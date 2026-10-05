@@ -1,0 +1,140 @@
+name: SpecGuard
+description: Requirement-aware PR reviewer that finds missing and weak unit tests and checks the repo's own coding standards.
+branding: { icon: shield, color: blue }
+
+inputs:
+  engine: { description: "auto | copilot | claude", default: auto }
+  claude_code_oauth_token: { description: "From `claude setup-token`. Selects the Claude engine.", default: "" }
+  anthropic_api_key: { description: "Alternative Claude credential.", default: "" }
+  copilot_token: { description: "Fallback fine-grained PAT (Copilot Requests). Empty = use the job token with permissions copilot-requests write.", default: "" }
+  github_token: { description: "Token for collect and post (needs pull-requests write).", default: "${{ github.token }}" }
+  model: { description: "Model name passed to the engine CLI. Empty = engine default.", default: "" }
+  max_turns: { description: "Agent turn cap (Claude only for now).", default: "30" }
+  max_budget_usd: { description: "Spend cap per run (Claude only).", default: "2" }
+  max_comments: { description: "Max inline comments (hard cap 30).", default: "10" }
+  max_diff_kb: { description: "Diff size above which the review is partial.", default: "300" }
+  ignore: { description: "Extra ignore globs, one per line, appended to the defaults.", default: "" }
+  copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
+  claude_version: { description: "Pinned @anthropic-ai/claude-code version (>= 2.1.205).", default: "2.1.290" }
+
+outputs:
+  skip: { description: "true when nothing reviewable changed", value: "${{ steps.collect.outputs.skip }}" }
+  partial: { description: "true when the diff was truncated", value: "${{ steps.collect.outputs.partial }}" }
+
+runs:
+  using: composite
+  steps:
+    - name: Refuse env that loads repo hooks or MCP
+      shell: bash
+      run: |
+        if env | grep -qE '^(COPILOT_ALLOW_ALL|GITHUB_COPILOT_PROMPT_MODE_[A-Za-z0-9_]*)='; then
+          echo "::error::COPILOT_ALLOW_ALL / GITHUB_COPILOT_PROMPT_MODE_* must not be set: they load repo hooks and MCP servers"
+          exit 1
+        fi
+
+    - id: collect
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        GH_REPO: ${{ github.repository }}
+        CTX: ${{ github.workspace }}/.specguard-ctx
+        IGNORE_EXTRA: ${{ inputs.ignore }}
+        MAX_DIFF_KB: ${{ inputs.max_diff_kb }}
+      run: bash "$GITHUB_ACTION_PATH/collect.sh"
+
+    - if: steps.collect.outputs.skip != 'true'
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: 22
+
+    - id: engine
+      if: steps.collect.outputs.skip != 'true'
+      shell: bash
+      env:
+        WANT: ${{ inputs.engine }}
+        HAS_CLAUDE: ${{ inputs.claude_code_oauth_token != '' || inputs.anthropic_api_key != '' }}
+      run: |
+        case "$WANT" in
+          auto) [ "$HAS_CLAUDE" = true ] && e=claude || e=copilot ;;
+          claude)
+            [ "$HAS_CLAUDE" = true ] || { echo "::error::engine=claude needs claude_code_oauth_token (run 'claude setup-token') or anthropic_api_key"; exit 1; }
+            e=claude ;;
+          copilot) e=copilot ;;
+          *) echo "::error::engine must be auto, copilot or claude"; exit 1 ;;
+        esac
+        echo "engine=$e" >> "$GITHUB_OUTPUT"
+
+    # Engine steps never fail the job: post reports "could not complete" instead. Config errors above fail loudly.
+    - name: Review with Claude Code
+      if: steps.collect.outputs.skip != 'true' && steps.engine.outputs.engine == 'claude'
+      shell: bash
+      env: # no GitHub write token here
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        CTX: ${{ github.workspace }}/.specguard-ctx
+        VERSION: ${{ inputs.claude_version }}
+        MODEL: ${{ inputs.model }}
+        MAX_TURNS: ${{ inputs.max_turns }}
+        MAX_BUDGET: ${{ inputs.max_budget_usd }}
+      run: |
+        npm install -g "@anthropic-ai/claude-code@$VERSION" >/dev/null || { echo "::warning::could not install claude-code@$VERSION"; exit 0; }
+        schema=$(jq -c . "$GITHUB_ACTION_PATH/findings.schema.json")
+        PROMPT="$(awk 'f>=2{print} /^---$/{f++}' "$GITHUB_ACTION_PATH/skills/specguard/SKILL.md")
+
+        Context directory (absolute path): $CTX
+        Your final answer must be JSON matching this schema: $schema"
+        # --tools (not --allowedTools) removes every tool but these; --setting-sources user skips the PR's hooks/MCP; never --bare (ignores the OAuth token)
+        claude -p "$PROMPT" --tools "Read,Grep,Glob" --setting-sources user --strict-mcp-config \
+          --settings '{"disableAllHooks":true}' --max-turns "$MAX_TURNS" --max-budget-usd "$MAX_BUDGET" \
+          --output-format json --json-schema "$schema" ${MODEL:+--model "$MODEL"} > "$CTX/claude.json" \
+          && jq -e '.structured_output | objects' "$CTX/claude.json" > "$CTX/findings.json" \
+          || echo "::warning::Claude review failed or returned no structured output"
+        exit 0
+
+    - name: Review with Copilot CLI
+      if: steps.collect.outputs.skip != 'true' && steps.engine.outputs.engine == 'copilot'
+      shell: bash
+      env:
+        COPILOT_GITHUB_TOKEN: ${{ inputs.copilot_token }}
+        GITHUB_TOKEN: ${{ github.token }}
+        CTX: ${{ github.workspace }}/.specguard-ctx
+        VERSION: ${{ inputs.copilot_version }}
+        MODEL: ${{ inputs.model }}
+      run: |
+        [ -n "$COPILOT_GITHUB_TOKEN" ] || unset COPILOT_GITHUB_TOKEN
+        npm install -g "@github/copilot@$VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$VERSION"; exit 0; }
+        schema=$(jq -c . "$GITHUB_ACTION_PATH/findings.schema.json")
+        PROMPT="$(awk 'f>=2{print} /^---$/{f++}' "$GITHUB_ACTION_PATH/skills/specguard/SKILL.md")
+
+        Context directory (absolute path): $CTX
+        Your final answer must be JSON only, matching this schema: $schema"
+        # verify-in-S4: no documented turn-cap flag (timeout is the cap); tool names view,glob,grep and --output-format json (text kept) unconfirmed
+        # never --allow-all, --allow-all-paths, --yolo
+        timeout 12m copilot -p "$PROMPT" --available-tools view,glob,grep --allow-all-tools --no-ask-user -s \
+          ${MODEL:+--model "$MODEL"} > "$CTX/copilot.out" \
+          || echo "::warning::Copilot review failed (needs 'permissions: copilot-requests: write' or a copilot_token)"
+        node -e '
+          const fs = require("fs"), s = fs.readFileSync(process.argv[1], "utf8"), ok = (t) => { try { JSON.parse(t); return t; } catch {} };
+          const blocks = [...s.matchAll(/```json\s*\n([\s\S]*?)```/g)].map((m) => m[1]);
+          const j = ok(s) || blocks.reverse().map(ok).find(Boolean);
+          if (j) fs.writeFileSync(process.argv[2], j); else console.log("::warning::no JSON found in Copilot output");
+        ' "$CTX/copilot.out" "$CTX/findings.json"
+        exit 0
+
+    - if: always()
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CTX: ${{ github.workspace }}/.specguard-ctx
+        MAX_COMMENTS: ${{ inputs.max_comments }}
+        ENGINE: ${{ steps.engine.outputs.engine }}
+        MODEL: ${{ inputs.model }}
+        SKIP: ${{ steps.collect.outputs.skip }}
+        PARTIAL: ${{ steps.collect.outputs.partial }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: await require(process.env.ACTION_PATH + '/post.js')({github, context, core})

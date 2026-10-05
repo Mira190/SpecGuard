@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["requirements_source", "coverage", "findings", "not_reviewed"],
+  "properties": {
+    "requirements_source": { "type": "string" },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["obligation", "source", "tests", "status"],
+        "properties": {
+          "obligation": { "type": "string" },
+          "source": { "type": "string" },
+          "tests": { "type": "array", "items": { "type": "string" } },
+          "status": { "enum": ["covered", "weak_test", "missing_test", "needs_human"] }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path", "line", "title", "body", "confidence"],
+        "properties": {
+          "kind": { "enum": ["missing_test", "weak_test", "standard", "pushdown"] },
+          "path": { "type": "string" },
+          "line": { "type": "integer", "minimum": 1 },
+          "start_line": { "type": "integer", "minimum": 1 },
+          "title": { "type": "string" },
+          "body": { "type": "string" },
+          "rule_source": { "type": "string" },
+          "confidence": { "enum": ["high", "low"] }
+        }
+      }
+    },
+    "not_reviewed": { "type": "string" }
+  }
+}

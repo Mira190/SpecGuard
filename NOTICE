@@ -1,0 +1,14 @@
+SpecGuard
+This product's review rubric and posting logic are adapted from the following projects.
+
+Rubric adapted from:
+- anthropics/claude-plugins-official: pr-review-toolkit (pr-test-analyzer, code-reviewer) and the code-review plugin. Apache-2.0.
+- github/awesome-copilot: skills/test-gap-audit. MIT.
+- obra/superpowers: writing-good-tests. MIT.
+- The-PR-Agent/pr-agent: needs-human status for acceptance criteria. MIT.
+
+Approach adapted from:
+- anthropics/claude-code-action: base-branch config restore list, input sanitizing and secret redaction. MIT.
+- reviewdog/reviewdog and github/gh-aw: fingerprint dedupe, review posting fallbacks. MIT.
+
+No text is copied verbatim from all-rights-reserved sources.
