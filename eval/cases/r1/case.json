@@ -1,0 +1,40 @@
+{
+  "id": "r1",
+  "goal": "requirements",
+  "description": "Four ACs, one weak test: three ACs untested, the SAVE10 one only asserted truthy.",
+  "pr_title": "Add checkout discount",
+  "pr_body": "Add the checkout discount.\n\n## Acceptance criteria\n- An order with no items throws \"empty order\".\n- The SAVE10 coupon takes 10% off the subtotal.\n- A total of 100 or more gets 5 off.\n- Store credit is subtracted from the total, which never goes below zero.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 5,
+        "quote": "throw new Error('empty order')"
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 11,
+        "quote": "total >= 100"
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 14,
+        "quote": "Math.max"
+      },
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/r1/discount.spec.js",
+        "line": 7,
+        "quote": "assert.ok(total)"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "missing_test x3 (empty order, >=100, credit floor), weak_test x1 on assert.ok(total)."
+  }
+}

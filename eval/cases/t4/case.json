@@ -1,0 +1,32 @@
+{
+  "id": "t4",
+  "goal": "test_quality",
+  "description": "Head deletes the only test file of total(), which checkout still uses.",
+  "pr_title": "Remove invoice tests",
+  "pr_body": "Remove the invoice tests; they are slow.\n",
+  "delete": [
+    "eval-sandbox/t4/invoice.spec.js"
+  ],
+  "expected": {
+    "findings": [
+      {
+        "kind": [
+          "missing_test",
+          "weak_test"
+        ],
+        "path": [
+          "eval-sandbox/t4/invoice.js",
+          "eval-sandbox/t4/invoice.spec.js"
+        ],
+        "line": 2,
+        "tolerance": 50,
+        "allow_summary": true,
+        "quote": "lines.reduce"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "The deleted tests are LEFT-side evidence, so the finding usually lands in the summary. allow_summary counts a summary item or coverage row with matching kind and either path as TP."
+  }
+}

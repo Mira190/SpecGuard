@@ -1,0 +1,26 @@
+{
+  "id": "l1",
+  "goal": "layering",
+  "description": "Pure pricing logic is only asserted through a Flask test-client request.",
+  "pr_title": "Add quote endpoint",
+  "pr_body": "Add a /quote endpoint that applies tier discounts and a bonus for big orders.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "pushdown",
+        "path": [
+          "eval-sandbox/l1/pricing.py",
+          "eval-sandbox/l1/test_quote_api.py"
+        ],
+        "line": 6,
+        "tolerance": 30,
+        "quote": "rate = TIER_DISCOUNT"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Pushdown on quote_total (or the integration test line). Python, pytest, never executed."
+  }
+}

@@ -170,6 +170,11 @@ const noGaps = (data) => !data.findings.length && data.coverage.length > 0 && !d
   && (!data.tooling || ['passed', 'not_configured'].includes(data.tooling.status))
   && data.coverage.every((c) => c.status === 'covered');
 
+// A criterion split into several obligations is covered only when every one is.
+const met = (r, cov) => {
+  const n = r.obligation_ids.length, k = r.obligation_ids.filter((id) => cov.find((c) => c.id === id)?.status === 'covered').length;
+  return n ? `${k}/${n} obligations covered${k < n ? ' (not fully covered)' : ''}. ` : '';
+};
 const cell = (s) => redact(s).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const item = ({ f, why }) => `- **${f.title}** (\`${f.path}:${f.line}\`, ${f.kind}${why ? `, ${why}` : ''})\n\n  ${redact(f.body + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
 
@@ -186,7 +191,7 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], parti
     s += `**Requirements source:** ${redact(data.requirements_source)}\n\n`;
     if (data.requirements.length) {
       s += '| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n';
-      for (const r of data.requirements) s += `| ${cell(r.id)} | ${cell(`${r.source}: ${r.quote}`)} | ${cell(r.obligation_ids.join(', ') || 'NOT ASSESSED')} | ${cell(r.reason)} |\n`;
+      for (const r of data.requirements) s += `| ${cell(r.id)} | ${cell(`${r.source}: ${r.quote}`)} | ${cell(r.obligation_ids.join(', ') || 'NOT ASSESSED')} | ${cell(`${met(r, data.coverage)}${r.reason}`)} |\n`;
       s += '\n';
     }
     s += `**Coding standards: ${cell(data.standards.status)}.** ${cell(data.standards.reason)} Sources: ${cell(data.standards.sources.join(', ') || 'none')}.\n\n`;

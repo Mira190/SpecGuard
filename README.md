@@ -75,6 +75,8 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `max_comments` | `10` | Max inline comments (hard cap 30). |
 | `max_diff_kb` | `300` | Above this the review is partial. |
 | `ignore` | | Extra ignore globs, one per line, added to the defaults (lockfiles, `dist/`, `build/`, `vendor/`, `node_modules/`, minified files, snapshots, non-standard `.md`). |
+| `standards_checks` | | Your own lint/format checks to report, `check:NAME` or `status:CONTEXT`, one per line. See [Standards evidence](#standards-evidence). |
+| `standards_ref` | `head` | `head` or `merge`: the commit those checks ran on. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
 | `claude_version` | `2.1.290` | Pinned `@anthropic-ai/claude-code` (>= 2.1.205). |
 
@@ -85,6 +87,40 @@ Claude engine:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
+
+## Standards evidence
+
+The AI's standards review is static. To also show whether your real lint/format jobs passed, name them:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+  checks: read
+  statuses: read
+  copilot-requests: write
+...
+      - uses: Mira190/SpecGuard@v1
+        with:
+          standards_checks: |
+            check:lint
+            status:ci/format
+```
+
+`check:NAME` matches a check run by name, `status:CONTEXT` a commit status by context. The state is read from the GitHub API on `standards_ref` (default: the PR head) and shown in the summary as "Standards tooling". It is independent of the AI: the model cannot set or override it, and SpecGuard never runs the tools or waits for them. Statuses:
+
+| Status | Meaning |
+|---|---|
+| `passed` | every named check succeeded |
+| `failed` | at least one failed, errored, was cancelled or timed out |
+| `pending` | at least one has not finished |
+| `not_found` | at least one named check or status does not exist on that commit |
+| `unavailable` | could not be read: missing `checks: read` / `statuses: read`, a malformed entry, or an unusable `standards_ref` |
+| `not_configured` | `standards_checks` is empty |
+| `incomplete` | all found, none failed or pending, but not all succeeded (for example skipped or neutral) |
+
+Anything other than `passed` or `not_configured` stops the summary from saying "No test gaps found". Advisory only; the job stays green.
 
 ## Run locally
 

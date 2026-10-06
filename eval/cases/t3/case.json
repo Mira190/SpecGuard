@@ -1,0 +1,29 @@
+{
+  "id": "t3",
+  "goal": "test_quality",
+  "description": "Head skips the only test of the negative-quantity rejection.",
+  "pr_title": "Skip flaky quantity test",
+  "pr_body": "Skip the negative quantity test for now.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": [
+          "weak_test",
+          "missing_test"
+        ],
+        "path": [
+          "eval-sandbox/t3/qty.spec.js",
+          "eval-sandbox/t3/qty.js"
+        ],
+        "line": 9,
+        "tolerance": 6,
+        "quote": "test.skip('rejects negative quantities'"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Accepts either kind. Any line in the skipped test counts; production-file location also accepted."
+  }
+}

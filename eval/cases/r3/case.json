@@ -1,0 +1,30 @@
+{
+  "id": "r3",
+  "goal": "requirements",
+  "description": "One compound AC; only the rejection half is tested.",
+  "pr_title": "Add normalizeName",
+  "pr_body": "Add name normalisation.\n\n## Acceptance criteria\n- normalizeName rejects empty names and trims whitespace.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/r3/name.js",
+        "line": 5,
+        "tolerance": 1,
+        "quote": "return name.trim();"
+      }
+    ],
+    "must_not": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/r3/name.js",
+        "line": 3,
+        "tolerance": 1
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Trim half is untested. The rejection half is tested and must not be flagged."
+  }
+}

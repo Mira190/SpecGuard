@@ -306,6 +306,15 @@ test('restores omitted collected criteria to the report as unassessed', () => {
   assert.match(post.buildSummary({ status: 'Reviewed', data: d }), /NOT ASSESSED/);
 });
 
+test('a compound criterion is covered only when all its obligations are', () => {
+  const r = { id: 'R1', source: 'PR body', quote: 'Rejects empty names and trims whitespace.', obligation_ids: ['O1', 'O2'], reason: 'Split in two.' };
+  const d = report({ requirements: [r], coverage: [row(), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { obligation_ids: ['O2'] })] });
+  assert.equal(post.validate(d).ok, true);
+  assert.match(post.buildSummary({ status: 'Reviewed', data: d }), /1\/2 obligations covered \(not fully covered\)/);
+  const all = report({ requirements: [r], coverage: [row(), row('covered', { id: 'O2' })], findings: [] });
+  assert.match(post.buildSummary({ status: 'Reviewed', data: all }), /2\/2 obligations covered\. Split/);
+});
+
 test('invalid requirement wording cannot support a covered obligation', () => {
   const d = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Made up.', obligation_ids: ['O1'], reason: 'Covered' }], coverage: [row()], findings: [] });
   post.verifyRequirements(d, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [] });
