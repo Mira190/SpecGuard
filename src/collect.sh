@@ -20,6 +20,8 @@ EXEC_CFG=('.claude/**' .mcp.json .claude.json CLAUDE.local.md .gitmodules .ripgr
   '.github/hooks/**' '.github/copilot/**' .github/mcp.json)
 IGNORES=(package-lock.json yarn.lock pnpm-lock.yaml Cargo.lock poetry.lock go.sum composer.lock Gemfile.lock '*.lock'
   .specguard-ctx/ dist/ build/ vendor/ node_modules/ '*.min.*' __snapshots__/ '*.snap')
+# SpecGuard's own instructions are never the repo's coding standard (still restored from base)
+OWN=('**/skills/test-review/**' .github/instructions/test-review.instructions.md)
 while IFS= read -r l; do [ -n "$l" ] && IGNORES+=("$l"); done <<< "${IGNORE_EXTRA:-}"
 
 # match FILE PATTERN...
@@ -64,7 +66,7 @@ fi
 # 3. Never follow a PR-controlled symlink as a trusted rule source.
 : > "$CTX/standards.txt"
 while IFS= read -r -d '' f; do
-  if match "$f" "${STANDARDS[@]}" && [ -f "$f" ] && [ ! -L "$f" ]; then
+  if match "$f" "${STANDARDS[@]}" && ! match "$f" "${IGNORES[@]}" "${OWN[@]}" && [ -f "$f" ] && [ ! -L "$f" ]; then
     printf '%s\n' "$f" >> "$CTX/standards.txt"
   fi
 done < <(git ls-tree -r -z --name-only "$BASE_SHA")

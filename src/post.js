@@ -285,10 +285,10 @@ function verifyRequirements(data, context, read = readLines) {
   for (const expected of context.criteria || []) {
     const r = data.requirements.find((r) => r.id === expected.id);
     if (!r) data.requirements.push({ ...expected, obligation_ids: [], reason: 'Structured acceptance criterion was not assessed.' });
-    else if (r.source !== expected.source || norm(r.quote) !== norm(expected.quote)) {
+    else if (!(r.source === expected.source || r.source.startsWith(`${expected.source} AC `) && /^\d+$/.test(r.source.slice(expected.source.length + 4))) || norm(r.quote) !== norm(expected.quote)) {
       r.obligation_ids.forEach((id) => invalid.add(id));
       Object.assign(r, expected, { obligation_ids: [], reason: 'Criterion ID did not match its collected source text.' });
-    }
+    } else r.source = expected.source; // "PR body AC 1" is accepted; the collected label is canonical
   }
   for (const r of data.requirements) {
     const collected = (context.documents || []).find((d) => d.source === r.source);

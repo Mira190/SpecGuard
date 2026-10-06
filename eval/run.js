@@ -91,18 +91,24 @@ async function waitForRun({ repo, branch, sha, workflow, timeoutMs = 25 * 60e3 }
   throw new Error(`timed out waiting for ${workflow} on ${branch}`);
 }
 
-// Non-fatal: the dogfood job uploads .specguard-ctx as artifact specguard-ctx. An empty result means "artifact unavailable".
-function rawOutput(repo, runId) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-ctx-'));
-  try {
-    sh('gh', ['run', 'download', String(runId), '--repo', repo, '-n', 'specguard-ctx', '-D', tmp]);
-    const files = walk(tmp), at = (n) => files.find((f) => path.basename(f) === n);
-    const first = ['copilot.out', 'claude.json', 'findings.json'].map(at).find(Boolean);
-    const found = at('findings.json');
-    let valid = false;
-    if (found) try { JSON.parse(fs.readFileSync(path.join(tmp, found), 'utf8')); valid = true; } catch {}
-    return { raw_findings_present: !!found, raw_findings_valid_json: valid, raw_excerpt: first ? fs.readFileSync(path.join(tmp, first), 'utf8').slice(0, 2000) : '' };
-  } catch { return {}; } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+// Non-fatal: the dogfood job uploads .specguard-ctx as artifact specguard-ctx. The artifact can lag the "completed" run, so retry;
+// a failure is recorded in raw_error, never swallowed.
+async function rawOutput(repo, runId, tries = 5, waitMs = 10e3) {
+  let err = '';
+  for (let i = 0; i < tries; i++) {
+    if (i) await sleep(waitMs);
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-ctx-'));
+    try {
+      sh('gh', ['run', 'download', String(runId), '--repo', repo, '-n', 'specguard-ctx', '-D', tmp]);
+      const files = walk(tmp), at = (n) => files.find((f) => path.basename(f) === n);
+      const first = ['copilot.out', 'claude.json', 'findings.json'].map(at).find(Boolean);
+      const found = at('findings.json');
+      let valid = false;
+      if (found) try { JSON.parse(fs.readFileSync(path.join(tmp, found), 'utf8')); valid = true; } catch {}
+      return { raw_findings_present: !!found, raw_findings_valid_json: valid, raw_excerpt: first ? fs.readFileSync(path.join(tmp, first), 'utf8').slice(0, 2000) : '' };
+    } catch (e) { err = String(e.stderr || e.message || e).trim().split('\n')[0]; } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  }
+  return { raw_error: `artifact download failed after ${tries} tries: ${err}` };
 }
 
 async function runOne({ repo, target, c, n, runId, keep, workflow }) {
@@ -130,7 +136,7 @@ async function runOne({ repo, target, c, n, runId, keep, workflow }) {
     const comments = ghLines(`repos/${repo}/pulls/${pr.number}/comments`).map(parseComment).filter(Boolean);
     const reviews = ghLines(`repos/${repo}/pulls/${pr.number}/reviews`).map((r) => ({ state: r.state, body: r.body || '' }));
     const sticky = ghLines(`repos/${repo}/issues/${pr.number}/comments`).find((x) => (x.body || '').includes('<!-- specguard:summary -->'));
-    const observed = { comments, reviews, summary: sticky ? sticky.body : null, latency_s, conclusion: run.conclusion, job_conclusion: job && job.conclusion, ...rawOutput(repo, run.databaseId) };
+    const observed = { comments, reviews, summary: sticky ? sticky.body : null, latency_s, conclusion: run.conclusion, job_conclusion: job && job.conclusion, ...await rawOutput(repo, run.databaseId) };
     return { ...grade(c, observed), rep: n, pr_url: url, run_url: run.url, conclusion: run.conclusion, job_conclusion: observed.job_conclusion, observed };
   } catch (e) {
     return { id: c.id, goal: c.goal, rep: n, error: String(e.message || e).split('\n')[0], pr_url: pr && pr.url };
@@ -194,4 +200,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { validateCase, allIds, loadCase, markdown };
+module.exports = { rawOutput, validateCase, allIds, loadCase, markdown };

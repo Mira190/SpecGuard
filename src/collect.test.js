@@ -21,6 +21,8 @@ test('collects changed behaviour with trusted base rules and explicit unavailabl
   fs.writeFileSync(path.join(root, 'pkg/CONTRIBUTING.md'), 'Use public seams.\n');
   fs.writeFileSync(path.join(root, 'CODING_STANDARDS.md'), 'Do not swallow errors.\n');
   fs.writeFileSync(path.join(root, 'docs/testing-standards.md'), 'Use independent values.\n');
+  for (const d of ['fx/pkg', '.github/skills/test-review', '.github/instructions']) fs.mkdirSync(path.join(root, d), { recursive: true });
+  for (const f of ['fx/pkg/REVIEW.md', '.github/skills/test-review/SKILL.md', '.github/instructions/test-review.instructions.md', '.github/instructions/team.instructions.md']) fs.writeFileSync(path.join(root, f), 'rule\n');
   git('add', '.');
   git('commit', '-m', 'base');
   const base = git('rev-parse', 'HEAD');
@@ -38,7 +40,7 @@ test('collects changed behaviour with trusted base rules and explicit unavailabl
   const script = path.resolve(__dirname, 'collect.sh').replace(/\\/g, '/');
   const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
   // No PR_NUMBER deliberately exercises the offline fallback without calling GitHub.
-  const env = { ...process.env, BASE_SHA: base, HEAD_SHA: head, CTX: ctx.replace(/\\/g, '/'), GITHUB_OUTPUT: output.replace(/\\/g, '/'), MAX_DIFF_KB: '300', IGNORE_EXTRA: '' };
+  const env = { ...process.env, BASE_SHA: base, HEAD_SHA: head, CTX: ctx.replace(/\\/g, '/'), GITHUB_OUTPUT: output.replace(/\\/g, '/'), MAX_DIFF_KB: '300', IGNORE_EXTRA: 'fx/' };
   delete env.PR_NUMBER;
   execFileSync(bash, [script], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
   assert.match(fs.readFileSync(path.join(ctx, 'diff.patch'), 'utf8'), /\+return 42;/);
@@ -50,6 +52,9 @@ test('collects changed behaviour with trusted base rules and explicit unavailabl
   assert.equal(fs.existsSync(path.join(root, 'pkg/CLAUDE.md')), false);
   assert.match(fs.readFileSync(path.join(ctx, 'standards.txt'), 'utf8'), /CODING_STANDARDS.md/);
   assert.match(fs.readFileSync(path.join(ctx, 'standards.txt'), 'utf8'), /docs\/testing-standards.md/);
+  const listed = fs.readFileSync(path.join(ctx, 'standards.txt'), 'utf8').split('\n');
+  assert.deepEqual(listed.filter((l) => /fx\/|test-review/.test(l)), []);
+  assert.ok(listed.includes('.github/instructions/team.instructions.md') && listed.includes('pkg/REVIEW.md'));
   assert.equal(JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')).status, 'unavailable');
   assert.match(fs.readFileSync(output, 'utf8'), /skip=false/);
 });
