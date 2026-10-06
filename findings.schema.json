@@ -87,6 +87,9 @@
           "rule_source": {
             "type": "string"
           },
+          "suggestion": {
+            "type": "string"
+          },
           "confidence": {
             "enum": [
               "high",

@@ -85,7 +85,7 @@ function setup({ existing = [], failFirst422 = false } = {}) {
       F({ path: 'other.js', line: 1, title: 'not in diff' }),
       F({ path: 'src.js', line: 4, quote: 'no such text', title: 'bad quote' }),
       F({ path: 'src.js', line: 4, quote: 'if (x) {', title: 'off by one' }),
-      F({ path: 'src.js', line: 2, quote: 'l2', kind: 'standard', rule_source: 'RULES.md:2', title: 'good rule' }),
+      F({ path: 'src.js', line: 2, quote: 'l2', kind: 'standard', rule_source: 'RULES.md:2', title: 'good rule', suggestion: '  l2 fixed();' }),
       F({ path: 'src.js', line: 4, quote: 'l4', kind: 'standard', rule_source: 'RULES.md:50', title: 'bad rule' }),
     ],
   };
@@ -129,6 +129,7 @@ test('main flow: one review, file-level comment, rule filter, summary created', 
   assert.strictEqual(s.calls.fileComment.length, 1);
   assert.strictEqual(s.calls.fileComment[0].subject_type, 'file');
   assert.ok(s.calls.fileComment[0].body.includes('/blob/HEADSHA/src.js#L8'));
+  assert.ok(r.comments.find((c) => c.line === 2).body.includes('```suggestion\n  l2 fixed();\n```'));
   assert.strictEqual(s.calls.issueCreate.length, 1);
   assert.ok(s.calls.issueCreate[0].body.includes('citation did not match the file'));
   assert.strictEqual(r.comments.filter((c) => c.line === 3).length, 1); // off-by-one snapped onto line 3, deduped with 'inline one'
@@ -168,4 +169,17 @@ test('snap: exact, +-1, closest wins, no match / unreadable / start_line underfl
   assert.strictEqual(snap({ line: 2, quote: 'throw 1;' }, null), null);
   assert.strictEqual(snap({ line: 3, start_line: 1, quote: 'throw 1;' }, L), null);
   assert.strictEqual(snap({ line: 50, quote: 'throw 1;' }, L), null); // beyond +-5
+});
+
+test('commentBody: suggestion block for inline standard, longer fence, ignored on other kinds, plain block at file level', () => {
+  const S = (o) => F({ kind: 'standard', suggestion: 'throw new Error(x);', ...o });
+  const inl = post.commentBody(S({}), 'a'.repeat(40));
+  assert.ok(inl.includes('```suggestion\nthrow new Error(x);\n```'));
+  assert.ok(inl.indexOf('```suggestion') < inl.indexOf('<details>'));
+  assert.ok(post.commentBody(S({ suggestion: 'a ```b``` c' }), 'a'.repeat(40)).includes('````suggestion\na ```b``` c\n````'));
+  assert.ok(!post.commentBody(F({ suggestion: 'x' }), 'a'.repeat(40)).includes('x\n```'));
+  assert.ok(!post.commentBody(S({ suggestion: '' }), 'a'.repeat(40)).includes('suggestion'));
+  const file = post.commentBody(S({}), 'a'.repeat(40), false);
+  assert.ok(file.includes('Suggested fix:\n\n```\nthrow new Error(x);\n```') && !file.includes('```suggestion'));
+  assert.strictEqual(validate({ requirements_source: '', not_reviewed: '', coverage: [], findings: [S({ suggestion: 1 })] }).ok, false);
 });

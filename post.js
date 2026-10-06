@@ -47,6 +47,7 @@ function validate(o) {
     if (!str(f.path) || !str(f.title) || !str(f.body) || !str(f.quote)) return bad(`findings[${i}] path/title/body/quote must be strings`);
     if (!int(f.line)) return bad(`findings[${i}].line must be an integer >= 1`);
     if (f.start_line !== undefined && !int(f.start_line)) return bad(`findings[${i}].start_line invalid`);
+    if (f.suggestion !== undefined && !str(f.suggestion)) return bad(`findings[${i}].suggestion invalid`);
     if (f.rule_source !== undefined && !str(f.rule_source)) return bad(`findings[${i}].rule_source invalid`);
     if (!['high', 'low'].includes(f.confidence)) return bad(`findings[${i}].confidence invalid`);
   }
@@ -94,13 +95,21 @@ function plan(findings, maps, maxComments = 10) {
   return out;
 }
 
-function commentBody(f, fp) {
+// Fenced block longer than any backtick run inside. A "suggestion" block is only valid on an inline range.
+function fence(lang, text) {
+  const f = '`'.repeat(Math.max(3, ...(text.match(/`+/g) || []).map((r) => r.length + 1)));
+  return `${f}${lang}\n${text}\n${f}`;
+}
+const fix = (f, inline) => (f.kind === 'standard' && typeof f.suggestion === 'string' && f.suggestion
+  ? `\n\n${inline ? fence('suggestion', f.suggestion) : `Suggested fix:\n\n${fence('', f.suggestion)}`}` : '');
+
+function commentBody(f, fp, inline = true) {
   const why = `kind: ${f.kind}, confidence: ${f.confidence}${f.rule_source ? `, rule: ${f.rule_source}` : ''}`;
-  return clean(`**${f.title}**\n\n${f.body}\n\n<details><summary>Why this was flagged</summary>\n\n${why}\n</details>\n\n<!-- specguard:fp=${fp} -->`);
+  return clean(`**${f.title}**\n\n${f.body}${fix(f, inline)}\n\n<details><summary>Why this was flagged</summary>\n\n${why}\n</details>\n\n<!-- specguard:fp=${fp} -->`);
 }
 
 const cell = (s) => redact(s).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
-const item = ({ f, why }) => `- **${f.title}** (\`${f.path}:${f.line}\`, ${f.kind}${why ? `, ${why}` : ''})\n\n  ${redact(f.body).replace(/\n/g, '\n  ')}\n`;
+const item = ({ f, why }) => `- **${f.title}** (\`${f.path}:${f.line}\`, ${f.kind}${why ? `, ${why}` : ''})\n\n  ${redact(f.body + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
 
 function buildSummary({ status, data, items = [], partial, engine, model }) {
   let s = `<!-- specguard:summary -->\n## SpecGuard\n\n${status}\n\n`;
@@ -210,7 +219,7 @@ async function run({ github, context, core }) {
     const range = f.start_line ? `#L${f.start_line}-L${f.line}` : `#L${f.line}`;
     const link = `${context.serverUrl}/${owner}/${repo}/blob/${headSha}/${f.path}${range}`;
     try {
-      await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp) });
+      await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
     } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); }
   }
 
