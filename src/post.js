@@ -87,7 +87,7 @@ function snap(f, lines) {
 function ruleLine(quote, lines, n) {
   const q = norm(quote || '');
   let best = 0;
-  if (q.length >= 10) lines.forEach((l, i) => { if (norm(l).includes(q) && (!best || Math.abs(i + 1 - n) < Math.abs(best - n))) best = i + 1; });
+  if (q) lines.forEach((l, i) => { if (norm(l).includes(q) && (!best || Math.abs(i + 1 - n) < Math.abs(best - n))) best = i + 1; });
   return best;
 }
 
