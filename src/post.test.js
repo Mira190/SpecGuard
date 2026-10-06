@@ -505,3 +505,20 @@ test('a missing_test on a pushdown behaviour line is marked unknown; other lines
   assert.deepEqual(d.findings.map((f) => f.obligation_ids[0]), ['O1', 'O3']);
   assert.match(d.validation_notes.join('\n'), /duplicates a pushdown obligation/);
 });
+
+test('merges same-kind findings on one line into one comment; other kinds stay separate', async (t) => {
+  const second = finding('missing_test', { title: 'Second obligation', confidence: 'low', body: 'Other gap.', obligation_ids: ['O2'] });
+  const data = () => report({ coverage: [row('missing_test'), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { source: 'issue #1 AC 1' }), { ...second, source: 'issue #1 AC 2' }] });
+  const s = setup(t, data());
+  await post(s);
+  const cs = s.calls.review[0].comments;
+  assert.equal(cs.length, 1);
+  assert.match(cs[0].body, /Verify the boundary total; Second obligation/);
+  assert.match(cs[0].body, /Other gap\./);
+  const fp = /specguard:fp=([0-9a-f]{40})/.exec(cs[0].body)[1];
+  const again = setup(t, data(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'Bot' } }] });
+  await post(again);
+  assert.equal(again.calls.review.length, 0);
+  const std = { ...finding('standard', { title: 'Rule', rule_source: 'RULES.md:1', rule_quote: 'rule one' }) };
+  assert.equal(post.merge([{ ...finding(), fp: 'a' }, { ...std, fp: 'b' }]).length, 2);
+});
