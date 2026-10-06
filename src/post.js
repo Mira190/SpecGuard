@@ -177,6 +177,21 @@ function snap(f, lines) {
   return null;
 }
 
+// One comment per kind, path and line. The merged fingerprint hashes the sorted constituents, so reruns dedupe.
+function merge(fs_) {
+  const groups = new Map();
+  for (const f of fs_) { const k = `${f.kind}\0${f.path}\0${f.line}`; groups.set(k, [...(groups.get(k) || []), f]); }
+  return [...groups.values()].map((g) => (g.length === 1 ? g[0] : {
+    ...g[0],
+    title: truncate(g.map((f) => f.title).join('; '), 200),
+    body: g.map((f) => `**${f.title}**\n\n${f.body}`).join('\n\n---\n\n'),
+    obligation_ids: [...new Set(g.flatMap((f) => f.obligation_ids))],
+    confidence: g.some((f) => f.confidence === 'high') ? 'high' : 'low',
+    start_line: g.some((f) => f.start_line === undefined) ? undefined : Math.min(...g.map((f) => f.start_line)),
+    fp: crypto.createHash('sha1').update(g.map((f) => f.fp).sort().join('\0')).digest('hex'),
+  }));
+}
+
 // 1-based line of the rule text nearest to n, or 0. Never guesses.
 function ruleLine(quote, lines, n) {
   const q = norm(quote || '');
@@ -401,6 +416,7 @@ async function run({ github, context, core }) {
   const kept = [];
   let already = 0;
   const seen = new Set();
+  const cands = [];
   const assessed = [];
   const unanchored = []; // items that failed to post or anchor; they go to the summary
   for (let f of data.findings) {
@@ -437,9 +453,9 @@ async function run({ github, context, core }) {
     if (seen.has(fp)) continue;
     seen.add(fp);
     assessed.push(f);
-    if (known.has(fp)) already++;
-    else kept.push({ ...f, line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }), fp });
+    cands.push({ ...f, line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }), fp });
   }
+  for (const f of merge(cands)) known.has(f.fp) ? already++ : kept.push(f);
 
   const p = plan(kept, maps, maxComments);
   const comments = p.inline.map((f) => ({
@@ -480,4 +496,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, parseDiff, validate, anchor, snap, ruleLine, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements });
+Object.assign(module.exports, { parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements });
