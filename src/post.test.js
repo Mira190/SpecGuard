@@ -132,7 +132,7 @@ function setup(t, data = report(), options = {}) {
   let count = 0;
   const github = { paginate: async (fn, args) => (await fn(args)).data, rest: {
     pulls: {
-      get: async () => ({ data: { head: { sha: options.head || 'HEADSHA' } } }),
+      get: async () => ({ data: { head: { sha: options.head || 'HEADSHA' }, ...options.pr } }),
       listFiles: async () => { calls.list++; if (options.listError) throw Object.assign(new Error('Server Error: diff temporarily unavailable'), { status: 500 }); return { data: options.listed || [{ filename: 'src.js', patch }] }; },
       listReviewComments: async () => ({ data: options.existing || [] }),
       createReview: async (args) => { calls.review.push(args); if (options.retry422 && count++ === 0) throw Object.assign(new Error('bad anchor'), { status: 422 }); },
@@ -579,4 +579,80 @@ test('calls listFiles for a reviewable file missing from the local diff and uses
   await post(s);
   assert.equal(s.calls.list, 1);
   assert.deepEqual(s.calls.review[0].comments.map((c) => c.path), ['extra.js']);
+});
+
+// Review-candidate regressions.
+const withStatus = (s, value) => { const f = path.join(s.dir, 'ctx', 'requirements-status.json'); value === null ? fs.rmSync(f) : fs.writeFileSync(f, JSON.stringify(value)); };
+
+test('c1: a model-added requirement cited as "PR body AC 3" resolves to the collected document and keeps its findings', () => {
+  const d = report({ requirements: [{ id: 'X1', source: 'PR body AC 3', quote: 'Return 42.', obligation_ids: ['O1'], reason: 'Added.' }] });
+  post.verifyRequirements(d, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [] });
+  assert.deepEqual(d.requirements[0].obligation_ids, ['O1']);
+  assert.equal(d.findings.length, 1);
+  const bad = report({ requirements: [{ id: 'X1', source: 'PR body AC 3', quote: 'Invented.', obligation_ids: ['O1'], reason: 'Added.' }] });
+  post.verifyRequirements(bad, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [] });
+  assert.deepEqual(bad.requirements[0].obligation_ids, []);
+  assert.equal(bad.findings.length, 0);
+});
+
+test('c2: findings with a suggestion or a start_line are never merged', () => {
+  const a = finding('standard', { suggestion: 'a()', start_line: 2 }), b = finding('standard', { title: 'B', suggestion: 'b()', start_line: 1 });
+  assert.equal(post.merge([a, b]).length, 2);
+  assert.equal(post.merge([a, finding('standard', { title: 'C' })]).length, 2);
+  assert.equal(post.merge([finding('standard', { title: 'C' }), finding('standard', { title: 'D' })]).length, 1);
+});
+
+test('c4: merge standards ref needs mergeable === true', async (t) => {
+  const s = setup(t, report(), { pr: { mergeable: false, merge_commit_sha: 'STALE' } });
+  process.env.STANDARDS_REF = 'merge';
+  await post(s);
+  assert.match(s.calls.summary[0].body, /Standards tooling: unavailable/);
+  assert.match(s.calls.summary[0].body, /PR has no current test-merge commit/);
+});
+
+test('c5: missing requirements status still verifies; an invented quote is never shown as verified and findings survive', async (t) => {
+  const reqs = [{ id: 'X1', source: 'issue #1', quote: 'Invented wording.', obligation_ids: ['O1'], reason: 'Added.' }];
+  const s = setup(t, report({ requirements: reqs }));
+  withStatus(s, null);
+  await post(s);
+  assert.equal(s.calls.review[0].comments.length, 1);
+  assert.match(s.calls.summary[0].body, /X1[^\n]*NOT ASSESSED/);
+  assert.match(s.calls.summary[0].body, /Requirement X1 is not assessed/);
+  assert.match(s.calls.summary[0].body, /Requirement collection status unavailable/);
+  const ok = setup(t, report({ requirements: [{ ...reqs[0], source: 'RULES.md', quote: 'rule one' }] }));
+  fs.writeFileSync(path.join(ok.dir, 'ctx', 'requirements-status.json'), '{bad');
+  await post(ok);
+  assert.doesNotMatch(ok.calls.summary[0].body, /X1[^\n]*NOT ASSESSED/);
+});
+
+test('c6: summary items outside the diff show the snapped line', async (t) => {
+  const s = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', { ...evidence, line: 3 })] }));
+  await post(s);
+  assert.match(s.calls.summary[0].body, /`test\.js:2`/);
+});
+
+test('c7: the summary status counts reflect failed posts', async (t) => {
+  const s = setup(t, report(), { retry422: true });
+  await post(s);
+  assert.match(s.calls.review[0].body, /1 inline, 0 file-level/);
+  assert.match(s.calls.summary[0].body, /Reviewed: [^\n]*0 inline, 0 file-level, 1 in summary/);
+});
+
+test('c8: a failing pulls.get does not abort publishing, and notes that HEAD was not rechecked', async (t) => {
+  const s = setup(t);
+  s.github.rest.pulls.get = async () => { throw new Error('502'); };
+  await post(s);
+  assert.equal(s.calls.review.length, 1);
+  assert.match(s.calls.summary[0].body, /could not be rechecked/);
+  const k = setup(t);
+  k.github.rest.pulls.get = async () => { throw new Error('502'); };
+  process.env.SKIP = 'true';
+  await post(k);
+  assert.equal(k.calls.summary.length, 1);
+});
+
+test('c9: a merged title is cut on one line with an ellipsis', () => {
+  const [m] = post.merge([finding('missing_test', { title: 'a'.repeat(150) }), finding('missing_test', { title: 'b'.repeat(150), obligation_ids: ['O2'] })]);
+  assert.doesNotMatch(m.title, /\n/);
+  assert.ok(m.title.endsWith('…') && m.title.length <= 200);
 });

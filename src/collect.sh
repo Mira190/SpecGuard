@@ -13,7 +13,7 @@ out skip false; out partial false
 
 # Globs: * crosses '/', leading **/ is optional (ponytail: not full gitignore semantics, swap for git check-ignore if it bites)
 STANDARDS=(.github/copilot-instructions.md '.github/instructions/**' '**/AGENTS.md' '**/AGENT.md' '**/CLAUDE.md'
-  '**/GEMINI.md' REVIEW.md CONTRIBUTING.md CODING_STANDARDS.md .editorconfig 'docs/*standards*' 'docs/*conventions*' '.claude/rules/**'
+  '**/GEMINI.md' REVIEW.md CONTRIBUTING.md CODING_STANDARDS.md .editorconfig 'docs/*standards*'.{md,mdx,rst,txt,adoc} 'docs/*conventions*'.{md,mdx,rst,txt,adoc} '.claude/rules/**'
   '.github/skills/**' '.claude/skills/**' '.agents/skills/**'
   .cursorrules '.cursor/rules/**' .windsurfrules '.clinerules/**')
 EXEC_CFG=('.claude/**' .mcp.json .claude.json CLAUDE.local.md .gitmodules .ripgreprc '.husky/**'
@@ -53,26 +53,52 @@ printf '%s\n' "${files[@]}" > "$CTX/files.txt"
 GIT_LITERAL_PATHSPECS=1 git diff --no-color --no-ext-diff --no-renames \
   "$BASE_SHA...$HEAD_SHA" -- "${files[@]}" > "$CTX/diff.patch"
 
-# 2. Discover exact paths once from both trees. The same matcher governs restoration
-# and the trusted inventory, including nested rules and head-only agent config.
-restore=()
+# 2. Discover exact paths once per tree. The same matched set governs restoration and the trusted inventory,
+# including nested rules and head-only agent config.
+base_hit=(); head_hit=()
 while IFS= read -r -d '' f; do
-  if match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}"; then restore+=("$f"); fi
-done < <({ git ls-tree -r -z --name-only "$BASE_SHA"; git ls-tree -r -z --name-only "$HEAD_SHA"; } | sort -zu)
-if [ ${#restore[@]} -gt 0 ]; then
-  GIT_LITERAL_PATHSPECS=1 git restore --source="$BASE_SHA" --worktree -- "${restore[@]}"
-fi
+  if match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}"; then base_hit+=("$f"); fi
+done < <(git ls-tree -r -z --name-only "$BASE_SHA")
+while IFS= read -r -d '' f; do
+  if match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}"; then head_hit+=("$f"); fi
+done < <(git ls-tree -r -z --name-only "$HEAD_SHA")
 
-# 3. Never follow a PR-controlled symlink as a trusted rule source.
+# Remove whatever the PR put at $1 (file, directory, or a parent that is a file or symlink). Never follows a PR symlink.
+clear_path() {
+  local d=$1
+  while [[ $d == */* ]]; do
+    d=${d%/*}
+    if [ -L "$d" ] || { [ -e "$d" ] && [ ! -d "$d" ]; }; then rm -f -- "$d"; fi
+  done
+  rm -rf -- "$1"
+}
+# One path at a time so a failure cannot abort the rest (ponytail: one git process per matched path, batch if it ever matters).
+# A path that cannot be restored is deleted: a PR-controlled rule or agent config is never left in place.
+: > "$CTX/restore-failures.txt"
+for f in "${head_hit[@]}"; do clear_path "$f"; done
+for f in "${base_hit[@]}"; do
+  clear_path "$f"
+  if ! GIT_LITERAL_PATHSPECS=1 git restore --source="$BASE_SHA" --worktree -- "$f" 2>/dev/null; then
+    clear_path "$f"; printf '%s\n' "$f" >> "$CTX/restore-failures.txt"
+    echo "::warning::could not restore $f from base; removed it and excluded it from the rule inventory"
+  fi
+done
+[ -s "$CTX/restore-failures.txt" ] || rm -f "$CTX/restore-failures.txt"
+
+# 3. Never follow a PR-controlled symlink as a trusted rule source. A path that failed to restore is gone, so it is not listed.
 : > "$CTX/standards.txt"
-while IFS= read -r -d '' f; do
+for f in "${base_hit[@]}"; do
   if match "$f" "${STANDARDS[@]}" && ! match "$f" "${IGNORES[@]}" "${OWN[@]}" && [ -f "$f" ] && [ ! -L "$f" ]; then
     printf '%s\n' "$f" >> "$CTX/standards.txt"
   fi
-done < <(git ls-tree -r -z --name-only "$BASE_SHA")
+done
 
-# 4. requirements, including explicit collection limitations
-node "$(dirname "$0")/requirements.js"
+# 4. requirements, including explicit collection limitations; a failure here must not abort collection
+if ! node "$(dirname "$0")/requirements.js"; then
+  echo "::warning::requirement collection failed; continuing without requirements"
+  echo none > "$CTX/requirements.md"
+  printf '{\n  "status": "unavailable",\n  "sources": [],\n  "limitations": ["Requirement collection failed; review is limited to changed behaviour."],\n  "documents": [],\n  "criteria": []\n}\n' > "$CTX/requirements-status.json"
+fi
 
 # 5. oversize
 if [ "$(wc -c < "$CTX/diff.patch")" -gt $((MAX_DIFF_KB * 1024)) ]; then

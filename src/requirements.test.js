@@ -35,3 +35,17 @@ test('inventories numbered, checkbox and explicitly labelled acceptance criteria
   ]);
   assert.deepEqual(extractCriteria([{ source: 'PR body', text: 'Make the system faster.' }]), []);
 });
+
+test('ignores HTML entities and merge-commit text but keeps real references', () => {
+  const calls = [];
+  const loadIssue = (repo, n) => { calls.push(n); return { title: 't', body: '' }; };
+  collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'Don&#39;t break it &#x27; a#5' }, commits: 'Merge pull request #4 from x/y\nMerge branch \'a\' into b #7', loadIssue });
+  assert.deepEqual(calls, []);
+  collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'Closes #12' }, commits: 'Merge pull request #4 from x/y\nfix (#13)', loadIssue });
+  assert.deepEqual(calls, [12, 13]);
+});
+
+test('indented sub-bullets continue their criterion', () => {
+  const criteria = extractCriteria([{ source: 'PR body', text: '## Acceptance criteria\n- Parent\n  - sub one\n  - sub two\n- Second' }]);
+  assert.deepEqual(criteria.map((r) => r.quote), ['Parent\n- sub one\n- sub two', 'Second']);
+});

@@ -130,3 +130,24 @@ test('acceptable findings are neither TP nor FP, are reported, and aggregate', (
   const a = aggregate([r, { ...r, acceptable: 2 }, { goal: 'requirements', error: 'x' }]);
   assert.deepEqual([a.acceptable, a.precision], [3, 0.5]);
 });
+
+test('billing: premium_request items replace Copilot SKUs of the general endpoint (no double count)', () => {
+  const { copilotItems } = require('./run.js');
+  const general = [{ sku: 'Copilot premium request', netAmount: 1 }, { sku: 'Actions minutes', netAmount: 9 }];
+  assert.deepEqual(copilotItems(general, [{ sku: 'Premium', model: 'm', netAmount: 2 }]), { 'Premium m': 2 });
+  assert.deepEqual(copilotItems(general, []), { 'Copilot premium request': 1 });
+});
+
+test('billing: both snapshots use the batch-start UTC date; a UTC midnight crossing is flagged', () => {
+  const { utcDay } = require('./run.js');
+  assert.equal(utcDay(new Date('2026-01-31T23:59:59Z')), 'year=2026&month=1&day=31');
+  assert.equal(utcDay(new Date('2026-02-01T00:00:00Z')), 'year=2026&month=2&day=1');
+});
+
+test('getVar: only a not-found error means unset; anything else aborts', () => {
+  const { varLookup } = require('./run.js');
+  assert.equal(varLookup(() => 'v'), 'v');
+  assert.equal(varLookup(() => { throw Object.assign(new Error('x'), { stderr: 'HTTP 404: Not Found' }); }), null);
+  assert.equal(varLookup(() => { throw Object.assign(new Error('x'), { stderr: 'variable FOO was not found' }); }), null);
+  assert.throws(() => varLookup(() => { throw Object.assign(new Error('x'), { stderr: 'HTTP 502: bad gateway' }); }), /could not read repo variable/);
+});
