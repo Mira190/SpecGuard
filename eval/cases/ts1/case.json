@@ -1,0 +1,39 @@
+{
+  "id": "ts1",
+  "goal": "requirements",
+  "description": "TypeScript (vitest): three ACs, only the hours path is tested; the minutes path and the invalid-input RangeError are untested.",
+  "pr_title": "Add parseDuration",
+  "pr_body": "Add parseDuration, which converts strings like \"1h30m\" to seconds.\n\n## Acceptance criteria\n- Hours and minutes combine, so \"1h30m\" is 5400 seconds.\n- Minutes alone work, so \"45m\" is 2700 seconds.\n- An invalid string throws a RangeError.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/ts1/duration.ts",
+        "line": 9,
+        "tolerance": 1,
+        "quote": "const minutes = Number"
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/ts1/duration.ts",
+        "line": 6,
+        "tolerance": 1,
+        "quote": "throw new RangeError"
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/ts1/duration.ts",
+        "line": 10,
+        "tolerance": 0,
+        "reason": "Combining hours and minutes is never exercised: the only test uses hours alone."
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "missing_test x2 (minutes path, invalid-input throw). The hours+minutes combination is also untested, so it is acceptable on the return line."
+  }
+}

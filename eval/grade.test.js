@@ -103,7 +103,7 @@ test('aggregate: precision, recall, validity, pass rate, latency and per-goal sp
 });
 
 test('shipped cases are well formed', () => {
-  assert.equal(allIds().length, 14);
+  assert.ok(allIds().length >= 21, 'every shipped case directory is listed');
   assert.deepEqual(allIds().flatMap(validateCase), []);
 });
 
