@@ -40,6 +40,15 @@ function parseSummary(text) {
   };
 }
 
+// The summary restricted to items and coverage rows under a path prefix (combined runs); every other line is kept.
+function filterSummary(text, prefix) {
+  if (text == null) return text;
+  return text.split('\n').filter((ln) => {
+    const m = /^- \*\*.+?\*\* \(`([^`:]+):\d+`, /.exec(ln) || (ln.startsWith('| ') ? /; (\S+?):\d+ — /.exec(ln.split(/(?<!\\)\|/)[2] || '') : null);
+    return !m || m[1].startsWith(prefix);
+  }).join('\n');
+}
+
 function grade(spec, obs) {
   const exp = spec.expected || {};
   const comments = obs.comments || [], reviews = obs.reviews || [];
@@ -127,4 +136,4 @@ function aggregate(results) {
   return { ...summarize(results), cost: 'not measured', by_goal };
 }
 
-module.exports = { grade, aggregate, parseComment, parseSummary };
+module.exports = { grade, aggregate, parseComment, parseSummary, filterSummary };
