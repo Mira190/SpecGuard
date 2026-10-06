@@ -44,7 +44,7 @@ function validate(o) {
   for (const [i, f] of o.findings.entries()) {
     if (!f || typeof f !== 'object') return bad(`findings[${i}] not an object`);
     if (!KINDS.includes(f.kind)) return bad(`findings[${i}].kind invalid`);
-    if (!str(f.path) || !str(f.title) || !str(f.body)) return bad(`findings[${i}] path/title/body must be strings`);
+    if (!str(f.path) || !str(f.title) || !str(f.body) || !str(f.quote)) return bad(`findings[${i}] path/title/body/quote must be strings`);
     if (!int(f.line)) return bad(`findings[${i}].line must be an integer >= 1`);
     if (f.start_line !== undefined && !int(f.start_line)) return bad(`findings[${i}].start_line invalid`);
     if (f.rule_source !== undefined && !str(f.rule_source)) return bad(`findings[${i}].rule_source invalid`);
@@ -64,7 +64,19 @@ function anchor(f, maps, fileUsed = 0) {
 }
 
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
-const fingerprint = (kind, p, lineText) => crypto.createHash('sha1').update(`${kind}\0${p}\0${norm(lineText)}`).digest('hex');
+const fingerprint = (kind, p, quote) => crypto.createHash('sha1').update(`${kind}\0${p}\0${norm(quote)}`).digest('hex');
+
+// Line delta (0, -1, +1, ... up to +-5) that puts the quote on the cited line, or null. Never guesses.
+function snap(f, lines) {
+  if (!lines) return null;
+  const q = norm(f.quote);
+  if (!q) return null;
+  for (let d = 0; d <= 5; d++) for (const s of d ? [-d, d] : [0]) {
+    const at = f.line - 1 + s;
+    if (at >= 0 && at < lines.length && norm(lines[at]) === q && (f.start_line === undefined || f.start_line + s >= 1)) return s;
+  }
+  return null;
+}
 
 // Order, cap, and route findings. Summary items carry the reason they are there.
 function plan(findings, maps, maxComments = 10) {
@@ -154,6 +166,8 @@ async function run({ github, context, core }) {
 
   const kept = [];
   let already = 0;
+  const seen = new Set();
+  const unanchored = []; // items that failed to post or anchor; they go to the summary
   for (const f of data.findings) {
     if (!maps.has(f.path) || !reviewable.has(f.path)) continue;
     if (f.kind === 'standard') {
@@ -162,19 +176,19 @@ async function run({ github, context, core }) {
       const okRule = rl && +m[2] >= 1 && +m[2] <= rl.length;
       if (!okRule && !(f.confidence === 'low' && !f.rule_source)) continue; // inferred (no rule, low) stays; bad citations drop
     }
-    const src = readLines(f.path);
-    const fp = fingerprint(f.kind, f.path, (src && src[f.line - 1]) ?? f.title);
+    const d = snap(f, readLines(f.path));
+    if (d === null) { unanchored.push({ f, why: 'citation did not match the file' }); continue; }
+    const fp = fingerprint(f.kind, f.path, f.quote);
     if (known.has(fp)) already++;
-    else kept.push({ ...f, fp });
+    else if (!seen.has(fp)) { seen.add(fp); kept.push({ ...f, line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }), fp }); }
   }
 
   const p = plan(kept, maps, maxComments);
-  const unanchored = []; // items that failed to post; they go to the summary
   const comments = p.inline.map((f) => ({
     path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp),
     ...(f.start_line !== undefined && { start_line: f.start_line, start_side: 'RIGHT' }),
   }));
-  const counts = `${comments.length} inline, ${p.file.length} file-level, ${p.summary.length} in summary${already ? `, ${already} already posted` : ''}`;
+  const counts = `${comments.length} inline, ${p.file.length} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
   const head = `<!-- specguard:review -->\nSpecGuard found ${counts}. Engine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
 
   if (comments.length) {
@@ -206,4 +220,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, validate, anchor, plan, fingerprint, redact, truncate, buildSummary, commentBody });
+Object.assign(module.exports, { parsePatch, validate, anchor, snap, plan, fingerprint, redact, truncate, buildSummary, commentBody });

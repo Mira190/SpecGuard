@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const post = require('./post.js');
-const { parsePatch, validate, anchor, plan, fingerprint, redact, truncate } = post;
+const { parsePatch, validate, anchor, snap, plan, fingerprint, redact, truncate } = post;
 
 const PATCH = ['@@ -1,3 +1,4 @@', ' ctx1', '-old2', '+new2', '+new3', ' ctx4', '\\ No newline at end of file', '@@ -20,2 +21,2 @@', ' c20', '+n22'].join('\n');
 
@@ -16,7 +16,7 @@ test('parsePatch: added, context, deleted, multiple hunks, no-newline marker', (
   assert.strictEqual(parsePatch('@@ -1 +1 @@\n+a\n').RIGHT.size, 1); // trailing '' is not a context line
 });
 
-const F = (o) => ({ kind: 'missing_test', path: 'a.js', line: 2, title: 't', body: 'b', confidence: 'high', ...o });
+const F = (o) => ({ kind: 'missing_test', path: 'a.js', line: 2, quote: 'q', title: 't', body: 'b', confidence: 'high', ...o });
 const maps = new Map([['a.js', parsePatch(PATCH)]]);
 
 test('anchor ladder: inline / file-level / summary', () => {
@@ -58,6 +58,7 @@ test('validate rejects bad kind and line, accepts a sample', () => {
 
 test('fingerprint is stable across line shifts, changes with text', () => {
   assert.strictEqual(fingerprint('standard', 'a.js', '  if (x)   {'), fingerprint('standard', 'a.js', 'if (x) {'));
+  assert.strictEqual(fingerprint('standard', 'a.js', 'if (x) {'), fingerprint('standard', 'a.js', ' if (x)  { '));
   assert.notStrictEqual(fingerprint('standard', 'a.js', 'if (x) {'), fingerprint('weak_test', 'a.js', 'if (x) {'));
   assert.notStrictEqual(fingerprint('standard', 'a.js', 'if (x) {'), fingerprint('standard', 'a.js', 'if (y) {'));
 });
@@ -72,18 +73,20 @@ test('redact and truncate', () => {
 function setup({ existing = [], failFirst422 = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-'));
   fs.mkdirSync(path.join(dir, 'ctx'));
-  fs.writeFileSync(path.join(dir, 'src.js'), 'l1\nl2\nif (x) {\nl4\n');
+  fs.writeFileSync(path.join(dir, 'src.js'), ['l1', 'l2', 'if (x) {', 'l4', 'l5', 'l6', 'l7', 'l8', ''].join('\n'));
   fs.writeFileSync(path.join(dir, 'RULES.md'), 'rule one\nrule two\n');
   fs.writeFileSync(path.join(dir, 'ctx/files.txt'), 'src.js\n');
   fs.writeFileSync(path.join(dir, 'ctx/standards.txt'), 'RULES.md\n');
   const findings = {
     requirements_source: 'PR body', not_reviewed: '', coverage: [],
     findings: [
-      F({ path: 'src.js', line: 3, title: 'inline one' }),
-      F({ path: 'src.js', line: 99, title: 'file level' }),
+      F({ path: 'src.js', line: 3, quote: 'if (x) {', title: 'inline one' }),
+      F({ path: 'src.js', line: 8, quote: 'l8', title: 'file level' }),
       F({ path: 'other.js', line: 1, title: 'not in diff' }),
-      F({ path: 'src.js', line: 2, kind: 'standard', rule_source: 'RULES.md:2', title: 'good rule' }),
-      F({ path: 'src.js', line: 4, kind: 'standard', rule_source: 'RULES.md:50', title: 'bad rule' }),
+      F({ path: 'src.js', line: 4, quote: 'no such text', title: 'bad quote' }),
+      F({ path: 'src.js', line: 4, quote: 'if (x) {', title: 'off by one' }),
+      F({ path: 'src.js', line: 2, quote: 'l2', kind: 'standard', rule_source: 'RULES.md:2', title: 'good rule' }),
+      F({ path: 'src.js', line: 4, quote: 'l4', kind: 'standard', rule_source: 'RULES.md:50', title: 'bad rule' }),
     ],
   };
   fs.writeFileSync(path.join(dir, 'ctx/findings.json'), JSON.stringify(findings));
@@ -125,8 +128,10 @@ test('main flow: one review, file-level comment, rule filter, summary created', 
   assert.ok(r.body.startsWith('<!-- specguard:review -->'));
   assert.strictEqual(s.calls.fileComment.length, 1);
   assert.strictEqual(s.calls.fileComment[0].subject_type, 'file');
-  assert.ok(s.calls.fileComment[0].body.includes('/blob/HEADSHA/src.js#L99'));
+  assert.ok(s.calls.fileComment[0].body.includes('/blob/HEADSHA/src.js#L8'));
   assert.strictEqual(s.calls.issueCreate.length, 1);
+  assert.ok(s.calls.issueCreate[0].body.includes('citation did not match the file'));
+  assert.strictEqual(r.comments.filter((c) => c.line === 3).length, 1); // off-by-one snapped onto line 3, deduped with 'inline one'
   assert.ok(s.calls.issueCreate[0].body.includes('<!-- specguard:summary -->'));
 });
 
@@ -135,7 +140,7 @@ test('main flow: dedupe skips an existing fingerprint', async () => {
   const s = setup({ existing: [{ body: `old <!-- specguard:fp=${fp} -->`, line: null }] });
   await post(s);
   assert.deepStrictEqual(s.calls.review[0].comments.map((c) => c.line), [2]);
-  assert.ok(s.calls.review[0].body.includes('1 already posted'));
+  assert.ok(s.calls.review[0].body.includes('2 already posted'));
 });
 
 test('main flow: 422 retries once as a body-only review', async () => {
@@ -152,4 +157,15 @@ test('main flow: missing findings.json reports could not complete and does not t
   await post(s);
   assert.strictEqual(s.calls.review.length, 0);
   assert.ok(s.calls.issueCreate[0].body.includes('Could not complete'));
+});
+
+test('snap: exact, +-1, closest wins, no match / unreadable / start_line underflow', () => {
+  const L = ['a', '  throw 1;', '}', 'c'];
+  assert.strictEqual(snap({ line: 2, quote: 'throw 1;' }, L), 0);
+  assert.strictEqual(snap({ line: 3, quote: 'throw 1;' }, L), -1);
+  assert.strictEqual(snap({ line: 1, quote: 'throw   1;' }, L), 1);
+  assert.strictEqual(snap({ line: 2, quote: 'nope' }, L), null);
+  assert.strictEqual(snap({ line: 2, quote: 'throw 1;' }, null), null);
+  assert.strictEqual(snap({ line: 3, start_line: 1, quote: 'throw 1;' }, L), null);
+  assert.strictEqual(snap({ line: 50, quote: 'throw 1;' }, L), null); // beyond +-5
 });
