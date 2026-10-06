@@ -12,6 +12,7 @@ const SECRET = /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-
 const redact = (s) => String(s).replace(SECRET, '[REDACTED]');
 const truncate = (s, n = BODY_MAX) => (s.length > n ? s.slice(0, n - 20) + '\n...(truncated)' : s);
 const clean = (s) => truncate(redact(s));
+const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 // line -> hunk index per side. RIGHT: '+' and ' ' lines, LEFT: '-' lines.
 function parsePatch(patch) {
@@ -160,6 +161,7 @@ function anchor(f, maps, fileUsed = 0) {
 
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
 // An acceptance-criterion source is stabler than a quote: the model re-anchors the same finding on different lines between runs.
+// ponytail: AC-only means a new gap on the same AC and file at another line is hidden once the first is posted; add the line to the key if that bites.
 const AC = /^(issue (?:[\w.-]+\/[\w.-]+)?#\d+|PR body) AC \d+$/;
 const fingerprint = (kind, p, quote, ...sources) => {
   const ac = sources.filter((s) => AC.test(s)).sort();
@@ -180,17 +182,17 @@ function snap(f, lines) {
 
 // One comment per kind, path, line and confidence (a low finding never rides on a high comment). One fingerprint per
 // merged comment from stable data only (kind, path, quote or the members' AC sources), so reruns dedupe without dropping findings.
+// A finding with a suggestion or a range is never merged: the block would replace a range it was not written for.
 function merge(fs_) {
   const groups = new Map();
-  for (const f of fs_) { const k = `${f.kind}\0${f.path}\0${f.line}\0${f.confidence}`; groups.set(k, [...(groups.get(k) || []), f]); }
+  for (const [i, f] of fs_.entries()) { const k = `${f.kind}\0${f.path}\0${f.line}\0${f.confidence}${f.suggestion || f.start_line !== undefined ? `\0${i}` : ''}`; groups.set(k, [...(groups.get(k) || []), f]); }
   return [...groups.values()].map((g) => ({
     ...g[0],
     fp: fingerprint(g[0].kind, g[0].path, g[0].quote, ...g.map((f) => f.source)),
     ...(g.length > 1 && {
-    title: truncate(g.map((f) => f.title).join('; '), 200),
+    title: oneLine(g.map((f) => f.title).join('; '), 200),
     body: g.map((f) => `**${f.title}**\n\n${f.body}`).join('\n\n---\n\n'),
     obligation_ids: [...new Set(g.flatMap((f) => f.obligation_ids))],
-    start_line: g.some((f) => f.start_line === undefined) ? undefined : Math.min(...g.map((f) => f.start_line)),
     }),
   }));
 }
@@ -282,7 +284,7 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], parti
   return clean(s);
 }
 
-const readLines = (p) => {
+const readFile = (p) => {
   try {
     const root = fs.realpathSync(process.env.GITHUB_WORKSPACE || process.cwd());
     const target = fs.realpathSync(path.resolve(root, p));
@@ -293,7 +295,7 @@ const readLines = (p) => {
 };
 
 // Verifies citations, not the model's semantic judgement. Never upgrades missing evidence.
-function verifyEvidence(data, reviewable, standards, read = readLines, maps = new Map()) {
+function verifyEvidence(data, reviewable, standards, read = readFile, maps = new Map()) {
   const exact = (c) => {
     if (c.side === 'LEFT') return norm(maps.get(c.path)?.changed.LEFT.get(c.line) || '') === norm(c.quote);
     const lines = read(c.path); return lines && norm(lines[c.line - 1] || '') === norm(c.quote);
@@ -318,7 +320,7 @@ function verifyEvidence(data, reviewable, standards, read = readLines, maps = ne
   return data;
 }
 
-function verifyRequirements(data, context, read = readLines) {
+function verifyRequirements(data, context, read = readFile) {
   const note = (s) => { data.not_reviewed = [data.not_reviewed, s].filter(Boolean).join(' '); };
   const invalid = new Set();
   for (const expected of context.criteria || []) {
@@ -330,10 +332,11 @@ function verifyRequirements(data, context, read = readLines) {
     } else r.source = expected.source; // "PR body AC 1" is accepted; the collected label is canonical
   }
   for (const r of data.requirements) {
-    const collected = (context.documents || []).find((d) => d.source === r.source);
+    const label = r.source.replace(/ AC \d+$/, ''); // "PR body AC 3" -> the collected document label
+    const collected = (context.documents || []).find((d) => d.source === label);
     const text = collected ? collected.text : (read(r.source) || []).join('\n');
     if (!norm(text).includes(norm(r.quote))) {
-      r.obligation_ids.forEach((id) => invalid.add(id));
+      if (!context.unavailable) r.obligation_ids.forEach((id) => invalid.add(id)); // no status file: citations that verify on their own keep their findings
       r.obligation_ids = [];
       r.reason = 'Could not verify the original criterion wording against its source.';
     }
@@ -357,8 +360,12 @@ async function run({ github, context, core }) {
   const partial = env.PARTIAL === 'true';
   const maxComments = Math.max(1, parseInt(env.MAX_COMMENTS, 10) || 10);
   const headSha = env.HEAD_SHA || pr.head.sha;
-  let livePR;
-  const current = async () => { livePR = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })).data; return livePR.head.sha === headSha; };
+  let livePR, unchecked = false;
+  const current = async () => {
+    try { livePR = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })).data; }
+    catch (e) { unchecked = true; core.warning(`SpecGuard: could not recheck HEAD: ${e.message}`); return true; } // continue with the event's head SHA
+    return livePR.head.sha === headSha;
+  };
   if (!await current()) return core.warning('SpecGuard: superseded HEAD; no results published');
 
   const publish = async (text) => {
@@ -374,9 +381,9 @@ async function run({ github, context, core }) {
 
   if (env.SKIP === 'true') return publish(buildSummary({ status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }));
   const target = env.STANDARDS_REF || 'head';
-  const ref = target === 'head' ? headSha : target === 'merge' && livePR.mergeable !== null ? livePR.merge_commit_sha : null;
+  const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
-    : { status: 'unavailable', ref: '', checks: [], reason: 'Configured standards ref must be head or an available current merge commit.' };
+    : { status: 'unavailable', ref: '', checks: [], reason: target === 'merge' ? 'PR has no current test-merge commit' : 'Configured standards ref must be head or an available current merge commit.' };
   const failed = (why) => publish(buildSummary({ status: `Could not complete: ${why}`, tooling, engine, model, partial }));
 
   let data;
@@ -389,6 +396,9 @@ async function run({ github, context, core }) {
   }
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
+  const addNote = (m) => { data.not_reviewed = [data.not_reviewed, m].filter(Boolean).join(' '); };
+  const memo = new Map(); // files do not change during a run
+  const readLines = (p) => (memo.has(p) ? memo : memo.set(p, readFile(p))).get(p);
   data.tooling = tooling; // Always overwrite any model-supplied tooling claim.
 
   let local = '';
@@ -402,13 +412,17 @@ async function run({ github, context, core }) {
     } catch { (data.validation_notes ||= []).push('GitHub diff API unavailable; anchored with the local diff only.'); }
   }
   verifyEvidence(data, reviewable, standards, readLines, maps);
-  try {
-    const requirements = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8'));
-    verifyRequirements(data, requirements);
+  let requirements = null;
+  try { requirements = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')); verifyRequirements(data, requirements, readLines); } catch { requirements = null; }
+  if (requirements) {
     data.requirements_source = requirements.sources.join(', ') || 'unavailable; changed behaviour only';
-    if (requirements.status !== 'available') data.not_reviewed = [data.not_reviewed, ...requirements.limitations].filter(Boolean).join(' ');
-  } catch { data.not_reviewed = [data.not_reviewed, 'Requirement collection status unavailable.'].filter(Boolean).join(' '); }
-  if (partial) data.not_reviewed = [data.not_reviewed, 'Diff truncated; obligations outside the reviewed portion are unknown.'].filter(Boolean).join(' ');
+    if (requirements.status !== 'available') addNote((requirements.limitations || []).join(' '));
+  } else { // no collected documents: quotes verify only against files; unverifiable ones are unassessed but their obligations keep their own citations
+    verifyRequirements(data, { unavailable: true }, readLines);
+    data.requirements_source = 'unavailable; changed behaviour only';
+    addNote('Requirement collection status unavailable.');
+  }
+  if (partial) addNote('Diff truncated; obligations outside the reviewed portion are unknown.');
 
   const known = new Set();
   for (const c of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: pr.number, per_page: 100 })) {
@@ -427,14 +441,15 @@ async function run({ github, context, core }) {
       if (f.kind !== 'standard' && reviewable.has(f.path) && norm(maps.get(f.path)?.changed.LEFT.get(f.line) || '') === norm(f.quote)) {
         assessed.push(f);
         unanchored.push({ f, why: 'removed test or assertion; location is on the LEFT side of the diff' });
-      } else data.not_reviewed = [data.not_reviewed, `Removed-line citation could not be verified: ${f.path}:${f.line}.`].filter(Boolean).join(' ');
+      } else addNote(`Removed-line citation could not be verified: ${f.path}:${f.line}.`);
       continue;
     }
     if (!maps.has(f.path) || !reviewable.has(f.path)) {
-      if (f.kind !== 'standard' && snap(f, readLines(f.path)) !== null) {
+      const d = f.kind !== 'standard' ? snap(f, readLines(f.path)) : null;
+      if (d !== null) {
         assessed.push(f);
-        unanchored.push({ f, why: 'assertion outside the reviewed diff' });
-      } else data.not_reviewed = [data.not_reviewed, `Finding location could not be verified: ${f.path}:${f.line}.`].filter(Boolean).join(' ');
+        unanchored.push({ f: { ...f, line: f.line + d }, why: 'assertion outside the reviewed diff' });
+      } else addNote(`Finding location could not be verified: ${f.path}:${f.line}.`);
       continue;
     }
     if (f.kind === 'standard') {
@@ -443,13 +458,13 @@ async function run({ github, context, core }) {
       const at = rl && ruleLine(f.rule_quote, rl, +m[2]);
       if (at) f = { ...f, rule_source: `${m[1]}:${at}` };
       else if (!(f.confidence === 'low' && !f.rule_source)) {
-        data.not_reviewed = [data.not_reviewed, `Unverified standards finding omitted: ${f.title}.`].filter(Boolean).join(' ');
+        addNote(`Unverified standards finding omitted: ${f.title}.`);
         continue;
       }
     }
     const d = snap(f, readLines(f.path));
     if (d === null) {
-      data.not_reviewed = [data.not_reviewed, `Finding citation did not match: ${f.path}:${f.line}.`].filter(Boolean).join(' ');
+      addNote(`Finding citation did not match: ${f.path}:${f.line}.`);
       continue;
     }
     const exact = [f.kind, f.path, f.line + d, f.title, f.body].join('\0'); // only a verbatim repeat is dropped
@@ -467,8 +482,9 @@ async function run({ github, context, core }) {
     ...(f.start_line !== undefined && { start_line: f.start_line, start_side: 'RIGHT' }),
   }));
   const prov = proven(data.coverage);
-  const counts = `${comments.length} inline, ${p.file.length} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
-  const head = `<!-- specguard:review -->\nSpecGuard found ${axes(assessed)}; ${counts}.${prov ? `\n${prov}.` : ''}\nEngine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
+  let inline = comments.length, filed = p.file.length;
+  const counts = () => `${inline} inline, ${filed} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
+  const head = `<!-- specguard:review -->\nSpecGuard found ${axes(assessed)}; ${counts()}.${prov ? `\n${prov}.` : ''}\nEngine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
 
   if (!await current()) return core.warning('SpecGuard: superseded HEAD; no review published');
   if (comments.length) {
@@ -479,10 +495,12 @@ async function run({ github, context, core }) {
         try { await post(`${head}\n\nInline anchors were rejected; unanchored findings:\n\n${p.inline.map((f) => item({ f })).join('\n')}`); }
         catch (e2) { core.warning(`SpecGuard: review retry failed: ${e2.message}`); }
         p.inline.forEach((f) => unanchored.push({ f, why: 'anchor rejected' }));
+        inline = 0;
       } else {
         core.warning(`SpecGuard: could not post review (${e.status}): ${e.message}`);
         if (e.status === 403 || e.status === 404) p.inline.slice(0, 10).forEach((f) => core.warning(f.title, { file: f.path, startLine: f.start_line || f.line, title: `SpecGuard ${f.kind}` }));
         p.inline.forEach((f) => unanchored.push({ f, why: 'could not post' }));
+        inline = 0;
       }
     }
   }
@@ -491,10 +509,11 @@ async function run({ github, context, core }) {
     const link = `${context.serverUrl}/${owner}/${repo}/blob/${headSha}/${f.path}${range}`;
     try {
       await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
-    } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); }
+    } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); filed--; }
   }
+  if (unchecked) addNote('The PR head could not be rechecked; results use the event head commit.');
 
-  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `Reviewed: ${axes(assessed)}; ${counts}.`}${prov ? `\n\n${prov}.` : ''}`, data, items: [...p.summary, ...unanchored], partial, engine, model }));
+  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, data, items: [...p.summary, ...unanchored], partial, engine, model }));
 }
 
 module.exports = async (a) => {

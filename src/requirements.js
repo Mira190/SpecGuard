@@ -12,7 +12,7 @@ const sanitize = (s) => String(s || '').replace(/<!--[\s\S]*?-->/g, '')
 function extractCriteria(documents) {
   const criteria = [];
   for (const { source, text } of documents) {
-    let depth = 0, active = null, fenced = false;
+    let depth = 0, active = null, fenced = false, top = 0;
     for (const line of text.split(/\r?\n/)) {
       if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
       if (fenced) continue;
@@ -24,8 +24,11 @@ function extractCriteria(documents) {
         continue;
       }
       const labelled = /^\s*AC\s*\d+\s*[:：]\s*(.+)$/i.exec(line);
-      const item = depth && /^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)(.+)$/.exec(line);
+      const indent = /^\s*/.exec(line)[0].length;
+      // an item indented deeper than the current criterion is a sub-point of it (continuation below)
+      const item = depth && !(active && indent > top) && /^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)(.+)$/.exec(line);
       if (labelled || item) {
+        top = indent;
         active = { id: `R${criteria.length + 1}`, source, quote: (labelled || item)[1].trim() };
         criteria.push(active);
       } else if (active && /^\s+\S/.test(line)) active.quote += '\n' + line.trim();
@@ -44,10 +47,10 @@ function collectRequirements({ pr, repo, commits = '', loadIssue }) {
     if (m) add(m[1], m[2]);
     else if (issue.number) add(repo, issue.number);
   }
-  const text = sanitize(`${pr.body || ''}\n${commits}`);
+  const text = sanitize(`${pr.body || ''}\n${String(commits).split(/\r?\n/).filter((l) => !/^Merge (pull request #|branch)/.test(l)).join('\n')}`);
   for (const m of text.matchAll(url)) add(m[1], m[2]);
   const withoutUrls = text.replace(/https?:\/\/\S+/g, '');
-  for (const m of withoutUrls.matchAll(/(?:\b([\w.-]+\/[\w.-]+))?#(\d+)\b/g)) add(m[1] || repo, m[2]);
+  for (const m of withoutUrls.matchAll(/(?:\b([\w.-]+\/[\w.-]+)#|(?<![&\w])#)(\d+)\b/g)) add(m[1] || repo, m[2]);
   const limitations = [];
   const parts = [`# PR: ${sanitize(pr.title)}\n\n${sanitize(pr.body)}`];
   const sources = ['PR body'];

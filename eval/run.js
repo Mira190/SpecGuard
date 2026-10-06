@@ -77,27 +77,39 @@ const push = (wt, branch) => git(wt, ['-c', 'credential.helper=', '-c', `credent
 const ghJson = (args) => JSON.parse(sh('gh', args));
 // Repo variable SPECGUARD_EVAL_MODEL is read by the dogfood step; null means unset.
 const VAR = 'SPECGUARD_EVAL_MODEL';
-const getVar = (repo, name = VAR) => { try { return sh('gh', ['variable', 'get', name, '--repo', repo]); } catch { return null; } };
+// Only "not found" means unset; any other failure must not look like unset, or restore() would delete a real variable.
+function varLookup(get) {
+  try { return get(); } catch (e) {
+    const msg = String(e.stderr || e.message);
+    if (/HTTP 404|not found/i.test(msg)) return null;
+    throw new Error(`could not read repo variable (aborting before changing any variable): ${msg.trim().split('\n')[0]}`);
+  }
+}
+const getVar = (repo, name = VAR) => varLookup(() => sh('gh', ['variable', 'get', name, '--repo', repo]));
 const setVar = (repo, v, name = VAR) => (v == null ? (() => { try { sh('gh', ['variable', 'delete', name, '--repo', repo]); } catch {} })() : sh('gh', ['variable', 'set', name, '--body', v, '--repo', repo]));
 // Combined mode: x1 (expect_skip) cannot coexist with code changes; x2's prompt injection would contaminate every other scenario.
 const COMBINED_SKIP = ['x1', 'x2'];
 const BUDGET = 30, BUDGET_VAR = 'SPECGUARD_EVAL_MAX_COMMENTS';
 
 // Assumed response of users/<owner>/settings/billing/usage: { usageItems: [{ product, sku, grossAmount, netAmount, ... }] }.
-// Copilot items = product or sku containing "copilot"; amount = netAmount, else grossAmount. Anything else is logged and skipped.
-function billingTotals(owner) {
-  const d = new Date(), q = `year=${d.getUTCFullYear()}&month=${d.getUTCMonth() + 1}&day=${d.getUTCDate()}`;
+// Copilot items = product or sku containing "copilot"; amount = netAmount, else grossAmount. Anything else is skipped.
+const utcDay = (d = new Date()) => `year=${d.getUTCFullYear()}&month=${d.getUTCMonth() + 1}&day=${d.getUTCDate()}`;
+// premium_request/usage is Copilot-only: when it returns items use only those, else the Copilot SKUs of the general endpoint.
+function copilotItems(general, premium) {
   const bySku = {};
-  // General usage carries Copilot only if its product/sku says so; premium_request/usage is Copilot-only.
-  for (const [ep, all] of [['usage', false], ['premium_request/usage', true]]) {
-    const j = JSON.parse(sh('gh', ['api', `users/${owner}/settings/billing/${ep}?${q}`]));
-    if (!Array.isArray(j.usageItems)) throw new Error(`unexpected billing response shape from ${ep} (keys: ${Object.keys(j).join(',')}); expected usageItems[]`);
-    for (const i of j.usageItems) if (all || /copilot/i.test(`${i.product} ${i.sku}`)) {
-      const k = `${i.sku || i.product}${i.model ? ` ${i.model}` : ''}`;
-      bySku[k] = (bySku[k] || 0) + (Number(i.netAmount ?? i.grossAmount) || 0);
-    }
+  for (const i of premium.length ? premium : general.filter((i) => /copilot/i.test(`${i.product} ${i.sku}`))) {
+    const k = `${i.sku || i.product}${i.model ? ` ${i.model}` : ''}`;
+    bySku[k] = (bySku[k] || 0) + (Number(i.netAmount ?? i.grossAmount) || 0);
   }
   return bySku;
+}
+function billingTotals(owner, day) {
+  const [general, premium] = ['usage', 'premium_request/usage'].map((ep) => {
+    const j = JSON.parse(sh('gh', ['api', `users/${owner}/settings/billing/${ep}?${day}`]));
+    if (!Array.isArray(j.usageItems)) throw new Error(`unexpected billing response shape from ${ep} (keys: ${Object.keys(j).join(',')}); expected usageItems[]`);
+    return j.usageItems;
+  });
+  return copilotItems(general, premium);
 }
 function billingDelta(before, after) {
   // No Copilot items at all means AI Credits are not itemized (or are delayed) here: never report that as $0.
@@ -280,11 +292,12 @@ async function main() {
   const restore = () => { while (saved.length) { const [name, prev] = saved.pop(); try { setVar(o.repo, prev, name); console.log(`restored ${name} to ${prev == null ? '(unset)' : prev}`); } catch (e) { console.error(`could NOT restore ${name} (was ${prev}): ${e.message}`); } } };
   process.on('SIGINT', () => { restore(); process.exit(130); });
   let cost = { cost: 'not measured (pass --billing)' }, before;
+  const day = utcDay(); // one date for both snapshots
   const results = [], reps = [];
   try {
     if (o.model) override(VAR, o.model === 'default' ? null : o.model);
     if (o.combined) override(BUDGET_VAR, String(BUDGET));
-    if (o.billing) try { before = billingTotals(o.repo.split('/')[0]); } catch (e) { cost = { cost: `not measured: ${String(e.stderr || e.message).trim().split('\n')[0]}` }; }
+    if (o.billing) try { before = billingTotals(o.repo.split('/')[0], day); } catch (e) { cost = { cost: `not measured: ${String(e.stderr || e.message).trim().split('\n')[0]}` }; }
     if (o.combined) for (let n = 1; n <= +o.runs; n++) {
       console.log(`running combined #${n} (${ids.length} cases)`);
       const r = await runCombined({ repo: o.repo, target: o.target, cs: ids.map(loadCase), n, runId, keep: o.keep, workflow: o.workflow });
@@ -299,7 +312,7 @@ async function main() {
       results.push(r);
       console.log(r.error ? `  error: ${r.error}` : `  ${r.pass ? 'pass' : 'FAIL'} tp=${r.tp} fp=${r.fp} fn=${r.fn} latency=${sec(r.latency_s)}`);
     }
-    if (before) try { cost = billingDelta(before, billingTotals(o.repo.split('/')[0])); } catch (e) { cost = { cost: `not measured: ${String(e.stderr || e.message).trim().split('\n')[0]}` }; }
+    if (before) try { cost = utcDay() !== day ? { cost: 'not measured: batch crossed UTC midnight' } : billingDelta(before, billingTotals(o.repo.split('/')[0], day)); } catch (e) { cost = { cost: `not measured: ${String(e.stderr || e.message).trim().split('\n')[0]}` }; }
   } finally { restore(); }
   const agg = aggregate(results);
   const combined = o.combined ? { cases: ids, budget: BUDGET, reps } : null;
@@ -312,4 +325,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { rawOutput, validateCase, allIds, loadCase, markdown, combine, COMBINED_SKIP };
+module.exports = { copilotItems, utcDay, varLookup, rawOutput, validateCase, allIds, loadCase, markdown, combine, COMBINED_SKIP };
