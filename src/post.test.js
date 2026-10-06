@@ -382,3 +382,17 @@ test('a degraded but otherwise clean report is never called clean', async (t) =>
   assert.doesNotMatch(s.calls.summary[0].body, /No test gaps found/);
   assert.match(s.calls.summary[0].body, /Validation notes/);
 });
+
+test('accepts the documented "PR body AC k" citation on real r1 output and keeps every finding', () => {
+  const load = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/r1', f), 'utf8'));
+  const d = load('findings.json'), status = load('requirements-status.json');
+  const before = d.findings.length;
+  assert.equal(post.validate(d).ok, true);
+  post.verifyRequirements(d, status);
+  assert.deepEqual(d.requirements.map((r) => [r.id, r.source, r.obligation_ids.length > 0]), [['R1', 'PR body', true], ['R2', 'PR body', true], ['R3', 'PR body', true], ['R4', 'PR body', true]]);
+  assert.equal(d.findings.length, before);
+  assert.equal(d.not_reviewed, '');
+  const bad = report({ requirements: [{ id: 'R1', source: 'PR body AC x', quote: 'Return 42.', obligation_ids: ['O1'], reason: 'r' }], coverage: [row()], findings: [] });
+  post.verifyRequirements(bad, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [{ id: 'R1', source: 'PR body', quote: 'Return 42.' }] });
+  assert.deepEqual(bad.requirements[0].obligation_ids, []);
+});
