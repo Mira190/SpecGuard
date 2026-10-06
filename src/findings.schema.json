@@ -90,6 +90,9 @@
           "suggestion": {
             "type": "string"
           },
+          "source": {
+            "type": "string"
+          },
           "confidence": {
             "enum": [
               "high",

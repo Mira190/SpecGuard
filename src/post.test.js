@@ -183,3 +183,65 @@ test('commentBody: suggestion block for inline standard, longer fence, ignored o
   assert.ok(file.includes('Suggested fix:\n\n```\nthrow new Error(x);\n```') && !file.includes('```suggestion'));
   assert.strictEqual(validate({ requirements_source: '', not_reviewed: '', coverage: [], findings: [S({ suggestion: 1 })] }).ok, false);
 });
+
+test('fingerprint: an AC source replaces the quote, other sources do not', () => {
+  assert.strictEqual(fingerprint('missing_test', 'a.js', 'x', 'issue #1 AC 2'), fingerprint('missing_test', 'a.js', 'y', 'issue #1 AC 2'));
+  assert.notStrictEqual(fingerprint('missing_test', 'a.js', 'x', 'issue #1 AC 2'), fingerprint('missing_test', 'a.js', 'x', 'issue #1 AC 3'));
+  assert.strictEqual(fingerprint('missing_test', 'a.js', 'x', 'PR body AC 1'), fingerprint('missing_test', 'a.js', 'z', 'PR body AC 1'));
+  assert.notStrictEqual(fingerprint('missing_test', 'a.js', 'x', 'PR body'), fingerprint('missing_test', 'a.js', 'y', 'PR body'));
+  assert.strictEqual(fingerprint('missing_test', 'a.js', 'x', 'PR body'), fingerprint('missing_test', 'a.js', 'x'));
+  assert.strictEqual(validate({ requirements_source: '', not_reviewed: '', coverage: [], findings: [F({ source: 'issue #1 AC 2' })] }).ok, true);
+  assert.strictEqual(validate({ requirements_source: '', not_reviewed: '', coverage: [], findings: [F({ source: 5 })] }).ok, false);
+});
+
+test('main flow: same AC source on different lines and quotes posts one comment', async () => {
+  const s = setup();
+  const file = path.join(process.env.CTX, 'findings.json');
+  const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+  d.findings = [
+    F({ path: 'src.js', line: 3, quote: 'if (x) {', title: 'ac one', source: 'issue #1 AC 2' }),
+    F({ path: 'src.js', line: 2, quote: 'l2', title: 'ac one again', source: 'issue #1 AC 2' }),
+  ];
+  fs.writeFileSync(file, JSON.stringify(d));
+  await post(s);
+  assert.strictEqual(s.calls.review[0].comments.length, 1);
+});
+
+test('axes and proven: per-axis counts, covered over non-needs_human rows', () => {
+  const fs_ = [F({}), F({}), F({ kind: 'weak_test' }), F({ kind: 'standard' }), F({ kind: 'pushdown' })];
+  assert.strictEqual(post.axes(fs_), 'Tests: 2 missing, 1 weak · Standards: 1 · Layering: 1');
+  const row = (status) => ({ obligation: 'o', source: 's', tests: [], status });
+  assert.strictEqual(post.proven([row('covered'), row('missing_test'), row('weak_test'), row('needs_human')]), 'Proven: 1/3 obligations');
+  assert.strictEqual(post.proven([row('needs_human')]), '');
+  assert.strictEqual(post.proven([]), '');
+});
+
+test('main flow: no findings and all rows covered or needs_human reports no test gaps, posts no review', async () => {
+  const s = setup();
+  const file = path.join(process.env.CTX, 'findings.json');
+  const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const row = (status) => ({ obligation: 'o', source: 's', tests: [], status });
+  d.findings = [];
+  d.coverage = [row('covered'), row('covered'), row('needs_human')];
+  fs.writeFileSync(file, JSON.stringify(d));
+  await post(s);
+  assert.strictEqual(s.calls.review.length, 0);
+  const body = s.calls.issueCreate[0].body;
+  assert.ok(body.includes('No test gaps found.') && body.includes('Proven: 2/2 obligations'));
+  assert.strictEqual(post.noGaps({ findings: [], coverage: [row('missing_test')] }), false);
+});
+
+test('main flow: review body and summary carry per-axis counts and the proven line', async () => {
+  const s = setup();
+  await post(s);
+  assert.ok(s.calls.review[0].body.includes('Tests: 2 missing, 0 weak · Standards: 1 · Layering: 0'));
+  assert.ok(s.calls.issueCreate[0].body.includes('Reviewed: Tests: 2 missing, 0 weak · Standards: 1 · Layering: 0;'));
+  const t = setup();
+  const file = path.join(process.env.CTX, 'findings.json');
+  const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+  d.coverage = [{ obligation: 'o', source: 's', tests: [], status: 'covered' }, { obligation: 'p', source: 's', tests: [], status: 'missing_test' }];
+  fs.writeFileSync(file, JSON.stringify(d));
+  await post(t);
+  assert.ok(t.calls.review[0].body.includes('Proven: 1/2 obligations.'));
+  assert.ok(t.calls.issueCreate[0].body.includes('Proven: 1/2 obligations.'));
+});

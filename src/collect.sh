@@ -67,10 +67,15 @@ sanitize() {
 }
 req=none
 if [ -n "${PR_NUMBER:-}" ] && command -v gh >/dev/null; then
+  # closing issues, then #N in the PR body and commit messages; deduped, max 5, self excluded
+  nums=$({
+    gh pr view "$PR_NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'
+    { gh pr view "$PR_NUMBER" --json body --jq .body; git log "$BASE_SHA..$HEAD_SHA" --format=%B; } | grep -oE '#[0-9]+' | tr -d '#'
+  } 2>/dev/null | grep -vx "$PR_NUMBER" | awk '!s[$0]++' | head -5) || true
   req=$({
     gh pr view "$PR_NUMBER" --json title,body --jq '"# PR: " + .title + "\n\n" + .body'
-    for n in $(gh pr view "$PR_NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
-      gh issue view "$n" --json title,body --jq '"\n# Issue #'"$n"': " + .title + "\n\n" + .body'
+    for n in $nums; do
+      gh issue view "$n" --json title,body --jq '"\n# Issue #'"$n"': " + .title + "\n\n" + .body' || true # not an issue, or no access: skip
     done
   } 2>/dev/null | sanitize) || req=none
   [ -n "$req" ] || req=none

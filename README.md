@@ -83,14 +83,14 @@ Claude engine:
 
 ## Run locally
 
-The review is a plain skill: [`skills/test-review/SKILL.md`](skills/test-review/SKILL.md). With no context directory it diffs against the default branch and prints a human-readable report.
+The review is a plain skill: [`skills/test-review/SKILL.md`](skills/test-review/SKILL.md), which loads detail from `skills/test-review/references/` only when needed. Copy the whole folder, not just `SKILL.md`. With no context directory it diffs against the default branch and prints a human-readable report.
 
 ```sh
-claude -p "$(cat skills/test-review/SKILL.md) Review my branch against main." --tools "Read,Grep,Glob"
-copilot -p "$(cat skills/test-review/SKILL.md) Review my branch against main."
+claude -p "$(cat skills/test-review/SKILL.md skills/test-review/references/*.md) Review my branch against main." --tools "Read,Grep,Glob"
+copilot -p "$(cat skills/test-review/SKILL.md skills/test-review/references/*.md) Review my branch against main."
 ```
 
-Lite tier: copy `skills/test-review` to `.github/skills/` and Copilot code review can pick it up, with no workflow. No guarantees: it reads instructions from the PR head, output is free-form, and nothing is deduped or capped.
+Lite tier: copy the whole `skills/test-review` folder to `.github/skills/` and Copilot code review can pick it up, with no workflow. No guarantees: it reads instructions from the PR head, output is free-form, and nothing is deduped or capped.
 
 ## Troubleshooting
 
@@ -105,8 +105,8 @@ Lite tier: copy `skills/test-review` to `.github/skills/` and Copilot code revie
 
 ## How it works
 
-1. `src/collect.sh` gathers the diff, applies ignores, restores rule files from base, and fetches PR and linked-issue text.
-2. One read-only agent run follows `skills/test-review/SKILL.md` and returns JSON matching `src/findings.schema.json`.
+1. `src/collect.sh` gathers the diff, applies ignores, restores rule files from base, and fetches PR text plus up to 5 issues referenced by the PR (closing issues, and `#N` in the PR body and commit messages).
+2. The action builds the prompt by concatenating `SKILL.md` (frontmatter stripped) and every `skills/test-review/references/*.md` under a `# references/<name>` header, because the model can only read the workspace, not the action's own files. One read-only agent run follows it and returns JSON matching `src/findings.schema.json`.
 3. `src/post.js` validates, drops findings outside the diff, dedupes, and posts one inline review plus the sticky summary.
 
 Design and rationale: [docs/design.md](docs/design.md).

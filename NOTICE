@@ -6,6 +6,8 @@ Rubric adapted from:
 - github/awesome-copilot: skills/test-gap-audit. MIT.
 - obra/superpowers: writing-good-tests. MIT.
 - The-PR-Agent/pr-agent: needs-human status for acceptance criteria. MIT.
+- mattpocock/skills: tdd (with tests.md and mocking.md) and code-review, adapted for the weak-test catalogue, mocking rule, seams and spec sources. MIT.
+- DietrichGebert/ponytail: ponytail-review, adapted for the terse finding style and smallest-test rule. MIT.
 
 Approach adapted from:
 - anthropics/claude-code-action: base-branch config restore list, input sanitizing and secret redaction. MIT.

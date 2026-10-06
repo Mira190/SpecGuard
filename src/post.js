@@ -49,6 +49,7 @@ function validate(o) {
     if (f.start_line !== undefined && !int(f.start_line)) return bad(`findings[${i}].start_line invalid`);
     if (f.suggestion !== undefined && !str(f.suggestion)) return bad(`findings[${i}].suggestion invalid`);
     if (f.rule_source !== undefined && !str(f.rule_source)) return bad(`findings[${i}].rule_source invalid`);
+    if (f.source !== undefined && !str(f.source)) return bad(`findings[${i}].source invalid`);
     if (!['high', 'low'].includes(f.confidence)) return bad(`findings[${i}].confidence invalid`);
   }
   return { ok: true };
@@ -65,7 +66,9 @@ function anchor(f, maps, fileUsed = 0) {
 }
 
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
-const fingerprint = (kind, p, quote) => crypto.createHash('sha1').update(`${kind}\0${p}\0${norm(quote)}`).digest('hex');
+// An acceptance-criterion source is stabler than a quote: the model re-anchors the same finding on different lines between runs.
+const AC = /^(issue #\d+|PR body) AC \d+$/;
+const fingerprint = (kind, p, quote, source) => crypto.createHash('sha1').update(`${kind}\0${p}\0${AC.test(source) ? source : norm(quote)}`).digest('hex');
 
 // Line delta (0, -1, +1, ... up to +-5) that puts the quote on the cited line, or null. Never guesses.
 function snap(f, lines) {
@@ -107,6 +110,14 @@ function commentBody(f, fp, inline = true) {
   const why = `kind: ${f.kind}, confidence: ${f.confidence}${f.rule_source ? `, rule: ${f.rule_source}` : ''}`;
   return clean(`**${f.title}**\n\n${f.body}${fix(f, inline)}\n\n<details><summary>Why this was flagged</summary>\n\n${why}\n</details>\n\n<!-- specguard:fp=${fp} -->`);
 }
+
+const axes = (fs) => { const n = (k) => fs.filter((f) => f.kind === k).length; return `Tests: ${n('missing_test')} missing, ${n('weak_test')} weak · Standards: ${n('standard')} · Layering: ${n('pushdown')}`; };
+const proven = (cov) => {
+  const rows = cov.filter((c) => c.status !== 'needs_human');
+  return rows.length ? `Proven: ${rows.filter((c) => c.status === 'covered').length}/${rows.length} obligations` : '';
+};
+// Nothing found and nothing unproven: covered and needs_human rows are not gaps.
+const noGaps = (data) => !data.findings.length && data.coverage.every((c) => c.status === 'covered' || c.status === 'needs_human');
 
 const cell = (s) => redact(s).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const item = ({ f, why }) => `- **${f.title}** (\`${f.path}:${f.line}\`, ${f.kind}${why ? `, ${why}` : ''})\n\n  ${redact(f.body + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
@@ -187,7 +198,7 @@ async function run({ github, context, core }) {
     }
     const d = snap(f, readLines(f.path));
     if (d === null) { unanchored.push({ f, why: 'citation did not match the file' }); continue; }
-    const fp = fingerprint(f.kind, f.path, f.quote);
+    const fp = fingerprint(f.kind, f.path, f.quote, f.source);
     if (known.has(fp)) already++;
     else if (!seen.has(fp)) { seen.add(fp); kept.push({ ...f, line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }), fp }); }
   }
@@ -197,8 +208,9 @@ async function run({ github, context, core }) {
     path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp),
     ...(f.start_line !== undefined && { start_line: f.start_line, start_side: 'RIGHT' }),
   }));
+  const prov = proven(data.coverage);
   const counts = `${comments.length} inline, ${p.file.length} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
-  const head = `<!-- specguard:review -->\nSpecGuard found ${counts}. Engine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
+  const head = `<!-- specguard:review -->\nSpecGuard found ${axes(kept)}; ${counts}.${prov ? `\n${prov}.` : ''}\nEngine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
 
   if (comments.length) {
     const post = (body, cs) => github.rest.pulls.createReview({ owner, repo, pull_number: pr.number, commit_id: headSha, event: 'COMMENT', body: clean(body), ...(cs && { comments: cs }) });
@@ -223,10 +235,10 @@ async function run({ github, context, core }) {
     } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); }
   }
 
-  await publish(buildSummary({ status: `Reviewed: ${counts}.`, data, items: [...p.summary, ...unanchored], partial, engine, model }));
+  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found.' : `Reviewed: ${axes(kept)}; ${counts}.`}${prov ? `\n\n${prov}.` : ''}`, data, items: [...p.summary, ...unanchored], partial, engine, model }));
 }
 
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, validate, anchor, snap, plan, fingerprint, redact, truncate, buildSummary, commentBody });
+Object.assign(module.exports, { parsePatch, validate, anchor, snap, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps });
