@@ -16,6 +16,15 @@
         "quote": "throw 'PORT is required'"
       }
     ],
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/s1/pkg/config.js",
+        "line": 2,
+        "tolerance": 1,
+        "reason": "falsy PORT values other than a missing key (for example an empty string) are not tested"
+      }
+    ],
     "must_not": [],
     "expect_skip": false,
     "expect_clean": false,

@@ -1,0 +1,20 @@
+{
+  "status": "available",
+  "sources": [
+    "PR body"
+  ],
+  "limitations": [],
+  "documents": [
+    {
+      "source": "PR body",
+      "text": "Add normalizeName\nAdd name normalisation.\n\n## Acceptance criteria\n- normalizeName rejects empty names and trims whitespace.\n"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "R1",
+      "source": "PR body",
+      "quote": "normalizeName rejects empty names and trims whitespace."
+    }
+  ]
+}

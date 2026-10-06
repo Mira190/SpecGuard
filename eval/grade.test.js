@@ -120,3 +120,13 @@ test('json_valid follows the raw model output when the artifact is available; de
   assert.deepEqual([r.degraded, r.validation_notes.length, grade(spec([]), obs()).degraded], [true, 2, false]);
   assert.equal(aggregate([r, grade(spec([]), obs())]).degraded_rate, 0.5);
 });
+
+test('acceptable findings are neither TP nor FP, are reported, and aggregate', () => {
+  const ok = { kind: 'missing_test', path: 'a.js', line: 3, tolerance: 1, reason: 'untested helper' };
+  const r = grade(spec([exp()], { acceptable: [ok] }), obs([com(), com({ line: 4, title: 'helper' }), com({ line: 3 })]));
+  assert.deepEqual([r.tp, r.fp, r.acceptable, r.fn, r.pass], [1, 1, 1, 0, true]);
+  assert.deepEqual(r.acceptable_findings.map((f) => [f.line, f.reason]), [[4, 'untested helper']]);
+  assert.equal(grade(spec([exp()], { acceptable: [ok] }), obs([com(), com({ line: 40 })])).fp, 1);
+  const a = aggregate([r, { ...r, acceptable: 2 }, { goal: 'requirements', error: 'x' }]);
+  assert.deepEqual([a.acceptable, a.precision], [3, 0.5]);
+});

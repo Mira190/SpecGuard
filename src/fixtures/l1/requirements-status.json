@@ -1,0 +1,14 @@
+{
+  "status": "available",
+  "sources": [
+    "PR body"
+  ],
+  "limitations": [],
+  "documents": [
+    {
+      "source": "PR body",
+      "text": "Add quote endpoint\nAdd a /quote endpoint that applies tier discounts and a bonus for big orders.\n"
+    }
+  ],
+  "criteria": []
+}

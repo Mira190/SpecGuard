@@ -51,6 +51,7 @@ function validateCase(id) {
   for (const d of c.delete || []) if (!d.startsWith(sandbox) || !inBase.has(d)) bad(`delete ${d} must be a base file under ${sandbox}`);
   if (!head.length && !(c.delete || []).length) bad('head changes nothing');
   const e = c.expected;
+  for (const a of e?.acceptable || []) if (!a.kind || ![].concat(a.path || []).length || !Number.isInteger(a.line) || !a.reason) bad(`acceptable needs kind, path, integer line and reason: ${JSON.stringify(a)}`);
   if (!e || !Array.isArray(e.findings) || !Array.isArray(e.must_not)) return [...errs, `${id}: expected.findings and expected.must_not must be arrays`];
   for (const f of e.findings) {
     const paths = [].concat(f.path || []);
@@ -154,18 +155,19 @@ const sec = (x) => (x == null ? 'n/a' : `${x}s`);
 function markdown({ runId, repo, target, results, agg }) {
   const why = (r) => (r.error ? `error: ${r.error}` : [
     ...r.missed.map((e) => `FN ${[].concat(e.kind).join('|')} ${[].concat(e.path)[0].split('/').pop()}:${e.line}`),
+    ...(r.acceptable_findings || []).map((f) => `acceptable ${f.kind} ${f.path.split("/").pop()}:${f.line}`),
     ...r.false_positives.map((f) => `FP ${f.kind} ${f.path.split('/').pop()}:${f.line}`),
     ...r.must_not_violations.map((m) => `must_not ${JSON.stringify(m)}`),
     ...r.text_misses.map((e) => `text /${e.text}/`),
     ...(r.json_valid ? [] : ['model JSON missing or invalid']), ...(r.complete ? [] : ['incomplete']), ...(r.degraded ? [`degraded: ${r.validation_notes.length} validation note(s)`] : []), ...(r.skip_ok ? [] : ['not skipped']), ...(r.clean_ok ? [] : ['not clean']),
   ].join('; '));
   let s = `# Evaluation ${runId}\n\nRepo ${repo}, target ${target}. Cost: not measured (check the Copilot billing page for the run window). Latency is the dogfood job duration.\n\n`;
-  s += '| Case | Goal | Rep | Pass | TP | FP | FN | Summary only | JSON valid | Degraded | Latency | Notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n';
+  s += '| Case | Goal | Rep | Pass | TP | FP | Acceptable | FN | Summary only | JSON valid | Degraded | Latency | Notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n';
   for (const r of results) s += r.error
-    ? `| ${r.id} | ${r.goal} | ${r.rep} | error | | | | | | | | ${why(r)} |\n`
-    : `| ${r.id} | ${r.goal} | ${r.rep} | ${r.pass ? 'yes' : 'no'} | ${r.tp} | ${r.fp} | ${r.fn} | ${r.summary_only} | ${r.json_valid ? 'yes' : 'no'} | ${r.degraded ? 'yes' : 'no'} | ${sec(r.latency_s)} | ${why(r)} |\n`;
-  const row = (name, a) => `| ${name} | ${a.runs} | ${a.errors} | ${pct(a.precision)} | ${pct(a.recall)} | ${pct(a.json_valid_rate)} | ${pct(a.degraded_rate)} | ${pct(a.pass_rate)} | ${sec(a.latency_median_s)} | ${sec(a.latency_max_s)} |\n`;
-  s += '\n## Aggregate\n\n| Scope | Runs | Errors | Precision | Recall | JSON valid | Degraded | Pass rate | Latency median | Latency max |\n|---|---|---|---|---|---|---|---|---|---|\n' + row('all', agg);
+    ? `| ${r.id} | ${r.goal} | ${r.rep} | error | | | | | | | | | ${why(r)} |\n`
+    : `| ${r.id} | ${r.goal} | ${r.rep} | ${r.pass ? 'yes' : 'no'} | ${r.tp} | ${r.fp} | ${r.acceptable || 0} | ${r.fn} | ${r.summary_only} | ${r.json_valid ? 'yes' : 'no'} | ${r.degraded ? 'yes' : 'no'} | ${sec(r.latency_s)} | ${why(r)} |\n`;
+  const row = (name, a) => `| ${name} | ${a.runs} | ${a.errors} | ${a.acceptable} | ${pct(a.precision)} | ${pct(a.recall)} | ${pct(a.json_valid_rate)} | ${pct(a.degraded_rate)} | ${pct(a.pass_rate)} | ${sec(a.latency_median_s)} | ${sec(a.latency_max_s)} |\n`;
+  s += '\n## Aggregate\n\n| Scope | Runs | Errors | Acceptable | Precision | Recall | JSON valid | Degraded | Pass rate | Latency median | Latency max |\n|---|---|---|---|---|---|---|---|---|---|---|\n' + row('all', agg);
   for (const [g, a] of Object.entries(agg.by_goal)) s += row(g, a);
   return s;
 }

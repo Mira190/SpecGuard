@@ -54,10 +54,12 @@ function validate(o) {
 
   const rowError = (c) => {
     if (!text(c.obligation) || !text(c.source) || !text(c.reason)) return 'obligation, source and reason are required';
+    if (c.change === undefined) c.change = c.behaviour; // ponytail: omitted change = the cited behaviour; verifyEvidence still checks it against the diff
     if (!(c.behaviour === null || citation(c.behaviour)) || !(c.change === null || citation(c.change))) return 'malformed citation';
     if (!Array.isArray(c.evidence)) return 'evidence must be an array';
     if (!STATUSES.includes(c.status)) return 'invalid status';
     for (const e of c.evidence) {
+      if (e && e.kind === undefined) e.kind = 'assertion'; // the documented meaning of an evidence quote; the quote is still verified
       if (!citation(e) || !['unit', 'component', 'integration', 'e2e'].includes(e.layer) || !text(e.proves)
         || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return 'evidence malformed';
       if (e.kind === 'removed' && e.side !== 'LEFT') return "removed evidence must cite the diff's LEFT side";
@@ -65,7 +67,7 @@ function validate(o) {
     if (c.status === 'covered' && (!c.behaviour || !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT'))) return 'covered needs a current unit assertion';
     if (c.status === 'weak_test' && !c.evidence.some((e) => e.layer === 'unit')) return 'weak_test needs a unit test location';
     if (c.status === 'higher_level_only' && (!c.evidence.length || c.evidence.some((e) => e.layer === 'unit'))) return 'higher_level_only needs higher-layer evidence only';
-    if (c.status === 'missing_test' && c.evidence.length) return 'missing_test cannot claim assertion evidence';
+    if (c.status === 'missing_test' && c.evidence.some((e) => e.kind === 'assertion')) return 'missing_test cannot claim assertion evidence';
     if (!c.change && !['unknown', 'needs_human'].includes(c.status)) return 'needs a changed-line citation';
     return '';
   };
