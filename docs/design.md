@@ -1,6 +1,6 @@
 # SpecGuard: Implementation Plan (v1)
 
-## Status (2026-10-06)
+## Status (2026-10-07)
 
 The refactor below supersedes the v1 report contract. The remaining v1 sections record the original implementation decisions. The original goal is unchanged.
 
@@ -16,7 +16,24 @@ The default remains the direct Agent GitHub Action (Copilot CLI or Claude), advi
 - No clean-review wording for empty obligations, unknown evidence, partial context, or unfinished checks. The ratio is Unit evidence: X/Y, a static judgement over assessed obligations; tests are not run.
 - Weak assertions outside the diff stay in the summary. Deduplication affects delivery only; persistent gaps remain counted. Superseded HEAD results do not overwrite the current report.
 
-The schema, skill and validator evolve together. Old report JSON is rejected as incomplete. Deterministic tests cover collection, evidence validation, consistency, partial results and publication; they do not establish LLM recall. The refactored prompt still needs a live pilot across representative languages before release. Historical live v1 results are not validation of this new contract.
+The schema, skill and validator evolve together. Old report JSON is rejected as incomplete. Deterministic tests cover collection, evidence validation, consistency, partial results and publication; they do not establish LLM recall. Historical live v1 results are not validation of this new contract.
+
+### Live evaluation (2026-10-07)
+
+Copilot CLI, auto model, job `GITHUB_TOKEN`, personal repo. Each case is a seeded PR graded by `eval/grade.js`; raw results are in `eval/results/`.
+
+| Run | Scope | Precision | Recall | Cases passed |
+|---|---|---|---|---|
+| `auto-rep3` (regraded) | 14 isolated cases, before the stability fixes | 88% | 83% | 10/14 |
+| `stability-a` | r3, r4, s2, t1 × 3, after the stability fixes | 100% | 100% | 12/12 |
+| `lang-b` + `lang-b2` (regraded) | 7 TypeScript / React / JavaScript ESM cases, 15 valid runs | 100% | 100% | 15/15 |
+| `combined-auto` | 12 cases in one PR × 3 | 93% | 67% | n/a |
+
+What this does not show:
+- Fixtures are seeded, not real PRs, and each case ran 1-3 times. Model routing under `auto` varies between runs.
+- After inspecting each failure, genuinely untested behaviour the model reported was added to that case's `acceptable` list and the runs were regraded without new model calls. Seeded expectations were never removed.
+- Large PRs: recall drops (the model stops after about 10 findings). Split large PRs or raise `max_comments`; a per-module review pass is the upgrade path.
+- Not verified live: the org-billing path, the Claude engine, native CCR mode. Cost is not measured, because the billing API does not itemise Copilot AI Credits.
 
 ## 0. Original Goal (verbatim, do not edit)
 

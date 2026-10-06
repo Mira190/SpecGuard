@@ -18,14 +18,14 @@
         "kind": "missing_test",
         "path": "eval-sandbox/js2/fetchWithRetry.js",
         "line": 10,
-        "tolerance": 1,
+        "tolerance": 3,
         "quote": "throw lastError"
       }
     ],
     "must_not": [],
     "expect_skip": false,
     "expect_clean": false,
-    "notes": "missing_test x2: retry path and final throw. global fetch is mocked via jest.spyOn, a system boundary, which is fine. The retry finding may anchor on the loop condition (line 3) or the catch (line 7): both decide the retry behaviour.",
+    "notes": "missing_test x2: retry path and final throw. global fetch is mocked via jest.spyOn, a system boundary, which is fine. The retry finding may anchor on the loop condition (line 3) or the catch (line 7): both decide the retry behaviour. The final-throw finding may anchor on the line that keeps the last error (7) or the throw (10).",
     "acceptable": [
       {
         "kind": "missing_test",
