@@ -72,6 +72,7 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `model` | engine default | Model name passed to the CLI. |
 | `max_turns` | `30` | Agent turn cap (Claude only). |
 | `max_budget_usd` | `2` | Spend cap per run (Claude only). |
+| `review_timeout_minutes` | `12` | Engine time limit. The job `timeout-minutes` must exceed it by at least 3. |
 | `max_comments` | `10` | Max inline comments (hard cap 30). |
 | `max_diff_kb` | `300` | Above this the review is partial. |
 | `ignore` | | Extra ignore globs, one per line, added to the defaults (lockfiles, `dist/`, `build/`, `vendor/`, `node_modules/`, minified files, snapshots, non-standard `.md`). |

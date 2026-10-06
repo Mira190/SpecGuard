@@ -24,6 +24,15 @@
     ],
     "expect_skip": false,
     "expect_clean": false,
-    "notes": "The BASE rule applies; the finding body must quote it and must not cite the weakened wording."
+    "notes": "The BASE rule applies; the finding body must quote it and must not cite the weakened wording.",
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/s2/pkg/config.js",
+        "line": 2,
+        "tolerance": 1,
+        "reason": "Empty or falsy PORT values are genuinely untested (same as s1)."
+      }
+    ]
   }
 }

@@ -25,6 +25,15 @@
     ],
     "expect_skip": false,
     "expect_clean": false,
-    "notes": "Trim half is untested. The rejection half is tested and must not be flagged."
+    "notes": "Trim half is untested. The rejection half is tested and must not be flagged.",
+    "acceptable": [
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/r3/name.test.js",
+        "line": 6,
+        "tolerance": 1,
+        "reason": "The rejection test uses whitespace only; the literal empty string boundary is untested."
+      }
+    ]
   }
 }

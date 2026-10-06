@@ -344,7 +344,12 @@ async function run({ github, context, core }) {
 
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
-  catch (e) { return failed(`no valid findings.json (${e.code || 'parse error'}); see the job log`); }
+  catch (e) {
+    let st = ''; try { st = fs.readFileSync(path.join(ctx, 'engine-status'), 'utf8').trim(); } catch {}
+    if (st === 'timeout') return failed(`the review timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; raise review_timeout_minutes or split the PR`);
+    if (st === 'failed') return failed('the review engine failed; see the job log');
+    return failed(`no valid findings.json (${e.code || 'parse error'}); see the job log`);
+  }
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
   data.tooling = tooling; // Always overwrite any model-supplied tooling claim.

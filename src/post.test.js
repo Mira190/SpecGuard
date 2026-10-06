@@ -439,3 +439,15 @@ test('a missing_test row may not cite assertion evidence, and covered still need
   assert.match(noted(row('missing_test', { evidence: [{ ...evidence }] })), /cannot claim assertion evidence/);
   assert.match(noted(row('covered', { evidence: [{ ...evidence, kind: 'disabled' }] })), /covered needs a current unit assertion/);
 });
+
+test('reports an engine timeout or failure instead of a missing file', async (t) => {
+  for (const [st, re] of [['timeout', /timed out after 7 minutes; raise review_timeout_minutes/], ['failed', /engine failed; see the job log/]]) {
+    const s = setup(t);
+    fs.unlinkSync(path.join(s.dir, 'ctx/findings.json'));
+    fs.writeFileSync(path.join(s.dir, 'ctx/engine-status'), st + '\n');
+    process.env.REVIEW_TIMEOUT_MINUTES = '7';
+    await post(s);
+    delete process.env.REVIEW_TIMEOUT_MINUTES;
+    assert.match(s.calls.summary[0].body, re);
+  }
+});
