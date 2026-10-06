@@ -253,10 +253,11 @@ const met = (r, cov) => {
 const cell = (s) => redact(s).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const item = ({ f, why }) => `- **${f.title}** (\`${f.path}:${f.line}\`, ${f.kind}${why ? `, ${why}` : ''})\n\n  ${redact(f.body + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
 
-function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, rules = [] }) {
   let s = `<!-- specguard:summary -->\n## SpecGuard\n\n${status}\n\n`;
   if (engine) s += `_Engine: ${engine}${model ? ` (${model})` : ''}_\n\n`;
   if (partial) s += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
+  if (rules.length) s += `> This PR modifies review rule or agent-config files (${rules.map(cell).join(', ')}); they were not reviewed, and the base versions were applied.\n\n`;
   if (tooling) {
     s += `**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`;
     for (const c of tooling.checks) s += `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`;
@@ -296,15 +297,18 @@ const readFile = (p) => {
 
 // Verifies citations, not the model's semantic judgement. Never upgrades missing evidence.
 function verifyEvidence(data, reviewable, standards, read = readFile, maps = new Map()) {
-  const exact = (c) => {
-    if (c.side === 'LEFT') return norm(maps.get(c.path)?.changed.LEFT.get(c.line) || '') === norm(c.quote);
-    const lines = read(c.path); return lines && norm(lines[c.line - 1] || '') === norm(c.quote);
+  // Corrects c.line to the nearest line within +-5 whose text equals the quote (the way snap does for findings); false when none.
+  const locate = (c, at) => {
+    const q = norm(c.quote);
+    for (let d = 0; d <= 5; d++) for (const s of d ? [-d, d] : [0]) if (c.line + s >= 1 && norm(at(c.line + s) || '') === q) { c.line += s; return true; }
+    return false;
   };
+  const changed = (c) => (l) => maps.get(c.path)?.changed[c.side || 'RIGHT'].get(l);
+  const exact = (c) => { const lines = c.side === 'LEFT' ? null : read(c.path); return locate(c, c.side === 'LEFT' ? changed(c) : (l) => lines?.[l - 1]); };
   for (const c of data.coverage) {
-    const change = c.change;
-    const inDiff = change && reviewable.has(change.path)
-      && norm(maps.get(change.path)?.changed[change.side || 'RIGHT'].get(change.line) || '') === norm(change.quote);
-    if ((change && !inDiff) || (c.behaviour && !exact(c.behaviour)) || c.evidence.some((e) => !exact(e))) {
+    const { change } = c;
+    const ok = [!change || (reviewable.has(change.path) && locate(change, changed(change))), !c.behaviour || exact(c.behaviour), ...c.evidence.map((e) => exact(e))];
+    if (ok.includes(false)) {
       c.status = 'unknown';
       c.reason = 'Could not verify the changed-line, behaviour or test citation.';
     }
@@ -379,12 +383,14 @@ async function run({ github, context, core }) {
     } catch (e) { core.warning(`SpecGuard: could not post summary comment: ${e.message}`); }
   };
 
-  if (env.SKIP === 'true') return publish(buildSummary({ status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }));
+  let rules = [];
+  try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }));
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
     : { status: 'unavailable', ref: '', checks: [], reason: target === 'merge' ? 'PR has no current test-merge commit' : 'Configured standards ref must be head or an available current merge commit.' };
-  const failed = (why) => publish(buildSummary({ status: `Could not complete: ${why}`, tooling, engine, model, partial }));
+  const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, partial }));
 
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
@@ -513,7 +519,7 @@ async function run({ github, context, core }) {
   }
   if (unchecked) addNote('The PR head could not be rechecked; results use the event head commit.');
 
-  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, data, items: [...p.summary, ...unanchored], partial, engine, model }));
+  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, data, items: [...p.summary, ...unanchored], rules, partial, engine, model }));
 }
 
 module.exports = async (a) => {
