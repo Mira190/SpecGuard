@@ -12,6 +12,10 @@ Not evidence (counts as zero):
 - assertions that can only fail by crashing;
 - a tautological assertion: the expected value is recomputed the way the code computes it, so it passes by construction. Expected values must come from an independent source: a literal, a worked example, or the acceptance criterion's own numbers.
 
+Tautology is a `weak_test` on the assertion line, not a `missing_test` on the production line. Code `return x * RATE;` with test `expect(fn(10)).toBe(10 * RATE)` exercises the behaviour but proves nothing; cite the `expect` line.
+
+SpecGuard does not execute tests. A test in the repo's conventional location and naming counts as existing evidence even if you cannot see a runner configuration or CI step that runs it. Report "not collected or not executed" only with concrete evidence (an explicit skip, or a name outside an explicitly configured pattern), and then only as a low-confidence `weak_test`; otherwise mention it in `not_reviewed`.
+
 ## Weak-test catalogue
 
 Report `weak_test` on the assertion line when a test exercises the behaviour but:
