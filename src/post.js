@@ -49,6 +49,7 @@ function validate(o) {
     if (f.start_line !== undefined && !int(f.start_line)) return bad(`findings[${i}].start_line invalid`);
     if (f.suggestion !== undefined && !str(f.suggestion)) return bad(`findings[${i}].suggestion invalid`);
     if (f.rule_source !== undefined && !str(f.rule_source)) return bad(`findings[${i}].rule_source invalid`);
+    if (f.rule_quote !== undefined && !str(f.rule_quote)) return bad(`findings[${i}].rule_quote invalid`);
     if (f.source !== undefined && !str(f.source)) return bad(`findings[${i}].source invalid`);
     if (!['high', 'low'].includes(f.confidence)) return bad(`findings[${i}].confidence invalid`);
   }
@@ -80,6 +81,14 @@ function snap(f, lines) {
     if (at >= 0 && at < lines.length && norm(lines[at]) === q && (f.start_line === undefined || f.start_line + s >= 1)) return s;
   }
   return null;
+}
+
+// 1-based line of the rule text nearest to n, or 0. Never guesses.
+function ruleLine(quote, lines, n) {
+  const q = norm(quote || '');
+  let best = 0;
+  if (q.length >= 10) lines.forEach((l, i) => { if (norm(l).includes(q) && (!best || Math.abs(i + 1 - n) < Math.abs(best - n))) best = i + 1; });
+  return best;
 }
 
 // Order, cap, and route findings. Summary items carry the reason they are there.
@@ -188,13 +197,14 @@ async function run({ github, context, core }) {
   let already = 0;
   const seen = new Set();
   const unanchored = []; // items that failed to post or anchor; they go to the summary
-  for (const f of data.findings) {
+  for (let f of data.findings) {
     if (!maps.has(f.path) || !reviewable.has(f.path)) continue;
     if (f.kind === 'standard') {
       const m = /^(.+):(\d+)$/.exec(f.rule_source || '');
       const rl = m && standards.has(m[1]) ? readLines(m[1]) : null;
-      const okRule = rl && +m[2] >= 1 && +m[2] <= rl.length;
-      if (!okRule && !(f.confidence === 'low' && !f.rule_source)) continue; // inferred (no rule, low) stays; bad citations drop
+      const at = rl && ruleLine(f.rule_quote, rl, +m[2]);
+      if (at) f = { ...f, rule_source: `${m[1]}:${at}` };
+      else if (!(f.confidence === 'low' && !f.rule_source)) continue; // inferred (no rule, low) stays; bad citations drop
     }
     const d = snap(f, readLines(f.path));
     if (d === null) { unanchored.push({ f, why: 'citation did not match the file' }); continue; }
@@ -241,4 +251,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, validate, anchor, snap, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps });
+Object.assign(module.exports, { parsePatch, validate, anchor, snap, ruleLine, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps });

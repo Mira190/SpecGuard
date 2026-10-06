@@ -87,6 +87,9 @@
           "rule_source": {
             "type": "string"
           },
+          "rule_quote": {
+            "type": "string"
+          },
           "suggestion": {
             "type": "string"
           },

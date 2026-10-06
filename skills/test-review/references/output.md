@@ -25,11 +25,12 @@ Finding fields:
 - `title`: one short line.
 - `body`: the gap, then the fix; a test skeleton for test kinds.
 - `rule_source`: `path:line`. Required for `standard`; omit when inferred.
+- `rule_quote`: the rule's line copied verbatim from the rule file. Required with `rule_source`; the poster corrects the line number from it and drops the finding if the text is not found.
 - `suggestion`: see `references/standards.md`.
 - `confidence`: `high` or `low`.
 
 ```json
-{"kind":"standard","path":"billing/invoice.py","line":42,"quote":"        log.info(\"total=%s\" % total)","title":"Log with structured fields","body":"`CONTRIBUTING.md:31` asks for structured log fields so totals can be queried.","rule_source":"CONTRIBUTING.md:31","suggestion":"        log.info(\"invoice total\", extra={\"total\": total})","confidence":"high"}
+{"kind":"standard","path":"billing/invoice.py","line":42,"quote":"        log.info(\"total=%s\" % total)","title":"Log with structured fields","body":"`CONTRIBUTING.md:31` asks for structured log fields so totals can be queried.","rule_source":"CONTRIBUTING.md:31","rule_quote":"Use structured log fields so totals can be queried.","suggestion":"        log.info(\"invoice total\", extra={\"total\": total})","confidence":"high"}
 ```
 
 ## Local mode: report

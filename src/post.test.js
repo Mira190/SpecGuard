@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const post = require('./post.js');
-const { parsePatch, validate, anchor, snap, plan, fingerprint, redact, truncate } = post;
+const { parsePatch, validate, anchor, snap, ruleLine, plan, fingerprint, redact, truncate } = post;
 
 const PATCH = ['@@ -1,3 +1,4 @@', ' ctx1', '-old2', '+new2', '+new3', ' ctx4', '\\ No newline at end of file', '@@ -20,2 +21,2 @@', ' c20', '+n22'].join('\n');
 
@@ -85,8 +85,8 @@ function setup({ existing = [], failFirst422 = false } = {}) {
       F({ path: 'other.js', line: 1, title: 'not in diff' }),
       F({ path: 'src.js', line: 4, quote: 'no such text', title: 'bad quote' }),
       F({ path: 'src.js', line: 4, quote: 'if (x) {', title: 'off by one' }),
-      F({ path: 'src.js', line: 2, quote: 'l2', kind: 'standard', rule_source: 'RULES.md:2', title: 'good rule', suggestion: '  l2 fixed();' }),
-      F({ path: 'src.js', line: 4, quote: 'l4', kind: 'standard', rule_source: 'RULES.md:50', title: 'bad rule' }),
+      F({ path: 'src.js', line: 2, quote: 'l2', kind: 'standard', rule_source: 'RULES.md:2', rule_quote: 'rule two', title: 'good rule', suggestion: '  l2 fixed();' }),
+      F({ path: 'src.js', line: 4, quote: 'l4', kind: 'standard', rule_source: 'RULES.md:50', rule_quote: 'no such rule', title: 'bad rule' }),
     ],
   };
   fs.writeFileSync(path.join(dir, 'ctx/findings.json'), JSON.stringify(findings));
@@ -244,4 +244,29 @@ test('main flow: review body and summary carry per-axis counts and the proven li
   await post(t);
   assert.ok(t.calls.review[0].body.includes('Proven: 1/2 obligations.'));
   assert.ok(t.calls.issueCreate[0].body.includes('Proven: 1/2 obligations.'));
+});
+
+test('ruleLine: nearest match, whitespace-normalised, no match', () => {
+  const L = ['a rule', 'Throw  Error never strings', 'b', 'a rule'];
+  assert.strictEqual(ruleLine('throw', L, 1), 0);
+  assert.strictEqual(ruleLine('Throw Error never strings', L, 1), 2);
+  assert.strictEqual(ruleLine('a rule', L, 3), 4);
+  assert.strictEqual(ruleLine('', L, 1), 0);
+  assert.strictEqual(ruleLine(undefined, L, 1), 0);
+});
+
+test('main flow: rule_source line is corrected from rule_quote; missing or unfound quote drops', async () => {
+  const s = setup();
+  const file = path.join(process.env.CTX, 'findings.json');
+  const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+  d.findings = [
+    F({ path: 'src.js', line: 2, quote: 'l2', kind: 'standard', rule_source: 'RULES.md:1', rule_quote: 'rule two', title: 'wrong line' }),
+    F({ path: 'src.js', line: 3, quote: 'if (x) {', kind: 'standard', rule_source: 'RULES.md:2', rule_quote: 'not in file', title: 'unfound' }),
+    F({ path: 'src.js', line: 4, quote: 'l4', kind: 'standard', rule_source: 'RULES.md:2', title: 'no quote' }),
+  ];
+  fs.writeFileSync(file, JSON.stringify(d));
+  await post(s);
+  const cs = s.calls.review[0].comments;
+  assert.strictEqual(cs.length, 1);
+  assert.ok(cs[0].body.includes('rule: RULES.md:2') && !cs[0].body.includes('RULES.md:1'));
 });

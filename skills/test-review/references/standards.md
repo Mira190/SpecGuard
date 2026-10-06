@@ -15,7 +15,7 @@ Instruction files, `AGENTS.md`/`CLAUDE.md`, `REVIEW.md`, `CONTRIBUTING.md`, `.ed
 
 ## Citation
 
-Quote the exact rule as `rule_source`: `path:line`. A violation of a citable rule in a changed line is always reported, never dropped as a judgement call. A test that breaks a quoted test rule is a `weak_test` mentioning the rule, or a `standard` when the test is otherwise sound.
+Quote the exact rule as `rule_source`: `path:line`, and copy that rule line verbatim from the rule file into `rule_quote`. The poster corrects the line number from `rule_quote` and drops the finding if the text is not found. A violation of a citable rule in a changed line is always reported, never dropped as a judgement call. A test that breaks a quoted test rule is a `weak_test` mentioning the rule, or a `standard` when the test is otherwise sound.
 
 No citable rule means the finding is inferred: say so in `body`, set `confidence: low`, omit `rule_source`. An inferred finding is never `high`.
 
