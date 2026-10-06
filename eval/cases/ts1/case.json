@@ -29,6 +29,13 @@
         "line": 10,
         "tolerance": 0,
         "reason": "Combining hours and minutes is never exercised: the only test uses hours alone."
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/ts1/duration.ts",
+        "line": 5,
+        "tolerance": 0,
+        "reason": "Empty input (the !input guard) is untested; the regex alone accepts it."
       }
     ],
     "must_not": [],

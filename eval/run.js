@@ -74,7 +74,10 @@ const allIds = () => fs.readdirSync(CASES).filter((d) => fs.existsSync(path.join
 
 function git(wt, args, extra = {}) { return sh('git', ['-C', wt, ...args], extra); }
 const push = (wt, branch) => git(wt, ['-c', 'credential.helper=', '-c', `credential.helper=${process.env.SPECGUARD_EVAL_CRED_HELPER || '!gh auth git-credential'}`, 'push', '-q', '-u', 'origin', branch]);
-const ghJson = (args) => JSON.parse(sh('gh', args));
+// Read-only gh calls only: GitHub's API intermittently fails mid-batch, and a retry is safe when nothing is written.
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const retryRead = (fn, tries = 3) => { for (let i = 1; ; i++) { try { return fn(); } catch (e) { if (i >= tries) throw e; sleepSync(5000 * i); } } };
+const ghJson = (args) => retryRead(() => JSON.parse(sh('gh', args)));
 // Repo variable SPECGUARD_EVAL_MODEL is read by the dogfood step; null means unset.
 const VAR = 'SPECGUARD_EVAL_MODEL';
 // Only "not found" means unset; any other failure must not look like unset, or restore() would delete a real variable.
@@ -118,7 +121,7 @@ function billingDelta(before, after) {
   for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) bySku[k] = +((after[k] || 0) - (before[k] || 0)).toFixed(4);
   return { cost_usd_delta: +Object.values(bySku).reduce((a, b) => a + b, 0).toFixed(4), cost_by_sku: bySku };
 }
-const ghLines = (endpoint) => sh('gh', ['api', '--paginate', endpoint, '--jq', '.[]']).split('\n').filter(Boolean).map((l) => JSON.parse(l));
+const ghLines = (endpoint) => retryRead(() => sh('gh', ['api', '--paginate', endpoint, '--jq', '.[]'])).split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
 // One PR for several cases: merged overlay (no path may appear twice) and one body section per case. extractCriteria
 // numbers R1..Rn across the whole body, so criterion ids differ from the isolated runs; grading is by path, so that is fine.

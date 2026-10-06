@@ -21,6 +21,15 @@
     "must_not": [],
     "expect_skip": false,
     "expect_clean": false,
-    "notes": "Pushdown: extract the percentage, rounding and format logic into a pure helper and unit-test it. The RTL tests cover no discount, a discount, cent rounding and EUR, so no missing_test is expected."
+    "notes": "Pushdown: extract the percentage, rounding and format logic into a pure helper and unit-test it. The RTL tests cover no discount, a discount, cent rounding and EUR, so no missing_test is expected.",
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/rx1/PriceTag.tsx",
+        "line": 12,
+        "tolerance": 0,
+        "reason": "The strike-through markup of the original price is never asserted."
+      }
+    ]
   }
 }
