@@ -133,7 +133,7 @@ function setup(t, data = report(), options = {}) {
   const github = { paginate: async (fn, args) => (await fn(args)).data, rest: {
     pulls: {
       get: async () => ({ data: { head: { sha: options.head || 'HEADSHA' } } }),
-      listFiles: async () => { calls.list++; if (options.listError) throw Object.assign(new Error('Server Error: diff temporarily unavailable'), { status: 500 }); return { data: [{ filename: 'src.js', patch }] }; },
+      listFiles: async () => { calls.list++; if (options.listError) throw Object.assign(new Error('Server Error: diff temporarily unavailable'), { status: 500 }); return { data: options.listed || [{ filename: 'src.js', patch }] }; },
       listReviewComments: async () => ({ data: options.existing || [] }),
       createReview: async (args) => { calls.review.push(args); if (options.retry422 && count++ === 0) throw Object.assign(new Error('bad anchor'), { status: 422 }); },
       createReviewComment: async (args) => { calls.file.push(args); },
@@ -420,7 +420,9 @@ test('l1: pushdown findings with component evidence survive (model omitted evide
   const d = realRun('l1');
   assert.deepEqual(kept(d).filter((k) => k.startsWith('pushdown')), ['pushdown:pricing.py:6', 'pushdown:pricing.py:8']);
   assert.deepEqual(d.coverage.filter((c) => c.status === 'higher_level_only').map((c) => c.id), ['O1', 'O2', 'O4', 'O6']);
-  assert.deepEqual(d.validation_notes, ['Obligation O3 marked unknown: duplicates a pushdown obligation.']);
+  assert.equal(d.coverage.find((c) => c.id === 'O3').status, 'missing_test');
+  assert.ok(kept(d).some((k) => k.startsWith('missing_test')));
+  assert.deepEqual(d.validation_notes, []);
 });
 
 test('r3: compound-criterion missing_test findings survive (model omitted change; disabled evidence allowed)', () => {
@@ -474,6 +476,7 @@ test('does not call the GitHub diff API when the local diff is complete', async 
 test('falls back to the API for a partial diff and survives its failure', async (t) => {
   const s = setup(t, report(), { listError: true });
   process.env.PARTIAL = 'true';
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\nother.js\n');
   await post(s);
   assert.equal(s.calls.list, 1);
   assert.equal(s.calls.review[0].comments.length, 1);
@@ -493,21 +496,25 @@ test('a missing local diff uses the API, and its failure never throws', async (t
   assert.match(bad.calls.summary[0].body, /GitHub diff API unavailable/);
 });
 
-test('a missing_test on a pushdown behaviour line is marked unknown; other lines are kept', () => {
-  const pd = { ...evidence, layer: 'integration', path: 'it.js' };
-  const d = report({
-    coverage: [row('higher_level_only', { id: 'O1', evidence: [pd] }), row('missing_test', { id: 'O2' }),
-      row('missing_test', { id: 'O3', behaviour: { ...behaviour, line: 5 }, change: { ...behaviour, line: 5 } })],
-    findings: [finding('pushdown', { obligation_ids: ['O1'] }), finding('missing_test', { obligation_ids: ['O2'] }), finding('missing_test', { obligation_ids: ['O3'], line: 5 })],
+test('a missing_test and a pushdown on one line are different obligations and both survive', async (t) => {
+  const pd = { ...evidence, layer: 'integration' };
+  const data = () => report({
+    coverage: [row('higher_level_only', { id: 'O1', obligation: 'True branch', evidence: [pd] }), row('missing_test', { id: 'O2', obligation: 'False branch' })],
+    findings: [finding('pushdown', { obligation_ids: ['O1'] }), finding('missing_test', { obligation_ids: ['O2'], title: 'Test the false branch' })],
   });
+  const d = data();
   assert.equal(post.validate(d).ok, true);
-  assert.deepEqual(d.coverage.map((c) => c.status), ['higher_level_only', 'unknown', 'missing_test']);
-  assert.deepEqual(d.findings.map((f) => f.obligation_ids[0]), ['O1', 'O3']);
-  assert.match(d.validation_notes.join('\n'), /duplicates a pushdown obligation/);
+  assert.deepEqual(d.coverage.map((c) => c.status), ['higher_level_only', 'missing_test']);
+  assert.deepEqual(d.findings.map((f) => f.obligation_ids[0]), ['O1', 'O2']);
+  assert.deepEqual(d.validation_notes, []);
+  const s = setup(t, data());
+  await post(s);
+  assert.equal(s.calls.review[0].comments.length, 2);
+  assert.ok(s.calls.review[0].comments.some((c) => /Test the false branch/.test(c.body) && /kind: missing_test/.test(c.body)));
 });
 
 test('merges same-kind findings on one line into one comment; other kinds stay separate', async (t) => {
-  const second = finding('missing_test', { title: 'Second obligation', confidence: 'low', body: 'Other gap.', obligation_ids: ['O2'] });
+  const second = finding('missing_test', { title: 'Second obligation', body: 'Other gap.', obligation_ids: ['O2'] });
   const data = () => report({ coverage: [row('missing_test'), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { source: 'issue #1 AC 1' }), { ...second, source: 'issue #1 AC 2' }] });
   const s = setup(t, data());
   await post(s);
@@ -520,5 +527,56 @@ test('merges same-kind findings on one line into one comment; other kinds stay s
   await post(again);
   assert.equal(again.calls.review.length, 0);
   const std = { ...finding('standard', { title: 'Rule', rule_source: 'RULES.md:1', rule_quote: 'rule one' }) };
-  assert.equal(post.merge([{ ...finding(), fp: 'a' }, { ...std, fp: 'b' }]).length, 2);
+  assert.equal(post.merge([finding(), std]).length, 2);
+  assert.equal(post.merge([finding(), finding('missing_test', { title: 'Other', obligation_ids: ['O2'] })]).length, 1);
+});
+
+test('a high and a low finding on one line never merge: the low one goes to the summary only', async (t) => {
+  const low = finding('missing_test', { title: 'Second obligation', confidence: 'low', body: 'Other gap.', obligation_ids: ['O2'] });
+  assert.deepEqual(post.merge([finding(), low]).map((f) => f.confidence).sort(), ['high', 'low']);
+  const s = setup(t, report({ coverage: [row('missing_test'), row('missing_test', { id: 'O2' })], findings: [finding(), low] }));
+  await post(s);
+  const cs = s.calls.review[0].comments;
+  assert.equal(cs.length, 1);
+  assert.match(cs[0].body, /confidence: high/);
+  assert.doesNotMatch(cs[0].body, /Second obligation/);
+  assert.match(s.calls.summary[0].body, /Second obligation[^]*low confidence/);
+});
+
+test('distinct same-line gaps without an AC source are merged, not dropped; reruns skip the merged comment', async (t) => {
+  const row3 = row('missing_test', { id: 'O3', behaviour: { path: 'src.js', line: 2, quote: 'l2' }, change: { path: 'src.js', line: 2, quote: 'l2' } });
+  const data = () => report({
+    coverage: [row('missing_test'), row('missing_test', { id: 'O2' }), row3],
+    findings: [finding(), finding('missing_test', { title: 'Second obligation', body: 'Other gap.', obligation_ids: ['O2'] }),
+      finding('missing_test', { title: 'Other line', obligation_ids: ['O3'], line: 2, quote: 'l2' })],
+  });
+  const s = setup(t, data());
+  await post(s);
+  const cs = s.calls.review[0].comments;
+  assert.equal(cs.length, 2);
+  const merged = cs.find((c) => c.line === 3);
+  assert.match(merged.body, /Verify the boundary total; Second obligation/);
+  assert.match(merged.body, /Other gap./);
+  assert.ok(cs.some((c) => c.line === 2 && /Other line/.test(c.body)));
+  const fp = /specguard:fp=([0-9a-f]{40})/.exec(merged.body)[1];
+  const again = setup(t, data(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'Bot' } }] });
+  await post(again);
+  assert.deepEqual(again.calls.review[0].comments.map((c) => c.line), [2]);
+});
+
+test('parseDiff decodes Git C-quoted paths', () => {
+  const q = (p) => '"' + p + '"';
+  const two = (p) => ['--- ' + q('a/' + p), '+++ ' + q('b/' + p)].join('\n');
+  const d = fileDiff('x', patch, two('\\344\\270\\255.js')) + fileDiff('y', patch, two('q\\"t\\tab.js'));
+  assert.deepEqual([...post.parseDiff(d).keys()], ['中.js', 'q"t\tab.js']);
+});
+
+test('calls listFiles for a reviewable file missing from the local diff and uses its patch', async (t) => {
+  const data = report({ coverage: [row('missing_test', { behaviour: { ...behaviour, path: 'extra.js' }, change: { ...behaviour, path: 'extra.js' } })], findings: [finding('missing_test', { path: 'extra.js' })] });
+  const s = setup(t, data, { listed: [{ filename: 'extra.js', patch }] });
+  fs.writeFileSync(path.join(s.dir, 'extra.js'), fs.readFileSync(path.join(s.dir, 'src.js')));
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\nextra.js\n');
+  await post(s);
+  assert.equal(s.calls.list, 1);
+  assert.deepEqual(s.calls.review[0].comments.map((c) => c.path), ['extra.js']);
 });
