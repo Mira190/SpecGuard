@@ -43,7 +43,7 @@ runs:
         CTX: ${{ github.workspace }}/.specguard-ctx
         IGNORE_EXTRA: ${{ inputs.ignore }}
         MAX_DIFF_KB: ${{ inputs.max_diff_kb }}
-      run: bash "$GITHUB_ACTION_PATH/collect.sh"
+      run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
     - if: steps.collect.outputs.skip != 'true'
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -81,8 +81,8 @@ runs:
         MAX_BUDGET: ${{ inputs.max_budget_usd }}
       run: |
         npm install -g "@anthropic-ai/claude-code@$VERSION" >/dev/null || { echo "::warning::could not install claude-code@$VERSION"; exit 0; }
-        schema=$(jq -c . "$GITHUB_ACTION_PATH/findings.schema.json")
-        PROMPT="$(awk 'f>=2{print} /^---$/{f++}' "$GITHUB_ACTION_PATH/skills/specguard/SKILL.md")
+        schema=$(jq -c . "$GITHUB_ACTION_PATH/src/findings.schema.json")
+        PROMPT="$(awk 'f>=2{print} /^---$/{f++}' "$GITHUB_ACTION_PATH/skills/test-review/SKILL.md")
 
         Context directory (absolute path): $CTX
         Your final answer must be JSON matching this schema: $schema"
@@ -106,8 +106,8 @@ runs:
       run: |
         [ -n "$COPILOT_GITHUB_TOKEN" ] || unset COPILOT_GITHUB_TOKEN
         npm install -g "@github/copilot@$VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$VERSION"; exit 0; }
-        schema=$(jq -c . "$GITHUB_ACTION_PATH/findings.schema.json")
-        PROMPT="$(awk 'f>=2{print} /^---$/{f++}' "$GITHUB_ACTION_PATH/skills/specguard/SKILL.md")
+        schema=$(jq -c . "$GITHUB_ACTION_PATH/src/findings.schema.json")
+        PROMPT="$(awk 'f>=2{print} /^---$/{f++}' "$GITHUB_ACTION_PATH/skills/test-review/SKILL.md")
 
         Context directory (absolute path): $CTX
         Your final answer must be JSON only, matching this schema: $schema"
@@ -137,4 +137,4 @@ runs:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       with:
         github-token: ${{ inputs.github_token }}
-        script: await require(process.env.ACTION_PATH + '/post.js')({github, context, core})
+        script: await require(process.env.ACTION_PATH + '/src/post.js')({github, context, core})
