@@ -17,11 +17,11 @@ One inline review comment per finding, on the line chosen by the anchoring rules
 - First line: `**[<kind> · high]** <title>`
 - Then the terse gap and fix. A `missing_test` carries a fenced test skeleton.
 - A mechanical `standard` fix is a native suggested change replacing exactly the cited line(s). Cite the rule as `path:line` with the rule text quoted.
-- The "This test fails today: ..." lens still applies.
+- The static prediction lens still applies; never imply a suggested test was executed.
 
 ## What to post
 
-Only `high` findings. Drop low-confidence and inferred items: there is no collapsed section, and precision matters more. Never post `needs_human` criteria.
+Only `high` findings. Drop low-confidence items: there is no collapsed section, and precision matters more. A demonstrated changed-behaviour gap does not require an issue. Never post `needs_human` or `unknown` criteria. The CI JSON fields and required assessments do not apply to this delivery mode.
 
 ## No summary
 

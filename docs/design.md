@@ -2,9 +2,21 @@
 
 ## Status (2026-10-06)
 
-- Shipped v1.
-- Verified live on a personal repo with Copilot via `GITHUB_TOKEN` (zero secrets): inline review with 0 422s, requirements read from the linked issue, quote-based anchoring, dedupe on rerun ("5 already posted"), suggestion blocks, about 1.5 min per run.
-- Not yet verified: Claude engine, org-repo billing path, non-JS repos, pushdown/needs_human cases.
+The refactor below supersedes the v1 report contract. The remaining v1 sections record the original implementation decisions. The original goal is unchanged.
+
+### Evidence contract refactor
+
+The default remains the direct Agent GitHub Action (Copilot CLI or Claude), advisory only. Native CCR is optional: its sparse comments cannot reconstruct a complete requirements/evidence table, so no hybrid coverage gate is introduced.
+
+- Each obligation has a unique ID, requirement source, changed-behaviour citation, assertion evidence with a test layer, status and reasoning. Findings reference obligation IDs; missing/weak rows require one matching finding.
+- Unit evidence is distinct from component/integration/e2e evidence. Higher-layer-only obligations may get a pushdown finding when a suitable public seam exists; integration responsibilities remain.
+- Standards and layering have explicit assessment statuses and explanations even when there are no findings. Checked records assessment, not certification.
+- The collector records inaccessible/capped requirements, including cross-repository issues. The poster preserves these limitations independently of the model.
+- The poster verifies citations against workspace files and rule sources against the base inventory. A mismatched assertion or behaviour becomes unknown, never covered. File reads stay inside the workspace, including symlink resolution.
+- No clean-review wording for empty obligations, unknown evidence, partial context, or unfinished checks. The ratio is Unit evidence: X/Y, a static judgement over assessed obligations; tests are not run.
+- Weak assertions outside the diff stay in the summary. Deduplication affects delivery only; persistent gaps remain counted. Superseded HEAD results do not overwrite the current report.
+
+The schema, skill and validator evolve together. Old report JSON is rejected as incomplete. Deterministic tests cover collection, evidence validation, consistency, partial results and publication; they do not establish LLM recall. The refactored prompt still needs a live pilot across representative languages before release. Historical live v1 results are not validation of this new contract.
 
 ## 0. Original Goal (verbatim, do not edit)
 
@@ -352,8 +364,8 @@ Deferred:
 | Item | Trigger |
 |---|---|
 | `copilot-code-review.yml` setup steps to precompute requirements and coverage | setup steps are verified to work for CCR |
-| Poller that posts the coverage summary after CCR | adopters ask for Proven X/Y in CCR mode |
-| Request CCR from the Action via `requested_reviewers` | adopters want one trigger and the same billing path |
+| Native review observer | only if adopters need review metadata; cannot reconstruct coverage from comments |
+| Request CCR from the Action via `requested_reviewers` | separate billing/identity validation required; never promise author-paid usage |
 
 Sources: changelogs 2026-07-17, 2026-07-29, 2026-09-11 and 2026-10-02 (github.blog/changelog); https://docs.github.com/en/copilot/concepts/agents/code-review ; microsoft/testfx.
 

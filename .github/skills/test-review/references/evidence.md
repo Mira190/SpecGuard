@@ -16,7 +16,7 @@ Not evidence (counts as zero):
 
 Report `weak_test` on the assertion line when a test exercises the behaviour but:
 - survives a plausible mutation: flipped condition, dropped branch, off-by-one, swapped error;
-- is coupled to the implementation:
+- is coupled to the implementation in a way that hides a specific required outcome or violates an applicable repo rule:
   - mocks the project's own modules or internal collaborators;
   - tests a private method;
   - asserts call counts or call order;
@@ -26,10 +26,12 @@ Report `weak_test` on the assertion line when a test exercises the behaviour but
 
 ## Mocks and seams
 
-Mock only at system boundaries: external APIs, time, randomness, sometimes the DB or file system. Never mock the project's own modules.
+Prefer mocks at system boundaries: external APIs, time, randomness, sometimes the DB or file system. An internal mock or a call-count assertion alone is not proof of a weak test: identify the missed behavioural regression and respect the repo's testing contract.
 
 Test at seams, meaning public boundaries. For `pushdown`, if a unit test would need to mock the project's own modules, it is not a candidate. Otherwise target the smallest public seam, never a private function.
 
 ## Test layers
 
-A unit test covers one function or class through its public interface, with no network and no real DB. Anything wider is component or integration. Use the repo's own names for layers.
+A unit test isolates a behaviour through a public seam, without network or a real DB. Use repository configuration, fixtures and dependencies to distinguish unit, component, integration and end-to-end tests. Preserve the repo's names in the explanation while using the schema's layer labels. When the layer is uncertain, mark the obligation `unknown` instead of crediting unit coverage.
+
+For every cited assertion, copy a real source line and explain the input and expected outcome it checks. A test name, a file's existence, or execution of a branch alone is not assertion evidence. `covered` requires unit evidence; `higher_level_only` records evidence at other layers without implying it should always move. Keep integration checks for wiring, persistence, protocols and cross-component contracts. Recommend pushdown only for separable deterministic logic, and retain those integration responsibilities.

@@ -1,272 +1,333 @@
 const test = require('node:test');
-const assert = require('node:assert');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const post = require('./post.js');
-const { parsePatch, validate, anchor, snap, ruleLine, plan, fingerprint, redact, truncate } = post;
 
-const PATCH = ['@@ -1,3 +1,4 @@', ' ctx1', '-old2', '+new2', '+new3', ' ctx4', '\\ No newline at end of file', '@@ -20,2 +21,2 @@', ' c20', '+n22'].join('\n');
+const behaviour = { path: 'src.js', line: 3, quote: 'if (x) {' };
+const evidence = { path: 'test.js', line: 2, quote: 'assert.equal(result, 42);', layer: 'unit', kind: 'assertion', proves: 'Returns the required total for the boundary input.' };
+const row = (status = 'covered', extra = {}) => ({ id: 'O1', obligation: 'Returns the required total', source: 'issue #1 AC 1', behaviour: { ...behaviour }, change: { ...behaviour }, evidence: status === 'missing_test' ? [] : [{ ...evidence }], status, reason: 'Searched unit and integration suites for the public total function.', ...extra });
+const finding = (kind = 'missing_test', extra = {}) => ({ kind, obligation_ids: kind === 'standard' ? [] : ['O1'], ...behaviour, title: 'Verify the boundary total', body: 'The boundary has no assertion. Add assert.equal(total(1), 42).', confidence: 'high', ...extra, kind });
+const report = (extra = {}) => ({ requirements: [], requirements_source: 'issue #1', not_reviewed: '', coverage: [row('missing_test')], findings: [finding()], standards: { status: 'checked', sources: ['RULES.md'], reason: 'Checked the changed code against the error handling rule.' }, layering: { status: 'checked', reason: 'Searched unit and integration suites; no suitable additional pushdown.' }, ...extra });
 
-test('parsePatch: added, context, deleted, multiple hunks, no-newline marker', () => {
-  const m = parsePatch(PATCH);
-  assert.deepStrictEqual([...m.RIGHT], [[1, 0], [2, 0], [3, 0], [4, 0], [21, 1], [22, 1]]);
-  assert.deepStrictEqual([...m.LEFT], [[2, 0]]);
-  assert.strictEqual(parsePatch(undefined).RIGHT.size, 0);
-  assert.strictEqual(parsePatch('@@ -1 +1 @@\n+a\n').RIGHT.size, 1); // trailing '' is not a context line
+const patch = '@@ -1,3 +1,4 @@\n l1\n-old\n+l2\n+if (x) {\n l4\n';
+test('maps diff hunks and routes low confidence and overflow to summary', () => {
+  const map = post.parsePatch(patch);
+  assert.deepEqual([...map.RIGHT], [[1, 0], [2, 0], [3, 0], [4, 0]]);
+  assert.deepEqual([...map.LEFT], [[2, 0]]);
+  assert.equal(post.parsePatch(undefined).RIGHT.size, 0);
+  assert.equal(post.anchor(finding(), map), 'inline');
+  assert.equal(post.anchor(finding('missing_test', { line: 8 }), map), 'file');
+  assert.equal(post.anchor(finding(), undefined), 'summary');
+  assert.equal(post.anchor(finding('missing_test', { start_line: 3 }), map), 'file');
+  const plan = post.plan([finding(), finding('weak_test', { confidence: 'low' }), finding('pushdown')], new Map([['src.js', map]]), 1);
+  assert.equal(plan.inline.length, 1);
+  assert.deepEqual(plan.summary.map((i) => i.why), ['low confidence', 'over max_comments']);
+  assert.equal(post.plan(Array(40).fill(finding()), new Map([['src.js', map]]), 99).inline.length, 30);
 });
 
-const F = (o) => ({ kind: 'missing_test', path: 'a.js', line: 2, quote: 'q', title: 't', body: 'b', confidence: 'high', ...o });
-const maps = new Map([['a.js', parsePatch(PATCH)]]);
-
-test('anchor ladder: inline / file-level / summary', () => {
-  const m = maps.get('a.js');
-  assert.strictEqual(anchor(F({ line: 2 }), m), 'inline');
-  assert.strictEqual(anchor(F({ line: 10 }), m), 'file');
-  assert.strictEqual(anchor(F({ line: 10, confidence: 'low' }), m), 'summary');
-  assert.strictEqual(anchor(F({ line: 2 }), undefined), 'summary');
-  assert.strictEqual(anchor(F({ line: 10 }), m, 3), 'summary');
+test('rejects missing checks, unsupported coverage, orphan findings and contradictory classifications', () => {
+  assert.deepEqual(post.validate(report()), { ok: true });
+  const covered = report({ coverage: [row()], findings: [] });
+  assert.equal(post.validate(covered).ok, true);
+  for (const d of [null, { ...covered, standards: undefined }, { ...covered, layering: undefined },
+    report({ coverage: [row('covered', { evidence: [] })], findings: [] }),
+    report({ coverage: [row('covered', { evidence: [{ ...evidence, layer: 'integration' }] })], findings: [] }),
+    report({ findings: [] }), report({ findings: [finding(), finding()] }),
+    report({ findings: [finding('pushdown')] }), report({ findings: [finding('missing_test', { obligation_ids: ['absent'] })] }),
+    report({ findings: [finding('missing_test', { line: 0 })] }),
+    report({ coverage: [row('missing_test'), row('missing_test')] }),
+    report({ coverage: [row('missing_test', { evidence: [evidence] })] })]) assert.equal(post.validate(d).ok, false);
 });
 
-test('range must stay in one hunk on RIGHT', () => {
-  const m = maps.get('a.js');
-  assert.strictEqual(anchor(F({ start_line: 1, line: 3 }), m), 'inline');
-  assert.strictEqual(anchor(F({ start_line: 4, line: 21 }), m), 'file');
-  assert.strictEqual(anchor(F({ start_line: 3, line: 3 }), m), 'file');
+test('records integration-only evidence without claiming unit coverage or forcing pushdown', () => {
+  const c = row('higher_level_only', { evidence: [{ ...evidence, layer: 'integration' }] });
+  assert.equal(post.validate(report({ coverage: [c], findings: [] })).ok, true);
+  assert.equal(post.validate(report({ coverage: [c], findings: [finding('pushdown')] })).ok, true);
+  assert.equal(post.noGaps(report({ coverage: [c], findings: [] })), false);
+  assert.match(post.proven([c]), /Unit evidence: 0\/1/);
+  assert.equal(post.proven([]), '');
+  assert.equal(post.proven([row('needs_human')]), '');
 });
 
-test('plan: low never inline, file-level cap 3, max_comments overflow, ordering', () => {
-  const fs_ = [F({ line: 10, title: 'f1' }), F({ line: 11 }), F({ line: 12 }), F({ line: 13 }), F({ line: 2, confidence: 'low' }),
-    F({ kind: 'pushdown', line: 1 }), F({ kind: 'weak_test', line: 3 }), F({ line: 4 })];
-  const p = plan(fs_, maps, 2);
-  assert.deepStrictEqual(p.inline.map((f) => f.kind), ['missing_test', 'weak_test']);
-  assert.strictEqual(p.file.length, 3);
-  const why = p.summary.map((s) => s.why).sort();
-  assert.deepStrictEqual(why, ['low confidence', 'not in a diff hunk', 'over max_comments']);
-  assert.strictEqual(plan(Array(40).fill(F({ line: 2 })), maps, 99).inline.length, 30);
+test('never labels empty, partial, unknown or incomplete checks as a clean review', () => {
+  const clean = report({ coverage: [row()], findings: [] });
+  assert.equal(post.noGaps(clean), true);
+  for (const d of [{ ...clean, coverage: [] }, { ...clean, not_reviewed: 'Issue unavailable' },
+    { ...clean, coverage: [row('unknown')] }, { ...clean, coverage: [row('needs_human')] },
+    { ...clean, standards: { status: 'not_reviewed' } }, { ...clean, layering: { status: 'not_reviewed' } }]) assert.equal(post.noGaps(d), false);
 });
 
-test('validate rejects bad kind and line, accepts a sample', () => {
-  const ok = { requirements_source: 'PR body', not_reviewed: '', coverage: [{ obligation: 'o', source: 's', tests: ['t.js:1'], status: 'covered' }], findings: [F({})] };
-  assert.strictEqual(validate(ok).ok, true);
-  assert.strictEqual(validate({ ...ok, findings: [F({ kind: 'nope' })] }).ok, false);
-  assert.strictEqual(validate({ ...ok, findings: [F({ line: 0 })] }).ok, false);
-  assert.strictEqual(validate({ ...ok, findings: [F({ line: 1.5 })] }).ok, false);
-  assert.strictEqual(validate({ ...ok, coverage: [{ ...ok.coverage[0], status: 'x' }] }).ok, false);
-  assert.strictEqual(validate(null).ok, false);
+test('verifies assertion citations and rejects a false no-rules assessment', () => {
+  const read = (p) => ({ 'src.js': ['l1', 'l2', behaviour.quote], 'test.js': ['test', evidence.quote] })[p];
+  assert.equal(post.verifyEvidence(report({ coverage: [row()], findings: [] }), new Set(['src.js']), new Set(['RULES.md']), read, new Map([['src.js', post.parsePatch(patch)]])).coverage[0].status, 'covered');
+  const bad = report({ coverage: [row('weak_test', { evidence: [{ ...evidence, quote: 'invented assertion' }] })], findings: [finding('weak_test')] });
+  const result = post.verifyEvidence(bad, new Set(['src.js']), new Set(['RULES.md']), read, new Map([['src.js', post.parsePatch(patch)]]));
+  assert.equal(result.coverage[0].status, 'unknown');
+  assert.deepEqual(result.findings, []);
+  const rules = report({ standards: { status: 'no_rules', sources: [], reason: 'No rules' } });
+  assert.equal(post.verifyEvidence(rules, new Set(['src.js']), new Set(['RULES.md']), read, new Map([['src.js', post.parsePatch(patch)]])).standards.status, 'not_reviewed');
 });
 
-test('fingerprint is stable across line shifts, changes with text', () => {
-  assert.strictEqual(fingerprint('standard', 'a.js', '  if (x)   {'), fingerprint('standard', 'a.js', 'if (x) {'));
-  assert.strictEqual(fingerprint('standard', 'a.js', 'if (x) {'), fingerprint('standard', 'a.js', ' if (x)  { '));
-  assert.notStrictEqual(fingerprint('standard', 'a.js', 'if (x) {'), fingerprint('weak_test', 'a.js', 'if (x) {'));
-  assert.notStrictEqual(fingerprint('standard', 'a.js', 'if (x) {'), fingerprint('standard', 'a.js', 'if (y) {'));
+test('anchors nearby quotes and deduplicates stable criteria', () => {
+  const lines = ['a', '  throw new Error(x);', '}', 'c'];
+  assert.equal(post.snap({ line: 3, quote: 'throw new Error(x);' }, lines), -1);
+  assert.equal(post.snap({ line: 3, start_line: 1, quote: 'throw new Error(x);' }, lines), null);
+  assert.equal(post.snap({ line: 2, quote: 'invented' }, lines), null);
+  assert.equal(post.ruleLine('throw new Error(x);', lines, 3), 2);
+  assert.equal(post.ruleLine('', lines, 1), 0);
+  assert.equal(post.fingerprint('missing_test', 'a.js', 'x', 'issue #1 AC 1'), post.fingerprint('missing_test', 'a.js', 'y', 'issue #1 AC 1'));
+  assert.notEqual(post.fingerprint('missing_test', 'a.js', 'x'), post.fingerprint('missing_test', 'a.js', 'y'));
 });
 
-test('redact and truncate', () => {
-  const t = 'ghp_' + 'a'.repeat(36);
-  assert.strictEqual(redact(`x ${t} y github_pat_${'B'.repeat(30)} sk-ant-${'c'.repeat(30)}`), 'x [REDACTED] y [REDACTED] [REDACTED]');
-  assert.ok(truncate('x'.repeat(70000)).length <= 65000);
+test('renders suggestions only for standards and redacts secrets', () => {
+  const standard = finding('standard', { suggestion: 'fixed();' });
+  assert.match(post.commentBody(standard, 'abc'), /```suggestion\nfixed\(\);/);
+  assert.doesNotMatch(post.commentBody(standard, 'abc', false), /```suggestion/);
+  assert.doesNotMatch(post.commentBody(finding('missing_test', { suggestion: 'fixed();' }), 'abc'), /fixed\(\);/);
+  assert.equal(post.redact('ghp_' + 'a'.repeat(36)), '[REDACTED]');
+  assert.ok(post.truncate('x'.repeat(70000)).length <= 65000);
+  assert.equal(post.axes([finding(), finding('pushdown')]), 'Tests: 1 missing, 0 weak · Standards: 0 · Layering: 1');
 });
 
-// ---- end to end with a stub github ----
-function setup({ existing = [], failFirst422 = false } = {}) {
+function setup(t, data = report(), options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-'));
+  const previous = { ...process.env };
+  t.after(() => {
+    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF']) {
+      if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
   fs.mkdirSync(path.join(dir, 'ctx'));
-  fs.writeFileSync(path.join(dir, 'src.js'), ['l1', 'l2', 'if (x) {', 'l4', 'l5', 'l6', 'l7', 'l8', ''].join('\n'));
+  fs.writeFileSync(path.join(dir, 'src.js'), 'l1\nl2\nif (x) {\nl4\nl5\nl6\nl7\nl8\n');
+  fs.writeFileSync(path.join(dir, 'test.js'), `test\n${evidence.quote}\n`);
   fs.writeFileSync(path.join(dir, 'RULES.md'), 'rule one\nrule two\n');
-  fs.writeFileSync(path.join(dir, 'ctx/files.txt'), 'src.js\n');
-  fs.writeFileSync(path.join(dir, 'ctx/standards.txt'), 'RULES.md\n');
-  const findings = {
-    requirements_source: 'PR body', not_reviewed: '', coverage: [],
-    findings: [
-      F({ path: 'src.js', line: 3, quote: 'if (x) {', title: 'inline one' }),
-      F({ path: 'src.js', line: 8, quote: 'l8', title: 'file level' }),
-      F({ path: 'other.js', line: 1, title: 'not in diff' }),
-      F({ path: 'src.js', line: 4, quote: 'no such text', title: 'bad quote' }),
-      F({ path: 'src.js', line: 4, quote: 'if (x) {', title: 'off by one' }),
-      F({ path: 'src.js', line: 2, quote: 'l2', kind: 'standard', rule_source: 'RULES.md:2', rule_quote: 'rule two', title: 'good rule', suggestion: '  l2 fixed();' }),
-      F({ path: 'src.js', line: 4, quote: 'l4', kind: 'standard', rule_source: 'RULES.md:50', rule_quote: 'no such rule', title: 'bad rule' }),
-    ],
-  };
-  fs.writeFileSync(path.join(dir, 'ctx/findings.json'), JSON.stringify(findings));
-  const calls = { review: [], fileComment: [], issueCreate: [], issueUpdate: [] };
-  const patch = '@@ -1,2 +1,4 @@\n l1\n+l2\n+if (x) {\n+l4';
-  let n422 = failFirst422 ? 1 : 0;
-  const github = {
-    paginate: async (fn, p) => (await fn(p)).data,
-    rest: {
-      pulls: {
-        listFiles: async () => ({ data: [{ filename: 'src.js', patch }] }),
-        listReviewComments: async () => ({ data: existing }),
-        createReview: async (a) => { calls.review.push(a); if (n422-- > 0) throw Object.assign(new Error('Line could not be resolved'), { status: 422 }); return {}; },
-        createReviewComment: async (a) => { calls.fileComment.push(a); return {}; },
-      },
-      issues: {
-        listComments: async () => ({ data: [] }),
-        createComment: async (a) => { calls.issueCreate.push(a); return {}; },
-        updateComment: async (a) => { calls.issueUpdate.push(a); return {}; },
-      },
+  for (const [name, value] of Object.entries({ 'files.txt': 'src.js\n', 'standards.txt': 'RULES.md\n', 'findings.json': JSON.stringify(data), 'requirements-status.json': JSON.stringify({ status: 'available', sources: ['PR body', 'issue #1'], limitations: [] }) })) fs.writeFileSync(path.join(dir, 'ctx', name), value);
+  const calls = { review: [], file: [], summary: [] };
+  let count = 0;
+  const github = { paginate: async (fn, args) => (await fn(args)).data, rest: {
+    pulls: {
+      get: async () => ({ data: { head: { sha: options.head || 'HEADSHA' } } }),
+      listFiles: async () => ({ data: [{ filename: 'src.js', patch }] }),
+      listReviewComments: async () => ({ data: options.existing || [] }),
+      createReview: async (args) => { calls.review.push(args); if (options.retry422 && count++ === 0) throw Object.assign(new Error('bad anchor'), { status: 422 }); },
+      createReviewComment: async (args) => { calls.file.push(args); },
     },
-  };
+    issues: {
+      listComments: async () => ({ data: [] }),
+      createComment: async (args) => { calls.summary.push(args); },
+      updateComment: async (args) => { calls.summary.push(args); },
+    },
+  } };
   const warnings = [];
-  const core = { warning: (m) => warnings.push(m), summary: { addRaw() { return this; }, async write() {} } };
+  const core = { warning: (s) => warnings.push(s), summary: { addRaw() { return this; }, async write() {} } };
   const context = { repo: { owner: 'o', repo: 'r' }, serverUrl: 'https://github.com', payload: { pull_request: { number: 7, head: { sha: 'HEADSHA' } } } };
-  Object.assign(process.env, { CTX: path.join(dir, 'ctx'), GITHUB_WORKSPACE: dir, HEAD_SHA: 'HEADSHA', MAX_COMMENTS: '10', ENGINE: 'copilot', SKIP: 'false', PARTIAL: 'false' });
-  return { github, core, context, calls, warnings };
+  Object.assign(process.env, { CTX: path.join(dir, 'ctx'), GITHUB_WORKSPACE: dir, HEAD_SHA: 'HEADSHA', MAX_COMMENTS: '10', ENGINE: 'copilot', SKIP: 'false', PARTIAL: 'false', STANDARDS_CHECKS: '', STANDARDS_REF: 'head' });
+  return { github, context, core, calls, warnings, dir };
 }
 
-test('main flow: one review, file-level comment, rule filter, summary created', async () => {
-  const s = setup();
+test('posts requirement-aware findings and reports standards and layers independently', async (t) => {
+  const s = setup(t);
   await post(s);
-  assert.strictEqual(s.calls.review.length, 1);
-  const r = s.calls.review[0];
-  assert.strictEqual(r.event, 'COMMENT');
-  assert.strictEqual(r.commit_id, 'HEADSHA');
-  assert.deepStrictEqual(r.comments.map((c) => c.line).sort(), [2, 3]); // 'bad rule' and 'not in diff' dropped
-  assert.ok(r.comments.every((c) => /<!-- specguard:fp=[0-9a-f]{40} -->/.test(c.body)));
-  assert.ok(r.body.startsWith('<!-- specguard:review -->'));
-  assert.strictEqual(s.calls.fileComment.length, 1);
-  assert.strictEqual(s.calls.fileComment[0].subject_type, 'file');
-  assert.ok(s.calls.fileComment[0].body.includes('/blob/HEADSHA/src.js#L8'));
-  assert.ok(r.comments.find((c) => c.line === 2).body.includes('```suggestion\n  l2 fixed();\n```'));
-  assert.strictEqual(s.calls.issueCreate.length, 1);
-  assert.ok(s.calls.issueCreate[0].body.includes('citation did not match the file'));
-  assert.strictEqual(r.comments.filter((c) => c.line === 3).length, 1); // off-by-one snapped onto line 3, deduped with 'inline one'
-  assert.ok(s.calls.issueCreate[0].body.includes('<!-- specguard:summary -->'));
+  assert.equal(s.calls.review.length, 1);
+  assert.equal(s.calls.review[0].commit_id, 'HEADSHA');
+  assert.equal(s.calls.review[0].event, 'COMMENT');
+  assert.equal(s.calls.review[0].comments[0].line, 3);
+  assert.match(s.calls.summary[0].body, /Coding standards: checked/);
+  assert.match(s.calls.summary[0].body, /Test layers: checked/);
+  assert.match(s.calls.summary[0].body, /O1: Returns the required total/);
 });
 
-test('main flow: dedupe skips an existing fingerprint', async () => {
-  const fp = fingerprint('missing_test', 'src.js', 'if (x) {');
-  const s = setup({ existing: [{ body: `old <!-- specguard:fp=${fp} -->`, line: null }] });
+test('keeps persistent gaps in coverage when their inline comment was already posted', async (t) => {
+  const fp = post.fingerprint('missing_test', 'src.js', behaviour.quote);
+  const s = setup(t, report(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
   await post(s);
-  assert.deepStrictEqual(s.calls.review[0].comments.map((c) => c.line), [2]);
-  assert.ok(s.calls.review[0].body.includes('2 already posted'));
+  assert.equal(s.calls.review.length, 0);
+  assert.match(s.calls.summary[0].body, /1 already posted/);
+  assert.match(s.calls.summary[0].body, /missing_test/);
+  assert.doesNotMatch(s.calls.summary[0].body, /No test gaps found/);
 });
 
-test('main flow: 422 retries once as a body-only review', async () => {
-  const s = setup({ failFirst422: true });
+test('preserves weak assertions outside the diff in the summary', async (t) => {
+  const s = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', evidence)] }));
   await post(s);
-  assert.strictEqual(s.calls.review.length, 2);
-  assert.strictEqual(s.calls.review[1].comments, undefined);
-  assert.ok(s.calls.review[1].body.includes('unanchored'));
+  assert.equal(s.calls.review.length, 0);
+  assert.match(s.calls.summary[0].body, /assertion outside the reviewed diff/);
+  assert.match(s.calls.summary[0].body, /test.js:2/);
 });
 
-test('main flow: missing findings.json reports could not complete and does not throw', async () => {
-  const s = setup();
-  fs.unlinkSync(path.join(process.env.CTX, 'findings.json'));
+test('does not publish results for a superseded commit', async (t) => {
+  const s = setup(t, report(), { head: 'NEWHEAD' });
   await post(s);
-  assert.strictEqual(s.calls.review.length, 0);
-  assert.ok(s.calls.issueCreate[0].body.includes('Could not complete'));
+  assert.deepEqual(s.calls, { review: [], file: [], summary: [] });
+  assert.match(s.warnings[0], /superseded HEAD/);
 });
 
-test('snap: exact, +-1, closest wins, no match / unreadable / start_line underflow', () => {
-  const L = ['a', '  throw 1;', '}', 'c'];
-  assert.strictEqual(snap({ line: 2, quote: 'throw 1;' }, L), 0);
-  assert.strictEqual(snap({ line: 3, quote: 'throw 1;' }, L), -1);
-  assert.strictEqual(snap({ line: 1, quote: 'throw   1;' }, L), 1);
-  assert.strictEqual(snap({ line: 2, quote: 'nope' }, L), null);
-  assert.strictEqual(snap({ line: 2, quote: 'throw 1;' }, null), null);
-  assert.strictEqual(snap({ line: 3, start_line: 1, quote: 'throw 1;' }, L), null);
-  assert.strictEqual(snap({ line: 50, quote: 'throw 1;' }, L), null); // beyond +-5
-});
-
-test('commentBody: suggestion block for inline standard, longer fence, ignored on other kinds, plain block at file level', () => {
-  const S = (o) => F({ kind: 'standard', suggestion: 'throw new Error(x);', ...o });
-  const inl = post.commentBody(S({}), 'a'.repeat(40));
-  assert.ok(inl.includes('```suggestion\nthrow new Error(x);\n```'));
-  assert.ok(inl.indexOf('```suggestion') < inl.indexOf('<details>'));
-  assert.ok(post.commentBody(S({ suggestion: 'a ```b``` c' }), 'a'.repeat(40)).includes('````suggestion\na ```b``` c\n````'));
-  assert.ok(!post.commentBody(F({ suggestion: 'x' }), 'a'.repeat(40)).includes('x\n```'));
-  assert.ok(!post.commentBody(S({ suggestion: '' }), 'a'.repeat(40)).includes('suggestion'));
-  const file = post.commentBody(S({}), 'a'.repeat(40), false);
-  assert.ok(file.includes('Suggested fix:\n\n```\nthrow new Error(x);\n```') && !file.includes('```suggestion'));
-  assert.strictEqual(validate({ requirements_source: '', not_reviewed: '', coverage: [], findings: [S({ suggestion: 1 })] }).ok, false);
-});
-
-test('fingerprint: an AC source replaces the quote, other sources do not', () => {
-  assert.strictEqual(fingerprint('missing_test', 'a.js', 'x', 'issue #1 AC 2'), fingerprint('missing_test', 'a.js', 'y', 'issue #1 AC 2'));
-  assert.notStrictEqual(fingerprint('missing_test', 'a.js', 'x', 'issue #1 AC 2'), fingerprint('missing_test', 'a.js', 'x', 'issue #1 AC 3'));
-  assert.strictEqual(fingerprint('missing_test', 'a.js', 'x', 'PR body AC 1'), fingerprint('missing_test', 'a.js', 'z', 'PR body AC 1'));
-  assert.notStrictEqual(fingerprint('missing_test', 'a.js', 'x', 'PR body'), fingerprint('missing_test', 'a.js', 'y', 'PR body'));
-  assert.strictEqual(fingerprint('missing_test', 'a.js', 'x', 'PR body'), fingerprint('missing_test', 'a.js', 'x'));
-  assert.strictEqual(validate({ requirements_source: '', not_reviewed: '', coverage: [], findings: [F({ source: 'issue #1 AC 2' })] }).ok, true);
-  assert.strictEqual(validate({ requirements_source: '', not_reviewed: '', coverage: [], findings: [F({ source: 5 })] }).ok, false);
-});
-
-test('main flow: same AC source on different lines and quotes posts one comment', async () => {
-  const s = setup();
-  const file = path.join(process.env.CTX, 'findings.json');
-  const d = JSON.parse(fs.readFileSync(file, 'utf8'));
-  d.findings = [
-    F({ path: 'src.js', line: 3, quote: 'if (x) {', title: 'ac one', source: 'issue #1 AC 2' }),
-    F({ path: 'src.js', line: 2, quote: 'l2', title: 'ac one again', source: 'issue #1 AC 2' }),
-  ];
-  fs.writeFileSync(file, JSON.stringify(d));
+test('retries rejected inline anchors as a body-only review', async (t) => {
+  const s = setup(t, report(), { retry422: true });
   await post(s);
-  assert.strictEqual(s.calls.review[0].comments.length, 1);
+  assert.equal(s.calls.review.length, 2);
+  assert.equal(s.calls.review[1].comments, undefined);
+  assert.match(s.calls.review[1].body, /unanchored/);
 });
 
-test('axes and proven: per-axis counts, covered over non-needs_human rows', () => {
-  const fs_ = [F({}), F({}), F({ kind: 'weak_test' }), F({ kind: 'standard' }), F({ kind: 'pushdown' })];
-  assert.strictEqual(post.axes(fs_), 'Tests: 2 missing, 1 weak · Standards: 1 · Layering: 1');
-  const row = (status) => ({ obligation: 'o', source: 's', tests: [], status });
-  assert.strictEqual(post.proven([row('covered'), row('missing_test'), row('weak_test'), row('needs_human')]), 'Proven: 1/3 obligations');
-  assert.strictEqual(post.proven([row('needs_human')]), '');
-  assert.strictEqual(post.proven([]), '');
-});
-
-test('main flow: no findings and all rows covered or needs_human reports no test gaps, posts no review', async () => {
-  const s = setup();
-  const file = path.join(process.env.CTX, 'findings.json');
-  const d = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const row = (status) => ({ obligation: 'o', source: 's', tests: [], status });
-  d.findings = [];
-  d.coverage = [row('covered'), row('covered'), row('needs_human')];
-  fs.writeFileSync(file, JSON.stringify(d));
+test('reports missing model output as incomplete', async (t) => {
+  const s = setup(t);
+  fs.unlinkSync(path.join(s.dir, 'ctx/findings.json'));
   await post(s);
-  assert.strictEqual(s.calls.review.length, 0);
-  const body = s.calls.issueCreate[0].body;
-  assert.ok(body.includes('No test gaps found.') && body.includes('Proven: 2/2 obligations'));
-  assert.strictEqual(post.noGaps({ findings: [], coverage: [row('missing_test')] }), false);
+  assert.equal(s.calls.review.length, 0);
+  assert.match(s.calls.summary[0].body, /Could not complete/);
 });
 
-test('main flow: review body and summary carry per-axis counts and the proven line', async () => {
-  const s = setup();
+test('verifies unit assertions and displays their text and layer without claiming execution', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] }));
   await post(s);
-  assert.ok(s.calls.review[0].body.includes('Tests: 2 missing, 0 weak · Standards: 1 · Layering: 0'));
-  assert.ok(s.calls.issueCreate[0].body.includes('Reviewed: Tests: 2 missing, 0 weak · Standards: 1 · Layering: 0;'));
-  const t = setup();
-  const file = path.join(process.env.CTX, 'findings.json');
-  const d = JSON.parse(fs.readFileSync(file, 'utf8'));
-  d.coverage = [{ obligation: 'o', source: 's', tests: [], status: 'covered' }, { obligation: 'p', source: 's', tests: [], status: 'missing_test' }];
-  fs.writeFileSync(file, JSON.stringify(d));
-  await post(t);
-  assert.ok(t.calls.review[0].body.includes('Proven: 1/2 obligations.'));
-  assert.ok(t.calls.issueCreate[0].body.includes('Proven: 1/2 obligations.'));
+  assert.match(s.calls.summary[0].body, /No test gaps found/);
+  assert.match(s.calls.summary[0].body, /unit: test.js:2/);
+  assert.match(s.calls.summary[0].body, /assert.equal\(result, 42\)/);
+  assert.match(s.calls.summary[0].body, /static review; tests not executed/);
 });
 
-test('ruleLine: nearest match, whitespace-normalised, no match', () => {
-  const L = ['a rule', 'Throw  Error never strings', 'b', 'a rule'];
-  assert.strictEqual(ruleLine('throw', L, 1), 0);
-  assert.strictEqual(ruleLine('Throw Error never strings', L, 1), 2);
-  assert.strictEqual(ruleLine('a rule', L, 3), 4);
-  assert.strictEqual(ruleLine('', L, 1), 0);
-  assert.strictEqual(ruleLine(undefined, L, 1), 0);
-});
-
-test('main flow: rule_source line is corrected from rule_quote; missing or unfound quote drops', async () => {
-  const s = setup();
-  const file = path.join(process.env.CTX, 'findings.json');
-  const d = JSON.parse(fs.readFileSync(file, 'utf8'));
-  d.findings = [
-    F({ path: 'src.js', line: 2, quote: 'l2', kind: 'standard', rule_source: 'RULES.md:1', rule_quote: 'rule two', title: 'wrong line' }),
-    F({ path: 'src.js', line: 3, quote: 'if (x) {', kind: 'standard', rule_source: 'RULES.md:2', rule_quote: 'not in file', title: 'unfound' }),
-    F({ path: 'src.js', line: 4, quote: 'l4', kind: 'standard', rule_source: 'RULES.md:2', title: 'no quote' }),
-  ];
-  fs.writeFileSync(file, JSON.stringify(d));
+test('unavailable requirements and truncated diffs prevent clean-review wording', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/requirements-status.json'), JSON.stringify({ status: 'partial', sources: ['PR body'], limitations: ['Could not read issue #2.'] }));
+  process.env.PARTIAL = 'true';
   await post(s);
-  const cs = s.calls.review[0].comments;
-  assert.strictEqual(cs.length, 1);
-  assert.ok(cs[0].body.includes('rule: RULES.md:2') && !cs[0].body.includes('RULES.md:1'));
+  assert.doesNotMatch(s.calls.summary[0].body, /No test gaps found/);
+  assert.match(s.calls.summary[0].body, /Could not read issue #2/);
+  assert.match(s.calls.summary[0].body, /Diff truncated/);
+});
+
+test('refuses assertion citations outside the workspace', async (t) => {
+  const s = setup(t, report({ coverage: [row('covered', { evidence: [{ ...evidence, path: '../outside.js' }] })], findings: [] }));
+  await post(s);
+  assert.match(s.calls.summary[0].body, /unknown/);
+  assert.match(s.calls.summary[0].body, /Unit evidence: 0\/1/);
+});
+
+test('renders empty assessments honestly', () => {
+  const summary = post.buildSummary({ status: 'Reviewed', data: report({ coverage: [], findings: [] }) });
+  assert.match(summary, /No obligations assessed/);
+  assert.doesNotMatch(summary, /No test gaps found/);
+});
+
+test('corrects a rule citation, rejects an invented rule and preserves the review limitation', async (t) => {
+  const s = setup(t, report({ coverage: [], findings: [
+    finding('standard', { line: 2, quote: 'l2', rule_source: 'RULES.md:1', rule_quote: 'rule two', suggestion: 'fixed();' }),
+    finding('standard', { rule_source: 'RULES.md:2', rule_quote: 'invented rule' }),
+  ] }));
+  await post(s);
+  assert.equal(s.calls.review[0].comments.length, 1);
+  assert.match(s.calls.review[0].comments[0].body, /rule: RULES.md:2/);
+  assert.match(s.calls.review[0].comments[0].body, /```suggestion/);
+  assert.match(s.calls.summary[0].body, /Unverified standards finding omitted/);
+});
+
+test('posts a file-level finding when its valid citation is outside the diff hunk', async (t) => {
+  const s = setup(t, report({ findings: [finding('missing_test', { line: 8, quote: 'l8' })] }));
+  await post(s);
+  assert.equal(s.calls.review.length, 0);
+  assert.equal(s.calls.file[0].subject_type, 'file');
+  assert.match(s.calls.file[0].body, /blob\/HEADSHA\/src.js#L8/);
+});
+
+test('does not let a human-supplied fingerprint suppress the review', async (t) => {
+  const fp = post.fingerprint('missing_test', 'src.js', behaviour.quote);
+  const s = setup(t, report(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'User' } }] });
+  await post(s);
+  assert.equal(s.calls.review[0].comments.length, 1);
+});
+
+test('rechecks HEAD after analysis and before posting comments', async (t) => {
+  const s = setup(t);
+  let reads = 0;
+  s.github.rest.pulls.get = async () => ({ data: { head: { sha: reads++ === 0 ? 'HEADSHA' : 'NEWHEAD' } } });
+  await post(s);
+  assert.equal(s.calls.review.length, 0);
+  assert.equal(s.calls.summary.length, 0);
+});
+
+test('summary preserves the integration assertion and proposed pushdown as a distinct finding', async (t) => {
+  const s = setup(t, report({ coverage: [row('higher_level_only', { evidence: [{ ...evidence, layer: 'integration' }] })], findings: [finding('pushdown', { body: 'Unit-test total(1) = 42; keep the integration persistence check.' })] }));
+  await post(s);
+  assert.match(s.calls.summary[0].body, /integration: test.js:2/);
+  assert.match(s.calls.summary[0].body, /Unit evidence: 0\/1/);
+  assert.match(s.calls.summary[0].body, /Layering: 1/);
+  assert.match(s.calls.review[0].comments[0].body, /keep the integration persistence check/);
+});
+
+test('reports a weakened assertion in a test-only PR with unchanged production behaviour', async (t) => {
+  const s = setup(t, report({ coverage: [row('weak_test', { change: { ...evidence } })], findings: [finding('weak_test', evidence)] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'test.js\n');
+  s.github.rest.pulls.listFiles = async () => ({ data: [{ filename: 'test.js', patch: `@@ -1,2 +1,2 @@\n test\n-assert.equal(result, 43);\n+${evidence.quote}` }] });
+  await post(s);
+  assert.equal(s.calls.review[0].comments[0].path, 'test.js');
+  assert.match(s.calls.summary[0].body, /weak_test/);
+  assert.doesNotMatch(s.calls.summary[0].body, /unknown/);
+});
+
+test('accepts a real zero-assertion or disabled test location without inventing an assertion', () => {
+  for (const kind of ['no_assertion', 'disabled']) {
+    const d = report({ coverage: [row('weak_test', { evidence: [{ ...evidence, kind }] })], findings: [finding('weak_test')] });
+    assert.equal(post.validate(d).ok, true);
+    d.coverage[0].status = 'covered'; d.findings = [];
+    assert.equal(post.validate(d).ok, false);
+  }
+});
+
+test('preserves removed assertions from deleted test files as LEFT-side summary evidence', async (t) => {
+  const removed = { ...evidence, side: 'LEFT', kind: 'removed' };
+  const s = setup(t, report({ coverage: [row('weak_test', { change: removed, evidence: [removed] })], findings: [finding('weak_test', removed)] }));
+  fs.unlinkSync(path.join(s.dir, 'test.js'));
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'test.js\n');
+  s.github.rest.pulls.listFiles = async () => ({ data: [{ filename: 'test.js', patch: `@@ -1,2 +0,0 @@\n-test\n-${evidence.quote}` }] });
+  await post(s);
+  assert.equal(s.calls.review.length, 0);
+  assert.match(s.calls.summary[0].body, /removed test or assertion/);
+  assert.match(s.calls.summary[0].body, /Tests: 0 missing, 1 weak/);
+});
+
+test('does not accept an unrelated historical line as the changed-line citation', () => {
+  const d = report({ coverage: [row('weak_test', { change: { ...behaviour, line: 1, quote: 'l1' } })], findings: [finding('weak_test')] });
+  post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (p) => p === 'src.js' ? ['l1', 'l2', behaviour.quote] : ['test', evidence.quote], new Map([['src.js', post.parsePatch(patch)]]));
+  assert.equal(d.coverage[0].status, 'unknown');
+  assert.equal(d.findings.length, 0);
+});
+
+test('restores omitted collected criteria to the report as unassessed', () => {
+  const r = { id: 'R1', source: 'PR body', quote: 'Return 42.', obligation_ids: ['O1'], reason: 'Unit assertion found.' };
+  const d = report({ requirements: [r], coverage: [row()], findings: [] });
+  post.verifyRequirements(d, { documents: [{ source: 'PR body', text: 'Return 42.\nReject zero.' }], criteria: [{ id: 'R1', source: 'PR body', quote: 'Return 42.' }, { id: 'R2', source: 'PR body', quote: 'Reject zero.' }] });
+  assert.equal(d.requirements.length, 2);
+  assert.deepEqual(d.requirements[1].obligation_ids, []);
+  assert.equal(post.noGaps(d), false);
+  assert.match(post.buildSummary({ status: 'Reviewed', data: d }), /NOT ASSESSED/);
+});
+
+test('invalid requirement wording cannot support a covered obligation', () => {
+  const d = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Made up.', obligation_ids: ['O1'], reason: 'Covered' }], coverage: [row()], findings: [] });
+  post.verifyRequirements(d, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [] });
+  assert.equal(d.coverage[0].status, 'unknown');
+  assert.equal(post.noGaps(d), false);
+});
+
+test('retains unimplemented requirements without a fabricated production location', () => {
+  const d = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Send receipts.', obligation_ids: ['O1'], reason: 'Implementation not located.' }], coverage: [row('unknown', { change: null, behaviour: null, evidence: [] })], findings: [] });
+  assert.equal(post.validate(d).ok, true);
+  assert.match(post.buildSummary({ status: 'Reviewed', data: d }), /implementation not located/);
+  assert.equal(post.noGaps(d), false);
+});
+
+test('tooling results overwrite model claims and remain visible if the model fails', async (t) => {
+  const s = setup(t, report({ tooling: { status: 'passed', checks: [], ref: 'fake' } }));
+  process.env.STANDARDS_CHECKS = 'check:lint';
+  s.github.rest.checks = { listForRef: async () => ({ data: [{ name: 'lint', status: 'completed', conclusion: 'failure', id: 1 }] }) };
+  await post(s);
+  assert.match(s.calls.summary[0].body, /Standards tooling: failed/);
+  fs.unlinkSync(path.join(s.dir, 'ctx/findings.json'));
+  await post(s);
+  assert.match(s.calls.summary[1].body, /Could not complete/);
+  assert.match(s.calls.summary[1].body, /Standards tooling: failed/);
 });

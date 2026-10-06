@@ -20,8 +20,8 @@ The gap, then the fix. Terse. No hedging ("might", "consider whether", "it may b
 
 - `missing_test`: skeleton of the new test, plus the input and expected output that pins the behaviour. For a boundary, use the value on each side of the edge.
 - `weak_test`: say which mutation survives, then give the replacement assertion for the cited line.
-- `pushdown`: name the smallest public function that holds the logic, and give the unit test that proves it directly. Say which integration test then needs less.
+- `pushdown`: name the smallest public function that holds the logic, give its direct inputs and expected outputs, and cite the current higher-layer assertion. Say which integration test needs less and which wiring or contract checks must remain. Do not recommend replacing integration coverage wholesale.
 
 ## Spec lens
 
-When you write the test an acceptance criterion needs, check it against the current implementation. If it would fail today because the code contradicts the criterion, start the body with "This test fails today: ..." and say why. It is `high`. It stays a `missing_test`, not a new kind.
+When you write the test an acceptance criterion needs, check it against the current implementation. If static inspection predicts a failure because the code contradicts the criterion, start the body with "Expected to fail against the current code: ..." and cite the contradiction. Never imply the test was run. It stays a `missing_test`, not a new kind.

@@ -2,7 +2,7 @@
 
 A GitHub Action that reviews pull requests for missing or weak unit tests. It maps the linked issue's acceptance criteria and the changed behaviour to test obligations, checks the repo's own coding standards, and flags logic that is only covered by integration tests but belongs in unit tests. The goal is to catch gaps on the PR, before QA does. It is advisory: it posts `COMMENT` reviews and never blocks a merge.
 
-SpecGuard brings no rules of its own. The standard is whatever your repo already has (Copilot/Claude/agent instruction files, `REVIEW.md`, `CONTRIBUTING.md`, `.editorconfig`). It knows no language or framework.
+Coding standards come from your repo (Copilot/Claude/agent instruction files, `REVIEW.md`, `CONTRIBUTING.md`, `.editorconfig`). SpecGuard applies a framework-independent test-evidence rubric and reports which rules and test layers it assessed.
 
 ## Quick start
 
@@ -40,9 +40,14 @@ jobs:
 ## What you get
 
 - Inline comments from `github-actions[bot]`: test skeletons for missing tests, one-click suggested fixes for standard violations.
-- A sticky summary comment with a requirement, test and status coverage table. Low-confidence items are collapsed in it.
+- A sticky summary maps each requirement or changed behaviour to an obligation, an exact behaviour citation, assertion quotes, test layers, and an explained status. Low-confidence items are collapsed in it.
+- Separate coding-standard and test-layer assessments, including when no violations or pushdown candidates were found.
+- `covered` requires a unit assertion; `higher_level_only` records component/integration/e2e evidence without counting it as unit coverage. Pushdown suggestions identify a public unit seam and preserve necessary integration checks.
+- Unknown evidence, inaccessible issues and partial reviews remain visible. Empty findings never imply that requirements were fully reviewed.
 - Docs-only and lockfile-only PRs are skipped with no AI call.
 - Advisory only: the job stays green.
+
+The default Action runs the reviewer directly so it can require this complete report. It reads tests but does not execute PR code: `Unit evidence: X/Y` is a static assessment of the listed obligations, not measured code coverage or proof that tests pass. AI can miss or misinterpret behaviour; source-quote validation checks citation existence, not semantic correctness. Run your normal test/lint CI alongside it.
 
 ## Who pays
 
@@ -109,13 +114,15 @@ mkdir -p .github/instructions && curl -fsSL https://raw.githubusercontent.com/Mi
 | | Action mode | CCR mode |
 |---|---|---|
 | Rules read from | the base branch | the PR head, so a PR can weaken its own rules |
-| Output | structured, capped and deduped, with a coverage table and Proven X/Y | free-form comments and CCR's own overview |
+| Output | structured evidence table, explicit standards/layer assessments, capped and deduped comments | free-form comments and CCR's own overview |
 | Skill used | always | chosen by the model |
 | Requirements | PR plus linked issues | PR body; issues only if CCR fetches them |
-| Who pays | the repo owner or org via the job token, plus Actions minutes | the PR author or requester (the org for bot requests); Actions minutes on private repos |
+| Usage and billing | the repo owner or org via the job token, plus Actions minutes | automatic reviews usually attribute usage to the author; organization pools, unlicensed-user and bot billing rules still apply |
 | Setup | one workflow file | two committed files plus the CCR setting |
 
 Use Action mode when you need the guarantees. Use CCR mode for zero-workflow adoption. Both can run together.
+
+Native CCR remains optional. Its comments cannot reconstruct the complete obligation inventory or confirm unmentioned requirements. SpecGuard does not turn a zero-comment native review into a coverage pass. Author usage attribution does not mean the organization avoids charges; see [GitHub's billing rules](https://docs.github.com/en/copilot/concepts/agents/code-review#code-review-usage).
 
 ## Troubleshooting
 
@@ -130,9 +137,11 @@ Use Action mode when you need the guarantees. Use CCR mode for zero-workflow ado
 
 ## How it works
 
-1. `src/collect.sh` gathers the diff, applies ignores, restores rule files from base, and fetches PR text plus up to 5 issues referenced by the PR (closing issues, and `#N` in the PR body and commit messages).
+1. `src/collect.sh` gathers the diff, applies ignores and restores rule files from base. `src/requirements.js` fetches PR text plus up to 5 linked issues, preserving cross-repository references and recording unavailable or omitted context in `requirements-status.json`.
 2. The action builds the prompt by concatenating `SKILL.md` (frontmatter stripped) and every `skills/test-review/references/*.md` under a `# references/<name>` header, because the model can only read the workspace, not the action's own files. One read-only agent run follows it and returns JSON matching `src/findings.schema.json`.
-3. `src/post.js` validates, drops findings outside the diff, dedupes, and posts one inline review plus the sticky summary.
+3. `src/post.js` validates assessment fields and obligation/finding consistency, verifies behaviour and assertion quotes, and checks cited rules against the base inventory. It routes weak assertions outside the diff to the summary, dedupes comment delivery without removing current gaps, and checks the live PR HEAD before publishing.
+
+Contributors: run `node --test` (Node 22) and `bash -n src/collect.sh`. Keep `skills/test-review/` identical to `.github/skills/test-review/`; CI checks this. Changes to the report schema require matching validator, prompt and fixture updates. Older findings JSON without evidence and assessment fields is intentionally rejected as incomplete.
 
 Design and rationale: [docs/design.md](docs/design.md).
 

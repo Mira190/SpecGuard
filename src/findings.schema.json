@@ -5,7 +5,10 @@
     "requirements_source",
     "coverage",
     "findings",
-    "not_reviewed"
+    "not_reviewed",
+    "standards",
+    "layering",
+    "requirements"
   ],
   "properties": {
     "requirements_source": {
@@ -16,22 +19,115 @@
       "items": {
         "type": "object",
         "required": [
+          "id",
           "obligation",
           "source",
-          "tests",
-          "status"
+          "behaviour",
+          "evidence",
+          "status",
+          "reason",
+          "change"
         ],
         "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
           "obligation": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "source": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
-          "tests": {
+          "behaviour": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "path",
+                  "line",
+                  "quote"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "quote": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "side": {
+                    "enum": [
+                      "LEFT",
+                      "RIGHT"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "object",
+              "required": [
+                "path",
+                "line",
+                "quote",
+                "layer",
+                "proves",
+                "kind"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "layer": {
+                  "enum": [
+                    "unit",
+                    "component",
+                    "integration",
+                    "e2e"
+                  ]
+                },
+                "proves": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "assertion",
+                    "no_assertion",
+                    "disabled",
+                    "removed"
+                  ]
+                },
+                "side": {
+                  "enum": [
+                    "LEFT",
+                    "RIGHT"
+                  ]
+                }
+              }
             }
           },
           "status": {
@@ -39,7 +135,48 @@
               "covered",
               "weak_test",
               "missing_test",
-              "needs_human"
+              "higher_level_only",
+              "needs_human",
+              "unknown"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "change": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "path",
+                  "line",
+                  "quote"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "quote": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "side": {
+                    "enum": [
+                      "LEFT",
+                      "RIGHT"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         }
@@ -56,7 +193,8 @@
           "quote",
           "title",
           "body",
-          "confidence"
+          "confidence",
+          "obligation_ids"
         ],
         "properties": {
           "kind": {
@@ -104,12 +242,111 @@
           },
           "quote": {
             "type": "string"
+          },
+          "obligation_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "side": {
+            "enum": [
+              "LEFT",
+              "RIGHT"
+            ]
           }
         }
       }
     },
     "not_reviewed": {
       "type": "string"
+    },
+    "standards": {
+      "type": "object",
+      "required": [
+        "status",
+        "sources",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "checked",
+            "no_rules",
+            "not_reviewed"
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "layering": {
+      "type": "object",
+      "required": [
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "checked",
+            "not_reviewed"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "quote",
+          "obligation_ids",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1
+          },
+          "obligation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     }
   }
 }

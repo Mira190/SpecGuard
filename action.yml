@@ -14,6 +14,8 @@ inputs:
   max_comments: { description: "Max inline comments (hard cap 30).", default: "10" }
   max_diff_kb: { description: "Diff size above which the review is partial.", default: "300" }
   ignore: { description: "Extra ignore globs, one per line, appended to the defaults.", default: "" }
+  standards_checks: { description: "Exact check:NAME or status:CONTEXT entries, one per line. Requires checks/statuses read permission. Empty means not configured.", default: "" }
+  standards_ref: { description: "head or merge: commit on which your lint/format jobs run. Defaults to head.", default: head }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
   claude_version: { description: "Pinned @anthropic-ai/claude-code version (>= 2.1.205).", default: "2.1.290" }
 
@@ -139,6 +141,8 @@ runs:
         SKIP: ${{ steps.collect.outputs.skip }}
         PARTIAL: ${{ steps.collect.outputs.partial }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        STANDARDS_CHECKS: ${{ inputs.standards_checks }}
+        STANDARDS_REF: ${{ inputs.standards_ref }}
       with:
         github-token: ${{ inputs.github_token }}
         retries: 3 # GitHub API 5xx (e.g. "diff temporarily unavailable") would otherwise drop the review

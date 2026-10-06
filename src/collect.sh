@@ -13,7 +13,7 @@ out skip false; out partial false
 
 # Globs: * crosses '/', leading **/ is optional (ponytail: not full gitignore semantics, swap for git check-ignore if it bites)
 STANDARDS=(.github/copilot-instructions.md '.github/instructions/**' '**/AGENTS.md' '**/AGENT.md' '**/CLAUDE.md'
-  '**/GEMINI.md' REVIEW.md CONTRIBUTING.md .editorconfig '.claude/rules/**'
+  '**/GEMINI.md' REVIEW.md CONTRIBUTING.md CODING_STANDARDS.md .editorconfig 'docs/*standards*' 'docs/*conventions*' '.claude/rules/**'
   '.github/skills/**' '.claude/skills/**' '.agents/skills/**'
   .cursorrules '.cursor/rules/**' .windsurfrules '.clinerules/**')
 EXEC_CFG=('.claude/**' .mcp.json .claude.json CLAUDE.local.md .gitmodules .ripgreprc '.husky/**'
@@ -51,36 +51,26 @@ printf '%s\n' "${files[@]}" > "$CTX/files.txt"
 GIT_LITERAL_PATHSPECS=1 git diff --no-color --no-ext-diff --no-renames \
   "$BASE_SHA...$HEAD_SHA" -- "${files[@]}" > "$CTX/diff.patch"
 
-# 2. restore standards + executable agent config from base (deletes head-only copies)
-for p in "${STANDARDS[@]}" "${EXEC_CFG[@]}"; do
-  git restore --source="$BASE_SHA" --worktree -- ":(glob)$p" 2>/dev/null || true # no match in either tree is fine
-done
-
-# 3. standards present at base (a rule file the PR deleted is restored above, so it counts)
-git ls-tree -r -z --name-only "$BASE_SHA" | while IFS= read -r -d '' f; do match "$f" "${STANDARDS[@]}" && [ -f "$f" ] && echo "$f"; done | sort -u > "$CTX/standards.txt" || true
-
-# 4. requirements (untrusted: sanitised, non-fatal)
-sanitize() {
-  node -e 'let s=require("fs").readFileSync(0,"utf8");
-  s=s.replace(/<!--[\s\S]*?-->/g,"").replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g,"").replace(/[\x00-\x08\x0B-\x1F\x7F]/g,"");
-  process.stdout.write(s)'
-}
-req=none
-if [ -n "${PR_NUMBER:-}" ] && command -v gh >/dev/null; then
-  # closing issues, then #N in the PR body and commit messages; deduped, max 5, self excluded
-  nums=$({
-    gh pr view "$PR_NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'
-    { gh pr view "$PR_NUMBER" --json body --jq .body; git log "$BASE_SHA..$HEAD_SHA" --format=%B; } | grep -oE '#[0-9]+' | tr -d '#'
-  } 2>/dev/null | grep -vx "$PR_NUMBER" | awk '!s[$0]++' | head -5) || true
-  req=$({
-    gh pr view "$PR_NUMBER" --json title,body --jq '"# PR: " + .title + "\n\n" + .body'
-    for n in $nums; do
-      gh issue view "$n" --json title,body --jq '"\n# Issue #'"$n"': " + .title + "\n\n" + .body' || true # not an issue, or no access: skip
-    done
-  } 2>/dev/null | sanitize) || req=none
-  [ -n "$req" ] || req=none
+# 2. Discover exact paths once from both trees. The same matcher governs restoration
+# and the trusted inventory, including nested rules and head-only agent config.
+restore=()
+while IFS= read -r -d '' f; do
+  if match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}"; then restore+=("$f"); fi
+done < <({ git ls-tree -r -z --name-only "$BASE_SHA"; git ls-tree -r -z --name-only "$HEAD_SHA"; } | sort -zu)
+if [ ${#restore[@]} -gt 0 ]; then
+  GIT_LITERAL_PATHSPECS=1 git restore --source="$BASE_SHA" --worktree -- "${restore[@]}"
 fi
-printf '%s\n' "$req" > "$CTX/requirements.md"
+
+# 3. Never follow a PR-controlled symlink as a trusted rule source.
+: > "$CTX/standards.txt"
+while IFS= read -r -d '' f; do
+  if match "$f" "${STANDARDS[@]}" && [ -f "$f" ] && [ ! -L "$f" ]; then
+    printf '%s\n' "$f" >> "$CTX/standards.txt"
+  fi
+done < <(git ls-tree -r -z --name-only "$BASE_SHA")
+
+# 4. requirements, including explicit collection limitations
+node "$(dirname "$0")/requirements.js"
 
 # 5. oversize
 if [ "$(wc -c < "$CTX/diff.patch")" -gt $((MAX_DIFF_KB * 1024)) ]; then

@@ -11,13 +11,16 @@ Each body is the gap, then the fix. No hedging, no praise, no diff summary. When
 One object matching the provided schema, no prose.
 
 - `requirements_source`: e.g. "issue #12, PR body".
-- `coverage[]`: `obligation`, `source`, `tests[]` as `file:line`, `status`. Cite sources as "issue #N AC k", "PR body AC k" or "PR body", never as context-file paths.
+- `coverage[]`: unique `id`, `obligation`, `source`, `behaviour: {path,line,quote}`, `evidence: [{path,line,quote,layer,proves}]`, `status`, and `reason`. Cite sources as "issue #N AC k", "PR body AC k", "PR body", or "from behaviour", never as context-file paths. Evidence quotes must be assertion lines. `covered` and `weak_test` require unit evidence; `higher_level_only` requires higher-layer evidence and no unit evidence; `missing_test` has no evidence. `unknown` and `needs_human` never generate test findings.
+- `standards`: `{status: "checked" | "no_rules" | "not_reviewed", sources: [rule-file paths], reason}`. Checked means the applicable rules were assessed, not necessarily satisfied. State any violations. Use `no_rules` only when no rules are available; explain non-applicable inventories as a completed scoped check.
+- `layering`: `{status: "checked" | "not_reviewed", reason}`. Identify the layers searched, candidates found, or why moving tests would not help.
 - `findings[]`: see below.
 - `not_reviewed`: what you could not review, e.g. a truncated diff; empty string if nothing.
 
 Finding fields:
 - `kind`: `missing_test`, `weak_test`, `standard` or `pushdown`.
-- `path`: a file in `files.txt`.
+- `obligation_ids`: IDs of all coverage rows this finding addresses. Required and nonempty for test findings; may be empty for `standard`.
+- `path`: a file in `files.txt`, or an unchanged test file holding the weak assertion (summary only).
 - `line`: per the anchoring rule in SKILL.md.
 - `start_line`: only for a multi-line range inside one hunk.
 - `quote`: the exact text of line `line`, copied from the file, not retyped. The poster snaps the line to it and drops the finding on a mismatch.
@@ -30,20 +33,23 @@ Finding fields:
 - `confidence`: `high` or `low`.
 
 ```json
-{"kind":"standard","path":"billing/invoice.py","line":42,"quote":"        log.info(\"total=%s\" % total)","title":"Log with structured fields","body":"`CONTRIBUTING.md:31` asks for structured log fields so totals can be queried.","rule_source":"CONTRIBUTING.md:31","rule_quote":"Use structured log fields so totals can be queried.","suggestion":"        log.info(\"invoice total\", extra={\"total\": total})","confidence":"high"}
+{"kind":"standard","obligation_ids":[],"path":"billing/invoice.py","line":42,"quote":"        log.info(\"total=%s\" % total)","title":"Log with structured fields","body":"`CONTRIBUTING.md:31` asks for structured log fields so totals can be queried.","rule_source":"CONTRIBUTING.md:31","rule_quote":"Use structured log fields so totals can be queried.","suggestion":"        log.info(\"invoice total\", extra={\"total\": total})","confidence":"high"}
 ```
 
 ## Local mode: report
 
 ```
 Tests: X missing, Y weak · Standards: Z · Layering: W
-Proven: P/N obligations
+Unit evidence: P/N obligations (static review; tests not executed)
 
-| Obligation | Source | Tests | Status |
+| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |
+
+Coding standards: checked / no_rules / not_reviewed, with sources and explanation
+Test layers: checked / not_reviewed, with explanation
 
 ### missing_test / weak_test / standard / pushdown
 - file:line  title
   gap, then fix (skeleton or replacement)
 ```
 
-Omit "Proven" when N is 0. N counts obligations except `needs_human`. Print JSON only if asked.
+Omit the ratio when N is 0. N counts obligations except `needs_human`; P counts only `covered` rows with unit assertion evidence. An empty report, partial context, or `unknown` row must never be described as a clean review. Print JSON only if asked.
