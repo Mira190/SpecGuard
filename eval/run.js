@@ -81,14 +81,22 @@ const setVar = (repo, v) => (v == null ? (() => { try { sh('gh', ['variable', 'd
 // Assumed response of users/<owner>/settings/billing/usage: { usageItems: [{ product, sku, grossAmount, netAmount, ... }] }.
 // Copilot items = product or sku containing "copilot"; amount = netAmount, else grossAmount. Anything else is logged and skipped.
 function billingTotals(owner) {
-  const d = new Date();
-  const j = JSON.parse(sh('gh', ['api', `users/${owner}/settings/billing/usage?year=${d.getUTCFullYear()}&month=${d.getUTCMonth() + 1}&day=${d.getUTCDate()}`]));
-  if (!Array.isArray(j.usageItems)) throw new Error(`unexpected billing response shape (keys: ${Object.keys(j).join(',')}); expected usageItems[]`);
+  const d = new Date(), q = `year=${d.getUTCFullYear()}&month=${d.getUTCMonth() + 1}&day=${d.getUTCDate()}`;
   const bySku = {};
-  for (const i of j.usageItems) if (/copilot/i.test(`${i.product} ${i.sku}`)) bySku[i.sku] = (bySku[i.sku] || 0) + (Number(i.netAmount ?? i.grossAmount) || 0);
+  // General usage carries Copilot only if its product/sku says so; premium_request/usage is Copilot-only.
+  for (const [ep, all] of [['usage', false], ['premium_request/usage', true]]) {
+    const j = JSON.parse(sh('gh', ['api', `users/${owner}/settings/billing/${ep}?${q}`]));
+    if (!Array.isArray(j.usageItems)) throw new Error(`unexpected billing response shape from ${ep} (keys: ${Object.keys(j).join(',')}); expected usageItems[]`);
+    for (const i of j.usageItems) if (all || /copilot/i.test(`${i.product} ${i.sku}`)) {
+      const k = `${i.sku || i.product}${i.model ? ` ${i.model}` : ''}`;
+      bySku[k] = (bySku[k] || 0) + (Number(i.netAmount ?? i.grossAmount) || 0);
+    }
+  }
   return bySku;
 }
 function billingDelta(before, after) {
+  // No Copilot items at all means AI Credits are not itemized (or are delayed) here: never report that as $0.
+  if (!Object.keys(after).length) throw new Error('billing API returned no Copilot usage items (AI Credits not itemized or delayed); check the billing page');
   const bySku = {};
   for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) bySku[k] = +((after[k] || 0) - (before[k] || 0)).toFixed(4);
   return { cost_usd_delta: +Object.values(bySku).reduce((a, b) => a + b, 0).toFixed(4), cost_by_sku: bySku };
