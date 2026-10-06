@@ -5,7 +5,7 @@
   "pr_title": "Remove invoice tests",
   "pr_body": "Remove the invoice tests; they are slow.\n",
   "delete": [
-    "eval-sandbox/t4/invoice.spec.js"
+    "eval-sandbox/t4/invoice.test.js"
   ],
   "expected": {
     "findings": [
@@ -16,7 +16,7 @@
         ],
         "path": [
           "eval-sandbox/t4/invoice.js",
-          "eval-sandbox/t4/invoice.spec.js"
+          "eval-sandbox/t4/invoice.test.js"
         ],
         "line": 2,
         "tolerance": 50,

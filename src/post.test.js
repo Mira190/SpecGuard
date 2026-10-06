@@ -429,7 +429,7 @@ test('r3: compound-criterion missing_test findings survive (model omitted change
 
 test('t3: a skipped test cited as disabled evidence keeps its missing_test finding', () => {
   const d = realRun('t3');
-  assert.deepEqual(kept(d), ['missing_test:qty.spec.js:9']);
+  assert.deepEqual(kept(d), ['missing_test:qty.test.js:9']);
   assert.equal(d.coverage[0].status, 'missing_test');
   assert.deepEqual(d.validation_notes, []);
 });

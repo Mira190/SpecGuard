@@ -1,7 +1,7 @@
-diff --git a/eval-sandbox/t3/qty.spec.js b/eval-sandbox/t3/qty.spec.js
+diff --git a/eval-sandbox/t3/qty.test.js b/eval-sandbox/t3/qty.test.js
 index 72dd636..fa7fa68 100644
---- a/eval-sandbox/t3/qty.spec.js
-+++ b/eval-sandbox/t3/qty.spec.js
+--- a/eval-sandbox/t3/qty.test.js
++++ b/eval-sandbox/t3/qty.test.js
 @@ -6,7 +6,7 @@ test('parses a positive integer', () => {
    assert.equal(parseQty('3'), 3);
  });

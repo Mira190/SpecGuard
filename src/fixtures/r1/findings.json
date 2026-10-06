@@ -30,7 +30,7 @@
       },
       "evidence": [
         {
-          "path": "eval-sandbox/r1/discount.spec.js",
+          "path": "eval-sandbox/r1/discount.test.js",
           "line": 7,
           "quote": "  assert.ok(total);",
           "layer": "unit",
@@ -138,7 +138,7 @@
       "obligation_ids": [
         "O2"
       ],
-      "path": "eval-sandbox/r1/discount.spec.js",
+      "path": "eval-sandbox/r1/discount.test.js",
       "line": 7,
       "quote": "  assert.ok(total);",
       "source": "PR body AC 2",

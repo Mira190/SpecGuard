@@ -9,7 +9,7 @@
     "findings": [
       {
         "kind": "weak_test",
-        "path": "eval-sandbox/t2/limits.spec.js",
+        "path": "eval-sandbox/t2/limits.test.js",
         "line": 6,
         "tolerance": 1,
         "quote": "assert.ok(clamp(15, 0, 10))"

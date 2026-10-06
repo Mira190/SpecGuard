@@ -9,7 +9,7 @@
     "findings": [
       {
         "kind": "weak_test",
-        "path": "eval-sandbox/t1/tax.spec.js",
+        "path": "eval-sandbox/t1/tax.test.js",
         "line": 6,
         "quote": "Math.round(50 * 1.2 * 100)"
       }
