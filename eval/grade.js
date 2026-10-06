@@ -32,8 +32,9 @@ function parseSummary(text) {
     const at = /; (\S+?):(\d+) — /.exec(c[2] || '');
     if (st && at) rows.push({ status: st[1], path: at[1], line: +at[2] });
   }
+  const notes = /<summary>Validation notes \(\d+\)<\/summary>\n\n([\s\S]*?)\n<\/details>/.exec(s);
   return {
-    items, rows,
+    items, rows, notes: notes ? notes[1].split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)) : [],
     skipped: /Nothing to review/.test(s),
     incomplete: /Could not complete/i.test(s) || /Partially reviewed/.test(s) || /Standards tooling: incomplete/.test(s),
   };
@@ -76,14 +77,16 @@ function grade(spec, obs) {
   };
   const mustNot = (exp.must_not || []).filter(violates);
 
-  const jsonValid = obs.summary != null && !sum.incomplete;
+  const complete = obs.summary != null && !sum.incomplete;
+  // With the raw artifact, JSON validity is about the model output alone; a skipped run has none. Without it, fall back to the summary.
+  const jsonValid = obs.raw_findings_present === undefined || sum.skipped ? complete : !!(obs.raw_findings_present && obs.raw_findings_valid_json);
   const skipOk = exp.expect_skip ? sum.skipped && comments.length === 0 : true;
   const cleanOk = exp.expect_clean ? posted.length === 0 : true;
   return {
     id: spec.id, goal: spec.goal, tp, fp: falsePositives.length, fn: missed.length, summary_only: sum.items.length,
     matched, missed, false_positives: falsePositives, must_not_violations: mustNot, text_misses: textMisses,
-    json_valid: jsonValid, skip_ok: skipOk, clean_ok: cleanOk,
-    pass: !missed.length && !mustNot.length && !textMisses.length && jsonValid && skipOk && cleanOk,
+    json_valid: jsonValid, complete, degraded: sum.notes.length > 0, validation_notes: sum.notes, skip_ok: skipOk, clean_ok: cleanOk,
+    pass: !missed.length && !mustNot.length && !textMisses.length && jsonValid && complete && skipOk && cleanOk,
     latency_s: obs.latency_s ?? null,
   };
 }
@@ -105,6 +108,7 @@ function summarize(rs) {
     runs: rs.length, errors: rs.length - ok.length, tp, fp, fn, summary_only: n('summary_only'),
     precision: ratio(tp, tp + fp), recall: ratio(tp, tp + fn),
     json_valid_rate: ratio(ok.filter((r) => r.json_valid).length, ok.length),
+    degraded_rate: ratio(ok.filter((r) => r.degraded).length, ok.length),
     pass_rate: ratio(ok.filter((r) => r.pass).length, ok.length),
     latency_median_s: median(lat), latency_max_s: lat.length ? Math.max(...lat) : null,
   };

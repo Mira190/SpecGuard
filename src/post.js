@@ -29,6 +29,8 @@ function parsePatch(patch) {
 }
 
 // Hand-rolled mirror of findings.schema.json. ponytail: swap for ajv if the schema grows.
+// Structural problems (not an object, core arrays missing) reject the output. Every other problem degrades only
+// the affected part, is repaired in place, and is listed in o.validation_notes.
 function validate(o) {
   const bad = (m) => ({ ok: false, error: m });
   const str = (v) => typeof v === 'string';
@@ -36,62 +38,94 @@ function validate(o) {
   const text = (v) => str(v) && v.trim().length > 0;
   const citation = (v) => v && text(v.path) && int(v.line) && text(v.quote) && (v.side === undefined || ['LEFT', 'RIGHT'].includes(v.side));
   if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('not an object');
-  if (!str(o.requirements_source)) return bad('requirements_source must be a string');
-  if (!str(o.not_reviewed)) return bad('not_reviewed must be a string');
-  if (!o.standards || !['checked', 'no_rules', 'not_reviewed'].includes(o.standards.status)
-    || !Array.isArray(o.standards.sources) || !o.standards.sources.every(text) || !text(o.standards.reason)) return bad('standards assessment missing or malformed');
-  if (o.standards.status === 'checked' && !o.standards.sources.length) return bad('checked standards need sources');
-  if (!o.layering || !['checked', 'not_reviewed'].includes(o.layering.status) || !text(o.layering.reason)) return bad('layering assessment missing or malformed');
-  if (!Array.isArray(o.coverage)) return bad('coverage must be an array');
-  if (!Array.isArray(o.requirements)) return bad('requirements inventory is required');
-  const requirementIds = new Set();
-  for (const r of o.requirements) {
-    if (!r || !text(r.id) || requirementIds.has(r.id) || !text(r.source) || !text(r.quote) || !text(r.reason)
-      || !Array.isArray(r.obligation_ids) || !r.obligation_ids.every(text)) return bad('requirements inventory malformed');
-    requirementIds.add(r.id);
-  }
-  const ids = new Set();
-  for (const [i, c] of o.coverage.entries()) {
-    if (!c || !text(c.id) || ids.has(c.id) || !text(c.obligation) || !text(c.source) || !text(c.reason)
-      || !(c.behaviour === null || citation(c.behaviour)) || !(c.change === null || citation(c.change)) || !Array.isArray(c.evidence)) return bad(`coverage[${i}] malformed or duplicate id`);
-    ids.add(c.id);
-    if (!STATUSES.includes(c.status)) return bad(`coverage[${i}].status invalid`);
+  for (const k of ['coverage', 'findings', 'requirements']) if (!Array.isArray(o[k])) return bad(`${k} must be an array`);
+  const notes = [];
+  if (!str(o.requirements_source)) { o.requirements_source = ''; notes.push('requirements_source was not a string; ignored.'); }
+  if (!str(o.not_reviewed)) { o.not_reviewed = ''; notes.push('not_reviewed was not a string; ignored.'); }
+  const demote = (key, why) => {
+    notes.push(`${key} assessment ignored: ${why}.`);
+    o[key] = { status: 'not_reviewed', ...(key === 'standards' && { sources: [] }), reason: `The ${key} assessment was unusable (${why}); not reviewed.` };
+  };
+  const s = o.standards, l = o.layering;
+  if (!s || typeof s !== 'object' || !['checked', 'no_rules', 'not_reviewed'].includes(s.status)
+    || !Array.isArray(s.sources) || !s.sources.every(text) || !text(s.reason)) demote('standards', 'missing or malformed');
+  else if (s.status === 'checked' && !s.sources.length) demote('standards', 'checked standards need sources');
+  if (!l || typeof l !== 'object' || !['checked', 'not_reviewed'].includes(l.status) || !text(l.reason)) demote('layering', 'missing or malformed');
+
+  const rowError = (c) => {
+    if (!text(c.obligation) || !text(c.source) || !text(c.reason)) return 'obligation, source and reason are required';
+    if (!(c.behaviour === null || citation(c.behaviour)) || !(c.change === null || citation(c.change))) return 'malformed citation';
+    if (!Array.isArray(c.evidence)) return 'evidence must be an array';
+    if (!STATUSES.includes(c.status)) return 'invalid status';
     for (const e of c.evidence) {
       if (!citation(e) || !['unit', 'component', 'integration', 'e2e'].includes(e.layer) || !text(e.proves)
-        || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return bad(`coverage[${i}] evidence malformed`);
-      if (e.kind === 'removed' && e.side !== 'LEFT') return bad(`coverage[${i}] removed evidence must cite the diff's LEFT side`);
+        || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return 'evidence malformed';
+      if (e.kind === 'removed' && e.side !== 'LEFT') return "removed evidence must cite the diff's LEFT side";
     }
-    if (c.status === 'covered' && (!c.behaviour || !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT'))) return bad(`coverage[${i}] covered needs a current unit assertion`);
-    if (c.status === 'weak_test' && !c.evidence.some((e) => e.layer === 'unit')) return bad(`coverage[${i}] weak_test needs a unit test location`);
-    if (c.status === 'higher_level_only' && (!c.evidence.length || c.evidence.some((e) => e.layer === 'unit'))) return bad(`coverage[${i}] higher_level_only needs higher-layer evidence only`);
-    if (c.status === 'missing_test' && c.evidence.length) return bad(`coverage[${i}] missing_test cannot claim assertion evidence`);
-    if (!c.change && (!['unknown', 'needs_human'].includes(c.status) || !o.requirements.some((r) => r.obligation_ids.includes(c.id)))) return bad(`coverage[${i}] needs a changed-line citation`);
+    if (c.status === 'covered' && (!c.behaviour || !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT'))) return 'covered needs a current unit assertion';
+    if (c.status === 'weak_test' && !c.evidence.some((e) => e.layer === 'unit')) return 'weak_test needs a unit test location';
+    if (c.status === 'higher_level_only' && (!c.evidence.length || c.evidence.some((e) => e.layer === 'unit'))) return 'higher_level_only needs higher-layer evidence only';
+    if (c.status === 'missing_test' && c.evidence.length) return 'missing_test cannot claim assertion evidence';
+    if (!c.change && !['unknown', 'needs_human'].includes(c.status)) return 'needs a changed-line citation';
+    return '';
+  };
+  const ids = new Set(), rows = [];
+  for (const [i, c] of o.coverage.entries()) {
+    if (!c || typeof c !== 'object' || !text(c.id) || ids.has(c.id)) { notes.push(`Dropped coverage[${i}]: missing or duplicate id.`); continue; }
+    ids.add(c.id);
+    const why = rowError(c);
+    if (!why) { rows.push(c); continue; }
+    notes.push(`Obligation ${c.id} marked unknown: ${why}.`);
+    rows.push({ id: c.id, obligation: text(c.obligation) ? c.obligation : '(not stated)', source: text(c.source) ? c.source : '(not stated)',
+      behaviour: citation(c.behaviour) ? c.behaviour : null, change: citation(c.change) ? c.change : null, evidence: [], status: 'unknown', reason: `Malformed coverage row: ${why}.` });
   }
-  if (o.requirements.some((r) => r.obligation_ids.some((id) => !ids.has(id)))) return bad('requirement refers to an unknown obligation');
-  if (!Array.isArray(o.findings)) return bad('findings must be an array');
-  for (const [i, f] of o.findings.entries()) {
-    if (!f || typeof f !== 'object') return bad(`findings[${i}] not an object`);
-    if (!KINDS.includes(f.kind)) return bad(`findings[${i}].kind invalid`);
-    if (!str(f.path) || !str(f.title) || !str(f.body) || !str(f.quote)) return bad(`findings[${i}] path/title/body/quote must be strings`);
-    if (!int(f.line)) return bad(`findings[${i}].line must be an integer >= 1`);
-    if (f.start_line !== undefined && !int(f.start_line)) return bad(`findings[${i}].start_line invalid`);
-    if (f.side !== undefined && !['LEFT', 'RIGHT'].includes(f.side)) return bad(`findings[${i}].side invalid`);
-    if (f.suggestion !== undefined && !str(f.suggestion)) return bad(`findings[${i}].suggestion invalid`);
-    if (f.rule_source !== undefined && !str(f.rule_source)) return bad(`findings[${i}].rule_source invalid`);
-    if (f.rule_quote !== undefined && !str(f.rule_quote)) return bad(`findings[${i}].rule_quote invalid`);
-    if (f.source !== undefined && !str(f.source)) return bad(`findings[${i}].source invalid`);
-    if (!['high', 'low'].includes(f.confidence)) return bad(`findings[${i}].confidence invalid`);
-    if (!Array.isArray(f.obligation_ids) || !f.obligation_ids.every((id) => ids.has(id))
-      || new Set(f.obligation_ids).size !== f.obligation_ids.length) return bad(`findings[${i}].obligation_ids invalid`);
-    if (f.kind !== 'standard' && !f.obligation_ids.length) return bad(`findings[${i}] needs an obligation`);
+  const status = (id) => rows.find((c) => c.id === id).status;
+
+  const reqIds = new Set(), reqs = [];
+  for (const [i, r] of o.requirements.entries()) {
+    if (!r || typeof r !== 'object' || !text(r.id) || reqIds.has(r.id) || !text(r.source) || !text(r.quote)) { notes.push(`Dropped requirements[${i}]: malformed or duplicate.`); continue; }
+    reqIds.add(r.id);
+    const linked = Array.isArray(r.obligation_ids) ? r.obligation_ids.filter((id) => ids.has(id)) : [];
+    const broken = !Array.isArray(r.obligation_ids) || linked.length !== r.obligation_ids.length;
+    if (broken) notes.push(`Requirement ${r.id}: unknown or malformed obligation links removed.`);
+    reqs.push({ id: r.id, source: r.source, quote: r.quote, obligation_ids: linked,
+      reason: broken && !linked.length ? 'Its obligation links were missing or invalid.' : text(r.reason) ? r.reason : 'No reason given.' });
+  }
+
+  const findingError = (f) => {
+    if (!f || typeof f !== 'object') return 'not an object';
+    if (!KINDS.includes(f.kind)) return 'invalid kind';
+    if (!str(f.path) || !str(f.title) || !str(f.body) || !str(f.quote)) return 'path, title, body and quote must be strings';
+    if (!int(f.line)) return 'line must be an integer >= 1';
+    if (f.start_line !== undefined && !int(f.start_line)) return 'invalid start_line';
+    if (f.side !== undefined && !['LEFT', 'RIGHT'].includes(f.side)) return 'invalid side';
+    for (const k of ['suggestion', 'rule_source', 'rule_quote', 'source']) if (f[k] !== undefined && !str(f[k])) return `invalid ${k}`;
+    if (!['high', 'low'].includes(f.confidence)) return 'invalid confidence';
+    if (!Array.isArray(f.obligation_ids)) return 'obligation_ids must be an array';
+    f.obligation_ids = [...new Set(f.obligation_ids.filter((id) => ids.has(id)))];
+    if (f.kind !== 'standard' && !f.obligation_ids.length) return 'no valid obligation';
     const expected = { missing_test: 'missing_test', weak_test: 'weak_test', pushdown: 'higher_level_only' }[f.kind];
-    if (expected && f.obligation_ids.some((id) => o.coverage.find((c) => c.id === id).status !== expected)) return bad(`findings[${i}] contradicts coverage`);
+    if (expected && f.obligation_ids.some((id) => status(id) !== expected)) return 'contradicts coverage';
+    if (f.kind === 'standard' && o.standards.status !== 'checked') return 'standards were not reviewed';
+    if (f.kind === 'pushdown' && o.layering.status !== 'checked') return 'layering was not reviewed';
+    return '';
+  };
+  let kept = [];
+  for (const [i, f] of o.findings.entries()) {
+    const why = findingError(f);
+    if (why) notes.push(`Dropped ${[`findings[${i}]`, ...(f && typeof f === 'object' ? [f.kind, f.path, f.title].filter(text) : [])].join(' ')}: ${why}.`);
+    else kept.push(f);
   }
-  for (const c of o.coverage) {
-    if (['missing_test', 'weak_test'].includes(c.status) && o.findings.filter((f) => f.kind === c.status && f.obligation_ids.includes(c.id)).length !== 1) return bad(`${c.id} needs exactly one ${c.status} finding`);
+  const demoted = new Set();
+  for (const c of rows) {
+    if (['missing_test', 'weak_test'].includes(c.status) && kept.filter((f) => f.kind === c.status && f.obligation_ids.includes(c.id)).length !== 1) {
+      notes.push(`Obligation ${c.id} marked unknown: needs exactly one ${c.status} finding.`);
+      demoted.add(c.id);
+      Object.assign(c, { status: 'unknown', reason: 'Inconsistent findings for this gap.' });
+    }
   }
-  if (o.findings.some((f) => f.kind === 'standard') && o.standards.status !== 'checked') return bad('standard findings require a completed standards check');
-  if (o.findings.some((f) => f.kind === 'pushdown') && o.layering.status !== 'checked') return bad('pushdown findings require a completed layering check');
+  kept = kept.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !demoted.has(id)) })).filter((f) => f.kind === 'standard' || f.obligation_ids.length);
+  Object.assign(o, { coverage: rows, requirements: reqs, findings: kept, validation_notes: notes });
   return { ok: true };
 }
 
@@ -164,7 +198,7 @@ const proven = (cov) => {
   const rows = cov.filter((c) => c.status !== 'needs_human');
   return rows.length ? `Unit evidence: ${rows.filter((c) => c.status === 'covered').length}/${rows.length} obligations (static review; tests not executed)` : '';
 };
-const noGaps = (data) => !data.findings.length && data.coverage.length > 0 && !data.not_reviewed
+const noGaps = (data) => !data.findings.length && !(data.validation_notes || []).length && data.coverage.length > 0 && !data.not_reviewed
   && data.standards.status !== 'not_reviewed' && data.layering.status === 'checked'
   && data.requirements.every((r) => r.obligation_ids.length > 0)
   && (!data.tooling || ['passed', 'not_configured'].includes(data.tooling.status))
@@ -202,6 +236,8 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], parti
       s += '\n';
     } else s += '**No obligations assessed.** This is not evidence that tests are sufficient.\n\n';
     if (data.not_reviewed) s += `**Not reviewed:** ${redact(data.not_reviewed)}\n\n`;
+    const vn = data.validation_notes || [];
+    if (vn.length) s += `<details><summary>Validation notes (${vn.length})</summary>\n\n${vn.map((m) => `- ${redact(m).replace(/\s*\n\s*/g, ' ')}`).join('\n')}\n</details>\n\n`;
   }
   if (items.length) s += `<details><summary>${items.length} more item(s): low confidence, inferred, overflow, unanchored</summary>\n\n${items.map(item).join('\n')}\n</details>\n`;
   return clean(s);
@@ -238,6 +274,7 @@ function verifyEvidence(data, reviewable, standards, read = readLines, maps = ne
   if ((data.standards.status === 'no_rules' && standards.size) || data.standards.sources.some((s) => !standards.has(s))) {
     data.standards = { status: 'not_reviewed', sources: [], reason: 'The standards assessment does not match the trusted rule inventory.' };
     data.findings = data.findings.filter((f) => f.kind !== 'standard');
+    (data.validation_notes ||= []).push('Standards assessment does not match the trusted rule inventory; not reviewed.');
   }
   return data;
 }

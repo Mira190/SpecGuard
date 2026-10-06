@@ -27,18 +27,39 @@ test('maps diff hunks and routes low confidence and overflow to summary', () => 
   assert.equal(post.plan(Array(40).fill(finding()), new Map([['src.js', map]]), 99).inline.length, 30);
 });
 
-test('rejects missing checks, unsupported coverage, orphan findings and contradictory classifications', () => {
+test('rejects structurally unusable output', () => {
   assert.deepEqual(post.validate(report()), { ok: true });
-  const covered = report({ coverage: [row()], findings: [] });
-  assert.equal(post.validate(covered).ok, true);
-  for (const d of [null, { ...covered, standards: undefined }, { ...covered, layering: undefined },
-    report({ coverage: [row('covered', { evidence: [] })], findings: [] }),
-    report({ coverage: [row('covered', { evidence: [{ ...evidence, layer: 'integration' }] })], findings: [] }),
-    report({ findings: [] }), report({ findings: [finding(), finding()] }),
-    report({ findings: [finding('pushdown')] }), report({ findings: [finding('missing_test', { obligation_ids: ['absent'] })] }),
-    report({ findings: [finding('missing_test', { line: 0 })] }),
-    report({ coverage: [row('missing_test'), row('missing_test')] }),
-    report({ coverage: [row('missing_test', { evidence: [evidence] })] })]) assert.equal(post.validate(d).ok, false);
+  for (const d of [null, [], 'x', report({ coverage: undefined }), report({ findings: {} }), report({ requirements: null })]) assert.equal(post.validate(d).ok, false);
+});
+
+test('degrades only the part with a semantic problem and records a note', () => {
+  const run = (d) => { const r = post.validate(d); assert.equal(r.ok, true); return d; };
+  const noted = (d, re) => assert.ok(d.validation_notes.some((n) => re.test(n)), d.validation_notes.join('|'));
+  let d = run(report({ standards: undefined, layering: undefined }));
+  assert.deepEqual([d.standards.status, d.layering.status, d.findings.length], ['not_reviewed', 'not_reviewed', 1]);
+  d = run(report({ coverage: [row('covered', { evidence: [] })], findings: [] }));
+  assert.equal(d.coverage[0].status, 'unknown'); noted(d, /covered needs a current unit assertion/);
+  d = run(report({ coverage: [row('covered', { evidence: [{ ...evidence, layer: 'integration' }] })], findings: [] }));
+  assert.equal(d.coverage[0].status, 'unknown');
+  d = run(report({ findings: [] }));
+  assert.equal(d.coverage[0].status, 'unknown'); noted(d, /needs exactly one missing_test/);
+  d = run(report({ findings: [finding(), finding()] }));
+  assert.deepEqual([d.coverage[0].status, d.findings.length], ['unknown', 0]);
+  d = run(report({ findings: [finding('pushdown')] }));
+  assert.equal(d.findings.length, 0); noted(d, /contradicts coverage/);
+  d = run(report({ findings: [finding(), finding('missing_test', { obligation_ids: ['absent'] })] }));
+  assert.equal(d.findings.length, 1); noted(d, /no valid obligation/);
+  d = run(report({ findings: [finding(), finding('missing_test', { line: 0, title: 'Bad line' })] }));
+  assert.equal(d.findings.length, 1); noted(d, /Dropped findings\[1\] missing_test src.js Bad line/);
+  d = run(report({ coverage: [row('missing_test'), row('missing_test')] }));
+  assert.equal(d.coverage.length, 1); noted(d, /duplicate id/);
+  d = run(report({ coverage: [row('missing_test', { evidence: [evidence] })] }));
+  assert.deepEqual([d.coverage[0].status, d.findings.length], ['unknown', 0]);
+  d = run(report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'q', obligation_ids: ['nope'], reason: 'r' }, { id: 'R2' }] }));
+  assert.deepEqual([d.requirements.length, d.requirements[0].obligation_ids], [1, []]);
+  d = run(report({ standards: { status: 'checked', sources: [], reason: 'ok' }, findings: [finding(), finding('standard')] }));
+  assert.deepEqual([d.standards.status, d.findings.map((f) => f.kind)], ['not_reviewed', ['missing_test']]);
+  assert.equal(post.noGaps(d), false);
 });
 
 test('records integration-only evidence without claiming unit coverage or forcing pushdown', () => {
@@ -273,7 +294,8 @@ test('accepts a real zero-assertion or disabled test location without inventing 
     const d = report({ coverage: [row('weak_test', { evidence: [{ ...evidence, kind }] })], findings: [finding('weak_test')] });
     assert.equal(post.validate(d).ok, true);
     d.coverage[0].status = 'covered'; d.findings = [];
-    assert.equal(post.validate(d).ok, false);
+    post.validate(d);
+    assert.equal(d.coverage[0].status, 'unknown');
   }
 });
 
@@ -339,4 +361,24 @@ test('tooling results overwrite model claims and remain visible if the model fai
   await post(s);
   assert.match(s.calls.summary[1].body, /Could not complete/);
   assert.match(s.calls.summary[1].body, /Standards tooling: failed/);
+});
+
+test('live failure: checked standards without sources do not discard valid test findings', async (t) => {
+  const s = setup(t, report({ coverage: [row('missing_test'), row('weak_test', { id: 'O2', evidence: [evidence] })],
+    findings: [finding(), finding('weak_test', { obligation_ids: ['O2'], ...evidence })], standards: { status: 'checked', sources: [], reason: 'Checked everything.' } }));
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.match(body, /Tests: 1 missing, 1 weak/);
+  assert.equal(s.calls.review[0].comments.length, 1);
+  assert.match(body, /Coding standards: not_reviewed./);
+  assert.match(body, /checked standards need sources/);
+  assert.match(body, /Validation notes \(1\)/);
+  assert.doesNotMatch(body, /No test gaps found|Could not complete/);
+});
+
+test('a degraded but otherwise clean report is never called clean', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [], standards: { status: 'checked', sources: [], reason: 'x' } }));
+  await post(s);
+  assert.doesNotMatch(s.calls.summary[0].body, /No test gaps found/);
+  assert.match(s.calls.summary[0].body, /Validation notes/);
 });

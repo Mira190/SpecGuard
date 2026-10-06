@@ -16,6 +16,10 @@ Options: `--runs N` repeats each case, `--run-id ID`, `--workflow NAME` (default
 
 Results go to `eval/results/<runId>.json` and `.md`.
 
+## Diagnostics artifact
+
+This repo's `dogfood` job uploads `.specguard-ctx/` as the 7-day artifact `specguard-ctx` (adopters are unaffected). After each run the harness downloads it with `gh run download` (non-fatal) and records per case `raw_findings_present`, `raw_findings_valid_json`, `raw_excerpt` (first 2000 characters of `copilot.out`, `claude.json` or `findings.json`) and `validation_notes` parsed from the sticky summary. With the artifact, `json_valid` means the model produced parseable JSON (the raw `findings.json` exists and parses), which is separate from "report complete" (no "Could not complete", "Partially reviewed" or incomplete tooling; still required to pass). `degraded` counts runs whose summary lists validation notes, meaning part of the output was demoted or dropped but the rest was kept; the aggregate reports its rate. Without the artifact, `json_valid` falls back to the summary-based rule.
+
 ## Cost and latency
 
 Every run spends Copilot AI Credits. The harness cannot read them reliably, so cost is recorded as `not measured`: check the billing page for the run's time window. Latency is the `dogfood` job duration.
