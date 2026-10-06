@@ -28,12 +28,17 @@ function parsePatch(patch) {
   return m;
 }
 
+// Git C-quotes paths with special or non-ASCII bytes ("b/\344\270\255.js"): decode the escapes to bytes, then UTF-8.
+const ESC = { a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' };
+const unquote = (s) => (/^".*"$/.test(s) ? Buffer.concat([...s.slice(1, -1).matchAll(/\\([0-7]{3})|\\(.)|([^\\]+)/gs)]
+  .map((m) => (m[1] ? Buffer.from([parseInt(m[1], 8)]) : Buffer.from(m[3] ?? ESC[m[2]] ?? m[2])))).toString('utf8') : s);
+const diffPath = (re, prefix, chunk) => { const m = re.exec(chunk), p = m ? unquote(m[1]) : ''; return p === '/dev/null' ? '' : p.replace(prefix, ''); };
+
 // Local diff.patch -> Map(path -> parsePatch). Keyed by the new path, or the old path for a deletion.
 function parseDiff(text) {
   const maps = new Map();
   for (const chunk of String(text || '').split(/^diff --git /m).slice(1)) {
-    const to = /^\+\+\+ (?:b\/)?(.+?)\t?$/m.exec(chunk), from = /^--- (?:a\/)?(.+?)\t?$/m.exec(chunk);
-    const p = to && to[1] !== '/dev/null' ? to[1] : from && from[1] !== '/dev/null' ? from[1] : '';
+    const p = diffPath(/^\+\+\+ (.+?)\t?$/m, /^b\//, chunk) || diffPath(/^--- (.+?)\t?$/m, /^a\//, chunk);
     const at = chunk.search(/^@@ /m);
     if (p && at >= 0) maps.set(p, parsePatch(chunk.slice(at)));
   }
@@ -131,13 +136,6 @@ function validate(o) {
     else kept.push(f);
   }
   const demoted = new Set();
-  // A behaviour already owed a pushdown is not also a missing_test.
-  const pushed = new Set(rows.filter((c) => c.status === 'higher_level_only' && c.behaviour).map((c) => `${c.behaviour.path}:${c.behaviour.line}`));
-  for (const c of rows) if (c.status === 'missing_test' && c.behaviour && pushed.has(`${c.behaviour.path}:${c.behaviour.line}`)) {
-    notes.push(`Obligation ${c.id} marked unknown: duplicates a pushdown obligation.`);
-    demoted.add(c.id);
-    Object.assign(c, { status: 'unknown', reason: 'Duplicates a pushdown obligation.' });
-  }
   for (const c of rows) {
     if (['missing_test', 'weak_test'].includes(c.status) && kept.filter((f) => f.kind === c.status && f.obligation_ids.includes(c.id)).length !== 1) {
       notes.push(`Obligation ${c.id} marked unknown: needs exactly one ${c.status} finding.`);
@@ -163,7 +161,10 @@ function anchor(f, maps, fileUsed = 0) {
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
 // An acceptance-criterion source is stabler than a quote: the model re-anchors the same finding on different lines between runs.
 const AC = /^(issue (?:[\w.-]+\/[\w.-]+)?#\d+|PR body) AC \d+$/;
-const fingerprint = (kind, p, quote, source) => crypto.createHash('sha1').update(`${kind}\0${p}\0${AC.test(source) ? source : norm(quote)}`).digest('hex');
+const fingerprint = (kind, p, quote, ...sources) => {
+  const ac = sources.filter((s) => AC.test(s)).sort();
+  return crypto.createHash('sha1').update(`${kind}\0${p}\0${ac.length ? ac.join('\0') : norm(quote)}`).digest('hex');
+};
 
 // Line delta (0, -1, +1, ... up to +-5) that puts the quote on the cited line, or null. Never guesses.
 function snap(f, lines) {
@@ -177,18 +178,20 @@ function snap(f, lines) {
   return null;
 }
 
-// One comment per kind, path and line. The merged fingerprint hashes the sorted constituents, so reruns dedupe.
+// One comment per kind, path, line and confidence (a low finding never rides on a high comment). One fingerprint per
+// merged comment from stable data only (kind, path, quote or the members' AC sources), so reruns dedupe without dropping findings.
 function merge(fs_) {
   const groups = new Map();
-  for (const f of fs_) { const k = `${f.kind}\0${f.path}\0${f.line}`; groups.set(k, [...(groups.get(k) || []), f]); }
-  return [...groups.values()].map((g) => (g.length === 1 ? g[0] : {
+  for (const f of fs_) { const k = `${f.kind}\0${f.path}\0${f.line}\0${f.confidence}`; groups.set(k, [...(groups.get(k) || []), f]); }
+  return [...groups.values()].map((g) => ({
     ...g[0],
+    fp: fingerprint(g[0].kind, g[0].path, g[0].quote, ...g.map((f) => f.source)),
+    ...(g.length > 1 && {
     title: truncate(g.map((f) => f.title).join('; '), 200),
     body: g.map((f) => `**${f.title}**\n\n${f.body}`).join('\n\n---\n\n'),
     obligation_ids: [...new Set(g.flatMap((f) => f.obligation_ids))],
-    confidence: g.some((f) => f.confidence === 'high') ? 'high' : 'low',
     start_line: g.some((f) => f.start_line === undefined) ? undefined : Math.min(...g.map((f) => f.start_line)),
-    fp: crypto.createHash('sha1').update(g.map((f) => f.fp).sort().join('\0')).digest('hex'),
+    }),
   }));
 }
 
@@ -391,13 +394,13 @@ async function run({ github, context, core }) {
   let local = '';
   try { local = fs.readFileSync(path.join(ctx, 'diff.patch'), 'utf8'); } catch {}
   const maps = parseDiff(local);
-  if (!maps.size || partial) { // the API is the fallback only: it can fail under load
+  const lines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
+  const reviewable = new Set(lines('files.txt')), standards = new Set(lines('standards.txt'));
+  if ([...reviewable].some((p) => !maps.has(p))) { // the API is the fallback only: it can fail under load
     try {
       for (const f of await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 })) if (!maps.has(f.filename)) maps.set(f.filename, parsePatch(f.patch));
     } catch { (data.validation_notes ||= []).push('GitHub diff API unavailable; anchored with the local diff only.'); }
   }
-  const lines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
-  const reviewable = new Set(lines('files.txt')), standards = new Set(lines('standards.txt'));
   verifyEvidence(data, reviewable, standards, readLines, maps);
   try {
     const requirements = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8'));
@@ -449,11 +452,12 @@ async function run({ github, context, core }) {
       data.not_reviewed = [data.not_reviewed, `Finding citation did not match: ${f.path}:${f.line}.`].filter(Boolean).join(' ');
       continue;
     }
-    const fp = fingerprint(f.kind, f.path, f.quote, f.source);
-    if (seen.has(fp)) continue;
-    seen.add(fp);
+    const exact = [f.kind, f.path, f.line + d, f.title, f.body].join('\0'); // only a verbatim repeat is dropped
+    if (seen.has(exact)) continue;
+    seen.add(exact);
     assessed.push(f);
-    cands.push({ ...f, line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }), fp });
+    cands.push({ ...f, line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }) });
+
   }
   for (const f of merge(cands)) known.has(f.fp) ? already++ : kept.push(f);
 
