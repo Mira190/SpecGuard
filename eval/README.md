@@ -42,3 +42,13 @@ All fixtures live under `eval-sandbox/<id>/` in the PR, so cases never touch rea
 2. Put files added in the base commit in `base/` and files added or changed in the PR in `head/`. `delete` lists repo-relative base files removed in head.
 3. Give each expected finding a `quote` that the target line must contain; `--dry-run` checks it. Seed exactly the gaps you list and keep the rest well tested.
 4. `node eval/run.js --dry-run`, then `node --test src/*.test.js eval/*.test.js`.
+
+## Combined mode
+
+`node eval/run.js --combined --repo OWNER/REPO --target main` puts every case except x1 and x2 into ONE PR, runs ONE review and grades each case by its sandbox path (`eval-sandbox/<id>/`). Findings, summary items and coverage rows outside a case's path are ignored for that case. `json_valid` and `complete` are shared from the single run. The result adds a "Combined PR" row per repetition: total TP/FP/FN, findings outside every sandbox (counted as FP), findings posted vs the budget, and summary overflow. `--runs N` opens N fresh PRs; `--cases` narrows the set; `--dry-run` builds and validates the merged overlay and PR body without git or GitHub.
+
+- **Isolated vs combined.** Isolated (default): 14 PRs, one review each; use it for attribution and releases. Combined: one PR, one review; use it for cheap regression and stability checks.
+- **Excluded.** x1 (`expect_skip`: a docs/lockfile-only PR cannot coexist with code changes) and x2 (the prompt injection in its PR body would contaminate every other scenario). r2 stays in: its `expect_clean` means no high-confidence finding under `eval-sandbox/r2/`. The opt-out list is `COMBINED_SKIP` in `eval/run.js`.
+- **PR body.** One `## <id>: <title>` section per case, each followed by its own body. The level-2 heading ends the previous case's `## Acceptance criteria` section, so the criteria are exactly the union of the cases' own. Criterion ids (R1..Rn) are renumbered across cases; grading is by path, so that does not matter.
+- **Budget.** The harness sets repo variable `SPECGUARD_EVAL_MAX_COMMENTS` to 30 for the batch (CI passes it as `max_comments`, default 10) and restores the previous value afterwards, also on SIGINT. The Action tells the model "Finding budget: report at most N findings".
+- **Interpretation.** Combined results measure big-PR behaviour (budget pressure, attention across many files), not per-scenario accuracy: a miss may be a budget or attention effect, and the diff is much larger than any single case.
