@@ -106,3 +106,17 @@ test('shipped cases are well formed', () => {
   assert.equal(allIds().length, 14);
   assert.deepEqual(allIds().flatMap(validateCase), []);
 });
+
+test('json_valid follows the raw model output when the artifact is available; degraded counts validation notes', () => {
+  const failed = obs([], { summary: 'Could not complete: findings.json failed validation' });
+  assert.deepEqual([grade(spec([]), { ...failed, raw_findings_present: true, raw_findings_valid_json: true }).json_valid, grade(spec([]), { ...failed, raw_findings_present: true, raw_findings_valid_json: true }).pass], [true, false]);
+  assert.equal(grade(spec([]), { ...obs(), raw_findings_present: false, raw_findings_valid_json: false }).json_valid, false);
+  assert.equal(grade(spec([]), { ...obs(), raw_findings_present: true, raw_findings_valid_json: false }).json_valid, false);
+  assert.equal(grade(spec([]), failed).json_valid, false);
+  const skip = '<!-- specguard:summary -->\n## SpecGuard\n\nNothing to review: every changed file is ignored.';
+  assert.equal(grade(spec([], { expect_skip: true }), { ...obs([], { summary: skip }), raw_findings_present: false }).pass, true);
+  const degraded = obs([], { summary: `${obs().summary}\n\n<details><summary>Validation notes (2)</summary>\n\n- Standards assessment ignored: checked standards need sources.\n- Dropped findings[1].\n</details>\n` });
+  const r = grade(spec([]), degraded);
+  assert.deepEqual([r.degraded, r.validation_notes.length, grade(spec([]), obs()).degraded], [true, 2, false]);
+  assert.equal(aggregate([r, grade(spec([]), obs())]).degraded_rate, 0.5);
+});

@@ -91,6 +91,20 @@ async function waitForRun({ repo, branch, sha, workflow, timeoutMs = 25 * 60e3 }
   throw new Error(`timed out waiting for ${workflow} on ${branch}`);
 }
 
+// Non-fatal: the dogfood job uploads .specguard-ctx as artifact specguard-ctx. An empty result means "artifact unavailable".
+function rawOutput(repo, runId) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-ctx-'));
+  try {
+    sh('gh', ['run', 'download', String(runId), '--repo', repo, '-n', 'specguard-ctx', '-D', tmp]);
+    const files = walk(tmp), at = (n) => files.find((f) => path.basename(f) === n);
+    const first = ['copilot.out', 'claude.json', 'findings.json'].map(at).find(Boolean);
+    const found = at('findings.json');
+    let valid = false;
+    if (found) try { JSON.parse(fs.readFileSync(path.join(tmp, found), 'utf8')); valid = true; } catch {}
+    return { raw_findings_present: !!found, raw_findings_valid_json: valid, raw_excerpt: first ? fs.readFileSync(path.join(tmp, first), 'utf8').slice(0, 2000) : '' };
+  } catch { return {}; } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+}
+
 async function runOne({ repo, target, c, n, runId, keep, workflow }) {
   const tag = `eval/${runId}-${c.id}-${n}`, baseBr = `${tag}-base`, headBr = `${tag}-head`;
   const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-eval-'));
@@ -116,7 +130,7 @@ async function runOne({ repo, target, c, n, runId, keep, workflow }) {
     const comments = ghLines(`repos/${repo}/pulls/${pr.number}/comments`).map(parseComment).filter(Boolean);
     const reviews = ghLines(`repos/${repo}/pulls/${pr.number}/reviews`).map((r) => ({ state: r.state, body: r.body || '' }));
     const sticky = ghLines(`repos/${repo}/issues/${pr.number}/comments`).find((x) => (x.body || '').includes('<!-- specguard:summary -->'));
-    const observed = { comments, reviews, summary: sticky ? sticky.body : null, latency_s, conclusion: run.conclusion, job_conclusion: job && job.conclusion };
+    const observed = { comments, reviews, summary: sticky ? sticky.body : null, latency_s, conclusion: run.conclusion, job_conclusion: job && job.conclusion, ...rawOutput(repo, run.databaseId) };
     return { ...grade(c, observed), rep: n, pr_url: url, run_url: run.url, conclusion: run.conclusion, job_conclusion: observed.job_conclusion, observed };
   } catch (e) {
     return { id: c.id, goal: c.goal, rep: n, error: String(e.message || e).split('\n')[0], pr_url: pr && pr.url };
@@ -137,15 +151,15 @@ function markdown({ runId, repo, target, results, agg }) {
     ...r.false_positives.map((f) => `FP ${f.kind} ${f.path.split('/').pop()}:${f.line}`),
     ...r.must_not_violations.map((m) => `must_not ${JSON.stringify(m)}`),
     ...r.text_misses.map((e) => `text /${e.text}/`),
-    ...(r.json_valid ? [] : ['invalid or incomplete']), ...(r.skip_ok ? [] : ['not skipped']), ...(r.clean_ok ? [] : ['not clean']),
+    ...(r.json_valid ? [] : ['model JSON missing or invalid']), ...(r.complete ? [] : ['incomplete']), ...(r.degraded ? [`degraded: ${r.validation_notes.length} validation note(s)`] : []), ...(r.skip_ok ? [] : ['not skipped']), ...(r.clean_ok ? [] : ['not clean']),
   ].join('; '));
   let s = `# Evaluation ${runId}\n\nRepo ${repo}, target ${target}. Cost: not measured (check the Copilot billing page for the run window). Latency is the dogfood job duration.\n\n`;
-  s += '| Case | Goal | Rep | Pass | TP | FP | FN | Summary only | JSON valid | Latency | Notes |\n|---|---|---|---|---|---|---|---|---|---|---|\n';
+  s += '| Case | Goal | Rep | Pass | TP | FP | FN | Summary only | JSON valid | Degraded | Latency | Notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n';
   for (const r of results) s += r.error
-    ? `| ${r.id} | ${r.goal} | ${r.rep} | error | | | | | | | ${why(r)} |\n`
-    : `| ${r.id} | ${r.goal} | ${r.rep} | ${r.pass ? 'yes' : 'no'} | ${r.tp} | ${r.fp} | ${r.fn} | ${r.summary_only} | ${r.json_valid ? 'yes' : 'no'} | ${sec(r.latency_s)} | ${why(r)} |\n`;
-  const row = (name, a) => `| ${name} | ${a.runs} | ${a.errors} | ${pct(a.precision)} | ${pct(a.recall)} | ${pct(a.json_valid_rate)} | ${pct(a.pass_rate)} | ${sec(a.latency_median_s)} | ${sec(a.latency_max_s)} |\n`;
-  s += '\n## Aggregate\n\n| Scope | Runs | Errors | Precision | Recall | JSON valid | Pass rate | Latency median | Latency max |\n|---|---|---|---|---|---|---|---|---|\n' + row('all', agg);
+    ? `| ${r.id} | ${r.goal} | ${r.rep} | error | | | | | | | | ${why(r)} |\n`
+    : `| ${r.id} | ${r.goal} | ${r.rep} | ${r.pass ? 'yes' : 'no'} | ${r.tp} | ${r.fp} | ${r.fn} | ${r.summary_only} | ${r.json_valid ? 'yes' : 'no'} | ${r.degraded ? 'yes' : 'no'} | ${sec(r.latency_s)} | ${why(r)} |\n`;
+  const row = (name, a) => `| ${name} | ${a.runs} | ${a.errors} | ${pct(a.precision)} | ${pct(a.recall)} | ${pct(a.json_valid_rate)} | ${pct(a.degraded_rate)} | ${pct(a.pass_rate)} | ${sec(a.latency_median_s)} | ${sec(a.latency_max_s)} |\n`;
+  s += '\n## Aggregate\n\n| Scope | Runs | Errors | Precision | Recall | JSON valid | Degraded | Pass rate | Latency median | Latency max |\n|---|---|---|---|---|---|---|---|---|---|\n' + row('all', agg);
   for (const [g, a] of Object.entries(agg.by_goal)) s += row(g, a);
   return s;
 }
