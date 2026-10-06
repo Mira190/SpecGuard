@@ -18,6 +18,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22 }
       - run: node --test
+      - run: diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md
   dogfood:
     if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest

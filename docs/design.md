@@ -325,6 +325,40 @@ Pilot mix: 3 languages, at least 2 with real test suites. One pilot has only Cop
 
 ---
 
+## CCR mode (2026-10-06)
+
+Native Copilot code review can run the same skill with no workflow.
+
+| Surface | Verdict |
+|---|---|
+| Instruction files (`.github/instructions/*.instructions.md`, `excludeAgent`) | used: routes every review to the skill |
+| Skills (`.github/skills/<name>/`) | used: read from the PR head, picked by relevance |
+| Custom agents | not used by CCR |
+| Prompt per API request | no |
+| Shaping the overview | no, CCR owns it |
+| Setup steps (`copilot-code-review.yml`) | unverified, not used yet |
+| Polling after review | possible, deferred |
+
+Decision: one skill, two delivery modes. `references/ccr.md` is the CCR delta; `ccr/test-review.instructions.md` is the adopter template. This repo dogfoods both under `.github/`, and CI fails on drift.
+
+Top constraints:
+- Rules and skill come from the PR head, so a PR can weaken its own rules.
+- The model decides whether to use the skill; no guarantee.
+- No cap, dedupe or coverage table; only high findings are posted.
+- Output format is unsupported to customise; issues are fetched only if CCR's tools allow.
+
+Deferred:
+
+| Item | Trigger |
+|---|---|
+| `copilot-code-review.yml` setup steps to precompute requirements and coverage | setup steps are verified to work for CCR |
+| Poller that posts the coverage summary after CCR | adopters ask for Proven X/Y in CCR mode |
+| Request CCR from the Action via `requested_reviewers` | adopters want one trigger and the same billing path |
+
+Sources: changelogs 2026-07-17, 2026-07-29, 2026-09-11 and 2026-10-02 (github.blog/changelog); https://docs.github.com/en/copilot/concepts/agents/code-review ; microsoft/testfx.
+
+---
+
 ## Sources (primary, checked 2026-10-06)
 - Copilot CLI in Actions with GITHUB_TOKEN: https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-in-actions , changelog https://github.blog/changelog/2026-07-02-copilot-cli-no-longer-needs-a-personal-access-token-in-github-actions/
 - Copilot usage-based billing (AI Credits): https://github.blog/news-insights/company-news/github-copilot-is-moving-to-usage-based-billing/

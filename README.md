@@ -90,7 +90,32 @@ claude -p "$(cat skills/test-review/SKILL.md skills/test-review/references/*.md)
 copilot -p "$(cat skills/test-review/SKILL.md skills/test-review/references/*.md) Review my branch against main."
 ```
 
-Lite tier: copy the whole `skills/test-review` folder to `.github/skills/` and Copilot code review can pick it up, with no workflow. No guarantees: it reads instructions from the PR head, output is free-form, and nothing is deduped or capped.
+To run it inside Copilot code review with no workflow, see [Use with native Copilot code review](#use-with-native-copilot-code-review).
+
+## Use with native Copilot code review
+
+Same skill, no workflow: Copilot code review (CCR) runs it and posts the comments itself.
+
+1. Enable automatic Copilot code review: the user setting, or a ruleset with "Review new pushes".
+2. Install the skill and the instructions file:
+
+```sh
+gh skill install Mira190/SpecGuard test-review --dir .github/skills
+mkdir -p .github/instructions && curl -fsSL https://raw.githubusercontent.com/Mira190/SpecGuard/main/ccr/test-review.instructions.md -o .github/instructions/test-review.instructions.md
+```
+
+3. Commit both files. Runtime or user-scope installs are ignored; CCR reads only what is committed.
+
+| | Action mode | CCR mode |
+|---|---|---|
+| Rules read from | the base branch | the PR head, so a PR can weaken its own rules |
+| Output | structured, capped and deduped, with a coverage table and Proven X/Y | free-form comments and CCR's own overview |
+| Skill used | always | chosen by the model |
+| Requirements | PR plus linked issues | PR body; issues only if CCR fetches them |
+| Who pays | the repo owner or org via the job token, plus Actions minutes | the PR author or requester (the org for bot requests); Actions minutes on private repos |
+| Setup | one workflow file | two committed files plus the CCR setting |
+
+Use Action mode when you need the guarantees. Use CCR mode for zero-workflow adoption. Both can run together.
 
 ## Troubleshooting
 

@@ -84,7 +84,7 @@ runs:
         schema=$(jq -c . "$GITHUB_ACTION_PATH/src/findings.schema.json")
         skill="$GITHUB_ACTION_PATH/skills/test-review"
         # the model can only read the workspace, so inline the skill and its references
-        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
+        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do [ "${r##*/}" = ccr.md ] && continue; echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
 
         Context directory (absolute path): $CTX
         Your final answer must be JSON matching this schema: $schema"
@@ -111,7 +111,7 @@ runs:
         schema=$(jq -c . "$GITHUB_ACTION_PATH/src/findings.schema.json")
         skill="$GITHUB_ACTION_PATH/skills/test-review"
         # the model can only read the workspace, so inline the skill and its references
-        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
+        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do [ "${r##*/}" = ccr.md ] && continue; echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
 
         Context directory (absolute path): $CTX
         Your final answer must be JSON only, matching this schema: $schema"
