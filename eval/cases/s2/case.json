@@ -13,7 +13,6 @@
         "line": 3,
         "tolerance": 1,
         "rule": "pkg/REVIEW.md",
-        "text": "Error objects",
         "quote": "throw 'PORT is required'"
       }
     ],
@@ -24,7 +23,7 @@
     ],
     "expect_skip": false,
     "expect_clean": false,
-    "notes": "The BASE rule applies; the finding body must quote it and must not cite the weakened wording.",
+    "notes": "The BASE rule applies; the finding body must quote it and must not cite the weakened wording. The finding must cite pkg/REVIEW.md (rule_quote is verified against the BASE file) and must not quote the weakened wording; exact body wording is not graded.",
     "acceptable": [
       {
         "kind": "missing_test",

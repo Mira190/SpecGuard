@@ -14,6 +14,8 @@ Not evidence (counts as zero):
 
 Tautology is a `weak_test` on the assertion line, not a `missing_test` on the production line. Code `return x * RATE;` with test `expect(fn(10)).toBe(10 * RATE)` exercises the behaviour but proves nothing; cite the `expect` line.
 
+Operational check: when the expected value is an expression rather than a literal, compare it with the implementation's computation. If it repeats the same operations with the same constants (an inlined literal is the same constant as a named one: `1.2` vs `RATE = 1.2`), it is tautological, so the obligation is `weak_test`, never `covered`. Example: `assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100)` against `Math.round(amount * RATE * 100) / 100` with `RATE = 1.2` is the same formula; use a literal such as `60`.
+
 SpecGuard does not execute tests. A test in the repo's conventional location and naming counts as existing evidence even if you cannot see a runner configuration or CI step that runs it. Report "not collected or not executed" only with concrete evidence (an explicit skip, or a name outside an explicitly configured pattern), and then only as a low-confidence `weak_test`; otherwise mention it in `not_reviewed`.
 
 ## Weak-test catalogue

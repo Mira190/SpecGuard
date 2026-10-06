@@ -28,6 +28,18 @@ function parsePatch(patch) {
   return m;
 }
 
+// Local diff.patch -> Map(path -> parsePatch). Keyed by the new path, or the old path for a deletion.
+function parseDiff(text) {
+  const maps = new Map();
+  for (const chunk of String(text || '').split(/^diff --git /m).slice(1)) {
+    const to = /^\+\+\+ (?:b\/)?(.+?)\t?$/m.exec(chunk), from = /^--- (?:a\/)?(.+?)\t?$/m.exec(chunk);
+    const p = to && to[1] !== '/dev/null' ? to[1] : from && from[1] !== '/dev/null' ? from[1] : '';
+    const at = chunk.search(/^@@ /m);
+    if (p && at >= 0) maps.set(p, parsePatch(chunk.slice(at)));
+  }
+  return maps;
+}
+
 // Hand-rolled mirror of findings.schema.json. ponytail: swap for ajv if the schema grows.
 // Structural problems (not an object, core arrays missing) reject the output. Every other problem degrades only
 // the affected part, is repaired in place, and is listed in o.validation_notes.
@@ -119,6 +131,13 @@ function validate(o) {
     else kept.push(f);
   }
   const demoted = new Set();
+  // A behaviour already owed a pushdown is not also a missing_test.
+  const pushed = new Set(rows.filter((c) => c.status === 'higher_level_only' && c.behaviour).map((c) => `${c.behaviour.path}:${c.behaviour.line}`));
+  for (const c of rows) if (c.status === 'missing_test' && c.behaviour && pushed.has(`${c.behaviour.path}:${c.behaviour.line}`)) {
+    notes.push(`Obligation ${c.id} marked unknown: duplicates a pushdown obligation.`);
+    demoted.add(c.id);
+    Object.assign(c, { status: 'unknown', reason: 'Duplicates a pushdown obligation.' });
+  }
   for (const c of rows) {
     if (['missing_test', 'weak_test'].includes(c.status) && kept.filter((f) => f.kind === c.status && f.obligation_ids.includes(c.id)).length !== 1) {
       notes.push(`Obligation ${c.id} marked unknown: needs exactly one ${c.status} finding.`);
@@ -354,8 +373,14 @@ async function run({ github, context, core }) {
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
   data.tooling = tooling; // Always overwrite any model-supplied tooling claim.
 
-  const maps = new Map();
-  for (const f of await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 })) maps.set(f.filename, parsePatch(f.patch));
+  let local = '';
+  try { local = fs.readFileSync(path.join(ctx, 'diff.patch'), 'utf8'); } catch {}
+  const maps = parseDiff(local);
+  if (!maps.size || partial) { // the API is the fallback only: it can fail under load
+    try {
+      for (const f of await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 })) if (!maps.has(f.filename)) maps.set(f.filename, parsePatch(f.patch));
+    } catch { (data.validation_notes ||= []).push('GitHub diff API unavailable; anchored with the local diff only.'); }
+  }
   const lines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
   const reviewable = new Set(lines('files.txt')), standards = new Set(lines('standards.txt'));
   verifyEvidence(data, reviewable, standards, readLines, maps);
@@ -455,4 +480,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, validate, anchor, snap, ruleLine, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements });
+Object.assign(module.exports, { parsePatch, parseDiff, validate, anchor, snap, ruleLine, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements });
