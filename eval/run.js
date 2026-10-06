@@ -76,7 +76,7 @@ function stage(wt, c, layer, message) {
   const src = path.join(CASES, c.id, layer);
   if (fs.existsSync(src)) fs.cpSync(src, path.join(wt, 'eval-sandbox', c.id), { recursive: true });
   if (layer === 'head') for (const d of c.delete) fs.rmSync(path.join(wt, d), { force: true });
-  git(wt, ['add', '-A', 'eval-sandbox']);
+  git(wt, ['add', '-A']); // fresh worktree: only this case's overlay and deletes are changed
   git(wt, ['commit', '-q', '--allow-empty', '-m', message]);
 }
 
