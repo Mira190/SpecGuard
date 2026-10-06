@@ -1,0 +1,239 @@
+{
+  "runId": "smoke4",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "results": [
+    {
+      "id": "r1",
+      "goal": "requirements",
+      "tp": 4,
+      "fp": 2,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "quote": "throw new Error('empty order')"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert the empty-order error",
+            "body": "**Assert the empty-order error**\n\nNo test checks the error message for an empty order. Add a unit assertion for the specified message:\n```js\ntest('rejects orders with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e1a7fcd2b144e486732fc89e5963542bd776cb7a -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "quote": "total >= 100"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Test the 100 threshold",
+            "body": "**Test the 100 threshold**\n\nNo test pins the threshold or its boundary. Assert both outcomes:\n```js\ntest('subtracts 5 at a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n\ntest('does not subtract 5 below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99, qty: 1 }] }), 99);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=7e9ea60c544fa00ebdd2b592034339bf865804d5 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "quote": "Math.max"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test credit deduction and flooring",
+            "body": "**Test credit deduction and flooring**\n\nNo test checks that credit is deducted or that excess credit floors the total at zero. Add assertions for both outcomes:\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 50, qty: 1 }], credit: 20 }), 30);\n});\n\ntest('floors the total at zero when credit exceeds it', () => {\n  assert.equal(applyDiscount({ items: [{ price: 10, qty: 1 }], credit: 20 }), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e767c1ab545b681a4c5721f92a25224e4c471db9 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/r1/discount.spec.js",
+            "line": 7,
+            "quote": "assert.ok(total)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.spec.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Assert the discounted total",
+            "body": "**Assert the discounted total**\n\nRemoving the 10% adjustment still returns a truthy 40 for this input. Replace the truthiness check with an assertion for the expected total:\n```js\nassert.equal(total, 36);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=cbf55fca298fb906a76ec48d139a8b3cbaf1eb7c -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 8,
+          "title": "Test other coupons"
+        },
+        {
+          "kind": "standard",
+          "path": "eval-sandbox/r1/discount.spec.js",
+          "line": 5,
+          "title": "Use the repository test filename convention"
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 162,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/12",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37419775686",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert the empty-order error",
+            "body": "**Assert the empty-order error**\n\nNo test checks the error message for an empty order. Add a unit assertion for the specified message:\n```js\ntest('rejects orders with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e1a7fcd2b144e486732fc89e5963542bd776cb7a -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Test the 100 threshold",
+            "body": "**Test the 100 threshold**\n\nNo test pins the threshold or its boundary. Assert both outcomes:\n```js\ntest('subtracts 5 at a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n\ntest('does not subtract 5 below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99, qty: 1 }] }), 99);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=7e9ea60c544fa00ebdd2b592034339bf865804d5 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test credit deduction and flooring",
+            "body": "**Test credit deduction and flooring**\n\nNo test checks that credit is deducted or that excess credit floors the total at zero. Add assertions for both outcomes:\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 50, qty: 1 }], credit: 20 }), 30);\n});\n\ntest('floors the total at zero when credit exceeds it', () => {\n  assert.equal(applyDiscount({ items: [{ price: 10, qty: 1 }], credit: 20 }), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e767c1ab545b681a4c5721f92a25224e4c471db9 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 8,
+            "level": "inline",
+            "title": "Test other coupons",
+            "body": "**Test other coupons**\n\nThe non-SAVE10 branch has no assertion that it leaves the subtotal unchanged. Add a unit test for another coupon:\n```js\ntest('does not discount other coupons', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'OTHER' }), 40);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=8b3f00572bfb953b44336b7957bb0e36731ba375 -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.spec.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Assert the discounted total",
+            "body": "**Assert the discounted total**\n\nRemoving the 10% adjustment still returns a truthy 40 for this input. Replace the truthiness check with an assertion for the expected total:\n```js\nassert.equal(total, 36);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=cbf55fca298fb906a76ec48d139a8b3cbaf1eb7c -->",
+            "source": ""
+          },
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": ".github/copilot-instructions.md:4",
+            "path": "eval-sandbox/r1/discount.spec.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Use the repository test filename convention",
+            "body": "**Use the repository test filename convention**\n\nThe unit test is named `discount.spec.js`, not the required `discount.test.js`; the CI `node --test` discovery pattern will not select this filename. Rename it to `discount.test.js` so the test is discovered.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: .github/copilot-instructions.md:4\n</details>\n\n<!-- specguard:fp=a3c6c2c3facde2992bd225c315434770d33055fe -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 4 missing, 1 weak · Standards: 1 · Layering: 0; 6 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/6 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 4 missing, 1 weak · Standards: 1 · Layering: 0; 6 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/6 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 50179825950b441c7b6f8cde136cfdf3f5806d76. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: An order with no items throws \"empty order\". | O1 | 0/1 obligations covered (not fully covered). Requires an assertion that an empty order throws with the specified message. |\n| R2 | PR body: The SAVE10 coupon takes 10% off the subtotal. | O2 | 0/1 obligations covered (not fully covered). Requires an assertion of the discounted subtotal, not merely a truthy result. |\n| R3 | PR body: A total of 100 or more gets 5 off. | O3 | 0/1 obligations covered (not fully covered). Requires assertions at the 100 threshold and below it. |\n| R4 | PR body: Store credit is subtracted from the total, which never goes below zero. | O4, O5 | 0/2 obligations covered (not fully covered). Split into separate obligations for subtracting credit and flooring the resulting total at zero. |\n\n**Coding standards: checked.** Assessed the repository instructions against the changed files. The unit-test filename convention is violated by discount.spec.js; the other listed conventions are satisfied. Sources: .github/copilot-instructions.md.\n\n**Test layers: checked.** Inspected the Node 22 CI configuration and JavaScript tests across src, eval, and eval-sandbox. The changed test calls the exported function directly with node:test and node:assert, so the tested seam is unit-level; no component, integration, or end-to-end assertions cover this function. No higher-layer-only logic is a pushdown candidate. This was a static review; tests were not executed.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: An order with no items throws an error with the message \"empty order\". | PR body AC 1; eval-sandbox/r1/discount.js:5 —     throw new Error('empty order'); | none | missing_test: A repository-wide search of JavaScript test files, including unchanged tests under src and eval, found no assertion for the empty-order error. |\n| O2: The SAVE10 coupon reduces the subtotal by 10%. | PR body AC 2; eval-sandbox/r1/discount.js:9 —     total *= 0.9; | unit: eval-sandbox/r1/discount.spec.js:7 —   assert.ok(total); (assertion; The test calls applyDiscount with a SAVE10 coupon and a subtotal of 40, but only checks truthiness; removing the 10% adjustment returns 40, which still passes.) | weak_test: The truthiness assertion survives removing the coupon adjustment: the current input would return 40 instead of 36 and still pass. |\n| O3: A total of 100 or more is reduced by 5. | PR body AC 3; eval-sandbox/r1/discount.js:11 —   if (total >= 100) { | none | missing_test: A repository-wide search of JavaScript test files found no assertion for the threshold or its boundary. |\n| O4: Store credit is subtracted from the total. | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | none | missing_test: A repository-wide search of JavaScript test files found no assertion that store credit reduces the returned total. |\n| O5: The total does not go below zero after store credit is applied. | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | none | missing_test: A repository-wide search of JavaScript test files found no assertion that excess store credit floors the returned total at zero. |\n| O6: A coupon other than SAVE10 leaves the subtotal unchanged. | from behaviour; eval-sandbox/r1/discount.js:8 —   if (order.coupon === 'SAVE10') { | none | missing_test: A repository-wide search of JavaScript test files found no assertion for the non-SAVE10 branch. |\n\n",
+        "latency_s": 162,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"An order with no items throws \\\"empty order\\\".\",\n      \"obligation_ids\": [\"O1\"],\n      \"reason\": \"Requires an assertion that an empty order throws with the specified message.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"The SAVE10 coupon takes 10% off the subtotal.\",\n      \"obligation_ids\": [\"O2\"],\n      \"reason\": \"Requires an assertion of the discounted subtotal, not merely a truthy result.\"\n    },\n    {\n      \"id\": \"R3\",\n      \"source\": \"PR body\",\n      \"quote\": \"A total of 100 or more gets 5 off.\",\n      \"obligation_ids\": [\"O3\"],\n      \"reason\": \"Requires assertions at the 100 threshold and below it.\"\n    },\n    {\n      \"id\": \"R4\",\n      \"source\": \"PR body\",\n      \"quote\": \"Store credit is subtracted from the total, which never goes below zero.\",\n      \"obligation_ids\": [\"O4\", \"O5\"],\n      \"reason\": \"Split into separate obligations for subtracting credit and flooring the resulting total at zero.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"An order with no items throws an error with the message \\\"empty order\\\".\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 5,\n        \"quote\": \"    throw new Error('empty order');\"\n      },\n      \"evidence\": [],\n      \"status\": \"missing_test\",\n      \"reason\": \"A repository-wide search of JavaScript test files, including unchanged tests under src and eval, found no assertion for the empty-order error.\",\n      \"change\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 5,\n        \"quote\": \"    throw new Error('empty order');\"\n      }\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"The SAVE10 coupon reduces the subtotal by 10%.\",\n      \"source\": \"PR body AC 2\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 9,\n        \"quote\": \" "
+      }
+    }
+  ],
+  "aggregate": {
+    "runs": 1,
+    "errors": 0,
+    "tp": 4,
+    "fp": 2,
+    "fn": 0,
+    "summary_only": 0,
+    "precision": 0.667,
+    "recall": 1,
+    "json_valid_rate": 1,
+    "degraded_rate": 0,
+    "pass_rate": 1,
+    "latency_median_s": 162,
+    "latency_max_s": 162,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 4,
+        "fp": 2,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 0.667,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 162,
+        "latency_max_s": 162
+      }
+    }
+  }
+}
