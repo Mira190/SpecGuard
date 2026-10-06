@@ -10,9 +10,9 @@
       {
         "kind": "missing_test",
         "path": "eval-sandbox/js2/fetchWithRetry.js",
-        "line": 7,
-        "tolerance": 1,
-        "quote": "lastError = error"
+        "line": 3,
+        "tolerance": 4,
+        "quote": "for (let attempt = 1; attempt <= retries; attempt++) {"
       },
       {
         "kind": "missing_test",
@@ -25,6 +25,15 @@
     "must_not": [],
     "expect_skip": false,
     "expect_clean": false,
-    "notes": "missing_test x2: retry path and final throw. global fetch is mocked via jest.spyOn, a system boundary, which is fine."
+    "notes": "missing_test x2: retry path and final throw. global fetch is mocked via jest.spyOn, a system boundary, which is fine. The retry finding may anchor on the loop condition (line 3) or the catch (line 7): both decide the retry behaviour.",
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/js2/fetchWithRetry.js",
+        "line": 1,
+        "tolerance": 0,
+        "reason": "The default of three attempts (AC 2) is untested."
+      }
+    ]
   }
 }
