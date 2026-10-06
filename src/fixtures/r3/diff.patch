@@ -1,0 +1,27 @@
+diff --git a/eval-sandbox/r3/name.js b/eval-sandbox/r3/name.js
+new file mode 100644
+index 0000000..eed86e1
+--- /dev/null
++++ b/eval-sandbox/r3/name.js
+@@ -0,0 +1,8 @@
++function normalizeName(name) {
++  if (name.trim() === '') {
++    throw new Error('name required');
++  }
++  return name.trim();
++}
++
++module.exports = { normalizeName };
+diff --git a/eval-sandbox/r3/name.test.js b/eval-sandbox/r3/name.test.js
+new file mode 100644
+index 0000000..d3f6ca7
+--- /dev/null
++++ b/eval-sandbox/r3/name.test.js
+@@ -0,0 +1,7 @@
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const { normalizeName } = require('./name.js');
++
++test('rejects empty names', () => {
++  assert.throws(() => normalizeName('   '), { message: 'name required' });
++});

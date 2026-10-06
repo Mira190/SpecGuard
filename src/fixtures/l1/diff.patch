@@ -1,0 +1,52 @@
+diff --git a/eval-sandbox/l1/app.py b/eval-sandbox/l1/app.py
+new file mode 100644
+index 0000000..258a359
+--- /dev/null
++++ b/eval-sandbox/l1/app.py
+@@ -0,0 +1,11 @@
++from flask import Flask, jsonify, request
++
++from pricing import quote_total
++
++app = Flask(__name__)
++
++
++@app.post("/quote")
++def quote():
++    body = request.get_json()
++    return jsonify(total=quote_total(body["items"], body.get("tier")))
+diff --git a/eval-sandbox/l1/pricing.py b/eval-sandbox/l1/pricing.py
+new file mode 100644
+index 0000000..c99f863
+--- /dev/null
++++ b/eval-sandbox/l1/pricing.py
+@@ -0,0 +1,10 @@
++TIER_DISCOUNT = {"gold": 0.15, "silver": 0.05}
++
++
++def quote_total(items, tier):
++    subtotal = sum(i["price"] * i["qty"] for i in items)
++    rate = TIER_DISCOUNT.get(tier, 0)
++    discount = round(subtotal * rate, 2)
++    if subtotal > 500:
++        discount += 10
++    return round(subtotal - discount, 2)
+diff --git a/eval-sandbox/l1/test_quote_api.py b/eval-sandbox/l1/test_quote_api.py
+new file mode 100644
+index 0000000..c4549a4
+--- /dev/null
++++ b/eval-sandbox/l1/test_quote_api.py
+@@ -0,0 +1,13 @@
++from app import app
++
++
++def test_quote_applies_gold_discount():
++    client = app.test_client()
++    resp = client.post("/quote", json={"items": [{"price": 100, "qty": 2}], "tier": "gold"})
++    assert resp.json["total"] == 170.0
++
++
++def test_quote_adds_big_order_bonus():
++    client = app.test_client()
++    resp = client.post("/quote", json={"items": [{"price": 300, "qty": 2}]})
++    assert resp.json["total"] == 590.0

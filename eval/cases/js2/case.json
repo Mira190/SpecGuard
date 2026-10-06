@@ -1,0 +1,39 @@
+{
+  "id": "js2",
+  "goal": "requirements",
+  "description": "JavaScript ESM (jest): fetchWithRetry tests only first-try success; the retry path and the final throw are untested.",
+  "pr_title": "Add fetchWithRetry",
+  "pr_body": "Add fetchWithRetry, a fetch wrapper that retries on network errors.\n\n## Acceptance criteria\n- It returns the response when a fetch attempt succeeds.\n- A network error is retried until `retries` attempts have been made (default 3).\n- After `retries` failed attempts it throws the last error.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/js2/fetchWithRetry.js",
+        "line": 3,
+        "tolerance": 4,
+        "quote": "for (let attempt = 1; attempt <= retries; attempt++) {"
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/js2/fetchWithRetry.js",
+        "line": 10,
+        "tolerance": 3,
+        "quote": "throw lastError"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "missing_test x2: retry path and final throw. global fetch is mocked via jest.spyOn, a system boundary, which is fine. The retry finding may anchor on the loop condition (line 3) or the catch (line 7): both decide the retry behaviour. The final-throw finding may anchor on the line that keeps the last error (7) or the throw (10).",
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/js2/fetchWithRetry.js",
+        "line": 1,
+        "tolerance": 0,
+        "reason": "The default of three attempts (AC 2) is untested."
+      }
+    ]
+  }
+}

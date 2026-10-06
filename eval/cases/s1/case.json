@@ -1,0 +1,33 @@
+{
+  "id": "s1",
+  "goal": "standards",
+  "description": "Nested pkg/REVIEW.md rule; head throws a string.",
+  "pr_title": "Add getPort",
+  "pr_body": "Add getPort to read the server port from the environment.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "standard",
+        "path": "eval-sandbox/s1/pkg/config.js",
+        "line": 3,
+        "tolerance": 1,
+        "rule": "pkg/REVIEW.md",
+        "quote": "throw 'PORT is required'"
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/s1/pkg/config.js",
+        "line": 2,
+        "tolerance": 1,
+        "reason": "falsy PORT values other than a missing key (for example an empty string) are not tested"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Rule citation must name the nested REVIEW.md."
+  }
+}

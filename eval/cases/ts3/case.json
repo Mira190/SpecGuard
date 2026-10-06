@@ -1,0 +1,24 @@
+{
+  "id": "ts3",
+  "goal": "standards",
+  "description": "TypeScript (vitest): a validation function throws although CONTRIBUTING.md requires a Result object. Tests are good.",
+  "pr_title": "Add validateAge",
+  "pr_body": "Add validateAge, which checks that an age is an integer from 0 to 150.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "standard",
+        "path": "eval-sandbox/ts3/validate.ts",
+        "line": 3,
+        "tolerance": 1,
+        "rule": "CONTRIBUTING.md",
+        "quote": "throw new RangeError"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "The rule is semantic (Result object instead of throwing), so no linter catches it. Tests exercise every branch, so no test findings are expected."
+  }
+}

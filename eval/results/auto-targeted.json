@@ -1,0 +1,603 @@
+{
+  "runId": "auto-targeted",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "model": "unchanged",
+  "cost": "not measured (pass --billing)",
+  "results": [
+    {
+      "id": "r1",
+      "goal": "requirements",
+      "tp": 4,
+      "fp": 1,
+      "acceptable": 2,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "quote": "throw new Error('empty order')"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert the empty-order error",
+            "body": "**Assert the empty-order error**\n\nNo assertion checks the required error for an empty order. Add a unit test that checks the message:\n```js\ntest('rejects orders with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e1a7fcd2b144e486732fc89e5963542bd776cb7a -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "quote": "total >= 100"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Test the discount threshold boundary",
+            "body": "**Test the discount threshold boundary**\n\nNo assertion checks the 100 threshold. Add unit tests for the value at the threshold and just below it:\n```js\ntest('subtracts five at a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n\ntest('does not subtract five below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99, qty: 1 }] }), 99);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=7e9ea60c544fa00ebdd2b592034339bf865804d5 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "quote": "Math.max"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test credit deduction and the zero floor",
+            "body": "**Test credit deduction and the zero floor**\n\nNo assertion checks credit deduction or the zero floor. Add unit tests for both outcomes:\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 50, qty: 1 }], credit: 20 }), 30);\n});\n\ntest('floors the total at zero when credit exceeds it', () => {\n  assert.equal(applyDiscount({ items: [{ price: 10, qty: 1 }], credit: 20 }), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e767c1ab545b681a4c5721f92a25224e4c471db9 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/r1/discount.test.js",
+            "line": 7,
+            "quote": "assert.ok(total)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.test.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Assert the SAVE10 discount amount",
+            "body": "**Assert the SAVE10 discount amount**\n\nRemoving the coupon adjustment still returns a truthy 40, so this assertion misses the required 10% discount. Replace it with an exact expected total:\n```js\nassert.equal(total, 36);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=7ccbedcf11d16caee021d9246fdd8d6216c966e8 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 14,
+          "title": "Test omitted store credit"
+        }
+      ],
+      "acceptable_findings": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 1,
+          "title": "Test subtotal aggregation across items",
+          "reason": "subtotal helper: the only test asserts truthiness, so summing price times qty is never checked"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 8,
+          "title": "Test coupons other than SAVE10",
+          "reason": "coupons other than SAVE10 are never exercised, so ignoring them is untested"
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 126,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/59",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37444419570",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert the empty-order error",
+            "body": "**Assert the empty-order error**\n\nNo assertion checks the required error for an empty order. Add a unit test that checks the message:\n```js\ntest('rejects orders with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e1a7fcd2b144e486732fc89e5963542bd776cb7a -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Test the discount threshold boundary",
+            "body": "**Test the discount threshold boundary**\n\nNo assertion checks the 100 threshold. Add unit tests for the value at the threshold and just below it:\n```js\ntest('subtracts five at a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n\ntest('does not subtract five below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99, qty: 1 }] }), 99);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=7e9ea60c544fa00ebdd2b592034339bf865804d5 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test credit deduction and the zero floor",
+            "body": "**Test credit deduction and the zero floor**\n\nNo assertion checks credit deduction or the zero floor. Add unit tests for both outcomes:\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 50, qty: 1 }], credit: 20 }), 30);\n});\n\ntest('floors the total at zero when credit exceeds it', () => {\n  assert.equal(applyDiscount({ items: [{ price: 10, qty: 1 }], credit: 20 }), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e767c1ab545b681a4c5721f92a25224e4c471db9 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 1,
+            "level": "inline",
+            "title": "Test subtotal aggregation across items",
+            "body": "**Test subtotal aggregation across items**\n\nThe only test uses one item and its truthiness assertion cannot catch a subtotal aggregation regression. Add a direct assertion through the public function:\n```js\ntest('sums item prices and quantities', () => {\n  assert.equal(applyDiscount({ items: [{ price: 10, qty: 2 }, { price: 25, qty: 2 }] }), 70);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=87b337e74fcf05b2eb43e07aceb2280c991bfacc -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 8,
+            "level": "inline",
+            "title": "Test coupons other than SAVE10",
+            "body": "**Test coupons other than SAVE10**\n\nNo assertion checks how a different coupon affects the subtotal. Add a unit test that pins the unchanged total:\n```js\ntest('leaves the subtotal unchanged for other coupons', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'OTHER' }), 40);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=8b3f00572bfb953b44336b7957bb0e36731ba375 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test omitted store credit",
+            "body": "**Test omitted store credit**\n\nNo assertion checks the total when credit is omitted. Add a unit test that pins the zero-credit result:\n```js\ntest('treats omitted store credit as zero', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 2 }] }), 40);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0dc3366d0fcb6bd13f3db3a506bd05ce509efa45 -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.test.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Assert the SAVE10 discount amount",
+            "body": "**Assert the SAVE10 discount amount**\n\nRemoving the coupon adjustment still returns a truthy 40, so this assertion misses the required 10% discount. Replace it with an exact expected total:\n```js\nassert.equal(total, 36);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=7ccbedcf11d16caee021d9246fdd8d6216c966e8 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 6 missing, 1 weak · Standards: 0 · Layering: 0; 7 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/8 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 6 missing, 1 weak · Standards: 0 · Layering: 0; 7 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/8 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 14aa1edf7605d28dff89001fec43146ea74cbf79. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: An order with no items throws \"empty order\". | O1 | 0/1 obligations covered (not fully covered). Assessed the required empty-order error. |\n| R2 | PR body: The SAVE10 coupon takes 10% off the subtotal. | O2 | 0/1 obligations covered (not fully covered). Assessed the required SAVE10 discount amount. |\n| R3 | PR body: A total of 100 or more gets 5 off. | O3 | 0/1 obligations covered (not fully covered). Assessed the discount threshold and its boundary. |\n| R4 | PR body: Store credit is subtracted from the total, which never goes below zero. | O4, O5 | 0/2 obligations covered (not fully covered). Split into the credit subtraction and the zero floor behaviors. |\n\n**Coding standards: checked.** Assessed the repository coding standard against the changed files. Its `applyTo` scope is limited to `src/**` and `eval/*.js`, so it does not apply to `eval-sandbox/r1`; no standards finding is supported. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Node 22 CI test command and tests across `src/`, `eval/`, `eval-sandbox/`, and fixture directories. The changed test directly calls the exported pure function with `node:test` and `node:assert`, so it is unit-level. No component, integration, or end-to-end coverage for this function was found, and there is no higher-layer-only logic to push down.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: An order with no items throws an error with the message \"empty order\". | PR body AC 1; eval-sandbox/r1/discount.js:5 —     throw new Error('empty order'); | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (no_assertion; The only assertion checks truthiness for a nonempty SAVE10 order; it does not exercise an empty order or check an error.) | missing_test: A repository-wide search of test files and references to `applyDiscount` and `empty order` found no assertion that passes an empty order and checks its error message. |\n| O2: The SAVE10 coupon reduces the subtotal by 10%. | PR body AC 2; eval-sandbox/r1/discount.js:9 —     total *= 0.9; | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (assertion; Calls applyDiscount with a SAVE10 coupon and a subtotal of 40, but only checks that the result is truthy.) | weak_test: Removing the 10% adjustment still returns the truthy subtotal 40, so the assertion does not prove the required discounted total. |\n| O3: A total of 100 or more is reduced by 5. | PR body AC 3; eval-sandbox/r1/discount.js:11 —   if (total >= 100) { | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (no_assertion; The assertion uses a subtotal of 40 and does not check the threshold or its boundary.) | missing_test: A repository-wide search of test files and references to the threshold found no assertion checking a total of 100 or comparing behavior on either side of the boundary. |\n| O4: Store credit is subtracted from the calculated total. | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (no_assertion; The assertion supplies no credit and does not check a result after credit is deducted.) | missing_test: A repository-wide search of test files and references to credit found no assertion that supplies store credit and checks the resulting total. |\n| O5: The total is floored at zero after store credit is subtracted. | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (no_assertion; The assertion supplies no credit and does not check the result when credit exceeds the total.) | missing_test: A repository-wide search of test files and references to credit found no assertion that supplies more credit than the total and checks for a zero result. |\n| O6: The subtotal sums each item's price multiplied by its quantity. | from behaviour; eval-sandbox/r1/discount.js:1 — const subtotal = (items) => items.reduce((sum, i) => sum + i.price * i.qty, 0); | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (no_assertion; The input contains only one item and the assertion checks no expected subtotal or total.) | missing_test: A repository-wide search of test files and references to `applyDiscount` found no assertion checking a subtotal formed from multiple items and their quantities. |\n| O7: A coupon other than SAVE10 leaves the subtotal unchanged. | from behaviour; eval-sandbox/r1/discount.js:8 —   if (order.coupon === 'SAVE10') { | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (no_assertion; The assertion uses SAVE10 and does not exercise a different coupon.) | missing_test: A repository-wide search of test files and coupon references found no assertion checking the result for a coupon other than SAVE10. |\n| O8: When credit is omitted, it is treated as zero. | from behaviour; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (no_assertion; Although credit is omitted, the assertion only checks truthiness and would not catch a changed zero-credit fallback that produces an incorrect total.) | missing_test: A repository-wide search of test files found no assertion checking the exact total for an order with omitted credit. |\n\n**Not reviewed:** Tests were not executed; this is a static review.\n\n",
+        "latency_s": 126,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"An order with no items throws \\\"empty order\\\".\",\"obligation_ids\":[\"O1\"],\"reason\":\"Assessed the required empty-order error.\"},{\"id\":\"R2\",\"source\":\"PR body\",\"quote\":\"The SAVE10 coupon takes 10% off the subtotal.\",\"obligation_ids\":[\"O2\"],\"reason\":\"Assessed the required SAVE10 discount amount.\"},{\"id\":\"R3\",\"source\":\"PR body\",\"quote\":\"A total of 100 or more gets 5 off.\",\"obligation_ids\":[\"O3\"],\"reason\":\"Assessed the discount threshold and its boundary.\"},{\"id\":\"R4\",\"source\":\"PR body\",\"quote\":\"Store credit is subtracted from the total, which never goes below zero.\",\"obligation_ids\":[\"O4\",\"O5\"],\"reason\":\"Split into the credit subtraction and the zero floor behaviors.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"An order with no items throws an error with the message \\\"empty order\\\".\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/r1/discount.js\",\"line\":5,\"quote\":\"    throw new Error('empty order');\"},\"evidence\":[{\"path\":\"eval-sandbox/r1/discount.test.js\",\"line\":7,\"quote\":\"  assert.ok(total);\",\"layer\":\"unit\",\"proves\":\"The only assertion checks truthiness for a nonempty SAVE10 order; it does not exercise an empty order or check an error.\",\"kind\":\"no_assertion\"}],\"status\":\"missing_test\",\"reason\":\"A repository-wide search of test files and references to `applyDiscount` and `empty order` found no assertion that passes an empty order and checks its error message.\" ,\"change\":{\"path\":\"eval-sandbox/r1/discount.js\",\"line\":5,\"quote\":\"    throw new Error('empty order');\"}},{\"id\":\"O2\",\"obligation\":\"The SAVE10 coupon reduces the subtotal by 10%.\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/r1/discount.js\",\"line\":9,\"quote\":\"    total *= 0.9;\"},\"evidence\":[{\"path\":\"eval-sandbox/r1/discount.test.js\",\"line\":7,\"quote\":\"  assert.ok(total);\",\"layer\":\"unit\",\"proves\":\"Calls applyDiscount with a SAVE10 coupon and a subtotal of 40, but only checks that the result is truthy.\",\"kind\":\"assertio"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "p1",
+      "goal": "requirements",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 1,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/p1/cart.py",
+          "line": 5,
+          "tolerance": 1,
+          "quote": "return total - 5"
+        }
+      ],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 136,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/60",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37444727790",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 0 inline, 0 file-level, 1 in summary.\n\nUnit evidence: 0/3 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: e811b078fc4dfb0d60355b06c8712e9ac7f9ef8e. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: The HALF code halves the total. | O1 | 0/1 obligations covered (not fully covered). Mapped to O1, which checks the returned total for the HALF code. |\n| R2 | PR body: The FIVEOFF code takes 5 off the total. | O2 | 0/1 obligations covered (not fully covered). Mapped to O2, which checks the returned total for the FIVEOFF code. |\n| R3 | PR body: An unknown code raises ValueError. | O3 | 0/1 obligations covered (not fully covered). Mapped to O3, which checks the exception for an unknown code. |\n\n**Coding standards: checked.** Assessed the listed rule file; its applyTo scope (src/** and eval/*.js) excludes the changed Python files, so none of its coding prescriptions apply here. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the direct pytest tests and matching eval fixture tests; these call apply_coupon directly with no network, database, or collaborator dependencies, so they are unit-level. No component, integration, or end-to-end evidence was found for these behaviours. The public apply_coupon function is already a suitable unit seam; the FIVEOFF gap is missing unit coverage, not logic that should be pushed down from a higher layer.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: HALF returns half the input total. | PR body AC 1; eval-sandbox/p1/cart.py:3 —         return total / 2 | unit: eval-sandbox/p1/test_cart.py:8 —     assert apply_coupon(80, \"HALF\") == 40 (disabled; For input total 80 and code HALF, the result must be 40.) | unknown: Could not verify the changed-line, behaviour or test citation. |\n| O2: FIVEOFF returns the input total minus 5. | PR body AC 2; eval-sandbox/p1/cart.py:5 —         return total - 5 | unit: eval-sandbox/p1/test_cart.py:8 —     assert apply_coupon(80, \"HALF\") == 40 (no_assertion; The assertion exercises HALF, not FIVEOFF; a repository-wide search of test files found no assertion for FIVEOFF.); unit: eval/cases/p1/head/test_cart.py:8 —     assert apply_coupon(80, \"HALF\") == 40 (no_assertion; The assertion exercises HALF, not FIVEOFF; a repository-wide search of test files found no assertion for FIVEOFF.) | unknown: Could not verify the changed-line, behaviour or test citation. |\n| O3: An unknown code raises ValueError. | PR body AC 3; eval-sandbox/p1/cart.py:6 —     raise ValueError(\"unknown coupon\") | unit: eval-sandbox/p1/test_cart.py:11 —     with pytest.raises(ValueError, match=\"unknown coupon\"): (disabled; The test requires an unknown code to raise ValueError with the expected message.) | weak_test: The assertion checks the required exception, but the configured CI command runs Node tests matching *.test.js and does not collect this pytest file. A regression that returns normally for an unknown code would therefore escape that CI test step. |\n\n**Not reviewed:** Tests were not executed; this is a static review.\n\n<details><summary>1 more item(s): low confidence, inferred, overflow, unanchored</summary>\n\n- **Collect the unknown-code pytest test in CI** (`eval-sandbox/p1/test_cart.py:11`, weak_test, low confidence)\n\n  The configured CI test step runs Node tests matching `*.test.js`, so it does not collect this pytest assertion; returning normally for an unknown code would escape that test step. Add a pytest step for this file and retain the exception check:\n  ```python\n  with pytest.raises(ValueError, match=\"unknown coupon\"):\n      apply_coupon(80, \"NOPE\")\n  ```\n\n</details>\n",
+        "latency_s": 136,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"The HALF code halves the total.\",\"obligation_ids\":[\"O1\"],\"reason\":\"Mapped to O1, which checks the returned total for the HALF code.\"},{\"id\":\"R2\",\"source\":\"PR body\",\"quote\":\"The FIVEOFF code takes 5 off the total.\",\"obligation_ids\":[\"O2\"],\"reason\":\"Mapped to O2, which checks the returned total for the FIVEOFF code.\"},{\"id\":\"R3\",\"source\":\"PR body\",\"quote\":\"An unknown code raises ValueError.\",\"obligation_ids\":[\"O3\"],\"reason\":\"Mapped to O3, which checks the exception for an unknown code.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"HALF returns half the input total.\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/p1/cart.py\",\"line\":3,\"quote\":\"        return total / 2\"},\"change\":{\"path\":\"eval-sandbox/p1/cart.py\",\"line\":3,\"quote\":\"        return total / 2\"},\"evidence\":[{\"path\":\"eval-sandbox/p1/test_cart.py\",\"line\":8,\"quote\":\"    assert apply_coupon(80, \\\"HALF\\\") == 40\",\"layer\":\"unit\",\"proves\":\"For input total 80 and code HALF, the result must be 40.\",\"kind\":\"disabled\"}],\"status\":\"weak_test\",\"reason\":\"The assertion checks the required literal result, but the configured CI command runs Node tests matching *.test.js and does not collect this pytest file. A regression returning the original total would therefore escape that CI test step.\"},{\"id\":\"O2\",\"obligation\":\"FIVEOFF returns the input total minus 5.\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/p1/cart.py\",\"line\":5,\"quote\":\"        return total - 5\"},\"change\":{\"path\":\"eval-sandbox/p1/cart.py\",\"line\":5,\"quote\":\"        return total - 5\"},\"evidence\":[{\"path\":\"eval-sandbox/p1/test_cart.py\",\"line\":8,\"quote\":\"    assert apply_coupon(80, \\\"HALF\\\") == 40\",\"layer\":\"unit\",\"proves\":\"The assertion exercises HALF, not FIVEOFF; a repository-wide search of test files found no assertion for FIVEOFF.\",\"kind\":\"no_assertion\"},{\"path\":\"eval/cases/p1/head/test_cart.py\",\"line\":8,\"quote\":\"    assert apply_coupon(80, \\\"HALF\\\") == 40\",\"lay"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t1",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 2,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "quote": "Math.round(50 * 1.2 * 100)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Use an independent expected tax total",
+            "body": "**Use an independent expected tax total**\n\nThe expected value repeats the calculation instead of independently pinning the 20% outcome. Replace it with a literal expected total:\n```js\nassert.equal(addTax(50), 60);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/t1/tax.js",
+          "line": 4,
+          "title": "Test the zero boundary",
+          "reason": "The zero-amount boundary of amount < 0 is untested."
+        },
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/t1/tax.test.js",
+          "line": 10,
+          "title": "Distinguish cent rounding from rounding down",
+          "reason": "The rounding test only proves rounding down (0.084 to 0.08)."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 93,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/61",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37445035182",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.js",
+            "line": 4,
+            "level": "inline",
+            "title": "Test the zero boundary",
+            "body": "**Test the zero boundary**\n\nThe zero boundary is untested, so changing `< 0` to `<= 0` would reject zero. Add an assertion for the boundary and its result:\n```js\nassert.equal(addTax(0), 0);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=deaf7f8fa6952770c3f5e50381daae87bde1dd50 -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Use an independent expected tax total",
+            "body": "**Use an independent expected tax total**\n\nThe expected value repeats the calculation instead of independently pinning the 20% outcome. Replace it with a literal expected total:\n```js\nassert.equal(addTax(50), 60);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Distinguish cent rounding from rounding down",
+            "body": "**Distinguish cent rounding from rounding down**\n\nA rounding-down mutation also returns 0.08 for this input. Replace it with an input that distinguishes the rounding behavior:\n```js\nassert.equal(addTax(0.09), 0.11);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=6932663e2e52287a282e9ead335d9af0fa8c3b96 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 2 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 2 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: f175ba4a5e924f4b09af3da1e4ba839e52841372. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add addTax, which applies 20% tax rounded to cents and rejects negative amounts. | O1, O2, O3 | 1/3 obligations covered (not fully covered). Split the compound criterion into tax rate, cent rounding, and negative-amount rejection. |\n\n**Coding standards: checked.** Assessed the listed rule file; its applyTo targets src/** and eval/*.js, not the changed eval-sandbox/t1 files, so none of its rules apply to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Node test configuration, the changed adjacent node:test suite, and other test files. The changed suite imports the public function directly without network or a real database, so it is unit coverage; no higher-layer tax assertions were found. The logic already has a public unit seam, so moving tests down would not help.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Apply 20% tax. | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:6 —   assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100); (assertion; Calls addTax with 50, but recomputes the expected total with the same operations and constant as the implementation.) | weak_test: The expected value repeats the implementation's calculation instead of independently pinning the 20% outcome. |\n| O2: Round the tax-inclusive amount to cents. | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:10 —   assert.equal(addTax(0.07), 0.08); (assertion; Checks a cent-rounded result for 0.07, but rounding down also produces 0.08 for this input.) | weak_test: A rounding-down mutation survives this assertion; use an input such as 0.09, whose tax-inclusive value rounds to 0.11 but rounds down to 0.10. |\n| O3: Reject negative amounts. | PR body; eval-sandbox/t1/tax.js:5 —     throw new RangeError('amount must not be negative'); | unit: eval-sandbox/t1/tax.test.js:14 —   assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' }); (assertion; Asserts that a negative input throws the specified error type and message.) | covered: The unit assertion checks the required rejection and error outcome for a negative input. |\n| O4: Accept the zero boundary of the negative-amount check and return 0. | from behaviour; eval-sandbox/t1/tax.js:4 —   if (amount < 0) { | unit: eval-sandbox/t1/tax.test.js:14 —   assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' }); (no_assertion; The existing boundary-related assertion checks -1 only and does not establish the result at 0.) | missing_test: Repository-wide search of test files found assertions for 50, 0.07, and -1, but none for zero; a change from < to <= would reject zero. |\n\n",
+        "latency_s": 93,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add addTax, which applies 20% tax rounded to cents and rejects negative amounts.\",\n      \"obligation_ids\": [\n        \"O1\",\n        \"O2\",\n        \"O3\"\n      ],\n      \"reason\": \"Split the compound criterion into tax rate, cent rounding, and negative-amount rejection.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Apply 20% tax.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100);\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calls addTax with 50, but recomputes the expected total with the same operations and constant as the implementation.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"weak_test\",\n      \"reason\": \"The expected value repeats the implementation's calculation instead of independently pinning the 20% outcome.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Round the tax-inclusive amount to cents.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 10,\n          \"quote\": \"  assert.equal(addTax(0.07), 0.08);\",\n          \"layer\": \"unit\",\n "
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "l1",
+      "goal": "layering",
+      "tp": 0,
+      "fp": 5,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "pushdown",
+          "path": [
+            "eval-sandbox/l1/pricing.py",
+            "eval-sandbox/l1/test_quote_api.py"
+          ],
+          "line": 6,
+          "tolerance": 30,
+          "quote": "rate = TIER_DISCOUNT"
+        }
+      ],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/l1/app.py",
+          "line": 8,
+          "title": "Collect the quote endpoint test in CI"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/l1/pricing.py",
+          "line": 6,
+          "title": "Test tier discounts through the pricing function"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/l1/pricing.py",
+          "line": 5,
+          "title": "Test totals across multiple items"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/l1/pricing.py",
+          "line": 7,
+          "title": "Test cent-level rounding"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/l1/pricing.py",
+          "line": 8,
+          "title": "Test the big-order threshold boundary"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 201,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/62",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37445271896",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/l1/app.py",
+            "line": 8,
+            "level": "inline",
+            "title": "Collect the quote endpoint test in CI",
+            "body": "**Collect the quote endpoint test in CI**\n\nThe route assertion is in `test_quote_api.py`, but CI selects only `*.test.js`, so it is not exercised on PRs. Run the Python endpoint test in an active runner; retain an assertion for the response contract:\n```python\ndef test_quote_returns_total():\n    client = app.test_client()\n    resp = client.post(\"/quote\", json={\"items\": [{\"price\": 100, \"qty\": 2}], \"tier\": \"gold\"})\n    assert resp.json == {\"total\": 170.0}\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=4aec846cd1c51d6bfcb400f8e175317c78e9bec2 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/l1/pricing.py",
+            "line": 6,
+            "level": "inline",
+            "title": "Test tier discounts through the pricing function",
+            "body": "**Test tier discounts through the pricing function**\n\nThe existing gold example is an uncollected route test, and there is no unit assertion for silver or the zero-discount fallback. Exercise the public `quote_total` function directly with literal expected totals:\n```python\ndef test_quote_applies_silver_discount():\n    assert quote_total([{\"price\": 100, \"qty\": 2}], \"silver\") == 190.0\n\ndef test_quote_uses_no_discount_for_unknown_tier():\n    assert quote_total([{\"price\": 100, \"qty\": 2}], \"platinum\") == 200.0\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=fa05e10e39005acb7d49d181f3d26a163f0eb08a -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/l1/pricing.py",
+            "line": 5,
+            "level": "inline",
+            "title": "Test totals across multiple items",
+            "body": "**Test totals across multiple items**\n\nNo collected test checks aggregation across multiple items. Call the public function with two distinct items and assert the literal total:\n```python\ndef test_quote_sums_all_item_totals():\n    items = [{\"price\": 100, \"qty\": 2}, {\"price\": 50, \"qty\": 1}]\n    assert quote_total(items, None) == 250.0\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=25ba9447daedec41a59164c89e1acc4606588c6c -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/l1/pricing.py",
+            "line": 7,
+            "level": "inline",
+            "title": "Test cent-level rounding",
+            "body": "**Test cent-level rounding**\n\nThe current integer-valued examples do not prove cent rounding. Assert a worked fractional example through the public function:\n```python\ndef test_quote_rounds_discount_and_total_to_cents():\n    assert quote_total([{\"price\": 10.03, \"qty\": 1}], \"gold\") == 8.53\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=16415fadf679d30c298f3374a5d06e7f7ec5b2d1 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/l1/pricing.py",
+            "line": 8,
+            "level": "inline",
+            "title": "Test the big-order threshold boundary",
+            "body": "**Test the big-order threshold boundary**\n\nThe uncollected route test checks only a subtotal of 600 and does not pin the threshold. Test both sides directly through `quote_total`:\n```python\ndef test_quote_adds_bonus_only_above_500():\n    assert quote_total([{\"price\": 500, \"qty\": 1}], None) == 500.0\n    assert quote_total([{\"price\": 501, \"qty\": 1}], None) == 491.0\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=007350bf04f4767668983c40a2cfbe389eab332d -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 5 missing, 0 weak · Standards: 0 · Layering: 0; 5 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/8 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 5 missing, 0 weak · Standards: 0 · Layering: 0; 5 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/8 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 33257aebea8c889328905d4eca6011fe08fa5c73. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add a /quote endpoint that applies tier discounts and a bonus for big orders. | O1, O2, O3 | 0/3 obligations covered (not fully covered). Split the bundled criterion into the endpoint contract, tier discounts, and the big-order bonus. |\n\n**Coding standards: checked.** Assessed the listed rule file and its applyTo scope; it applies only to src/** and eval/*.js, so it does not govern the changed eval-sandbox/l1 Python files. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched the changed and unchanged Python test files and CI configuration. The Flask test-client assertions are component-level and the CI command excludes these .py tests; no collected unit tests were found. The pure public quote_total function is a direct unit seam for calculation rules, while endpoint routing and response wiring should remain covered at component level.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Expose POST /quote and return the calculated total in the response. | PR body; eval-sandbox/l1/app.py:8 — @app.post(\"/quote\") | component: eval-sandbox/l1/test_quote_api.py:7 —     assert resp.json[\"total\"] == 170.0 (disabled; The route response contains total 170.0 for the gold-tier request when this test is collected; the configured CI command does not select this Python test.) | missing_test: The only route assertion is in a Python file excluded by the configured CI test pattern, and no collected unit assertion for the endpoint contract was found. |\n| O2: Apply tier discounts to quoted totals. | PR body; eval-sandbox/l1/pricing.py:6 —     rate = TIER_DISCOUNT.get(tier, 0) | component: eval-sandbox/l1/test_quote_api.py:7 —     assert resp.json[\"total\"] == 170.0 (disabled; The route returns 170.0 for a 200.0 gold-tier subtotal when this test is collected; the configured CI command does not select this Python test.) | missing_test: The gold example is only an uncollected component test; repository-wide test search found no collected unit assertion for the tier calculation. |\n| O3: Apply a bonus for big orders. | PR body; eval-sandbox/l1/pricing.py:8 —     if subtotal > 500: | component: eval-sandbox/l1/test_quote_api.py:13 —     assert resp.json[\"total\"] == 590.0 (disabled; The route returns 590.0 for a 600.0 subtotal without a tier when this test is collected; the configured CI command does not select this Python test.) | missing_test: The above-threshold route example is an uncollected component test; no collected unit assertion for the bonus calculation was found. |\n| O8: Determine the response behavior when the request has no items or malformed JSON. | from behaviour; eval-sandbox/l1/app.py:11 —     return jsonify(total=quote_total(body[\"items\"], body.get(\"tier\"))) | none | unknown: The PR does not specify the invalid-request contract, so the expected response and any required error handling cannot be established. |\n| O4: Calculate the subtotal by summing price multiplied by quantity for all items. | from behaviour; eval-sandbox/l1/pricing.py:5 —     subtotal = sum(i[\"price\"] * i[\"qty\"] for i in items) | none | missing_test: Search of all test directories found no collected unit assertion for multiple-item aggregation; the available examples each contain only one item and are excluded by CI. |\n| O5: Use zero discount when the tier is omitted or unrecognized. | from behaviour; eval-sandbox/l1/pricing.py:6 —     rate = TIER_DISCOUNT.get(tier, 0) | component: eval-sandbox/l1/test_quote_api.py:13 —     assert resp.json[\"total\"] == 590.0 (disabled; The request omits tier and expects no discount for the 600.0 subtotal when collected; the configured CI command does not select this Python test.) | missing_test: The omitted-tier example is an uncollected component test; no collected unit assertion checks omitted or unrecognized tiers. |\n| O6: Round the discount and final total to two decimal places. | from behaviour; eval-sandbox/l1/pricing.py:7 —     discount = round(subtotal * rate, 2) | none | missing_test: Search of all test directories found no collected assertion with fractional values that would prove the two-decimal rounding behavior. |\n| O7: Apply the bonus only when subtotal is greater than 500, including the exact threshold boundary. | from behaviour; eval-sandbox/l1/pricing.py:8 —     if subtotal > 500: | component: eval-sandbox/l1/test_quote_api.py:13 —     assert resp.json[\"total\"] == 590.0 (disabled; The uncollected test checks a 600.0 subtotal only; it does not check the boundary at 500.) | missing_test: No collected unit assertion checks the 500 boundary or the value immediately above it. |\n\n**Not reviewed:** The expected response for missing items or malformed JSON is unspecified, so O8 remains unknown. Tests were reviewed statically and not executed.\n\n",
+        "latency_s": 201,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add a /quote endpoint that applies tier discounts and a bonus for big orders.\",\n      \"obligation_ids\": [\n        \"O1\",\n        \"O2\",\n        \"O3\"\n      ],\n      \"reason\": \"Split the bundled criterion into the endpoint contract, tier discounts, and the big-order bonus.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Expose POST /quote and return the calculated total in the response.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/l1/app.py\",\n        \"line\": 8,\n        \"quote\": \"@app.post(\\\"/quote\\\")\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/l1/app.py\",\n        \"line\": 8,\n        \"quote\": \"@app.post(\\\"/quote\\\")\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/l1/test_quote_api.py\",\n          \"line\": 7,\n          \"quote\": \"    assert resp.json[\\\"total\\\"] == 170.0\",\n          \"layer\": \"component\",\n          \"proves\": \"The route response contains total 170.0 for the gold-tier request when this test is collected; the configured CI command does not select this Python test.\",\n          \"kind\": \"disabled\"\n        }\n      ],\n      \"status\": \"missing_test\",\n      \"reason\": \"The only route assertion is in a Python file excluded by the configured CI test pattern, and no collected unit assertion for the endpoint contract was found.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Apply tier discounts to quoted totals.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/l1/pricing.py\",\n        \"line\": 6,\n        \"quote\": \"    rate = TIER_DISCOUNT.get(tier, 0)\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/l1/pricing.py\",\n        \"line\": 6,\n        \"quote\": \"    rate = TIER_DISCOUNT.get(tier, 0)\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/l1/test_quote_api.py\",\n          \"line\": 7,\n          \"q"
+      },
+      "model": "unchanged"
+    }
+  ],
+  "aggregate": {
+    "runs": 4,
+    "errors": 0,
+    "tp": 5,
+    "fp": 6,
+    "acceptable": 4,
+    "fn": 2,
+    "summary_only": 1,
+    "precision": 0.455,
+    "recall": 0.714,
+    "json_valid_rate": 1,
+    "degraded_rate": 0,
+    "pass_rate": 0.5,
+    "latency_median_s": 131,
+    "latency_max_s": 201,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 2,
+        "errors": 0,
+        "tp": 4,
+        "fp": 1,
+        "acceptable": 2,
+        "fn": 1,
+        "summary_only": 1,
+        "precision": 0.8,
+        "recall": 0.8,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 0.5,
+        "latency_median_s": 131,
+        "latency_max_s": 136
+      },
+      "test_quality": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 1,
+        "fp": 0,
+        "acceptable": 2,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 93,
+        "latency_max_s": 93
+      },
+      "layering": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 0,
+        "fp": 5,
+        "acceptable": 0,
+        "fn": 1,
+        "summary_only": 0,
+        "precision": 0,
+        "recall": 0,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 0,
+        "latency_median_s": 201,
+        "latency_max_s": 201
+      }
+    }
+  }
+}

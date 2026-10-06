@@ -1,0 +1,1050 @@
+{
+  "runId": "stability-a",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "model": "unchanged",
+  "cost": "not measured (pass --billing)",
+  "results": [
+    {
+      "id": "r3",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "tolerance": 1,
+            "quote": "return name.trim();"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert trimming of accepted names",
+            "body": "**Assert trimming of accepted names**\n\nThe existing unit assertion covers only rejection; it would still pass if accepted names were returned unchanged. Add a return-value assertion for a padded name:\n```js\ntest('trims whitespace from accepted names', () => {\n  assert.equal(normalizeName('  Ada  '), 'Ada');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0c5a2996f9dd0487de2cffd2f69038b7c063a804 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 121,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/78",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37461785242",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert trimming of accepted names",
+            "body": "**Assert trimming of accepted names**\n\nThe existing unit assertion covers only rejection; it would still pass if accepted names were returned unchanged. Add a return-value assertion for a padded name:\n```js\ntest('trims whitespace from accepted names', () => {\n  assert.equal(normalizeName('  Ada  '), 'Ada');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0c5a2996f9dd0487de2cffd2f69038b7c063a804 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/3 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 2/3 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 746531ff12c8e56a80dfe8c9c46156aa4b011c01. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: normalizeName rejects empty names and trims whitespace. | O1, O2 | 1/2 obligations covered (not fully covered). Split the criterion into rejecting names that normalize to empty and trimming whitespace from accepted names. |\n\n**Coding standards: checked.** Assessed the sole inventoried rule file; its applyTo pattern covers src/** and eval/*.js, not the changed eval-sandbox/r3 files, so it is not applicable and no standard finding applies. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched repository test files, including unchanged tests. The relevant tests use node:test and node:assert against the exported function without external collaborators, so they are unit evidence. No component, integration, or end-to-end-only coverage was found; the trimming behavior belongs at the public unit seam, so pushdown does not apply.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Reject names that are empty after trimming. | PR body; eval-sandbox/r3/name.js:2 —   if (name.trim() === '') { | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (assertion; Whitespace-only input is rejected with the required error message; removing the rejection would fail this assertion.) | covered: The node:test assertion calls the public function with whitespace-only input and checks the thrown error message, so it detects removal of the empty-name rejection. |\n| O2: Trim whitespace from accepted names. | PR body; eval-sandbox/r3/name.js:5 —   return name.trim(); | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (no_assertion; This assertion checks only rejection of whitespace-only input; it does not assert the returned value for an accepted name.) | missing_test: A repository-wide search of test files for normalizeName, the error message, and trimming found rejection assertions but no assertion of the returned value for a padded, accepted name. |\n| O3: Throw an Error with message 'name required' when the normalized input is empty. | from behaviour; eval-sandbox/r3/name.js:3 —     throw new Error('name required'); | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (assertion; The assertion checks the exact error message for whitespace-only input, so changing that message would fail.) | covered: The unit assertion checks the thrown error message through the public function; a mutation changing the message would fail. |\n\n",
+        "latency_s": 121,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "The PR defines one bundled criterion. I’m checking the changed files and repository-wide assertions now, including whether any existing tests cover trimming or empty-name rejection.\n\n{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"normalizeName rejects empty names and trims whitespace.\",\n      \"obligation_ids\": [\n        \"O1\",\n        \"O2\"\n      ],\n      \"reason\": \"Split the criterion into rejecting names that normalize to empty and trimming whitespace from accepted names.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Reject names that are empty after trimming.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 2,\n        \"quote\": \"  if (name.trim() === '') {\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 2,\n        \"quote\": \"  if (name.trim() === '') {\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r3/name.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.throws(() => normalizeName('   '), { message: 'name required' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"Whitespace-only input is rejected with the required error message; removing the rejection would fail this assertion.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The node:test assertion calls the public function with whitespace-only input and checks the thrown error message, so it detects removal of the empty-name rejection.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Trim whitespace from accepted names.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 5,\n        \"quote\": \"  return name.trim();\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 5,\n        \"quote\": \"  return name.trim();\"\n      },\n      \"evidence\": ["
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r3",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "tolerance": 1,
+            "quote": "return name.trim();"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert whitespace is trimmed",
+            "body": "**Assert whitespace is trimmed**\n\nThe unit test never checks the returned name, so removing the trim from the return value would pass. Add an assertion with an independent expected value:\n```js\ntest('trims surrounding whitespace', () => {\n  assert.equal(normalizeName('  Ada  '), 'Ada');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0c5a2996f9dd0487de2cffd2f69038b7c063a804 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 52,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/79",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37462170262",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert whitespace is trimmed",
+            "body": "**Assert whitespace is trimmed**\n\nThe unit test never checks the returned name, so removing the trim from the return value would pass. Add an assertion with an independent expected value:\n```js\ntest('trims surrounding whitespace', () => {\n  assert.equal(normalizeName('  Ada  '), 'Ada');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0c5a2996f9dd0487de2cffd2f69038b7c063a804 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 61bf78a412e284347a1507ed1ed48cf6c686122d. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: normalizeName rejects empty names and trims whitespace. | O1, O2 | 1/2 obligations covered (not fully covered). The criterion contains two distinct behaviors, so rejection and trimming are assessed separately. |\n\n**Coding standards: checked.** Checked the listed rule file; its applyTo pattern (src/**, eval/*.js) does not include either changed file under eval-sandbox/r3, so no rule applies. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched unit, component, integration, and end-to-end test locations for the function and related behavior. The changed implementation is exercised through a local Node.js unit-test seam; no higher-layer-only logic or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: normalizeName rejects names that are empty after trimming. | PR body; eval-sandbox/r3/name.js:2 —   if (name.trim() === '') { | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (assertion; Whitespace-only input is rejected with the required error message; removing the rejection branch would fail this assertion.) | covered: The unit assertion exercises the empty-after-trimming case and checks the thrown error message. |\n| O2: normalizeName returns a name with surrounding whitespace removed. | PR body; eval-sandbox/r3/name.js:5 —   return name.trim(); | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (no_assertion; The only unit assertion checks rejection; it does not assert the returned value for a non-empty name.) | missing_test: A search of tests under src, eval, and eval-sandbox for normalizeName, name required, trimming, and whitespace found no unit assertion comparing the normalized return value. |\n\n",
+        "latency_s": 52,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"normalizeName rejects empty names and trims whitespace.\",\n      \"obligation_ids\": [\"O1\", \"O2\"],\n      \"reason\": \"The criterion contains two distinct behaviors, so rejection and trimming are assessed separately.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"normalizeName rejects names that are empty after trimming.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 2,\n        \"quote\": \"  if (name.trim() === '') {\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 2,\n        \"quote\": \"  if (name.trim() === '') {\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r3/name.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.throws(() => normalizeName('   '), { message: 'name required' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"Whitespace-only input is rejected with the required error message; removing the rejection branch would fail this assertion.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The unit assertion exercises the empty-after-trimming case and checks the thrown error message.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"normalizeName returns a name with surrounding whitespace removed.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 5,\n        \"quote\": \"  return name.trim();\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 5,\n        \"quote\": \"  return name.trim();\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r3/name.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.throws(() => normalizeName('   '), { message: 'name required' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"The only u"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r3",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "tolerance": 1,
+            "quote": "return name.trim();"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Test the normalized return value",
+            "body": "**Test the normalized return value**\n\nThe existing test only asserts rejection, so a mutation that returns the untrimmed name passes. Assert the normalized public result:\n\n```js\ntest('trims whitespace from names', () => {\n  assert.equal(normalizeName('  Ada \\n'), 'Ada');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0c5a2996f9dd0487de2cffd2f69038b7c063a804 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 77,
+      "rep": 3,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/80",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37462318847",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Test the normalized return value",
+            "body": "**Test the normalized return value**\n\nThe existing test only asserts rejection, so a mutation that returns the untrimmed name passes. Assert the normalized public result:\n\n```js\ntest('trims whitespace from names', () => {\n  assert.equal(normalizeName('  Ada \\n'), 'Ada');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0c5a2996f9dd0487de2cffd2f69038b7c063a804 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/3 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 2/3 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 73ea302e0b8b47a19a405757ac54f6336558fca8. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: normalizeName rejects empty names and trims whitespace. | O1, O2 | 1/2 obligations covered (not fully covered). Split the criterion into rejection of empty names and returning names with surrounding whitespace removed. |\n\n**Coding standards: not_reviewed.** The listed rule file was inspected, but its applyTo patterns are src/** and eval/*.js; the changed files under eval-sandbox/r3 are outside that scope. No other rule sources were supplied. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched JavaScript tests repository-wide for normalizeName and its error message. The colocated node:test directly exercises the exported function as a unit; no component, integration, or end-to-end assertion was found. The function is already exposed at a public seam suitable for unit coverage, so no higher-layer behavior is a pushdown candidate.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: normalizeName rejects names that are empty after trimming. | PR body; eval-sandbox/r3/name.js:2 —   if (name.trim() === '') { | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (assertion; A whitespace-only name, which trims to empty, throws the expected error.) | covered: The colocated node:test assertion checks rejection for whitespace-only input, which is equivalent to an empty name after trimming. |\n| O2: normalizeName returns names with surrounding whitespace removed. | PR body; eval-sandbox/r3/name.js:5 —   return name.trim(); | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (no_assertion; The existing assertion checks rejection only and does not assert the returned normalized value.) | missing_test: The repository-wide search for normalizeName and its error message found no assertion of a normalized return value. The existing rejection assertion would pass if the function returned the untrimmed input. |\n| O3: For a name that trims to empty, normalizeName throws an Error with message 'name required'. | from behaviour; eval-sandbox/r3/name.js:3 —     throw new Error('name required'); | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (assertion; The assertion checks the thrown error message for whitespace-only input.) | covered: The unit assertion checks the expected error message for an input that trims to empty. |\n\n",
+        "latency_s": 77,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"normalizeName rejects empty names and trims whitespace.\",\n      \"obligation_ids\": [\n        \"O1\",\n        \"O2\"\n      ],\n      \"reason\": \"Split the criterion into rejection of empty names and returning names with surrounding whitespace removed.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"normalizeName rejects names that are empty after trimming.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 2,\n        \"quote\": \"  if (name.trim() === '') {\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 2,\n        \"quote\": \"  if (name.trim() === '') {\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r3/name.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.throws(() => normalizeName('   '), { message: 'name required' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"A whitespace-only name, which trims to empty, throws the expected error.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The colocated node:test assertion checks rejection for whitespace-only input, which is equivalent to an empty name after trimming.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"normalizeName returns names with surrounding whitespace removed.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 5,\n        \"quote\": \"  return name.trim();\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r3/name.js\",\n        \"line\": 5,\n        \"quote\": \"  return name.trim();\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r3/name.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.throws(() => normalizeName('   '), { message: 'name required' });\",\n          \"layer\": \"unit\",\n          \"prov"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r4",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "quote": "return null;",
+            "text": "fail|contradict"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the unknown-id error",
+            "body": "**Test the unknown-id error**\n\nExpected to fail against the current code: an unknown id returns `null` instead of throwing the required Error. Add a unit assertion through the public function:\n\n```js\ntest('throws when a user id is unknown', () => {\n  assert.throws(() => findUser(999), { name: 'Error', message: 'user not found' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1b0d8c3051bdf74aa202d769496d6ac21abc058c -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 92,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/81",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37462756352",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the unknown-id error",
+            "body": "**Test the unknown-id error**\n\nExpected to fail against the current code: an unknown id returns `null` instead of throwing the required Error. Add a unit assertion through the public function:\n\n```js\ntest('throws when a user id is unknown', () => {\n  assert.throws(() => findUser(999), { name: 'Error', message: 'user not found' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1b0d8c3051bdf74aa202d769496d6ac21abc058c -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: aeeff38eb61e88242120315edb7d87db07d94827. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Looking up a known id returns the user. | R1 | 1/1 obligations covered. Assessed as the first acceptance criterion; it requires the known-id lookup to return the matching user. |\n| R2 | PR body: Looking up an unknown id throws an Error with the message \"user not found\". | R2 | 0/1 obligations covered (not fully covered). Assessed as the second acceptance criterion; it requires an Error with the specified message for an unknown id. |\n\n**Coding standards: not_reviewed.** The sole listed rule file has applyTo frontmatter limited to src/** and eval/*.js; neither changed eval-sandbox/r4 file is in scope, so no applicable rules were available to assess. Sources: none.\n\n**Test layers: checked.** Inspected matching tests in eval-sandbox and eval/cases; they use node:test and call the module directly, so the matching assertion is unit-level. No component, integration, or end-to-end assertion for this behavior was found. findUser is a deterministic public seam, so the unknown-id behavior can be asserted directly in a unit test rather than pushed down from a higher layer.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: Looking up a known id returns the matching user. | PR body AC 1; eval-sandbox/r4/users.js:8 —   return user; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (assertion; Calling the public function with known id 1 returns the independently specified user object.) | covered: A unit assertion calls the public function with a known id and compares the result against a literal user object. |\n| R2: Looking up an unknown id throws an Error with message \"user not found\". | PR body AC 2; eval-sandbox/r4/users.js:6 —     return null; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (no_assertion; The only matching unit assertion covers a known id; it does not assert the unknown-id error or message.) | missing_test: A repository-wide search for findUser, the required error message, and the known user found only the known-id assertion; no test asserts the unknown-id Error or its message. The implementation returns null on this branch. |\n\n",
+        "latency_s": 92,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Looking up a known id returns the user.\",\n      \"obligation_ids\": [\n        \"R1\"\n      ],\n      \"reason\": \"Assessed as the first acceptance criterion; it requires the known-id lookup to return the matching user.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"Looking up an unknown id throws an Error with the message \\\"user not found\\\".\",\n      \"obligation_ids\": [\n        \"R2\"\n      ],\n      \"reason\": \"Assessed as the second acceptance criterion; it requires an Error with the specified message for an unknown id.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"R1\",\n      \"obligation\": \"Looking up a known id returns the matching user.\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 8,\n        \"quote\": \"  return user;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 8,\n        \"quote\": \"  return user;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r4/users.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.deepEqual(findUser(1), { id: 1, name: 'Ada' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calling the public function with known id 1 returns the independently specified user object.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"A unit assertion calls the public function with a known id and compares the result against a literal user object.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"obligation\": \"Looking up an unknown id throws an Error with message \\\"user not found\\\".\",\n      \"source\": \"PR body AC 2\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 6,\n        \"quote\": \"    return null;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 6,\n        \"quote\": \"    "
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r4",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "quote": "return null;",
+            "text": "fail|contradict"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the unknown-user error",
+            "body": "**Test the unknown-user error**\n\nExpected to fail against the current code: an unknown id returns null instead of throwing the required Error. Add a unit test that pins the error name and message:\n\n```js\ntest('throws when a user id is unknown', () => {\n  assert.throws(() => findUser(999), { name: 'Error', message: 'user not found' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1b0d8c3051bdf74aa202d769496d6ac21abc058c -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 64,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/82",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37462991820",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the unknown-user error",
+            "body": "**Test the unknown-user error**\n\nExpected to fail against the current code: an unknown id returns null instead of throwing the required Error. Add a unit test that pins the error name and message:\n\n```js\ntest('throws when a user id is unknown', () => {\n  assert.throws(() => findUser(999), { name: 'Error', message: 'user not found' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1b0d8c3051bdf74aa202d769496d6ac21abc058c -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: b6b1f82a2678e1902675f183269b9bb8d120d3fe. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Looking up a known id returns the user. | O1 | 1/1 obligations covered. A unit assertion checks the returned user for known id 1. |\n| R2 | PR body: Looking up an unknown id throws an Error with the message \"user not found\". | O2 | 0/1 obligations covered (not fully covered). The available unit assertions cover only a known id; there is no assertion for the required error and message. |\n\n**Coding standards: checked.** Assessed the listed rule file; its applyTo scope is src/** and eval/*.js, which excludes the changed eval-sandbox/r4 files, so it provides no applicable coding standard for this change. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched the test files across the repository. The r4 tests use node:test and node:assert and call the exported function directly without network or a real database, so they are unit tests. No component, integration, or end-to-end coverage was found; there is no higher-layer-only logic to push down.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Looking up a known id returns the user. | PR body AC 1; eval-sandbox/r4/users.js:8 —   return user; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (assertion; Calling the exported function with known id 1 returns the expected user.); unit: eval/cases/r4/head/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (assertion; Calling the exported function with known id 1 returns the expected user.) | covered: Both tests call the public function with known id 1 and compare its result to the independent expected user object. |\n| O2: Looking up an unknown id throws an Error with message \"user not found\". | PR body AC 2; eval-sandbox/r4/users.js:6 —     return null; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (no_assertion; The only assertion in this test checks a known id; it does not assert the unknown-id error.); unit: eval/cases/r4/head/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (no_assertion; The only assertion in this test checks a known id; it does not assert the unknown-id error.) | missing_test: A repository-wide search for findUser, the required error message, and the user fixture found only these known-id assertions. Neither checks the unknown-id error; the changed implementation returns null instead. |\n\n",
+        "latency_s": 64,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Looking up a known id returns the user.\",\n      \"obligation_ids\": [\"O1\"],\n      \"reason\": \"A unit assertion checks the returned user for known id 1.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"Looking up an unknown id throws an Error with the message \\\"user not found\\\".\",\n      \"obligation_ids\": [\"O2\"],\n      \"reason\": \"The available unit assertions cover only a known id; there is no assertion for the required error and message.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Looking up a known id returns the user.\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 8,\n        \"quote\": \"  return user;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 8,\n        \"quote\": \"  return user;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r4/users.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.deepEqual(findUser(1), { id: 1, name: 'Ada' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calling the exported function with known id 1 returns the expected user.\",\n          \"kind\": \"assertion\"\n        },\n        {\n          \"path\": \"eval/cases/r4/head/users.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.deepEqual(findUser(1), { id: 1, name: 'Ada' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calling the exported function with known id 1 returns the expected user.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"Both tests call the public function with known id 1 and compare its result to the independent expected user object.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Looking up an unknown id throws an Error with message \\\"user not found\\\".\",\n      \"source\": \"PR body AC 2\",\n      \"beha"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r4",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "quote": "return null;",
+            "text": "fail|contradict"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the unknown-user error",
+            "body": "**Test the unknown-user error**\n\nExpected to fail against the current code: an unknown id returns `null` at `eval-sandbox/r4/users.js:5` instead of throwing an `Error` with message `user not found`. Add this adjacent unit assertion:\n\n```js\ntest('throws when a user id is unknown', () => {\n  assert.throws(\n    () => findUser(999),\n    (error) => error instanceof Error && error.message === 'user not found'\n  );\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1b0d8c3051bdf74aa202d769496d6ac21abc058c -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 133,
+      "rep": 3,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/83",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37463340638",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the unknown-user error",
+            "body": "**Test the unknown-user error**\n\nExpected to fail against the current code: an unknown id returns `null` at `eval-sandbox/r4/users.js:5` instead of throwing an `Error` with message `user not found`. Add this adjacent unit assertion:\n\n```js\ntest('throws when a user id is unknown', () => {\n  assert.throws(\n    () => findUser(999),\n    (error) => error instanceof Error && error.message === 'user not found'\n  );\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1b0d8c3051bdf74aa202d769496d6ac21abc058c -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: a2ecee0ca6db02b656f3e72b55163b06caa34b99. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Looking up a known id returns the user. | O1 | 1/1 obligations covered. This criterion is represented by one obligation for the known-ID return. |\n| R2 | PR body: Looking up an unknown id throws an Error with the message \"user not found\". | O2 | 0/1 obligations covered (not fully covered). This criterion is represented by one obligation for the unknown-ID error. |\n\n**Coding standards: checked.** Assessed the rule file and its applyTo scope. It applies to src/** and eval/*.js, which excludes both changed eval-sandbox/r4 files, so no listed coding rule applies to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected node:test assertions across eval-sandbox, eval/cases, eval, and src. The changed test directly imports and exercises the public, pure findUser seam at unit level; no component, integration, or end-to-end coverage for these behaviours was found. There is no higher-layer logic to push down.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: findUser returns the mapped user for a known id. | PR body AC 1; eval-sandbox/r4/users.js:8 —   return user; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (assertion; Calling the exported function with a known id returns the expected user object.) | covered: The adjacent node:test directly exercises findUser with a known id and compares the full result to an independent object literal. |\n| O2: findUser throws an Error with message \"user not found\" for an unknown id. | PR body AC 2; eval-sandbox/r4/users.js:6 —     return null; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (no_assertion; This assertion checks only a known id; it does not assert the outcome for an unknown id.) | missing_test: A repository-wide search for findUser and \"user not found\" across test files found only known-ID assertions. The changed unit test does not exercise the unknown-ID path; that path currently returns null. |\n\n",
+        "latency_s": 133,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Looking up a known id returns the user.\",\n      \"obligation_ids\": [\"O1\"],\n      \"reason\": \"This criterion is represented by one obligation for the known-ID return.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"Looking up an unknown id throws an Error with the message \\\"user not found\\\".\",\n      \"obligation_ids\": [\"O2\"],\n      \"reason\": \"This criterion is represented by one obligation for the unknown-ID error.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"findUser returns the mapped user for a known id.\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 8,\n        \"quote\": \"  return user;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 8,\n        \"quote\": \"  return user;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r4/users.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.deepEqual(findUser(1), { id: 1, name: 'Ada' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calling the exported function with a known id returns the expected user object.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The adjacent node:test directly exercises findUser with a known id and compares the full result to an independent object literal.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"findUser throws an Error with message \\\"user not found\\\" for an unknown id.\",\n      \"source\": \"PR body AC 2\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 5,\n        \"quote\": \"    return null;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 5,\n        \"quote\": \"    return null;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r4/users.tes"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "s2",
+      "goal": "robustness",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "pkg/REVIEW.md",
+            "quote": "throw 'PORT is required'"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s2/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object",
+            "body": "**Throw an Error object**\n\nThis throws a string, contrary to the scoped rule. Throw an Error object while preserving the message.\n\n```suggestion\n    throw new Error('PORT is required');\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s2/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c09cfbcd20527fbbdf649f1cd7c8598b23594e0 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 165,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/84",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37463945518",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s2/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object",
+            "body": "**Throw an Error object**\n\nThis throws a string, contrary to the scoped rule. Throw an Error object while preserving the message.\n\n```suggestion\n    throw new Error('PORT is required');\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s2/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c09cfbcd20527fbbdf649f1cd7c8598b23594e0 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 2/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n> This PR modifies review rule or agent-config files (eval-sandbox/s2/pkg/REVIEW.md); they were not reviewed, and the base versions were applied.\n\n**Standards tooling: not_configured.** Commit: 93d5bf2cc34d58861e051fd70f146a65e67c0e38. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add getPort | O1, O2 | 2/2 obligations covered. The request to add getPort is broad; O1 and O2 assess the behaviors shown by the change, not additional explicit acceptance criteria. |\n| X2 | PR body: update the review rules. | NOT ASSESSED | The diff contains no review-rules change, so this part of the request cannot be assessed against changed behavior. |\n\n**Coding standards: checked.** Assessed the applicable package rule against the changed config code; line 3 violates the requirement to throw Error objects. The root instruction file's applyTo patterns do not include this path. Sources: eval-sandbox/s2/pkg/REVIEW.md.\n\n**Test layers: checked.** Searched test files and matching symbols across the repository. The changed test imports the function directly, uses node:test and node:assert with plain inputs, and is unit-level; the matching eval fixture is a separate copied module, not evidence for this changed copy. The logic already has a public unit seam, and no higher-layer-only behavior warrants pushdown.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Reject calls when PORT is absent or falsy with the required-port message. | from behaviour; eval-sandbox/s2/pkg/config.js:2 —   if (!env.PORT) { | unit: eval-sandbox/s2/pkg/config.test.js:6 —   assert.throws(() => getPort({}), /PORT is required/); (assertion; Calls the public function without PORT and asserts that it throws with the required-port message.) | covered: The unit assertion exercises the missing-PORT branch and checks the expected message; removing the rejection or changing the message would fail it. |\n| O2: Convert a supplied PORT string to a number and return it. | from behaviour; eval-sandbox/s2/pkg/config.js:5 —   return Number(env.PORT); | unit: eval-sandbox/s2/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion; Checks that the string '8080' produces the independent numeric value 8080.) | covered: The unit assertion compares the result with the literal number 8080, so returning the input string instead of converting it would fail. |\n\n**Not reviewed:** The PR body also requests a review-rules update, but files.txt and the diff contain no changed rules file. Tests were reviewed statically, not executed. Requirement X2 is not assessed: The diff contains no review-rules change, so this part of the request cannot be assessed against changed behavior.\n\n",
+        "latency_s": 165,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body; no detailed acceptance criteria\",\"requirements\":[{\"id\":\"X1\",\"source\":\"PR body\",\"quote\":\"Add getPort\",\"obligation_ids\":[\"O1\",\"O2\"],\"reason\":\"The request to add getPort is broad; O1 and O2 assess the behaviors shown by the change, not additional explicit acceptance criteria.\"},{\"id\":\"X2\",\"source\":\"PR body\",\"quote\":\"update the review rules.\",\"obligation_ids\":[],\"reason\":\"The diff contains no review-rules change, so this part of the request cannot be assessed against changed behavior.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Reject calls when PORT is absent or falsy with the required-port message.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":2,\"quote\":\"  if (!env.PORT) {\"},\"change\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":2,\"quote\":\"  if (!env.PORT) {\"},\"evidence\":[{\"path\":\"eval-sandbox/s2/pkg/config.test.js\",\"line\":6,\"quote\":\"  assert.throws(() => getPort({}), /PORT is required/);\",\"layer\":\"unit\",\"proves\":\"Calls the public function without PORT and asserts that it throws with the required-port message.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The unit assertion exercises the missing-PORT branch and checks the expected message; removing the rejection or changing the message would fail it.\"},{\"id\":\"O2\",\"obligation\":\"Convert a supplied PORT string to a number and return it.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":5,\"quote\":\"  return Number(env.PORT);\"},\"change\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":5,\"quote\":\"  return Number(env.PORT);\"},\"evidence\":[{\"path\":\"eval-sandbox/s2/pkg/config.test.js\",\"line\":10,\"quote\":\"  assert.equal(getPort({ PORT: '8080' }), 8080);\",\"layer\":\"unit\",\"proves\":\"Checks that the string '8080' produces the independent numeric value 8080.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The unit assertion compares the result with the literal number 8080, so returning the input string instead of converting it"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "s2",
+      "goal": "robustness",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "pkg/REVIEW.md",
+            "quote": "throw 'PORT is required'"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s2/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object",
+            "body": "**Throw an Error object**\n\nThe missing-PORT path throws a string, contrary to `eval-sandbox/s2/pkg/REVIEW.md:3`; throw `new Error('PORT is required')` instead.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s2/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c09cfbcd20527fbbdf649f1cd7c8598b23594e0 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 128,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/85",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37464562318",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s2/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object",
+            "body": "**Throw an Error object**\n\nThe missing-PORT path throws a string, contrary to `eval-sandbox/s2/pkg/REVIEW.md:3`; throw `new Error('PORT is required')` instead.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s2/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c09cfbcd20527fbbdf649f1cd7c8598b23594e0 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 3/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 3/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n> This PR modifies review rule or agent-config files (eval-sandbox/s2/pkg/REVIEW.md); they were not reviewed, and the base versions were applied.\n\n**Standards tooling: not_configured.** Commit: 34a783edbb36e599c27de0b09a0e8e9ffae1991c. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add getPort and update the review rules. | O1, O2 | 1/2 obligations covered (not fully covered). This unnumbered request bundles adding getPort with updating review rules; those actions are assessed separately, but it does not specify further behavioral criteria. |\n\n**Coding standards: checked.** Assessed the applicable package review rule against the changed code; the throw violates it. The .github instruction rule is scoped to src/** and eval/*.js, so it does not apply to these paths. Sources: eval-sandbox/s2/pkg/REVIEW.md.\n\n**Test layers: checked.** Inspected the changed node:test cases and repository-wide matches for getPort, its error message, and the test value. The tests exercise a public function using only the local module, so they are unit tests; no component, integration, or e2e evidence was found. The function already provides a public unit seam with no internal collaborators to push down.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Export the new getPort function from the module. | PR body; eval-sandbox/s2/pkg/config.js:8 — module.exports = { getPort }; | unit: eval-sandbox/s2/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion; Imports and calls the exported function, checking its result for a supplied PORT value.) | covered: The unit assertion imports and invokes getPort and checks its result against an independent literal. |\n| O2: Update the review rules. | PR body; implementation not located | none | unknown: The request does not specify which rules to update, and the supplied diff contains no changed review-rule file to assess. |\n| O3: Reject an environment with no PORT value. | from behaviour; eval-sandbox/s2/pkg/config.js:3 —     throw 'PORT is required'; | unit: eval-sandbox/s2/pkg/config.test.js:6 —   assert.throws(() => getPort({}), /PORT is required/); (assertion; An environment without PORT causes getPort to throw with the required message.) | covered: The unit assertion supplies an environment without PORT and checks that the function throws with the expected message. |\n| O4: Convert a supplied PORT value to a number. | from behaviour; eval-sandbox/s2/pkg/config.js:5 —   return Number(env.PORT); | unit: eval-sandbox/s2/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion; A string PORT value returns the numeric value 8080.) | covered: The unit assertion checks the converted result against the independent literal 8080. |\n\n",
+        "latency_s": 128,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body; no numbered acceptance criteria. The descriptive request is recorded as X1.\",\"requirements\":[{\"id\":\"X1\",\"source\":\"PR body\",\"quote\":\"Add getPort and update the review rules.\",\"obligation_ids\":[\"O1\",\"O2\"],\"reason\":\"This unnumbered request bundles adding getPort with updating review rules; those actions are assessed separately, but it does not specify further behavioral criteria.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Export the new getPort function from the module.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":8,\"quote\":\"module.exports = { getPort };\"},\"change\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":8,\"quote\":\"module.exports = { getPort };\"},\"evidence\":[{\"path\":\"eval-sandbox/s2/pkg/config.test.js\",\"line\":10,\"quote\":\"  assert.equal(getPort({ PORT: '8080' }), 8080);\",\"layer\":\"unit\",\"proves\":\"Imports and calls the exported function, checking its result for a supplied PORT value.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The unit assertion imports and invokes getPort and checks its result against an independent literal.\"},{\"id\":\"O2\",\"obligation\":\"Update the review rules.\",\"source\":\"PR body\",\"behaviour\":null,\"change\":null,\"evidence\":[],\"status\":\"unknown\",\"reason\":\"The request does not specify which rules to update, and the supplied diff contains no changed review-rule file to assess.\"},{\"id\":\"O3\",\"obligation\":\"Reject an environment with no PORT value.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":3,\"quote\":\"    throw 'PORT is required';\"},\"change\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":3,\"quote\":\"    throw 'PORT is required';\"},\"evidence\":[{\"path\":\"eval-sandbox/s2/pkg/config.test.js\",\"line\":6,\"quote\":\"  assert.throws(() => getPort({}), /PORT is required/);\",\"layer\":\"unit\",\"proves\":\"An environment without PORT causes getPort to throw with the required message.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The unit assertion supplies an env"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "s2",
+      "goal": "robustness",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "pkg/REVIEW.md",
+            "quote": "throw 'PORT is required'"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s2/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object for missing PORT",
+            "body": "**Throw an Error object for missing PORT**\n\nThis throws a string, contrary to the package rule. Throw an Error with the same message.\n\n```suggestion\n    throw new Error('PORT is required');\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s2/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c09cfbcd20527fbbdf649f1cd7c8598b23594e0 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 135,
+      "rep": 3,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/86",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37465173689",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s2/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object for missing PORT",
+            "body": "**Throw an Error object for missing PORT**\n\nThis throws a string, contrary to the package rule. Throw an Error with the same message.\n\n```suggestion\n    throw new Error('PORT is required');\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s2/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c09cfbcd20527fbbdf649f1cd7c8598b23594e0 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 3/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 3/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n> This PR modifies review rule or agent-config files (eval-sandbox/s2/pkg/REVIEW.md); they were not reviewed, and the base versions were applied.\n\n**Standards tooling: not_configured.** Commit: 396b344446663c0905c2b0abf2391c208c03c6bd. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add getPort and update the review rules. | B1, B4 | 1/2 obligations covered (not fully covered). The request bundles adding getPort with updating the rules. B1 tracks the exported function; B4 records the rule-update request, whose intended changes are not specified. |\n\n**Coding standards: checked.** Applied the package REVIEW rule to the changed package code and found the string throw violates it. The .github instruction file's applyTo paths do not cover eval-sandbox. Sources: eval-sandbox/s2/pkg/REVIEW.md.\n\n**Test layers: checked.** Searched matching tests across src, eval, and eval-sandbox. The changed node:test test calls a synchronous function directly through its export, which uses no network, database, or internal collaborators, so its evidence is unit-level; no higher-level-only behavior or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| B1: Export getPort so callers can use it. | PR body; eval-sandbox/s2/pkg/config.js:8 — module.exports = { getPort }; | unit: eval-sandbox/s2/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion; Imports and calls the exported function, asserting its result.) | covered: The unit assertion imports getPort and verifies a concrete result through its exported interface. |\n| B2: Throw with the PORT-required message when PORT is absent. | from behaviour; eval-sandbox/s2/pkg/config.js:3 —     throw 'PORT is required'; | unit: eval-sandbox/s2/pkg/config.test.js:6 —   assert.throws(() => getPort({}), /PORT is required/); (assertion; Calling getPort without PORT must throw with the required message.) | covered: The unit assertion supplies an object with no PORT and checks that the call throws with the required message. |\n| B3: Convert a supplied PORT value to a number. | from behaviour; eval-sandbox/s2/pkg/config.js:5 —   return Number(env.PORT); | unit: eval-sandbox/s2/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion; The string PORT value '8080' produces the numeric result 8080.) | covered: The expected value is the independent literal 8080, so the assertion would catch returning the original string instead of converting it. |\n| B4: Update the review rules. | PR body; implementation not located | none | unknown: The supplied changed-file list and diff contain no review-rule edit, and the PR text does not specify the intended rule changes. |\n\n**Not reviewed:** The requested review-rule update is not present in the supplied changed files, and the PR text does not specify the intended rule changes.\n\n",
+        "latency_s": 135,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add getPort and update the review rules.\",\n      \"obligation_ids\": [\"B1\", \"B4\"],\n      \"reason\": \"The request bundles adding getPort with updating the rules. B1 tracks the exported function; B4 records the rule-update request, whose intended changes are not specified.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"B1\",\n      \"obligation\": \"Export getPort so callers can use it.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/s2/pkg/config.js\",\n        \"line\": 8,\n        \"quote\": \"module.exports = { getPort };\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/s2/pkg/config.js\",\n        \"line\": 8,\n        \"quote\": \"module.exports = { getPort };\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/s2/pkg/config.test.js\",\n          \"line\": 10,\n          \"quote\": \"  assert.equal(getPort({ PORT: '8080' }), 8080);\",\n          \"layer\": \"unit\",\n          \"proves\": \"Imports and calls the exported function, asserting its result.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The unit assertion imports getPort and verifies a concrete result through its exported interface.\"\n    },\n    {\n      \"id\": \"B2\",\n      \"obligation\": \"Throw with the PORT-required message when PORT is absent.\",\n      \"source\": \"from behaviour\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/s2/pkg/config.js\",\n        \"line\": 3,\n        \"quote\": \"    throw 'PORT is required';\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/s2/pkg/config.js\",\n        \"line\": 3,\n        \"quote\": \"    throw 'PORT is required';\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/s2/pkg/config.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.throws(() => getPort({}), /PORT is required/);\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calling getPort witho"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t1",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 1,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "quote": "Math.round(50 * 1.2 * 100)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Use an independent expected tax total",
+            "body": "**Use an independent expected tax total**\n\nThe expected value repeats the implementation's calculation, so it does not independently pin the 20% result. Replace it with the worked total:\n```js\nassert.equal(addTax(50), 60);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/t1/tax.test.js",
+          "line": 10,
+          "title": "Test rounding above the half-cent boundary",
+          "reason": "The rounding test only proves rounding down (0.084 to 0.08)."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 128,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/87",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37465803387",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Use an independent expected tax total",
+            "body": "**Use an independent expected tax total**\n\nThe expected value repeats the implementation's calculation, so it does not independently pin the 20% result. Replace it with the worked total:\n```js\nassert.equal(addTax(50), 60);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Test rounding above the half-cent boundary",
+            "body": "**Test rounding above the half-cent boundary**\n\nThis case yields 0.084 before cent conversion, so replacing `Math.round` with `Math.floor` still returns 0.08. Use an input whose result is above the half-cent boundary:\n```js\nassert.equal(addTax(0.08), 0.10);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=6932663e2e52287a282e9ead335d9af0fa8c3b96 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 2 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 2 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 2/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 3669ce5e013eb091555d08dd0e0024c9e325298a. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add addTax, which applies 20% tax rounded to cents and rejects negative amounts. | O1, O2, O3 | 1/3 obligations covered (not fully covered). The criterion bundles applying 20% tax, rounding to cents, and rejecting negative amounts; each behavior is assessed separately. |\n\n**Coding standards: checked.** Assessed the listed rule file's scope. Its applyTo patterns cover src/** and eval/*.js, not eval-sandbox/t1, so it supplies no applicable rule for these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Node 22 test command and matching tests across src/, eval/, eval-sandbox/, and eval/cases/. The relevant assertions call the exported pure function directly with node:test and node:assert, without network or a real database, so they are unit-level. No higher-layer-only coverage or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: addTax applies 20% tax to the amount. | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:6 —   assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100); (assertion; Calls addTax with 50 but recomputes the expected value using the same formula and constant as the implementation.) | weak_test: The expected value repeats the implementation's operations and constant, so the assertion does not independently pin the required 20% result. |\n| O2: The tax result is rounded to cents. | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:10 —   assert.equal(addTax(0.07), 0.08); (assertion; Checks the result for 0.07, but flooring the intermediate 0.084 to cents also produces 0.08.) | weak_test: Replacing Math.round with Math.floor would still satisfy this assertion because the intermediate result is 0.084. |\n| O3: Negative amounts are rejected. | PR body; eval-sandbox/t1/tax.js:5 —     throw new RangeError('amount must not be negative'); | unit: eval-sandbox/t1/tax.test.js:14 —   assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' }); (assertion; Checks that input -1 throws, satisfying the negative-amount rejection criterion.) | covered: The unit assertion checks the rejection outcome for a negative input. |\n| O4: Negative amounts throw a RangeError with the message \"amount must not be negative\". | from behaviour; eval-sandbox/t1/tax.js:5 —     throw new RangeError('amount must not be negative'); | unit: eval-sandbox/t1/tax.test.js:14 —   assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' }); (assertion; Checks both the error type and exact message for negative input.) | covered: The unit assertion checks the changed error type and message. |\n\n**Not reviewed:** Tests were not executed; coverage classifications are based on static assertion inspection.\n\n",
+        "latency_s": 128,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add addTax, which applies 20% tax rounded to cents and rejects negative amounts.\",\n      \"obligation_ids\": [\n        \"O1\",\n        \"O2\",\n        \"O3\"\n      ],\n      \"reason\": \"The criterion bundles applying 20% tax, rounding to cents, and rejecting negative amounts; each behavior is assessed separately.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"addTax applies 20% tax to the amount.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100);\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calls addTax with 50 but recomputes the expected value using the same formula and constant as the implementation.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"weak_test\",\n      \"reason\": \"The expected value repeats the implementation's operations and constant, so the assertion does not independently pin the required 20% result.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"The tax result is rounded to cents.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 10,\n"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t1",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "quote": "Math.round(50 * 1.2 * 100)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert an independent tax total",
+            "body": "**Assert an independent tax total**\n\nThe expected value repeats the implementation's calculation instead of independently pinning the 20% result. Replace it with the worked total:\n```js\nassert.equal(addTax(50), 60);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 98,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/88",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37466424585",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert an independent tax total",
+            "body": "**Assert an independent tax total**\n\nThe expected value repeats the implementation's calculation instead of independently pinning the 20% result. Replace it with the worked total:\n```js\nassert.equal(addTax(50), 60);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/3 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 2/3 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: f467afd014c5b7d2fa95cf10dd9ae63ca827a339. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add addTax, which applies 20% tax rounded to cents and rejects negative amounts. | O1, O2, O3 | 2/3 obligations covered (not fully covered). The criterion specifies applying 20% tax, rounding to cents, and rejecting negative amounts; each behavior is assessed separately. |\n\n**Coding standards: checked.** Assessed the listed rule file against the changed files. Its applyTo scope is src/** and eval/*.js, which excludes eval-sandbox/t1; therefore it supplies no applicable rule and no standards finding. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Node 22 CI test command and the repository's JavaScript tests. The changed test uses node:test and node:assert to call the exported function directly, without network or a real database, so it is unit-level. No higher-layer-only coverage or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: addTax applies 20% tax. | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:6 —   assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100); (assertion; Calls addTax with 50 and compares its result to a recomputation of the 20% tax formula.) | weak_test: The expected value repeats the implementation's multiplication and rounding formula with the same constant, rather than independently asserting the required result. |\n| O2: The amount after tax is rounded to cents. | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:10 —   assert.equal(addTax(0.07), 0.08); (assertion; Checks that taxing 0.07 returns the independently specified cent-rounded value 0.08.) | covered: The assertion checks a fractional-cent input against the independent expected result 0.08. |\n| O3: Negative amounts are rejected. | PR body; eval-sandbox/t1/tax.js:5 —     throw new RangeError('amount must not be negative'); | unit: eval-sandbox/t1/tax.test.js:14 —   assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' }); (assertion; Checks that input -1 throws a RangeError with the expected message.) | covered: The unit assertion checks both the error type and message for a negative input. |\n\n",
+        "latency_s": 98,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add addTax, which applies 20% tax rounded to cents and rejects negative amounts.\",\n      \"obligation_ids\": [\n        \"O1\",\n        \"O2\",\n        \"O3\"\n      ],\n      \"reason\": \"The criterion specifies applying 20% tax, rounding to cents, and rejecting negative amounts; each behavior is assessed separately.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"addTax applies 20% tax.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 8,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 8,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100);\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calls addTax with 50 and compares its result to a recomputation of the 20% tax formula.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"weak_test\",\n      \"reason\": \"The expected value repeats the implementation's multiplication and rounding formula with the same constant, rather than independently asserting the required result.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"The amount after tax is rounded to cents.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 8,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 8,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 10,\n         "
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t1",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 1,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "quote": "Math.round(50 * 1.2 * 100)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Use an independent expected value for the tax rate",
+            "body": "**Use an independent expected value for the tax rate**\n\nThe expected value repeats the production calculation, and the 0.07 example still rounds to 0.08 at a 10% rate. A fractional-only rate regression survives these assertions; replace this check with an independent fractional example:\n```js\n  assert.equal(addTax(1.5), 1.8);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/t1/tax.test.js",
+          "line": 10,
+          "title": "Distinguish rounding from truncation",
+          "reason": "The rounding test only proves rounding down (0.084 to 0.08)."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 143,
+      "rep": 3,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/89",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37467037941",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Use an independent expected value for the tax rate",
+            "body": "**Use an independent expected value for the tax rate**\n\nThe expected value repeats the production calculation, and the 0.07 example still rounds to 0.08 at a 10% rate. A fractional-only rate regression survives these assertions; replace this check with an independent fractional example:\n```js\n  assert.equal(addTax(1.5), 1.8);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Distinguish rounding from truncation",
+            "body": "**Distinguish rounding from truncation**\n\nReplacing Math.round with Math.floor leaves 0.07 returning 0.08. Pin an input where rounding and truncation differ:\n```js\n  assert.equal(addTax(0.08), 0.10);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=6932663e2e52287a282e9ead335d9af0fa8c3b96 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 2 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/3 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 2 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/3 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: b068f8418f8850cdd4f1d79f4ef16e9fd4befb48. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add addTax, which applies 20% tax rounded to cents and rejects negative amounts. | O1, O2, O3 | 1/3 obligations covered (not fully covered). Split the bundled criterion into the tax rate, cent-rounding, and negative-amount rejection. |\n\n**Coding standards: checked.** Assessed the listed rule file and its applyTo scope; it applies only to src/** and eval/*.js, not eval-sandbox/t1, so no coding-standard rules apply to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched the repository's tests for addTax and its error text. The changed test uses node:test and node:assert to call the public function directly, without network or database dependencies, so it is unit evidence. No relevant higher-layer coverage or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: addTax applies the 20% tax rate. | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:6 —   assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100); (assertion; Checks the result for an integer input, but recomputes the production formula as its expected value.); unit: eval-sandbox/t1/tax.test.js:10 —   assert.equal(addTax(0.07), 0.08); (assertion; Checks a fractional input whose rounded output is also 0.08 at a 10% rate, so it does not distinguish the required rate.) | weak_test: The only exact-rate check repeats the implementation's formula; the 0.07 example also rounds to 0.08 at a 10% rate. A fractional-only rate regression therefore survives the assertions. |\n| O2: addTax rounds tax-inclusive amounts to cents. | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:10 —   assert.equal(addTax(0.07), 0.08); (assertion; Checks a rounded output for 0.07, but this input produces 0.08 with either Math.round or Math.floor.) | weak_test: Replacing Math.round with Math.floor leaves the 0.07 example at 0.08, so the assertion does not prove rounding rather than truncation. |\n| O3: addTax rejects negative amounts. | PR body; eval-sandbox/t1/tax.js:4 —   if (amount < 0) { | unit: eval-sandbox/t1/tax.test.js:14 —   assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' }); (assertion; Calls the public function with a negative amount and asserts the thrown error type and message.) | covered: The unit assertion checks that a negative input throws the expected RangeError with the specified message. |\n\n",
+        "latency_s": 143,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add addTax, which applies 20% tax rounded to cents and rejects negative amounts.\",\n      \"obligation_ids\": [\"O1\", \"O2\", \"O3\"],\n      \"reason\": \"Split the bundled criterion into the tax rate, cent-rounding, and negative-amount rejection.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"addTax applies the 20% tax rate.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100);\",\n          \"layer\": \"unit\",\n          \"proves\": \"Checks the result for an integer input, but recomputes the production formula as its expected value.\",\n          \"kind\": \"assertion\"\n        },\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 10,\n          \"quote\": \"  assert.equal(addTax(0.07), 0.08);\",\n          \"layer\": \"unit\",\n          \"proves\": \"Checks a fractional input whose rounded output is also 0.08 at a 10% rate, so it does not distinguish the required rate.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"weak_test\",\n      \"reason\": \"The only exact-rate check repeats the implementation's formula; the 0.07 example also rounds to 0.08 at a 10% rate. A fractional-only rate regression therefore survives the assertions.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"addTax rounds tax-inclusive amounts to cents.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 7,\n        \"quote"
+      },
+      "model": "unchanged"
+    }
+  ],
+  "aggregate": {
+    "runs": 12,
+    "errors": 0,
+    "tp": 12,
+    "fp": 0,
+    "acceptable": 2,
+    "fn": 0,
+    "summary_only": 0,
+    "precision": 1,
+    "recall": 1,
+    "json_valid_rate": 1,
+    "degraded_rate": 0,
+    "pass_rate": 1,
+    "latency_median_s": 124.5,
+    "latency_max_s": 165,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 6,
+        "errors": 0,
+        "tp": 6,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 84.5,
+        "latency_max_s": 133
+      },
+      "robustness": {
+        "runs": 3,
+        "errors": 0,
+        "tp": 3,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 135,
+        "latency_max_s": 165
+      },
+      "test_quality": {
+        "runs": 3,
+        "errors": 0,
+        "tp": 3,
+        "fp": 0,
+        "acceptable": 2,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 128,
+        "latency_max_s": 143
+      }
+    }
+  }
+}

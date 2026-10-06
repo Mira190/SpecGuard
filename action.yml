@@ -14,7 +14,10 @@ inputs:
   max_comments: { description: "Max inline comments (hard cap 30).", default: "10" }
   max_diff_kb: { description: "Diff size above which the review is partial.", default: "300" }
   ignore: { description: "Extra ignore globs, one per line, appended to the defaults.", default: "" }
+  standards_checks: { description: "Exact check:NAME or status:CONTEXT entries, one per line. Requires checks/statuses read permission. Empty means not configured.", default: "" }
+  standards_ref: { description: "head or merge: commit on which your lint/format jobs run. Defaults to head.", default: head }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
+  review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it.", default: "12" }
   claude_version: { description: "Pinned @anthropic-ai/claude-code version (>= 2.1.205).", default: "2.1.290" }
 
 outputs:
@@ -79,21 +82,24 @@ runs:
         MODEL: ${{ inputs.model }}
         MAX_TURNS: ${{ inputs.max_turns }}
         MAX_BUDGET: ${{ inputs.max_budget_usd }}
+        TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
         npm install -g "@anthropic-ai/claude-code@$VERSION" >/dev/null || { echo "::warning::could not install claude-code@$VERSION"; exit 0; }
         schema=$(jq -c . "$GITHUB_ACTION_PATH/src/findings.schema.json")
         skill="$GITHUB_ACTION_PATH/skills/test-review"
         # the model can only read the workspace, so inline the skill and its references
-        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
+        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do [ "${r##*/}" = ccr.md ] && continue; echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
 
         Context directory (absolute path): $CTX
         Your final answer must be JSON matching this schema: $schema"
         # --tools (not --allowedTools) removes every tool but these; --setting-sources user skips the PR's hooks/MCP; never --bare (ignores the OAuth token)
-        claude -p "$PROMPT" --tools "Read,Grep,Glob" --setting-sources user --strict-mcp-config \
+        rc=0
+        timeout "${TIMEOUT}m" claude -p "$PROMPT" --tools "Read,Grep,Glob" --setting-sources user --strict-mcp-config \
           --settings '{"disableAllHooks":true}' --max-turns "$MAX_TURNS" --max-budget-usd "$MAX_BUDGET" \
           --output-format json --json-schema "$schema" ${MODEL:+--model "$MODEL"} > "$CTX/claude.json" \
           && jq -e '.structured_output | objects' "$CTX/claude.json" > "$CTX/findings.json" \
-          || echo "::warning::Claude review failed or returned no structured output"
+          || rc=$?
+        [ $rc = 0 ] || { echo "::warning::Claude review failed, timed out or returned no structured output"; [ $rc = 124 ] && echo timeout > "$CTX/engine-status" || echo failed > "$CTX/engine-status"; }
         exit 0
 
     - name: Review with Copilot CLI
@@ -105,27 +111,25 @@ runs:
         CTX: ${{ github.workspace }}/.specguard-ctx
         VERSION: ${{ inputs.copilot_version }}
         MODEL: ${{ inputs.model }}
+        TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
         [ -n "$COPILOT_GITHUB_TOKEN" ] || unset COPILOT_GITHUB_TOKEN
         npm install -g "@github/copilot@$VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$VERSION"; exit 0; }
         schema=$(jq -c . "$GITHUB_ACTION_PATH/src/findings.schema.json")
         skill="$GITHUB_ACTION_PATH/skills/test-review"
         # the model can only read the workspace, so inline the skill and its references
-        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
+        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do [ "${r##*/}" = ccr.md ] && continue; echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
 
         Context directory (absolute path): $CTX
         Your final answer must be JSON only, matching this schema: $schema"
         # verify-in-S4: no documented turn-cap flag (timeout is the cap); tool names view,glob,grep and --output-format json (text kept) unconfirmed
         # never --allow-all, --allow-all-paths, --yolo
-        timeout 12m copilot -p "$PROMPT" --available-tools view,glob,grep --allow-all-tools --no-ask-user -s \
+        rc=0
+        timeout "${TIMEOUT}m" copilot -p "$PROMPT" --available-tools view,glob,grep --allow-all-tools --no-ask-user -s \
           ${MODEL:+--model "$MODEL"} > "$CTX/copilot.out" \
-          || echo "::warning::Copilot review failed (needs 'permissions: copilot-requests: write' or a copilot_token)"
-        node -e '
-          const fs = require("fs"), s = fs.readFileSync(process.argv[1], "utf8"), ok = (t) => { try { JSON.parse(t); return t; } catch {} };
-          const blocks = [...s.matchAll(/```json\s*\n([\s\S]*?)```/g)].map((m) => m[1]);
-          const j = ok(s) || blocks.reverse().map(ok).find(Boolean);
-          if (j) fs.writeFileSync(process.argv[2], j); else console.log("::warning::no JSON found in Copilot output");
-        ' "$CTX/copilot.out" "$CTX/findings.json"
+          || rc=$?
+        [ $rc = 0 ] || { echo "::warning::Copilot review failed or timed out (needs 'permissions: copilot-requests: write' or a copilot_token)"; [ $rc = 124 ] && echo timeout > "$CTX/engine-status" || echo failed > "$CTX/engine-status"; }
+        node "$GITHUB_ACTION_PATH/src/extract-json.js" "$CTX/copilot.out" "$CTX/findings.json"
         exit 0
 
     - if: ${{ !cancelled() }} # failures still report; a cancelled run (superseded push) posts nothing
@@ -139,6 +143,9 @@ runs:
         SKIP: ${{ steps.collect.outputs.skip }}
         PARTIAL: ${{ steps.collect.outputs.partial }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        STANDARDS_CHECKS: ${{ inputs.standards_checks }}
+        STANDARDS_REF: ${{ inputs.standards_ref }}
+        REVIEW_TIMEOUT_MINUTES: ${{ inputs.review_timeout_minutes }}
       with:
         github-token: ${{ inputs.github_token }}
         retries: 3 # GitHub API 5xx (e.g. "diff temporarily unavailable") would otherwise drop the review

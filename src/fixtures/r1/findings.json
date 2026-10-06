@@ -1,0 +1,242 @@
+{
+  "requirements_source": "PR body",
+  "coverage": [
+    {
+      "id": "O1",
+      "obligation": "An order with no items throws an Error with the message \"empty order\".",
+      "source": "PR body AC 1",
+      "behaviour": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 5,
+        "quote": "    throw new Error('empty order');"
+      },
+      "evidence": [],
+      "status": "missing_test",
+      "reason": "A repository-wide search of JavaScript test files under src, eval, and eval-sandbox found no assertion for the empty-order error.",
+      "change": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 5,
+        "quote": "    throw new Error('empty order');"
+      }
+    },
+    {
+      "id": "O2",
+      "obligation": "The SAVE10 coupon reduces the subtotal by 10%.",
+      "source": "PR body AC 2",
+      "behaviour": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 9,
+        "quote": "    total *= 0.9;"
+      },
+      "evidence": [
+        {
+          "path": "eval-sandbox/r1/discount.test.js",
+          "line": 7,
+          "quote": "  assert.ok(total);",
+          "layer": "unit",
+          "proves": "The test calls applyDiscount with SAVE10 and a subtotal of 40, but checks only that the result is truthy; disabling the coupon adjustment still returns a truthy 40.",
+          "kind": "assertion"
+        }
+      ],
+      "status": "weak_test",
+      "reason": "The unit test exercises SAVE10, but its truthiness assertion survives a mutation that removes the 10% adjustment.",
+      "change": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 9,
+        "quote": "    total *= 0.9;"
+      }
+    },
+    {
+      "id": "O3",
+      "obligation": "A total of 100 or more is reduced by 5.",
+      "source": "PR body AC 3",
+      "behaviour": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 11,
+        "quote": "  if (total >= 100) {"
+      },
+      "evidence": [],
+      "status": "missing_test",
+      "reason": "A repository-wide search of JavaScript test files found no assertion for the 100 threshold or the 5-unit reduction.",
+      "change": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 11,
+        "quote": "  if (total >= 100) {"
+      }
+    },
+    {
+      "id": "O4",
+      "obligation": "Store credit is subtracted from the total.",
+      "source": "PR body AC 4",
+      "behaviour": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 14,
+        "quote": "  return Math.max(total - (order.credit || 0), 0);"
+      },
+      "evidence": [],
+      "status": "missing_test",
+      "reason": "A repository-wide search of JavaScript test files found no assertion that a positive credit reduces the total by the credit amount.",
+      "change": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 14,
+        "quote": "  return Math.max(total - (order.credit || 0), 0);"
+      }
+    },
+    {
+      "id": "O5",
+      "obligation": "The total never falls below zero after store credit is applied.",
+      "source": "PR body AC 4",
+      "behaviour": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 14,
+        "quote": "  return Math.max(total - (order.credit || 0), 0);"
+      },
+      "evidence": [],
+      "status": "missing_test",
+      "reason": "A repository-wide search of JavaScript test files found no assertion for credit exceeding the total and the resulting zero floor.",
+      "change": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 14,
+        "quote": "  return Math.max(total - (order.credit || 0), 0);"
+      }
+    },
+    {
+      "id": "O6",
+      "obligation": "A coupon other than SAVE10 leaves the subtotal unchanged.",
+      "source": "from behaviour",
+      "behaviour": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 8,
+        "quote": "  if (order.coupon === 'SAVE10') {"
+      },
+      "evidence": [],
+      "status": "missing_test",
+      "reason": "The changed coupon condition has a non-matching branch; a repository-wide search of JavaScript test files found no assertion for a different coupon leaving the subtotal unchanged.",
+      "change": {
+        "path": "eval-sandbox/r1/discount.js",
+        "line": 8,
+        "quote": "  if (order.coupon === 'SAVE10') {"
+      }
+    }
+  ],
+  "findings": [
+    {
+      "kind": "missing_test",
+      "obligation_ids": [
+        "O1"
+      ],
+      "path": "eval-sandbox/r1/discount.js",
+      "line": 5,
+      "quote": "    throw new Error('empty order');",
+      "source": "PR body AC 1",
+      "title": "Assert the empty-order error",
+      "body": "No test checks the error message for an empty order. Add a unit test that asserts the exact message:\n```js\ntest('rejects orders with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```",
+      "confidence": "high"
+    },
+    {
+      "kind": "weak_test",
+      "obligation_ids": [
+        "O2"
+      ],
+      "path": "eval-sandbox/r1/discount.test.js",
+      "line": 7,
+      "quote": "  assert.ok(total);",
+      "source": "PR body AC 2",
+      "title": "Assert the SAVE10 amount",
+      "body": "Removing the coupon adjustment still returns a truthy 40, so this assertion misses the regression. Assert the expected discounted total of 36:\n```js\ntest('takes 10% off the subtotal', () => {\n  const total = applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'SAVE10' });\n  assert.equal(total, 36);\n});\n```",
+      "confidence": "high"
+    },
+    {
+      "kind": "missing_test",
+      "obligation_ids": [
+        "O3"
+      ],
+      "path": "eval-sandbox/r1/discount.js",
+      "line": 11,
+      "quote": "  if (total >= 100) {",
+      "source": "PR body AC 3",
+      "title": "Test both sides of the 100 threshold",
+      "body": "No test pins the threshold or its boundary. Assert that 100 becomes 95 and 99 remains 99:\n```js\ntest('subtracts 5 at a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n\ntest('does not subtract 5 below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99, qty: 1 }] }), 99);\n});\n```",
+      "confidence": "high"
+    },
+    {
+      "kind": "missing_test",
+      "obligation_ids": [
+        "O4",
+        "O5"
+      ],
+      "path": "eval-sandbox/r1/discount.js",
+      "line": 14,
+      "quote": "  return Math.max(total - (order.credit || 0), 0);",
+      "source": "PR body AC 4",
+      "title": "Test store-credit deduction and floor",
+      "body": "No test asserts that credit is deducted or that excess credit floors the total at zero. Add unit tests for both outcomes:\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 50, qty: 1 }], credit: 20 }), 30);\n});\n\ntest('floors the total at zero when credit exceeds it', () => {\n  assert.equal(applyDiscount({ items: [{ price: 10, qty: 1 }], credit: 20 }), 0);\n});\n```",
+      "confidence": "high"
+    },
+    {
+      "kind": "missing_test",
+      "obligation_ids": [
+        "O6"
+      ],
+      "path": "eval-sandbox/r1/discount.js",
+      "line": 8,
+      "quote": "  if (order.coupon === 'SAVE10') {",
+      "title": "Test non-SAVE10 coupons",
+      "body": "The changed branch leaves the subtotal unchanged for coupons other than SAVE10, but no test pins that behavior. Assert the unchanged total:\n```js\ntest('does not discount other coupons', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'OTHER' }), 40);\n});\n```",
+      "confidence": "high"
+    }
+  ],
+  "not_reviewed": "",
+  "standards": {
+    "status": "checked",
+    "sources": [
+      ".github/copilot-instructions.md",
+      ".github/instructions/test-review.instructions.md"
+    ],
+    "reason": "Assessed the repository-wide instructions that apply to this review; they prescribe review workflow rather than code style for eval-sandbox/r1. The REVIEW.md files in the inventory are scoped to eval/cases/*/pkg and do not apply to these changed files. No changed-line coding-standard violation was found."
+  },
+  "layering": {
+    "status": "checked",
+    "reason": "Inspected the Node 22 CI configuration and JavaScript test files across src, eval, and eval-sandbox. The changed test uses node:test and node:assert and calls the exported pure function directly without network or a real database, so it is unit-level. No component, integration, or end-to-end assertion covers this function; there is no higher-layer-only logic to push down."
+  },
+  "requirements": [
+    {
+      "id": "R1",
+      "source": "PR body AC 1",
+      "quote": "An order with no items throws \"empty order\".",
+      "obligation_ids": [
+        "O1"
+      ],
+      "reason": "Requires an empty-order input to throw with the specified message."
+    },
+    {
+      "id": "R2",
+      "source": "PR body AC 2",
+      "quote": "The SAVE10 coupon takes 10% off the subtotal.",
+      "obligation_ids": [
+        "O2"
+      ],
+      "reason": "Requires the SAVE10 result to equal the subtotal reduced by 10%."
+    },
+    {
+      "id": "R3",
+      "source": "PR body AC 3",
+      "quote": "A total of 100 or more gets 5 off.",
+      "obligation_ids": [
+        "O3"
+      ],
+      "reason": "Requires the 5-unit reduction at the 100 boundary and above."
+    },
+    {
+      "id": "R4",
+      "source": "PR body AC 4",
+      "quote": "Store credit is subtracted from the total, which never goes below zero.",
+      "obligation_ids": [
+        "O4",
+        "O5"
+      ],
+      "reason": "Split the criterion into the credit deduction and the zero-floor outcome."
+    }
+  ]
+}
+

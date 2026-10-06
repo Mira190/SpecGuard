@@ -1,0 +1,14 @@
+{
+  "status": "available",
+  "sources": [
+    "PR body"
+  ],
+  "limitations": [],
+  "documents": [
+    {
+      "source": "PR body",
+      "text": "Skip flaky quantity test\nSkip the negative quantity test for now.\n"
+    }
+  ],
+  "criteria": []
+}

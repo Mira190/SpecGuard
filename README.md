@@ -2,7 +2,7 @@
 
 A GitHub Action that reviews pull requests for missing or weak unit tests. It maps the linked issue's acceptance criteria and the changed behaviour to test obligations, checks the repo's own coding standards, and flags logic that is only covered by integration tests but belongs in unit tests. The goal is to catch gaps on the PR, before QA does. It is advisory: it posts `COMMENT` reviews and never blocks a merge.
 
-SpecGuard brings no rules of its own. The standard is whatever your repo already has (Copilot/Claude/agent instruction files, `REVIEW.md`, `CONTRIBUTING.md`, `.editorconfig`). It knows no language or framework.
+Coding standards come from your repo (Copilot/Claude/agent instruction files, `REVIEW.md`, `CONTRIBUTING.md`, `.editorconfig`). SpecGuard applies a framework-independent test-evidence rubric and reports which rules and test layers it assessed.
 
 ## Quick start
 
@@ -40,9 +40,14 @@ jobs:
 ## What you get
 
 - Inline comments from `github-actions[bot]`: test skeletons for missing tests, one-click suggested fixes for standard violations.
-- A sticky summary comment with a requirement, test and status coverage table. Low-confidence items are collapsed in it.
+- A sticky summary maps each requirement or changed behaviour to an obligation, an exact behaviour citation, assertion quotes, test layers, and an explained status. Low-confidence items are collapsed in it.
+- Separate coding-standard and test-layer assessments, including when no violations or pushdown candidates were found.
+- `covered` requires a unit assertion; `higher_level_only` records component/integration/e2e evidence without counting it as unit coverage. Pushdown suggestions identify a public unit seam and preserve necessary integration checks.
+- Unknown evidence, inaccessible issues and partial reviews remain visible. Empty findings never imply that requirements were fully reviewed.
 - Docs-only and lockfile-only PRs are skipped with no AI call.
 - Advisory only: the job stays green.
+
+The default Action runs the reviewer directly so it can require this complete report. It reads tests but does not execute PR code: `Unit evidence: X/Y` is a static assessment of the listed obligations, not measured code coverage or proof that tests pass. AI can miss or misinterpret behaviour; source-quote validation checks citation existence, not semantic correctness. Run your normal test/lint CI alongside it.
 
 ## Who pays
 
@@ -67,9 +72,12 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `model` | engine default | Model name passed to the CLI. |
 | `max_turns` | `30` | Agent turn cap (Claude only). |
 | `max_budget_usd` | `2` | Spend cap per run (Claude only). |
+| `review_timeout_minutes` | `12` | Engine time limit. The job `timeout-minutes` must exceed it by at least 3. |
 | `max_comments` | `10` | Max inline comments (hard cap 30). |
 | `max_diff_kb` | `300` | Above this the review is partial. |
 | `ignore` | | Extra ignore globs, one per line, added to the defaults (lockfiles, `dist/`, `build/`, `vendor/`, `node_modules/`, minified files, snapshots, non-standard `.md`). |
+| `standards_checks` | | Your own lint/format checks to report, `check:NAME` or `status:CONTEXT`, one per line. See [Standards evidence](#standards-evidence). |
+| `standards_ref` | `head` | `head` or `merge`: the commit those checks ran on. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
 | `claude_version` | `2.1.290` | Pinned `@anthropic-ai/claude-code` (>= 2.1.205). |
 
@@ -81,6 +89,40 @@ Claude engine:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
+## Standards evidence
+
+The AI's standards review is static. To also show whether your real lint/format jobs passed, name them:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+  checks: read
+  statuses: read
+  copilot-requests: write
+...
+      - uses: Mira190/SpecGuard@v1
+        with:
+          standards_checks: |
+            check:lint
+            status:ci/format
+```
+
+`check:NAME` matches a check run by name, `status:CONTEXT` a commit status by context. The state is read from the GitHub API on `standards_ref` (default: the PR head) and shown in the summary as "Standards tooling". It is independent of the AI: the model cannot set or override it, and SpecGuard never runs the tools or waits for them. Statuses:
+
+| Status | Meaning |
+|---|---|
+| `passed` | every named check succeeded |
+| `failed` | at least one failed, errored, was cancelled or timed out |
+| `pending` | at least one has not finished |
+| `not_found` | at least one named check or status does not exist on that commit |
+| `unavailable` | could not be read: missing `checks: read` / `statuses: read`, a malformed entry, or an unusable `standards_ref` |
+| `not_configured` | `standards_checks` is empty |
+| `incomplete` | all found, none failed or pending, but not all succeeded (for example skipped or neutral) |
+
+Anything other than `passed` or `not_configured` stops the summary from saying "No test gaps found". Advisory only; the job stays green.
+
 ## Run locally
 
 The review is a plain skill: [`skills/test-review/SKILL.md`](skills/test-review/SKILL.md), which loads detail from `skills/test-review/references/` only when needed. Copy the whole folder, not just `SKILL.md`. With no context directory it diffs against the default branch and prints a human-readable report.
@@ -90,7 +132,34 @@ claude -p "$(cat skills/test-review/SKILL.md skills/test-review/references/*.md)
 copilot -p "$(cat skills/test-review/SKILL.md skills/test-review/references/*.md) Review my branch against main."
 ```
 
-Lite tier: copy the whole `skills/test-review` folder to `.github/skills/` and Copilot code review can pick it up, with no workflow. No guarantees: it reads instructions from the PR head, output is free-form, and nothing is deduped or capped.
+To run it inside Copilot code review with no workflow, see [Use with native Copilot code review](#use-with-native-copilot-code-review).
+
+## Use with native Copilot code review
+
+Same skill, no workflow: Copilot code review (CCR) runs it and posts the comments itself.
+
+1. Enable automatic Copilot code review: the user setting, or a ruleset with "Review new pushes".
+2. Install the skill and the instructions file:
+
+```sh
+gh skill install Mira190/SpecGuard test-review --dir .github/skills
+mkdir -p .github/instructions && curl -fsSL https://raw.githubusercontent.com/Mira190/SpecGuard/main/ccr/test-review.instructions.md -o .github/instructions/test-review.instructions.md
+```
+
+3. Commit both files. Runtime or user-scope installs are ignored; CCR reads only what is committed.
+
+| | Action mode | CCR mode |
+|---|---|---|
+| Rules read from | the base branch | the PR head, so a PR can weaken its own rules |
+| Output | structured evidence table, explicit standards/layer assessments, capped and deduped comments | free-form comments and CCR's own overview |
+| Skill used | always | chosen by the model |
+| Requirements | PR plus linked issues | PR body; issues only if CCR fetches them |
+| Usage and billing | the repo owner or org via the job token, plus Actions minutes | automatic reviews usually attribute usage to the author; organization pools, unlicensed-user and bot billing rules still apply |
+| Setup | one workflow file | two committed files plus the CCR setting |
+
+Use Action mode when you need the guarantees. Use CCR mode for zero-workflow adoption. Both can run together.
+
+Native CCR remains optional. Its comments cannot reconstruct the complete obligation inventory or confirm unmentioned requirements. SpecGuard does not turn a zero-comment native review into a coverage pass. Author usage attribution does not mean the organization avoids charges; see [GitHub's billing rules](https://docs.github.com/en/copilot/concepts/agents/code-review#code-review-usage).
 
 ## Troubleshooting
 
@@ -105,9 +174,11 @@ Lite tier: copy the whole `skills/test-review` folder to `.github/skills/` and C
 
 ## How it works
 
-1. `src/collect.sh` gathers the diff, applies ignores, restores rule files from base, and fetches PR text plus up to 5 issues referenced by the PR (closing issues, and `#N` in the PR body and commit messages).
+1. `src/collect.sh` gathers the diff, applies ignores and restores rule files from base. `src/requirements.js` fetches PR text plus up to 5 linked issues, preserving cross-repository references and recording unavailable or omitted context in `requirements-status.json`.
 2. The action builds the prompt by concatenating `SKILL.md` (frontmatter stripped) and every `skills/test-review/references/*.md` under a `# references/<name>` header, because the model can only read the workspace, not the action's own files. One read-only agent run follows it and returns JSON matching `src/findings.schema.json`.
-3. `src/post.js` validates, drops findings outside the diff, dedupes, and posts one inline review plus the sticky summary.
+3. `src/post.js` validates assessment fields and obligation/finding consistency, verifies behaviour and assertion quotes, and checks cited rules against the base inventory. It routes weak assertions outside the diff to the summary, dedupes comment delivery without removing current gaps, and checks the live PR HEAD before publishing.
+
+Contributors: run `node --test src/*.test.js eval/*.test.js` from a POSIX shell (a bare `node --test` would also discover the `eval/cases` fixtures) and `bash -n src/collect.sh`. Keep `skills/test-review/` identical to `.github/skills/test-review/`; CI checks this. Changes to the report schema require matching validator, prompt and fixture updates. Older findings JSON without evidence and assessment fields is intentionally rejected as incomplete.
 
 Design and rationale: [docs/design.md](docs/design.md).
 

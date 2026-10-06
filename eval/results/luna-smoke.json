@@ -1,0 +1,109 @@
+{
+  "runId": "luna-smoke",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "model": "gpt-6-luna",
+  "cost": "not measured: billing API returned no Copilot usage items (AI Credits not itemized or delayed); check the billing page",
+  "results": [
+    {
+      "id": "r1",
+      "goal": "requirements",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 4,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 5,
+          "quote": "throw new Error('empty order')"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 11,
+          "quote": "total >= 100"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 14,
+          "quote": "Math.max"
+        },
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/r1/discount.test.js",
+          "line": 7,
+          "quote": "assert.ok(total)"
+        }
+      ],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": false,
+      "complete": false,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 15,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/27",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37430179269",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nCould not complete: no valid findings.json (ENOENT); see the job log\n\n_Engine: copilot (gpt-6-luna)_\n\n**Standards tooling: not_configured.** Commit: 8833a48481ebad133a456cda2291200606ec578e. \n\n\n",
+        "latency_s": 15,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": false,
+        "raw_findings_valid_json": false,
+        "raw_excerpt": ""
+      },
+      "model": "gpt-6-luna"
+    }
+  ],
+  "aggregate": {
+    "runs": 1,
+    "errors": 0,
+    "tp": 0,
+    "fp": 0,
+    "acceptable": 0,
+    "fn": 4,
+    "summary_only": 0,
+    "precision": null,
+    "recall": 0,
+    "json_valid_rate": 0,
+    "degraded_rate": 0,
+    "pass_rate": 0,
+    "latency_median_s": 15,
+    "latency_max_s": 15,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 0,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 4,
+        "summary_only": 0,
+        "precision": null,
+        "recall": 0,
+        "json_valid_rate": 0,
+        "degraded_rate": 0,
+        "pass_rate": 0,
+        "latency_median_s": 15,
+        "latency_max_s": 15
+      }
+    }
+  }
+}

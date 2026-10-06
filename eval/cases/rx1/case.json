@@ -1,0 +1,35 @@
+{
+  "id": "rx1",
+  "goal": "layering",
+  "description": "React TSX (jest + RTL): pure price discount, rounding and currency logic inline in PriceTag, tested only through render and getByText.",
+  "pr_title": "Add PriceTag",
+  "pr_body": "Add a PriceTag component that shows the original price struck through next to the discounted price.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "pushdown",
+        "path": [
+          "eval-sandbox/rx1/PriceTag.tsx",
+          "eval-sandbox/rx1/PriceTag.test.tsx"
+        ],
+        "line": 4,
+        "tolerance": 30,
+        "quote": "const discounted"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Pushdown: extract the percentage, rounding and format logic into a pure helper and unit-test it. The RTL tests cover no discount, a discount, cent rounding and EUR, so no missing_test is expected.",
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/rx1/PriceTag.tsx",
+        "line": 12,
+        "tolerance": 0,
+        "reason": "The strike-through markup of the original price is never asserted."
+      }
+    ]
+  }
+}

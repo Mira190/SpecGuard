@@ -1,0 +1,23 @@
+{
+  "id": "rx2",
+  "goal": "requirements",
+  "description": "React TSX (jest + RTL): the empty-cart branch of CheckoutButton is untested.",
+  "pr_title": "Add CheckoutButton",
+  "pr_body": "Add a CheckoutButton to the cart page.\n\n## Acceptance criteria\n- The button is enabled when the cart has items.\n- The button is disabled and labelled \"Cart is empty\" when the cart is empty.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+        "line": 4,
+        "tolerance": 2,
+        "quote": "itemCount === 0"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "missing_test on the empty-cart branch. The enabled state and the click handler are tested."
+  }
+}

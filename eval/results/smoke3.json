@@ -1,0 +1,126 @@
+{
+  "runId": "smoke3",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "results": [
+    {
+      "id": "r1",
+      "goal": "requirements",
+      "tp": 0,
+      "fp": 1,
+      "fn": 4,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 5,
+          "quote": "throw new Error('empty order')"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 11,
+          "quote": "total >= 100"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 14,
+          "quote": "Math.max"
+        },
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/r1/discount.spec.js",
+          "line": 7,
+          "quote": "assert.ok(total)"
+        }
+      ],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 8,
+          "title": "Test non-SAVE10 coupons"
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 223,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/11",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37419102405",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 8,
+            "level": "inline",
+            "title": "Test non-SAVE10 coupons",
+            "body": "**Test non-SAVE10 coupons**\n\nThe changed branch leaves the subtotal unchanged for coupons other than SAVE10, but no test pins that behavior. Assert the unchanged total:\n```js\ntest('does not discount other coupons', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'OTHER' }), 40);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=8b3f00572bfb953b44336b7957bb0e36731ba375 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/6 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/6 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 044f5e073dc172ed282f6de7941a28631d0dd8ce. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: An order with no items throws \"empty order\". | NOT ASSESSED | Criterion ID did not match its collected source text. |\n| R2 | PR body: The SAVE10 coupon takes 10% off the subtotal. | NOT ASSESSED | Criterion ID did not match its collected source text. |\n| R3 | PR body: A total of 100 or more gets 5 off. | NOT ASSESSED | Criterion ID did not match its collected source text. |\n| R4 | PR body: Store credit is subtracted from the total, which never goes below zero. | NOT ASSESSED | Criterion ID did not match its collected source text. |\n\n**Coding standards: checked.** Assessed the repository-wide instructions that apply to this review; they prescribe review workflow rather than code style for eval-sandbox/r1. The REVIEW.md files in the inventory are scoped to eval/cases/*/pkg and do not apply to these changed files. No changed-line coding-standard violation was found. Sources: .github/copilot-instructions.md, .github/instructions/test-review.instructions.md.\n\n**Test layers: checked.** Inspected the Node 22 CI configuration and JavaScript test files across src, eval, and eval-sandbox. The changed test uses node:test and node:assert and calls the exported pure function directly without network or a real database, so it is unit-level. No component, integration, or end-to-end assertion covers this function; there is no higher-layer-only logic to push down.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: An order with no items throws an Error with the message \"empty order\". | PR body AC 1; eval-sandbox/r1/discount.js:5 —     throw new Error('empty order'); | none | unknown: The linked requirement citation could not be verified. |\n| O2: The SAVE10 coupon reduces the subtotal by 10%. | PR body AC 2; eval-sandbox/r1/discount.js:9 —     total *= 0.9; | unit: eval-sandbox/r1/discount.spec.js:7 —   assert.ok(total); (assertion; The test calls applyDiscount with SAVE10 and a subtotal of 40, but checks only that the result is truthy; disabling the coupon adjustment still returns a truthy 40.) | unknown: The linked requirement citation could not be verified. |\n| O3: A total of 100 or more is reduced by 5. | PR body AC 3; eval-sandbox/r1/discount.js:11 —   if (total >= 100) { | none | unknown: The linked requirement citation could not be verified. |\n| O4: Store credit is subtracted from the total. | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | none | unknown: The linked requirement citation could not be verified. |\n| O5: The total never falls below zero after store credit is applied. | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | none | unknown: The linked requirement citation could not be verified. |\n| O6: A coupon other than SAVE10 leaves the subtotal unchanged. | from behaviour; eval-sandbox/r1/discount.js:8 —   if (order.coupon === 'SAVE10') { | none | missing_test: The changed coupon condition has a non-matching branch; a repository-wide search of JavaScript test files found no assertion for a different coupon leaving the subtotal unchanged. |\n\n**Not reviewed:** Requirement R1 is not assessed: Criterion ID did not match its collected source text. Requirement R2 is not assessed: Criterion ID did not match its collected source text. Requirement R3 is not assessed: Criterion ID did not match its collected source text. Requirement R4 is not assessed: Criterion ID did not match its collected source text.\n\n",
+        "latency_s": 223,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"An order with no items throws an Error with the message \\\"empty order\\\".\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 5,\n        \"quote\": \"    throw new Error('empty order');\"\n      },\n      \"evidence\": [],\n      \"status\": \"missing_test\",\n      \"reason\": \"A repository-wide search of JavaScript test files under src, eval, and eval-sandbox found no assertion for the empty-order error.\",\n      \"change\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 5,\n        \"quote\": \"    throw new Error('empty order');\"\n      }\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"The SAVE10 coupon reduces the subtotal by 10%.\",\n      \"source\": \"PR body AC 2\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 9,\n        \"quote\": \"    total *= 0.9;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r1/discount.spec.js\",\n          \"line\": 7,\n          \"quote\": \"  assert.ok(total);\",\n          \"layer\": \"unit\",\n          \"proves\": \"The test calls applyDiscount with SAVE10 and a subtotal of 40, but checks only that the result is truthy; disabling the coupon adjustment still returns a truthy 40.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"weak_test\",\n      \"reason\": \"The unit test exercises SAVE10, but its truthiness assertion survives a mutation that removes the 10% adjustment.\",\n      \"change\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 9,\n        \"quote\": \"    total *= 0.9;\"\n      }\n    },\n    {\n      \"id\": \"O3\",\n      \"obligation\": \"A total of 100 or more is reduced by 5.\",\n      \"source\": \"PR body AC 3\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 11,\n        \"quote\": \"  if (total >= 100) {\"\n      },\n      \"evidence\": [],\n      \"status\": \"missing_test\",\n      \""
+      }
+    }
+  ],
+  "aggregate": {
+    "runs": 1,
+    "errors": 0,
+    "tp": 0,
+    "fp": 1,
+    "fn": 4,
+    "summary_only": 0,
+    "precision": 0,
+    "recall": 0,
+    "json_valid_rate": 1,
+    "degraded_rate": 0,
+    "pass_rate": 0,
+    "latency_median_s": 223,
+    "latency_max_s": 223,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 0,
+        "fp": 1,
+        "fn": 4,
+        "summary_only": 0,
+        "precision": 0,
+        "recall": 0,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 0,
+        "latency_median_s": 223,
+        "latency_max_s": 223
+      }
+    }
+  }
+}

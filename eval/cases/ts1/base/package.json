@@ -1,0 +1,7 @@
+{
+  "name": "ts1",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "typescript": "^5.5.0", "vitest": "^2.0.0" }
+}

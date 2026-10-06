@@ -1,0 +1,23 @@
+{
+  "id": "t2",
+  "goal": "test_quality",
+  "description": "Test-only PR that weakens an exact assertion to a truthiness check.",
+  "pr_title": "Simplify clamp test",
+  "pr_body": "Simplify the upper-bound clamp test.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/t2/limits.test.js",
+        "line": 6,
+        "tolerance": 1,
+        "quote": "assert.ok(clamp(15, 0, 10))"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Changed assertion line 6 no longer pins the upper bound."
+  }
+}

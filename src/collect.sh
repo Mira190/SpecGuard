@@ -13,13 +13,15 @@ out skip false; out partial false
 
 # Globs: * crosses '/', leading **/ is optional (ponytail: not full gitignore semantics, swap for git check-ignore if it bites)
 STANDARDS=(.github/copilot-instructions.md '.github/instructions/**' '**/AGENTS.md' '**/AGENT.md' '**/CLAUDE.md'
-  '**/GEMINI.md' REVIEW.md CONTRIBUTING.md .editorconfig '.claude/rules/**'
+  '**/GEMINI.md' REVIEW.md CONTRIBUTING.md CODING_STANDARDS.md .editorconfig 'docs/*standards*'.{md,mdx,rst,txt,adoc} 'docs/*conventions*'.{md,mdx,rst,txt,adoc} '.claude/rules/**'
   '.github/skills/**' '.claude/skills/**' '.agents/skills/**'
   .cursorrules '.cursor/rules/**' .windsurfrules '.clinerules/**')
 EXEC_CFG=('.claude/**' .mcp.json .claude.json CLAUDE.local.md .gitmodules .ripgreprc '.husky/**'
   '.github/hooks/**' '.github/copilot/**' .github/mcp.json)
 IGNORES=(package-lock.json yarn.lock pnpm-lock.yaml Cargo.lock poetry.lock go.sum composer.lock Gemfile.lock '*.lock'
   .specguard-ctx/ dist/ build/ vendor/ node_modules/ '*.min.*' __snapshots__/ '*.snap')
+# SpecGuard's own instructions are never the repo's coding standard (still restored from base)
+OWN=('**/skills/test-review/**' .github/instructions/test-review.instructions.md)
 while IFS= read -r l; do [ -n "$l" ] && IGNORES+=("$l"); done <<< "${IGNORE_EXTRA:-}"
 
 # match FILE PATTERN...
@@ -34,14 +36,17 @@ match() {
 }
 
 # 1. diff (three-dot = merge-base, same as GitHub's PR diff; needs fetch-depth 0)
-files=()
+# Rule and agent-config files are never reviewed (they are restored from base below); the modified ones are reported.
+files=(); rules=()
 while IFS= read -r -d '' f; do
-  match "$f" "${STANDARDS[@]}" && files+=("$f") && continue
+  match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}" && rules+=("$f") && continue
   match "$f" "${IGNORES[@]}" && continue
   [[ $f == *.md ]] && continue
   files+=("$f")
 done < <(git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA")
 
+: > "$CTX/rule-changes.txt"
+[ ${#rules[@]} -eq 0 ] || printf '%s\n' "${rules[@]}" > "$CTX/rule-changes.txt"
 if [ ${#files[@]} -eq 0 ]; then
   : > "$CTX/diff.patch"; : > "$CTX/files.txt"
   echo "nothing reviewable in diff"; out skip true; exit 0
@@ -51,36 +56,52 @@ printf '%s\n' "${files[@]}" > "$CTX/files.txt"
 GIT_LITERAL_PATHSPECS=1 git diff --no-color --no-ext-diff --no-renames \
   "$BASE_SHA...$HEAD_SHA" -- "${files[@]}" > "$CTX/diff.patch"
 
-# 2. restore standards + executable agent config from base (deletes head-only copies)
-for p in "${STANDARDS[@]}" "${EXEC_CFG[@]}"; do
-  git restore --source="$BASE_SHA" --worktree -- ":(glob)$p" 2>/dev/null || true # no match in either tree is fine
+# 2. Discover exact paths once per tree. The same matched set governs restoration and the trusted inventory,
+# including nested rules and head-only agent config.
+base_hit=(); head_hit=()
+while IFS= read -r -d '' f; do
+  if match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}"; then base_hit+=("$f"); fi
+done < <(git ls-tree -r -z --name-only "$BASE_SHA")
+while IFS= read -r -d '' f; do
+  if match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}"; then head_hit+=("$f"); fi
+done < <(git ls-tree -r -z --name-only "$HEAD_SHA")
+
+# Remove whatever the PR put at $1 (file, directory, or a parent that is a file or symlink). Never follows a PR symlink.
+clear_path() {
+  local d=$1
+  while [[ $d == */* ]]; do
+    d=${d%/*}
+    if [ -L "$d" ] || { [ -e "$d" ] && [ ! -d "$d" ]; }; then rm -f -- "$d"; fi
+  done
+  rm -rf -- "$1"
+}
+# One path at a time so a failure cannot abort the rest (ponytail: one git process per matched path, batch if it ever matters).
+# A path that cannot be restored is deleted: a PR-controlled rule or agent config is never left in place.
+: > "$CTX/restore-failures.txt"
+for f in "${head_hit[@]}"; do clear_path "$f"; done
+for f in "${base_hit[@]}"; do
+  clear_path "$f"
+  if ! GIT_LITERAL_PATHSPECS=1 git restore --source="$BASE_SHA" --worktree -- "$f" 2>/dev/null; then
+    clear_path "$f"; printf '%s\n' "$f" >> "$CTX/restore-failures.txt"
+    echo "::warning::could not restore $f from base; removed it and excluded it from the rule inventory"
+  fi
+done
+[ -s "$CTX/restore-failures.txt" ] || rm -f "$CTX/restore-failures.txt"
+
+# 3. Never follow a PR-controlled symlink as a trusted rule source. A path that failed to restore is gone, so it is not listed.
+: > "$CTX/standards.txt"
+for f in "${base_hit[@]}"; do
+  if match "$f" "${STANDARDS[@]}" && ! match "$f" "${IGNORES[@]}" "${OWN[@]}" && [ -f "$f" ] && [ ! -L "$f" ]; then
+    printf '%s\n' "$f" >> "$CTX/standards.txt"
+  fi
 done
 
-# 3. standards present at base (a rule file the PR deleted is restored above, so it counts)
-git ls-tree -r -z --name-only "$BASE_SHA" | while IFS= read -r -d '' f; do match "$f" "${STANDARDS[@]}" && [ -f "$f" ] && echo "$f"; done | sort -u > "$CTX/standards.txt" || true
-
-# 4. requirements (untrusted: sanitised, non-fatal)
-sanitize() {
-  node -e 'let s=require("fs").readFileSync(0,"utf8");
-  s=s.replace(/<!--[\s\S]*?-->/g,"").replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g,"").replace(/[\x00-\x08\x0B-\x1F\x7F]/g,"");
-  process.stdout.write(s)'
-}
-req=none
-if [ -n "${PR_NUMBER:-}" ] && command -v gh >/dev/null; then
-  # closing issues, then #N in the PR body and commit messages; deduped, max 5, self excluded
-  nums=$({
-    gh pr view "$PR_NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'
-    { gh pr view "$PR_NUMBER" --json body --jq .body; git log "$BASE_SHA..$HEAD_SHA" --format=%B; } | grep -oE '#[0-9]+' | tr -d '#'
-  } 2>/dev/null | grep -vx "$PR_NUMBER" | awk '!s[$0]++' | head -5) || true
-  req=$({
-    gh pr view "$PR_NUMBER" --json title,body --jq '"# PR: " + .title + "\n\n" + .body'
-    for n in $nums; do
-      gh issue view "$n" --json title,body --jq '"\n# Issue #'"$n"': " + .title + "\n\n" + .body' || true # not an issue, or no access: skip
-    done
-  } 2>/dev/null | sanitize) || req=none
-  [ -n "$req" ] || req=none
+# 4. requirements, including explicit collection limitations; a failure here must not abort collection
+if ! node "$(dirname "$0")/requirements.js"; then
+  echo "::warning::requirement collection failed; continuing without requirements"
+  echo none > "$CTX/requirements.md"
+  printf '{\n  "status": "unavailable",\n  "sources": [],\n  "limitations": ["Requirement collection failed; review is limited to changed behaviour."],\n  "documents": [],\n  "criteria": []\n}\n' > "$CTX/requirements-status.json"
 fi
-printf '%s\n' "$req" > "$CTX/requirements.md"
 
 # 5. oversize
 if [ "$(wc -c < "$CTX/diff.patch")" -gt $((MAX_DIFF_KB * 1024)) ]; then
