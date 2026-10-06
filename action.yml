@@ -141,4 +141,5 @@ runs:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       with:
         github-token: ${{ inputs.github_token }}
+        retries: 3 # GitHub API 5xx (e.g. "diff temporarily unavailable") would otherwise drop the review
         script: await require(process.env.ACTION_PATH + '/src/post.js')({github, context, core})
