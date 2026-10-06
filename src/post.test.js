@@ -112,6 +112,8 @@ test('renders suggestions only for standards and redacts secrets', () => {
   assert.equal(post.axes([finding(), finding('pushdown')]), 'Tests: 1 missing, 0 weak · Standards: 0 · Layering: 1');
 });
 
+const fileDiff = (p, body, head = `--- a/${p}\n+++ b/${p}`) => `diff --git a/${p} b/${p}\n${head}\n${body}\n`;
+
 function setup(t, data = report(), options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-'));
   const previous = { ...process.env };
@@ -125,13 +127,13 @@ function setup(t, data = report(), options = {}) {
   fs.writeFileSync(path.join(dir, 'src.js'), 'l1\nl2\nif (x) {\nl4\nl5\nl6\nl7\nl8\n');
   fs.writeFileSync(path.join(dir, 'test.js'), `test\n${evidence.quote}\n`);
   fs.writeFileSync(path.join(dir, 'RULES.md'), 'rule one\nrule two\n');
-  for (const [name, value] of Object.entries({ 'files.txt': 'src.js\n', 'standards.txt': 'RULES.md\n', 'findings.json': JSON.stringify(data), 'requirements-status.json': JSON.stringify({ status: 'available', sources: ['PR body', 'issue #1'], limitations: [] }) })) fs.writeFileSync(path.join(dir, 'ctx', name), value);
-  const calls = { review: [], file: [], summary: [] };
+  for (const [name, value] of Object.entries({ 'files.txt': 'src.js\n', 'diff.patch': fileDiff('src.js', patch),'standards.txt': 'RULES.md\n', 'findings.json': JSON.stringify(data), 'requirements-status.json': JSON.stringify({ status: 'available', sources: ['PR body', 'issue #1'], limitations: [] }) })) fs.writeFileSync(path.join(dir, 'ctx', name), value);
+  const calls = { review: [], file: [], summary: [], list: 0 };
   let count = 0;
   const github = { paginate: async (fn, args) => (await fn(args)).data, rest: {
     pulls: {
       get: async () => ({ data: { head: { sha: options.head || 'HEADSHA' } } }),
-      listFiles: async () => ({ data: [{ filename: 'src.js', patch }] }),
+      listFiles: async () => { calls.list++; if (options.listError) throw Object.assign(new Error('Server Error: diff temporarily unavailable'), { status: 500 }); return { data: [{ filename: 'src.js', patch }] }; },
       listReviewComments: async () => ({ data: options.existing || [] }),
       createReview: async (args) => { calls.review.push(args); if (options.retry422 && count++ === 0) throw Object.assign(new Error('bad anchor'), { status: 422 }); },
       createReviewComment: async (args) => { calls.file.push(args); },
@@ -182,7 +184,7 @@ test('preserves weak assertions outside the diff in the summary', async (t) => {
 test('does not publish results for a superseded commit', async (t) => {
   const s = setup(t, report(), { head: 'NEWHEAD' });
   await post(s);
-  assert.deepEqual(s.calls, { review: [], file: [], summary: [] });
+  assert.deepEqual(s.calls, { review: [], file: [], summary: [], list: 0 });
   assert.match(s.warnings[0], /superseded HEAD/);
 });
 
@@ -282,7 +284,7 @@ test('summary preserves the integration assertion and proposed pushdown as a dis
 test('reports a weakened assertion in a test-only PR with unchanged production behaviour', async (t) => {
   const s = setup(t, report({ coverage: [row('weak_test', { change: { ...evidence } })], findings: [finding('weak_test', evidence)] }));
   fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'test.js\n');
-  s.github.rest.pulls.listFiles = async () => ({ data: [{ filename: 'test.js', patch: `@@ -1,2 +1,2 @@\n test\n-assert.equal(result, 43);\n+${evidence.quote}` }] });
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('test.js', `@@ -1,2 +1,2 @@\n test\n-assert.equal(result, 43);\n+${evidence.quote}`));
   await post(s);
   assert.equal(s.calls.review[0].comments[0].path, 'test.js');
   assert.match(s.calls.summary[0].body, /weak_test/);
@@ -304,7 +306,7 @@ test('preserves removed assertions from deleted test files as LEFT-side summary 
   const s = setup(t, report({ coverage: [row('weak_test', { change: removed, evidence: [removed] })], findings: [finding('weak_test', removed)] }));
   fs.unlinkSync(path.join(s.dir, 'test.js'));
   fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'test.js\n');
-  s.github.rest.pulls.listFiles = async () => ({ data: [{ filename: 'test.js', patch: `@@ -1,2 +0,0 @@\n-test\n-${evidence.quote}` }] });
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('test.js', `@@ -1,2 +0,0 @@\n-test\n-${evidence.quote}`, '--- a/test.js\n+++ /dev/null'));
   await post(s);
   assert.equal(s.calls.review.length, 0);
   assert.match(s.calls.summary[0].body, /removed test or assertion/);
@@ -418,7 +420,7 @@ test('l1: pushdown findings with component evidence survive (model omitted evide
   const d = realRun('l1');
   assert.deepEqual(kept(d).filter((k) => k.startsWith('pushdown')), ['pushdown:pricing.py:6', 'pushdown:pricing.py:8']);
   assert.deepEqual(d.coverage.filter((c) => c.status === 'higher_level_only').map((c) => c.id), ['O1', 'O2', 'O4', 'O6']);
-  assert.deepEqual(d.validation_notes, []);
+  assert.deepEqual(d.validation_notes, ['Obligation O3 marked unknown: duplicates a pushdown obligation.']);
 });
 
 test('r3: compound-criterion missing_test findings survive (model omitted change; disabled evidence allowed)', () => {
@@ -450,4 +452,56 @@ test('reports an engine timeout or failure instead of a missing file', async (t)
     delete process.env.REVIEW_TIMEOUT_MINUTES;
     assert.match(s.calls.summary[0].body, re);
   }
+});
+
+test('parseDiff splits a multi-file diff: added, deleted and spaced paths', () => {
+  const d = fileDiff('a b.js', patch) + fileDiff('new.js', '@@ -0,0 +1,2 @@\n+x\n+y', '--- /dev/null\n+++ b/new.js') + fileDiff('gone.js', '@@ -1,2 +0,0 @@\n-x\n-y', '--- a/gone.js\n+++ /dev/null');
+  const m = post.parseDiff(d);
+  assert.deepEqual([...m.keys()], ['a b.js', 'new.js', 'gone.js']);
+  assert.equal(m.get('a b.js').RIGHT.has(3), true);
+  assert.equal(m.get('new.js').RIGHT.size, 2);
+  assert.equal(m.get('gone.js').changed.LEFT.get(2), 'y');
+  assert.equal(m.get('gone.js').RIGHT.size, 0);
+});
+
+test('does not call the GitHub diff API when the local diff is complete', async (t) => {
+  const s = setup(t);
+  await post(s);
+  assert.equal(s.calls.list, 0);
+  assert.equal(s.calls.review[0].comments.length, 1);
+});
+
+test('falls back to the API for a partial diff and survives its failure', async (t) => {
+  const s = setup(t, report(), { listError: true });
+  process.env.PARTIAL = 'true';
+  await post(s);
+  assert.equal(s.calls.list, 1);
+  assert.equal(s.calls.review[0].comments.length, 1);
+  assert.match(s.calls.summary[0].body, /GitHub diff API unavailable; anchored with the local diff only/);
+});
+
+test('a missing local diff uses the API, and its failure never throws', async (t) => {
+  const ok = setup(t);
+  fs.unlinkSync(path.join(ok.dir, 'ctx/diff.patch'));
+  await post(ok);
+  assert.equal(ok.calls.list, 1);
+  assert.equal(ok.calls.review[0].comments.length, 1);
+  const bad = setup(t, report(), { listError: true });
+  fs.unlinkSync(path.join(bad.dir, 'ctx/diff.patch'));
+  await post(bad);
+  assert.equal(bad.warnings.length, 0);
+  assert.match(bad.calls.summary[0].body, /GitHub diff API unavailable/);
+});
+
+test('a missing_test on a pushdown behaviour line is marked unknown; other lines are kept', () => {
+  const pd = { ...evidence, layer: 'integration', path: 'it.js' };
+  const d = report({
+    coverage: [row('higher_level_only', { id: 'O1', evidence: [pd] }), row('missing_test', { id: 'O2' }),
+      row('missing_test', { id: 'O3', behaviour: { ...behaviour, line: 5 }, change: { ...behaviour, line: 5 } })],
+    findings: [finding('pushdown', { obligation_ids: ['O1'] }), finding('missing_test', { obligation_ids: ['O2'] }), finding('missing_test', { obligation_ids: ['O3'], line: 5 })],
+  });
+  assert.equal(post.validate(d).ok, true);
+  assert.deepEqual(d.coverage.map((c) => c.status), ['higher_level_only', 'unknown', 'missing_test']);
+  assert.deepEqual(d.findings.map((f) => f.obligation_ids[0]), ['O1', 'O3']);
+  assert.match(d.validation_notes.join('\n'), /duplicates a pushdown obligation/);
 });
