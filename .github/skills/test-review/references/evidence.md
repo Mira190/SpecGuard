@@ -14,9 +14,11 @@ Not evidence (counts as zero):
 
 Tautology is a `weak_test` on the assertion line, not a `missing_test` on the production line. Code `return x * RATE;` with test `expect(fn(10)).toBe(10 * RATE)` exercises the behaviour but proves nothing; cite the `expect` line.
 
-Operational check: when the expected value is an expression rather than a literal, compare it with the implementation's computation. If it repeats the same operations with the same constants (an inlined literal is the same constant as a named one: `1.2` vs `RATE = 1.2`), it is tautological, so the obligation is `weak_test`, never `covered`. Example: `assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100)` against `Math.round(amount * RATE * 100) / 100` with `RATE = 1.2` is the same formula; use a literal such as `60`.
+Operational check: when the expected value is an expression rather than a literal, compare it with the implementation's computation. If it repeats the same operations with the same constants (an inlined literal is the same constant as a named one: `1.2` vs `RATE = 1.2`), it is tautological, so the obligation is `weak_test`, never `covered`. Check every cited assertion before marking a row `covered`: it needs at least one whose expected value is independent of the implementation (a literal, a worked example, or the acceptance criterion's own numbers). Example: `assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100)` against `Math.round(amount * RATE * 100) / 100` with `RATE = 1.2` is the same formula; use a literal such as `60`.
 
 SpecGuard does not execute tests or evaluate CI configuration, and CI workflows are often incomplete. Never infer that a test is not collected or not executed from a CI workflow, a missing runner config, or CI using a different language's runner; such a test is existing evidence at its layer. Only an explicit marker in the test code (skip, xfail, disabled, commented out, an `if False`-style guard) shows a test does not run, and then it is a low-confidence `weak_test`. Do not suggest CI or runner configuration changes; they are outside SpecGuard's scope.
+
+A test that drives the same branch with an equivalent input is evidence for that branch: a whitespace-only name that trims to empty covers the empty-name rejection. Suggest boundary variants only as a low-confidence `weak_test` on the test line, never as a `missing_test` on production code.
 
 ## Weak-test catalogue
 

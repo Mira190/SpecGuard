@@ -79,7 +79,7 @@ function scenario(t, baseFiles, change, extraEnv = {}) {
   delete env.PR_NUMBER; delete env.GITHUB_OUTPUT;
   execFileSync(bash, [script], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
-  return { root, ctx, read, standards: fs.readFileSync(path.join(ctx, 'standards.txt'), 'utf8').split('\n').filter(Boolean) };
+  return { root, ctx, read, standards: (fs.existsSync(path.join(ctx, 'standards.txt')) ? fs.readFileSync(path.join(ctx, 'standards.txt'), 'utf8') : '').split('\n').filter(Boolean) };
 }
 
 test('a matched path that changes type in the PR does not abort collection and is restored from base', (t) => {
@@ -114,4 +114,21 @@ test('a failing requirements step records unavailable instead of aborting collec
   const s = JSON.parse(fs.readFileSync(path.join(r.ctx, 'requirements-status.json'), 'utf8'));
   assert.equal(s.status, 'unavailable');
   assert.match(s.limitations.join(' '), /collection failed/);
+});
+
+test('s2: modified rule and agent-config files are not reviewable changes and are listed in rule-changes.txt', (t) => {
+  const r = scenario(t, { 'src.js': 'x\n', 'pkg/REVIEW.md': 'base\n', '.claude/settings.json': '{}\n', 'docs/old-standards.md': 'base\n', 'AGENTS.md': 'same\n' }, ({ write, rm }) => {
+    write('src.js', 'y\n'); write('pkg/REVIEW.md', 'weaker\n'); write('.claude/settings.json', '{"a":1}\n'); rm('docs/old-standards.md'); write('CLAUDE.md', 'new\n');
+  });
+  const files = fs.readFileSync(path.join(r.ctx, 'files.txt'), 'utf8');
+  assert.equal(files, 'src.js\n');
+  assert.doesNotMatch(fs.readFileSync(path.join(r.ctx, 'diff.patch'), 'utf8'), /REVIEW|settings|standards|CLAUDE/);
+  assert.deepEqual(fs.readFileSync(path.join(r.ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean).sort(), ['.claude/settings.json', 'CLAUDE.md', 'docs/old-standards.md', 'pkg/REVIEW.md']);
+  assert.equal(r.read('pkg/REVIEW.md'), 'base\n');
+});
+
+test('s2: a PR that only changes rule files has nothing reviewable', (t) => {
+  const r = scenario(t, { 'REVIEW.md': 'base\n' }, ({ write }) => write('REVIEW.md', 'weaker\n'));
+  assert.equal(fs.readFileSync(path.join(r.ctx, 'files.txt'), 'utf8'), '');
+  assert.equal(fs.readFileSync(path.join(r.ctx, 'rule-changes.txt'), 'utf8'), 'REVIEW.md\n');
 });

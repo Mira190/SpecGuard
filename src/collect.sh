@@ -36,14 +36,17 @@ match() {
 }
 
 # 1. diff (three-dot = merge-base, same as GitHub's PR diff; needs fetch-depth 0)
-files=()
+# Rule and agent-config files are never reviewed (they are restored from base below); the modified ones are reported.
+files=(); rules=()
 while IFS= read -r -d '' f; do
-  match "$f" "${STANDARDS[@]}" && files+=("$f") && continue
+  match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}" && rules+=("$f") && continue
   match "$f" "${IGNORES[@]}" && continue
   [[ $f == *.md ]] && continue
   files+=("$f")
 done < <(git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA")
 
+: > "$CTX/rule-changes.txt"
+[ ${#rules[@]} -eq 0 ] || printf '%s\n' "${rules[@]}" > "$CTX/rule-changes.txt"
 if [ ${#files[@]} -eq 0 ]; then
   : > "$CTX/diff.patch"; : > "$CTX/files.txt"
   echo "nothing reviewable in diff"; out skip true; exit 0

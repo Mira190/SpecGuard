@@ -656,3 +656,22 @@ test('c9: a merged title is cut on one line with an ellipsis', () => {
   assert.doesNotMatch(m.title, /\n/);
   assert.ok(m.title.endsWith('…') && m.title.length <= 200);
 });
+
+test('r4: coverage citations snap +-5 lines to the quote; a missing quote or an unchanged change line stays unknown', () => {
+  const read = (p) => ({ 'src.js': ['l1', 'l2', behaviour.quote], 'test.js': ['test', evidence.quote] })[p];
+  const run = (d) => post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), read, new Map([['src.js', post.parsePatch(patch)]]));
+  const d = run(report({ coverage: [row('covered', { behaviour: { ...behaviour, line: 4 }, change: { ...behaviour, line: 4 }, evidence: [{ ...evidence, line: 3 }] })], findings: [] }));
+  assert.deepEqual([d.coverage[0].status, d.coverage[0].behaviour.line, d.coverage[0].change.line, d.coverage[0].evidence[0].line], ['covered', 3, 3, 2]);
+  const far = run(report({ coverage: [row('covered', { behaviour: { ...behaviour, line: 30 }, change: { ...behaviour } })], findings: [] }));
+  assert.equal(far.coverage[0].status, 'unknown');
+  const ctxLine = run(report({ coverage: [row('weak_test', { change: { path: 'src.js', line: 2, quote: 'l1' } })], findings: [finding('weak_test')] }));
+  assert.equal(ctxLine.coverage[0].status, 'unknown');
+  assert.equal(ctxLine.findings.length, 0);
+});
+
+test('s2: the summary names rule or agent-config files the PR modified and says they were not reviewed', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/rule-changes.txt'), 'pkg/REVIEW.md\n.claude/settings.json\n');
+  await post(s);
+  assert.match(s.calls.summary[0].body, /modifies review rule or agent-config files \(pkg\/REVIEW\.md, \.claude\/settings\.json\); they were not reviewed, and the base versions were applied/);
+});
