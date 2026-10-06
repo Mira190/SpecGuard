@@ -122,12 +122,7 @@ runs:
         timeout 12m copilot -p "$PROMPT" --available-tools view,glob,grep --allow-all-tools --no-ask-user -s \
           ${MODEL:+--model "$MODEL"} > "$CTX/copilot.out" \
           || echo "::warning::Copilot review failed (needs 'permissions: copilot-requests: write' or a copilot_token)"
-        node -e '
-          const fs = require("fs"), s = fs.readFileSync(process.argv[1], "utf8"), ok = (t) => { try { JSON.parse(t); return t; } catch {} };
-          const blocks = [...s.matchAll(/```json\s*\n([\s\S]*?)```/g)].map((m) => m[1]);
-          const j = ok(s) || blocks.reverse().map(ok).find(Boolean);
-          if (j) fs.writeFileSync(process.argv[2], j); else console.log("::warning::no JSON found in Copilot output");
-        ' "$CTX/copilot.out" "$CTX/findings.json"
+        node "$GITHUB_ACTION_PATH/src/extract-json.js" "$CTX/copilot.out" "$CTX/findings.json"
         exit 0
 
     - if: ${{ !cancelled() }} # failures still report; a cancelled run (superseded push) posts nothing

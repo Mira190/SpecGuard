@@ -66,7 +66,13 @@ function grade(spec, obs) {
       tp++; matched.push({ expected: e, observed: null, via_summary: true });
     } else missed.push(e);
   }
-  const falsePositives = posted.filter((_, j) => !used.has(j)).map(({ kind, path, line, title }) => ({ kind, path, line, title }));
+  // Reasonable findings the fixture truly leaves untested but did not seed: neither TP nor FP.
+  const spare = [...(exp.acceptable || [])], acceptable = [], falsePositives = [];
+  for (const { kind, path, line, title } of posted.filter((_, j) => !used.has(j))) {
+    const k = spare.findIndex((a) => arr(a.kind).includes(kind) && arr(a.path).includes(path) && line != null && Math.abs(line - a.line) <= (a.tolerance ?? 2));
+    if (k >= 0) acceptable.push({ kind, path, line, title, reason: spare.splice(k, 1)[0].reason });
+    else falsePositives.push({ kind, path, line, title });
+  }
 
   const violates = (m) => {
     if (m.state) return reviews.some((r) => r.state === m.state);
@@ -83,8 +89,8 @@ function grade(spec, obs) {
   const skipOk = exp.expect_skip ? sum.skipped && comments.length === 0 : true;
   const cleanOk = exp.expect_clean ? posted.length === 0 : true;
   return {
-    id: spec.id, goal: spec.goal, tp, fp: falsePositives.length, fn: missed.length, summary_only: sum.items.length,
-    matched, missed, false_positives: falsePositives, must_not_violations: mustNot, text_misses: textMisses,
+    id: spec.id, goal: spec.goal, tp, fp: falsePositives.length, acceptable: acceptable.length, fn: missed.length, summary_only: sum.items.length,
+    matched, missed, false_positives: falsePositives, acceptable_findings: acceptable, must_not_violations: mustNot, text_misses: textMisses,
     json_valid: jsonValid, complete, degraded: sum.notes.length > 0, validation_notes: sum.notes, skip_ok: skipOk, clean_ok: cleanOk,
     pass: !missed.length && !mustNot.length && !textMisses.length && jsonValid && complete && skipOk && cleanOk,
     latency_s: obs.latency_s ?? null,
@@ -103,9 +109,10 @@ function summarize(rs) {
   const ok = rs.filter((r) => !r.error);
   const n = (k) => ok.reduce((t, r) => t + r[k], 0);
   const [tp, fp, fn] = [n('tp'), n('fp'), n('fn')];
+  const acceptable = ok.reduce((t, r) => t + (r.acceptable || 0), 0);
   const lat = ok.map((r) => r.latency_s).filter((x) => x != null);
   return {
-    runs: rs.length, errors: rs.length - ok.length, tp, fp, fn, summary_only: n('summary_only'),
+    runs: rs.length, errors: rs.length - ok.length, tp, fp, acceptable, fn, summary_only: n('summary_only'),
     precision: ratio(tp, tp + fp), recall: ratio(tp, tp + fn),
     json_valid_rate: ratio(ok.filter((r) => r.json_valid).length, ok.length),
     degraded_rate: ratio(ok.filter((r) => r.degraded).length, ok.length),

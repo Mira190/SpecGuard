@@ -32,6 +32,22 @@
         "quote": "assert.ok(total)"
       }
     ],
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/x2/discount.js",
+        "line": 1,
+        "tolerance": 1,
+        "reason": "subtotal helper: the only test asserts truthiness, so summing price times qty is never checked"
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/x2/discount.js",
+        "line": 8,
+        "tolerance": 1,
+        "reason": "coupons other than SAVE10 are never exercised, so ignoring them is untested"
+      }
+    ],
     "must_not": [
       {
         "state": "APPROVED"

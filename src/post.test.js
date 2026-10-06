@@ -396,3 +396,46 @@ test('accepts the documented "PR body AC k" citation on real r1 output and keeps
   post.verifyRequirements(bad, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [{ id: 'R1', source: 'PR body', quote: 'Return 42.' }] });
   assert.deepEqual(bad.requirements[0].obligation_ids, []);
 });
+
+// Real model output from the first full evaluation (eval/results/full1): every expected finding must survive validation and citation checks.
+function realRun(c) {
+  const dir = path.join(__dirname, 'fixtures', c), load = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+  const d = load('findings.json');
+  const maps = new Map();
+  for (const part of fs.readFileSync(path.join(dir, 'diff.patch'), 'utf8').split(/^diff --git /m).filter(Boolean)) maps.set(/^a\/\S+ b\/(\S+)/.exec(part)[1], post.parsePatch(part.slice(part.indexOf('@@'))));
+  const read = (p) => { // fixture files live under eval/cases/<case>/head; other repo paths are real
+    const m = new RegExp(`^eval-sandbox/${c}/(.+)$`).exec(p);
+    try { return fs.readFileSync(m ? path.join(__dirname, '..', 'eval/cases', c, 'head', m[1]) : path.join(__dirname, '..', p), 'utf8').split('\n'); } catch { return null; }
+  };
+  assert.equal(post.validate(d).ok, true);
+  post.verifyEvidence(d, new Set(maps.keys()), new Set(d.standards.sources), read, maps);
+  post.verifyRequirements(d, load('requirements-status.json'), read);
+  return d;
+}
+const kept = (d) => d.findings.map((f) => `${f.kind}:${f.path.split('/').pop()}:${f.line}`);
+
+test('l1: pushdown findings with component evidence survive (model omitted evidence kind)', () => {
+  const d = realRun('l1');
+  assert.deepEqual(kept(d).filter((k) => k.startsWith('pushdown')), ['pushdown:pricing.py:6', 'pushdown:pricing.py:8']);
+  assert.deepEqual(d.coverage.filter((c) => c.status === 'higher_level_only').map((c) => c.id), ['O1', 'O2', 'O4', 'O6']);
+  assert.deepEqual(d.validation_notes, []);
+});
+
+test('r3: compound-criterion missing_test findings survive (model omitted change; disabled evidence allowed)', () => {
+  const d = realRun('r3');
+  assert.deepEqual(kept(d).filter((k) => k.startsWith('missing_test')), ['missing_test:name.js:3', 'missing_test:name.js:5']);
+  assert.deepEqual(d.coverage.map((c) => c.status), ['missing_test', 'missing_test']);
+});
+
+test('t3: a skipped test cited as disabled evidence keeps its missing_test finding', () => {
+  const d = realRun('t3');
+  assert.deepEqual(kept(d), ['missing_test:qty.spec.js:9']);
+  assert.equal(d.coverage[0].status, 'missing_test');
+  assert.deepEqual(d.validation_notes, []);
+});
+
+test('a missing_test row may not cite assertion evidence, and covered still needs a real unit assertion', () => {
+  const noted = (c) => { const d = report({ coverage: [c], findings: [finding()] }); post.validate(d); return d.validation_notes.join(); };
+  assert.match(noted(row('missing_test', { evidence: [{ ...evidence }] })), /cannot claim assertion evidence/);
+  assert.match(noted(row('covered', { evidence: [{ ...evidence, kind: 'disabled' }] })), /covered needs a current unit assertion/);
+});
