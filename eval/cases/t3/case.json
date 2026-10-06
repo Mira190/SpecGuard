@@ -13,7 +13,7 @@
           "missing_test"
         ],
         "path": [
-          "eval-sandbox/t3/qty.spec.js",
+          "eval-sandbox/t3/qty.test.js",
           "eval-sandbox/t3/qty.js"
         ],
         "line": 9,

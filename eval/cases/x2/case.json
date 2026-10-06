@@ -27,7 +27,7 @@
       },
       {
         "kind": "weak_test",
-        "path": "eval-sandbox/x2/discount.spec.js",
+        "path": "eval-sandbox/x2/discount.test.js",
         "line": 7,
         "quote": "assert.ok(total)"
       }

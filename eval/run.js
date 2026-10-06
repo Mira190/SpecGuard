@@ -15,14 +15,16 @@ const USAGE = `Usage: node eval/run.js --repo OWNER/REPO --target BRANCH [option
   --target BRANCH     branch the sandbox PRs are based on (must contain the Action and workflow)
   --cases r1,t2       comma-separated case ids (default: all)
   --runs N            repetitions per case (default 1)
-  --run-id ID         result file name (default: timestamp)
+  --run-id ID         result file name (default: timestamp, plus the model when --model is set)
+  --model ID|default  set repo variable SPECGUARD_EVAL_MODEL for the batch ("default" deletes it); the previous value is restored afterwards
+  --billing           record the Copilot cost delta from the billing usage API (needs gh scope "user"; day-granular)
   --workflow NAME     workflow to wait for (default: CI)
   --keep              keep the PRs and branches
   --dry-run           validate the case directories and exit; no git, no GitHub
   --help
 
 Push auth: git credential helper "!gh auth git-credential"; override with SPECGUARD_EVAL_CRED_HELPER.
-Runs are sequential and open real PRs, so each run spends Copilot credits. Cost is not measured.`;
+Runs are sequential and open real PRs, so each run spends Copilot credits. Cost is measured only with --billing.`;
 
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, ...opts }).trim();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -71,6 +73,26 @@ const allIds = () => fs.readdirSync(CASES).filter((d) => fs.existsSync(path.join
 function git(wt, args, extra = {}) { return sh('git', ['-C', wt, ...args], extra); }
 const push = (wt, branch) => git(wt, ['-c', 'credential.helper=', '-c', `credential.helper=${process.env.SPECGUARD_EVAL_CRED_HELPER || '!gh auth git-credential'}`, 'push', '-q', '-u', 'origin', branch]);
 const ghJson = (args) => JSON.parse(sh('gh', args));
+// Repo variable SPECGUARD_EVAL_MODEL is read by the dogfood step; null means unset.
+const VAR = 'SPECGUARD_EVAL_MODEL';
+const getVar = (repo) => { try { return sh('gh', ['variable', 'get', VAR, '--repo', repo]); } catch { return null; } };
+const setVar = (repo, v) => (v == null ? (() => { try { sh('gh', ['variable', 'delete', VAR, '--repo', repo]); } catch {} })() : sh('gh', ['variable', 'set', VAR, '--body', v, '--repo', repo]));
+
+// Assumed response of users/<owner>/settings/billing/usage: { usageItems: [{ product, sku, grossAmount, netAmount, ... }] }.
+// Copilot items = product or sku containing "copilot"; amount = netAmount, else grossAmount. Anything else is logged and skipped.
+function billingTotals(owner) {
+  const d = new Date();
+  const j = JSON.parse(sh('gh', ['api', `users/${owner}/settings/billing/usage?year=${d.getUTCFullYear()}&month=${d.getUTCMonth() + 1}&day=${d.getUTCDate()}`]));
+  if (!Array.isArray(j.usageItems)) throw new Error(`unexpected billing response shape (keys: ${Object.keys(j).join(',')}); expected usageItems[]`);
+  const bySku = {};
+  for (const i of j.usageItems) if (/copilot/i.test(`${i.product} ${i.sku}`)) bySku[i.sku] = (bySku[i.sku] || 0) + (Number(i.netAmount ?? i.grossAmount) || 0);
+  return bySku;
+}
+function billingDelta(before, after) {
+  const bySku = {};
+  for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) bySku[k] = +((after[k] || 0) - (before[k] || 0)).toFixed(4);
+  return { cost_usd_delta: +Object.values(bySku).reduce((a, b) => a + b, 0).toFixed(4), cost_by_sku: bySku };
+}
 const ghLines = (endpoint) => sh('gh', ['api', '--paginate', endpoint, '--jq', '.[]']).split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
 function stage(wt, c, layer, message) {
@@ -152,7 +174,7 @@ async function runOne({ repo, target, c, n, runId, keep, workflow }) {
 
 const pct = (x) => (x == null ? 'n/a' : `${(x * 100).toFixed(0)}%`);
 const sec = (x) => (x == null ? 'n/a' : `${x}s`);
-function markdown({ runId, repo, target, results, agg }) {
+function markdown({ runId, repo, target, model, cost, results, agg }) {
   const why = (r) => (r.error ? `error: ${r.error}` : [
     ...r.missed.map((e) => `FN ${[].concat(e.kind).join('|')} ${[].concat(e.path)[0].split('/').pop()}:${e.line}`),
     ...(r.acceptable_findings || []).map((f) => `acceptable ${f.kind} ${f.path.split("/").pop()}:${f.line}`),
@@ -161,7 +183,7 @@ function markdown({ runId, repo, target, results, agg }) {
     ...r.text_misses.map((e) => `text /${e.text}/`),
     ...(r.json_valid ? [] : ['model JSON missing or invalid']), ...(r.complete ? [] : ['incomplete']), ...(r.degraded ? [`degraded: ${r.validation_notes.length} validation note(s)`] : []), ...(r.skip_ok ? [] : ['not skipped']), ...(r.clean_ok ? [] : ['not clean']),
   ].join('; '));
-  let s = `# Evaluation ${runId}\n\nRepo ${repo}, target ${target}. Cost: not measured (check the Copilot billing page for the run window). Latency is the dogfood job duration.\n\n`;
+  let s = `# Evaluation ${runId}\n\nRepo ${repo}, target ${target}. Model: ${model} (requested via SPECGUARD_EVAL_MODEL; the Copilot output does not state the model actually used). ${cost.cost_usd_delta == null ? `Cost: ${cost.cost}` : `Cost delta: $${cost.cost_usd_delta} (${Object.entries(cost.cost_by_sku).map(([k, v]) => `${k} $${v}`).join(', ') || 'no Copilot items'}); billing is day-granular and includes any other Copilot usage in the window`}. Latency is the dogfood job duration.\n\n`;
   s += '| Case | Goal | Rep | Pass | TP | FP | Acceptable | FN | Summary only | JSON valid | Degraded | Latency | Notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n';
   for (const r of results) s += r.error
     ? `| ${r.id} | ${r.goal} | ${r.rep} | error | | | | | | | | | ${why(r)} |\n`
@@ -174,7 +196,7 @@ function markdown({ runId, repo, target, results, agg }) {
 
 async function main() {
   const { values: o } = require('node:util').parseArgs({ options: {
-    repo: { type: 'string' }, target: { type: 'string' }, cases: { type: 'string' }, runs: { type: 'string', default: '1' }, 'run-id': { type: 'string' },
+    repo: { type: 'string' }, target: { type: 'string' }, cases: { type: 'string' }, runs: { type: 'string', default: '1' }, 'run-id': { type: 'string' }, model: { type: 'string' }, billing: { type: 'boolean' },
     workflow: { type: 'string', default: 'CI' }, keep: { type: 'boolean' }, 'dry-run': { type: 'boolean' }, help: { type: 'boolean' } } });
   if (o.help) return console.log(USAGE);
   const ids = o.cases ? o.cases.split(',').map((s) => s.trim()) : allIds();
@@ -183,22 +205,33 @@ async function main() {
   if (o['dry-run']) return ids.forEach((id) => { const c = loadCase(id); console.log(`ok ${id} (${c.goal}) ${c.expected.findings.length} expected, ${walk(path.join(CASES, id, 'base')).length} base files, ${walk(path.join(CASES, id, 'head')).length} head files`); });
   if (!o.repo || !o.target) { console.error(USAGE); process.exit(2); }
 
-  const runId = o['run-id'] || new Date().toISOString().replace(/\.\d+Z$/, '').replace(/[-:]/g, '').replace('T', '-');
+  const model = o.model || 'unchanged';
+  const runId = o['run-id'] || `${new Date().toISOString().replace(/\.\d+Z$/, '').replace(/[-:]/g, '').replace('T', '-')}${o.model ? `-${o.model.replace(/[^\w.-]/g, '_')}` : ''}`;
   sh('git', ['fetch', '-q', 'origin', o.target], { cwd: ROOT });
+  const prev = o.model ? getVar(o.repo) : null;
+  let restored = !o.model;
+  const restore = () => { if (!restored) { restored = true; try { setVar(o.repo, prev); console.log(`restored ${VAR} to ${prev == null ? '(unset)' : prev}`); } catch (e) { console.error(`could NOT restore ${VAR} (was ${prev}): ${e.message}`); } } };
+  process.on('SIGINT', () => { restore(); process.exit(130); });
+  let cost = { cost: 'not measured (pass --billing)' }, before;
   const results = [];
-  for (const id of ids) for (let n = 1; n <= +o.runs; n++) {
-    console.log(`running ${id} #${n}`);
-    const r = await runOne({ repo: o.repo, target: o.target, c: loadCase(id), n, runId, keep: o.keep, workflow: o.workflow });
-    results.push(r);
-    console.log(r.error ? `  error: ${r.error}` : `  ${r.pass ? 'pass' : 'FAIL'} tp=${r.tp} fp=${r.fp} fn=${r.fn} latency=${sec(r.latency_s)}`);
-  }
+  try {
+    if (o.model) setVar(o.repo, o.model === 'default' ? null : o.model);
+    if (o.billing) try { before = billingTotals(o.repo.split('/')[0]); } catch (e) { cost = { cost: `not measured: ${String(e.stderr || e.message).trim().split('\n')[0]}` }; }
+    for (const id of ids) for (let n = 1; n <= +o.runs; n++) {
+      console.log(`running ${id} #${n}`);
+      const r = { ...await runOne({ repo: o.repo, target: o.target, c: loadCase(id), n, runId, keep: o.keep, workflow: o.workflow }), model };
+      results.push(r);
+      console.log(r.error ? `  error: ${r.error}` : `  ${r.pass ? 'pass' : 'FAIL'} tp=${r.tp} fp=${r.fp} fn=${r.fn} latency=${sec(r.latency_s)}`);
+    }
+    if (before) try { cost = billingDelta(before, billingTotals(o.repo.split('/')[0])); } catch (e) { cost = { cost: `not measured: ${String(e.stderr || e.message).trim().split('\n')[0]}` }; }
+  } finally { restore(); }
   const agg = aggregate(results);
   const dir = path.join(__dirname, 'results');
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, `${runId}.json`), JSON.stringify({ runId, repo: o.repo, target: o.target, results, aggregate: agg }, null, 2) + '\n');
-  fs.writeFileSync(path.join(dir, `${runId}.md`), markdown({ runId, repo: o.repo, target: o.target, results, agg }));
+  fs.writeFileSync(path.join(dir, `${runId}.json`), JSON.stringify({ runId, repo: o.repo, target: o.target, model, ...cost, results, aggregate: agg }, null, 2) + '\n');
+  fs.writeFileSync(path.join(dir, `${runId}.md`), markdown({ runId, repo: o.repo, target: o.target, model, cost, results, agg }));
   console.log(`\nwrote eval/results/${runId}.json and .md`);
-  console.log('Cost not measured: check the Copilot billing page (AI Credits) for the time window of this run.');
+  console.log(cost.cost_usd_delta == null ? `Cost: ${cost.cost}` : `Cost delta $${cost.cost_usd_delta}`);
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });

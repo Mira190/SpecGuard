@@ -12,11 +12,11 @@ index 0000000..eed86e1
 +}
 +
 +module.exports = { normalizeName };
-diff --git a/eval-sandbox/r3/name.spec.js b/eval-sandbox/r3/name.spec.js
+diff --git a/eval-sandbox/r3/name.test.js b/eval-sandbox/r3/name.test.js
 new file mode 100644
 index 0000000..d3f6ca7
 --- /dev/null
-+++ b/eval-sandbox/r3/name.spec.js
++++ b/eval-sandbox/r3/name.test.js
 @@ -0,0 +1,7 @@
 +const test = require('node:test');
 +const assert = require('node:assert/strict');
