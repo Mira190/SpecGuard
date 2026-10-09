@@ -242,3 +242,19 @@ node --test eval/field.test.js
 ```
 
 `measure` takes about 1 h on this machine (kubernetes is most of it). `big` times the largest commit; the 20- and 100-commit range runs in section 3.2 were run with the same `trace.js` invocation by hand (`BASE_SHA=<tip~N> HEAD_SHA=<tip> CTX=<dir> node src/trace.js` with the clone as cwd).
+
+## 7. After `fix/discovery` (merged d786847)
+
+Reported by the agent that made the change, measured on the same 12 repositories with a patched copy of `eval/field.js` kept outside the repository. **Not reproducible from the committed `eval/field.js`**: re-run section 6 before relying on these numbers.
+
+| metric | before | after |
+|---|---|---|
+| classified docs | 1378 | 515 |
+| doc precision strict / lenient | 22% / 68% | 66% / 98% |
+| 7 spec-less repos: classified / false | 393 / 383 | 6 / 3 (the other 3 borderline) |
+| S-item noise (study rules) | 30 of 81 | 0 of 344 (sets not comparable: the old run missed timed-out repos and OpenAPI 3.2.x) |
+| slowest run over 333 | 120 s, killed | 13.1 s |
+| `trace-candidates.json` p95 / max | 8.5k / 127.5k tokens | 5.8k / 15.0k |
+| candidates plus index p95 / max | 13.0k / 128k | 15.5k / 30.1k |
+
+Trade-offs: about 506 Kubernetes KEP READMEs (graded BORDER in the study) are no longer classified as requirement docs; the index now dominates the token p95. Still false: fastapi `metadata.md`, curl `docs/INSTALL-CMAKE.md`, kubernetes `cri-api` README. The "at most 10% false on spec-less repos" target is met only as a share of the old 393 (3 of 6 remaining are false). Suite results at merge: `src` 233/233, `eval/*.test.js` 139/139.
