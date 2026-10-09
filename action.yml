@@ -16,6 +16,8 @@ inputs:
   ignore: { description: "Extra ignore globs, one per line, appended to the defaults.", default: "" }
   standards_checks: { description: "Exact check:NAME or status:CONTEXT entries, one per line. Requires checks/statuses read permission. Empty means not configured.", default: "" }
   standards_ref: { description: "head or merge: commit on which your lint/format jobs run. Defaults to head.", default: head }
+  requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes. Empty = content-based discovery only.", default: "" }
+  trace: { description: "auto | off. auto traces requirement docs and code when any requirement doc is found.", default: auto }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
   review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it.", default: "12" }
   claude_version: { description: "Pinned @anthropic-ai/claude-code version (>= 2.1.205).", default: "2.1.290" }
@@ -46,6 +48,8 @@ runs:
         CTX: ${{ github.workspace }}/.specguard-ctx
         IGNORE_EXTRA: ${{ inputs.ignore }}
         MAX_DIFF_KB: ${{ inputs.max_diff_kb }}
+        REQ_PATHS: ${{ inputs.requirements_paths }}
+        TRACE: ${{ inputs.trace }}
       run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
     - if: steps.collect.outputs.skip != 'true'
@@ -91,6 +95,7 @@ runs:
         PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do [ "${r##*/}" = ccr.md ] && continue; echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
 
         Context directory (absolute path): $CTX
+        Optional context files (present when requirement documents were found): spec-files.txt, requirements-index.md, trace-candidates.json.
         Your final answer must be JSON matching this schema: $schema"
         # --tools (not --allowedTools) removes every tool but these; --setting-sources user skips the PR's hooks/MCP; never --bare (ignores the OAuth token)
         rc=0
@@ -121,6 +126,7 @@ runs:
         PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do [ "${r##*/}" = ccr.md ] && continue; echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
 
         Context directory (absolute path): $CTX
+        Optional context files (present when requirement documents were found): spec-files.txt, requirements-index.md, trace-candidates.json.
         Your final answer must be JSON only, matching this schema: $schema"
         # verify-in-S4: no documented turn-cap flag (timeout is the cap); tool names view,glob,grep and --output-format json (text kept) unconfirmed
         # never --allow-all, --allow-all-paths, --yolo

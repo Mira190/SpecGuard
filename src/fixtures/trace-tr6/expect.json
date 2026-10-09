@@ -1,0 +1,19 @@
+{
+  "count": 1,
+  "specFiles": [
+    "features/claims.feature"
+  ],
+  "b": {
+    "criterion": "S1",
+    "code": [
+      "src/claims/deadline.ts"
+    ],
+    "tests": [
+      "src/claims/deadline.test.ts"
+    ]
+  },
+  "ref": "@AC-4",
+  "occ": [
+    "src/claims/deadline.ts"
+  ]
+}

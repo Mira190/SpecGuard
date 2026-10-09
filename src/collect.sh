@@ -37,13 +37,30 @@ match() {
 
 # 1. diff (three-dot = merge-base, same as GitHub's PR diff; needs fetch-depth 0)
 # Rule and agent-config files are never reviewed (they are restored from base below); the modified ones are reported.
-files=(); rules=()
+HERE=$(dirname "$0")
+files=(); rules=(); docs=(); specs=()
 while IFS= read -r -d '' f; do
   match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}" && rules+=("$f") && continue
   match "$f" "${IGNORES[@]}" && continue
-  [[ $f == *.md ]] && continue
+  [[ $f =~ \.(md|mdx|markdown|rst|adoc|txt|feature)$ ]] && { docs+=("$f"); continue; }
   files+=("$f")
 done < <(git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA")
+
+# Changed docs are reviewable only when trace.js names them requirement docs (classify runs before diff.patch is written).
+# Unclassified .md is dropped as before; other doc types stay as ordinary files. A trace.js failure degrades to that old behaviour.
+if [ ${#docs[@]} -gt 0 ]; then
+  cls=""
+  if [ "${TRACE:-auto}" != off ]; then
+    cls=$(timeout 60 node "$HERE/trace.js" classify "${docs[@]}" 2>/dev/null) || { echo "::warning::requirement-doc classification failed; changed docs are not reviewed"; cls=""; }
+  fi
+  for f in "${docs[@]}"; do
+    if [ -n "$cls" ] && grep -qxF -- "$f" <<< "$cls"; then specs+=("$f")
+    elif [[ $f != *.md ]]; then files+=("$f"); fi
+  done
+fi
+nspecs=${#specs[@]}
+[ "$nspecs" -eq 0 ] || files+=("${specs[@]}")
+ncode=$(( ${#files[@]} - nspecs ))
 
 : > "$CTX/rule-changes.txt"
 [ ${#rules[@]} -eq 0 ] || printf '%s\n' "${rules[@]}" > "$CTX/rule-changes.txt"
@@ -101,6 +118,17 @@ if ! node "$(dirname "$0")/requirements.js"; then
   echo "::warning::requirement collection failed; continuing without requirements"
   echo none > "$CTX/requirements.md"
   printf '{\n  "status": "unavailable",\n  "sources": [],\n  "limitations": ["Requirement collection failed; review is limited to changed behaviour."],\n  "documents": [],\n  "criteria": []\n}\n' > "$CTX/requirements-status.json"
+fi
+
+# 4b. trace: spec items, candidates and occurrences. Fail-soft like step 4. Prints the count of changed normative spec items.
+# A PR with no code files is reviewed only if a normative spec item changed.
+if [ "${TRACE:-auto}" != off ]; then
+  nchanged=$(timeout 60 node "$HERE/trace.js" | tail -n 1) || { echo "::warning::requirement tracing failed; continuing without trace data"; nchanged=0; }
+else nchanged=0; fi
+[[ $nchanged =~ ^[0-9]+$ ]] || nchanged=0
+if [ "$ncode" -eq 0 ] && [ "$nchanged" -eq 0 ]; then
+  : > "$CTX/diff.patch"; : > "$CTX/files.txt"
+  echo "nothing reviewable in diff"; out skip true; exit 0
 fi
 
 # 5. oversize
