@@ -317,7 +317,7 @@ const gapFree = (data) => !data.findings.length && !(data.validation_notes || []
   && (!data.tooling || ['passed', 'not_configured'].includes(data.tooling.status))
   && data.coverage.every((c) => c.status === 'covered' && !['mismatch', 'unknown'].includes(c.alignment?.status));
 // The requirement text is read from the PR head, so a PR can weaken it and still be "consistent": never clean when it did.
-const reqChanged = (data) => data.requirements.some((r) => r.req_change);
+const reqChanged = (data) => data.requirements.some((r) => r.req_change || (r.reflected_in && r.reflected_in.spec));
 const noGaps = (data) => gapFree(data) && !reqChanged(data);
 
 // A criterion split into several obligations is covered only when every one is.
