@@ -171,3 +171,51 @@ test('tokens: matches a task.md kickoff with a literal Windows backslash path', 
   assert.strictEqual(r.per[0].cumFirst_mean, 200);
   assert.strictEqual(r.per[0].cumLater_mean, 50);
 });
+
+// ---- --prompt-file (free-form competitor stand-ins) ----
+const COMP = process.env.AB_COMP_DIR || '<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/ab-comp';
+const stand = path.join(tmp, 'stand.txt');
+put(stand, '<!-- PROVENANCE: inferred -->\nReview the PR.\nWrite {"comments":[]}.\n');
+
+test('parseVariants: --prompt-file name=file mixes with --variant, errors on bad form', () => {
+  const v = ab.parseVariants([`A=${wtA}`], [`cp=${stand}`]);
+  assert.deepStrictEqual(v.map((x) => [x.name, !!x.dir, !!x.promptFile]), [['A', true, false], ['cp', false, true]]);
+  assert.throws(() => ab.parseVariants([], ['nofile']), /name=file/);
+  assert.throws(() => ab.parseVariants([`cp=${stand}`], [`cp=${stand}`]), /duplicate/);
+});
+
+test('prompt-file variant: provenance stripped, inlined blocks + parallel-batch line + review.json tail; task asks for review.json without schema', () => {
+  put(path.join(src, 'one', 'ctx', 'files.txt'), 'a.js\n');
+  const dir5 = path.join(tmp, 'ab-free');
+  const m = ab.setup({ src, ids: ['one'], ab: dir5, variants: ab.parseVariants([], [`cp=${stand}`]), log: quiet });
+  assert.strictEqual(m[0].free, true);
+  const d = path.join(dir5, 'cp', 'one'), prompt = fs.readFileSync(path.join(d, 'prompt.md'), 'utf8'), ctx = path.join(d, 'ctx').split(path.sep).join('/');
+  assert.ok(prompt.startsWith('Review the PR.') && !prompt.includes('PROVENANCE'));
+  assert.ok(prompt.includes('<untrusted-data name="files.txt">') && prompt.includes('<untrusted-data name="diff.patch">') && prompt.includes('ONE parallel batch') && prompt.includes(`${ctx}/review.json`));
+  const task = fs.readFileSync(m[0].taskPath, 'utf8');
+  assert.ok(task.includes('review.json') && !task.includes('schema') && !task.includes('findings.json'));
+});
+
+test('finish on a free variant: counts by severity, writes bundle-readable files; bundle.js parses all as inline review_comment', async () => {
+  const dir6 = path.join(tmp, 'ab-free2');
+  ab.setup({ src, ids: ['one', 'two'], ab: dir6, variants: ab.parseVariants([], [`cp=${stand}`]), log: quiet });
+  fs.writeFileSync(path.join(dir6, 'cp', 'one', 'ctx', 'review.json'), JSON.stringify({ summary: 'S', comments: [
+    { path: 'a.js', line: 3, severity: 'High', title: 'T1', body: 'B1', suggestion: 'x = 1;' }, { path: 'b.js', start_line: 7, severity: 'low', body: 'B2' }] }));
+  const { results } = await ab.finish({ ab: dir6, log: quiet });
+  const r = results.find((x) => x.id === 'one'), e = results.find((x) => x.id === 'two');
+  assert.deepStrictEqual([r.kind, r.inline, r.high, r.medium, r.low], ['free', 2, 1, 0, 1]);
+  assert.strictEqual(e.engine_failed, true);
+  const bundle = require('./bundle.js'), posted = JSON.parse(fs.readFileSync(path.join(dir6, 'cp', 'one', 'posted.json'), 'utf8'));
+  const inl = bundle.parseInline(posted);
+  assert.deepStrictEqual(inl.map((x) => [x.kind, x.confidence, x.class, x.path, x.line, x.title]), [['review_comment', 'high', 'inline', 'a.js', 3, 'T1'], ['review_comment', 'low', 'inline', 'b.js', 7, 'B2']]);
+  assert.strictEqual(inl[0].suggestion, 'x = 1;');
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir6, 'cp', 'one', 'ctx', 'findings.json'), 'utf8')).findings[0].origin, 'free');
+});
+
+test('competitor prompt files never mention SpecGuard, coverage, alignment, obligation', { skip: !fs.existsSync(path.join(COMP, 'copilot-style.txt')) }, () => {
+  for (const f of ['copilot-style.txt', 'pocock-style.txt']) {
+    const ctx = path.join(src, 'one', 'ctx');
+    const text = ab.freePromptBuilder(path.join(COMP, f))(ctx);
+    for (const w of ['SpecGuard', 'coverage', 'alignment', 'obligation', 'schema', 'PROVENANCE', 'INFERRED', 'RECONSTRUCTED']) assert.ok(!new RegExp(w, 'i').test(text.split(/\n---\n/)[0]), `${f} contains ${w}`);
+  }
+});

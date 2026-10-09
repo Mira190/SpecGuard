@@ -18,3 +18,11 @@ Compares prompt variants on identical inputs: quality (real `post.run`, graded) 
 - Constant across variants: system prompt, tool schemas, hook context and the `task.md` wrapper (inside the first-turn context, re-sent every turn), plus the extra turn spent reading `prompt.md`. Differences come from prompt size and the turns and tool results the prompt induces.
 - Quality grading is per-run on one sample of a stochastic agent; with small n treat deltas as hints, not results. Rerun the same ids to see noise.
 - Reviewer transcripts are recognised by "review model inside a CI code-review Action" in `task.md`; keep that sentence.
+
+## Free-form competitor stand-ins (`--prompt-file`)
+
+`setup ... --prompt-file copilot=FILE --prompt-file pocock=FILE` adds variants whose prompt is the file's text (leading `<!-- ... -->` provenance comments are stripped) plus a fixed per-PR tail: context dir, inlined `files.txt`, `standards.txt`, `requirements.md`, `diff.patch` (same 4/4/8/40 KiB limits and block format as `src/prompt.js`) and the same "one parallel batch" instruction. Tools and context match the lean variant; only the review philosophy differs.
+
+- Output contract: free-form `<ctx>/review.json` = `{"comments":[{path,line,severity:high|medium|low,title,body,suggestion?}],"summary"}`. No schema, no coverage rows, no citation verification, nothing dropped (deliberately generous to the stand-ins). `task.md` asks for `review.json`; manifest entries carry `free: true`.
+- `finish` does not call `post.run` for these: it counts comments by severity (`inline` = all comments) and writes `posted.json` (every comment inline, kind `review_comment`, confidence = severity), `summary.md` and `ctx/findings.json` (`kind: review_comment`, `origin: 'free'`) so `eval/bundle.js` can adjudicate them next to schema variants. Standalone: `convertFree(dir)` in `ab.js`.
+- Mix with other variants by copying a variant directory (plus its manifest entries) into the ab dir that bundle.js reads.
