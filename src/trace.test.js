@@ -115,6 +115,82 @@ test('isRequirementDoc needs one structured item or two normative sentences', ()
   assert.equal(T.isRequirementDoc([{ kind: 'gherkin' }]), true);
 });
 
+test('parseItems: a bare Example: is a scenario only in a .feature file, never in prose or YAML front matter', () => {
+  assert.deepEqual(T.parseItems('docs/opt.md', '---\nExample:\n- --foo $URL\n---\n# --foo\nDo foo.\n\nExample: run it twice.\n'), []);
+  assert.deepEqual(T.parseItems('f.feature', 'Feature: F\n  Example: Plain\n    Given x\n').map((i) => [i.ref, i.kind]), [['Scenario: Plain', 'gherkin']]);
+});
+
+test('parseItems: Gherkin in Markdown needs Given/When/Then steps or a fenced gherkin block', () => {
+  assert.deepEqual(T.parseItems('r.md', '# T\n\nScenario: a title only\n\nSome text.\n'), []);
+  const prose = T.parseItems('r.md', 'Scenario: Late\n  Given a claim\n  When it is late\n  Then it is refused\n\n# Next\n');
+  assert.deepEqual(prose.map((i) => [i.ref, i.line, i.end]), [['Scenario: Late', 1, 4]]);
+  const fenced = T.parseItems('r.md', '# T\n\n```gherkin\nScenario: Fenced\n  Given a\n  Then b\n```\n\nAfter.\n');
+  assert.deepEqual(fenced.map((i) => [i.ref, i.line, i.end]), [['Scenario: Fenced', 4, 6]]);
+  assert.deepEqual(T.parseItems('r.md', '```bash\nScenario: x\n  Given a\n```\n'), []);
+});
+
+test('parseItems: a Scenario: inside a docstring does not start an item', () => {
+  const text = 'Feature: F\n  Scenario: Outer\n    Given a file\n    """\n    Scenario: Nested\n      Given b\n    """\n    Then ok\n';
+  assert.deepEqual(T.parseItems('d.feature', text).map((i) => [i.ref, i.line, i.end]), [['Scenario: Outer', 2, 8]]);
+});
+
+test('parseItems: a title ID (# KEP-1: Title) over a long document is not one item; its sections still are', () => {
+  const body = Array.from({ length: 80 }, (_, i) => `Line ${i}.`).join('\n');
+  const doc = `# KEP-7: Swap support\n\n${body}\n\n## Requirements\n\nThe node must reserve swap. It shall be off by default.\n`;
+  const items = T.parseItems('keps/7/README.md', doc);
+  assert.ok(!items.some((i) => i.kind === 'id'));
+  assert.deepEqual(items.map((i) => i.kind), ['normative', 'normative']);
+  assert.equal(T.parseItems('s.md', '# REQ-7: Short title\n\nOne rule.\n')[0].ref, 'REQ-7'); // a small document may be one requirement
+});
+
+test('parseItems: an ID heading spanning many lines stops at its first sub-heading and is capped', () => {
+  const doc = ['## REQ-1: Big', 'Intro.', '### Detail', ...Array.from({ length: 100 }, (_, i) => `Detail ${i}.`)].join('\n');
+  const [it] = T.parseItems('s.md', doc);
+  assert.deepEqual([it.ref, it.line, it.end], ['REQ-1', 1, 2]);
+  const flat = ['## REQ-2: Long', ...Array.from({ length: 100 }, () => 'Text.')].join('\n');
+  assert.equal(T.parseItems('s.md', flat)[0].end, 60);
+});
+
+test('parseItems: link reference definitions are not ID items, a bracketed ID with prose still is', () => {
+  const doc = '[KEP-4671]: https://kep.k8s.io/4671\n[RFC-2119]: ./rfc.md "title"\n[REQ-1]: The system must refuse zero.\n';
+  assert.deepEqual(T.parseItems('s.md', doc).map((i) => i.ref), ['REQ-1']);
+});
+
+test('parseItems: a stray triple-backtick line does not invert fencing for the rest of the file', () => {
+  const doc = ['# KEP', '``` <<[UNRESOLVED stuff ]>> notes ```', '', 'The node must reserve swap.', '', '```', 'code must stay out.', '```', '', 'It shall be off.'].join('\n');
+  assert.deepEqual(T.parseItems('k.md', doc).map((i) => i.text), ['The node must reserve swap.', 'It shall be off.']);
+  // an opener that never closes: re-parse without fences instead of dropping the rest of the file
+  assert.deepEqual(T.parseItems('k.md', '```\nThe node must reserve swap.\nIt shall be off.\n').map((i) => i.text), ['The node must reserve swap.', 'It shall be off.']);
+  // a closer needs the same character, no info string, at least the opening length
+  assert.deepEqual(T.parseItems('k.md', '````\n```js\nIt must stay out.\n````\nIt shall count.\n').map((i) => i.text), ['It shall count.']);
+});
+
+test('parseItems: must/shall inside identifiers or code spans is not normative; table rows pair by their first cell', () => {
+  assert.deepEqual(T.parseItems('a.md', 'Label `must-have` is set. Branch triage-must-have is used. The `must` word.\n'), []);
+  const row = (k, v) => `| ${k} | The value MUST be ${v}. |`;
+  const head = ['| Field | Rule |', '|---|---|', row('alpha', 'a'), row('beta', 'b')].join('\n');
+  const refs = (t) => T.parseItems('a.md', t).map((i) => i.ref);
+  assert.deepEqual(refs(head), ['doc#alpha', 'doc#beta']);
+  assert.deepEqual(refs([head.split('\n')[0], '|---|---|', row('zero', 'z'), row('alpha', 'a'), row('beta', 'b')].join('\n')), ['doc#zero', 'doc#alpha', 'doc#beta']);
+});
+
+test('isSpecDoc admits structured items, RFC capitals, dense prose and spec directories, not sparse lowercase prose', () => {
+  const n = (raw) => ({ kind: 'normative', raw });
+  assert.equal(T.isSpecDoc([n('a must b.')], 'a.md', 10), false);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'a.md', 300), true);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'a.md', 90000), false);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c SHALL d.')], 'a.md', 90000), true);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'docs/specs/a.md', 90000), true);
+  assert.equal(T.isSpecDoc([{ kind: 'id', raw: 'R1: x' }], 'a.md', 90000), true);
+});
+
+test('classify: .txt files are documents only when named like requirements', (t) => {
+  const spec = 'AC-1: The thing must work.\nAC-2: It shall be fast.\n';
+  const r = repo(t, { 'a.js': 'x\n' }, { 'CMakeLists.txt': spec, 'docs/requirements.txt': spec, 'LICENSES/MIT.txt': spec, 'a.js': 'y\n' });
+  const paths = ['CMakeLists.txt', 'docs/requirements.txt', 'LICENSES/MIT.txt'];
+  assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths }), ['docs/requirements.txt']);
+});
+
 // ---- changed-item pairing and deltas ----
 test('pairItems pairs by ref, falls back to heading and ordinal, and reports added and removed items', () => {
   const it = (ref, heading) => ({ ref, heading });
