@@ -23,7 +23,7 @@ Finding fields:
 - `kind`: `missing_test`, `weak_test`, `standard`, `pushdown` or `spec_mismatch`.
 - `obligation_ids`: IDs of all coverage rows this finding addresses. Required and nonempty for test findings and `spec_mismatch` (exactly one `mismatch` row per finding); may be empty for `standard`.
 - `path`: a file in `files.txt`, or an unchanged test file holding the weak assertion (summary only).
-- `line`: per the anchoring rule in SKILL.md.
+- `line`: per the anchoring rule in SKILL.md; it is the line number in the checked-out file, never a line of `diff.patch`.
 - `start_line`: only for a multi-line range inside one hunk.
 - `quote`: the exact text of line `line`, copied, not retyped; the poster snaps the line to it and drops the finding on a mismatch.
 - `source`: the coverage source the finding addresses, e.g. "issue #1 AC 2"; required when tied to an acceptance criterion (keeps the finding stable across runs).

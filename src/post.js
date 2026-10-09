@@ -514,16 +514,24 @@ function trackedFiles(root) {
 // Verifies citations, not the model's semantic judgement. Never upgrades missing evidence.
 function verifyEvidence(data, reviewable, standards, read = readFile, maps = new Map()) {
   // Corrects c.line to the nearest line within +-5 whose text equals the quote (the way snap does for findings); false when none.
-  const locate = (c, at) => {
+  // Failing that, snaps to the one line among `all` (candidate line numbers) whose text equals the quote, e.g. when the model cited a
+  // diff.patch line number; several matches or none keep the citation unverified.
+  const locate = (c, at, all = []) => {
     const q = norm(c.quote);
     for (let d = 0; d <= 5; d++) for (const s of d ? [-d, d] : [0]) if (c.line + s >= 1 && norm(at(c.line + s) || '') === q) { c.line += s; return true; }
+    const hits = [...all].filter((l) => norm(at(l) || '') === q);
+    if (hits.length === 1) { c.line = hits[0]; return true; }
     return false;
   };
   const changed = (c) => (l) => maps.get(c.path)?.changed[c.side || 'RIGHT'].get(l);
-  const exact = (c) => { const lines = c.side === 'LEFT' ? null : read(c.path); return locate(c, c.side === 'LEFT' ? changed(c) : (l) => lines?.[l - 1]); };
+  const keys = (c) => maps.get(c.path)?.changed[c.side || 'RIGHT'].keys() || []; // the known (changed) line range of that side
+  const exact = (c) => {
+    const lines = c.side === 'LEFT' ? null : read(c.path);
+    return c.side === 'LEFT' ? locate(c, changed(c), keys(c)) : locate(c, (l) => lines?.[l - 1], lines ? lines.map((_, i) => i + 1) : []);
+  };
   for (const c of data.coverage) {
     const { change } = c;
-    const ok = [!change || (reviewable.has(change.path) && locate(change, changed(change))), !c.behaviour || exact(c.behaviour), ...c.evidence.map((e) => exact(e))];
+    const ok = [!change || (reviewable.has(change.path) && locate(change, changed(change), keys(change))), !c.behaviour || exact(c.behaviour), ...c.evidence.map((e) => exact(e))];
     if (ok.includes(false)) {
       c.status = 'unknown';
       c.reason = 'Could not verify the changed-line, behaviour or test citation.';
