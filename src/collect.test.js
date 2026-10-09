@@ -239,3 +239,45 @@ test('collects a CRLF repository like an LF one: IGNORE_EXTRA with CRLF, spec fi
   const occ = JSON.parse(read('trace-candidates.json')).occurrences[0].hits;
   assert.ok(occ.some((h) => h.path === 'src/d.ts' && h.text === 'export const DAYS = 30;'));
 });
+
+// ---- hardening: control-character paths and the trace-status marker ----
+test('F3b: a trace.js failure leaves an empty spec-files.txt and trace-status=failed; success and off are marked too', (t) => {
+  const change = ({ write }) => write('src.js', 'b\n');
+  const crash = run(t, { 'src.js': 'a\n' }, change, { ...SPEC, STUB_CRASH: '1' });
+  assert.equal(crash.ctxFile('spec-files.txt'), '');
+  assert.equal(crash.ctxFile('trace-status').trim(), 'failed');
+  assert.equal(run(t, { 'src.js': 'a\n' }, change, { ...SPEC }).ctxFile('trace-status').trim(), 'ok');
+  const off = run(t, { 'src.js': 'a\n' }, change, { ...SPEC, TRACE: 'off' });
+  assert.equal(off.ctxFile('trace-status').trim(), 'off');
+  assert.equal(off.ctxFile('spec-files.txt'), '');
+});
+
+// A repo whose head commit tracks paths with newlines (built with `git mktree -z`; a Windows checkout cannot hold them).
+// checkout is stubbed out: the collector's lists are derived from git objects, not from the working tree.
+function newlineScenario(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-nl-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const g = (input, ...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...a], { cwd: root, input, encoding: 'utf8' }).trim();
+  g(undefined, 'init', '-q');
+  const blob = (s) => g(s, 'hash-object', '-w', '--stdin');
+  const top = (files) => g(Object.entries(files).map(([p, s]) => `100644 blob ${blob(s)}\t${p}\0`).join(''), 'mktree', '-z');
+  const base = g(undefined, 'commit-tree', top({ 'src.js': 'a\n' }), '-m', 'b');
+  const head = g(undefined, 'commit-tree', top({ 'src.js': 'b\n', 'evil\n.md': 'AC-1: x must hold\nAC-2: y must hold\n', 'bad\nsrc.js': 'c\n' }), '-p', base, '-m', 'h');
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-bin-')); t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
+  const rc = path.join(bin, 'rc.sh'); // BASH_ENV: a git() function outranks PATH (Git for Windows prepends its own dirs)
+  fs.writeFileSync(rc, 'git() { [ "$1" = checkout ] && return 0; command git "$@"; }'+String.fromCharCode(10));
+  const ctx = path.join(root, 'ctx');
+  const env = { ...process.env, BASH_ENV: rc.replace(/\\/g, '/'), BASE_SHA: base, HEAD_SHA: head, CTX: ctx.replace(/\\/g, '/'), MAX_DIFF_KB: '300' };
+  delete env.PR_NUMBER; delete env.GITHUB_OUTPUT;
+  execFileSync(bash, [path.resolve(__dirname, 'collect.sh').replace(/\\/g, '/')], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  return (f) => fs.readFileSync(path.join(ctx, f), 'utf8');
+}
+
+test('F2: tracked paths containing a newline never enter files.txt, spec-files.txt or the diff, and a limitation is recorded', (t) => {
+  const read = newlineScenario(t);
+  assert.equal(read('files.txt'), 'src.js\n');
+  assert.equal(read('spec-files.txt'), '');
+  assert.doesNotMatch(read('diff.patch'), /evil|bad/);
+  assert.match(read('collect-limits.txt'), /2 changed path\(s\) containing control characters/);
+});

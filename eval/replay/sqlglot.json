@@ -1,0 +1,5174 @@
+{
+  "repo": "tobymao/sqlglot",
+  "window": {
+    "since": "2025-10-09",
+    "until": null
+  },
+  "generated": "2026-10-09T02:14:41.462Z",
+  "contamination": "Public repo: the model may have seen the later fix in its training data. Report public and private pilots separately; prefer fixes from the last ~4 months.",
+  "stats": {
+    "commits": 2297,
+    "candidates": 120,
+    "signals": {
+      "title_prefix": 119,
+      "keyword": 1
+    },
+    "excluded_docs_tests": 1,
+    "located": 91,
+    "unlocatable": 27,
+    "no_introducing": 2,
+    "revert_direct": 0,
+    "introducing_pairs": 187,
+    "pairs_with_pr": 165
+  },
+  "candidates": [
+    {
+      "fix": {
+        "sha": "1e2cc210e2a336defd9037dfc66d9dae1e72780e",
+        "parent": "56910fd955e62d8e20ba85c1264123656698c178",
+        "title": "fix(optimizer)!: preserve CASE branches before always-true conditions (#8572)",
+        "date": "2026-10-09T04:44:20+03:00",
+        "pr": 8572
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-09T04:44:20+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "56910fd955e62d8e20ba85c1264123656698c178",
+        "parent": "ffe2c73694fc88e5b44b0deff1f1fb92a6a9fe95",
+        "title": "fix(optimizer): allow simplification to scalar subqueries (#8573)",
+        "date": "2026-10-09T04:41:15+03:00",
+        "pr": 8573
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-09T04:41:15+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "0628741a43aebff20077f549e34ec6d14f67c75b",
+          "title": "feat: make simplify more efficient in number of iterations (#6351)",
+          "date": "2025-11-19T15:17:59+02:00",
+          "pr": 6351,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1a0fc4299add581c61a21c92d0c41d13698b20c5",
+        "parent": "aa58ce602e3f50b87192f2e1bd2994d56da10c3c",
+        "title": "fix(parser): `ALTER` actions/options in any order. (#8565)",
+        "date": "2026-10-08T23:59:26+03:00",
+        "pr": 8565
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-08T23:59:26+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "fc4964bbe8a8efdf28d2c4cbc7a5d66b160e7946",
+          "title": "feat(parser)!: support mixed-operation `ALTER`s. (#8419)",
+          "date": "2026-10-03T23:52:00+03:00",
+          "pr": 8419,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "out",
+          "grade": null,
+          "note": "8565 is a feat that lets table options sit between actions; before 8419 such ALTERs already fell back to exp.Command, so 8419 did not create a defect, it left a gap. Scope: Fix is a feature extension (accept more orderings), not a behaviour defect.",
+          "category": "other_out_of_scope"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "862fd55467e09527e07240725c6e78c793099ff1",
+        "parent": "54005bf19b32d1dbcaecbd9f752059bc647339c5",
+        "title": "fix(trino): preserve precision for all temporal literals (#8564)",
+        "date": "2026-10-08T18:32:59+03:00",
+        "pr": 8564
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-08T18:32:59+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "e1e0d2e52f45247bfa0ab815eb8a7388ea50a0e8",
+          "title": "fix(trino)!: preserve precision for timestamp and time literals (#8534) (#8538)",
+          "date": "2026-10-07T15:02:01+03:00",
+          "pr": 8538,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "Follow-up to a design question (issue 8562) about TIMESTAMP(0..2) literals; the unadorned TIMESTAMP output for <=3 digits predates 8538. Only the Trino to Presto TIMESTAMP(4) leak is new, and it is a side effect. Scope: Wrong temporal precision on transpile changes the type, a logic/boundary defect.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "507cbf99ca3f34b7f7f7fc26a90a94031c2452cd",
+        "parent": "93aa16deb98a0f85b4613405e2cfd2a5685bc3fb",
+        "title": "fix(optimizer): qualify DuckDB list comprehension variables (#8557)",
+        "date": "2026-10-08T16:31:37+03:00",
+        "pr": 8557
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-08T16:31:37+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "655ee72b97f3df3288c01e8ed5a61b13827435aa",
+          "title": "Feat!(duckdb): add list comprehensions closes #2118",
+          "date": "2023-08-28T15:11:55-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "0b82a47a1900b8092ecda4a233bcf67efe4500c1",
+          "title": "fix(duckdb): Support positional index in list comprehension (#6163)",
+          "date": "2025-10-22T12:58:42+03:00",
+          "pr": 6163,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "93aa16deb98a0f85b4613405e2cfd2a5685bc3fb",
+        "parent": "921445341b7fc8afa40359bebb8b59f53a86916c",
+        "title": "fix(mysql): keep the CHAR length in CHARACTER SET casts [CLAUDE] (#8559)",
+        "date": "2026-10-08T13:15:30+03:00",
+        "pr": 8559
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-08T13:15:30+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "187746cdcc0d8852666804dac58f34369fee0ec5",
+          "title": "fix!: do not treat `CHARACTER SET` as a single token (#8007)",
+          "date": "2026-07-31T16:52:12+03:00",
+          "pr": 8007,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "CAST(.. AS CHAR(N) CHARACTER SET x) already built DType.CHARACTER_SET.into_expr(kind=..) which dropped the length before 8007; 8007 only changed how the CHARACTER SET keyword is matched. Scope: Dropping the CHAR length changes results, a logic error.",
+          "category": "validation"
+        },
+        {
+          "sha": "6e3163a1a5b6b221a7b12c0dec966514d6f6b838",
+          "title": "compile expressions/core (#7171)",
+          "date": "2026-03-02T09:33:43-08:00",
+          "pr": 7171,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "247548f5913ebfd8666432ff1f089df0fb16f69a",
+          "title": "refactor(Expressions): add into_expr method to DType enum (#7411)",
+          "date": "2026-03-30T20:28:57+03:00",
+          "pr": 7411,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4458e816fd1e19485387f9ea260302a05f015d21",
+          "title": "Fix: redshift to ast incorrect",
+          "date": "2023-06-27T23:04:10-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "025a2f46f9a29fcfc68d88ad0290c9c7f7e05320",
+        "parent": "97a2fa2ed6351835f07303bd839fec96a01c472e",
+        "title": "fix(clickhouse): map bitwise aggregates to groupBitAnd/Or/Xor (#8556)",
+        "date": "2026-10-08T04:02:38+03:00",
+        "pr": 8556
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-08T04:02:38+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "97a2fa2ed6351835f07303bd839fec96a01c472e",
+        "parent": "542c64b4ceadd1510747b9193f8d908e67f1c5e9",
+        "title": "fix(mysql): Misplaced table and index options. (#8553)",
+        "date": "2026-10-07T22:35:58+03:00",
+        "pr": 8553
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T22:35:58+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "8e46a647475578cff6268b6edc4fd8118b183040",
+          "title": "Extract MySQL parser into sqlglot/parsers/mysql.py for mypyc compilation (#7217)",
+          "date": "2026-03-06T20:23:01+02:00",
+          "pr": 7217,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f2b81bfb2d2cf5b14b01be5211e022b23b6bec19",
+        "parent": "e78a4127128b23dc471080b3b739b12523d82c1e",
+        "title": "fix(optimizer)!: annotate FLOOR, CEIL and SIGN by their arg type (#8547)",
+        "date": "2026-10-07T19:48:36+03:00",
+        "pr": 8547
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T19:48:36+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "5d9050e26c195fa9095451897957269d9e2ec0d6",
+          "title": "Refactor!!: make annotator format more extensible (#6222)",
+          "date": "2025-11-03T21:55:49+02:00",
+          "pr": 6222,
+          "lines": 8,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "534354acace404a94497e8155ad58077e31b063e",
+          "title": "feat(bigquery): Native annotations for more math functions (#4212)",
+          "date": "2024-10-07T10:04:06+03:00",
+          "pr": 4212,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b1169c2de07c2cfe8695fbf09b449cec48803e2b",
+          "title": "Chore: rename `EXPRESSION_SPEC` to `EXPRESSION_METADATA`",
+          "date": "2025-11-03T22:15:22+02:00",
+          "pr": null,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "8abd89c3f3a4dee9d65f1935278fc0421ea2eb0b",
+          "title": "Fixup",
+          "date": "2025-12-02T18:36:48+02:00",
+          "pr": null,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "022bb41fc5f9b35ab303a5989edd1f9544ec11bb",
+        "parent": "aa64321744bcb38828146b33ead1c0529dd64652",
+        "title": "fix(duckdb): generate USING SAMPLE before ORDER BY and LIMIT [CLAUDE] (#8550)",
+        "date": "2026-10-07T18:23:44+03:00",
+        "pr": 8550
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T18:23:44+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "3582aa54226e20b6b6187e1f30ae183bba91f79d",
+          "title": "refactor(generators): Cleanup and fully compile all generators (#7389)",
+          "date": "2026-03-26T15:30:25+02:00",
+          "pr": 7389,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "aa64321744bcb38828146b33ead1c0529dd64652",
+        "parent": "b7e515399a589e720b2bd081e5bb395f408feff8",
+        "title": "fix(optimizer)!: expand USING columns first in star expansion (#8536)",
+        "date": "2026-10-07T18:18:40+03:00",
+        "pr": 8536
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T18:18:40+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b261cad06a405ec1986416904a4d6287fad05fbe",
+          "title": "Optimizer: fix star expansion when USING clause is present (#1335)",
+          "date": "2023-03-23T19:10:58-07:00",
+          "pr": 1335,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "9e4b3d15e67bf3508c9b25c0c025da0ea3d1a87b",
+          "title": "perf(optimizer): speed up qualify by ~24% and optimize by ~17% (#7724)",
+          "date": "2026-06-09T16:13:00-07:00",
+          "pr": 7724,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4de72a3d0503adf992fff3a224384afe41a2e066",
+          "title": "Refactor!: move normalization logic in Dialect, update case-sensitivity info (#1784)",
+          "date": "2023-06-16T19:04:36+03:00",
+          "pr": 1784,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "618804ce12b09b563147a31c37734725928f34c6",
+          "title": "fix(optimizer)!: resolve NATURAL JOIN common columns in qualify [CLAUDE] (#7880)",
+          "date": "2026-07-16T21:23:53+03:00",
+          "pr": 7880,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b7e515399a589e720b2bd081e5bb395f408feff8",
+        "parent": "6aeb6a0ab705c5a4f07a4b6d3af8040c689c4f4b",
+        "title": "fix(optimizer)!: preserve bracket flags in gen serialization",
+        "date": "2026-10-07T17:04:38+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T17:04:38+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "3096a591d65b1b00ba9abdf482fc7b7973a6e6af",
+        "parent": "f8606fe8f97a10a3ba00f42104836add1299966f",
+        "title": "fix(duckdb): transpile Spark CONCAT_WS on arrays to ARRAY_TO_STRING (#8521) (#8523)",
+        "date": "2026-10-07T16:37:44+03:00",
+        "pr": 8523
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T16:37:44+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f8606fe8f97a10a3ba00f42104836add1299966f",
+        "parent": "7404abdab87653dcd4e93b321ed281aa7bce01c1",
+        "title": "fix(tsql): treat `output` as a valid identifier closes #8545",
+        "date": "2026-10-07T16:24:41+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T16:24:41+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "51cfa6a326b487e23e78a3ef5eef37dbc96526c0",
+          "title": "fix(tsql): remove BEGIN from identifiers (#4695)",
+          "date": "2025-02-03T17:51:32+02:00",
+          "pr": 4695,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f5dd70bff7ebce048d6bdd3f782328104c6c119d",
+        "parent": "e1e0d2e52f45247bfa0ab815eb8a7388ea50a0e8",
+        "title": "fix!: truncate integer division towards zero instead of rounding (#8532)",
+        "date": "2026-10-07T15:37:04+03:00",
+        "pr": 8532
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T15:37:04+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "ae3d8f377dd514fde5253383a5eb37fe7452261d",
+          "title": "fix!: transpile division (#2513)",
+          "date": "2023-11-06T09:55:29-08:00",
+          "pr": 2513,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "05af25250aa3941c7ee15ea52c2bf96385c909c6",
+          "title": "Revert: \"Fix division operator transpilation across dialects (#1245)\" (#1277)",
+          "date": "2023-03-08T23:57:43+02:00",
+          "pr": 1277,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a34eef994826ea5b607768bdd741dd2ea58f431a",
+          "title": "cleanup env",
+          "date": "2022-11-18T08:30:09-08:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "5a6b1b1db87a49a5716d12a8d0fed02c459e8148",
+          "title": "Refactor!: generator now always copies, making transforms much simpler (#2477)",
+          "date": "2023-10-28T20:45:07-07:00",
+          "pr": 2477,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e1e0d2e52f45247bfa0ab815eb8a7388ea50a0e8",
+        "parent": "818483464bf50a1b41d6982dbc172e7934141c52",
+        "title": "fix(trino)!: preserve precision for timestamp and time literals (#8534) (#8538)",
+        "date": "2026-10-07T15:02:01+03:00",
+        "pr": 8538
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T15:02:01+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "d1cd04f6a5a699f96641f03735c9cd315d348042",
+          "title": "oracle date literal",
+          "date": "2023-04-12T22:21:41-07:00",
+          "pr": null,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "818483464bf50a1b41d6982dbc172e7934141c52",
+        "parent": "af9915fa4cc1f20fcae8b09058be5b96b2cbc8b0",
+        "title": "fix(duckdb): preserve Spark array slice length (#8524)",
+        "date": "2026-10-07T13:37:31+03:00",
+        "pr": 8524
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T13:37:31+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "3de5d29ef5fd19e2f1ac0b2681e29e8a6c6fbd48",
+          "title": "feat(duckdb): Add transpilation support for ARRAY_SLICE function (#7188)",
+          "date": "2026-03-04T01:51:53+02:00",
+          "pr": 7188,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "850bf1e49a59c5950c0385772641fd0e89a3a4b8",
+          "title": "refactor(duckdb)!: Extract and compile generator (#7375)",
+          "date": "2026-03-24T19:01:42+02:00",
+          "pr": 7375,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "af62f54e4b916966d60896b09e84e76b4741c51f",
+          "title": "Extract Spark2 parser into sqlglot/parsers/spark2.py for mypyc compilation (#7227)",
+          "date": "2026-03-09T13:51:52+02:00",
+          "pr": 7227,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "af9915fa4cc1f20fcae8b09058be5b96b2cbc8b0",
+        "parent": "48beaa64b8d3348c31a8eab2e7daf90836d151b2",
+        "title": "fix(mysql): parse the AS clause of WEIGHT_STRING [CLAUDE] (#8544)",
+        "date": "2026-10-07T11:49:10+03:00",
+        "pr": 8544
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-07T11:49:10+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "48beaa64b8d3348c31a8eab2e7daf90836d151b2",
+        "parent": "30958d61522b84765973a8fa6c76ea03d7f97373",
+        "title": "fix(optimizer): preserve all OR arms during DNF pushdown for multi-table branches (#8525)",
+        "date": "2026-10-06T18:42:03-04:00",
+        "pr": 8525
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T18:42:03-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "6a6bf890b7fdbf69e45566ec2c168b626d5f12b1",
+          "title": "more progress",
+          "date": "2022-06-07T19:28:30-07:00",
+          "pr": null,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "8719b01ab4bd8247d587234c832f28e7c03504d5",
+          "title": "fix: pushdown predicate to HAVING (#2064)",
+          "date": "2023-08-15T10:46:06-07:00",
+          "pr": 2064,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "076e2c12a72239744b4900b15d89e3083d35c318",
+          "title": "Fix(optimizer): pushdown predicates more conservatively to avoid DAG cycles (#2808)",
+          "date": "2024-01-10T18:13:17Z",
+          "pr": 2808,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "5de12f7146f6bc8004436ce50cd56032783949a5",
+          "title": "simple predicate pushdown",
+          "date": "2022-06-01T10:15:01-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "3a3c84836e2b0fd718ee92c3a8b93d25811989fc",
+          "title": "more",
+          "date": "2022-06-08T10:30:37-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "30958d61522b84765973a8fa6c76ea03d7f97373",
+        "parent": "6de29fdce762e564002e0ae0d8d09c388ebc4cfb",
+        "title": "fix(optimizer): column resolution for TVFs, PIVOTs, and Snowflake schemas (#8472)",
+        "date": "2026-10-06T17:37:01-04:00",
+        "pr": 8472
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T17:37:01-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a34fc276539980ee1f3d51e85a17a19f40b3f276",
+          "title": "fix(optimizer)!: star referencing outer-scope from correlated subquery (#8291)",
+          "date": "2026-09-10T13:34:12+03:00",
+          "pr": 8291,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "out",
+          "grade": null,
+          "note": "Blamed lines are 8291's outer_resolvers() generator, which 8472 only memoizes into a list; the rest of 8472 is STRICT_SCHEMA test fixture changes, no behaviour defect repaired. Scope: Caching and test-fixture adjustments, no behaviour change.",
+          "category": "other_out_of_scope"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5b7b413451e2a7a35bfc8c076d3b3636f8a7b203",
+        "parent": "d5d436bc32030c019ca07e1dcb4a247f5b4a0f53",
+        "title": "fix(optimizer)!: expand nested join constructs in qualify_tables (#8530)",
+        "date": "2026-10-06T18:16:50+03:00",
+        "pr": 8530
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T18:16:50+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "8d74a35e86b0bdd60a093f02b990a367d413b13e",
+          "title": "Fix!(optimizer): preserve parenthesized joins, tables (#1900)",
+          "date": "2023-07-09T05:45:30+03:00",
+          "pr": 1900,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a42be47efb4d36e105f91aacd1b6665fa684b382",
+          "title": "refactor: replace direct arg manipulation (#6073)",
+          "date": "2025-10-10T16:18:30+03:00",
+          "pr": 6073,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "34da6e207a8a5ca2eb3889fe36eac907caf79a7d",
+          "title": "feat(optimizer): traverse scope (#141)",
+          "date": "2022-05-25T16:46:21-07:00",
+          "pr": 141,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d5d436bc32030c019ca07e1dcb4a247f5b4a0f53",
+        "parent": "b184687587a2e8d451d9af575ba1746c3d55c4ab",
+        "title": "fix(generator): escape identifier escape chars when generating quoted identifiers (#8533)",
+        "date": "2026-10-06T18:13:58+03:00",
+        "pr": 8533
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T18:13:58+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "fc8178edd3e4717db5acf1c735a03aeb67951c92",
+        "parent": "ee7567c86d9a418cc517f80194e6fc35e075be4a",
+        "title": "fix(parser): `DROP INDEX` accepts `db.t` syntax. (#8526)",
+        "date": "2026-10-06T16:32:11+03:00",
+        "pr": 8526
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T16:32:11+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "970d43e2088f66dab008983be91a2e45378fbf37",
+          "title": "Feat: Support for TRUNCATE TABLE/DATABASE DDL (#3026)",
+          "date": "2024-02-27T19:36:13+02:00",
+          "pr": 3026,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "ee7567c86d9a418cc517f80194e6fc35e075be4a",
+        "parent": "971d004474ff010eaf247f186d71dc39ae1151f9",
+        "title": "fix(optimizer)!: expand stars in the order sources appear in FROM (#8529)",
+        "date": "2026-10-06T15:51:29+03:00",
+        "pr": 8529
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T15:51:29+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "cab0f24ad212eea592f532628f4fc10489fc32f7",
+          "title": "feat: compile scope for mypy (#7192)",
+          "date": "2026-03-03T10:02:23-08:00",
+          "pr": 7192,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "34da6e207a8a5ca2eb3889fe36eac907caf79a7d",
+          "title": "feat(optimizer): traverse scope (#141)",
+          "date": "2022-05-25T16:46:21-07:00",
+          "pr": 141,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "9d93c0acdbe6fc2007cff829d48818bcbbbf2ce9",
+          "title": "Fix: make bigquery unnest unalias more comprehensive",
+          "date": "2023-06-29T20:17:41-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "50d7ce4a9808aed6beb4127c4f60d309219c664d",
+        "parent": "51587ffdecfc8b2c08ee1da24b543312ded90d39",
+        "title": "fix(duckdb): read the UNIFORM seed set by the Databricks parser (#8519)",
+        "date": "2026-10-05T19:20:51+03:00",
+        "pr": 8519
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-05T19:20:51+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "850bf1e49a59c5950c0385772641fd0e89a3a4b8",
+          "title": "refactor(duckdb)!: Extract and compile generator (#7375)",
+          "date": "2026-03-24T19:01:42+02:00",
+          "pr": 7375,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "51587ffdecfc8b2c08ee1da24b543312ded90d39",
+        "parent": "c7957e8c867e42654d91b1d9c20d5e9b77ddf5b9",
+        "title": "fix(mysql): Parse `DROP KEY`, `DROP CHECK` and `SIGNED`. (#8515)",
+        "date": "2026-10-05T17:37:07+03:00",
+        "pr": 8515
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-05T17:37:07+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c7957e8c867e42654d91b1d9c20d5e9b77ddf5b9",
+        "parent": "89afde76506999f1aa0b20a945858406e13fec83",
+        "title": "fix(generator): only resolve a query's own ORDER BY aliases in NULLS simulation (#8514)",
+        "date": "2026-10-05T17:24:06+03:00",
+        "pr": 8514
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-05T17:24:06+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "0e9e0a483b3207a573ba07023d4071d1b9ddc181",
+          "title": "fix(mysql)!: qualify column reference in NULLS LAST CASE simulation (#7641)",
+          "date": "2026-05-19T21:14:28+03:00",
+          "pr": 7641,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": true,
+          "scope": "in",
+          "grade": null,
+          "note": "7641 added _resolve_ordered_for_null_ordering_simulation using expression.find_ancestor(exp.Select, exp.Window), which walks out of aggregate/window ORDER BYs into the enclosing SELECT; 8514 replaces it with the direct Order parent. Scope: Wrong ancestor lookup substitutes the wrong expression into generated SQL, a logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a980f017130a5d9c485c53c878982155362ca4de",
+        "parent": "47b94d424a05768a2e3b416cc4282b8449f8197f",
+        "title": "fix!: scope preserved function names to their dialect (#8512)",
+        "date": "2026-10-05T13:54:19+03:00",
+        "pr": 8512
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-05T13:54:19+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "24022d947f84e24abb00a735451a0c9f60b827b8",
+          "title": "fix: Refactor NORMALIZE_FUNCTIONS flag usage (#4437)",
+          "date": "2024-11-22T21:25:29+02:00",
+          "pr": 4437,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "27caa24cd806e60b4143bfa0eb066d16c7779a92",
+          "title": "Fix!(clickhouse): preserve original function names instead of uppercasing (#1983)",
+          "date": "2023-08-01T01:47:56+03:00",
+          "pr": 1983,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "9e4b3d15e67bf3508c9b25c0c025da0ea3d1a87b",
+          "title": "perf(optimizer): speed up qualify by ~24% and optimize by ~17% (#7724)",
+          "date": "2026-06-09T16:13:00-07:00",
+          "pr": 7724,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "d3012336461b9b45953f5c7e04e07fa503e99cd2",
+          "title": "refactor(bigquery)!: Extract and compile generator (#7372)",
+          "date": "2026-03-24T16:20:26+02:00",
+          "pr": 7372,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "7fb054f17f0b86bf572884a524067ca9eb883fb4",
+        "parent": "f337c70ee42614bb3224fe8c54b7af5be286eb85",
+        "title": "fix(clickhouse): generate POSITION(...) > 0 for Contains (#8507)",
+        "date": "2026-10-05T13:16:15+03:00",
+        "pr": 8507
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-05T13:16:15+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f337c70ee42614bb3224fe8c54b7af5be286eb85",
+        "parent": "a7fcf9e07f53ee47d330466675c9614deb5c5d60",
+        "title": "fix(snowflake): parse LIST and LS stage commands [GPT-6.1] (#8502)",
+        "date": "2026-10-04T01:41:22+03:00",
+        "pr": 8502
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-04T01:41:22+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5e6887adc805ee13b359e25b1d17e062b0a60342",
+        "parent": "fc4964bbe8a8efdf28d2c4cbc7a5d66b160e7946",
+        "title": "fix(tsql): parse bare table hints [CODEX: GPT-6.1 Sol] (#8493)",
+        "date": "2026-10-04T00:25:09+03:00",
+        "pr": 8493
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-04T00:25:09+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a6698b765b006b4b3b181fcdc75319f7f990164f",
+        "parent": "0ceaf1319e6506fe7644021c0825c10af4f0ae6a",
+        "title": "fix: drop wrong Dialect cast in build_formatted_time [CLAUDE]",
+        "date": "2026-10-03T13:41:43-07:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-03T13:41:43-07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "7e7cf8b06397ed440921d079a39112e073bcfa80",
+          "title": "Refactor: make dialect in build_formatted_time optional, fetch it from parser (#7639)",
+          "date": "2026-05-12T20:01:27+03:00",
+          "pr": 7639,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4080ca8b928e7852d846b870434baa9c16e02092",
+          "title": "make it easier to subclass parsers",
+          "date": "2022-07-11T16:25:30-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0ceaf1319e6506fe7644021c0825c10af4f0ae6a",
+        "parent": "bffcdefc16b01527ee252ad2bf322b0bbff33bc8",
+        "title": "fix(clickhouse): map ISO calendar functions in both directions [CLAUDE] (#8494)",
+        "date": "2026-10-03T23:32:22+03:00",
+        "pr": 8494
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-03T23:32:22+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "bffcdefc16b01527ee252ad2bf322b0bbff33bc8",
+        "parent": "b65592b45831df5e7f13d418e50f24c4cea118f0",
+        "title": "fix(snowflake): parse (+) outer join markers (#8492)",
+        "date": "2026-10-02T21:46:20+03:00",
+        "pr": 8492
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-02T21:46:20+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "489ba1dd0b6024f2d876b474b451b5e6fa8d27de",
+          "title": "perf(parser): fast path for column reference parsing (#7293)",
+          "date": "2026-03-16T08:44:15-07:00",
+          "pr": 7293,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "17bf3b86e54040cc71de5d454d8ec1659cb39210",
+          "title": "Fix(redshift): add support for Oracle style outer join markers #3611 (#3612)",
+          "date": "2024-06-07T18:57:26+03:00",
+          "pr": 3612,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b65592b45831df5e7f13d418e50f24c4cea118f0",
+        "parent": "b12b50fc068730fd04f864a3757cd8d356afccfa",
+        "title": "fix(postgres): parse ^@ as STARTS_WITH closes #8490",
+        "date": "2026-10-02T20:25:32+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-02T20:25:32+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "8bab05bb33cd98dc7199a344a0aab4bdf5ec0e72",
+          "title": "feat(duckdb): Add more Postgres operators (#4199)",
+          "date": "2024-10-03T18:23:41+03:00",
+          "pr": 4199,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5fc93a9eab142393c0ef688c82d898329bcddb67",
+        "parent": "1d2a99b9cc0acf671fd2688ef02097a69404057d",
+        "title": "fix(snowflake): support for SPLIT_TO_TABLE (#8488)",
+        "date": "2026-10-02T19:56:26+03:00",
+        "pr": 8488
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-02T19:56:26+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "d5e3f14b109ebe5decd66bc77bde38fd5b001bb1",
+          "title": "fix(parser, optimizer): support starrocks GENERATE_SERIES parse and qualify (#8246)",
+          "date": "2026-08-24T18:43:34+03:00",
+          "pr": 8246,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1d2a99b9cc0acf671fd2688ef02097a69404057d",
+        "parent": "268ad021b8bfaf164be3b0774657952c3d70bed4",
+        "title": "fix(parser): ALTER DROP/ALTER COLUMN cleanups",
+        "date": "2026-10-02T19:41:42+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-02T19:41:42+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "268ad021b8bfaf164be3b0774657952c3d70bed4",
+          "title": "fix(parser): parse ALTER TABLE DROP with multiple columns (#8486)",
+          "date": "2026-10-02T19:13:08+03:00",
+          "pr": 8486,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "5d997d94d8041ed12db5abe7a1155b30df057b43",
+          "title": "feat(parser)!: Parse bare `ALTER TABLE ... DROP c`. (#8432)",
+          "date": "2026-10-01T14:17:28+03:00",
+          "pr": 8432,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6c714800fabae41e9d70b9ff7d0349f8692c660f",
+          "title": "feat(mysql): Parse MODIFY COLUMN (#3189)",
+          "date": "2024-03-21T18:50:21+02:00",
+          "pr": 3189,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "cb91d9142a76234630b4e9dfbccf1fdb8076c830",
+          "title": "Feat(mysql): support `ALTER TABLE ... RENAME INDEX`. (#7511)",
+          "date": "2026-04-17T13:57:03+03:00",
+          "pr": 7511,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "96a90befb8493a70c6bd98e7f252480b23803eb1",
+          "title": "Feat(duckdb): add support for overloaded `MACRO` DDL syntax (#7690)",
+          "date": "2026-05-29T16:49:55+03:00",
+          "pr": 7690,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "268ad021b8bfaf164be3b0774657952c3d70bed4",
+        "parent": "b4d66eec8e4dfbe0adcff872afa69355abfd63b4",
+        "title": "fix(parser): parse ALTER TABLE DROP with multiple columns (#8486)",
+        "date": "2026-10-02T19:13:08+03:00",
+        "pr": 8486
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-02T19:13:08+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "68861d9f3aaa6c9ae405dacfa22117fb64a1d803",
+          "title": "feat(mysql)!: support `DROP PRIMARY KEY`. (#7530)",
+          "date": "2026-04-21T18:54:29+03:00",
+          "pr": 7530,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "7530 only wrapped _parse_drop_column in _parse_alter_drop_action for DROP PRIMARY KEY; the failure on 'DROP COLUMN a, b' (Snowflake/T-SQL) existed before. Scope: Wrong parse of a valid statement falling back to Command is a parsing logic error.",
+          "category": "validation"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5fe5606b905f38930017149c4a6e3d1b3a3a5616",
+        "parent": "13463de608e9d74d36fb57da045c537e0ce1a7f6",
+        "title": "fix!: correct PostgreSQL, DuckDB, Redshift, and ClickHouse string escapes (#8484)",
+        "date": "2026-10-02T15:24:48+03:00",
+        "pr": 8484
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-02T15:24:48+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "37fa8c7219a2f17a351f948d6eb314a543f8784d",
+          "title": "chore(tokenizer)!: Split core functionality to TokenizerCore (#7116)",
+          "date": "2026-02-20T19:55:29+02:00",
+          "pr": 7116,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "69431bcdc9f57ced8026584827004e3874800ea9",
+          "title": "Fixup, sync w/ integration tests",
+          "date": "2026-06-22T16:53:07+03:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "fdc0339b219da56b4433198e3cd53e7604d53188",
+          "title": "fix(bigquery)!: decode string escapes and preserve byte literals (#8479)",
+          "date": "2026-10-01T20:00:39+03:00",
+          "pr": 8479,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "1150e3911b0b82a9683f765de11605b14fd66ddb",
+          "title": "refactor!: expression_core which is now compilable by mypyc (#7117)",
+          "date": "2026-02-20T23:16:24-08:00",
+          "pr": 7117,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "13463de608e9d74d36fb57da045c537e0ce1a7f6",
+        "parent": "954503e4c6fa5988e81450f6e390244f69fcc97d",
+        "title": "fix(clickhouse): parse isInfinite (#8487)",
+        "date": "2026-10-02T14:58:51+03:00",
+        "pr": 8487
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-02T14:58:51+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5cc5ef046e8213dcb373c82f6c00fcf918fb4a5b",
+        "parent": "db3931c8bac748038751ce20f40fd6c54619a7e1",
+        "title": "fix(drill)!: preserve backslashes in string literals (#8481)",
+        "date": "2026-10-01T20:21:20+03:00",
+        "pr": 8481
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T20:21:20+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "341446402925c0c09c18daa19ad00c1ce4a1c374",
+          "title": "Fix: allow identifier escapes in the tokenizer (#1123)",
+          "date": "2023-02-08T14:38:35-08:00",
+          "pr": 1123,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "db3931c8bac748038751ce20f40fd6c54619a7e1",
+        "parent": "eeeb868998482b380ca343cab765dd84c23da03a",
+        "title": "feat(mysql): Fix sqlglot tokenizer to incorporate mysql rules (#8465)",
+        "date": "2026-10-01T20:19:30+03:00",
+        "pr": 8465
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T20:19:30+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "37fa8c7219a2f17a351f948d6eb314a543f8784d",
+          "title": "chore(tokenizer)!: Split core functionality to TokenizerCore (#7116)",
+          "date": "2026-02-20T19:55:29+02:00",
+          "pr": 7116,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "fdc0339b219da56b4433198e3cd53e7604d53188",
+        "parent": "8f0d751dd28b5cfa610c33691ca371d6389d392e",
+        "title": "fix(bigquery)!: decode string escapes and preserve byte literals (#8479)",
+        "date": "2026-10-01T20:00:39+03:00",
+        "pr": 8479
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T20:00:39+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4ae6c3d8fe774c57647491572b764a4c2767704a",
+          "title": "feat: fast path for tokenizer (#7226)",
+          "date": "2026-03-09T13:46:41-07:00",
+          "pr": 7226,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a056caa7e47f9397d2843fd2e5c486a13f4b379e",
+          "title": "Fix: escape byte string delimiters (#5916)",
+          "date": "2025-09-18T20:21:23+03:00",
+          "pr": 5916,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "afa5b3a6e7def8834f19adf039ddcb135be56a5c",
+          "title": "fix(generator)!: handle casting for bytestrings  (#6252)",
+          "date": "2025-11-05T15:17:02-08:00",
+          "pr": 6252,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ac940f016a1d398137b4d666db0f191e6c4b6d1f",
+          "title": "refactor(tokenizer): generalize backslash escape handling, report unterminated escapes (#8470)",
+          "date": "2026-09-30T16:01:07+03:00",
+          "pr": 8470,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "49d6ed436647447a775f4bba5f1af94702f31055",
+        "parent": "b06f44200c72d3e254133fd63eae910f76a9634b",
+        "title": "fix(hive): decode backslash string escapes (#8478)",
+        "date": "2026-10-01T17:22:16+03:00",
+        "pr": 8478
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T17:22:16+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "15a77f1d89c3c6baac93230173e48b626497027d",
+        "parent": "c7778cf56d90e409c75e59b82842544b118fa850",
+        "title": "fix(mysql): decode backslash string escapes (#8471)",
+        "date": "2026-10-01T15:48:01+03:00",
+        "pr": 8471
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T15:48:01+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "0a0cc95e97c501b56931c08ff5a5278df2b97bf2",
+          "title": "feat!!: remove rust and build c (#7120)",
+          "date": "2026-02-23T08:25:55-08:00",
+          "pr": 7120,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "55edab3167b14f65d7afa1d30a352624d89b6ea1",
+          "title": "fix(tokenizer)!: add support for noop string escapes (#6526)",
+          "date": "2025-12-11T16:35:04+02:00",
+          "pr": 6526,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "37fa8c7219a2f17a351f948d6eb314a543f8784d",
+          "title": "chore(tokenizer)!: Split core functionality to TokenizerCore (#7116)",
+          "date": "2026-02-20T19:55:29+02:00",
+          "pr": 7116,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "81d2755bdbcf18dc1272fe02760ff105807dd332",
+          "title": "feat(singlestore): Fixed exp.IsAscii generation (#5687)",
+          "date": "2025-08-27T14:58:06+03:00",
+          "pr": 5687,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c7778cf56d90e409c75e59b82842544b118fa850",
+        "parent": "ac084c5bdb2f188ff878687000273ae2247db24b",
+        "title": "fix(parser): bare ALTER DROP refactor and indexes named concurrently",
+        "date": "2026-10-01T15:31:05+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T15:31:05+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "5d997d94d8041ed12db5abe7a1155b30df057b43",
+          "title": "feat(parser)!: Parse bare `ALTER TABLE ... DROP c`. (#8432)",
+          "date": "2026-10-01T14:17:28+03:00",
+          "pr": 8432,
+          "lines": 13,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "33a043abb633221ad5cb7c1a832c643cac07e61a",
+          "title": "Fix: allow parsing 'if' as an identifier (#1517)",
+          "date": "2023-05-02T07:24:35-07:00",
+          "pr": 1517,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "30494afd301e0662f2b22ec92f73bb8b87d3a7f4",
+          "title": "Fix: remove default kind from _parse_drop to make parsing more lenient (#1433)",
+          "date": "2023-04-15T10:57:15-07:00",
+          "pr": 1433,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "7216cf94c47ad0a71c5e840a4298748a1e2a4d95",
+          "title": "feat(snowflake): support DROP ICEBERG TABLE (#7398)",
+          "date": "2026-03-26T17:58:56+02:00",
+          "pr": 7398,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "de29d1d6fdd5e5cfdf038593228a34e694075a5d",
+          "title": "refactor",
+          "date": "2023-02-27T08:30:09-08:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "ac084c5bdb2f188ff878687000273ae2247db24b",
+        "parent": "5d997d94d8041ed12db5abe7a1155b30df057b43",
+        "title": "fix(builders): allow None table name in table_ for sqlglotc (#8476)",
+        "date": "2026-10-01T15:08:44+03:00",
+        "pr": 8476
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T15:08:44+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "74fd80cdf055c828cedfac43b4b54132d18558bb",
+          "title": "refactor!: split up expressions.py (#7160)",
+          "date": "2026-02-26T14:18:40-08:00",
+          "pr": 7160,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
+        "parent": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
+        "title": "fix(duckdb): check for an empty regexp pattern before embedding flags (#8474)",
+        "date": "2026-10-01T11:24:09+03:00",
+        "pr": 8474
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T11:24:09+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4f8a49cd42ef37178cd0626554bfd263a140046e",
+          "title": "feat(snowflake)!: Transpilation support for Snowflake REGEXP_COUNT to DuckDB (#7054)",
+          "date": "2026-02-12T18:59:07+02:00",
+          "pr": 7054,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "1074d66231d1de64b6b9aa43de6afbdc6717da5f",
+          "title": "feat(snowflake)!: transpilation of Snowflake REGEXP_INSTR to DuckDB (#7097)",
+          "date": "2026-02-18T13:05:33+02:00",
+          "pr": 7097,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4afe079f91f06440b2f4c4a2cad754e0ee8d23fa",
+        "parent": "61fc386dc713e281523768d41ff2bb8b5450e751",
+        "title": "fix(ci): wait for sqlglotc before publishing sqlglot [CODEX]",
+        "date": "2026-09-30T17:36:36-07:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T17:36:36-07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "61fc386dc713e281523768d41ff2bb8b5450e751",
+        "parent": "cb8f96327ef8c34e7d748ba6003a35c3b53d4b92",
+        "title": "fix(clickhouse): generate toDayOfMonth and toDayOfYear (#8473)",
+        "date": "2026-10-01T03:29:07+03:00",
+        "pr": 8473
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T03:29:07+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5d16fa83bfb8f3582eaffa4b99c7d05a061d8a76",
+        "parent": "b54d32f036d4c1158bb889324f4ac6d2846d2701",
+        "title": "fix(ci): publish sqlglot independently of sqlglotc [CODEX]",
+        "date": "2026-09-30T10:30:05-07:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T10:30:05-07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "0a0cc95e97c501b56931c08ff5a5278df2b97bf2",
+          "title": "feat!!: remove rust and build c (#7120)",
+          "date": "2026-02-23T08:25:55-08:00",
+          "pr": 7120,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b54d32f036d4c1158bb889324f4ac6d2846d2701",
+        "parent": "aa702020725f4d1591cfb2d308c72937a38e8fd4",
+        "title": "fix(optimizer): stop struct lookup at nearest alias [CODEX]",
+        "date": "2026-09-30T10:08:27-07:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T10:08:27-07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "aa702020725f4d1591cfb2d308c72937a38e8fd4",
+          "title": "fix(optimizer): qualify struct paths with conflicting aliases [CODEX] (#8467)",
+          "date": "2026-09-30T09:46:55-07:00",
+          "pr": 8467,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "aa702020725f4d1591cfb2d308c72937a38e8fd4",
+        "parent": "1e6ac8f4650dda7f29553a2d2a320b4d4035af66",
+        "title": "fix(optimizer): qualify struct paths with conflicting aliases [CODEX] (#8467)",
+        "date": "2026-09-30T09:46:55-07:00",
+        "pr": 8467
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T09:46:55-07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a34fc276539980ee1f3d51e85a17a19f40b3f276",
+          "title": "fix(optimizer)!: star referencing outer-scope from correlated subquery (#8291)",
+          "date": "2026-09-10T13:34:12+03:00",
+          "pr": 8291,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "Pre-8291 code already had 'column_table not in scope.selected_sources', so c.address.state stayed a 3-part column when 'address' was also a source alias; 8291 only reshuffled that condition. Scope: Wrong qualification of a struct path that collides with a source alias is a logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "840b4823e649e380e1dda30cf21907baebb6c58c",
+        "parent": "2960bdd7470f1c21518710ed468466b9bab4bb7b",
+        "title": "fix(postgres): keep WITH ORDINALITY alias columns on LATERAL UNNEST [GROK] (#8463)",
+        "date": "2026-09-30T11:34:49+03:00",
+        "pr": 8463
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T11:34:49+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "1430461bb6ba53c29bc08e5df9172d6f7c71f3da",
+          "title": "Expression building (#96)",
+          "date": "2022-04-21T10:33:50-07:00",
+          "pr": 96,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "2960bdd7470f1c21518710ed468466b9bab4bb7b",
+        "parent": "e7aa310df7aa74891e22394416c1ee6a2a389f9e",
+        "title": "fix(optimizer): preserve tautological aggregate filters [CODEX] (#8466)",
+        "date": "2026-09-30T11:33:25+03:00",
+        "pr": 8466
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T11:33:25+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "d1ca59ffbc1ee259f4e2edbbdea7e41d6777196f",
+          "title": "remove where true",
+          "date": "2022-05-27T19:17:49-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "18520e2b5bfa3f1d7ed1a261d1bd463132054db1",
+        "parent": "11220460d0e78a3c83f14b006239f636e4ddde71",
+        "title": "fix(clickhouse): generate varPop for VariancePop [CLAUDE] (#8469)",
+        "date": "2026-09-30T11:27:38+03:00",
+        "pr": 8469
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T11:27:38+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "11220460d0e78a3c83f14b006239f636e4ddde71",
+        "parent": "d84f7f3ee1ff50778c93970b086d59692714dcdc",
+        "title": "fix(spark)!: convert ARRAY_INSERT position between 0- and 1-based dialects [CLAUDE] (#8460)",
+        "date": "2026-09-29T21:05:00+03:00",
+        "pr": 8460
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-29T21:05:00+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "9d7db06cf8ef66583f11b6d54af573bb28f4434b",
+          "title": "fix(spark)!: Generator for ARRAY_INSERT(expr) (#7036)",
+          "date": "2026-02-10T15:27:50+02:00",
+          "pr": 7036,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": true,
+          "scope": "in",
+          "grade": null,
+          "note": "7036 added a Spark generator lambda for exp.ArrayInsert that prints args['position'] verbatim, so a Snowflake 0-based position is emitted unchanged for Spark's 1-based ARRAY_INSERT (8460 body: Snowflake 0 to Spark 0 errors, should be 1). Scope: Wrong index base conversion between dialects is a boundary/off-by-one logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d84f7f3ee1ff50778c93970b086d59692714dcdc",
+        "parent": "b4d9e37d84a61eeb78e8d652f697e2e0d4d57869",
+        "title": "fix!: preserve BD literal semantics in Hive and Spark (#8455)",
+        "date": "2026-09-29T20:34:01+03:00",
+        "pr": 8455
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-29T20:34:01+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4eae60b8a2b32f9d70ed88be1108f96f8286ec72",
+          "title": "Extract Hive parser into sqlglot/parsers/hive.py for mypyc compilation (#7219)",
+          "date": "2026-03-06T20:24:59+02:00",
+          "pr": 7219,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "37fa8c7219a2f17a351f948d6eb314a543f8784d",
+          "title": "chore(tokenizer)!: Split core functionality to TokenizerCore (#7116)",
+          "date": "2026-02-20T19:55:29+02:00",
+          "pr": 7116,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "63f8dc6dfc19d4ae14984d393bc63532c1085e07",
+          "title": "perf(tokens): cache TokenizerCore per thread (#7547)",
+          "date": "2026-04-23T09:15:28-07:00",
+          "pr": 7547,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b4d9e37d84a61eeb78e8d652f697e2e0d4d57869",
+        "parent": "38ed0293330047bb5c058bc53d10b6bf6dbcdc34",
+        "title": "fix(athena)!: inherit Trino dialect, parser and generator defaults (#8464)",
+        "date": "2026-09-29T17:25:33+03:00",
+        "pr": 8464
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-29T17:25:33+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "ce16997f7fd81bfebc65a80b70112069f98b8d63",
+          "title": "Chore: clean tokenizer/dialect code from **opts, and minor typing improvements (#7422)",
+          "date": "2026-04-01T14:34:40+03:00",
+          "pr": 7422,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "cfab31c4bb7d869f571ef72986411ede2a30f84c",
+          "title": "Refactor(athena)!: route statements to hive/trino depending on their type (#5314)",
+          "date": "2025-07-01T01:14:17+03:00",
+          "pr": 5314,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "dcf01c17adb1c8231fee929c588eded0e71e3a5e",
+          "title": "refactor(presto)!: Extract and compile generator (#7379)",
+          "date": "2026-03-24T17:56:57+02:00",
+          "pr": 7379,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e3f71dc1a1186ada4b017a5f2498b8c2b0a8a25b",
+        "parent": "f8e3d836e1a00697ce4a9a420f276d1e3f89db55",
+        "title": "fix(snowflake)!: decode backslash escape sequences in string literals (#8456)",
+        "date": "2026-09-29T16:51:22+03:00",
+        "pr": 8456
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-29T16:51:22+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d9b2b9660be8a6b77a0bb0475f6bf0509c6c6aa0",
+        "parent": "0695e224a8b021dea96c10d923ec8ae71393bcfb",
+        "title": "fix(parser): constraint parsing fixup (#8457)",
+        "date": "2026-09-28T21:46:39+03:00",
+        "pr": 8457
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T21:46:39+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "ab010674bd82514d6568094b376a1d2377b67995",
+          "title": "Chore!: cleanup unnecessary tokens (#1688)",
+          "date": "2023-05-24T13:40:47-07:00",
+          "pr": 1688,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4b01d2ba95358e3746a4cd33541ff252e571f80e",
+        "parent": "c4090855c9457971083e43e6e781e83bbd411c19",
+        "title": "fix(mysql): parse INSERT VALUE synonym [CODEX] (#8437)",
+        "date": "2026-09-28T16:00:34+03:00",
+        "pr": 8437
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T16:00:34+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "ee5a989cd5b756c10068837887f34ffe8606ce7f",
+          "title": "Feat(mysql): support INSERT ... SET ... syntax closes #7927 (#7929)",
+          "date": "2026-07-22T17:36:04+03:00",
+          "pr": 7929,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "e31b7176341a8496ec8cccef50d57346145b02d3",
+          "title": "Fix(clickhouse): generate exp.Values correctly, handle `FORMAT Values` (#3900)",
+          "date": "2024-08-13T16:27:11+03:00",
+          "pr": 3900,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c4090855c9457971083e43e6e781e83bbd411c19",
+        "parent": "b3b6c57cea516bf8f76c6262b308d86dff82ca1b",
+        "title": "fix(singlestore): make Collate generation idempotent (#8454)",
+        "date": "2026-09-28T15:41:23+03:00",
+        "pr": 8454
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T15:41:23+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b3b6c57cea516bf8f76c6262b308d86dff82ca1b",
+        "parent": "2be1e0e2addc0ef01cfa3fd3cf2ef751cdbf411d",
+        "title": "fix(transforms)!: avoid projecting window-only columns in eliminate_qualify [WORKBUDDY] (#8447)",
+        "date": "2026-09-28T14:49:48+03:00",
+        "pr": 8447
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T14:49:48+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a800d8578df17a645dde769e9db4605daceb6222",
+          "title": "Whoops",
+          "date": "2024-04-15T22:43:51+03:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1d40af146d77dcf890ae18c1a59e649bf0862db3",
+        "parent": "a97ebe1ec304244ecc69e62a1936135aab5ccdb8",
+        "title": "fix(optimizer): unqualified semi/anti join column bound to table joined (#8430)",
+        "date": "2026-09-28T13:08:31+03:00",
+        "pr": 8430
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T13:08:31+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "48224266ff6502a6c9eaeb854f398327ee894fb4",
+          "title": "fix(optimizer): Disambiguate JOIN ON columns during qualify (#6155)",
+          "date": "2025-10-23T14:29:22+03:00",
+          "pr": 6155,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "The unqualified semi/anti-join column resolved via the global unambiguous-column lookup, which already existed before 6155 (it only added a fallback); 8430 fixes that older lookup. Scope: Wrong table bound to an unqualified column is a logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d01e9461a7a3fcbe50a965c7a2ddf55d41aca97d",
+        "parent": "d2fbb215ff6bd548547a151e8838c277aad076c1",
+        "title": "fix(optimizer): preserve ordinal ordering with duplicate aliases [CODEX] (#8436)",
+        "date": "2026-09-25T20:02:49-07:00",
+        "pr": 8436
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T20:02:49-07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d2fbb215ff6bd548547a151e8838c277aad076c1",
+        "parent": "87b14027372c3820cbf6c89bc8adc2cbf8963404",
+        "title": "fix(duckdb)!: preserve TIMESTAMP_FROM_PARTS time zones (#8422) (#8434)",
+        "date": "2026-09-25T20:53:20+03:00",
+        "pr": 8434
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T20:53:20+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "87b14027372c3820cbf6c89bc8adc2cbf8963404",
+        "parent": "4c11d07af4b533274cabbcae9271234e9a0b039c",
+        "title": "fix(optimizer): preserve grouping when complementing comparisons (#8433)",
+        "date": "2026-09-25T20:48:38+03:00",
+        "pr": 8433
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T20:48:38+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b898e924ad3b81d33c9f4eacf5decdaf542aebda",
+          "title": "fix(optimizer)!: refactor `Connector` simplification to factor in types (#6152)",
+          "date": "2025-11-10T15:26:56+02:00",
+          "pr": 6152,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": "in",
+          "grade": null,
+          "note": "skipped for size. Not evaluated: introducing PR 6152 is 2052 changed lines (limit 1500), skipped for size. Scope: Negated-comparison simplification losing grouping/parentheses is a logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4c11d07af4b533274cabbcae9271234e9a0b039c",
+        "parent": "981e492413740f7740d2b0288e3da5b4028c767e",
+        "title": "fix(sqlite)!: avoid AUTOINCREMENT without a primary key (#8431)",
+        "date": "2026-09-25T19:33:59+03:00",
+        "pr": 8431
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T19:33:59+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "dbc316cd126bed5311552e5dce7703ec693f4771",
+          "title": "Fix SQLite autoincrement constraint order (#7664)",
+          "date": "2026-05-25T12:37:39+03:00",
+          "pr": 7664,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "Issue 8423 is GENERATED AS IDENTITY with no primary key leaking AUTOINCREMENT, a different constraint path 7664 never touched (it only reorders AutoIncrementColumnConstraint); the no-PK drop for AUTO_INCREMENT pre-dated it. Scope: Invalid SQLite DDL emitted, a logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "981e492413740f7740d2b0288e3da5b4028c767e",
+        "parent": "a313c8bee143b4b92c9a068fef72a5fd512bba61",
+        "title": "fix(clickhouse): preserve GLOBAL JOIN after ON conditions fixes #8426",
+        "date": "2026-09-25T18:41:51+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T18:41:51+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "193f9a288d999b50d45108fd53f825615fc2b606",
+          "title": "Extract ClickHouse parser into sqlglot/parsers/clickhouse.py for mypyc compilation (#7230)",
+          "date": "2026-03-09T17:09:51+02:00",
+          "pr": 7230,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b155a29574fbc57720637343529623c02b0db43a",
+          "title": "refactor!: expression to not use **kwargs because it allocates multiple dicts (#7256)",
+          "date": "2026-03-10T07:49:51-07:00",
+          "pr": 7256,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8d9f5d08cce4b72b4df1a8f6394c2aa043cc7de8",
+        "parent": "b85a8c8b0d107410f6689c2ddad0921dbff9ddad",
+        "title": "fix(parser): handle singular ROW in FETCH and OFFSET clauses closes #8429",
+        "date": "2026-09-25T17:53:37+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T17:53:37+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "84e9da0bb552f76fee224551fc276199f2790e5d",
+          "title": "fix(tsql)!: support TOP with PERCENT and WITH TIES (#4801)",
+          "date": "2025-02-25T21:49:51+02:00",
+          "pr": 4801,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "d3aa7bb166ab46d3be943abe2655618154f17803",
+          "title": "Feat(parser): allow functions in FETCH clause (#2207)",
+          "date": "2023-09-13T08:45:42-07:00",
+          "pr": 2207,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "934cdb585d1697c04dbecf056d7412ac515bc25f",
+          "title": "add more robust struct support",
+          "date": "2022-08-08T21:13:55-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b85a8c8b0d107410f6689c2ddad0921dbff9ddad",
+        "parent": "20fa8aedc48fccb780b973987908db63d0f76895",
+        "title": "fix(optimizer)!: exponential AST growth prevention in merge_subqueries (#8427)",
+        "date": "2026-09-25T17:21:38+03:00",
+        "pr": 8427
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T17:21:38+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "c933fe330472ae216786eff3837bcc5233ab6d08",
+          "title": "fix(optimizer)!: canonicalize numeric-literal GROUP BY to positional ordinal on merge (#7883)",
+          "date": "2026-07-20T22:28:32+03:00",
+          "pr": 7883,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "1a38c056a1f47cfc07c9bef4ed11b795a91f947e",
+          "title": "perf(optimizer): speed up merge_subqueries (#7924)",
+          "date": "2026-07-24T13:00:35+03:00",
+          "pr": 7924,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "2ad70da8c21cdbf4fc4b17330cb2978425837c7d",
+          "title": "Optimizer: Merge derived tables (#433)",
+          "date": "2022-09-15T10:15:09-07:00",
+          "pr": 433,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "20fa8aedc48fccb780b973987908db63d0f76895",
+        "parent": "32a9297a24f06035293a2a3e935a7b65ece25755",
+        "title": "fix!: keep `TRY_TO_NUMBER` safe when it falls back to a cast [CLAUDE] (#8424)",
+        "date": "2026-09-25T15:59:52+03:00",
+        "pr": 8424
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T15:59:52+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "61bb18cc00a1749f8945e56ff4e83e4c809bd6df",
+          "title": "feat(snowflake)!: Transpilation support for TO_DECIMAL, TO_NUMBER,NUMERIC (#7315)",
+          "date": "2026-04-06T13:53:41+03:00",
+          "pr": 7315,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "850bf1e49a59c5950c0385772641fd0e89a3a4b8",
+          "title": "refactor(duckdb)!: Extract and compile generator (#7375)",
+          "date": "2026-03-24T19:01:42+02:00",
+          "pr": 7375,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "32a9297a24f06035293a2a3e935a7b65ece25755",
+        "parent": "a3884168f639633fa8f64334bf63e4b343bedfe2",
+        "title": "fix(optimizer): avoid accumulating parentheses when merging repeated references (#8425)",
+        "date": "2026-09-25T14:41:08+03:00",
+        "pr": 8425
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T14:41:08+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "46de976953aab66e10216bd0df56fd3537ee996d",
+          "title": "Fix!(optimizer): preserve predecence when merging derived tables (#1857)",
+          "date": "2023-06-29T10:01:41-07:00",
+          "pr": 1857,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "0b29bb3b6065b3f0de492f3c07584b2cc9475f5f",
+          "title": "Fix(optimizer)!: preserve projection names when merging subqueries",
+          "date": "2025-08-11T14:43:09+03:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ddbf64ceef63150ffef5e60b5601af0e84a9f54b",
+          "title": "perf: optimize large query performance in optimizer pipeline (#7090)",
+          "date": "2026-02-18T11:45:55+02:00",
+          "pr": 7090,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a3884168f639633fa8f64334bf63e4b343bedfe2",
+        "parent": "aff6c37d1c7ea4c0853f33c0b1ced8af5ec69a52",
+        "title": "fix!: retain json <string> literals closes #8413",
+        "date": "2026-09-24T14:39:17+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T14:39:17+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "74fd80cdf055c828cedfac43b4b54132d18558bb",
+          "title": "refactor!: split up expressions.py (#7160)",
+          "date": "2026-02-26T14:18:40-08:00",
+          "pr": 7160,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b155a29574fbc57720637343529623c02b0db43a",
+          "title": "refactor!: expression to not use **kwargs because it allocates multiple dicts (#7256)",
+          "date": "2026-03-10T07:49:51-07:00",
+          "pr": 7256,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "abacf31d7b12b3bd70cd4a70b25cfcd2ad6c1f0a",
+        "parent": "284ea43fe773762a1aa1556171bbb4c03a197788",
+        "title": "fix(optimizer)!: use row-preserving default projection for windowed aggregates (#8381)",
+        "date": "2026-09-24T13:51:27+03:00",
+        "pr": 8381
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T13:51:27+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "1d753d72c6e81e39cfc7160af33673314d4d600e",
+          "title": "fix(optimizer)!: EXISTS over a scalar aggregate is always true [CLAUDE] (#8304)",
+          "date": "2026-09-07T17:52:31+03:00",
+          "pr": 8304,
+          "lines": 16,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "8a29419f98c88939080db8e4fe1df34225d9135a",
+          "title": "fix(optimizer)!: stop pruning implicit GROUP BY ALL keys during projection pushdown (#8129)",
+          "date": "2026-08-12T19:26:58+03:00",
+          "pr": 8129,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "284ea43fe773762a1aa1556171bbb4c03a197788",
+        "parent": "60c1f4b7d8f488b6b8e3eaf5086e400950a2b02b",
+        "title": "fix(starrocks)!: support IGNORE NULLS and RESPECT NULLS in window functions [CLAUDE] (#8412)",
+        "date": "2026-09-24T00:13:10+03:00",
+        "pr": 8412
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T00:13:10+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1d0e3f34864037c54cf6bdf45af594db62ad7319",
+        "parent": "29126817b38894518ddecb9531fa9ae07a1d934e",
+        "title": "fix(mysql)!: Fix mysql roundtrip for DATE_ADD and DATE_SUB (#8417)",
+        "date": "2026-09-22T17:24:36-04:00",
+        "pr": 8417
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-22T17:24:36-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "646295528c953311540fe2175999ac0231a25b71",
+          "title": "fix(postgres): transpile DAY/MONTH/YEAR to EXTRACT [CLAUDE] (#7984)",
+          "date": "2026-07-30T18:04:20+03:00",
+          "pr": 7984,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "7984 only moved _remove_ts_or_ds_to_date from mysql.py into dialect.py as remove_ts_or_ds_to_date (pure move); the DATE() drop in DATE_ADD existed in versions 28+ per issue 8392. Scope: Silently dropping DATE() truncation changes the computed value, a logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1a782c55a8f2bad4ac9ca7e28b1a1b1164840894",
+        "parent": "8c3b9893f72f0913fa0a8a4188d55c8cc6692ad5",
+        "title": "fix(mysql)!: keep the native IF instead of changing it to CASE [CLAUDE] (#8409)",
+        "date": "2026-09-21T15:56:07+03:00",
+        "pr": 8409
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-21T15:56:07+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8c3b9893f72f0913fa0a8a4188d55c8cc6692ad5",
+        "parent": "4ef067cff468c08f69cb84b4bab15f4b991da9e2",
+        "title": "fix(mysql): SHOW CREATE TABLE generating a syntax error [CLAUDE] (#8408)",
+        "date": "2026-09-21T14:44:20+03:00",
+        "pr": 8408
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-21T14:44:20+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "1b14a7971c63a44ec1e52e4356316a2db20dde43",
+          "title": "refactor(mysql)!: Extract and compile generator (#7381)",
+          "date": "2026-03-24T20:13:28+02:00",
+          "pr": 7381,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "eeece5a564e2d5c37b73d172843e7cd437406c42",
+        "parent": "8b6ff9386ddf4f6f8e3120a21f1991a384e60abd",
+        "title": "fix!: preserve pagination scope in set operations (#8385)",
+        "date": "2026-09-21T13:50:27+03:00",
+        "pr": 8385
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-21T13:50:27+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "93af9da1f128d984c891ba5e463b564f1b28c6ef",
+          "title": "feat!: allow unions to be limited directly and stop subquerying since… (#3301)",
+          "date": "2024-04-11T10:04:49-07:00",
+          "pr": 3301,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "09cc35dcb7392865f60532c9ba389c64dcd3177a",
+          "title": "refactor(tsql)!: Extract and compile generator (#7373)",
+          "date": "2026-03-24T16:11:57+02:00",
+          "pr": 7373,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "e65b00ede53fb846b654601fafcd21b357c9b47b",
+          "title": "fix: make union parsing non-recursive, allowing to parse infinite large unions and lhs binding (#2662)",
+          "date": "2023-12-12T15:57:32-08:00",
+          "pr": 2662,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "bb7d59390db47b24ad0ed08b8a5330391fc8b0a2",
+          "title": "Fix!: refactor SET OPERATION handling to set correct defaults (#4009)",
+          "date": "2024-08-29T23:10:41+03:00",
+          "pr": 4009,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "dfa65297ab72fbe97000b6dc177d4d3e9332c678",
+          "title": "feat(oracle): Support for WITH READ ONLY / CHECK OPTION (#3639)",
+          "date": "2024-06-12T20:43:37+03:00",
+          "pr": 3639,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8b6ff9386ddf4f6f8e3120a21f1991a384e60abd",
+        "parent": "99940ea16df4827cc23a942a8fe7e24ab09ca907",
+        "title": "fix(executor): support DISTINCT calculations CLAUDE (#8395)",
+        "date": "2026-09-19T20:14:39-07:00",
+        "pr": 8395
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-19T20:14:39-07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "dcf9ed58303bf320f3e3498618bd95639037efde",
+          "title": "Feat(mypyc)!: compile python generator (#7528)",
+          "date": "2026-04-20T22:34:17+03:00",
+          "pr": 7528,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a22d2cf57e3c5f075323fee95b8e8da22b671b52",
+          "title": "more progress",
+          "date": "2022-06-16T18:55:26-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4d68928217023ba066714825172115520f012dd6",
+          "title": "refactor",
+          "date": "2022-06-17T16:43:00-07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "854f2ba3091c2a53e95eb269f24899ba3fe2dc3b",
+          "title": "Refactor: factor out the the name sequence generation logic (#1716)",
+          "date": "2023-06-02T08:36:54-07:00",
+          "pr": 1716,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ac43f3049baab385106748f5e0f722c0c5fc5df6",
+          "title": "allow joining with same names (#660)",
+          "date": "2022-10-31T15:05:29-07:00",
+          "pr": 660,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9beb769dbffdbabc73b4459137ce2be21678765f",
+        "parent": "9bc418af0e03220a6eb5289a009bd79328e7cfd1",
+        "title": "fix(duckdb)!: drop TIMESTAMP_LTZ precision [CODEX] (#8403)",
+        "date": "2026-09-19T15:24:47+03:00",
+        "pr": 8403
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-19T15:24:47+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "cb228952ce742903749e63bfa4db3175ecac17cc",
+          "title": "Fix: parse time[(p)] with time zone correctly (#2041)",
+          "date": "2023-08-11T21:34:44+03:00",
+          "pr": 2041,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9bc418af0e03220a6eb5289a009bd79328e7cfd1",
+        "parent": "06c7b3dd7b656ff5ed80337ee668cf58318e002b",
+        "title": "fix(snowflake): parse unquoted PUT sources as exp.Put [CODEX] (#8400)",
+        "date": "2026-09-19T14:50:35+03:00",
+        "pr": 8400
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-19T14:50:35+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "47e75e5bb29c6ecd142ca4c51e27ac4ed9996f74",
+          "title": "refactor!: Extract Snowflake parser for mypyc compilation (#7229)",
+          "date": "2026-03-09T17:33:04+02:00",
+          "pr": 7229,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "06c7b3dd7b656ff5ed80337ee668cf58318e002b",
+        "parent": "a070393d34aae2fda84f70896a3c3d90820720b5",
+        "title": "fix(optimizer)!: preserve precedence when collapsing CASE and IF (#8389)",
+        "date": "2026-09-19T14:32:42+03:00",
+        "pr": 8389
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-19T14:32:42+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "0f637bcd5fa079d19a23314ef8c80ae4e9f8857d",
+          "title": "fix: can't simplify null parens",
+          "date": "2024-03-18T23:47:29-07:00",
+          "pr": null,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "2cb9772c420f8446a783ef95d5fdb2b94410fae7",
+          "title": "fix(optimizer): enhance simplify_parens to handle additional parent types (#7339)",
+          "date": "2026-03-20T11:11:09+02:00",
+          "pr": 7339,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "1173ccf17934fde457fca91982cd58cdec98dff5",
+          "title": " Feat!(optimizer): simplify conditionals (IF, CASE) (#2403)",
+          "date": "2023-10-14T02:03:02+03:00",
+          "pr": 2403,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "419a9d47c2f73105eea64d0ac7c4c868e96623c2",
+          "title": "Feat(optimizer): simplify CONCAT_WS (#2383)",
+          "date": "2023-10-08T02:10:37+03:00",
+          "pr": 2383,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b898e924ad3b81d33c9f4eacf5decdaf542aebda",
+          "title": "fix(optimizer)!: refactor `Connector` simplification to factor in types (#6152)",
+          "date": "2025-11-10T15:26:56+02:00",
+          "pr": 6152,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a470787be21812ba235963c41f23107e3502c00b",
+        "parent": "59e970284f93b780f6e2886471e35a01087a34ee",
+        "title": "fix(optimizer): prevent merge_subqueries from folding set-returning projections (#8379)",
+        "date": "2026-09-18T16:23:15-04:00",
+        "pr": 8379
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-18T16:23:15-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "1a38c056a1f47cfc07c9bef4ed11b795a91f947e",
+          "title": "perf(optimizer): speed up merge_subqueries (#7924)",
+          "date": "2026-07-24T13:00:35+03:00",
+          "pr": 7924,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "f22bcdbad732d9df2c02d37426cbdc27e64b5da6",
+          "title": "fix(optimizer): preserve unreferenced UDTF and anonymous-function projections (#8314)",
+          "date": "2026-09-08T19:48:58-04:00",
+          "pr": 8314,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "901a67882871b9eb27ad9dfdd23380c0fca4cf1f",
+        "parent": "90d44b8556a19ddf8d4d43395a39f589a42ab748",
+        "title": "fix(optimizer)!: preserve DuckDB DATE_TRUNC return type when simplifying.",
+        "date": "2026-09-18T22:12:03+03:00",
+        "pr": 8375
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-18T22:12:03+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "e86889549e739b998c4bd7552d5f1fe45b056378",
+          "title": "feat(optimizer): more date function coercion (#2493)",
+          "date": "2023-10-31T16:21:46-07:00",
+          "pr": 2493,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "48c7e721e4c0ff93862ca8909dc31f350ca667e2",
+          "title": "Fix(optimizer): preserve the original type when creating a date literal (#3273)",
+          "date": "2024-04-04T18:04:21+03:00",
+          "pr": 3273,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f5cb53d6d06e8dd7e7521b35d7294d7c9fa5d293",
+        "parent": "539b1125dbe698145057a58efaff2eb7ae2dfdbd",
+        "title": "fix(optimizer)!: qualify bare right-hand table column ref in SEMI/ANTI join ON (#8383)",
+        "date": "2026-09-18T04:12:04+03:00",
+        "pr": 8383
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-18T04:12:04+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "48224266ff6502a6c9eaeb854f398327ee894fb4",
+          "title": "fix(optimizer): Disambiguate JOIN ON columns during qualify (#6155)",
+          "date": "2025-10-23T14:29:22+03:00",
+          "pr": 6155,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "Without a resolvable source for a semi/anti join table, an unqualified ON column raised 'not found' before 6155; 6155 added a new fallback that did not cover semi/anti joins, a gap, not a regression. Scope: Valid query rejected because of resolution order, a logic/boundary error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4e973f0c0cd426ab2260db291d45a7a207b48356",
+        "parent": "5803bd751da9f956c7973d26f692e449ad560357",
+        "title": "fix(optimizer)!: honor positional column aliases declared on derived tables and CTEs (#8382)",
+        "date": "2026-09-17T21:45:07+03:00",
+        "pr": 8382
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-17T21:45:07+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "113338aee38d3f11e91f0f591ce52b532d377c02",
+          "title": "Fix(optimizer): ensure TableAlias column names shadow source columns (#2002)",
+          "date": "2023-08-08T16:24:41+03:00",
+          "pr": 2002,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "76004d7f33b2365e5e0d66917c18422070fda129",
+        "parent": "b6aebcde1f6722142dbd812715cc5db6e5dc54f4",
+        "title": "fix(sqlite): emit GROUP_CONCAT ORDER BY instead of dropping it [CODEX] (#8373)",
+        "date": "2026-09-17T15:34:07+03:00",
+        "pr": 8373
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-17T15:34:07+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "d9f2667700f1cb132d27176d595e73af4558dce7",
+          "title": "Add support for STRING_AGG <-> GROUP_CONCAT transpilation (#774)",
+          "date": "2022-11-28T15:35:49-08:00",
+          "pr": 774,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ab3360d3dded78d44c74bafa027fa6c09c77968f",
+          "title": "Chore!: improve python type hints (#1689)",
+          "date": "2023-05-25T22:44:33+03:00",
+          "pr": 1689,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "65eb23b53420212c20f394d399ca18efefec90e3",
+        "parent": "be21f091dc5de8add630267b5d0c20ba1b10fc7f",
+        "title": "fix(spark): emit SQL function determinism correctly [CODEX] (#8369)",
+        "date": "2026-09-17T13:08:38+03:00",
+        "pr": 8369
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-17T13:08:38+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "fa73693547ad5a88ccbbe90fad1196b3153198ed",
+        "parent": "da5725b475a08258450a8e535dff1c72360f2f62",
+        "title": "fix(parser): support OPERATOR as implicit alias (#8365)",
+        "date": "2026-09-16T14:56:28-05:00",
+        "pr": 8365
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-16T14:56:28-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a2b09dab9dbd91bd354214db2ec7d0cf7cb93b86",
+          "title": "fix(postgres)!: move postgres range parsers to global level (#6591)",
+          "date": "2025-12-22T14:52:30+02:00",
+          "pr": 6591,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d53cbc988512ee63ca547694c6a1656fd4dbb637",
+        "parent": "e94639635d388cf6b58dd79d643a62082d2305cb",
+        "title": "fix(parser)!: raise on a duplicate OFFSET instead of overwriting it [CLAUDE] (#8367)",
+        "date": "2026-09-16T09:52:10+03:00",
+        "pr": 8367
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-16T09:52:10+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e94639635d388cf6b58dd79d643a62082d2305cb",
+        "parent": "338bb0699385f8a35f76c98954c58b920da679b5",
+        "title": "fix(optimizer): preserve COALESCE fallbacks after NULL [CODEX] (#8364)",
+        "date": "2026-09-15T17:10:12+03:00",
+        "pr": 8364
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-15T17:10:12+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "05d3f301e7bf18fc0492b6741ab878a977bfb32a",
+          "title": "fix!: sort comparisons (#2686)",
+          "date": "2023-12-15T12:59:51-08:00",
+          "pr": 2686,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "338bb0699385f8a35f76c98954c58b920da679b5",
+        "parent": "a069a0964418188e3822e8bf9238af6b89db0652",
+        "title": "fix(sqlite): evaluate dynamic date-add amounts [COPILOT] (#8360)",
+        "date": "2026-09-15T15:39:13+03:00",
+        "pr": 8360
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-15T15:39:13+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a069a0964418188e3822e8bf9238af6b89db0652",
+        "parent": "4eb2c99a150f56c9048a3ddf6c71dded86597362",
+        "title": "fix(tsql): parse FORMAT(x, 'ffffff') as a time format",
+        "date": "2026-09-15T15:08:38+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-15T15:08:38+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "319f3591e53013b972c57057c65479d7024a4388",
+          "title": "feat(tsql): Move parser out and enable compilation (#7221)",
+          "date": "2026-03-06T20:23:30+02:00",
+          "pr": 7221,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4eb2c99a150f56c9048a3ddf6c71dded86597362",
+        "parent": "4b84b4d4f3e91e4f64721cb72e0590e4de72aa46",
+        "title": "fix(fabric)!: transpile json type to varchar(max), similar to xml",
+        "date": "2026-09-15T14:59:03+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-15T14:59:03+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "09cc35dcb7392865f60532c9ba389c64dcd3177a",
+          "title": "refactor(tsql)!: Extract and compile generator (#7373)",
+          "date": "2026-03-24T16:11:57+02:00",
+          "pr": 7373,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4b84b4d4f3e91e4f64721cb72e0590e4de72aa46",
+        "parent": "d3110c5c2c1eb6c1da6b4e3dc20652c08c8d4691",
+        "title": "fix(fabric)!: keep scale and length for MONEY, SMALLMONEY, XML and IMAGE [CLAUDE] (#8362)",
+        "date": "2026-09-15T14:49:02+03:00",
+        "pr": 8362
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-15T14:49:02+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "09cc35dcb7392865f60532c9ba389c64dcd3177a",
+          "title": "refactor(tsql)!: Extract and compile generator (#7373)",
+          "date": "2026-03-24T16:11:57+02:00",
+          "pr": 7373,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "eee4750c47cf15c8a41432b21df26fdaa0a11ead",
+        "parent": "3ca824895ef423f7895fb13d72357548c0f1f367",
+        "title": "fix(optimizer)!: preserve UNION ALL arm width when nested set op forces column retention (#8325)",
+        "date": "2026-09-15T14:41:50+03:00",
+        "pr": 8325
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-15T14:41:50+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "d3bdb7ccc636dbb709a8e5ac434f7c183e4e5e71",
+          "title": "feat(optimizer): add a journal to record rule mutations (#8026)",
+          "date": "2026-08-03T19:00:09+03:00",
+          "pr": 8026,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b11c3d915ca617ea6f343b0c7cc4b392766fdaa0",
+          "title": "refactor(optimizer): clean up `pushdown_projections`",
+          "date": "2026-08-17T21:19:38+03:00",
+          "pr": null,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "5fac41edc6d81e9bad5a5d6a64888de4f80ff598",
+          "title": "refactor(optimizer): skip projection pushdown early (#8336)",
+          "date": "2026-09-11T15:08:07+03:00",
+          "pr": 8336,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "2d7cef9818637562a38a7a25c02f5d2852af7e62",
+          "title": "v11.2.5",
+          "date": "2023-03-03T11:45:30-08:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "3ca824895ef423f7895fb13d72357548c0f1f367",
+        "parent": "e27b7654a9d710e29da6f42994de845a99444c84",
+        "title": "fix(sqlite)!: preserve coalesce concat semantics closes #8343",
+        "date": "2026-09-14T16:39:39+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-14T16:39:39+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "adf00320d38a9904c8928bd33498fe4f79947150",
+          "title": "refactor(sqlite)!: Extract and compile generator (#7366)",
+          "date": "2026-03-24T15:47:16+02:00",
+          "pr": 7366,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e27b7654a9d710e29da6f42994de845a99444c84",
+        "parent": "87d16d022d76e642705681cb6140a544dbde24df",
+        "title": "fix(executor): plan DISTINCT before ORDER BY so the sort survives [CLAUDE] (#8321)",
+        "date": "2026-09-14T16:27:36+03:00",
+        "pr": 8321
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-14T16:27:36+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "3a5a9ab76a06db680b673cfca6ce968b106f7aea",
+          "title": "Execute SELECT DISTINCT (#782)",
+          "date": "2022-11-29T14:02:45-08:00",
+          "pr": 782,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6944a6c3ff5a9d18f31ddab53239cbce2e702055",
+          "title": "refactor!: Improve typing annotations for planner, schema, serde, and transforms modules (#7579)",
+          "date": "2026-05-05T14:13:03+03:00",
+          "pr": 7579,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "250bc50899c818bc9b93f6aa7b4456b485e0b5f9",
+          "title": "Fix: order by agg closes #1887 (#1889)",
+          "date": "2023-07-04T10:24:38-07:00",
+          "pr": 1889,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "87d16d022d76e642705681cb6140a544dbde24df",
+        "parent": "9d322b95cffbf09964f4b1b4dcfe0b17813d6b84",
+        "title": "fix(singlestore): ignore nulls in percentile ordering [CODEX] (#8352)",
+        "date": "2026-09-14T15:43:05+03:00",
+        "pr": 8352
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-14T15:43:05+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9831daa7b785c941ff7c7f90e7640349cec15151",
+        "parent": "1928165c7d9085b783f8f0c4eec2d6b12fd49a2c",
+        "title": "fix(sqlite): correct nanosecond date difference multiplier [COPILOT] (#8346)",
+        "date": "2026-09-14T15:22:33+03:00",
+        "pr": 8346
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-14T15:22:33+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "adf00320d38a9904c8928bd33498fe4f79947150",
+          "title": "refactor(sqlite)!: Extract and compile generator (#7366)",
+          "date": "2026-03-24T15:47:16+02:00",
+          "pr": 7366,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5dea557136b0690c280c5c006257f4d681d7f3ce",
+        "parent": "5cfb5997a99010940138670adf3d6b34ac5a0a08",
+        "title": "fix(doris): add 15 missing words to RESERVED_KEYWORDS (#8357)",
+        "date": "2026-09-14T11:38:01+03:00",
+        "pr": 8357
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-14T11:38:01+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5cfb5997a99010940138670adf3d6b34ac5a0a08",
+        "parent": "5bd170049d9d4d079e7200f55eaaacde294d1ca1",
+        "title": "fix(optimizer)!: preserve precedence when replacing aliases in predicate pushdown [GLM] (#8342)",
+        "date": "2026-09-12T14:01:25+03:00",
+        "pr": 8342
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-12T14:01:25+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "5faceb036273f889e8f4dfb4fd051c829bf1f3be",
+          "title": "copy column during replace (#680)",
+          "date": "2022-11-08T15:56:29-08:00",
+          "pr": 680,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a8719ad6425579b8becd9434b93c9a9f0d28b05e",
+        "parent": "56a66cddf65e83080ae6534824136575bf192274",
+        "title": "fix(optimizer)!: preserve columns when source is a whole-row reference (#8332)",
+        "date": "2026-09-11T15:51:32-04:00",
+        "pr": 8332
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-11T15:51:32-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b54e74a28dedfbac1269fe91d09a0b7878e8a9a6",
+          "title": "Feat(optimizer): add support for Spark's TRANSFORM clause (#4993)",
+          "date": "2025-04-21T12:42:39+03:00",
+          "pr": 4993,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "56a66cddf65e83080ae6534824136575bf192274",
+        "parent": "64d6f59a4981d35f362fecc615a4e3ce764bebb7",
+        "title": "fix(optimizer)!: avoid to rewrite RIGHT JOIN ... ON TRUE to CROSS JOIN in simplify (#8340)",
+        "date": "2026-09-11T21:29:30+03:00",
+        "pr": 8340
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-11T21:29:30+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4ceda24f30508d722819321aa97c60aead148d76",
+          "title": "fix: only some joins can be simplified to CROSS (#2025)",
+          "date": "2023-08-10T16:12:19-07:00",
+          "pr": 2025,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "31595ba4c5a8192db1ce681149becc152fa208c4",
+          "title": "refactor(optimizer)!: Compile simplify.py with mypyc (#7415)",
+          "date": "2026-03-30T18:09:17+03:00",
+          "pr": 7415,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b898e924ad3b81d33c9f4eacf5decdaf542aebda",
+          "title": "fix(optimizer)!: refactor `Connector` simplification to factor in types (#6152)",
+          "date": "2025-11-10T15:26:56+02:00",
+          "pr": 6152,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "64d6f59a4981d35f362fecc615a4e3ce764bebb7",
+        "parent": "70951c72dff3fb694040353e8db330756a242a7a",
+        "title": "fix(optimizer)!: for simplify fold contradictory comparisons to FALSE only for non-null columns (#8338)",
+        "date": "2026-09-11T19:34:29+03:00",
+        "pr": 8338
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-11T19:34:29+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "207b93e409f2762c61e2adde0885092cdd20c2fa",
+          "title": "simplify comparisons (#793)",
+          "date": "2022-12-04T19:24:38-08:00",
+          "pr": 793,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "70951c72dff3fb694040353e8db330756a242a7a",
+        "parent": "45595690cfbacaad486683e019e35c4b6c653786",
+        "title": "fix: implement `is_star` iteratively (#8337)",
+        "date": "2026-09-11T16:34:39+03:00",
+        "pr": 8337
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-11T16:34:39+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "74fd80cdf055c828cedfac43b4b54132d18558bb",
+          "title": "refactor!: split up expressions.py (#7160)",
+          "date": "2026-02-26T14:18:40-08:00",
+          "pr": 7160,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "45595690cfbacaad486683e019e35c4b6c653786",
+        "parent": "9ec72cf88314ef218face2c587957189ab10a21b",
+        "title": "fix(mysql): drop implicit NULLS FIRST from UNIQUE/INDEX key parts",
+        "date": "2026-09-11T16:26:57+03:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-11T16:26:57+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "9ec72cf88314ef218face2c587957189ab10a21b",
+          "title": "fix(mysql)!: parse MySQL index prefixes (#8335)",
+          "date": "2026-09-11T15:51:27+03:00",
+          "pr": 8335,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9ec72cf88314ef218face2c587957189ab10a21b",
+        "parent": "5fac41edc6d81e9bad5a5d6a64888de4f80ff598",
+        "title": "fix(mysql)!: parse MySQL index prefixes (#8335)",
+        "date": "2026-09-11T15:51:27+03:00",
+        "pr": 8335
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-11T15:51:27+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "8b374bd525eeade40cef0b02d281e7a9636b974a",
+          "title": "fix(mysql): support`UNIQUE` with options (#8330)",
+          "date": "2026-09-10T19:18:43+03:00",
+          "pr": 8330,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "7120c19570208503cff001788f28989f6f7ed9db",
+          "title": "Fix!(mysql): parse wrapped ordered for KEY/INDEX constraint (#3272)",
+          "date": "2024-04-04T03:13:59+03:00",
+          "pr": 3272,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "cf8a4db927c6ce462e2962ddc9546ab4152b8626",
+        "parent": "929fb83698f8cfb85e27d560a5182accff43573d",
+        "title": "fix(snowflake): support ROLLBACK as id var and udf name (#8334)",
+        "date": "2026-09-11T13:33:00+03:00",
+        "pr": 8334
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-11T13:33:00+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8b374bd525eeade40cef0b02d281e7a9636b974a",
+        "parent": "83abff6576cbc3b5858581b8ae9a912dec0f3304",
+        "title": "fix(mysql): support`UNIQUE` with options (#8330)",
+        "date": "2026-09-10T19:18:43+03:00",
+        "pr": 8330
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-10T19:18:43+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "0be05cb0e14355dc61577173c79f4a337bf63286",
+          "title": "Feat(mysql): improve support for DDL index column constraints (#1961)",
+          "date": "2023-07-27T19:39:00+03:00",
+          "pr": 1961,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b155a29574fbc57720637343529623c02b0db43a",
+          "title": "refactor!: expression to not use **kwargs because it allocates multiple dicts (#7256)",
+          "date": "2026-03-10T07:49:51-07:00",
+          "pr": 7256,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "8e46a647475578cff6268b6edc4fd8118b183040",
+          "title": "Extract MySQL parser into sqlglot/parsers/mysql.py for mypyc compilation (#7217)",
+          "date": "2026-03-06T20:23:01+02:00",
+          "pr": 7217,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "7120c19570208503cff001788f28989f6f7ed9db",
+          "title": "Fix!(mysql): parse wrapped ordered for KEY/INDEX constraint (#3272)",
+          "date": "2024-04-04T03:13:59+03:00",
+          "pr": 3272,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "58d8a05231999d8d0376f806ac5090fd67ed3507",
+          "title": "Fix(mysql): add support for index type in the UNIQUE KEY constraint (#2211)",
+          "date": "2023-09-13T08:45:11-07:00",
+          "pr": 2211,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "83abff6576cbc3b5858581b8ae9a912dec0f3304",
+        "parent": "9f604b3de5967c0107404676690c82e3c3552593",
+        "title": "fix(expressions)!: render a DynamicIdentifier in Table.name [CLAUDE] (#8329)",
+        "date": "2026-09-10T14:35:36+03:00",
+        "pr": 8329
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-10T14:35:36+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "74fd80cdf055c828cedfac43b4b54132d18558bb",
+          "title": "refactor!: split up expressions.py (#7160)",
+          "date": "2026-02-26T14:18:40-08:00",
+          "pr": 7160,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9f604b3de5967c0107404676690c82e3c3552593",
+        "parent": "faa5ebf5e7195ea62996d30a1089bf3533731eb2",
+        "title": "fix(sqlite)!: preserve GREATEST/LEAST NULL semantics (#8320)",
+        "date": "2026-09-10T14:35:12+03:00",
+        "pr": 8320
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-10T14:35:12+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "ce24ec6cd1d8e201b65a585593cd0297147efc7d",
+          "title": "Refactor!: improve transpilation of JSON paths across dialects (#2883)",
+          "date": "2024-01-30T03:07:50Z",
+          "pr": 2883,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "7aac85d0b76f8ea06b4b2160287d6fbf7224c71f",
+          "title": "Fix transpilation of casting to date in sqlite (#1286)",
+          "date": "2023-03-10T21:32:25+02:00",
+          "pr": 1286,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ee8974706a6be2cb146aaa7d6d672cb2d2735381",
+          "title": "Fix: transpile LEAST, MIN correctly (SQLite, Snowflake) (#1261)",
+          "date": "2023-03-08T00:10:23+02:00",
+          "pr": 1261,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "f15b8b018ddb0aa1bd26683c439ab2d063ca9cd8",
+          "title": "Feat: transpile postgres GREATEST(x,y) to MAX in sqlite (#7274)",
+          "date": "2026-03-12T13:59:05+02:00",
+          "pr": 7274,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "adf00320d38a9904c8928bd33498fe4f79947150",
+          "title": "refactor(sqlite)!: Extract and compile generator (#7366)",
+          "date": "2026-03-24T15:47:16+02:00",
+          "pr": 7366,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "faa5ebf5e7195ea62996d30a1089bf3533731eb2",
+        "parent": "351e97b4c9a727c656019b5926873275698ccbe2",
+        "title": "fix(optimizer): in simplify only move MONTH/YEAR intervals across a comparison when the move is exact (#8324)",
+        "date": "2026-09-10T14:27:35+03:00",
+        "pr": 8324
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-10T14:27:35+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a34fc276539980ee1f3d51e85a17a19f40b3f276",
+        "parent": "0714112aa814778ff371cc33a9441548ae6b924c",
+        "title": "fix(optimizer)!: star referencing outer-scope from correlated subquery (#8291)",
+        "date": "2026-09-10T13:34:12+03:00",
+        "pr": 8291
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-10T13:34:12+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "6c7c9e87dc7c7dc4c32fb7e7763227c6c65e440e",
+          "title": "Fix(optimizer): column-to-dot conversion bug in qualify due to looking at wrong source set (#7718)",
+          "date": "2026-06-08T19:59:44+03:00",
+          "pr": 7718,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "d00b9d8b06098c39c3348adf827f53b13c474578",
+          "title": "feat(optimizer)!: Expand stars on BigQuery's tbl.struct_col.* selections (#3531)",
+          "date": "2024-05-29T22:55:10+03:00",
+          "pr": 3531,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "744be75ecacf5595fd3cfb9fa8eb6a7eb0a20130",
+          "title": "chore: iterative annotate types (#6342)",
+          "date": "2025-11-19T14:20:25+02:00",
+          "pr": 6342,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "3150fa13e9ff6f6619d48a11f34a529fb74d22fb",
+          "title": "Handle structs gracefully in qualify columns (#1299)",
+          "date": "2023-03-17T00:35:04+02:00",
+          "pr": 1299,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "79b73d26eedc4b279907b0e2b4c1e835937e1b5d",
+          "title": "Struct (#1312)",
+          "date": "2023-03-17T21:12:35-07:00",
+          "pr": 1312,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0714112aa814778ff371cc33a9441548ae6b924c",
+        "parent": "deb4f522dc74188e5c85982cfdbd58001be44299",
+        "title": "fix(optimizer)!: only propagate constants through non-nullable columns (#8326)",
+        "date": "2026-09-09T19:57:49+03:00",
+        "pr": 8326
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-09T19:57:49+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "0f12db536348b77f837de322a580a99572720761",
+          "title": "Feat(optimizer): propagate constants (#2386)",
+          "date": "2023-10-09T19:09:02+03:00",
+          "pr": 2386,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f22bcdbad732d9df2c02d37426cbdc27e64b5da6",
+        "parent": "0d88a211de50fa118e7e7185665d2f31310fceaa",
+        "title": "fix(optimizer): preserve unreferenced UDTF and anonymous-function projections (#8314)",
+        "date": "2026-09-08T19:48:58-04:00",
+        "pr": 8314
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-08T19:48:58-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "5c916eee88264c3d73040b5d00232265cf47a1b2",
+          "title": "fix(optimizer): retain set-returning projections in pushdown_projections (#7686)",
+          "date": "2026-05-28T15:34:12+03:00",
+          "pr": 7686,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0d88a211de50fa118e7e7185665d2f31310fceaa",
+        "parent": "106ad25d3500f479144a24f3130c8a45a1d547b0",
+        "title": "fix(optimizer)!: don't fan out EXISTS decorrelation over grouped subqueries (#8318)",
+        "date": "2026-09-08T19:07:40+03:00",
+        "pr": 8318
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-08T19:07:40+03:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "1d753d72c6e81e39cfc7160af33673314d4d600e",
+          "title": "fix(optimizer)!: EXISTS over a scalar aggregate is always true [CLAUDE] (#8304)",
+          "date": "2026-09-07T17:52:31+03:00",
+          "pr": 8304,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "The GROUP BY fan-out in decorrelate() existed before 8304; 8304 added the early return for EXISTS without GROUP BY and left the GROUP BY path as it was, which 8318 then changes. Scope: Wrong rows from an unnest rewrite is a logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    }
+  ]
+}
