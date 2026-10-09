@@ -13,6 +13,7 @@ A body is the gap, then the fix. Terse: no hedging ("might", "consider whether")
 - Expected values are literals or come from the acceptance criterion, never recomputed with the code's own formula.
 - Exercise the public interface only. Mock only system boundaries.
 - Put it in a fenced block inside `body`.
+- Write every expected value out. A block containing a placeholder (`<expected SQL>`, `TODO`, a lone `...`) is removed by the poster and only your prose is shown; if you cannot compute the expected value from the code or the criterion, describe it in prose instead of writing a skeleton.
 
 ## By kind
 
