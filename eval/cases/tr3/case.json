@@ -1,0 +1,35 @@
+{
+  "id": "tr3",
+  "goal": "traceability",
+  "description": "B-stale: AC-4 goes from 30 to 45 days in the spec; deadline.js and its test still use 30.",
+  "pr_title": "Extend the claim filing window in the spec (AC-4)",
+  "pr_body": "Update the claims spec: the filing window is now 45 days.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr3/docs/specs/claims.md",
+        "line": 11,
+        "quote": "45 days",
+        "text": "deadline\\.js:2\\b"
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": [
+          "weak_test",
+          "missing_test"
+        ],
+        "path": "eval-sandbox/tr3/src/deadline.test.js",
+        "line": 14,
+        "tolerance": 6,
+        "reason": "the test asserts the old 30-day boundary only, so it pins the stale behaviour"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the AC-4 line; text cites deadline.js:2 (FILING_WINDOW_DAYS = 30)."
+  }
+}

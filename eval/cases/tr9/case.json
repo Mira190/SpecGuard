@@ -1,0 +1,15 @@
+{
+  "id": "tr9",
+  "goal": "traceability",
+  "description": "Prose-only: a typo fix in docs/guide.md, which has no requirements.",
+  "pr_title": "Fix a typo in the guide",
+  "pr_body": "Fix a typo.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [],
+    "expect_skip": true,
+    "expect_clean": true,
+    "notes": "Skipped with \"Nothing to review\"; no AI call, no comments."
+  }
+}

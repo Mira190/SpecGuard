@@ -1,0 +1,23 @@
+{
+  "id": "tr6",
+  "goal": "traceability",
+  "description": "Gherkin: a Scenario Outline Examples row goes from 30 to 45 days in features/claims.feature; deadline.js and its test still use 30.",
+  "pr_title": "Update the claims feature examples",
+  "pr_body": "Update the claim filing window examples: 45 days are now accepted.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr6/features/claims.feature",
+        "line": 11,
+        "quote": "| 45",
+        "text": "deadline\\.js"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch anchored on the changed Examples row in the .feature file."
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "tr11",
+  "goal": "traceability",
+  "description": "Wrong oracle (U2): code and test both move to 3x and the PR says so, but R3 still says twice.",
+  "pr_title": "Raise premium cap to 3x",
+  "pr_body": "Raise the premium cap to 3x the base rate.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr11/src/premium.js",
+        "line": 1,
+        "quote": "CAP_MULTIPLIER = 3",
+        "text": "pricing\\.md"
+      }
+    ],
+    "must_not": [],
+    "rows_not": [
+      {
+        "status": "covered",
+        "text": "R3"
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the code line naming pricing.md; the matching test asserts the contradicting value, so R3 is never shown as covered."
+  }
+}
