@@ -41,28 +41,38 @@ function extractCriteria(documents) {
 const DOC_EXT = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
 const TEST_PATH = /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/i;
 
+const MAX_HUNKS = 50, MAX_SHAS = 20, MAX_HISTORY_DOCS = 3;
+
 // LEFT line ranges of production hunks in a unified diff: [{path, a, b}] (inclusive). Pure insertions have no history.
+// The (old) path comes from the "--- a/path" line, so a path containing " b/" or spaces parses correctly; quoted
+// (C-escaped) paths are skipped. At most MAX_HUNKS ranges are returned.
 function leftRanges(diff) {
   const out = [];
-  let file = null;
+  let file = null, inHunk = false;
   for (const line of String(diff).split(/\r?\n/)) {
-    const f = /^diff --git a\/.+ b\/(.+)$/.exec(line);
-    if (f) { file = DOC_EXT.test(f[1]) || TEST_PATH.test(f[1]) ? null : f[1]; continue; }
+    if (out.length >= MAX_HUNKS) break;
+    if (line.startsWith('diff --git ')) { file = null; inHunk = false; continue; }
+    const f = !inHunk && /^--- (?:a\/)?(.*?)\t?$/.exec(line);
+    if (f) { file = f[1] === '/dev/null' || f[1].startsWith('"') || DOC_EXT.test(f[1]) || TEST_PATH.test(f[1]) ? null : f[1]; continue; }
     const h = /^@@ -(\d+)(?:,(\d+))? \+/.exec(line);
-    if (h && file) { const n = h[2] === undefined ? 1 : +h[2]; if (n > 0) out.push({ path: file, a: +h[1], b: +h[1] + n - 1 }); }
+    if (h) { inHunk = true; if (file) { const n = h[2] === undefined ? 1 : +h[2]; if (n > 0) out.push({ path: file, a: +h[1], b: +h[1] + n - 1 }); } }
   }
   return out;
 }
 
 // Top 3 blamed commits per hunk (by line count), merged by total lines. `blame(path, a, b)` returns porcelain text.
-function blameShas(diff, blame) {
-  const total = new Map();
+// opts.stats (optional) receives { failed, skipped }: hunks whose blame threw, and hunks not tried after opts.deadline (ms epoch).
+function blameShas(diff, blame, opts = {}) {
+  const total = new Map(), stats = opts.stats || {};
+  stats.failed = 0; stats.skipped = 0;
   for (const { path: p, a, b } of leftRanges(diff)) {
+    if (opts.deadline && Date.now() > opts.deadline) { stats.skipped++; continue; }
     const n = new Map();
-    for (const m of String(blame(p, a, b)).matchAll(/^([0-9a-f]{40}) \d+ \d+/gm)) n.set(m[1], (n.get(m[1]) || 0) + 1);
+    try { for (const m of String(blame(p, a, b)).matchAll(/^([0-9a-f]{40}) \d+ \d+/gm)) n.set(m[1], (n.get(m[1]) || 0) + 1); }
+    catch { stats.failed++; continue; }
     for (const [sha, c] of [...n].sort((x, y) => y[1] - x[1]).slice(0, 3)) total.set(sha, (total.get(sha) || 0) + c);
   }
-  return [...total].sort((x, y) => y[1] - x[1]).map(([sha]) => sha);
+  return [...total].sort((x, y) => y[1] - x[1]).slice(0, MAX_SHAS).map(([sha]) => sha);
 }
 
 // Optional historical intent: blamed commit -> PR -> closing issues, at most 3 documents. Failures become limitations.
@@ -70,12 +80,15 @@ function collectHistory({ history, repo, mainPr, seen, loadIssue }) {
   const documents = [], limitations = [];
   if (!history) return { documents, limitations };
   if (history.error) return { documents, limitations: ['Historical intent unavailable: git blame failed.'] };
+  if (history.partial) limitations.push(history.partial);
   const done = new Set();
-  const add = (source, title, body) => { if (documents.length < 3) documents.push({ source, text: sanitize(`${title || ''}\n${body || ''}`) }); };
-  for (const sha of history.shas || []) {
-    if (documents.length >= 3) break;
+  // history text is whatever a past author wrote: flagged low-trust so nothing downstream treats it as the approved requirement
+  const add = (source, title, body) => { if (documents.length < MAX_HISTORY_DOCS) documents.push({ source, untrusted: true, text: sanitize(`${title || ''}\n${body || ''}`) }); };
+  const sameRepo = (p) => String(p && p.base && p.base.repo && p.base.repo.full_name || '').toLowerCase() === repo.toLowerCase();
+  for (const sha of (history.shas || []).slice(0, MAX_SHAS)) {
+    if (documents.length >= MAX_HISTORY_DOCS) break;
     try {
-      const pull = (history.pulls(sha) || [])[0];
+      const pull = (history.pulls(sha) || []).find((p) => p && p.merged_at && sameRepo(p)); // merged, targeting this repository
       if (!pull || !pull.number || pull.number === mainPr || done.has(pull.number)) continue; // direct push, or already known
       done.add(pull.number);
       const pr = history.pr(pull.number);
@@ -83,8 +96,9 @@ function collectHistory({ history, repo, mainPr, seen, loadIssue }) {
       for (const issue of pr.closingIssuesReferences || []) {
         const m = /github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)/.exec(issue.url || '');
         const r = m ? m[1] : repo, n = m ? +m[2] : issue.number;
+        if (r.toLowerCase() !== repo.toLowerCase()) continue; // history never reads another repository's issues
         const key = `${r.toLowerCase()}#${n}`;
-        if (!n || done.has(key) || seen.has(key) || documents.length >= 3) continue;
+        if (!n || done.has(key) || seen.has(key) || documents.length >= MAX_HISTORY_DOCS) continue;
         done.add(key);
         try { const i = loadIssue(r, n); add(r.toLowerCase() === repo.toLowerCase() ? `history issue #${n}` : `history issue ${r}#${n}`, i.title, i.body); }
         catch { limitations.push(`Could not read history issue ${key}.`); }
@@ -127,7 +141,7 @@ function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
   const past = collectHistory({ history, repo, mainPr: pr.number, seen, loadIssue });
   limitations.push(...past.limitations);
   for (const { source, text: t } of past.documents) {
-    documents.push({ source, text: t });
+    documents.push({ source, text: t, untrusted: true });
     sources.push(source);
     for (const c of extractCriteria([{ source, text: t }])) criteria.push({ id: `H${criteria.filter((x) => x.optional).length + 1}`, source, quote: c.quote, optional: true });
   }
@@ -136,7 +150,7 @@ function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
 
 if (require.main === module) {
   const env = process.env;
-  const gh = (args) => JSON.parse(execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+  const gh = (args) => JSON.parse(execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 }));
   let result;
   try {
     const pr = gh(['pr', 'view', env.PR_NUMBER, '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences']);
@@ -144,8 +158,11 @@ if (require.main === module) {
     let history;
     try {
       const diff = fs.readFileSync(path.join(env.CTX, 'diff.patch'), 'utf8');
-      const shas = blameShas(diff, (p, a, b) => execFileSync('git', ['blame', '-w', '-M', '-C', '--porcelain', env.BASE_SHA, '-L', `${a},${b}`, '--', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20 }));
-      history = { shas, pulls: (sha) => gh(['api', `repos/${env.GH_REPO}/commits/${sha}/pulls`]),
+      const stats = {};
+      const shas = blameShas(diff, (p, a, b) => execFileSync('git', ['blame', '-w', '-M', '-C', '--porcelain', env.BASE_SHA, '-L', `${a},${b}`, '--', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, timeout: 10000 }),
+        { stats, deadline: Date.now() + 25000 });
+      if (stats.failed && !shas.length) throw new Error('git blame failed for every hunk');
+      history = { shas, partial: stats.failed || stats.skipped ? `Historical intent is partial: git blame failed for ${stats.failed} and was skipped for ${stats.skipped} hunk(s).` : '', pulls: (sha) => gh(['api', `repos/${env.GH_REPO}/commits/${sha}/pulls`]),
         pr: (n) => gh(['pr', 'view', String(n), '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences']) };
     } catch { history = { error: true }; }
     result = collectRequirements({ pr, repo: env.GH_REPO, commits, history,
