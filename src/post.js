@@ -552,6 +552,22 @@ function verifyRequirements(data, context, read = readFile) {
 
 // Differential check: an 'introduced' mismatch/impacted becomes 'pre_existing' unless this PR touched the relation, i.e. the
 // requirement item's lines (either side), the behaviour line (RIGHT), or a change in the same hunk as the behaviour.
+// Cross-language keywords that are never a defined name. ponytail: tiny stoplist; upgrade = parse the declaration with the language's own tooling.
+const KW = new Set('return const let var function async await class this self true false null none nil else elif throw raise import from export public private static void string number bool int float then with while for if not and or new def func type'.split(' '));
+// Names a line DEFINES (assignment, declaration, object/keyword property, function or class head), not names it merely mentions.
+function definedNames(t) {
+  const s = String(t || ''), out = new Set();
+  for (const m of s.matchAll(/(?:^|[^\w.])([A-Za-z_]\w{2,})\s*(?::[^=\n]*)?=(?![=>])/g)) out.add(m[1]);
+  for (const m of s.matchAll(/(?:function|def|func|fn|class|let|var|const)\s+([A-Za-z_]\w{2,})/g)) out.add(m[1]);
+  for (const m of s.matchAll(/^\s*["']?([A-Za-z_]\w{2,})["']?\s*:(?!:)/g)) out.add(m[1]);
+  return [...out].filter((w) => !KW.has(w.toLowerCase()));
+}
+// True when the changed line defines a name the behaviour line uses (a constant defined away from its use).
+function definesUsedBy(change, behaviour) {
+  const b = String(behaviour || '');
+  return definedNames(change).some((w) => new RegExp('(?:^|[^\\w])' + w + '(?![\\w])').test(b));
+}
+
 function differential(data, maps) {
   for (const c of data.coverage) {
     const a = c.alignment;
@@ -566,11 +582,12 @@ function differential(data, maps) {
     const b = c.behaviour, ch = c.change, mb = b && maps.get(b.path);
     const behaviourChanged = !!mb && mb.changed.RIGHT.has(b.line);
     const hunk = mb && ch && ch.path === b.path ? (ch.side === 'LEFT' ? mb.LEFT : mb.RIGHT).get(ch.line) : undefined;
-    const sameHunk = hunk !== undefined && hunk === mb.RIGHT.get(b.line);
+    const linked = !!ch && !!b && definesUsedBy(ch.quote, b.quote); // a nearby edit only counts when it defines something the behaviour line uses
+    const sameHunk = linked && hunk !== undefined && hunk === mb.RIGHT.get(b.line);
     // (d) the PR modified existing text (hunk has removed lines) at `change`, e.g. a constant defined away from its use.
-    // ponytail: any modified line in that hunk counts, even an unrelated one (a log message edit); upgrade = compare the quote's tokens against `deltas`/the requirement value.
+    // ponytail: (c) and (d) need `change` to DEFINE a name that `behaviour` uses (the constant defined away from its use). Misses an indirect change (a callee body); upgrade = the call graph.
     const mc = ch && ch.side !== 'LEFT' && maps.get(ch.path), ch_h = mc && mc.changed.RIGHT.has(ch.line) ? mc.RIGHT.get(ch.line) : undefined;
-    const modified = ch_h !== undefined && !data.requirements.some((r) => r.source === ch.path) && [...mc.LEFT.values()].includes(ch_h);
+    const modified = linked && ch_h !== undefined && !data.requirements.some((r) => r.source === ch.path) && [...mc.LEFT.values()].includes(ch_h);
     const touched = specTouched || behaviourChanged || sameHunk || modified;
     if (a.since === 'introduced' && !touched) c.alignment = { ...a, since: 'pre_existing', reason: `${a.reason} (Downgraded to pre_existing: this PR changed neither the requirement nor the behaviour.)` };
     else if (a.since === 'pre_existing' && touched) { // symmetric: a model-emitted pre_existing cannot hide drift this PR touched
@@ -825,4 +842,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

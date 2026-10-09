@@ -875,7 +875,7 @@ const spec2 = '@@ -3,1 +3,1 @@\n-AC-4: 45 days\n+AC-4: Claims must be filed with
 const align = (since, o = {}) => {
   const d = report({
     requirements: [sreq({ line: 3, end: 4, ...(o.req || {}) })],
-    coverage: [row('missing_test', { alignment: { status: o.status || 'mismatch', since, reason: 'Requirement says 30; code says 45.' }, behaviour: { path: 'code.js', line: 4, quote: 'behaviour' }, change: { path: o.changePath || 'code.js', line: o.changeLine || 3, quote: 'new' } })],
+    coverage: [row('missing_test', { alignment: { status: o.status || 'mismatch', since, reason: 'Requirement says 30; code says 45.' }, behaviour: { path: 'code.js', line: 4, quote: 'behaviour' }, change: { path: o.changePath || 'code.js', line: o.changeLine || 3, quote: 'behaviour = new' } })],
     findings: [specFinding()],
   });
   post.validate(d);
@@ -892,9 +892,12 @@ test('differential: introduced is downgraded to pre_existing unless the PR chang
   assert.equal(since(far(), dmaps()), 'pre_existing');
   const downgraded = far(); post.differential(downgraded, dmaps());
   assert.match(downgraded.coverage[0].alignment.reason, /Downgraded to pre_existing/);
-  // the change shares a hunk with the behaviour
-  const same = far(); same.coverage[0].change = { path: 'code.js', line: 3, quote: 'new' };
+  // the change shares a hunk with the behaviour AND names something the behaviour line uses
+  const same = far(); Object.assign(same.coverage[0], { behaviour: { path: 'code.js', line: 1, quote: 'use(behaviour)' }, change: { path: 'code.js', line: 3, quote: 'behaviour = new' } });
   assert.equal(since(same, dmaps()), 'introduced');
+  // ... but an unrelated edit in the same hunk does not make old drift the PR's doing
+  const unrelated = far(); unrelated.coverage[0].change = { path: 'code.js', line: 3, quote: 'console.log(1)' };
+  assert.equal(since(unrelated, dmaps()), 'pre_existing');
   // the requirement item lines intersect the diff (RIGHT) or are a removed item
   assert.equal(since(far(), dmaps({ 'docs/spec.md': post.parsePatch(spec2) })), 'introduced');
   const left = far({ req: { line: 3, end: 3 } });
@@ -910,16 +913,18 @@ test('differential: introduced is downgraded to pre_existing unless the PR chang
 });
 
 test('differential: a modified line far from the unchanged behaviour keeps introduced; an add-only hunk does not', () => {
-  const run = (patch, line) => {
+  const run = (patch, line, quote = 'CAP_LIMIT = 3') => {
     const d = align('introduced');
-    Object.assign(d.coverage[0], { behaviour: { path: 'code.js', line: 9, quote: 'return cap' }, change: { path: 'code.js', line, quote: 'x' } });
+    Object.assign(d.coverage[0], { behaviour: { path: 'code.js', line: 9, quote: 'return Math.min(raw, CAP_LIMIT)' }, change: { path: 'code.js', line, quote } });
     post.differential(d, new Map([['code.js', post.parsePatch(patch)]]));
     return d.coverage[0].alignment.since;
   };
   // constant modified on line 1 (-/+), the use on line 9 is untouched and outside the hunk
   assert.equal(run('@@ -1,3 +1,3 @@\n-CAP = 2\n+CAP = 3\n a\n b\n', 1), 'introduced');
   // only a logging line added: the drift pre-dated the PR
-  assert.equal(run('@@ -1,3 +1,4 @@\n a\n+console.log(1)\n b\n c\n', 2), 'pre_existing');
+  assert.equal(run('@@ -1,3 +1,4 @@\n a\n+console.log(1)\n b\n c\n', 2, 'console.log(1)'), 'pre_existing');
+  // a modified line that does not touch anything the behaviour uses (a reworded message): still pre-existing
+  assert.equal(run('@@ -1,3 +1,3 @@\n-throw new Error("old")\n+throw new Error("new")\n a\n b\n', 1, 'throw new Error("new")'), 'pre_existing');
 });
 
 test('renameMaps reads renames with git diff -M so a moved file is not wholly "changed"', () => {
@@ -1333,4 +1338,17 @@ test('F8: a fingerprint is honoured only as the last thing in a bot review comme
   const mine = setup(t, report(), { issueComments: [{ id: 7, body: '<!-- specguard:summary -->\nold', user: { type: 'Bot', login: 'github-actions[bot]' } }] });
   await post(mine);
   assert.equal(mine.calls.summary[0].comment_id, 7);
+});
+
+test('definesUsedBy links a changed line to the behaviour only when it defines a name the behaviour uses', () => {
+  assert.deepEqual(post.definedNames('const CAP_LIMIT = 3;'), ['CAP_LIMIT']);
+  assert.deepEqual(post.definedNames("  console.log('premium', base, riskFactor);"), []);
+  assert.deepEqual(post.definedNames("    throw new Error('needs an order with a numeric subtotal');"), []);
+  assert.deepEqual(post.definedNames('MAX_AGE_DAYS: int = 30'), ['MAX_AGE_DAYS']);
+  assert.deepEqual(post.definedNames('def limit(x):'), ['limit']);
+  assert.deepEqual(post.definedNames('if (a == b) {'), []); // comparison, not a definition
+  assert.equal(post.definesUsedBy('const CAP_LIMIT = 3;', 'return Math.min(raw, CAP_LIMIT)'), true);
+  assert.equal(post.definesUsedBy('const CAP_LIMIT = 3;', 'return Math.min(raw, CAP_LIMIT_OTHER)'), false); // whole word only
+  assert.equal(post.definesUsedBy("console.log('premium', base)", 'return Math.min(raw, base * CAP)'), false);
+  assert.equal(post.definesUsedBy(undefined, 'x'), false);
 });
