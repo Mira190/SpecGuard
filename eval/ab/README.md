@@ -26,3 +26,14 @@ Compares prompt variants on identical inputs: quality (real `post.run`, graded) 
 - Output contract: free-form `<ctx>/review.json` = `{"comments":[{path,line,severity:high|medium|low,title,body,suggestion?}],"summary"}`. No schema, no coverage rows, no citation verification, nothing dropped (deliberately generous to the stand-ins). `task.md` asks for `review.json`; manifest entries carry `free: true`.
 - `finish` does not call `post.run` for these: it counts comments by severity (`inline` = all comments) and writes `posted.json` (every comment inline, kind `review_comment`, confidence = severity), `summary.md` and `ctx/findings.json` (`kind: review_comment`, `origin: 'free'`) so `eval/bundle.js` can adjudicate them next to schema variants. Standalone: `convertFree(dir)` in `ab.js`.
 - Mix with other variants by copying a variant directory (plus its manifest entries) into the ab dir that bundle.js reads.
+
+## Adjudication metrics (`node eval/bundle.js join`)
+
+After the hit tables, `join` prints a quality/volume table per variant (also returned as `metrics` on each variant of the result object). Only shown findings count (inline + summary; `dropped` are excluded). Unjudged findings (no `verdict`) stay in the share denominators but not in the false-gap denominators. A zero denominator prints `-` (null).
+
+- false-gap rate (inline / all classes): findings with verdict `wrong` or `unverifiable`, divided by findings with any verdict, within inline only or inline + summary.
+- comment density: inline findings per PR (mean over all PRs the variant ran, and max) and summary-class findings per PR (mean).
+- actionable share: inline findings with `useful: would_fix`, divided by all inline findings.
+- noise share: inline findings with verdict `trivial` or `wrong`, divided by all inline findings.
+
+Bug hits read a `hit: direct|near` field when present (current adjudicators, with verdict `true_gap|wrong|trivial|unverifiable`), else the legacy verdicts `hit_direct` / `hit_near`.
