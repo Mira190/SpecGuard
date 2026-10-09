@@ -152,7 +152,7 @@ test('parseItems: an ID heading spanning many lines stops at its first sub-headi
 });
 
 test('parseItems: link reference definitions are not ID items, a bracketed ID with prose still is', () => {
-  const doc = '[KEP-4671]: https://kep.k8s.io/4671\n[RFC-2119]: ./rfc.md "title"\n[KEP-5732]: Topology-aware workload scheduling.\n- [KEP-5972: Dynamic Containers](https://x.io/5972) permits it.\n[REQ-1]: The system must refuse zero.\n';
+  const doc = '[KEP-4671]: https://kep.k8s.io/4671\n[RFC-2119]: ./rfc.md "title"\n[KEP-5732]: Topology-aware workload scheduling.\n- [KEP-4671]: Gang Scheduling.\n[KEP-1287: In-Place Scaling][kep-1287]. It goes on.\n- [KEP-5972: Dynamic Containers](https://x.io/5972) permits it.\n[REQ-1]: The system must refuse zero.\n';
   assert.deepEqual(T.parseItems('s.md', doc).map((i) => i.ref), ['REQ-1']);
 });
 
