@@ -1558,12 +1558,21 @@ test('stale: resolves nothing on a failed, skipped or truncated run, or when dis
   assert.equal(bad.queries + skipped.queries + part.queries + off.queries, 0);
 });
 
-test('stale: a GraphQL error is swallowed into one limitation note and the review still posts', async (t) => {
+test('stale: a GraphQL error only warns; the review and summary are unchanged', async (t) => {
+  const clean = setup(t); await post(clean);
   const s = withThreads(t, [new Error('Resource not accessible by integration')]);
   await post(s);
   assert.equal(s.calls.review.length, 1);
-  assert.match(s.calls.summary[0].body, /Stale review threads could not be resolved: Resource not accessible/);
+  assert.deepEqual(s.warnings, ['SpecGuard: stale review threads could not be resolved: Resource not accessible by integration']);
+  assert.equal(s.calls.summary[0].body, clean.calls.summary[0].body);
   assert.deepEqual(s.resolved, []);
+});
+
+test('stale: a marker followed by trailing whitespace and a newline still counts', async (t) => {
+  const th = thread('ws', FP('a')); th.comments.nodes[0].body += '  \n';
+  const s = withThreads(t, [[th]]);
+  await post(s);
+  assert.deepEqual(s.resolved, ['ws']);
 });
 
 test('stale: pages through threads, stops at 300 threads and resolves at most 20', async (t) => {

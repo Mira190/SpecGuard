@@ -699,7 +699,7 @@ function renameMaps(base, head, cwd, git = (...a) => execFileSync('git', a, { cw
 }
 
 // Resolve review threads whose only comment is our own bot comment for a finding this run no longer reports. Any failure is a limitation note, never a run failure.
-async function resolveStale({ github, owner, repo, number, current, addNote, maxThreads = 300, maxResolve = 20 }) {
+async function resolveStale({ github, core, owner, repo, number, current, maxThreads = 300, maxResolve = 20 }) {
   const q = 'query($o:String!,$r:String!,$n:Int!,$a:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$a){pageInfo{hasNextPage endCursor}nodes{id isResolved comments(first:2){nodes{author{login __typename} body}}}}}}}';
   try {
     const stale = [];
@@ -709,14 +709,14 @@ async function resolveStale({ github, owner, repo, number, current, addNote, max
       for (const th of t.nodes) {
         seen++;
         const cs = th.comments.nodes;
-        const m = cs.length === 1 && !th.isResolved && cs[0].author && cs[0].author.__typename === 'Bot' && /<!-- specguard:fp=([0-9a-f]{40}) -->s*$/.exec(cs[0].body || '');
+        const m = cs.length === 1 && !th.isResolved && cs[0].author && cs[0].author.__typename === 'Bot' && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(cs[0].body || '');
         if (m && !current.has(m[1])) stale.push(th.id);
       }
       if (!t.pageInfo.hasNextPage) break;
       after = t.pageInfo.endCursor;
     }
     for (const threadId of stale.slice(0, maxResolve)) await github.graphql('mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{id}}}', { t: threadId });
-  } catch (e) { addNote(`Stale review threads could not be resolved: ${e.message}`); }
+  } catch (e) { core.warning(`SpecGuard: stale review threads could not be resolved: ${e.message}`); }
 }
 
 async function run({ github, context, core }) {
@@ -926,7 +926,7 @@ async function run({ github, context, core }) {
       await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
     } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); filed--; }
   }
-  if (!partial && env.RESOLVE_STALE !== 'false') await resolveStale({ github, owner, repo, number: pr.number, current: new Set(merged.map((f) => f.fp)), addNote });
+  if (!partial && env.RESOLVE_STALE !== 'false') await resolveStale({ github, core, owner, repo, number: pr.number, current: new Set(merged.map((f) => f.fp)) });
   if (unchecked) addNote('The PR head could not be rechecked; results use the event head commit.');
 
   await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `${gapFree(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, partial, engine, model, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, headSha,
