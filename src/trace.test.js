@@ -189,6 +189,8 @@ test('isSpecDoc admits structured items, RFC capitals, dense prose and spec dire
   assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'design/a.md', 90000), true);
   assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'docs/specs/a.md', 90000), true);
   assert.equal(T.isSpecDoc([{ kind: 'id', raw: 'R1: x' }], 'a.md', 90000), true);
+  assert.equal(T.isSpecDoc([n('a must b.')], 'openspec/specs/x/spec.md', 300), true); // a single requirement in a spec directory
+  assert.equal(T.isSpecDoc([n('a must b.')], 'docs/x.md', 300), false);
 });
 
 test('classify: .txt files are documents only when named like requirements', (t) => {
