@@ -77,6 +77,8 @@ test('must_not: kind/path/line, text and review state', () => {
   const s = (m) => spec([], { must_not: [m] });
   assert.equal(grade(s({ kind: 'missing_test', path: 'a.js', line: 3 }), obs([com({ line: 4 })])).must_not_violations.length, 1);
   assert.equal(grade(s({ kind: 'missing_test', path: 'a.js', line: 3 }), obs([com({ line: 9 })])).pass, true);
+  assert.equal(grade(s({ kind: 'pushdown', confidence: 'high' }), obs([com({ kind: 'pushdown', confidence: 'low' })])).pass, true);
+  assert.equal(grade(s({ kind: 'pushdown', confidence: 'high' }), obs([com({ kind: 'pushdown' })])).pass, false);
   assert.equal(grade(s({ text: 'LGTM' }), obs([com({ body: 'lgtm!' })])).pass, false);
   assert.equal(grade(s({ text: 'LGTM' }), obs([], { reviews: [{ state: 'COMMENT', body: 'LGTM' }] })).pass, false);
   assert.equal(grade(s({ state: 'APPROVED' }), obs([], { reviews: [{ state: 'APPROVED', body: '' }] })).pass, false);
