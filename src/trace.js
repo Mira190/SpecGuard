@@ -263,7 +263,8 @@ const isRequirementDoc = (items) => items.some((i) => i.kind !== 'normative') ||
 // or a dense run of them (long documents need more); structured items (ID, acceptance criteria, Gherkin) always admit. Spec directories keep the loose rule.
 const STRONG_DIR = /(^|\/)(specs?|requirements|design|rfcs?|proposals)\/|(^|\/)adrs?\/|^\.kiro\/specs\/|^openspec\//i;
 const DENSITY = 300, DENSITY_CAPS = 5000; // prose-only: one normative sentence per 300 bytes, or per 5 KB when one has an RFC 2119 capital: a long tutorial with a few stray "must" lines is not a spec
-const isSpecDoc = (items, file = '', size = 0) => isRequirementDoc(items) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || items.length * DENSITY >= size || (items.length * DENSITY_CAPS >= size && items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw))));
+const SPEC_DIR = /(^|\/)(specs?|requirements)\/|^openspec\//i; // one normative sentence is enough for a file that lives in a spec directory
+const isSpecDoc = (items, file = '', size = 0) => (isRequirementDoc(items) || (items.length === 1 && SPEC_DIR.test(file))) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || items.length * DENSITY >= size || (items.length * DENSITY_CAPS >= size && items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw))));
 // Directories of LLM prompts, command/workflow definitions and templates are instructions to a tool, not product requirements.
 const NON_SPEC_DIR = /(^|\/)(templates?|prompts?|commands|workflows|agents|skills)\/|-template\.md$/i;
 const specLike = (p) => docLike(p) && !NON_SPEC_DIR.test(p);
@@ -531,38 +532,39 @@ function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {} }) {
     return { criterion: c.id, code: pick(false, 8), tests: pick(true, 5) };
   });
   if (!dl.over()) {
-    const extra = transitiveTests({ cwd, head, rows, shaOf, total: eligible.length, dl, info });
+    const extra = transitiveTests({ cwd, entries, rows, shaOf, total: eligible.length, dl, info });
     rows.forEach((r, k) => { for (const t of extra[k]) { const dup = r.tests.find((x) => x.path === t.path); if (dup) dup.via = t.via; else r.tests.push(t); } });
   } else info.cut = true;
   if (info.cut && !meta.length) return []; // the budget ran out before any code was read: no rows rather than empty ones
   return rows.map((r) => ({ criterion: r.criterion, code: r.code, tests: r.tests.slice(0, 8) }));
 }
 
-// One repo-wide `git grep` per 100 identifiers for the whole run (not one per criterion per window): file and test-file hits per identifier.
-function grepIdentifiers(cwd, head, ids, dl, info) {
+// File and test-file hits per identifier, in one pass over the tracked blobs (batched cat-file, one process per 300 files; many
+// `git grep` patterns over a big tree cost seconds each). Binary files and files over MAX_BIG are skipped.
+function grepIdentifiers(cwd, ids, entries, dl, info) {
   const stats = new Map(ids.map((id) => [id, { files: new Set(), tests: new Map() }]));
-  for (let s = 0; s < ids.length; s += 100) {
+  const files = entries.filter((e) => e.size <= MAX_BIG);
+  for (let s = 0; s < files.length && stats.size; s += 300) {
     if (dl.over()) { info.cut = true; break; }
-    let res;
-    try { res = gitGrep(cwd, ['grep', '-n', '-I', '-w', '-F', ...ids.slice(s, s + 100).flatMap((c) => ['-e', c]), head, '--'], Math.max(dl.left(), 1000)); } catch { info.cut = true; break; }
-    let seen = 0;
-    for (const l of res.split('\n')) {
-      if (++seen > 200000) break;
-      const m = GREP_HIT.exec(l);
-      if (!m) continue;
-      for (const t of new Set(m[3].match(/[A-Za-z_$][\w$]*/g) || [])) {
-        const e = stats.get(t);
-        if (!e) continue;
-        e.files.add(m[1]);
-        if (isTestPath(m[1]) && !e.tests.has(m[1])) e.tests.set(m[1], +m[2]);
-      }
-    }
+    const part = files.slice(s, s + 300), bufs = catBatch(cwd, part.map((e) => e.sha));
+    part.forEach((e, k) => {
+      if (!bufs[k] || bufs[k].includes(0)) return;
+      const test = isTestPath(e.path);
+      bufs[k].toString('utf8').split('\n').forEach((line, i) => {
+        for (const t of new Set(line.length > 2000 ? [] : line.match(/[A-Za-z_$][\w$]*/g))) {
+          const st = stats.get(t);
+          if (!st) continue;
+          st.files.add(e.path);
+          if (test && !st.tests.has(e.path)) st.tests.set(e.path, i + 1);
+        }
+      });
+    });
   }
   return stats;
 }
 
 // Test-transitive step: the rarest identifiers of each top production window, grepped in test paths. Returns one test list per row.
-function transitiveTests({ cwd, head, rows, shaOf, total, dl, info }) {
+function transitiveTests({ cwd, entries, rows, shaOf, total, dl, info }) {
   const paths = [...new Set(rows.flatMap((r) => r.code.map((w) => w.path)))];
   const got = paths.length ? catBatch(cwd, paths.map((p) => shaOf.get(p))) : [];
   const text = new Map(paths.map((p, k) => [p, got[k] ? got[k].toString('utf8').split(/\r?\n/) : null]));
@@ -574,7 +576,7 @@ function transitiveTests({ cwd, head, rows, shaOf, total, dl, info }) {
       .map((id) => [id, (/[a-z][A-Z]|_|^[A-Z0-9_]+$/.test(id) ? 10 : 0) + Math.min(id.length, 12)]).sort((a, b) => b[1] - a[1]).slice(0, 12).map((x) => x[0]);
     idsOf.set(key, cands); cands.forEach((c) => all.add(c));
   }
-  const stats = grepIdentifiers(cwd, head, [...all], dl, info);
+  const stats = grepIdentifiers(cwd, [...all], entries, dl, info);
   return rows.map((r) => {
     const out = [];
     for (const w of r.code) {
