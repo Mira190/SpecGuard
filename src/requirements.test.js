@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { collectRequirements, extractCriteria, leftRanges, blameShas } = require('./requirements');
 
+const pull = (number, o = {}) => ({ number, merged_at: '2024-01-01T00:00:00Z', base: { repo: { full_name: 'org/app' } }, ...o });
+
 test('resolves qualified issues without confusing them with local issue numbers', () => {
   const calls = [];
   const result = collectRequirements({ repo: 'org/app', pr: { number: 9, title: 'Change', body: 'Closes #1; org/spec#2; https://github.com/org/other/issues/3; #1; #9', closingIssuesReferences: [{ number: 2, url: 'https://github.com/org/spec/issues/2' }] },
@@ -53,15 +55,15 @@ test('indented sub-bullets continue their criterion', () => {
 const SHA1 = 'a'.repeat(40), SHA2 = 'b'.repeat(40), SHA3 = 'c'.repeat(40);
 
 test('leftRanges lists LEFT ranges of production hunks only', () => {
-  const diff = ['diff --git a/src/a.js b/src/a.js', '@@ -10,3 +10,4 @@ fn', '@@ -30 +31 @@', '@@ -40,0 +41,2 @@',
-    'diff --git a/docs/x.md b/docs/x.md', '@@ -1,2 +1,2 @@', 'diff --git a/src/a.test.js b/src/a.test.js', '@@ -5,2 +5,2 @@'].join('\n');
+  const diff = ['diff --git a/src/a.js b/src/a.js', '--- a/src/a.js', '+++ b/src/a.js', '@@ -10,3 +10,4 @@ fn', '@@ -30 +31 @@', '@@ -40,0 +41,2 @@',
+    'diff --git a/docs/x.md b/docs/x.md', '--- a/docs/x.md', '+++ b/docs/x.md', '@@ -1,2 +1,2 @@', 'diff --git a/src/a.test.js b/src/a.test.js', '--- a/src/a.test.js', '+++ b/src/a.test.js', '@@ -5,2 +5,2 @@'].join('\n');
   assert.deepEqual(leftRanges(diff), [{ path: 'src/a.js', a: 10, b: 12 }, { path: 'src/a.js', a: 30, b: 30 }]);
 });
 
 test('blameShas ranks commits by blamed line count across hunks', () => {
   const porcelain = (shas) => shas.map((s, i) => `${s} ${i + 1} ${i + 1}\n\tcode`).join('\n');
   const calls = [];
-  const diff = 'diff --git a/src/a.js b/src/a.js\n@@ -1,3 +1,3 @@\n@@ -9,2 +9,2 @@';
+  const diff = 'diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1,3 +1,3 @@\n@@ -9,2 +9,2 @@';
   const out = blameShas(diff, (p, a, b) => { calls.push([p, a, b]); return a === 1 ? porcelain([SHA1, SHA2, SHA2]) : porcelain([SHA3, SHA2]); });
   assert.deepEqual(calls, [['src/a.js', 1, 3], ['src/a.js', 9, 10]]);
   assert.deepEqual(out, [SHA2, SHA1, SHA3]);
@@ -69,7 +71,7 @@ test('blameShas ranks commits by blamed line count across hunks', () => {
 
 test('history: blame -> PR -> closing issue become optional criteria; direct pushes are skipped', () => {
   const issues = [];
-  const history = { shas: [SHA1, SHA2], pulls: (sha) => (sha === SHA1 ? [{ number: 7 }] : []),
+  const history = { shas: [SHA1, SHA2], pulls: (sha) => (sha === SHA1 ? [pull(7)] : []),
     pr: (n) => { assert.equal(n, 7); return { number: 7, title: 'Old', body: '## Acceptance criteria\n- Cap at twice base', closingIssuesReferences: [{ number: 3, url: 'https://github.com/org/app/issues/3' }] }; } };
   const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'x' }, history, loadIssue: (repo, n) => { issues.push([repo, n]); return { title: 'Issue', body: 'AC 1: never above 2x' }; } });
   assert.deepEqual(issues, [['org/app', 3]]);
@@ -79,7 +81,7 @@ test('history: blame -> PR -> closing issue become optional criteria; direct pus
 });
 
 test('history: API failures become limitations and collection continues', () => {
-  const history = { shas: [SHA1, SHA2, SHA3], pulls: (sha) => { if (sha === SHA1) throw new Error('403'); return [{ number: 8 }]; },
+  const history = { shas: [SHA1, SHA2, SHA3], pulls: (sha) => { if (sha === SHA1) throw new Error('403'); return [pull(8)]; },
     pr: (n) => ({ number: n, title: 'T', body: '', closingIssuesReferences: [{ number: 4 }] }) };
   const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'x' }, history, loadIssue: () => { throw new Error('404'); } });
   assert.equal(r.status, 'partial');
@@ -90,8 +92,51 @@ test('history: API failures become limitations and collection continues', () => 
 });
 
 test('history: stops at three documents and skips the current PR and already linked issues', () => {
-  const history = { shas: [SHA1, SHA2, SHA3], pulls: (sha) => [{ number: sha === SHA1 ? 9 : sha === SHA2 ? 5 : 6 }],
+  const history = { shas: [SHA1, SHA2, SHA3], pulls: (sha) => [pull(sha === SHA1 ? 9 : sha === SHA2 ? 5 : 6)],
     pr: (n) => ({ number: n, title: `PR${n}`, body: '', closingIssuesReferences: [{ number: 1 }, { number: 2 }] }) };
   const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'Closes #1' }, history, loadIssue: (repo, n) => ({ title: `I${n}`, body: '' }) });
   assert.deepEqual(r.sources.filter((s) => s.startsWith('history')), ['history PR #5', 'history issue #2', 'history PR #6']);
+});
+
+// ---- F10: history hardening ----
+const pr0 = (o = {}) => ({ number: 9, body: 'x', ...o });
+
+test('F10: leftRanges parses paths containing " b/" and spaces, ignores "--- " inside hunks, and caps the hunks', () => {
+  const diff = ['diff --git a/src/x b/y.js b/src/x b/y.js', '--- a/src/x b/y.js', '+++ b/src/x b/y.js', '@@ -3,2 +3,2 @@', '--- a/evil.js', '+new',
+    'diff --git a/my dir/z.js b/my dir/z.js', '--- a/my dir/z.js\t', '+++ b/my dir/z.js\t', '@@ -7 +7 @@'].join('\n');
+  assert.deepEqual(leftRanges(diff), [{ path: 'src/x b/y.js', a: 3, b: 4 }, { path: 'my dir/z.js', a: 7, b: 7 }]);
+  const many = ['diff --git a/s.js b/s.js', '--- a/s.js', '+++ b/s.js', ...Array.from({ length: 80 }, (_, i) => `@@ -${i * 10 + 1},2 +${i * 10 + 1},2 @@`)].join('\n');
+  assert.equal(leftRanges(many).length, 50);
+});
+
+test('F10: a blame failure on one hunk keeps the other hunks; the deadline skips the rest; shas are capped at 20', () => {
+  const sha = (i) => i.toString(16).padStart(40, '0');
+  const diff = 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1,2 +1,2 @@\n@@ -10,2 +10,2 @@\n@@ -20,2 +20,2 @@';
+  const stats = {};
+  const out = blameShas(diff, (p, a) => { if (a === 10) throw new Error('boom'); return `${sha(a)} 1 1\n\tx`; }, { stats });
+  assert.deepEqual(out, [sha(1), sha(20)]);
+  assert.deepEqual(stats, { failed: 1, skipped: 0 });
+  const late = {};
+  assert.deepEqual(blameShas(diff, () => assert.fail('deadline passed'), { stats: late, deadline: Date.now() - 1 }), []);
+  assert.deepEqual(late, { failed: 0, skipped: 3 });
+  const wide = Array.from({ length: 40 }, (_, i) => `@@ -${i * 10 + 1},1 +${i * 10 + 1},1 @@`).join('\n');
+  assert.equal(blameShas(`diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n${wide}`, (p, a) => `${sha(a)} 1 1\n\tx`).length, 20);
+});
+
+test('F10: only merged, same-repository pulls are used; history issues from other repositories are never loaded; history documents are untrusted', () => {
+  const loaded = [];
+  const history = { shas: [SHA1, SHA2, SHA3],
+    pulls: (sha) => [{ number: 3, merged_at: null, base: { repo: { full_name: 'org/app' } } }, sha === SHA1 ? pull(11, { base: { repo: { full_name: 'evil/fork' } } }) : sha === SHA2 ? pull(12) : pull(13)],
+    pr: (n) => ({ number: n, title: `PR${n}`, body: '## Acceptance criteria\n- Keep it', closingIssuesReferences: n === 12 ? [{ number: 5, url: 'https://github.com/evil/other/issues/5' }, { number: 6, url: 'https://github.com/org/app/issues/6' }] : [] }) };
+  const r = collectRequirements({ repo: 'org/app', pr: pr0(), history, loadIssue: (repo, n) => { loaded.push([repo, n]); return { title: 'I', body: 'AC 1: be fast' }; } });
+  assert.deepEqual(r.sources, ['PR body', 'history PR #12', 'history issue #6', 'history PR #13']);
+  assert.deepEqual(loaded, [['org/app', 6]]);
+  assert.deepEqual(r.documents.map((d) => [d.source, !!d.untrusted]), [['PR body', false], ['history PR #12', true], ['history issue #6', true], ['history PR #13', true]]);
+  assert.equal(r.criteria.every((c) => c.source.startsWith('history') === !!c.optional), true);
+});
+
+test('F10: a partial blame result is reported as a limitation, not as history being unavailable', () => {
+  const r = collectRequirements({ repo: 'org/app', pr: pr0(), history: { shas: [], partial: 'Historical intent is partial: git blame failed for 1 and was skipped for 0 hunk(s).', pulls: () => [], pr: () => ({}) }, loadIssue: () => ({}) });
+  assert.equal(r.status, 'partial');
+  assert.match(r.limitations.join(' '), /partial: git blame failed for 1/);
 });
