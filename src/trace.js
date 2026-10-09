@@ -84,6 +84,8 @@ function buildIndex(docs, terms, k1 = 1.2, b = 0.75) {
 }
 
 const slug = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
+// git's lines are LF-separated: CRLF becomes LF and a lone CR a space, so line numbers match the diff and no CR reaches a quote.
+const lf = (s) => String(s).replace(/\r\n/g, '\n').replace(/\r/g, ' ');
 const clean = (s) => String(s).replace(/[​-‏‪-‮⁠-⁤﻿]/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 const ID = String.raw`(?:AC\s?\d+|[A-Z][A-Z0-9]*(?:[-_.][A-Z0-9]+)*-?\d+(?:\.\d+)*)`;
 const ID_LINE = new RegExp(String.raw`^\s*(?:[-*+]\s+|\d+[.)]\s+)?(#{1,6}\s+)?[*_\[\`]*(${ID})[*_\]\`]*\s*[:：.)\-—–]`);
@@ -97,7 +99,7 @@ const strip = (l) => l.replace(/^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)?(?:
 
 // Item records: { path, ref, line, end, heading, text (<=600), raw, kind: id|ac|gherkin|normative, normative: true }.
 function parseItems(file, text) {
-  const lines = clean(text).split(/\r?\n/), n = lines.length;
+  const lines = lf(clean(text)).split('\n'), n = lines.length;
   const feature = /\.feature$/i.test(file);
   const fenced = new Array(n).fill(false), head = new Array(n).fill(null);
   let f = false, cur = null;
@@ -255,7 +257,7 @@ function codeHunks(patch) {
     const one = [...parseDiff('diff --git ' + chunk)][0];
     if (!one) continue;
     const [file, map] = one;
-    const headers = [...chunk.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@ ?(.*)$/gm)];
+    const headers = [...chunk.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@ ?([^\n]*)/gm)]; // not '.': it skips a CR
     headers.forEach((h, idx) => {
       const right = [...map.changed.RIGHT].filter(([l]) => map.RIGHT.get(l) === idx);
       const left = [...map.changed.LEFT].filter(([l]) => map.LEFT.get(l) === idx);
@@ -295,6 +297,7 @@ function catBatch(cwd, specs) {
   }
   return out;
 }
+const GREP_HIT = /^[^:]*:(.*?):(\d+):(.*)$/s; // 's': the hit line may end in (or hold) a CR, which '.' does not match
 const gitGrep = (cwd, args) => {
   try { return git(cwd, args, { encoding: 'utf8' }); } catch (e) { if (e.status === 1) return ''; throw e; }
 };
@@ -322,7 +325,7 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
   cands.forEach((c, k) => {
     const buf = bufs[k];
     if (!buf || buf.includes(0)) return;
-    const text = buf.toString('utf8'), items = parseItems(c.path, text);
+    const text = lf(buf.toString('utf8')), items = parseItems(c.path, text);
     if (isRequirementDoc(items) || forced(c.path)) docs.set(c.path, { path: c.path, text, items, forced: forced(c.path) });
   });
   let list = [...docs.values()].sort(byRank);
@@ -454,7 +457,7 @@ function transitiveTests({ cwd, head, code, shaOf, total }) {
     try { res = gitGrep(cwd, ['grep', '-n', '-I', '-w', '-F', ...cands.flatMap((c) => ['-e', c]), head, '--']); } catch { continue; }
     const per = new Map(cands.map((c) => [c, { files: new Set(), tests: new Map() }]));
     for (const l of res.split('\n').slice(0, 20000)) {
-      const m = /^[^:]*:(.*?):(\d+):(.*)$/.exec(l);
+      const m = GREP_HIT.exec(l);
       if (!m) continue;
       for (const c of cands) if (new RegExp(`(?<![\\w$])${esc(c)}(?![\\w$])`).test(m[3])) {
         const e = per.get(c); e.files.add(m[1]);
@@ -478,9 +481,9 @@ function occurrences({ cwd, head, crits, maps }) {
     const words = new Set(tokenize(c.quote + ' ' + (c.previous || '')));
     const hits = [];
     for (const l of res.split('\n')) {
-      const m = /^[^:]*:(.*?):(\d+):(.*)$/.exec(l);
+      const m = GREP_HIT.exec(l);
       if (!m) continue;
-      hits.push({ path: m[1], line: +m[2], text: m[3].trim().slice(0, 200), kind: pathKind(m[1]), touched_in_pr: !!maps.get(m[1])?.changed.RIGHT.has(+m[2]),
+      hits.push({ path: m[1], line: +m[2], text: m[3].replace(/\r/g, ' ').trim().slice(0, 200), kind: pathKind(m[1]), touched_in_pr: !!maps.get(m[1])?.changed.RIGHT.has(+m[2]),
         o: tokenize(m[3] + ' ' + m[1]).filter((t) => words.has(t)).length });
     }
     const order = ['test', 'src', 'config', 'snapshot', 'doc'];
