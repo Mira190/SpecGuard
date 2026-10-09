@@ -91,10 +91,16 @@ const slug = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').rep
 const lf = (s) => String(s).replace(/\r\n/g, '\n').replace(/\r/g, ' ');
 const clean = (s) => String(s).replace(/[​-‏‪-‮⁠-⁤﻿]/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 const ID = String.raw`(?:AC\s?\d+|[A-Z][A-Z0-9]*(?:[-_.][A-Z0-9]+)*(?<=\d))`; // linear: quantifiers are separated by distinct delimiters; the last char must be a digit
-const ID_LINE = new RegExp(String.raw`^\s*(?:[-*+]\s+|\d+[.)]\s+)?(#{1,6}\s+)?[*_\[\`]*(${ID})[*_\]\`]*\s*[:：.)\-—–]`);
+const ID_LINE = new RegExp(String.raw`^\s*(?:[-*+]\s+|\d+[.)]\s+)?(#{1,6}\s+)?[*_\[]*(${ID})[*_\]\`]*\s*(?:[:：)\-—–]|\.(?!\w))`); // not a backtick opener (`ENABLE_IPV6` - text) nor a file name or version ([CHANGELOG-1.38.md])
 // A Markdown link reference definition ('[KEP-1]: https://...') is a label for a URL, not an item.
 const LINKDEF = /^\s*\[[^\]]+\]:\s*(?:(?:[a-z][a-z0-9+.-]*:\/\/|\/|\.{1,2}\/|#|<|mailto:)\S*(?:\s+["'(].*)?|\S+)\s*$/i;
-const idLine = (l) => { const c = l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l; return LINKDEF.test(c) ? null : ID_LINE.exec(c); }; // an ID label sits in the first MAX_LINE chars
+const idLine = (l) => { // an ID label sits in the first MAX_LINE chars
+  const c = l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l, m = LINKDEF.test(c) ? null : ID_LINE.exec(c);
+  if (!m) return null;
+  if (/_/.test(m[2]) && !/[-.]/.test(m[2]) && !/[:：]$/.test(m[0])) return null; // CURLOPT_FOO - text, MACRO_NAME): a code name, not a requirement ID
+  if (!m[1] && !c.slice(m[0].length).trim()) return null; // 'VS2013.' : an ID needs text after it unless it is a heading
+  return m;
+};
 const AC_HEAD = /^(acceptance criteria|acceptance tests|验收标准|验收条件|AC)\s*[:：]?$/i;
 const LIST_ITEM = /^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)(.+)$/;
 // Gherkin keywords count in .feature files and in fenced gherkin/feature blocks, or in a document that also has Given/When/Then steps.
@@ -240,10 +246,13 @@ function parseItems(file, text) {
 
 const isRequirementDoc = (items) => items.some((i) => i.kind !== 'normative') || items.length >= 2;
 // Stricter than isRequirementDoc, used to admit a document: prose alone needs 2+ items and either an RFC 2119 capital (MUST/SHALL/REQUIRED)
-// or a dense run of them; structured items (ID, acceptance criteria, Gherkin) always admit. Spec directories keep the loose rule.
-const STRONG_DIR = /(^|\/)(specs?|requirements)\/|(^|\/)adrs?\/|^\.kiro\/specs\/|^openspec\//i;
-const DENSITY = 2000; // prose-only: at least one normative sentence per 2 KB, so a long tutorial with two stray "must" lines is not a spec
-const isSpecDoc = (items, file = '', size = 0) => isRequirementDoc(items) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || items.length * DENSITY >= size || items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw)));
+// or a dense run of them (long documents need more); structured items (ID, acceptance criteria, Gherkin) always admit. Spec directories keep the loose rule.
+const STRONG_DIR = /(^|\/)(specs?|requirements|design|rfcs?|proposals)\/|(^|\/)adrs?\/|^\.kiro\/specs\/|^openspec\//i;
+const DENSITY = 300, DENSITY_CAPS = 5000; // prose-only: one normative sentence per 300 bytes, or per 5 KB when one has an RFC 2119 capital: a long tutorial with a few stray "must" lines is not a spec
+const isSpecDoc = (items, file = '', size = 0) => isRequirementDoc(items) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || items.length * DENSITY >= size || (items.length * DENSITY_CAPS >= size && items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw))));
+// Directories of LLM prompts, command/workflow definitions and templates are instructions to a tool, not product requirements.
+const NON_SPEC_DIR = /(^|\/)(templates?|prompts?|commands|workflows|agents|skills)\/|-template\.md$/i;
+const specLike = (p) => docLike(p) && !NON_SPEC_DIR.test(p);
 
 // Pair BASE and HEAD items by ref (k-th duplicate with k-th), then leftovers by heading + ordinal.
 function pairItems(baseItems, headItems) {
@@ -372,7 +381,7 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
   const forced = (p) => inc.some((g) => matchGlob(p, g)), excluded = (p) => exc.some((g) => matchGlob(p, g));
   for (const e of entries) if (UNREADABLE.test(e.path) && UNREADABLE_NAME.test(path.basename(e.path)) && !excluded(e.path)) limitations.push(`requirement-like file not readable: ${e.path}`);
   let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
-    && ((docLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
+    && ((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
   if (cands.length > MAX_CANDIDATES) { limitations.push(`${cands.length - MAX_CANDIDATES} candidate documents skipped by the ${MAX_CANDIDATES}-file limit.`); cands = cands.slice(0, MAX_CANDIDATES); }
   let budget = MAX_DOC_BYTES, over = false;
   const docs = new Map(), bufs = catBatch(cwd, cands.map((c) => c.sha));
@@ -393,7 +402,7 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
 function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '' }) {
   const { inc, exc } = parseReqPaths(reqPaths), extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
   const eligible = (p) => !exc.some((g) => matchGlob(p, g)) && (inc.some((g) => matchGlob(p, g))
-    || (docLike(p) && !SKIP_NAME.test(p) && !RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g))));
+    || (specLike(p) && !SKIP_NAME.test(p) && !RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g))));
   const todo = paths.filter((p) => !CONTROL.test(p) && eligible(p));
   const read = (rev) => catBatch(cwd, todo.map((p) => `${rev}:${p}`));
   const heads = todo.length ? read(head) : [], bases = todo.length && base ? read(base) : [];
@@ -581,7 +590,7 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   }
   const maps = parseDiff(patch);
   // changed requirement items (head docs, plus docs that were requirement docs at base: deleted or emptied)
-  let specCand = [...maps.keys()].filter((p) => !CONTROL.test(p) && !d.excluded(p) && (d.docs.has(p) || (!d.ruled(p) && docLike(p) && !SKIP_NAME.test(p)) || d.forced(p)));
+  let specCand = [...maps.keys()].filter((p) => !CONTROL.test(p) && !d.excluded(p) && (d.docs.has(p) || (!d.ruled(p) && specLike(p) && !SKIP_NAME.test(p)) || d.forced(p)));
   if (specCand.length > MAX_CHANGED_DOCS) { cand.limitations.push(`${specCand.length - MAX_CHANGED_DOCS} changed requirement document(s) skipped by the ${MAX_CHANGED_DOCS}-document limit.`); specCand = specCand.slice(0, MAX_CHANGED_DOCS); }
   const baseBufs = specCand.length ? catBatch(cwd, specCand.map((p) => `${base}:${p}`)) : [];
   const files = [];
