@@ -112,7 +112,7 @@ function grade(spec, obs) {
   const violates = (m) => {
     if (m.state) return reviews.some((r) => r.state === m.state);
     const re = m.text && new RegExp(m.text, 'i');
-    const hit = comments.some((c) => (!m.kind || c.kind === m.kind) && (!m.path || c.path === m.path)
+    const hit = comments.some((c) => (!m.kind || c.kind === m.kind) && (!m.path || c.path === m.path) && (!m.confidence || c.confidence === m.confidence)
       && (m.line === undefined || Math.abs((c.line ?? 1e9) - m.line) <= (m.tolerance ?? 1)) && (!re || re.test(`${c.title}\n${c.body}`)));
     return hit || (!!re && !m.kind && !m.path && m.line === undefined && reviews.some((r) => re.test(r.body || '')));
   };

@@ -675,7 +675,7 @@ test('r4: coverage citations snap +-5 lines to the quote; a missing quote or an 
   const run = (d) => post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), read, new Map([['src.js', post.parsePatch(patch)]]));
   const d = run(report({ coverage: [row('covered', { behaviour: { ...behaviour, line: 4 }, change: { ...behaviour, line: 4 }, evidence: [{ ...evidence, line: 3 }] })], findings: [] }));
   assert.deepEqual([d.coverage[0].status, d.coverage[0].behaviour.line, d.coverage[0].change.line, d.coverage[0].evidence[0].line], ['covered', 3, 3, 2]);
-  const far = run(report({ coverage: [row('covered', { behaviour: { ...behaviour, line: 30 }, change: { ...behaviour } })], findings: [] }));
+  const far = run(report({ coverage: [row('covered', { behaviour: { ...behaviour, line: 30, quote: 'absent' }, change: { ...behaviour } })], findings: [] }));
   assert.equal(far.coverage[0].status, 'unknown');
   const ctxLine = run(report({ coverage: [row('weak_test', { change: { path: 'src.js', line: 2, quote: 'l1' } })], findings: [finding('weak_test')] }));
   assert.equal(ctxLine.coverage[0].status, 'unknown');
@@ -1497,4 +1497,17 @@ test('run adds the manifest to the sticky summary from the collected files', asy
   withMap(s, [{ path: 'RULES.md', scope: ['**'], kind: 'repo' }]);
   await post(s);
   assert.match(s.calls.summary[0].body, /Sources read[\s\S]*docs\/spec\.md[\s\S]*RULES\.md[\s\S]*spec found/);
+});
+
+test('evidence cited at a wrong line (e.g. a diff.patch line) snaps to the file line only on a unique whole-file match', () => {
+  const check = (lines) => {
+    const ev = { ...evidence, path: 'test.js', line: 24 };
+    const d = report({ coverage: [row('covered', { evidence: [ev] })], findings: [] });
+    post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (p) => p === 'src.js' ? ['l1', 'l2', behaviour.quote] : lines, new Map([['src.js', post.parsePatch(patch)]]));
+    return { status: d.coverage[0].status, line: ev.line };
+  };
+  const tenLines = Array.from({ length: 10 }, (_, i) => i === 1 ? evidence.quote : `other ${i}`);
+  assert.deepEqual(check(tenLines), { status: 'covered', line: 2 });
+  assert.equal(check([evidence.quote, ...tenLines]).status, 'unknown'); // two matches: never guess
+  assert.equal(check(['nothing', 'matches']).status, 'unknown');
 });
