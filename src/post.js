@@ -21,6 +21,7 @@ const truncate = (s, n = BODY_MAX) => {
   if (end > 0 && /[\uD800-\uDBFF]/.test(s[end - 1])) end--;
   return s.slice(0, end) + '\n...(truncated)';
 };
+const { matches } = require('./standards-map');
 const clean = (s) => truncate(redact(s));
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
@@ -418,10 +419,16 @@ function traceTable(data, blob, specFiles = [], covById = new Map(data.coverage.
 }
 
 const MAX_ROWS = 30;
+// Collapsed list of what the review read. Paths are repo-relative and come from the collector, not the model.
+function sourcesRead({ reqDocs = [], standards = [], trace, head, base }) {
+  const list = (a) => (a.length ? a.slice(0, 15).map((x) => `\`${cell(x)}\``).join(', ') + (a.length > 15 ? `, +${a.length - 15} more` : '') : 'none');
+  return `<details><summary>Sources read</summary>\n\n- Requirement documents: ${list(reqDocs)}\n- Standards files: ${list(standards)}\n- Trace: ${cell(trace)}\n- Commits: head \`${cell(String(head).slice(0, 7))}\`, base \`${cell(String(base).slice(0, 7))}\`\n\n</details>\n`;
+}
 // Sections in order of importance (findings, pre-existing drift, Traceability, then the long tables). Each section's items are
 // added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, rules = [], blob, specFiles, pre = [], traceNote }) {
-  let head = `<!-- specguard:summary -->\n## SpecGuard\n\n${neutralize(status)}\n\n`;
+function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest }) {
+  // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
+  let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}## SpecGuard\n\n${neutralize(status)}\n\n`;
   if (engine) head += `_Engine: ${cell(`${engine}${model ? ` (${model})` : ''}`)}_\n\n`;
   if (partial) head += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
   if (traceNote) head += `> Traceability unavailable for this PR (${cell(traceNote)}).\n\n`;
@@ -472,6 +479,8 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], parti
     }
     out += h + body + tail;
   }
+  const src = manifest && sourcesRead(manifest); // metadata: dropped before anything else, and never alongside a cut section
+  if (src && !cut && out.length + src.length + RESERVE <= BODY_MAX) out += src;
   return clean(cut ? `${out}\n_(truncated: the summary exceeded the comment size limit; the most important sections come first)_\n` : out);
 }
 
@@ -715,7 +724,7 @@ async function run({ github, context, core }) {
 
   let rules = [];
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
-  if (env.SKIP === 'true') return publish(buildSummary({ rules, status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }));
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, headSha, status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }));
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -762,6 +771,8 @@ async function run({ github, context, core }) {
     specFiles = [];
     traceNote = traceStatus === 'failed' ? 'requirement tracing failed or timed out' : 'requirement tracing is not available';
   } else if (traceStatus === 'off') specFiles = [];
+  let smap = null; // path -> scope; absent for older collectors, which skips the applicability check
+  try { smap = new Map(JSON.parse(readCtx('standards-map.json')).map((e) => [e.path, e.scope])); } catch { /* no map */ }
   for (const l of (readCtx('collect-limits.txt') || '').split('\n').filter(Boolean)) addNote(l);
   verifyEvidence(data, reviewable, standards, readLines, maps);
   let requirements = null;
@@ -826,6 +837,10 @@ async function run({ github, context, core }) {
       const m = /^(.+):(\d+)$/.exec(f.rule_source || '');
       const rl = m && standards.has(m[1]) ? readRule(m[1]) : null;
       const at = rl && ruleLine(f.rule_quote, rl, +m[2]);
+      if (at && smap?.get(m[1]) && !matches(smap.get(m[1]), f.path)) {
+        addNote(`Standards finding omitted: ${m[1]} does not apply to ${f.path} (its scope: ${smap.get(m[1]).join(', ')}).`);
+        continue;
+      }
       if (at) f = { ...f, rule_source: `${m[1]}:${at}` };
       else if (!(f.confidence === 'low' && !f.rule_source)) {
         addNote(`Unverified standards finding omitted: ${f.title}.`);
@@ -883,7 +898,8 @@ async function run({ github, context, core }) {
   }
   if (unchecked) addNote('The PR head could not be rechecked; results use the event head commit.');
 
-  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `${gapFree(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, partial, engine, model, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}` }));
+  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `${gapFree(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, partial, engine, model, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, headSha,
+    manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base } }));
 }
 
 module.exports = async (a) => {

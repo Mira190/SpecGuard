@@ -1434,3 +1434,67 @@ test('end to end: the comment keeps its prose but no placeholder block', async (
   assert.match(body, /Skeleton omitted: placeholder/);
   assert.match(s.calls.summary[0].body, /skeleton omitted: placeholder/);
 });
+
+test('the sticky summary hides the head SHA in a comment and leaves the visible text unchanged; a failed run records none', async (t) => {
+  const bare = post.buildSummary({ status: 'Reviewed' });
+  const marked = post.buildSummary({ status: 'Reviewed', headSha: 'abc123' });
+  assert.ok(marked.startsWith('<!-- specguard:summary -->\n<!-- specguard:head=abc123 -->\n## SpecGuard'));
+  assert.equal(marked.replace('<!-- specguard:head=abc123 -->\n', ''), bare);
+  assert.doesNotMatch(post.buildSummary({ status: 'Reviewed', headSha: 'x --> <b>' }), /specguard:head/);
+  const ok = setup(t);
+  await post(ok);
+  assert.match(ok.calls.summary[0].body, /^<!-- specguard:summary -->\n<!-- specguard:head=HEADSHA -->\n/);
+  const failed = setup(t);
+  fs.unlinkSync(path.join(failed.dir, 'ctx/findings.json'));
+  await post(failed);
+  assert.doesNotMatch(failed.calls.summary[0].body, /specguard:head/); // a failed run must be retried, not skipped as done
+});
+
+const stdFinding = () => finding('standard', { line: 2, quote: 'l2', rule_source: 'RULES.md:1', rule_quote: 'rule one' });
+const withMap = (s, entries) => fs.writeFileSync(path.join(s.dir, 'ctx/standards-map.json'), JSON.stringify(entries));
+
+test('a standards finding whose rule file is mapped but does not apply to the cited path is dropped with a note', async (t) => {
+  const s = setup(t, report({ coverage: [], findings: [stdFinding()] }));
+  withMap(s, [{ path: 'RULES.md', scope: ['docs/**'], kind: 'repo' }]);
+  await post(s);
+  assert.equal(s.calls.review.length, 0);
+  assert.match(s.calls.summary[0].body, /Standards finding omitted: RULES\.md does not apply to src\.js/);
+});
+
+test('a standards finding is kept when the mapped scope covers its path, or when there is no map', async (t) => {
+  const covered = setup(t, report({ coverage: [], findings: [stdFinding()] }));
+  withMap(covered, [{ path: 'RULES.md', scope: ['docs/**', 'src.js'], kind: 'repo' }]);
+  await post(covered);
+  assert.equal(covered.calls.review[0].comments.length, 1);
+  const unmapped = setup(t, report({ coverage: [], findings: [stdFinding()] }));
+  await post(unmapped);
+  assert.equal(unmapped.calls.review[0].comments.length, 1);
+});
+
+const manifest = { reqDocs: ['docs/spec.md'], standards: ['AGENTS.md', 'pkg/CLAUDE.md'], trace: 'spec found', head: 'a'.repeat(40), base: 'b'.repeat(40) };
+
+test('the Sources read manifest is one collapsed section with paths, trace status and short SHAs', () => {
+  const s = post.buildSummary({ status: 'x', manifest });
+  assert.match(s, /<details><summary>Sources read<\/summary>[\s\S]*docs\/spec\.md[\s\S]*AGENTS\.md[\s\S]*pkg\/CLAUDE\.md[\s\S]*spec found[\s\S]*aaaaaaa[\s\S]*bbbbbbb[\s\S]*<\/details>/);
+  assert.doesNotMatch(s, /a{8}/);
+  assert.match(post.buildSummary({ status: 'x', manifest: { ...manifest, reqDocs: [], standards: [] } }), /Requirement documents: none/);
+});
+
+test('the manifest is the first thing dropped when the summary is over budget', () => {
+  const pre = Array.from({ length: 300 }, (_, i) => ({ kind: 'spec_mismatch', path: 'src.js', line: i + 1, title: `T${i}`, body: 'b'.repeat(400), confidence: 'high' }));
+  const small = post.buildSummary({ status: 'x', manifest, pre: pre.slice(0, 2) });
+  assert.match(small, /Sources read/);
+  const big = post.buildSummary({ status: 'x', manifest, pre });
+  assert.ok(big.length <= 65536);
+  assert.match(big, /\(truncated/);
+  assert.doesNotMatch(big, /Sources read/);
+});
+
+test('run adds the manifest to the sticky summary from the collected files', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), 'docs/spec.md\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/trace-status'), 'ok\n');
+  withMap(s, [{ path: 'RULES.md', scope: ['**'], kind: 'repo' }]);
+  await post(s);
+  assert.match(s.calls.summary[0].body, /Sources read[\s\S]*docs\/spec\.md[\s\S]*RULES\.md[\s\S]*spec found/);
+});
