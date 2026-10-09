@@ -286,6 +286,34 @@ function ruleLine(quote, lines, n) {
   return best;
 }
 
+// Quality gate: a code block with unresolved placeholders (<expected SQL>, TODO, a lone "...") is not a usable skeleton: keep the prose, drop the block.
+// Pure; returns { f, note } and leaves a validation note when it fires. Blind adjudication: all 4 such skeletons were judged unusable.
+const PLACEHOLDER_WORD = /^(?:expected|actual|sql|value|result|output|input|your|fill|placeholder|todo)(?![a-z])/i;
+function placeholder(code) {
+  const t = String(code).replace(/&lt;/g, '<');
+  if (/\bTODO\b/.test(t) || /^\s*(?:\.\.\.|…)\s*$/m.test(t)) return true;
+  // <expected SQL ...> or <some words>; not Foo<T> generics (preceded by a word), not comparisons (a < b), not single-word tags (<div>)
+  for (const m of t.matchAll(/(?<![\w)\]>])<([a-z_][^<>\n]{1,300})>/gi)) if (PLACEHOLDER_WORD.test(m[1]) || /^[a-z_]+(?: [a-z_]+){1,6}$/i.test(m[1])) return true;
+  return false;
+}
+function skeletonGate(f) {
+  const out = [];
+  let dropped = 0, open = null, buf = [];
+  const close = () => { if (placeholder(buf.slice(1, buf.length - (open.closed ? 1 : 0)).join('\n'))) dropped++; else out.push(...buf); open = null; };
+  for (const line of String(f.body).split(/\r?\n/)) {
+    const m = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (!open && m) { open = { ch: m[1][0], n: m[1].length }; buf = [line]; continue; }
+    if (!open) { out.push(line); continue; }
+    buf.push(line);
+    if (m && m[1][0] === open.ch && m[1].length >= open.n) { open.closed = true; close(); }
+  }
+  if (open) close(); // an unclosed fence runs to the end
+  const sug = f.kind === 'standard' && typeof f.suggestion === 'string' && placeholder(f.suggestion);
+  if (!dropped && !sug) return { f, note: '' };
+  const { suggestion, ...rest } = f;
+  return { f: { ...(sug ? rest : f), body: `${out.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n\n_Skeleton omitted: placeholder._` }, note: `Finding ${f.kind} ${f.path}:${f.line}: skeleton omitted: placeholder.` };
+}
+
 // Order, cap, and route findings. Summary items carry the reason they are there.
 function plan(findings, maps, maxComments = 10) {
   const cap = Math.min(HARD_CAP, maxComments);
@@ -767,6 +795,7 @@ async function run({ github, context, core }) {
   const cands = [];
   const assessed = [];
   const unanchored = []; // items that failed to post or anchor; they go to the summary
+  const gate = (r) => { if (r.note) (data.validation_notes ||= []).push(r.note); return r.f; }; // quality gates only demote or trim; each leaves a validation note
   for (let f of data.findings) {
     if (f.kind === 'spec_mismatch') {
       const req = data.requirements.find((r) => r.obligation_ids.includes(f.obligation_ids[0]));
@@ -777,6 +806,7 @@ async function run({ github, context, core }) {
         continue;
       }
     }
+    f = gate(skeletonGate(f));
     if (f.side === 'LEFT') {
       if (f.kind !== 'standard' && reviewable.has(f.path) && norm(maps.get(f.path)?.changed.LEFT.get(f.line) || '') === norm(f.quote)) {
         assessed.push(f);
@@ -859,4 +889,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

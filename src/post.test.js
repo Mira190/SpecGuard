@@ -1398,3 +1398,39 @@ test("a finding on a row the model marked covered is kept at low confidence and 
   post.validate(u);
   assert.equal(u.findings.length, 0);
 });
+
+// ---- skeleton placeholder gate ----
+test('placeholder: unresolved tokens only, not generics, comparisons or tags', () => {
+  for (const code of ['expect(sql).toBe("<expected SQL>")', 'x = <value>', '// TODO: fill', 'f(\n...\n)', 'write={"duckdb": "<expected SQL whose empty check is \'\' = \'\'>"}', '<expected_sql>', 'assert x == <some words here>'])
+    assert.equal(post.placeholder(code), true, code);
+  for (const code of ['const m = new Map<string, number>()', 'if (a < b && c > d) {}', 'if (a <b && c> d)', '<div class="x">', 'fn f<T>(x: T)', 'vec<u8>', 'x = [...rest]', 'it("handles todos")', 'a = b < c'])
+    assert.equal(post.placeholder(code), false, code);
+});
+
+test('skeletonGate: drops only fenced blocks with placeholders and says so', () => {
+  const f = { kind: 'missing_test', path: 'a.js', line: 2, title: 't', confidence: 'high', body: 'Add a test.\n\n```python\nvalidate("<expected SQL>")\n```\n\nThen run it.\n\n```js\nassert.equal(f(1), 2)\n```\n' };
+  const r = post.skeletonGate(f);
+  assert.doesNotMatch(r.f.body, /expected SQL/);
+  assert.match(r.f.body, /assert\.equal\(f\(1\), 2\)/); // clean block kept
+  assert.match(r.f.body, /Add a test\./);
+  assert.match(r.f.body, /Skeleton omitted: placeholder/);
+  assert.match(r.note, /skeleton omitted: placeholder/);
+  const clean = { ...f, body: 'Add a test.\n```js\nassert.equal(f(1), 2)\n```' };
+  assert.equal(post.skeletonGate(clean).f, clean);
+  assert.equal(post.skeletonGate(clean).note, '');
+  assert.doesNotMatch(post.skeletonGate({ ...f, body: 'Do it:\n````\n```\n<expected value>\n```\n````\n' }).f.body, /expected value/); // longer outer fence
+  assert.doesNotMatch(post.skeletonGate({ ...f, body: 'Do it:\n```\n// TODO fill in' }).f.body, /TODO/); // unclosed fence
+  const std = post.skeletonGate({ kind: 'standard', path: 'a', line: 1, title: 't', body: 'b', suggestion: 'x = <your value>' });
+  assert.equal(std.f.suggestion, undefined);
+  assert.match(std.note, /skeleton omitted/);
+});
+
+test('end to end: the comment keeps its prose but no placeholder block', async (t) => {
+  const s = setup(t, report({ findings: [finding('missing_test', { body: 'total(1) returns 41 instead of 42.\n\n```js\nexpect(total(1)).toBe(<expected value>)\n```' })] }));
+  await post(s);
+  const body = s.calls.review[0].comments[0].body;
+  assert.match(body, /returns 41 instead of 42/);
+  assert.doesNotMatch(body, /expected value/);
+  assert.match(body, /Skeleton omitted: placeholder/);
+  assert.match(s.calls.summary[0].body, /skeleton omitted: placeholder/);
+});
