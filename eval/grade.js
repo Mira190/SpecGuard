@@ -2,6 +2,21 @@
 const arr = (v) => (v === undefined ? [] : [].concat(v));
 const lc = (s) => String(s || '').toLowerCase();
 const STATUS = /^(covered|weak_test|missing_test|higher_level_only|needs_human|unknown): /;
+const ALIGN = ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
+const TRACE_HEAD = /^\|\s*Requirement\s*\|\s*Changed\s*\|\s*Implementation\s*\|\s*Tests\s*\|\s*Alignment\s*\|\s*Reflected in\s*\|/i;
+const YES = '✓✔✅', NO = '✗✘❌✕';
+// "spec ✓ tests ✗ PR ✗" (labelled) or "✓ ✗ ✓" (spec, tests, PR in that order). null = not stated.
+function parseReflected(cell) {
+  const out = { spec: null, tests: null, pr: null };
+  const mark = (c) => (YES.includes(c) ? true : NO.includes(c) ? false : null);
+  for (const k of Object.keys(out)) {
+    const m = new RegExp(`\\b${k}\\b\\W{0,3}([${YES}${NO}]|yes|no|true|false)`, 'i').exec(cell);
+    if (m) out[k] = /^(yes|true)$/i.test(m[1]) ? true : /^(no|false)$/i.test(m[1]) ? false : mark(m[1]);
+  }
+  const marks = [...cell].filter((c) => (YES + NO).includes(c));
+  if (marks.length === 3 && Object.values(out).every((v) => v === null)) [out.spec, out.tests, out.pr] = marks.map(mark);
+  return out;
+}
 
 // Parses a review comment the Action posted (src/post.js commentBody). Null when it is not ours.
 function parseComment(c) {
@@ -24,17 +39,28 @@ function parseSummary(text) {
   const s = String(text || '');
   const items = [...s.matchAll(/^- \*\*(.+?)\*\* \(`([^`]+):(\d+)`, (\w+)(?:, ([^)]*))?\)/gm)]
     .map((m) => ({ title: m[1], path: m[2], line: +m[3], kind: m[4], why: m[5] || '' }));
-  const rows = [];
-  for (const ln of s.split('\n')) {
-    if (!ln.startsWith('| ')) continue;
+  const rows = [], trace = [], lines = s.split('\n'), traceLines = new Set();
+  // Traceability table: the header row, then table rows until the first other line.
+  const th = lines.findIndex((l) => TRACE_HEAD.test(l));
+  if (th >= 0) for (let i = th; i < lines.length && lines[i].startsWith('|'); i++) {
+    traceLines.add(i);
+    const c = lines[i].split(/(?<!\\)\|/).map((x) => x.trim());
+    if (i === th || /^:?-+:?$/.test(c[1] || '')) continue;
+    trace.push({ requirement: c[1], changed: c[2], implementation: c[3], tests: c[4], alignment: ALIGN.find((a) => new RegExp(`\\b${a}\\b`, 'i').test(c[5] || '')) || '', reflected: parseReflected(c[6] || ''), raw: lines[i] });
+  }
+  lines.forEach((ln, i) => {
+    if (!ln.startsWith('| ') || traceLines.has(i)) return;
     const c = ln.split(/(?<!\\)\|/).map((x) => x.trim());
     const st = STATUS.exec(c[4] || '');
     const at = /; (\S+?):(\d+) — /.exec(c[2] || '');
-    if (st && at) rows.push({ status: st[1], path: at[1], line: +at[2] });
-  }
+    if (st && at) rows.push({ status: st[1], path: at[1], line: +at[2], text: ln });
+  });
+  // "Pre-existing drift (not caused by this PR)" section: up to the next heading or the end of its <details>. Null when absent.
+  const pe = /Pre-existing drift \(not caused by this PR\)/.exec(s);
+  const preExisting = pe ? s.slice(pe.index + pe[0].length).split(/\n#{1,6} |<\/details>/)[0].trim() : null;
   const notes = /<summary>Validation notes \(\d+\)<\/summary>\n\n([\s\S]*?)\n<\/details>/.exec(s);
   return {
-    items, rows, notes: notes ? notes[1].split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)) : [],
+    items, rows, trace, preExisting, noRequirementDocs: /No requirement documents found/.test(s), notes: notes ? notes[1].split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)) : [],
     skipped: /Nothing to review/.test(s),
     incomplete: /Could not complete/i.test(s) || /Partially reviewed/.test(s) || /Standards tooling: incomplete/.test(s),
   };
@@ -92,6 +118,20 @@ function grade(spec, obs) {
   };
   const mustNot = (exp.must_not || []).filter(violates);
 
+  // Summary-level expectations (traceability). Every failed check is listed in summary_misses.
+  const text = String(obs.summary || ''), re = (p) => new RegExp(p, 'i'), sm = [];
+  for (const p of exp.summary_has || []) if (!re(p).test(text)) sm.push(`missing /${p}/`);
+  for (const p of exp.summary_lacks || []) if (re(p).test(text)) sm.push(`must not contain /${p}/`);
+  for (const r of exp.rows_not || []) if (sum.rows.some((x) => x.status === r.status && (!r.text || re(r.text).test(x.text)))) sm.push(`coverage row ${r.status} /${r.text || ''}/`);
+  if (exp.pre_existing !== undefined && !(sum.preExisting != null && (exp.pre_existing === true || re(exp.pre_existing).test(sum.preExisting)))) sm.push(`no Pre-existing drift section matching ${JSON.stringify(exp.pre_existing)}`);
+  for (const t of exp.trace || []) {
+    const row = sum.trace.find((x) => !t.requirement || re(t.requirement).test(x.requirement));
+    if (!row) { sm.push(`no Traceability row for /${t.requirement || ''}/`); continue; }
+    if (t.alignment && !arr(t.alignment).includes(row.alignment)) sm.push(`/${t.requirement}/ alignment ${row.alignment || '(none)'}, want ${arr(t.alignment).join('|')}`);
+    if (t.alignment_not && arr(t.alignment_not).includes(row.alignment)) sm.push(`/${t.requirement}/ alignment must not be ${row.alignment}`);
+    for (const [k, v] of Object.entries(t.reflected || {})) if (row.reflected[k] !== v) sm.push(`/${t.requirement}/ reflected ${k} is ${row.reflected[k]}, want ${v}`);
+  }
+
   const complete = obs.summary != null && !sum.incomplete;
   // With the raw artifact, JSON validity is about the model output alone; a skipped run has none. Without it, fall back to the summary.
   const jsonValid = obs.raw_findings_present === undefined || sum.skipped ? complete : !!(obs.raw_findings_present && obs.raw_findings_valid_json);
@@ -99,9 +139,9 @@ function grade(spec, obs) {
   const cleanOk = exp.expect_clean ? posted.length === 0 : true;
   return {
     id: spec.id, goal: spec.goal, tp, fp: falsePositives.length, acceptable: acceptable.length, fn: missed.length, summary_only: sum.items.length,
-    matched, missed, false_positives: falsePositives, acceptable_findings: acceptable, must_not_violations: mustNot, text_misses: textMisses,
+    matched, missed, summary_misses: sm, false_positives: falsePositives, acceptable_findings: acceptable, must_not_violations: mustNot, text_misses: textMisses,
     json_valid: jsonValid, complete, degraded: sum.notes.length > 0, validation_notes: sum.notes, skip_ok: skipOk, clean_ok: cleanOk,
-    pass: !missed.length && !mustNot.length && !textMisses.length && jsonValid && complete && skipOk && cleanOk,
+    pass: !missed.length && !mustNot.length && !sm.length && !textMisses.length && jsonValid && complete && skipOk && cleanOk,
     latency_s: obs.latency_s ?? null,
   };
 }

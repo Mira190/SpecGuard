@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { grade, aggregate, parseComment, parseSummary } = require('./grade.js');
-const { validateCase, allIds } = require('./run.js');
+const { validateCase, allIds, loadCase } = require('./run.js');
 
 const exp = (extra = {}) => ({ kind: 'missing_test', path: 'a.js', line: 10, ...extra });
 const spec = (findings = [exp()], rest = {}) => ({ id: 'c', goal: 'requirements', expected: { findings, must_not: [], ...rest } });
@@ -103,7 +103,7 @@ test('aggregate: precision, recall, validity, pass rate, latency and per-goal sp
 });
 
 test('shipped cases are well formed', () => {
-  assert.ok(allIds().length >= 21, 'every shipped case directory is listed');
+  assert.ok(allIds().length >= 38, 'every shipped case directory is listed');
   assert.deepEqual(allIds().flatMap(validateCase), []);
 });
 
@@ -150,4 +150,89 @@ test('getVar: only a not-found error means unset; anything else aborts', () => {
   assert.equal(varLookup(() => { throw Object.assign(new Error('x'), { stderr: 'HTTP 404: Not Found' }); }), null);
   assert.equal(varLookup(() => { throw Object.assign(new Error('x'), { stderr: 'variable FOO was not found' }); }), null);
   assert.throws(() => varLookup(() => { throw Object.assign(new Error('x'), { stderr: 'HTTP 502: bad gateway' }); }), /could not read repo variable/);
+});
+
+const TRACE = [
+  '| Requirement | Changed | Implementation | Tests | Alignment | Reflected in |',
+  '|---|---|---|---|---|---|',
+  '| [pricing.md R3](https://github.com/o/r/blob/abc/pricing.md#L7) | code | [premium.js:1](https://github.com/o/r/blob/abc/premium.js#L1) | [premium.test.js:9](https://github.com/o/r/blob/abc/premium.test.js#L9) | consistent | spec ✓ tests ✓ PR ✓ |',
+  '| AC-4 | spec | [deadline.js:2](https://x/deadline.js#L2) | none | mismatch (introduced) | spec ✓ tests ✗ PR ✗ |',
+  '| R9 | code | x | y | not_verifiable | ✓ ✗ ✓ |',
+].join('\n');
+const traceSummary = (extra = '') => `<!-- specguard:summary -->
+## SpecGuard
+
+Reviewed.
+
+### Traceability
+
+${TRACE}
+
+${extra}`;
+
+test('parseSummary reads the Traceability table without disturbing coverage rows', () => {
+  const cov = '| O1: sums | PR body; p.js:2 — return x | none | missing_test: no test |';
+  const s = parseSummary(`${traceSummary()}
+${cov}
+`);
+  assert.deepEqual(s.trace.map((r) => [r.alignment, r.reflected.spec, r.reflected.tests, r.reflected.pr]), [['consistent', true, true, true], ['mismatch', true, false, false], ['not_verifiable', true, false, true]]);
+  assert.equal(s.trace[0].requirement.startsWith('[pricing.md R3]'), true);
+  assert.deepEqual(s.rows.map((r) => [r.status, r.path, r.line]), [['missing_test', 'p.js', 2]]);
+  assert.deepEqual([parseSummary(summaryWith('')).trace, parseSummary(summaryWith('')).preExisting], [[], null]);
+});
+
+test('parseSummary reads the Pre-existing drift section and the no-requirement-docs line', () => {
+  const s = parseSummary(`${traceSummary()}
+### Pre-existing drift (not caused by this PR)
+
+- R3 says twice; premium.js:1 uses 3
+
+### Next
+
+rest`);
+  assert.deepEqual([s.preExisting, s.noRequirementDocs], ['- R3 says twice; premium.js:1 uses 3', false]);
+  const d = parseSummary('<details><summary>Pre-existing drift (not caused by this PR)</summary>\n\nR3 drift\n</details>\nafter');
+  assert.equal(d.preExisting.endsWith('R3 drift'), true);
+  assert.equal(parseSummary('No requirement documents found (content-based discovery; see x).').noRequirementDocs, true);
+});
+
+test('spec_mismatch is graded like any other kind, with text', () => {
+  const e = exp({ kind: 'spec_mismatch', text: 'R3' });
+  assert.equal(grade(spec([e]), obs([com({ kind: 'spec_mismatch', body: 'violates R3' })])).pass, true);
+  assert.equal(grade(spec([e]), obs([com({ kind: 'spec_mismatch', body: 'violates R9' })])).pass, false);
+  assert.equal(parseComment({ path: 'a.js', line: 7, body: '**Mismatch**\n\nkind: spec_mismatch, confidence: high' }).kind, 'spec_mismatch');
+  assert.equal(grade(spec([], { must_not: [{ kind: 'spec_mismatch' }] }), obs([com({ kind: 'spec_mismatch' })])).pass, false);
+});
+
+test('summary expectations: summary_has, summary_lacks, trace, pre_existing, rows_not', () => {
+  const g = (x, summary) => grade(spec([], x), obs([], { summary }));
+  const sm = (x, summary) => g(x, summary).summary_misses;
+  assert.deepEqual(sm({ summary_has: ['No requirement documents found'] }, 'No requirement documents found (x)'), []);
+  assert.equal(g({ summary_has: ['not_verifiable'] }, obs().summary).pass, false);
+  assert.equal(g({ summary_lacks: ['development\\.md'] }, 'cites docs/development.md').pass, false);
+  assert.equal(g({ summary_lacks: ['development\\.md'] }, obs().summary).pass, true);
+  const t = (x) => sm({ trace: [x] }, traceSummary());
+  assert.deepEqual(t({ requirement: 'R3', alignment: 'consistent', reflected: { spec: true, tests: true, pr: true } }), []);
+  assert.equal(t({ requirement: 'AC-4', alignment: 'consistent' }).length, 1);
+  assert.equal(t({ requirement: 'AC-4', alignment_not: ['mismatch'] }).length, 1);
+  assert.equal(t({ requirement: 'AC-4', reflected: { tests: true } }).length, 1);
+  assert.equal(t({ requirement: 'R404' }).length, 1);
+  assert.equal(sm({ pre_existing: 'R3' }, traceSummary()).length, 1);
+  assert.deepEqual(sm({ pre_existing: 'R3' }, traceSummary('### Pre-existing drift (not caused by this PR)\n\n- R3 drift\n')), []);
+  const cov = '| O1: cap | PR body; p.js:2 — min | e | covered: R3 holds |';
+  assert.equal(sm({ rows_not: [{ status: 'covered', text: 'R3' }] }, `Reviewed
+${cov}
+`).length, 1);
+  assert.equal(sm({ rows_not: [{ status: 'covered', text: 'R4' }] }, `Reviewed
+${cov}
+`).length, 0);
+});
+
+test('shipped traceability cases carry valid summary expectations', () => {
+  const ids = allIds().filter((id) => id.startsWith('tr'));
+  assert.equal(ids.length, 23);
+  for (const id of ids) {
+    const e = loadCase(id).expected;
+    for (const p of [...(e.summary_has || []), ...(e.summary_lacks || []), ...(e.rows_not || []).map((r) => r.text).filter(Boolean), ...[e.pre_existing].filter((p) => typeof p === 'string'), ...e.findings.map((f) => f.text).filter(Boolean)]) new RegExp(p, 'i');
+  }
 });

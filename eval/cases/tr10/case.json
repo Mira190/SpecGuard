@@ -1,0 +1,20 @@
+{
+  "id": "tr10",
+  "goal": "traceability",
+  "description": "Pre-existing (U1): at base the spec says 2x while the code already caps at 3x; the PR only adds a log line inside calcPremium.",
+  "pr_title": "Log premium inputs",
+  "pr_body": "Add a log line to calcPremium for debugging.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "pre_existing": "R3|pricing\\.md",
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "No inline spec_mismatch; the drift is listed under \"Pre-existing drift (not caused by this PR)\"."
+  }
+}

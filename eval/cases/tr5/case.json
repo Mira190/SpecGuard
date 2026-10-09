@@ -1,0 +1,28 @@
+{
+  "id": "tr5",
+  "goal": "traceability",
+  "description": "Semantic: the spec says claims after the grace window are refused (30 days); the code threshold POLICY_LAG goes to 45 with no lexical overlap. graceWindowLabel() is a vocabulary-sharing distractor.",
+  "pr_title": "Tune submission policy lag",
+  "pr_body": "Adjust the submission policy lag and the label wording.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr5/src/submit.js",
+        "line": 2,
+        "tolerance": 7,
+        "quote": "POLICY_LAG = 45"
+      }
+    ],
+    "must_not": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr5/src/labels.js"
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the threshold (or its throw line); none on the label helper."
+  }
+}

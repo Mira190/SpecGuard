@@ -1,0 +1,19 @@
+{
+  "id": "tr4",
+  "goal": "traceability",
+  "description": "B-done: AC-4 goes from 30 to 45 days and the code and test are updated with it.",
+  "pr_title": "Extend the claim filing window to 45 days (AC-4)",
+  "pr_body": "The filing window is now 45 days: spec, code and test updated.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Nothing is stale; no spec_mismatch anywhere."
+  }
+}

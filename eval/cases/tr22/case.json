@@ -1,0 +1,35 @@
+{
+  "id": "tr22",
+  "goal": "traceability",
+  "description": "Boundary: R2 says at least 18 years (>=); the PR changes canRegister from age >= 18 to age > 18, and the tests only check ages 10 and 30.",
+  "pr_title": "Tighten the age check",
+  "pr_body": "Small cleanup of the registration age check.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr22/src/signup.js",
+        "line": 11,
+        "quote": "age > 18",
+        "text": "signup[.]md|R2|at least 18"
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": [
+          "weak_test",
+          "missing_test"
+        ],
+        "path": "eval-sandbox/tr22/src/signup.test.js",
+        "line": 9,
+        "tolerance": 6,
+        "reason": "no test exercises age 18, the boundary the change moves"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the changed comparison: at least 18 includes 18, but 18-year-olds are now refused."
+  }
+}

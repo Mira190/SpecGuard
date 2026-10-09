@@ -1,0 +1,23 @@
+{
+  "id": "tr16",
+  "goal": "traceability",
+  "description": "No issue, thin PR body: the governing requirement is a README.md section; discovery must not depend on globs or links.",
+  "pr_title": "Update premium calc",
+  "pr_body": "update premium calc\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr16/src/premium.js",
+        "line": 1,
+        "quote": "CAP_MULTIPLIER = 3",
+        "text": "README\\.md"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the cap line naming README.md."
+  }
+}

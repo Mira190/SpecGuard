@@ -9,7 +9,7 @@ const { extractCriteria } = require('../src/requirements.js');
 
 const ROOT = path.join(__dirname, '..');
 const CASES = path.join(__dirname, 'cases');
-const GOALS = ['requirements', 'test_quality', 'standards', 'layering', 'robustness'];
+const GOALS = ['requirements', 'test_quality', 'standards', 'layering', 'robustness', 'traceability'];
 const USAGE = `Usage: node eval/run.js --repo OWNER/REPO --target BRANCH [options]
 
   --repo OWNER/REPO   repository that has the Action wired up in its CI workflow; origin must point at it
@@ -21,8 +21,11 @@ const USAGE = `Usage: node eval/run.js --repo OWNER/REPO --target BRANCH [option
   --billing           record the Copilot cost delta from the billing usage API (needs gh scope "user"; day-granular)
   --workflow NAME     workflow to wait for (default: CI)
   --combined          put all selected cases (except x1, x2) into ONE PR and review once; graded per case by sandbox path
+  --external FILE     external mode: manifest of whole source repos at historical commits (see below); needs --repo (the private mirror) and --action, not --target
+  --action OWNER/specguard@SHA  SpecGuard commit the mirror workflow pins (external mode)
+  --trace off,auto    trace values to run each external scenario with (default off,auto; set via repo variable SPECGUARD_EVAL_TRACE)
   --keep              keep the PRs and branches
-  --dry-run           validate the case directories (and with --combined the merged overlay and PR body) and exit; no git, no GitHub
+  --dry-run           validate the case directories (and with --combined the merged overlay and PR body; with --external the manifest and the base'/head' construction, cloning the sources but pushing nothing) and exit; no git, no GitHub
   --help
 
 Push auth: git credential helper "!gh auth git-credential"; override with SPECGUARD_EVAL_CRED_HELPER.
@@ -91,7 +94,7 @@ function varLookup(get) {
 const getVar = (repo, name = VAR) => varLookup(() => sh('gh', ['variable', 'get', name, '--repo', repo]));
 const setVar = (repo, v, name = VAR) => (v == null ? (() => { try { sh('gh', ['variable', 'delete', name, '--repo', repo]); } catch {} })() : sh('gh', ['variable', 'set', name, '--body', v, '--repo', repo]));
 // Combined mode: x1 (expect_skip) cannot coexist with code changes; x2's prompt injection would contaminate every other scenario.
-const COMBINED_SKIP = ['x1', 'x2'];
+const COMBINED_SKIP = ['x1', 'x2', ...Array.from({ length: 23 }, (_, i) => `tr${i + 1}`)]; // tr*: each needs its own requirement docs and summary
 const BUDGET = 30, BUDGET_VAR = 'SPECGUARD_EVAL_MAX_COMMENTS';
 
 // Assumed response of users/<owner>/settings/billing/usage: { usageItems: [{ product, sku, grossAmount, netAmount, ... }] }.
@@ -177,6 +180,19 @@ async function rawOutput(repo, runId, tries = 5, waitMs = 10e3) {
   return { raw_error: `artifact download failed after ${tries} tries: ${err}` };
 }
 
+// Waits for the Action on the head SHA, then reads back everything it posted on the PR.
+async function observePR({ repo, headBr, sha, workflow, number }) {
+  const run = await waitForRun({ repo, branch: headBr, sha, workflow });
+  const job = ghJson(['run', 'view', String(run.databaseId), '--repo', repo, '--json', 'jobs']).jobs.find((j) => j.name === 'dogfood');
+  const latency_s = job && job.startedAt && job.completedAt ? Math.round((Date.parse(job.completedAt) - Date.parse(job.startedAt)) / 1000) : null;
+
+  const comments = ghLines(`repos/${repo}/pulls/${number}/comments`).map(parseComment).filter(Boolean);
+  const reviews = ghLines(`repos/${repo}/pulls/${number}/reviews`).map((r) => ({ state: r.state, body: r.body || '' }));
+  const sticky = ghLines(`repos/${repo}/issues/${number}/comments`).find((x) => (x.body || '').includes('<!-- specguard:summary -->'));
+  const observed = { comments, reviews, summary: sticky ? sticky.body : null, latency_s, conclusion: run.conclusion, job_conclusion: job && job.conclusion, ...await rawOutput(repo, run.databaseId) };
+  return { observed, run };
+}
+
 // Opens one PR for the cases cs, waits for the Action, returns what it posted. Errors carry pr_url.
 async function runPR({ repo, target, cs, name, title, body, n, runId, keep, workflow }) {
   const tag = `eval/${runId}-${name}-${n}`, baseBr = `${tag}-base`, headBr = `${tag}-head`;
@@ -196,14 +212,7 @@ async function runPR({ repo, target, cs, name, title, body, n, runId, keep, work
     const url = sh('gh', ['pr', 'create', '--repo', repo, '--base', baseBr, '--head', headBr, '--title', title, '--body', body]).split('\n').pop();
     pr = { url, number: +url.match(/(\d+)\s*$/)[1] };
 
-    const run = await waitForRun({ repo, branch: headBr, sha, workflow });
-    const job = ghJson(['run', 'view', String(run.databaseId), '--repo', repo, '--json', 'jobs']).jobs.find((j) => j.name === 'dogfood');
-    const latency_s = job && job.startedAt && job.completedAt ? Math.round((Date.parse(job.completedAt) - Date.parse(job.startedAt)) / 1000) : null;
-
-    const comments = ghLines(`repos/${repo}/pulls/${pr.number}/comments`).map(parseComment).filter(Boolean);
-    const reviews = ghLines(`repos/${repo}/pulls/${pr.number}/reviews`).map((r) => ({ state: r.state, body: r.body || '' }));
-    const sticky = ghLines(`repos/${repo}/issues/${pr.number}/comments`).find((x) => (x.body || '').includes('<!-- specguard:summary -->'));
-    const observed = { comments, reviews, summary: sticky ? sticky.body : null, latency_s, conclusion: run.conclusion, job_conclusion: job && job.conclusion, ...await rawOutput(repo, run.databaseId) };
+    const { observed, run } = await observePR({ repo, headBr, sha, workflow, number: pr.number });
     return { observed, url, run };
   } catch (e) {
     throw Object.assign(e, { pr_url: pr && pr.url });
@@ -251,7 +260,7 @@ function markdown({ runId, repo, target, model, cost, results, agg, combined }) 
     ...r.missed.map((e) => `FN ${[].concat(e.kind).join('|')} ${[].concat(e.path)[0].split('/').pop()}:${e.line}`),
     ...(r.acceptable_findings || []).map((f) => `acceptable ${f.kind} ${f.path.split("/").pop()}:${f.line}`),
     ...r.false_positives.map((f) => `FP ${f.kind} ${f.path.split('/').pop()}:${f.line}`),
-    ...r.must_not_violations.map((m) => `must_not ${JSON.stringify(m)}`),
+    ...r.must_not_violations.map((m) => `must_not ${JSON.stringify(m)}`), ...(r.summary_misses || []).map((m) => `summary ${m}`),
     ...r.text_misses.map((e) => `text /${e.text}/`),
     ...(r.json_valid ? [] : ['model JSON missing or invalid']), ...(r.complete ? [] : ['incomplete']), ...(r.degraded ? [`degraded: ${r.validation_notes.length} validation note(s)`] : []), ...(r.skip_ok ? [] : ['not skipped']), ...(r.clean_ok ? [] : ['not clean']),
   ].join('; '));
@@ -271,11 +280,141 @@ function markdown({ runId, repo, target, model, cost, results, agg, combined }) 
   return s;
 }
 
+// ---- External-repo mode (docs/traceability-plan.md §7.4.1): whole source repos at historical commits, mirrored to a private eval repo. ----
+const MIRROR_WORKFLOW = path.join(__dirname, 'mirror-workflow.yml');
+const WORKFLOW_PATH = '.github/workflows/specguard-eval.yml';
+const TRACE_VAR = 'SPECGUARD_EVAL_TRACE';
+const PLACEHOLDER = 'OWNER/specguard@SHA';
+const IDENT = ['-c', 'user.name=specguard-eval', '-c', 'user.email=eval@example.invalid', '-c', 'core.autocrlf=false', '-c', 'commit.gpgsign=false'];
+const trimUrl = (u) => u.replace(/(\.git)?\/*$/, '');
+
+// Returns a list of problems; empty means the manifest is runnable.
+function validateManifest(m) {
+  if (!Array.isArray(m) || !m.length) return ['manifest must be a non-empty array of entries'];
+  const errs = [], seen = new Set();
+  m.forEach((e, i) => {
+    const id = e && typeof e.id === 'string' ? e.id : `#${i}`;
+    const bad = (msg) => errs.push(`${id}: ${msg}`);
+    if (!e || typeof e !== 'object') return bad('entry must be an object');
+    if (!/^[\w.-]+$/.test(e.id || '')) bad('id must match [A-Za-z0-9_.-]+');
+    else if (seen.has(e.id)) bad('duplicate id'); else seen.add(e.id);
+    if (!e.source || !/^https:\/\/\S+$/.test(e.source.url || '')) bad('source.url must be an https URL');
+    if (!e.source || !/^[0-9a-f]{40}$/.test(e.source.sha || '')) bad('source.sha must be a 40-character lowercase hex SHA');
+    for (const k of ['base', 'head', 'pr_title']) if (typeof e[k] !== 'string' || !e[k].trim()) bad(`${k} must be a non-empty string`);
+    if (typeof e.pr_body !== 'string') bad('pr_body must be a string');
+    if (/claude|generated with|co-authored|\u{1F916}/iu.test(`${e.pr_title}\n${e.pr_body}`)) bad('PR text must not carry attribution');
+    if (e.linked_issues !== undefined && (!Array.isArray(e.linked_issues) || e.linked_issues.some((x) => !x || !Number.isInteger(x.number) || typeof x.body !== 'string'))) bad('linked_issues must be an array of {number, title?, body}');
+    const x = e.expected;
+    if (!x || !Array.isArray(x.findings) || !Array.isArray(x.must_not)) return bad('expected.findings and expected.must_not must be arrays');
+    for (const f of x.findings) if (!f.kind || ![].concat(f.path || []).length || !Number.isInteger(f.line)) bad(`finding needs kind, path and integer line: ${JSON.stringify(f)}`);
+  });
+  return errs;
+}
+
+// "#12" -> "<source url>/issues/12", so the number cannot resolve to an issue of the mirror. "owner/repo#12" and "a#12" are left alone.
+const rewriteIssueRefs = (text, sourceUrl) => String(text).replace(/(^|[^\w/#&])#(\d+)\b/g, `$1${trimUrl(sourceUrl)}/issues/$2`);
+
+// PR body for the mirror: refs rewritten, copied linked-issue text inlined (HTML comments dropped, 8000 characters per issue).
+function externalBody(e) {
+  const url = e.source.url, clean = (t) => rewriteIssueRefs(t.replace(/<!--[\s\S]*?-->/g, '').trim().slice(0, 8000), url);
+  let body = rewriteIssueRefs(e.pr_body, url).trimEnd();
+  if ((e.linked_issues || []).length) body += `\n\n## Linked issue (copied)\n\n${e.linked_issues.map((i) => `${trimUrl(url)}/issues/${i.number}${i.title ? ` ${i.title}` : ''}\n\n${clean(i.body)}`).join('\n\n')}`;
+  return body + '\n';
+}
+
+// In dir (a clone containing base and head): base' = base + W (W only adds the workflow), head' = merge(head, base').
+// git diff base'...head' then equals git diff base...head. Branch names derive from tag. Only dir is touched.
+function injectWorkflow({ dir, base, head, workflow, tag, exec = sh }) {
+  const g = (...a) => exec('git', ['-C', dir, ...IDENT, ...a]);
+  const baseBr = `${tag}-base`, headBr = `${tag}-head`;
+  g('checkout', '-q', '-b', baseBr, base);
+  fs.mkdirSync(path.join(dir, path.dirname(WORKFLOW_PATH)), { recursive: true });
+  fs.writeFileSync(path.join(dir, WORKFLOW_PATH), workflow);
+  g('add', WORKFLOW_PATH);
+  g('commit', '-q', '-m', 'specguard eval workflow');
+  g('checkout', '-q', '-b', headBr, head);
+  g('merge', '-q', '--no-ff', '-m', 'merge base with eval workflow', baseBr);
+  return { baseBr, headBr, baseSha: g('rev-parse', baseBr), headSha: g('rev-parse', headBr) };
+}
+
+const extError = (e, mode, err) => ({ id: `${e.id} [trace ${mode}]`, goal: e.goal || 'external', rep: 1, trace: mode, error: String(err.message || err).split('\n')[0] });
+const cloneRepo = (url, dir) => sh('git', ['clone', '-q', '--no-checkout', url, dir]);
+
+// Stages every entry (clone, verify, inject) and, unless dryRun, pushes it to the mirror and runs each trace mode.
+// clone, exec, observe and setTrace are injectable so tests stay offline. Returns { staged, results }.
+async function runExternal({ entries, repo, modes, runId, keep, workflow, action, dryRun, clone = cloneRepo, exec = sh, observe = observePR, setTrace = (v) => setVar(repo, v, TRACE_VAR) }) {
+  let wf = fs.readFileSync(MIRROR_WORKFLOW, 'utf8');
+  if (action) wf = wf.replace(PLACEHOLDER, action);
+  else if (!dryRun) throw new Error('--action OWNER/specguard@SHA is required (pins the SpecGuard commit under test)');
+  const staged = [], results = [];
+  for (const e of entries) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-ext-')), pushed = [], prs = [];
+    try {
+      clone(e.source.url, dir);
+      for (const r of [e.source.sha, e.base, e.head]) exec('git', ['-C', dir, 'cat-file', '-e', `${r}^{commit}`]);
+      const inj = injectWorkflow({ dir, base: e.base, head: e.head, workflow: wf, tag: `eval/${runId}-${e.id}`, exec });
+      const body = externalBody(e);
+      staged.push({ id: e.id, ...inj, title: e.pr_title, body });
+      if (dryRun) continue;
+      const helper = process.env.SPECGUARD_EVAL_CRED_HELPER || '!gh auth git-credential';
+      for (const b of [inj.baseBr, inj.headBr]) { exec('git', ['-C', dir, '-c', 'credential.helper=', '-c', `credential.helper=${helper}`, 'push', '-q', `https://github.com/${repo}.git`, `${b}:refs/heads/${b}`]); pushed.push(b); }
+      for (const mode of modes) {
+        const id = `${e.id} [trace ${mode}]`;
+        try {
+          setTrace(mode);
+          const url = exec('gh', ['pr', 'create', '--repo', repo, '--base', inj.baseBr, '--head', inj.headBr, '--title', e.pr_title, '--body', body]).split('\n').pop();
+          const number = +url.match(/(\d+)\s*$/)[1];
+          prs.push(number);
+          const { observed, run } = await observe({ repo, headBr: inj.headBr, sha: inj.headSha, workflow, number });
+          results.push({ ...grade({ id, goal: e.goal || 'external', expected: e.expected }, observed), rep: 1, trace: mode, pr_url: url, run_url: run.url, conclusion: run.conclusion, job_conclusion: observed.job_conclusion, observed });
+        } catch (err) { results.push(extError(e, mode, err)); }
+      }
+    } catch (err) { results.push(...modes.map((mode) => extError(e, mode, err))); } finally {
+      if (!keep && !dryRun) {
+        for (const n of prs) try { exec('gh', ['pr', 'close', String(n), '--repo', repo]); } catch {}
+        for (const b of pushed) try { exec('gh', ['api', '-X', 'DELETE', `repos/${repo}/git/refs/heads/${b}`]); } catch {}
+      }
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  return { staged, results };
+}
+
+async function mainExternal(o) {
+  const entries = JSON.parse(fs.readFileSync(o.external, 'utf8'));
+  const errs = validateManifest(entries);
+  if (errs.length) { console.error(errs.join('\n')); process.exit(1); }
+  const modes = o.trace.split(',').map((t) => t.trim());
+  if (modes.some((t) => !['off', 'auto'].includes(t))) { console.error('--trace takes off, auto or off,auto'); process.exit(2); }
+  if (!o['dry-run'] && !o.repo) { console.error(USAGE); process.exit(2); }
+  const model = o.model || 'unchanged', workflow = o.workflow || 'specguard-eval';
+  const runId = o['run-id'] || `ext-${new Date().toISOString().replace(/\.\d+Z$/, '').replace(/[-:]/g, '').replace('T', '-')}`;
+  const saved = []; // [name, previous value]; null means unset
+  const override = (name, v) => { saved.push([name, getVar(o.repo, name)]); setVar(o.repo, v, name); };
+  const restore = () => { while (saved.length) { const [name, prev] = saved.pop(); try { setVar(o.repo, prev, name); console.log(`restored ${name} to ${prev == null ? '(unset)' : prev}`); } catch (e) { console.error(`could NOT restore ${name} (was ${prev}): ${e.message}`); } } };
+  process.on('SIGINT', () => { restore(); process.exit(130); });
+  let out;
+  try {
+    if (!o['dry-run']) { override(TRACE_VAR, 'auto'); if (o.model) override(VAR, o.model === 'default' ? null : o.model); }
+    out = await runExternal({ entries, repo: o.repo, modes, runId, keep: o.keep, workflow, action: o.action, dryRun: o['dry-run'],
+      setTrace: (v) => setVar(o.repo, v, TRACE_VAR) });
+  } finally { restore(); }
+  if (o['dry-run']) return out.staged.forEach((s) => console.log(`ok ${s.id}: base' ${s.baseSha.slice(0, 10)} head' ${s.headSha.slice(0, 10)}, PR body ${s.body.length} characters, not pushed`));
+  const agg = aggregate(out.results), cost = { cost: 'not measured' };
+  const dir = path.join(__dirname, 'results');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${runId}.json`), JSON.stringify({ runId, repo: o.repo, target: 'external', model, ...cost, traces: modes, results: out.results, aggregate: agg }, null, 2) + '\n');
+  fs.writeFileSync(path.join(dir, `${runId}.md`), markdown({ runId, repo: o.repo, target: 'external', model, cost, results: out.results, agg }));
+  console.log(`wrote eval/results/${runId}.json and .md`);
+}
+
 async function main() {
   const { values: o } = require('node:util').parseArgs({ options: {
     repo: { type: 'string' }, target: { type: 'string' }, cases: { type: 'string' }, runs: { type: 'string', default: '1' }, 'run-id': { type: 'string' }, model: { type: 'string' }, billing: { type: 'boolean' }, combined: { type: 'boolean' },
-    workflow: { type: 'string', default: 'CI' }, keep: { type: 'boolean' }, 'dry-run': { type: 'boolean' }, help: { type: 'boolean' } } });
+    workflow: { type: 'string' }, external: { type: 'string' }, action: { type: 'string' }, trace: { type: 'string', default: 'off,auto' }, keep: { type: 'boolean' }, 'dry-run': { type: 'boolean' }, help: { type: 'boolean' } } });
   if (o.help) return console.log(USAGE);
+  if (o.external) return mainExternal(o);
+  o.workflow ||= 'CI';
   let ids = o.cases ? o.cases.split(',').map((s) => s.trim()) : allIds();
   if (o.combined) ids = ids.filter((id) => !COMBINED_SKIP.includes(id));
   const errs = ids.flatMap((id) => (fs.existsSync(path.join(CASES, id)) ? validateCase(id) : [`${id}: no such case`]));
@@ -328,4 +467,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { copilotItems, utcDay, varLookup, rawOutput, validateCase, allIds, loadCase, markdown, combine, COMBINED_SKIP };
+module.exports = { copilotItems, utcDay, varLookup, rawOutput, validateCase, allIds, loadCase, markdown, combine, COMBINED_SKIP, validateManifest, rewriteIssueRefs, externalBody, injectWorkflow, runExternal };

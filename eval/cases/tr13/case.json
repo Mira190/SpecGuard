@@ -1,0 +1,22 @@
+{
+  "id": "tr13",
+  "goal": "traceability",
+  "description": "Not in repo (U5): AC-4 goes 30 to 45; the window is read from configuration and no literal exists in the repo.",
+  "pr_title": "Extend the claim filing window in the spec (AC-4)",
+  "pr_body": "Update the claims spec: the filing window is now 45 days. The value is configured per environment.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "summary_has": [
+      "not_verifiable"
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "The implementation reads config; \"not found\" must be not_verifiable, never a mismatch."
+  }
+}

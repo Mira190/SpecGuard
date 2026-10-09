@@ -1,0 +1,19 @@
+{
+  "id": "tr21",
+  "goal": "traceability",
+  "description": "Pre-existing drift: at base R2 says free shipping from 500 while the code already uses 800. The PR only rewords the error message in the same function.",
+  "pr_title": "Clearer error text in shippingCost",
+  "pr_body": "Reword the validation error so it names the function and the field.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "The only changed line is an error string that no requirement covers; the 500 vs 800 drift was already there at base and the threshold line is not in the diff, so no inline spec_mismatch is correct (it cannot be anchored on a changed line and would blame the PR). Reporting nothing, or a summary-only pre-existing drift item, are both acceptable, so pre_existing is not required."
+  }
+}
