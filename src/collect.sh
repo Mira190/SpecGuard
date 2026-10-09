@@ -8,6 +8,10 @@ MAX_DIFF_KB=${MAX_DIFF_KB:-300}
 git checkout -q --detach "$HEAD_SHA"
 rm -rf "$CTX"
 mkdir -p "$CTX"
+# Present from the start so that an absent list never means "no restriction": a trace.js failure leaves trace-status=failed
+# and an empty list (post.js then fails closed for path-sourced requirements). trace-status: ok | failed | off.
+: > "$CTX/collect-limits.txt"; : > "$CTX/spec-files.txt"
+if [ "${TRACE:-auto}" = off ]; then echo off > "$CTX/trace-status"; else echo failed > "$CTX/trace-status"; fi
 out() { [ -n "${GITHUB_OUTPUT:-}" ] && echo "$1=$2" >> "$GITHUB_OUTPUT"; return 0; }
 out skip false; out partial false
 
@@ -38,8 +42,11 @@ match() {
 # 1. diff (three-dot = merge-base, same as GitHub's PR diff; needs fetch-depth 0)
 # Rule and agent-config files are never reviewed (they are restored from base below); the modified ones are reported.
 HERE=$(dirname "$0")
-files=(); rules=(); docs=(); specs=()
+files=(); rules=(); docs=(); specs=(); nctl=0
+# A path with a control character (git allows a newline) would split the newline-delimited lists below: drop it, say so.
+cntrl() { [[ $1 == *[[:cntrl:]]* ]]; }
 while IFS= read -r -d '' f; do
+  if cntrl "$f"; then nctl=$((nctl + 1)); continue; fi
   match "$f" "${STANDARDS[@]}" "${EXEC_CFG[@]}" && rules+=("$f") && continue
   match "$f" "${IGNORES[@]}" && continue
   [[ $f =~ \.(md|mdx|markdown|rst|adoc|txt|feature)$ ]] && { docs+=("$f"); continue; }
@@ -58,6 +65,7 @@ if [ ${#docs[@]} -gt 0 ]; then
     elif [[ $f != *.md ]]; then files+=("$f"); fi
   done
 fi
+[ "$nctl" -eq 0 ] || echo "$nctl changed path(s) containing control characters were not reviewed." >> "$CTX/collect-limits.txt"
 nspecs=${#specs[@]}
 [ "$nspecs" -eq 0 ] || files+=("${specs[@]}")
 ncode=$(( ${#files[@]} - nspecs ))
@@ -99,8 +107,8 @@ for f in "${head_hit[@]}"; do clear_path "$f"; done
 for f in "${base_hit[@]}"; do
   clear_path "$f"
   if ! GIT_LITERAL_PATHSPECS=1 git restore --source="$BASE_SHA" --worktree -- "$f" 2>/dev/null; then
-    clear_path "$f"; printf '%s\n' "$f" >> "$CTX/restore-failures.txt"
-    echo "::warning::could not restore $f from base; removed it and excluded it from the rule inventory"
+    clear_path "$f"; cntrl "$f" || printf '%s\n' "$f" >> "$CTX/restore-failures.txt"
+    echo "::warning::could not restore ${f//[[:cntrl:]]/?} from base; removed it and excluded it from the rule inventory"
   fi
 done
 [ -s "$CTX/restore-failures.txt" ] || rm -f "$CTX/restore-failures.txt"
@@ -108,13 +116,13 @@ done
 # 3. Never follow a PR-controlled symlink as a trusted rule source. A path that failed to restore is gone, so it is not listed.
 : > "$CTX/standards.txt"
 for f in "${base_hit[@]}"; do
-  if match "$f" "${STANDARDS[@]}" && ! match "$f" "${IGNORES[@]}" "${OWN[@]}" && [ -f "$f" ] && [ ! -L "$f" ]; then
+  if ! cntrl "$f" && match "$f" "${STANDARDS[@]}" && ! match "$f" "${IGNORES[@]}" "${OWN[@]}" && [ -f "$f" ] && [ ! -L "$f" ]; then
     printf '%s\n' "$f" >> "$CTX/standards.txt"
   fi
 done
 
 # 4. requirements, including explicit collection limitations; a failure here must not abort collection
-if ! node "$(dirname "$0")/requirements.js"; then
+if ! timeout 60 node "$(dirname "$0")/requirements.js"; then
   echo "::warning::requirement collection failed; continuing without requirements"
   echo none > "$CTX/requirements.md"
   printf '{\n  "status": "unavailable",\n  "sources": [],\n  "limitations": ["Requirement collection failed; review is limited to changed behaviour."],\n  "documents": [],\n  "criteria": []\n}\n' > "$CTX/requirements-status.json"
@@ -123,7 +131,8 @@ fi
 # 4b. trace: spec items, candidates and occurrences. Fail-soft like step 4. Prints the count of changed normative spec items.
 # A PR with no code files is reviewed only if a normative spec item changed.
 if [ "${TRACE:-auto}" != off ]; then
-  nchanged=$(timeout 60 node "$HERE/trace.js" | tail -n 1) || { echo "::warning::requirement tracing failed; continuing without trace data"; nchanged=0; }
+  if nchanged=$(timeout 60 node "$HERE/trace.js" | tail -n 1); then echo ok > "$CTX/trace-status"
+  else echo "::warning::requirement tracing failed; continuing without trace data"; nchanged=0; fi
 else nchanged=0; fi
 [[ $nchanged =~ ^[0-9]+$ ]] || nchanged=0
 if [ "$ncode" -eq 0 ] && [ "$nchanged" -eq 0 ]; then
