@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-const sanitize = (s) => String(s || '').replace(/<!--[\s\S]*?-->/g, '')
+const sanitize = (s) => String(s || '').replace(/\r\n?/g, '\n').replace(/<!--[\s\S]*?-->/g, '')
   .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, '')
   .replace(/[\x00-\x08\x0B-\x1F\x7F]/g, '');
 
@@ -13,7 +13,7 @@ function extractCriteria(documents) {
   const criteria = [];
   for (const { source, text } of documents) {
     let depth = 0, active = null, fenced = false, top = 0;
-    for (const line of text.split(/\r?\n/)) {
+    for (const line of text.split(/\r\n?|\n/)) {
       if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
       if (fenced) continue;
       const heading = /^(#{1,6})\s+(.+)$/.exec(line);
