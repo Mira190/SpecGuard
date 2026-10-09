@@ -446,3 +446,71 @@ Requirements <-> code, inside the same PR review. Scenario A: a changed code lin
 - Review API: https://docs.github.com/en/rest/pulls/reviews#create-a-review-for-a-pull-request , https://docs.github.com/en/rest/pulls/comments#create-a-review-comment-for-a-pull-request , 422 evidence https://github.com/pingdotgg/t3code/issues/12549
 - reviewdog: https://github.com/reviewdog/reviewdog ; annotation limits: https://github.com/actions/toolkit/blob/main/docs/problem-matchers.md
 - Depth evidence: https://arxiv.org/abs/2412.10133 (ExecutionAgent), https://arxiv.org/abs/2402.09171 (TestGen-LLM), https://arxiv.org/abs/2501.12862 (ACH), https://arxiv.org/abs/2601.22832 (JiT), https://github.com/Bachmann1234/diff_cover , https://securitylab.github.com/resources/github-actions-preventing-pwn-requests , https://www.aikido.dev/blog/promptpwnd-github-actions-ai-agents
+
+---
+
+## Evaluation findings and decisions (2026-10-09)
+
+Only what the repo's research docs support. Where something was not measured, it says so. Sources: `docs/competitors/head-to-head.md`, `docs/field-study.md`, `docs/competitors/landscape-verification.md`, `docs/competitors/native-copilot-integration.md`, `docs/competitors/copilot-instructions-discovery.md`, `docs/token-anatomy.md`. Dated change list with commits: `docs/changelog-evaluation.md`.
+
+### 1. Lean prompt and the head-to-head
+
+- The lean prompt is the default. On the first holdout it cost -18% mean and -28% median cumulative input vs v1, with 7/12 vs 6/12 bug PRs directly hit.
+- A later blind comparison (24 real PRs: 12 with a shipped bug, 12 clean; five variants; three Sonnet adjudicators) gave direct hits lean 7, copilot-style 8, pocock-style 9 of 12. Lean had 22 inline findings, 13 judged would_fix. Mean cumulative input was about 559k for lean vs about 375k for the free-form styles (copilot about 372k, pocock about 381k).
+- Reading: recall is not an advantage (the gap is noise at n = 12); precision and actionability are (would_fix per inline finding: lean 59%, copilot-style 46%, pocock-style 16%); cost is a gap (about 50% more input tokens than free-form).
+- Caveats: the copilot and pocock variants are stand-in prompts we wrote from their published style, not the products. Real Copilot was never run. n = 12 and 12. Lean was chosen on the first holdout, so the second pass is in-sample. The same adjudicator family judged all variants, and judges saw findings, not whether the validator would post them.
+
+### 2. Rejected gates
+
+Gates G1-G3 were rejected: they were predicted to help and the evaluation data did not support them. Only the G4 placeholder gate was kept (post.js drops code blocks with unresolved placeholders from finding bodies, keeps the prose, leaves a validation note). The per-gate measurements are not recorded in the research docs in this repo, so no numbers are given here.
+
+### 3. Validator changes that keep verified findings
+
+- A verified finding is kept rather than dropped over a bookkeeping slip (repair of covered rows, strip of assertion evidence that does not verify).
+- Differential rule: a nearby edit counts as introducing a mismatch only when it defines a name the behaviour line uses.
+- Rule unchanged: a failed check degrades a claim, never upgrades one.
+
+### 4. Field study (12 public repos, 333 runs)
+
+Measured before the discovery fixes (`docs/field-study.md`): strict discovery precision 22% (lenient 68%) over 1,378 classified docs; 383 of 393 docs classified in the 7 repos without requirement docs were false; 30 of 81 S items were obvious noise; the slowest trace.js run was killed at 120 s. Discovery tightening, a trace time budget and candidate caps were then merged (`d786847`).
+
+Not stated in any source doc, so not stated here: the post-fix figures (precision, false classifications, S-item noise, slowest run) and the trade-off that KEP READMEs are now missed. Re-run `eval/field.js` to produce them. Timings came from one Windows machine under load; the collect.sh loop was not measured on Linux.
+
+### 5. Traceability value is not proven on real repos
+
+No real-bug hit in the head-to-head came from spec comparison; every direct hit came from code-vs-sibling-path test gaps. The coverage table, the `trace` section and the validator are not exercised by that comparison. The field study shows discovery noise on repos without requirement docs. The live evaluation of `tr1`-`tr17` has not been run (see the Traceability section).
+
+### 6. Adopted from the landscape research
+
+- Preflight skip: closed PRs, bot authors and head SHAs that already have a SpecGuard summary are skipped before the model step. Inputs `include_bots` and `force` override the last two.
+- Standards applicability map (`src/standards-map.js`) with a post.js scope check: a standards finding citing a rule that does not cover its file is dropped with a note.
+- Sources-read manifest in the summary; more ignored types (svg, log, map); a head-SHA marker supports the skip.
+- Basis: path-scoped instructions were the competitor idea worth keeping (`head-to-head.md`); Copilot excludes dependency files, logs and SVG (`native-copilot-integration.md`).
+
+### 7. Rejected, with reasons
+
+| Idea | Reason |
+|---|---|
+| Second model verifier | Token cost; little false-positive headroom: wrong inline findings were 0-2 per variant in the head-to-head. |
+| Executing tests or mutation in the Action | Security: the Action does not execute PR code. |
+| Reading rule files from the PR head | The author could rewrite review policy. Copilot reads the head branch (verified, changelog 2026-07-17); SpecGuard restores rule files from base and does not. |
+| Converting native Copilot comments into findings | No evidence data to map from (no obligation ids or citations); content is unconstrained. |
+| Third provenance tier labels | EXPLICIT_REPOSITORY_RULE / INFERRED_CONVENTION / GENERAL_BEST_PRACTICE are not in the Pocock skill (grep count 0). |
+| Ticket-key resolution | No tracker access. |
+
+### 8. Native Copilot review
+
+- Can be requested programmatically: REST `requested_reviewers` with `copilot-pull-request-reviewer[bot]`, or `gh pr edit --add-reviewer @copilot`; REST and GraphQL accept an optional effort level.
+- Cannot be given a per-review prompt or output schema. Instructions that change comment format or the overview are documented as ignored. Model selection is not supported.
+- Posture: coexistence. SpecGuard owns test gaps and standards; native review owns general bugs; no shared state, no post-processing of native comments.
+- UNVERIFIED: whether the job `GITHUB_TOKEN` can request the review, whose credits are billed for API requests, the effort field name, fork PR behaviour, the author login and events of Copilot reviews, and the 4,000-character instruction cap (search excerpt only).
+
+### 9. Open items
+
+- Pushdown suggestions are not validated.
+- Stale review threads are never resolved.
+- Node 20 locally vs 22 in CI.
+- No real Copilot run.
+- Real GitHub trigger paths are untested.
+- A severity field is deferred.
+- Lean's token cost is still above free-form review; re-measure after any prompt growth.
