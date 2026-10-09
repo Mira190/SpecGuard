@@ -37,3 +37,5 @@ After the hit tables, `join` prints a quality/volume table per variant (also ret
 - noise share: inline findings with verdict `trivial` or `wrong`, divided by all inline findings.
 
 Bug hits read a `hit: direct|near` field when present (current adjudicators, with verdict `true_gap|wrong|trivial|unverifiable`), else the legacy verdicts `hit_direct` / `hit_near`.
+
+Keep the `_mapping.json` that `bundle.js build` wrote: verdict files are keyed by its finding ids, and rebuilding the bundle (even with the same seed, if the variant set or findings changed) yields different ids, so `join` then scores the wrong findings. Pass the original out directory to `join`.
