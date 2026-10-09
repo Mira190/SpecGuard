@@ -578,3 +578,74 @@ test('F4: spec.added lists requirement documents that did not exist at BASE', (t
   T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
   assert.deepEqual(status(r).spec.added, ['docs/new.md']);
 });
+
+// ---- discovery cost and precision fixes (field study) ----
+const lim = (r) => status(r).spec.limitations.join('\n');
+
+test('a doc move is not a change; a move plus an edit is only the edit', (t) => {
+  const r = repo(t, { 'docs/specs/a.md': SPEC_TEXT, 'src/a.js': 'x\n' }, { 'docs/specs/a.md': null, 'docs/specs/old/a.md': SPEC_TEXT, 'src/a.js': 'x\n' });
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }), 0);
+  const r2 = repo(t, { 'docs/specs/a.md': SPEC_TEXT }, { 'docs/specs/a.md': null, 'docs/specs/old/a.md': SPEC_TEXT.replace('30 days', '45 days') });
+  assert.equal(T.run({ cwd: r2.dir, base: r2.base, head: r2.head, ctx: r2.ctx }), 1);
+  const [c] = status(r2).criteria;
+  assert.deepEqual([c.ref, c.change, c.source], ['AC-1', 'modified', 'docs/specs/old/a.md']);
+  assert.deepEqual(c.deltas, { removed: ['30 days'], added: ['45 days'] });
+});
+
+const BIG_SPEC = Array.from({ length: 3000 }, (_, i) => `R${i + 1}: The system MUST keep value ${i + 1} under 30 days. ${'padding '.repeat(8)}`).join('\n') + '\n';
+
+test('a spec over 256 KB is reported when skipped and parsed around its changed lines when the PR edits it', (t) => {
+  assert.ok(BIG_SPEC.length > 256 * 1024);
+  const r = repo(t, { 'docs/big.md': BIG_SPEC, 'src/a.js': 'x\n' }, { 'src/a.js': 'y\n' });
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }), 0);
+  assert.match(lim(r), /oversize doc skipped: docs\/big\.md \(\d+ KB\)/);
+  const r2 = repo(t, { 'docs/big.md': BIG_SPEC }, { 'docs/big.md': BIG_SPEC.replace('R1500: The system MUST keep value 1500 under 30 days', 'R1500: The system MUST keep value 1500 under 45 days') });
+  assert.equal(T.run({ cwd: r2.dir, base: r2.base, head: r2.head, ctx: r2.ctx }), 1);
+  const [c] = status(r2).criteria;
+  assert.deepEqual([c.ref, c.change, c.deltas.added], ['R1500', 'modified', ['45 days']]);
+  assert.doesNotMatch(lim(r2), /oversize/);
+  assert.deepEqual(T.classify({ cwd: r2.dir, base: r2.base, head: r2.head, paths: ['docs/big.md'] }), ['docs/big.md']);
+});
+
+test('only the largest MAX_DEEP changes are traced in depth; the rest are deferred in limitations', (t) => {
+  const many = (days) => Array.from({ length: 30 }, (_, i) => `AC-${i + 1}: file within ${days + i} days`).join('\n') + '\n';
+  const r = repo(t, { 'docs/spec.md': many(1), 'src/filing.js': 'export const filing = 1;\n' }, { 'docs/spec.md': many(100) });
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }), 30);
+  assert.equal(status(r).criteria.length, 30);
+  assert.equal(cands(r).requirement_to_code.length, 25);
+  assert.match(lim(r), /deferred: 5 changed requirement item\(s\)/);
+});
+
+test('an expired time budget keeps the criteria and writes a limitation instead of failing', (t) => {
+  const r = repo(t, { 'docs/spec.md': SPEC_TEXT, 'src/a.js': 'x\n' }, { 'docs/spec.md': SPEC_TEXT.replace('30 days', '45 days') });
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, budgetMs: -1 }), 1);
+  assert.equal(status(r).criteria.length, 1);
+  assert.deepEqual(cands(r).requirement_to_code, []);
+  assert.match(lim(r), /time budget was reached/);
+  const env = { ...process.env, BASE_SHA: r.base, HEAD_SHA: r.head, CTX: r.ctx, TRACE_BUDGET_MS: '60000' };
+  assert.equal(execFileSync('node', [path.join(__dirname, 'trace.js')], { cwd: r.dir, env, encoding: 'utf8' }).trim(), '1');
+  assert.doesNotMatch(lim(r), /time budget/);
+});
+
+test('trace-candidates.json is capped by hunk count and size, with a limitation; fixture and testdata hunks are not traced', (t) => {
+  const doc = Array.from({ length: 80 }, (_, i) => `R${i + 1}: The widget number ${i + 1} must stay valid.`).join('\n') + '\n';
+  const code = (v) => Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`src/widget${i}.js`, `export function widget${i}() {\n  return ${v};\n}\n`]));
+  const r = repo(t, { 'docs/specs/w.md': doc, ...code(1), 'testdata/widget.js': 'a\n' }, { ...code(2), 'testdata/widget.js': 'b\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const c = cands(r);
+  assert.equal(c.code_to_requirement.length, 60);
+  assert.ok(!c.code_to_requirement.some((h) => h.path.startsWith('testdata/')));
+  assert.ok(c.code_to_requirement.every((h) => h.candidates.length <= 5));
+  assert.match(c.limitations.join('\n'), /70?\d* weaker code hunk|10 weaker code hunk/);
+  assert.ok(fs.statSync(path.join(r.ctx, 'trace-candidates.json')).size <= 60 * 1024);
+});
+
+test('the candidate cap trims occurrence hits when the file is too big, and says so', (t) => {
+  const spec = (d) => Array.from({ length: 20 }, (_, i) => `AC-${i + 1}: file within ${d + i} days`).join('\n') + '\n';
+  const hits = Array.from({ length: 20 }, (_, i) => Array.from({ length: 60 }, (_, k) => `const l${i}_${k} = ${100 + i}; // within ${100 + i} days ${'x'.repeat(100)}`).join('\n')).join('\n') + '\n';
+  const r = repo(t, { 'docs/spec.md': spec(100), 'src/a.js': hits }, { 'docs/spec.md': spec(300) });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  assert.ok(cands(r).occurrences.length > 0 && cands(r).occurrences.every((o) => o.hits.length <= 10));
+  assert.match(lim(r), /trimmed to 60 KB/);
+  assert.ok(fs.statSync(path.join(r.ctx, 'trace-candidates.json')).size <= 60 * 1024);
+});
