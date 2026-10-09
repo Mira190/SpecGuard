@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const post = require('./post.js');
 
 const behaviour = { path: 'src.js', line: 3, quote: 'if (x) {' };
@@ -115,6 +116,7 @@ test('renders suggestions only for standards and redacts secrets', () => {
   assert.equal(post.axes([finding(), finding('pushdown')]), 'Tests: 1 missing, 0 weak · Standards: 0 · Layering: 1');
 });
 
+const track = (s, ...files) => execFileSync('git', ['add', ...files], { cwd: s.dir }); // workspace files a test adds must be tracked to be read
 const fileDiff = (p, body, head = `--- a/${p}\n+++ b/${p}`) => `diff --git a/${p} b/${p}\n${head}\n${body}\n`;
 
 function setup(t, data = report(), options = {}) {
@@ -130,6 +132,7 @@ function setup(t, data = report(), options = {}) {
   fs.writeFileSync(path.join(dir, 'src.js'), 'l1\nl2\nif (x) {\nl4\nl5\nl6\nl7\nl8\n');
   fs.writeFileSync(path.join(dir, 'test.js'), `test\n${evidence.quote}\n`);
   fs.writeFileSync(path.join(dir, 'RULES.md'), 'rule one\nrule two\n');
+  for (const a of [['init', '-q'], ['add', 'src.js', 'test.js', 'RULES.md']]) execFileSync('git', a, { cwd: dir }); // citations are only read from tracked files
   for (const [name, value] of Object.entries({ 'files.txt': 'src.js\n', 'diff.patch': fileDiff('src.js', patch),'standards.txt': 'RULES.md\n', 'findings.json': JSON.stringify(data), 'requirements-status.json': JSON.stringify({ status: 'available', sources: ['PR body', 'issue #1'], limitations: [] }) })) fs.writeFileSync(path.join(dir, 'ctx', name), value);
   const calls = { review: [], file: [], summary: [], list: 0 };
   let count = 0;
@@ -142,7 +145,7 @@ function setup(t, data = report(), options = {}) {
       createReviewComment: async (args) => { calls.file.push(args); },
     },
     issues: {
-      listComments: async () => ({ data: [] }),
+      listComments: async () => ({ data: options.issueComments || [] }),
       createComment: async (args) => { calls.summary.push(args); },
       updateComment: async (args) => { calls.summary.push(args); },
     },
@@ -578,6 +581,7 @@ test('calls listFiles for a reviewable file missing from the local diff and uses
   const data = report({ coverage: [row('missing_test', { behaviour: { ...behaviour, path: 'extra.js' }, change: { ...behaviour, path: 'extra.js' } })], findings: [finding('missing_test', { path: 'extra.js' })] });
   const s = setup(t, data, { listed: [{ filename: 'extra.js', patch }] });
   fs.writeFileSync(path.join(s.dir, 'extra.js'), fs.readFileSync(path.join(s.dir, 'src.js')));
+  track(s, 'extra.js');
   fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\nextra.js\n');
   await post(s);
   assert.equal(s.calls.list, 1);
@@ -884,7 +888,7 @@ test('differential: introduced is downgraded to pre_existing unless the PR chang
   // behaviour (code.js:4) is a changed RIGHT line: stays introduced
   assert.equal(since(align('introduced'), dmaps()), 'introduced');
   // behaviour untouched (context line 1 of hunk 0 is not changed) and the change is in a different hunk, spec not in the diff
-  const far = (o = {}) => { const d = align('introduced', o); Object.assign(d.coverage[0], { behaviour: { path: 'code.js', line: 1, quote: 'a' }, change: { path: 'code.js', line: 22, quote: 'z' } }); return d; };
+  const far = (o = {}) => { const d = align(o.since || 'introduced', o); Object.assign(d.coverage[0], { behaviour: { path: 'code.js', line: 1, quote: 'a' }, change: { path: 'code.js', line: 22, quote: 'z' } }); return d; };
   assert.equal(since(far(), dmaps()), 'pre_existing');
   const downgraded = far(); post.differential(downgraded, dmaps());
   assert.match(downgraded.coverage[0].alignment.reason, /Downgraded to pre_existing/);
@@ -897,8 +901,8 @@ test('differential: introduced is downgraded to pre_existing unless the PR chang
   assert.equal(since(left, dmaps({ 'docs/spec.md': post.parsePatch('@@ -3,1 +9,1 @@\n-AC-4: old\n+other\n') })), 'introduced'); // LEFT line 3 intersects too
   const rem = far({ req: { source: 'docs/spec.md (removed)' } });
   assert.equal(since(rem, dmaps()), 'introduced');
-  // pre_existing and not-mismatch rows are left alone; impacted is also downgraded
-  assert.equal(since(align('pre_existing'), dmaps()), 'pre_existing');
+  // an untouched pre_existing row and not-mismatch rows are left alone; impacted is also downgraded
+  assert.equal(since(far({ since: 'pre_existing' }), dmaps()), 'pre_existing');
   const imp = far(); imp.coverage[0].alignment = { status: 'impacted', since: 'introduced', reason: 'r' };
   assert.equal(since(imp, dmaps()), 'pre_existing');
   const ok = far(); ok.coverage[0].alignment = { ...OK };
@@ -988,14 +992,15 @@ function specSetup(t, since, o = {}) {
   const behaviourAt = o.behaviour || { path: 'src.js', line: 3, quote: 'if (x) {' };
   const data = report({
     requirements: [sreq({ line: 1, pr_quote: null })],
-    coverage: [row(o.status || 'missing_test', { alignment: MM(since), behaviour: behaviourAt, change: o.change || { ...behaviour }, ...(o.status === 'unknown' && { evidence: [] }) })],
-    findings: [specFinding()],
+    coverage: [row(o.status || 'missing_test', { alignment: MM(since), behaviour: behaviourAt, change: 'change' in o ? o.change : { ...behaviour }, ...(o.status === 'unknown' && { evidence: [] }) })],
+    findings: [specFinding(o.finding || {})],
   });
   const s = setup(t, data);
   fs.writeFileSync(path.join(s.dir, 'other.js'), 'limit = 3;\n');
   fs.mkdirSync(path.join(s.dir, 'docs'));
   fs.writeFileSync(path.join(s.dir, 'docs/spec.md'), `${SPEC_Q}\n`);
   fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), 'docs/spec.md\n');
+  track(s, 'other.js', 'docs/spec.md');
   return s;
 }
 
@@ -1055,7 +1060,8 @@ test('a mismatch row stated as unknown or covered is normalised to needs_human a
 });
 
 test('a pre_existing mismatch row with its spec_mismatch finding renders in the Pre-existing section, not inline', async (t) => {
-  const s = specSetup(t, 'pre_existing');
+  const at = { path: 'other.js', line: 1, quote: 'limit = 3;' }; // a pre_existing claim only stands when the PR did not touch the relation
+  const s = specSetup(t, 'pre_existing', { behaviour: at, finding: at, change: null, status: 'needs_human' });
   await post(s);
   assert.equal(s.calls.review.length, 0);
   assert.match(s.calls.summary[0].body, /### Pre-existing drift \(not caused by this PR\)/);
@@ -1081,8 +1087,248 @@ test('pre-existing drift with no changed line: change null + needs_human + a fin
   fs.mkdirSync(path.join(s.dir, 'docs'));
   fs.writeFileSync(path.join(s.dir, 'docs/spec.md'), `${SPEC_Q}\n`);
   fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), 'docs/spec.md\n');
+  track(s, 'other.js', 'docs/spec.md');
   await post(s);
   assert.equal(s.calls.review.length, 0);
   assert.match(s.calls.summary[0].body, /### Pre-existing drift \(not caused by this PR\)/);
   assert.match(s.calls.summary[0].body, /Code contradicts AC-4/);
+});
+
+// ---- security hardening regressions (red team) ----
+const B64 = 'eC1hY2Nlc3MtdG9rZW46Z2hzX0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFB';
+const EXTRAHEADER = `extraheader = AUTHORIZATION: basic ${B64}`;
+const reqData = (source, quote, extra = {}) => ({
+  requirements: [{ id: 'S1', source, quote, obligation_ids: ['O1'], reason: 'x', ...extra }],
+  coverage: [{ id: 'O1', obligation: 'o', source: 's', behaviour: null, change: null, evidence: [], status: 'unknown', reason: 'r', alignment: { status: 'not_verifiable', reason: 'r' } }],
+  findings: [], standards: { status: 'no_rules', sources: [], reason: 'r' }, layering: { status: 'checked', reason: 'r' }, requirements_source: '', not_reviewed: '',
+});
+// A workspace that is a real git repo whose .git/config holds a checkout credential.
+function credentialWorkspace(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-cred-'));
+  const prev = process.env.GITHUB_WORKSPACE;
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  fs.appendFileSync(path.join(dir, '.git', 'config'), `[http "https://github.com/"]\n\t${EXTRAHEADER}\n`);
+  fs.writeFileSync(path.join(dir, 'a.md'), 'plain\n');
+  process.env.GITHUB_WORKSPACE = dir;
+  t.after(() => { if (prev === undefined) delete process.env.GITHUB_WORKSPACE; else process.env.GITHUB_WORKSPACE = prev; fs.rmSync(dir, { recursive: true, force: true }); });
+  return dir;
+}
+
+test('F1: a requirement source that merely starts like a label cannot read .git/config into the summary', (t) => {
+  credentialWorkspace(t);
+  for (const src of ['history/../.git/config', 'issue/../.git/config', 'PR body/../.git/config', '.git/config', 'history PR #1/../.git/config']) {
+    for (const ctx of [{ specFiles: ['docs/a.md'], documents: [] }, { documents: [] }, { specFiles: ['a', '.git/config', 'b.md'], documents: [] }]) {
+      const d = reqData(src, EXTRAHEADER);
+      post.verifyRequirements(d, ctx);
+      assert.deepEqual(d.requirements[0].obligation_ids, [], `${src} ${JSON.stringify(ctx.specFiles)}`);
+      assert.doesNotMatch(post.buildSummary({ status: 'x', data: d }), new RegExp(B64));
+    }
+  }
+});
+
+test('F1: paths with .. , absolute, backslash or control characters are rejected even if allow-listed; labels must be exact', (t) => {
+  const dir = credentialWorkspace(t);
+  for (const bad of ['../a.md', 'docs/../a.md', '/etc/passwd', 'C:/x.md', 'docs\\a.md', 'a.md\n', './/a.md', '']) assert.equal(post.safeRel(bad), null, JSON.stringify(bad));
+  assert.equal(post.safeRel('./docs/a.md'), 'docs/a.md');
+  assert.equal(post.readFile('.git/config'), null);
+  assert.equal(post.readFile('.GIT/config'), null);
+  assert.equal(post.readFile('a.md')[0], 'plain');
+  fs.mkdirSync(path.join(dir, '.specguard-ctx'));
+  fs.writeFileSync(path.join(dir, '.specguard-ctx/findings.json'), 'secret\n');
+  assert.equal(post.readFile('.specguard-ctx/findings.json'), null);
+  const prev = process.env.CTX;
+  fs.mkdirSync(path.join(dir, 'myctx')); fs.writeFileSync(path.join(dir, 'myctx/x.txt'), 'secret\n');
+  process.env.CTX = path.join(dir, 'myctx'); t.after(() => { if (prev === undefined) delete process.env.CTX; else process.env.CTX = prev; });
+  assert.equal(post.readFile('myctx/x.txt'), null);
+  // a label that was not collected verifies against nothing, not against a file of that name
+  fs.writeFileSync(path.join(dir, 'issue #9'), 'The system must do it.\n');
+  const d = reqData('issue #9', 'The system must do it.');
+  post.verifyRequirements(d, { specFiles: [], documents: [] });
+  assert.deepEqual(d.requirements[0].obligation_ids, []);
+  const ok = reqData('issue #9', 'The system must do it.');
+  post.verifyRequirements(ok, { documents: [{ source: 'issue #9', text: 'The system must do it.' }] });
+  assert.deepEqual(ok.requirements[0].obligation_ids, ['O1']);
+});
+
+test('F1: behaviour or evidence citing .git/config is unverifiable', (t) => {
+  credentialWorkspace(t);
+  const d = reqData('PR body', 'q');
+  d.coverage[0].behaviour = { path: '.git/config', line: 2, quote: EXTRAHEADER };
+  d.coverage[0].status = 'needs_human';
+  post.verifyEvidence(d, new Set(), new Set());
+  assert.equal(d.coverage[0].status, 'unknown');
+  assert.doesNotMatch(post.buildSummary({ status: 'x', data: d }), new RegExp(B64));
+});
+
+test('F1: evidence from an untracked workspace file is unverifiable; a tracked out-of-diff test file still verifies', async (t) => {
+  const s = setup(t, report({ coverage: [row('covered', { evidence: [{ ...evidence, path: 'secret.txt', quote: 'token=abc' }] })], findings: [] }));
+  fs.writeFileSync(path.join(s.dir, 'secret.txt'), 'x\ntoken=abc\n');
+  await post(s);
+  assert.match(s.calls.summary[0].body, /Unit evidence: 0\/1/);
+  const ok = setup(t, report({ coverage: [row('covered')], findings: [] }));
+  await post(ok); // test.js is tracked and not in the diff
+  assert.match(ok.calls.summary[0].body, /Unit evidence: 1\/1/);
+});
+
+test('F1: redaction covers base64 AUTHORIZATION headers and extraheader lines', () => {
+  assert.equal(post.redact(EXTRAHEADER), '[REDACTED]');
+  assert.doesNotMatch(post.redact(`Authorization: Bearer abcdefgh12345678`), /abcdefgh/);
+  assert.doesNotMatch(post.redact(`http.https://github.com/.extraheader=AUTHORIZATION: basic ${B64}`), new RegExp(B64));
+});
+
+test('F3b: trace-status failed/unavailable fails closed with a visible notice; ok keeps the list; absent status is the old collector', async (t) => {
+  const withStatus2 = async (status, list) => {
+    const s = setup(t, report({ requirements: [{ id: 'S1', source: 'docs/a.md', quote: 'The system must do it.', obligation_ids: ['O1'], reason: 'x' }], coverage: [row('covered', { source: 'docs/a.md R1' })], findings: [] }));
+    fs.mkdirSync(path.join(s.dir, 'docs')); fs.writeFileSync(path.join(s.dir, 'docs/a.md'), 'The system must do it.\n'); track(s, 'docs/a.md');
+    if (status !== null) fs.writeFileSync(path.join(s.dir, 'ctx/trace-status'), `${status}\n`);
+    if (list !== null) fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), list);
+    await post(s);
+    return s.calls.summary[0].body;
+  };
+  for (const st of ['failed', 'unavailable']) {
+    const body = await withStatus2(st, 'docs/a.md\n'); // even a stale list is ignored
+    assert.match(body, /Traceability unavailable for this PR \(/);
+    assert.match(body, /not a collected requirement document/);
+  }
+  const ok = await withStatus2('ok', 'docs/a.md\n');
+  assert.doesNotMatch(ok, /Traceability unavailable/);
+  assert.doesNotMatch(ok, /not a collected requirement document/);
+  assert.doesNotMatch(await withStatus2(null, null), /Traceability unavailable/); // old collector: no restriction
+  assert.match(await withStatus2('ok', ''), /not a collected requirement document/); // empty list restricts
+});
+
+test('F4: rows whose requirement text this PR changed show the base text, a banner, and never count as clean', () => {
+  const clean = (extra = {}) => ({ findings: [], validation_notes: [], coverage: [{ id: 'O1', obligation: 'o', source: 'docs/s.md R1', behaviour: { path: 'a.js', line: 1, quote: 'q' }, change: null, evidence: [], status: 'covered', reason: 'r', alignment: { status: 'consistent', reason: 'matches' } }],
+    not_reviewed: '', standards: { status: 'checked', sources: ['x'], reason: 'r' }, layering: { status: 'checked', reason: 'r' }, tooling: { status: 'not_configured' },
+    requirements: [{ id: 'S1', source: 'docs/s.md', ref: 'AC-1', quote: 'file within 45 days', obligation_ids: ['O1'], reason: 'r', line: 1, ...extra }], requirements_source: 'PR body' });
+  const d = clean();
+  assert.equal(post.noGaps(d), true);
+  post.markChanged(d, { criteria: [{ id: 'S1', source: 'docs/s.md', change: 'modified', previous: 'file within 30 days' }], spec: { added: [] } });
+  assert.equal(post.noGaps(d), false);
+  const s = post.buildSummary({ status: 'x', data: d });
+  assert.match(s, /Requirement text was changed by this PR: consistency with the changed text does not prove the change itself is approved/);
+  assert.match(s, /Requirement changed in this PR — was: "file within 30 days"/);
+  const authored = clean(); post.markChanged(authored, { criteria: [], spec: { added: ['docs/s.md'] } });
+  assert.match(post.buildSummary({ status: 'x', data: authored }), /document authored in this PR/);
+  assert.equal(post.noGaps(authored), false);
+  const spec = clean({ reflected_in: { spec: true, tests: false, pr: false } }); post.markChanged(spec, null); // no criterion: the diff lines say it changed
+  assert.equal(post.noGaps(spec), false);
+  const same = clean(); post.markChanged(same, { criteria: [{ id: 'S9', source: 'other.md', change: 'modified' }], spec: { added: [] } });
+  assert.equal(post.noGaps(same), true);
+});
+
+test('F4: end to end, a changed requirement is not announced as "No test gaps" and creates no finding', async (t) => {
+  const s = setup(t, report({ requirements: [{ id: 'S1', source: 'docs/spec.md', quote: 'file within 45 days', obligation_ids: ['O1'], reason: 'x', ref: 'AC-1' }],
+    coverage: [row('covered', { source: 'docs/spec.md AC-1', alignment: { status: 'consistent', reason: 'Spec says 45; code says 45.' } })], findings: [], not_reviewed: '' }));
+  fs.mkdirSync(path.join(s.dir, 'docs')); fs.writeFileSync(path.join(s.dir, 'docs/spec.md'), 'AC-1: file within 45 days\n'); track(s, 'docs/spec.md');
+  fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), 'docs/spec.md\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/requirements-status.json'), JSON.stringify({ status: 'available', sources: ['PR body'], limitations: [], documents: [], criteria: [{ id: 'S1', source: 'docs/spec.md', ref: 'AC-1', quote: 'file within 45 days', line: 1, change: 'modified', previous: 'file within 30 days' }] }));
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.doesNotMatch(body, /No test gaps found/);
+  assert.match(body, /Requirement changed in this PR — review it/);
+  assert.match(body, /was: "file within 30 days"/);
+  assert.equal(s.calls.review.length, 0);
+});
+
+test('F5: a model-emitted pre_existing is upgraded to introduced when the PR touched the relation, with a note', () => {
+  const mk = (since, line) => ({ coverage: [{ id: 'O1', obligation: 'o', source: 'docs/s.md R1', behaviour: { path: 'src/a.js', line, quote: 'const KEEP=90;' }, change: { path: 'src/a.js', line, quote: 'const KEEP=90;' }, evidence: [], status: 'needs_human', reason: 'r', alignment: { status: 'mismatch', since, reason: 'code keeps 90d, spec says 30d' } }],
+    requirements: [{ id: 'S1', source: 'docs/s.md', quote: 'q', obligation_ids: ['O1'], reason: 'r', line: 3 }], findings: [] });
+  const maps = post.parseDiff('diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1 +1 @@\n-const KEEP=30;\n+const KEEP=90;\n');
+  const forged = mk('pre_existing', 1);
+  post.differential(forged, maps);
+  assert.equal(forged.coverage[0].alignment.since, 'introduced');
+  assert.match(forged.validation_notes.join(' '), /pre_existing claim overridden/);
+  const honest = mk('pre_existing', 9); // an untouched line far from the diff
+  post.differential(honest, maps);
+  assert.equal(honest.coverage[0].alignment.since, 'pre_existing');
+  assert.equal(honest.validation_notes, undefined);
+});
+
+test('F6: thousands of NOT ASSESSED rows keep the findings and the Traceability table, stay under the limit and end cleanly', () => {
+  const reqs = Array.from({ length: 4540 }, (_, i) => ({ id: `S${i}`, source: 'docs/d.md', quote: `The system must do thing ${i} within 5 days.`, obligation_ids: [], reason: 'Structured acceptance criterion was not assessed.' }));
+  const traced = { id: 'T1', source: 'docs/t.md', ref: 'AC-1', quote: 'traced', obligation_ids: ['O1'], reason: 'r', line: 1 };
+  const f = { kind: 'spec_mismatch', path: 'src/a.js', line: 1, title: 'REAL FINDING', body: 'b', confidence: 'high', obligation_ids: [] };
+  const cov = { id: 'O1', obligation: 'o', source: 'docs/t.md AC-1', behaviour: null, change: null, evidence: [], status: 'needs_human', reason: 'r', alignment: { status: 'consistent', reason: 'fine' } };
+  const s = post.buildSummary({ status: 'x', data: { requirements_source: '', requirements: [traced, ...reqs], coverage: [cov], standards: { status: 'no_rules', sources: [], reason: 'r' }, layering: { status: 'checked', reason: 'r' } }, items: [{ f, why: 'not in a diff hunk' }], pre: [{ ...f, title: 'OLD DRIFT' }] });
+  assert.ok(s.length <= 65536, `${s.length}`);
+  assert.ok(s.indexOf('REAL FINDING') > 0 && s.indexOf('REAL FINDING') < s.indexOf('Traceability'), 'findings come before the Traceability table');
+  assert.ok(s.indexOf('OLD DRIFT') < s.indexOf('Traceability'));
+  assert.match(s, /\*\*Traceability\*\*/);
+  assert.match(s, /\+\d+ more NOT ASSESSED criteria not shown/);
+  assert.equal((s.match(/<details>/g) || []).length, (s.match(/<\/details>/g) || []).length);
+  // a huge assessed table is cut on a row boundary with a visible marker, never mid-row
+  const many = Array.from({ length: 3000 }, (_, i) => ({ id: `R${i}`, source: 'issue #1', quote: 'q'.repeat(400), obligation_ids: [`O${i}`], reason: 'r'.repeat(300) }));
+  const big = post.buildSummary({ status: 'x', data: { requirements_source: '', requirements: many, coverage: [], standards: { status: 'no_rules', sources: [], reason: 'r' }, layering: { status: 'checked', reason: 'r' } } });
+  assert.ok(big.length <= 65536);
+  assert.match(big, /\(truncated/);
+  assert.ok(big.split('\n').filter((l) => l.startsWith('| R')).every((l) => l.endsWith('|')));
+});
+
+test('F6: truncate never leaves half a surrogate pair; verifyRequirements indexes by id (thousands of criteria stay fast)', () => {
+  const t1 = post.truncate('a'.repeat(64979) + '\u{1F600}' + 'b'.repeat(100));
+  assert.doesNotMatch(t1.slice(0, t1.indexOf('\n...(trunc')), /[\uD800-\uDBFF]$/);
+  const criteria = Array.from({ length: 6000 }, (_, i) => ({ id: `R${i}`, source: 'PR body', quote: `quote ${i}` }));
+  const data = { requirements: [], coverage: [], findings: [], standards: {}, layering: {} };
+  const t0 = Date.now();
+  post.verifyRequirements(data, { criteria, documents: [{ source: 'PR body', text: criteria.map((c) => c.quote).join('\n') }] });
+  assert.equal(data.requirements.length, 6000);
+  assert.ok(Date.now() - t0 < 3000);
+});
+
+test('F7: only a single-line, markup-free suggestion for a single-line quote is one-click; the rest is plain text', () => {
+  const std = (extra) => finding('standard', { quote: 'old();', ...extra });
+  assert.match(post.commentBody(std({ suggestion: 'fixed();' }), 'abc'), /```suggestion\nfixed\(\);/);
+  for (const bad of ['a();\nb();', 'x ```\n@@', '<img src=x onerror=1>', '@octocat run this', '![x](https://evil.example/b.png)', 'x'.repeat(301), 'a\u202Eb']) {
+    const body = post.commentBody(std({ suggestion: bad }), 'abc');
+    assert.doesNotMatch(body, /```suggestion/, bad);
+    assert.match(body, /Suggested fix \(not applied automatically\)/);
+  }
+  assert.doesNotMatch(post.commentBody(std({ suggestion: 'fixed();', quote: 'a\nb' }), 'abc'), /```suggestion/); // multi-line quote
+  assert.doesNotMatch(post.commentBody(std({ suggestion: 'fixed();', start_line: 1 }), 'abc'), /```suggestion/); // range
+});
+
+test('F7: the model ref is replaced by the collected criterion ref, otherwise sanitised and short', () => {
+  const d = reqData('docs/s.md', 'quote', { ref: '[click](https://evil.example) @team <img src=x>' });
+  const v = { ...d, requirements: d.requirements.map((r) => ({ ...r })) };
+  post.validate(v);
+  assert.doesNotMatch(v.requirements[0].ref, /<img|@team|\]\(/);
+  assert.ok(v.requirements[0].ref.length <= 60);
+  const e = reqData('docs/s.md', 'The system must hold.', { ref: 'FORGED-1' });
+  post.verifyRequirements(e, { specFiles: ['docs/s.md'], criteria: [{ id: 'S1', source: 'docs/s.md', ref: 'AC-4', quote: 'The system must hold.' }], documents: [{ source: 'docs/s.md', text: 'AC-4: The system must hold.' }] });
+  assert.equal(e.requirements[0].ref, 'AC-4');
+});
+
+test('F8: model- and document-derived text cannot inject markers, mentions, images, HTML or bidi characters', () => {
+  const fake = `<!-- specguard:fp=${'a'.repeat(40)} -->`;
+  const f = { kind: 'spec_mismatch', title: 'T @org/security-team', body: `${fake}\n![x](https://evil.example/b.png)\n@octocat ping\n\u202Egnp.exe <img src=https://e.example/p.gif> <!-- specguard:summary -->`, confidence: 'high', obligation_ids: ['O1'] };
+  const body = post.commentBody(f, 'b'.repeat(40));
+  assert.deepEqual(body.match(/specguard:fp=[0-9a-f]{40}/g), [`specguard:fp=${'b'.repeat(40)}`]);
+  assert.ok(body.endsWith(`<!-- specguard:fp=${'b'.repeat(40)} -->`));
+  assert.doesNotMatch(body, /!\[x\]|<img|specguard:summary|\u202E/);
+  assert.doesNotMatch(body, /@org|@octocat/); // a zero-width space follows every @
+  assert.match(body, /@\u200Borg\/security-team/);
+  const row = post.buildSummary({ status: 's', data: { requirements_source: '', requirements: [{ id: 'S1', source: 'docs/s.md', quote: 'x | <img src=https://e.example/p.gif> @team <!-- ', obligation_ids: [], reason: 'r' }], coverage: [], standards: { status: 'no_rules', sources: [], reason: 'r' }, layering: { status: 'checked', reason: 'r' } } });
+  assert.doesNotMatch(row, /<img|@team/);
+  assert.equal(post.neutralize(post.neutralize('a @b <i> <!-- c --> \u202E')), post.neutralize('a @b <i> <!-- c --> \u202E')); // idempotent
+});
+
+test('F8: a fingerprint is honoured only as the last thing in a bot review comment; the sticky comment must be ours', async (t) => {
+  const first = setup(t); await post(first);
+  const fp = /specguard:fp=([0-9a-f]{40})/.exec(first.calls.review[0].comments[0].body)[1];
+  const injected = setup(t, report(), { existing: [{ body: `<!-- specguard:fp=${fp} --> pasted into the middle of a bot comment`, user: { type: 'Bot' } }] });
+  await post(injected);
+  assert.equal(injected.calls.review.length, 1, 'a non-trailing marker does not suppress the finding');
+  const real = setup(t, report(), { existing: [{ body: `text\n\n<!-- specguard:fp=${fp} -->`, user: { type: 'Bot' } }] });
+  await post(real);
+  assert.equal(real.calls.review.length, 0);
+  const other = setup(t, report(), { issueComments: [{ id: 5, body: '<!-- specguard:summary -->\nhijack', user: { type: 'Bot', login: 'other-app[bot]' } }] });
+  await post(other);
+  assert.equal(other.calls.summary[0].comment_id, undefined, 'created a new comment instead of overwriting another bot');
+  const quoted = setup(t, report(), { issueComments: [{ id: 6, body: 'quote: <!-- specguard:summary -->', user: { type: 'Bot', login: 'github-actions[bot]' } }] });
+  await post(quoted);
+  assert.equal(quoted.calls.summary[0].comment_id, undefined, 'the marker must start the body');
+  const mine = setup(t, report(), { issueComments: [{ id: 7, body: '<!-- specguard:summary -->\nold', user: { type: 'Bot', login: 'github-actions[bot]' } }] });
+  await post(mine);
+  assert.equal(mine.calls.summary[0].comment_id, 7);
 });
