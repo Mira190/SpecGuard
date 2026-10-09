@@ -65,3 +65,13 @@ test('finishReal runs post.run on findings.json and writes posted.json and summa
   assert.strictEqual((await finishRealOne('r2', out)).id, 'r2');
   assert.match(logs[0], /r2/);
 });
+
+test('prepareReal shared:true checks out head and borrows objects via alternates', () => {
+  const { d, base, head } = mkRepo();
+  const out = path.join(tmp, 'out-shared');
+  const m = prepareReal({ repoDir: d, base, head, out, id: 's1', shared: true });
+  const repo = path.join(out, 's1', 'repo');
+  assert.ok(m.collect_ok);
+  assert.strictEqual(git(repo, 'rev-parse', 'HEAD'), head);
+  assert.ok(fs.readFileSync(path.join(repo, '.git', 'objects', 'info', 'alternates'), 'utf8').includes('src-repo'));
+});

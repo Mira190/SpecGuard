@@ -129,7 +129,11 @@ function validate(o) {
     if (c.status === 'covered' && (!c.behaviour || !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT'))) return 'covered needs a current unit assertion';
     if (c.status === 'weak_test' && !c.evidence.some((e) => e.layer === 'unit')) return 'weak_test needs a unit test location';
     if (c.status === 'higher_level_only' && (!c.evidence.length || c.evidence.some((e) => e.layer === 'unit'))) return 'higher_level_only needs higher-layer evidence only';
-    if (c.status === 'missing_test' && c.evidence.some((e) => e.kind === 'assertion')) return 'missing_test cannot claim assertion evidence';
+    if (c.status === 'missing_test' && c.evidence.some((e) => e.kind === 'assertion')) { // citing the nearby test that shows the gap is how a model explains a missing_test; drop the claim of proof, keep the row and its finding
+      const n = c.evidence.length;
+      c.evidence = c.evidence.filter((e) => e.kind !== 'assertion');
+      notes.push(`Obligation ${c.id}: missing_test cannot claim assertion evidence; ignored ${n - c.evidence.length} evidence ${n - c.evidence.length === 1 ? 'entry' : 'entries'} and kept the row.`);
+    }
     if (!c.change && !['unknown', 'needs_human'].includes(c.status)) return 'needs a changed-line citation';
     return '';
   };
@@ -190,8 +194,21 @@ function validate(o) {
     if (f.kind === 'pushdown' && o.layering.status !== 'checked') return 'layering was not reviewed';
     return '';
   };
+  // A finding whose row the model marked `covered` is a bookkeeping slip, not evidence against the finding: its own citations are verified later.
+  // Keep it, make the row agree, and demote it to the summary. Only `covered` rows are repaired; unknown or malformed rows still drop the finding.
+  const repair = (f) => {
+    const want = f && { missing_test: 'missing_test', weak_test: 'weak_test', pushdown: 'higher_level_only' }[f.kind];
+    if (!want || !Array.isArray(f.obligation_ids)) return;
+    let fixed = false;
+    for (const id of f.obligation_ids) {
+      const r = rows.find((c) => c.id === id);
+      if (r && r.status === 'covered') { r.status = want; r.reason = `The model raised a ${f.kind} finding on this obligation although it marked it covered.`; fixed = true; }
+    }
+    if (fixed) { f.confidence = 'low'; notes.push(`Obligation row contradicted finding ${f.kind} ${f.path}: kept the finding at low confidence and marked the row ${want}.`); }
+  };
   let kept = [];
   for (const [i, f] of o.findings.entries()) {
+    repair(f);
     const why = findingError(f);
     if (why) notes.push(`Dropped ${[`findings[${i}]`, ...(f && typeof f === 'object' ? [f.kind, f.path, f.title].filter(text) : [])].join(' ')}: ${why}.`);
     else kept.push(f);

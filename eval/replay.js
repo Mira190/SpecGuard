@@ -24,11 +24,13 @@ cp.execFileSync = function (file, args) {
 `;
 
 // Clone repoDir to <out>/<id>/repo at head (full history, so base is reachable), run the real collect.sh, write prompt.md and meta.json.
-function prepareReal({ repoDir, base, head, prTitle = '', prBody = '', out, id, trace = 'auto' }) {
+// shared: true uses 'git clone --shared' (objects via .git/objects/info/alternates) instead of a full copy, saving disk. The working copy then
+// DEPENDS ON repoDir staying where it is and keeping its objects: do not move, delete or gc/prune the source clone while shared copies exist.
+function prepareReal({ repoDir, base, head, prTitle = '', prBody = '', out, id, trace = 'auto', shared = false }) {
   const dir = path.resolve(out, id), repo = path.join(dir, 'repo'), ctx = path.join(dir, 'ctx');
   fs.mkdirSync(dir, { recursive: true });
   if (!fs.existsSync(path.join(repo, '.git'))) {
-    execFileSync('git', ['clone', '-q', '--no-hardlinks', '--no-checkout', path.resolve(repoDir), repo], { stdio: 'pipe' });
+    execFileSync('git', ['clone', '-q', ...(shared ? ['--shared'] : ['--no-hardlinks']), '--no-checkout', path.resolve(repoDir), repo], { stdio: 'pipe' });
     for (const [k, v] of [['user.name', 'specguard-local'], ['user.email', 'local@example.invalid'], ['core.autocrlf', 'false']]) git(repo, 'config', k, v);
   }
   head = git(repo, 'rev-parse', head); base = git(repo, 'rev-parse', base);
@@ -101,17 +103,17 @@ async function finishReal({ ids, out, log = console.log }) {
 }
 
 const USAGE = `Usage:
-  node eval/replay.js prepare --repo DIR --base SHA --head SHA --out DIR --id ID [--title T] [--body B] [--trace auto|off]
+  node eval/replay.js prepare --repo DIR --base SHA --head SHA --out DIR --id ID [--title T] [--body B] [--trace auto|off] [--shared]
   node eval/replay.js finish  --id ID[,ID...] --out DIR
 No pass/fail: findings are adjudicated by a human against the later fix (eval/replay/README.md).`;
 
 async function main() {
   const { values: o, positionals } = require('node:util').parseArgs({ allowPositionals: true, options: {
     repo: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' }, out: { type: 'string' }, id: { type: 'string' },
-    title: { type: 'string', default: '' }, body: { type: 'string', default: '' }, trace: { type: 'string', default: 'auto' }, help: { type: 'boolean' } } });
+    title: { type: 'string', default: '' }, body: { type: 'string', default: '' }, trace: { type: 'string', default: 'auto' }, shared: { type: 'boolean' }, help: { type: 'boolean' } } });
   const [cmd] = positionals;
   if (o.help || !['prepare', 'finish'].includes(cmd) || !o.out || !o.id) { console.log(USAGE); process.exit(o.help ? 0 : 2); }
-  if (cmd === 'prepare') console.log(JSON.stringify(prepareReal({ repoDir: o.repo, base: o.base, head: o.head, prTitle: o.title, prBody: o.body, out: o.out, id: o.id, trace: o.trace }), null, 2));
+  if (cmd === 'prepare') console.log(JSON.stringify(prepareReal({ repoDir: o.repo, base: o.base, head: o.head, prTitle: o.title, prBody: o.body, out: o.out, id: o.id, trace: o.trace, shared: o.shared }), null, 2));
   else await finishReal({ ids: o.id.split(','), out: o.out });
 }
 

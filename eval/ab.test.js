@@ -155,3 +155,19 @@ test('tokens: matches transcripts by variant dir, per-variant stats and paired d
   assert.match(lines.join('\n'), /Constant across variants/);
   assert.ok(fs.existsSync(path.join(dir3, 'tokens.json')));
 });
+
+test('tokens: matches a task.md kickoff with a literal Windows backslash path', async () => {
+  const dir4 = path.join(tmp, 'ab-task');
+  ab.setup({ src, ids: ['one'], ab: dir4, variants: ab.parseVariants([`A=${wtA}`]), log: quiet });
+  const win = path.join(dir4, 'A', 'one').split(path.sep).join('\\') + '\\task.md';
+  const f = path.join(tmp, 'tr', 'task.jsonl');
+  const asst = (i, input, tools) => ({ type: 'assistant', agentId: 'w', uuid: 'w' + i, message: { id: 'w' + i, usage: { input_tokens: input, output_tokens: 3 }, content: tools.map((id) => ({ type: 'tool_use', id, name: 'Read', input: {} })) } });
+  put(f, [{ type: 'user', agentId: 'w', message: { content: 'You are acting as the review model inside a CI code-review Action, run locally and offline. Read the task file `' + win + '` and follow it exactly.' } },
+    asst(0, 100, ['a', 'b']), asst(1, 150, ['c'])].map((l) => JSON.stringify(l)).join('\n') + '\n');
+  const r = await ab.tokens({ ab: dir4, transcripts: [f], log: quiet });
+  assert.strictEqual(r.per[0].runs, 1);
+  assert.strictEqual(r.per[0].calls_mean, 3);
+  assert.strictEqual(r.per[0].parPerTurn_mean, 1.5);
+  assert.strictEqual(r.per[0].cumFirst_mean, 200);
+  assert.strictEqual(r.per[0].cumLater_mean, 50);
+});
