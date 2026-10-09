@@ -21,9 +21,11 @@ inputs:
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
   review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it.", default: "12" }
   claude_version: { description: "Pinned @anthropic-ai/claude-code version (>= 2.1.205).", default: "2.1.290" }
+  include_bots: { description: "true to review PRs opened by bots (skipped by default).", default: "false" }
+  force: { description: "true to review again although this head SHA already has a SpecGuard summary.", default: "false" }
 
 outputs:
-  skip: { description: "true when nothing reviewable changed", value: "${{ steps.collect.outputs.skip }}" }
+  skip: { description: "true when nothing reviewable changed", value: "${{ steps.preflight.outputs.skip == 'true' && 'true' || steps.collect.outputs.skip }}" }
   partial: { description: "true when the diff was truncated", value: "${{ steps.collect.outputs.partial }}" }
 
 runs:
@@ -37,7 +39,20 @@ runs:
           exit 1
         fi
 
+    # Closed PR, bot author or an already-reviewed head: skip before any model tokens are spent; the job stays green.
+    - id: preflight
+      shell: bash
+      env:
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        GH_REPO: ${{ github.repository }}
+        INCLUDE_BOTS: ${{ inputs.include_bots }}
+        FORCE: ${{ inputs.force }}
+      run: node "$GITHUB_ACTION_PATH/src/preflight.js"
+
     - id: collect
+      if: steps.preflight.outputs.skip != 'true'
       shell: bash
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -52,13 +67,13 @@ runs:
         TRACE: ${{ inputs.trace }}
       run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
-    - if: steps.collect.outputs.skip != 'true'
+    - if: steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true'
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: 22
 
     - id: engine
-      if: steps.collect.outputs.skip != 'true'
+      if: steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true'
       shell: bash
       env:
         WANT: ${{ inputs.engine }}
@@ -76,7 +91,7 @@ runs:
 
     # Engine steps never fail the job: post reports "could not complete" instead. Config errors above fail loudly.
     - name: Review with Claude Code
-      if: steps.collect.outputs.skip != 'true' && steps.engine.outputs.engine == 'claude'
+      if: steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true' && steps.engine.outputs.engine == 'claude'
       shell: bash
       env: # no GitHub write token here
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
@@ -104,7 +119,7 @@ runs:
         exit 0
 
     - name: Review with Copilot CLI
-      if: steps.collect.outputs.skip != 'true' && steps.engine.outputs.engine == 'copilot'
+      if: steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true' && steps.engine.outputs.engine == 'copilot'
       shell: bash
       env:
         COPILOT_GITHUB_TOKEN: ${{ inputs.copilot_token }}
@@ -129,7 +144,7 @@ runs:
         node "$GITHUB_ACTION_PATH/src/extract-json.js" "$CTX/copilot.out" "$CTX/findings.json"
         exit 0
 
-    - if: ${{ !cancelled() }} # failures still report; a cancelled run (superseded push) posts nothing
+    - if: ${{ !cancelled() && steps.preflight.outputs.skip != 'true' }} # failures still report; a cancelled run (superseded push) posts nothing
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
