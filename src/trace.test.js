@@ -24,7 +24,7 @@ function repo(t, baseFiles, headFiles) {
 }
 const readTree = (root) => { const out = {}; (function walk(d, rel) { for (const e of fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }) : []) {
   const p = path.join(d, e.name), r = rel ? `${rel}/${e.name}` : e.name;
-  if (e.isDirectory()) walk(p, r); else out[r] = fs.readFileSync(p, 'utf8');
+  if (e.isDirectory()) walk(p, r); else out[r] = fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); // the checkout's line endings (autocrlf) must not matter
 } })(root, ''); return out; };
 const FIX = path.join(__dirname, 'fixtures');
 const fixture = (t, id) => { const dir = path.join(FIX, `trace-${id}`); return { ...repo(t, readTree(path.join(dir, 'base')), readTree(path.join(dir, 'head'))), expect: JSON.parse(fs.readFileSync(path.join(dir, 'expect.json'), 'utf8')) }; };
@@ -325,4 +325,103 @@ test('CLI classify and full run use the env contract and print the count', (t) =
   assert.equal(run('classify', 'docs/specs/claims.md').trim(), 'docs/specs/claims.md');
   assert.equal(execFileSync(process.execPath, [path.join(__dirname, 'trace.js'), 'classify', 'docs/specs/claims.md'], { cwd: r.dir, env: { ...env, TRACE: 'off' }, encoding: 'utf8' }), '');
   assert.ok(fs.existsSync(path.join(r.ctx, 'trace-candidates.json')));
+});
+
+// ---- CRLF / lone CR: behaviour must be identical to LF ----
+const post = require('./post');
+const CRLF = (files) => Object.fromEntries(Object.entries(files).map(([k, v]) => [k, v === null ? null : v.replace(/\n/g, '\r\n')]));
+const CLAIMS = (days) => `# Claims\n\n## Acceptance criteria\n\nAC-1: A claim must include the policy number.\nAC-4: A claim filed more than ${days} days after the incident is rejected as late.\n`;
+const TS = (extra = '') => `export const FILING_WINDOW_DAYS = 30;\n${extra}export const OTHER = 1;\n`;
+const claimsRepo = (t, conv) => repo(t, conv({ 'docs/specs/claims.md': CLAIMS(30), 'src/claims/deadline.ts': TS() }),
+  conv({ 'docs/specs/claims.md': CLAIMS(45), 'src/claims/deadline.ts': TS('export const NEW = 2;\n') }));
+
+test('CRLF checkout: the occurrence table keeps hits whose source line ends in CR (the original bug)', (t) => {
+  const lf = claimsRepo(t, (x) => x), cr = claimsRepo(t, CRLF);
+  T.run({ cwd: lf.dir, base: lf.base, head: lf.head, ctx: lf.ctx }); T.run({ cwd: cr.dir, base: cr.base, head: cr.head, ctx: cr.ctx });
+  const hit = cands(cr).occurrences[0].hits.find((h) => h.path === 'src/claims/deadline.ts');
+  assert.deepEqual([hit.line, hit.text, hit.kind], [1, 'export const FILING_WINDOW_DAYS = 30;', 'src']);
+  assert.deepEqual(cands(cr), cands(lf));
+  assert.deepEqual(status(cr), status(lf));
+  assert.equal(out(cr, 'requirements-index.md'), out(lf, 'requirements-index.md'));
+});
+
+test('CRLF, mixed endings and a lone CR give the same criteria, quotes and candidates as LF', (t) => {
+  const spec = 'docs/specs/claims.md', lfFiles = { [spec]: CLAIMS(30), 'src/claims/deadline.ts': TS() };
+  const head = { [spec]: CLAIMS(45), 'src/claims/deadline.ts': TS('export const NEW = 2;\n') };
+  const lf = repo(t, lfFiles, head), ref = (r) => ({ s: status(r), c: cands(r), i: out(r, 'requirements-index.md') });
+  T.run({ cwd: lf.dir, base: lf.base, head: lf.head, ctx: lf.ctx });
+  const want = ref(lf);
+  const mixed = (f) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.split('\n').map((l, i, all) => (i < all.length - 1 && l.length % 2 === 0 ? l + '\r' : l)).join('\n')]));
+  for (const conv of [CRLF, mixed]) {
+    const r = repo(t, conv(lfFiles), conv(head));
+    T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+    assert.deepEqual(ref(r), want);
+    for (const c of status(r).criteria) assert.doesNotMatch(JSON.stringify(c), /\\r/);
+  }
+  // a lone CR inside a sentence: the criterion reads as one sentence; line numbers stay git's (LF only)
+  const lone = { [spec]: CLAIMS(30).replace('late.', 'late.\rIt is final.'), 'src/a.ts': 'x\n' };
+  const r = repo(t, lone, { ...lone, [spec]: lone[spec].replace('30 days', '45 days') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const c = status(r).criteria[0];
+  assert.deepEqual([c.ref, c.line, c.deltas.added], ['AC-4', 6, ['45 days']]);
+  assert.doesNotMatch(c.quote + c.previous, /\r/);
+  assert.match(c.quote, /rejected as late\. It is final\./);
+});
+
+for (const id of ['tr1', 'tr3', 'tr5', 'tr6', 'tr9', 'tr12', 'tr14', 'tr16', 'tr17']) {
+  test(`fixture ${id} in CRLF produces the same candidates and criteria as LF`, (t) => {
+    const dir = path.join(FIX, `trace-${id}`);
+    const lf = repo(t, readTree(path.join(dir, 'base')), readTree(path.join(dir, 'head')));
+    const cr = repo(t, CRLF(readTree(path.join(dir, 'base'))), CRLF(readTree(path.join(dir, 'head'))));
+    const n1 = T.run({ cwd: lf.dir, base: lf.base, head: lf.head, ctx: lf.ctx }), n2 = T.run({ cwd: cr.dir, base: cr.base, head: cr.head, ctx: cr.ctx });
+    assert.equal(n2, n1);
+    assert.deepEqual(cands(cr), cands(lf));
+    assert.deepEqual(status(cr), status(lf));
+    assert.equal(out(cr, 'spec-files.txt'), out(lf, 'spec-files.txt'));
+  });
+}
+
+test('parseItems, classify and codeHunks are CRLF-neutral; a CR in a hunk context line still yields the hunk', (t) => {
+  const text = '# T\n\n## Acceptance criteria\n\n- Reject zero.\n- Accept positive values.\n\nR1: Orders must ship.\nSecond line.\n\nThe system shall log. It must not crash.\n';
+  assert.deepEqual(T.parseItems('d.md', text.replace(/\n/g, '\r\n')), T.parseItems('d.md', text));
+  const r = claimsRepo(t, CRLF);
+  assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths: ['docs/specs/claims.md', 'src/claims/deadline.ts'] }), ['docs/specs/claims.md']);
+  const patch = ['diff --git a/a.ts b/a.ts', '--- a/a.ts', '+++ b/a.ts', '@@ -1,2 +1,3 @@ export function filingWindow() {', ' export const A = 1;', '+export const FILING = 45;', ' export const B = 2;', ''].join('\r\n');
+  const [h] = T.codeHunks(patch);
+  assert.deepEqual([h.path, h.line, h.context], ['a.ts', 2, 'export function filingWindow() {']);
+  assert.ok(h.literals.added.includes('45'));
+});
+
+test('end to end on a CRLF repo: trace output verifies against CRLF files with LF model quotes, and the spec_mismatch is accepted inline', (t) => {
+  const r = claimsRepo(t, CRLF);
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const s = status(r), s1 = s.criteria[0];
+  const patch = execFileSync('git', ['diff', '--no-color', '--no-renames', `${r.base}...${r.head}`], { cwd: r.dir, encoding: 'utf8' });
+  assert.match(patch, /\r\n/);
+  const maps = post.parseDiff(patch), old = process.env.GITHUB_WORKSPACE;
+  process.env.GITHUB_WORKSPACE = r.dir; t.after(() => { if (old === undefined) delete process.env.GITHUB_WORKSPACE; else process.env.GITHUB_WORKSPACE = old; });
+  const quote = 'export const FILING_WINDOW_DAYS = 30;', spec = 'AC-4: A claim filed more than 45 days after the incident is rejected as late.';
+  const cit = (p, line, q) => ({ path: p, line, quote: q });
+  const mk = () => ({
+    requirements: [{ id: 'Q1', source: 'docs/specs/claims.md', quote: spec, ref: 'AC-4', obligation_ids: ['O1'], reason: 'r' }],
+    coverage: [{ id: 'O1', obligation: 'o', source: 'docs/specs/claims.md AC-4', behaviour: cit('src/claims/deadline.ts', 1, quote), change: cit('docs/specs/claims.md', s1.line, spec),
+      evidence: [], status: 'needs_human', reason: 'r', alignment: { status: 'mismatch', since: 'introduced', reason: 'code still 30' } }],
+    findings: [{ kind: 'spec_mismatch', path: 'src/claims/deadline.ts', line: 1, quote, title: 't', body: 'b', confidence: 'high', obligation_ids: ['O1'] }],
+    standards: { status: 'not_reviewed', sources: [], reason: 'x' }, layering: { status: 'not_reviewed', reason: 'x' }, validation_notes: [], not_reviewed: '',
+  });
+  const d = mk();
+  assert.doesNotMatch(s1.quote, /\r/);
+  assert.equal(post.validate(d).ok, true);
+  post.verifyEvidence(d, new Set(['docs/specs/claims.md', 'src/claims/deadline.ts']), new Set(), post.readFile, maps);
+  post.verifyRequirements(d, { ...s, specFiles: out(r, 'spec-files.txt').split('\n').filter(Boolean) }, post.readFile);
+  assert.deepEqual([d.coverage[0].alignment.status, d.findings.length, d.requirements[0].obligation_ids], ['mismatch', 1, ['O1']]);
+  assert.equal(d.requirements[0].line, 6); // re-derived from the CRLF spec file
+  assert.equal(post.snap(d.findings[0], post.readFile('src/claims/deadline.ts')), 0);
+  assert.deepEqual(post.plan(d.findings, maps).inline.map((f) => f.line), [1]);
+  // the same quote verifies against collected CRLF document text, whether the model quote is LF or CRLF
+  const crDoc = { documents: [{ source: 'docs/specs/claims.md', text: CLAIMS(45).replace(/\n/g, '\r\n') }], specFiles: ['docs/specs/claims.md'] };
+  for (const q of [spec, spec.replace(/ /g, '\r\n')]) {
+    const e = mk(); e.requirements[0].quote = q; post.verifyRequirements(e, crDoc, () => null);
+    assert.deepEqual(e.requirements[0].obligation_ids, ['O1']);
+  }
 });
