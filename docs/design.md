@@ -262,7 +262,7 @@ Output must match `findings.schema.json`: `requirements_source`, a `coverage[]` 
    3. Otherwise the finding goes in the summary only.
 5. **Post** one `createReview({event:'COMMENT', commit_id: <SHA collect.sh diffed>, body, comments})`. Inline comments are capped by `max_comments` (default 10, hard cap 30) and sorted by kind and confidence; overflow goes to the summary. If there are 0 inline comments, skip the review. On a 422, retry once as a body-only review with an "unanchored" section. On a 403/404, emit up to 10 `::warning` annotations plus the job summary. Always exit 0.
 6. **Body format:** test skeletons go in a plain language fence. A ```` ```suggestion ```` block is used only for mechanical `standard` fixes inside one RIGHT-side hunk. Each body ends with a collapsed "Why this was flagged" block.
-7. **Dedup:** `<!-- specguard:fp=sha1(kind+path+normalised line text) -->`. Paginate `listReviewComments`. Outdated comments have `line=null`, so match them by fingerprint only. v1 never deletes or resolves old threads.
+7. **Dedup:** `<!-- specguard:fp=sha1(kind+path+normalised line text) -->`. Paginate `listReviewComments`. Outdated comments have `line=null`, so match them by fingerprint only. v1 never deletes old threads; it resolves one only when it is our own single-comment, unresolved thread whose fp is absent from this run's findings, the run completed untruncated, at most 20 per run, via GraphQL `resolveReviewThread` (errors are swallowed into a limitation note; `resolve_stale: false` disables it).
 8. **Summary:** the review body is short (`<!-- specguard:review -->`, a status line, counts, engine/model, and a link to the sticky comment). The sticky issue comment `<!-- specguard:summary -->` holds the coverage table and the collapsed low-confidence, inferred and overflow items, and is updated in place. The same text goes to `$GITHUB_STEP_SUMMARY`.
 
 ---
@@ -508,7 +508,7 @@ No real-bug hit in the head-to-head came from spec comparison; every direct hit 
 ### 9. Open items
 
 - Pushdown suggestions are not validated.
-- Stale review threads are never resolved.
+- Stale threads are resolved only under the conservative rule in step 7 (unreplied, our own, fp absent from a complete run); replied or human threads stay open.
 - Node 20 locally vs 22 in CI.
 - No real Copilot run.
 - Real GitHub trigger paths are untested.
