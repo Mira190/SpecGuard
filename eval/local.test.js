@@ -39,7 +39,7 @@ test('resolveCases: lists, all, unknown ids', () => {
 test('buildPrompt: skill body, references except ccr, context lines, schema', () => {
   const p = buildPrompt('/x/ctx');
   assert.ok(!p.startsWith('---') && !p.includes('description: Review a PR'), 'front matter stripped');
-  assert.ok(p.includes('# references/trace.md') && p.includes('# references/output.md'));
+  assert.ok(p.includes('# references/output.md') && p.includes('Per-PR context is inlined below'));
   assert.ok(!p.includes('# references/ccr.md'));
   assert.ok(p.includes('Context directory (absolute path): /x/ctx'));
   assert.ok(p.includes('Your final answer must be JSON only, matching this schema: {'));
@@ -69,8 +69,8 @@ test('prepare: builds repos, runs collect, writes prompt and meta', () => {
   assert.ok(by.r1.files > 0 && by.tr7.collect_ok);
 
   const prompt = fs.readFileSync(path.join(out, 'tr3', 'prompt.md'), 'utf8');
-  assert.ok(prompt.includes('"coverage"') && prompt.includes(fs.readFileSync(path.join(__dirname, '..', 'skills', 'test-review', 'references', 'trace.md'), 'utf8').slice(0, 200)));
-  assert.ok(prompt.includes(path.join(out, 'tr3', 'ctx')));
+  assert.ok(prompt.includes('"coverage"') && prompt.includes(fs.readFileSync(path.join(__dirname, '..', 'skills', 'test-review', 'references', 'trace.md'), 'utf8').replaceAll(String.fromCharCode(13), '').slice(0, 200)));
+  assert.ok(prompt.includes(path.join(out, 'tr3', 'ctx').split(path.sep).join('/')) && prompt.includes('<untrusted-data name="diff.patch"'));
 });
 
 test('prepareOne: trace off skips spec classification', () => {
