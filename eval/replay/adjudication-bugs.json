@@ -1,0 +1,64 @@
+{
+ "replays": [
+  {
+   "id": "sqlglot-7641", "grade": "miss", "inline_count": 0, "summary_count": 2,
+   "justification": "Defect: sqlglot/generator.py:2973 `ancestor = expression.find_ancestor(exp.Select, exp.Window)` stops at a Window but walks out of aggregate / WITHIN GROUP / set-operation ORDER BYs into the enclosing SELECT, so a projection alias shadows the real column (fix #8514 replaces it with the direct Order parent and adds ARRAY_AGG, LISTAGG WITHIN GROUP, UNION ALL tests). The model's O4 finding is anchored on exactly that line, but it asks for a test that ORDER BY inside a window is not substituted; the guard already handles windows, so a test written to the finding passes on the buggy head. It never mentions aggregate ORDER BY, WITHIN GROUP or UNION. The other finding (ambiguous duplicate projection, line 2983) is unrelated. Near miss, not indirect: the finding is a mutation-style gap (removing exp.Window), not the behaviour that broke.",
+   "findings": [
+    {"where": "sqlglot/generator.py:2973 (summary details, low)", "kind": "missing_test", "verdict": "unrelated-but-valid", "why": "Window guard is indeed untested, but the proposed test passes on the buggy code and the sibling cases (aggregate, WITHIN GROUP, set-op) that broke are not named."},
+    {"where": "sqlglot/generator.py:2983 (summary details, low)", "kind": "missing_test", "verdict": "unrelated-but-valid", "why": "len(matched)==1 uniqueness branch has no duplicate-output-name test; real gap but not what later broke."}
+   ],
+   "miss_cause": "B",
+   "suggested_change": "When a missing_test is raised on a scope-walking call (find_ancestor / parent traversal), require the reviewer to enumerate which node types the walk can cross (Agg, WithinGroup, Union, subquery) and check each against the tests: a 'boundary of the walk' item in the skill's edge-case step.",
+   "useful_extra": "Marginal: the duplicate-projection test (O3) is a genuine hardening suggestion; low value."
+  },
+  {
+   "id": "sqlglot-7036", "grade": "direct", "inline_count": 0, "summary_count": 1,
+   "justification": "Defect: sqlglot/dialects/spark.py:222-223 prints e.args.get(\"position\") verbatim, ignoring the offset arg, so Snowflake 0-based positions reach Spark's 1-based ARRAY_INSERT unchanged (fix #8460 adds offset conversion). The finding (summary-only, confidence low) at spark.py:223 says the generator 'passes `position` through unchanged and ignores the `offset` arg, which the Spark parser sets to 1 while the default parser leaves unset (0-based)... cross-dialect output is unpinned', and proposes read={'': 'ARRAY_INSERT([1, 2, 3], 0, 99)'} -> spark position 1, noting it is 'expected to fail against the current code, which would emit position 0'. That is the defective behaviour with a test that fails on the head. Hedged ('If the generator should adjust') and low confidence, so it appeared only in the collapsed details block, but it names the behaviour. Negative positions not mentioned.",
+   "findings": [
+    {"where": "sqlglot/dialects/spark.py:223 (summary details, low)", "kind": "missing_test", "verdict": "true-positive", "why": "Names the exact unconverted-position defect and gives a failing test."}
+   ],
+   "miss_cause": null,
+   "suggested_change": "Do not demote a finding to the collapsed details just because the model hedges about intent when the evidence is a concrete code-versus-parser asymmetry; confidence should reflect evidence. A summary-only hit is easy to miss.",
+   "useful_extra": "The finding itself."
+  },
+  {
+   "id": "orpc-2113", "grade": "miss", "inline_count": 0, "summary_count": 0,
+   "justification": "Defect: packages/contract/src/error-factory.ts:159 `RECURSIVE_CLIENT_UNWRAP_KEYS.has(code)` over-broadens the bypass beyond `then`, so legal codes named toString/valueOf/toJSON/call/apply stop building errors (fix #2117 narrows to code === 'then'). The PR body explicitly documents this as an accepted 'Behavior change' and the new test encodes it, so the model's coverage rows O1/O2 are both 'covered' and findings are empty. Nothing flagged. This is a deliberate design reversal rather than an accidental defect; no finding could name a violated requirement because the stated requirement endorsed the behaviour. Borderline-in-scope as flagged in pairs.json.",
+   "findings": [],
+   "miss_cause": "A",
+   "suggested_change": "None plausible from the skill; at most an 'API-surface narrowing' prompt (does a documented behaviour change remove a legal user input?), which would be speculative and noisy.",
+   "useful_extra": "none"
+  },
+  {
+   "id": "orpc-1961", "grade": "miss", "inline_count": 0, "summary_count": 0,
+   "justification": "Defect: packages/server/src/plugins/prototype-pollution-protection.ts:77-83 `if (Array.isArray(value)) { for (const item of value) { stack.push(item) } continue }` checks arrays by index only; structured-cloned arrays from the MessagePort adapter can carry own __proto__ / constructor.prototype keys (fix #2107 gives arrays the plain-object key checks plus a MessagePortRPCHandler test). The model marked O1 covered citing the array-element __proto__ test and produced no findings; not_reviewed only mentions the OpenAPIHandler docs claim. The PR body promises every matched request on any handler is protected and that any input with an own __proto__ key is rejected, so the requirement was violated, but connecting it requires knowing the repo has a structured-clone transport (adapters/message-port) and that arrays can have named own keys.",
+   "findings": [],
+   "miss_cause": "B",
+   "suggested_change": "For security/validation controls, add a mandatory adversarial step: for each container type the guard walks, list the value shapes the transports can deliver (grep adapters/) and ask whether every own-key channel is inspected; require a test per bypass shape.",
+   "useful_extra": "none"
+  },
+  {
+   "id": "rqlite-1722", "grade": "direct", "inline_count": 0, "summary_count": 1,
+   "justification": "Defect: db/db.go ~line 691 `return response, nil` in the ForceQuery error branch of executeStmtWithConn (fix #2533 changes it to `return response, err`, so the transaction rolls back). Finding at db/db.go:686 (summary-only, low): 'When a ForceQuery statement fails, executeStmtWithConn returns (response, nil), whereas the plain exec path returns the error. executeWithConn then treats the statement as non-failing, so a transaction may not be rolled back', with a Transaction:true test expecting count 0 after INSERT ... RETURNING fails. This names the defective behaviour and the test fails on the head (the first insert would commit). Hedged ('Statically this looks like a divergence, though I have not run it') and demoted to collapsed details.",
+   "findings": [
+    {"where": "db/db.go:686 (summary details, low)", "kind": "missing_test", "verdict": "true-positive", "why": "Exact bug: nil error on RETURNING failure means no rollback; failing test supplied."}
+   ],
+   "miss_cause": null,
+   "suggested_change": "Same as 7036: the hit is real but low-confidence and collapsed. A divergence between sibling branches (one returns err, the other nil) with a shown test should be rated at least medium and surfaced inline.",
+   "useful_extra": "The finding itself. The O5 'unknown' row (cluster protobuf) was noise."
+  },
+  {
+   "id": "rqlite-1556", "grade": "direct", "inline_count": 3, "summary_count": 0,
+   "justification": "Defect: cmd/rqlite/main.go:469 `return &buf, nil` after `w := bytes.NewBuffer(buf)`, so callers see an empty slice (fix #2403 returns w.Bytes()). Inline high-confidence comment at main.go:469: '`buf` is a nil slice and `bytes.NewBuffer(buf)` writes into the Buffer's own storage, so `&buf` stays empty. Every caller that reads the response (e.g. restore...) gets no data... Fix by returning `w.Bytes()`', plus an httptest test that fails on the head. Best result of the six: exact line, exact mechanism, correct fix, posted inline.",
+   "findings": [
+    {"where": "cmd/rqlite/main.go:469 (inline, high)", "kind": "missing_test", "verdict": "true-positive", "why": "The later bug exactly, with fix and failing test."},
+    {"where": "cmd/rqlite/backup.go:49 (inline, high)", "kind": "missing_test", "verdict": "true-positive", "why": "os.OpenFile without O_TRUNC replaced os.WriteFile; stale trailing bytes on overwrite. Still present at upstream HEAD (OpenFile at backup.go lines 34 and 63 lack O_TRUNC), so a real unrelated defect."},
+    {"where": "store/store_test.go:207 (inline, high)", "kind": "weak_test", "verdict": "true-positive", "why": "Vacuum branch opens dstDB then asserts on the live store s; verified at lines 195-207. Valid weak test."}
+   ],
+   "miss_cause": null,
+   "suggested_change": "None needed; keep the high-confidence-on-concrete-mechanism inline path.",
+   "useful_extra": "The O_TRUNC finding (real, still unfixed upstream) and the vacuum weak_test are both useful to the author."
+  }
+ ],
+ "totals": {"direct": 3, "indirect": 0, "miss": 3, "inline_direct": 1, "summary_only_direct": 2, "by_cause": {"A": 1, "B": 2, "C": 0, "D": 0}}
+}
