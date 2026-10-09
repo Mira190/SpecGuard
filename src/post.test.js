@@ -136,7 +136,7 @@ function setup(t, data = report(), options = {}) {
   for (const [name, value] of Object.entries({ 'files.txt': 'src.js\n', 'diff.patch': fileDiff('src.js', patch),'standards.txt': 'RULES.md\n', 'findings.json': JSON.stringify(data), 'requirements-status.json': JSON.stringify({ status: 'available', sources: ['PR body', 'issue #1'], limitations: [] }) })) fs.writeFileSync(path.join(dir, 'ctx', name), value);
   const calls = { review: [], file: [], summary: [], list: 0 };
   let count = 0;
-  const github = { paginate: async (fn, args) => (await fn(args)).data, rest: {
+  const github = { paginate: async (fn, args) => (await fn(args)).data, graphql: async () => ({ repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false }, nodes: [] } } } }), rest: {
     pulls: {
       get: async () => ({ data: { head: { sha: options.head || 'HEADSHA' }, ...options.pr } }),
       listFiles: async () => { calls.list++; if (options.listError) throw Object.assign(new Error('Server Error: diff temporarily unavailable'), { status: 500 }); return { data: options.listed || [{ filename: 'src.js', patch }] }; },
@@ -1510,4 +1510,70 @@ test('evidence cited at a wrong line (e.g. a diff.patch line) snaps to the file 
   assert.deepEqual(check(tenLines), { status: 'covered', line: 2 });
   assert.equal(check([evidence.quote, ...tenLines]).status, 'unknown'); // two matches: never guess
   assert.equal(check(['nothing', 'matches']).status, 'unknown');
+});
+
+// stale-thread resolution: a fake github.graphql serves reviewThreads pages and records resolveReviewThread calls
+const FP = (c) => c.repeat(40);
+const thread = (id, fp, extra = {}) => ({ id, isResolved: false, comments: { nodes: [{ author: { login: 'github-actions', __typename: 'Bot' }, body: `text\n\n<!-- specguard:fp=${fp} -->` }] }, ...extra });
+const withThreads = (t, pages, data = report(), setupOpts = {}) => {
+  const s = setup(t, data, setupOpts);
+  s.resolved = []; s.queries = 0;
+  s.github.graphql = async (q, v) => {
+    if (/resolveReviewThread/.test(q)) { s.resolved.push(v.t); return {}; }
+    const page = pages[s.queries++];
+    if (page instanceof Error) throw page;
+    return { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: s.queries < pages.length, endCursor: `c${s.queries}` }, nodes: page } } } };
+  };
+  return s;
+};
+
+test('stale: resolves an unreplied bot thread whose finding is gone; keeps replied, current, human, resolved ones', async (t) => {
+  const first = setup(t); await post(first);
+  const cur = /specguard:fp=([0-9a-f]{40})/.exec(first.calls.review[0].comments[0].body)[1];
+  const reply = thread('replied', FP('b')); reply.comments.nodes.push({ author: { login: 'bob', __typename: 'User' }, body: 'no' });
+  const human = thread('human', FP('c')); human.comments.nodes[0].author.__typename = 'User';
+  const s = withThreads(t, [[thread('stale', FP('a')), reply, thread('current', cur), human, thread('done', FP('d'), { isResolved: true }), { id: 'plain', isResolved: false, comments: { nodes: [{ author: { login: 'github-actions', __typename: 'Bot' }, body: 'no marker' }] } }]]);
+  await post(s);
+  assert.deepEqual(s.resolved, ['stale']);
+  assert.equal(s.calls.review.length, 1, 'the posted review is unchanged');
+});
+
+test('stale: resolves nothing on a failed, skipped or truncated run, or when disabled', async (t) => {
+  const bad = withThreads(t, [[thread('stale', FP('a'))]]);
+  fs.writeFileSync(path.join(bad.dir, 'ctx/findings.json'), '{not json');
+  await post(bad);
+  const skipped = withThreads(t, [[thread('stale', FP('a'))]]);
+  process.env.SKIP = 'true';
+  await post(skipped);
+  process.env.SKIP = 'false';
+  const part = withThreads(t, [[thread('stale', FP('a'))]]);
+  process.env.PARTIAL = 'true';
+  await post(part);
+  process.env.PARTIAL = 'false';
+  const off = withThreads(t, [[thread('stale', FP('a'))]]);
+  process.env.RESOLVE_STALE = 'false';
+  t.after(() => { delete process.env.RESOLVE_STALE; });
+  await post(off);
+  for (const s of [bad, skipped, part, off]) assert.deepEqual(s.resolved, []);
+  assert.equal(bad.queries + skipped.queries + part.queries + off.queries, 0);
+});
+
+test('stale: a GraphQL error is swallowed into one limitation note and the review still posts', async (t) => {
+  const s = withThreads(t, [new Error('Resource not accessible by integration')]);
+  await post(s);
+  assert.equal(s.calls.review.length, 1);
+  assert.match(s.calls.summary[0].body, /Stale review threads could not be resolved: Resource not accessible/);
+  assert.deepEqual(s.resolved, []);
+});
+
+test('stale: pages through threads, stops at 300 threads and resolves at most 20', async (t) => {
+  const page = (p) => Array.from({ length: 100 }, (_, i) => thread(`t${p}-${i}`, FP('a')));
+  const s = withThreads(t, [page(0), page(1), page(2), page(3)]);
+  await post(s);
+  assert.equal(s.queries, 3, 'no fourth page');
+  assert.equal(s.resolved.length, 20);
+  assert.deepEqual(s.resolved.slice(0, 2), ['t0-0', 't0-1']);
+  const two = withThreads(t, [[thread('p0', FP('a'))], [thread('p1', FP('e'))]]);
+  await post(two);
+  assert.deepEqual(two.resolved, ['p0', 'p1']);
 });
