@@ -22,7 +22,7 @@ IGNORES=(package-lock.json yarn.lock pnpm-lock.yaml Cargo.lock poetry.lock go.su
   .specguard-ctx/ dist/ build/ vendor/ node_modules/ '*.min.*' __snapshots__/ '*.snap')
 # SpecGuard's own instructions are never the repo's coding standard (still restored from base)
 OWN=('**/skills/test-review/**' .github/instructions/test-review.instructions.md)
-while IFS= read -r l; do [ -n "$l" ] && IGNORES+=("$l"); done <<< "${IGNORE_EXTRA:-}"
+while IFS= read -r l; do l=${l%$'\r'}; [ -n "$l" ] && IGNORES+=("$l"); done <<< "${IGNORE_EXTRA:-}"
 
 # match FILE PATTERN...
 match() {
