@@ -16,6 +16,12 @@ const MAX_FILE = 256 * 1024, MAX_CANDIDATES = 2000, MAX_DOCS = 500, INDEX_CAP = 
 const MAX_CRITERIA = 200, MAX_CHANGED_DOCS = 100, MAX_PATCH = 16 << 20, MAX_LINE = 300, MAX_DOC_BYTES = 48 << 20;
 const CONTROL = /[\x00-\x1F\x7F]/; // git allows these in paths; every list we write is newline-delimited
 const WIN = 40, STEP = 20;
+const MAX_BIG = 2 << 20; // a requirement doc over MAX_FILE is read (only when changed) up to this size
+const BUDGET_MS = 40000, MAX_DEEP = 25, MAX_DELTAS = 20, MAX_LITS = 200, MAX_VALUES = 40; // time budget; S items traced to code; per-item / per-run search breadth
+const MAX_HUNKS = 60, CAND_CAP = 60 * 1024, PER_HUNK = 5, FLOOR = 0.3, SURE = 3; // trace-candidates.json caps; a BM25 floor (share of the hunk best) applies after the first SURE candidates
+const NOT_CODE_DIR = /(^|\/)(testdata|fixtures?|__fixtures__|__snapshots__|vendor|third_party|generated)\//i; // hunks there rarely trace to a requirement
+// A wall-clock budget shared by the expensive loops; they stop early and the run records a limitation instead of being killed.
+const makeClock = (ms) => { const end = Date.now() + ms; return { left: () => end - Date.now(), over: () => Date.now() >= end }; };
 // Mirrors the globs in collect.sh. ponytail: duplicated, keep in sync (collect.sh could export them later).
 const EXT5 = ['md', 'mdx', 'rst', 'txt', 'adoc'];
 const RULE_GLOBS = [
@@ -367,8 +373,8 @@ function catBatch(cwd, specs) {
   return out;
 }
 const GREP_HIT = /^[^:]*:(.*?):(\d+):(.*)$/s; // 's': the hit line may end in (or hold) a CR, which '.' does not match
-const gitGrep = (cwd, args) => {
-  try { return git(cwd, args, { encoding: 'utf8' }); } catch (e) { if (e.status === 1) return ''; throw e; }
+const gitGrep = (cwd, args, timeout) => {
+  try { return git(cwd, args, { encoding: 'utf8', timeout }); } catch (e) { if (e.status === 1) return ''; throw e; }
 };
 
 function parseReqPaths(s) {
@@ -390,6 +396,13 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
   for (const e of entries) if (UNREADABLE.test(e.path) && UNREADABLE_NAME.test(path.basename(e.path)) && !excluded(e.path)) limitations.push(`requirement-like file not readable: ${e.path}`);
   let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
     && ((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
+  // Documents over MAX_FILE are not indexed. Those that read like a spec (RFC 2119 capitals) are listed so the skip is visible,
+  // and run() still parses one when the PR changes it.
+  const bigAll = entries.filter((e) => e.size > MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
+    && ((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).slice(0, 60);
+  const bigBufs = catBatch(cwd, bigAll.map((e) => (e.size <= MAX_BIG ? e.sha : '0'.repeat(40))));
+  const oversize = bigAll.filter((e, k) => forced(e.path) || UNREADABLE_NAME.test(path.basename(e.path))
+    || (bigBufs[k] && (bigBufs[k].toString('utf8').match(/\b(MUST|SHALL)\b/g) || []).length >= 5));
   if (cands.length > MAX_CANDIDATES) { limitations.push(`${cands.length - MAX_CANDIDATES} candidate documents skipped by the ${MAX_CANDIDATES}-file limit.`); cands = cands.slice(0, MAX_CANDIDATES); }
   let budget = MAX_DOC_BYTES, over = false;
   const docs = new Map(), bufs = catBatch(cwd, cands.map((c) => c.sha));
@@ -403,7 +416,7 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
   if (over) limitations.push(`Document parsing stopped at the ${MAX_DOC_BYTES >> 20} MB byte budget; later candidate documents were skipped.`);
   let list = [...docs.values()].sort(byRank);
   if (list.length > MAX_DOCS) { limitations.push(`${list.length - MAX_DOCS} requirement documents skipped by the ${MAX_DOCS}-file limit.`); list = list.slice(0, MAX_DOCS); }
-  return { entries, docs: new Map(list.map((d) => [d.path, d])), limitations, ruled, forced, excluded };
+  return { entries, docs: new Map(list.map((d) => [d.path, d])), limitations, ruled, forced, excluded, oversize };
 }
 
 // `node trace.js classify <paths>`: the subset of (changed) paths that are requirement docs at head, or at base when deleted.
@@ -416,7 +429,7 @@ function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '
   const heads = todo.length ? read(head) : [], bases = todo.length && base ? read(base) : [];
   const ok = new Set(todo.filter((p, k) => {
     const buf = heads[k] || bases[k];
-    if (!buf || buf.includes(0) || buf.length > MAX_FILE) return false;
+    if (!buf || buf.includes(0) || buf.length > MAX_BIG) return false;
     return inc.some((g) => matchGlob(p, g)) || isSpecDoc(parseItems(p, buf.toString('utf8')), p, buf.length);
   }));
   return paths.filter((p) => ok.has(p));
@@ -447,34 +460,42 @@ function changedItems(files, maps) { // files: [{path, headItems, baseItems}] ->
       }
     }
   }
-  return out;
+  return out.map((o) => ({ ...o, deltas: { removed: o.deltas.removed.slice(0, MAX_DELTAS), added: o.deltas.added.slice(0, MAX_DELTAS) } })); // a huge rewrite must not fan out into hundreds of repo searches
 }
 
-function codeToRequirement(hunks, items) {
+// Ranks requirement items for every code hunk: the best SURE candidates always stay, later ones must reach FLOOR of the hunk best score;
+// at most MAX_HUNKS hunks (best scores first) are kept. info.dropped counts the hunks left out.
+function codeToRequirement(hunks, items, info = {}) {
   const index = buildIndex(items.map((i) => tokenize(`${i.path} ${i.heading} ${i.ref} ${i.text}`)));
   const per = hunks.map((h) => {
     const s = index.search(tokenize([h.context, h.identifiers.join(' '), h.literals.added.join(' '), h.literals.removed.join(' '), h.path].join(' ')));
-    const top = [...s.keys()].filter((k) => s[k] > 0).sort((a, b) => s[b] - s[a]).slice(0, 5);
-    return top.map((k) => ({ path: items[k].path, ref: items[k].ref, line: items[k].line, score: round(s[k]), k }));
+    const top = [...s.keys()].filter((k) => s[k] > 0).sort((a, b) => s[b] - s[a]).slice(0, PER_HUNK);
+    return top.filter((k, r) => r < SURE || s[k] >= FLOOR * s[top[0]]).map((k) => ({ path: items[k].path, ref: items[k].ref, line: items[k].line, score: round(s[k]), k }));
   });
   const keep = new Set();
   for (const e of per.flat().sort((a, b) => b.score - a.score)) if (keep.size < 15 || keep.has(e.k)) keep.add(e.k);
-  return hunks.map((h, i) => ({ path: h.path, line: h.line, context: h.context,
+  let out = hunks.map((h, i) => ({ path: h.path, line: h.line, context: h.context,
     candidates: per[i].filter((e) => keep.has(e.k)).map(({ k, ...e }) => e) })).filter((h) => h.candidates.length);
+  info.dropped = Math.max(0, out.length - MAX_HUNKS);
+  if (info.dropped) { const top = new Set([...out].sort((a, b) => b.candidates[0].score - a.candidates[0].score).slice(0, MAX_HUNKS)); out = out.filter((h) => top.has(h)); }
+  return out;
 }
 
 const numeric = (v) => /^\d+(?:[.,]\d+)*(?:\s*\S+)?$/.test(v) ? v.replace(/^(\d+(?:[.,]\d+)*).*$/, '$1') : null;
 
-function requirementToCode({ cwd, head, entries, skip, crits, maps }) {
+// info.cut is set when the time budget stopped a search early.
+function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {} }) {
   const eligible = entries.filter((e) => e.size <= MAX_FILE && !skip(e.path));
-  const lits = [...new Set(crits.flatMap((c) => c.lits))];
+  const lits = [...new Set(crits.flatMap((c) => c.lits))].slice(0, MAX_LITS);
   const litRe = lits.map((l) => new RegExp(`(?<![\\w])${esc(l)}(?![\\w])`));
   const queries = crits.map((c) => tokenize(`${c.quote} ${c.previous || ''}`));
   const meta = [], litHits = new Map();
   function* windows() {
     for (let s = 0; s < eligible.length; s += 300) {
+      if (dl.over()) { info.cut = true; return; }
       const part = eligible.slice(s, s + 300), bufs = catBatch(cwd, part.map((e) => e.sha));
       for (let f = 0; f < part.length; f++) {
+        if (dl.over()) { info.cut = true; return; }
         if (!bufs[f] || bufs[f].includes(0)) continue;
         const lines = bufs[f].toString('utf8').split(/\r?\n/), pt = tokenize(part[f].path);
         const lt = lines.map((l) => tokenize(l.slice(0, 400))), lh = lines.map((l) => lits.flatMap((x, i) => (l.includes(x) && litRe[i].test(l) ? [i] : [])));
@@ -491,7 +512,7 @@ function requirementToCode({ cwd, head, entries, skip, crits, maps }) {
   }
   const index = buildIndex(windows(), new Set(queries.flat()));
   const shaOf = new Map(entries.map((e) => [e.path, e.sha]));
-  return crits.map((c, qi) => {
+  const rows = crits.map((c, qi) => {
     const s = index.search(queries[qi]);
     const mine = c.lits.map((l) => lits.indexOf(l));
     for (const [i, hs] of litHits) if (mine.some((x) => hs.has(x))) s[i] += 2;
@@ -507,50 +528,80 @@ function requirementToCode({ cwd, head, entries, skip, crits, maps }) {
       }
       return out;
     };
-    const code = pick(false, 8), tests = pick(true, 5);
-    for (const t of transitiveTests({ cwd, head, code, shaOf, total: eligible.length })) {
-      const dup = tests.find((x) => x.path === t.path);
-      if (dup) dup.via = t.via; else tests.push(t);
-    }
-    return { criterion: c.id, code, tests: tests.slice(0, 8) };
+    return { criterion: c.id, code: pick(false, 8), tests: pick(true, 5) };
   });
+  if (!dl.over()) {
+    const extra = transitiveTests({ cwd, head, rows, shaOf, total: eligible.length, dl, info });
+    rows.forEach((r, k) => { for (const t of extra[k]) { const dup = r.tests.find((x) => x.path === t.path); if (dup) dup.via = t.via; else r.tests.push(t); } });
+  } else info.cut = true;
+  if (info.cut && !meta.length) return []; // the budget ran out before any code was read: no rows rather than empty ones
+  return rows.map((r) => ({ criterion: r.criterion, code: r.code, tests: r.tests.slice(0, 8) }));
 }
 
-// Test-transitive step: the rarest identifiers of each top production window, grepped in test paths.
-function transitiveTests({ cwd, head, code, shaOf, total }) {
-  const out = [];
-  for (const w of code) {
-    const buf = catBatch(cwd, [shaOf.get(w.path)])[0];
-    if (!buf) continue;
-    const text = buf.toString('utf8').split(/\r?\n/).slice(w.line - 1, w.end).join('\n');
-    const cands = [...new Set(text.match(/[A-Za-z_$][\w$]{3,}/g) || [])]
-      .map((id) => [id, (/[a-z][A-Z]|_|^[A-Z0-9_]+$/.test(id) ? 10 : 0) + Math.min(id.length, 12)]).sort((a, b) => b[1] - a[1]).slice(0, 12).map((x) => x[0]);
-    if (!cands.length) continue;
+// One repo-wide `git grep` per 100 identifiers for the whole run (not one per criterion per window): file and test-file hits per identifier.
+function grepIdentifiers(cwd, head, ids, dl, info) {
+  const stats = new Map(ids.map((id) => [id, { files: new Set(), tests: new Map() }]));
+  for (let s = 0; s < ids.length; s += 100) {
+    if (dl.over()) { info.cut = true; break; }
     let res;
-    try { res = gitGrep(cwd, ['grep', '-n', '-I', '-w', '-F', ...cands.flatMap((c) => ['-e', c]), head, '--']); } catch { continue; }
-    const per = new Map(cands.map((c) => [c, { files: new Set(), tests: new Map() }]));
-    for (const l of res.split('\n').slice(0, 20000)) {
+    try { res = gitGrep(cwd, ['grep', '-n', '-I', '-w', '-F', ...ids.slice(s, s + 100).flatMap((c) => ['-e', c]), head, '--'], Math.max(dl.left(), 1000)); } catch { info.cut = true; break; }
+    let seen = 0;
+    for (const l of res.split('\n')) {
+      if (++seen > 200000) break;
       const m = GREP_HIT.exec(l);
       if (!m) continue;
-      for (const c of cands) if (new RegExp(`(?<![\\w$])${esc(c)}(?![\\w$])`).test(m[3])) {
-        const e = per.get(c); e.files.add(m[1]);
+      for (const t of new Set(m[3].match(/[A-Za-z_$][\w$]*/g) || [])) {
+        const e = stats.get(t);
+        if (!e) continue;
+        e.files.add(m[1]);
         if (isTestPath(m[1]) && !e.tests.has(m[1])) e.tests.set(m[1], +m[2]);
       }
     }
-    [...per].filter(([, e]) => e.tests.size).sort((a, b) => a[1].files.size - b[1].files.size).slice(0, 3).forEach(([id, e]) => {
-      for (const [p, l] of [...e.tests].slice(0, 3)) out.push({ path: p, line: Math.max(1, l - 10), end: Math.max(1, l - 10) + 39, score: round(Math.log(total / e.files.size)), via: id });
-    });
   }
-  const seen = new Set();
-  return out.filter((t) => !seen.has(t.path) && seen.add(t.path));
+  return stats;
 }
 
-function occurrences({ cwd, head, crits, maps }) {
-  const out = [];
+// Test-transitive step: the rarest identifiers of each top production window, grepped in test paths. Returns one test list per row.
+function transitiveTests({ cwd, head, rows, shaOf, total, dl, info }) {
+  const paths = [...new Set(rows.flatMap((r) => r.code.map((w) => w.path)))];
+  const got = paths.length ? catBatch(cwd, paths.map((p) => shaOf.get(p))) : [];
+  const text = new Map(paths.map((p, k) => [p, got[k] ? got[k].toString('utf8').split(/\r?\n/) : null]));
+  const idsOf = new Map(), all = new Set();
+  for (const r of rows) for (const w of r.code) {
+    const key = `${w.path}:${w.line}`;
+    if (idsOf.has(key) || !text.get(w.path)) continue;
+    const cands = [...new Set(text.get(w.path).slice(w.line - 1, w.end).join('\n').match(/[A-Za-z_$][\w$]{3,}/g) || [])]
+      .map((id) => [id, (/[a-z][A-Z]|_|^[A-Z0-9_]+$/.test(id) ? 10 : 0) + Math.min(id.length, 12)]).sort((a, b) => b[1] - a[1]).slice(0, 12).map((x) => x[0]);
+    idsOf.set(key, cands); cands.forEach((c) => all.add(c));
+  }
+  const stats = grepIdentifiers(cwd, head, [...all], dl, info);
+  return rows.map((r) => {
+    const out = [];
+    for (const w of r.code) {
+      const cands = idsOf.get(`${w.path}:${w.line}`) || [];
+      cands.map((id) => [id, stats.get(id)]).filter(([, e]) => e.tests.size).sort((a, b) => a[1].files.size - b[1].files.size).slice(0, 3).forEach(([id, e]) => {
+        for (const [p, l] of [...e.tests].slice(0, 3)) out.push({ path: p, line: Math.max(1, l - 10), end: Math.max(1, l - 10) + 39, score: round(Math.log(total / e.files.size)), via: id });
+      });
+    }
+    const seen = new Set();
+    return out.filter((t) => !seen.has(t.path) && seen.add(t.path));
+  });
+}
+
+function occurrences({ cwd, head, crits, maps, dl, info = {} }) {
+  const out = [], cache = new Map();
   const pathspec = ['.', ...LOCK_EXCLUDES.map((g) => `:(exclude,glob)${g}`)];
+  let n = 0;
   for (const c of crits) for (const value of c.deltas.removed) {
+    if (dl.over()) { info.cut = true; return out; }
+    if (++n > MAX_VALUES) { info.valuesCapped = true; return out; }
     const variants = durationVariants(value), pats = [...new Set([...variants, value])].filter((v) => v.length > 1 || /\d/.test(v));
-    const res = gitGrep(cwd, ['grep', '-n', '-I', '-w', '-F', ...pats.flatMap((p) => ['-e', p]), head, '--', ...pathspec]);
+    const key = pats.join('\0');
+    let res = cache.get(key); // the same value in two criteria is searched once
+    if (res === undefined) {
+      try { res = gitGrep(cwd, ['grep', '-n', '-I', '-w', '-F', ...pats.flatMap((p) => ['-e', p]), head, '--', ...pathspec], Math.max(dl.left(), 1000)); } catch { info.cut = true; return out; }
+      cache.set(key, res);
+    }
     const words = new Set(tokenize(c.quote + ' ' + (c.previous || '')));
     const hits = [];
     for (const l of res.split('\n')) {
@@ -566,9 +617,30 @@ function occurrences({ cwd, head, crits, maps }) {
   return out;
 }
 
+// Keeps trace-candidates.json within CAND_CAP: fewer occurrence hits, fewer code/test windows, then the weakest hunks. Returns a note or ''.
+function fitCandidates(cand) {
+  const size = () => Buffer.byteLength(JSON.stringify(cand, null, 2));
+  // ponytail: each step re-serialises; fine for a few hundred KB, switch to estimated sizes if candidates ever reach MBs
+  const before = size();
+  if (before <= CAND_CAP) return '';
+  for (const o of cand.occurrences) o.hits = o.hits.slice(0, 10);
+  if (size() > CAND_CAP) for (const r of cand.requirement_to_code) { r.code = r.code.slice(0, 5); r.tests = r.tests.slice(0, 4); }
+  if (size() > CAND_CAP) cand.occurrences = cand.occurrences.slice(0, 15);
+  const top = (h) => h.candidates[0]?.score || 0;
+  while (size() > CAND_CAP && cand.code_to_requirement.length > 1) {
+    const keep = new Set([...cand.code_to_requirement].sort((a, b) => top(b) - top(a)).slice(0, Math.floor(cand.code_to_requirement.length * 0.8)));
+    cand.code_to_requirement = cand.code_to_requirement.filter((h) => keep.has(h));
+  }
+  for (const o of cand.occurrences) if (size() > CAND_CAP - 512) o.hits = o.hits.slice(0, 3);
+  while (size() > CAND_CAP - 512 && cand.occurrences.length) cand.occurrences.pop();
+  while (size() > CAND_CAP - 512 && cand.requirement_to_code.length) cand.requirement_to_code.pop();
+  return `trace-candidates.json was ${Math.round(before / 1024)} KB; it was trimmed to ${CAND_CAP / 1024} KB (weakest hunks and extra occurrence hits dropped).`;
+}
+
 // Writes spec-files.txt, requirements-index.md, trace-candidates.json and extends requirements-status.json.
-// Returns the number of changed normative items.
-function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtra = '', maxCriteria = MAX_CRITERIA, maxPatch = MAX_PATCH }) {
+// Returns the number of changed normative items. budgetMs bounds the expensive searches: they stop early and say so in limitations.
+function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtra = '', maxCriteria = MAX_CRITERIA, maxPatch = MAX_PATCH, budgetMs = BUDGET_MS }) {
+  const dl = makeClock(budgetMs);
   const cand = { requirement_to_code: [], code_to_requirement: [], occurrences: [], limitations: [] };
   const write = (name, s) => fs.writeFileSync(path.join(ctx, name), s);
   const statusFile = path.join(ctx, 'requirements-status.json');
@@ -589,22 +661,41 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   const docs = [...d.docs.values()], allItems = docs.flatMap((x) => x.items);
   spec.files = docs.length; spec.items = allItems.length;
 
+  // -M: a pure move is not a change, a move plus an edit is only the edit (items pair against the old path).
+  const range = `${base}...${head}`, renames = new Map();
   let patch;
-  try { patch = git(cwd, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `${base}...${head}`], { encoding: 'utf8', maxBuffer: maxPatch }); }
+  try { patch = git(cwd, ['diff', '--no-color', '--no-ext-diff', '-M', range], { encoding: 'utf8', maxBuffer: maxPatch }); }
   catch (e) { // an oversized diff: requirement tracing is skipped for this PR
     if (e.code !== 'ENOBUFS') throw e;
     cand.limitations.push(`The diff exceeded ${maxPatch >> 10} KB; requirement tracing was skipped for this PR.`);
     return finish(0, docs.map((x) => x.path));
   }
+  try {
+    const t = git(cwd, ['diff', '--name-status', '-z', '-M', '--no-color', '--no-ext-diff', range], { encoding: 'utf8', maxBuffer: maxPatch }).split('\0');
+    for (let k = 0; k < t.length && t[k];) { const st = t[k++]; if (st[0] === 'R') { const from = t[k++]; renames.set(t[k++], from); } else k++; }
+  } catch { /* no rename map: every move reads as remove + add, as before */ }
   const maps = parseDiff(patch);
   // changed requirement items (head docs, plus docs that were requirement docs at base: deleted or emptied)
   let specCand = [...maps.keys()].filter((p) => !CONTROL.test(p) && !d.excluded(p) && (d.docs.has(p) || (!d.ruled(p) && specLike(p) && !SKIP_NAME.test(p)) || d.forced(p)));
   if (specCand.length > MAX_CHANGED_DOCS) { cand.limitations.push(`${specCand.length - MAX_CHANGED_DOCS} changed requirement document(s) skipped by the ${MAX_CHANGED_DOCS}-document limit.`); specCand = specCand.slice(0, MAX_CHANGED_DOCS); }
-  const baseBufs = specCand.length ? catBatch(cwd, specCand.map((p) => `${base}:${p}`)) : [];
+  const baseBufs = specCand.length ? catBatch(cwd, specCand.map((p) => `${base}:${renames.get(p) || p}`)) : [];
+  // A changed spec over 256 KB is parsed whole (cheap); only items around its changed lines can become criteria.
+  const bigs = new Map(d.oversize.filter((e) => e.size <= MAX_BIG).map((e) => [e.path, e]));
+  const bigPaths = specCand.filter((p) => !d.docs.has(p) && bigs.has(p));
+  const bigBufs = bigPaths.length ? catBatch(cwd, bigPaths.map((p) => bigs.get(p).sha)) : [];
+  const big = new Map();
+  bigPaths.forEach((p, k) => {
+    if (!bigBufs[k] || bigBufs[k].includes(0)) return;
+    const text = lf(bigBufs[k].toString('utf8')), items = parseItems(p, text);
+    if (isSpecDoc(items, p, text.length) || d.forced(p)) big.set(p, { text, items });
+  });
+  const oversize = d.oversize.filter((e) => !big.has(e.path));
+  oversize.slice(0, 10).forEach((e) => cand.limitations.push(`oversize doc skipped: ${e.path} (${Math.round(e.size / 1024)} KB)`));
+  if (oversize.length > 10) cand.limitations.push(`${oversize.length - 10} more oversize document(s) skipped.`);
   const files = [];
   specCand.forEach((p, k) => {
-    const hd = d.docs.get(p), b = baseBufs[k];
-    const baseItems = b && !b.includes(0) && b.length <= MAX_FILE ? parseItems(p, b.toString('utf8')) : [];
+    const hd = d.docs.get(p) || big.get(p), b = baseBufs[k];
+    const baseItems = b && !b.includes(0) && b.length <= MAX_BIG ? parseItems(p, b.toString('utf8')) : [];
     if (!hd && !isSpecDoc(baseItems, p, b ? b.length : 0)) return;
     if (hd && !b) spec.added.push(p); // authored in this PR: no BASE version to compare with
     files.push({ path: p, headItems: hd ? hd.items : [], baseItems, text: hd ? hd.text : null });
@@ -621,27 +712,43 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   status.criteria = (status.criteria || []).concat(criteria);
   status.documents = (status.documents || []).concat(documents);
 
+  const info = { cut: false };
   // A: code hunks -> requirement items
   try {
-    const hunks = codeHunks(patch).filter((h) => !h.is_test && !d.docs.has(h.path) && !d.ruled(h.path) && !docLike(h.path));
-    if (allItems.length && hunks.length) cand.code_to_requirement = codeToRequirement(hunks, allItems);
+    const hunks = codeHunks(patch).filter((h) => !h.is_test && !d.docs.has(h.path) && !d.ruled(h.path) && !docLike(h.path) && !NOT_CODE_DIR.test(h.path));
+    if (allItems.length && hunks.length) {
+      const c2r = {};
+      cand.code_to_requirement = codeToRequirement(hunks, allItems, c2r);
+      if (c2r.dropped) cand.limitations.push(`${c2r.dropped} weaker code hunk(s) beyond the ${MAX_HUNKS}-hunk limit were left out of code_to_requirement.`);
+    }
   } catch (e) { lim('code-to-requirement ranking', e); }
-  // B: changed requirement items -> code and tests; occurrence table
-  const crits = criteria.map((c) => ({ id: c.id, quote: c.quote, previous: c.previous, deltas: c.deltas,
+  // B: changed requirement items -> code and tests; occurrence table. Only the MAX_DEEP largest changes are traced in depth.
+  const all = criteria.map((c) => ({ id: c.id, quote: c.quote, previous: c.previous, deltas: c.deltas,
     lits: [...new Set([...c.deltas.removed, ...c.deltas.added].map((v) => numeric(v) ?? v))] }));
-  if (crits.length) {
-    try { cand.requirement_to_code = requirementToCode({ cwd, head, entries: d.entries, maps, crits, skip: (p) => d.docs.has(p) || d.ruled(p) }); } catch (e) { lim('requirement-to-code ranking', e); }
-    try { cand.occurrences = occurrences({ cwd, head, crits: crits.filter((c) => c.deltas.removed.length), maps }); } catch (e) { lim('occurrence search', e); }
+  const weight = (c) => (c.deltas.removed.length + c.deltas.added.length) * 1000 + c.quote.length + (c.previous || '').length;
+  const deep = all.length <= MAX_DEEP ? all : all.map((c, i) => [c, i]).sort((a, b) => weight(b[0]) - weight(a[0]) || a[1] - b[1]).slice(0, MAX_DEEP).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
+  if (deep.length < all.length) {
+    const left = all.filter((c) => !deep.includes(c)).map((c) => c.id);
+    cand.limitations.push(`deferred: ${left.length} changed requirement item(s) were not traced to code in depth (only the ${MAX_DEEP} largest changes were): ${left.slice(0, 10).join(', ')}${left.length > 10 ? ', ...' : ''}.`);
   }
+  if (deep.length) {
+    try { cand.requirement_to_code = requirementToCode({ cwd, head, entries: d.entries, crits: deep, dl, info, skip: (p) => d.docs.has(p) || d.ruled(p) }); } catch (e) { lim('requirement-to-code ranking', e); }
+    try { cand.occurrences = occurrences({ cwd, head, crits: deep.filter((c) => c.deltas.removed.length), maps, dl, info }); } catch (e) { lim('occurrence search', e); }
+  }
+  if (info.cut) cand.limitations.push(`The ${Math.round(budgetMs / 1000)} s time budget was reached; code, test and occurrence search for the changed requirements is partial.`);
+  if (info.valuesCapped) cand.limitations.push(`Occurrence search covers only the first ${MAX_VALUES} changed values.`);
+  const note = fitCandidates(cand);
+  if (note) cand.limitations.push(note);
 
   // index: path:line [ref] text, hinted docs first, capped; over the cap only candidate and changed items remain
   const line = (i) => `${i.path}:${i.line} [${i.ref}] ${flat(i.text).slice(0, 160)}\n`;
   let index = allItems.map(line).join('');
   if (Buffer.byteLength(index) > INDEX_CAP) {
+    const full = Buffer.byteLength(index);
     const want = new Set([...cand.code_to_requirement.flatMap((h) => h.candidates.map((c) => `${c.path}:${c.ref}`)), ...criteria.map((c) => `${c.source}:${c.ref}`)]);
     index = allItems.filter((i) => want.has(`${i.path}:${i.ref}`)).map(line).join('');
     while (Buffer.byteLength(index) > INDEX_CAP) index = index.slice(0, index.lastIndexOf('\n', index.length - 2) + 1);
-    cand.limitations.push(`requirements-index.md exceeded ${INDEX_CAP / 1024} KB; it lists only candidate and changed items.`);
+    cand.limitations.push(`requirements-index.md exceeded ${INDEX_CAP / 1024} KB (full index ${Math.round(full / 1024)} KB); it lists only candidate and changed items.`);
   }
   return finish(criteria.length, docs.map((x) => x.path), index);
 }
@@ -653,7 +760,7 @@ if (require.main === module) {
     const out = off ? [] : classify({ base: env.BASE_SHA, head: env.HEAD_SHA || 'HEAD', paths: args, reqPaths: env.REQ_PATHS, ignoreExtra: env.IGNORE_EXTRA });
     process.stdout.write(out.map((p) => p + '\n').join(''));
   } else {
-    process.stdout.write(`${run({ base: env.BASE_SHA, head: env.HEAD_SHA, ctx: env.CTX, reqPaths: env.REQ_PATHS, trace: env.TRACE, ignoreExtra: env.IGNORE_EXTRA })}\n`);
+    process.stdout.write(`${run({ base: env.BASE_SHA, head: env.HEAD_SHA, ctx: env.CTX, reqPaths: env.REQ_PATHS, trace: env.TRACE, ignoreExtra: env.IGNORE_EXTRA, budgetMs: +env.TRACE_BUDGET_MS || undefined })}\n`);
   }
 }
 
