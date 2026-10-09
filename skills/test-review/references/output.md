@@ -4,7 +4,7 @@ Read before producing output.
 
 ## Style
 
-Each body is the gap, then the fix. No hedging, no praise, no diff summary. When nothing is wrong, say so plainly ("No test gaps found.") and return empty `findings`.
+Each body is the gap, then the fix; no hedging, praise or diff summary. When nothing is wrong, say "No test gaps found." and return empty `findings`.
 
 ## CI mode: JSON only
 
@@ -25,12 +25,12 @@ Finding fields:
 - `path`: a file in `files.txt`, or an unchanged test file holding the weak assertion (summary only).
 - `line`: per the anchoring rule in SKILL.md.
 - `start_line`: only for a multi-line range inside one hunk.
-- `quote`: the exact text of line `line`, copied from the file, not retyped. The poster snaps the line to it and drops the finding on a mismatch.
-- `source`: the coverage source the finding addresses, e.g. "issue #1 AC 2". Required when the finding is tied to an acceptance criterion; it keeps the finding stable across runs.
+- `quote`: the exact text of line `line`, copied, not retyped; the poster snaps the line to it and drops the finding on a mismatch.
+- `source`: the coverage source the finding addresses, e.g. "issue #1 AC 2"; required when tied to an acceptance criterion (keeps the finding stable across runs).
 - `title`: one short line.
 - `body`: the gap, then the fix; a test skeleton for test kinds.
 - `rule_source`: `path:line`. Required for `standard`; omit when inferred.
-- `rule_quote`: the rule's line copied verbatim from the rule file. Required with `rule_source`; the poster corrects the line number from it and drops the finding if the text is not found.
+- `rule_quote`: the rule's line copied verbatim; required with `rule_source` (the poster corrects the line number from it and drops the finding if not found).
 - `suggestion`: see `references/standards.md`.
 - `confidence`: `high` or `low`, by the evidence rule in SKILL.md (two verified disagreeing citations, or a concrete input whose result the cited code makes unambiguous, is `high`; never `low` merely because the code was not run). A `high` body states the failure scenario: input X → code does Y, requirement/sibling does Z.
 
@@ -38,6 +38,7 @@ Finding fields:
 {"kind":"standard","obligation_ids":[],"path":"billing/invoice.py","line":42,"quote":"        log.info(\"total=%s\" % total)","title":"Log with structured fields","body":"`CONTRIBUTING.md:31` asks for structured log fields so totals can be queried.","rule_source":"CONTRIBUTING.md:31","rule_quote":"Use structured log fields so totals can be queried.","suggestion":"        log.info(\"invoice total\", extra={\"total\": total})","confidence":"high"}
 ```
 
+<!-- mode:local -->
 ## Local mode: report
 
 ```
@@ -55,3 +56,4 @@ Test layers: checked / not_reviewed, with explanation
 ```
 
 Omit the ratio when N is 0. N counts obligations except `needs_human`; P counts only `covered` rows with unit assertion evidence. An empty report, partial context, or `unknown` row must never be described as a clean review. Print JSON only if asked.
+<!-- /mode -->
