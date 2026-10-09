@@ -262,7 +262,7 @@ const isRequirementDoc = (items) => items.some((i) => i.kind !== 'normative') ||
 // Stricter than isRequirementDoc, used to admit a document: prose alone needs 2+ items and either an RFC 2119 capital (MUST/SHALL/REQUIRED)
 // or a dense run of them (long documents need more); structured items (ID, acceptance criteria, Gherkin) always admit. Spec directories keep the loose rule.
 const STRONG_DIR = /(^|\/)(specs?|requirements|design|rfcs?|proposals)\/|(^|\/)adrs?\/|^\.kiro\/specs\/|^openspec\//i;
-const DENSITY = 300, DENSITY_CAPS = 5000; // prose-only: one normative sentence per 300 bytes, or per 5 KB when one has an RFC 2119 capital: a long tutorial with a few stray "must" lines is not a spec
+const DENSITY = 300, DENSITY_CAPS = 7000; // prose-only: one normative sentence per 300 bytes, or per 7 KB when one has an RFC 2119 capital: a long tutorial with a few stray "must" lines is not a spec
 const SPEC_DIR = /(^|\/)(specs?|requirements)\/|^openspec\//i; // one normative sentence is enough for a file that lives in a spec directory
 const isSpecDoc = (items, file = '', size = 0) => (isRequirementDoc(items) || (items.length === 1 && SPEC_DIR.test(file))) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || items.length * DENSITY >= size || (items.length * DENSITY_CAPS >= size && items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw))));
 // Directories of LLM prompts, command/workflow definitions and templates are instructions to a tool, not product requirements.
