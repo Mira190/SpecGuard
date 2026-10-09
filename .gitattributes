@@ -1,0 +1,7 @@
+# Tracked content is LF; keep CRLF checkouts (core.autocrlf) from changing fixtures, skills and scripts.
+src/fixtures/** text=auto eol=lf
+eval/cases/** text=auto eol=lf
+skills/** text=auto eol=lf
+.github/skills/** text=auto eol=lf
+ccr/** text=auto eol=lf
+*.sh text eol=lf
