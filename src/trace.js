@@ -8,6 +8,7 @@ const { execFileSync } = require('node:child_process');
 const { parseDiff } = require('./post');
 
 const DOC_EXT = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
+const docLike = (p) => DOC_EXT.test(p) && (!/\.txt$/i.test(p) || UNREADABLE_NAME.test(path.basename(p))); // a .txt is a document only when named like one (not CMakeLists.txt, licences, test data)
 const SKIP_NAME = /(^|\/)(CHANGELOG|LICENSE|CODE_OF_CONDUCT|SECURITY)[^/]*$/i;
 const UNREADABLE = /\.(docx|pdf|xlsx)$/i, UNREADABLE_NAME = /(requirement|spec|prd|acceptance)/i;
 const HINTS = [/(^|\/)(docs?|spec|specs|requirements)\//i, /\.feature$/i, /(^|\/)adrs?\//i, /^\.kiro\/specs\//, /^openspec\//];
@@ -91,25 +92,53 @@ const lf = (s) => String(s).replace(/\r\n/g, '\n').replace(/\r/g, ' ');
 const clean = (s) => String(s).replace(/[​-‏‪-‮⁠-⁤﻿]/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 const ID = String.raw`(?:AC\s?\d+|[A-Z][A-Z0-9]*(?:[-_.][A-Z0-9]+)*(?<=\d))`; // linear: quantifiers are separated by distinct delimiters; the last char must be a digit
 const ID_LINE = new RegExp(String.raw`^\s*(?:[-*+]\s+|\d+[.)]\s+)?(#{1,6}\s+)?[*_\[\`]*(${ID})[*_\]\`]*\s*[:：.)\-—–]`);
-const idLine = (l) => ID_LINE.exec(l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l); // an ID label sits in the first MAX_LINE chars
+// A Markdown link reference definition ('[KEP-1]: https://...') is a label for a URL, not an item.
+const LINKDEF = /^\s*\[[^\]]+\]:\s*(?:(?:[a-z][a-z0-9+.-]*:\/\/|\/|\.{1,2}\/|#|<|mailto:)\S*(?:\s+["'(].*)?|\S+)\s*$/i;
+const idLine = (l) => { const c = l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l; return LINKDEF.test(c) ? null : ID_LINE.exec(c); }; // an ID label sits in the first MAX_LINE chars
 const AC_HEAD = /^(acceptance criteria|acceptance tests|验收标准|验收条件|AC)\s*[:：]?$/i;
 const LIST_ITEM = /^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)(.+)$/;
-const GHERKIN = /^\s*(Feature|Rule|Scenario Outline|Scenario Template|Scenario|Example(?!s))\s*:\s*(.*)$/;
-const NORMATIVE = /\b(shall|must|required to)\b|必须|应当|不得/i;
+// Gherkin keywords count in .feature files and in fenced gherkin/feature blocks, or in a document that also has Given/When/Then steps.
+// A bare 'Example:' (prose, YAML front matter) is a scenario only in a .feature file.
+const GHERKIN = /^\s*(Feature|Rule|Scenario Outline|Scenario Template|Scenario|Background)\s*:\s*(.*)$/;
+const GHERKIN_EXAMPLE = /^\s*(Example)\s*:\s*(.*)$/;
+const GHERKIN_STEP = /^\s*(?:[-*+]\s+)?(?:\*\*)?(Given|When|Then)\b/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const ID_MAX_LINES = 60, ID_MAX_CHARS = 3000; // an ID'd item is a requirement, not a chapter
+const NORMATIVE = /(?<![\w-])(shall|must|required to)(?![\w-])|必须|应当|不得/i; // not inside an identifier like triage-must-have
+const TABLE_ROW = /^\s*\|.*\|\s*$/, TABLE_RULE = /^\s*\|[\s:|-]+\|\s*$/; // a Markdown table row pairs by its first cell
 const SECOND_PERSON = /\b(you|your|you're|please)\b/i;
 const IMPERATIVE = /^(run|use|install|make|ensure|add|check|create|open|build|push|commit|update|write|set|do|don't|never|always|avoid|keep|remember|read|see|follow|try|test)\b/i;
 const strip = (l) => l.replace(/^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)?(?:#{1,6}\s+)?/, '').trim();
+
+// Fence state per line. CommonMark: an opener has at most 3 spaces of indent and, for backticks, no backtick in its info string;
+// a closer is the same character, at least as long, with nothing after it. An unclosed fence makes the result one entry longer.
+function scanFences(lines, mode) {
+  const fenced = new Array(lines.length).fill(false), info = new Array(lines.length).fill('');
+  let o = null;
+  if (mode === 'marks') lines.forEach((l, i) => { if (FENCE.test(l)) fenced[i] = true; }); // fence-free re-parse still skips the marker lines themselves
+  else if (mode === 'on') lines.forEach((l, i) => {
+    const m = FENCE.exec(l);
+    if (o) { fenced[i] = true; info[i] = o.info; if (m && m[1][0] === o.ch && m[1].length >= o.len && !m[2].trim()) o = null; }
+    else if (m && !(m[1][0] === '`' && m[2].includes('`'))) { o = { ch: m[1][0], len: m[1].length, info: m[2].trim().toLowerCase() }; fenced[i] = true; info[i] = o.info; }
+  });
+  if (o) fenced.push(true);
+  return { fenced, info };
+}
 
 // Item records: { path, ref, line, end, heading, text (<=600), raw, kind: id|ac|gherkin|normative, normative: true }.
 function parseItems(file, text) {
   const lines = lf(clean(text)).split('\n'), n = lines.length;
   const feature = /\.feature$/i.test(file);
-  const fenced = new Array(n).fill(false), head = new Array(n).fill(null);
-  let f = false, cur = null;
+  const head = new Array(n).fill(null);
+  let { fenced, info } = scanFences(lines, feature ? 'none' : 'on');
+  if (fenced.length > n) ({ fenced, info } = scanFences(lines, 'marks')); // an unclosed fence is a stray marker: parse without fences
+  if (!feature && lines[0].trim() === '---' && /^[\w.-]+\s*:/.test(lines[1] || '')) { // YAML front matter is metadata, not requirements
+    const e = lines.findIndex((l, i) => i > 0 && i < 200 && /^(---|\.\.\.)\s*$/.test(l));
+    for (let k = 0; k <= e; k++) fenced[k] = true;
+  }
+  let cur = null;
   lines.forEach((l, i) => {
-    if (!feature && /^\s*(```|~~~)/.test(l)) { fenced[i] = true; f = !f; return; }
-    fenced[i] = f;
-    const h = !f && !feature && /^(#{1,6})\s+(.+)$/.exec(l);
+    const h = !fenced[i] && !feature && /^(#{1,6})\s+(.+)$/.exec(l);
     if (h) cur = { level: h[1].length, text: h[2].trim(), at: i };
     head[i] = cur;
   });
@@ -130,12 +159,17 @@ function parseItems(file, text) {
     const m = idLine(lines[i]);
     if (!m) continue;
     const level = m[1] ? m[1].trim().length : 0;
-    let j = i + 1;
-    for (; j < n; j++) {
+    const stop = (j, deep) => { for (; j < n; j++) {
       if (!fenced[j] && idLine(lines[j])) break;
       const h = !feature && !fenced[j] && /^(#{1,6})\s/.exec(lines[j]);
-      if (h && (!level || h[1].length <= level)) break;
+      if (h && (!level || deep || h[1].length <= level)) break;
       if (!level && !lines[j].trim()) break;
+    } return j; };
+    let j = stop(i + 1, false);
+    if (j - i > ID_MAX_LINES || lines.slice(i, j).join('\n').length > ID_MAX_CHARS) {
+      if (level === 1) continue; // a document title (# KEP-1: Title) is not one requirement
+      j = Math.min(stop(i + 1, true), i + ID_MAX_LINES); // the heading and its own text; sub-headings become their own items
+      while (j > i + 1 && lines.slice(i, j).join('\n').length > ID_MAX_CHARS) j--;
     }
     push('id', m[2].replace(/\s/g, ''), i, j - 1, parentHeading(i));
   }
@@ -160,17 +194,22 @@ function parseItems(file, text) {
     } else if (!lines[i].trim()) continue; else active = null;
   }
   // 3. Gherkin scenarios (with the tag lines above them)
-  const starts = [];
-  for (let i = 0; i < n; i++) {
-    if (fenced[i]) continue;
-    const g = GHERKIN.exec(lines[i]);
+  const starts = [], gfence = (i) => /^(gherkin|feature)\b/.test(info[i]);
+  const hasSteps = feature || lines.some((l, i) => (!fenced[i] || gfence(i)) && GHERKIN_STEP.test(l));
+  let doc = null; // inside a """ or ``` docstring (.feature only): nested 'Scenario:' lines are text
+  for (let i = 0; i < n && hasSteps; i++) {
+    if (fenced[i] && !gfence(i)) continue;
+    if (feature) { const d = /^\s*(""")|^\s*(```)/.exec(lines[i]); if (d) { const k = d[1] || d[2]; if (!doc) doc = k; else if (doc === k) doc = null; continue; } if (doc) continue; }
+    else if (fenced[i] && FENCE.test(lines[i])) continue;
+    const g = GHERKIN.exec(lines[i]) || (feature && GHERKIN_EXAMPLE.exec(lines[i]));
     if (!g) continue;
     let t = i; while (t > 0 && /^\s*@\S/.test(lines[t - 1])) t--;
     starts.push({ i, t, kind: g[1], name: g[2].trim() });
   }
   starts.forEach((s, k) => {
-    if (/^(Feature|Rule)$/.test(s.kind)) return;
-    const z = (starts[k + 1] ? starts[k + 1].t : n) - 1;
+    if (/^(Feature|Rule|Background)$/.test(s.kind)) return;
+    let z = (starts[k + 1] ? starts[k + 1].t : n) - 1;
+    if (!feature) for (let q = s.i + 1; q <= z; q++) if (/^ {0,3}(```|~~~)\s*$/.test(lines[q]) || (!fenced[q] && /^#{1,6}\s/.test(lines[q]))) { z = q - 1; break; } // a prose scenario ends at its fence or next heading
     const tags = lines.slice(s.t, s.i).join(' ').split(/\s+/).filter((x) => x.startsWith('@'));
     push('gherkin', tags.find((x) => /\d/.test(x)) || `Scenario: ${s.name}`, s.t, z, '');
   });
@@ -178,18 +217,21 @@ function parseItems(file, text) {
   const ord = new Map();
   for (let i = 0; i < n; i++) {
     if (fenced[i] || covered.has(i) || !lines[i].trim() || (!feature && /^#{1,6}\s/.test(lines[i]))) continue;
-    let j = i; // paragraph: consecutive prose lines, a new list item starts a new paragraph
-    while (j + 1 < n && !fenced[j + 1] && !covered.has(j + 1) && lines[j + 1].trim() && !LIST_ITEM.test(lines[j + 1]) && !/^#{1,6}\s/.test(lines[j + 1])) j++;
+    const row = TABLE_ROW.test(lines[i]);
+    if (row && TABLE_RULE.test(lines[i])) continue;
+    let j = i; // paragraph: consecutive prose lines, a new list item starts a new paragraph; a table row is its own paragraph
+    while (!row && j + 1 < n && !fenced[j + 1] && !covered.has(j + 1) && lines[j + 1].trim() && !LIST_ITEM.test(lines[j + 1]) && !TABLE_ROW.test(lines[j + 1]) && !/^#{1,6}\s/.test(lines[j + 1])) j++;
+    const cell = row ? slug(lines[i].replace(/^\s*\|/, '').split('|')[0].replace(/[*_`]/g, '')) : '';
     const listItem = LIST_ITEM.test(lines[i]);
     const para = lines.slice(i, j + 1).map((l, k) => (k === 0 ? strip(l) : l.trim())).join('\n');
     for (const s of para.matchAll(/\S[\s\S]*?(?:[.!?。！？](?=\s|$)|$)/g)) {
       const sentence = s[0].trim();
-      if (!NORMATIVE.test(sentence) || SECOND_PERSON.test(sentence) || (listItem && IMPERATIVE.test(sentence))) continue;
+      if (!NORMATIVE.test(sentence.replace(/`[^`]*`/g, ' ')) || SECOND_PERSON.test(sentence) || (listItem && IMPERATIVE.test(sentence))) continue;
       const a = i + (para.slice(0, s.index).match(/\n/g) || []).length;
       const z = a + (sentence.match(/\n/g) || []).length;
       const heading = head[i]?.text || '', key = slug(heading) || 'doc';
       const k = (ord.get(key) || 0) + 1; ord.set(key, k);
-      items.push({ path: file, ref: `${key}#${k}`, line: a + 1, end: z + 1, heading, text: sentence.slice(0, 600), raw: sentence, kind: 'normative', normative: true });
+      items.push({ path: file, ref: `${key}#${cell || k}`, line: a + 1, end: z + 1, heading, text: sentence.slice(0, 600), raw: sentence, kind: 'normative', normative: true });
     }
     i = j;
   }
@@ -197,6 +239,11 @@ function parseItems(file, text) {
 }
 
 const isRequirementDoc = (items) => items.some((i) => i.kind !== 'normative') || items.length >= 2;
+// Stricter than isRequirementDoc, used to admit a document: prose alone needs 2+ items and either an RFC 2119 capital (MUST/SHALL/REQUIRED)
+// or a dense run of them; structured items (ID, acceptance criteria, Gherkin) always admit. Spec directories keep the loose rule.
+const STRONG_DIR = /(^|\/)(specs?|requirements)\/|(^|\/)adrs?\/|^\.kiro\/specs\/|^openspec\//i;
+const DENSITY = 2000; // prose-only: at least one normative sentence per 2 KB, so a long tutorial with two stray "must" lines is not a spec
+const isSpecDoc = (items, file = '', size = 0) => isRequirementDoc(items) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || items.length * DENSITY >= size || items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw)));
 
 // Pair BASE and HEAD items by ref (k-th duplicate with k-th), then leftovers by heading + ordinal.
 function pairItems(baseItems, headItems) {
@@ -325,7 +372,7 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
   const forced = (p) => inc.some((g) => matchGlob(p, g)), excluded = (p) => exc.some((g) => matchGlob(p, g));
   for (const e of entries) if (UNREADABLE.test(e.path) && UNREADABLE_NAME.test(path.basename(e.path)) && !excluded(e.path)) limitations.push(`requirement-like file not readable: ${e.path}`);
   let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
-    && ((DOC_EXT.test(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
+    && ((docLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
   if (cands.length > MAX_CANDIDATES) { limitations.push(`${cands.length - MAX_CANDIDATES} candidate documents skipped by the ${MAX_CANDIDATES}-file limit.`); cands = cands.slice(0, MAX_CANDIDATES); }
   let budget = MAX_DOC_BYTES, over = false;
   const docs = new Map(), bufs = catBatch(cwd, cands.map((c) => c.sha));
@@ -334,7 +381,7 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
     if (!buf || buf.includes(0)) return;
     if ((budget -= buf.length) < 0) { over = true; return; }
     const text = lf(buf.toString('utf8')), items = parseItems(c.path, text);
-    if (isRequirementDoc(items) || forced(c.path)) docs.set(c.path, { path: c.path, text, items, forced: forced(c.path) });
+    if (isSpecDoc(items, c.path, text.length) || forced(c.path)) docs.set(c.path, { path: c.path, text, items, forced: forced(c.path) });
   });
   if (over) limitations.push(`Document parsing stopped at the ${MAX_DOC_BYTES >> 20} MB byte budget; later candidate documents were skipped.`);
   let list = [...docs.values()].sort(byRank);
@@ -346,14 +393,14 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
 function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '' }) {
   const { inc, exc } = parseReqPaths(reqPaths), extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
   const eligible = (p) => !exc.some((g) => matchGlob(p, g)) && (inc.some((g) => matchGlob(p, g))
-    || (DOC_EXT.test(p) && !SKIP_NAME.test(p) && !RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g))));
+    || (docLike(p) && !SKIP_NAME.test(p) && !RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g))));
   const todo = paths.filter((p) => !CONTROL.test(p) && eligible(p));
   const read = (rev) => catBatch(cwd, todo.map((p) => `${rev}:${p}`));
   const heads = todo.length ? read(head) : [], bases = todo.length && base ? read(base) : [];
   const ok = new Set(todo.filter((p, k) => {
     const buf = heads[k] || bases[k];
     if (!buf || buf.includes(0) || buf.length > MAX_FILE) return false;
-    return inc.some((g) => matchGlob(p, g)) || isRequirementDoc(parseItems(p, buf.toString('utf8')));
+    return inc.some((g) => matchGlob(p, g)) || isSpecDoc(parseItems(p, buf.toString('utf8')), p, buf.length);
   }));
   return paths.filter((p) => ok.has(p));
 }
@@ -534,14 +581,14 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   }
   const maps = parseDiff(patch);
   // changed requirement items (head docs, plus docs that were requirement docs at base: deleted or emptied)
-  let specCand = [...maps.keys()].filter((p) => !CONTROL.test(p) && !d.excluded(p) && (d.docs.has(p) || (!d.ruled(p) && DOC_EXT.test(p) && !SKIP_NAME.test(p)) || d.forced(p)));
+  let specCand = [...maps.keys()].filter((p) => !CONTROL.test(p) && !d.excluded(p) && (d.docs.has(p) || (!d.ruled(p) && docLike(p) && !SKIP_NAME.test(p)) || d.forced(p)));
   if (specCand.length > MAX_CHANGED_DOCS) { cand.limitations.push(`${specCand.length - MAX_CHANGED_DOCS} changed requirement document(s) skipped by the ${MAX_CHANGED_DOCS}-document limit.`); specCand = specCand.slice(0, MAX_CHANGED_DOCS); }
   const baseBufs = specCand.length ? catBatch(cwd, specCand.map((p) => `${base}:${p}`)) : [];
   const files = [];
   specCand.forEach((p, k) => {
     const hd = d.docs.get(p), b = baseBufs[k];
     const baseItems = b && !b.includes(0) && b.length <= MAX_FILE ? parseItems(p, b.toString('utf8')) : [];
-    if (!hd && !isRequirementDoc(baseItems)) return;
+    if (!hd && !isSpecDoc(baseItems, p, b ? b.length : 0)) return;
     if (hd && !b) spec.added.push(p); // authored in this PR: no BASE version to compare with
     files.push({ path: p, headItems: hd ? hd.items : [], baseItems, text: hd ? hd.text : null });
   });
@@ -559,7 +606,7 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
 
   // A: code hunks -> requirement items
   try {
-    const hunks = codeHunks(patch).filter((h) => !h.is_test && !d.docs.has(h.path) && !d.ruled(h.path) && !DOC_EXT.test(h.path));
+    const hunks = codeHunks(patch).filter((h) => !h.is_test && !d.docs.has(h.path) && !d.ruled(h.path) && !docLike(h.path));
     if (allItems.length && hunks.length) cand.code_to_requirement = codeToRequirement(hunks, allItems);
   } catch (e) { lim('code-to-requirement ranking', e); }
   // B: changed requirement items -> code and tests; occurrence table
@@ -593,5 +640,5 @@ if (require.main === module) {
   }
 }
 
-module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, pairItems, valueDeltas, durationVariants, isTestPath, pathKind,
+module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, isTestPath, pathKind,
   codeHunks, matchGlob, classify, run };
