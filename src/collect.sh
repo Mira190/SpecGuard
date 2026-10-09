@@ -23,7 +23,7 @@ STANDARDS=(.github/copilot-instructions.md '.github/instructions/**' '**/AGENTS.
 EXEC_CFG=('.claude/**' .mcp.json .claude.json CLAUDE.local.md .gitmodules .ripgreprc '.husky/**'
   '.github/hooks/**' '.github/copilot/**' .github/mcp.json)
 IGNORES=(package-lock.json yarn.lock pnpm-lock.yaml Cargo.lock poetry.lock go.sum composer.lock Gemfile.lock '*.lock'
-  .specguard-ctx/ dist/ build/ vendor/ node_modules/ '*.min.*' __snapshots__/ '*.snap')
+  .specguard-ctx/ dist/ build/ vendor/ node_modules/ '*.min.*' __snapshots__/ '*.snap' '*.svg' '*.log' '*.map')
 # SpecGuard's own instructions are never the repo's coding standard (still restored from base)
 OWN=('**/skills/test-review/**' .github/instructions/test-review.instructions.md)
 while IFS= read -r l; do l=${l%$'\r'}; [ -n "$l" ] && IGNORES+=("$l"); done <<< "${IGNORE_EXTRA:-}"
@@ -120,6 +120,9 @@ for f in "${base_hit[@]}"; do
     printf '%s\n' "$f" >> "$CTX/standards.txt"
   fi
 done
+
+# 3b. where each trusted rule file applies (applyTo / paths / directory); fail-soft, post.js skips the check without it
+timeout 30 node "$HERE/standards-map.js" || echo "::warning::standards applicability map failed; continuing without it"
 
 # 4. requirements, including explicit collection limitations; a failure here must not abort collection
 if ! timeout 60 node "$(dirname "$0")/requirements.js"; then

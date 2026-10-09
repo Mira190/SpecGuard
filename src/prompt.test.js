@@ -137,3 +137,14 @@ test('main / CLI: prints the prompt, exits 2 on missing flags', () => {
   const orig = console.error; console.error = () => {};
   try { assert.equal(main([]), 2); } finally { console.error = orig; }
 });
+
+test('assemble: standards-map.json is inlined as one compact line per rule file (path and scope, never contents)', () => {
+  const map = [{ path: 'AGENTS.md', scope: ['**'], kind: 'agents' }, { path: '.github/instructions/py.instructions.md', scope: ['**/*.py', 'tools/**'], kind: 'copilot' }];
+  const p = build(ctx({ 'standards.txt': 'AGENTS.md\n.github/instructions/py.instructions.md\n', 'standards-map.json': JSON.stringify(map, null, 2) }));
+  const m = /<untrusted-data name="standards-map\.json"[^>]*>\n([\s\S]+?)\n<\/untrusted-data>/.exec(p);
+  assert.ok(m);
+  assert.deepEqual(m[1].split('\n'), ['AGENTS.md applies to: **', '.github/instructions/py.instructions.md applies to: **/*.py, tools/**']);
+  assert.match(p, /cite a rule_source only if its scope covers the finding's path/);
+  assert.doesNotMatch(build(ctx({ 'standards.txt': 'AGENTS.md\n' })), /standards-map/); // older run: no block, no "empty" noise
+  assert.doesNotMatch(build(ctx({ 'standards-map.json': 'not json' })), /standards-map/);
+});

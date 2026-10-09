@@ -82,6 +82,8 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `standards_ref` | `head` | `head` or `merge`: the commit those checks ran on. |
 | `requirements_paths` | | Globs, one per line, that add requirement documents to the ones found by content; `!glob` excludes noisy docs (e.g. `!docs/**`). Empty = content-based discovery only. |
 | `trace` | `auto` | `auto` links requirement docs and changed code in both directions when any requirement doc exists; `off` disables it. |
+| `include_bots` | `false` | Bot-authored PRs (Dependabot, Renovate, any `[bot]` author) are skipped before the model runs; `true` reviews them. |
+| `force` | `false` | A head SHA that already has a SpecGuard summary is skipped (idempotent rerun, no tokens spent); `true` reviews it again. Closed PRs are always skipped. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
 | `claude_version` | `2.1.290` | Pinned `@anthropic-ai/claude-code` (>= 2.1.205). |
 
@@ -181,6 +183,8 @@ Native CCR remains optional. Its comments cannot reconstruct the complete obliga
 1. `src/collect.sh` gathers the diff, applies ignores and restores rule files from base. `src/requirements.js` fetches PR text plus up to 5 linked issues, preserving cross-repository references and recording unavailable or omitted context in `requirements-status.json`.
 2. The action builds the prompt by concatenating `SKILL.md` (frontmatter stripped) and every `skills/test-review/references/*.md` under a `# references/<name>` header, because the model can only read the workspace, not the action's own files. One read-only agent run follows it and returns JSON matching `src/findings.schema.json`.
 3. `src/post.js` validates assessment fields and obligation/finding consistency, verifies behaviour and assertion quotes, and checks cited rules against the base inventory. It routes weak assertions outside the diff to the summary, dedupes comment delivery without removing current gaps, and checks the live PR HEAD before publishing.
+
+Before step 1, `src/preflight.js` skips the run (one log line, green job, no model tokens) for a closed PR, a bot author or an already-reviewed head SHA. `src/standards-map.js` records where each base-branch rule file applies (`applyTo`, `paths:`, directory-scoped `AGENTS.md`/`CLAUDE.md`) in `standards-map.json`; a standards finding that cites a rule not covering its file is dropped with a note. The sticky summary ends with a collapsed "Sources read" list.
 
 Contributors: run `node --test src/*.test.js eval/*.test.js` from a POSIX shell (a bare `node --test` would also discover the `eval/cases` fixtures) and `bash -n src/collect.sh`. Keep `skills/test-review/` identical to `.github/skills/test-review/`; CI checks this. Changes to the report schema require matching validator, prompt and fixture updates. Older findings JSON without evidence and assessment fields is intentionally rejected as incomplete.
 
