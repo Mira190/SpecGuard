@@ -179,7 +179,9 @@ test('isSpecDoc admits structured items, RFC capitals, dense prose and spec dire
   assert.equal(T.isSpecDoc([n('a must b.')], 'a.md', 10), false);
   assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'a.md', 300), true);
   assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'a.md', 90000), false);
-  assert.equal(T.isSpecDoc([n('a must b.'), n('c SHALL d.')], 'a.md', 90000), true);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c SHALL d.')], 'a.md', 9000), true);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c SHALL d.')], 'a.md', 90000), false);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'design/a.md', 90000), true);
   assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'docs/specs/a.md', 90000), true);
   assert.equal(T.isSpecDoc([{ kind: 'id', raw: 'R1: x' }], 'a.md', 90000), true);
 });
@@ -189,6 +191,13 @@ test('classify: .txt files are documents only when named like requirements', (t)
   const r = repo(t, { 'a.js': 'x\n' }, { 'CMakeLists.txt': spec, 'docs/requirements.txt': spec, 'LICENSES/MIT.txt': spec, 'a.js': 'y\n' });
   const paths = ['CMakeLists.txt', 'docs/requirements.txt', 'LICENSES/MIT.txt'];
   assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths }), ['docs/requirements.txt']);
+});
+
+test('classify: LLM prompt and template directories are not requirement docs; code-name and file-name lines are not IDs', (t) => {
+  const spec = 'AC-1: The thing must work.\nAC-2: It shall be fast.\n';
+  const r = repo(t, { 'a.js': 'x\n' }, { 'templates/commands/run.md': spec, 'docs/foo-template.md': spec, 'docs/real.md': spec, 'a.js': 'y\n' });
+  assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths: ['templates/commands/run.md', 'docs/foo-template.md', 'docs/real.md'] }), ['docs/real.md']);
+  assert.deepEqual(T.parseItems('m.md', 'CURLOPT_AWS_SIGV4 - V4 signature\n`ENABLE_IPV6`: Enable IPv6.\n- [CHANGELOG-1.38.md](./CHANGELOG-1.38.md)\nVS2013.\nFR_1: A real one.\n').map((i) => i.ref), ['FR_1']);
 });
 
 // ---- changed-item pairing and deltas ----
