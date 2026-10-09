@@ -38,7 +38,63 @@ function extractCriteria(documents) {
   return criteria;
 }
 
-function collectRequirements({ pr, repo, commits = '', loadIssue }) {
+const DOC_EXT = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
+const TEST_PATH = /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/i;
+
+// LEFT line ranges of production hunks in a unified diff: [{path, a, b}] (inclusive). Pure insertions have no history.
+function leftRanges(diff) {
+  const out = [];
+  let file = null;
+  for (const line of String(diff).split(/\r?\n/)) {
+    const f = /^diff --git a\/.+ b\/(.+)$/.exec(line);
+    if (f) { file = DOC_EXT.test(f[1]) || TEST_PATH.test(f[1]) ? null : f[1]; continue; }
+    const h = /^@@ -(\d+)(?:,(\d+))? \+/.exec(line);
+    if (h && file) { const n = h[2] === undefined ? 1 : +h[2]; if (n > 0) out.push({ path: file, a: +h[1], b: +h[1] + n - 1 }); }
+  }
+  return out;
+}
+
+// Top 3 blamed commits per hunk (by line count), merged by total lines. `blame(path, a, b)` returns porcelain text.
+function blameShas(diff, blame) {
+  const total = new Map();
+  for (const { path: p, a, b } of leftRanges(diff)) {
+    const n = new Map();
+    for (const m of String(blame(p, a, b)).matchAll(/^([0-9a-f]{40}) \d+ \d+/gm)) n.set(m[1], (n.get(m[1]) || 0) + 1);
+    for (const [sha, c] of [...n].sort((x, y) => y[1] - x[1]).slice(0, 3)) total.set(sha, (total.get(sha) || 0) + c);
+  }
+  return [...total].sort((x, y) => y[1] - x[1]).map(([sha]) => sha);
+}
+
+// Optional historical intent: blamed commit -> PR -> closing issues, at most 3 documents. Failures become limitations.
+function collectHistory({ history, repo, mainPr, seen, loadIssue }) {
+  const documents = [], limitations = [];
+  if (!history) return { documents, limitations };
+  if (history.error) return { documents, limitations: ['Historical intent unavailable: git blame failed.'] };
+  const done = new Set();
+  const add = (source, title, body) => { if (documents.length < 3) documents.push({ source, text: sanitize(`${title || ''}\n${body || ''}`) }); };
+  for (const sha of history.shas || []) {
+    if (documents.length >= 3) break;
+    try {
+      const pull = (history.pulls(sha) || [])[0];
+      if (!pull || !pull.number || pull.number === mainPr || done.has(pull.number)) continue; // direct push, or already known
+      done.add(pull.number);
+      const pr = history.pr(pull.number);
+      add(`history PR #${pull.number}`, pr.title, pr.body);
+      for (const issue of pr.closingIssuesReferences || []) {
+        const m = /github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)/.exec(issue.url || '');
+        const r = m ? m[1] : repo, n = m ? +m[2] : issue.number;
+        const key = `${r.toLowerCase()}#${n}`;
+        if (!n || done.has(key) || seen.has(key) || documents.length >= 3) continue;
+        done.add(key);
+        try { const i = loadIssue(r, n); add(r.toLowerCase() === repo.toLowerCase() ? `history issue #${n}` : `history issue ${r}#${n}`, i.title, i.body); }
+        catch { limitations.push(`Could not read history issue ${key}.`); }
+      }
+    } catch { limitations.push(`Could not map commit ${String(sha).slice(0, 7)} to its pull request.`); }
+  }
+  return { documents, limitations };
+}
+
+function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
   const refs = new Map();
   const add = (r, n) => { if (!(r.toLowerCase() === repo.toLowerCase() && +n === pr.number)) refs.set(`${r.toLowerCase()}#${+n}`, { repo: r, number: +n }); };
   const url = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)/g;
@@ -52,6 +108,7 @@ function collectRequirements({ pr, repo, commits = '', loadIssue }) {
   const withoutUrls = text.replace(/https?:\/\/\S+/g, '');
   for (const m of withoutUrls.matchAll(/(?:\b([\w.-]+\/[\w.-]+)#|(?<![&\w])#)(\d+)\b/g)) add(m[1] || repo, m[2]);
   const limitations = [];
+  const seen = new Set(refs.keys());
   const parts = [`# PR: ${sanitize(pr.title)}\n\n${sanitize(pr.body)}`];
   const sources = ['PR body'];
   const documents = [{ source: 'PR body', text: sanitize(`${pr.title || ''}\n${pr.body || ''}`) }];
@@ -66,7 +123,15 @@ function collectRequirements({ pr, repo, commits = '', loadIssue }) {
     } catch { limitations.push(`Could not read ${label}.`); }
   }
   if (!String(pr.body || '').trim() && sources.length === 1) limitations.push('No requirement text available; only changed behaviour can be assessed.');
-  return { text: parts.join('\n\n'), status: limitations.length ? 'partial' : 'available', sources, limitations, documents, criteria: extractCriteria(documents) };
+  const criteria = extractCriteria(documents);
+  const past = collectHistory({ history, repo, mainPr: pr.number, seen, loadIssue });
+  limitations.push(...past.limitations);
+  for (const { source, text: t } of past.documents) {
+    documents.push({ source, text: t });
+    sources.push(source);
+    for (const c of extractCriteria([{ source, text: t }])) criteria.push({ id: `H${criteria.filter((x) => x.optional).length + 1}`, source, quote: c.quote, optional: true });
+  }
+  return { text: parts.join('\n\n'), status: limitations.length ? 'partial' : 'available', sources, limitations, documents, criteria };
 }
 
 if (require.main === module) {
@@ -76,7 +141,14 @@ if (require.main === module) {
   try {
     const pr = gh(['pr', 'view', env.PR_NUMBER, '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences']);
     const commits = execFileSync('git', ['log', `${env.BASE_SHA}..${env.HEAD_SHA}`, '--format=%B'], { encoding: 'utf8' });
-    result = collectRequirements({ pr, repo: env.GH_REPO, commits,
+    let history;
+    try {
+      const diff = fs.readFileSync(path.join(env.CTX, 'diff.patch'), 'utf8');
+      const shas = blameShas(diff, (p, a, b) => execFileSync('git', ['blame', '-w', '-M', '-C', '--porcelain', env.BASE_SHA, '-L', `${a},${b}`, '--', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20 }));
+      history = { shas, pulls: (sha) => gh(['api', `repos/${env.GH_REPO}/commits/${sha}/pulls`]),
+        pr: (n) => gh(['pr', 'view', String(n), '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences']) };
+    } catch { history = { error: true }; }
+    result = collectRequirements({ pr, repo: env.GH_REPO, commits, history,
       loadIssue: (repo, n) => gh(['issue', 'view', String(n), '--repo', repo, '--json', 'title,body']) });
   } catch {
     result = { text: 'none', status: 'unavailable', sources: [], limitations: ['PR requirements could not be loaded; review is limited to changed behaviour.'], documents: [], criteria: [] };
@@ -86,4 +158,4 @@ if (require.main === module) {
   fs.writeFileSync(path.join(env.CTX, 'requirements-status.json'), JSON.stringify(status, null, 2) + '\n');
 }
 
-module.exports = { collectRequirements, extractCriteria };
+module.exports = { collectRequirements, extractCriteria, leftRanges, blameShas };

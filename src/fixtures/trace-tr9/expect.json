@@ -1,0 +1,12 @@
+{
+  "count": 0,
+  "specFiles": [
+    "docs/specs/claims.md"
+  ],
+  "classify": {
+    "paths": [
+      "docs/guide.md"
+    ],
+    "expect": []
+  }
+}

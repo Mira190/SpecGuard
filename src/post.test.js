@@ -7,7 +7,10 @@ const post = require('./post.js');
 
 const behaviour = { path: 'src.js', line: 3, quote: 'if (x) {' };
 const evidence = { path: 'test.js', line: 2, quote: 'assert.equal(result, 42);', layer: 'unit', kind: 'assertion', proves: 'Returns the required total for the boundary input.' };
-const row = (status = 'covered', extra = {}) => ({ id: 'O1', obligation: 'Returns the required total', source: 'issue #1 AC 1', behaviour: { ...behaviour }, change: { ...behaviour }, evidence: status === 'missing_test' ? [] : [{ ...evidence }], status, reason: 'Searched unit and integration suites for the public total function.', ...extra });
+const NA = { status: 'not_applicable', reason: 'No requirement governs this obligation.' };
+const aligned = (d) => { for (const c of d.coverage) c.alignment ??= { status: 'unknown', reason: 'Fixture recorded before the alignment contract.' }; return d; };
+const OK = { status: 'consistent', reason: 'Requirement says X; code does X.' };
+const row = (status = 'covered', extra = {}) => ({ id: 'O1', obligation: 'Returns the required total', source: 'issue #1 AC 1', behaviour: { ...behaviour }, change: { ...behaviour }, evidence: status === 'missing_test' ? [] : [{ ...evidence }], status, reason: 'Searched unit and integration suites for the public total function.', alignment: { ...NA }, ...extra });
 const finding = (kind = 'missing_test', extra = {}) => ({ kind, obligation_ids: kind === 'standard' ? [] : ['O1'], ...behaviour, title: 'Verify the boundary total', body: 'The boundary has no assertion. Add assert.equal(total(1), 42).', confidence: 'high', ...extra, kind });
 const report = (extra = {}) => ({ requirements: [], requirements_source: 'issue #1', not_reviewed: '', coverage: [row('missing_test')], findings: [finding()], standards: { status: 'checked', sources: ['RULES.md'], reason: 'Checked the changed code against the error handling rule.' }, layering: { status: 'checked', reason: 'Searched unit and integration suites; no suitable additional pushdown.' }, ...extra });
 
@@ -387,7 +390,7 @@ test('a degraded but otherwise clean report is never called clean', async (t) =>
 
 test('accepts the documented "PR body AC k" citation on real r1 output and keeps every finding', () => {
   const load = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/r1', f), 'utf8'));
-  const d = load('findings.json'), status = load('requirements-status.json');
+  const d = aligned(load('findings.json')), status = load('requirements-status.json');
   const before = d.findings.length;
   assert.equal(post.validate(d).ok, true);
   post.verifyRequirements(d, status);
@@ -402,7 +405,7 @@ test('accepts the documented "PR body AC k" citation on real r1 output and keeps
 // Real model output from the first full evaluation (eval/results/full1): every expected finding must survive validation and citation checks.
 function realRun(c) {
   const dir = path.join(__dirname, 'fixtures', c), load = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-  const d = load('findings.json');
+  const d = aligned(load('findings.json'));
   const maps = new Map();
   for (const part of fs.readFileSync(path.join(dir, 'diff.patch'), 'utf8').split(/^diff --git /m).filter(Boolean)) maps.set(/^a\/\S+ b\/(\S+)/.exec(part)[1], post.parsePatch(part.slice(part.indexOf('@@'))));
   const read = (p) => { // fixture files live under eval/cases/<case>/head; other repo paths are real
@@ -674,4 +677,412 @@ test('s2: the summary names rule or agent-config files the PR modified and says 
   fs.writeFileSync(path.join(s.dir, 'ctx/rule-changes.txt'), 'pkg/REVIEW.md\n.claude/settings.json\n');
   await post(s);
   assert.match(s.calls.summary[0].body, /modifies review rule or agent-config files \(pkg\/REVIEW\.md, \.claude\/settings\.json\); they were not reviewed, and the base versions were applied/);
+});
+
+// ---- WP3: requirement <-> code traceability contract ----
+const SPEC_Q = 'Claims must be filed within 30 days.';
+const sreq = (extra = {}) => ({ id: 'G1', source: 'docs/spec.md', ref: 'AC-4', quote: SPEC_Q, obligation_ids: ['O1'], reason: 'Governs the filing window.', ...extra });
+const MM = (since = 'introduced') => ({ status: 'mismatch', since, reason: 'Requirement says 30 days; code allows 45.' });
+const specFinding = (extra = {}) => finding('spec_mismatch', { title: 'Code contradicts AC-4', body: 'docs/spec.md:1 says 30 days.', ...extra });
+const mismatchReport = (since = 'introduced', extra = {}) => report({ requirements: [sreq()], coverage: [row('missing_test', { alignment: MM(since) })], findings: [specFinding()], ...extra });
+const noted = (d, re) => assert.ok(d.validation_notes.some((n) => re.test(n)), d.validation_notes.join('|'));
+
+test('schema requires coverage alignment, spec_mismatch, and optional requirement fields', () => {
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, 'findings.schema.json'), 'utf8')).properties;
+  const cov = schema.coverage.items;
+  assert.ok(cov.required.includes('alignment'));
+  assert.deepEqual(cov.properties.alignment.properties.status.enum, ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown']);
+  assert.deepEqual(cov.properties.alignment.properties.since.enum, ['introduced', 'pre_existing']);
+  assert.deepEqual(cov.properties.alignment.then.required, ['since']);
+  assert.ok(schema.findings.items.properties.kind.enum.includes('spec_mismatch'));
+  assert.ok(!schema.requirements.items.required.some((k) => ['ref', 'line', 'pr_quote'].includes(k)));
+  for (const k of ['ref', 'line', 'pr_quote']) assert.ok(schema.requirements.items.properties[k]);
+});
+
+test('an old report without coverage alignment is rejected as incomplete', () => {
+  const old = report();
+  delete old.coverage[0].alignment;
+  const r = post.validate(old);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /alignment is required/);
+});
+
+test('alignment degrades to unknown unless its evidence rules hold', () => {
+  const run = (alignment, o = {}) => {
+    const d = report({ requirements: o.noReq ? [] : [sreq()], coverage: [row('unknown', { alignment, ...(o.row || {}) })], findings: [] });
+    assert.equal(post.validate(d).ok, true);
+    return d.coverage[0].alignment.status;
+  };
+  assert.equal(run(OK), 'consistent');
+  assert.equal(run(OK, { noReq: true }), 'unknown');
+  assert.equal(run(OK, { row: { behaviour: null } }), 'unknown');
+  assert.equal(run({ status: 'impacted', reason: 'r' }), 'unknown'); // since is required
+  assert.equal(run({ status: 'impacted', since: 'introduced', reason: 'Governed behaviour changed.' }), 'impacted');
+  assert.equal(run({ status: 'not_verifiable', reason: 'Searched code, config and migrations.' }), 'not_verifiable');
+  assert.equal(run({ status: 'not_verifiable', reason: 'Searched code, config and migrations.' }, { noReq: true }), 'unknown');
+  assert.equal(run({ status: 'not_verifiable', reason: '  ' }), 'unknown');
+  assert.equal(run(NA, { noReq: true }), 'not_applicable');
+  assert.equal(run(NA), 'unknown'); // not_applicable with a linked requirement
+  assert.equal(run({ status: 'bogus', reason: 'r' }), 'unknown');
+  assert.equal(run({ status: 'consistent' }), 'unknown');
+  assert.equal(run({ ...OK, since: 'sometime' }), 'unknown');
+});
+
+test('a mismatch row pairs with exactly one spec_mismatch finding and replaces the missing/weak finding', () => {
+  let d = mismatchReport();
+  assert.equal(post.validate(d).ok, true);
+  assert.deepEqual([d.coverage[0].alignment.status, d.findings.map((f) => f.kind)], ['mismatch', ['spec_mismatch']]);
+  d = mismatchReport('introduced', { findings: [specFinding(), finding('missing_test')] });
+  post.validate(d);
+  assert.deepEqual([d.coverage[0].alignment.status, d.findings.map((f) => f.kind)], ['mismatch', ['spec_mismatch']]); // no double comment
+  d = mismatchReport('introduced', { findings: [] });
+  post.validate(d);
+  assert.equal(d.coverage[0].alignment.status, 'unknown'); noted(d, /needs exactly one spec_mismatch/);
+  d = mismatchReport('introduced', { findings: [specFinding(), specFinding({ title: 'Again' })] });
+  post.validate(d);
+  assert.deepEqual([d.coverage[0].alignment.status, d.findings.length], ['unknown', 0]);
+  d = report({ requirements: [sreq({ obligation_ids: ['O1', 'O2'] })], coverage: [row('missing_test', { alignment: MM() }), row('missing_test', { id: 'O2', alignment: MM() })], findings: [specFinding({ obligation_ids: ['O1', 'O2'] })] });
+  post.validate(d);
+  assert.equal(d.findings.length, 0); noted(d, /spec_mismatch needs exactly one obligation/);
+  d = report({ requirements: [sreq()], coverage: [row('missing_test', { alignment: OK })], findings: [specFinding(), finding()] });
+  post.validate(d);
+  assert.deepEqual(d.findings.map((f) => f.kind), ['missing_test']); // a spec_mismatch needs a mismatch row
+});
+
+test('a mismatch row can never be covered: a test of the contradicting value is the wrong oracle', () => {
+  const d = mismatchReport('introduced', { coverage: [row('covered', { alignment: MM() })] });
+  assert.equal(post.validate(d).ok, true);
+  assert.equal(d.coverage[0].alignment.status, 'mismatch');
+  assert.equal(d.coverage[0].status, 'needs_human');
+  assert.match(d.coverage[0].reason, /cannot be covered/);
+  assert.equal(post.noGaps(d), false);
+});
+
+test('mismatch and unknown alignment are gaps, never a clean review', () => {
+  const clean = report({ requirements: [sreq()], coverage: [row('covered', { alignment: OK })], findings: [] });
+  assert.equal(post.noGaps(clean), true);
+  for (const a of [MM(), { status: 'unknown', reason: 'r' }]) assert.equal(post.noGaps({ ...clean, coverage: [row('covered', { alignment: a })] }), false);
+  assert.equal(post.noGaps({ ...clean, coverage: [row('covered', { alignment: { status: 'not_verifiable', reason: 'r' } })] }), true);
+});
+
+test('validate keeps optional requirement ref, line and pr_quote', () => {
+  const d = report({ requirements: [sreq({ line: 7, pr_quote: 'Raise the window.' }), sreq({ id: 'G2', ref: '', line: 0, pr_quote: null }), sreq({ id: 'G3', pr_quote: 5 })], coverage: [row('missing_test', { alignment: MM() })], findings: [specFinding()] });
+  post.validate(d);
+  assert.deepEqual([d.requirements[0].ref, d.requirements[0].line, d.requirements[0].pr_quote], ['AC-4', 7, 'Raise the window.']);
+  assert.deepEqual([d.requirements[1].ref, d.requirements[1].line, d.requirements[1].pr_quote], [undefined, undefined, null]);
+  assert.equal('pr_quote' in d.requirements[2], false);
+});
+
+const specLines = ['# Claims', '', 'AC-4: Claims must be filed', '  within 30 days.', 'AC-5: other'];
+const specRead = (p) => ({ 'docs/spec.md': specLines, 'src/code.js': ['// ' + SPEC_Q] })[p] || null;
+
+test('spec path allow-list: a requirement citing a file outside spec-files.txt is unlinked', () => {
+  const build = (source) => mismatchReport('introduced', { requirements: [sreq({ source })] });
+  let d = build('src/code.js');
+  post.validate(d);
+  post.verifyRequirements(d, { documents: [], criteria: [], specFiles: ['docs/spec.md'] }, specRead);
+  assert.deepEqual(d.requirements[0].obligation_ids, []);
+  assert.equal(d.coverage[0].status, 'unknown');
+  assert.equal(d.coverage[0].alignment.status, 'unknown');
+  assert.deepEqual(d.findings, []);
+  assert.match(d.requirements[0].reason, /not a collected requirement document/);
+  assert.match(d.not_reviewed, /Requirement G1 is not assessed/);
+  d = build('src/code.js'); // no allow-list (older collector): unchanged behaviour
+  post.validate(d);
+  post.verifyRequirements(d, { documents: [], criteria: [] }, specRead);
+  assert.deepEqual(d.requirements[0].obligation_ids, ['O1']);
+  d = build('docs/spec.md');
+  post.validate(d);
+  post.verifyRequirements(d, { documents: [], criteria: [], specFiles: ['docs/spec.md'] }, specRead);
+  assert.deepEqual(d.requirements[0].obligation_ids, ['O1']);
+  assert.equal(d.coverage[0].alignment.status, 'mismatch');
+  d = build('PR body'); // labels are not paths: the allow-list never applies
+  post.validate(d);
+  post.verifyRequirements(d, { documents: [{ source: 'PR body', text: SPEC_Q }], criteria: [], specFiles: [] }, specRead);
+  assert.deepEqual(d.requirements[0].obligation_ids, ['O1']);
+});
+
+test('requirement quote is found in HEAD and its line re-derived; wrong lines and invented quotes do not survive', () => {
+  assert.equal(post.quoteLine(specLines, SPEC_Q), 3);
+  assert.equal(post.quoteLine(specLines, 'AC-5: other'), 5);
+  assert.equal(post.quoteLine(specLines, 'nothing like it'), 0);
+  assert.equal(post.quoteLine(specLines, ''), 0);
+  const ctx = { documents: [], criteria: [], specFiles: ['docs/spec.md'] };
+  const d = mismatchReport('introduced', { requirements: [sreq({ line: 99 })] });
+  post.validate(d);
+  post.verifyRequirements(d, ctx, specRead);
+  assert.deepEqual([d.requirements[0].line, d.requirements[0].obligation_ids], [3, ['O1']]);
+  const bad = mismatchReport('introduced', { requirements: [sreq({ quote: 'Claims may be filed any time.' })] });
+  post.validate(bad);
+  post.verifyRequirements(bad, ctx, specRead);
+  assert.deepEqual([bad.requirements[0].obligation_ids, bad.coverage[0].alignment.status], [[], 'unknown']);
+});
+
+test('removed spec items verify against the "<path> (removed)" document, with the line re-derived', () => {
+  const removed = { source: 'docs/spec.md (removed)', text: 'AC-9: Old rule.\nAC-4: Claims must be filed within 30 days.\n' };
+  const ctx = { documents: [removed], criteria: [], specFiles: ['docs/spec.md'] };
+  const d = mismatchReport('introduced', { requirements: [sreq({ source: 'docs/spec.md (removed)', line: 40 })] });
+  post.validate(d);
+  post.verifyRequirements(d, ctx, specRead);
+  assert.deepEqual([d.requirements[0].obligation_ids, d.requirements[0].line], [['O1'], 2]);
+  const invented = mismatchReport('introduced', { requirements: [sreq({ source: 'docs/spec.md (removed)', quote: 'AC-4: never existed' })] });
+  post.validate(invented);
+  post.verifyRequirements(invented, ctx, specRead);
+  assert.deepEqual(invented.requirements[0].obligation_ids, []);
+  const nodoc = mismatchReport('introduced', { requirements: [sreq({ source: 'docs/other.md (removed)' })] });
+  post.validate(nodoc);
+  post.verifyRequirements(nodoc, ctx, specRead);
+  assert.deepEqual(nodoc.requirements[0].obligation_ids, []);
+});
+
+test('omitted spec (S) criteria are re-added as NOT ASSESSED; optional history (H) criteria are not', () => {
+  const d = report({ requirements: [], coverage: [row()], findings: [] });
+  const criteria = [
+    { id: 'S1', source: 'docs/spec.md', ref: 'AC-4', line: 3, quote: SPEC_Q },
+    { id: 'H1', source: 'history PR #3', quote: 'Old intent.', optional: true },
+  ];
+  post.verifyRequirements(d, { documents: [{ source: 'docs/spec.md', text: `# t
+
+${SPEC_Q}` }, { source: 'history PR #3', text: 'Old intent.' }], criteria, specFiles: ['docs/spec.md'] });
+  assert.deepEqual(d.requirements.map((r) => r.id), ['S1']);
+  assert.deepEqual([d.requirements[0].ref, d.requirements[0].line, d.requirements[0].obligation_ids], ['AC-4', 3, []]);
+  assert.match(post.buildSummary({ status: 'Reviewed', data: d }), /NOT ASSESSED/);
+  // a model-supplied H criterion still verifies against its collected document
+  const h = report({ requirements: [{ id: 'H1', source: 'history PR #3', quote: 'Old intent.', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('unknown', { alignment: OK })], findings: [] });
+  post.validate(h);
+  post.verifyRequirements(h, { documents: [{ source: 'history PR #3', text: 'Old intent.' }], criteria: [criteria[1]] });
+  assert.deepEqual(h.requirements[0].obligation_ids, ['O1']);
+});
+
+test('pr_quote is kept only when it is a verbatim sentence of the PR body', () => {
+  const ctx = { documents: [{ source: 'PR body', text: 'Raise the cap to 3x. Tidy up.' }], criteria: [], specFiles: ['docs/spec.md'] };
+  const keep = mismatchReport('introduced', { requirements: [sreq({ pr_quote: 'Raise the cap to 3x.' })] });
+  post.validate(keep);
+  post.verifyRequirements(keep, ctx, specRead);
+  assert.equal(keep.requirements[0].pr_quote, 'Raise the cap to 3x.');
+  const fake = mismatchReport('introduced', { requirements: [sreq({ pr_quote: 'Documented the change.' })] });
+  post.validate(fake);
+  post.verifyRequirements(fake, ctx, specRead);
+  assert.equal(fake.requirements[0].pr_quote, null);
+});
+
+const dpatch = '@@ -1,3 +1,4 @@\n a\n-old\n+new\n+behaviour\n c\n@@ -20,2 +21,3 @@\n x\n+z\n y\n';
+const spec2 = '@@ -3,1 +3,1 @@\n-AC-4: 45 days\n+AC-4: Claims must be filed within 30 days.\n';
+const align = (since, o = {}) => {
+  const d = report({
+    requirements: [sreq({ line: 3, end: 4, ...(o.req || {}) })],
+    coverage: [row('missing_test', { alignment: { status: o.status || 'mismatch', since, reason: 'Requirement says 30; code says 45.' }, behaviour: { path: 'code.js', line: 4, quote: 'behaviour' }, change: { path: o.changePath || 'code.js', line: o.changeLine || 3, quote: 'new' } })],
+    findings: [specFinding()],
+  });
+  post.validate(d);
+  return d;
+};
+const dmaps = (extra = {}) => new Map(Object.entries({ 'code.js': post.parsePatch(dpatch), ...extra }));
+
+test('differential: introduced is downgraded to pre_existing unless the PR changed the relation', () => {
+  const since = (d, maps) => { post.differential(d, maps); return d.coverage[0].alignment.since; };
+  // behaviour (code.js:4) is a changed RIGHT line: stays introduced
+  assert.equal(since(align('introduced'), dmaps()), 'introduced');
+  // behaviour untouched (context line 1 of hunk 0 is not changed) and the change is in a different hunk, spec not in the diff
+  const far = (o = {}) => { const d = align('introduced', o); Object.assign(d.coverage[0], { behaviour: { path: 'code.js', line: 1, quote: 'a' }, change: { path: 'code.js', line: 22, quote: 'z' } }); return d; };
+  assert.equal(since(far(), dmaps()), 'pre_existing');
+  const downgraded = far(); post.differential(downgraded, dmaps());
+  assert.match(downgraded.coverage[0].alignment.reason, /Downgraded to pre_existing/);
+  // the change shares a hunk with the behaviour
+  const same = far(); same.coverage[0].change = { path: 'code.js', line: 3, quote: 'new' };
+  assert.equal(since(same, dmaps()), 'introduced');
+  // the requirement item lines intersect the diff (RIGHT) or are a removed item
+  assert.equal(since(far(), dmaps({ 'docs/spec.md': post.parsePatch(spec2) })), 'introduced');
+  const left = far({ req: { line: 3, end: 3 } });
+  assert.equal(since(left, dmaps({ 'docs/spec.md': post.parsePatch('@@ -3,1 +9,1 @@\n-AC-4: old\n+other\n') })), 'introduced'); // LEFT line 3 intersects too
+  const rem = far({ req: { source: 'docs/spec.md (removed)' } });
+  assert.equal(since(rem, dmaps()), 'introduced');
+  // pre_existing and not-mismatch rows are left alone; impacted is also downgraded
+  assert.equal(since(align('pre_existing'), dmaps()), 'pre_existing');
+  const imp = far(); imp.coverage[0].alignment = { status: 'impacted', since: 'introduced', reason: 'r' };
+  assert.equal(since(imp, dmaps()), 'pre_existing');
+  const ok = far(); ok.coverage[0].alignment = { ...OK };
+  assert.equal(since(ok, dmaps()), undefined);
+});
+
+test('differential: a modified line far from the unchanged behaviour keeps introduced; an add-only hunk does not', () => {
+  const run = (patch, line) => {
+    const d = align('introduced');
+    Object.assign(d.coverage[0], { behaviour: { path: 'code.js', line: 9, quote: 'return cap' }, change: { path: 'code.js', line, quote: 'x' } });
+    post.differential(d, new Map([['code.js', post.parsePatch(patch)]]));
+    return d.coverage[0].alignment.since;
+  };
+  // constant modified on line 1 (-/+), the use on line 9 is untouched and outside the hunk
+  assert.equal(run('@@ -1,3 +1,3 @@\n-CAP = 2\n+CAP = 3\n a\n b\n', 1), 'introduced');
+  // only a logging line added: the drift pre-dated the PR
+  assert.equal(run('@@ -1,3 +1,4 @@\n a\n+console.log(1)\n b\n c\n', 2), 'pre_existing');
+});
+
+test('renameMaps reads renames with git diff -M so a moved file is not wholly "changed"', () => {
+  const calls = [];
+  const git = (...a) => {
+    calls.push(a);
+    if (a.includes('--name-status')) return 'R095\0old/spec.md\0docs/spec.md\0M\0code.js\0R100\0a.md\0b.md\0';
+    return a.at(-1) === 'docs/spec.md' ? 'diff --git a/old/spec.md b/docs/spec.md\nsimilarity index 95%\n--- a/old/spec.md\n+++ b/docs/spec.md\n@@ -2,1 +2,1 @@\n-x\n+y\n' : '';
+  };
+  const m = post.renameMaps('base', 'head', '.', git);
+  assert.deepEqual([...m.keys()], ['docs/spec.md', 'b.md']);
+  assert.deepEqual([...m.get('docs/spec.md').changed.RIGHT.keys()], [2]);
+  assert.equal(m.get('b.md').changed.RIGHT.size, 0); // pure rename: nothing changed
+  assert.ok(calls.every((a) => a.includes('-M')));
+  assert.equal(post.renameMaps('base', 'head', '.', () => { throw new Error('no git'); }).size, 0);
+});
+
+test('reflected_in reports whether the spec, the tests and the PR description were updated', () => {
+  const d = report({
+    requirements: [sreq({ line: 3, end: 3, pr_quote: 'Raise the cap.' }), sreq({ id: 'G2', source: 'PR body', obligation_ids: ['O2'] }), sreq({ id: 'G3', obligation_ids: ['O3'] })],
+    coverage: [row('missing_test', { alignment: MM(), evidence: [] }), row('covered', { id: 'O2', alignment: NA }), row('covered', { id: 'O3', alignment: { status: 'not_verifiable', reason: 'r' } })],
+  });
+  d.coverage[0].evidence = [{ ...evidence, path: 'a.test.js' }];
+  const maps = new Map([['docs/spec.md', post.parsePatch(spec2)]]);
+  post.reflect(d, maps, new Set(['a.test.js']));
+  assert.deepEqual(d.requirements[0].reflected_in, { spec: true, tests: true, pr: true });
+  assert.equal(d.requirements[1].reflected_in, undefined); // not_applicable: not assessed
+  assert.equal(d.requirements[2].reflected_in, undefined); // not_verifiable: not assessed
+  post.reflect(d, new Map(), new Set());
+  assert.deepEqual(d.requirements[0].reflected_in, { spec: false, tests: false, pr: true });
+  d.requirements[0].pr_quote = null;
+  post.reflect(d, new Map(), new Set());
+  assert.equal(d.requirements[0].reflected_in.pr, false);
+});
+
+test('fingerprint keys spec sources on "path ref", never on the quote or line', () => {
+  const f = (q, s) => post.fingerprint('spec_mismatch', 'code.js', q, s);
+  assert.equal(f('a', 'docs/spec.md AC-4'), f('b', 'docs/spec.md AC-4'));
+  assert.notEqual(f('a', 'docs/spec.md AC-4'), f('a', 'docs/spec.md AC-5'));
+  assert.notEqual(f('a', 'PR body'), f('b', 'PR body'));
+  assert.equal(post.axes([specFinding(), finding()]).endsWith('Spec: 1 mismatch'), true);
+});
+
+test('summary renders a Traceability table with HEAD permalinks and the no-documents line', () => {
+  const d = mismatchReport('introduced', { requirements: [sreq({ line: 3, reflected_in: { spec: false, tests: false, pr: true } })] });
+  d.coverage[0].change = { path: 'src.js', line: 3, quote: 'if (x) {' };
+  d.coverage[0].evidence = [{ ...evidence }];
+  d.coverage[0].status = 'weak_test';
+  const blob = 'https://github.com/o/r/blob/HEADSHA';
+  const s = post.buildSummary({ status: 'Reviewed', data: d, blob, specFiles: ['docs/spec.md'] });
+  assert.match(s, /\*\*Traceability\*\*/);
+  assert.ok(s.includes('| Requirement | Changed | Implementation | Tests | Alignment | Reflected in |'));
+  assert.ok(s.includes(`[docs/spec.md AC-4](${blob}/docs/spec.md#L3)`));
+  assert.ok(s.includes(`[src.js:3](${blob}/src.js#L3)`) && s.includes(`[test.js:2](${blob}/test.js#L2)`));
+  assert.match(s, /mismatch \(introduced\): Requirement says 30 days/);
+  assert.match(s, /spec ✗, tests ✗, PR ✓/);
+  assert.doesNotMatch(s, /No requirement documents found/);
+  assert.match(post.buildSummary({ status: 'Reviewed', data: d, specFiles: ['docs/spec.md'] }), /\| docs\/spec\.md AC-4 \|/); // no blob: plain text
+  const none = post.buildSummary({ status: 'Reviewed', data: report({ coverage: [row()], findings: [] }), specFiles: [] });
+  assert.match(none, /No requirement documents found \(content-based discovery; see `requirements_paths` to add or exclude\)\./);
+  assert.doesNotMatch(none, /Traceability/);
+  assert.doesNotMatch(post.buildSummary({ status: 'Reviewed', data: report({ coverage: [row()], findings: [] }) }), /No requirement documents found/);
+  const removed = mismatchReport('introduced', { requirements: [sreq({ source: 'docs/spec.md (removed)' })] });
+  assert.match(post.buildSummary({ status: 'Reviewed', data: removed, blob }), /docs\/spec\.md AC-4 \(removed\)/);
+  const pre = post.buildSummary({ status: 'Reviewed', data: d, pre: [specFinding({ title: 'Old drift' })] });
+  assert.match(pre, /### Pre-existing drift \(not caused by this PR\)\n\n- \*\*Old drift\*\*/);
+});
+
+function specSetup(t, since, o = {}) {
+  const behaviourAt = o.behaviour || { path: 'src.js', line: 3, quote: 'if (x) {' };
+  const data = report({
+    requirements: [sreq({ line: 1, pr_quote: null })],
+    coverage: [row(o.status || 'missing_test', { alignment: MM(since), behaviour: behaviourAt, change: o.change || { ...behaviour }, ...(o.status === 'unknown' && { evidence: [] }) })],
+    findings: [specFinding()],
+  });
+  const s = setup(t, data);
+  fs.writeFileSync(path.join(s.dir, 'other.js'), 'limit = 3;\n');
+  fs.mkdirSync(path.join(s.dir, 'docs'));
+  fs.writeFileSync(path.join(s.dir, 'docs/spec.md'), `${SPEC_Q}\n`);
+  fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), 'docs/spec.md\n');
+  return s;
+}
+
+test('end to end: an introduced spec_mismatch is posted inline and the summary shows traceability', async (t) => {
+  const s = specSetup(t, 'introduced');
+  await post(s);
+  assert.equal(s.calls.review[0].comments.length, 1);
+  assert.match(s.calls.review[0].comments[0].body, /Code contradicts AC-4/);
+  assert.match(s.calls.review[0].comments[0].body, /kind: spec_mismatch/);
+  const body = s.calls.summary[0].body;
+  assert.ok(body.includes('https://github.com/o/r/blob/HEADSHA/docs/spec.md#L1'));
+  assert.match(body, /Spec: 1 mismatch/);
+  assert.doesNotMatch(body, /Pre-existing drift/);
+  assert.doesNotMatch(body, /No test gaps found/);
+});
+
+test('end to end: pre-existing drift goes to its summary section, never inline', async (t) => {
+  const s = specSetup(t, 'introduced', { behaviour: { path: 'other.js', line: 1, quote: 'limit = 3;' } });
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', '@@ -1,2 +1,4 @@\n l1\n+l2\n+if (x) {\n l4\n')); // add-only hunk: nothing modified
+  await post(s); // behaviour is untouched and in another file, and the spec is not in the diff: downgraded
+  assert.equal(s.calls.review.length, 0);
+  const body = s.calls.summary[0].body;
+  assert.match(body, /### Pre-existing drift \(not caused by this PR\)/);
+  assert.match(body, /Code contradicts AC-4/);
+  assert.match(body, /pre_existing/);
+});
+
+test('end to end: a spec outside spec-files.txt cannot produce a spec_mismatch', async (t) => {
+  const s = specSetup(t, 'introduced');
+  fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), 'docs/other.md\n');
+  await post(s);
+  assert.equal(s.calls.review.length, 0);
+  assert.doesNotMatch(s.calls.summary[0].body, /Code contradicts AC-4/);
+  assert.match(s.calls.summary[0].body, /not a collected requirement document|NOT ASSESSED/);
+});
+
+test('end to end: an empty spec-files.txt prints the no-documents line', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), '');
+  await post(s);
+  assert.match(s.calls.summary[0].body, /No requirement documents found/);
+});
+
+test('a mismatch row stated as unknown or covered is normalised to needs_human and keeps its inline spec_mismatch', async (t) => {
+  for (const status of ['unknown', 'covered']) {
+    const s = specSetup(t, 'introduced', { status });
+    await post(s);
+    assert.equal(s.calls.review[0].comments.length, 1, status);
+    assert.match(s.calls.review[0].comments[0].body, /kind: spec_mismatch/);
+    assert.doesNotMatch(s.calls.summary[0].body, /No test gaps found/);
+  }
+  const d = mismatchReport('introduced', { coverage: [row('covered', { alignment: MM() })] });
+  assert.ok(post.validate(d).ok);
+  assert.equal(d.coverage[0].status, 'needs_human');
+  assert.equal(d.findings.length, 1);
+  assert.equal(post.noGaps(d), false);
+});
+
+test('a pre_existing mismatch row with its spec_mismatch finding renders in the Pre-existing section, not inline', async (t) => {
+  const s = specSetup(t, 'pre_existing');
+  await post(s);
+  assert.equal(s.calls.review.length, 0);
+  assert.match(s.calls.summary[0].body, /### Pre-existing drift \(not caused by this PR\)/);
+  assert.match(s.calls.summary[0].body, /Code contradicts AC-4/);
+});
+
+test('an unverifiable citation still sets the row unknown and drops its spec_mismatch finding', async (t) => {
+  const s = specSetup(t, 'introduced', { behaviour: { path: 'src.js', line: 3, quote: 'no such line' } });
+  await post(s);
+  assert.equal(s.calls.review.length, 0);
+  assert.doesNotMatch(s.calls.summary[0].body, /Code contradicts AC-4/);
+});
+
+test('pre-existing drift with no changed line: change null + needs_human + a finding on an unchanged line renders in the Pre-existing section', async (t) => {
+  const at = { path: 'other.js', line: 1, quote: 'limit = 3;' };
+  const data = report({
+    requirements: [sreq({ line: 1, pr_quote: null })],
+    coverage: [row('needs_human', { alignment: MM('pre_existing'), behaviour: at, change: null, evidence: [] })],
+    findings: [specFinding({ ...at })],
+  });
+  const s = setup(t, data);
+  fs.writeFileSync(path.join(s.dir, 'other.js'), 'limit = 3;\n');
+  fs.mkdirSync(path.join(s.dir, 'docs'));
+  fs.writeFileSync(path.join(s.dir, 'docs/spec.md'), `${SPEC_Q}\n`);
+  fs.writeFileSync(path.join(s.dir, 'ctx/spec-files.txt'), 'docs/spec.md\n');
+  await post(s);
+  assert.equal(s.calls.review.length, 0);
+  assert.match(s.calls.summary[0].body, /### Pre-existing drift \(not caused by this PR\)/);
+  assert.match(s.calls.summary[0].body, /Code contradicts AC-4/);
 });

@@ -26,7 +26,8 @@
           "evidence",
           "status",
           "reason",
-          "change"
+          "change",
+          "alignment"
         ],
         "properties": {
           "id": {
@@ -178,6 +179,50 @@
                 "type": "null"
               }
             ]
+          },
+          "alignment": {
+            "type": "object",
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "consistent",
+                  "mismatch",
+                  "impacted",
+                  "not_verifiable",
+                  "not_applicable",
+                  "unknown"
+                ]
+              },
+              "since": {
+                "enum": [
+                  "introduced",
+                  "pre_existing"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "mismatch",
+                    "impacted"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "since"
+              ]
+            }
           }
         }
       }
@@ -202,7 +247,8 @@
               "missing_test",
               "weak_test",
               "standard",
-              "pushdown"
+              "pushdown",
+              "spec_mismatch"
             ]
           },
           "path": {
@@ -344,6 +390,24 @@
           "reason": {
             "type": "string",
             "minLength": 1
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pr_quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       }

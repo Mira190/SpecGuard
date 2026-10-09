@@ -2,9 +2,12 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 const { inspectChecks } = require('./checks');
 
-const KINDS = ['missing_test', 'weak_test', 'standard', 'pushdown'];
+const KINDS = ['spec_mismatch', 'missing_test', 'weak_test', 'standard', 'pushdown'];
+const ALIGN = ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
+const unknownAlign = (reason) => ({ status: 'unknown', reason });
 const STATUSES = ['covered', 'weak_test', 'missing_test', 'higher_level_only', 'needs_human', 'unknown'];
 const FILE_CAP = 3, HARD_CAP = 30, BODY_MAX = 65000;
 const SECRET = /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,})/g;
@@ -44,6 +47,28 @@ function parseDiff(text) {
     if (p && at >= 0) maps.set(p, parsePatch(chunk.slice(at)));
   }
   return maps;
+}
+
+// Deterministic alignment rules (a failure only degrades, never upgrades), run after every step that can unlink a requirement or finding.
+// Idempotent. Mutates d.coverage[].alignment/status and d.findings.
+function settle(d, notes) {
+  const linked = (id) => d.requirements.some((r) => r.obligation_ids.includes(id));
+  const down = (c, why) => { notes.push(`Obligation ${c.id} alignment unknown: ${why}.`); c.alignment = unknownAlign(`Alignment ${c.alignment.status} degraded: ${why}.`); };
+  for (const c of d.coverage) {
+    const { status: s, since } = c.alignment;
+    if (['consistent', 'mismatch', 'impacted'].includes(s) && !linked(c.id)) down(c, 'needs a linked requirement');
+    else if (['consistent', 'mismatch', 'impacted'].includes(s) && !c.behaviour) down(c, 'needs a located behaviour');
+    else if (['mismatch', 'impacted'].includes(s) && !since) down(c, 'needs since');
+    else if (s === 'not_verifiable' && (!linked(c.id) || !String(c.alignment.reason).trim())) down(c, 'not_verifiable needs a linked requirement and a reason');
+    else if (s === 'not_applicable' && linked(c.id)) down(c, 'not_applicable cannot have a linked requirement');
+  }
+  for (const c of d.coverage) if (c.alignment.status === 'mismatch') {
+    if (d.findings.filter((f) => f.kind === 'spec_mismatch' && f.obligation_ids.includes(c.id)).length !== 1) down(c, 'needs exactly one spec_mismatch finding');
+    else if (c.status === 'covered') Object.assign(c, { status: 'needs_human', reason: 'A mismatch row cannot be covered: a test of the contradicting behaviour does not prove the requirement.' });
+  }
+  const mm = new Set(d.coverage.filter((c) => c.alignment.status === 'mismatch').map((c) => c.id));
+  d.findings = d.findings.map((f) => (['missing_test', 'weak_test'].includes(f.kind) ? { ...f, obligation_ids: f.obligation_ids.filter((id) => !mm.has(id)) } : f)) // the spec_mismatch finding replaces them
+    .filter((f) => (f.kind === 'spec_mismatch' ? f.obligation_ids.length === 1 && mm.has(f.obligation_ids[0]) : f.kind === 'standard' || f.obligation_ids.length));
 }
 
 // Hand-rolled mirror of findings.schema.json. ponytail: swap for ajv if the schema grows.
@@ -90,14 +115,28 @@ function validate(o) {
     return '';
   };
   const ids = new Set(), rows = [];
+  for (const [i, c] of o.coverage.entries()) if (c && typeof c === 'object' && c.alignment === undefined) return bad(`coverage[${i}].alignment is required (old report format)`);
+  const align = (a) => {
+    if (!a || typeof a !== 'object' || !ALIGN.includes(a.status) || !text(a.reason) || (a.since !== undefined && !['introduced', 'pre_existing'].includes(a.since))) return null;
+    return { status: a.status, ...(a.since && { since: a.since }), reason: a.reason };
+  };
   for (const [i, c] of o.coverage.entries()) {
     if (!c || typeof c !== 'object' || !text(c.id) || ids.has(c.id)) { notes.push(`Dropped coverage[${i}]: missing or duplicate id.`); continue; }
     ids.add(c.id);
     const why = rowError(c);
-    if (!why) { rows.push(c); continue; }
+    if (!why) {
+      const a = align(c.alignment);
+      if (!a) notes.push(`Obligation ${c.id} alignment unknown: malformed alignment.`);
+      const al = a || unknownAlign('Malformed alignment.');
+      if (al.status === 'mismatch' && ['unknown', 'covered'].includes(c.status)) { // never covered; 'unknown' would drop its spec_mismatch finding
+        notes.push(`Obligation ${c.id}: mismatch row with status ${c.status} normalised to needs_human.`);
+        rows.push({ ...c, status: 'needs_human', reason: 'A mismatch row cannot be covered: a test of the contradicting behaviour does not prove the requirement.', alignment: al });
+      } else rows.push({ ...c, alignment: al });
+      continue;
+    }
     notes.push(`Obligation ${c.id} marked unknown: ${why}.`);
     rows.push({ id: c.id, obligation: text(c.obligation) ? c.obligation : '(not stated)', source: text(c.source) ? c.source : '(not stated)',
-      behaviour: citation(c.behaviour) ? c.behaviour : null, change: citation(c.change) ? c.change : null, evidence: [], status: 'unknown', reason: `Malformed coverage row: ${why}.` });
+      behaviour: citation(c.behaviour) ? c.behaviour : null, change: citation(c.change) ? c.change : null, evidence: [], status: 'unknown', reason: `Malformed coverage row: ${why}.`, alignment: unknownAlign('Malformed coverage row.') });
   }
   const status = (id) => rows.find((c) => c.id === id).status;
 
@@ -109,6 +148,7 @@ function validate(o) {
     const broken = !Array.isArray(r.obligation_ids) || linked.length !== r.obligation_ids.length;
     if (broken) notes.push(`Requirement ${r.id}: unknown or malformed obligation links removed.`);
     reqs.push({ id: r.id, source: r.source, quote: r.quote, obligation_ids: linked,
+      ...(text(r.ref) && { ref: r.ref }), ...(int(r.line) && { line: r.line }), ...((r.pr_quote === null || text(r.pr_quote)) && { pr_quote: r.pr_quote }),
       reason: broken && !linked.length ? 'Its obligation links were missing or invalid.' : text(r.reason) ? r.reason : 'No reason given.' });
   }
 
@@ -124,6 +164,7 @@ function validate(o) {
     if (!Array.isArray(f.obligation_ids)) return 'obligation_ids must be an array';
     f.obligation_ids = [...new Set(f.obligation_ids.filter((id) => ids.has(id)))];
     if (f.kind !== 'standard' && !f.obligation_ids.length) return 'no valid obligation';
+    if (f.kind === 'spec_mismatch' && f.obligation_ids.length !== 1) return 'spec_mismatch needs exactly one obligation';
     const expected = { missing_test: 'missing_test', weak_test: 'weak_test', pushdown: 'higher_level_only' }[f.kind];
     if (expected && f.obligation_ids.some((id) => status(id) !== expected)) return 'contradicts coverage';
     if (f.kind === 'standard' && o.standards.status !== 'checked') return 'standards were not reviewed';
@@ -136,9 +177,12 @@ function validate(o) {
     if (why) notes.push(`Dropped ${[`findings[${i}]`, ...(f && typeof f === 'object' ? [f.kind, f.path, f.title].filter(text) : [])].join(' ')}: ${why}.`);
     else kept.push(f);
   }
+  const d = { coverage: rows, requirements: reqs, findings: kept };
+  settle(d, notes);
+  kept = d.findings;
   const demoted = new Set();
   for (const c of rows) {
-    if (['missing_test', 'weak_test'].includes(c.status) && kept.filter((f) => f.kind === c.status && f.obligation_ids.includes(c.id)).length !== 1) {
+    if (c.alignment.status !== 'mismatch' && ['missing_test', 'weak_test'].includes(c.status) && kept.filter((f) => f.kind === c.status && f.obligation_ids.includes(c.id)).length !== 1) {
       notes.push(`Obligation ${c.id} marked unknown: needs exactly one ${c.status} finding.`);
       demoted.add(c.id);
       Object.assign(c, { status: 'unknown', reason: 'Inconsistent findings for this gap.' });
@@ -163,8 +207,9 @@ const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
 // An acceptance-criterion source is stabler than a quote: the model re-anchors the same finding on different lines between runs.
 // ponytail: AC-only means a new gap on the same AC and file at another line is hidden once the first is posted; add the line to the key if that bites.
 const AC = /^(issue (?:[\w.-]+\/[\w.-]+)?#\d+|PR body) AC \d+$/;
+const SPEC = /^(?=\S*[./])\S+ \S.*$/; // "docs/specs/pricing.md R3": a spec source keys on path + ref, never on line numbers
 const fingerprint = (kind, p, quote, ...sources) => {
-  const ac = sources.filter((s) => AC.test(s)).sort();
+  const ac = sources.filter((s) => AC.test(s) || SPEC.test(s)).sort();
   return crypto.createHash('sha1').update(`${kind}\0${p}\0${ac.length ? ac.join('\0') : norm(quote)}`).digest('hex');
 };
 
@@ -234,7 +279,7 @@ function commentBody(f, fp, inline = true) {
   return clean(`**${f.title}**\n\n${f.body}${fix(f, inline)}\n\n<details><summary>Why this was flagged</summary>\n\n${why}\n</details>\n\n<!-- specguard:fp=${fp} -->`);
 }
 
-const axes = (fs) => { const n = (k) => fs.filter((f) => f.kind === k).length; return `Tests: ${n('missing_test')} missing, ${n('weak_test')} weak · Standards: ${n('standard')} · Layering: ${n('pushdown')}`; };
+const axes = (fs) => { const n = (k) => fs.filter((f) => f.kind === k).length; return `Tests: ${n('missing_test')} missing, ${n('weak_test')} weak · Standards: ${n('standard')} · Layering: ${n('pushdown')}${n('spec_mismatch') ? ` · Spec: ${n('spec_mismatch')} mismatch` : ''}`; };
 const proven = (cov) => {
   const rows = cov.filter((c) => c.status !== 'needs_human');
   return rows.length ? `Unit evidence: ${rows.filter((c) => c.status === 'covered').length}/${rows.length} obligations (static review; tests not executed)` : '';
@@ -243,7 +288,7 @@ const noGaps = (data) => !data.findings.length && !(data.validation_notes || [])
   && data.standards.status !== 'not_reviewed' && data.layering.status === 'checked'
   && data.requirements.every((r) => r.obligation_ids.length > 0)
   && (!data.tooling || ['passed', 'not_configured'].includes(data.tooling.status))
-  && data.coverage.every((c) => c.status === 'covered');
+  && data.coverage.every((c) => c.status === 'covered' && !['mismatch', 'unknown'].includes(c.alignment?.status));
 
 // A criterion split into several obligations is covered only when every one is.
 const met = (r, cov) => {
@@ -253,7 +298,34 @@ const met = (r, cov) => {
 const cell = (s) => redact(s).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const item = ({ f, why }) => `- **${f.title}** (\`${f.path}:${f.line}\`, ${f.kind}${why ? `, ${why}` : ''})\n\n  ${redact(f.body + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
 
-function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, rules = [] }) {
+const DOC_LABEL = /^(PR body|issue|history)(?![A-Za-z])/;
+const REMOVED = / [(]removed[)]$/;
+const specPath = (src) => !DOC_LABEL.test(src); // the source cites a repository file, not a PR/issue label
+
+// Traceability rows: one per spec-sourced requirement and linked obligation. blob = permalink prefix at HEAD_SHA (no links when absent).
+function traceTable(data, blob, specFiles = []) {
+  const link = (p, line, label) => {
+    const t = String(label).replace(/[\[\]]/g, '');
+    return blob && line ? `[${t}](${blob}/${p.split('/').map(encodeURIComponent).join('/')}#L${line})` : t;
+  };
+  const at = (c) => (c ? link(c.path, c.line, `${c.path}:${c.line}`) : '');
+  const rows = [];
+  for (const r of data.requirements) {
+    if (!specPath(r.source) || !r.obligation_ids.length) continue;
+    const removed = REMOVED.test(r.source), p = r.source.replace(REMOVED, '');
+    const req = removed ? `${p} ${r.ref || ''} (removed)` : link(p, r.line, `${p}${r.ref ? ` ${r.ref}` : ''}`);
+    for (const id of r.obligation_ids) {
+      const c = data.coverage.find((x) => x.id === id);
+      if (!c) continue;
+      const a = c.alignment, ri = r.reflected_in;
+      const kind = c.change && (specFiles.includes(c.change.path) ? 'spec' : 'code');
+      rows.push(`| ${cell(req)} | ${cell(c.change ? `${kind}: ${at(c.change)}` : 'none')} | ${cell(c.behaviour ? at(c.behaviour) : 'not located')} | ${cell(c.evidence.map((e) => at(e)).join('; ') || 'none')} | ${cell(`${a.status}${a.since ? ` (${a.since})` : ''}: ${a.reason}`)} | ${ri ? cell(`spec ${ri.spec ? '✓' : '✗'}, tests ${ri.tests ? '✓' : '✗'}, PR ${ri.pr ? '✓' : '✗'}`) : 'n/a'} |`);
+    }
+  }
+  return rows.length ? `**Traceability**\n\n| Requirement | Changed | Implementation | Tests | Alignment | Reflected in |\n|---|---|---|---|---|---|\n${rows.join('\n')}\n\n` : '';
+}
+
+function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, rules = [], blob, specFiles, pre = [] }) {
   let s = `<!-- specguard:summary -->\n## SpecGuard\n\n${status}\n\n`;
   if (engine) s += `_Engine: ${engine}${model ? ` (${model})` : ''}_\n\n`;
   if (partial) s += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
@@ -272,6 +344,8 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], parti
     }
     s += `**Coding standards: ${cell(data.standards.status)}.** ${cell(data.standards.reason)} Sources: ${cell(data.standards.sources.join(', ') || 'none')}.\n\n`;
     s += `**Test layers: ${cell(data.layering.status)}.** ${cell(data.layering.reason)}\n\n`;
+    if (specFiles && !specFiles.length) s += 'No requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n';
+    s += traceTable(data, blob, specFiles);
     if (data.coverage.length) {
       s += '| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n';
       for (const c of data.coverage) s += `| ${cell(`${c.id}: ${c.obligation}`)} | ${cell(`${c.source}; ${c.behaviour ? `${c.behaviour.path}:${c.behaviour.line} — ${c.behaviour.quote}` : 'implementation not located'}`)} | ${cell(c.evidence.map((e) => `${e.layer}: ${e.path}:${e.line} — ${e.quote} (${e.kind}; ${e.proves})`).join('; ') || 'none')} | ${cell(`${c.status}: ${c.reason}`)} |\n`;
@@ -281,6 +355,7 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], parti
     const vn = data.validation_notes || [];
     if (vn.length) s += `<details><summary>Validation notes (${vn.length})</summary>\n\n${vn.map((m) => `- ${redact(m).replace(/\s*\n\s*/g, ' ')}`).join('\n')}\n</details>\n\n`;
   }
+  if (pre.length) s += `### Pre-existing drift (not caused by this PR)\n\n${pre.map((f) => item({ f })).join('\n')}\n`;
   if (items.length) s += `<details><summary>${items.length} more item(s): low confidence, inferred, overflow, unanchored</summary>\n\n${items.map(item).join('\n')}\n</details>\n`;
   return clean(s);
 }
@@ -311,11 +386,13 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
     if (ok.includes(false)) {
       c.status = 'unknown';
       c.reason = 'Could not verify the changed-line, behaviour or test citation.';
+      c.alignment = unknownAlign('A citation could not be verified.');
     }
   }
   const invalid = new Set(data.coverage.filter((c) => c.status === 'unknown').map((c) => c.id));
   data.findings = data.findings.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !invalid.has(id)) }))
     .filter((f) => f.kind === 'standard' || f.obligation_ids.length);
+  settle(data, data.validation_notes ||= []);
   if ((data.standards.status === 'no_rules' && standards.size) || data.standards.sources.some((s) => !standards.has(s))) {
     data.standards = { status: 'not_reviewed', sources: [], reason: 'The standards assessment does not match the trusted rule inventory.' };
     data.findings = data.findings.filter((f) => f.kind !== 'standard');
@@ -324,34 +401,105 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
   return data;
 }
 
+// 1-based first line of text where the (normalised) quote starts, or 0. Never guesses.
+function quoteLine(lines, quote) {
+  const q = norm(quote), qs = String(quote).split('\n').map(norm).filter(Boolean);
+  if (!qs.length) return 0;
+  const win = (i) => norm(lines.slice(i, i + qs.length + 6).join(' ')).includes(q); // tolerates a quote wrapped over a few lines
+  return lines.findIndex((l, i) => norm(l) && win(i) && !win(i + 1)) + 1; // the quote starts on the last line from which it still fits
+}
+
+// context.specFiles (optional): the trusted spec-files.txt allow-list. A requirement citing a repository file outside it is unlinked.
 function verifyRequirements(data, context, read = readFile) {
+  const allow = context.specFiles ? new Set(context.specFiles) : null;
   const note = (s) => { data.not_reviewed = [data.not_reviewed, s].filter(Boolean).join(' '); };
   const invalid = new Set();
   for (const expected of context.criteria || []) {
     const r = data.requirements.find((r) => r.id === expected.id);
-    if (!r) data.requirements.push({ ...expected, obligation_ids: [], reason: 'Structured acceptance criterion was not assessed.' });
+    if (!r) { if (!expected.optional) data.requirements.push({ id: expected.id, source: expected.source, quote: expected.quote, ...(expected.ref && { ref: expected.ref }), ...(expected.line && { line: expected.line }), obligation_ids: [], reason: 'Structured acceptance criterion was not assessed.' }); } // optional (history) criteria are never re-added
     else if (!(r.source === expected.source || r.source.startsWith(`${expected.source} AC `) && /^\d+$/.test(r.source.slice(expected.source.length + 4))) || norm(r.quote) !== norm(expected.quote)) {
       r.obligation_ids.forEach((id) => invalid.add(id));
-      Object.assign(r, expected, { obligation_ids: [], reason: 'Criterion ID did not match its collected source text.' });
+      Object.assign(r, { source: expected.source, quote: expected.quote, obligation_ids: [], reason: 'Criterion ID did not match its collected source text.' });
     } else r.source = expected.source; // "PR body AC 1" is accepted; the collected label is canonical
   }
   for (const r of data.requirements) {
     const label = r.source.replace(/ AC \d+$/, ''); // "PR body AC 3" -> the collected document label
     const collected = (context.documents || []).find((d) => d.source === label);
-    const text = collected ? collected.text : (read(r.source) || []).join('\n');
-    if (!norm(text).includes(norm(r.quote))) {
-      if (!context.unavailable) r.obligation_ids.forEach((id) => invalid.add(id)); // no status file: citations that verify on their own keep their findings
+    const rejected = !collected && allow && specPath(label) && !allow.has(label);
+    const text = rejected ? '' : collected ? collected.text : (read(r.source) || []).join('\n');
+    if (rejected || !norm(text).includes(norm(r.quote))) {
+      if (rejected || !context.unavailable) r.obligation_ids.forEach((id) => invalid.add(id)); // no status file: citations that verify on their own keep their findings
       r.obligation_ids = [];
-      r.reason = 'Could not verify the original criterion wording against its source.';
+      r.reason = rejected ? 'The cited file is not a collected requirement document.' : 'Could not verify the original criterion wording against its source.';
+    } else if (specPath(label)) { // re-derive the line from the quote; a model-supplied line is never trusted
+      const at = quoteLine(text.split('\n'), r.quote);
+      if (at) { r.line = at; r.end = at + String(r.quote).split('\n').length - 1; } else delete r.line;
+    }
+    if (r.pr_quote !== undefined) { // a verified sentence from the PR body, else null
+      const pr = (context.documents || []).find((d) => d.source === 'PR body');
+      if (!(typeof r.pr_quote === 'string' && pr && norm(pr.text).includes(norm(r.pr_quote)))) r.pr_quote = null;
     }
     if (!r.obligation_ids.length) note(`Requirement ${r.id} is not assessed: ${r.reason}`);
   }
   for (const c of data.coverage) if (invalid.has(c.id)) {
     c.status = 'unknown'; c.reason = 'The linked requirement citation could not be verified.';
+    c.alignment = unknownAlign('The linked requirement citation could not be verified.');
   }
   data.findings = data.findings.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !invalid.has(id)) }))
     .filter((f) => f.kind === 'standard' || f.obligation_ids.length);
+  settle(data, data.validation_notes ||= []);
   return data;
+}
+
+// Differential check: an 'introduced' mismatch/impacted becomes 'pre_existing' unless this PR touched the relation, i.e. the
+// requirement item's lines (either side), the behaviour line (RIGHT), or a change in the same hunk as the behaviour.
+function differential(data, maps) {
+  for (const c of data.coverage) {
+    const a = c.alignment;
+    if (!['mismatch', 'impacted'].includes(a.status) || a.since !== 'introduced') continue;
+    const specTouched = data.requirements.filter((r) => r.obligation_ids.includes(c.id)).some((r) => {
+      if (REMOVED.test(r.source)) return true;
+      const m = maps.get(r.source);
+      if (!m || !r.line) return false;
+      for (let l = r.line; l <= (r.end || r.line); l++) if (m.changed.RIGHT.has(l) || m.changed.LEFT.has(l)) return true;
+      return false;
+    });
+    const b = c.behaviour, ch = c.change, mb = b && maps.get(b.path);
+    const behaviourChanged = !!mb && mb.changed.RIGHT.has(b.line);
+    const hunk = mb && ch && ch.path === b.path ? (ch.side === 'LEFT' ? mb.LEFT : mb.RIGHT).get(ch.line) : undefined;
+    const sameHunk = hunk !== undefined && hunk === mb.RIGHT.get(b.line);
+    // (d) the PR modified existing text (hunk has removed lines) at `change`, e.g. a constant defined away from its use.
+    // ponytail: any modified line in that hunk counts, even an unrelated one (a log message edit); upgrade = compare the quote's tokens against `deltas`/the requirement value.
+    const mc = ch && ch.side !== 'LEFT' && maps.get(ch.path), ch_h = mc && mc.changed.RIGHT.has(ch.line) ? mc.RIGHT.get(ch.line) : undefined;
+    const modified = ch_h !== undefined && !data.requirements.some((r) => r.source === ch.path) && [...mc.LEFT.values()].includes(ch_h);
+    if (!(specTouched || behaviourChanged || sameHunk || modified)) c.alignment = { ...a, since: 'pre_existing', reason: `${a.reason} (Downgraded to pre_existing: this PR changed neither the requirement nor the behaviour.)` };
+  }
+}
+
+// reflected_in per requirement with an assessed alignment: did the PR also update the spec, the tests, and say so in its description?
+function reflect(data, maps, reviewable) {
+  for (const r of data.requirements) {
+    const rows = data.coverage.filter((c) => r.obligation_ids.includes(c.id) && ['consistent', 'mismatch', 'impacted'].includes(c.alignment.status));
+    if (!rows.length) continue;
+    const m = maps.get(r.source);
+    let spec = REMOVED.test(r.source);
+    if (m && r.line) for (let l = r.line; l <= (r.end || r.line); l++) if (m.changed.RIGHT.has(l)) spec = true;
+    r.reflected_in = { spec, tests: rows.some((c) => c.evidence.some((e) => reviewable.has(e.path))), pr: typeof r.pr_quote === 'string' && r.pr_quote.length > 0 };
+  }
+}
+
+// Rename-aware maps (git diff -M) for the differential only: diff.patch is written with --no-renames, so a moved file would look wholly changed.
+function renameMaps(base, head, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 })) {
+  const out = new Map();
+  try {
+    const t = git('diff', '-M', '--name-status', '-z', `${base}...${head}`).split('\0');
+    for (let i = 0; i < t.length - 1;) {
+      if (!/^[RC]/.test(t[i++])) { i++; continue; }
+      const [from, to] = [t[i++], t[i++]];
+      out.set(to, parseDiff(git('diff', '-M', '--no-color', '--no-ext-diff', `${base}...${head}`, '--', from, to)).get(to) || parsePatch(''));
+    }
+  } catch { /* fall back to the plain maps */ }
+  return out;
 }
 
 async function run({ github, context, core }) {
@@ -417,18 +565,26 @@ async function run({ github, context, core }) {
       for (const f of await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 })) if (!maps.has(f.filename)) maps.set(f.filename, parsePatch(f.patch));
     } catch { (data.validation_notes ||= []).push('GitHub diff API unavailable; anchored with the local diff only.'); }
   }
+  let specFiles; // the trusted spec allow-list; absent = an older collector, so no restriction
+  try { specFiles = fs.readFileSync(path.join(ctx, 'spec-files.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
   verifyEvidence(data, reviewable, standards, readLines, maps);
   let requirements = null;
-  try { requirements = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')); verifyRequirements(data, requirements, readLines); } catch { requirements = null; }
+  try { requirements = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')); verifyRequirements(data, { ...requirements, specFiles }, readLines); } catch { requirements = null; }
   if (requirements) {
     data.requirements_source = requirements.sources.join(', ') || 'unavailable; changed behaviour only';
     if (requirements.status !== 'available') addNote((requirements.limitations || []).join(' '));
   } else { // no collected documents: quotes verify only against files; unverifiable ones are unassessed but their obligations keep their own citations
-    verifyRequirements(data, { unavailable: true }, readLines);
+    verifyRequirements(data, { unavailable: true, specFiles }, readLines);
     data.requirements_source = 'unavailable; changed behaviour only';
     addNote('Requirement collection status unavailable.');
   }
   if (partial) addNote('Diff truncated; obligations outside the reviewed portion are unknown.');
+  const base = env.BASE_SHA || pr.base?.sha;
+  const dmaps = new Map([...maps, ...(base ? renameMaps(base, headSha, process.env.GITHUB_WORKSPACE || process.cwd()) : [])]);
+  differential(data, dmaps);
+  reflect(data, dmaps, reviewable);
+  const pre = new Set(data.coverage.filter((c) => ['mismatch', 'impacted'].includes(c.alignment.status) && c.alignment.since === 'pre_existing').map((c) => c.id));
+  const preExisting = []; // drift this PR did not cause: summary section only, never inline
 
   const known = new Set();
   for (const c of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: pr.number, per_page: 100 })) {
@@ -443,6 +599,15 @@ async function run({ github, context, core }) {
   const assessed = [];
   const unanchored = []; // items that failed to post or anchor; they go to the summary
   for (let f of data.findings) {
+    if (f.kind === 'spec_mismatch') {
+      const req = data.requirements.find((r) => r.obligation_ids.includes(f.obligation_ids[0]));
+      if (req && specPath(req.source) && req.ref) f = { ...f, source: `${req.source.replace(REMOVED, '')} ${req.ref}` };
+      if (f.obligation_ids.every((id) => pre.has(id))) {
+        const d = snap(f, readLines(f.path));
+        if (d === null) addNote(`Finding citation did not match: ${f.path}:${f.line}.`); else preExisting.push({ ...f, line: f.line + d });
+        continue;
+      }
+    }
     if (f.side === 'LEFT') {
       if (f.kind !== 'standard' && reviewable.has(f.path) && norm(maps.get(f.path)?.changed.LEFT.get(f.line) || '') === norm(f.quote)) {
         assessed.push(f);
@@ -519,10 +684,10 @@ async function run({ github, context, core }) {
   }
   if (unchecked) addNote('The PR head could not be rechecked; results use the event head commit.');
 
-  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, data, items: [...p.summary, ...unanchored], rules, partial, engine, model }));
+  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, data, items: [...p.summary, ...unanchored], rules, partial, engine, model, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}` }));
 }
 
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements });
+Object.assign(module.exports, { parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine });

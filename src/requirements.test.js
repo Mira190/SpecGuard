@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { collectRequirements, extractCriteria } = require('./requirements');
+const { collectRequirements, extractCriteria, leftRanges, blameShas } = require('./requirements');
 
 test('resolves qualified issues without confusing them with local issue numbers', () => {
   const calls = [];
@@ -48,4 +48,50 @@ test('ignores HTML entities and merge-commit text but keeps real references', ()
 test('indented sub-bullets continue their criterion', () => {
   const criteria = extractCriteria([{ source: 'PR body', text: '## Acceptance criteria\n- Parent\n  - sub one\n  - sub two\n- Second' }]);
   assert.deepEqual(criteria.map((r) => r.quote), ['Parent\n- sub one\n- sub two', 'Second']);
+});
+
+const SHA1 = 'a'.repeat(40), SHA2 = 'b'.repeat(40), SHA3 = 'c'.repeat(40);
+
+test('leftRanges lists LEFT ranges of production hunks only', () => {
+  const diff = ['diff --git a/src/a.js b/src/a.js', '@@ -10,3 +10,4 @@ fn', '@@ -30 +31 @@', '@@ -40,0 +41,2 @@',
+    'diff --git a/docs/x.md b/docs/x.md', '@@ -1,2 +1,2 @@', 'diff --git a/src/a.test.js b/src/a.test.js', '@@ -5,2 +5,2 @@'].join('\n');
+  assert.deepEqual(leftRanges(diff), [{ path: 'src/a.js', a: 10, b: 12 }, { path: 'src/a.js', a: 30, b: 30 }]);
+});
+
+test('blameShas ranks commits by blamed line count across hunks', () => {
+  const porcelain = (shas) => shas.map((s, i) => `${s} ${i + 1} ${i + 1}\n\tcode`).join('\n');
+  const calls = [];
+  const diff = 'diff --git a/src/a.js b/src/a.js\n@@ -1,3 +1,3 @@\n@@ -9,2 +9,2 @@';
+  const out = blameShas(diff, (p, a, b) => { calls.push([p, a, b]); return a === 1 ? porcelain([SHA1, SHA2, SHA2]) : porcelain([SHA3, SHA2]); });
+  assert.deepEqual(calls, [['src/a.js', 1, 3], ['src/a.js', 9, 10]]);
+  assert.deepEqual(out, [SHA2, SHA1, SHA3]);
+});
+
+test('history: blame -> PR -> closing issue become optional criteria; direct pushes are skipped', () => {
+  const issues = [];
+  const history = { shas: [SHA1, SHA2], pulls: (sha) => (sha === SHA1 ? [{ number: 7 }] : []),
+    pr: (n) => { assert.equal(n, 7); return { number: 7, title: 'Old', body: '## Acceptance criteria\n- Cap at twice base', closingIssuesReferences: [{ number: 3, url: 'https://github.com/org/app/issues/3' }] }; } };
+  const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'x' }, history, loadIssue: (repo, n) => { issues.push([repo, n]); return { title: 'Issue', body: 'AC 1: never above 2x' }; } });
+  assert.deepEqual(issues, [['org/app', 3]]);
+  assert.deepEqual(r.sources, ['PR body', 'history PR #7', 'history issue #3']);
+  assert.deepEqual(r.criteria.map((c) => [c.id, c.source, c.quote, c.optional]), [['H1', 'history PR #7', 'Cap at twice base', true], ['H2', 'history issue #3', 'never above 2x', true]]);
+  assert.equal(r.status, 'available');
+});
+
+test('history: API failures become limitations and collection continues', () => {
+  const history = { shas: [SHA1, SHA2, SHA3], pulls: (sha) => { if (sha === SHA1) throw new Error('403'); return [{ number: 8 }]; },
+    pr: (n) => ({ number: n, title: 'T', body: '', closingIssuesReferences: [{ number: 4 }] }) };
+  const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'x' }, history, loadIssue: () => { throw new Error('404'); } });
+  assert.equal(r.status, 'partial');
+  assert.ok(r.limitations.some((l) => /Could not map commit aaaaaaa/.test(l)));
+  assert.ok(r.limitations.some((l) => /Could not read history issue org\/app#4/.test(l)));
+  assert.ok(r.sources.includes('history PR #8'));
+  assert.equal(collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'x' }, history: { error: true }, loadIssue: () => assert.fail('none') }).limitations.some((l) => /Historical intent unavailable/.test(l)), true);
+});
+
+test('history: stops at three documents and skips the current PR and already linked issues', () => {
+  const history = { shas: [SHA1, SHA2, SHA3], pulls: (sha) => [{ number: sha === SHA1 ? 9 : sha === SHA2 ? 5 : 6 }],
+    pr: (n) => ({ number: n, title: `PR${n}`, body: '', closingIssuesReferences: [{ number: 1 }, { number: 2 }] }) };
+  const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'Closes #1' }, history, loadIssue: (repo, n) => ({ title: `I${n}`, body: '' }) });
+  assert.deepEqual(r.sources.filter((s) => s.startsWith('history')), ['history PR #5', 'history issue #2', 'history PR #6']);
 });
