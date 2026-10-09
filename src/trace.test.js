@@ -156,6 +156,11 @@ test('parseItems: link reference definitions are not ID items, a bracketed ID wi
   assert.deepEqual(T.parseItems('s.md', doc).map((i) => i.ref), ['REQ-1']);
 });
 
+test('parseItems: HTML comments (template instructions) are skipped', () => {
+  const doc = '<!--\n**ACTION REQUIRED:** a PR must be merged.\n-->\n\n<!-- one liner: it must go -->\nThe node must reserve swap. It shall be off. <!-- tail -->\n';
+  assert.deepEqual(T.parseItems('k.md', doc).map((i) => i.text), ['The node must reserve swap.', 'It shall be off.']);
+});
+
 test('parseItems: a stray triple-backtick line does not invert fencing for the rest of the file', () => {
   const doc = ['# KEP', '``` <<[UNRESOLVED stuff ]>> notes ```', '', 'The node must reserve swap.', '', '```', 'code must stay out.', '```', '', 'It shall be off.'].join('\n');
   assert.deepEqual(T.parseItems('k.md', doc).map((i) => i.text), ['The node must reserve swap.', 'It shall be off.']);

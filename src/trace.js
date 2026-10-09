@@ -142,6 +142,14 @@ function parseItems(file, text) {
     const e = lines.findIndex((l, i) => i > 0 && i < 200 && /^(---|\.\.\.)\s*$/.test(l));
     for (let k = 0; k <= e; k++) fenced[k] = true;
   }
+  if (!feature) { // HTML comments are template instructions, not rendered text
+    let cm = false;
+    lines.forEach((l, i) => {
+      if (fenced[i]) return;
+      if (cm || /^\s*<!--/.test(l)) fenced[i] = true;
+      if (l.lastIndexOf('<!--') > l.lastIndexOf('-->')) cm = true; else if (l.includes('-->')) cm = false;
+    });
+  }
   let cur = null;
   lines.forEach((l, i) => {
     const h = !fenced[i] && !feature && /^(#{1,6})\s+(.+)$/.exec(l);
