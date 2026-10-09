@@ -164,7 +164,10 @@ function loadAnatomy() {
   return m.exports;
 }
 
-const METRICS = [['turns', 'turns'], ['cum', 'cum input (no cache)'], ['cachedStatic', 'cum input (static-prefix cache)'], ['ctx1', 'first-turn ctx'], ['outTok', 'output tok']];
+const r2 = (x) => Math.round(x * 100) / 100;
+const METRICS = [['turns', 'turns'], ['cum', 'cum input (no cache)'], ['cachedStatic', 'cum input (static-prefix cache)'], ['ctx1', 'first-turn ctx'], ['cumFirst', 'cum input: first-turn ctx x turns'], ['cumLater', 'cum input: later-turn growth'], ['calls', 'tool calls'], ['parPerTurn', 'parallel calls/turn'], ['outTok', 'output tok']];
+// usage fields (input/cache tokens) come from the transcripts; derived: tool calls, calls per turn, cum split into the re-sent first-turn context vs what later turns added.
+const derive = (r) => { const calls = r.par.reduce((a, b) => a + b, 0); return { ...r, calls, parPerTurn: calls / r.turns, cumFirst: r.ctx1 * r.turns, cumLater: r.cum - r.ctx1 * r.turns }; };
 
 async function tokens({ ab, transcripts, log = console.log }) {
   const abDir = path.resolve(ab), manifest = loadManifest(abDir), anatomy = loadAnatomy();
@@ -174,16 +177,17 @@ async function tokens({ ab, transcripts, log = console.log }) {
   for (const { f } of list) {
     let r; try { r = await anatomy.parse(f); } catch { continue; }
     const e = r && want.get(fwd(r.dir));
+    if (e) r = derive(r);
     if (e) runs.set(`${e.variant}/${e.id}`, { variant: e.variant, id: e.id, ...Object.fromEntries(METRICS.map(([k]) => [k, r[k]])) });
   }
   const variants = [...new Set(manifest.map((e) => e.variant))], all = [...runs.values()];
   const per = variants.map((name) => {
     const rs = all.filter((r) => r.variant === name), o = { variant: name, runs: rs.length };
-    for (const [k] of METRICS) { o[`${k}_median`] = median(rs.map((r) => r[k])); o[`${k}_mean`] = Math.round(mean(rs.map((r) => r[k])) * 10) / 10; }
+    for (const [k] of METRICS) { o[`${k}_median`] = median(rs.map((r) => r[k])); o[`${k}_mean`] = r2(mean(rs.map((r) => r[k]))); }
     return o;
   });
   log(pad([['variant', 'runs', ...METRICS.flatMap(([, l]) => [`${l} med`, 'mean'])],
-    ...per.map((o) => [o.variant, o.runs, ...METRICS.flatMap(([k]) => [Math.round(o[`${k}_median`]), Math.round(o[`${k}_mean`])])])]));
+    ...per.map((o) => [o.variant, o.runs, ...METRICS.flatMap(([k]) => [r2(o[`${k}_median`]), r2(o[`${k}_mean`])])])]));
   // paired: ids completed by both the baseline (first variant) and each other variant
   const paired = [];
   for (const name of variants.slice(1)) {
@@ -191,7 +195,7 @@ async function tokens({ ab, transcripts, log = console.log }) {
     const p = { baseline: variants[0], variant: name, n: ids.length, ids, metrics: {} };
     for (const [k, label] of METRICS) {
       const d = ids.map((id) => runs.get(`${name}/${id}`)[k] - runs.get(`${variants[0]}/${id}`)[k]);
-      p.metrics[k] = { mean_delta: Math.round(mean(d) * 10) / 10, deltas: d };
+      p.metrics[k] = { mean_delta: r2(mean(d)), deltas: d.map(r2) };
       log(`paired ${name} - ${variants[0]} (n=${ids.length}) ${label}: mean delta ${p.metrics[k].mean_delta}; per id ${ids.map((id, i) => `${id}:${d[i]}`).join(' ')}`);
     }
     paired.push(p);

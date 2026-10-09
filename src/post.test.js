@@ -58,7 +58,7 @@ test('degrades only the part with a semantic problem and records a note', () => 
   d = run(report({ coverage: [row('missing_test'), row('missing_test')] }));
   assert.equal(d.coverage.length, 1); noted(d, /duplicate id/);
   d = run(report({ coverage: [row('missing_test', { evidence: [evidence] })] }));
-  assert.deepEqual([d.coverage[0].status, d.findings.length], ['unknown', 0]);
+  assert.deepEqual([d.coverage[0].status, d.findings.length], ['missing_test', 1]); // assertion evidence on a missing_test row is dropped, not the row
   d = run(report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'q', obligation_ids: ['nope'], reason: 'r' }, { id: 'R2' }] }));
   assert.deepEqual([d.requirements.length, d.requirements[0].obligation_ids], [1, []]);
   d = run(report({ standards: { status: 'checked', sources: [], reason: 'ok' }, findings: [finding(), finding('standard')] }));
@@ -447,6 +447,12 @@ test('t3: a skipped test cited as disabled evidence keeps its missing_test findi
 test('a missing_test row may not cite assertion evidence, and covered still needs a real unit assertion', () => {
   const noted = (c) => { const d = report({ coverage: [c], findings: [finding()] }); post.validate(d); return d.validation_notes.join(); };
   assert.match(noted(row('missing_test', { evidence: [{ ...evidence }] })), /cannot claim assertion evidence/);
+  // ... but the row and its finding survive: dropping a verified finding over a harmless evidence field lost real bug hits
+  const d = report({ coverage: [row('missing_test', { evidence: [{ ...evidence }] })], findings: [finding()] });
+  assert.equal(post.validate(d).ok, true);
+  assert.equal(d.coverage[0].status, 'missing_test');
+  assert.deepEqual(d.coverage[0].evidence, []);
+  assert.equal(d.findings.length, 1);
   assert.match(noted(row('covered', { evidence: [{ ...evidence, kind: 'disabled' }] })), /covered needs a current unit assertion/);
 });
 
@@ -1378,4 +1384,17 @@ test('definesUsedBy links a changed line to the behaviour only when it defines a
   assert.equal(post.definesUsedBy('const CAP_LIMIT = 3;', 'return Math.min(raw, CAP_LIMIT_OTHER)'), false); // whole word only
   assert.equal(post.definesUsedBy("console.log('premium', base)", 'return Math.min(raw, base * CAP)'), false);
   assert.equal(post.definesUsedBy(undefined, 'x'), false);
+});
+
+test("a finding on a row the model marked covered is kept at low confidence and the row follows it", () => {
+  const d = report({ coverage: [row("covered")], findings: [finding()] });
+  assert.equal(post.validate(d).ok, true);
+  assert.equal(d.findings.length, 1);
+  assert.equal(d.findings[0].confidence, "low");
+  assert.equal(d.coverage[0].status, "missing_test");
+  assert.ok(d.validation_notes.some((n) => /contradicted finding/.test(n)), d.validation_notes.join("|"));
+  // unknown or malformed rows still drop the finding (their citations were not verified)
+  const u = report({ coverage: [row("covered", { evidence: [] })], findings: [finding()] });
+  post.validate(u);
+  assert.equal(u.findings.length, 0);
 });

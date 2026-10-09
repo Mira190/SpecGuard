@@ -55,7 +55,7 @@ async function parse(file) {
     }
   }
   if (!first || !/review model inside a CI code-review Action/.test(first)) return null;
-  const pm = first.match(/([A-Za-z]:\\[^\s`]*?)\\prompt\.md/);
+  const pm = first.match(/([A-Za-z]:\\[^\s`]*?)\\(?:prompt|task)\.md/);
   const dir = pm ? pm[1] : ''; const caseName = dir.split('\\').pop();
   const turns = order.map(k => calls.get(k)).filter(c => c.usage);
   if (turns.length < 2) return null;
