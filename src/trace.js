@@ -12,6 +12,8 @@ const SKIP_NAME = /(^|\/)(CHANGELOG|LICENSE|CODE_OF_CONDUCT|SECURITY)[^/]*$/i;
 const UNREADABLE = /\.(docx|pdf|xlsx)$/i, UNREADABLE_NAME = /(requirement|spec|prd|acceptance)/i;
 const HINTS = [/(^|\/)(docs?|spec|specs|requirements)\//i, /\.feature$/i, /(^|\/)adrs?\//i, /^\.kiro\/specs\//, /^openspec\//];
 const MAX_FILE = 256 * 1024, MAX_CANDIDATES = 2000, MAX_DOCS = 500, INDEX_CAP = 60 * 1024;
+const MAX_CRITERIA = 200, MAX_CHANGED_DOCS = 100, MAX_PATCH = 16 << 20, MAX_LINE = 300, MAX_DOC_BYTES = 48 << 20;
+const CONTROL = /[\x00-\x1F\x7F]/; // git allows these in paths; every list we write is newline-delimited
 const WIN = 40, STEP = 20;
 // Mirrors the globs in collect.sh. ponytail: duplicated, keep in sync (collect.sh could export them later).
 const EXT5 = ['md', 'mdx', 'rst', 'txt', 'adoc'];
@@ -85,8 +87,9 @@ function buildIndex(docs, terms, k1 = 1.2, b = 0.75) {
 
 const slug = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
 const clean = (s) => String(s).replace(/[​-‏‪-‮⁠-⁤﻿]/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-const ID = String.raw`(?:AC\s?\d+|[A-Z][A-Z0-9]*(?:[-_.][A-Z0-9]+)*-?\d+(?:\.\d+)*)`;
+const ID = String.raw`(?:AC\s?\d+|[A-Z][A-Z0-9]*(?:[-_.][A-Z0-9]+)*(?<=\d))`; // linear: quantifiers are separated by distinct delimiters; the last char must be a digit
 const ID_LINE = new RegExp(String.raw`^\s*(?:[-*+]\s+|\d+[.)]\s+)?(#{1,6}\s+)?[*_\[\`]*(${ID})[*_\]\`]*\s*[:：.)\-—–]`);
+const idLine = (l) => ID_LINE.exec(l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l); // an ID label sits in the first MAX_LINE chars
 const AC_HEAD = /^(acceptance criteria|acceptance tests|验收标准|验收条件|AC)\s*[:：]?$/i;
 const LIST_ITEM = /^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)(.+)$/;
 const GHERKIN = /^\s*(Feature|Rule|Scenario Outline|Scenario Template|Scenario|Example(?!s))\s*:\s*(.*)$/;
@@ -122,12 +125,12 @@ function parseItems(file, text) {
   // 1. ID'd items
   for (let i = 0; i < n; i++) {
     if (fenced[i] || covered.has(i)) continue;
-    const m = ID_LINE.exec(lines[i]);
+    const m = idLine(lines[i]);
     if (!m) continue;
     const level = m[1] ? m[1].trim().length : 0;
     let j = i + 1;
     for (; j < n; j++) {
-      if (!fenced[j] && ID_LINE.test(lines[j])) break;
+      if (!fenced[j] && idLine(lines[j])) break;
       const h = !feature && !fenced[j] && /^(#{1,6})\s/.exec(lines[j]);
       if (h && (!level || h[1].length <= level)) break;
       if (!level && !lines[j].trim()) break;
@@ -272,11 +275,13 @@ function codeHunks(patch) {
 
 // ---- git plumbing -------------------------------------------------------------------------------------------
 const git = (cwd, args, o = {}) => execFileSync('git', args, { cwd, maxBuffer: 1 << 30, stdio: ['pipe', 'pipe', 'pipe'], ...o });
-function lsTree(cwd, rev) {
+// Entries whose path holds a control character (newline, CR...) are dropped and counted in skipped.n.
+function lsTree(cwd, rev, skipped = { n: 0 }) {
   const out = [];
   for (const r of git(cwd, ['ls-tree', '-r', '-z', '-l', rev], { encoding: 'utf8' }).split('\0')) {
     const m = /^(\d{6}) (\w+) ([0-9a-f]+) +(\d+|-)\t([\s\S]*)$/.exec(r);
-    if (m && m[2] === 'blob' && m[1] !== '120000') out.push({ path: m[5], sha: m[3], size: +m[4] });
+    if (!m || m[2] !== 'blob' || m[1] === '120000') continue;
+    if (CONTROL.test(m[5])) skipped.n++; else out.push({ path: m[5], sha: m[3], size: +m[4] });
   }
   return out;
 }
@@ -284,7 +289,7 @@ function lsTree(cwd, rev) {
 function catBatch(cwd, specs) {
   const out = [];
   for (let s = 0; s < specs.length; s += 300) {
-    const part = specs.slice(s, s + 300);
+    const part = specs.slice(s, s + 300).map((x) => (CONTROL.test(x) ? '0'.repeat(40) : x)); // a newline would desync the batch protocol; this object is missing
     const buf = git(cwd, ['cat-file', '--batch'], { input: part.join('\n') + '\n' });
     let pos = 0;
     for (let k = 0; k < part.length; k++) {
@@ -311,20 +316,24 @@ const byRank = (a, b) => rank(a.path) - rank(b.path) || (a.path < b.path ? -1 : 
 function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
   const { inc, exc } = parseReqPaths(reqPaths), limitations = [];
   const extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
-  const entries = lsTree(cwd, head);
+  const skipped = { n: 0 }, entries = lsTree(cwd, head, skipped);
+  if (skipped.n) limitations.push(`${skipped.n} tracked path(s) containing a control character were ignored.`);
   const ruled = (p) => RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g));
   const forced = (p) => inc.some((g) => matchGlob(p, g)), excluded = (p) => exc.some((g) => matchGlob(p, g));
   for (const e of entries) if (UNREADABLE.test(e.path) && UNREADABLE_NAME.test(path.basename(e.path)) && !excluded(e.path)) limitations.push(`requirement-like file not readable: ${e.path}`);
   let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
     && ((DOC_EXT.test(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
   if (cands.length > MAX_CANDIDATES) { limitations.push(`${cands.length - MAX_CANDIDATES} candidate documents skipped by the ${MAX_CANDIDATES}-file limit.`); cands = cands.slice(0, MAX_CANDIDATES); }
+  let budget = MAX_DOC_BYTES, over = false;
   const docs = new Map(), bufs = catBatch(cwd, cands.map((c) => c.sha));
   cands.forEach((c, k) => {
     const buf = bufs[k];
     if (!buf || buf.includes(0)) return;
+    if ((budget -= buf.length) < 0) { over = true; return; }
     const text = buf.toString('utf8'), items = parseItems(c.path, text);
     if (isRequirementDoc(items) || forced(c.path)) docs.set(c.path, { path: c.path, text, items, forced: forced(c.path) });
   });
+  if (over) limitations.push(`Document parsing stopped at the ${MAX_DOC_BYTES >> 20} MB byte budget; later candidate documents were skipped.`);
   let list = [...docs.values()].sort(byRank);
   if (list.length > MAX_DOCS) { limitations.push(`${list.length - MAX_DOCS} requirement documents skipped by the ${MAX_DOCS}-file limit.`); list = list.slice(0, MAX_DOCS); }
   return { entries, docs: new Map(list.map((d) => [d.path, d])), limitations, ruled, forced, excluded };
@@ -335,7 +344,7 @@ function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '
   const { inc, exc } = parseReqPaths(reqPaths), extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
   const eligible = (p) => !exc.some((g) => matchGlob(p, g)) && (inc.some((g) => matchGlob(p, g))
     || (DOC_EXT.test(p) && !SKIP_NAME.test(p) && !RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g))));
-  const todo = paths.filter(eligible);
+  const todo = paths.filter((p) => !CONTROL.test(p) && eligible(p));
   const read = (rev) => catBatch(cwd, todo.map((p) => `${rev}:${p}`));
   const heads = todo.length ? read(head) : [], bases = todo.length && base ? read(base) : [];
   const ok = new Set(todo.filter((p, k) => {
@@ -492,15 +501,15 @@ function occurrences({ cwd, head, crits, maps }) {
 
 // Writes spec-files.txt, requirements-index.md, trace-candidates.json and extends requirements-status.json.
 // Returns the number of changed normative items.
-function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtra = '' }) {
+function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtra = '', maxCriteria = MAX_CRITERIA, maxPatch = MAX_PATCH }) {
   const cand = { requirement_to_code: [], code_to_requirement: [], occurrences: [], limitations: [] };
   const write = (name, s) => fs.writeFileSync(path.join(ctx, name), s);
   const statusFile = path.join(ctx, 'requirements-status.json');
   let status = {};
   try { status = JSON.parse(fs.readFileSync(statusFile, 'utf8')); } catch { /* requirements.js did not run */ }
-  const spec = { files: 0, items: 0, limitations: cand.limitations };
+  const spec = { files: 0, items: 0, added: [], limitations: cand.limitations };
   const finish = (n, specFiles = [], index = '') => {
-    write('spec-files.txt', specFiles.map((f) => f + '\n').join(''));
+    write('spec-files.txt', specFiles.filter((f) => !CONTROL.test(f)).map((f) => f + '\n').join(''));
     write('requirements-index.md', index);
     write('trace-candidates.json', JSON.stringify(cand, null, 2) + '\n');
     write('requirements-status.json', JSON.stringify({ ...status, spec }, null, 2) + '\n');
@@ -513,19 +522,28 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   const docs = [...d.docs.values()], allItems = docs.flatMap((x) => x.items);
   spec.files = docs.length; spec.items = allItems.length;
 
-  const patch = git(cwd, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `${base}...${head}`], { encoding: 'utf8' });
+  let patch;
+  try { patch = git(cwd, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `${base}...${head}`], { encoding: 'utf8', maxBuffer: maxPatch }); }
+  catch (e) { // an oversized diff: requirement tracing is skipped for this PR
+    if (e.code !== 'ENOBUFS') throw e;
+    cand.limitations.push(`The diff exceeded ${maxPatch >> 10} KB; requirement tracing was skipped for this PR.`);
+    return finish(0, docs.map((x) => x.path));
+  }
   const maps = parseDiff(patch);
   // changed requirement items (head docs, plus docs that were requirement docs at base: deleted or emptied)
-  const specCand = [...maps.keys()].filter((p) => !d.excluded(p) && (d.docs.has(p) || (!d.ruled(p) && DOC_EXT.test(p) && !SKIP_NAME.test(p)) || d.forced(p)));
+  let specCand = [...maps.keys()].filter((p) => !CONTROL.test(p) && !d.excluded(p) && (d.docs.has(p) || (!d.ruled(p) && DOC_EXT.test(p) && !SKIP_NAME.test(p)) || d.forced(p)));
+  if (specCand.length > MAX_CHANGED_DOCS) { cand.limitations.push(`${specCand.length - MAX_CHANGED_DOCS} changed requirement document(s) skipped by the ${MAX_CHANGED_DOCS}-document limit.`); specCand = specCand.slice(0, MAX_CHANGED_DOCS); }
   const baseBufs = specCand.length ? catBatch(cwd, specCand.map((p) => `${base}:${p}`)) : [];
   const files = [];
   specCand.forEach((p, k) => {
     const hd = d.docs.get(p), b = baseBufs[k];
     const baseItems = b && !b.includes(0) && b.length <= MAX_FILE ? parseItems(p, b.toString('utf8')) : [];
     if (!hd && !isRequirementDoc(baseItems)) return;
+    if (hd && !b) spec.added.push(p); // authored in this PR: no BASE version to compare with
     files.push({ path: p, headItems: hd ? hd.items : [], baseItems, text: hd ? hd.text : null });
   });
-  const changed = changedItems(files, maps);
+  let changed = changedItems(files, maps);
+  if (changed.length > maxCriteria) { cand.limitations.push(`${changed.length - maxCriteria} changed requirement item(s) beyond the ${maxCriteria}-criteria limit were not traced; the criteria shown are only the first ${maxCriteria}.`); changed = changed.slice(0, maxCriteria); }
   const documents = [], criteria = [];
   changed.forEach((c, i) => {
     const { path: p, removedRaw, ...rest } = c;

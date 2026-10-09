@@ -247,7 +247,7 @@ test('run writes the contract: S criterion, changed document, spec summary, stdo
   assert.match(s1.previous, /30 days/); assert.match(s1.quote, /45 days/);
   assert.deepEqual(s.documents.map((d) => d.source), ['PR body', 'docs/specs/claims.md']);
   assert.match(s.documents[1].text, /45 days/);
-  assert.deepEqual(s.spec, { files: 1, items: 5, limitations: [] });
+  assert.deepEqual(s.spec, { files: 1, items: 5, added: [], limitations: [] });
   assert.deepEqual(Object.keys(c), ['requirement_to_code', 'code_to_requirement', 'occurrences', 'limitations']);
   assert.deepEqual(Object.keys(c.requirement_to_code[0]), ['criterion', 'code', 'tests']);
   assert.deepEqual(Object.keys(c.requirement_to_code[0].code[0]), ['path', 'line', 'end', 'score', 'hits']);
@@ -325,4 +325,67 @@ test('CLI classify and full run use the env contract and print the count', (t) =
   assert.equal(run('classify', 'docs/specs/claims.md').trim(), 'docs/specs/claims.md');
   assert.equal(execFileSync(process.execPath, [path.join(__dirname, 'trace.js'), 'classify', 'docs/specs/claims.md'], { cwd: r.dir, env: { ...env, TRACE: 'off' }, encoding: 'utf8' }), '');
   assert.ok(fs.existsSync(path.join(r.ctx, 'trace-candidates.json')));
+});
+
+// ---- hardening: control-character paths, ReDoS, caps, change flags ----
+// A repo whose tree is built with `git update-index -z`, so it can hold paths (newlines) a Windows checkout cannot.
+function rawRepo(t, files) {
+  const dir = tmp(t);
+  const g = (input, ...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...a], { cwd: dir, input, encoding: 'utf8' }).trim();
+  g(undefined, 'init', '-q');
+  const tree = (m) => { // nested `git mktree -z` (git update-index refuses newline paths)
+    const level = (entries) => {
+      const kids = new Map(), leaves = [];
+      for (const [p, text] of entries) {
+        const i = p.indexOf('/');
+        if (i < 0) leaves.push(`100644 blob ${g(text, 'hash-object', '-w', '--stdin')}\t${p}\0`);
+        else kids.set(p.slice(0, i), [...(kids.get(p.slice(0, i)) || []), [p.slice(i + 1), text]]);
+      }
+      for (const [name, sub] of kids) leaves.push(`040000 tree ${level(sub)}\t${name}\0`);
+      return g(leaves.join(''), 'mktree', '-z');
+    };
+    return level(Object.entries(m));
+  };
+  const commit = (m, parent) => g(undefined, 'commit-tree', tree(m), ...(parent ? ['-p', parent] : []), '-m', 'c');
+  return { dir, commit };
+}
+const SPEC_TEXT = '# Claims\n\nAC-1: file within 30 days\nAC-2: pay within 5 days\n';
+
+test('F2/F9: a tracked path containing a newline is ignored by discover and classify, and never reaches spec-files.txt', (t) => {
+  const r = rawRepo(t, {});
+  const base = r.commit({ 'docs/spec.md': SPEC_TEXT });
+  const head = r.commit({ 'docs/spec.md': SPEC_TEXT.replace('30 days', '45 days'), 'zz\n.md': SPEC_TEXT, 'evil\n.git/config\n.md': SPEC_TEXT }, base);
+  const ctx = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-ctx-')); t.after(() => fs.rmSync(ctx, { recursive: true, force: true }));
+  T.run({ cwd: r.dir, base, head, ctx });
+  assert.equal(out({ ctx }, 'spec-files.txt'), 'docs/spec.md\n');
+  assert.match(JSON.parse(out({ ctx }, 'requirements-status.json')).spec.limitations.join(' '), /control character/);
+  assert.deepEqual(T.classify({ cwd: r.dir, base, head, paths: ['zz\n.md', 'docs/spec.md'] }), ['docs/spec.md']);
+  assert.deepEqual(T.classify({ cwd: r.dir, base, head, paths: ['docs/spec.md', 'zz\n.md'] }), ['docs/spec.md']);
+});
+
+test('F3a: ID_LINE is linear on the red team ReDoS inputs', () => {
+  const cases = ['A' + '1'.repeat(262144) + 'x', 'A1'.repeat(131072) + 'x', 'A' + '.1'.repeat(131072) + 'x', 'A' + '-1'.repeat(131072) + 'x', 'It must. '.repeat(29000)];
+  const t0 = Date.now();
+  for (const c of cases) T.parseItems('d.md', c);
+  assert.ok(Date.now() - t0 < 3000, `took ${Date.now() - t0} ms`);
+  // behaviour preserved
+  assert.deepEqual(T.parseItems('d.md', 'REQ-12.3: must do x\nAB-: no\nNOTE: no\n').map((i) => i.ref), ['REQ-12.3']);
+});
+
+test('F3c: criteria are capped with a limitation, and the diff input is capped', (t) => {
+  const many = (n) => Array.from({ length: n }, (_, i) => `AC-${i + 1}: file within ${i + 1} days`).join('\n') + '\n';
+  const r = repo(t, { 'docs/spec.md': many(30).replace(/within \d+/g, 'within 1') }, { 'docs/spec.md': many(30) });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, maxCriteria: 5 });
+  const s = status(r);
+  assert.equal(s.criteria.length, 5);
+  assert.match(s.spec.limitations.join(' '), /criteria.*5/);
+  const r2 = repo(t, { 'docs/spec.md': SPEC_TEXT }, { 'docs/spec.md': SPEC_TEXT.replace('30 days', '45 days') });
+  assert.equal(T.run({ cwd: r2.dir, base: r2.base, head: r2.head, ctx: r2.ctx, maxPatch: 10 }), 0);
+  assert.match(status(r2).spec.limitations.join(' '), /diff.*exceeded/);
+});
+
+test('F4: spec.added lists requirement documents that did not exist at BASE', (t) => {
+  const r = repo(t, { 'src.js': 'x\n' }, { 'docs/new.md': SPEC_TEXT });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  assert.deepEqual(status(r).spec.added, ['docs/new.md']);
 });
