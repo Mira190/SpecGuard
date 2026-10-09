@@ -1086,3 +1086,30 @@ test('pre-existing drift with no changed line: change null + needs_human + a fin
   assert.match(s.calls.summary[0].body, /### Pre-existing drift \(not caused by this PR\)/);
   assert.match(s.calls.summary[0].body, /Code contradicts AC-4/);
 });
+
+test('CRLF and lone CR: parsePatch, readFile, snap, quoteLine and the requirement quote checks match LF', (t) => {
+  const lfPatch = '@@ -1,2 +1,3 @@\n keep\n-old 30\n+new 45\n+added\n';
+  const crPatch = lfPatch.replace(/\n/g, '\r\n');
+  assert.deepEqual(post.parsePatch(crPatch), post.parsePatch(lfPatch));
+  assert.equal(post.parsePatch(crPatch).changed.RIGHT.get(2), 'new 45');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-post-crlf-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, 'a.md'), 'one\r\nAC-4: late after 45 days\r\n\r\nthree\rfour\n');
+  const old = process.env.GITHUB_WORKSPACE; process.env.GITHUB_WORKSPACE = dir;
+  t.after(() => { if (old === undefined) delete process.env.GITHUB_WORKSPACE; else process.env.GITHUB_WORKSPACE = old; });
+  const lines = post.readFile('a.md');
+  assert.deepEqual(lines.slice(0, 3), ['one', 'AC-4: late after 45 days', '']);
+  assert.equal(post.snap({ line: 2, quote: 'AC-4: late after 45 days' }, lines), 0);
+  assert.equal(post.snap({ line: 2, quote: 'AC-4: late after 45 days\r' }, ['x', 'AC-4: late after 45 days\r']), 0); // CRLF lines read some other way
+  assert.equal(post.quoteLine(lines, 'AC-4: late after 45 days'), 2);
+  assert.equal(post.quoteLine(['x\r', 'AC-4: late\r', 'after 45 days\r'], 'AC-4: late\nafter 45 days'), 2);
+  assert.equal(post.quoteLine(lines, 'three four'), 4); // a lone CR is whitespace
+  const mk = (source, quote) => ({ requirements: [{ id: 'Q1', source, quote, obligation_ids: ['O1'], reason: 'r' }],
+    coverage: [{ id: 'O1', status: 'needs_human', reason: 'r', alignment: { status: 'unknown', reason: 'r' }, evidence: [], behaviour: null, change: null }], findings: [] });
+  for (const [doc, q] of [['AC-4: late\r\nafter 45 days\r\n', 'AC-4: late\nafter 45 days'], ['AC-4: late\nafter 45 days\n', 'AC-4: late\r\nafter 45 days'], ['AC-4: late\rafter 45 days', 'AC-4: late after 45 days']]) {
+    const d = post.verifyRequirements(mk('PR body', q), { documents: [{ source: 'PR body', text: doc }], criteria: [{ id: 'Q1', source: 'PR body', quote: q }] });
+    assert.deepEqual(d.requirements[0].obligation_ids, ['O1'], JSON.stringify([doc, q]));
+  }
+  const d = post.verifyRequirements(mk('a.md', 'AC-4: late after 45 days'), { specFiles: ['a.md'] }, post.readFile);
+  assert.deepEqual([d.requirements[0].obligation_ids, d.requirements[0].line], [['O1'], 2]);
+});

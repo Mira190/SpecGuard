@@ -21,7 +21,7 @@ const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 function parsePatch(patch) {
   const m = { RIGHT: new Map(), LEFT: new Map(), changed: { RIGHT: new Map(), LEFT: new Map() } };
   let h = -1, l = 0, r = 0;
-  for (const ln of String(patch || '').split('\n')) {
+  for (const ln of String(patch || '').split(/\r?\n/)) { // CRLF files: content lines end in CR
     const hd = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(ln);
     if (hd) { h++; l = +hd[1]; r = +hd[2]; continue; }
     if (h < 0 || ln === '' || ln[0] === '\\') continue;
@@ -366,7 +366,7 @@ const readFile = (p) => {
     const target = fs.realpathSync(path.resolve(root, p));
     const relative = path.relative(root, target);
     if (!relative || relative.startsWith('..' + path.sep) || relative === '..' || path.isAbsolute(relative)) return null;
-    return fs.readFileSync(target, 'utf8').split('\n');
+    return fs.readFileSync(target, 'utf8').split(/\r?\n/);
   } catch { return null; }
 };
 
@@ -690,4 +690,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine });
+Object.assign(module.exports, { parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, readFile });
