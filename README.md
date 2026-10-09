@@ -84,6 +84,7 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `trace` | `auto` | `auto` links requirement docs and changed code in both directions when any requirement doc exists; `off` disables it. |
 | `include_bots` | `false` | Bot-authored PRs (Dependabot, Renovate, any `[bot]` author) are skipped before the model runs; `true` reviews them. |
 | `force` | `false` | A head SHA that already has a SpecGuard summary is skipped (idempotent rerun, no tokens spent); `true` reviews it again. Closed PRs are always skipped. |
+| `resolve_stale` | `true` | After a normally completed (not truncated) review, resolves SpecGuard's own review threads that have no replies and whose finding is no longer reported (at most 20 per run). Needs `pull-requests: write`; failures are noted and never fail the run. `false` disables it. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
 | `claude_version` | `2.1.290` | Pinned `@anthropic-ai/claude-code` (>= 2.1.205). |
 
