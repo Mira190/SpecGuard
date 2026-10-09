@@ -95,3 +95,15 @@ test('history: stops at three documents and skips the current PR and already lin
   const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'Closes #1' }, history, loadIssue: (repo, n) => ({ title: `I${n}`, body: '' }) });
   assert.deepEqual(r.sources.filter((s) => s.startsWith('history')), ['history PR #5', 'history issue #2', 'history PR #6']);
 });
+
+test('GitHub CRLF bodies: sanitised, criteria inventoried without CR, a lone CR is a line break', () => {
+  const body = '# Acceptance criteria\r\n1. Reject zero.\r\n2. Accept positive values.\r\n   Keep precision.\r\n\r\nAC 3: Preserve existing callers.\r\n';
+  const lf = body.replace(/\r\n/g, '\n');
+  const want = [['R1', 'Reject zero.'], ['R2', 'Accept positive values.\nKeep precision.'], ['R3', 'Preserve existing callers.']];
+  for (const text of [body, lf, body.replace(/\r\n/g, '\r')]) assert.deepEqual(extractCriteria([{ source: 'PR body', text }]).map((r) => [r.id, r.quote]), want);
+  const r = collectRequirements({ repo: 'o/a', pr: { number: 1, title: 'T', body }, loadIssue: () => assert.fail('none') });
+  assert.doesNotMatch(r.text, /\r/);
+  assert.match(r.text, /1\. Reject zero\.\n2\. Accept positive values\.\n {3}Keep precision\./);
+  assert.deepEqual(extractCriteria([{ source: 'PR body', text: r.text }]).map((c) => c.quote), want.map((w) => w[1]));
+  assert.equal(collectRequirements({ repo: 'o/a', pr: { number: 1, title: 'a\rb', body: 'x\ry' }, loadIssue: () => assert.fail('none') }).text.includes('x\ny'), true);
+});
