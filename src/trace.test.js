@@ -115,6 +115,98 @@ test('isRequirementDoc needs one structured item or two normative sentences', ()
   assert.equal(T.isRequirementDoc([{ kind: 'gherkin' }]), true);
 });
 
+test('parseItems: a bare Example: is a scenario only in a .feature file, never in prose or YAML front matter', () => {
+  assert.deepEqual(T.parseItems('docs/opt.md', '---\nExample:\n- --foo $URL\n---\n# --foo\nDo foo.\n\nExample: run it twice.\n'), []);
+  assert.deepEqual(T.parseItems('f.feature', 'Feature: F\n  Example: Plain\n    Given x\n').map((i) => [i.ref, i.kind]), [['Scenario: Plain', 'gherkin']]);
+});
+
+test('parseItems: Gherkin in Markdown needs Given/When/Then steps or a fenced gherkin block', () => {
+  assert.deepEqual(T.parseItems('r.md', '# T\n\nScenario: a title only\n\nSome text.\n'), []);
+  const prose = T.parseItems('r.md', 'Scenario: Late\n  Given a claim\n  When it is late\n  Then it is refused\n\n# Next\n');
+  assert.deepEqual(prose.map((i) => [i.ref, i.line, i.end]), [['Scenario: Late', 1, 4]]);
+  const fenced = T.parseItems('r.md', '# T\n\n```gherkin\nScenario: Fenced\n  Given a\n  Then b\n```\n\nAfter.\n');
+  assert.deepEqual(fenced.map((i) => [i.ref, i.line, i.end]), [['Scenario: Fenced', 4, 6]]);
+  assert.deepEqual(T.parseItems('r.md', '```bash\nScenario: x\n  Given a\n```\n'), []);
+});
+
+test('parseItems: a Scenario: inside a docstring does not start an item', () => {
+  const text = 'Feature: F\n  Scenario: Outer\n    Given a file\n    """\n    Scenario: Nested\n      Given b\n    """\n    Then ok\n';
+  assert.deepEqual(T.parseItems('d.feature', text).map((i) => [i.ref, i.line, i.end]), [['Scenario: Outer', 2, 8]]);
+});
+
+test('parseItems: a title ID (# KEP-1: Title) over a long document is not one item; its sections still are', () => {
+  const body = Array.from({ length: 80 }, (_, i) => `Line ${i}.`).join('\n');
+  const doc = `# KEP-7: Swap support\n\n${body}\n\n## Requirements\n\nThe node must reserve swap. It shall be off by default.\n`;
+  const items = T.parseItems('keps/7/README.md', doc);
+  assert.ok(!items.some((i) => i.kind === 'id'));
+  assert.deepEqual(items.map((i) => i.kind), ['normative', 'normative']);
+  assert.equal(T.parseItems('s.md', '# REQ-7: Short title\n\nOne rule.\n')[0].ref, 'REQ-7'); // a small document may be one requirement
+});
+
+test('parseItems: an ID heading spanning many lines stops at its first sub-heading and is capped', () => {
+  const doc = ['## REQ-1: Big', 'Intro.', '### Detail', ...Array.from({ length: 100 }, (_, i) => `Detail ${i}.`)].join('\n');
+  const [it] = T.parseItems('s.md', doc);
+  assert.deepEqual([it.ref, it.line, it.end], ['REQ-1', 1, 2]);
+  const flat = ['## REQ-2: Long', ...Array.from({ length: 100 }, () => 'Text.')].join('\n');
+  assert.equal(T.parseItems('s.md', flat)[0].end, 60);
+});
+
+test('parseItems: link reference definitions are not ID items, a bracketed ID with prose still is', () => {
+  const doc = '[KEP-4671]: https://kep.k8s.io/4671\n[RFC-2119]: ./rfc.md "title"\n[KEP-5732]: Topology-aware workload scheduling.\n- [KEP-4671]: Gang Scheduling.\n[KEP-1287: In-Place Scaling][kep-1287]. It goes on.\n- [KEP-5972: Dynamic Containers](https://x.io/5972) permits it.\n[REQ-1]: The system must refuse zero.\n';
+  assert.deepEqual(T.parseItems('s.md', doc).map((i) => i.ref), ['REQ-1']);
+});
+
+test('parseItems: HTML comments (template instructions) are skipped', () => {
+  const doc = '<!--\n**ACTION REQUIRED:** a PR must be merged.\n-->\n\n<!-- one liner: it must go -->\nThe node must reserve swap. It shall be off. <!-- tail -->\n';
+  assert.deepEqual(T.parseItems('k.md', doc).map((i) => i.text), ['The node must reserve swap.', 'It shall be off.']);
+});
+
+test('parseItems: a stray triple-backtick line does not invert fencing for the rest of the file', () => {
+  const doc = ['# KEP', '``` <<[UNRESOLVED stuff ]>> notes ```', '', 'The node must reserve swap.', '', '```', 'code must stay out.', '```', '', 'It shall be off.'].join('\n');
+  assert.deepEqual(T.parseItems('k.md', doc).map((i) => i.text), ['The node must reserve swap.', 'It shall be off.']);
+  // an opener that never closes: re-parse without fences instead of dropping the rest of the file
+  assert.deepEqual(T.parseItems('k.md', '```\nThe node must reserve swap.\nIt shall be off.\n').map((i) => i.text), ['The node must reserve swap.', 'It shall be off.']);
+  // a closer needs the same character, no info string, at least the opening length
+  assert.deepEqual(T.parseItems('k.md', '````\n```js\nIt must stay out.\n````\nIt shall count.\n').map((i) => i.text), ['It shall count.']);
+});
+
+test('parseItems: must/shall inside identifiers or code spans is not normative; table rows pair by their first cell', () => {
+  assert.deepEqual(T.parseItems('a.md', 'Label `must-have` is set. Branch triage-must-have is used. The `must` word.\n'), []);
+  const row = (k, v) => `| ${k} | The value MUST be ${v}. |`;
+  const head = ['| Field | Rule |', '|---|---|', row('alpha', 'a'), row('beta', 'b')].join('\n');
+  const refs = (t) => T.parseItems('a.md', t).map((i) => i.ref);
+  assert.deepEqual(refs(head), ['doc#alpha', 'doc#beta']);
+  assert.deepEqual(refs([head.split('\n')[0], '|---|---|', row('zero', 'z'), row('alpha', 'a'), row('beta', 'b')].join('\n')), ['doc#zero', 'doc#alpha', 'doc#beta']);
+});
+
+test('isSpecDoc admits structured items, RFC capitals, dense prose and spec directories, not sparse lowercase prose', () => {
+  const n = (raw) => ({ kind: 'normative', raw });
+  assert.equal(T.isSpecDoc([n('a must b.')], 'a.md', 10), false);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'a.md', 300), true);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'a.md', 90000), false);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c SHALL d.')], 'a.md', 9000), true);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c SHALL d.')], 'a.md', 90000), false);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'design/a.md', 90000), true);
+  assert.equal(T.isSpecDoc([n('a must b.'), n('c shall d.')], 'docs/specs/a.md', 90000), true);
+  assert.equal(T.isSpecDoc([{ kind: 'id', raw: 'R1: x' }], 'a.md', 90000), true);
+  assert.equal(T.isSpecDoc([n('a must b.')], 'openspec/specs/x/spec.md', 300), true); // a single requirement in a spec directory
+  assert.equal(T.isSpecDoc([n('a must b.')], 'docs/x.md', 300), false);
+});
+
+test('classify: .txt files are documents only when named like requirements', (t) => {
+  const spec = 'AC-1: The thing must work.\nAC-2: It shall be fast.\n';
+  const r = repo(t, { 'a.js': 'x\n' }, { 'CMakeLists.txt': spec, 'docs/requirements.txt': spec, 'LICENSES/MIT.txt': spec, 'a.js': 'y\n' });
+  const paths = ['CMakeLists.txt', 'docs/requirements.txt', 'LICENSES/MIT.txt'];
+  assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths }), ['docs/requirements.txt']);
+});
+
+test('classify: LLM prompt and template directories are not requirement docs; code-name and file-name lines are not IDs', (t) => {
+  const spec = 'AC-1: The thing must work.\nAC-2: It shall be fast.\n';
+  const r = repo(t, { 'a.js': 'x\n' }, { 'templates/commands/run.md': spec, 'docs/foo-template.md': spec, 'docs/real.md': spec, 'a.js': 'y\n' });
+  assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths: ['templates/commands/run.md', 'docs/foo-template.md', 'docs/real.md'] }), ['docs/real.md']);
+  assert.deepEqual(T.parseItems('m.md', 'CURLOPT_AWS_SIGV4 - V4 signature\n`ENABLE_IPV6`: Enable IPv6.\n- [CHANGELOG-1.38.md](./CHANGELOG-1.38.md)\nVS2013.\nFR_1: A real one.\n').map((i) => i.ref), ['FR_1']);
+});
+
 // ---- changed-item pairing and deltas ----
 test('pairItems pairs by ref, falls back to heading and ordinal, and reports added and removed items', () => {
   const it = (ref, heading) => ({ ref, heading });
@@ -487,4 +579,75 @@ test('F4: spec.added lists requirement documents that did not exist at BASE', (t
   const r = repo(t, { 'src.js': 'x\n' }, { 'docs/new.md': SPEC_TEXT });
   T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
   assert.deepEqual(status(r).spec.added, ['docs/new.md']);
+});
+
+// ---- discovery cost and precision fixes (field study) ----
+const lim = (r) => status(r).spec.limitations.join('\n');
+
+test('a doc move is not a change; a move plus an edit is only the edit', (t) => {
+  const r = repo(t, { 'docs/specs/a.md': SPEC_TEXT, 'src/a.js': 'x\n' }, { 'docs/specs/a.md': null, 'docs/specs/old/a.md': SPEC_TEXT, 'src/a.js': 'x\n' });
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }), 0);
+  const r2 = repo(t, { 'docs/specs/a.md': SPEC_TEXT }, { 'docs/specs/a.md': null, 'docs/specs/old/a.md': SPEC_TEXT.replace('30 days', '45 days') });
+  assert.equal(T.run({ cwd: r2.dir, base: r2.base, head: r2.head, ctx: r2.ctx }), 1);
+  const [c] = status(r2).criteria;
+  assert.deepEqual([c.ref, c.change, c.source], ['AC-1', 'modified', 'docs/specs/old/a.md']);
+  assert.deepEqual(c.deltas, { removed: ['30 days'], added: ['45 days'] });
+});
+
+const BIG_SPEC = Array.from({ length: 3000 }, (_, i) => `R${i + 1}: The system MUST keep value ${i + 1} under 30 days. ${'padding '.repeat(8)}`).join('\n') + '\n';
+
+test('a spec over 256 KB is reported when skipped and parsed around its changed lines when the PR edits it', (t) => {
+  assert.ok(BIG_SPEC.length > 256 * 1024);
+  const r = repo(t, { 'docs/big.md': BIG_SPEC, 'src/a.js': 'x\n' }, { 'src/a.js': 'y\n' });
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }), 0);
+  assert.match(lim(r), /oversize doc skipped: docs\/big\.md \(\d+ KB\)/);
+  const r2 = repo(t, { 'docs/big.md': BIG_SPEC }, { 'docs/big.md': BIG_SPEC.replace('R1500: The system MUST keep value 1500 under 30 days', 'R1500: The system MUST keep value 1500 under 45 days') });
+  assert.equal(T.run({ cwd: r2.dir, base: r2.base, head: r2.head, ctx: r2.ctx }), 1);
+  const [c] = status(r2).criteria;
+  assert.deepEqual([c.ref, c.change, c.deltas.added], ['R1500', 'modified', ['45 days']]);
+  assert.doesNotMatch(lim(r2), /oversize/);
+  assert.deepEqual(T.classify({ cwd: r2.dir, base: r2.base, head: r2.head, paths: ['docs/big.md'] }), ['docs/big.md']);
+});
+
+test('only the largest MAX_DEEP changes are traced in depth; the rest are deferred in limitations', (t) => {
+  const many = (days) => Array.from({ length: 30 }, (_, i) => `AC-${i + 1}: file within ${days + i} days`).join('\n') + '\n';
+  const r = repo(t, { 'docs/spec.md': many(1), 'src/filing.js': 'export const filing = 1;\n' }, { 'docs/spec.md': many(100) });
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }), 30);
+  assert.equal(status(r).criteria.length, 30);
+  assert.equal(cands(r).requirement_to_code.length, 25);
+  assert.match(lim(r), /deferred: 5 changed requirement item\(s\)/);
+});
+
+test('an expired time budget keeps the criteria and writes a limitation instead of failing', (t) => {
+  const r = repo(t, { 'docs/spec.md': SPEC_TEXT, 'src/a.js': 'x\n' }, { 'docs/spec.md': SPEC_TEXT.replace('30 days', '45 days') });
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, budgetMs: -1 }), 1);
+  assert.equal(status(r).criteria.length, 1);
+  assert.deepEqual(cands(r).requirement_to_code, []);
+  assert.match(lim(r), /time budget was reached/);
+  const env = { ...process.env, BASE_SHA: r.base, HEAD_SHA: r.head, CTX: r.ctx, TRACE_BUDGET_MS: '60000' };
+  assert.equal(execFileSync('node', [path.join(__dirname, 'trace.js')], { cwd: r.dir, env, encoding: 'utf8' }).trim(), '1');
+  assert.doesNotMatch(lim(r), /time budget/);
+});
+
+test('trace-candidates.json is capped by hunk count and size, with a limitation; fixture and testdata hunks are not traced', (t) => {
+  const doc = Array.from({ length: 80 }, (_, i) => `R${i + 1}: The widget number ${i + 1} must stay valid.`).join('\n') + '\n';
+  const code = (v) => Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`src/widget${i}.js`, `export function widget${i}() {\n  return ${v};\n}\n`]));
+  const r = repo(t, { 'docs/specs/w.md': doc, ...code(1), 'testdata/widget.js': 'a\n' }, { ...code(2), 'testdata/widget.js': 'b\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const c = cands(r);
+  assert.equal(c.code_to_requirement.length, 60);
+  assert.ok(!c.code_to_requirement.some((h) => h.path.startsWith('testdata/')));
+  assert.ok(c.code_to_requirement.every((h) => h.candidates.length <= 5));
+  assert.match(c.limitations.join('\n'), /70?\d* weaker code hunk|10 weaker code hunk/);
+  assert.ok(fs.statSync(path.join(r.ctx, 'trace-candidates.json')).size <= 60 * 1024);
+});
+
+test('the candidate cap trims occurrence hits when the file is too big, and says so', (t) => {
+  const spec = (d) => Array.from({ length: 20 }, (_, i) => `AC-${i + 1}: file within ${d + i} days`).join('\n') + '\n';
+  const hits = Array.from({ length: 20 }, (_, i) => Array.from({ length: 60 }, (_, k) => `const l${i}_${k} = ${100 + i}; // within ${100 + i} days ${'x'.repeat(100)}`).join('\n')).join('\n') + '\n';
+  const r = repo(t, { 'docs/spec.md': spec(100), 'src/a.js': hits }, { 'docs/spec.md': spec(300) });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  assert.ok(cands(r).occurrences.length > 0 && cands(r).occurrences.every((o) => o.hits.length <= 10));
+  assert.match(lim(r), /trimmed to 60 KB/);
+  assert.ok(fs.statSync(path.join(r.ctx, 'trace-candidates.json')).size <= 60 * 1024);
 });
