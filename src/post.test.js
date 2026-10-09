@@ -1211,7 +1211,9 @@ test('F4: rows whose requirement text this PR changed show the base text, a bann
   const authored = clean(); post.markChanged(authored, { criteria: [], spec: { added: ['docs/s.md'] } });
   assert.match(post.buildSummary({ status: 'x', data: authored }), /document authored in this PR/);
   assert.equal(post.noGaps(authored), false);
-  const spec = clean({ reflected_in: { spec: true, tests: false, pr: false } }); post.markChanged(spec, null); // no criterion: the diff lines say it changed
+  const spec = clean({ reflected_in: { spec: true, tests: false, pr: false } });
+  assert.equal(post.noGaps(spec), false); // even before markChanged: the spec item lines are in the diff
+  post.markChanged(spec, null); // no criterion: the diff lines say it changed
   assert.equal(post.noGaps(spec), false);
   const same = clean(); post.markChanged(same, { criteria: [{ id: 'S9', source: 'other.md', change: 'modified' }], spec: { added: [] } });
   assert.equal(post.noGaps(same), true);
