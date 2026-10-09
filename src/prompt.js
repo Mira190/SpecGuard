@@ -69,6 +69,10 @@ function dynamic(ctxDir) {
   };
   add('files.txt', read(ctxDir, 'files.txt'), LIMITS.small);
   add('standards.txt', read(ctxDir, 'standards.txt'), LIMITS.small);
+  try { // where each rule file applies; absent or unreadable (older runs) adds nothing
+    const lines = JSON.parse(read(ctxDir, 'standards-map.json')).map((e) => `${e.path} applies to: ${e.scope.join(', ')}`).join('\n');
+    if (nonEmpty(lines)) { const c = cut(lines, LIMITS.small); parts.push(block('standards-map.json', c.text, c.cut ? 'truncated; Read the file for the rest' : "cite a rule_source only if its scope covers the finding's path")); }
+  } catch { /* no map */ }
   add('rule-changes.txt', read(ctxDir, 'rule-changes.txt'), LIMITS.small);
   add('requirements.md', read(ctxDir, 'requirements.md'), LIMITS.requirements);
   const sb = statusBlock(ctxDir);
