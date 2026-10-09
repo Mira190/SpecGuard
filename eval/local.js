@@ -7,6 +7,7 @@ const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { grade, aggregate, parseComment } = require('./grade.js');
 const { allIds, loadCase } = require('./run.js');
+const { assemble } = require('../src/prompt.js');
 
 const ROOT = path.join(__dirname, '..');
 const CASES = path.join(__dirname, 'cases');
@@ -29,19 +30,9 @@ function resolveCases(arg) {
   return ids;
 }
 
-// The prompt exactly as action.yml assembles it: SKILL.md after the front matter, references except ccr.md, then context and schema.
+// The production prompt: src/prompt.js is the single assembler (action.yml calls it too). Local agents have no --json-schema flag, hence 'copilot' wording.
 function buildPrompt(ctx) {
-  const skill = fs.readFileSync(path.join(SKILL, 'SKILL.md'), 'utf8').split(/\r?\n/); // CRLF checkouts on Windows
-  const close = skill.findIndex((l, i) => i > 0 && l === '---'); // awk 'f>=2': everything after the second --- line
-  let block = skill.slice(close + 1).join('\n');
-  const refs = path.join(SKILL, 'references');
-  for (const r of fs.readdirSync(refs).filter((f) => f.endsWith('.md') && f !== 'ccr.md').sort()) block += `\n# references/${r}\n\n${fs.readFileSync(path.join(refs, r), 'utf8')}`;
-  const schema = JSON.stringify(JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'findings.schema.json'), 'utf8')));
-  return `${block.replace(/\n+$/, '')}
-
-Context directory (absolute path): ${ctx}
-Optional context files (present when requirement documents were found): spec-files.txt, requirements-index.md, trace-candidates.json.
-Your final answer must be JSON only, matching this schema: ${schema}\n`;
+  return assemble({ skillDir: SKILL, ctxDir: ctx, schemaPath: path.join(ROOT, 'src', 'findings.schema.json'), engine: 'copilot' });
 }
 
 // Preloaded into collect.sh's node processes: requirements.js calls `gh`, which has no network here. Serves the case's PR from a file.
