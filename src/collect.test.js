@@ -211,3 +211,31 @@ test('wp1: the dogfood workflow excludes this repo\'s own docs and fixtures from
   assert.match(action, /requirements_paths: \{[^}]*default: ""/);
   assert.match(action, /trace: \{[^}]*default: auto/);
 });
+
+test('collects a CRLF repository like an LF one: IGNORE_EXTRA with CRLF, spec files and criteria without CR', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-collect-crlf-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', ['-c', 'core.autocrlf=false', ...args], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const put = (f, s) => { fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); fs.writeFileSync(path.join(root, f), s.replace(/\n/g, '\r\n')); };
+  git('init'); git('config', 'user.name', 'SpecGuard test'); git('config', 'user.email', 'test@example.invalid');
+  put('docs/specs/c.md', '# C\n\n## Acceptance criteria\n\nAC-4: A claim filed more than 30 days after the incident is rejected.\n');
+  put('src/d.ts', 'export const DAYS = 30;\n'); put('fx/REVIEW.md', 'rule\n');
+  git('add', '.'); git('commit', '-m', 'base');
+  const base = git('rev-parse', 'HEAD');
+  put('docs/specs/c.md', '# C\n\n## Acceptance criteria\n\nAC-4: A claim filed more than 45 days after the incident is rejected.\n');
+  put('src/d.ts', 'export const DAYS = 30;\nexport const X = 1;\n');
+  git('add', '.'); git('commit', '-m', 'head');
+  const head = git('rev-parse', 'HEAD'), ctx = path.join(root, 'ctx');
+  const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
+  const env = { ...process.env, BASE_SHA: base, HEAD_SHA: head, CTX: ctx.replace(/\\/g, '/'), MAX_DIFF_KB: '300', IGNORE_EXTRA: 'fx/\r\n' };
+  delete env.PR_NUMBER; delete env.GITHUB_OUTPUT;
+  execFileSync(bash, [path.resolve(__dirname, 'collect.sh').replace(/\\/g, '/')], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const read = (f) => fs.readFileSync(path.join(ctx, f), 'utf8');
+  assert.equal(read('spec-files.txt'), 'docs/specs/c.md\n');
+  assert.deepEqual(read('files.txt').split('\n').filter(Boolean).sort(), ['docs/specs/c.md', 'src/d.ts']);
+  assert.doesNotMatch(read('standards.txt'), /fx\//); // the CRLF-terminated ignore line still applies
+  const c = JSON.parse(read('requirements-status.json')).criteria.find((x) => x.id === 'S1');
+  assert.deepEqual([c.ref, c.deltas, c.quote], ['AC-4', { removed: ['30 days'], added: ['45 days'] }, 'AC-4: A claim filed more than 45 days after the incident is rejected.']);
+  const occ = JSON.parse(read('trace-candidates.json')).occurrences[0].hits;
+  assert.ok(occ.some((h) => h.path === 'src/d.ts' && h.text === 'export const DAYS = 30;'));
+});
