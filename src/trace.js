@@ -99,9 +99,10 @@ const clean = (s) => String(s).replace(/[​-‏‪-‮⁠-⁤﻿]/g, '').replac
 const ID = String.raw`(?:AC\s?\d+|[A-Z][A-Z0-9]*(?:[-_.][A-Z0-9]+)*(?<=\d))`; // linear: quantifiers are separated by distinct delimiters; the last char must be a digit
 const ID_LINE = new RegExp(String.raw`^\s*(?:[-*+]\s+|\d+[.)]\s+)?(#{1,6}\s+)?[*_\[]*(${ID})[*_\]\`]*\s*(?:[:：)\-—–]|\.(?!\w))`); // not a backtick opener (`ENABLE_IPV6` - text) nor a file name or version ([CHANGELOG-1.38.md])
 // A Markdown link reference definition ('[KEP-1]: https://...') is a label for a URL, not an item.
-const LINKDEF = /^\s*\[[^\]]+\]:\s*(?:(?:[a-z][a-z0-9+.-]*:\/\/|\/|\.{1,2}\/|#|<|mailto:)\S*(?:\s+["'(].*)?|\S+)\s*$/i;
+const LINKDEF = /^\s*\[[^\]]+\]:\s*(?:(?:[a-z][a-z0-9+.-]*:\/\/|\/|\.{1,2}\/|#|<|mailto:)\S*(?:\s+["'(].*)?|\S+(?:\s+\S+){0,3})\s*$/i; // or a 1-4 word title: '[KEP-4671]: Gang Scheduling.'
+const INLINE_LINK = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\[[^\]]*\]\(/; // '[KEP-5972: Dynamic Containers](https://...) permits...' is a sentence, not an ID
 const idLine = (l) => { // an ID label sits in the first MAX_LINE chars
-  const c = l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l, m = LINKDEF.test(c) ? null : ID_LINE.exec(c);
+  const c = l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l, m = LINKDEF.test(c) || INLINE_LINK.test(c) ? null : ID_LINE.exec(c);
   if (!m) return null;
   if (/_/.test(m[2]) && !/[-.]/.test(m[2]) && !/[:：]$/.test(m[0])) return null; // CURLOPT_FOO - text, MACRO_NAME): a code name, not a requirement ID
   if (!m[1] && !c.slice(m[0].length).trim()) return null; // 'VS2013.' : an ID needs text after it unless it is a heading
