@@ -57,6 +57,13 @@
         "line": 10,
         "tolerance": 0,
         "reason": "Final-total rounding is never exercised with a fractional value."
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/l1/pricing.py",
+        "line": 9,
+        "tolerance": 0,
+        "reason": "A tier discount combined with the big-order bonus on one order is exercised by no test at any layer."
       }
     ]
   }
