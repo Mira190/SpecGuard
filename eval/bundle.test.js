@@ -81,3 +81,34 @@ test('build: dedup, anonymity, mapping; join: tables', () => {
   assert.equal(t.v2.clean.findings, 1); assert.equal(t.v2.clean.byVerdict.wrong, 1); assert.equal(t.v2.clean.would_fix, 0);
   assert.equal(t.v1.clean.findings, 0);
 });
+
+test('join metrics: both vocabularies, zero-finding variant', () => {
+  const x = fixture();
+  b.build(x.ab, x.out, { pairs: x.pairs, clean: x.clean, seed: 's' });
+  const bug = JSON.parse(fs.readFileSync(path.join(x.out, 'r-1.json'), 'utf8'));
+  const noise = JSON.parse(fs.readFileSync(path.join(x.out, 'c-1.json'), 'utf8')).findings[0];
+  const merged = bug.findings.find((f) => f.path === 'a.js' && f.line < 20);
+  const far = bug.findings.find((f) => f.line === 90);
+  const dropped = bug.findings.find((f) => f.class === 'dropped');
+  const run = (v) => { const vf = path.join(x.d, 'm.json'); fs.writeFileSync(vf, JSON.stringify(v)); return b.join(x.ab, x.out, vf, { pairs: x.pairs, clean: x.clean }); };
+  // new vocabulary: hit field + true_gap/wrong/unverifiable verdicts
+  const t = run({ [merged.fid]: { verdict: 'true_gap', hit: 'direct', useful: 'would_fix' }, [far.fid]: { verdict: 'unverifiable', useful: 'would_ignore' }, [noise.fid]: { verdict: 'wrong', useful: 'noise' }, [dropped.fid]: { verdict: 'wrong' } });
+  assert.deepEqual(t.v1.bug.inline, { direct: 1, near: 0, miss: 0 });
+  assert.deepEqual(t.v2.bug.summary, { direct: 1, near: 0, miss: 0 });
+  const m1 = t.v1.metrics; // v1: 2 inline on r-1 (merged good, far unverifiable), none on c-1
+  assert.equal(m1.false_gap_inline, 0.5); assert.equal(m1.false_gap_all, 0.5);
+  assert.equal(m1.inline_per_pr_mean, 1); assert.equal(m1.inline_per_pr_max, 2); assert.equal(m1.summary_per_pr_mean, 0);
+  assert.equal(m1.actionable_share, 0.5); assert.equal(m1.noise_share, 0);
+  const m2 = t.v2.metrics; // v2: summary on r-1 (true_gap), inline noise on c-1 (wrong)
+  assert.equal(m2.false_gap_inline, 1); assert.equal(m2.false_gap_all, 0.5);
+  assert.equal(m2.summary_per_pr_mean, 0.5); assert.equal(m2.actionable_share, 0); assert.equal(m2.noise_share, 1);
+  // lean: inline merged (good) only; its dropped finding is not counted
+  assert.equal(t.lean.metrics.false_gap_all, 0); assert.equal(t.lean.metrics.inline_per_pr_mean, 0.5);
+  // legacy vocabulary, and `hit` wins over a legacy verdict
+  assert.deepEqual(run({ [merged.fid]: { verdict: 'hit_near', useful: 'would_fix' } }).v1.bug.inline, { direct: 0, near: 1, miss: 0 });
+  assert.deepEqual(run({ [merged.fid]: { verdict: 'hit_near', hit: 'direct' } }).v1.bug.inline, { direct: 1, near: 0, miss: 0 });
+  // zero-finding variant: no division by zero
+  fs.mkdirSync(path.join(x.ab, 'empty', 'r-1'), { recursive: true }); fs.writeFileSync(path.join(x.ab, 'empty', 'r-1', 'meta.json'), '{}');
+  const z = run({}).empty.metrics;
+  assert.deepEqual([z.false_gap_inline, z.false_gap_all, z.actionable_share, z.noise_share, z.inline_per_pr_max, z.inline_per_pr_mean], [null, null, null, null, 0, 0]);
+});
