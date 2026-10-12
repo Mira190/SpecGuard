@@ -39,6 +39,15 @@ match() {
   return 1
 }
 
+# 0. Two bases, not to be merged. BASE_SHA is the policy base: trusted rules and spec sources come from it. DIFF_BASE_SHA is the
+# merge-base of BASE_SHA and HEAD_SHA: the left side of every PR diff hunk (three-dot) lives there, so blame, requirement-change
+# comparison and diff-side references must use it. Exported for the node steps and written to $CTX/diff-base-sha.
+# With several merge-bases (criss-cross history) git picks one (its default); that is the same one the three-dot diff uses.
+if DIFF_BASE_SHA=$(git merge-base "$BASE_SHA" "$HEAD_SHA" 2>/dev/null) && [ -n "$DIFF_BASE_SHA" ]; then :
+else DIFF_BASE_SHA=$BASE_SHA; echo "::warning::no merge-base of BASE_SHA and HEAD_SHA (shallow clone? use fetch-depth 0); diff-side history may not line up"; fi
+export DIFF_BASE_SHA
+echo "$DIFF_BASE_SHA" > "$CTX/diff-base-sha"
+
 # 1. diff (three-dot = merge-base, same as GitHub's PR diff; needs fetch-depth 0)
 # Rule and agent-config files are never reviewed (they are restored from base below); the modified ones are reported.
 HERE=$(dirname "$0")

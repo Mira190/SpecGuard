@@ -651,3 +651,21 @@ test('the candidate cap trims occurrence hits when the file is too big, and says
   assert.match(lim(r), /trimmed to 60 KB/);
   assert.ok(fs.statSync(path.join(r.ctx, 'trace-candidates.json')).size <= 60 * 1024);
 });
+
+// ---- M11: the diff base is the merge-base, not the advanced target tip ----
+test('M11: the CLI pairs changed spec items against DIFF_BASE_SHA, so a target branch that moved on does not rewrite the previous text', (t) => {
+  const r = fixture(t, 'tr3');
+  const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'core.autocrlf=false', '-c', 'commit.gpgsign=false', ...a], { cwd: r.dir, encoding: 'utf8' }).trim();
+  git('checkout', '-q', '-b', 'target', r.base); // the target branch advances after the PR branched: AC-4 now says 60 days there
+  const spec = path.join(r.dir, 'docs/specs/claims.md');
+  fs.writeFileSync(spec, fs.readFileSync(spec, 'utf8').replace('30 days', '60 days'));
+  git('commit', '-qam', 'target moves on');
+  const tip = git('rev-parse', 'HEAD');
+  assert.notEqual(tip, r.base);
+  const cli = (extra) => { fs.rmSync(path.join(r.ctx, 'requirements-status.json'), { force: true }); execFileSync(process.execPath, [path.join(__dirname, 'trace.js')], { cwd: r.dir, env: { ...process.env, BASE_SHA: tip, HEAD_SHA: r.head, CTX: r.ctx, REQ_PATHS: '', ...extra } }); return status(r).criteria[0]; };
+  const good = cli({ DIFF_BASE_SHA: r.base });
+  assert.deepEqual([good.ref, good.deltas], ['AC-4', { removed: ['30 days'], added: ['45 days'] }]);
+  assert.match(good.previous, /30 days/);
+  const stale = cli({}); // no DIFF_BASE_SHA: falls back to BASE_SHA, the old behaviour this fix replaces
+  assert.match(stale.previous, /60 days/);
+});

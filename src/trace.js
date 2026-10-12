@@ -640,6 +640,7 @@ function fitCandidates(cand) {
   return `trace-candidates.json was ${Math.round(before / 1024)} KB; it was trimmed to ${CAND_CAP / 1024} KB (weakest hunks and extra occurrence hits dropped).`;
 }
 
+// `base` is the diff base (the PR's merge-base; the CLI passes DIFF_BASE_SHA): the range is three-dot and spec items are paired against it.
 // Writes spec-files.txt, requirements-index.md, trace-candidates.json and extends requirements-status.json.
 // Returns the number of changed normative items. budgetMs bounds the expensive searches: they stop early and say so in limitations.
 function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtra = '', maxCriteria = MAX_CRITERIA, maxPatch = MAX_PATCH, budgetMs = BUDGET_MS }) {
@@ -760,10 +761,10 @@ if (require.main === module) {
   const env = process.env, [cmd, ...args] = process.argv.slice(2);
   const off = String(env.TRACE || '').toLowerCase() === 'off';
   if (cmd === 'classify') {
-    const out = off ? [] : classify({ base: env.BASE_SHA, head: env.HEAD_SHA || 'HEAD', paths: args, reqPaths: env.REQ_PATHS, ignoreExtra: env.IGNORE_EXTRA });
+    const out = off ? [] : classify({ base: env.DIFF_BASE_SHA || env.BASE_SHA, head: env.HEAD_SHA || 'HEAD', paths: args, reqPaths: env.REQ_PATHS, ignoreExtra: env.IGNORE_EXTRA });
     process.stdout.write(out.map((p) => p + '\n').join(''));
   } else {
-    process.stdout.write(`${run({ base: env.BASE_SHA, head: env.HEAD_SHA, ctx: env.CTX, reqPaths: env.REQ_PATHS, trace: env.TRACE, ignoreExtra: env.IGNORE_EXTRA, budgetMs: +env.TRACE_BUDGET_MS || undefined })}\n`);
+    process.stdout.write(`${run({ base: env.DIFF_BASE_SHA || env.BASE_SHA, head: env.HEAD_SHA, ctx: env.CTX, reqPaths: env.REQ_PATHS, trace: env.TRACE, ignoreExtra: env.IGNORE_EXTRA, budgetMs: +env.TRACE_BUDGET_MS || undefined })}\n`);
   }
 }
 
