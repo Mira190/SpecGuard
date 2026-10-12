@@ -75,6 +75,9 @@ function blameShas(diff, blame, opts = {}) {
   return [...total].sort((x, y) => y[1] - x[1]).slice(0, MAX_SHAS).map(([sha]) => sha);
 }
 
+// Diff hunks are three-dot, so their left line numbers belong to the merge-base (DIFF_BASE_SHA), never to a later BASE_SHA tip.
+const blameAt = (rev, cwd = '.') => (p, a, b) => execFileSync('git', ['blame', '-w', '-M', '-C', '--porcelain', rev, '-L', `${a},${b}`, '--', p], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, timeout: 10000 });
+
 // Optional historical intent: blamed commit -> PR -> closing issues, at most 3 documents. Failures become limitations.
 function collectHistory({ history, repo, mainPr, seen, loadIssue }) {
   const documents = [], limitations = [];
@@ -159,8 +162,7 @@ if (require.main === module) {
     try {
       const diff = fs.readFileSync(path.join(env.CTX, 'diff.patch'), 'utf8');
       const stats = {};
-      const shas = blameShas(diff, (p, a, b) => execFileSync('git', ['blame', '-w', '-M', '-C', '--porcelain', env.BASE_SHA, '-L', `${a},${b}`, '--', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, timeout: 10000 }),
-        { stats, deadline: Date.now() + 25000 });
+      const shas = blameShas(diff, blameAt(env.DIFF_BASE_SHA || env.BASE_SHA), { stats, deadline: Date.now() + 25000 });
       if (stats.failed && !shas.length) throw new Error('git blame failed for every hunk');
       history = { shas, partial: stats.failed || stats.skipped ? `Historical intent is partial: git blame failed for ${stats.failed} and was skipped for ${stats.skipped} hunk(s).` : '', pulls: (sha) => gh(['api', `repos/${env.GH_REPO}/commits/${sha}/pulls`]),
         pr: (n) => gh(['pr', 'view', String(n), '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences']) };
@@ -175,4 +177,4 @@ if (require.main === module) {
   fs.writeFileSync(path.join(env.CTX, 'requirements-status.json'), JSON.stringify(status, null, 2) + '\n');
 }
 
-module.exports = { collectRequirements, extractCriteria, leftRanges, blameShas };
+module.exports = { collectRequirements, extractCriteria, leftRanges, blameShas, blameAt };

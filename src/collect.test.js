@@ -288,3 +288,37 @@ test('F2: tracked paths containing a newline never enter files.txt, spec-files.t
   assert.doesNotMatch(read('diff.patch'), /evil|bad/);
   assert.match(read('collect-limits.txt'), /2 changed path\(s\) containing control characters/);
 });
+
+test('M11: collect.sh records DIFF_BASE_SHA = merge-base and the node steps use it while BASE_SHA stays the policy base', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-mb-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const write = (f, c) => { fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); fs.writeFileSync(path.join(root, f), c); };
+  const spec = (days) => `# Claims\n\n## Acceptance criteria\n\nAC-1: A claim must include the policy number.\nAC-2: A claim filed more than ${days} days after the incident is rejected as late.\n`;
+  git('init', '-q'); git('config', 'user.name', 'SpecGuard test'); git('config', 'user.email', 'test@example.invalid'); git('config', 'core.autocrlf', 'false');
+  write('docs/specs/claims.md', spec(30)); write('src.js', 'const LIMIT = 30;\n'); write('AGENTS.md', 'base rule\n');
+  git('add', '.'); git('commit', '-qm', 'common ancestor');
+  const mergeBase = git('rev-parse', 'HEAD');
+  git('checkout', '-q', '-b', 'pr');
+  write('docs/specs/claims.md', spec(45)); write('src.js', 'const LIMIT = 45;\n');
+  git('add', '.'); git('commit', '-qm', 'pr');
+  const head = git('rev-parse', 'HEAD');
+  git('checkout', '-q', '-b', 'target', mergeBase); // the target moves on after the PR branched: spec says 60 days, a new rule file lands
+  write('docs/specs/claims.md', spec(60)); write('AGENTS.md', 'tip rule\n');
+  git('add', '.'); git('commit', '-qm', 'target moves on');
+  const tip = git('rev-parse', 'HEAD');
+  const ctx = path.join(root, 'ctx');
+  const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
+  const env = { ...process.env, BASE_SHA: tip, HEAD_SHA: head, CTX: ctx.replace(/\\/g, '/'), MAX_DIFF_KB: '300' };
+  delete env.PR_NUMBER; delete env.GITHUB_OUTPUT; delete env.DIFF_BASE_SHA;
+  execFileSync(bash, [path.resolve(__dirname, 'collect.sh').replace(/\\/g, '/')], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(fs.readFileSync(path.join(ctx, 'diff-base-sha'), 'utf8').trim(), mergeBase);
+  assert.notEqual(mergeBase, tip);
+  const diff = fs.readFileSync(path.join(ctx, 'diff.patch'), 'utf8');
+  assert.match(diff, /-const LIMIT = 30;\n\+const LIMIT = 45;/); // three-dot: the left side is the merge-base
+  const s1 = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')).criteria.find((c) => c.id === 'S1');
+  assert.match(s1.previous, /30 days/); // paired against the merge-base version, not the 60-day tip
+  assert.deepEqual(s1.deltas, { removed: ['30 days'], added: ['45 days'] });
+  assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), 'tip rule\n'); // trusted rules still come from BASE_SHA
+  assert.match(fs.readFileSync(path.join(ctx, 'standards.txt'), 'utf8'), /AGENTS\.md/);
+});

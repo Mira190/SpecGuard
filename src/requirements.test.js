@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { collectRequirements, extractCriteria, leftRanges, blameShas } = require('./requirements');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { collectRequirements, extractCriteria, leftRanges, blameShas, blameAt } = require('./requirements');
 
 const pull = (number, o = {}) => ({ number, merged_at: '2024-01-01T00:00:00Z', base: { repo: { full_name: 'org/app' } }, ...o });
 
@@ -151,4 +155,28 @@ test('F10: a partial blame result is reported as a limitation, not as history be
   const r = collectRequirements({ repo: 'org/app', pr: pr0(), history: { shas: [], partial: 'Historical intent is partial: git blame failed for 1 and was skipped for 0 hunk(s).', pulls: () => [], pr: () => ({}) }, loadIssue: () => ({}) });
   assert.equal(r.status, 'partial');
   assert.match(r.limitations.join(' '), /partial: git blame failed for 1/);
+});
+
+test('M11: blame at the merge-base hits the lines the three-dot diff points at, not what a moved-on target tip has there', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-blame-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'core.autocrlf=false', '-c', 'commit.gpgsign=false', ...a], { cwd: dir, encoding: 'utf8' }).trim();
+  const file = path.join(dir, 'lib.js'), lines = (n, p) => Array.from({ length: n }, (_, i) => `${p}${i + 1}`);
+  git('init', '-q');
+  fs.writeFileSync(file, lines(13, 'L').join('\n') + '\n');
+  git('add', '-A'); git('commit', '-qm', 'common ancestor');
+  const mergeBase = git('rev-parse', 'HEAD');
+  git('checkout', '-q', '-b', 'pr');
+  fs.writeFileSync(file, [...lines(6, 'L'), ...lines(7, 'NEW')].join('\n') + '\n'); // the PR rewrites old lines 7-13
+  git('commit', '-qam', 'pr change');
+  const head = git('rev-parse', 'HEAD');
+  git('checkout', '-q', '-b', 'target', mergeBase);
+  fs.writeFileSync(file, [...lines(4, 'INSERT'), ...lines(13, 'L')].join('\n') + '\n'); // the target branch inserts lines at the top after the PR branched
+  git('commit', '-qam', 'target inserts at top');
+  const tip = git('rev-parse', 'HEAD');
+  const diff = git('diff', '--no-color', '--no-renames', `${tip}...${head}`);
+  assert.deepEqual(leftRanges(diff), [{ path: 'lib.js', a: 4, b: 13 }]); // old-side coordinates of the common ancestor
+  assert.equal(git('merge-base', tip, head), mergeBase);
+  assert.deepEqual(blameShas(diff, blameAt(mergeBase, dir)), [mergeBase]);
+  assert.ok(blameShas(diff, blameAt(tip, dir)).includes(tip)); // the old behaviour: blame at the tip lands on the unrelated INSERT lines
 });

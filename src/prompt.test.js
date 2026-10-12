@@ -28,7 +28,7 @@ test('assemble: plain PR keeps every invariant section the model needs', () => {
   assert.ok(!p.includes('# references/ccr.md'));
   assert.ok(!p.includes('# references/trace.md') && !p.includes('# references/standards.md'));
   assert.match(p, /not included because they cannot matter.*standards\.md.*no_rules.*trace\.md.*not_applicable/s);
-  assert.ok(p.includes('2b. Trace requirements to code. With no requirement document, set `alignment.status` to `not_applicable`.'));
+  assert.ok(p.includes('2b. Trace requirements to code. Document tracing is separate from alignment: `alignment.status` is `not_applicable` only for a row that links no requirement at all'));
 });
 
 test('assemble: CI prompt drops local and Copilot-code-review mode text and all markers', () => {
@@ -147,4 +147,32 @@ test('assemble: standards-map.json is inlined as one compact line per rule file 
   assert.match(p, /cite a rule_source only if its scope covers the finding's path/);
   assert.doesNotMatch(build(ctx({ 'standards.txt': 'AGENTS.md\n' })), /standards-map/); // older run: no block, no "empty" noise
   assert.doesNotMatch(build(ctx({ 'standards-map.json': 'not json' })), /standards-map/);
+});
+
+// ---- M5: alignment depends on a linked requirement, not on repository documents ----
+test('M5: not_applicable only for rows with no linked requirement; PR and issue criteria are judged with or without documents and tracing', () => {
+  const crit = (source) => JSON.stringify({ status: 'available', sources: [source], limitations: [], criteria: [{ id: 'R1', source, quote: 'Reject zero.' }] });
+  const noCrit = JSON.stringify({ status: 'partial', sources: ['PR body'], limitations: ['No requirement text available; only changed behaviour can be assessed.'], criteria: [] });
+  const emptyCands = JSON.stringify({ requirement_to_code: [], code_to_requirement: [], occurrences: [], limitations: [] });
+  const groups = {
+    'PR-only': { files: { 'requirements.md': '# PR: t\n\nAC 1: Reject zero.', 'requirements-status.json': crit('PR body') }, trace: false, inlined: /AC 1: Reject zero/ },
+    'issue-only': { files: { 'requirements.md': '# issue #3: t\n\nReject zero.', 'requirements-status.json': crit('issue #3') }, trace: false, inlined: /"source":"issue #3"/ },
+    'spec-only': { files: { 'spec-files.txt': 'docs/s.md\n', 'requirements-index.md': 'docs/s.md:3 [AC-1] Reject zero\n', 'requirements-status.json': JSON.stringify({ criteria: [{ id: 'S1', source: 'docs/s.md', quote: 'Reject zero.' }] }) }, trace: true, inlined: /"id":"S1"/ },
+    none: { files: { 'requirements.md': 'none', 'requirements-status.json': noCrit }, trace: false, inlined: /No requirement text available/ },
+    'trace off + PR requirement': { files: { 'spec-files.txt': '', 'trace-candidates.json': emptyCands, 'requirements.md': '# PR: t\n\nAC 1: Reject zero.', 'requirements-status.json': crit('PR body') }, trace: false, inlined: /"id":"R1"/ },
+  };
+  const schema = JSON.parse(fs.readFileSync(SCHEMA, 'utf8'));
+  const statuses = JSON.stringify(schema).match(/"enum":\["consistent"[^\]]*\]/)[0];
+  for (const [name, g] of Object.entries(groups)) {
+    const p = build(ctx(g.files));
+    assert.ok(!p.includes('With no requirement document, set `alignment.status` to `not_applicable`'), `${name}: no document-only not_applicable rule`);
+    assert.ok(p.includes('`not_applicable` only for a row that links no requirement at all'), name);
+    assert.match(p, g.inlined, name);
+    assert.equal(p.includes('# references/trace.md'), g.trace, `${name}: trace.md`);
+    if (!g.trace) { // the status meanings travel with the omission note, and each status it names exists in the schema
+      const note = p.slice(p.indexOf('trace.md (no requirement documents'), p.indexOf('trace.md (no requirement documents') + 450);
+      assert.match(note, /Alignment still applies to PR and issue criteria/, name);
+      for (const s of ['consistent', 'mismatch', 'unknown', 'not_applicable']) { assert.ok(note.includes(`\`${s}\``), `${name}: ${s}`); assert.ok(statuses.includes(`"${s}"`), s); }
+    }
+  }
 });

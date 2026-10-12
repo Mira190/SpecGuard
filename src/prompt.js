@@ -100,7 +100,7 @@ function assemble({ skillDir, ctxDir, schemaPath, engine = 'claude' }) {
   const refsDir = path.join(skillDir, 'references');
   const omitted = [];
   for (const r of fs.readdirSync(refsDir).filter((f) => f.endsWith('.md') && f !== 'ccr.md').sort()) {
-    if (r === 'trace.md' && !trace) { omitted.push('trace.md (no requirement documents: set `alignment.status` to `not_applicable`)'); continue; }
+    if (r === 'trace.md' && !trace) { omitted.push('trace.md (no requirement documents, so skip repository document tracing. Alignment still applies to PR and issue criteria: a row linked to one is `consistent` when the code implements the criterion, `mismatch` when it contradicts it (needs `since` and one spec_mismatch finding), else `unknown` with the searches listed; `not_applicable` only for a row that links no requirement at all)'); continue; }
     if (r === 'standards.md' && !standards) { omitted.push('standards.md (no rule files: set `standards.status` to `no_rules`)'); continue; }
     out += `\n\n# references/${r}\n\n${strip(read(refsDir, r), { trace }).replace(/\n+$/, '')}`;
   }
