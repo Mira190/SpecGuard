@@ -151,10 +151,11 @@ function setup(t, data = report(), options = {}) {
     },
   } };
   const warnings = [];
-  const core = { warning: (s) => warnings.push(s), summary: { addRaw() { return this; }, async write() {} } };
+  const jobSummary = []; // what reaches the run's job summary (core.summary)
+  const core = { warning: (s) => warnings.push(s), summary: { addRaw(x) { jobSummary.push(x); return this; }, async write() {} } };
   const context = { repo: { owner: 'o', repo: 'r' }, serverUrl: 'https://github.com', payload: { pull_request: { number: 7, head: { sha: 'HEADSHA' } } } };
   Object.assign(process.env, { CTX: path.join(dir, 'ctx'), GITHUB_WORKSPACE: dir, HEAD_SHA: 'HEADSHA', MAX_COMMENTS: '10', ENGINE: 'copilot', SKIP: 'false', PARTIAL: 'false', STANDARDS_CHECKS: '', STANDARDS_REF: 'head' });
-  return { github, context, core, calls, warnings, dir };
+  return { github, context, core, calls, warnings, dir, jobSummary };
 }
 
 test('posts requirement-aware findings and reports standards and layers independently', async (t) => {
@@ -535,7 +536,7 @@ test('merges same-kind findings on one line into one comment; other kinds stay s
   assert.match(cs[0].body, /Verify the boundary total; Second obligation/);
   assert.match(cs[0].body, /Other gap\./);
   const fp = /specguard:fp=([0-9a-f]{40})/.exec(cs[0].body)[1];
-  const again = setup(t, data(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'Bot' } }] });
+  const again = setup(t, data(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
   await post(again);
   assert.equal(again.calls.review.length, 0);
   const std = { ...finding('standard', { title: 'Rule', rule_source: 'RULES.md:1', rule_quote: 'rule one' }) };
@@ -571,7 +572,7 @@ test('distinct same-line gaps without an AC source are merged, not dropped; reru
   assert.match(merged.body, /Other gap./);
   assert.ok(cs.some((c) => c.line === 2 && /Other line/.test(c.body)));
   const fp = /specguard:fp=([0-9a-f]{40})/.exec(merged.body)[1];
-  const again = setup(t, data(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'Bot' } }] });
+  const again = setup(t, data(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
   await post(again);
   assert.deepEqual(again.calls.review[0].comments.map((c) => c.line), [2]);
 });
@@ -651,17 +652,20 @@ test('c7: the summary status counts reflect failed posts', async (t) => {
   assert.match(s.calls.summary[0].body, /Reviewed: [^\n]*0 inline, 0 file-level, 1 in summary/);
 });
 
-test('c8: a failing pulls.get does not abort publishing, and notes that HEAD was not rechecked', async (t) => {
+test('c8 (M8): a failing pulls.get posts nothing to the PR but the result still reaches the job summary', async (t) => {
   const s = setup(t);
   s.github.rest.pulls.get = async () => { throw new Error('502'); };
   await post(s);
-  assert.equal(s.calls.review.length, 1);
-  assert.match(s.calls.summary[0].body, /could not be rechecked/);
+  assert.deepEqual([s.calls.review.length, s.calls.file.length, s.calls.summary.length], [0, 0, 0]);
+  assert.match(s.jobSummary.join(), /Verify the boundary total/);
+  assert.match(s.jobSummary.join(), /could not recheck HEAD/);
+  assert.doesNotMatch(s.jobSummary.join(), /specguard:head/);
   const k = setup(t);
   k.github.rest.pulls.get = async () => { throw new Error('502'); };
   process.env.SKIP = 'true';
   await post(k);
-  assert.equal(k.calls.summary.length, 1);
+  assert.equal(k.calls.summary.length, 0);
+  assert.match(k.jobSummary.join(), /Nothing to review/);
 });
 
 test('c9: a merged title is cut on one line with an ellipsis', () => {
@@ -1356,10 +1360,10 @@ test('F8: model- and document-derived text cannot inject markers, mentions, imag
 test('F8: a fingerprint is honoured only as the last thing in a bot review comment; the sticky comment must be ours', async (t) => {
   const first = setup(t); await post(first);
   const fp = /specguard:fp=([0-9a-f]{40})/.exec(first.calls.review[0].comments[0].body)[1];
-  const injected = setup(t, report(), { existing: [{ body: `<!-- specguard:fp=${fp} --> pasted into the middle of a bot comment`, user: { type: 'Bot' } }] });
+  const injected = setup(t, report(), { existing: [{ body: `<!-- specguard:fp=${fp} --> pasted into the middle of a bot comment`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
   await post(injected);
   assert.equal(injected.calls.review.length, 1, 'a non-trailing marker does not suppress the finding');
-  const real = setup(t, report(), { existing: [{ body: `text\n\n<!-- specguard:fp=${fp} -->`, user: { type: 'Bot' } }] });
+  const real = setup(t, report(), { existing: [{ body: `text\n\n<!-- specguard:fp=${fp} -->`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
   await post(real);
   assert.equal(real.calls.review.length, 0);
   const other = setup(t, report(), { issueComments: [{ id: 5, body: '<!-- specguard:summary -->\nhijack', user: { type: 'Bot', login: 'other-app[bot]' } }] });
@@ -1585,4 +1589,185 @@ test('stale: pages through threads, stops at 300 threads and resolves at most 20
   const two = withThreads(t, [[thread('p0', FP('a'))], [thread('p1', FP('e'))]]);
   await post(two);
   assert.deepEqual(two.resolved, ['p0', 'p1']);
+});
+
+// ---- run integrity (M1-M9) ----
+const GONE = () => [thread('gone', FP('a'))]; // a thread whose finding this run does not report
+const fpOf = (kind, p, quote) => post.fingerprint(kind, p, quote);
+const writeCtx = (s, name, v) => fs.writeFileSync(path.join(s.dir, 'ctx', name), typeof v === 'string' ? v : JSON.stringify(v));
+const actionYml = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
+// the post step's env as written in action.yml (raw template values), and what its `${{ inputs.x }}` entries evaluate to
+const postStepEnv = () => {
+  const block = /env:\n((?: {8}\S.*\n)+)/.exec(actionYml.slice(actionYml.indexOf('uses: actions/github-script')))[1];
+  return Object.fromEntries([...block.matchAll(/^ {8}([A-Z_]+): (.*)$/gm)].map((m) => [m[1], m[2]]));
+};
+const fromInputs = (inputs) => Object.fromEntries(Object.entries(postStepEnv()).filter(([, v]) => /^\$\{\{ inputs\.\w+ \}\}$/.test(v)).map(([k, v]) => [k, inputs[/inputs\.(\w+)/.exec(v)[1]] ?? '']));
+
+test('M1: every env var post.js reads is mapped in the Action post step (runner-provided ones excepted)', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'post.js'), 'utf8');
+  const read = new Set([...src.matchAll(/\benv\.([A-Z][A-Z_]+)/g)].map((m) => m[1]));
+  const mapped = new Set(Object.keys(postStepEnv()));
+  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA']); // set by the runner / optional fallback to the event payload
+  assert.ok(read.has('RESOLVE_STALE') && read.has('MAX_COMMENTS'), 'the scan found the known variables');
+  assert.deepEqual([...read].filter((k) => !mapped.has(k) && !runner.has(k)), []);
+});
+
+test('M1: resolve_stale=false set through the Action inputs resolves no thread and does not even query threads', async (t) => {
+  const off = withThreads(t, [GONE()]);
+  Object.assign(process.env, fromInputs({ resolve_stale: 'false', max_comments: '10' }));
+  t.after(() => { for (const k of ['RESOLVE_STALE', 'MODEL', 'REVIEW_TIMEOUT_MINUTES']) delete process.env[k]; });
+  assert.equal(process.env.RESOLVE_STALE, 'false');
+  await post(off);
+  assert.deepEqual([off.resolved, off.queries], [[], 0]);
+});
+
+test('M2: a finding whose citation failed (demoted to unknown) does not resolve its old thread', async (t) => {
+  const s = withThreads(t, [[thread('old', fpOf('missing_test', 'src.js', behaviour.quote)), ...GONE()]], report({ coverage: [row('missing_test', { behaviour: { ...behaviour, line: 30, quote: 'absent' } })] }));
+  await post(s);
+  assert.match(s.calls.summary[0].body, /unknown/);
+  assert.deepEqual(s.resolved, [], 'nothing is resolved when a finding was degraded');
+  const control = withThreads(t, [GONE()]); // same run, nothing degraded: the gone thread is resolved
+  await post(control);
+  assert.deepEqual(control.resolved, ['gone']);
+});
+
+test('M2: a finding moved to the summary (outside the diff, or already posted) keeps its thread; only a truly gone one resolves', async (t) => {
+  const data = report({ coverage: [row('weak_test')], findings: [finding('weak_test', evidence)] });
+  const moved = withThreads(t, [[thread('still-present', fpOf('weak_test', 'test.js', evidence.quote)), ...GONE()]], data);
+  await post(moved);
+  assert.match(moved.calls.summary[0].body, /assertion outside the reviewed diff/);
+  assert.deepEqual(moved.resolved, ['gone']);
+  const fp = fpOf('missing_test', 'src.js', behaviour.quote); // already posted: not re-posted, still reported
+  const posted = withThreads(t, [[thread('posted', fp), ...GONE()]], report(), { existing: [{ body: `x\n\n<!-- specguard:fp=${fp} -->`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
+  await post(posted);
+  assert.deepEqual(posted.resolved, ['gone']);
+  const low = withThreads(t, [[thread('low', fpOf('missing_test', 'src.js', behaviour.quote)), ...GONE()]], report({ findings: [finding('missing_test', { confidence: 'low' })] }));
+  await post(low); // low confidence goes to the summary, never inline
+  assert.equal(low.calls.review.length, 0);
+  assert.deepEqual(low.resolved, ['gone']);
+});
+
+test('M3: a collector limitation in requirements-status spec.limitations makes the run incomplete: visible, no clean verdict, no marker, no resolve', async (t) => {
+  const s = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
+  writeCtx(s, 'requirements-status.json', { status: 'available', sources: ['PR body'], limitations: [], spec: { files: 1, items: 2, added: [], limitations: ['500 candidate documents skipped by the 200-file limit.'] } });
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.doesNotMatch(body, /No test gaps found/);
+  assert.match(body, /Incomplete review/);
+  assert.match(body, /500 candidate documents skipped/);
+  assert.doesNotMatch(body, /specguard:head/);
+  assert.match(s.jobSummary.join(), /500 candidate documents skipped/);
+  assert.deepEqual(s.resolved, []);
+});
+
+test('M3: a capped requirements-index.md or an empty PR body is not "not collected": the run stays complete', async (t) => {
+  for (const spec of [{ limitations: ['requirements-index.md exceeded 64 KB (full index 90 KB); it lists only candidate and changed items.'] }, { limitations: [] }]) {
+    const s = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
+    writeCtx(s, 'requirements-status.json', { status: 'available', sources: ['PR body'], limitations: [], spec });
+    await post(s);
+    assert.match(s.calls.summary[0].body, /No test gaps found/);
+    assert.match(s.calls.summary[0].body, /specguard:head=HEADSHA/);
+    assert.deepEqual(s.resolved, ['gone']);
+  }
+  const top = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
+  writeCtx(top, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: ['Could not read issue #2.'] });
+  await post(top);
+  assert.match(top.calls.summary[0].body, /Incomplete review[\s\S]*Could not read issue #2/);
+  assert.deepEqual(top.resolved, []);
+});
+
+test('M4: an engine timeout or failure beside valid findings.json posts the verified findings but marks the run incomplete', async (t) => {
+  for (const [st, re] of [['timeout', /timed out after 7 minutes/], ['failed', /review engine failed/]]) {
+    const s = withThreads(t, [GONE()]);
+    writeCtx(s, 'engine-status', `${st}\n`);
+    process.env.REVIEW_TIMEOUT_MINUTES = '7';
+    t.after(() => { delete process.env.REVIEW_TIMEOUT_MINUTES; });
+    await post(s);
+    assert.equal(s.calls.review.length, 1, `${st}: the verified finding is still posted`);
+    assert.match(s.calls.summary[0].body, /Incomplete review/);
+    assert.match(s.calls.summary[0].body, re);
+    assert.doesNotMatch(s.calls.summary[0].body, /specguard:head/); // preflight must retry this head
+    assert.deepEqual(s.resolved, [], `${st}: no thread is resolved`);
+  }
+  const ok = withThreads(t, [GONE()]); // engine wrote no status: a normal complete run
+  await post(ok);
+  assert.match(ok.calls.summary[0].body, /specguard:head=HEADSHA/);
+  assert.doesNotMatch(ok.calls.summary[0].body, /Incomplete review/);
+  assert.deepEqual(ok.resolved, ['gone']);
+});
+
+test('M4: a timeout with valid findings never says "No test gaps found"', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] }));
+  writeCtx(s, 'engine-status', 'timeout\n');
+  await post(s);
+  assert.doesNotMatch(s.calls.summary[0].body, /No test gaps found/);
+  assert.match(s.calls.summary[0].body, /Incomplete review \(see below\)/);
+});
+
+test('M7: only our own bot counts: another bot\'s fingerprint comment does not dedupe, another bot\'s thread is not resolved', async (t) => {
+  const fp = fpOf('missing_test', 'src.js', behaviour.quote);
+  const other = thread('other-bot', FP('a')); other.comments.nodes[0].author.login = 'other-app';
+  const s = withThreads(t, [[other, ...GONE()]], report(), { existing: [{ body: `x\n\n<!-- specguard:fp=${fp} -->`, user: { type: 'Bot', login: 'other-app[bot]' } }] });
+  await post(s);
+  assert.equal(s.calls.review.length, 1, 'the other bot\'s comment did not suppress ours');
+  assert.deepEqual(s.resolved, ['gone']);
+});
+
+test('M7: with a custom token the authenticated login is the identity (not github-actions)', async (t) => {
+  const mineT = thread('mine', FP('a')); mineT.comments.nodes[0].author.login = 'review-app';
+  const s = withThreads(t, [[mineT, ...GONE()]]);
+  s.github.rest.users = { getAuthenticated: async () => ({ data: { login: 'review-app[bot]' } }) };
+  await post(s);
+  assert.deepEqual(s.resolved, ['mine']);
+  const fp = fpOf('missing_test', 'src.js', behaviour.quote);
+  const d = setup(t, report(), { existing: [{ body: `x\n\n<!-- specguard:fp=${fp} -->`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
+  d.github.rest.users = { getAuthenticated: async () => ({ data: { login: 'review-app[bot]' } }) };
+  await post(d);
+  assert.equal(d.calls.review.length, 1, 'a comment by github-actions is not ours when the token is review-app');
+});
+
+test('M7: a thread with no author login is never resolved', async (t) => {
+  const anon = thread('anon', FP('a')); delete anon.comments.nodes[0].author.login;
+  const s = withThreads(t, [[anon]]);
+  await post(s);
+  assert.deepEqual(s.resolved, []);
+});
+
+test('M8: HEAD changed or PR closed after analysis: no review, no sticky update, no thread change; the job summary still has the findings', async (t) => {
+  for (const later of [{ head: { sha: 'NEWHEAD' } }, { head: { sha: 'HEADSHA' }, state: 'closed' }]) {
+    const s = withThreads(t, [GONE()]);
+    let reads = 0;
+    s.github.rest.pulls.get = async () => ({ data: reads++ === 0 ? { head: { sha: 'HEADSHA' }, state: 'open' } : later });
+    await post(s);
+    assert.deepEqual([s.calls.review.length, s.calls.file.length, s.calls.summary.length, s.resolved.length, s.queries], [0, 0, 0, 0, 0]);
+    assert.match(s.jobSummary.join(), /Verify the boundary total/);
+    assert.match(s.jobSummary.join(), /not posted/);
+  }
+});
+
+test('M8: a recheck that fails only after analysis also withholds the PR writes', async (t) => {
+  const s = withThreads(t, [GONE()]);
+  let reads = 0;
+  s.github.rest.pulls.get = async () => { if (reads++) throw new Error('503'); return { data: { head: { sha: 'HEADSHA' } } }; };
+  await post(s);
+  assert.deepEqual([s.calls.review.length, s.calls.summary.length, s.resolved.length], [0, 0, 0]);
+  assert.match(s.jobSummary.join(), /could not recheck HEAD/);
+});
+
+test('M9: listing existing review comments fails: inline comments are withheld, the sticky summary and job summary still carry the findings', async (t) => {
+  for (const status of [503, 403]) {
+    const s = withThreads(t, [GONE()]);
+    s.github.rest.pulls.listReviewComments = async () => { throw Object.assign(new Error('simulated'), { status }); };
+    await post(s);
+    assert.deepEqual([s.calls.review.length, s.calls.file.length], [0, 0], 'cannot dedupe safely: nothing inline');
+    assert.equal(s.calls.summary.length, 1);
+    const body = s.calls.summary[0].body;
+    assert.match(body, /Incomplete review/);
+    assert.match(body, new RegExp(`Delivery degraded: existing review comments could not be listed \\(${status}: simulated\\)`));
+    assert.match(body, /Verify the boundary total/); // the finding is in the summary
+    assert.match(body, /0 inline, 0 file-level, 1 in summary/);
+    assert.doesNotMatch(body, /specguard:head/);
+    assert.match(s.jobSummary.join(), /Delivery degraded/);
+    assert.deepEqual([s.resolved, s.queries], [[], 0]);
+  }
 });
