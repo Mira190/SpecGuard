@@ -151,6 +151,7 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         MAX_COMMENTS: ${{ inputs.max_comments }}
+        RESOLVE_STALE: ${{ inputs.resolve_stale }}
         ENGINE: ${{ steps.engine.outputs.engine }}
         MODEL: ${{ inputs.model }}
         SKIP: ${{ steps.collect.outputs.skip }}

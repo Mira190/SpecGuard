@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { inspectChecks } = require('./checks');
+const { ours } = require('./preflight');
 
 const KINDS = ['spec_mismatch', 'missing_test', 'weak_test', 'standard', 'pushdown'];
 const ALIGN = ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
@@ -426,11 +427,12 @@ function sourcesRead({ reqDocs = [], standards = [], trace, head, base }) {
 }
 // Sections in order of importance (findings, pre-existing drift, Traceability, then the long tables). Each section's items are
 // added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [] }) {
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
   let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}## SpecGuard\n\n${neutralize(status)}\n\n`;
   if (engine) head += `_Engine: ${cell(`${engine}${model ? ` (${model})` : ''}`)}_\n\n`;
   if (partial) head += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
+  if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
   if (traceNote) head += `> Traceability unavailable for this PR (${cell(traceNote)}).\n\n`;
   if (rules.length) head += `> This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.\n\n`;
   const sections = []; // { h, atoms, tail }
@@ -699,7 +701,7 @@ function renameMaps(base, head, cwd, git = (...a) => execFileSync('git', a, { cw
 }
 
 // Resolve review threads whose only comment is our own bot comment for a finding this run no longer reports. Any failure is a limitation note, never a run failure.
-async function resolveStale({ github, core, owner, repo, number, current, maxThreads = 300, maxResolve = 20 }) {
+async function resolveStale({ github, core, owner, repo, number, current, actor = null, maxThreads = 300, maxResolve = 20 }) {
   const q = 'query($o:String!,$r:String!,$n:Int!,$a:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$a){pageInfo{hasNextPage endCursor}nodes{id isResolved comments(first:2){nodes{author{login __typename} body}}}}}}}';
   try {
     const stale = [];
@@ -709,7 +711,7 @@ async function resolveStale({ github, core, owner, repo, number, current, maxThr
       for (const th of t.nodes) {
         seen++;
         const cs = th.comments.nodes;
-        const m = cs.length === 1 && !th.isResolved && cs[0].author && cs[0].author.__typename === 'Bot' && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(cs[0].body || '');
+        const m = cs.length === 1 && !th.isResolved && ours(cs[0].author, actor) && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(cs[0].body || '');
         if (m && !current.has(m[1])) stale.push(th.id);
       }
       if (!t.pageInfo.hasNextPage) break;
@@ -729,23 +731,29 @@ async function run({ github, context, core }) {
   const partial = env.PARTIAL === 'true';
   const maxComments = Math.max(1, parseInt(env.MAX_COMMENTS, 10) || 10);
   const headSha = env.HEAD_SHA || pr.head.sha;
-  let livePR, unchecked = false;
+  // '' when the PR is still open at our head; else why not. Not being able to tell is also a reason: nothing is posted then (no atomicity is claimed: a push can still land right after).
+  let livePR, rechecked = true;
   const current = async () => {
-    try { livePR = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })).data; }
-    catch (e) { unchecked = true; core.warning(`SpecGuard: could not recheck HEAD: ${e.message}`); return true; } // continue with the event's head SHA
-    return livePR.head.sha === headSha;
+    try { livePR = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })).data; rechecked = true; }
+    catch (e) { rechecked = false; core.warning(`SpecGuard: could not recheck HEAD: ${e.message}`); return 'could not recheck HEAD'; }
+    return livePR.head.sha !== headSha ? 'superseded HEAD' : livePR.state === 'closed' ? 'PR is no longer open' : '';
   };
-  if (!await current()) return core.warning('SpecGuard: superseded HEAD; no results published');
+  const early = await current();
+  if (early && rechecked) return core.warning(`SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary
+  let actorId; // the authenticated login, or null (GITHUB_TOKEN cannot call /user: github-actions[bot])
+  const actor = async () => {
+    if (actorId === undefined) { try { actorId = (await github.rest.users.getAuthenticated()).data.login; } catch { actorId = null; } }
+    return actorId;
+  };
 
   const publish = async (text) => {
     await core.summary.addRaw(text).write();
     try {
-      if (!await current()) return core.warning('SpecGuard: superseded HEAD; summary not updated');
+      const stop = await current();
+      if (stop) return core.warning(`SpecGuard: ${stop}; summary comment not updated`);
       const cs = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 });
-      // Only our own comment: a Bot whose login is the authenticated actor (github-actions[bot] for GITHUB_TOKEN) and whose body starts with the marker.
-      let actor = null;
-      try { actor = (await github.rest.users.getAuthenticated()).data.login; } catch { /* GITHUB_TOKEN cannot call this */ }
-      const mine = cs.find((c) => c.user && c.user.type === 'Bot' && c.user.login === (actor || 'github-actions[bot]') && typeof c.body === 'string' && c.body.startsWith('<!-- specguard:summary -->'));
+      const me = await actor();
+      const mine = cs.find((c) => ours(c.user, me) && typeof c.body === 'string' && c.body.startsWith('<!-- specguard:summary -->'));
       if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body: text });
       else await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: text });
     } catch (e) { core.warning(`SpecGuard: could not post summary comment: ${e.message}`); }
@@ -760,16 +768,24 @@ async function run({ github, context, core }) {
     : { status: 'unavailable', ref: '', checks: [], reason: target === 'merge' ? 'PR has no current test-merge commit' : 'Configured standards ref must be head or an available current merge commit.' };
   const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, partial }));
 
+  const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
+  // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
+  const incomplete = [];
+  const st = (readCtx('engine-status') || '').trim();
+  if (partial) incomplete.push('The diff exceeded `max_diff_kb` and was truncated; obligations outside the reviewed portion are unknown.');
+
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
   catch (e) {
-    let st = ''; try { st = fs.readFileSync(path.join(ctx, 'engine-status'), 'utf8').trim(); } catch {}
     if (st === 'timeout') return failed(`the review timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; raise review_timeout_minutes or split the PR`);
     if (st === 'failed') return failed('the review engine failed; see the job log');
     return failed(`no valid findings.json (${e.code || 'parse error'}); see the job log`);
   }
+  const proposed = Array.isArray(data?.findings) ? data.findings.length : 0; // what the model reported: a finding dropped or demoted later is a degrade, not a fix
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
+  // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
+  if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);
   const addNote = (m) => { data.not_reviewed = [data.not_reviewed, m].filter(Boolean).join(' '); };
   const memoed = (read) => { const m = new Map(); return (p) => (m.has(p) ? m : m.set(p, read(p))).get(p); }; // files do not change during a run
   const root = env.GITHUB_WORKSPACE || process.cwd();
@@ -792,13 +808,13 @@ async function run({ github, context, core }) {
   }
   // The trusted spec allow-list. trace-status says whether tracing ran: failed/unavailable means an EMPTY list (fail closed) and a visible
   // notice; an absent list with no status is an older collector (no restriction, but paths are still normalised and tracked-only).
-  const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
   let specFiles, traceNote = '';
   const traceStatus = (readCtx('trace-status') || '').trim(), listed = readCtx('spec-files.txt');
   if (listed !== null) specFiles = listed.split('\n').filter(Boolean);
   if (['failed', 'unavailable'].includes(traceStatus)) {
     specFiles = [];
     traceNote = traceStatus === 'failed' ? 'requirement tracing failed or timed out' : 'requirement tracing is not available';
+    incomplete.push(`Requirement tracing was not done: ${traceNote}.`);
   } else if (traceStatus === 'off') specFiles = [];
   let smap = null; // path -> scope; absent for older collectors, which skips the applicability check
   try { smap = new Map(JSON.parse(readCtx('standards-map.json')).map((e) => [e.path, e.scope])); } catch { /* no map */ }
@@ -809,10 +825,14 @@ async function run({ github, context, core }) {
   if (requirements) {
     data.requirements_source = requirements.sources.join(', ') || 'unavailable; changed behaviour only';
     if (requirements.status !== 'available') addNote((requirements.limitations || []).join(' '));
+    // What the collector did not collect. Not these: an empty PR body (a fact about the PR) and the capped requirements-index.md (the documents stay readable).
+    const lims = [...(requirements.limitations || []), ...(requirements.spec?.limitations || [])].filter((l) => !/^No requirement text available|^requirements-index\.md exceeded /.test(l));
+    if (lims.length) incomplete.push(`Requirement collection did not cover everything: ${lims.slice(0, 10).join(' ')}${lims.length > 10 ? ` (+${lims.length - 10} more)` : ''}`);
   } else { // no collected documents: quotes verify only against files; unverifiable ones are unassessed but their obligations keep their own citations
     verifyRequirements(data, { unavailable: true, specFiles }, readLines);
     data.requirements_source = 'unavailable; changed behaviour only';
     addNote('Requirement collection status unavailable.');
+    incomplete.push('Requirement collection status was unavailable; only changed behaviour was assessed.');
   }
   if (partial) addNote('Diff truncated; obligations outside the reviewed portion are unknown.');
   const base = env.BASE_SHA || pr.base?.sha;
@@ -824,10 +844,19 @@ async function run({ github, context, core }) {
   const preExisting = []; // drift this PR did not cause: summary section only, never inline
 
   const known = new Set();
-  for (const c of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: pr.number, per_page: 100 })) {
-    const m = /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || ''); // the marker is always last; outdated comments have line=null: fingerprint only
-    if (m && c.user && c.user.type === 'Bot') known.add(m[1]);
+  let withheld = ''; // why inline comments cannot be posted safely
+  try {
+    const me = await actor();
+    for (const c of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: pr.number, per_page: 100 })) {
+      const m = /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || ''); // the marker is always last; outdated comments have line=null: fingerprint only
+      if (m && ours(c.user, me)) known.add(m[1]);
+    }
+  } catch (e) {
+    withheld = `existing review comments could not be listed (${e.status ? `${e.status}: ` : ''}${String(e.message).split('\n')[0]}), so inline comments were withheld to avoid duplicates`;
+    core.warning(`SpecGuard: ${withheld}`);
+    incomplete.push(`Delivery degraded: ${withheld}; the findings are in this summary.`);
   }
+  const survive = new Set(); // fingerprints of every finding still present after validation, wherever it ends up (inline, summary, capped, unverifiable)
 
   const kept = [];
   let already = 0;
@@ -840,11 +869,12 @@ async function run({ github, context, core }) {
     if (f.kind === 'spec_mismatch') {
       const req = data.requirements.find((r) => r.obligation_ids.includes(f.obligation_ids[0]));
       if (req && specPath(req.source) && req.ref) f = { ...f, source: `${req.source.replace(REMOVED, '')} ${req.ref}` };
-      if (f.obligation_ids.every((id) => pre.has(id))) {
-        const d = snap(f, readLines(f.path));
-        if (d === null) addNote(`Finding citation did not match: ${f.path}:${f.line}.`); else preExisting.push({ ...f, line: f.line + d });
-        continue;
-      }
+    }
+    survive.add(fingerprint(f.kind, f.path, f.quote, f.source)); // before any route or drop below
+    if (f.kind === 'spec_mismatch' && f.obligation_ids.every((id) => pre.has(id))) {
+      const d = snap(f, readLines(f.path));
+      if (d === null) addNote(`Finding citation did not match: ${f.path}:${f.line}.`); else preExisting.push({ ...f, line: f.line + d });
+      continue;
     }
     f = gate(skeletonGate(f));
     if (f.side === 'LEFT') {
@@ -889,7 +919,9 @@ async function run({ github, context, core }) {
 
   }
   const merged = merge(cands);
-  for (const f of merged) known.has(f.fp) ? already++ : kept.push(f);
+  for (const f of merged) { survive.add(f.fp); known.has(f.fp) ? already++ : kept.push(f); } // a merged comment's fp covers all its members
+  // ponytail: a finding that validation/verification dropped (its citation or requirement link failed) cannot be fingerprinted like its comment was; hold all resolving instead of guessing.
+  const degraded = proposed > data.findings.length;
 
   const p = plan(kept, maps, maxComments);
   const comments = p.inline.map((f) => ({
@@ -901,8 +933,13 @@ async function run({ github, context, core }) {
   const counts = () => `${inline} inline, ${filed} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
   const head = `<!-- specguard:review -->\nSpecGuard found ${axes(assessed)}; ${counts()}.${prov ? `\n${prov}.` : ''}\nEngine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
 
-  if (!await current()) return core.warning('SpecGuard: superseded HEAD; no review published');
-  if (comments.length) {
+  const stop = withheld ? 'inline comments withheld: could not deduplicate' : await current(); // never post what cannot be deduplicated or what may be stale
+  if (stop) {
+    if (!withheld) { core.warning(`SpecGuard: ${stop}; no review published`); incomplete.push(`Delivery degraded: ${stop}; the review comments and PR summary were not updated (this text is the job summary).`); }
+    for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: withheld ? 'withheld: could not deduplicate' : `not posted: ${stop}` });
+    inline = filed = 0;
+  }
+  if (!stop && comments.length) {
     const post = (body, cs) => github.rest.pulls.createReview({ owner, repo, pull_number: pr.number, commit_id: headSha, event: 'COMMENT', body: clean(body), ...(cs && { comments: cs }) });
     try { await post(head, comments); }
     catch (e) {
@@ -919,17 +956,17 @@ async function run({ github, context, core }) {
       }
     }
   }
-  for (const f of p.file) {
+  for (const f of stop ? [] : p.file) {
     const range = f.start_line ? `#L${f.start_line}-L${f.line}` : `#L${f.line}`;
     const link = `${context.serverUrl}/${owner}/${repo}/blob/${headSha}/${f.path}${range}`;
     try {
       await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
     } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); filed--; }
   }
-  if (!partial && env.RESOLVE_STALE !== 'false') await resolveStale({ github, core, owner, repo, number: pr.number, current: new Set(merged.map((f) => f.fp)) });
-  if (unchecked) addNote('The PR head could not be rechecked; results use the event head commit.');
+  if (!stop && !incomplete.length && !degraded && env.RESOLVE_STALE !== 'false') await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: await actor() });
 
-  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found in the assessed obligations.' : `${gapFree(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, partial, engine, model, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, headSha,
+  const clean_ = noGaps(data) && !incomplete.length;
+  await publish(buildSummary({ status: `${clean_ ? 'No test gaps found in the assessed obligations.' : `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base } }));
 }
 
