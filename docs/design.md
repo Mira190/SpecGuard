@@ -54,6 +54,12 @@ What this does not show:
 - **Advisory only.** v1 posts `COMMENT` reviews and never fails or blocks a PR because of findings.
 - **Reuse before writing.** Section 4 lists the prior art that was checked and what each item contributes.
 
+### Decisions (2026-10-13, owner answers to `handoff-goal-critique.md` §7)
+- **Requirements live in the PR or in the repo.** SpecGuard finds requirement docs and folders itself, so `trace: auto` stays the default. PR and issue criteria are judged for alignment even with no repo doc or with `trace: off`.
+- **"Coding standard confirmed"** means the repo's instruction files (AI review) plus the configured lint/format check results. No PR-template checkbox.
+- **QA happens in the PR action, on every push.** Incremental review and trigger tuning are deferred.
+- **Pilot repo:** Kite (private, Electron/React/TypeScript), Copilot engine on a personal repo.
+
 ---
 
 ## 1. First principles
