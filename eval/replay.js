@@ -54,7 +54,7 @@ function prepareReal({ repoDir, base, head, prTitle = '', prBody = '', out, id, 
   return meta;
 }
 
-// Counts from the posted comments and the sticky summary. Summary-only = findings carried in full by the summary (`- ❌ **Missing test:** title `path:line` (why)`),
+// Counts from the posted comments and the sticky summary. Summary-only = findings carried in full by the summary (`- title `path:line` (why)` under a kind heading, or the older `- ❌ **Missing test:** …`),
 // outside the Pre-existing drift block of Details; findings posted as comments appear there with a linked title (`[title](url)`) and are not counted.
 function countFindings(comments, summary) {
   const inline = { total: 0, byKind: {}, byConfidence: { high: 0, low: 0 } };
