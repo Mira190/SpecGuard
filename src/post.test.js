@@ -1642,12 +1642,36 @@ test('stale: resolves nothing on a failed, skipped or truncated run, or when dis
 
 test('stale: a GraphQL error only warns; the review and summary are unchanged', async (t) => {
   const clean = setup(t); await post(clean);
-  const s = withThreads(t, [new Error('Resource not accessible by integration')]);
+  const s = withThreads(t, [new Error('rate limited')]);
   await post(s);
   assert.equal(s.calls.review.length, 1);
-  assert.deepEqual(s.warnings, ['SpecGuard: stale review threads could not be resolved: Resource not accessible by integration']);
+  assert.deepEqual(s.warnings, ['SpecGuard: stale review threads could not be resolved: rate limited']);
   assert.equal(s.calls.summary[0].body, clean.calls.summary[0].body);
   assert.deepEqual(s.resolved, []);
+});
+
+const NOTE = /<sub>Threads for findings no longer reported were left open: this token cannot resolve review threads \(see README, resolve_stale\)\.<\/sub>/;
+const failMutation = (s, err) => {
+  const g = s.github.graphql;
+  s.github.graphql = async (q, v) => { if (/resolveReviewThread/.test(q)) throw err; return g(q, v); };
+};
+
+test('stale: the mutation refused for permissions adds one summary note and never throws', async (t) => {
+  for (const err of [new Error('Request failed due to following response errors: - Resource not accessible by integration'), Object.assign(new Error('Forbidden'), { status: 403 })]) {
+    const s = withThreads(t, [[thread('stale', FP('a'))]]);
+    failMutation(s, err);
+    await post(s);
+    assert.equal(s.calls.summary[0].body.match(new RegExp(NOTE.source, 'g')).length, 1);
+    assert.equal(s.warnings.length, 1);
+  }
+});
+
+test('stale: a generic mutation error warns only, no summary note', async (t) => {
+  const s = withThreads(t, [[thread('stale', FP('a'))]]);
+  failMutation(s, new Error('rate limited'));
+  await post(s);
+  assert.doesNotMatch(s.calls.summary[0].body, /left open/);
+  assert.deepEqual(s.warnings, ['SpecGuard: stale review threads could not be resolved: rate limited']);
 });
 
 test('stale: a marker followed by trailing whitespace and a newline still counts', async (t) => {

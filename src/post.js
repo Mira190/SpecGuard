@@ -507,12 +507,13 @@ function sourcesRead({ reqDocs = [], standards = [], trace, head, base, rejected
 }
 // Sections in order of importance (findings, pre-existing drift, Traceability, then the long tables). Each section's items are
 // added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote }) {
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
   let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}## SpecGuard\n\n${neutralize(status)}\n\n`;
   if (engine) head += `${usageLine({ engine, model, raw: usage, notes })}\n\n`;
   const sn = counts && counts.complete && counts.since;
   if (sn && counts.since_total) head += `<sub>Since earlier reviews: ${sn.addressed} addressed · ${sn.open} still open · ${sn.dismissed} dismissed · ${sn.not_observed} not observed (not proof of a fix)</sub>\n\n`;
+  if (resolveNote) head += `<sub>Threads for findings no longer reported were left open: ${resolveNote} (see README, resolve_stale).</sub>\n\n`;
   if (partial) head += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
   if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
   if (traceNote) head += `> Traceability unavailable for this PR (${cell(traceNote)}).\n\n`;
@@ -815,7 +816,11 @@ async function resolveStale({ github, core, owner, repo, number, current, actor 
       if (m && !current.has(m[1])) stale.push(th.id);
     }
     for (const threadId of stale.slice(0, maxResolve)) await github.graphql('mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{id}}}', { t: threadId });
-  } catch (e) { core.warning(`SpecGuard: stale review threads could not be resolved: ${e.message}`); }
+  } catch (e) {
+    core.warning(`SpecGuard: stale review threads could not be resolved: ${e.message}`);
+    // returns a short reason when the token itself is not allowed to resolve threads, so the summary can say why they stayed open
+    if (e.status === 403 || /Resource not accessible by integration/i.test(e.message)) return 'this token cannot resolve review threads';
+  }
 }
 
 // Did the diff from `from` to `to` change a line of the old side of `file` in [start, end]? true / false, or null when git cannot say
@@ -1145,10 +1150,10 @@ async function run({ github, context, core }) {
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
   const tele = { v: 1, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, outcomes };
-  if (!stop && complete && env.RESOLVE_STALE !== 'false') await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads });
+  const resolveNote = !stop && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
   const clean_ = noGaps(data) && !incomplete.length;
-  await publish(buildSummary({ status: `${clean_ ? 'No test gaps found in the assessed obligations.' : `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ status: `${clean_ ? 'No test gaps found in the assessed obligations.' : `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele }));
 }

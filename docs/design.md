@@ -294,7 +294,7 @@ Output must match `findings.schema.json`: `requirements_source`, a `coverage[]` 
 - [x] **S3 `post.js` + `post.test.js`.** Use canned findings, no AI. In the sandbox, verify: an inline comment, a multi-line suggestion block, an out-of-hunk finding routed to a file-level comment, the 422 body-only retry, a re-run that creates no duplicates, and the summary updated in place. Capture the real 422 bodies, and re-test whether the API now accepts comments on unchanged lines.
 - [ ] **S4 Engines.** (Copilot via GITHUB_TOKEN on a personal repo verified; Claude engine and org-repo billing not yet.) Verify the section 8 flags on both CLIs, including the Copilot output and turn-cap flags. Test `GITHUB_TOKEN` + `copilot-requests` on **a personal repo and an org repo**. Record credits/usage per run. Canary: a PR that adds a `.claude/settings.json` hook and a `.mcp.json` must not execute either. Exit criterion: the same skill yields valid JSON on both engines.
 - [x] **S5 Skill.** Write `SKILL.md` from the section 4.1 sources, add `NOTICE`, and iterate against the acceptance matrix.
-- [ ] **S6 Pilots.** (one live personal-repo run so far) Install on 3 repos (section 10) and grade with the skill-creator style loop (expectations, then grader). Track useful / not useful in `eval/results.md`.
+- [ ] **S6 Pilots.** (Kite pilot 2026-10-13: 6 PR runs + 1 audit, see `docs/pilot-kite.md`; still needs human-authored PRs and a paid-plan run) Install on 3 repos (section 10) and grade with the skill-creator style loop (expectations, then grader). Track useful / not useful in `eval/results.md`.
 - [x] **S7 Release.** Tag `v1` and finish the README.
 
 ### Success criteria
