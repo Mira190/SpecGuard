@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { splitDiff, stats, thresholds, parseCandidates, plan, main, DIFF_BUDGET } = require('./focus.js');
+const { splitDiff, stats, trim, thresholds, parseCandidates, plan, main, DIFF_BUDGET } = require('./focus.js');
+const { numberDiff } = require('./numdiff.js');
 const { LIMITS } = require('./prompt.js');
 
 // One file's diff: `add` added lines, `del` removed lines (each a branch line when `branchy`), optionally a whole-file deletion.
@@ -36,7 +37,7 @@ const candidates = (withTest) => Array.from({ length: 12 }, (_, i) => `src/mod${
 test('splitDiff and stats: per file text, changed lines and removed branch lines', () => {
   const parts = splitDiff(fileDiff('a/b.js', { add: 2, del: 3, branchy: true }) + fileDiff('c.js'));
   assert.deepEqual(parts.map((p) => p.path), ['a/b.js', 'c.js']);
-  assert.deepEqual(stats(parts[0].text), { lines: 5, risky: 3, deleted: false });
+  assert.deepEqual(stats(parts[0].text), { lines: 5, risky: 3, branch: 3, deleted: false });
   assert.equal(stats(splitDiff(fileDiff('x.js', { deleted: true, del: 2 }))[0].text).deleted, true);
   assert.equal(stats('diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n--- sql comment\n+++ b\n').lines, 2, 'a removed "-- x" line is not a header');
 });
@@ -72,23 +73,82 @@ test('ranking: a 30-file mixed PR keeps logic first and drops docs, config and g
   assert.ok(src.every((p) => /^src\/mod\d+\.js$/.test(p)), src.join());
   assert.equal(names(r)[0], 'src/mod3.js', 'removed error handling and no test found rank first');
   assert.match(r.chosen[0].why.join(), /no test found/);
-  assert.match(r.chosen[0].why.join(), /12 removed branch\/error line/);
+  assert.match(r.chosen[0].why.join(), /12 branch\/error line\(s\) changed.*12 of them removed/);
   const out = new Set(r.skipped.map((f) => f.path));
   assert.ok(!names(r).includes('dist/bundle.js') && !names(r).includes('assets/logo.snap'));
   assert.equal(r.chosen.length + r.skipped.length, 30);
   assert.equal(new Set([...names(r), ...out]).size, 30, 'every file is either chosen or skipped');
 });
 
-test('budget: chosen source diffs fit 60% of the prompt budget; a changed test of a chosen file rides in the rest', () => {
+test('budget: every chosen file is kept, each cut to its share of the prompt budget with a marker; a small file keeps all of its diff', () => {
   assert.equal(DIFF_BUDGET, LIMITS.diff);
-  const big = Array.from({ length: 10 }, (_, i) => fileDiff(`src/big${i}.js`, { add: 250 }));
-  const r = plan(ctx([...big, fileDiff('src/big0.test.js', { add: 20 }), ...Array.from({ length: 20 }, (_, i) => fileDiff(`x${i}.js`, { add: 1 }))],
+  const big = Array.from({ length: 14 }, (_, i) => fileDiff(`src/big${i}.js`, { add: 250 + i }));
+  const r = plan(ctx([...big, fileDiff('src/big0.test.js', { add: 20 }), fileDiff('src/small.js', { add: 3 }), ...Array.from({ length: 20 }, (_, i) => fileDiff(`x${i}.js`, { add: 1 }))],
     { 'test-candidates.txt': 'src/big0.js\n  src/big0.test.js  (same name)\n' }), {});
-  const srcBytes = r.chosen.filter((f) => !f.path.includes('.test.')).reduce((a, f) => a + Buffer.byteLength(f.text), 0);
-  assert.ok(srcBytes < DIFF_BUDGET * 0.6 + 8000, String(srcBytes)); // numbered text is a little larger than the raw one
-  assert.ok(Buffer.byteLength(r.numbered) <= DIFF_BUDGET, 'the numbered focused diff fits the prompt budget');
-  assert.ok(names(r).filter((p) => p.startsWith('src/big') && !p.includes('.test.')).length <= 4, 'only a few big files fit');
-  if (names(r).includes('src/big0.js')) assert.ok(names(r).includes('src/big0.test.js'));
+  assert.equal(names(r).filter((p) => !p.includes('.test.')).length, 12, 'K files, none dropped for size');
+  assert.ok(names(r).includes('src/big0.test.js'), 'a changed test of a chosen file rides along');
+  assert.ok(Buffer.byteLength(r.numbered) <= DIFF_BUDGET, `the numbered focused diff fits the prompt budget: ${Buffer.byteLength(r.numbered)}`);
+  const pieces = r.numbered.split(/^(?=diff --git )/m);
+  assert.equal(pieces.length, r.chosen.length);
+  for (const piece of pieces.filter((x) => /^diff --git a\/src\/big\d+\.js/.test(x))) {
+    assert.match(piece, /\n… \d+ more changed lines in this file not shown \(read the file for them\)\n$/);
+    assert.ok(Buffer.byteLength(piece) > 1500, 'every file keeps a real share, not one line');
+  }
+  const only = plan(ctx([fileDiff('src/small.js', { add: 3 }), ...big.slice(0, 2)]), { FOCUS_THRESHOLD: '1,1' });
+  assert.ok(!only.numbered.split('diff --git a/src/big')[0].includes('more changed lines'), 'no marker on a file that fits');
+});
+
+test('trim: whole hunks up to the allowance, the first hunk cut by lines when alone too big, a marker counts the changed lines left out', () => {
+  const hunk = (at, n) => `@@ -${at},${n} +${at},${n} @@\n${Array.from({ length: n }, (_, i) => `+line ${at + i}\n`).join('')}`;
+  const nd = numberDiff(`diff --git a/f.js b/f.js\n--- a/f.js\n+++ b/f.js\n${hunk(1, 20)}${hunk(100, 20)}${hunk(200, 20)}`);
+  assert.equal(trim(nd, 1e6), nd);
+  const two = trim(nd, Buffer.byteLength(nd) - 50);
+  assert.match(two, /@@ -100,20/);
+  assert.doesNotMatch(two, /@@ -200,20/);
+  assert.match(two, /… 20 more changed lines in this file not shown \(read the file for them\)\n$/);
+  const cut = trim(nd, 300);
+  assert.match(cut, /@@ -1,20/);
+  assert.doesNotMatch(cut, /@@ -100,20/);
+  assert.match(cut, /… (4\d|5\d|60) more changed lines/);
+  assert.ok(Buffer.byteLength(cut) < 450);
+});
+
+test('requirement documents are not review files: listed in focus-requirements.txt, neither chosen nor skipped', () => {
+  const d = ctx([fileDiff('docs/spec.md', { add: 300 }), fileDiff('src/a.js', { add: 20 }), ...Array.from({ length: 26 }, (_, i) => fileDiff(`src/m${i}.js`, { add: 2 }))], { 'spec-files.txt': 'docs/spec.md\n' });
+  const r = main(d, {});
+  assert.ok(!names(r).includes('docs/spec.md') && !r.skipped.some((f) => f.path === 'docs/spec.md'));
+  assert.equal(fs.readFileSync(path.join(d, 'focus-requirements.txt'), 'utf8'), 'docs/spec.md\t300\n');
+  assert.ok(!fs.readFileSync(path.join(d, 'diff.numbered.txt'), 'utf8').includes('docs/spec.md'));
+});
+
+// PR #111 (721dd1a..7909236): the live focused review spent its three files on the offline eval tool and skipped the product. Names and sizes are the real ones.
+test('PR #111 shape: post, prompt, focus, collect.sh and action.yml are chosen before eval/* and docs/*', () => {
+  const pr = {
+    'README.md': [3], 'action.yml': [4, ['  focus_files: { default: "12" }']], 'docs/validation-plan.md': [98], 'docs/validation-workflow.example.yml': [112],
+    'eval/assign.js': [17], 'eval/assign.test.js': [38], 'eval/label-export.js': [103, ['if (!rows.length) return;', 'throw new Error("bad")']], 'eval/label-export.test.js': [54],
+    'eval/weekly-report.js': [259, Array.from({ length: 30 }, (_, i) => `if (x${i}) return;`)], 'eval/weekly-report.test.js': [150],
+    'src/collect.sh': [4, ['timeout 60 node "$HERE/focus.js" "$CTX" || { echo failed; }']], 'src/collect.test.js': [17],
+    'src/focus.js': [145, ["const { numberDiff } = require('./numdiff.js');", 'if (!th) return { focused: false };']], 'src/focus.test.js': [122],
+    'src/post.js': [7, ['const focusNote = (n) => n; // see src/focus.js']], 'src/post.test.js': [17],
+    'src/prompt.js': [22, ["const { splitDiff } = require('./focus.js');", 'if (focus) return null;']], 'src/prompt.test.js': [19],
+  };
+  const diffs = Object.entries(pr).map(([p, [add, extra = []]]) => fileDiff(p, { add }) + extra.map((l) => `+${l}\n`).join(''));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-root-'));
+  fs.writeFileSync(path.join(root, 'action.yml'), 'runs:\n  steps:\n    - run: bash "$GITHUB_ACTION_PATH/src/collect.sh"\n    - run: node "$GITHUB_ACTION_PATH/src/prompt.js" && node "$GITHUB_ACTION_PATH/src/post.js"\n');
+  const cands = ['src/collect.sh', 'src/focus.js', 'src/post.js', 'src/prompt.js', 'eval/assign.js', 'eval/label-export.js', 'eval/weekly-report.js']
+    .map((p) => `${p}\n  ${p.replace(/\.(js|sh)$/, '.test.js')}  (same name)\n`).join('');
+  const d = ctx(diffs, { 'test-candidates.txt': cands });
+  const r = plan(d, { FOCUS_ROOT: root });
+  const src = names(r).filter((p) => !p.includes('.test.'));
+  const core = ['src/post.js', 'src/prompt.js', 'src/focus.js', 'src/collect.sh', 'action.yml'];
+  assert.deepEqual(src.slice(0, 5).sort(), core.slice().sort(), r.chosen.map((f) => `${f.path} ${f.score.toFixed(1)}`).join('\n'));
+  assert.ok(src.slice(5).every((p) => /^(eval|docs)\/|^README/.test(p)));
+  const k6 = plan(d, { FOCUS_ROOT: root, FOCUS_FILES: '6' });
+  assert.deepEqual(names(k6).filter((p) => !p.includes('.test.')).slice(0, 5).sort(), core.slice().sort());
+  const why = Object.fromEntries(r.chosen.map((f) => [f.path, f.why.join(', ')]));
+  assert.match(why['src/post.js'], /entry point \+3\.0/);
+  assert.match(why['src/focus.js'], /fan-in 3 \+3\.0/);
+  assert.match(why['eval/weekly-report.js'], /tooling\/docs path x0\.35/);
 });
 
 test('deleted files rank low, a requirement naming a file raises it, at most FOCUS_FILES are kept', () => {
@@ -106,7 +166,7 @@ test('main: writes focus.txt, focus-skipped.txt and a numbered diff of the chose
   const before = fs.readFileSync(path.join(d, 'diff.patch'), 'utf8');
   assert.equal(main(d, {}).focused, true);
   const focus = fs.readFileSync(path.join(d, 'focus.txt'), 'utf8').split('\n').filter(Boolean);
-  assert.match(focus[0], /^src\/mod3\.js\t\d+\.\d\tlogic, no test found, 12 removed branch\/error line\(s\)$/);
+  assert.match(focus[0], /^src\/mod3\.js\t\d+\.\d\tlogic \+3\.0, size \+2\.5, 12 branch\/error line\(s\) changed \+2\.0, 12 of them removed \+2\.0, no test found \+0\.5$/);
   const skipped = fs.readFileSync(path.join(d, 'focus-skipped.txt'), 'utf8').split('\n').filter(Boolean);
   assert.match(skipped[0], /^[^\t]+\t\d+$/);
   assert.equal(focus.length + skipped.length, 30);
