@@ -194,7 +194,8 @@ test('isSpecDoc admits structured items, RFC capitals, dense prose and spec dire
   // a file named like a spec is as strong as a spec directory, in any directory (long English design doc, sparse "must")
   const two = [n('a must b.'), n('c should d.')];
   for (const f of ['docs/design.md', 'design.md', 'api-spec.md', 'docs/design_doc.md', 'product-requirements.md', 'docs/PRD.md', 'acceptance-criteria.md']) assert.equal(T.isSpecDoc(two, f, 27600), true, f);
-  for (const f of ['docs/guide.md', 'README.md', 'docs/architecture.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'designer-notes.md']) assert.equal(T.isSpecDoc(two, f, 27600), false, f);
+  for (const f of ['design-doc.md', 'docs/design-v2.md']) assert.equal(T.isSpecDoc(two, f, 27600), true, f);
+  for (const f of ['docs/guide.md', 'README.md', 'docs/architecture.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'designer-notes.md', 'design-tokens.md', 'docs/design-system.md']) assert.equal(T.isSpecDoc(two, f, 27600), false, f);
   assert.equal(T.isSpecDoc([n('a must b.')], 'docs/design.md', 27600), false); // the requirement-doc gate still applies
 });
 
@@ -240,6 +241,11 @@ test('durationVariants expands durations and leaves other values bare', () => {
 test('isTestPath matches test directories and file suffixes only', () => {
   for (const p of ['src/a.test.ts', 'test/a.js', 'src/__tests__/a.js', 'a_spec.rb', 'pkg/tests/x.py', 'foo-test.go']) assert.equal(T.isTestPath(p), true, p);
   for (const p of ['src/contest.js', 'src/latest.js', 'src/premium.ts', 'docs/specs/a.md']) assert.equal(T.isTestPath(p), false, p);
+});
+
+test('isTestPath per stack: .NET, Swift, Java, Go, Python, Scala, JS; case-insensitive words, no false positives', () => {
+  for (const p of ['Foo.Tests/Bar.cs', 'Foo.Tests/FooTests.cs', 'src/Tests/Bar.cs', 'AppTests.swift', 'src/main/java/FooTest.java', 'pkg/foo_test.go', 'test_foo.py', 'src/FooSpec.scala', 'src/foo.spec.ts']) assert.equal(T.isTestPath(p), true, p);
+  for (const p of ['src/contest/x.ts', 'latest.ts', 'attestation.go', 'src/Latest.cs', 'docs/Spec.md', 'SPEC.md']) assert.equal(T.isTestPath(p), false, p);
 });
 
 test('pathKind classifies snapshot, test, doc, config and src by path', () => {

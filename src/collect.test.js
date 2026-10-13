@@ -374,3 +374,39 @@ fs.writeFileSync(path.join(process.env.CTX, 'requirements-status.json'), JSON.st
   assert.equal(unnamed.ctxFile('files.txt'), '');
   assert.equal(unnamed.ctxFile('diff.patch'), '');
 });
+
+test('D6: an oversize diff keeps whole files in order, lists the dropped ones, and never cuts mid-hunk', (t) => {
+  const out = path.join(os.tmpdir(), `specguard-out-${process.pid}-d6`).split(path.sep).join('/'); t.after(() => fs.rmSync(out, { force: true }));
+  const lines = (tag, n) => Array.from({ length: n }, (_, i) => `${tag} line ${i} ${'x'.repeat(20)}\n`).join('');
+  const r = scenario(t, { 'a.js': lines('a', 5), 'b.js': lines('b', 5), 'c.js': lines('c', 5), 'd.js': lines('d', 5) }, ({ write }) => {
+    write('a.js', lines('A', 5)); write('b.js', lines('B', 60)); write('c.js', lines('C', 5)); write('d.js', lines('D', 5));
+  }, { MAX_DIFF_KB: '1', GITHUB_OUTPUT: out });
+  const d = r.ctxFile('diff.patch');
+  assert.ok(d.length <= 1024);
+  assert.match(d, /\+A line 4/); assert.match(d, /\+C line 4/);
+  assert.doesNotMatch(d, /B line/); // b.js does not fit: dropped whole, later files that fit are kept
+  assert.deepEqual(r.ctxFile('diff-dropped.txt').split('\n').filter(Boolean), ['b.js', 'd.js']);
+  assert.deepEqual([...d.matchAll(/^diff --git a\/(\S+)/gm)].map((m) => m[1]), ['a.js', 'c.js']);
+  assert.match(fs.readFileSync(out, 'utf8'), /partial=true/);
+});
+
+test('D6: when the first file alone exceeds the budget its first whole hunks are kept and it is listed as partial', (t) => {
+  const body = (tag) => Array.from({ length: 40 }, (_, i) => `${tag} ${i} ${'y'.repeat(60)}\n`).join('');
+  const r = scenario(t, { 'big.js': body('o'), 'z.js': 'z\n' }, ({ write }) => {
+    // three change groups far apart: three hunks of about 560 bytes each
+    write('big.js', body('o').split('\n').map((l, i) => ([2, 20, 38].includes(i) ? l.replace('o', 'N') : l)).join('\n')); write('z.js', 'zz\n');
+  }, { MAX_DIFF_KB: '1' });
+  const d = r.ctxFile('diff.patch');
+  assert.ok(d.length <= 1024);
+  assert.match(d, /^diff --git a\/big\.js/);
+  const hunks = d.split('\n').filter((l) => l.startsWith('@@ ')).length;
+  assert.ok(hunks >= 1 && hunks < 3, `hunks ${hunks}`);
+  assert.ok(d.endsWith('\n') && !/\n[^\n+ \-@\d][^\n]*$/.test(d.trimEnd()), 'ends at a hunk boundary');
+  assert.deepEqual(r.ctxFile('diff-dropped.txt').split('\n').filter(Boolean), ['big.js (partial)']); // z.js is small enough to follow it
+});
+
+test('D6: generated code and lock files are ignored by default', (t) => {
+  const gen = ['api.pb.go', 'x_pb2.py', 'x_pb2_grpc.py', 'Model.g.cs', 'Form1.Designer.cs', 'schema.generated.ts', 'packages.lock.json', 'gradle.lockfile', 'site.min.css'];
+  const r = scenario(t, { 'src.js': 'a\n', ...Object.fromEntries(gen.map((f) => [f, 'old\n'])) }, ({ write }) => { write('src.js', 'b\n'); for (const f of gen) write(f, 'new\n'); });
+  assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean), ['src.js']);
+});

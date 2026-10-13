@@ -10,7 +10,7 @@ rm -rf "$CTX"
 mkdir -p "$CTX"
 # Present from the start so that an absent list never means "no restriction": a trace.js failure leaves trace-status=failed
 # and an empty list (post.js then fails closed for path-sourced requirements). trace-status: ok | failed | off.
-: > "$CTX/collect-limits.txt"; : > "$CTX/spec-files.txt"; : > "$CTX/spec-rejected.txt"
+: > "$CTX/collect-limits.txt"; : > "$CTX/spec-files.txt"; : > "$CTX/spec-rejected.txt"; : > "$CTX/diff-dropped.txt"
 if [ "${TRACE:-auto}" = off ]; then echo off > "$CTX/trace-status"; else echo failed > "$CTX/trace-status"; fi
 out() { [ -n "${GITHUB_OUTPUT:-}" ] && echo "$1=$2" >> "$GITHUB_OUTPUT"; return 0; }
 out skip false; out partial false
@@ -24,7 +24,8 @@ STANDARDS=(.github/copilot-instructions.md '.github/instructions/**' '**/AGENTS.
 EXEC_CFG=('.claude/**' .mcp.json .claude.json CLAUDE.local.md .gitmodules .ripgreprc '.husky/**'
   '.github/hooks/**' '.github/copilot/**' .github/mcp.json)
 IGNORES=(package-lock.json yarn.lock pnpm-lock.yaml Cargo.lock poetry.lock go.sum composer.lock Gemfile.lock '*.lock'
-  .specguard-ctx/ dist/ build/ vendor/ node_modules/ '*.min.*' __snapshots__/ '*.snap' '*.svg' '*.log' '*.map')
+  .specguard-ctx/ dist/ build/ vendor/ node_modules/ '*.min.*' __snapshots__/ '*.snap' '*.svg' '*.log' '*.map'
+  packages.lock.json gradle.lockfile '*.pb.go' '*_pb2.py' '*_pb2_grpc.py' '*.g.cs' '*.Designer.cs' '*.generated.*')
 # STANDARDS_PATHS: newline-separated globs, '!glob' excludes (same semantics as REQ_PATHS). Matches join the standards set: restored from base, never taken from the PR head.
 STD_EXC=()
 while IFS= read -r l; do
@@ -179,8 +180,38 @@ if [ "$ncode" -eq 0 ] && [ "$nchanged" -eq 0 ]; then
   echo "nothing reviewable in diff"; out skip true; exit 0
 fi
 
-# 5. oversize
+# 5. oversize: keep whole files in diff order within the budget. A file that does not fit is dropped and listed in diff-dropped.txt
+# (a later, smaller one may still fit); the first file alone over the budget keeps its first whole hunks and is listed as "path (partial)".
 if [ "$(wc -c < "$CTX/diff.patch")" -gt $((MAX_DIFF_KB * 1024)) ]; then
-  head -c $((MAX_DIFF_KB * 1024)) "$CTX/diff.patch" > "$CTX/diff.tmp" && mv "$CTX/diff.tmp" "$CTX/diff.patch"
+  MAX=$((MAX_DIFF_KB * 1024)) KEEP="$CTX/diff.tmp" DROP="$CTX/diff-dropped.txt" LC_ALL=C awk '
+function flush(   i, j, k, s, sz, hs, nh) {
+  if (!n) return
+  sz = 0; for (i = 1; i <= n; i++) sz += length(L[i]) + 1
+  if (sz <= max - used) { for (i = 1; i <= n; i++) print L[i] > keep; used += sz }
+  else if (nfiles == 1) { # the first file alone exceeds the budget: its header and whole hunks that fit, else the first hunk cut at a line
+    hs = n + 1; for (i = 1; i <= n; i++) if (L[i] ~ /^@@ /) { hs = i; break }
+    for (i = 1; i < hs; i++) { print L[i] > keep; used += length(L[i]) + 1 }
+    i = hs; nh = 0
+    while (i <= n) {
+      j = i + 1; while (j <= n && L[j] !~ /^@@ /) j++
+      s = 0; for (k = i; k < j; k++) s += length(L[k]) + 1
+      if (used + s > max) break
+      for (k = i; k < j; k++) print L[k] > keep
+      used += s; nh++; i = j
+    }
+    if (!nh && i <= n) for (k = i; k < j && used + length(L[k]) + 1 <= max; k++) { print L[k] > keep; used += length(L[k]) + 1 }
+    print path " (partial)" > drop
+  } else print path > drop
+  n = 0
+}
+function pathof(l,   r) { # "diff --git a/X b/X" (no renames: both sides equal, so X survives spaces) or the quoted form
+  if (l ~ /^diff --git "a\//) { r = substr(l, 15); return substr(r, 1, (length(r) - 6) / 2) }
+  r = substr(l, 14); return substr(r, 1, (length(r) - 3) / 2)
+}
+BEGIN { max = ENVIRON["MAX"] + 0; keep = ENVIRON["KEEP"]; drop = ENVIRON["DROP"]; printf "" > keep; printf "" > drop }
+/^diff --git / { flush(); nfiles++; path = pathof($0) }
+{ L[++n] = $0 }
+END { flush() }
+  ' "$CTX/diff.patch" && mv "$CTX/diff.tmp" "$CTX/diff.patch"
   out partial true
 fi
