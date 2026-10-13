@@ -21,7 +21,7 @@ test('armOf reads the review-arm label (names or label objects)', () => {
 });
 
 test('the example workflow computes the same arm as assign() for 1..30', (t) => {
-  const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8');
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout may have CRLF
   const m = /# BEGIN arm\n([\s\S]*?)\n\s*# END arm/.exec(yml);
   assert.ok(m, 'BEGIN/END arm markers');
   const script = m[1].split('\n').map((l) => l.replace(/^ {10}/, '')).join('\n');
