@@ -1,6 +1,6 @@
 name: "SpecGuard reusable (called from target repos; no Run button here, use SpecGuard manual run)"
 # Reusable workflow (on: workflow_call): runs SpecGuard against the CALLER's repository with the caller's GITHUB_TOKEN (repository access never needs a PAT). The caller writes ~10 lines (README: "Enterprise setup").
-# Credential: pass the optional secret llm_token (a GitHub fine-grained PAT runs Copilot, an Anthropic API key sk-ant-... runs Claude Code; detected by prefix), or the copilot_token alias below.
+# Credential: pass the optional secret llm_token (a GitHub fine-grained PAT runs Copilot, an Anthropic API key sk-ant-... runs Claude; detected by prefix), or the copilot_token alias below.
 # Copilot: pass the optional secret copilot_token (user-owned fine-grained PAT, Copilot Requests; billed to that user's seat) with `secrets: { copilot_token: ${{ secrets.SPECGUARD_COPILOT_TOKEN }} }`
 # or `secrets: inherit` (then a caller secret named SPECGUARD_COPILOT_TOKEN is read). Without it Copilot runs on the job token, which needs the org policy "Allow use of Copilot CLI billed to the organization".
 # github.* in here is always the caller's context (repository, event, token), so actions/checkout below checks out the caller's repository.
@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with: { fetch-depth: 0, persist-credentials: false }
-      - uses: Mira190/SpecGuard@33a3c75f9fbbaffa0b3143a5f2a28ab17de6913d # specguard-pin
+      - uses: Mira190/SpecGuard@caa99fbbef69ef03f3082f2227f85a8c83977332 # specguard-pin
         with:
           mode: ${{ inputs.mode }}
           github_token: ${{ github.token }}
