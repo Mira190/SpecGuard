@@ -1,6 +1,6 @@
 name: SpecGuard manual run
 # Run SpecGuard on demand against ANOTHER repository (README: "Manual run (SpecGuard repo)"). This workflow lives in the SpecGuard repo only; it is not shipped to target repos.
-# Needs the secret SPECGUARD_PAT: a fine-grained PAT with Contents, Issues and Pull requests read on the target repositories (Pull requests write only for post_to_pr).
+# The secret SPECGUARD_PAT (a fine-grained PAT with Contents, Issues and Pull requests read on the target repositories; Pull requests write only for post_to_pr) is needed for other private or internal repositories. Without it the job token is used, which reads only this repository and public ones.
 on:
   workflow_dispatch:
     inputs:
@@ -22,7 +22,7 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions: { contents: read }
+    permissions: { contents: read, pull-requests: read }
     outputs:
       repo: ${{ steps.in.outputs.repo }}
       pr: ${{ steps.in.outputs.pr }}
@@ -50,13 +50,13 @@ jobs:
           RULES_DOCS: ${{ inputs.rules_docs }}
           TEST_DIRS: ${{ inputs.test_dirs }}
         run: |
-          [ -n "$PAT" ] || { echo "::error::the secret SPECGUARD_PAT is not set (fine-grained PAT, see the README section 'Manual run')"; exit 1; }
+          [ -n "$PAT" ] || echo "::notice::SPECGUARD_PAT is not set: using the job token, which reads only this repository and public repositories"
           node src/resolve-inputs.js
       - id: pr
         if: steps.in.outputs.mode == 'pr'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.SPECGUARD_PAT }}
+          GH_TOKEN: ${{ secrets.SPECGUARD_PAT || github.token }}
           REPO: ${{ steps.in.outputs.repo }}
           PR: ${{ steps.in.outputs.pr }}
         run: |
@@ -69,13 +69,13 @@ jobs:
     needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions: { contents: read, copilot-requests: write }
+    permissions: { contents: read, pull-requests: read, issues: read, copilot-requests: write }
     steps:
       # the target first, at the workspace root where the action works; then SpecGuard itself beside it (a checkout of the root would delete a folder created before it)
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: ${{ needs.resolve.outputs.repo }}
-          token: ${{ secrets.SPECGUARD_PAT }}
+          token: ${{ secrets.SPECGUARD_PAT || github.token }}
           ref: ${{ needs.resolve.outputs.head_sha || needs.resolve.outputs.ref }}
           fetch-depth: 0
           persist-credentials: false
@@ -91,7 +91,7 @@ jobs:
           pr_number: ${{ needs.resolve.outputs.pr }}
           base_sha: ${{ needs.resolve.outputs.base_sha }}
           head_sha: ${{ needs.resolve.outputs.head_sha || steps.head.outputs.sha }}
-          github_token: ${{ secrets.SPECGUARD_PAT }}
+          github_token: ${{ secrets.SPECGUARD_PAT || github.token }}
           delivery: ${{ inputs.post_to_pr && 'pr' || 'summary' }}
           resolve_stale: ${{ inputs.post_to_pr && 'true' || 'false' }}
           requirements_paths: ${{ needs.resolve.outputs.design }}

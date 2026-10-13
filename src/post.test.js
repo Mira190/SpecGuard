@@ -123,7 +123,7 @@ function setup(t, data = report(), options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-'));
   const previous = { ...process.env };
   t.after(() => {
-    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF']) {
+    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF', 'DELIVERY']) {
       if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
     }
     fs.rmSync(dir, { recursive: true, force: true });
@@ -193,6 +193,53 @@ test('does not publish results for a superseded commit', async (t) => {
   await post(s);
   assert.deepEqual(s.calls, { review: [], file: [], summary: [], list: 0 });
   assert.match(s.warnings[0], /superseded HEAD/);
+});
+
+// delivery=summary: every write method on the fake GitHub is spied; none may be called
+function spyWrites(s) {
+  const writes = [];
+  for (const ns of Object.values(s.github.rest)) for (const [k, fn] of Object.entries(ns)) if (!/^(get|list)/.test(k)) ns[k] = async (...a) => { writes.push(k); return fn(...a); };
+  const gq = s.github.graphql;
+  s.github.graphql = async (q, ...a) => { if (/mutation/i.test(q)) writes.push('graphql mutation'); return gq(q, ...a); };
+  return writes;
+}
+
+test('delivery=summary: no write call, full findings and a plain delivery note in the job summary', async (t) => {
+  const s = setup(t, report(), { existing: [{ body: `<!-- specguard:fp=${post.fingerprint('missing_test', 'src.js', behaviour.quote)} -->`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
+  process.env.DELIVERY = 'summary';
+  const writes = spyWrites(s);
+  await post(s);
+  assert.deepEqual(writes, []);
+  assert.deepEqual(s.calls, { review: [], file: [], summary: [], list: 0 });
+  const out = s.jobSummary.join('');
+  assert.match(out, /### Unit test gaps[\s\S]*Verify the boundary total[\s\S]*The boundary has no assertion\. Add assert\.equal\(total\(1\), 42\)\./);
+  assert.match(out, /Delivery: summary only \(manual run; nothing was posted to the PR\)/);
+  assert.doesNotMatch(out, /Delivery degraded|Incomplete review|already posted|Comments:|specguard:status=incomplete/);
+  assert.match(out, /specguard:status=complete/);
+});
+
+test('delivery=summary: a closed PR is reviewed and says so; normal mode still stops', async (t) => {
+  const s = setup(t, report(), { pr: { state: 'closed' } });
+  process.env.DELIVERY = 'summary';
+  const writes = spyWrites(s);
+  await post(s);
+  assert.deepEqual(writes, []);
+  assert.match(s.jobSummary.join(''), /The PR is closed/);
+  assert.match(s.jobSummary.join(''), /Verify the boundary total/);
+  delete process.env.DELIVERY; // before setup: it snapshots the env it restores
+  const n = setup(t, report(), { pr: { state: 'closed' } });
+  await post(n);
+  assert.deepEqual(n.calls, { review: [], file: [], summary: [], list: 0 });
+  assert.match(n.warnings[0], /no longer open/);
+});
+
+test('without delivery=summary the review and the sticky comment are posted as before', async (t) => {
+  const s = setup(t);
+  delete process.env.DELIVERY;
+  await post(s);
+  assert.equal(s.calls.review.length, 1);
+  assert.equal(s.calls.summary.length, 1);
+  assert.doesNotMatch(s.jobSummary.join(''), /summary only/);
 });
 
 test('retries rejected inline anchors as a body-only review', async (t) => {

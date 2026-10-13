@@ -103,15 +103,15 @@ test('specguard-run.yml: dispatch inputs, minimal permissions, PAT checkout with
   assert.match(y, /^ {6}post_to_pr: \{[^}]*type: boolean, default: false/m);
   assert.match(y, /^ {6}mode: \{[^}]*options: \[auto, pr, audit\]/m);
   assert.match(y, /^permissions: \{\}$/m);
-  assert.match(y, /permissions: \{ contents: read \}/);
-  assert.match(y, /permissions: \{ contents: read, copilot-requests: write \}/);
-  assert.doesNotMatch(y, /(pull-requests|issues|actions|checks|statuses|id-token): (write|read)/);
-  assert.match(y, /repository: \$\{\{ needs\.resolve\.outputs\.repo \}\}\n {10}token: \$\{\{ secrets\.SPECGUARD_PAT \}\}/);
+  assert.match(y, /permissions: \{ contents: read, pull-requests: read \}/); // read-only: the job token is the fallback when SPECGUARD_PAT is unset
+  assert.match(y, /permissions: \{ contents: read, pull-requests: read, issues: read, copilot-requests: write \}/);
+  assert.doesNotMatch(y, /(contents|pull-requests|issues|actions|checks|statuses|id-token): write/);
+  assert.match(y, /repository: \$\{\{ needs\.resolve\.outputs\.repo \}\}\n {10}token: \$\{\{ secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
   assert.equal((y.match(/persist-credentials: false/g) || []).length, 3, 'every checkout');
   assert.match(y, /fetch-depth: 0/);
   assert.match(y, /uses: \.\/\.specguard-src/);
   assert.match(y, /delivery: \$\{\{ inputs\.post_to_pr && 'pr' \|\| 'summary' \}\}/);
-  assert.match(y, /github_token: \$\{\{ secrets\.SPECGUARD_PAT \}\}/);
+  assert.match(y, /github_token: \$\{\{ secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
   assert.match(y, /ctx_retention_days: "0"/);
   assert.match(y, /requirements_paths: \$\{\{ needs\.resolve\.outputs\.design \}\}/);
   assert.match(y, /standards_paths: \$\{\{ needs\.resolve\.outputs\.rules \}\}/);

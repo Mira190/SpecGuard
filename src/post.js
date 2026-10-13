@@ -632,13 +632,14 @@ function verdict(data, fs_) {
 // Sections in goal order, which is also the importance order: unit test gaps, requirements, standards, layers, completeness, then collapsed reference
 // material. Each section's items are added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier }) {
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)];
   if (data && !status) status = `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}${verdict(data, all)}`;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
   let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}<!-- specguard:status=${state || (incomplete.length ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n${neutralize(status)}\n\n`;
   if (reduced) head += `> Reduced review: ${reduced.reasons.map((r) => cell(r)).join('; ')} (model: ${cell(reduced.model || 'unknown', 80)}). Only high-confidence findings were posted inline.\n\n`;
   if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
+  if (banner.length) head += `${banner.map((r) => `> ${cell(r)}`).join('\n')}\n\n`;
   if (partial || dropped.length) head += `${partial ? '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.' : ''}${dropped.length ? `${partial ? '\n' : ''}> ${notReviewed(dropped)}` : ''}\n\n`;
   const lintChanged = lint.changed || [];
   if (rules.length || lintChanged.length) head += `> ${[rules.length && `This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`, lintChanged.length && `Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`].filter(Boolean).join(' ')}\n\n`;
@@ -1065,6 +1066,7 @@ async function run({ github, context, core }) {
   const pr = context.payload.pull_request;
   if (!pr) return core.warning('SpecGuard: not a pull_request event');
   const env = process.env;
+  const summaryOnly = env.DELIVERY === 'summary'; // manual run: results go to the job summary only; nothing is ever written to the PR
   const ctx = env.CTX || '';
   const engine = env.ENGINE || '', model = env.MODEL || '';
   const partial = env.PARTIAL === 'true';
@@ -1075,7 +1077,7 @@ async function run({ github, context, core }) {
   const current = async () => {
     try { livePR = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })).data; rechecked = true; }
     catch (e) { rechecked = false; core.warning(`SpecGuard: could not recheck HEAD: ${e.message}`); return 'could not recheck HEAD'; }
-    return livePR.head.sha !== headSha ? 'superseded HEAD' : livePR.state === 'closed' ? 'PR is no longer open' : '';
+    return livePR.head.sha !== headSha ? 'superseded HEAD' : livePR.state === 'closed' && !summaryOnly ? 'PR is no longer open' : '';
   };
   const early = await current();
   if (early && rechecked) return core.warning(`SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary
@@ -1097,6 +1099,7 @@ async function run({ github, context, core }) {
   const publish = async (text, state) => {
     core.setOutput?.('status', state);
     await core.summary.addRaw(text).write();
+    if (summaryOnly) return;
     try {
       const stop = await current();
       if (stop) return core.warning(`SpecGuard: ${stop}; summary comment not updated`);
@@ -1219,10 +1222,14 @@ async function run({ github, context, core }) {
       if (m && ours(c.user, me)) { known.add(m[1]); priors.delete(m[1]); priors.set(m[1], c); }
     }
   } catch (e) {
+    if (summaryOnly) core.warning(`SpecGuard: existing review comments could not be read: ${e.message}`);
+    else {
     withheld = `existing review comments could not be listed (${e.status ? `${e.status}: ` : ''}${String(e.message).split('\n')[0]}), so inline comments were withheld to avoid duplicates`;
     core.warning(`SpecGuard: ${withheld}`);
     incomplete.push(`Delivery degraded: ${withheld}; the findings are in this summary.`);
+    }
   }
+  if (summaryOnly) known.clear(); // nothing is posted, so no finding is "already posted": every one carries its full text here
   let threads; // review threads (first 300), read once for the dedup below, the telemetry and the stale resolver
   if (priors.size) {
     try { threads = await fetchThreads({ github, owner, repo, number: pr.number }); }
@@ -1318,15 +1325,18 @@ async function run({ github, context, core }) {
   const counts = () => `${inline} inline, ${filed} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
   const head = `<!-- specguard:review -->\nSpecGuard found ${axes(assessed)}; ${counts()}.${prov ? `\n${prov}.` : ''}\nEngine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
 
-  const stop = withheld ? 'inline comments withheld: could not deduplicate' : await current(); // never post what cannot be deduplicated or what may be stale
-  if (stop) {
+  const stop = summaryOnly ? '' : withheld ? 'inline comments withheld: could not deduplicate' : await current(); // never post what cannot be deduplicated or what may be stale
+  if (summaryOnly) {
+    for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: 'summary only' });
+    inline = filed = 0;
+  } else if (stop) {
     if (!withheld) { core.warning(`SpecGuard: ${stop}; no review published`); incomplete.push(`Delivery degraded: ${stop}; the review comments and PR summary were not updated (this text is the job summary).`); }
     for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: withheld ? 'withheld: could not deduplicate' : `not posted: ${stop}` });
     inline = filed = 0;
   }
   const urls = new Map(); // fp -> link to our comment, for the result lines in the summary
   for (const [fp, c] of priors) if (c.html_url) urls.set(fp, c.html_url);
-  if (!stop && comments.length) {
+  if (!stop && !summaryOnly && comments.length) {
     const post = (body, cs) => github.rest.pulls.createReview({ owner, repo, pull_number: pr.number, commit_id: headSha, event: 'COMMENT', body: clean(body), ...(cs && { comments: cs }) });
     try {
       const posted = await post(head, comments), reviewId = posted?.data?.id;
@@ -1347,7 +1357,7 @@ async function run({ github, context, core }) {
       }
     }
   }
-  for (const f of stop ? [] : p.file) {
+  for (const f of stop || summaryOnly ? [] : p.file) {
     const range = f.start_line ? `#L${f.start_line}-L${f.line}` : `#L${f.line}`;
     const link = `${context.serverUrl}/${owner}/${repo}/blob/${headSha}/${f.path}${range}`;
     try {
@@ -1370,11 +1380,11 @@ async function run({ github, context, core }) {
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
   const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
-  const resolveNote = !stop && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
+  const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
   const clean_ = noGaps(data) && !incomplete.length && !reduced, state = incomplete.length || reduced ? 'incomplete' : 'complete';
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: counts(), traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: summaryOnly ? '' : counts(), banner: summaryOnly ? ['Delivery: summary only (manual run; nothing was posted to the PR).', ...(livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [])] : [], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
