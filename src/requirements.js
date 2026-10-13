@@ -58,6 +58,11 @@ function extractCriteria(documents) {
 const DOC_EXT = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
 const TEST_PATH = { test: (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/i.test(p) || /[a-z0-9](Tests?|Spec)\.[^/]*$/.test(p) }; // same rule as trace.isTestPath (not imported: trace pulls in post.js)
 
+// Limitation kinds live in limitations.js (a FACT is a note, a GAP makes the run incomplete); every limitation emitted below goes through fact() or gap().
+// A test scans this file for a bare push. Kept out of post.js's import chain: the collector stubs this file in tests.
+const { isFactLimitation } = require('./limitations');
+const fact = (s) => s, gap = (s) => s; // ponytail: markers only; the kind lives in limitations.js (strings must stay plain text in requirements-status.json)
+
 const MAX_HUNKS = 50, MAX_SHAS = 20, MAX_HISTORY_DOCS = 3;
 
 // LEFT line ranges of production hunks in a unified diff: [{path, a, b}] (inclusive). Pure insertions have no history.
@@ -95,12 +100,14 @@ function blameShas(diff, blame, opts = {}) {
 // Diff hunks are three-dot, so their left line numbers belong to the merge-base (DIFF_BASE_SHA), never to a later BASE_SHA tip.
 const blameAt = (rev, cwd = '.') => (p, a, b) => execFileSync('git', ['blame', '-w', '-M', '-C', '--porcelain', rev, '-L', `${a},${b}`, '--', p], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20, timeout: 10000 });
 
+const otherRepo = (r, n) => `Not read: other-repo reference ${r}#${n} (only issues of this repository are read)`;
+
 // Optional historical intent: blamed commit -> PR -> closing issues, at most 3 documents. Failures become limitations.
 function collectHistory({ history, repo, mainPr, seen, loadIssue }) {
   const documents = [], limitations = [];
   if (!history) return { documents, limitations };
-  if (history.error) return { documents, limitations: ['Historical intent unavailable: git blame failed.'] };
-  if (history.partial) limitations.push(history.partial);
+  if (history.error) return { documents, limitations: [gap('Historical intent unavailable: git blame failed.')] };
+  if (history.partial) limitations.push(gap(history.partial));
   const done = new Set();
   // history text is whatever a past author wrote: flagged low-trust so nothing downstream treats it as the approved requirement
   const add = (source, title, body) => { if (documents.length < MAX_HISTORY_DOCS) documents.push({ source, untrusted: true, text: sanitize(`${title || ''}\n${body || ''}`) }); };
@@ -116,14 +123,14 @@ function collectHistory({ history, repo, mainPr, seen, loadIssue }) {
       for (const issue of pr.closingIssuesReferences || []) {
         const m = /github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)/.exec(issue.url || '');
         const r = m ? m[1] : repo, n = m ? +m[2] : issue.number;
-        if (r.toLowerCase() !== repo.toLowerCase()) continue; // history never reads another repository's issues
+        if (r.toLowerCase() !== repo.toLowerCase()) { if (n) limitations.push(fact(otherRepo(r, n))); continue; } // history never reads another repository's issues
         const key = `${r.toLowerCase()}#${n}`;
         if (!n || done.has(key) || seen.has(key) || documents.length >= MAX_HISTORY_DOCS) continue;
         done.add(key);
         try { const i = loadIssue(r, n); add(r.toLowerCase() === repo.toLowerCase() ? `history issue #${n}` : `history issue ${r}#${n}`, i.title, i.body); }
-        catch { limitations.push(`Could not read history issue ${key}.`); }
+        catch { limitations.push(fact(`Could not read history issue ${key}.`)); }
       }
-    } catch { limitations.push(`Could not map commit ${String(sha).slice(0, 7)} to its pull request.`); }
+    } catch { limitations.push(gap(`Could not map commit ${String(sha).slice(0, 7)} to its pull request.`)); }
   }
   return { documents, limitations };
 }
@@ -166,9 +173,10 @@ function trackerRefs({ title = '', branch = '', texts = [] }) {
 
 const labelNames = (ls) => (ls || []).map((l) => sanitize(typeof l === 'string' ? l : l && l.name).replace(/\s+/g, ' ').trim().slice(0, 40)).filter(Boolean).slice(0, 10);
 
-// Issue comments by people with write access (OWNER, MEMBER, COLLABORATOR), not minimised: the last five, newest kept when the cap bites.
+// Issue comments by people with write access (OWNER, COLLABORATOR), not minimised: the last five, newest kept when the cap bites.
+// MEMBER is any organisation member, not write access, so it is not trusted here.
 // `gh issue view --json comments` rows carry: author, authorAssociation, body, createdAt, id, isMinimized, minimizedReason, url (oldest first).
-const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+const TRUSTED = new Set(['OWNER', 'COLLABORATOR']);
 const COMMENT_CAP = 1500, ISSUE_CAP = 3000;
 function trustedComments(comments, cap = COMMENT_CAP) {
   const out = [];
@@ -202,22 +210,32 @@ function fitBody(body, cap = ISSUE_CAP) {
   return { text: out.join('\n'), cut };
 }
 
+// GitHub closing keywords (close/fix/resolve + their -s/-d forms, optional colon) directly before an issue reference or URL.
+const CLOSING = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s+(?:https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)|(?:([\w.-]+\/[\w.-]+)#|#)([1-9]\d{0,5})(?!\w))/gi;
+const MAX_ISSUES = 5, MAX_OTHER_REPO_NOTES = 5;
+
 function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
-  const refs = new Map();
-  const add = (r, n) => { if (!(r.toLowerCase() === repo.toLowerCase() && +n === pr.number)) refs.set(`${r.toLowerCase()}#${+n}`, { repo: r, number: +n }); };
+  const refs = new Map(), foreign = new Map(); // refs: issues of this repository, { closing }; foreign: other-repository references, named and never read
+  const add = (r, n, closing = false) => {
+    if (r.toLowerCase() === repo.toLowerCase() && +n === pr.number) return;
+    const k = `${r.toLowerCase()}#${+n}`;
+    if (r.toLowerCase() !== repo.toLowerCase()) { foreign.set(k, otherRepo(r, +n)); return; } // a PR author can name any repository: only this one is read
+    refs.set(k, { repo: r, number: +n, closing: closing || !!refs.get(k)?.closing });
+  };
   const url = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)/g;
   for (const issue of pr.closingIssuesReferences || []) {
     const m = [...String(issue.url || '').matchAll(url)][0];
-    if (m) add(m[1], m[2]);
-    else if (issue.number) add(repo, issue.number);
+    if (m) add(m[1], m[2], true);
+    else if (issue.number) add(repo, issue.number, true);
   }
   const text = sanitize(`${pr.title || ''}\n${pr.body || ''}\n${String(commits).split(/\r?\n/).filter((l) => !/^Merge (pull request #|branch)/.test(l)).join('\n')}`);
+  for (const m of text.matchAll(CLOSING)) add(m[1] || m[3] || repo, m[2] || m[4], true); // only these give acceptance criteria; any other mention is context
   for (const m of text.matchAll(url)) add(m[1], m[2]);
   const withoutUrls = text.replace(/https?:\/\/\S+/g, '');
   // a plain integer, no leading zero, at most 6 digits, not followed by a word character: not #000000, #fff, #L12, #007, #12ab
   for (const m of withoutUrls.matchAll(/(?:\b([\w.-]+\/[\w.-]+)#|(?<![&\w])#)([1-9]\d{0,5})(?!\w)/g)) add(m[1] || repo, m[2]);
   const fromBranch = new Set();
-  for (const n of branchIssues(pr.headRefName)) { const k = `${repo.toLowerCase()}#${n}`; if (!refs.has(k) && n !== pr.number) { add(repo, n); fromBranch.add(k); } }
+  for (const n of branchIssues(pr.headRefName)) { if (n === pr.number) continue; const k = `${repo.toLowerCase()}#${n}`; if (!refs.has(k)) fromBranch.add(k); add(repo, n, true); }
   const limitations = [];
   const seen = new Set(refs.keys());
   const labels = {}, comments = [], scan = [sanitize(pr.title), sanitize(pr.body)];
@@ -226,29 +244,38 @@ function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
   const parts = [`# PR: ${sanitize(pr.title)}\n\n${sanitize(pr.body)}`];
   const sources = ['PR body'];
   const documents = [{ source: 'PR body', text: sanitize(`${pr.title || ''}\n${pr.body || ''}`) }];
-  if (refs.size > 5) limitations.push(`${refs.size - 5} linked issue(s) omitted by the five-issue limit.`);
-  for (const { repo: r, number } of [...refs.values()].slice(0, 5)) {
-    const label = r.toLowerCase() === repo.toLowerCase() ? `issue #${number}` : `issue ${r}#${number}`;
+  const context = []; // loaded but not closing: read as context, no criteria
+  const all = [...refs.values()].sort((a, b) => b.closing - a.closing); // closing first, so the cap never cuts a closing issue for a mention (the sort is stable)
+  const cutClosing = all.slice(MAX_ISSUES).filter((x) => x.closing).length, cutOther = all.length - MAX_ISSUES - cutClosing;
+  if (cutClosing) limitations.push(gap(`${cutClosing} linked issue(s) omitted by the five-issue limit.`));
+  if (cutOther > 0) limitations.push(fact(`Context trimmed: ${cutOther} mentioned issue(s) omitted by the five-issue limit (context only, not acceptance criteria).`));
+  const fore = [...foreign.values()];
+  for (const f of fore.slice(0, MAX_OTHER_REPO_NOTES)) limitations.push(fact(f));
+  if (fore.length > MAX_OTHER_REPO_NOTES) limitations.push(fact(`Not read: other-repo reference ${fore.length - MAX_OTHER_REPO_NOTES} more (only issues of this repository are read)`));
+  for (const { repo: r, number, closing } of all.slice(0, MAX_ISSUES)) {
+    const label = `issue #${number}`, key = `${r.toLowerCase()}#${number}`;
     try {
       const issue = loadIssue(r, number);
-      if (fromBranch.has(`${r.toLowerCase()}#${number}`) && issue.url && !issue.url.toLowerCase().startsWith(`https://github.com/${r.toLowerCase()}/issues/`)) throw new Error('not an issue of this repository'); // a branch-name guess is never a pull request
+      if (fromBranch.has(key) && issue.url && !issue.url.toLowerCase().startsWith(`https://github.com/${r.toLowerCase()}/issues/`)) throw new Error('not an issue of this repository'); // a branch-name guess is never a pull request
       const body = sanitize(issue.body), fit = fitBody(body); // criteria come from the whole body; only the prompt text is cut
-      parts.push(`# ${label}: ${sanitize(issue.title)}\n\n${fit.text}`);
-      if (fit.cut) limitations.push(`Context trimmed: ${label} body cut to about ${ISSUE_CAP / 1000} KB in requirements.md (acceptance criteria kept).`);
+      parts.push(`# ${label}${closing ? '' : ' (context only, not acceptance criteria)'}: ${sanitize(issue.title)}\n\n${fit.text}`);
+      if (fit.cut) limitations.push(fact(`Context trimmed: ${label} body cut to about ${ISSUE_CAP / 1000} KB in requirements.md (acceptance criteria kept).`));
       const il = labelNames(issue.labels);
       if (il.length) labels[label] = il;
       scan.push(sanitize(issue.title), body);
       const cm = trustedComments(issue.comments);
       if (cm) { comments.push({ label, text: cm }); parts.push(`# ${label}: comments by maintainers (context only, not acceptance criteria)\n\n${cm}`); }
-      sources.push(fromBranch.has(`${r.toLowerCase()}#${number}`) ? `${label} (branch name)` : label);
-      documents.push({ source: label, text: sanitize(`${issue.title || ''}\n${issue.body || ''}`) });
-    } catch { if (!fromBranch.has(`${r.toLowerCase()}#${number}`)) limitations.push(`Could not read ${label}.`); } // a number guessed from the branch name may not be an issue
+      sources.push(closing ? (fromBranch.has(key) ? `${label} (branch name)` : label) : `${label} (context)`);
+      const doc = { source: closing ? label : `${label} (context)`, text: sanitize(`${issue.title || ''}\n${issue.body || ''}`) };
+      if (closing) documents.push(doc); else context.push({ ...doc, untrusted: true });
+    } catch { if (!fromBranch.has(key)) limitations.push(fact(`Could not read ${label}.`)); } // a number guessed from the branch name may not be an issue
   }
-  for (const r of trackerRefs({ title: scan[0], branch: String(pr.headRefName || ''), texts: scan })) limitations.push(`Referenced but not readable: ${r}. Paste the acceptance criteria into the PR body to have them reviewed.`);
+  for (const r of trackerRefs({ title: scan[0], branch: String(pr.headRefName || ''), texts: scan })) limitations.push(fact(`Referenced but not readable: ${r}. Paste the acceptance criteria into the PR body to have them reviewed.`));
   if (Object.keys(labels).length) parts.splice(1, 0, `Labels: ${Object.entries(labels).map(([k, v]) => `${k}: ${v.join(', ')}`).join('; ')}`);
-  if (!String(pr.body || '').trim() && sources.length === 1) limitations.push('No requirement text available; only changed behaviour can be assessed.');
+  if (!String(pr.body || '').trim() && sources.length === 1) limitations.push(fact('No requirement text available; only changed behaviour can be assessed.'));
   const criteria = extractCriteria(documents);
-  for (const { label, text: t } of comments) { // maintainer comments are context, like history: no criteria are taken from them
+  documents.push(...context); // context issues and maintainer comments are read, like history: no criteria are taken from them
+  for (const { label, text: t } of comments) {
     documents.push({ source: `${label} comments`, text: t, untrusted: true });
     sources.push(`${label} comments`);
   }
@@ -259,7 +286,8 @@ function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
     sources.push(source);
     for (const c of extractCriteria([{ source, text: t }])) criteria.push({ id: `H${criteria.filter((x) => x.optional).length + 1}`, source, quote: c.quote, optional: true });
   }
-  return { text: parts.join('\n\n'), status: limitations.length ? 'partial' : 'available', sources, limitations, documents, criteria, branch: String(pr.headRefName || ''), labels };
+  const lims = [...new Set(limitations)];
+  return { text: parts.join('\n\n'), status: lims.length ? 'partial' : 'available', sources, limitations: lims, documents, criteria, branch: String(pr.headRefName || ''), labels };
 }
 
 if (require.main === module) {
@@ -284,11 +312,11 @@ if (require.main === module) {
         try { return view('title,body,url,labels,comments'); } catch { return view('title,body,url'); } // labels and comments are extras: never the reason an issue is unreadable
       } });
   } catch {
-    result = { text: 'none', status: 'unavailable', sources: [], limitations: ['PR requirements could not be loaded; review is limited to changed behaviour.'], documents: [], criteria: [] };
+    result = { text: 'none', status: 'unavailable', sources: [], limitations: [gap('PR requirements could not be loaded; review is limited to changed behaviour.')], documents: [], criteria: [] };
   }
   fs.writeFileSync(path.join(env.CTX, 'requirements.md'), result.text + '\n');
   const { text, ...status } = result;
   fs.writeFileSync(path.join(env.CTX, 'requirements-status.json'), JSON.stringify(status, null, 2) + '\n');
 }
 
-module.exports = { sanitize, trackerRefs, trustedComments, fitBody, branchIssues, collectRequirements, extractCriteria, leftRanges, blameShas, blameAt };
+module.exports = { isFactLimitation, sanitize, trackerRefs, trustedComments, fitBody, branchIssues, collectRequirements, extractCriteria, leftRanges, blameShas, blameAt };

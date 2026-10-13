@@ -116,8 +116,8 @@ jobs:
 ```
 
 The review contract ships as an **Agent Skill** (`skills/test-review/SKILL.md`, an open format read by Copilot CLI and Copilot code review). The same file drives:
-- **CI**: both engines, through the action.
-- **Local pre-push**: `copilot -p` with the skill, or `node bin/specguard-local.js` (needs bash; the prompt goes to copilot on stdin, so it also runs on Windows). This is the earliest shift-left point.
+- **CI**: the Copilot CLI engine, through the action (a Copilot SDK engine was trialled on 2026-10-13, tied with the CLI and was removed; commit `58d8937`).
+- **Local, before the PR exists**: `copilot -p` with the skill, or `node bin/specguard-local.js` (needs bash; the prompt goes to copilot on stdin, so it also runs on Windows). This is the earliest shift-left point. It is opt-in per run (a review takes minutes and spends credits), not a blocking hook on every push. It takes the CI path inputs as flags, fetches the base first, gates `--fail-on-gaps` on the validated review, and cleans its worktree on SIGINT/SIGTERM.
 - **Optional "lite" tier**: an adopter copies the skill to `.github/skills/` and native Copilot code review picks it up. There is no workflow and no guarantees (section 4.1 explains why that path is not the main one).
 
 ---
@@ -268,7 +268,7 @@ Output must match `findings.schema.json`: `requirements_source`, a `coverage[]` 
    3. Otherwise the finding goes in the summary only.
 5. **Post** one `createReview({event:'COMMENT', commit_id: <SHA collect.sh diffed>, body, comments})`. Inline comments are capped by `max_comments` (default 10, hard cap 30) and sorted by kind and confidence; overflow goes to the summary. If there are 0 inline comments, skip the review. On a 422, retry once as a body-only review with an "unanchored" section. On a 403/404, emit up to 10 `::warning` annotations plus the job summary. Always exit 0.
 6. **Body format:** test skeletons go in a plain language fence. A ```` ```suggestion ```` block is used only for mechanical `standard` fixes inside one RIGHT-side hunk. Each body ends with a collapsed "Why this was flagged" block.
-7. **Dedup:** `<!-- specguard:fp=sha1(kind+path+normalised line text) -->`. Paginate `listReviewComments`. Outdated comments have `line=null`, so match them by fingerprint only. v1 never deletes old threads; it resolves one only when it is our own single-comment, unresolved thread whose fp is absent from this run's findings, the run completed untruncated, at most 20 per run, via GraphQL `resolveReviewThread` (errors are swallowed into a limitation note; `resolve_stale: false` disables it).
+7. **Dedup:** `<!-- specguard:fp=sha1(kind+path+normalised line text) -->`. Paginate `listReviewComments`. Outdated comments have `line=null`, so match them by fingerprint only. v1 never deletes old threads; it resolves one only when it is our own single-comment, unresolved thread whose fp is absent from this run's findings, the run completed untruncated, at most 20 per run, via GraphQL `resolveReviewThread` (errors are swallowed into a limitation note). **Off by default** (`resolve_stale: false`, round 3): the job token cannot resolve threads, and where "require conversation resolution" is on every unresolved advisory thread would block the merge; enable it only with a token that can resolve threads.
 8. **Summary:** the review body is short (`<!-- specguard:review -->`, a status line, counts, engine/model, and a link to the sticky comment). The sticky issue comment `<!-- specguard:summary -->` holds the coverage table and the collapsed low-confidence, inferred and overflow items, and is updated in place. The same text goes to `$GITHUB_STEP_SUMMARY`.
 
 ---
