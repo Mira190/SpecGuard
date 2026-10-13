@@ -1,0 +1,25 @@
+{
+  "count": 1,
+  "specFiles": [
+    "docs/specs/claims.md"
+  ],
+  "b": {
+    "criterion": "S1",
+    "code": [
+      "src/claims/deadline.ts"
+    ],
+    "tests": [
+      "src/claims/deadline.test.ts"
+    ]
+  },
+  "occ": [
+    "src/claims/deadline.ts"
+  ],
+  "variants": [
+    "30",
+    "720",
+    "2592000",
+    "2592000000",
+    "P30D"
+  ]
+}

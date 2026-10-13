@@ -1,0 +1,22 @@
+{
+  "id": "tr17",
+  "goal": "traceability",
+  "description": "Process-doc noise: docs/development.md has contributor instructions and one normative sentence; the code change is unrelated to it.",
+  "pr_title": "Prefix money amounts with a dollar sign",
+  "pr_body": "formatMoney now prefixes amounts with a dollar sign.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "summary_lacks": [
+      "(?:^|\\n)(?:\\|[^\\n]*|\\*\\*Requirements source[^\\n]*)development\\.md"
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "The second-person sentence is not indexed, so development.md is not a requirement doc and is never cited."
+  }
+}

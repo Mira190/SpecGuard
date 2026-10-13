@@ -1,0 +1,13 @@
+{
+  "count": 0,
+  "specFiles": [
+    "docs/specs/claims.md"
+  ],
+  "a": [
+    {
+      "path": "src/claims/submit.ts",
+      "ref": "R2",
+      "spec": "docs/specs/claims.md"
+    }
+  ]
+}

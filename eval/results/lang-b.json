@@ -1,0 +1,1303 @@
+{
+  "runId": "lang-b",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "model": "unchanged",
+  "cost": "not measured (pass --billing)",
+  "results": [
+    {
+      "id": "ts1",
+      "goal": "requirements",
+      "tp": 2,
+      "fp": 1,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 9,
+            "tolerance": 1,
+            "quote": "const minutes = Number"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 10,
+            "level": "inline",
+            "title": "Test combined hours and minutes; Test minutes-only durations",
+            "body": "**Test combined hours and minutes; Test minutes-only durations**\n\n**Test combined hours and minutes**\n\nThe unit suite does not prove the required combined-duration result. Add an assertion for the specified input and literal result:\n\n```ts\nit('parses combined hours and minutes', () => {\n  expect(parseDuration('1h30m')).toBe(5400);\n});\n```\n\n---\n\n**Test minutes-only durations**\n\nThe unit suite does not prove the required minutes-only result. Add an assertion for the specified input and literal result:\n\n```ts\nit('parses minutes alone', () => {\n  expect(parseDuration('45m')).toBe(2700);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=eca90c23c849de04bcf730aba576746b914cf6ee -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "tolerance": 1,
+            "quote": "throw new RangeError"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Test invalid-duration errors",
+            "body": "**Test invalid-duration errors**\n\nNo unit assertion proves an invalid string throws a `RangeError`. Add an assertion for a malformed, nonempty input:\n\n```ts\nit('rejects invalid durations', () => {\n  expect(() => parseDuration('invalid')).toThrow(RangeError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1eec2b087258a5223e2e2d273d452cf56e91d453 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/ts1/duration.ts",
+          "line": 5,
+          "title": "Test rejection of empty input"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 122,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/90",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37467843922",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 10,
+            "level": "inline",
+            "title": "Test combined hours and minutes; Test minutes-only durations",
+            "body": "**Test combined hours and minutes; Test minutes-only durations**\n\n**Test combined hours and minutes**\n\nThe unit suite does not prove the required combined-duration result. Add an assertion for the specified input and literal result:\n\n```ts\nit('parses combined hours and minutes', () => {\n  expect(parseDuration('1h30m')).toBe(5400);\n});\n```\n\n---\n\n**Test minutes-only durations**\n\nThe unit suite does not prove the required minutes-only result. Add an assertion for the specified input and literal result:\n\n```ts\nit('parses minutes alone', () => {\n  expect(parseDuration('45m')).toBe(2700);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=eca90c23c849de04bcf730aba576746b914cf6ee -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Test invalid-duration errors",
+            "body": "**Test invalid-duration errors**\n\nNo unit assertion proves an invalid string throws a `RangeError`. Add an assertion for a malformed, nonempty input:\n\n```ts\nit('rejects invalid durations', () => {\n  expect(() => parseDuration('invalid')).toThrow(RangeError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1eec2b087258a5223e2e2d273d452cf56e91d453 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 5,
+            "level": "inline",
+            "title": "Test rejection of empty input",
+            "body": "**Test rejection of empty input**\n\nThe empty-input branch has no unit assertion. Add a check that pins its expected error:\n\n```ts\nit('rejects an empty duration', () => {\n  expect(() => parseDuration('')).toThrow(RangeError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=dfccfba46ff88ec1a98b0abcffc466a2cb4708e7 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 4 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/5 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 4 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/5 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: bb4d4fff1e1cd14512cbe6d890b34500b556a8f1. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Hours and minutes combine, so \"1h30m\" is 5400 seconds. | R1 | 0/1 obligations covered (not fully covered). This criterion specifies one exact combined-duration result. |\n| R2 | PR body: Minutes alone work, so \"45m\" is 2700 seconds. | R2 | 0/1 obligations covered (not fully covered). This criterion specifies one exact minutes-only result. |\n| R3 | PR body: An invalid string throws a RangeError. | R3 | 0/1 obligations covered (not fully covered). This criterion requires an invalid input to throw the specified error type. |\n\n**Coding standards: checked.** Assessed the listed rule file and its applyTo scope; it covers src/** and eval/*.js, not the changed eval-sandbox/ts1 files, so none of its coding rules apply to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched for the function and related input/error literals across repository TypeScript and JavaScript files, including eval-sandbox/ts1 and eval/cases/ts1/head. The Vitest test calls the exported function directly and is unit-level; no component, integration, or end-to-end evidence was found. The parser is already a deterministic public function suitable for direct unit assertions, so moving coverage down from a higher layer is not applicable.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: Parsing \"1h30m\" returns 5400 seconds. | PR body; eval-sandbox/ts1/duration.ts:10 —   return hours * 3600 + minutes * 60; | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (no_assertion; Checks an hours-only input, not the required combined input or result.) | missing_test: Repository-wide search for parseDuration found only the added unit test and its matching eval case; neither asserts the combined input or expected 5400 result. |\n| R2: Parsing \"45m\" returns 2700 seconds. | PR body; eval-sandbox/ts1/duration.ts:10 —   return hours * 3600 + minutes * 60; | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (no_assertion; Checks an hours-only input, not a minutes-only input or the required 2700 result.) | missing_test: Repository-wide search for parseDuration found only the added unit test and its matching eval case; neither asserts the minutes-only input or expected 2700 result. |\n| R3: An invalid string throws a RangeError. | PR body; eval-sandbox/ts1/duration.ts:6 —     throw new RangeError(`Invalid duration: \"${input}\"`); | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (no_assertion; Checks a valid input's return value; it does not assert the error for an invalid string.) | missing_test: The repository-wide symbol search found no assertion for invalid input or the RangeError type. |\n| B1: An hours-only duration parses to its seconds value. | from behaviour; eval-sandbox/ts1/duration.ts:10 —   return hours * 3600 + minutes * 60; | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (assertion; Calls the public function with '1h' and compares its result with the independent literal 3600.) | covered: The unit assertion checks the hours-only result against a literal expected value. |\n| B2: Empty input is rejected. | from behaviour; eval-sandbox/ts1/duration.ts:5 —   if (!input \\|\\| !match) { | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (no_assertion; Checks a nonempty valid input; it does not exercise the empty-input branch.) | missing_test: The repository-wide search found no assertion for an empty input, which is separately rejected by the !input branch. |\n\n",
+        "latency_s": 122,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"Hours and minutes combine, so \\\"1h30m\\\" is 5400 seconds.\",\"obligation_ids\":[\"R1\"],\"reason\":\"This criterion specifies one exact combined-duration result.\"},{\"id\":\"R2\",\"source\":\"PR body\",\"quote\":\"Minutes alone work, so \\\"45m\\\" is 2700 seconds.\",\"obligation_ids\":[\"R2\"],\"reason\":\"This criterion specifies one exact minutes-only result.\"},{\"id\":\"R3\",\"source\":\"PR body\",\"quote\":\"An invalid string throws a RangeError.\",\"obligation_ids\":[\"R3\"],\"reason\":\"This criterion requires an invalid input to throw the specified error type.\"}],\"coverage\":[{\"id\":\"R1\",\"obligation\":\"Parsing \\\"1h30m\\\" returns 5400 seconds.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"change\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"evidence\":[{\"path\":\"eval-sandbox/ts1/duration.test.ts\",\"line\":6,\"quote\":\"    expect(parseDuration('1h')).toBe(3600);\",\"layer\":\"unit\",\"proves\":\"Checks an hours-only input, not the required combined input or result.\",\"kind\":\"no_assertion\"}],\"status\":\"missing_test\",\"reason\":\"Repository-wide search for parseDuration found only the added unit test and its matching eval case; neither asserts the combined input or expected 5400 result.\"},{\"id\":\"R2\",\"obligation\":\"Parsing \\\"45m\\\" returns 2700 seconds.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"change\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"evidence\":[{\"path\":\"eval-sandbox/ts1/duration.test.ts\",\"line\":6,\"quote\":\"    expect(parseDuration('1h')).toBe(3600);\",\"layer\":\"unit\",\"proves\":\"Checks an hours-only input, not a minutes-only input or the required 2700 result.\",\"kind\":\"no_assertion\"}],\"status\":\"missing_test\",\"reason\":\"Repository-wide search for parseDuration found onl"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "ts1",
+      "goal": "requirements",
+      "tp": 2,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 9,
+            "tolerance": 1,
+            "quote": "const minutes = Number"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 10,
+            "level": "inline",
+            "title": "Test combined hours and minutes; Test minutes-only duration",
+            "body": "**Test combined hours and minutes; Test minutes-only duration**\n\n**Test combined hours and minutes**\n\nThe unit test checks only an hours-only input, so it does not prove the required combined duration. Add an assertion for the specified input and result:\n```ts\nit('combines hours and minutes', () => {\n  expect(parseDuration('1h30m')).toBe(5400);\n});\n```\n\n---\n\n**Test minutes-only duration**\n\nNo unit assertion checks a minutes-only input. Add an assertion for the specified input and result:\n```ts\nit('parses minutes alone', () => {\n  expect(parseDuration('45m')).toBe(2700);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0925235fea4270f16b6e5c8711f47fea33b171eb -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "tolerance": 1,
+            "quote": "throw new RangeError"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Test invalid-duration error type",
+            "body": "**Test invalid-duration error type**\n\nThe unit test covers only valid input and does not prove the required error type. Add an assertion that invalid input throws RangeError:\n```ts\nit('rejects invalid durations', () => {\n  expect(() => parseDuration('invalid')).toThrow(RangeError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=d668b368acf01f74724f564aa8e2c72024f3c76e -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 111,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/91",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37468315461",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 10,
+            "level": "inline",
+            "title": "Test combined hours and minutes; Test minutes-only duration",
+            "body": "**Test combined hours and minutes; Test minutes-only duration**\n\n**Test combined hours and minutes**\n\nThe unit test checks only an hours-only input, so it does not prove the required combined duration. Add an assertion for the specified input and result:\n```ts\nit('combines hours and minutes', () => {\n  expect(parseDuration('1h30m')).toBe(5400);\n});\n```\n\n---\n\n**Test minutes-only duration**\n\nNo unit assertion checks a minutes-only input. Add an assertion for the specified input and result:\n```ts\nit('parses minutes alone', () => {\n  expect(parseDuration('45m')).toBe(2700);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0925235fea4270f16b6e5c8711f47fea33b171eb -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Test invalid-duration error type",
+            "body": "**Test invalid-duration error type**\n\nThe unit test covers only valid input and does not prove the required error type. Add an assertion that invalid input throws RangeError:\n```ts\nit('rejects invalid durations', () => {\n  expect(() => parseDuration('invalid')).toThrow(RangeError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=d668b368acf01f74724f564aa8e2c72024f3c76e -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 06a62d1b35edb1dc099878e93420beb207fb2fde. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Hours and minutes combine, so \"1h30m\" is 5400 seconds. | O1 | 0/1 obligations covered (not fully covered). Requires a unit assertion for the combined-hours-and-minutes example. |\n| R2 | PR body: Minutes alone work, so \"45m\" is 2700 seconds. | O2 | 0/1 obligations covered (not fully covered). Requires a unit assertion for minutes-only input. |\n| R3 | PR body: An invalid string throws a RangeError. | O3 | 0/1 obligations covered (not fully covered). Requires a unit assertion that invalid input throws RangeError. |\n\n**Coding standards: not_reviewed.** The only listed rule file, .github/instructions/specguard.instructions.md, has applyTo metadata for src/** and eval/*.js, which excludes the changed eval-sandbox/ts1 TypeScript files; there is no applicable rule file to assess or cite. Sources: none.\n\n**Test layers: checked.** Inspected the Vitest unit test and searched TypeScript/JavaScript code for the public function, relevant inputs, and error evidence. The test invokes the exported function directly without network or a real database, so it is unit-level; no component, integration, or end-to-end evidence was found. The deterministic public function is directly unit-testable, so higher-level-only coverage and pushdown are not applicable.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Parsing \"1h30m\" returns 5400 seconds. | PR body AC 1; eval-sandbox/ts1/duration.ts:10 —   return hours * 3600 + minutes * 60; | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (no_assertion; The existing assertion checks an hours-only input, not the required combined input and result.) | missing_test: A repository-wide search for parseDuration and the relevant input and output literals found only an assertion for '1h' returning 3600; no unit assertion checks '1h30m' returning 5400. |\n| O2: Parsing \"45m\" returns 2700 seconds. | PR body AC 2; eval-sandbox/ts1/duration.ts:10 —   return hours * 3600 + minutes * 60; | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (no_assertion; The existing assertion checks an hours-only input, not minutes-only input.) | missing_test: A repository-wide search for parseDuration and the relevant input and output literals found no unit assertion for '45m' returning 2700. |\n| O3: An invalid string throws a RangeError. | PR body AC 3; eval-sandbox/ts1/duration.ts:6 —     throw new RangeError(`Invalid duration: \"${input}\"`); | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (no_assertion; The existing assertion checks a valid input and does not assert the error type for invalid input.) | missing_test: A repository-wide search for parseDuration and invalid-input error evidence found no unit assertion that invalid input throws RangeError. |\n| O4: An hours-only duration such as \"1h\" returns 3600 seconds. | from behaviour; eval-sandbox/ts1/duration.ts:10 —   return hours * 3600 + minutes * 60; | unit: eval-sandbox/ts1/duration.test.ts:6 —     expect(parseDuration('1h')).toBe(3600); (assertion; Calling the exported function with '1h' yields the literal expected result 3600.) | covered: The unit test calls the public function with an hours-only input and compares its result to the independent literal 3600. |\n\n",
+        "latency_s": 111,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"Hours and minutes combine, so \\\"1h30m\\\" is 5400 seconds.\",\"obligation_ids\":[\"O1\"],\"reason\":\"Requires a unit assertion for the combined-hours-and-minutes example.\"},{\"id\":\"R2\",\"source\":\"PR body\",\"quote\":\"Minutes alone work, so \\\"45m\\\" is 2700 seconds.\",\"obligation_ids\":[\"O2\"],\"reason\":\"Requires a unit assertion for minutes-only input.\"},{\"id\":\"R3\",\"source\":\"PR body\",\"quote\":\"An invalid string throws a RangeError.\",\"obligation_ids\":[\"O3\"],\"reason\":\"Requires a unit assertion that invalid input throws RangeError.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Parsing \\\"1h30m\\\" returns 5400 seconds.\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"change\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"evidence\":[{\"path\":\"eval-sandbox/ts1/duration.test.ts\",\"line\":6,\"quote\":\"    expect(parseDuration('1h')).toBe(3600);\",\"layer\":\"unit\",\"proves\":\"The existing assertion checks an hours-only input, not the required combined input and result.\",\"kind\":\"no_assertion\"}],\"status\":\"missing_test\",\"reason\":\"A repository-wide search for parseDuration and the relevant input and output literals found only an assertion for '1h' returning 3600; no unit assertion checks '1h30m' returning 5400.\"},{\"id\":\"O2\",\"obligation\":\"Parsing \\\"45m\\\" returns 2700 seconds.\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"change\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"evidence\":[{\"path\":\"eval-sandbox/ts1/duration.test.ts\",\"line\":6,\"quote\":\"    expect(parseDuration('1h')).toBe(3600);\",\"layer\":\"unit\",\"proves\":\"The existing assertion checks an hours-only input, not minutes-only input.\",\"kind\":\"no_assertion\"}],\"status\":\"missing_test\",\"reason\":\"A reposi"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "ts2",
+      "goal": "test_quality",
+      "rep": 1,
+      "error": "Command failed: gh run list --repo Mira190/SpecGuard --branch eval/lang-b-ts2-1-head --event pull_request --limit 20 --json databaseId,headSha,status,conclusion,workflowName,url",
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/92",
+      "model": "unchanged"
+    },
+    {
+      "id": "ts2",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 1,
+      "acceptable": 2,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "tolerance": 1,
+            "quote": "toBeDefined()"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert the discounted total",
+            "body": "**Assert the discounted total**\n\nThe defined-value assertion passes if SAVE10 is ignored or assigned another rate, so it does not prove the coupon-adjusted total. Replace it with an exact result check:\n```ts\nexpect(applyCoupon(100, 'SAVE10')).toBe(90);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=6c8b76380ad79f90fa02a68187037a667137da8e -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/ts2/coupon.ts",
+          "line": 1,
+          "title": "Test the HALF coupon"
+        }
+      ],
+      "acceptable_findings": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/ts2/coupon.ts",
+          "line": 4,
+          "title": "Test unknown coupon codes",
+          "reason": "Coupon rates (SAVE10, HALF, unknown codes) are never checked against a value."
+        },
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/ts2/coupon.test.ts",
+          "line": 10,
+          "title": "Assert cent rounding",
+          "reason": "The second assertion (toBeTypeOf number) is equally weak."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 144,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/93",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37469588935",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.ts",
+            "line": 1,
+            "level": "inline",
+            "title": "Test the HALF coupon",
+            "body": "**Test the HALF coupon**\n\nNo unit assertion checks the HALF rate. Add an exact outcome check:\n```ts\nit('applies the HALF coupon', () => {\n  expect(applyCoupon(100, 'HALF')).toBe(50);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=c1f906ed68b1a4e7180c4076ae0c847b37f024e9 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.ts",
+            "line": 4,
+            "level": "inline",
+            "title": "Test unknown coupon codes",
+            "body": "**Test unknown coupon codes**\n\nNo unit assertion checks the fallback for an unrecognized coupon code. Add an exact unchanged-total check:\n```ts\nit('leaves the total unchanged for an unknown coupon', () => {\n  expect(applyCoupon(100, 'NOPE')).toBe(100);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=dab67330935607940bb473519ed1125e27c4bd79 -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert the discounted total",
+            "body": "**Assert the discounted total**\n\nThe defined-value assertion passes if SAVE10 is ignored or assigned another rate, so it does not prove the coupon-adjusted total. Replace it with an exact result check:\n```ts\nexpect(applyCoupon(100, 'SAVE10')).toBe(90);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=6c8b76380ad79f90fa02a68187037a667137da8e -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 10,
+            "level": "inline",
+            "title": "Assert cent rounding",
+            "body": "**Assert cent rounding**\n\nThis type assertion still passes if rounding is removed or changed, and the current input does not distinguish those behaviours. Replace it with an exact cent-rounding check:\n```ts\nexpect(applyCoupon(10.01, 'SAVE10')).toBe(9.01);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=3b25a9286d8f12b21944bc848bb21951d00063eb -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 2 missing, 2 weak · Standards: 0 · Layering: 0; 4 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 2 missing, 2 weak · Standards: 0 · Layering: 0; 4 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 3363074615589f661797847d233c9eb833ab0d00. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add applyCoupon, which applies a coupon code to an order total. | O1 | 0/1 obligations covered (not fully covered). This is the only criterion. O1 captures the observable coupon-adjusted total; the PR does not specify additional discount policies. |\n\n**Coding standards: checked.** Assessed the listed rule file and its applyTo scope; it applies only to src/** and eval/*.js, so none of its rules apply to the changed eval-sandbox/ts2 TypeScript files. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Vitest tests in eval-sandbox/ts2 and the matching eval/cases/ts2/head scenario tests. They call the exported pure function without network or database collaborators, so they are unit-level; no higher-layer-only logic or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Return the order total after applying the supplied SAVE10 coupon. | PR body; eval-sandbox/ts2/coupon.ts:5 —   return Math.round(total * (1 - rate) * 100) / 100; | unit: eval-sandbox/ts2/coupon.test.ts:6 —     expect(applyCoupon(100, 'SAVE10')).toBeDefined(); (assertion; Calls the exported function with SAVE10 but only checks that the result is defined, not that the coupon changes the total to the expected amount.); unit: eval/cases/ts2/head/coupon.test.ts:6 —     expect(applyCoupon(100, 'SAVE10')).toBeDefined(); (assertion; The matching scenario test also checks only that the result is defined.) | weak_test: The Vitest unit tests call the exported function with (100, 'SAVE10'), but the defined-value assertion survives mutations that ignore SAVE10 or apply a different rate. |\n| O2: Apply the configured 50% discount for the HALF coupon. | from behaviour; eval-sandbox/ts2/coupon.ts:1 — const COUPON_RATES: Record<string, number> = { SAVE10: 0.1, HALF: 0.5 }; | none | missing_test: A repository-wide search of test files for applyCoupon, coupon codes and their values found no assertion exercising HALF; the available coupon tests use only SAVE10. |\n| O3: Leave the total unchanged when the coupon code is unrecognized. | from behaviour; eval-sandbox/ts2/coupon.ts:4 —   const rate = COUPON_RATES[code] ?? 0; | none | missing_test: A repository-wide search of test files for applyCoupon, coupon codes and their values found no assertion using an unrecognized code or checking the unchanged-total result. |\n| O4: Round the discounted total to two decimal places. | from behaviour; eval-sandbox/ts2/coupon.ts:5 —   return Math.round(total * (1 - rate) * 100) / 100; | unit: eval-sandbox/ts2/coupon.test.ts:10 —     expect(applyCoupon(100, 'SAVE10')).toBeTypeOf('number'); (assertion; Calls the function with an input whose discounted result is already a whole number, then checks only its type; removing rounding still satisfies the assertion.); unit: eval/cases/ts2/head/coupon.test.ts:10 —     expect(applyCoupon(100, 'SAVE10')).toBeTypeOf('number'); (assertion; The matching scenario test likewise checks only the result type for a whole-number outcome.) | weak_test: Both unit-test copies use total 100 and assert only that the result is a number; dropping or changing the rounding operation survives those assertions. |\n\n",
+        "latency_s": 144,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add applyCoupon, which applies a coupon code to an order total.\",\n      \"obligation_ids\": [\n        \"O1\"\n      ],\n      \"reason\": \"This is the only criterion. O1 captures the observable coupon-adjusted total; the PR does not specify additional discount policies.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Return the order total after applying the supplied SAVE10 coupon.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/ts2/coupon.ts\",\n        \"line\": 5,\n        \"quote\": \"  return Math.round(total * (1 - rate) * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/ts2/coupon.ts\",\n        \"line\": 5,\n        \"quote\": \"  return Math.round(total * (1 - rate) * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/ts2/coupon.test.ts\",\n          \"line\": 6,\n          \"quote\": \"    expect(applyCoupon(100, 'SAVE10')).toBeDefined();\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calls the exported function with SAVE10 but only checks that the result is defined, not that the coupon changes the total to the expected amount.\",\n          \"kind\": \"assertion\"\n        },\n        {\n          \"path\": \"eval/cases/ts2/head/coupon.test.ts\",\n          \"line\": 6,\n          \"quote\": \"    expect(applyCoupon(100, 'SAVE10')).toBeDefined();\",\n          \"layer\": \"unit\",\n          \"proves\": \"The matching scenario test also checks only that the result is defined.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"weak_test\",\n      \"reason\": \"The Vitest unit tests call the exported function with (100, 'SAVE10'), but the defined-value assertion survives mutations that ignore SAVE10 or apply a different rate.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Apply the configured 50% discount for the HALF coupon.\",\n      \"source\": \"from behaviour\",\n    "
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "ts3",
+      "goal": "standards",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "CONTRIBUTING.md",
+            "quote": "throw new RangeError"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/ts3/CONTRIBUTING.md:3",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "level": "inline",
+            "title": "Return a Result instead of throwing",
+            "body": "**Return a Result instead of throwing**\n\n`eval-sandbox/ts3/CONTRIBUTING.md:3` requires validation functions to return a Result object rather than throw. Return `{ ok: true, value }` for valid ages and `{ ok: false, error }` for invalid ages.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/ts3/CONTRIBUTING.md:3\n</details>\n\n<!-- specguard:fp=d6b54eae90308a6e048cb4f784b0fc55cf7a092e -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 122,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/94",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37470245578",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/ts3/CONTRIBUTING.md:3",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "level": "inline",
+            "title": "Return a Result instead of throwing",
+            "body": "**Return a Result instead of throwing**\n\n`eval-sandbox/ts3/CONTRIBUTING.md:3` requires validation functions to return a Result object rather than throw. Return `{ ok: true, value }` for valid ages and `{ ok: false, error }` for invalid ages.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/ts3/CONTRIBUTING.md:3\n</details>\n\n<!-- specguard:fp=d6b54eae90308a6e048cb4f784b0fc55cf7a092e -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 6/6 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 6/6 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 92a4522289d12b1bd9ccadf934aef85b798b6fe9. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add validateAge, which checks that an age is an integer from 0 to 150. | R1, R2, R3 | 3/3 obligations covered. The criterion combines integer validation and both range limits; each is assessed separately. |\n\n**Coding standards: checked.** Assessed the applicable CONTRIBUTING rule for the changed validation function; it requires Result returns, and the implementation throws. Sources: eval-sandbox/ts3/CONTRIBUTING.md.\n\n**Test layers: checked.** Searched test directories for validateAge and its error message. The changed Vitest tests import the function directly and exercise its deterministic behavior without external collaborators, so they are unit tests. A matching unit test also exists under eval/cases/ts3; no component, integration, or e2e-only coverage was found. The pure public function already has unit coverage, so pushdown is not applicable.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: Age must be an integer. | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:17 —     expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5'); (assertion; A fractional age is rejected; the literal expected error identifies the invalid input.) | covered: The unit assertion rejects a fractional age, and would fail if the integer check were removed. |\n| R2: Age must be at least 0. | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:6 —     expect(validateAge(0)).toBe(0); (assertion; The inclusive lower bound, zero, is accepted.); unit: eval-sandbox/ts3/validate.test.ts:12 —     expect(() => validateAge(-1)).toThrow(RangeError); (assertion; An integer below the lower bound is rejected.) | covered: Assertions on zero and -1 check both sides of the lower boundary and would catch excluding zero or accepting a negative integer. |\n| R3: Age must be at most 150. | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:8 —     expect(validateAge(150)).toBe(150); (assertion; The inclusive upper bound, 150, is accepted.); unit: eval-sandbox/ts3/validate.test.ts:13 —     expect(() => validateAge(151)).toThrow(RangeError); (assertion; An integer above the upper bound is rejected.) | covered: Assertions on 150 and 151 check both sides of the upper boundary and would catch excluding 150 or accepting an integer above it. |\n| B1: Out-of-range integer ages are rejected with a RangeError. | from behaviour; eval-sandbox/ts3/validate.ts:3 —     throw new RangeError(`Invalid age: ${age}`); | unit: eval-sandbox/ts3/validate.test.ts:12 —     expect(() => validateAge(-1)).toThrow(RangeError); (assertion; A below-range integer produces a RangeError.); unit: eval-sandbox/ts3/validate.test.ts:13 —     expect(() => validateAge(151)).toThrow(RangeError); (assertion; An above-range integer produces a RangeError.) | covered: Both out-of-range sides assert the error type; changing the rejection to a different error type would fail these assertions. |\n| B2: The rejection error message includes the invalid age. | from behaviour; eval-sandbox/ts3/validate.ts:3 —     throw new RangeError(`Invalid age: ${age}`); | unit: eval-sandbox/ts3/validate.test.ts:17 —     expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5'); (assertion; The error message for fractional input contains its value.); unit: eval-sandbox/ts3/validate.test.ts:18 —     expect(() => validateAge(Number.NaN)).toThrow('Invalid age: NaN'); (assertion; The error message for NaN contains its value.) | covered: Literal expected messages for two invalid inputs would fail if the input were omitted or formatted incorrectly. |\n| B3: A valid age is returned unchanged. | from behaviour; eval-sandbox/ts3/validate.ts:5 —   return age; | unit: eval-sandbox/ts3/validate.test.ts:7 —     expect(validateAge(30)).toBe(30); (assertion; A valid in-range age is returned as the same value.) | covered: The independent literal expected value checks the public return value and would catch returning a different value. |\n\n**Not reviewed:** The PR body specifies validity constraints but not the return or error contract. Return and error behavior above is therefore recorded as inferred from the diff; the repository's Result-object rule conflicts with the implementation and is reported.\n\n",
+        "latency_s": 122,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add validateAge, which checks that an age is an integer from 0 to 150.\",\n      \"obligation_ids\": [\n        \"R1\",\n        \"R2\",\n        \"R3\"\n      ],\n      \"reason\": \"The criterion combines integer validation and both range limits; each is assessed separately.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"R1\",\n      \"obligation\": \"Age must be an integer.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/ts3/validate.ts\",\n        \"line\": 2,\n        \"quote\": \"  if (!Number.isInteger(age) || age < 0 || age > 150) {\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/ts3/validate.ts\",\n        \"line\": 2,\n        \"quote\": \"  if (!Number.isInteger(age) || age < 0 || age > 150) {\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/ts3/validate.test.ts\",\n          \"line\": 17,\n          \"quote\": \"    expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5');\",\n          \"layer\": \"unit\",\n          \"proves\": \"A fractional age is rejected; the literal expected error identifies the invalid input.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The unit assertion rejects a fractional age, and would fail if the integer check were removed.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"obligation\": \"Age must be at least 0.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/ts3/validate.ts\",\n        \"line\": 2,\n        \"quote\": \"  if (!Number.isInteger(age) || age < 0 || age > 150) {\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/ts3/validate.ts\",\n        \"line\": 2,\n        \"quote\": \"  if (!Number.isInteger(age) || age < 0 || age > 150) {\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/ts3/validate.test.ts\",\n          \"line\": 6,\n          \"quote\": \"    expect(validateAge(0)).toBe(0);\",\n          \"layer\": "
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "ts3",
+      "goal": "standards",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "CONTRIBUTING.md",
+            "quote": "throw new RangeError"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/ts3/CONTRIBUTING.md:3",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "level": "inline",
+            "title": "Return a Result instead of throwing",
+            "body": "**Return a Result instead of throwing**\n\n`eval-sandbox/ts3/CONTRIBUTING.md` requires validation functions to return a Result object instead of throwing. Return `{ ok: false, error }` for invalid ages and `{ ok: true, value }` for valid ages.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/ts3/CONTRIBUTING.md:3\n</details>\n\n<!-- specguard:fp=d6b54eae90308a6e048cb4f784b0fc55cf7a092e -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 104,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/95",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37470912264",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/ts3/CONTRIBUTING.md:3",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "level": "inline",
+            "title": "Return a Result instead of throwing",
+            "body": "**Return a Result instead of throwing**\n\n`eval-sandbox/ts3/CONTRIBUTING.md` requires validation functions to return a Result object instead of throwing. Return `{ ok: false, error }` for invalid ages and `{ ok: true, value }` for valid ages.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/ts3/CONTRIBUTING.md:3\n</details>\n\n<!-- specguard:fp=d6b54eae90308a6e048cb4f784b0fc55cf7a092e -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 6/6 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 6/6 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 104622aad9feef04190cc07803c9ceae7bcb9e43. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Add validateAge, which checks that an age is an integer from 0 to 150. | O1, O2, O3, O4 | 4/4 obligations covered. Split the criterion into accepting valid integers, rejecting non-integers, and enforcing each inclusive range boundary. |\n\n**Coding standards: checked.** Assessed the applicable local contributing rule against the changed validation function; it requires Result returns rather than throwing. The repository instruction file's applyTo scope does not include these eval-sandbox TypeScript files. Sources: eval-sandbox/ts3/CONTRIBUTING.md.\n\n**Test layers: checked.** Searched tests across the repository for validateAge, its error message, and relevant boundary behavior, including the changed test and the unchanged eval/cases/ts3/head test. The Vitest package script and direct imports show these exercise the exported pure function at unit level. No higher-level-only behavior was found; the public unit seam already covers the logic, so pushdown does not apply.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Accept valid in-range integers unchanged. | PR body; eval-sandbox/ts3/validate.ts:5 —   return age; | unit: eval-sandbox/ts3/validate.test.ts:7 —     expect(validateAge(30)).toBe(30); (assertion; For an in-range integer input of 30, the public function returns 30.) | covered: The unit assertion compares the function's result with the independent literal 30. |\n| O2: Reject non-integer ages. | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:17 —     expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5'); (assertion; A fractional age is rejected with the expected invalid-age message.); unit: eval-sandbox/ts3/validate.test.ts:18 —     expect(() => validateAge(Number.NaN)).toThrow('Invalid age: NaN'); (assertion; NaN is rejected with the expected invalid-age message.) | covered: The assertions check the rejection outcome for both a fractional value and NaN using expected messages independent of the implementation. |\n| O3: Reject ages below 0 and accept the inclusive lower bound. | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:12 —     expect(() => validateAge(-1)).toThrow(RangeError); (assertion; An age immediately below the lower bound is rejected.); unit: eval-sandbox/ts3/validate.test.ts:6 —     expect(validateAge(0)).toBe(0); (assertion; The lower bound is accepted and returned unchanged.) | covered: Unit assertions cover both rejection immediately below 0 and acceptance at 0. |\n| O4: Reject ages above 150 and accept the inclusive upper bound. | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:13 —     expect(() => validateAge(151)).toThrow(RangeError); (assertion; An age immediately above the upper bound is rejected.); unit: eval-sandbox/ts3/validate.test.ts:8 —     expect(validateAge(150)).toBe(150); (assertion; The upper bound is accepted and returned unchanged.) | covered: Unit assertions cover both rejection immediately above 150 and acceptance at 150. |\n| O5: Invalid ages throw a RangeError. | from behaviour; eval-sandbox/ts3/validate.ts:3 —     throw new RangeError(`Invalid age: ${age}`); | unit: eval-sandbox/ts3/validate.test.ts:12 —     expect(() => validateAge(-1)).toThrow(RangeError); (assertion; An invalid age below the range throws RangeError.); unit: eval-sandbox/ts3/validate.test.ts:13 —     expect(() => validateAge(151)).toThrow(RangeError); (assertion; An invalid age above the range throws RangeError.) | covered: Assertions check the thrown error type for invalid ages on both sides of the range. |\n| O6: The invalid-age error message includes the rejected value. | from behaviour; eval-sandbox/ts3/validate.ts:3 —     throw new RangeError(`Invalid age: ${age}`); | unit: eval-sandbox/ts3/validate.test.ts:17 —     expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5'); (assertion; The error message includes the rejected fractional value.); unit: eval-sandbox/ts3/validate.test.ts:18 —     expect(() => validateAge(Number.NaN)).toThrow('Invalid age: NaN'); (assertion; The error message includes the rejected NaN value.) | covered: Assertions compare error messages against independent expected strings for two invalid inputs. |\n\n",
+        "latency_s": 104,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add validateAge, which checks that an age is an integer from 0 to 150.\",\n      \"obligation_ids\": [\"O1\", \"O2\", \"O3\", \"O4\"],\n      \"reason\": \"Split the criterion into accepting valid integers, rejecting non-integers, and enforcing each inclusive range boundary.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Accept valid in-range integers unchanged.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/ts3/validate.ts\",\n        \"line\": 5,\n        \"quote\": \"  return age;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/ts3/validate.ts\",\n        \"line\": 5,\n        \"quote\": \"  return age;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/ts3/validate.test.ts\",\n          \"line\": 7,\n          \"quote\": \"    expect(validateAge(30)).toBe(30);\",\n          \"layer\": \"unit\",\n          \"proves\": \"For an in-range integer input of 30, the public function returns 30.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The unit assertion compares the function's result with the independent literal 30.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Reject non-integer ages.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/ts3/validate.ts\",\n        \"line\": 2,\n        \"quote\": \"  if (!Number.isInteger(age) || age < 0 || age > 150) {\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/ts3/validate.ts\",\n        \"line\": 2,\n        \"quote\": \"  if (!Number.isInteger(age) || age < 0 || age > 150) {\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/ts3/validate.test.ts\",\n          \"line\": 15,\n          \"quote\": \"    expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5');\",\n          \"layer\": \"unit\",\n          \"proves\": \"A fractional age is rejected with the expected invalid-age messa"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "rx1",
+      "goal": "layering",
+      "tp": 1,
+      "fp": 1,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "pushdown",
+            "path": [
+              "eval-sandbox/rx1/PriceTag.tsx",
+              "eval-sandbox/rx1/PriceTag.test.tsx"
+            ],
+            "line": 4,
+            "tolerance": 30,
+            "quote": "const discounted"
+          },
+          "observed": {
+            "kind": "pushdown",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx1/PriceTag.tsx",
+            "line": 4,
+            "level": "inline",
+            "title": "Unit-test the pure pricing logic",
+            "body": "**Unit-test the pure pricing logic**\n\nPercentage calculation, cent rounding, and currency formatting are deterministic but are covered only through component rendering (for example, `PriceTag.test.tsx:17` and `PriceTag.test.tsx:22`). Extract them behind a public pure helper and test its direct inputs against literal outputs, for example:\n\n```tsx\ntest('formats a rounded discounted price', () => {\n  expect(formatDiscountedPrice(19.99, 15, 'USD')).toBe('$16.99');\n});\n```\n\nAdd focused cases for `formatDiscountedPrice(100, 20, 'USD')` yielding `'$80.00'` and `formatDiscountedPrice(50, 10, 'EUR')` yielding `'€45.00'`. Keep the existing render assertions to verify component wiring and visible output.\n\n<details><summary>Why this was flagged</summary>\n\nkind: pushdown, confidence: high\n</details>\n\n<!-- specguard:fp=c24f1d3c9e1da284f6040418ad48fe298bcbea82 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/rx1/PriceTag.tsx",
+          "line": 12,
+          "title": "Assert the original price is struck through; Assert the prices are adjacent"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 160,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/96",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37471619895",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx1/PriceTag.tsx",
+            "line": 12,
+            "level": "inline",
+            "title": "Assert the original price is struck through; Assert the prices are adjacent",
+            "body": "**Assert the original price is struck through; Assert the prices are adjacent**\n\n**Assert the original price is struck through**\n\nThe existing text assertion would still pass if the `<s>` element were replaced with a plain span. Add a component assertion for the rendered markup:\n\n```tsx\nexpect(screen.getByText('$100.00').closest('s')).not.toBeNull();\n```\n\n---\n\n**Assert the prices are adjacent**\n\nThe separate text assertions would still pass if the discounted price moved away from the original. Assert their rendered DOM relationship:\n\n```tsx\nconst original = screen.getByText('$100.00');\nexpect(original.nextElementSibling).toBe(screen.getByText('$80.00'));\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0effd68f05aa64b947d5604a4835c9c2f0b146b9 -->",
+            "source": ""
+          },
+          {
+            "kind": "pushdown",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx1/PriceTag.tsx",
+            "line": 4,
+            "level": "inline",
+            "title": "Unit-test the pure pricing logic",
+            "body": "**Unit-test the pure pricing logic**\n\nPercentage calculation, cent rounding, and currency formatting are deterministic but are covered only through component rendering (for example, `PriceTag.test.tsx:17` and `PriceTag.test.tsx:22`). Extract them behind a public pure helper and test its direct inputs against literal outputs, for example:\n\n```tsx\ntest('formats a rounded discounted price', () => {\n  expect(formatDiscountedPrice(19.99, 15, 'USD')).toBe('$16.99');\n});\n```\n\nAdd focused cases for `formatDiscountedPrice(100, 20, 'USD')` yielding `'$80.00'` and `formatDiscountedPrice(50, 10, 'EUR')` yielding `'€45.00'`. Keep the existing render assertions to verify component wiring and visible output.\n\n<details><summary>Why this was flagged</summary>\n\nkind: pushdown, confidence: high\n</details>\n\n<!-- specguard:fp=c24f1d3c9e1da284f6040418ad48fe298bcbea82 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 2 missing, 0 weak · Standards: 0 · Layering: 1; 2 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/7 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 2 missing, 0 weak · Standards: 0 · Layering: 1; 2 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/7 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 5563c2a756e43d31e0a1af0ec7d92fc6b17cb461. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Add a PriceTag component that shows the original price struck through next to the discounted price. | O1, O2, O3 | 0/3 obligations covered (not fully covered). Split the criterion into displaying the original price, striking it through, and placing it next to the discounted price. |\n\n**Coding standards: checked.** Inspected the listed standard; its applyTo pattern covers src/** and eval/*.js, not the changed eval-sandbox/rx1 files, so no rules apply to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched tests across eval-sandbox and eval/cases for PriceTag and the relevant output values; the current and snapshot tests use Jest, jsdom, and React Testing Library to render the component, so they are component-layer evidence. No isolated tests for the pricing logic or integration/e2e coverage were found. The deterministic discount, rounding, and formatting logic can be extracted behind a public pure helper and unit-tested; retain render assertions for component wiring and visible output.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Display the original price. | PR body; eval-sandbox/rx1/PriceTag.tsx:12 —       <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong> | component: eval-sandbox/rx1/PriceTag.test.tsx:11 —   expect(screen.getByText('$100.00')).toBeTruthy(); (assertion; Rendering with a 20% discount displays the original $100.00 price.) | higher_level_only: The assertion checks the original price through React rendering, a component-layer test; no unit-level assertion was found. |\n| O2: Strike through the original price. | PR body; eval-sandbox/rx1/PriceTag.tsx:12 —       <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong> | component: eval-sandbox/rx1/PriceTag.test.tsx:11 —   expect(screen.getByText('$100.00')).toBeTruthy(); (no_assertion; This checks that the original price text is present, but does not assert that it is struck through.) | missing_test: The repository-wide search for PriceTag assertions found only text-presence checks; none asserts the original price's strike-through markup. |\n| O3: Place the original price next to the discounted price. | PR body; eval-sandbox/rx1/PriceTag.tsx:12 —       <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong> | component: eval-sandbox/rx1/PriceTag.test.tsx:12 —   expect(screen.getByText('$80.00')).toBeTruthy(); (no_assertion; This checks that the discounted price text is present, but not its placement relative to the original price.) | missing_test: The repository-wide search found separate text-presence assertions but no assertion that the original and discounted prices are adjacent. |\n| O4: Without a positive discount, show the plain price. | from behaviour; eval-sandbox/rx1/PriceTag.tsx:7 —   if (discountPercent <= 0) { | component: eval-sandbox/rx1/PriceTag.test.tsx:6 —   expect(screen.getByText('$100.00')).toBeTruthy(); (assertion; Rendering with the default discount displays the plain $100.00 price.) | higher_level_only: The default no-discount outcome is checked through React rendering, a component-layer test; no unit-level assertion was found. |\n| O5: Calculate the discounted price from the percentage discount. | from behaviour; eval-sandbox/rx1/PriceTag.tsx:4 —   const discounted = Math.round(price * (1 - discountPercent / 100) * 100) / 100; | component: eval-sandbox/rx1/PriceTag.test.tsx:12 —   expect(screen.getByText('$80.00')).toBeTruthy(); (assertion; Rendering price 100 with a 20% discount displays $80.00.) | higher_level_only: The percentage calculation is asserted only through React rendering; no isolated unit test of the deterministic pricing logic was found. |\n| O6: Round the discounted price to cents. | from behaviour; eval-sandbox/rx1/PriceTag.tsx:4 —   const discounted = Math.round(price * (1 - discountPercent / 100) * 100) / 100; | component: eval-sandbox/rx1/PriceTag.test.tsx:17 —   expect(screen.getByText('$16.99')).toBeTruthy(); (assertion; Rendering price 19.99 with a 15% discount displays the independently specified rounded value $16.99.) | higher_level_only: The cent-rounding example is asserted only through React rendering; no isolated unit test of the deterministic pricing logic was found. |\n| O7: Format prices using the supplied currency. | from behaviour; eval-sandbox/rx1/PriceTag.tsx:5 —   const format = new Intl.NumberFormat('en-US', { style: 'currency', currency }); | component: eval-sandbox/rx1/PriceTag.test.tsx:22 —   expect(screen.getByText('€45.00')).toBeTruthy(); (assertion; Rendering a discounted price with currency EUR displays €45.00.) | higher_level_only: Currency formatting is asserted only through React rendering; no isolated unit test of the deterministic pricing and formatting logic was found. |\n\n",
+        "latency_s": 160,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add a PriceTag component that shows the original price struck through next to the discounted price.\",\n      \"obligation_ids\": [\n        \"O1\",\n        \"O2\",\n        \"O3\"\n      ],\n      \"reason\": \"Split the criterion into displaying the original price, striking it through, and placing it next to the discounted price.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Display the original price.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/rx1/PriceTag.tsx\",\n        \"line\": 12,\n        \"quote\": \"      <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong>\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/rx1/PriceTag.tsx\",\n        \"line\": 12,\n        \"quote\": \"      <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong>\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/rx1/PriceTag.test.tsx\",\n          \"line\": 11,\n          \"quote\": \"  expect(screen.getByText('$100.00')).toBeTruthy();\",\n          \"layer\": \"component\",\n          \"proves\": \"Rendering with a 20% discount displays the original $100.00 price.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"higher_level_only\",\n      \"reason\": \"The assertion checks the original price through React rendering, a component-layer test; no unit-level assertion was found.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Strike through the original price.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/rx1/PriceTag.tsx\",\n        \"line\": 12,\n        \"quote\": \"      <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong>\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/rx1/PriceTag.tsx\",\n        \"line\": 12,\n        \"quote\": \"      <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong>\""
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "rx1",
+      "goal": "layering",
+      "tp": 1,
+      "fp": 1,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "pushdown",
+            "path": [
+              "eval-sandbox/rx1/PriceTag.tsx",
+              "eval-sandbox/rx1/PriceTag.test.tsx"
+            ],
+            "line": 4,
+            "tolerance": 30,
+            "quote": "const discounted"
+          },
+          "observed": {
+            "kind": "pushdown",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx1/PriceTag.tsx",
+            "line": 4,
+            "level": "inline",
+            "title": "Test discount arithmetic at a unit seam",
+            "body": "**Test discount arithmetic at a unit seam**\n\nThe deterministic discount calculation is covered only through component rendering. Expose it as a pure public `calculateDiscountedPrice` function and unit-test direct inputs, while retaining the component tests for rendering, currency formatting, and wiring:\n```tsx\ntest('rounds discounted prices to cents', () => {\n  expect(calculateDiscountedPrice(19.99, 15)).toBe(16.99);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: pushdown, confidence: high\n</details>\n\n<!-- specguard:fp=c24f1d3c9e1da284f6040418ad48fe298bcbea82 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/rx1/PriceTag.tsx",
+          "line": 12,
+          "title": "Assert the prices are adjacent"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 234,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/97",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37472241050",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx1/PriceTag.tsx",
+            "line": 12,
+            "level": "inline",
+            "title": "Assert the prices are adjacent",
+            "body": "**Assert the prices are adjacent**\n\nThe text assertions pass if the two prices are rendered apart. Add a component test that verifies the discounted element immediately follows the original price:\n```tsx\nconst original = screen.getByText('$100.00');\nconst discounted = screen.getByText('$80.00');\nexpect(original.parentElement).toBe(discounted.parentElement);\nexpect(original.nextElementSibling).toBe(discounted);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=0effd68f05aa64b947d5604a4835c9c2f0b146b9 -->",
+            "source": ""
+          },
+          {
+            "kind": "pushdown",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx1/PriceTag.tsx",
+            "line": 4,
+            "level": "inline",
+            "title": "Test discount arithmetic at a unit seam",
+            "body": "**Test discount arithmetic at a unit seam**\n\nThe deterministic discount calculation is covered only through component rendering. Expose it as a pure public `calculateDiscountedPrice` function and unit-test direct inputs, while retaining the component tests for rendering, currency formatting, and wiring:\n```tsx\ntest('rounds discounted prices to cents', () => {\n  expect(calculateDiscountedPrice(19.99, 15)).toBe(16.99);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: pushdown, confidence: high\n</details>\n\n<!-- specguard:fp=c24f1d3c9e1da284f6040418ad48fe298bcbea82 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 1; 2 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/5 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 1; 2 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/5 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 5debb0d550b063ee0fcbc25278460600e11dbc61. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add a PriceTag component that shows the original price struck through next to the discounted price. | R1, R2, R3 | 0/3 obligations covered (not fully covered). The status file listed no collected criteria. Added the PR body's unnumbered criterion and separated original-price visibility, strikethrough, and adjacency. |\n\n**Coding standards: checked.** Reviewed the supplied rule file for scope; its applyTo targets src/** and eval/*.js, excluding the changed eval-sandbox/rx1/*.tsx files. The scoped standards check is complete and no listed rule applies. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Jest, jsdom, and React Testing Library setup and searched the repository for PriceTag and its displayed values, including the eval case fixtures. The tests mount the isolated component and are component-layer evidence; no separate unit, integration, or end-to-end evidence was found. The arithmetic is deterministic and separable, so it is a pushdown candidate; rendering and currency-formatting checks should remain at component level.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: Display the original price when a discounted price is shown. | PR body; eval-sandbox/rx1/PriceTag.tsx:12 —       <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong> | component: eval-sandbox/rx1/PriceTag.test.tsx:11 —   expect(screen.getByText('$100.00')).toBeTruthy(); (assertion; The original price text appears in the rendered component.) | higher_level_only: The original-price text is checked only by a Jest/jsdom React Testing Library render test; no unit-level assertion was found. |\n| R2: Show the original price struck through. | PR body; eval-sandbox/rx1/PriceTag.tsx:12 —       <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong> | component: eval-sandbox/rx1/PriceTag.test.tsx:11 —   expect(screen.getByText('$100.00')).toBeTruthy(); (assertion; The original-price text is present, but the assertion does not verify its strikethrough appearance.) | needs_human: The criterion requires visual strikethrough rendering, which a unit assertion cannot establish; the component assertion checks text only. |\n| R3: Place the discounted price next to the original price. | PR body; eval-sandbox/rx1/PriceTag.tsx:12 —       <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong> | component: eval-sandbox/rx1/PriceTag.test.tsx:12 —   expect(screen.getByText('$80.00')).toBeTruthy(); (no_assertion; Checks that discounted text exists, but does not assert its relationship to the original price.) | missing_test: A repository-wide search for PriceTag and its displayed values found no assertion checking that the original and discounted prices are adjacent. |\n| B1: Omitted discount and currency props default to zero discount and USD. | from behaviour; eval-sandbox/rx1/PriceTag.tsx:3 — export function PriceTag({ price, discountPercent = 0, currency = 'USD' }: PriceTagProps) { | component: eval-sandbox/rx1/PriceTag.test.tsx:6 —   expect(screen.getByText('$100.00')).toBeTruthy(); (assertion; With both optional props omitted, the rendered price is the undiscounted USD amount.) | higher_level_only: The default-prop result is asserted only through a rendered component; no unit-level assertion was found. |\n| B2: Calculate the discounted amount from the price and percentage, rounded to cents. | from behaviour; eval-sandbox/rx1/PriceTag.tsx:4 —   const discounted = Math.round(price * (1 - discountPercent / 100) * 100) / 100; | component: eval-sandbox/rx1/PriceTag.test.tsx:12 —   expect(screen.getByText('$80.00')).toBeTruthy(); (assertion; A 20% discount on 100 renders as 80.); component: eval-sandbox/rx1/PriceTag.test.tsx:17 —   expect(screen.getByText('$16.99')).toBeTruthy(); (assertion; A 15% discount on 19.99 renders as 16.99.) | higher_level_only: The example outputs are asserted only after mounting the component. The deterministic discount calculation has no separate unit-level seam or assertion. |\n| B3: Format the price using a caller-specified currency. | from behaviour; eval-sandbox/rx1/PriceTag.tsx:5 —   const format = new Intl.NumberFormat('en-US', { style: 'currency', currency }); | component: eval-sandbox/rx1/PriceTag.test.tsx:22 —   expect(screen.getByText('€45.00')).toBeTruthy(); (assertion; A supplied EUR currency renders the discounted amount with a euro sign.) | higher_level_only: The supplied-currency output is asserted only through the rendered component; no unit-level assertion was found. |\n\n",
+        "latency_s": 234,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add a PriceTag component that shows the original price struck through next to the discounted price.\",\n      \"obligation_ids\": [\"R1\", \"R2\", \"R3\"],\n      \"reason\": \"The status file listed no collected criteria. Added the PR body's unnumbered criterion and separated original-price visibility, strikethrough, and adjacency.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"R1\",\n      \"obligation\": \"Display the original price when a discounted price is shown.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/rx1/PriceTag.tsx\",\n        \"line\": 12,\n        \"quote\": \"      <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong>\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/rx1/PriceTag.tsx\",\n        \"line\": 12,\n        \"quote\": \"      <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong>\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/rx1/PriceTag.test.tsx\",\n          \"line\": 11,\n          \"quote\": \"  expect(screen.getByText('$100.00')).toBeTruthy();\",\n          \"layer\": \"component\",\n          \"proves\": \"The original price text appears in the rendered component.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"higher_level_only\",\n      \"reason\": \"The original-price text is checked only by a Jest/jsdom React Testing Library render test; no unit-level assertion was found.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"obligation\": \"Show the original price struck through.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/rx1/PriceTag.tsx\",\n        \"line\": 12,\n        \"quote\": \"      <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong>\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/rx1/PriceTag.tsx\",\n        \"line\": 12,\n        \"quote\": \"      <s>{format.format(price)}</s> <strong>{"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "rx2",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 4,
+            "tolerance": 2,
+            "quote": "itemCount === 0"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 4,
+            "level": "inline",
+            "title": "Test the empty-cart state",
+            "body": "**Test the empty-cart state**\n\nNo unit assertion exercises the empty-cart branch, so regressions to its disabled state or label would go undetected. Add focused component tests:\n```tsx\ntest('disables checkout for an empty cart', () => {\n  render(<CheckoutButton itemCount={0} onCheckout={() => {}} />);\n  expect(screen.getByRole('button')).toBeDisabled();\n});\n\ntest('labels an empty cart', () => {\n  render(<CheckoutButton itemCount={0} onCheckout={() => {}} />);\n  expect(screen.getByRole('button')).toHaveAccessibleName('Cart is empty');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=4a6231d82204d17efd0f68342a1c27b6dffb83f0 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 140,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/98",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37472899341",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 4,
+            "level": "inline",
+            "title": "Test the empty-cart state",
+            "body": "**Test the empty-cart state**\n\nNo unit assertion exercises the empty-cart branch, so regressions to its disabled state or label would go undetected. Add focused component tests:\n```tsx\ntest('disables checkout for an empty cart', () => {\n  render(<CheckoutButton itemCount={0} onCheckout={() => {}} />);\n  expect(screen.getByRole('button')).toBeDisabled();\n});\n\ntest('labels an empty cart', () => {\n  render(<CheckoutButton itemCount={0} onCheckout={() => {}} />);\n  expect(screen.getByRole('button')).toHaveAccessibleName('Cart is empty');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=4a6231d82204d17efd0f68342a1c27b6dffb83f0 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 2/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: a7cf712e60d014e97f5641bba8d94c5a9e5c4031. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: The button is enabled when the cart has items. | R1 | 1/1 obligations covered. The nonempty-cart enabled state is covered by a unit assertion; see coverage R1. |\n| R2 | PR body: The button is disabled and labelled \"Cart is empty\" when the cart is empty. | R2a, R2b | 0/2 obligations covered (not fully covered). The disabled state and empty-cart label are separate obligations; neither has an assertion for an empty cart. |\n\n**Coding standards: checked.** Assessed the supplied rule file's scope; its applyTo pattern (src/**, eval/*.js) excludes both changed eval-sandbox/rx2 files, so no rule applies to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Jest/jsdom and React Testing Library configuration and searched all test files for the component and its relevant inputs and label. The existing test isolates and renders the component through its public interface without network or a real database, so it is unit evidence; empty-state presentation is best verified at that rendered component seam, with no higher-layer logic suitable for pushdown.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: The button is enabled when the cart has items. | PR body; eval-sandbox/rx2/CheckoutButton.tsx:4 —   if (itemCount === 0) { | unit: eval-sandbox/rx2/CheckoutButton.test.tsx:9 —   expect(button).toBeEnabled(); (assertion; With itemCount=2, the rendered Checkout button is enabled.) | covered: An isolated React Testing Library test renders the public component with two items and asserts the button is enabled. |\n| R2a: The button is disabled when the cart is empty. | PR body; eval-sandbox/rx2/CheckoutButton.tsx:5 —     return <button disabled>Cart is empty</button>; | unit: eval-sandbox/rx2/CheckoutButton.test.tsx:9 —   expect(button).toBeEnabled(); (no_assertion; The only state assertion exercises the nonempty-cart case (itemCount=2), not the empty-cart disabled state.) | missing_test: A repository-wide search for CheckoutButton, itemCount, and the empty-cart label across test files found no assertion that renders an empty cart and checks the button is disabled. |\n| R2b: The button is labelled \"Cart is empty\" when the cart is empty. | PR body; eval-sandbox/rx2/CheckoutButton.tsx:5 —     return <button disabled>Cart is empty</button>; | unit: eval-sandbox/rx2/CheckoutButton.test.tsx:9 —   expect(button).toBeEnabled(); (no_assertion; The only state assertion exercises the nonempty-cart case (itemCount=2), not the empty-cart label.) | missing_test: A repository-wide search for CheckoutButton, itemCount, and the empty-cart label across test files found no assertion that renders an empty cart and checks its label. |\n| B1: Clicking the enabled checkout button invokes onCheckout. | from behaviour; eval-sandbox/rx2/CheckoutButton.tsx:7 —   return <button onClick={onCheckout}>Checkout</button>; | unit: eval-sandbox/rx2/CheckoutButton.test.tsx:11 —   expect(onCheckout).toHaveBeenCalledTimes(1); (assertion; After clicking the enabled button, the public callback is invoked once.) | covered: The unit test clicks the enabled button and asserts one callback invocation. |\n\n",
+        "latency_s": 140,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"The button is enabled when the cart has items.\",\"obligation_ids\":[\"R1\"],\"reason\":\"The nonempty-cart enabled state is covered by a unit assertion; see coverage R1.\"},{\"id\":\"R2\",\"source\":\"PR body\",\"quote\":\"The button is disabled and labelled \\\"Cart is empty\\\" when the cart is empty.\",\"obligation_ids\":[\"R2a\",\"R2b\"],\"reason\":\"The disabled state and empty-cart label are separate obligations; neither has an assertion for an empty cart.\"}],\"coverage\":[{\"id\":\"R1\",\"obligation\":\"The button is enabled when the cart has items.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/rx2/CheckoutButton.tsx\",\"line\":4,\"quote\":\"  if (itemCount === 0) {\"},\"change\":{\"path\":\"eval-sandbox/rx2/CheckoutButton.tsx\",\"line\":4,\"quote\":\"  if (itemCount === 0) {\"},\"evidence\":[{\"path\":\"eval-sandbox/rx2/CheckoutButton.test.tsx\",\"line\":9,\"quote\":\"  expect(button).toBeEnabled();\",\"layer\":\"unit\",\"proves\":\"With itemCount=2, the rendered Checkout button is enabled.\"}],\"status\":\"covered\",\"reason\":\"An isolated React Testing Library test renders the public component with two items and asserts the button is enabled.\"},{\"id\":\"R2a\",\"obligation\":\"The button is disabled when the cart is empty.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/rx2/CheckoutButton.tsx\",\"line\":5,\"quote\":\"    return <button disabled>Cart is empty</button>;\"},\"change\":{\"path\":\"eval-sandbox/rx2/CheckoutButton.tsx\",\"line\":5,\"quote\":\"    return <button disabled>Cart is empty</button>;\"}, \"evidence\":[{\"path\":\"eval-sandbox/rx2/CheckoutButton.test.tsx\",\"line\":9,\"quote\":\"  expect(button).toBeEnabled();\",\"layer\":\"unit\",\"proves\":\"The only state assertion exercises the nonempty-cart case (itemCount=2), not the empty-cart disabled state.\",\"kind\":\"no_assertion\"}],\"status\":\"missing_test\",\"reason\":\"A repository-wide search for CheckoutButton, itemCount, and the empty-cart label across test files found no assertion that renders an empty cart and checks the b"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "rx2",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 4,
+            "tolerance": 2,
+            "quote": "itemCount === 0"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 5,
+            "level": "inline",
+            "title": "Test the empty-cart button state and label",
+            "body": "**Test the empty-cart button state and label**\n\nThe suite does not assert that an empty cart produces a disabled button with the required label. Add an empty-cart test that finds the button by its exact accessible name and checks its disabled state:\n```tsx\ntest('disables and labels the button when the cart is empty', () => {\n  render(<CheckoutButton itemCount={0} onCheckout={jest.fn()} />);\n  const button = screen.getByRole('button', { name: 'Cart is empty' });\n  expect(button).toBeDisabled();\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1e6e93253f121dfcfd206621c11c8231563be8d3 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 128,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/99",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37473579563",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 5,
+            "level": "inline",
+            "title": "Test the empty-cart button state and label",
+            "body": "**Test the empty-cart button state and label**\n\nThe suite does not assert that an empty cart produces a disabled button with the required label. Add an empty-cart test that finds the button by its exact accessible name and checks its disabled state:\n```tsx\ntest('disables and labels the button when the cart is empty', () => {\n  render(<CheckoutButton itemCount={0} onCheckout={jest.fn()} />);\n  const button = screen.getByRole('button', { name: 'Cart is empty' });\n  expect(button).toBeDisabled();\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1e6e93253f121dfcfd206621c11c8231563be8d3 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 2/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: ee47346f453d7415869b074efd70874609bca54e. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: The button is enabled when the cart has items. | O1 | 1/1 obligations covered. Requires an enabled button for a non-empty cart. |\n| R2 | PR body: The button is disabled and labelled \"Cart is empty\" when the cart is empty. | O2, O3 | 0/2 obligations covered (not fully covered). Split into separate disabled-state and required-label obligations. |\n\n**Coding standards: checked.** Assessed the available rule file; its applyTo scope is src/** and eval/*.js, so it does not apply to the changed eval-sandbox TSX files. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched all test directories for the component and relevant behavior. The matching Jest/React Testing Library test renders this component directly through its public props, without network or database dependencies, so its assertions are unit evidence. No higher-level-only coverage or separable pure-logic seam was found; the empty-cart state and label belong at the rendered component boundary.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: The button is enabled when the cart has items. | PR body AC 1; eval-sandbox/rx2/CheckoutButton.tsx:7 —   return <button onClick={onCheckout}>Checkout</button>; | unit: eval-sandbox/rx2/CheckoutButton.test.tsx:9 —   expect(button).toBeEnabled(); (assertion; With itemCount 2, the rendered button is enabled.) | covered: The isolated component test renders the button with itemCount 2 and asserts its enabled state. |\n| O2: The button is disabled when the cart is empty. | PR body AC 2; eval-sandbox/rx2/CheckoutButton.tsx:5 —     return <button disabled>Cart is empty</button>; | none | missing_test: Searched all test directories and matching CheckoutButton tests; the available assertion covers itemCount 2, with no assertion for the empty-cart disabled state. |\n| O3: The empty-cart button is labelled \"Cart is empty\". | PR body AC 2; eval-sandbox/rx2/CheckoutButton.tsx:5 —     return <button disabled>Cart is empty</button>; | none | missing_test: Searched all test directories and matching CheckoutButton tests; none renders an empty cart or asserts its required label. |\n| O4: Clicking the enabled button invokes the checkout callback. | from behaviour; eval-sandbox/rx2/CheckoutButton.tsx:7 —   return <button onClick={onCheckout}>Checkout</button>; | unit: eval-sandbox/rx2/CheckoutButton.test.tsx:11 —   expect(onCheckout).toHaveBeenCalledTimes(1); (assertion; After clicking the rendered button once, the checkout callback was invoked once.) | covered: The isolated component test clicks the button and checks that the callback was invoked exactly once. |\n\n",
+        "latency_s": 128,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"The button is enabled when the cart has items.\",\n      \"obligation_ids\": [\"O1\"],\n      \"reason\": \"Requires an enabled button for a non-empty cart.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"The button is disabled and labelled \\\"Cart is empty\\\" when the cart is empty.\",\n      \"obligation_ids\": [\"O2\", \"O3\"],\n      \"reason\": \"Split into separate disabled-state and required-label obligations.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"The button is enabled when the cart has items.\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/rx2/CheckoutButton.tsx\",\n        \"line\": 7,\n        \"quote\": \"  return <button onClick={onCheckout}>Checkout</button>;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/rx2/CheckoutButton.tsx\",\n        \"line\": 7,\n        \"quote\": \"  return <button onClick={onCheckout}>Checkout</button>;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/rx2/CheckoutButton.test.tsx\",\n          \"line\": 9,\n          \"quote\": \"  expect(button).toBeEnabled();\",\n          \"layer\": \"unit\",\n          \"proves\": \"With itemCount 2, the rendered button is enabled.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The isolated component test renders the button with itemCount 2 and asserts its enabled state.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"The button is disabled when the cart is empty.\",\n      \"source\": \"PR body AC 2\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/rx2/CheckoutButton.tsx\",\n        \"line\": 5,\n        \"quote\": \"    return <button disabled>Cart is empty</button>;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/rx2/CheckoutButton.tsx\",\n        \"line\": 5,\n        \"quote\": \"    return <button disabled>Cart is empty</button>;\"\n      },\n    "
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "rx3",
+      "goal": "test_quality",
+      "rep": 1,
+      "error": "Command failed: gh run view 37474278084 --repo Mira190/SpecGuard --json jobs",
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/100",
+      "model": "unchanged"
+    },
+    {
+      "id": "rx3",
+      "goal": "test_quality",
+      "tp": 0,
+      "fp": 1,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/rx3/CartSummary.test.tsx",
+          "line": 10,
+          "tolerance": 1,
+          "quote": "expect(useCart).toHaveBeenCalled()"
+        }
+      ],
+      "false_positives": [
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/rx3/CartSummary.tsx",
+          "line": 5,
+          "title": "Assert the displayed cart summary"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 100,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/101",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37475023680",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx3/CartSummary.tsx",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert the displayed cart summary",
+            "body": "**Assert the displayed cart summary**\n\nThe call-count assertion still passes if the item count is removed or the total is omitted or wrong, so it proves neither displayed value. Replace it with an output assertion using nonzero cart data:\n```tsx\ntest('shows the cart item count and total', () => {\n  (useCart as jest.Mock).mockReturnValue({\n    items: [{ id: 'a', name: 'Book', price: 3 }, { id: 'b', name: 'Pen', price: 4 }],\n    total: 7,\n  });\n  expect(render(<CartSummary />).container.textContent).toBe('2 items, total 7');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=3fd47d42329330d75fd5528eb02051e4091193f8 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 83ba7b6f7eb36ec0ab75b82c95cb5f46cf4cb990. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add a CartSummary component that shows the item count and total from the cart. | O1, O2 | 0/2 obligations covered (not fully covered). The criterion requires two distinct displayed values: the cart item count and the cart total. |\n\n**Coding standards: checked.** Assessed the listed rule file; its applyTo scope is src/** and eval/*.js, which excludes both changed eval-sandbox/rx3 files, so no listed coding rule applies. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Jest/jsdom/React Testing Library setup and searched repository test files for CartSummary and useCart. The relevant test isolates and renders the component; no relevant integration or end-to-end assertion was found. The display contract belongs at this component-facing seam, so pushing it to a lower layer would not help.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Display the number of items in the cart. | PR body; eval-sandbox/rx3/CartSummary.tsx:5 —   return <p>{items.length} items, total {total}</p>; | unit: eval-sandbox/rx3/CartSummary.test.tsx:10 —   expect(useCart).toHaveBeenCalled(); (assertion; Only that the hook was called; this assertion does not verify the displayed item count.) | weak_test: The unit test renders the component, but its call-count assertion would still pass if the item count were removed or displayed incorrectly. |\n| O2: Display the total from the cart. | PR body; eval-sandbox/rx3/CartSummary.tsx:5 —   return <p>{items.length} items, total {total}</p>; | unit: eval-sandbox/rx3/CartSummary.test.tsx:10 —   expect(useCart).toHaveBeenCalled(); (assertion; Only that the hook was called; this assertion does not verify the displayed total.) | weak_test: The unit test renders the component, but its call-count assertion would still pass if the total were omitted or displayed incorrectly. |\n\n",
+        "latency_s": 100,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add a CartSummary component that shows the item count and total from the cart.\",\n      \"obligation_ids\": [\"O1\", \"O2\"],\n      \"reason\": \"The criterion requires two distinct displayed values: the cart item count and the cart total.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Display the number of items in the cart.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/rx3/CartSummary.tsx\",\n        \"line\": 5,\n        \"quote\": \"  return <p>{items.length} items, total {total}</p>;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/rx3/CartSummary.tsx\",\n        \"line\": 5,\n        \"quote\": \"  return <p>{items.length} items, total {total}</p>;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/rx3/CartSummary.test.tsx\",\n          \"line\": 10,\n          \"quote\": \"  expect(useCart).toHaveBeenCalled();\",\n          \"layer\": \"unit\",\n          \"proves\": \"Only that the hook was called; this assertion does not verify the displayed item count.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"weak_test\",\n      \"reason\": \"The unit test renders the component, but its call-count assertion would still pass if the item count were removed or displayed incorrectly.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Display the total from the cart.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/rx3/CartSummary.tsx\",\n        \"line\": 5,\n        \"quote\": \"  return <p>{items.length} items, total {total}</p>;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/rx3/CartSummary.tsx\",\n        \"line\": 5,\n        \"quote\": \"  return <p>{items.length} items, total {total}</p>;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/rx3/CartSummary.test.tsx\",\n          \"line\": 10,\n          \"quote\": \"  expect(useCart).toHaveBe"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "js2",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 2,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "tolerance": 1,
+            "quote": "throw lastError"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Test that the final error is thrown",
+            "body": "**Test that the final error is thrown**\n\nNo unit test verifies that the rejection is the last error after multiple failed attempts. Add a test that uses distinct errors and compares the rejection to the second one:\n```js\ntest('throws the last error after all attempts fail', async () => {\n  const firstError = new Error('first');\n  const lastError = new Error('last');\n  jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(firstError)\n    .mockRejectedValueOnce(lastError);\n\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(lastError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=d08e8bbc56755169c852b6ffcc83c63cf28b4a8f -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 7,
+          "tolerance": 1,
+          "quote": "lastError = error"
+        }
+      ],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 3,
+          "title": "Test the configured retry limit"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 1,
+          "title": "Test the default three-attempt limit"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 97,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/102",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37475739553",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Test the configured retry limit",
+            "body": "**Test the configured retry limit**\n\nNo unit test proves that failed fetches are retried up to the configured attempt limit. Add a test that rejects on both attempts and verifies exactly two calls:\n```js\ntest('retries network errors up to the configured attempt limit', async () => {\n  const error = new Error('network');\n  const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(error);\n\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(error);\n  expect(fetchSpy).toHaveBeenCalledTimes(2);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=cb27df6a0ad8fc261a4e0ee40b59b0c7fa47b67d -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 1,
+            "level": "inline",
+            "title": "Test the default three-attempt limit",
+            "body": "**Test the default three-attempt limit**\n\nNo unit test verifies that omitted retries defaults to three attempts. Add a test that fails twice, succeeds on the third attempt, and checks the call count:\n```js\ntest('uses three attempts by default', async () => {\n  const response = { ok: true };\n  const fetchSpy = jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(new Error('network'))\n    .mockRejectedValueOnce(new Error('network'))\n    .mockResolvedValue(response);\n\n  await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response);\n  expect(fetchSpy).toHaveBeenCalledTimes(3);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=cb27df6a0ad8fc261a4e0ee40b59b0c7fa47b67d -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Test that the final error is thrown",
+            "body": "**Test that the final error is thrown**\n\nNo unit test verifies that the rejection is the last error after multiple failed attempts. Add a test that uses distinct errors and compares the rejection to the second one:\n```js\ntest('throws the last error after all attempts fail', async () => {\n  const firstError = new Error('first');\n  const lastError = new Error('last');\n  jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(firstError)\n    .mockRejectedValueOnce(lastError);\n\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(lastError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=d08e8bbc56755169c852b6ffcc83c63cf28b4a8f -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 24b13b77c161a260d7e169a764209c1831ed8eb7. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: It returns the response when a fetch attempt succeeds. | R1 | 1/1 obligations covered. This criterion describes one observable outcome. |\n| R2 | PR body: A network error is retried until `retries` attempts have been made (default 3). | R2a, R2b | 0/2 obligations covered (not fully covered). Split into the configured retry limit and the default limit of three attempts. |\n| R3 | PR body: After `retries` failed attempts it throws the last error. | R3 | 0/1 obligations covered (not fully covered). This criterion requires the last failure to be observable as the rejection. |\n\n**Coding standards: checked.** Checked the listed rule file and its applyTo scope. It applies to src/** and eval/*.js, not the changed eval-sandbox/js2 files, so no coding-standard rule applies to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched all test directories for the changed symbol and related fetch, retry, and error assertions. The matching changed spec and evaluation-fixture copy use Jest to mock global fetch, a system boundary, so they are unit tests. No component, integration, or end-to-end assertion covers the retry or final-error behavior; no higher-level-only logic was found that would warrant pushdown.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: Return the response when a fetch attempt succeeds. | PR body AC 1; eval-sandbox/js2/fetchWithRetry.js:5 —       return await fetch(url); | unit: eval-sandbox/js2/fetchWithRetry.spec.js:11 —   await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response); (assertion; A successful fetch resolves fetchWithRetry with the same response object.) | covered: The unit assertion compares the returned value to an independently constructed response object. |\n| R2a: On network errors, retry until the configured retries attempt limit is reached. | PR body AC 2; eval-sandbox/js2/fetchWithRetry.js:3 —   for (let attempt = 1; attempt <= retries; attempt++) { | none | missing_test: Searched all test directories and matching symbols and fetch/retry assertions; the changed spec and its evaluation-fixture copy only assert first-attempt success. No unit assertion exercises failed fetch attempts or verifies the configured attempt limit. |\n| R2b: When retries is omitted, use a limit of three attempts. | PR body AC 2; eval-sandbox/js2/fetchWithRetry.js:1 — export async function fetchWithRetry(url, { retries = 3 } = {}) { | none | missing_test: Searched all test directories and matching symbols and fetch/retry assertions; the changed spec and its evaluation-fixture copy only call the function with the default options on a successful first attempt, so neither exercises the default retry count. |\n| R3: After retries failed attempts, reject with the last error. | PR body AC 3; eval-sandbox/js2/fetchWithRetry.js:10 —   throw lastError; | none | missing_test: Searched all test directories and matching symbols, error handling, and fetch/retry assertions; no unit assertion makes multiple attempts fail and verifies that the final error is the rejection. |\n\n",
+        "latency_s": 97,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"It returns the response when a fetch attempt succeeds.\",\n      \"obligation_ids\": [\"R1\"],\n      \"reason\": \"This criterion describes one observable outcome.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"A network error is retried until `retries` attempts have been made (default 3).\",\n      \"obligation_ids\": [\"R2a\", \"R2b\"],\n      \"reason\": \"Split into the configured retry limit and the default limit of three attempts.\"\n    },\n    {\n      \"id\": \"R3\",\n      \"source\": \"PR body\",\n      \"quote\": \"After `retries` failed attempts it throws the last error.\",\n      \"obligation_ids\": [\"R3\"],\n      \"reason\": \"This criterion requires the last failure to be observable as the rejection.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"R1\",\n      \"obligation\": \"Return the response when a fetch attempt succeeds.\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/js2/fetchWithRetry.js\",\n        \"line\": 5,\n        \"quote\": \"      return await fetch(url);\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/js2/fetchWithRetry.js\",\n        \"line\": 5,\n        \"quote\": \"      return await fetch(url);\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/js2/fetchWithRetry.spec.js\",\n          \"line\": 11,\n          \"quote\": \"  await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response);\",\n          \"layer\": \"unit\",\n          \"proves\": \"A successful fetch resolves fetchWithRetry with the same response object.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The unit assertion compares the returned value to an independently constructed response object.\"\n    },\n    {\n      \"id\": \"R2a\",\n      \"obligation\": \"On network errors, retry until the configured retries attempt limit is reached.\",\n      \"source\": \"PR body AC 2\",\n      \"b"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "js2",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 2,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "tolerance": 1,
+            "quote": "throw lastError"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Test that exhaustion throws the last error",
+            "body": "**Test that exhaustion throws the last error**\n\nNo unit assertion proves that exhaustion throws the most recent error rather than an earlier one. Add a test with distinct errors for successive attempts:\n```js\ntest('throws the last error after retries are exhausted', async () => {\n  const firstError = new Error('first failure');\n  const lastError = new Error('last failure');\n  jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(firstError)\n    .mockRejectedValueOnce(lastError);\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(lastError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=d08e8bbc56755169c852b6ffcc83c63cf28b4a8f -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 7,
+          "tolerance": 1,
+          "quote": "lastError = error"
+        }
+      ],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 3,
+          "title": "Test the configured retry limit"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 1,
+          "title": "Test the default retry count"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 96,
+      "rep": 2,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/103",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37476431909",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Test the configured retry limit",
+            "body": "**Test the configured retry limit**\n\nNo unit assertion proves the configured attempt limit. Add a test that fails if two configured attempts produce a different number of fetch calls:\n```js\ntest('stops after the configured number of attempts', async () => {\n  const error = new Error('network');\n  const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(error);\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(error);\n  expect(fetchSpy).toHaveBeenCalledTimes(2);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=cb27df6a0ad8fc261a4e0ee40b59b0c7fa47b67d -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 1,
+            "level": "inline",
+            "title": "Test the default retry count",
+            "body": "**Test the default retry count**\n\nNo unit assertion proves the default is three attempts. Add a test that calls the public function without options and checks the attempt count:\n```js\ntest('uses three attempts by default', async () => {\n  const error = new Error('network');\n  const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(error);\n  await expect(fetchWithRetry('https://api.test/items')).rejects.toBe(error);\n  expect(fetchSpy).toHaveBeenCalledTimes(3);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=cb27df6a0ad8fc261a4e0ee40b59b0c7fa47b67d -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Test that exhaustion throws the last error",
+            "body": "**Test that exhaustion throws the last error**\n\nNo unit assertion proves that exhaustion throws the most recent error rather than an earlier one. Add a test with distinct errors for successive attempts:\n```js\ntest('throws the last error after retries are exhausted', async () => {\n  const firstError = new Error('first failure');\n  const lastError = new Error('last failure');\n  jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(firstError)\n    .mockRejectedValueOnce(lastError);\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(lastError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=d08e8bbc56755169c852b6ffcc83c63cf28b4a8f -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: d3ffa3049093f921c225459863c0c2d39bc5f214. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: It returns the response when a fetch attempt succeeds. | O1 | 1/1 obligations covered. The success outcome is assessed as one obligation. |\n| R2 | PR body: A network error is retried until `retries` attempts have been made (default 3). | O2, O3 | 0/2 obligations covered (not fully covered). Split into configured retry-limit behavior (O2) and the default of three attempts (O3). |\n| R3 | PR body: After `retries` failed attempts it throws the last error. | O4 | 0/1 obligations covered (not fully covered). The final thrown error is assessed separately from the retry count. |\n\n**Coding standards: checked.** Assessed the listed instruction file; its applyTo scope is src/** and eval/*.js, so it does not apply to the changed eval-sandbox/js2 files. No applicable rule violation is supported. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Searched the changed unit test and all repository test directories for fetchWithRetry and retry-related assertions. The existing Jest test exercises the public function while mocking global fetch, a system boundary; no component, integration, or end-to-end evidence was found, and there is no higher-layer-only behavior to push down.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Return the response when a fetch attempt succeeds. | PR body AC 1; eval-sandbox/js2/fetchWithRetry.js:5 —       return await fetch(url); | unit: eval-sandbox/js2/fetchWithRetry.spec.js:11 —   await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response); (assertion; A successful fetch returns the same response value.) | covered: The unit assertion compares the public function's result with the independently supplied response object. |\n| O2: Retry network errors up to the configured retries count. | PR body AC 2; eval-sandbox/js2/fetchWithRetry.js:3 —   for (let attempt = 1; attempt <= retries; attempt++) { | none | missing_test: A repository-wide search for fetchWithRetry and retry-related assertions found only the first-attempt success unit test, in eval-sandbox/js2 and its eval/cases/js2 counterpart; neither asserts retries for a configured count. |\n| O3: Use three attempts when retries is not specified. | PR body AC 2; eval-sandbox/js2/fetchWithRetry.js:1 — export async function fetchWithRetry(url, { retries = 3 } = {}) { | none | missing_test: A repository-wide search for fetchWithRetry assertions found no unit test that calls the function without a retries option and asserts three attempts. |\n| O4: After all configured attempts fail, throw the last error. | PR body AC 3; eval-sandbox/js2/fetchWithRetry.js:10 —   throw lastError; | none | missing_test: A repository-wide search for fetchWithRetry assertions found no unit test that checks which error is thrown after repeated failures. |\n\n",
+        "latency_s": 96,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"It returns the response when a fetch attempt succeeds.\",\"obligation_ids\":[\"O1\"],\"reason\":\"The success outcome is assessed as one obligation.\"},{\"id\":\"R2\",\"source\":\"PR body\",\"quote\":\"A network error is retried until `retries` attempts have been made (default 3).\",\"obligation_ids\":[\"O2\",\"O3\"],\"reason\":\"Split into configured retry-limit behavior (O2) and the default of three attempts (O3).\"},{\"id\":\"R3\",\"source\":\"PR body\",\"quote\":\"After `retries` failed attempts it throws the last error.\",\"obligation_ids\":[\"O4\"],\"reason\":\"The final thrown error is assessed separately from the retry count.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Return the response when a fetch attempt succeeds.\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/js2/fetchWithRetry.js\",\"line\":5,\"quote\":\"      return await fetch(url);\"},\"change\":{\"path\":\"eval-sandbox/js2/fetchWithRetry.js\",\"line\":5,\"quote\":\"      return await fetch(url);\"},\"evidence\":[{\"path\":\"eval-sandbox/js2/fetchWithRetry.spec.js\",\"line\":11,\"quote\":\"  await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response);\",\"layer\":\"unit\",\"proves\":\"A successful fetch returns the same response value.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The unit assertion compares the public function's result with the independently supplied response object.\"},{\"id\":\"O2\",\"obligation\":\"Retry network errors up to the configured retries count.\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/js2/fetchWithRetry.js\",\"line\":3,\"quote\":\"  for (let attempt = 1; attempt <= retries; attempt++) {\"},\"change\":{\"path\":\"eval-sandbox/js2/fetchWithRetry.js\",\"line\":3,\"quote\":\"  for (let attempt = 1; attempt <= retries; attempt++) {\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"A repository-wide search for fetchWithRetry and retry-related assertions found only the first-attempt success unit test, in eval-sandbox/js2 and its eval/cases/js2 counter"
+      },
+      "model": "unchanged"
+    }
+  ],
+  "aggregate": {
+    "runs": 14,
+    "errors": 2,
+    "tp": 13,
+    "fp": 9,
+    "acceptable": 2,
+    "fn": 3,
+    "summary_only": 0,
+    "precision": 0.591,
+    "recall": 0.813,
+    "json_valid_rate": 1,
+    "degraded_rate": 0,
+    "pass_rate": 0.75,
+    "latency_median_s": 122,
+    "latency_max_s": 234,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 6,
+        "errors": 0,
+        "tp": 8,
+        "fp": 5,
+        "acceptable": 0,
+        "fn": 2,
+        "summary_only": 0,
+        "precision": 0.615,
+        "recall": 0.8,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 0.667,
+        "latency_median_s": 116.5,
+        "latency_max_s": 140
+      },
+      "test_quality": {
+        "runs": 4,
+        "errors": 2,
+        "tp": 1,
+        "fp": 2,
+        "acceptable": 2,
+        "fn": 1,
+        "summary_only": 0,
+        "precision": 0.333,
+        "recall": 0.5,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 0.5,
+        "latency_median_s": 122,
+        "latency_max_s": 144
+      },
+      "standards": {
+        "runs": 2,
+        "errors": 0,
+        "tp": 2,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 113,
+        "latency_max_s": 122
+      },
+      "layering": {
+        "runs": 2,
+        "errors": 0,
+        "tp": 2,
+        "fp": 2,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 0.5,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 197,
+        "latency_max_s": 234
+      }
+    }
+  }
+}

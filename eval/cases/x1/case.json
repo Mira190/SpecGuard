@@ -1,0 +1,15 @@
+{
+  "id": "x1",
+  "goal": "robustness",
+  "description": "Only a lockfile and a README change.",
+  "pr_title": "Refresh lockfile and docs",
+  "pr_body": "Refresh the lockfile and fix the README.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [],
+    "expect_skip": true,
+    "expect_clean": true,
+    "notes": "Skipped with \"Nothing to review\", no AI call, no comments."
+  }
+}

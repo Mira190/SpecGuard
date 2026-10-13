@@ -1,0 +1,19 @@
+{
+  "id": "tr20",
+  "goal": "traceability",
+  "description": "B-done negative control (Go): REQ-4 goes from 24 to 12 hours and token.go and its test are updated consistently.",
+  "pr_title": "Shorten session token lifetime (REQ-4)",
+  "pr_body": "Session tokens now expire after 12 hours. Spec, constant and tests are updated together.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Spec, code and test all say 12 hours; any spec_mismatch is a false positive."
+  }
+}

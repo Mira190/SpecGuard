@@ -1,0 +1,4787 @@
+{
+  "repo": "middleapi/orpc",
+  "window": {
+    "since": "2025-10-09",
+    "until": null
+  },
+  "generated": "2026-10-09T02:14:41.505Z",
+  "contamination": "Public repo: the model may have seen the later fix in its training data. Report public and private pilots separately; prefer fixes from the last ~4 months.",
+  "stats": {
+    "commits": 786,
+    "candidates": 120,
+    "signals": {
+      "title_prefix": 118,
+      "issue_label": 4,
+      "keyword": 2
+    },
+    "excluded_docs_tests": 4,
+    "located": 77,
+    "unlocatable": 10,
+    "no_introducing": 33,
+    "revert_direct": 0,
+    "introducing_pairs": 139,
+    "pairs_with_pr": 128
+  },
+  "candidates": [
+    {
+      "fix": {
+        "sha": "648d1b2c20968df546a633f3c9dc29de9f202213",
+        "parent": "769916d7154aa5b8db3e24ca14bdcd4629b076b5",
+        "title": "fix(cloudflare): use timestamp-based ids to handle table recreation (#2190)",
+        "date": "2026-10-06T15:30:52+07:00",
+        "pr": 2190
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T15:30:52+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "769916d7154aa5b8db3e24ca14bdcd4629b076b5",
+        "parent": "acbef83238f5463f65b55233dda92276a4cfb5ab",
+        "title": "fix(client): prevent retry of non-resendable request bodies (#2183)",
+        "date": "2026-10-06T15:10:16+07:00",
+        "pr": 2183
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T15:10:16+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "86c31c3917dc6635c3636d7c81ef063138439ae4",
+        "parent": "f8cdffb4429ef1a1ecad4bf89eb4700732ce632a",
+        "title": "fix(openapi,rpc): handle raw chars in paths stored percent-encoded (#2185)",
+        "date": "2026-10-06T10:31:02+07:00",
+        "pr": 2185
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T10:31:02+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b0b8261ec344677fa700548ed98bff2e2aaac1f7",
+          "title": "fix(openapi): improve OpenAPI path matching with rou3 v1 (#2173)",
+          "date": "2026-10-04T11:24:43+07:00",
+          "pr": 2173,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "cfe895157f426d555a34002bd25b484295a8c6b5",
+          "title": "fix(rpc,openapi): concurrent lazy router resolution, and faster route matching (#1736)",
+          "date": "2026-07-28T11:29:25+07:00",
+          "pr": 1736,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f8cdffb4429ef1a1ecad4bf89eb4700732ce632a",
+        "parent": "57bf278bf8fd675561e7c83902e86e44f3a6cbc3",
+        "title": "fix(openapi): fix regex pattern for numeric path validation (#2186)",
+        "date": "2026-10-06T10:13:23+07:00",
+        "pr": 2186
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T10:13:23+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d28d10d1a63b1ac9e179d90bc5e11e0960f89f1c",
+        "parent": "7ee24a6165c46728c4cecbf69c985c345d987150",
+        "title": "fix(trpc): handle TRPCError in subscription iterators (#2181)",
+        "date": "2026-10-06T09:26:38+07:00",
+        "pr": 2181
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T09:26:38+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b84477dd23d9c6a4023ed33a53f2f81b4492e924",
+          "title": "feat(trpc): tRPC integration (#1683)",
+          "date": "2026-07-19T10:38:28+07:00",
+          "pr": 1683,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "7ee24a6165c46728c4cecbf69c985c345d987150",
+        "parent": "d3ec22450cbc02906200c6be6289805f905e5fcf",
+        "title": "fix: raise TanStack Query and Pinia Colada peer dependency floors (#2180)",
+        "date": "2026-10-05T13:52:34+07:00",
+        "pr": 2180
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-05T13:52:34+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "e12f7c3fdcc57055a869e580e5db5ee822c6023c",
+          "title": "feat(pinia-colada): Pinia Colada integration (#1686)",
+          "date": "2026-07-20T07:52:59+07:00",
+          "pr": 1686,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "d9acc8fb937195bff09bc257ce7e8723be1cecb7",
+          "title": "chore(deps-dev): bump the dev-dependencies-minor-patch group across 1 directory with 39 updates (#587)",
+          "date": "2025-06-03T21:21:58+07:00",
+          "pr": 587,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "2dc60992158d20e04d180f0d0eb6695e80248262",
+        "parent": "554e759380078391d8b4402081e7edef35382204",
+        "title": "fix: upgrade @openapi-spec packages to v0.3.0 (#2178)",
+        "date": "2026-10-04T15:21:42+07:00",
+        "pr": 2178
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-04T15:21:42+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "15044d4fe6a060cefe967a7d03175f8c4bd8fe5c",
+          "title": "feat!: migrate to @openapi-spec types and target OpenAPI 3.2 with a version option (#1998)",
+          "date": "2026-09-07T20:51:40+07:00",
+          "pr": 1998,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "7103c64aaf8bdb563e45fe9528559b24e77e41bc",
+        "parent": "161cdc089437d737d3ab797cae46ffb4ed9d7273",
+        "title": "fix(client): exclude aborted subrequests from batch messages (#2176)",
+        "date": "2026-10-04T15:14:20+07:00",
+        "pr": 2176
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        },
+        {
+          "signal": "issue_label",
+          "strength": "strong",
+          "number": 2172,
+          "labels": [
+            "bug"
+          ]
+        }
+      ],
+      "issue": {
+        "number": 2172,
+        "created_at": "2026-10-04T03:46:07Z"
+      },
+      "report_date": "2026-10-04T03:46:07Z",
+      "report_date_source": "issue",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "8f1f9e47b3a856ccec2e9054dfc3b8cdd5cb27ef",
+          "title": "fix: never throw when encoding or decoding URI components (#2011)",
+          "date": "2026-09-12T11:06:32+07:00",
+          "pr": 2011,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f7c1ee42fd5f53025f85d7c6a8eddcc760ab8fa1",
+        "parent": "b0b8261ec344677fa700548ed98bff2e2aaac1f7",
+        "title": "fix: upgrade @standard-server packages to 0.10.1 (#2174)",
+        "date": "2026-10-04T14:28:07+07:00",
+        "pr": 2174
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-04T14:28:07+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "6c46a1bd761d6871f379db72be29eeabd3cfdec6",
+          "title": "fix: upgrade standard-server to 0.10.0 and ban signal.throwIfAborted() (#2118)",
+          "date": "2026-09-30T10:46:04+07:00",
+          "pr": 2118,
+          "lines": 37,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b0b8261ec344677fa700548ed98bff2e2aaac1f7",
+        "parent": "cb7715a985dc5d14e7a721480daa113f896c134d",
+        "title": "fix(openapi): improve OpenAPI path matching with rou3 v1 (#2173)",
+        "date": "2026-10-04T11:24:43+07:00",
+        "pr": 2173
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-04T11:24:43+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "cfe895157f426d555a34002bd25b484295a8c6b5",
+          "title": "fix(rpc,openapi): concurrent lazy router resolution, and faster route matching (#1736)",
+          "date": "2026-07-28T11:29:25+07:00",
+          "pr": 1736,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "8f1f9e47b3a856ccec2e9054dfc3b8cdd5cb27ef",
+          "title": "fix: never throw when encoding or decoding URI components (#2011)",
+          "date": "2026-09-12T11:06:32+07:00",
+          "pr": 2011,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "649bb65cd7cee2b40198a9385b023191842afa3e",
+          "title": "chore(deps): bump rou3 from 0.9.0 to 0.9.1 (#1648)",
+          "date": "2026-07-11T08:58:23+07:00",
+          "pr": 1648,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "3826d73b18c68b6ee7e8f5584c8733be14a12f46",
+          "title": "feat(openapi): support reserved expansion in .route.path (#150)",
+          "date": "2025-02-17T10:33:14+07:00",
+          "pr": 150,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "cf36774e656b5a2ea5eaa62d168b1a36a4b22b17",
+        "parent": "d083d52117b9ae17339454585e05e4d13214b4e6",
+        "title": "fix(cloudflare): improve event replay and error handling (#2170)",
+        "date": "2026-10-01T21:17:17+07:00",
+        "pr": 2170
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T21:17:17+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "35f2ca22277dd43b653bdba90d693bec0ddae014",
+          "title": "feat(ratelimit, publisher, cloudflare): ratelimit and publisher adapters for cloudflare (#1618)",
+          "date": "2026-07-03T09:33:59+07:00",
+          "pr": 1618,
+          "lines": 13,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "fb8192d3c3995313a333655943f6968ff036069b",
+          "title": "fix(cloudflare): prevent leaked websockets in DurablePublisherObject (#2017)",
+          "date": "2026-09-14T14:21:48+07:00",
+          "pr": 2017,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "981626851b112971d0f9565c1e4047dc8835fac7",
+        "parent": "c8f97a50974f9beaa4d647cd0938903ad10ce8e4",
+        "title": "fix(node): enforce per-event size limits in event streams (#2168)",
+        "date": "2026-10-01T19:52:50+07:00",
+        "pr": 2168
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T19:52:50+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a214208e494e6527f276f1d8de6fded0e16b698f",
+          "title": "feat(node): add TmpFileUploadHandlerPlugin (#1863)",
+          "date": "2026-08-15T10:42:28+07:00",
+          "pr": 1863,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "5f023ca29cde18c4c8addfcf8608b41b82f91539",
+          "title": "feat(node): resolve tmp file upload body limits per request (#1881)",
+          "date": "2026-08-17T16:09:16+07:00",
+          "pr": 1881,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c8f97a50974f9beaa4d647cd0938903ad10ce8e4",
+        "parent": "8d644ee039bcf53f689d7c304467783fda4363b5",
+        "title": "fix(cloudflare): order resumed publisher events by numeric id (#2167)",
+        "date": "2026-10-01T16:07:45+07:00",
+        "pr": 2167
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T16:07:45+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "35f2ca22277dd43b653bdba90d693bec0ddae014",
+          "title": "feat(ratelimit, publisher, cloudflare): ratelimit and publisher adapters for cloudflare (#1618)",
+          "date": "2026-07-03T09:33:59+07:00",
+          "pr": 1618,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": "in",
+          "grade": null,
+          "note": "skipped for size. Not evaluated: introducing PR 1618 changes 50 files and +18144 lines, skipped for size. Scope: ORDER BY resolving the alias as text instead of the numeric id is a logic error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e6ac18b83fcf06ef656309339221cee7d247f038",
+        "parent": "b35407c8dfc5ba85a556d328999f5c2c1f5e3a5b",
+        "title": "fix(json-schema): fix date, bigint, tuple and composed required handling (#2127)",
+        "date": "2026-10-01T15:33:04+07:00",
+        "pr": 2127
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T15:33:04+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "e5e261360d5acf77cf60fab2b7adbdf02c9e81b4",
+          "title": "feat(json-schema): smart coercion plugin for any standard schema (#748)",
+          "date": "2025-07-11T14:27:48+07:00",
+          "pr": 748,
+          "lines": 41,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "91471ef5285d6583885ea47e8d555309437e2c24",
+          "title": "fix(json-schema): safer value coercion and smarter union matching (#1729)",
+          "date": "2026-07-26T15:47:47+07:00",
+          "pr": 1729,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b35407c8dfc5ba85a556d328999f5c2c1f5e3a5b",
+        "parent": "4fa24c9a40dfd02d14f40f389bf4767936043596",
+        "title": "fix(openapi): reject dot-segment path params in OpenAPILink (#2126)",
+        "date": "2026-10-01T14:19:25+07:00",
+        "pr": 2126
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T14:19:25+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "476e70d11ae15e09b2df99da35f643dec45cd268",
+        "parent": "62ed5f75f2319476a0f1e57f1276b1bbdf9c34c9",
+        "title": "fix(opentelemetry): send spans to the tracer provider given to registerInstrumentations (#2137)",
+        "date": "2026-10-01T12:58:06+07:00",
+        "pr": 2137
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T12:58:06+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c3c4cb5267d3965dafcc3b0c02d0c564efb2c8bd",
+        "parent": "bac530f215dedb092946e556c6bd99d5ceb4484d",
+        "title": "fix(contract): keep error factory default message when message is undefined (#2144)",
+        "date": "2026-10-01T10:15:49+07:00",
+        "pr": 2144
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T10:15:49+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "240215cb5f6724db563725c678f44bb175cb37a1",
+          "title": "feat(contract): validate data in error factory constructor (#1765)",
+          "date": "2026-08-02T21:11:12+07:00",
+          "pr": 1765,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "The pre-1765 constructor already did super(code, { message, ...options }), so an explicit message: undefined overwrote the default before 1765; 1765 only added the data field. Scope: An explicit undefined overriding a default is an edge-case logic error.",
+          "category": "boundary"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "bac530f215dedb092946e556c6bd99d5ceb4484d",
+        "parent": "6364437ad0424d6083bb80f7aa962c3bae9fee4c",
+        "title": "fix(swr): stop stale subscribers from writing and match dates by time (#2154)",
+        "date": "2026-10-01T09:52:31+07:00",
+        "pr": 2154
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T09:52:31+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "6364437ad0424d6083bb80f7aa962c3bae9fee4c",
+        "parent": "43b471822f76522fb535b4756cd0da8f9bb55732",
+        "title": "fix(client): stop cancelled batched streams from running forever on the server (#2161)",
+        "date": "2026-10-01T09:00:09+07:00",
+        "pr": 2161
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T09:00:09+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "6c46a1bd761d6871f379db72be29eeabd3cfdec6",
+          "title": "fix: upgrade standard-server to 0.10.0 and ban signal.throwIfAborted() (#2118)",
+          "date": "2026-09-30T10:46:04+07:00",
+          "pr": 2118,
+          "lines": 8,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4e2239afe2f847d956963cc8db7525f07bba5542",
+          "title": "feat(client): add wait option to batch and dedupe link plugins (#2090)",
+          "date": "2026-09-26T14:24:08+07:00",
+          "pr": 2090,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "43b471822f76522fb535b4756cd0da8f9bb55732",
+        "parent": "0d42e65e206f29413a0fd93d5d27bbcd416e6525",
+        "title": "fix(shared): stop onFinish from keeping the last result alive (#2142)",
+        "date": "2026-10-01T06:16:53+07:00",
+        "pr": 2142
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-01T06:16:53+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0d42e65e206f29413a0fd93d5d27bbcd416e6525",
+        "parent": "3763475f9fbd00c00dc3163b090f11cce372ea62",
+        "title": "fix(client): send batched and deduped requests in their caller's async context (#2160)",
+        "date": "2026-09-30T19:59:08+07:00",
+        "pr": 2160
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T19:59:08+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "f4e2558ace90c21680f49249feb5b5cad1c6c00e",
+          "title": "fix(client): stop deduped calls from ignoring their own abort signal (#2159)",
+          "date": "2026-09-30T16:05:51+07:00",
+          "pr": 2159,
+          "lines": 11,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "32a6de9432c7b6fb88fcaede8980ee1d1ce54454",
+          "title": "feat(client, server): batch request/response plugin (#329)",
+          "date": "2025-04-08T09:50:52+07:00",
+          "pr": 329,
+          "lines": 8,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "2bc387b981d16b6a3f5f43e4b10a56bc35035fde",
+          "title": "feat(rpc,openapi): add end-to-end HTTP QUERY support (#1844)",
+          "date": "2026-08-12T16:06:57+07:00",
+          "pr": 1844,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6c46a1bd761d6871f379db72be29eeabd3cfdec6",
+          "title": "fix: upgrade standard-server to 0.10.0 and ban signal.throwIfAborted() (#2118)",
+          "date": "2026-09-30T10:46:04+07:00",
+          "pr": 2118,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f4e2558ace90c21680f49249feb5b5cad1c6c00e",
+        "parent": "fc60e4b837ffc6d947d36175eda4ba6eb5396218",
+        "title": "fix(client): stop deduped calls from ignoring their own abort signal (#2159)",
+        "date": "2026-09-30T16:05:51+07:00",
+        "pr": 2159
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T16:05:51+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "65596eae1f39e734c0af5ad57d148f7cd4bdd91e",
+          "title": "feat(client): Dedupe Requests Plugin (#582)",
+          "date": "2025-06-03T08:54:26+07:00",
+          "pr": 582,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4e2239afe2f847d956963cc8db7525f07bba5542",
+          "title": "feat(client): add wait option to batch and dedupe link plugins (#2090)",
+          "date": "2026-09-26T14:24:08+07:00",
+          "pr": 2090,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "588f0125541aa380ca0a78d892b12d5af7532417",
+          "title": "fix(client): stop concurrent body reads from starving deduped callers (#2078)",
+          "date": "2026-09-25T09:03:02+07:00",
+          "pr": 2078,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "515adce3264376ea8cffe5a432ea4df4b676d1c3",
+        "parent": "6c46a1bd761d6871f379db72be29eeabd3cfdec6",
+        "title": "fix(node): weaken ETag and drop Accept-Ranges on compressed batch responses (#2149)",
+        "date": "2026-09-30T14:07:58+07:00",
+        "pr": 2149
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T14:07:58+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b6a88adb5830d8dea35a63838a4fc8035a29d1fd",
+          "title": "feat(node): add batch response compression plugin (#1882)",
+          "date": "2026-08-18T09:20:45+07:00",
+          "pr": 1882,
+          "lines": 13,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "af359e914e6f5ff4bfc0d62d1413971ca1cddf13",
+          "title": "feat(client, server)!: add response compression plugin, replace body compression plugin (#1653)",
+          "date": "2026-07-10T13:57:59+07:00",
+          "pr": 1653,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "70db4488bb2b0f8075e0c090b90ee192f7ea6422",
+          "title": "feat(node): add @orpc/node package with StaticFileHandlerPlugin (#1819)",
+          "date": "2026-08-10T15:20:57+07:00",
+          "pr": 1819,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "93a9a5cdc4a77e2fe7c06d1472c473166564d48c",
+          "title": "fix(server, node): honour the Accept-Encoding wildcard in response compression (#2066)",
+          "date": "2026-09-24T13:06:08+07:00",
+          "pr": 2066,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a8030f7040f432bfea53e145bec0fcd2a3646472",
+          "title": "fix(server): weaken ETag and drop Accept-Ranges on compressed responses (#2094)",
+          "date": "2026-09-26T15:55:05+07:00",
+          "pr": 2094,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "6c46a1bd761d6871f379db72be29eeabd3cfdec6",
+        "parent": "da00339a363b50cf9b11a66b017d9738332e3807",
+        "title": "fix: upgrade standard-server to 0.10.0 and ban signal.throwIfAborted() (#2118)",
+        "date": "2026-09-30T10:46:04+07:00",
+        "pr": 2118
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T10:46:04+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "25cb3865d72aa2f5b2ac7e2ec80f34cc0805c992",
+          "title": "fix: upgrade standard-server to 0.9.2 (#2049)",
+          "date": "2026-09-19T15:31:04+07:00",
+          "pr": 2049,
+          "lines": 37,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4e2239afe2f847d956963cc8db7525f07bba5542",
+          "title": "feat(client): add wait option to batch and dedupe link plugins (#2090)",
+          "date": "2026-09-26T14:24:08+07:00",
+          "pr": 2090,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "32a6de9432c7b6fb88fcaede8980ee1d1ce54454",
+          "title": "feat(client, server): batch request/response plugin (#329)",
+          "date": "2025-04-08T09:50:52+07:00",
+          "pr": 329,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c5d193cabd826776d10ea41af64ce40954ed96d5",
+        "parent": "63b20537dbb6ee91a4d68c6d81fa1f53ab114964",
+        "title": "fix(contract): only reserve `then` in the handler errors map (#2117)",
+        "date": "2026-09-30T09:31:50+07:00",
+        "pr": 2117
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-30T09:31:50+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "94f55fd27d9a506091669ca9f58aba2e8411a36b",
+          "title": "fix(contract): stop the handler errors map from being thenable (#2113)",
+          "date": "2026-09-28T15:02:14+07:00",
+          "pr": 2113,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": true,
+          "scope": "in",
+          "grade": null,
+          "note": "2113 made the errors proxy return the raw target for every RECURSIVE_CLIENT_UNWRAP_KEYS member, so toString/valueOf/toJSON/bind/call/apply no longer build errors with those codes; 2117 narrows it back to 'then' only. Scope: Over-broad reserved-key check disables valid error codes, a logic/boundary error.",
+          "category": "logic"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "94f55fd27d9a506091669ca9f58aba2e8411a36b",
+        "parent": "2f1100af72253f242991911be0f6d5c66562bfa6",
+        "title": "fix(contract): stop the handler errors map from being thenable (#2113)",
+        "date": "2026-09-28T15:02:14+07:00",
+        "pr": 2113
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T15:02:14+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4dc0866d788b33b8ea5e586d94412bc53263bc52",
+          "title": "feat(contract): error factory (#1760)",
+          "date": "2026-08-02T08:56:09+07:00",
+          "pr": 1760,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "2f1100af72253f242991911be0f6d5c66562bfa6",
+        "parent": "eab53d6aa31384ff61ae41db4f329b530613ec23",
+        "title": "fix(client): stop WebSocket errors from crashing the process in RPCLink (#2111)",
+        "date": "2026-09-28T14:46:46+07:00",
+        "pr": 2111
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T14:46:46+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "eab53d6aa31384ff61ae41db4f329b530613ec23",
+        "parent": "f75dbd1dc950a73158ed89768f8d4930d8de67ee",
+        "title": "fix(server): keep union and index-signature context types across .use() (#2110)",
+        "date": "2026-09-28T14:43:54+07:00",
+        "pr": 2110
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T14:43:54+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f75dbd1dc950a73158ed89768f8d4930d8de67ee",
+        "parent": "1d4024605715b826a7197507d8748a518909e1d7",
+        "title": "fix(client): stop native fetch from throwing Illegal invocation in browsers (#2112)",
+        "date": "2026-09-28T14:41:03+07:00",
+        "pr": 2112
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T14:41:03+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "fa2f16567211f0e973e1b322ffa431f2f45e151c",
+          "title": "feat!: remove adapter interceptors and adapter plugins (#2038)",
+          "date": "2026-09-17T20:02:01+07:00",
+          "pr": 2038,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1d4024605715b826a7197507d8748a518909e1d7",
+        "parent": "ce855ef8b30b35019dc0be4b081fca6283695eed",
+        "title": "fix(openapi): stop JsonifiedValue from turning interface outputs into unknown (#2109)",
+        "date": "2026-09-28T14:27:31+07:00",
+        "pr": 2109
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T14:27:31+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a246703b9507a7a1ee3396b0f09fc1ac7a18fe55",
+          "title": "feat(openapi): OpenAPILink (#303)",
+          "date": "2025-03-28T14:43:45+07:00",
+          "pr": 303,
+          "lines": 14,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b5896204b07d68dca307062ded4b43690fd67c40",
+          "title": "chore(deps-dev): bump @antfu/eslint-config from 4.13.3 to 4.14.1 in the eslint group (#626)",
+          "date": "2025-06-15T15:35:02+07:00",
+          "pr": 626,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "dfa4e1efd59a0c0de30ea06e9c860bbdf2c268fe",
+        "parent": "6e2bf7e85b9a71e83b79115a986974e4ccca1bde",
+        "title": "fix(server): stop malformed WebSocket frames from crashing the process (#2108)",
+        "date": "2026-09-28T10:34:56+07:00",
+        "pr": 2108
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-28T10:34:56+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "6e2bf7e85b9a71e83b79115a986974e4ccca1bde",
+        "parent": "6731ca701dde93ab08c45b5d113482cbd96377bf",
+        "title": "fix(client): stop retrying forever when retryDelay throws (#2105)",
+        "date": "2026-09-27T19:55:30+07:00",
+        "pr": 2105
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T19:55:30+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b3c3ac6662e87bed67929456ad6b710550bbc0a5",
+          "title": "feat(client): pass isSuccess to ClientRetryPlugin onRetry returned callback (#389)",
+          "date": "2025-04-11T15:15:47+07:00",
+          "pr": 389,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "7134cf94c01777a96c8e34e39c9c6d51596a7bec",
+          "title": "feat(client)!: update `ClientRetryPlugin` options (#280)",
+          "date": "2025-03-21T18:43:33+07:00",
+          "pr": 280,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "6731ca701dde93ab08c45b5d113482cbd96377bf",
+        "parent": "1637032eba226264f349d7d10aa7c4d341932fdd",
+        "title": "fix(publisher): stop truncating the resume backlog to maxBufferedEvents (#2104)",
+        "date": "2026-09-27T19:53:25+07:00",
+        "pr": 2104
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T19:53:25+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "22ef10a4fa453c7563afc426220437035b8ec422",
+          "title": "feat(publisher): memory, ioredis, upstash redis publishers (#1094)",
+          "date": "2025-10-19T15:11:51+07:00",
+          "pr": 1094,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "dd4e8828eaae6f4b1e45fdae2c133d987912326a",
+          "title": "feat(server): event publisher (#603)",
+          "date": "2025-06-05T22:05:57+07:00",
+          "pr": 603,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1637032eba226264f349d7d10aa7c4d341932fdd",
+        "parent": "8599310732da32109f295d6cef86450d32cdbdb9",
+        "title": "fix(server): stop MessagePort arrays from bypassing prototype pollution protection (#2107)",
+        "date": "2026-09-27T19:50:32+07:00",
+        "pr": 2107
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T19:50:32+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "658f36be64f7ce1a182fdb9bcdf81caabb08acda",
+          "title": "feat(server): add PrototypePollutionProtectionHandlerPlugin (#1961)",
+          "date": "2026-08-27T14:50:03+07:00",
+          "pr": 1961,
+          "lines": 9,
+          "via": "blame",
+          "confirmed": true,
+          "scope": "in",
+          "grade": null,
+          "note": "1961 walks arrays with `if (Array.isArray(value)) { for (const item of value) stack.push(item) }`, so named own keys on an array (__proto__, constructor.prototype) kept by structured clone are never checked; 2107 makes arrays take the same key checks as plain objects. Scope: Missing input validation in a security guard is a validation error.",
+          "category": "validation"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8599310732da32109f295d6cef86450d32cdbdb9",
+        "parent": "a5d98e7347bee04941a9ec140a9efe3093488745",
+        "title": "fix(json-schema): prevent unhandled rejections when converting async schemas (#2103)",
+        "date": "2026-09-27T19:45:31+07:00",
+        "pr": 2103
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T19:45:31+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "fb2b8d27734a921d40e5fad4dff37625d07898c1",
+          "title": "refactor(json-schema,openapi)!: make JsonSchemaConverter sync (#1716)",
+          "date": "2026-07-23T14:20:47+07:00",
+          "pr": 1716,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a5d98e7347bee04941a9ec140a9efe3093488745",
+        "parent": "536161c07fabca52290fd6085bb409ca0d1ff384",
+        "title": "fix(trpc): stop toORPCRouter from passing input keys the schema strips (#2106)",
+        "date": "2026-09-27T19:39:25+07:00",
+        "pr": 2106
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T19:39:25+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b84477dd23d9c6a4023ed33a53f2f81b4492e924",
+          "title": "feat(trpc): tRPC integration (#1683)",
+          "date": "2026-07-19T10:38:28+07:00",
+          "pr": 1683,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "536161c07fabca52290fd6085bb409ca0d1ff384",
+        "parent": "26b97f2dd99d0fceecd933db5cddd7713c9f7aab",
+        "title": "fix(client): send FormData uploads outside the batch (#2102)",
+        "date": "2026-09-27T15:33:33+07:00",
+        "pr": 2102
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T15:33:33+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "26b97f2dd99d0fceecd933db5cddd7713c9f7aab",
+        "parent": "e46194e95e5ad688b2a73c80787f1794def06369",
+        "title": "fix(openapi): ignore paramsStyles keys the matched route has no path param for (#2100)",
+        "date": "2026-09-27T15:09:25+07:00",
+        "pr": 2100
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T15:09:25+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e46194e95e5ad688b2a73c80787f1794def06369",
+        "parent": "2cd0134f3ea6325737d73ce174633602bfc8b8ac",
+        "title": "fix(nest): cancel streamed response bodies when the client disconnects (#2101)",
+        "date": "2026-09-27T15:08:54+07:00",
+        "pr": 2101
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T15:08:54+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "25cfa7c0fe7dbcc2b5f6d096f0ea045c98dda5c4",
+          "title": "refactor(nest): merge middleapi/orpc-nest back into middleapi/orpc",
+          "date": "2026-06-30T16:03:55+07:00",
+          "pr": null,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "2cd0134f3ea6325737d73ce174633602bfc8b8ac",
+        "parent": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+        "title": "fix(server,contract,ai-sdk): stop loose stacked input schemas from reverting earlier transforms (#2099)",
+        "date": "2026-09-27T14:40:34+07:00",
+        "pr": 2099
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T14:40:34+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4fd063c56de3b9779cfc6d7c0c82dd4bcbb817e5",
+          "title": "feat(server,contract,ai-sdk): merge stacked object input schemas (#1851)",
+          "date": "2026-08-13T15:46:40+07:00",
+          "pr": 1851,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "88ee055fee0910ae389ccd429e75bf3a0b20731c",
+          "title": "feat(ai-sdk): stream tool outputs for async generator handlers (#1981)",
+          "date": "2026-09-04T14:48:32+07:00",
+          "pr": 1981,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+        "parent": "a717584bec97454e83ef7deeb75907dd85c511cd",
+        "title": "fix(tanstack-query,pinia-colada): keep contract meta interceptors when utils define none (#2098)",
+        "date": "2026-09-27T10:53:32+07:00",
+        "pr": 2098
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T10:53:32+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "cfe183931f048896b421b6214ba9ef59de4081e5",
+          "title": "feat(pinia-colada): define base options and interceptors via contract meta (#1718)",
+          "date": "2026-07-25T08:53:20+07:00",
+          "pr": 1718,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6c2c35ef0deafc7e443481798023c69df8531133",
+          "title": "feat(tanstack-query): define base options and interceptors via contract meta (#1705)",
+          "date": "2026-07-25T08:50:21+07:00",
+          "pr": 1705,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "46bd033b183fc84d409244b9c193293cf5af04db",
+          "title": "fix: keep nested clients and utils referentially stable (#1757)",
+          "date": "2026-07-31T10:30:39+07:00",
+          "pr": 1757,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "e12f7c3fdcc57055a869e580e5db5ee822c6023c",
+          "title": "feat(pinia-colada): Pinia Colada integration (#1686)",
+          "date": "2026-07-20T07:52:59+07:00",
+          "pr": 1686,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "7106a526483983bf0876a9775b196cfc359a2d39",
+          "title": "feat(tanstack-query): `prefix` option to avoid key conflicts (#1692)",
+          "date": "2026-07-20T10:42:57+07:00",
+          "pr": 1692,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c45a0738f417510c9c3844aa67a59d1404c5d690",
+        "parent": "fbe045c379812a582b58a0768014ef4c50b38da0",
+        "title": "fix(openapi): stop Swagger UI reference from unquoting strings inside the spec (#2096)",
+        "date": "2026-09-27T10:43:02+07:00",
+        "pr": 2096
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-27T10:43:02+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4f28b69506c28889c9a0a870875cc8055980ab89",
+          "title": "feat(openapi): Add Swagger UI support to OpenAPI Reference Plugin (#904)",
+          "date": "2025-08-22T14:13:56+07:00",
+          "pr": 904,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "297d9b09ac6987a06d989e83b18893fa3075377e",
+        "parent": "c432774a5d6230759235014826737aeeacb053fc",
+        "title": "fix(openapi): emit valid refs for schemas that recurse to their own root (#2088)",
+        "date": "2026-09-26T19:50:41+07:00",
+        "pr": 2088
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-26T19:50:41+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "deb9e7594c88cebb940650f4bd48ee7c8f5daaa3",
+          "title": "feat(openapi): modularize generator and hoist error schemas into components (#1721)",
+          "date": "2026-07-25T07:50:55+07:00",
+          "pr": 1721,
+          "lines": 24,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "7151b7f7b3334f55a04cf347cacc44ba7af5c7a0",
+          "title": "fix(json-schema, openapi): preserve schema properties and defs named __proto__ (#2065)",
+          "date": "2026-09-24T10:38:22+07:00",
+          "pr": 2065,
+          "lines": 12,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6941896a233df63da833ebed5a6d50584d10dacc",
+          "title": "feat(openapi)!: replace shouldHoistDef with customComponentName option in generator (#1728)",
+          "date": "2026-07-26T14:20:53+07:00",
+          "pr": 1728,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "c0ca4c726da54cb99adaa9b65e8db45e7614e58c",
+          "title": "fix(openapi): correct success response spec for optional body (#319)",
+          "date": "2025-04-01T10:19:32+07:00",
+          "pr": 319,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c432774a5d6230759235014826737aeeacb053fc",
+        "parent": "47bd7076b7b2de6ebc34e9f02e22af6a03716344",
+        "title": "fix(shared): close the source iterator when consumeAsyncIterator onEvent throws (#2093)",
+        "date": "2026-09-26T19:36:59+07:00",
+        "pr": 2093
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-26T19:36:59+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "47bd7076b7b2de6ebc34e9f02e22af6a03716344",
+        "parent": "a8030f7040f432bfea53e145bec0fcd2a3646472",
+        "title": "fix(server): abort batch sub-requests when the client disconnects (#2092)",
+        "date": "2026-09-26T19:35:58+07:00",
+        "pr": 2092
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-26T19:35:58+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "5e2865ce9e2d5d492ef398cbb5d4e8336c3a8347",
+          "title": "feat(client, server): add keep-alive for streaming batch responses (#1657)",
+          "date": "2026-07-11T07:37:09+07:00",
+          "pr": 1657,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a8030f7040f432bfea53e145bec0fcd2a3646472",
+        "parent": "5872ffea55451453868ddd79564881301c421fdf",
+        "title": "fix(server): weaken ETag and drop Accept-Ranges on compressed responses (#2094)",
+        "date": "2026-09-26T15:55:05+07:00",
+        "pr": 2094
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-26T15:55:05+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "af359e914e6f5ff4bfc0d62d1413971ca1cddf13",
+          "title": "feat(client, server)!: add response compression plugin, replace body compression plugin (#1653)",
+          "date": "2026-07-10T13:57:59+07:00",
+          "pr": 1653,
+          "lines": 15,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b6a88adb5830d8dea35a63838a4fc8035a29d1fd",
+          "title": "feat(node): add batch response compression plugin (#1882)",
+          "date": "2026-08-18T09:20:45+07:00",
+          "pr": 1882,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f200a41d2e97ec097ff8ddc8fbaf390fdc0f4787",
+        "parent": "4e2239afe2f847d956963cc8db7525f07bba5542",
+        "title": "fix(valibot): resolve recursion and $defs through v.set and v.map (#2089)",
+        "date": "2026-09-26T14:29:37+07:00",
+        "pr": 2089
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-26T14:29:37+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "98e1b3d40c02cbeb38ebe786d2162ae6afbe1ed4",
+          "title": "feat(valibot): ValibotToJsonSchemaConverter (#261)",
+          "date": "2025-03-18T13:01:37+07:00",
+          "pr": 261,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "21251bbfd4f480790d489f0c521e43d641a6f12c",
+          "title": "feat(zod,valibot,arktype): add option to cache generated JSON schemas (#1753)",
+          "date": "2026-07-30T14:01:30+07:00",
+          "pr": 1753,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "f4ed9abfc0cf57ebd4edd84bdba835f62fe17425",
+          "title": "feat(valibot): update version and SchemaConverter options",
+          "date": "2025-05-17T20:46:22+07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1f4310fbbe0b15b3a753691aca13ea8d60dd6fd8",
+        "parent": "767591e5523ec2ad4353430aca30c02128b788da",
+        "title": "fix(node): stop 8.3 short names from bypassing static file dotfiles (#2087)",
+        "date": "2026-09-26T14:02:39+07:00",
+        "pr": 2087
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-26T14:02:39+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "70db4488bb2b0f8075e0c090b90ee192f7ea6422",
+          "title": "feat(node): add @orpc/node package with StaticFileHandlerPlugin (#1819)",
+          "date": "2026-08-10T15:20:57+07:00",
+          "pr": 1819,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "91b8d73ac5611da819e8cdb988f82cec18ac1564",
+        "parent": "ab120b7c3fcd96615389fa76f8087a5f17492a4c",
+        "title": "fix(client): let the WebSocket link reconnect after giving up (#2084)",
+        "date": "2026-09-25T14:16:42+07:00",
+        "pr": 2084
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T14:16:42+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "29285f649de446e212ad41eea03395f5b8149fe6",
+          "title": "fix(client): reject WebSocket link calls after the socket closes (#2081)",
+          "date": "2026-09-25T09:39:44+07:00",
+          "pr": 2081,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "ab120b7c3fcd96615389fa76f8087a5f17492a4c",
+        "parent": "7d931718cf664d874d3573a11a0947881e45d5b4",
+        "title": "fix(publisher, bun)!: keep Redis Pub/Sub delivery in stream order (#2073)",
+        "date": "2026-09-25T13:20:56+07:00",
+        "pr": 2073
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T13:20:56+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "523a9d7bfa33aa0176945361d038f7fd8a313a0b",
+          "title": "refactor(publisher): share Redis adapter logic through BaseRedisPublisher (#2003)",
+          "date": "2026-09-09T14:23:57+07:00",
+          "pr": 2003,
+          "lines": 54,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "2f356b3501c298e21ed31a75282aa29cb024f95e",
+          "title": "feat(ratelimit, publisher, bun): bun's redis ratelimit and publisher adapters",
+          "date": "2026-06-29T14:23:56+07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "3c0a03b4ad9aa8cda5e3669ef631046cef260bd3",
+        "parent": "0caff283d4655fad3adf067859e9abb1583ecdc1",
+        "title": "fix(client): reject WebSocket link calls when connect returns a closed socket (#2083)",
+        "date": "2026-09-25T11:06:23+07:00",
+        "pr": 2083
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T11:06:23+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0caff283d4655fad3adf067859e9abb1583ecdc1",
+        "parent": "29285f649de446e212ad41eea03395f5b8149fe6",
+        "title": "fix(client): reject message port link calls after the port closes (#2082)",
+        "date": "2026-09-25T09:59:36+07:00",
+        "pr": 2082
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T09:59:36+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "897a75198f012811ab828aace75685ab8adbaf7b",
+          "title": "fix(client, server): preserve message ordering for blob messages in peer adapters (#1621)",
+          "date": "2026-07-03T14:47:22+07:00",
+          "pr": 1621,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "29285f649de446e212ad41eea03395f5b8149fe6",
+        "parent": "b050f3039c37cb9653c8a21e53b3bad78906440e",
+        "title": "fix(client): reject WebSocket link calls after the socket closes (#2081)",
+        "date": "2026-09-25T09:39:44+07:00",
+        "pr": 2081
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T09:39:44+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b050f3039c37cb9653c8a21e53b3bad78906440e",
+        "parent": "588f0125541aa380ca0a78d892b12d5af7532417",
+        "title": "fix(client): reject batched calls when a batch option throws (#2079)",
+        "date": "2026-09-25T09:12:59+07:00",
+        "pr": 2079
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T09:12:59+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "588f0125541aa380ca0a78d892b12d5af7532417",
+        "parent": "e2770aa3ee5cd86d7810b71b38255e223237b69f",
+        "title": "fix(client): stop concurrent body reads from starving deduped callers (#2078)",
+        "date": "2026-09-25T09:03:02+07:00",
+        "pr": 2078
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T09:03:02+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e2770aa3ee5cd86d7810b71b38255e223237b69f",
+        "parent": "7fbeccad1300ef95456ae543d8d5397b23c1c1a7",
+        "title": "fix(publisher): deliver to every memory listener when one unsubscribes mid-publish (#2077)",
+        "date": "2026-09-25T08:25:36+07:00",
+        "pr": 2077
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T08:25:36+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "22ef10a4fa453c7563afc426220437035b8ec422",
+          "title": "feat(publisher): memory, ioredis, upstash redis publishers (#1094)",
+          "date": "2025-10-19T15:11:51+07:00",
+          "pr": 1094,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "7fbeccad1300ef95456ae543d8d5397b23c1c1a7",
+        "parent": "dcf5f42f9dee63375244bd81aa8f704ec50ee9a2",
+        "title": "fix(zod): resolve recursion and $defs through z.set and z.map (#2074)",
+        "date": "2026-09-25T08:24:59+07:00",
+        "pr": 2074
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T08:24:59+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "00d7d75de1ae03a52d92c4bec177d223382b9b58",
+          "title": "refactor(openapi): replace `zod-to-json-schema`  with self implementation",
+          "date": "2024-11-05T09:18:59+07:00",
+          "pr": null,
+          "lines": 9,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b8d527a914e2473085c79297394d4c02403201bc",
+          "title": "chore: upgrade zod to 4.5.4 and drop the manual root $ref hoisting (#1969)",
+          "date": "2026-08-31T11:02:50+07:00",
+          "pr": 1969,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "dcf5f42f9dee63375244bd81aa8f704ec50ee9a2",
+        "parent": "a16c885a1317254b661e67af97b77c85094f85fe",
+        "title": "fix(openapi): omit null and undefined members in delimited-object query styles (#2076)",
+        "date": "2026-09-25T08:12:04+07:00",
+        "pr": 2076
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-25T08:12:04+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8e9a4552d40d33c2c8d5142df5837c3322dc7a07",
+        "parent": "31e7076e2fcec7a7b55490d71f1c4288e3935540",
+        "title": "fix(server): apply the contract to routers implemented with .lazy() (#2070)",
+        "date": "2026-09-24T14:40:27+07:00",
+        "pr": 2070
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T14:40:27+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "14eada7b276a3ebeb9a2183ad18da471573d81b9",
+          "title": "feat(server): disable validation (#1678)",
+          "date": "2026-07-18T14:43:03+07:00",
+          "pr": 1678,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "31e7076e2fcec7a7b55490d71f1c4288e3935540",
+        "parent": "a523ec7fd1a2f38816c74f238604b32aac015752",
+        "title": "fix(server, contract): stop router lookups from resolving inherited properties (#2072)",
+        "date": "2026-09-24T14:26:07+07:00",
+        "pr": 2072
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T14:26:07+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "14eada7b276a3ebeb9a2183ad18da471573d81b9",
+          "title": "feat(server): disable validation (#1678)",
+          "date": "2026-07-18T14:43:03+07:00",
+          "pr": 1678,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a523ec7fd1a2f38816c74f238604b32aac015752",
+        "parent": "647acd2e15e0117b29b0a97b68d0370da411d855",
+        "title": "fix(server): keep decorated middleware metadata through .use and .adaptInput (#2071)",
+        "date": "2026-09-24T14:25:39+07:00",
+        "pr": 2071
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T14:25:39+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "647acd2e15e0117b29b0a97b68d0370da411d855",
+        "parent": "e9f8ee897ff14d10aea3af9e880a3201c7ccb71a",
+        "title": "fix(ai-sdk): always pass the tool call abort signal to procedures (#2069)",
+        "date": "2026-09-24T14:24:43+07:00",
+        "pr": 2069
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T14:24:43+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "428ad93edc4a718783f9cabda82cce0b10d155e5",
+          "title": "feat(ai-sdk): AI SDK integration (#1707)",
+          "date": "2026-07-22T14:23:31+07:00",
+          "pr": 1707,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "f36f85e019c31014d708441744a0e49ce1b17e40",
+          "title": "fix(ai-sdk): keep output validation enabled for tool procedures (#1791)",
+          "date": "2026-08-05T14:52:44+07:00",
+          "pr": 1791,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e9f8ee897ff14d10aea3af9e880a3201c7ccb71a",
+        "parent": "93a9a5cdc4a77e2fe7c06d1472c473166564d48c",
+        "title": "fix(node): charge multipart part headers against tmp file upload limits (#2067)",
+        "date": "2026-09-24T13:25:23+07:00",
+        "pr": 2067
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T13:25:23+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a214208e494e6527f276f1d8de6fded0e16b698f",
+          "title": "feat(node): add TmpFileUploadHandlerPlugin (#1863)",
+          "date": "2026-08-15T10:42:28+07:00",
+          "pr": 1863,
+          "lines": 11,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "5f023ca29cde18c4c8addfcf8608b41b82f91539",
+          "title": "feat(node): resolve tmp file upload body limits per request (#1881)",
+          "date": "2026-08-17T16:09:16+07:00",
+          "pr": 1881,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "93a9a5cdc4a77e2fe7c06d1472c473166564d48c",
+        "parent": "054245df931bd35d6c067d37b157e44e60a3687a",
+        "title": "fix(server, node): honour the Accept-Encoding wildcard in response compression (#2066)",
+        "date": "2026-09-24T13:06:08+07:00",
+        "pr": 2066
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T13:06:08+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "70db4488bb2b0f8075e0c090b90ee192f7ea6422",
+          "title": "feat(node): add @orpc/node package with StaticFileHandlerPlugin (#1819)",
+          "date": "2026-08-10T15:20:57+07:00",
+          "pr": 1819,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b6a88adb5830d8dea35a63838a4fc8035a29d1fd",
+          "title": "feat(node): add batch response compression plugin (#1882)",
+          "date": "2026-08-18T09:20:45+07:00",
+          "pr": 1882,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "8f1f9e47b3a856ccec2e9054dfc3b8cdd5cb27ef",
+          "title": "fix: never throw when encoding or decoding URI components (#2011)",
+          "date": "2026-09-12T11:06:32+07:00",
+          "pr": 2011,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "054245df931bd35d6c067d37b157e44e60a3687a",
+        "parent": "43b8454e92ebda037f7c7a282dc3235166211da3",
+        "title": "fix(server): match RPC requests to a trailing-slash prefix exactly (#2068)",
+        "date": "2026-09-24T13:04:16+07:00",
+        "pr": 2068
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T13:04:16+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "43b8454e92ebda037f7c7a282dc3235166211da3",
+        "parent": "7151b7f7b3334f55a04cf347cacc44ba7af5c7a0",
+        "title": "fix(json-schema): stop $defs alias cycles from recursing forever (#2064)",
+        "date": "2026-09-24T10:39:01+07:00",
+        "pr": 2064
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T10:39:01+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "7151b7f7b3334f55a04cf347cacc44ba7af5c7a0",
+        "parent": "0e50129acad3bf602b9079758f3792b3e8227d6a",
+        "title": "fix(json-schema, openapi): preserve schema properties and defs named __proto__ (#2065)",
+        "date": "2026-09-24T10:38:22+07:00",
+        "pr": 2065
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T10:38:22+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "6941896a233df63da833ebed5a6d50584d10dacc",
+          "title": "feat(openapi)!: replace shouldHoistDef with customComponentName option in generator (#1728)",
+          "date": "2026-07-26T14:20:53+07:00",
+          "pr": 1728,
+          "lines": 16,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "deb9e7594c88cebb940650f4bd48ee7c8f5daaa3",
+          "title": "feat(openapi): modularize generator and hoist error schemas into components (#1721)",
+          "date": "2026-07-25T07:50:55+07:00",
+          "pr": 1721,
+          "lines": 9,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "15044d4fe6a060cefe967a7d03175f8c4bd8fe5c",
+          "title": "feat!: migrate to @openapi-spec types and target OpenAPI 3.2 with a version option (#1998)",
+          "date": "2026-09-07T20:51:40+07:00",
+          "pr": 1998,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0e50129acad3bf602b9079758f3792b3e8227d6a",
+        "parent": "90fad9f4e05da49ce8ed70103873b4149b1c6d06",
+        "title": "fix(server): return ORPCError message when the batch body fails to resolve (#2063)",
+        "date": "2026-09-24T09:39:42+07:00",
+        "pr": 2063
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T09:39:42+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "90fad9f4e05da49ce8ed70103873b4149b1c6d06",
+        "parent": "4a1f0a6a53ca3b6f6f0cfdcbafb0c44b0a1fcab7",
+        "title": "fix(server, client): cap content-encoding chain in compression plugins (#2061)",
+        "date": "2026-09-24T09:09:17+07:00",
+        "pr": 2061
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T09:09:17+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4a1f0a6a53ca3b6f6f0cfdcbafb0c44b0a1fcab7",
+        "parent": "b3837183b72934d360db85ae2a5ad3e8d494f455",
+        "title": "fix(node): bound multipart padding, header size, and parameter parsing (#2062)",
+        "date": "2026-09-24T08:59:15+07:00",
+        "pr": 2062
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-24T08:59:15+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a214208e494e6527f276f1d8de6fded0e16b698f",
+          "title": "feat(node): add TmpFileUploadHandlerPlugin (#1863)",
+          "date": "2026-08-15T10:42:28+07:00",
+          "pr": 1863,
+          "lines": 11,
+          "via": "blame",
+          "confirmed": null,
+          "scope": "out",
+          "grade": null,
+          "note": "skipped for size. Not evaluated: introducing PR 1863 is 25 files +2839 -128 (2967 lines), skipped for size. Scope: Fix bounds memory and CPU of a multipart parser (resource exhaustion/performance), out by the performance rule.",
+          "category": "other_out_of_scope"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1339a5ece68f77ede181aa845aed574605b94ba7",
+        "parent": "1cd76aff76cc1d11717cf602f38800d9a648f65e",
+        "title": "fix(rpc, openapi): reject non-Blob values in serialized blobs (#2059)",
+        "date": "2026-09-23T21:12:59+07:00",
+        "pr": 2059
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-23T21:12:59+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "54ea37fce1964c9af6437130ccce8634156328cf",
+        "parent": "e2858b33eb9760a8f1febe6288ce724a4bf399bc",
+        "title": "fix(openapi): align error schemas with v2 bodies (#2057)",
+        "date": "2026-09-22T10:43:35+07:00",
+        "pr": 2057
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        },
+        {
+          "signal": "issue_label",
+          "strength": "strong",
+          "number": 2056,
+          "labels": [
+            "bug"
+          ]
+        }
+      ],
+      "issue": {
+        "number": 2056,
+        "created_at": "2026-09-22T02:45:18Z"
+      },
+      "report_date": "2026-09-22T02:45:18Z",
+      "report_date_source": "issue",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "deb9e7594c88cebb940650f4bd48ee7c8f5daaa3",
+          "title": "feat(openapi): modularize generator and hoist error schemas into components (#1721)",
+          "date": "2026-07-25T07:50:55+07:00",
+          "pr": 1721,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "cde99a23f4082f48045155a35cbbdbac1a46ee7f",
+        "parent": "406075935a98333e6de2daace876ba8f826eacd8",
+        "title": "fix(rpc, openapi): stop JSON serializers from mutating their input on deserialize (#2054)",
+        "date": "2026-09-21T20:12:05+07:00",
+        "pr": 2054
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        },
+        {
+          "signal": "issue_label",
+          "strength": "strong",
+          "number": 2053,
+          "labels": [
+            "bug"
+          ]
+        }
+      ],
+      "issue": {
+        "number": 2053,
+        "created_at": "2026-09-21T11:02:58Z"
+      },
+      "report_date": "2026-09-21T11:02:58Z",
+      "report_date_source": "issue",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "25cb3865d72aa2f5b2ac7e2ec80f34cc0805c992",
+        "parent": "b7946fdc64c377d53ad6ce55aeb1ef523615f653",
+        "title": "fix: upgrade standard-server to 0.9.2 (#2049)",
+        "date": "2026-09-19T15:31:04+07:00",
+        "pr": 2049
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-19T15:31:04+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "1d8f9bad6d1e40d4acf6095f6d70a661f01aa3cc",
+          "title": "chore: upgrade standard-server to 0.9.1 and re-export its safe URI helpers (#2035)",
+          "date": "2026-09-17T06:49:56+07:00",
+          "pr": 2035,
+          "lines": 37,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b7946fdc64c377d53ad6ce55aeb1ef523615f653",
+        "parent": "b2a681940e940934905347e8a76a2775ba25c420",
+        "title": "fix(rpc): check serialized value types before restoring built-in values (#2047)",
+        "date": "2026-09-19T11:30:29+07:00",
+        "pr": 2047
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-19T11:30:29+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9e96b4fdc22e30905610215d6138750eab2c9dd0",
+        "parent": "78feb9cd5602f3dc5bf24cb3d28635feaa2290c8",
+        "title": "fix: small edge cases in mergeTwoLevels and the tmp file upload plugin (#2042)",
+        "date": "2026-09-18T13:09:18+07:00",
+        "pr": 2042
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-18T13:09:18+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a214208e494e6527f276f1d8de6fded0e16b698f",
+          "title": "feat(node): add TmpFileUploadHandlerPlugin (#1863)",
+          "date": "2026-08-15T10:42:28+07:00",
+          "pr": 1863,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4fd063c56de3b9779cfc6d7c0c82dd4bcbb817e5",
+          "title": "feat(server,contract,ai-sdk): merge stacked object input schemas (#1851)",
+          "date": "2026-08-13T15:46:40+07:00",
+          "pr": 1851,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "964718324c27815f85ab76941cf34d3514d23237",
+        "parent": "75217411695b9e36dafc5d502401fb74d280058b",
+        "title": "fix: keep registration order when sorting plugins (#2040)",
+        "date": "2026-09-18T10:10:19+07:00",
+        "pr": 2040
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-18T10:10:19+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8a91f7a1e8f3024995a73e67cd3d7f49d846422e",
+        "parent": "8da683c41555f19d0cd3fcdab518aff955cfd2ae",
+        "title": "fix(server): start the request span as the active span (#2037)",
+        "date": "2026-09-17T15:58:39+07:00",
+        "pr": 2037
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-17T15:58:39+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "9b9b44b091cdec9dc6da347b8312332b3cfec868",
+          "title": "fix(server): keep the request span open until the streamed response body finishes (#2032)",
+          "date": "2026-09-16T10:59:41+07:00",
+          "pr": 2032,
+          "lines": 9,
+          "via": "blame",
+          "confirmed": true,
+          "scope": "out",
+          "grade": null,
+          "note": "2032 replaced startActiveSpan with tracer.startSpan(...) followed by withActiveSpan(span, next), which leaves the request span non-active on backends that cannot activate an existing span (Cloudflare Workers Traces); 2037 body says 'Affected since #2032'. Scope: Tracing backend (Cloudflare Workers Traces) quirk, a platform/third-party limitation.",
+          "category": "other_out_of_scope"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9b9b44b091cdec9dc6da347b8312332b3cfec868",
+        "parent": "6034724dbe23c68cc972fc4a7ed3003861c91232",
+        "title": "fix(server): keep the request span open until the streamed response body finishes (#2032)",
+        "date": "2026-09-16T10:59:41+07:00",
+        "pr": 2032
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-16T10:59:41+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "e22700c042f41231b927ecb14702e7d3c47e0a4b",
+          "title": "feat(server): accept a context function in handler options, resolved after the prefix check (#2029)",
+          "date": "2026-09-15T15:03:57+07:00",
+          "pr": 2029,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 4
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b0b52fa3fca1b1a29b3d67780d00182e44be5974",
+        "parent": "8fc6d01d8d6b42736a8c16a58fbd65b038952fef",
+        "title": "fix(openapi): prevent prototype pollution through object values in bracket notation (#2024)",
+        "date": "2026-09-15T08:40:49+07:00",
+        "pr": 2024
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-15T08:40:49+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "7e904b4043051d21f778787676ab64ddc6991e24",
+          "title": "feat!: update rpc and openapi serializer (#171)",
+          "date": "2025-02-26T20:24:56+07:00",
+          "pr": 171,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4a431e02d66e73a18717868290418d4a099b92b9",
+          "title": "feat(openapi): parse bracket notation with same name as array (#567)",
+          "date": "2025-06-01T10:39:50+07:00",
+          "pr": 567,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "24b3d023c275b6d86faa12ad6dc681b018eaa43e",
+          "title": "feat(transformer): bracket notation helper",
+          "date": "2024-10-29T14:30:28+07:00",
+          "pr": null,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8fc6d01d8d6b42736a8c16a58fbd65b038952fef",
+        "parent": "8fb80e4af8adc9b21e8bfcc1c9f9311a6a1be81b",
+        "title": "fix(next): throw when a server form function does not receive form data (#2022)",
+        "date": "2026-09-14T17:22:23+07:00",
+        "pr": 2022
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-14T17:22:23+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d7c0f6a7a0830ee967cf5aa243745172fb51e9fd",
+        "parent": "fe46f02f858742488a88df6cba2fe5343ec82bd9",
+        "title": "fix(openapi): keep thrown error internals out of mid-stream event payloads (#2019)",
+        "date": "2026-09-14T16:03:56+07:00",
+        "pr": 2019
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-14T16:03:56+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "53280cf5dae5ca1e560a328e7fec72f156e061f9",
+          "title": "perf(rpc,openapi): speed up RPC and OpenAPI serializers (#1731)",
+          "date": "2026-07-28T10:21:25+07:00",
+          "pr": 1731,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "fb8192d3c3995313a333655943f6968ff036069b",
+        "parent": "986f7ef716cf52474100f0558e6793c72bc69f47",
+        "title": "fix(cloudflare): prevent leaked websockets in DurablePublisherObject (#2017)",
+        "date": "2026-09-14T14:21:48+07:00",
+        "pr": 2017
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-14T14:21:48+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "35f2ca22277dd43b653bdba90d693bec0ddae014",
+          "title": "feat(ratelimit, publisher, cloudflare): ratelimit and publisher adapters for cloudflare (#1618)",
+          "date": "2026-07-03T09:33:59+07:00",
+          "pr": 1618,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "be82b92fdeef7d5f3ad82c358178252e564ef1b1",
+          "title": "refactor(publisher,bun,cloudflare)!: rename replay option to resume (#1711)",
+          "date": "2026-07-23T08:29:48+07:00",
+          "pr": 1711,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8f1f9e47b3a856ccec2e9054dfc3b8cdd5cb27ef",
+        "parent": "9ad5039e753b47033b2e05e3a8942f32f9ae4c2e",
+        "title": "fix: never throw when encoding or decoding URI components (#2011)",
+        "date": "2026-09-12T11:06:32+07:00",
+        "pr": 2011
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-12T11:06:32+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "cff2b1a6812deed3e53555f4c5c392f2b8fa0e86",
+          "title": "refactor: tryDecodeURIComponent",
+          "date": "2025-07-26T15:24:02+07:00",
+          "pr": null,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "70db4488bb2b0f8075e0c090b90ee192f7ea6422",
+          "title": "feat(node): add @orpc/node package with StaticFileHandlerPlugin (#1819)",
+          "date": "2026-08-10T15:20:57+07:00",
+          "pr": 1819,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "bc0f743c3c48526ce0b9c0c58521a48f4ef0e4ce",
+          "title": "fix(client): forward error batch responses instead of parsing them (#1847)",
+          "date": "2026-08-12T09:35:12+07:00",
+          "pr": 1847,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8be90cb0a215b0dc0aa2a9c2210c2e51eb08165c",
+        "parent": "5c76a6a893484adcdd143e2c37291d203acae48c",
+        "title": "fix(valibot): upgrade @valibot/to-json-schema to 1.8.0 (#2009)",
+        "date": "2026-09-12T10:28:12+07:00",
+        "pr": 2009
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-12T10:28:12+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "15044d4fe6a060cefe967a7d03175f8c4bd8fe5c",
+          "title": "feat!: migrate to @openapi-spec types and target OpenAPI 3.2 with a version option (#1998)",
+          "date": "2026-09-07T20:51:40+07:00",
+          "pr": 1998,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "f4ed9abfc0cf57ebd4edd84bdba835f62fe17425",
+          "title": "feat(valibot): update version and SchemaConverter options",
+          "date": "2025-05-17T20:46:22+07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a8f52f07bc7f0c8ac03e5efca997392044ddc46d",
+          "title": "chore(deps): update versions (#1315)",
+          "date": "2025-12-29T15:49:02+07:00",
+          "pr": 1315,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4d9956975cad6600d9b91071d1dfc816017f9997",
+        "parent": "03ac086e8e69f8abdb10478152201f454924edc4",
+        "title": "fix(openapi): add titles to generated error schemas (#2002)",
+        "date": "2026-09-09T08:55:58+07:00",
+        "pr": 2002
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-09T08:55:58+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "deb9e7594c88cebb940650f4bd48ee7c8f5daaa3",
+          "title": "feat(openapi): modularize generator and hoist error schemas into components (#1721)",
+          "date": "2026-07-25T07:50:55+07:00",
+          "pr": 1721,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d7f65692847d16e07d59a78290dfb751474c06bf",
+        "parent": "5f144914ad882a3b3844e3e98bf862796585de34",
+        "title": "fix(effect): default middlewareGen type parameters so standalone middleware works on concrete procedures (#1996)",
+        "date": "2026-09-07T20:41:29+07:00",
+        "pr": 1996
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-07T20:41:29+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "777665e6988f937b0b143aad28b91be47063e770",
+          "title": "feat(effect): add middlewareGen for effectful middleware (#1974)",
+          "date": "2026-09-03T16:07:47+07:00",
+          "pr": 1974,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d637f30f6c645fcf410ca045ccc44db34f8b91d2",
+        "parent": "9379b505b0eb0748a022e438b6ba73f2a6127a5e",
+        "title": "fix(server): vary on Origin whenever CORS headers depend on the request origin (#1993)",
+        "date": "2026-09-07T10:58:02+07:00",
+        "pr": 1993
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-07T10:58:02+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "519c3f28189cd3c2502f273fb417183b97b8dd0f",
+          "title": "feat(server)!: default CORS origin to \"*\" and support async origin options (#1914)",
+          "date": "2026-08-22T08:12:22+07:00",
+          "pr": 1914,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "29c4fbc16e2c82e97d49ba83edf583f56ce3358f",
+          "title": "feat(server): base simple CSRF protection on Sec-Fetch-Site (#1840)",
+          "date": "2026-08-11T21:21:23+07:00",
+          "pr": 1840,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "31cafadc3000d5848b2e66bdbb932ad29a0042a0",
+        "parent": "777665e6988f937b0b143aad28b91be47063e770",
+        "title": "fix(openapi): prefer path params over unmergeable compact body (#1978)",
+        "date": "2026-09-03T16:08:32+07:00",
+        "pr": 1978
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-03T16:08:32+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "ca9c46be2abf406c5269cb9142b38bf558df5920",
+        "parent": "c7dc8ba741ecd6f060fa2d0b8110c8f6437e205e",
+        "title": "fix(client): unwrap call and apply in recursive client proxies (#1972)",
+        "date": "2026-09-01T11:04:07+07:00",
+        "pr": 1972
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-01T11:04:07+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8a27a2e02a871645c82eab83c11ef32c5f0cf299",
+        "parent": "17609e6784e86b64941d8ebefbb4343a85f06361",
+        "title": "fix(json-schema): rewrite refs inside promoted $defs when combining schemas (#1954)",
+        "date": "2026-08-25T19:58:37+07:00",
+        "pr": 1954
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-25T19:58:37+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
+        "parent": "2991776691409d3e624475794d604aa4b71e856a",
+        "title": "fix(server): judge GET CSRF protection after routing so unmatched requests fall through (#1955)",
+        "date": "2026-08-25T19:34:23+07:00",
+        "pr": 1955
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-25T19:34:23+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "29c4fbc16e2c82e97d49ba83edf583f56ce3358f",
+          "title": "feat(server): base simple CSRF protection on Sec-Fetch-Site (#1840)",
+          "date": "2026-08-11T21:21:23+07:00",
+          "pr": 1840,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "9fab60acb6cc41a7ab5afb15d1fe83705b50d005",
+          "title": "feat(server): replace simple CSRF protection with GET method CSRF protection (#1846)",
+          "date": "2026-08-12T09:34:36+07:00",
+          "pr": 1846,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d272e5b25b46479a7521d10ad955c4fbb7965dd0",
+        "parent": "c93eddf4dcabdcb19516ee8880308cf8bb7ac7af",
+        "title": "fix(openapi): give path params precedence over query and body in compact input (#1947)",
+        "date": "2026-08-25T14:41:46+07:00",
+        "pr": 1947
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-25T14:41:46+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a9c57f32470161f238a9ed49411c7c0b442c2717",
+        "parent": "2f2bf6052d798b3d92e64f2de39956c698b60dd2",
+        "title": "chore: fix broken links on the home page and the OpenAPI specification page (#1941)",
+        "date": "2026-08-24T21:45:36+07:00",
+        "pr": 1941
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-24T21:45:36+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "41a20eaa4da4ab85ba72d540c36d000e71d81e46",
+          "title": "chore(content): redesign the home page as a landing page (#1825)",
+          "date": "2026-08-09T18:31:21+07:00",
+          "pr": 1825,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "cd21f12462d0abb93d10b54a761a3fa2d3d7de9f",
+        "parent": "3cb192cfea6c3aee1963954d6ce4d0819176abb6",
+        "title": "fix(shared): do not require the AbortSignal global (#1936)",
+        "date": "2026-08-24T13:22:53+07:00",
+        "pr": 1936
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-24T13:22:53+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "eee680dc5e089d241e84264e841610de50c3b12c",
+          "title": "feat(client): timeout link plugin (#1697)",
+          "date": "2026-07-20T21:03:11+07:00",
+          "pr": 1697,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d7e45f910baa27a8c8178a6204d46381386ee589",
+        "parent": "0c7ec80fda38c431a1e8a7f8cb65bf3cabbeb94c",
+        "title": "fix(json-schema): keep sibling union branches that share a $defs entry (#1927)",
+        "date": "2026-08-23T08:33:29+07:00",
+        "pr": 1927
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-23T08:33:29+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "8a3e0a230852a5b936d818e274c0c11641d7b677",
+        "parent": "cc68d42111cd10b7527512ccb2d2b70c3592624d",
+        "title": "fix(nest): honor routed request during input decoding (#1922)",
+        "date": "2026-08-22T12:46:05+07:00",
+        "pr": 1922
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        },
+        {
+          "signal": "issue_label",
+          "strength": "strong",
+          "number": 1921,
+          "labels": [
+            "bug"
+          ]
+        }
+      ],
+      "issue": {
+        "number": 1921,
+        "created_at": "2026-08-22T04:29:07Z"
+      },
+      "report_date": "2026-08-22T04:29:07Z",
+      "report_date_source": "issue",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "25cfa7c0fe7dbcc2b5f6d096f0ea045c98dda5c4",
+          "title": "refactor(nest): merge middleapi/orpc-nest back into middleapi/orpc",
+          "date": "2026-06-30T16:03:55+07:00",
+          "pr": null,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a9b4f2edbba8862d625a97381ad55344185dc2ac",
+        "parent": "0b4ddd342ca0a3caa08cf2186329f72d9a5c8eb9",
+        "title": "fix(evlog): do not log ErrorEvent from event stream response bodies (#1918)",
+        "date": "2026-08-22T10:22:17+07:00",
+        "pr": 1918
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-22T10:22:17+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0b4ddd342ca0a3caa08cf2186329f72d9a5c8eb9",
+        "parent": "3078b1ca14ffa4ba2d18ccb932ab2d27b932d5bf",
+        "title": "fix: stop error-code lookups resolving through Object.prototype (#1913)",
+        "date": "2026-08-22T09:44:53+07:00",
+        "pr": 1913
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-22T09:44:53+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "d9d031f90aa2d6e9b256176e6bb16c61058bb2bd",
+          "title": "feat(effect): add catchORPCError, catchORPCErrorCode and catchORPCErrorCodes utils (#1766)",
+          "date": "2026-08-03T07:36:41+07:00",
+          "pr": 1766,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "46bd033b183fc84d409244b9c193293cf5af04db",
+          "title": "fix: keep nested clients and utils referentially stable (#1757)",
+          "date": "2026-07-31T10:30:39+07:00",
+          "pr": 1757,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4dc0866d788b33b8ea5e586d94412bc53263bc52",
+          "title": "feat(contract): error factory (#1760)",
+          "date": "2026-08-02T08:56:09+07:00",
+          "pr": 1760,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "101a7ac9e21698fe35a6b7ecdcea412cee6df315",
+        "parent": "3ff7f48bfdf3ea9e3be4cab08b787f798ac3dc17",
+        "title": "fix(server): let batch request headers win over sub-request headers (#1912)",
+        "date": "2026-08-21T20:33:58+07:00",
+        "pr": 1912
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-21T20:33:58+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "32a6de9432c7b6fb88fcaede8980ee1d1ce54454",
+          "title": "feat(client, server): batch request/response plugin (#329)",
+          "date": "2025-04-08T09:50:52+07:00",
+          "pr": 329,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "aff6c24b071bc2ea30e5021eb1b657f617d62461",
+        "parent": "2a80b570881add47c27066393e664a8004cbd819",
+        "title": "fix(client): resolve default fetch lazily so interception tools work regardless of link construction order (#1901)",
+        "date": "2026-08-20T19:30:28+07:00",
+        "pr": 1901
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-20T19:30:28+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b5e327f236db6617f531c86256e56a558481cf06",
+          "title": "feat(client): adapter interceptor (#899)",
+          "date": "2025-08-21T15:21:23+07:00",
+          "pr": 899,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1d6dbe64b859d304db0d006eca62cf6f5b1120bd",
+        "parent": "bc0f743c3c48526ce0b9c0c58521a48f4ef0e4ce",
+        "title": "fix(client): respect user-provided mapSubresponse in BatchLinkPlugin (#1848)",
+        "date": "2026-08-12T09:35:34+07:00",
+        "pr": 1848
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-12T09:35:34+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "bc0f743c3c48526ce0b9c0c58521a48f4ef0e4ce",
+        "parent": "9fab60acb6cc41a7ab5afb15d1fe83705b50d005",
+        "title": "fix(client): forward error batch responses instead of parsing them (#1847)",
+        "date": "2026-08-12T09:35:12+07:00",
+        "pr": 1847
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-12T09:35:12+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "99ce3de86d633d6574a139254e3c1815782fc427",
+        "parent": "e584b49738e4cd1419a0779bdf2d87765fc71edd",
+        "title": "fix(nest): keep non-contract params and harden path param handling (#1818)",
+        "date": "2026-08-08T17:30:59+07:00",
+        "pr": 1818
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-08T17:30:59+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "25cfa7c0fe7dbcc2b5f6d096f0ea045c98dda5c4",
+          "title": "refactor(nest): merge middleapi/orpc-nest back into middleapi/orpc",
+          "date": "2026-06-30T16:03:55+07:00",
+          "pr": null,
+          "lines": 15,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "91471ef5285d6583885ea47e8d555309437e2c24",
+          "title": "fix(json-schema): safer value coercion and smarter union matching (#1729)",
+          "date": "2026-07-26T15:47:47+07:00",
+          "pr": 1729,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0c089b73f3ee9e6cc193265cf27011f55b7652c0",
+        "parent": "29a900bf554f0619dc3cf1572d46691a78a93358",
+        "title": "fix(server): reject non-GET sub-requests in GET batch requests (#1813)",
+        "date": "2026-08-08T09:08:25+07:00",
+        "pr": 1813
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-08T09:08:25+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "37d883615d3dd7b4e182dc52f88738c28d9c3bdc",
+        "parent": "722f8dffe7388acef47ed72ac9745220a98c0959",
+        "title": "fix(client): preserve subclass prototype chain in cloneORPCError (#1801)",
+        "date": "2026-08-07T16:21:09+07:00",
+        "pr": 1801
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-07T16:21:09+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "adde78c28877827e85c6f2f5d65068361999c6f1",
+        "parent": "324bd7aa7a24b22ff5a507a42fce5d2b64e91a5f",
+        "title": "fix(openapi): preserve event iterator return type in JsonifiedClient (#1797)",
+        "date": "2026-08-07T07:47:22+07:00",
+        "pr": 1797
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-07T07:47:22+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a246703b9507a7a1ee3396b0f09fc1ac7a18fe55",
+          "title": "feat(openapi): OpenAPILink (#303)",
+          "date": "2025-03-28T14:43:45+07:00",
+          "pr": 303,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f36f85e019c31014d708441744a0e49ce1b17e40",
+        "parent": "9f9d6644bbf7d5d21de9388db14ba8a877ed522e",
+        "title": "fix(ai-sdk): keep output validation enabled for tool procedures (#1791)",
+        "date": "2026-08-05T14:52:44+07:00",
+        "pr": 1791
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-05T14:52:44+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "428ad93edc4a718783f9cabda82cce0b10d155e5",
+          "title": "feat(ai-sdk): AI SDK integration (#1707)",
+          "date": "2026-07-22T14:23:31+07:00",
+          "pr": 1707,
+          "lines": 8,
+          "via": "blame",
+          "confirmed": null,
+          "scope": "in",
+          "grade": null,
+          "note": "skipped for size. Not evaluated: introducing PR 1707 is 15 files +1562 -2 (1564 lines, 569 production), over the 1500 limit, skipped for size. Scope: Output validation silently disabled against the declared .output() schema is a validation/requirement gap.",
+          "category": "requirement_mismatch"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9f9d6644bbf7d5d21de9388db14ba8a877ed522e",
+        "parent": "e0b4947acba164080c6aeea125dcaf9fae5eabc6",
+        "title": "fix(shared): prevent clone() from re-parenting the cloned object (#1790)",
+        "date": "2026-08-05T14:25:18+07:00",
+        "pr": 1790
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-05T14:25:18+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "56cbd20cbafba901057d8e9f9054b577ce1afe4a",
+          "title": "feat(openapi): rewrite OpenAPIGenerator (#208)",
+          "date": "2025-03-08T18:47:11+07:00",
+          "pr": 208,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b4897a01b0985c98d51f6a98adae6fd1c6b5c3bf",
+          "title": "fix: clone util should clone symbol properties of object (#1258)",
+          "date": "2025-11-28T08:59:07+07:00",
+          "pr": 1258,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a0afe484ba5f7e59c84c029f93de9070725ebc70",
+        "parent": "5965f879fe2b03e6e4004a6f2c6293a68d183b0c",
+        "title": "fix(nest): apply method-level decorators to router-contract `@Implement` routes (#1776)",
+        "date": "2026-08-04T10:46:32+07:00",
+        "pr": 1776
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-04T10:46:32+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "25cfa7c0fe7dbcc2b5f6d096f0ea045c98dda5c4",
+          "title": "refactor(nest): merge middleapi/orpc-nest back into middleapi/orpc",
+          "date": "2026-06-30T16:03:55+07:00",
+          "pr": null,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "91471ef5285d6583885ea47e8d555309437e2c24",
+          "title": "fix(json-schema): safer value coercion and smarter union matching (#1729)",
+          "date": "2026-07-26T15:47:47+07:00",
+          "pr": 1729,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4b8652657a42a4639fa7eeb6b33664f23327157b",
+        "parent": "a8d4afc4442d08c599e8cd5f90de74001da44085",
+        "title": "fix(client): match subclasses in ORPCError cross-context instanceof check (#1762)",
+        "date": "2026-08-02T15:11:56+07:00",
+        "pr": 1762
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-08-02T15:11:56+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "85c0fd702915b3bd973dd4a9c26f310b6f6d4ec0",
+          "title": "feat(client): support ORPCError instanceof checks across different dependency graph (#972)",
+          "date": "2025-09-08T10:37:41+07:00",
+          "pr": 972,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "46bd033b183fc84d409244b9c193293cf5af04db",
+        "parent": "1402783e5480a5e23acc083d390740e67c239ea8",
+        "title": "fix: keep nested clients and utils referentially stable (#1757)",
+        "date": "2026-07-31T10:30:39+07:00",
+        "pr": 1757
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-31T10:30:39+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "e12f7c3fdcc57055a869e580e5db5ee822c6023c",
+          "title": "feat(pinia-colada): Pinia Colada integration (#1686)",
+          "date": "2026-07-20T07:52:59+07:00",
+          "pr": 1686,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "91471ef5285d6583885ea47e8d555309437e2c24",
+          "title": "fix(json-schema): safer value coercion and smarter union matching (#1729)",
+          "date": "2026-07-26T15:47:47+07:00",
+          "pr": 1729,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 3
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "10e1e0ecc501d453b703daa3b10acbee3556243d",
+        "parent": "21251bbfd4f480790d489f0c521e43d641a6f12c",
+        "title": "fix(server): make callable extension type augmentation work in published builds (#1755)",
+        "date": "2026-07-30T20:38:31+07:00",
+        "pr": 1755
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-30T20:38:31+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b589bfbcafbd5c796191fcd3b91529503038d61a",
+        "parent": "37e8837558c5fdf280c2a489a9911a18b9fa18df",
+        "title": "fix(pino,evlog): only treat thrown ORPCError as business error (#1746)",
+        "date": "2026-07-29T15:04:16+07:00",
+        "pr": 1746
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-29T15:04:16+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "37e8837558c5fdf280c2a489a9911a18b9fa18df",
+        "parent": "5b554ff45bdbc2d91a2f8e1669bf7fd110b16ee4",
+        "title": "fix(openapi): only treat actual array values as multi-value headers when serializing (#1745)",
+        "date": "2026-07-29T14:52:02+07:00",
+        "pr": 1745
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-29T14:52:02+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "5b554ff45bdbc2d91a2f8e1669bf7fd110b16ee4",
+          "title": "fix(openapi): serialize headers in detailed input/output structures (#1743)",
+          "date": "2026-07-29T14:07:11+07:00",
+          "pr": 1743,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5b554ff45bdbc2d91a2f8e1669bf7fd110b16ee4",
+        "parent": "c27eef62099585aff72ce5793e4a654afb836b1d",
+        "title": "fix(openapi): serialize headers in detailed input/output structures (#1743)",
+        "date": "2026-07-29T14:07:11+07:00",
+        "pr": 1743
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-29T14:07:11+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "48b9a859e07752652c8debe401dd23ac5a7c954a",
+        "parent": "cfe895157f426d555a34002bd25b484295a8c6b5",
+        "title": "fix(shared): prevent prototype injection in set util (#1744)",
+        "date": "2026-07-29T10:10:34+07:00",
+        "pr": 1744
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-29T10:10:34+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "cfe895157f426d555a34002bd25b484295a8c6b5",
+        "parent": "53280cf5dae5ca1e560a328e7fec72f156e061f9",
+        "title": "fix(rpc,openapi): concurrent lazy router resolution, and faster route matching (#1736)",
+        "date": "2026-07-28T11:29:25+07:00",
+        "pr": 1736
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-28T11:29:25+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 3
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "91471ef5285d6583885ea47e8d555309437e2c24",
+        "parent": "6941896a233df63da833ebed5a6d50584d10dacc",
+        "title": "fix(json-schema): safer value coercion and smarter union matching (#1729)",
+        "date": "2026-07-26T15:47:47+07:00",
+        "pr": 1729
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-26T15:47:47+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "e5e261360d5acf77cf60fab2b7adbdf02c9e81b4",
+          "title": "feat(json-schema): smart coercion plugin for any standard schema (#748)",
+          "date": "2025-07-11T14:27:48+07:00",
+          "pr": 748,
+          "lines": 54,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "d5472fd8db5b20fb6d0e8a2350d3773dccdedc38",
+          "title": "feat(nest): allow context as async fn(ExecutionContext) (#1666)",
+          "date": "2026-07-13T20:18:07+07:00",
+          "pr": 1666,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "25cfa7c0fe7dbcc2b5f6d096f0ea045c98dda5c4",
+          "title": "refactor(nest): merge middleapi/orpc-nest back into middleapi/orpc",
+          "date": "2026-06-30T16:03:55+07:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "dropped": {
+        "mass_change": 2
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "652a5e8fa420b4543e5b5d144be210c0fbf0c90b",
+        "parent": "e12f7c3fdcc57055a869e580e5db5ee822c6023c",
+        "title": "chore: merge vitest configs + fix pnpm lock (#1691)",
+        "date": "2026-07-20T09:14:47+07:00",
+        "pr": 1691
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-20T09:14:47+07:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "35f2ca22277dd43b653bdba90d693bec0ddae014",
+          "title": "feat(ratelimit, publisher, cloudflare): ratelimit and publisher adapters for cloudflare (#1618)",
+          "date": "2026-07-03T09:33:59+07:00",
+          "pr": 1618,
+          "lines": 14,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "da7eb75711d4de6e28d59e8a940d540c09de6870",
+          "title": "ci: Add CodSpeed performance benchmarks (#1676)",
+          "date": "2026-07-16T15:03:58+07:00",
+          "pr": 1676,
+          "lines": 13,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "efcf2d78be5b3355ff099540afc3e7359b9b7e3c",
+          "title": "docs: Cloudflare Playground (#1623)",
+          "date": "2026-07-03T20:16:55+07:00",
+          "pr": 1623,
+          "lines": 13,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    }
+  ]
+}

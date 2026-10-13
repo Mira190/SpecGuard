@@ -1,0 +1,23 @@
+{
+  "count": 1,
+  "specFiles": [
+    "docs/specs/claims.md"
+  ],
+  "b": {
+    "criterion": "S1",
+    "code": [
+      "src/claims/deadline.ts"
+    ],
+    "tests": [
+      "src/claims/deadline.test.ts"
+    ]
+  },
+  "occ": [
+    "web/validate.ts",
+    "web/i18n/en.json",
+    "web/__snapshots__/form.snap"
+  ],
+  "notOcc": [
+    "src/claims/deadline.ts"
+  ]
+}

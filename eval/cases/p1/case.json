@@ -1,0 +1,23 @@
+{
+  "id": "p1",
+  "goal": "requirements",
+  "description": "Python/pytest: the FIVEOFF acceptance criterion has no test.",
+  "pr_title": "Add coupons",
+  "pr_body": "Add apply_coupon.\n\n## Acceptance criteria\n- The HALF code halves the total.\n- The FIVEOFF code takes 5 off the total.\n- An unknown code raises ValueError.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/p1/cart.py",
+        "line": 5,
+        "tolerance": 1,
+        "quote": "return total - 5"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Only FIVEOFF is untested."
+  }
+}

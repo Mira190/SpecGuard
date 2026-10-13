@@ -1,0 +1,22 @@
+{
+  "id": "tr7",
+  "goal": "traceability",
+  "description": "No specs: a cap change in a repo with no requirement documents.",
+  "pr_title": "Raise premium cap",
+  "pr_body": "Raise the premium cap to three times the base rate.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "summary_has": [
+      "No requirement documents found"
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "No spec_mismatch; the summary states that no requirement documents were found."
+  }
+}

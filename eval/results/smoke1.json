@@ -1,0 +1,45 @@
+{
+  "runId": "smoke1",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "results": [
+    {
+      "id": "r1",
+      "goal": "requirements",
+      "rep": 1,
+      "error": "Command failed: git -C C:\\Users\\emily\\AppData\\Local\\Temp\\specguard-eval-uIIceP add -A eval-sandbox",
+      "pr_url": null
+    }
+  ],
+  "aggregate": {
+    "runs": 1,
+    "errors": 1,
+    "tp": 0,
+    "fp": 0,
+    "fn": 0,
+    "summary_only": 0,
+    "precision": null,
+    "recall": null,
+    "json_valid_rate": null,
+    "pass_rate": null,
+    "latency_median_s": null,
+    "latency_max_s": null,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 1,
+        "errors": 1,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": null,
+        "recall": null,
+        "json_valid_rate": null,
+        "pass_rate": null,
+        "latency_median_s": null,
+        "latency_max_s": null
+      }
+    }
+  }
+}

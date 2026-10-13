@@ -1,0 +1,38 @@
+{
+  "id": "t1",
+  "goal": "test_quality",
+  "description": "The expected value is recomputed with the code formula.",
+  "pr_title": "Add tax calculation",
+  "pr_body": "Add addTax, which applies 20% tax rounded to cents and rejects negative amounts.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/t1/tax.test.js",
+        "line": 6,
+        "quote": "Math.round(50 * 1.2 * 100)"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Tautological assertion on line 5; the other two tests are strong.",
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/t1/tax.js",
+        "line": 4,
+        "tolerance": 1,
+        "reason": "The zero-amount boundary of amount < 0 is untested."
+      },
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/t1/tax.test.js",
+        "line": 10,
+        "tolerance": 1,
+        "reason": "The rounding test only proves rounding down (0.084 to 0.08)."
+      }
+    ]
+  }
+}

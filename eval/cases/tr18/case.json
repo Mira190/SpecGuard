@@ -1,0 +1,23 @@
+{
+  "id": "tr18",
+  "goal": "traceability",
+  "description": "A-violation with distance: R2 says locked after 5 failures; the PR raises LOCKOUT_THRESHOLD to 8 on line 1, 20 lines away from the comparison that uses it. Spec, tests and PR body are untouched.",
+  "pr_title": "Tweak limits",
+  "pr_body": "tweak limits\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr18/src/lockout.js",
+        "line": 1,
+        "quote": "LOCKOUT_THRESHOLD = 8",
+        "text": "auth[.]md|R2"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the changed constant line; text cites auth.md R2 (5 failed attempts). The test only checks 1 and 20 failures, so it does not pin the threshold."
+  }
+}

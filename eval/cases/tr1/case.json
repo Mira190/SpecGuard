@@ -1,0 +1,23 @@
+{
+  "id": "tr1",
+  "goal": "traceability",
+  "description": "A-violation: calcPremium cap goes from 2x to 3x while pricing R3 says never more than twice; spec, tests and PR body untouched.",
+  "pr_title": "Refactor calcPremium",
+  "pr_body": "Refactor the premium calculation.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr1/src/premium.js",
+        "line": 1,
+        "quote": "CAP_MULTIPLIER = 3",
+        "text": "R3"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the changed cap line naming R3."
+  }
+}

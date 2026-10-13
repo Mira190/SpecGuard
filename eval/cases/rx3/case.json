@@ -1,0 +1,42 @@
+{
+  "id": "rx3",
+  "goal": "test_quality",
+  "description": "React TSX (jest + RTL): CartSummary test mocks the project's own useCart hook and only asserts that it was called.",
+  "pr_title": "Add CartSummary",
+  "pr_body": "Add a CartSummary component that shows the item count and total from the cart.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "weak_test",
+        "path": [
+          "eval-sandbox/rx3/CartSummary.test.tsx",
+          "eval-sandbox/rx3/CartSummary.tsx"
+        ],
+        "line": 10,
+        "tolerance": 5,
+        "quote": "expect(useCart).toHaveBeenCalled()"
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/rx3/CartSummary.test.tsx",
+        "line": 5,
+        "tolerance": 0,
+        "reason": "jest.mock of the project's own useCart module couples the test to the implementation."
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/rx3/CartSummary.tsx",
+        "line": 5,
+        "tolerance": 1,
+        "reason": "The rendered item count and total text is never asserted."
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "weak_test on the toHaveBeenCalled assertion; the own-module mock and unasserted output are acceptable side findings. The weak assertion may be anchored on the test or on the unasserted render line."
+  }
+}

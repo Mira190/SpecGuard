@@ -1,0 +1,30 @@
+{
+  "id": "tr2",
+  "goal": "traceability",
+  "description": "A-intentional: cap 2x to 3x with R3, the test and the PR body all updated together.",
+  "pr_title": "Raise premium cap to three times the base rate",
+  "pr_body": "Raise the premium cap from twice to three times the base rate. R3 and its test are updated to match.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "trace": [
+      {
+        "requirement": "R3",
+        "alignment": "consistent",
+        "reflected": {
+          "spec": true,
+          "tests": true,
+          "pr": true
+        }
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "No spec_mismatch; the Traceability row for R3 is consistent and reflected in spec, tests and PR."
+  }
+}
