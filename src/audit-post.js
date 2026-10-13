@@ -26,7 +26,8 @@ const lines = (s) => String(s || '').split('\n').filter(Boolean);
 const bytes = (s) => Buffer.byteLength(s);
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const cell = (s, n = Infinity) => oneLine(neutralize(String(s)), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
-const solid = (q) => String(q).replace(/\s/g, '').length >= MIN_QUOTE;
+const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
+const solid = (q) =>String(q).replace(/\s/g, '').length >= MIN_QUOTE;
 const CID = /^([0-9a-f]{8})(?:\.[1-9]\d*)?$/; // a block id, or block id + .1, .2 for the atomic requirements a block bundles
 const cidOf = (id) => (CID.exec(String(id)) || [])[1];
 
@@ -42,52 +43,75 @@ function readCandidates(txt) {
 const ctxCandidates = () => { try { return readCandidates(fs.readFileSync(path.join(process.env.CTX, 'audit-candidates.txt'), 'utf8')); } catch { return null; } };
 const MISSING_MAX = 0.2; // more unanswered blocks than this share of the candidates reject the output (the repair turn)
 
-// Hand-rolled mirror of audit.schema.json: structural problems reject the output (the repair turn's trigger); evidence that does not
-// fit the status is not rejected here but downgraded by verify(). cands (default: audit-candidates.txt in $CTX; null = unknown): every
-// result must name a listed block, and more than MISSING_MAX of the blocks unanswered rejects the output (a few misses become `unknown` in verify()).
+// Hand-rolled mirror of audit.schema.json. Only an unusable output is rejected (the repair turn's trigger): not an object, no requirements
+// array, more than half of the rows unusable, or more than MISSING_MAX of the listed blocks unanswered. Every other problem degrades one
+// row (an unknown status or class becomes unknown/human, a malformed citation is dropped, so verify() downgrades what it no longer carries)
+// and is listed in not_reviewed. Enum case, spaces for underscores and numeric strings are normalised. Evidence that does not fit the status
+// is downgraded by verify(). cands (default: audit-candidates.txt in $CTX; null = unknown): a result must name a listed block.
 function validate(o, cands = ctxCandidates()) {
   const bad = (m) => ({ ok: false, error: m });
   const text = (v) => typeof v === 'string' && v.trim().length > 0;
+  const { slug, whole } = post;
   const cite = (v) => !!v && typeof v === 'object' && text(v.path) && Number.isInteger(v.line) && v.line >= 1 && text(v.quote);
-  if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('not an object');
-  if (!Array.isArray(o.docs_reviewed) || !o.docs_reviewed.every(text)) return bad('docs_reviewed must be an array of paths');
-  if (!Array.isArray(o.not_reviewed) || !o.not_reviewed.every(text)) return bad('not_reviewed must be an array of strings');
+  const tidy = (v) => { if (v && typeof v === 'object') { v.line = whole(v.line); if (v.layer !== undefined) v.layer = slug(v.layer); } return v; };
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('$ is not an object');
   if (!Array.isArray(o.requirements)) return bad('requirements must be an array');
-  if (o.not_requirements === undefined) o.not_requirements = [];
-  if (!Array.isArray(o.not_requirements)) return bad('not_requirements must be an array');
-  const ids = new Set(), answered = new Set(), skipped = new Set();
+  const notes = [];
+  for (const k of ['docs_reviewed', 'not_reviewed']) {
+    if (!Array.isArray(o[k])) { if (o[k] !== undefined) notes.push(`${k} was not an array; ignored.`); o[k] = []; }
+    else if (!o[k].every(text)) { notes.push(`${k} had entries that were not text; ignored.`); o[k] = o[k].filter(text); }
+  }
+  if (o.not_requirements === undefined || o.not_requirements === null) o.not_requirements = [];
+  if (!Array.isArray(o.not_requirements)) { notes.push('not_requirements was not an array; ignored.'); o.not_requirements = []; }
+  const ids = new Set(), answered = new Set(), skipped = new Set(), skips = [];
   for (const [i, n] of o.not_requirements.entries()) {
     const w = `not_requirements[${i}]`;
-    if (!n || typeof n !== 'object' || !/^[0-9a-f]{8}$/.test(n.cid) || !text(n.reason)) return bad(`${w} needs a block cid and a reason`);
-    if (cands && !cands.has(n.cid)) return bad(`${w}: unknown block ${n.cid}; only the listed candidates may be answered`);
-    if (skipped.has(n.cid)) return bad(`${w}: duplicate block ${n.cid}`);
-    skipped.add(n.cid);
+    if (!n || typeof n !== 'object' || !/^[0-9a-f]{8}$/.test(n.cid) || !text(n.reason)) notes.push(`${w} ignored: it needs a block cid and a reason.`);
+    else if (cands && !cands.has(n.cid)) notes.push(`${w} ignored: unknown block ${n.cid}; only the listed candidates may be answered.`);
+    else if (skipped.has(n.cid)) notes.push(`${w} ignored: duplicate block ${n.cid}.`);
+    else { skipped.add(n.cid); skips.push(n); }
   }
+  o.not_requirements = skips;
+  let unusable = 0, first = '';
+  const kept = [];
   for (const [i, r] of o.requirements.entries()) {
     const w = `requirements[${i}]`;
-    if (!r || typeof r !== 'object' || Array.isArray(r)) return bad(`${w} is not an object`);
-    if (!text(r.id) || !text(r.text)) return bad(`${w}: id and text are required`);
-    if (ids.has(r.id)) return bad(`${w}: duplicate id ${String(r.id).slice(0, 40)}`);
+    const drop = (why) => { unusable++; first ||= `${w}: ${why}`; notes.push(`${w} dropped: ${why}.`); };
+    if (!r || typeof r !== 'object' || Array.isArray(r)) { drop('not an object'); continue; }
+    const cid = cidOf(r.id), cand = cands && cid && cands.get(cid);
+    if (!text(r.text) && cand) r.text = cand.text; // the block's own text, from the trusted candidate list
+    if (!text(r.id) || !text(r.text)) { drop('id and text are required'); continue; }
+    if (ids.has(r.id)) { drop(`duplicate id ${String(r.id).slice(0, 40)}`); continue; }
+    if (cands && (!cid || !cands.has(cid))) { drop(`id ${String(r.id).slice(0, 40)} is not a listed block id (the block cid, or cid.1, cid.2)`); continue; }
+    if (cands && skipped.has(cid)) { drop(`block ${cid} is answered both as not_a_requirement and as a requirement`); continue; }
+    if (!cite(tidy(r.source))) { drop('source needs path, line and quote'); continue; }
     ids.add(r.id);
-    const cid = cidOf(r.id);
-    if (cands) {
-      if (!cid || !cands.has(cid)) return bad(`${w}: id ${String(r.id).slice(0, 40)} is not a listed block id (the block cid, or cid.1, cid.2)`);
-      if (skipped.has(cid)) return bad(`${w}: block ${cid} is answered both as not_a_requirement and as a requirement`);
-      answered.add(cid);
+    const problems = [];
+    r.class = slug(r.class); r.status = slug(r.status);
+    const noClass = !CLASS.includes(r.class); // a class is never invented: the row takes the one that can never be covered, and its status is unknown
+    if (noClass) { problems.push(`class not stated (one of ${CLASS.join(', ')})`); r.class = 'human'; r.status = 'unknown'; }
+    if (!noClass && !STATUS.includes(r.status)) { problems.push(`status must be one of ${STATUS.join(', ')}`); r.status = 'unknown'; }
+    for (const [k, extra] of [['code', () => true], ['tests', (t) => LAYER.includes(t.layer)]]) {
+      if (!Array.isArray(r[k])) { problems.push(`${k} must be an array of citations`); r[k] = []; continue; }
+      const ok = r[k].map(tidy).filter((c) => cite(c) && extra(c));
+      if (ok.length !== r[k].length) notes.push(`${w}: ${r[k].length - ok.length} malformed ${k} citation(s) ignored.`);
+      r[k] = ok;
     }
-    if (!cite(r.source)) return bad(`${w}: source needs path, line and quote`);
-    if (!CLASS.includes(r.class)) return bad(`${w}: class must be one of ${CLASS.join(', ')}`);
-    if (!STATUS.includes(r.status)) return bad(`${w}: status must be one of ${STATUS.join(', ')}`);
-    if (!Array.isArray(r.code) || !r.code.every(cite)) return bad(`${w}: code must be an array of {path, line, quote}`);
-    if (!Array.isArray(r.tests) || !r.tests.every((t) => cite(t) && LAYER.includes(t.layer))) return bad(`${w}: tests must be an array of {path, line, quote, layer: ${LAYER.join('|')}}`);
-    if (r.note === undefined) r.note = '';
-    else if (typeof r.note !== 'string') return bad(`${w}: note must be a string`);
+    if (noClass) r.note = `${typeof r.note === 'string' ? r.note : ''} Class not stated; status unknown.`.trim();
+    else if (r.note === undefined || r.note === null) r.note = '';
+    else if (typeof r.note !== 'string') { r.note = ''; notes.push(`${w}: note was not a string; ignored.`); }
     for (const c of [r.source, ...r.code, ...r.tests]) c.quote = c.quote.slice(0, 200); // a prefix of a verbatim quote still verifies
+    if (problems.length) { unusable++; first ||= `${w}: ${problems[0]}`; notes.push(`${w} marked unknown: ${problems.join('; ')}.`); }
+    if (cid) answered.add(cid);
+    kept.push(r);
   }
+  if (unusable * 2 > o.requirements.length) return bad(`${first} (${unusable} of ${o.requirements.length} requirement rows are unusable)`);
+  o.requirements = kept;
   if (cands) {
     const missing = [...cands.keys()].filter((k) => !answered.has(k) && !skipped.has(k));
     if (missing.length > cands.size * MISSING_MAX) return bad(`${missing.length} of ${cands.size} listed blocks were not answered (e.g. ${missing.slice(0, 5).join(', ')}); answer every block exactly once`);
   }
+  o.not_reviewed.push(...notes);
   return { ok: true };
 }
 
@@ -133,9 +157,14 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     if (!all) return false;
     const a = Math.max(0, c.line - 1 - NEAR), n = String(c.quote).split('\n').length;
     const k = quoteLine(all.slice(a, c.line - 1 + NEAR + n), c.quote);
-    if (!k) return false;
-    if (Math.abs(a + k - c.line) > NEAR) return false;
-    c.path = rel; c.line = a + k;
+    c.path = rel;
+    if (k && Math.abs(a + k - c.line) <= NEAR) { c.line = a + k; return true; }
+    // quote-first: the model's line is a hint; the one place in the file where the quote starts wins, several never do
+    const head = norm(String(c.quote).split('\n').find((x) => x.trim()) || '');
+    const q = norm(c.quote), at = (i) => norm(all[i]), hits = all.map((_, i) => i).filter((i) => at(i).includes(head) && (n === 1 ? at(i).includes(q)
+      : (() => { const k = norm(all.slice(i, i + n + 6).join(' ')).indexOf(q); return k >= 0 && k <= at(i).length; })())); // the quote starts in this line
+    if (hits.length !== 1) return false;
+    c.line = hits[0] + 1;
     return true;
   };
   const isDoc = (p) => DOCFILE.test(p) || (docs && docs.has(p));
