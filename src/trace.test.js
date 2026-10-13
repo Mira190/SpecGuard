@@ -961,3 +961,17 @@ test('blocksOf without the ruled argument returns the kept blocks only', () => {
   const md = '# Design\n\n| Pilot run on Kite | 88% | 2026-10-07 | 12/14 |\n\nThe tool must validate the input before it saves.\n';
   assert.deepEqual(T.blocksOf('d.md', md).map((b) => b.text), ['The tool must validate the input before it saves.']);
 });
+
+test('run never takes sample or vendored trees as requirement documents; requirements_paths still can, and a docs/examples folder outside a test dir stays a candidate', (t) => {
+  const spec = 'R1: The widget MUST stay valid.\nR2: The widget MUST NOT be empty.\n';
+  const samples = ['src/fixtures/trace-tr17/base/docs/development.md', 'a/__fixtures__/specs/s.md', 'pkg/testdata/specs/s.md', 'pkg/test-data/specs/s.md', 'eval/cases/tr17/base/docs/development.md',
+    'tests/e2e/examples/specs/s.md', 'vendor/lib/specs/s.md', 'web/node_modules/x/specs/s.md', 'third_party/y/specs/s.md'];
+  const files = { 'docs/specs/a.md': spec, 'docs/examples/specs/ok.md': spec, 'src/a.js': 'x\n', ...Object.fromEntries(samples.map((p) => [p, spec])) };
+  const r = repo(t, files, { 'src/a.js': 'y\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  assert.deepEqual(out(r, 'spec-files.txt').split('\n').filter(Boolean), ['docs/examples/specs/ok.md', 'docs/specs/a.md']);
+  assert.equal(fs.existsSync(path.join(r.ctx, 'spec-rejected.txt')) ? out(r, 'spec-rejected.txt') : '', '', 'samples are not even listed as rejected candidates');
+  const forced = repo(t, files, { 'src/a.js': 'y\n' });
+  T.run({ cwd: forced.dir, base: forced.base, head: forced.head, ctx: forced.ctx, reqPaths: 'eval/cases/**' });
+  assert.ok(out(forced, 'spec-files.txt').split('\n').includes('eval/cases/tr17/base/docs/development.md'));
+});

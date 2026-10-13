@@ -151,5 +151,6 @@ jobs:
           scan_issue_repo: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue == 'specguard' && github.repository || '' }} # empty = the scanned repository (scan_issue: target, written with github_token)
           scan_issue_token: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue == 'specguard' && github.token || '' }}
           force: "true"
+          fail_on_error: "true" # a manual run that cannot complete (quota, auth, engine error) goes red; PR checks stay advisory
           include_bots: "true"
           ctx_retention_days: "0" # the context holds snippets of the target repository: no artifact

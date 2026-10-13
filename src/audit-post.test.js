@@ -211,7 +211,7 @@ const sample = () => {
 test('render: header counts by block status, no percentage, the disclaimer; one line per block, sub-row evidence collapsed per document', () => {
   const md = render({ data: sample(), docs: [['docs/design.md', 'discovered']], blob: 'https://github.com/o/r/blob/abc', usage: '<sub>Engine: copilot</sub>', cap: 80, candidates: 131 });
   const head = md.slice(0, md.indexOf('### '));
-  assert.match(head, /^## SpecGuard unit test gap scan\n\nBehaviour described in the design documents, checked for unit-test evidence\.\n\n\*\*3 requirements\*\* from 1 document\n\n3 blocks scanned of 131 in the documents \(cap 80\); 0 blocks were not requirements\./);
+  assert.match(head, /^## SpecGuard unit test gap scan\n\nBehaviour described in the design documents, checked for unit-test evidence\.\n\n\*\*3 requirements\*\* from 1 document\n\n3 blocks scanned of 131 in the documents \(cap 80\)\.\n\nBy block/);
   assert.doesNotMatch(head, /the model chose/);
   assert.match(head, /By block: new gap \(unconfirmed\) 1 · unsure 1 · covered 1\n/);
   assert.match(head, /first scan run[^\n]*every gap is \*\*unconfirmed\*\*; one more scan run will confirm/);
@@ -231,7 +231,9 @@ test('render: header counts by block status, no percentage, the disclaimer; one 
   assert.match(md.slice(md.indexOf('<summary>Sub-row evidence')), /tests: unit \[tests\/plan\.test\.js:2\]/);
   assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /\| covered \|/);
   assert.match(md, /\`not_implemented\` and \`missing_test\` are model claims \(not verified statically\)/);
-  assert.match(md, /### Not reviewed\n\n- docs\/old\.md: unreadable\n/);
+  assert.match(md, /<details><summary>Not reviewed: 1 item<\/summary>\n\n- docs\/old\.md: unreadable\n\n<\/details>/, 'a complete run collapses Not reviewed to one line');
+  assert.doesNotMatch(md, /### Not reviewed/);
+  assert.match(render({ data: sample(), partial: 'engine timeout' }), /### Not reviewed\n\n- docs\/old\.md: unreadable\n/, 'an incomplete run keeps the reasons visible');
   assert.doesNotMatch(md, /not requirements<\/summary>/, 'no details block when every block was a requirement');
   assert.ok(md.trimEnd().endsWith('<sub>Engine: copilot</sub>'));
 });
@@ -239,24 +241,28 @@ test('render: header counts by block status, no percentage, the disclaimer; one 
 test('render: rejected candidate documents say how to include them; unread admitted documents are listed; markup in model text is neutralised', () => {
   const data = result([req({ text: 'Click <img src=x> @team <!-- hidden --> | pipe', note: '' })]);
   const md = render({ data, docs: [['docs/design.md', 'discovered'], ['docs/other.md', 'discovered']], rejected: [['README.md', 'only 1 normative item']] });
-  assert.match(md, /### Documents not included\n\nThese looked like requirement documents but were not admitted \(add them to `requirements_paths` to include\):\n\n- `README\.md`: only 1 normative item/);
+  assert.doesNotMatch(md, /### Documents not included/, 'never in the visible body');
+  const src = md.slice(md.indexOf('<details><summary>Sources</summary>'));
+  assert.match(src, /^<details><summary>Sources<\/summary>\n\n- Requirement documents: `docs\/design\.md` \(discovered\), `docs\/other\.md` \(discovered\)\n- 1 candidate document was not admitted \(add to `requirements_paths` to include\)\n\n<details><summary>Candidates not admitted<\/summary>\n\n- `README\.md`: only 1 normative item\n\n<\/details>\n\n<\/details>/);
+  assert.equal(md.replace(/<details>[\s\S]*?<\/details>/g, '').includes('README.md'), false, 'the rejected document appears only inside details');
   assert.match(md, /`docs\/other\.md` was admitted but is not in docs_reviewed\./);
   assert.doesNotMatch(md, /<img|<!--|@team/);
   assert.match(md, /\\\| pipe/);
 });
 
 test('render: no documents and failures say so', () => {
-  assert.match(render({ data: null, rejected: [['README.md', 'x']] }), /No design documents were found, so nothing was scanned\.[\s\S]*Documents not included/);
+  assert.match(render({ data: null, rejected: [['README.md', 'x']] }), /No design documents were found, so nothing was scanned\.[\s\S]*<details><summary>Sources<\/summary>[\s\S]*1 candidate document was not admitted/);
   assert.match(render({ failure: 'the engine timed out' }), /Could not complete: the engine timed out/);
 });
 
 test('render: blocks that were not requirements are counted in the header and listed in a collapsed block, not in the tables', () => {
   const data = verify(result([req()], { not_requirements: [{ cid: C2, reason: 'rationale, not behaviour <b>x</b>' }] }), { read, cands: TWO() });
   const md = render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 9, cap: 5, capLeft: ['docs/design.md § 4. After: 3 blocks not scanned (cap)'] });
-  assert.match(md, /2 blocks scanned of 9 in the documents \(cap 5\); 1 block was not a requirement\./);
+  assert.match(md, /2 blocks scanned of 9 in the documents \(cap 5\)\./);
+  assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /not a requirement|not requirements/, 'only the collapsed line says it');
   assert.ok(md.includes('<details><summary>1 block was not a requirement</summary>\n\n- [docs/design.md:4](https://github.com/o/r/blob/abc/docs/design.md#L4) `2222222b` A plan must start in the future. (rationale, not behaviour &lt;b>x&lt;/b>)'), md);
   assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /2222222b/, 'not in the main tables');
-  assert.match(md, /### Not reviewed\n\n- docs\/design\.md § 4\. After: 3 blocks not scanned \(cap\)\n/);
+  assert.match(md, /<details><summary>Not reviewed: 1 item<\/summary>\n\n- docs\/design\.md § 4\. After: 3 blocks not scanned \(cap\)\n/);
   assert.doesNotMatch(md, /<b>/, "markup in the reason is neutralised");
   const two = render({ data: { ...data, not_requirements: [data.not_requirements[0], data.not_requirements[0]] }, candidates: 2 });
   assert.match(two, /2 blocks were not requirements/);
@@ -288,13 +294,13 @@ function workspace(t, files = FILES) {
   return { root, ctx, put: (n, v) => fs.writeFileSync(path.join(ctx, n), typeof v === 'string' ? v : JSON.stringify(v)) };
 }
 function mocks({ issues = [], login = null, failList = false } = {}) {
-  const calls = { created: [], updated: [], summary: '', warnings: [] };
+  const calls = { created: [], updated: [], summary: '', warnings: [], outputs: {} };
   const github = {
     paginate: async (fn) => { if (failList) throw new Error('403'); return fn(); },
     rest: { users: { getAuthenticated: async () => { if (!login) throw new Error('no /user for GITHUB_TOKEN'); return { data: { login } }; } },
       issues: { listForRepo: () => issues, create: async (a) => { calls.created.push(a); }, update: async (a) => { calls.updated.push(a); } } },
   };
-  const core = { warning: (m) => calls.warnings.push(m), summary: { addRaw(s) { calls.summary = s; return this; }, async write() {} } };
+  const core = { warning: (m) => calls.warnings.push(m), setOutput: (k, v) => { calls.outputs[k] = v; }, summary: { addRaw(s) { calls.summary = s; return this; }, async write() {} } };
   return { github, core, calls, context: { repo: { owner: 'o', repo: 'r' }, sha: 'abc123' } };
 }
 const BOT = { type: 'Bot', login: 'github-actions[bot]' };
@@ -686,9 +692,9 @@ test('run: the header counts blocks from the candidate file and meta, the not-a-
     'audit-candidates.txt': candTxt(TWO()),
     'audit-meta.json': { head: 'abc123', max_requirements: 2, docs: 1, candidates: 14, candidates_listed: 2, cap_left: ['docs/design.md § 4. After: 12 blocks not scanned (cap)'], limitations: [] } } });
   const md = r.calls.summary;
-  assert.match(md, /\*\*1 requirement\*\* from 1 document\n\n2 blocks scanned of 14 in the documents \(cap 2\); 1 block was not a requirement\./);
+  assert.match(md, /\*\*1 requirement\*\* from 1 document\n\n2 blocks scanned of 14 in the documents \(cap 2\)\./);
   assert.match(md, /<details><summary>1 block was not a requirement<\/summary>[\s\S]*2222222b[\s\S]*\(rationale, not behaviour\)/);
-  assert.match(md, /### Not reviewed\n\n- docs\/design\.md § 4\. After: 12 blocks not scanned \(cap\)\n/);
+  assert.match(md, /<details><summary>Not reviewed: 1 item<\/summary>\n\n- docs\/design\.md § 4\. After: 12 blocks not scanned \(cap\)\n/);
   const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
   assert.deepEqual(saved.not_requirements.map((x) => [x.cid, x.path, x.line, x.reason]), [[C2, 'docs/design.md', 4, 'rationale, not behaviour']]);
 });
@@ -820,4 +826,20 @@ test('render: blocks skipped by rule are listed in their own collapsed block wit
   const md = render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 2, cap: 5, ruled });
   assert.ok(md.includes('<details><summary>1 block was skipped by rule</summary>\n\n- [docs/design.md:9](https://github.com/o/r/blob/abc/docs/design.md#L9) `3333333c` \\| Pilot run \\| 88% \\| (skipped by rule: results/data table row)'), md);
   assert.equal(md.replace(/<details><summary>1 block was skipped by rule[\s\S]*?<\/details>\n\n/, ''), render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 2, cap: 5 }), 'only the extra block differs');
+});
+
+test('run: the status output (and the reason when failed) is set in scan mode for every outcome', async (t) => {
+  const out = async (o) => (await runPost(t, o)).calls.outputs;
+  assert.deepEqual(await out({ ctxFiles: { 'findings.json': result(), 'engine-status': 'success\n' } }), { status: 'complete' });
+  assert.deepEqual(await out({ ctxFiles: { 'findings.json': result(), 'engine-status': 'timeout\n' } }), { status: 'incomplete', reason: 'engine timeout' });
+  assert.deepEqual(await out({ env: { SKIP: 'true' } }), { status: 'complete' }, 'nothing to scan is not a failure');
+  assert.deepEqual(await out({ mock: {}, ctxFiles: { 'audit-meta.json': 'not json' } }), { status: 'failed', reason: 'the collection step did not produce its context.' });
+  const bad = await out({ ctxFiles: { 'findings.json': result([req({ status: 'great' })]) } });
+  assert.equal(bad.status, 'failed');
+  assert.match(bad.reason, /^the result failed validation: requirements\[0\]: status must be one of/);
+  // the engine step's classified reason (quota, auth, policy) reaches the output and the summary instead of "see the job log"
+  const quota = await runPost(t, { ctxFiles: { 'engine-status': 'failed\n', 'engine-error': 'quota\nYou have exceeded your monthly quota\n' } });
+  assert.deepEqual(quota.calls.outputs, { status: 'failed', reason: 'You have exceeded your monthly quota' });
+  assert.match(quota.calls.summary, /Could not complete: You have exceeded your monthly quota/);
+  assert.deepEqual((await runPost(t, { ctxFiles: { 'engine-status': 'failed\n' } })).calls.outputs, { status: 'failed', reason: 'the engine failed; see the job log' });
 });

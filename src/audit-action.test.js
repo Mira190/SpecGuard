@@ -58,7 +58,7 @@ test('action.yml contract: every PR step is guarded by mode pr, audit steps by m
     const c = cond(s);
     kinds[pr.test(c) && au.test(c) ? 'both' : pr.test(c) ? 'pr' : au.test(c) ? 'audit' : 'none'].push(s);
   }
-  assert.equal(kinds.none.length, 2, 'only the refuse-env and mode-check steps are unguarded');
+  assert.equal(kinds.none.length, 3, 'only the refuse-env, mode-check and fail_on_error steps are unguarded');
   const touches = (list, re) => list.filter((s) => re.test(s)).length;
   // PR-only: preflight, collect, the superseded check, the optional coverage evidence, the PR post step and its artifact
   assert.equal(kinds.pr.length, 6);
@@ -176,4 +176,41 @@ test('action.yml: coverage_files is off by default; its step runs between setup-
   const src = fs.readFileSync(path.join(__dirname, 'coverage.js'), 'utf8');
   const mapped = new Set([...c.slice(c.indexOf('env:'), c.indexOf('run:')).matchAll(/^\s+([A-Z_]+): /gm)].map((m) => m[1]));
   assert.deepEqual([...src.matchAll(/env\.([A-Z][A-Z_]+)/g)].map((m) => m[1]).filter((k) => !mapped.has(k) && k !== 'GITHUB_WORKSPACE'), []);
+});
+
+// ---- fail_on_error: a manual run that could not complete goes red; PR checks stay advisory ----
+
+test('action.yml: the status output covers both post steps (PR and scan) and fail_on_error is off by default', () => {
+  assert.match(input('fail_on_error'), /default: "false" \}$/);
+  assert.match(yml, /^  status: \{[^}]*value: "\$\{\{ steps\.post\.outputs\.status \|\| steps\.scan_post\.outputs\.status \}\}"/m);
+  assert.match(find(/audit-post\.js/), /^id: scan_post$/m);
+  assert.match(find(/src\/post\.js'/), /^id: post$/m);
+});
+
+test('action.yml: the last step runs fail-on-error.js only when fail_on_error is true, with the status and reason of whichever post step ran', () => {
+  const s = steps[steps.length - 1];
+  assert.match(cond(s), /^\$\{\{ !cancelled\(\) && inputs\.fail_on_error == 'true' \}\}$/);
+  assert.match(s, /STATUS: \$\{\{ steps\.post\.outputs\.status \|\| steps\.scan_post\.outputs\.status \}\}/);
+  assert.match(s, /REASON: \$\{\{ steps\.post\.outputs\.reason \|\| steps\.scan_post\.outputs\.reason \}\}/);
+  assert.match(s, /node "\$GITHUB_ACTION_PATH\/src\/fail-on-error\.js"/);
+});
+
+test('fail-on-error.js: failed exits 1 with ::error::, incomplete only warns, complete or empty is silent; the reason cannot inject a command', () => {
+  const run = (STATUS, REASON = '') => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, REASON } });
+  const f = run('failed', 'You have exceeded your monthly quota');
+  assert.equal(f.status, 1);
+  assert.equal(f.stdout.trim(), '::error::SpecGuard could not complete: You have exceeded your monthly quota');
+  assert.match(run('failed').stdout, /::error::SpecGuard could not complete: see the job summary/);
+  assert.match(run('failed', 'a\n::error::fake').stdout.trim(), /^::error::SpecGuard could not complete: a%0A::error::fake$/);
+  const w = run('incomplete', 'engine timeout');
+  assert.equal(w.status, 0);
+  assert.match(w.stdout, /^::warning::SpecGuard result is incomplete: engine timeout/);
+  for (const s of ['complete', '']) assert.deepEqual([run(s).status, run(s).stdout], [0, '']);
+});
+
+test('the manual-run workflow turns fail_on_error on; the PR workflow examples leave it off', () => {
+  const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
+  assert.match(read('.github', 'workflows', 'specguard-run.yml'), /^ +fail_on_error: "true"/m);
+  assert.doesNotMatch(read('.github', 'workflows', 'specguard.yml'), /fail_on_error/);
+  assert.doesNotMatch(read('README.md'), /fail_on_error: ?["']?true/);
 });
