@@ -178,3 +178,17 @@ test('audit-post: scan_issue_repo together with scan_paths titles "...: owner/na
   } finally { for (const k of Object.keys(env)) if (k in saved) process.env[k] = saved[k]; else delete process.env[k]; fs.rmSync(ctx, { recursive: true, force: true }); }
   assert.deepEqual(calls, [['update', 'corp', 'specguard', 3, sc.title]], 'only the issue of this target and scope is updated');
 });
+
+test('specguard-run.yml: the results artifact uploads only the named result files, from a pinned action, even when the run failed; never the ctx dir', () => {
+  const y = central(), at = y.indexOf('uses: actions/upload-artifact@'), step = y.slice(y.lastIndexOf('\n      - ', at), y.indexOf('\n\n', at) < 0 ? undefined : y.indexOf('\n\n', at));
+  assert.ok(at > y.indexOf('uses: ./.specguard-src'), 'after the SpecGuard step');
+  assert.equal(y.split('actions/upload-artifact@').length, 2);
+  assert.match(step, /^\n {6}- if: always\(\)\n {8}uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\.0\.1\n/);
+  assert.match(step, /name: specguard-result-\$\{\{ github\.run_id \}\}/);
+  assert.match(step, /retention-days: 14\n/);
+  assert.match(step, /if-no-files-found: ignore\n/);
+  const paths = /path: \|\n((?: {12}.*\n)+)/.exec(step)[1].trim().split('\n').map((l) => l.trim());
+  assert.deepEqual(paths.map((p) => p.replace('${{ github.workspace }}/.specguard-ctx/', '')).sort(), ['audit.json', 'findings.json', 'requirements-status.json', 'summary.md', 'usage.json']);
+  assert.ok(paths.every((p) => /\.(md|json)$/.test(p)), 'files, not the directory');
+  assert.match(y, /quote the target repository, so this repository must stay private/);
+});
