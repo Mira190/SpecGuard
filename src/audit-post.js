@@ -1,6 +1,7 @@
 // Unit test gap scan (mode scan; audit is an alias), last step (actions/github-script): validates the model's result and every citation against the checked-out HEAD,
 // renders it to the job summary and, with scan_issue (deprecated alias audit_issue), to ONE issue we own. Advisory; never fails the run.
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const post = require('./post');
@@ -15,6 +16,13 @@ const CLASS = ['static', 'unit', 'higher_level', 'human'];
 const LAYER = ['unit', 'component', 'integration', 'e2e'];
 // MARK (and the state marker) stay 'specguard:audit': an issue created before the rename is still found and updated, not duplicated. TITLE: issue title; HEADING: summary head.
 const MARK = '<!-- specguard:audit -->', TITLE = 'SpecGuard: unit test gap scan', HEADING = 'SpecGuard unit test gap scan';
+// One scan issue per scope (scan_paths): the marker carries a short hash of the sorted globs and the title names the scope. No scope keeps the original marker and title, so an older issue is still found.
+function scopeOf(spec) {
+  const ls = [...new Set(String(spec || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean))].sort();
+  if (!ls.length) return { lines: [], mark: MARK, title: TITLE };
+  const shown = (ls.filter((l) => !l.startsWith('!')).join(', ') || ls.join(', ')).replace(/[\x00-\x1F\x7F<>]/g, ' ');
+  return { lines: ls, mark: `<!-- specguard:audit scope=${sha8(...ls)} -->`, title: `${TITLE} (${oneLine(shown, 60)})` };
+}
 const SUMMARY_MAX = 1000000, ISSUE_MAX = 64000; // bytes: job summary 1 MiB; issue body 65536
 const NEAR = 5; // a quote may sit this many lines from the cited one
 const MIN_QUOTE = 12; // non-space characters a quote needs to count as evidence
@@ -238,21 +246,44 @@ function track(blocks, prior, head = '') {
   return blocks;
 }
 
-// Hidden machine-readable previous state: block ids and statuses only (never text), so the next run can confirm. v3; v2 (per-row) reads as one prior run.
-const stateRaw = (head, blocks) => `<!-- specguard:audit-state ${JSON.stringify({ v: 3, head: String(head || '').slice(0, 40), blocks }).replace(/[<>]/g, (c) => (c === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d')} -->`;
-const stateComment = (head, data, prior = null) => stateRaw(head, track(blocksOf(data), prior, head).filter((b) => /^[0-9a-f]{8}$/.test(b.cid)).map((b) => b.next));
-const priorState = (p) => stateRaw(p.head, p.blocks.map((b) => [b.cid, b.status, b.since, b.runs]));
+// Hidden machine-readable previous state: block ids, statuses and when each block was last audited, never text, so the next run can confirm and rotate.
+// v4: { head, audits: [[sha7, date]], blocks: [[cid, status, since, runs, index into audits (-1 = unknown)]] }. v3 (no audit dates) and v2 (per-row) still read.
+const STATE_MAX = 600, ISO_DATE = /^\d{4}-\d\d-\d\d$/; // blocks kept (the covered, longest ago audited go first; a dropped block counts as never audited again)
+const stateRaw = (head, entries) => { // entries: [cid, status, since, runs, at: { head, date } | null]
+  const audits = [], idx = new Map();
+  const blocks = entries.map(([cid, status, since, runs, at]) => {
+    if (!at) return [cid, status, since, runs, -1];
+    const k = `${at.head}@${at.date}`;
+    if (!idx.has(k)) { idx.set(k, audits.length); audits.push([at.head, at.date]); }
+    return [cid, status, since, runs, idx.get(k)];
+  });
+  return `<!-- specguard:audit-state ${JSON.stringify({ v: 4, head: String(head || '').slice(0, 40), audits, blocks }).replace(/[<>]/g, (c) => (c === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d')} -->`;
+};
+const today = () => new Date().toISOString().slice(0, 10);
+// This run's blocks (tracked against prior, audited now) plus the carried ones (prior blocks this run did not audit, still in the documents). dropped: carried blocks over STATE_MAX.
+function stateOf(head, data, prior = null, { carried = [], date = today() } = {}) {
+  const at = { head: String(head || '').slice(0, 7), date };
+  const now = track(blocksOf(data), prior, head).filter((b) => /^[0-9a-f]{8}$/.test(b.cid)).map((b) => [...b.next, at]);
+  const rank = (b) => (b.status === 'covered' || b.status === 'not_req' ? 1 : 0), when = (b) => (b.at && b.at.date) || '';
+  const old = carried.slice().sort((a, b) => rank(a) - rank(b) || (when(a) < when(b) ? 1 : when(a) > when(b) ? -1 : 0)).slice(0, Math.max(0, STATE_MAX - now.length));
+  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at])]), dropped: carried.length - old.length };
+}
+const stateComment = (head, data, prior = null, opts) => stateOf(head, data, prior, opts).raw;
+const priorState = (p) => stateRaw(p.head, p.blocks.map((b) => [b.cid, b.status, b.since, b.runs, b.at]));
 function readState(body) {
   const m = STATE_RE.exec(String(body || ''));
   if (!m) return null;
   try {
     const o = JSON.parse(m[1]), head = String((o && o.head) || '');
-    if (o && o.v === 3 && Array.isArray(o.blocks) && o.blocks.every((x) => Array.isArray(x) && /^[0-9a-f]{8}$/.test(x[0]) && BSTATE.includes(x[1]) && /^[\w.-]{0,40}$/.test(x[2]) && Number.isInteger(x[3]) && x[3] >= 1 && x[3] <= MAXRUN))
-      return { head, blocks: o.blocks.map(([cid, status, since, runs]) => ({ cid, status, since, runs })) };
+    const v = o && (o.v === 3 || o.v === 4) && Array.isArray(o.blocks), audits = o && o.v === 4 && Array.isArray(o.audits) ? o.audits : [];
+    if (v && (o.v === 3 || (Array.isArray(o.audits) && audits.every((a) => Array.isArray(a) && /^[\w.-]{0,40}$/.test(a[0]) && ISO_DATE.test(a[1]))))
+      && o.blocks.every((x) => Array.isArray(x) && /^[0-9a-f]{8}$/.test(x[0]) && BSTATE.includes(x[1]) && /^[\w.-]{0,40}$/.test(x[2]) && Number.isInteger(x[3]) && x[3] >= 1 && x[3] <= MAXRUN
+        && (o.v === 3 || (Number.isInteger(x[4]) && x[4] >= -1 && x[4] < audits.length))))
+      return { head, blocks: o.blocks.map(([cid, status, since, runs, a]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null })) };
     if (o && o.v === 2 && Array.isArray(o.rows) && o.rows.every((x) => Array.isArray(x) && CID.test(x[0]) && STATUS.includes(x[1]))) {
       const by = new Map();
       for (const [id, s] of o.rows) by.set(cidOf(id), [...(by.get(cidOf(id)) || []), s]);
-      return { head, blocks: [...by].map(([cid, ss]) => ({ cid, status: blockStatus(ss), since: head.slice(0, 7), runs: 1 })) };
+      return { head, blocks: [...by].map(([cid, ss]) => ({ cid, status: blockStatus(ss), since: head.slice(0, 7), runs: 1, at: null })) };
     }
   } catch { /* an edited or foreign comment is no state */ }
   return null;
@@ -260,7 +291,10 @@ function readState(body) {
 
 // Markdown that fits `max` bytes: header and footer first, then whole table rows while they fit (never cut mid-row).
 // partial: why the scan is incomplete (shown first); prior: readState() of the last full scan; head: this commit; cap: scan_max_blocks.
-function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', failure = '', partial = '', prior = null, head: sha = '', cap = 0, candidates = 0, max = SUMMARY_MAX }) {
+// carried: prior blocks this run did not audit ({ cid, path, line, text, status, since, runs, at }); they keep their status in the tables, marked "from <date>".
+// rotation / search (evidence candidates): audit-meta.json's; scope: the scan_paths lines; stateDropped: carried blocks that no longer fit the state.
+function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', failure = '', partial = '', prior = null, head: sha = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
+  carried = [], rotation = null, search = null, scope = [], stateDropped = 0 }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
     const rel = safeRel(p);
@@ -269,15 +303,19 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const at = (c) => link(c.path, c.line, `${c.path}:${c.line}`);
   const rows = data ? data.requirements : [];
   const blocks = data ? track(blocksOf(data), prior, sha) : [], byCid = new Map(blocks.map((b) => [b.cid, b]));
+  // carried blocks: the previous status, no sub-rows; a pending recheck stays pending; blocks that were not requirements are only counted
+  const old = carried.filter((p) => p.status !== 'not_req').map((p) => ({ cid: p.cid, path: p.path, line: p.line, text: p.text, rows: [], carried: true, at: p.at, next: [p.cid, p.status, p.since, p.runs],
+    status: p.status === 'recheck' ? 'covered' : p.status, mark: p.status === 'recheck' ? 'recheck' : p.status === 'gap' ? (p.runs >= 2 ? 'confirmed' : 'new') : '' }));
+  const oldNotReq = carried.length - old.length;
   const name = (r) => `${link(r.source.path, r.source.line, r.id)}`;
   const evidence = (r) => [r.code.length ? `code: ${r.code.map(at).join('; ')}` : '', r.tests.length ? `tests: ${r.tests.map((t) => `${t.layer} ${at(t)}`).join('; ')}` : ''].filter(Boolean).join('<br>');
   const first = (r) => `${name(r)} ${cell(r.text, 300)}${r.note ? `<br><sub>${cell(r.note, 300)}</sub>` : ''}`;
   const label = (b) => (b.status === 'gap' ? (b.mark === 'confirmed' ? `gap (confirmed${b.next[2] ? ` since ${cell(b.next[2], 12)}` : ''})` : 'gap (unconfirmed)')
     : b.mark === 'resolved' ? 'covered (resolved)' : b.mark === 'recheck' ? 'covered (resolved? recheck next run)' : b.status);
   const subs = (b) => count(b.rows, 'status', RISK).map(([v, n]) => `${v} ×${n}`).join(', ');
-  const bline = (b) => `| \`${b.cid}\` | ${link(b.path, b.line, `${b.path}:${b.line}`)} | ${cell(b.text, 120)} | ${label(b)} | ${subs(b)} |\n`;
+  const bline = (b) => `| \`${b.cid}\` | ${link(b.path, b.line, `${b.path}:${b.line}`)} | ${cell(b.text, 120)} | ${label(b)}${b.carried ? `<br><sub>from ${b.at ? cell(b.at.date, 12) : 'an earlier run'}</sub>` : ''} | ${subs(b)} |\n`;
   const BTOP = '| Block | Line | Requirement | Status | Sub-rows |\n|---|---|---|---|---|\n';
-  const of = (s, m) => blocks.filter((b) => b.status === s && (!m || b.mark === m));
+  const of = (s, m) => blocks.concat(old).filter((b) => b.status === s && (!m || b.mark === m));
   const confirmed = of('gap', 'confirmed'), fresh = of('gap', 'new'), unsure = of('unsure'), covered = of('covered');
   const clash = (ok) => rows.filter((r) => r.status === 'contradicted' && ((byCid.get(cidOf(r.id) || r.id) || {}).mark === 'confirmed') === ok)
     .map((r) => `| ${first(r)} | "${cell(r.source.quote, 200)}"<br>${at(r.source)} | "${cell(r.code[0].quote, 200)}"<br>${r.code.map(at).join('; ')} |\n`);
@@ -290,19 +328,29 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
 
   const by = (pairs) => pairs.map(([v, n]) => `${v} ${n}`).join(' · ') || 'none';
   const docCount = new Set(rows.map((r) => r.source.path)).size;
+  // how much of the repository this run covers, and how its blocks were chosen
+  const coverage = () => {
+    const where = scope.length ? `Scope (scan_paths): ${scope.map((l) => `\`${cell(l, 100)}\``).join(', ')}.\n\n` : '';
+    if (!rotation || !candidates) return where;
+    const k = rotation.picked;
+    const found = search && search.blocks ? `Evidence candidates found before the model ran: ${search.with_code} of ${search.blocks} blocks have a code location, ${search.with_tests} a test location.\n\n` : '';
+    if (!rotation.rotate) return `${where}${k < candidates ? `Scanned in document order: the first ${k} of ${candidates} blocks (cap ${cap}). Schedule with scan_issue: true to rotate through all blocks.\n\n` : ''}${found}`;
+    return `${where}Coverage: ${k + carried.length} of ${candidates} blocks audited at least once; this run audited ${k} (changed ${rotation.changed}, confirming ${rotation.confirming}, new ${rotation.new}, oldest ${rotation.oldest}).\n\n${found}`;
+  };
   let top = `## ${HEADING}\n\nBehaviour described in the design documents, checked for unit-test evidence${sha ? ` at \`${cell(sha.slice(0, 7), 12)}\`` : ''}.\n\n`;
   if (partial) top += `> **Partial scan: ${cell(partial, 200)}.** The rows below passed verification but the list may be incomplete. The scan issue, if enabled, was not updated.\n\n`;
   if (failure) top += `Could not complete: ${cell(failure, 400)}\n\n`;
   else if (!data) top += 'No design documents were found, so nothing was scanned.\n\n';
   else {
     const skipped = data.not_requirements || [], n = new Set(rows.map((r) => cidOf(r.id) || r.id)).size + skipped.length;
-    const tally = [['confirmed gap', confirmed.length], ['new gap (unconfirmed)', fresh.length], ['unsure', unsure.length], ['covered', covered.length], ['not a requirement', skipped.length]].filter(([, k]) => k);
+    const tally = [['confirmed gap', confirmed.length], ['new gap (unconfirmed)', fresh.length], ['unsure', unsure.length], ['covered', covered.length], ['not a requirement', skipped.length + oldNotReq]].filter(([, k]) => k);
     top += `**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${docCount} document${docCount === 1 ? '' : 's'}\n\n`
-      + `${candidates ? `${n} block${n === 1 ? '' : 's'} scanned of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${n} block${n === 1 ? '' : 's'} scanned`}; ${skipped.length} block${skipped.length === 1 ? ' was' : 's were'} not ${skipped.length === 1 ? 'a requirement' : 'requirements'}.\n\n`
+      + `${rotation ? `${n} block${n === 1 ? '' : 's'} audited this run` : candidates ? `${n} block${n === 1 ? '' : 's'} scanned of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${n} block${n === 1 ? '' : 's'} scanned`}; ${skipped.length} block${skipped.length === 1 ? ' was' : 's were'} not ${skipped.length === 1 ? 'a requirement' : 'requirements'}.\n\n`
+      + coverage()
       + `By block: ${by(tally)}\n\n`
-      + (prior ? `A gap is **confirmed** when the block was a gap in this run and in the previous one${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}; one run alone is unconfirmed. \`unsure\` and sub-row detail vary from run to run and are not confirmed.\n\n`
+      + (prior ? `A gap is **confirmed** when the block was a gap in this run and ${rotation && rotation.rotate ? 'the last time it was audited' : 'in the previous one'}${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}; one run alone is unconfirmed. \`unsure\` and sub-row detail vary from run to run and are not confirmed.\n\n`
         : 'This is the first scan run (no earlier result to compare with), so every gap is **unconfirmed**; one more scan run will confirm the ones that persist.\n\n')
-      + 'The blocks are fixed by the documents (every paragraph, list item and table row, in document order, up to the cap), not chosen by the model: the same commit lists the same blocks. The model only assesses each one; the counts describe that list, not the repository.\n\n';
+      + 'The blocks are fixed by the documents (every paragraph, list item and table row, in document order) and the publisher, not the model, picks the ones a run assesses (up to the cap): the same commit and state list the same blocks. The model only assesses each one; the counts describe that list, not the repository.\n\n';
   }
   top += '> Static review; not coverage; not for scoring people. Tests were not executed: a requirement is `covered` when a cited unit assertion with an independent expected value proves it. `not_implemented` and `missing_test` are model claims (not verified statically): the search that found nothing is not checked. A block is a `gap` when any of its sub-rows is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise. Blocks are identified by a stable id (a hash of the document, heading and block text), so a reworded block shows as removed and new.\n\n';
   if (prior && data) top += changedSince(prior, blocks);
@@ -310,7 +358,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const list = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
   let foot = '';
   if (rejected.length) foot += `### Documents not included\n\nThese looked like requirement documents but were not admitted (add them to \`requirements_paths\` to include):\n\n${list(rejected, 20, ([p, why]) => `- \`${cell(p, 200)}\`: ${cell(why, 200)}\n`)}\n`;
-  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations];
+  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...(stateDropped ? [`the scan issue state keeps at most ${STATE_MAX} blocks: ${stateDropped} older block(s) are dropped and will count as never audited`] : [])];
   const nrq = data && data.not_requirements ? data.not_requirements : [];
   if (nrq.length) foot += `<details><summary>${nrq.length} block${nrq.length === 1 ? ' was' : 's were'} not ${nrq.length === 1 ? 'a requirement' : 'requirements'}</summary>\n\n${list(nrq, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(${cell(n.reason, 80)})\n`)}\n</details>\n\n`;
   const unread = data ? docs.filter(([p]) => !data.docs_reviewed.includes(p)).map(([p]) => `\`${p}\` was admitted but is not in docs_reviewed.`) : [];
@@ -348,14 +396,17 @@ function changedSince(prior, blocks) {
 }
 
 // Our scan issue among open and closed issues (marker plus identity); an open one wins.
-async function findIssue({ github, owner, repo, me }) {
+async function findIssue({ github, owner, repo, me, mark = MARK }) {
   // ponytail: lists every issue; narrow with a label or `creator` if a repo has thousands
   const all = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
-  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && typeof i.body === 'string' && i.body.startsWith(MARK));
+  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && typeof i.body === 'string' && i.body.startsWith(mark));
   return mine.find((i) => i.state !== 'closed') || mine[0] || null;
 }
 
-async function main({ github, context, core }) {
+const whoami = async (github) => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } };
+const wantsIssue = (env) => String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
+
+async function main({ github, context, core, date = today() }) {
   const env = process.env, ctx = env.CTX;
   const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
   const { owner, repo } = context.repo, sha = context.sha || env.GITHUB_SHA || '';
@@ -372,31 +423,32 @@ async function main({ github, context, core }) {
   const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
   const cap = meta && meta.max_requirements;
   const cands = readCandidates(readCtx('audit-candidates.txt'));
-  const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0 };
+  const scope = scopeOf(env.SCAN_PATHS);
+  const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0,
+    rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   const finish = async (md) => { try { await core.summary.addRaw(md).write(); } catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); } };
-  const wantIssue = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
-  // issue lookup: our open or closed issue and the state it holds; a failure only warns
+  const wantIssue = wantsIssue(env);
+  // issue lookup: our open or closed issue (of this scope) and the state it holds; a failure only warns
   let mine = null, prior = null;
   const lookup = async () => {
     if (!wantIssue) return;
     try {
-      const me = await (async () => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } })();
-      mine = await findIssue({ github, owner, repo, me });
+      mine = await findIssue({ github, owner, repo, me: await whoami(github), mark: scope.mark });
       prior = mine && readState(mine.body);
     } catch (e) { core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); mine = null; return false; }
     return true;
   };
   const publish = async (md, state) => {
     try {
-      const body = `${MARK}\n${[md.trimEnd(), state].filter(Boolean).join('\n\n')}`;
+      const body = `${scope.mark}\n${[md.trimEnd(), state].filter(Boolean).join('\n\n')}`;
       const flat = (s) => String(s).replace(/\r\n/g, '\n').trim();
       if (mine) {
         const closed = mine.state === 'closed';
-        if (flat(body) !== flat(mine.body) || mine.title !== TITLE || closed) await github.rest.issues.update({ owner, repo, issue_number: mine.number, title: TITLE, body, ...(closed ? { state: 'open' } : {}) });
-      } else await github.rest.issues.create({ owner, repo, title: TITLE, body });
+        if (flat(body) !== flat(mine.body) || mine.title !== scope.title || closed) await github.rest.issues.update({ owner, repo, issue_number: mine.number, title: scope.title, body, ...(closed ? { state: 'open' } : {}) });
+      } else await github.rest.issues.create({ owner, repo, title: scope.title, body });
     } catch (e) { core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); }
   };
-  const room = (state) => ISSUE_MAX - bytes(MARK) - bytes(state) - 4;
+  const room = (state) => ISSUE_MAX - bytes(scope.mark) - bytes(state) - 4;
 
   if (!meta) return finish(render({ ...shared, failure: 'the collection step did not produce its context.' }));
   if (env.SKIP === 'true') {
@@ -419,14 +471,17 @@ async function main({ github, context, core }) {
   const checked = verify(data, { tracked: trackedFiles(process.env.GITHUB_WORKSPACE || process.cwd()), docs: new Set(docs.map(([p]) => p)), cands });
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
-  await finish(render({ ...shared, data: checked, partial, prior }));
+  // the blocks this run did not audit: the state's blocks that are still in the documents (audit-carried.txt), with the text and place from the collector
+  const left = readCandidates(readCtx('audit-carried.txt')), carried = prior && shared.rotation && shared.rotation.rotate
+    ? prior.blocks.filter((b) => left.has(b.cid) && !cands.has(b.cid)).map((b) => ({ ...left.get(b.cid), ...b })) : [];
+  await finish(render({ ...shared, data: checked, partial, prior, carried }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
-  const state = stateComment(meta.head, checked, prior);
-  await publish(render({ ...shared, data: checked, prior, max: room(state) }), state);
+  const state = stateOf(meta.head, checked, prior, { carried, date });
+  await publish(render({ ...shared, data: checked, prior, carried, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
 }
 
 // Never fails the run: any error here is a warning.
 module.exports = async (args) => {
   try { await main(args); } catch (e) { try { args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { readCandidates, validate, verify, render, gap, readState, stateComment, blocksOf, track, STATUS, CLASS, MARK, TITLE, HEADING });
+Object.assign(module.exports, { readCandidates, validate, verify, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, STATUS, CLASS, MARK, TITLE, HEADING });

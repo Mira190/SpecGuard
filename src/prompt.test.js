@@ -223,7 +223,7 @@ test('audit prompt: per-run context is inlined as untrusted-data blocks after a 
   assert.equal(p.slice(0, i), abuild(b).slice(0, abuild(b).indexOf('Context directory (absolute path):')));
   for (const [n, body] of [['audit-meta.json', '{"max_requirements":25}'], ['audit-docs.txt', 'docs/design.md\tdiscovered'], ['standards.txt', 'CONTRIBUTING.md'], ['test-layout.txt', 'tests (3)']])
     assert.ok(new RegExp(`<untrusted-data name="${n}"[^>]*>\\n[\\s\\S]*${body.replace(/[()]/g, '\\$&')}[\\s\\S]*?\\n</untrusted-data>`).test(p.slice(i)), n);
-  assert.match(abuild(ctx({ 'audit-docs.txt': 'a.md\tdiscovered\n' })), /Empty or absent \(nothing to read\): audit-candidates\.txt, standards\.txt, test-layout\.txt\./);
+  assert.match(abuild(ctx({ 'audit-docs.txt': 'a.md\tdiscovered\n' })), /Empty or absent \(nothing to read\): audit-candidates\.txt, audit-evidence\.txt, standards\.txt, test-layout\.txt\./);
   assert.match(abuild(ctx({ 'audit-docs.txt': 'a.md\tdiscovered\n' })), /"max_requirements":80/, 'default cap when audit-meta.json is absent');
 });
 
@@ -236,6 +236,17 @@ test('audit prompt: the candidate list is inlined in full, with the totals in th
   assert.ok(!/truncated; Read/.test(p));
   assert.ok(p.includes('"max_requirements":300,"candidates":412,"candidates_listed":300'));
   assert.equal(p.split('</untrusted-data>').length - 1, p.split('<untrusted-data name=').length - 1);
+});
+
+test('audit prompt: the evidence candidates are inlined as leads to verify first, and the scope reaches the model through the meta', () => {
+  const ev = 'aaaaaaaa\tcode\tsrc/plan.js:2\tif (p.repeat) return p;\naaaaaaaa\ttest\ttests/plan.test.js:2\tassert.equal(fire({ repeat: true }).on, true);\nbbbbbbbb\tnone\n';
+  const p = abuild(actx({ 'audit-candidates.txt': 'aaaaaaaa\tdocs/design.md:3\t§1\tA plan repeats.\n', 'audit-evidence.txt': ev, 'audit-meta.json': '{"max_requirements":25,"scope":["packages/payments/**","!**/legacy/**"],"limitations":["x"]}' }));
+  assert.match(p, /<untrusted-data name="audit-evidence\.txt" note="per block \(cid\)[^"]*Verify these first; search further only when none fits">/);
+  assert.ok(p.includes('aaaaaaaa\tcode\tsrc/plan.js:2\tif (p.repeat) return p;') && p.includes('bbbbbbbb\tnone'));
+  assert.ok(p.includes('"scope":["packages/payments/**","!**/legacy/**"]'));
+  assert.match(p, /open those first and verify them; they are leads, not evidence/);
+  assert.match(p, /search for code and tests only under those paths/);
+  assert.ok(!abuild(actx()).includes('"scope"'), 'no scope, no scope key');
 });
 
 test('audit prompt: the schema is inlined; a closing tag in a document path cannot end its block', () => {

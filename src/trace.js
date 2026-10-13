@@ -84,7 +84,7 @@ function buildIndex(docs, terms, k1 = 1.2, b = 0.75) {
   const idf = (t) => { const n = post.get(t)?.d.length || 0; return Math.log(1 + (i - n + 0.5) / (n + 0.5)); };
   const find = (t, doc) => { const p = post.get(t); if (!p) return -1; let lo = 0, hi = p.d.length - 1; while (lo <= hi) { const m = (lo + hi) >> 1; if (p.d[m] === doc) return m; if (p.d[m] < doc) lo = m + 1; else hi = m - 1; } return -1; };
   return {
-    size: i, idf,
+    size: i, idf, df: (t) => post.get(t)?.d.length || 0,
     has: (t, doc) => find(t, doc) >= 0,
     search(q) {
       const s = new Float64Array(i);
@@ -509,10 +509,11 @@ const rank = (p) =>{ const i = HINTS.findIndex((h) => h.test(p)); return i < 0 ?
 const byRank = (a, b) => rank(a.path) - rank(b.path) || (a.path < b.path ? -1 : 1);
 
 // Which tracked files are requirement docs at `head` (content-based; globs only rank, includes/excludes adjust).
-function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [], branch = '' }) {
+// scope (optional predicate on a path): files outside it do not exist for discovery, so a monorepo package is scanned without the caps counting the rest.
+function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [], branch = '', scope = null }) {
   const { inc, exc } = parseReqPaths(reqPaths), limitations = [];
   const extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
-  const skipped = { n: 0 }, entries = lsTree(cwd, head, skipped);
+  const skipped = { n: 0 }, entries = lsTree(cwd, head, skipped).filter((e) => !scope || scope(e.path));
   if (skipped.n) limitations.push(`${skipped.n} tracked path(s) containing a control character were ignored.`);
   const ruled = (p) => RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g));
   const excluded = (p) => exc.some((g) => matchGlob(p, g)), named = namedSet({ cwd, base, head, texts, ruled, excluded, branch });
@@ -613,11 +614,11 @@ function codeToRequirement(hunks, items, info = {}, { per: perHunk = PER_HUNK, t
 const numeric = (v) => /^\d+(?:[.,]\d+)*(?:\s*\S+)?$/.test(v) ? v.replace(/^(\d+(?:[.,]\d+)*).*$/, '$1') : null;
 
 // info.cut is set when the time budget stopped a search early.
-function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {} }) {
+function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {}, stop = null, cover = false }) {
   const eligible = entries.filter((e) => e.size <= MAX_FILE && !skip(e.path));
   const lits = [...new Set(crits.flatMap((c) => c.lits))].slice(0, MAX_LITS);
   const litRe = lits.map((l) => new RegExp(`(?<![\\w])${esc(l)}(?![\\w])`));
-  const queries = crits.map((c) => tokenize(`${c.quote} ${c.previous || ''}`));
+  const queries = crits.map((c) => tokenize(`${c.quote} ${c.previous || ''}`).filter((w) => !stop || (w.length > 1 && !stop.has(w))));
   const meta = [], litHits = new Map();
   function* windows() {
     for (let s = 0; s < eligible.length; s += 300) {
@@ -646,13 +647,14 @@ function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {} }) {
     const mine = c.lits.map((l) => lits.indexOf(l));
     for (const [i, hs] of litHits) if (mine.some((x) => hs.has(x))) s[i] += 2;
     const order = [...s.keys()].filter((i) => s[i] > 0).sort((a, b) => s[b] - s[a]);
+    const terms = [...new Set(queries[qi])], weigh = (ts) => ts.reduce((a, t) => a + index.idf(t), 0), known = cover ? weigh(terms.filter((t) => index.df(t) > 0)) : 0;
     const pick = (isTest, n) => {
       const out = [];
       for (const i of order) {
         const [p, a, z] = meta[i];
         if (isTestPath(p) !== isTest || out.some((o) => o.path === p && Math.abs(o.line - a) < WIN)) continue;
         const hits = [...new Set(queries[qi])].filter((t) => index.has(t, i)).sort((x, y) => index.idf(y) - index.idf(x)).slice(0, 5);
-        out.push({ path: p, line: a, end: z, score: round(s[i]), hits });
+        out.push({ path: p, line: a, end: z, score: round(s[i]), hits, ...(cover && { cover: known ? round(weigh(terms.filter((t) => index.has(t, i))) / known) : 0 }) }); // cover: the share of the query's weight (idf of the terms the corpus knows) that this window holds
         if (out.length === n) break;
       }
       return out;
@@ -770,7 +772,7 @@ function fitCandidates(cand) {
 // `base` is the diff base (the PR's merge-base; the CLI passes DIFF_BASE_SHA): the range is three-dot and spec items are paired against it.
 // Writes spec-files.txt, requirements-index.md, trace-candidates.json and extends requirements-status.json.
 // Returns the number of changed normative items. budgetMs bounds the expensive searches: they stop early and say so in limitations.
-function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtra = '', maxCriteria = MAX_CRITERIA, maxPatch = MAX_PATCH, budgetMs = BUDGET_MS }) {
+function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtra = '', maxCriteria = MAX_CRITERIA, maxPatch = MAX_PATCH, budgetMs = BUDGET_MS, scope = null }) {
   const dl = makeClock(budgetMs);
   const cand = { requirement_to_code: [], code_to_requirement: [], occurrences: [], limitations: [] };
   const write = (name, s) => fs.writeFileSync(path.join(ctx, name), s);
@@ -789,7 +791,7 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   };
   if (String(trace).toLowerCase() === 'off') return finish(0);
   const lim = (what, e) => cand.limitations.push(`${what} failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); continuing without it.`);
-  const d = discover({ cwd, base, head, reqPaths, ignoreExtra, texts: prTexts(status), branch: status.branch });
+  const d = discover({ cwd, base, head, reqPaths, ignoreExtra, texts: prTexts(status), branch: status.branch, scope });
   rejected = d.rejected;
   cand.limitations.push(...d.limitations);
   const docs = [...d.docs.values()], allItems = docs.flatMap((x) => x.items);
@@ -923,4 +925,4 @@ if (require.main === module) {
 }
 
 module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, isTestPath, pathKind,
-  codeHunks, matchGlob, testScope, classify, namedDocs, blocksOf, run };
+  codeHunks, matchGlob, testScope, classify, namedDocs, blocksOf, run, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP };

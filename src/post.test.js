@@ -656,6 +656,16 @@ test('reports an engine timeout or failure instead of a missing file', async (t)
   }
 });
 
+test('a classified engine failure replaces the generic failed text in Could not complete', async (t) => {
+  const s = setup(t);
+  fs.unlinkSync(path.join(s.dir, 'ctx/findings.json'));
+  fs.writeFileSync(path.join(s.dir, 'ctx/engine-status'), 'failed\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/engine-error'), 'quota\nCopilot quota or budget exhausted for this token\'s account/org (raise the budget or wait for the reset)\n');
+  await post(s);
+  assert.match(s.calls.summary[0].body, /Could not complete: Copilot quota or budget exhausted/);
+  assert.doesNotMatch(s.calls.summary[0].body, /see the job log/);
+});
+
 test('parseDiff splits a multi-file diff: added, deleted and spaced paths', () => {
   const d = fileDiff('a b.js', patch) + fileDiff('new.js', '@@ -0,0 +1,2 @@\n+x\n+y', '--- /dev/null\n+++ b/new.js') + fileDiff('gone.js', '@@ -1,2 +0,0 @@\n-x\n-y', '--- a/gone.js\n+++ /dev/null');
   const m = post.parseDiff(d);
