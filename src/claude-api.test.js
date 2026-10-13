@@ -237,7 +237,7 @@ test('a refused output schema: ONE retry asking for plain JSON (no output_config
   assert.equal(h.calls.length, 2);
   assert.ok(h.calls[0].body.output_config && !h.calls[1].body.output_config);
   assert.deepEqual(JSON.parse(h.file('findings.json')), VALID);
-  assert.match(h.file('engine-notes'), /structured output rejected \(Schema is too complex/);
+  assert.equal(h.file('engine-notes'), 'structured output unavailable for this schema; plain JSON requested');
   assert.ok([null, 'success'].includes(h.file('engine-status')));
 });
 
@@ -272,6 +272,102 @@ test('an unknown model is priced at the high default card and the cost is noted 
   await h.go({ MODEL: 'claude-future-9' });
   assert.match(h.file('engine-notes'), /cost estimated at default rates: claude-future-9 is not in the price table/);
   assert.ok(JSON.parse(h.file('usage.json')).totalCostUsd > 0.1);
+});
+
+// --- the context pack: repository files appended to the user message ---
+function repo(t, files, ctxFiles = {}, env = {}) {
+  const h = harness(t, [good()], env), root = path.join(h.dir, 'repo');
+  fs.mkdirSync(root); fs.mkdirSync(h.ctx, { recursive: true });
+  const put = (base, n, c) => { fs.mkdirSync(path.dirname(path.join(base, n)), { recursive: true }); fs.writeFileSync(path.join(base, n), c); };
+  for (const [n, c] of Object.entries(files)) put(root, n, c);
+  for (const [n, c] of Object.entries(ctxFiles)) put(h.ctx, n, c);
+  return { h, root, go: (extra) => h.go({ GITHUB_WORKSPACE: root, ...extra }), user: () => h.calls[0].body.messages[0].content };
+}
+const lineText = (n) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
+
+test('context pack: rest of a cut diff, rule files, changed files (focus order), their tests, requirement docs, in that order; line-numbered, de-duplicated, deleted files skipped; one note', async (t) => {
+  const diff = Array.from({ length: 5000 }, (_, i) => `${String(i + 1).padStart(4)}| +code ${i}`).join('\n') + '\n'; // far above the 40 KiB prompt limit
+  const r = repo(t, { 'RULES.md': 'Rule one\n', 'src/a.js': 'const a = 1;\nconst b = 2;\n', 'src/b.js': 'b();\n', 'test/a.test.js': 'test(a);\n', 'docs/req.md': 'REQ text\n' }, {
+    'diff.numbered.txt': diff, 'standards.txt': 'RULES.md\n', 'files.txt': 'src/a.js\nsrc/b.js\nsrc/gone.js\n', 'focus.txt': 'src/b.js\t9\tx\nsrc/a.js\t5\ty\nsrc/gone.js\t1\tz\n',
+    'test-candidates.txt': 'src/a.js\n  test/a.test.js  (same stem)\n  src/b.js  (dup)\nsrc/b.js\n  (no candidate test file found)\n', 'spec-files.txt': 'docs/req.md\nRULES.md\n' });
+  await r.go();
+  const u = r.user(), at = (s) => u.indexOf(s);
+  assert.ok(at('diff.numbered.txt (rest)') > 0 && at('diff.numbered.txt (rest)') < at('name="RULES.md"') && at('name="RULES.md"') < at('name="src/b.js"') && at('name="src/b.js"') < at('name="src/a.js"') && at('name="src/a.js"') < at('name="test/a.test.js"') && at('name="test/a.test.js"') < at('name="docs/req.md"'), 'priority order');
+  assert.match(u, /name="diff\.numbered\.txt \(rest\)" note="lines \d+ to 5000 of 5000; continues the diff block above"/);
+  assert.match(u, /name="src\/a\.js" note="full file, line-numbered">\n {3}1\| const a = 1;\n {3}2\| const b = 2;\n<\/untrusted-data>/);
+  assert.match(u, /name="RULES\.md" note="full file">\nRule one\n/);
+  assert.equal(u.split('name="src/b.js"').length, 2, 'de-duplicated');
+  assert.ok(!u.includes('gone.js"'));
+  assert.match(u, /no file tools[\s\S]*Repository files[\s\S]*full current text/);
+  assert.match(r.h.file('engine-notes'), /^context pack: 5 files, \d+ KB$/);
+});
+
+test('context pack: files.txt order without focus.txt; the byte budget cuts a file at a line boundary and lists what did not fit', async (t) => {
+  const names = 'abcdefgh'.split('').map((c) => `${c}.js`);
+  const r = repo(t, Object.fromEntries(names.map((n) => [n, Array.from({ length: 10 }, () => 'x'.repeat(99)).join('\n') + '\n'])), { 'files.txt': names.join('\n') + '\n' }, { CONTEXT_PACK_BYTES: '2000' });
+  await r.go();
+  const u = r.user();
+  assert.match(u, /name="a\.js" note="full file, line-numbered"/);
+  assert.match(u, /name="b\.js" note="first \d of 10 lines, line-numbered"/);
+  assert.ok(!u.includes('name="c.js"'));
+  assert.equal(r.h.file('engine-notes').split('\n').length, 1);
+  assert.match(r.h.file('engine-notes'), /^context pack: 2 files, \d KB; not included: c\.js, d\.js, e\.js, f\.js \(\+2 more\)$/);
+});
+
+test('context pack: a file over 48 KiB is cut at a line boundary and says so', async (t) => {
+  const r = repo(t, { 'big.js': lineText(20000) }, { 'files.txt': 'big.js\n' });
+  await r.go();
+  const m = /name="big\.js" note="first (\d+) of 20000 lines, line-numbered">\n([\s\S]*?)\n<\/untrusted-data>/.exec(r.user());
+  assert.ok(m && +m[1] > 1000 && +m[1] < 20000);
+  assert.equal(m[2].split('\n').length, +m[1]);
+  assert.ok(Buffer.byteLength(m[2]) <= 48 * 1024);
+  assert.doesNotMatch(r.h.file('engine-notes'), /not included/, 'a cut file is not an omitted file');
+});
+
+test('context pack: CONTEXT_PACK_BYTES=0 turns it off (old note, no files, no pack note); an empty value means the default', async (t) => {
+  const off = repo(t, { 'a.js': 'secret-body\n' }, { 'files.txt': 'a.js\n' }, { CONTEXT_PACK_BYTES: '0' });
+  await off.go();
+  assert.ok(!off.user().includes('secret-body') && !off.user().includes('Repository files'));
+  assert.match(off.user(), /Use only the context inlined below/);
+  assert.equal(off.h.file('engine-notes'), '');
+  const dflt = repo(t, { 'a.js': 'secret-body\n' }, { 'files.txt': 'a.js\n' }, { CONTEXT_PACK_BYTES: '' });
+  await dflt.go();
+  assert.ok(dflt.user().includes('secret-body'));
+});
+
+test('context pack: ../ traversal, absolute paths and symlinks out of the repository are never read', async (t) => {
+  const r = repo(t, { 'ok.js': 'fine\n' }, { 'files.txt': '../outside.txt\n/etc/hostname\nok.js\nlink.txt\nlinkdir/inner.txt\n' });
+  const outside = path.join(r.h.dir, 'outside.txt');
+  fs.writeFileSync(outside, 'TOPSECRET\n');
+  fs.mkdirSync(path.join(r.h.dir, 'outdir')); fs.writeFileSync(path.join(r.h.dir, 'outdir', 'inner.txt'), 'TOPSECRET2\n');
+  let linked = true;
+  try { fs.symlinkSync(outside, path.join(r.root, 'link.txt')); fs.symlinkSync(path.join(r.h.dir, 'outdir'), path.join(r.root, 'linkdir'), 'junction'); } catch { linked = false; } // Windows without the privilege
+  await r.go();
+  const body = JSON.stringify(r.h.calls[0].body);
+  assert.ok(body.includes('name=\\"ok.js\\"'));
+  assert.ok(!body.includes('TOPSECRET') && !body.includes('outside.txt'), `symlinks created: ${linked}`);
+  assert.match(r.h.file('engine-notes'), /^context pack: 1 files/);
+});
+
+test('context pack: .env files, keys, .git, binaries and huge files are skipped', async (t) => {
+  const files = { 'ok.js': 'fine\n', '.env': 'K=ENVSECRET\n', 'sub/prod.env': 'ENVSECRET\n', 'sub/.env.local': 'ENVSECRET\n', 'k.pem': 'ENVSECRET\n', 'my.key': 'ENVSECRET\n', 'id_rsa': 'ENVSECRET\n', 'id_rsa.pub': 'ENVSECRET\n', '.git/config': 'ENVSECRET\n', 'sub/.git/HEAD': 'ENVSECRET\n', 'bin.dat': Buffer.concat([Buffer.from('ENVSECRET'), Buffer.from([0, 1, 2])]), 'huge.txt': 'ENVSECRET\n'.repeat(250000) };
+  const r = repo(t, files, { 'files.txt': Object.keys(files).join('\n') + '\n', 'standards.txt': '.env\n' });
+  await r.go();
+  const u = r.user();
+  assert.ok(u.includes('name="ok.js"') && !u.includes('ENVSECRET'), 'only the plain file');
+  assert.match(r.h.file('engine-notes'), /^context pack: 1 files/);
+});
+
+test('context pack: the pre-flight cost check includes the pack', async (t) => {
+  const files = { 'a.js': lineText(8000), 'b.js': lineText(8000), 'c.js': lineText(8000) }, ctxFiles = { 'files.txt': 'a.js\nb.js\nc.js\n' };
+  const env = { MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.05', MAX_OUTPUT_TOKENS: '1000' }; // the prompt alone is a few cents of nothing; about 100 KB of pack is not
+  const on = repo(t, files, ctxFiles, env);
+  await on.go();
+  assert.equal(on.h.calls.length, 0, 'nothing was sent');
+  assert.equal(on.h.file('engine-error').split('\n')[0], 'budget');
+  const off = repo(t, files, ctxFiles, { ...env, CONTEXT_PACK_BYTES: '0' });
+  await off.go();
+  assert.equal(off.h.calls.length, 1);
 });
 
 // --- claude.sh dispatch: api (default) needs no CLI and no install; agent runs the CLI ---
