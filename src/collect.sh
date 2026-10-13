@@ -280,3 +280,7 @@ for (const [k, f] of changed.entries()) {
 if (omitted) out.push(`(${omitted} more changed file(s) not listed)\n`);
 fs.writeFileSync(path.join(ctx, 'test-candidates.txt'), out.join(''));
 JS
+
+# 7. Large PR (over FOCUS_THRESHOLD lines,files): rank the changed files by risk and give the model only the top FOCUS_FILES (src/focus.js).
+# Writes focus.txt and focus-skipped.txt and narrows diff.numbered.txt; diff.patch stays whole. Fail-soft: the full numbered diff comes back.
+timeout 60 node "$HERE/focus.js" "$CTX" || { echo "::warning::focused review failed; the whole diff is used"; rm -f "$CTX/focus.txt" "$CTX/focus-skipped.txt"; node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null || rm -f "$CTX/diff.numbered.txt"; }
