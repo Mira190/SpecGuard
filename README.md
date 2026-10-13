@@ -201,10 +201,28 @@ Anything other than `passed` or `not_configured` stops the summary from saying "
 
 ## Run locally
 
-The review is a plain skill: [`skills/test-review/SKILL.md`](skills/test-review/SKILL.md), which loads detail from `skills/test-review/references/` only when needed. Copy the whole folder, not just `SKILL.md`. With no context directory it diffs against the default branch and prints a human-readable report.
+Recommended: the runner. It runs the same pipeline as CI before the PR exists: the real collector, prompt, Copilot CLI step (same safety flags) and post step, with citation checks and the summary, against a fake GitHub that prints instead of posting. Needs Node 22, git, bash and a logged-in [Copilot CLI](https://github.com/github/copilot-cli).
 
 ```sh
-claude -p "$(cat skills/test-review/SKILL.md skills/test-review/references/*.md) Review my branch against main." --tools "Read,Grep,Glob"
+node bin/specguard-local.js                       # branch vs the remote default branch
+node bin/specguard-local.js --base origin/develop --model auto --json
+node bin/specguard-local.js --fail-on-gaps        # exit 1 when unit test gaps exist
+```
+
+It reviews committed changes only (uncommitted work is ignored, with a warning), in a throwaway git worktree, so your checkout is untouched. The PR text is your commit messages (or `--body FILE`); linked issues are unavailable offline. The exit code is 0 unless the tool crashed (advisory), or 1 with `--fail-on-gaps`. Options: `--base`, `--body`, `--model`, `--effort`, `--auto-tier`, `--json`, `--keep`.
+
+As a pre-push hook (`.git/hooks/pre-push`, made executable):
+
+```sh
+#!/bin/sh
+node path/to/SpecGuard/bin/specguard-local.js --fail-on-gaps || { echo "SpecGuard found unit test gaps (git push --no-verify to skip)"; exit 1; }
+```
+
+CI skips draft PRs by default: remove `!github.event.pull_request.draft` from the workflow `if` to review drafts too (costs one run per push).
+
+Fallback without the runner: the review is a plain skill, [`skills/test-review/SKILL.md`](skills/test-review/SKILL.md), which loads detail from `skills/test-review/references/` only when needed. Copy the whole folder, not just `SKILL.md`. With no context directory it diffs against the default branch and prints a human-readable report, but has no deterministic collector, citation verifier or summary.
+
+```sh
 copilot -p "$(cat skills/test-review/SKILL.md skills/test-review/references/*.md) Review my branch against main."
 ```
 
