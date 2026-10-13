@@ -2365,18 +2365,22 @@ test('the hint is only for missing_test and weak_test; low confidence shows in t
 test('F3 the sources-read details list up to 10 rejected candidate documents with the reason and how to include them', () => {
   const rejected = Array.from({ length: 12 }, (_, i) => [`docs/n${i}.md`, i ? 'no requirement-like items' : 'over size cap (90 KB > 64 KB) | <b>x</b>']);
   const b = post.buildSummary({ status: 'ok', manifest: { reqDocs: [], standards: [], trace: 'off', head: 'abc1234', base: 'def5678', rejected } });
-  assert.match(b, /- Considered, not admitted: `docs\/n0\.md` — over size cap \(90 KB > 64 KB\) \\\| &lt;b>x&lt;\/b> \(add to `requirements_paths` to include\)/);
-  assert.equal((b.match(/Considered, not admitted: `/g) || []).length, 10);
-  assert.match(b, /\+2 more considered, not admitted/);
-  assert.doesNotMatch(post.buildSummary({ status: 'ok', manifest: { reqDocs: [], standards: [], trace: 'off', head: 'a', base: 'b' } }), /Considered, not admitted/);
+  assert.match(b, /\n- 12 candidate documents were not admitted \(add to `requirements_paths` to include\)\n/);
+  assert.match(b, /<details><summary>Candidates not admitted<\/summary>\n\n- `docs\/n0\.md` — over size cap \(90 KB > 64 KB\) \\\| &lt;b>x&lt;\/b>\n/);
+  assert.equal((b.match(/^- `docs\/n\d+\.md` — /gm) || []).length, 10);
+  assert.match(b, /- \+2 more\n/);
+  assert.ok(b.indexOf('Candidates not admitted') > b.indexOf('<summary>Sources read') && b.trimEnd().endsWith('</details>'), 'nested inside Sources read');
+  assert.match(post.buildSummary({ status: 'ok', manifest: { reqDocs: [], standards: [], trace: 'off', head: 'a', base: 'b', rejected: [['x.md', 'y']] } }), /- 1 candidate document was not admitted/);
+  assert.doesNotMatch(post.buildSummary({ status: 'ok', manifest: { reqDocs: [], standards: [], trace: 'off', head: 'a', base: 'b' } }), /not admitted/);
 });
 
 test('F3 end to end: spec-rejected.txt (path<TAB>reason) reaches the summary', async (t) => {
   const s = setup(t);
   writeCtx(s, 'spec-rejected.txt', 'docs/notes.md\tno requirement-like items\ndocs/big.md\tover size cap (80 KB > 64 KB)\n');
   await post(s);
-  assert.match(s.calls.summary[0].body, /Considered, not admitted: `docs\/notes\.md` — no requirement-like items \(add to `requirements_paths` to include\)/);
-  assert.match(s.calls.summary[0].body, /Considered, not admitted: `docs\/big\.md` — over size cap/);
+  assert.match(s.calls.summary[0].body, /- 2 candidate documents were not admitted \(add to `requirements_paths` to include\)/);
+  assert.match(s.calls.summary[0].body, /- `docs\/notes\.md` — no requirement-like items\n/);
+  assert.match(s.calls.summary[0].body, /- `docs\/big\.md` — over size cap/);
 });
 
 test('R3 G4: a demoted row names the citation that failed (behaviour, evidence N, changed line, requirement) with path:line, in the reason and the validation notes', () => {
@@ -2431,11 +2435,11 @@ test('layout: the verdict leads, results follow in goal order, reference materia
   const s = post.buildSummary({ data: layoutData(), posted, usage: null, engine: 'copilot', blob: 'https://github.com/o/r/blob/HEADSHA', specFiles: [], pre: layoutPre, manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } });
   const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
   assert.match(s, /## SpecGuard\n\nUnit tests: 1 missing, 0 weak · Requirements: 1 criterion · 1 with a unit test gap · Standards: 1 finding · Pushdown: 1\n/);
-  const order = ['## SpecGuard', '### Unit test gaps', '### Requirements', '| Criterion | Source', '### Coding standards', '### Test layers', '**Not reviewed:**', '<sub>Engine: copilot', '<summary>Obligations (1)', '<summary>Pre-existing drift', '<summary>Validation notes', '<summary>Sources read'].map(at);
+  const order = ['## SpecGuard', '### Unit test gaps', '### Requirements', '| Criterion | Source', '### Coding standards', '### Test layers', '<summary>Not reviewed:', '<sub>Engine: copilot', '<summary>Obligations (1)', '<summary>Pre-existing drift', '<summary>Validation notes', '<summary>Sources read'].map(at);
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   assert.ok(at('POSTED GAP') > at('### Unit test gaps') && at('POSTED GAP') < at('### Requirements'));
   assert.ok(at('POSTED STD') > at('### Coding standards') && at('POSTED STD') < at('### Test layers'));
-  assert.ok(at('POSTED PUSH') > at('### Test layers') && at('POSTED PUSH') < at('**Not reviewed:**'));
+  assert.ok(at('POSTED PUSH') > at('### Test layers') && at('POSTED PUSH') < at('<summary>Not reviewed:'));
   assert.ok(s.includes('- **POSTED GAP** — [src.js:3](https://github.com/o/r/pull/1#discussion_r5) · missing_test · The boundary has no assertion.'), 'linked to the inline comment, one sentence why');
   assert.ok(s.includes('[src.js:3](https://github.com/o/r/blob/HEADSHA/src.js#L3)'), 'no comment link: the blob line');
   assert.equal((s.match(/<details>/g) || []).length, (s.match(/<\/details>/g) || []).length);
@@ -2480,7 +2484,7 @@ test('layout: size-limit overflow drops appendix items before results', () => {
   const s = post.buildSummary({ status: 'x', data: d, posted, pre: layoutPre, manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } });
   assert.ok(s.length <= 65536, `${s.length}`);
   for (let i = 0; i < 40; i++) assert.ok(s.includes(`GAP ${i}**`), `GAP ${i}`);
-  for (const h of ['### Requirements', '### Coding standards', '### Test layers', '**Not reviewed:**']) assert.ok(s.includes(h), h);
+  for (const h of ['### Requirements', '### Coding standards', '### Test layers', '<summary>Not reviewed:']) assert.ok(s.includes(h), h);
   assert.match(s, /\+\d+ more not shown/);
   assert.match(s, /\(truncated/);
   assert.ok(!s.includes('<summary>Sources read'));
@@ -2663,7 +2667,7 @@ test('process-only criteria stay in Not reviewed and out of the Requirements tab
   assert.match(table, /\| R9 \|.*NOT ASSESSED/); // an unassessed criterion the model did not file as process stays visible
   assert.match(s, /Requirements: 2 criteria · 0 with a unit test gap · 1 not assessed · Standards/);
   assert.equal(s.match(/npm test passes/g).length, 1); // once, in Not reviewed
-  assert.match(s, /\*\*Not reviewed:\*\*.*npm test passes/);
+  assert.match(s, /<summary>Not reviewed: 4 items<\/summary>[\s\S]*npm test passes/);
   // wording alone never hides: without the model naming it in not_reviewed, the row stays
   const lone = report({ requirements: [real, ci], coverage: [row()], findings: [], not_reviewed: auto(ci) });
   assert.match(sumOf(lone), /\| R2 \|.*NOT ASSESSED/);
@@ -3049,4 +3053,27 @@ test('usage line: a failed run does not repeat the classified engine error that 
   assert.match(body, new RegExp(`Could not complete: ${why}`));
   assert.match(body, /<sub>Engine: copilot · copilot exit 1 \(main\)<\/sub>/);
   assert.doesNotMatch(body, /HTTP 402|Cost|API time|usage partial/);
+});
+
+test('fail_on_error input: the failed run names its reason in the reason output; complete and incomplete runs set none', async (t) => {
+  const run = async (prep) => {
+    const s = setup(t);
+    s.outputs = {}; s.core.setOutput = (k, v) => { s.outputs[k] = v; };
+    prep?.(s);
+    await post(s);
+    return s.outputs;
+  };
+  assert.deepEqual(await run(), { status: 'complete' });
+  assert.deepEqual(await run((s) => writeCtx(s, 'engine-status', 'timeout\n')), { status: 'incomplete' });
+  assert.deepEqual(await run((s) => { fs.unlinkSync(path.join(s.dir, 'ctx/findings.json')); writeCtx(s, 'engine-status', 'failed\n'); writeCtx(s, 'engine-error', 'quota\nYou have exceeded your monthly quota\n'); }),
+    { reason: 'You have exceeded your monthly quota', status: 'failed' });
+});
+
+test('Not reviewed: visible when the run is incomplete, one collapsed line when it is complete', () => {
+  const opts = { data: layoutData(), manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } };
+  const done = post.buildSummary(opts), part = post.buildSummary({ ...opts, incomplete: ['The review engine timed out.'] });
+  assert.match(done, /<details><summary>Not reviewed: \d+ items?<\/summary>\n\n[^\n]+\n\n<\/details>\n/);
+  assert.doesNotMatch(done, /\*\*Not reviewed:\*\*/);
+  assert.match(part, /\*\*Not reviewed:\*\*/);
+  assert.doesNotMatch(part, /<summary>Not reviewed/);
 });
