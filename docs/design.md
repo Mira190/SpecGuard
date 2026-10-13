@@ -59,6 +59,7 @@ What this does not show:
 - **"Coding standard confirmed"** means the repo's instruction files (AI review) plus the configured lint/format check results. No PR-template checkbox.
 - **QA happens in the PR action, on every push.** Incremental review and trigger tuning are deferred.
 - **Pilot repo:** Kite (private, Electron/React/TypeScript), Copilot engine on a personal repo.
+- **The summary follows the goal order** (2026-10-13): verdict, unit test gaps, requirements, coding standards, test layers, not reviewed; traceability, obligations, drift and sources are collapsed reference material. Traceability and audit are means: they reach the author only as a requirement row or a spec_mismatch finding.
 
 ---
 
