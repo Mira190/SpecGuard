@@ -654,12 +654,12 @@ const parens = (u) => u.replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)
 const pin = (f, blob) => (blob ? parens(`${blob}/${String(f.path).split('/').map(encodeURIComponent).join('/')}#L${f.line}`) : '');
 const LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 8, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
 
-// One list item: icon, label, title (linked to its inline comment when posted, else the location is linked to the blob line), location, and the first sentence (a standard: its rule).
-function findingHead(f, { url, why, icon = '❌', posted: isPosted } = {}, blob = '') {
+// One list item: icon and label (bare: none, the section heading names the kind), title (linked to its inline comment when posted, else the location is linked to the blob line), location, and the first sentence (a standard: its rule).
+function findingHead(f, { url, why, icon = '❌', posted: isPosted, bare } = {}, blob = '') {
   const blobUrl = pin(f, blob), link = /^https:\/\//.test(url || '') ? parens(url) : isPosted ? blobUrl : '', title = title1(f.title).replace(/[\[\]]/g, ''), r = route(why);
   const loc = `\`${cell(`${f.path}:${f.line}`)}\``, notes = [r, f.confidence === 'low' && !/low confidence/.test(r) ? 'low confidence' : ''].filter(Boolean);
   const tail = f.kind === 'standard' && f.rule_source ? `rule: \`${cell(String(f.rule_source).replace(/:\d+$/, ''))}\`` : sentence(f.body);
-  return `- ${icon ? `${icon} ` : ''}**${KIND_LABEL[f.kind]}:** ${link ? `[${title}](${link})` : title} ${!link && blobUrl ? `[${loc}](${blobUrl})` : loc}${notes.length ? ` (${notes.join('; ')})` : ''}${tail ? ` — ${tail}` : ''}\n`;
+  return `- ${bare ? '' : `${icon ? `${icon} ` : ''}**${KIND_LABEL[f.kind]}:** `}${link ? `[${title}](${link})` : title} ${!link && blobUrl ? `[${loc}](${blobUrl})` : loc}${notes.length ? ` (${notes.join('; ')})` : ''}${tail ? ` — ${tail}` : ''}\n`;
 }
 const acts = (fs_) => { const n = (...ks) => fs_.filter((f) => ks.includes(f.kind)).length; return [[n('missing_test', 'weak_test'), 'unit test gap'], [n('spec_mismatch'), 'spec mismatch', 'spec mismatches'], [n('standard'), 'standards violation'], [n('pushdown'), 'test to move down', 'tests to move down']].filter(([k]) => k).map(([k, one, many]) => plural(k, one, many)); };
 const FENCED = /^(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\1[`~]*[ \t]*$/gm;
@@ -695,6 +695,8 @@ const STD_WORD = { checked: 'reviewed', no_rules: 'no rule files found', not_rev
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
 // status: the whole verdict for a run without findings data (a skipped run); delivery: how the findings reached the PR ("7 inline comments"); runNotes: Details-only facts about the run.
 function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [] }) {
+  const isLow = (x) => x.f.confidence === 'low' || x.why === 'low confidence', lows = [...posted, ...items].filter(isLow); // low-confidence findings are never an action: Details only
+  posted = posted.filter((x) => !isLow(x)); items = items.filter((x) => !isLow(x));
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)], failed = state === 'failed';
   const urls = new Map(posted.map((x) => [x.f, x.url]));
   const inc = incomplete.length > 0;
@@ -724,7 +726,8 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     const tool = tooling && !['passed', 'not_configured'].includes(tooling.status) ? `; tool checks ${cell(tooling.status)}` : '';
     const std = data.standards.status === 'checked' ? (nk('standard') ? plural(nk('standard'), 'violation') : 'none found') : data.standards.status === 'no_rules' ? 'no rules found' : 'not reviewed';
     const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
-    line2 = [...crit, `Standards: ${std}${tool}`, `Test layers: ${lay}`].join(' · ');
+    const snc = counts && counts.complete && counts.since_total && counts.since, delta = snc ? [snc.addressed && `${snc.addressed} fixed`, Math.max(0, all.length - snc.open) && `${Math.max(0, all.length - snc.open)} new`].filter(Boolean) : []; // push-to-push: addressed earlier findings, and findings not reported before
+    line2 = [`Unit tests: ${nk('missing_test') || nk('weak_test') ? [nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ') : 'no gaps'}`, ...crit, `Standards: ${std}${tool}`, `Test layers: ${lay}`, ...(delta.length ? [`Since last push: ${delta.join(' · ')}`] : [])].join(' · ');
   }
 
   // notices: one blockquote, one bullet each. The incomplete sentence leads; rule and lint notices stay visible only because they change how to read the result.
@@ -744,7 +747,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const add = (target, h, atoms = [], tail = '') => target.push({ h, atoms, tail });
   const detail = (h, atoms, tail = '\n') => atoms.length && add(det, h, atoms, tail);
   if (nrAll.length) {
-    add(vis, '### Not reviewed\n\n', nrAll.slice(0, NR_CAP).map((x) => `- ${x}\n`), nrAll.length > NR_CAP ? `- +${nrAll.length - NR_CAP} more in Details\n\n` : '\n');
+    add(vis, `### ⚠️ Not reviewed (${nrAll.length})\n\n`, nrAll.slice(0, NR_CAP).map((x) => `- ${x}\n`), nrAll.length > NR_CAP ? `- +${nrAll.length - NR_CAP} more in Details\n\n` : '\n');
     detail('**Not reviewed (more)**\n\n', nrAll.slice(NR_CAP).map((x) => `- ${x}\n`));
   }
   if (!failed && data) {
@@ -753,11 +756,12 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     const listOf = (title, kinds, more, onlyItems) => {
       const es = entry(kinds).filter((e) => !(onlyItems && e.posted));
       if (!es.length) return;
-      const atoms = es.map((e) => { const r = rank++; return e.posted ? findingHead(e.f, { url: e.url, posted: true }, blob) : findingBlock(e, blob, r); });
+      const atoms = es.map((e) => { const r = rank++; return e.posted ? findingHead(e.f, { url: e.url, posted: true, bare: true }, blob) : findingBlock(e, blob, r, { bare: true }); });
       add(vis, `### ${title} (${es.length})\n\n`, atoms.slice(0, LIST_CAP), es.length > LIST_CAP ? `- +${es.length - LIST_CAP} more in Details\n\n` : '\n');
       detail(`**${more} (${es.length - LIST_CAP})**\n\n`, es.slice(LIST_CAP).map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: e.posted }, blob)));
     };
-    listOf('Unit test gaps', ['missing_test', 'weak_test'], 'More unit test gaps');
+    listOf('❌ Missing unit tests', ['missing_test'], 'More missing unit tests');
+    listOf('❌ Weak unit tests', ['weak_test'], 'More weak unit tests');
     if (todo.length) {
       const link = (x) => { const u = x.f && (urls.get(x.f) || pin(x.f, blob)); return u ? ` ([finding](${/^https:\/\//.test(u) ? parens(u) : u}))` : ''; };
       const next = (x) => (x.kind === 'gap' ? (x.f ? `${KIND_LABEL[x.f.kind]}: ${cell(title1(x.f.title), 110)}${link(x)}` : 'Add a unit test.')
@@ -765,13 +769,14 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
           : x.kind === 'check' && x.higher ? 'Only higher-level tests cover it; add a unit test or confirm that is enough.' : 'Check by hand.');
       const row = (x) => `| ${x.kind === 'gap' ? '❌ Gap' : x.kind === 'mismatch' ? '❌ Mismatch' : '❔ Not assessed'} | **${cell(x.r.id, 40)}** ${cell(x.r.quote, 120)} | ${next(x)} |\n`;
       const th = '| Status | Criterion | Next step |\n|---|---|---|\n';
-      add(vis, `### Requirements to check (${todo.length} of ${rows.length})\n\n${th}`, todo.slice(0, ROW_CAP).map(row), todo.length > ROW_CAP ? `\n+${todo.length - ROW_CAP} more in Details.\n\n` : '\n');
+      add(vis, `### ${todo.some((x) => x.kind === 'gap' || x.kind === 'mismatch') ? '❌' : '❔'} Requirements to check (${todo.length})\n\n${th}`, todo.slice(0, ROW_CAP).map(row), todo.length > ROW_CAP ? `\n+${todo.length - ROW_CAP} more in Details.\n\n` : '\n');
       detail(`**More criteria to check (${todo.length - ROW_CAP})**\n\n${th}`, todo.slice(ROW_CAP, ROW_CAP + MORE_CAP).map(row), todo.length > ROW_CAP + MORE_CAP ? `\n+${todo.length - ROW_CAP - MORE_CAP} more not shown.\n\n` : '\n');
     }
     // a posted mismatch is a row above and a comment; one that was not posted carries its full text here, since no comment holds it
-    listOf('Spec mismatches', ['spec_mismatch'], 'More spec mismatches', true);
-    listOf('Coding standards', ['standard'], 'More standards violations');
-    listOf('Test layers', ['pushdown'], 'More tests to move down');
+    listOf('❌ Spec mismatches', ['spec_mismatch'], 'More spec mismatches', true);
+    listOf('❌ Coding standard violations', ['standard'], 'More standards violations');
+    listOf('❌ Tests to move down', ['pushdown'], 'More tests to move down');
+    detail(`**Low-confidence findings (${lows.length})**\n\n`, lows.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)));
   }
 
   // ---- Details: the rest of the result, then run information
@@ -1588,7 +1593,7 @@ async function run({ github, context, core }) {
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
   const delivered = summaryOnly ? 'summary only; nothing was posted to the PR' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt; the reviewer read the files directly`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }

@@ -239,6 +239,19 @@ test('shipped traceability cases carry valid summary expectations', () => {
   }
 });
 
+test('parseSummary takes an item kind from its section heading (bare items) and still reads the old labelled items; Details never inherit a heading', () => {
+  const md = [
+    '## SpecGuard', '', '**❌ 4 unit test gaps to fix**', '', '### ❌ Missing unit tests (2)', '',
+    '- [Posted](https://github.com/o/r/pull/1#discussion_r1) `a.js:3` — posted', '- Kept here [`b.js:7`](https://github.com/o/r/blob/x/b.js#L7) (inline limit reached) — text', '',
+    '### ❌ Weak unit tests (1)', '', '- Weak one `c.js:9` — why', '',
+    '### ❌ Requirements to check (1)', '', '| Status | Criterion | Next step |', '|---|---|---|', '| ❌ Gap | **R1** x | Missing test: y |', '',
+    '### ❌ Coding standard violations (1)', '', '- Throw an Error `d.js:1` — rule: `RULES.md`', '',
+    '<details><summary>Details: x</summary>', '', '**Low-confidence findings (1)**', '', '- ❌ **Weak test:** Old label `e.js:2` (low confidence) — z', '- note `f.js:5` is not an item', '', '</details>'].join('\n');
+  assert.deepEqual(parseSummary(md).items.map((i) => [i.kind, i.path, i.line, i.why]), [['missing_test', 'b.js', 7, 'inline limit reached'], ['weak_test', 'c.js', 9, ''], ['standard', 'd.js', 1, ''], ['weak_test', 'e.js', 2, 'low confidence']]);
+  assert.deepEqual(parseSummary('### Unit test gaps (1)\n\n- ❌ **Missing test:** Old `a.js:3` — x\n').items.map((i) => i.kind), ['missing_test']);
+  assert.deepEqual(parseSummary('### ❌ Requirements to check (1)\n\n- stray `a.js:3` — x\n').items, []);
+});
+
 test('parseSummary reads the redesigned summary: linked (posted) titles are not summary items, the obligations table uses status words, Details sections are bold headings', () => {
   const md = [
     '<!-- specguard:summary -->', '## SpecGuard', '', '**❌ 2 unit test gaps and 1 spec mismatch to fix**',

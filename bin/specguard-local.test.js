@@ -153,6 +153,9 @@ test('validatedGaps: inline comments need high confidence; summary items count u
   assert.strictEqual(validatedGaps({ comments: [], summary: '- ❌ **Weak test:** Test it `src/a.js:3` — x\n' }), true);
   assert.strictEqual(validatedGaps({ comments: [], summary: '- ❌ **Missing test:** Test it `src/a.js:3` (low confidence) — x\n' }), false);
   assert.strictEqual(validatedGaps({ comments: [], summary: '- ❌ **Violation:** Style `src/a.js:3` — rule: `R.md`\n' }), false);
+  assert.strictEqual(validatedGaps({ comments: [], summary: '### ❌ Missing unit tests (1)\n\n- Test it `src/a.js:3` (inline limit reached) — x\n' }), true);
+  assert.strictEqual(validatedGaps({ comments: [], summary: '### ❌ Weak unit tests (1)\n\n- Test it `src/a.js:3` (low confidence) — x\n' }), false);
+  assert.strictEqual(validatedGaps({ comments: [], summary: '### ❌ Coding standard violations (1)\n\n- Style `src/a.js:3` — rule: `R.md`\n' }), false);
   assert.strictEqual(validatedGaps({}), false);
 });
 
