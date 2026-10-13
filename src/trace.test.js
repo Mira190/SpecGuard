@@ -834,3 +834,55 @@ test('block candidates are capped per hunk and overall', (t) => {
   assert.equal(Math.max(...per), 3);
   assert.ok(new Set(hs.flatMap((h) => h.candidates.filter((c) => c.kind === 'block').map((c) => c.line))).size <= 20);
 });
+
+// ---- spec-driven layouts: branch -> spec folder, tasks.md, Gherkin variants ----
+test('branch name selects its spec folder: force-admitted even when the heuristics would reject it; others stay out', (t) => {
+  const plan = (x) => `# Plan\n\nAlbums group photos by date.\n${x}`;
+  const base = { 'specs/003-photo-albums/plan.md': plan(''), 'specs/004-other/plan.md': plan(''), 'src/a.js': 'x\n' };
+  const head = { ...base, 'specs/003-photo-albums/plan.md': plan('\nAn album shows its newest photo first.\n'), 'specs/004-other/plan.md': plan('\nSomething else entirely.\n') };
+  const run = (t, branch) => { const r = repo(t, base, head); fs.writeFileSync(path.join(r.ctx, 'requirements-status.json'), JSON.stringify({ branch })); T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }); return r; };
+  assert.equal(out(run(t, 'main'), 'spec-files.txt'), '', 'no branch match, nothing admitted');
+  for (const branch of ['feat/003-photo-albums', '003-photo-albums', 'user/Fix/003-Photo-Albums', 'feat/photo-albums']) {
+    const r = run(t, branch);
+    assert.deepEqual(out(r, 'spec-files.txt').split('\n').filter(Boolean), ['specs/003-photo-albums/plan.md'], branch);
+    assert.deepEqual(status(r).criteria.map((c) => [c.source, c.change, c.quote]), [['specs/003-photo-albums/plan.md', 'added', 'An album shows its newest photo first.']], branch);
+  }
+  const r = run(t, 'feat/photo');
+  assert.equal(out(r, 'spec-files.txt'), '', 'a partial name is not a match');
+  const c = repo(t, base, head); // classify (collect.sh) agrees with discover
+  fs.writeFileSync(path.join(c.ctx, 'requirements-status.json'), JSON.stringify({ branch: 'feat/003-photo-albums' }));
+  assert.deepEqual(T.classify({ cwd: c.dir, base: c.base, head: c.head, paths: ['specs/003-photo-albums/plan.md', 'specs/004-other/plan.md'], ctx: c.ctx }), ['specs/003-photo-albums/plan.md']);
+  // the .kiro and openspec layouts, and a single-word folder
+  const k = { '.kiro/specs/albums/requirements.md': '# R\n\nAlbums exist.\n', 'openspec/changes/add-albums/proposal.md': '# P\n\nWhy albums.\n', 'src/a.js': 'x\n' };
+  const kr = repo(t, k, { ...k, '.kiro/specs/albums/requirements.md': '# R\n\nAlbums exist.\n\nThey sort by date.\n', 'openspec/changes/add-albums/proposal.md': '# P\n\nWhy albums.\n\nUsers asked.\n' });
+  fs.writeFileSync(path.join(kr.ctx, 'requirements-status.json'), JSON.stringify({ branch: 'feat/albums' }));
+  assert.deepEqual(T.classify({ cwd: kr.dir, base: kr.base, head: kr.head, paths: ['.kiro/specs/albums/requirements.md', 'openspec/changes/add-albums/proposal.md'], ctx: kr.ctx }), ['.kiro/specs/albums/requirements.md']);
+  fs.writeFileSync(path.join(kr.ctx, 'requirements-status.json'), JSON.stringify({ branch: 'add-albums' }));
+  assert.deepEqual(T.classify({ cwd: kr.dir, base: kr.base, head: kr.head, paths: ['.kiro/specs/albums/requirements.md', 'openspec/changes/add-albums/proposal.md'], ctx: kr.ctx }), ['openspec/changes/add-albums/proposal.md']);
+});
+
+test('tasks.md of Spec Kit, Kiro and OpenSpec: each checkbox is an item and ticking one is a changed requirement', (t) => {
+  const tasks = (a, b) => `# Tasks\n\n## Phase 1\n\n- [${a}] T006 [P] Create the album model in src/album.js\n- [ ] T007 Add the album list endpoint\n\n- [${b}] 1.2 Write migration\n`;
+  for (const file of ['specs/003-photo-albums/tasks.md', '.kiro/specs/albums/tasks.md', 'openspec/changes/add-albums/tasks.md']) {
+    const items = T.parseItems(file, tasks(' ', ' '));
+    assert.deepEqual(items.map((i) => [i.kind, i.ref, i.raw]), [['task', 'task#T006', '[ ] T006 [P] Create the album model in src/album.js'], ['task', 'task#T007', '[ ] T007 Add the album list endpoint'], ['task', 'task#1.2', '[ ] 1.2 Write migration']], file);
+    assert.equal(T.isSpecDoc(items, file, 200), true, file);
+    const r = repo(t, { [file]: tasks(' ', ' '), 'src/album.js': 'a\n' }, { [file]: tasks('x', ' '), 'src/album.js': 'a\n' });
+    T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+    assert.deepEqual(status(r).criteria.map((c) => [c.source, c.change, c.quote, c.previous]), [[file, 'modified', '[x] T006 [P] Create the album model in src/album.js', '[ ] T006 [P] Create the album model in src/album.js']], file);
+  }
+  assert.deepEqual(T.parseItems('docs/tasks.md', tasks(' ', ' ')), [], 'not in a spec folder: an ordinary checklist');
+  assert.equal(T.parseItems('specs/a/tasks.md', '```\n- [ ] T1 in a fence\n```\n').length, 0);
+});
+
+test('Gherkin steps: case-insensitive, numbered, bold; OpenSpec scenario headings are one item each', () => {
+  const kinds = (text, file = 'specs/a/spec.md') => T.parseItems(file, text).map((i) => [i.kind, i.ref, i.text]);
+  const open = '### Requirement: Albums\nThe system SHALL list albums.\n\n#### Scenario: Empty list\n- **WHEN** the user has no albums\n- **THEN** an empty state is shown\n\n#### Scenario: Sorted\n- **WHEN** albums exist\n- **THEN** newest first\n';
+  assert.deepEqual(kinds(open).filter((k) => k[0] === 'gherkin').map((k) => k[1]), ['Scenario: Empty list', 'Scenario: Sorted']);
+  assert.match(T.parseItems('specs/a/spec.md', open).find((i) => i.ref === 'Scenario: Sorted').raw, /THEN\*\* newest first/);
+  for (const step of ['1. **Given** an album, **When** opened, **Then** shown', '- **WHEN** a', '2) Given a', 'then x', 'WHEN y']) {
+    assert.deepEqual(kinds(`Scenario: S\n${step}\n`).map((k) => k[0]), ['gherkin'], step);
+  }
+  assert.deepEqual(kinds('**Scenario:** Bold\n- **GIVEN** a\n').map((k) => k[1]), ['Scenario: Bold']);
+  assert.deepEqual(kinds('Scenario: S\nSomething else\n').map((k) => k[0]), [], 'a Scenario: line with no step in the document is prose');
+});
