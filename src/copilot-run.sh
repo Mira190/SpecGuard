@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copilot review run: one turn, then ONE repair turn on the same session when its JSON is missing or fails post.js's validator.
-# Env: CTX PROMPT MODEL EFFORT MAX_CREDITS TIMEOUT (minutes, shared by both turns). Never --allow-all, --allow-all-paths, --yolo.
+# Env: CTX PROMPT MODEL EFFORT MAX_CREDITS TIMEOUT (minutes, shared by both turns). CHECK=audit validates with audit-post.js (audit mode; read by extract-json.js). Never --allow-all, --allow-all-paths, --yolo.
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bash "$here/validate-inputs.sh" || exit 1
 TIMEOUT="${TIMEOUT:-12}"
