@@ -5,7 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 const b = require('./bundle.js');
 
-const comment = (p, line, title, body, kind = 'missing_test') => ({ path: p, line, body: `**${title}**\n\n${body}\n\n<details><summary>Why this was flagged</summary>\n\nkind: ${kind}, confidence: high\n</details>\n\n<!-- specguard:fp=${'a'.repeat(40)} -->` });
+const comment = (p, line, title, body, kind = 'missing_test') => ({ path: p, line, body: `**${title}**\n\n${body}\n\n<!--\nkind: ${kind}, confidence: high\n-->\n<!-- specguard:fp=${'a'.repeat(40)} -->` });
+const oldComment = (p, line, title, body, kind = 'missing_test') => ({ path: p, line, body: `**${title}**\n\n${body}\n\n<details><summary>Why this was flagged</summary>\n\nkind: ${kind}, confidence: high\n</details>\n\n<!-- specguard:fp=${'a'.repeat(40)} -->` });
 const summary = (items, notes = '') => `<!-- specguard:summary -->\n## SpecGuard\n\n<details><summary>${items.length} more item(s): low confidence, inferred, overflow, unanchored</summary>\n\n${items.map((i) => `- **${i.t}** (\`${i.p}:${i.l}\`, ${i.k}, low confidence)\n\n  ${i.b}\n`).join('\n')}\n</details>\n${notes ? `\n<details><summary>Validation notes (1)</summary>\n\n- ${notes}\n</details>\n` : ''}`;
 
 function fixture() {
@@ -34,6 +35,10 @@ function fixture() {
 test('parsers', () => {
   const [i] = b.parseInline({ comments: [comment('x.js', 3, 'Title', 'Body\n\nmore')] });
   assert.deepEqual([i.kind, i.confidence, i.class, i.path, i.line, i.title, i.body], ['missing_test', 'high', 'inline', 'x.js', 3, 'Title', 'Body\n\nmore']);
+  const [o] = b.parseInline({ comments: [oldComment('x.js', 3, 'Title', 'Body\n\nmore', 'weak_test')] }); // stored historical format
+  assert.deepEqual([o.kind, o.confidence, o.title, o.body], ['weak_test', 'high', 'Title', 'Body\n\nmore']);
+  const [r] = b.parseInline({ comments: [{ path: 'x.js', line: 3, body: '**T (low confidence)**\n\nB\n\nTake the expected value from the requirement.\n\n<!--\nkind: standard, confidence: low, rule: AGENTS.md\n-->\n<!-- specguard:fp=' + 'b'.repeat(40) + ' -->' }] });
+  assert.deepEqual([r.kind, r.confidence, r.body], ['standard', 'low', 'B\n\nTake the expected value from the requirement.']);
   const [s] = b.parseSummary(summary([{ t: 'T', p: 'p/q.js', l: 8, k: 'weak_test', b: 'l1\n  l2' }]));
   assert.deepEqual([s.kind, s.confidence, s.class, s.path, s.line, s.title, s.body], ['weak_test', 'low', 'summary', 'p/q.js', 8, 'T', 'l1\nl2']);
   assert.equal(b.parseDropped('- Dropped findings[0] weak_test b.js Dropped idea: contradicts coverage.', { findings: [{ title: 'Dropped idea', body: 'x', kind: 'weak_test', path: 'b.js', line: 3 }] })[0].line, 3);

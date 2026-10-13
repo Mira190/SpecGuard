@@ -34,6 +34,7 @@ inputs:
 
 outputs:
   skip: { description: "true when nothing reviewable changed", value: "${{ steps.preflight.outputs.skip == 'true' && 'true' || steps.collect.outputs.skip }}" }
+  status: { description: "complete | incomplete | failed for the PR review; empty when skipped", value: "${{ steps.post.outputs.status }}" }
   partial: { description: "true when the diff was truncated", value: "${{ steps.collect.outputs.partial }}" }
 
 runs:
@@ -184,7 +185,8 @@ runs:
         PROMPT="$PROMPT" bash "$GITHUB_ACTION_PATH/src/copilot-run.sh" || exit 1
         exit 0
 
-    - if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' }} # failures still report; a cancelled run (superseded push) posts nothing
+    - id: post
+      if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' }} # failures still report; a cancelled run (superseded push) posts nothing
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}

@@ -14,12 +14,13 @@ const tryRead = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { retu
 const tryJson = (p) => { try { return JSON.parse(tryRead(p)); } catch { return null; } };
 
 // ---- parsing the three outputs -------------------------------------------------------------------------------------
-const TRAILER = '\n\n<details><summary>Why this was flagged</summary>';
+// Current comments end with a hidden `<!--\nkind: X, confidence: Y[, rule: Z]\n-->` block; stored historical ones with a "Why this was flagged" <details>.
+const TRAILERS = ['\n\n<!--\nkind: ', '\n\n<details><summary>Why this was flagged</summary>'];
 function parseInline(posted) {
   const out = [];
   for (const c of (posted && posted.comments) || []) {
     const b = String(c.body || '');
-    const k = b.lastIndexOf(TRAILER);
+    const k = Math.max(...TRAILERS.map((t) => b.lastIndexOf(t)));
     const main = k < 0 ? b : b.slice(0, k);
     const why = k < 0 ? '' : b.slice(k);
     const t = /^\*\*(.*?)\*\*\n\n([\s\S]*)$/.exec(main);
