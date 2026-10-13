@@ -4,6 +4,10 @@ name: SpecGuard manual run
 # The secret SPECGUARD_PAT (a fine-grained PAT with Contents, Issues and Pull requests read on the target repositories; Pull requests write only for post_to_pr) belongs in the ENVIRONMENT secret store of
 # the environment "specguard" (deployment branches: main only), never in the repository secrets: both jobs run in that environment and nothing else in this file reads the secret. Without it the job token is
 # used, which reads only this repository and public ones.
+# Scans keep their state (two-run confirmation) in an issue: scan_issue specguard (default) = one issue per scanned repository in THIS repository, written with the job token (issues: write on the review job);
+# the quoted code and requirement text then sit in this repository, so keep it private with access no wider than the targets'. target = the issue in the scanned repository (token needs Issues write there).
+# Token order: GitHub App installation token (environment secrets SPECGUARD_APP_ID = the App's Client ID or App ID, and SPECGUARD_APP_PRIVATE_KEY; minted per job, scoped to the one target repository, read-only
+# unless post_to_pr or scan_issue: target), else SPECGUARD_PAT, else the job token. The App needs Contents, Pull requests and Issues read (Pull requests write for post_to_pr) and must be installed on the target repository.
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +16,7 @@ on:
       rules_docs: { description: "Coding-standard documents, same format. Empty = found automatically.", required: false, type: string }
       test_dirs: { description: "Unit-test folders, same format. Empty = found automatically.", required: false, type: string }
       post_to_pr: { description: "PR links only: also post the review on the PR. Off = results stay on this run page.", required: false, type: boolean, default: false }
+      scan_issue: { description: "Scans only: where the scan keeps its state, so gaps can be confirmed across runs. specguard = one issue per scanned repository in THIS repository (the target needs no write access); target = the issue in the scanned repository; none = run page only.", required: false, type: choice, default: specguard, options: [specguard, target, none] }
 permissions: {}
 concurrency: { group: "specguard-run-${{ inputs.target }}", cancel-in-progress: false }
 
@@ -22,6 +27,8 @@ jobs:
     environment: specguard # the PAT lives here only; main-only deployment branches mean only code from main ever sees it
     timeout-minutes: 5
     permissions: { contents: read, pull-requests: read }
+    env: # job env, not a step if:, because step conditions cannot read secrets
+      HAVE_APP: ${{ secrets.SPECGUARD_APP_ID != '' && secrets.SPECGUARD_APP_PRIVATE_KEY != '' }}
     outputs:
       repo: ${{ steps.in.outputs.repo }}
       pr: ${{ steps.in.outputs.pr }}
@@ -37,17 +44,36 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22 }
+      - id: scope # the target repository for the App token
+        if: env.HAVE_APP == 'true'
+        shell: bash
+        env:
+          SPEC: ${{ inputs.target }}
+        run: |
+          spec="${SPEC//[[:space:]]/}"; spec="${spec#http*://*/}"; owner="${spec%%/*}"; name="${spec#*/}"; name="${name%%/*}"; name="${name%.git}"
+          [[ "$spec" == */* && "$owner" =~ ^[A-Za-z0-9._-]+$ && "$name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::cannot read owner/name from the target"; exit 1; }
+          echo "owner=$owner" >> "$GITHUB_OUTPUT"; echo "name=$name" >> "$GITHUB_OUTPUT"
+      - id: app
+        if: env.HAVE_APP == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.SPECGUARD_APP_ID }}
+          private-key: ${{ secrets.SPECGUARD_APP_PRIVATE_KEY }}
+          owner: ${{ steps.scope.outputs.owner }}
+          repositories: ${{ steps.scope.outputs.name }}
+          permission-contents: read
+          permission-pull-requests: read
       - id: in
         shell: bash
         env: # inputs reach the script as environment variables only, never as part of the shell text
-          GH_TOKEN: ${{ secrets.SPECGUARD_PAT || github.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
           HAVE_PAT: ${{ secrets.SPECGUARD_PAT != '' }}
           TARGET: ${{ inputs.target }}
           DESIGN_DOCS: ${{ inputs.design_docs }}
           RULES_DOCS: ${{ inputs.rules_docs }}
           TEST_DIRS: ${{ inputs.test_dirs }}
         run: |
-          [ "$HAVE_PAT" = true ] || echo "::notice::SPECGUARD_PAT is not set in the specguard environment: using the job token, which reads only this repository and public repositories"
+          [ "$HAVE_PAT" = true ] || [ "$HAVE_APP" = true ] || echo "::notice::neither the App secrets nor SPECGUARD_PAT is set in the specguard environment: using the job token, which reads only this repository and public repositories"
           node src/resolve-inputs.js # reads the PR (open only) and, with the token, the branch name and folders of the links
 
   review:
@@ -55,13 +81,35 @@ jobs:
     runs-on: ubuntu-latest
     environment: specguard
     timeout-minutes: 30
-    permissions: { contents: read, pull-requests: read, issues: read, copilot-requests: write }
+    permissions: { contents: read, pull-requests: read, issues: write, copilot-requests: write } # issues write: the scan issue in THIS repository (scan_issue: specguard); the job token reaches no other repository
+    env: # job env, not a step if:, because step conditions cannot read secrets
+      HAVE_APP: ${{ secrets.SPECGUARD_APP_ID != '' && secrets.SPECGUARD_APP_PRIVATE_KEY != '' }}
     steps:
+      - id: scope # the target repository for the App token
+        if: env.HAVE_APP == 'true'
+        shell: bash
+        env:
+          SPEC: ${{ needs.resolve.outputs.repo }}
+        run: |
+          spec="${SPEC//[[:space:]]/}"; spec="${spec#http*://*/}"; owner="${spec%%/*}"; name="${spec#*/}"; name="${name%%/*}"; name="${name%.git}"
+          [[ "$spec" == */* && "$owner" =~ ^[A-Za-z0-9._-]+$ && "$name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::cannot read owner/name from the target"; exit 1; }
+          echo "owner=$owner" >> "$GITHUB_OUTPUT"; echo "name=$name" >> "$GITHUB_OUTPUT"
+      - id: app
+        if: env.HAVE_APP == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.SPECGUARD_APP_ID }}
+          private-key: ${{ secrets.SPECGUARD_APP_PRIVATE_KEY }}
+          owner: ${{ steps.scope.outputs.owner }}
+          repositories: ${{ steps.scope.outputs.name }}
+          permission-contents: read
+          permission-pull-requests: ${{ inputs.post_to_pr && needs.resolve.outputs.mode == 'pr' && 'write' || 'read' }}
+          permission-issues: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue == 'target' && 'write' || 'read' }}
       # the target first, at the workspace root where the action works
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: ${{ needs.resolve.outputs.repo }}
-          token: ${{ secrets.SPECGUARD_PAT || github.token }}
+          token: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
           ref: ${{ needs.resolve.outputs.head_sha || needs.resolve.outputs.ref }}
           fetch-depth: 0
           persist-credentials: false
@@ -78,10 +126,10 @@ jobs:
         shell: bash
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       # first line of the run summary (the scan appends its report after it): a manual scan runs once and keeps nothing, so no gap can be confirmed by a second run
-      - if: needs.resolve.outputs.mode == 'scan'
+      - if: needs.resolve.outputs.mode == 'scan' && inputs.scan_issue == 'none'
         shell: bash
         run: |
-          echo '**One-off scan: gaps are unconfirmed; schedule the scan in the target repo to confirm across runs.**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**One-off scan: gaps are unconfirmed; run it again with a scan issue (scan_issue: specguard or target) to confirm across runs.**' >> "$GITHUB_STEP_SUMMARY"
       - uses: ./.specguard-src
         with:
           mode: ${{ needs.resolve.outputs.mode }}
@@ -89,12 +137,15 @@ jobs:
           pr_number: ${{ needs.resolve.outputs.pr }}
           base_sha: ${{ needs.resolve.outputs.base_sha }}
           head_sha: ${{ needs.resolve.outputs.head_sha || steps.head.outputs.sha }}
-          github_token: ${{ secrets.SPECGUARD_PAT || github.token }}
+          github_token: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
           delivery: ${{ inputs.post_to_pr && needs.resolve.outputs.mode == 'pr' && 'pr' || 'summary' }}
           requirements_paths: ${{ needs.resolve.outputs.design }}
           standards_paths: ${{ needs.resolve.outputs.rules }}
           test_paths: ${{ needs.resolve.outputs.tests }}
           ignore: .specguard-src/
+          scan_issue: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue != 'none' && 'true' || 'false' }}
+          scan_issue_repo: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue == 'specguard' && github.repository || '' }} # empty = the scanned repository (scan_issue: target, written with github_token)
+          scan_issue_token: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue == 'specguard' && github.token || '' }}
           force: "true"
           include_bots: "true"
           ctx_retention_days: "0" # the context holds snippets of the target repository: no artifact

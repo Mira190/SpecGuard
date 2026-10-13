@@ -191,11 +191,11 @@ test('as a script (no token: nothing is looked up): writes multi-line outputs (r
 
 const workflow = () => fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'specguard-run.yml'), 'utf8').replace(/\r\n/g, '\n');
 
-test('specguard-run.yml: one required target plus four optional inputs, nothing else on the form', () => {
+test('specguard-run.yml: one required target plus five optional inputs, nothing else on the form', () => {
   const y = workflow(), form = /^ {4}inputs:\n((?: {6}.*\n)+)/m.exec(y)[1];
-  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr']);
+  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'scan_issue']);
   assert.match(y, /^ {6}target: \{[^}]*required: true/m);
-  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
+  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'scan_issue']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
   assert.match(y, /^ {6}post_to_pr: \{[^}]*type: boolean, default: false/m);
   assert.doesNotMatch(form, /\b(repo|pr|ref|mode|model|effort):/);
   assert.doesNotMatch(y, /inputs\.(repo|pr|ref|mode|model|effort)\b/);
@@ -212,20 +212,21 @@ test('specguard-run.yml: both jobs run in the specguard environment and the PAT 
   assert.equal(y.slice(0, y.indexOf('\njobs:')).includes('secrets.'), false, 'no secret above the jobs');
   assert.doesNotMatch(y, /^ +PAT: /m);
   assert.match(y, /HAVE_PAT: \$\{\{ secrets\.SPECGUARD_PAT != '' \}\}/);
-  assert.match(y, /GH_TOKEN: \$\{\{ secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
+  assert.match(y, /GH_TOKEN: \$\{\{ steps\.app\.outputs\.token \|\| secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
 });
 
 test('specguard-run.yml: minimal permissions, PAT checkout without persisted credentials, no input interpolated into shell text, nothing uploaded', () => {
   const y = workflow();
   assert.match(y, /^permissions: \{\}$/m);
   assert.match(y, /permissions: \{ contents: read, pull-requests: read \}/); // read-only: the job token is the fallback when SPECGUARD_PAT is unset
-  assert.match(y, /permissions: \{ contents: read, pull-requests: read, issues: read, copilot-requests: write \}/);
-  assert.doesNotMatch(y, /(contents|pull-requests|issues|actions|checks|statuses|id-token): write/);
-  assert.match(y, /repository: \$\{\{ needs\.resolve\.outputs\.repo \}\}\n {10}token: \$\{\{ secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
+  assert.match(y, /permissions: \{ contents: read, pull-requests: read, issues: write, copilot-requests: write \}/); // issues write: the scan issue in this repository only
+  assert.doesNotMatch(y, /(contents|pull-requests|actions|checks|statuses|id-token): write/);
+  assert.equal((y.match(/issues: write/g) || []).length, 2, 'the job permission and its comment, nowhere else');
+  assert.match(y, /repository: \$\{\{ needs\.resolve\.outputs\.repo \}\}\n {10}token: \$\{\{ steps\.app\.outputs\.token \|\| secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
   assert.equal((y.match(/persist-credentials: false/g) || []).length, 3, 'every checkout');
   assert.match(y, /fetch-depth: 0/);
   assert.match(y, /delivery: \$\{\{ inputs\.post_to_pr && needs\.resolve\.outputs\.mode == 'pr' && 'pr' \|\| 'summary' \}\}/, 'post_to_pr only counts for PR targets');
-  assert.match(y, /github_token: \$\{\{ secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
+  assert.match(y, /github_token: \$\{\{ steps\.app\.outputs\.token \|\| secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
   assert.match(y, /ctx_retention_days: "0"/);
   assert.match(y, /requirements_paths: \$\{\{ needs\.resolve\.outputs\.design \}\}/);
   assert.match(y, /standards_paths: \$\{\{ needs\.resolve\.outputs\.rules \}\}/);
@@ -247,7 +248,7 @@ test('specguard-run.yml: SpecGuard is checked out AFTER the target into a path t
 });
 
 test('specguard-run.yml: a manual scan summary starts with the one-off notice (V9)', () => {
-  const y = workflow(), note = y.indexOf("**One-off scan: gaps are unconfirmed; schedule the scan in the target repo to confirm across runs.**");
+  const y = workflow(), note = y.indexOf("**One-off scan: gaps are unconfirmed; run it again with a scan issue (scan_issue: specguard or target) to confirm across runs.**");
   assert.ok(note > 0 && note < y.indexOf('uses: ./.specguard-src'), 'written before the action so it is the first line');
-  assert.match(y, /- if: needs\.resolve\.outputs\.mode == 'scan'\n {8}shell: bash\n {8}run: \|\n {10}echo '\*\*One-off scan[^\n]*>> "\$GITHUB_STEP_SUMMARY"/);
+  assert.match(y, /- if: needs\.resolve\.outputs\.mode == 'scan' && inputs\.scan_issue == 'none'\n {8}shell: bash\n {8}run: \|\n {10}echo '\*\*One-off scan[^\n]*>> "\$GITHUB_STEP_SUMMARY"/);
 });
