@@ -1,0 +1,112 @@
+# Three-arm validation workflow (docs/validation-plan.md). Copy to .github/workflows/specguard-validation.yml in the TARGET repo.
+#   arm 0 (PR number % 3 == 0): SpecGuard only
+#   arm 1 (PR number % 3 == 1): native Copilot code review only
+#   arm 2 (PR number % 3 == 2): both
+# The arm is recorded as the PR label `review-arm:N`; eval/weekly-report.js reads it. No PR goes without review: the "control" is the
+# pre-period (see the plan). The mapping is the same as eval/assign.js (eval/assign.test.js runs the BEGIN/END arm block below).
+#
+# Before you start:
+#  - Remove any other SpecGuard workflow, and turn OFF automatic Copilot review for this repo (Settings > Rulesets > "Automatically request
+#    Copilot code review", and the personal/org "Automatic Copilot code review" setting), or every PR gets Copilot and arm 0 disappears.
+#    Rulesets cannot split arms: GitHub documents no per-pull-request filter for that rule (only repository and branch targets). If you
+#    cannot request reviews by API (see the Copilot step), the fallback is a two-arm study: keep the ruleset ON for every PR and let only
+#    this workflow's SpecGuard job vary (arms 0 and 2 only: SpecGuard + Copilot vs Copilot alone). That measures SpecGuard's added value
+#    but not a head-to-head.
+#  - Same-repo PRs by humans only: fork PRs get a read-only token and bot PRs are not part of the study.
+#  - Replace <full-commit-sha> with a full SpecGuard commit SHA (never a branch or @v1), as in the README.
+name: SpecGuard validation
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions: {}
+jobs:
+  arm:
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write # adds the review-arm label (the issues labels endpoint accepts pull-requests: write on a PR)
+    outputs:
+      arm: ${{ steps.arm.outputs.arm }}
+      specguard: ${{ steps.arm.outputs.specguard }}
+      copilot: ${{ steps.arm.outputs.copilot }}
+    steps:
+      - id: arm
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # BEGIN arm
+          arm=$(( PR_NUMBER % 3 ))
+          sg=true; cp=true
+          [ "$arm" = 1 ] && sg=false
+          [ "$arm" = 0 ] && cp=false
+          echo "arm=$arm" >> "$GITHUB_OUTPUT"
+          echo "specguard=$sg" >> "$GITHUB_OUTPUT"
+          echo "copilot=$cp" >> "$GITHUB_OUTPUT"
+          # END arm
+          # Label once, never overwrite a label someone fixed by hand (POST creates the label on first use).
+          have=$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/labels" --jq '.[].name')
+          case "$have" in *review-arm:*) ;; *)
+            gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/labels" -f "labels[]=review-arm:$arm" > /dev/null ;;
+          esac
+
+  specguard:
+    needs: arm
+    if: ${{ needs.arm.outputs.specguard == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency: { group: "specguard-${{ github.event.pull_request.number }}", cancel-in-progress: true }
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      copilot-requests: write # Copilot billed to the org (org repo) or the owner's seat (personal repo)
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: Mira190/SpecGuard@<full-commit-sha> # pin a full commit SHA, not a branch or @v1
+
+  copilot:
+    needs: arm
+    if: ${{ needs.arm.outputs.copilot == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write # request the reviewer, read the result, label a failed request
+    steps:
+      # Requests the native Copilot code review. Facts as of 2026-10-13:
+      #  - VERIFIED (GitHub docs): the REST request-reviewers endpoint exists and the reviewer is the bot `copilot-pull-request-reviewer[bot]`;
+      #    the CLI form `gh pr edit --add-reviewer @copilot` exists since gh 2.88.0 (2026-03-10); API support for requesting a Copilot review
+      #    was announced on 2026-10-02 for Pro, Pro+, Max, Business and Enterprise.
+      #  - UNVERIFIED: that GITHUB_TOKEN (github-actions[bot]) is allowed to request it. Third-party notes report that plain REST
+      #    `reviewers: [Copilot]` can return 201 and silently drop the bot, and that the GraphQL `requestReviewsByLogin` mutation with
+      #    botLogins is the reliable path; `gh` uses GraphQL. Copilot may also need a real user identity for billing.
+      #  So this job is a trial that checks its own result. If it cannot confirm the request it labels the PR `copilot-request-failed`
+      #  (the report then excludes that PR from the Copilot arms) and fails the job. Fix it by adding a repository secret
+      #  COPILOT_REVIEW_TOKEN: a fine-grained PAT of a user with a Copilot licence, repository permission Pull requests: write.
+      #  Run a canary PR first (the plan, step 2) and look at this job before you trust the arms.
+      - name: Request and confirm the Copilot review
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_REVIEW_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          LABEL_TOKEN: ${{ github.token }}
+        run: |
+          gh --version | head -1
+          before=$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/events" --paginate --jq '.[].id' | sort -n | tail -1)
+          gh pr edit "$PR_NUMBER" --add-reviewer @copilot || true
+          ok=
+          for i in 1 2 3 4 5 6; do
+            sleep 10
+            # confirmed when Copilot shows up as a requested reviewer, as a reviewer, or its work-started event is new
+            if gh api "repos/$GH_REPO/pulls/$PR_NUMBER/requested_reviewers" --jq '.users[].login' | grep -qi '^copilot'; then ok=1; break; fi
+            if gh api "repos/$GH_REPO/pulls/$PR_NUMBER/reviews" --jq '.[].user.login' | grep -qi '^copilot'; then ok=1; break; fi
+            if gh api "repos/$GH_REPO/issues/$PR_NUMBER/events" --paginate --jq ".[] | select(.id > ${before:-0}) | .event" | grep -q '^copilot_work_started'; then ok=1; break; fi
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Copilot review was not confirmed for PR $PR_NUMBER. Set the COPILOT_REVIEW_TOKEN secret or use the two-arm fallback in the header."
+            GH_TOKEN="$LABEL_TOKEN" gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/labels" -f 'labels[]=copilot-request-failed' > /dev/null
+            exit 1
+          fi

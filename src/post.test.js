@@ -2912,3 +2912,20 @@ test("a citation under .specguard-src/ (the reviewer's own checkout in manual ru
   assert.equal(verified('.specguard-src/own.test.js'), 'unknown');
   assert.equal(verified('own.test.js'), 'covered');
 });
+
+test('focused (large PR) review: incomplete note naming the riskiest skipped files, no head marker, not reduced, counts carry focused', async (t) => {
+  const s = setup(t);
+  writeCtx(s, 'focus.txt', 'a.js\t14.0\tlogic\nb.js\t9.0\tlogic\n');
+  writeCtx(s, 'focus-skipped.txt', `${Array.from({ length: 12 }, (_, i) => `rest/f${i}.js\t${40 - i}`).join('\n')}\n`);
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, /Incomplete review/);
+  assert.match(b, /> - Large PR: focused review of 2 of 14 files \(highest risk first\); not reviewed: `rest\/f0\.js`, `rest\/f1\.js`.*`rest\/f9\.js`, … \(\+2 more\)\n/);
+  assert.doesNotMatch(b, /f10\.js|Reduced review|specguard:head=/);
+  assert.match(b, /<!-- specguard:status=incomplete -->/);
+  assert.deepEqual(countsOf(b).focused, { files: 2, of: 14 });
+  const n = setup(t);
+  await post(n);
+  assert.doesNotMatch(n.calls.summary[0].body, /Large PR/);
+  assert.equal('focused' in countsOf(n.calls.summary[0].body), false);
+});
