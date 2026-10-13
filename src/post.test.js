@@ -1512,7 +1512,7 @@ test('end to end: the comment keeps its prose but no placeholder block', async (
   await post(s);
   const body = s.calls.review[0].comments[0].body;
   assert.match(body, /returns 41 instead of 42/);
-  assert.doesNotMatch(body, /expected value/);
+  assert.doesNotMatch(body, /<expected value>/);
   assert.match(body, /Skeleton omitted: placeholder/);
   assert.match(s.calls.summary[0].body, /skeleton omitted: placeholder/);
 });
@@ -1848,4 +1848,225 @@ test('M9: listing existing review comments fails: inline comments are withheld, 
     assert.match(s.jobSummary.join(), /Delivery degraded/);
     assert.deepEqual([s.resolved, s.queries], [[], 0]);
   }
+});
+
+// ---- fix-through telemetry, reactions, agent prompt, rejected candidates, named citation failures ----
+const BOT = { type: 'Bot', login: 'github-actions[bot]' };
+const gitIn = (s, ...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: s.dir, encoding: 'utf8' }).trim();
+const countsOf = (body) => JSON.parse(/<!-- specguard:counts (.*) -->/.exec(body)[1]);
+const REAL_FP = post.fingerprint('missing_test', 'src.js', behaviour.quote); // the finding report() produces
+const prior = (id, fp, line, sha, extra = {}) => ({ id, path: 'src.js', original_line: line, line, original_commit_id: sha, commit_id: sha, user: BOT, reactions: { '+1': 1, '-1': 1 },
+  body: `**t**\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<sub>Useful? React 👍 / 👎.</sub>\n\n<!-- specguard:fp=${fp} -->`, ...extra });
+const mine = (content) => ({ content, user: BOT }), other = (content, login = 'alice') => ({ content, user: { type: 'User', login } });
+// A repo with two commits (A, then B changing only src.js line 7), HEAD = B. priors(A) lists our earlier comments.
+function followSetup(t, priors, pages = [[]], data = report()) {
+  const opts = { existing: [] };
+  const s = withThreads(t, pages, data, opts);
+  gitIn(s, 'commit', '-qm', 'a');
+  const A = gitIn(s, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(s.dir, 'src.js'), 'l1\nl2\nif (x) {\nl4\nl5\nl6\nl7x\nl8\n');
+  gitIn(s, 'commit', '-qam', 'b');
+  const B = gitIn(s, 'rev-parse', 'HEAD');
+  opts.head = B; process.env.HEAD_SHA = B;
+  opts.existing = priors(A);
+  s.rx = {}; s.A = A; s.B = B;
+  s.github.rest.reactions = { listForPullRequestReviewComment: async ({ comment_id }) => ({ data: s.rx[comment_id] || [mine('+1'), mine('-1')] }) };
+  return s;
+}
+
+test('G1 outcome labels are conservative: nothing is ever called fixed', () => {
+  const o = (p) => post.outcome({ still_reported: false, anchor_touched: null, thread: 'open', up: 0, down: 0, ...p });
+  assert.equal(o({ anchor_touched: true }), 'addressed');
+  assert.equal(o({ anchor_touched: false }), 'not_observed'); // gone but untouched: could be a miss
+  assert.equal(o({ anchor_touched: null }), 'not_observed'); // unknown anchor
+  assert.equal(o({ still_reported: true, anchor_touched: true }), 'open');
+  assert.equal(o({ thread: 'human', anchor_touched: false }), 'dismissed');
+  assert.equal(o({ thread: 'human', anchor_touched: true }), 'addressed'); // resolved after a change
+  assert.equal(o({ thread: 'human', anchor_touched: null }), 'not_observed'); // no proof the code was untouched
+  assert.equal(o({ thread: 'specguard', anchor_touched: false }), 'not_observed');
+  assert.equal(o({ down: 2, up: 1, anchor_touched: true }), 'dismissed');
+  assert.equal(o({ down: 1, up: 1 }), 'not_observed');
+  assert.equal(o({ still_reported: true, thread: 'human', anchor_touched: false }), 'dismissed');
+});
+
+test('G1 anchorTouched: old-side range, insertions, deleted file, unavailable commit', () => {
+  const hex = 'a'.repeat(40), run = (d) => post.anchorTouched(hex, 'b'.repeat(40), 'f.js', 5, 7, '.', () => d);
+  assert.equal(run('@@ -6 +6 @@\n-a\n+b\n'), true);
+  assert.equal(run('@@ -8,2 +8,2 @@\n'), false);
+  assert.equal(run('@@ -3,3 +3,1 @@\n'), true); // 3-5 overlaps from the left
+  assert.equal(run('@@ -2,2 +2,2 @@\n'), false);
+  assert.equal(run('@@ -5,0 +6,2 @@\n'), true); // inserted between lines 5 and 6
+  assert.equal(run('@@ -7,0 +8 @@\n'), false); // after the last anchored line
+  assert.equal(run(''), false);
+  assert.equal(run('deleted file mode 100644\n@@ -1,9 +0,0 @@\n'), null); // deleted or renamed: no evidence either way
+  assert.equal(post.anchorTouched(hex, hex, 'f.js', 1, 1, '.', () => { throw new Error('bad object'); }), null);
+  assert.equal(post.anchorTouched('nonsense', hex, 'f.js', 1, 1, '.', () => ''), null);
+  assert.equal(post.anchorTouched(hex, hex, 'f.js', 1, null, '.', () => ''), null);
+});
+
+test('G1 end to end: per prior finding the outcome, thread, reactions (ours excluded) and the counts line', async (t) => {
+  const human = { isResolved: true, resolvedBy: { login: 'alice', __typename: 'User' } };
+  const s = followSetup(t, (A) => [
+    prior(1, FP('a'), 7, A), prior(2, FP('b'), 2, A), prior(3, REAL_FP, 3, A), prior(4, FP('c'), 2, A), prior(5, FP('d'), 2, A), prior(6, FP('f'), 2, 'dead'.repeat(10)),
+  ], [[thread('t4', FP('c'), human), thread('t1', FP('a'))]]);
+  s.rx[5] = [mine('+1'), mine('-1'), other('-1'), other('-1', 'bob'), other('+1', 'carol')];
+  await post(s);
+  const body = s.calls.summary[0].body, c = countsOf(body);
+  const by = Object.fromEntries(c.outcomes.map((o) => [o.fp, o]));
+  assert.deepEqual([FP('a'), FP('b'), REAL_FP, FP('c'), FP('d'), FP('f')].map((f) => by[f].outcome), ['addressed', 'not_observed', 'open', 'dismissed', 'dismissed', 'not_observed']);
+  assert.deepEqual([by[FP('a')].anchor_touched, by[FP('b')].anchor_touched, by[FP('f')].anchor_touched], [true, false, null]);
+  assert.deepEqual([by[FP('c')].thread, by[FP('a')].thread, by[FP('b')].thread], ['human', 'open', 'unknown']);
+  assert.deepEqual([by[FP('d')].up, by[FP('d')].down, by[FP('a')].up, by[FP('a')].down], [1, 2, 0, 0]);
+  assert.deepEqual([by[REAL_FP].still_reported, by[FP('a')].still_reported, by[REAL_FP].kind], [true, false, 'missing_test']);
+  assert.deepEqual(c.since, { addressed: 1, open: 1, dismissed: 2, not_observed: 2 });
+  assert.match(body, /<sub>Since earlier reviews: 1 addressed · 1 still open · 2 dismissed · 2 not observed \(not proof of a fix\)<\/sub>/);
+  assert.match(body, /^<!-- specguard:summary -->\n<!-- specguard:head=[0-9a-f]+ -->\n<!-- specguard:counts /);
+  assert.deepEqual([c.v, c.head, c.engine, c.complete, c.already, c.posted], [1, s.B, 'copilot', true, 1, { inline: 0, file: 0 }]);
+  assert.deepEqual(c.findings, { missing_test: { posted: 0, already: 1, summary: 0 } });
+  assert.equal(s.queries, 1, 'one thread read serves the telemetry and the stale resolver');
+  assert.deepEqual(s.resolved, ['t1'], 'its finding is gone: the stale resolver still works from the shared read');
+});
+
+test('G1 the since line and per-finding outcomes exist only with earlier findings; counts are always there', async (t) => {
+  const s = setup(t);
+  await post(s);
+  const body = s.calls.summary[0].body, c = countsOf(body);
+  assert.doesNotMatch(body, /Since earlier reviews/);
+  assert.deepEqual([c.complete, c.outcomes, c.since_total, c.posted, c.already], [true, [], 0, { inline: 1, file: 0 }, 0]);
+  assert.deepEqual(c.findings, { missing_test: { posted: 1, already: 0, summary: 0 } });
+});
+
+test('G1 an incomplete run still emits counts, marked complete:false, with no outcomes, no since line and no thread read', async (t) => {
+  const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
+  writeCtx(s, 'engine-status', 'timeout\n');
+  await post(s);
+  const body = s.calls.summary[0].body, c = countsOf(body);
+  assert.equal(c.complete, false);
+  assert.deepEqual([c.outcomes, c.since_total], [[], 0]);
+  assert.doesNotMatch(body, /Since earlier reviews/);
+  assert.deepEqual([s.queries, s.resolved], [0, []]);
+});
+
+test('G1 counts JSON is capped at 8 KB, drops the oldest outcomes first, keeps the tally, and cannot close its comment', () => {
+  const outcomes = Array.from({ length: 300 }, (_, i) => ({ fp: String(i).padStart(40, '0'), kind: 'missing_test', still_reported: false, anchor_touched: null, thread: 'open', up: 0, down: 0, outcome: 'not_observed' }));
+  const line = post.countsComment({ v: 1, head: 'abc', engine: 'a-->b<c', complete: true, since: { addressed: 0, open: 0, dismissed: 0, not_observed: 300 }, outcomes });
+  const json = /^<!-- specguard:counts (.*) -->$/.exec(line)[1];
+  assert.ok(json.length <= 8192);
+  assert.ok(!json.includes('-->') && !json.includes('<'));
+  const c = JSON.parse(json);
+  assert.equal(c.engine, 'a-->b<c');
+  assert.equal(c.dropped + c.outcomes.length, 300);
+  assert.equal(c.outcomes.at(-1).fp, outcomes.at(-1).fp, 'the newest outcome is kept');
+  assert.equal(c.outcomes[0].fp, outcomes[c.dropped].fp);
+  assert.equal(c.since.not_observed, 300);
+});
+
+test('G2 every new comment gets a thumbs up and down from our token, and its body invites the rating before the fp marker', async (t) => {
+  const s = setup(t, report({ coverage: [row('missing_test'), row('missing_test', { id: 'O2' })], findings: [finding(), finding('missing_test', { obligation_ids: ['O2'], line: 8, quote: 'l8' })] }));
+  s.reacted = [];
+  const orig = s.github.rest.pulls.createReview;
+  s.github.rest.pulls.createReview = async (a) => { await orig(a); return { data: { id: 55 } }; };
+  s.github.rest.pulls.listCommentsForReview = async ({ review_id }) => ({ data: review_id === 55 ? [{ id: 101 }] : [] });
+  s.github.rest.pulls.createReviewComment = async (a) => { s.calls.file.push(a); return { data: { id: 202 } }; };
+  s.github.rest.reactions = { createForPullRequestReviewComment: async (a) => { s.reacted.push(`${a.comment_id}${a.content}`); } };
+  await post(s);
+  assert.deepEqual(s.reacted, ['101+1', '101-1', '202+1', '202-1']);
+  const c = s.calls.review[0].comments[0].body;
+  assert.match(c, /<sub>Useful\? React 👍 \/ 👎\.<\/sub>\n\n<!-- specguard:fp=[0-9a-f]{40} -->$/);
+  assert.match(s.calls.file[0].body, /<sub>Useful\? React 👍 \/ 👎\.<\/sub>\n\n<!-- specguard:fp=[0-9a-f]{40} -->$/);
+  assert.deepEqual(s.warnings, []);
+});
+
+test('G2 a reaction failure is a warning only: the review, the summary and the other comments are unaffected', async (t) => {
+  const s = setup(t);
+  const orig = s.github.rest.pulls.createReview;
+  s.github.rest.pulls.createReview = async (a) => { await orig(a); return { data: { id: 55 } }; };
+  s.github.rest.pulls.listCommentsForReview = async () => ({ data: [{ id: 101 }, { id: 102 }] });
+  let n = 0;
+  s.github.rest.reactions = { createForPullRequestReviewComment: async () => { n++; throw Object.assign(new Error('rate limited'), { status: 403 }); } };
+  await post(s);
+  assert.equal(n, 1, 'stops at the first failure');
+  assert.deepEqual(s.warnings, ['SpecGuard: could not add 👍/👎 reactions: rate limited']);
+  assert.equal(s.calls.review.length, 1);
+  assert.match(s.calls.summary[0].body, /1 inline/);
+  const none = setup(t); // no review id came back: nothing to add and nothing to warn about
+  await post(none);
+  assert.deepEqual(none.warnings, []);
+});
+
+test('H the comment carries a collapsed prompt for a coding agent: fields, requirement quote, skeleton and the rule verbatim, fp marker last', async (t) => {
+  const rule = 'Take expected values from the requirement quote or an independent literal; never compute them from the implementation under test. If the requirement is ambiguous, stop and ask.';
+  const body = 'Pin the 30-day window.\n\n```js\nassert.equal(fileClaim(day(31)).status, "late");\n```';
+  const s = specSetup(t, 'introduced', { finding: { body } });
+  await post(s);
+  const c = s.calls.review[0].comments[0].body;
+  const m = /<details><summary>Prompt for a coding agent<\/summary>\n\n(`{3,})text\n([\s\S]*?)\n\1\n<\/details>/.exec(c);
+  assert.ok(m, c);
+  assert.match(m[2], /^File: src\.js:3\n\nGap: Code contradicts AC-4\nPin the 30-day window\./);
+  assert.match(m[2], /Requirement \(docs\/spec\.md\): "Claims must be filed within 30 days\."/);
+  assert.match(m[2], /Test skeleton:\n```\nassert\.equal\(fileClaim\(day\(31\)\)\.status, "late"\);\n```/);
+  assert.ok(m[2].endsWith(rule));
+  assert.ok(c.indexOf('Prompt for a coding agent') < c.indexOf('Why this was flagged'));
+  assert.match(c, /<!-- specguard:fp=[0-9a-f]{40} -->$/);
+  assert.equal(c.split('specguard:fp=').length, 2);
+});
+
+test('H the agent prompt is sanitised and bounded, skipped for style findings, and the comment stays under the size limit', () => {
+  const f = { ...finding('missing_test'), title: 'T <script> @bob', body: `x <!-- specguard:fp=${'a'.repeat(40)} --> ![i](http://e/x.png) ${'y'.repeat(70000)}\n\n\`\`\`js\n${'z'.repeat(2000)}\n\`\`\`` };
+  const p = post.agentPrompt(f, { source: 'PR body AC 1', quote: 'q'.repeat(5000) });
+  assert.ok(p.length < 3500, String(p.length));
+  assert.doesNotMatch(p, /<!--|<script|!\[|@bob|z{10}/); // markers, tags, images and mentions are neutralised; an oversized skeleton is left out
+  assert.ok(p.includes('&lt;script>') && p.includes('@​bob'));
+  assert.equal(post.agentPrompt(finding('standard'), null), '');
+  const c = post.commentBody(f, 'f'.repeat(40));
+  assert.ok(c.length <= 65000);
+  assert.match(c, /<!-- specguard:fp=f{40} -->$/);
+  assert.equal((c.match(/<!-- specguard:fp=/g) || []).length, 1);
+});
+
+test('F3 the sources-read details list up to 10 rejected candidate documents with the reason and how to include them', () => {
+  const rejected = Array.from({ length: 12 }, (_, i) => [`docs/n${i}.md`, i ? 'no requirement-like items' : 'over size cap (90 KB > 64 KB) | <b>x</b>']);
+  const b = post.buildSummary({ status: 'ok', manifest: { reqDocs: [], standards: [], trace: 'off', head: 'abc1234', base: 'def5678', rejected } });
+  assert.match(b, /- Considered, not admitted: `docs\/n0\.md` — over size cap \(90 KB > 64 KB\) \\\| &lt;b>x&lt;\/b> \(add to `requirements_paths` to include\)/);
+  assert.equal((b.match(/Considered, not admitted: `/g) || []).length, 10);
+  assert.match(b, /\+2 more considered, not admitted/);
+  assert.doesNotMatch(post.buildSummary({ status: 'ok', manifest: { reqDocs: [], standards: [], trace: 'off', head: 'a', base: 'b' } }), /Considered, not admitted/);
+});
+
+test('F3 end to end: spec-rejected.txt (path<TAB>reason) reaches the summary', async (t) => {
+  const s = setup(t);
+  writeCtx(s, 'spec-rejected.txt', 'docs/notes.md\tno requirement-like items\ndocs/big.md\tover size cap (80 KB > 64 KB)\n');
+  await post(s);
+  assert.match(s.calls.summary[0].body, /Considered, not admitted: `docs\/notes\.md` — no requirement-like items \(add to `requirements_paths` to include\)/);
+  assert.match(s.calls.summary[0].body, /Considered, not admitted: `docs\/big\.md` — over size cap/);
+});
+
+test('R3 G4: a demoted row names the citation that failed (behaviour, evidence N, changed line, requirement) with path:line, in the reason and the validation notes', () => {
+  const d = (extra) => aligned(report({ coverage: [row('covered', extra)], findings: [] }));
+  const readOf = (p) => ({ 'src.js': ['l1', 'l2', 'if (x) {'], 'test.js': ['test', evidence.quote] })[p] || null;
+  const maps = new Map([['src.js', post.parsePatch(patch)]]);
+  const miss = d({ behaviour: { ...behaviour, line: 30, quote: 'absent' } });
+  post.validate(miss);
+  post.verifyEvidence(miss, new Set(['src.js']), new Set(), readOf, maps);
+  assert.equal(miss.coverage[0].status, 'unknown');
+  assert.match(miss.coverage[0].reason, /^Could not verify the citation: behaviour src\.js:30\.$/);
+  assert.match(miss.coverage[0].alignment.reason, /behaviour src\.js:30/);
+  assert.ok(miss.validation_notes.includes('Obligation O1 marked unknown: could not verify citation: behaviour src.js:30.'), miss.validation_notes.join('|'));
+  const two = d({ evidence: [{ ...evidence }, { ...evidence, line: 9, quote: 'nope' }] });
+  post.validate(two);
+  post.verifyEvidence(two, new Set(['src.js']), new Set(), readOf, maps);
+  assert.match(two.coverage[0].reason, /evidence 2 test\.js:9\./);
+  assert.doesNotMatch(two.coverage[0].reason, /evidence 1|behaviour/);
+  const ch = d({});
+  post.validate(ch);
+  post.verifyEvidence(ch, new Set(), new Set(), readOf, new Map());
+  assert.match(ch.coverage[0].reason, /changed line src\.js:3/);
+  const req = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Return 42.', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('covered')], findings: [] });
+  post.validate(req);
+  post.verifyEvidence(req, new Set(['src.js']), new Set(), readOf, new Map([['src.js', post.parsePatch(patch)]]));
+  assert.equal(req.coverage[0].status, 'covered');
+  post.verifyRequirements(req, { documents: [{ source: 'PR body', text: 'Something else.' }], criteria: [] });
+  assert.equal(req.coverage[0].status, 'unknown');
+  assert.match(req.coverage[0].reason, /requirement citation could not be verified \(requirement R1 PR body: quote not found in its source\)\./);
+  assert.ok(req.validation_notes.some((n) => /Obligation O1 marked unknown: .*requirement R1 PR body/.test(n)));
 });

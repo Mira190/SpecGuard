@@ -346,10 +346,26 @@ const fix = (f, inline) => (f.kind === 'standard' && typeof f.suggestion === 'st
   ? `\n\n${inline && oneClick(f) ? fence('suggestion', f.suggestion) : `Suggested fix (not applied automatically):\n\n${fence('', neutralize(f.suggestion))}`}` : '');
 const title1 = (t) => oneLine(neutralize(t).replace(/\s+/g, ' ').trim(), 200);
 
-function commentBody(f, fp, inline = true) {
+// Take expected values from the requirement, never from the code under test (the mirror-test trap). Verbatim in every agent prompt.
+const AGENT_RULE = 'Take expected values from the requirement quote or an independent literal; never compute them from the implementation under test. If the requirement is ambiguous, stop and ask.';
+const FENCED = /^[ \t]*(`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n[ \t]*\1[`~]*[ \t]*$/gm;
+// Paste-ready prompt for a coding agent, built only from validated fields (path, line, title, body, linked requirement). Style findings carry their own fix: none.
+// req: { source, quote } of a verified linked requirement, or null. Bounded (about 3 KB), so the comment trailer can never push a comment over the limit.
+function agentPrompt(f, req) {
+  if (f.kind === 'standard') return '';
+  const body = String(f.body), code = [...body.matchAll(FENCED)][0]?.[2];
+  const prose = body.replace(FENCED, '').replace(/\n{3,}/g, '\n\n').trim();
+  const parts = [`File: ${oneLine(String(f.path).replace(/\s+/g, ' '), 200)}:${f.line}`, `Gap: ${oneLine(String(f.title).replace(/\s+/g, ' ').trim(), 200)}\n${truncate(prose, 700)}`];
+  if (req && req.quote) parts.push(`Requirement (${oneLine(norm(req.source), 100)}): "${oneLine(norm(req.quote), 400)}"`);
+  if (code && code.length <= 1500) parts.push(`Test skeleton:\n${fence('', code)}`);
+  parts.push(AGENT_RULE);
+  return `\n\n<details><summary>Prompt for a coding agent</summary>\n\n${fence('text', neutralize(parts.join('\n\n')))}\n</details>`;
+}
+
+function commentBody(f, fp, inline = true, req = null) {
   const why = neutralize(`kind: ${f.kind}, confidence: ${f.confidence}${f.rule_source ? `, rule: ${f.rule_source}` : ''}`);
-  // the trailer (suggestion, rationale, fingerprint marker) is never cut: only the model's own text is truncated
-  const trailer = `${fix(f, inline)}\n\n<details><summary>Why this was flagged</summary>\n\n${why}\n</details>\n\n<!-- specguard:fp=${fp} -->`;
+  // the trailer (suggestion, agent prompt, rationale, rating hint, fingerprint marker) is never cut: only the model's own text is truncated
+  const trailer = `${fix(f, inline)}${agentPrompt(f, req)}\n\n<details><summary>Why this was flagged</summary>\n\n${why}\n</details>\n\n<sub>Useful? React 👍 / 👎.</sub>\n\n<!-- specguard:fp=${fp} -->`;
   return truncate(`**${title1(f.title)}**\n\n${neutralize(f.body)}`, BODY_MAX - trailer.length) + trailer;
 }
 
@@ -470,17 +486,33 @@ function usageLine({ engine, model, raw, notes = [] }) {
   for (const x of notes) parts.push(nm(x));
   return `<sub>${parts.join(' · ')}</sub>`;
 }
+// Fix-through telemetry (0 tokens). The outcome of an earlier finding, conservatively: nothing here is ever "fixed", only observed.
+//   dismissed: a human resolved the thread with the anchor untouched, or more 👎 than 👍 (people other than us)
+//   open: reported again; addressed: not reported and the anchored lines changed since the comment; not_observed: not reported, anchor untouched or unknown (could be a miss)
+const outcome = (p) => ((p.thread === 'human' && p.anchor_touched === false) || p.down > p.up ? 'dismissed' : p.still_reported ? 'open' : p.anchor_touched === true ? 'addressed' : 'not_observed');
+const COUNTS_MAX = 8192;
+// Hidden machine-readable line in the sticky summary. `outcomes` drops its oldest entries first to stay under COUNTS_MAX; the tally in `since` always covers all of them.
+function countsComment(c) {
+  const o = { ...c, outcomes: [...(c.outcomes || [])] };
+  const json = () => JSON.stringify(o).replace(/[<>]/g, (ch) => (ch === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d'); // can never close the HTML comment
+  while (json().length > COUNTS_MAX && o.outcomes.length) { o.outcomes.shift(); o.dropped = (o.dropped || 0) + 1; }
+  return `<!-- specguard:counts ${json()} -->`;
+}
 // Collapsed list of what the review read. Paths are repo-relative and come from the collector, not the model.
-function sourcesRead({ reqDocs = [], standards = [], trace, head, base }) {
+function sourcesRead({ reqDocs = [], standards = [], trace, head, base, rejected = [] }) {
   const list = (a) => (a.length ? a.slice(0, 15).map((x) => `\`${cell(x)}\``).join(', ') + (a.length > 15 ? `, +${a.length - 15} more` : '') : 'none');
-  return `<details><summary>Sources read</summary>\n\n- Requirement documents: ${list(reqDocs)}\n- Standards files: ${list(standards)}\n- Trace: ${cell(trace)}\n- Commits: head \`${cell(String(head).slice(0, 7))}\`, base \`${cell(String(base).slice(0, 7))}\`\n\n</details>\n`;
+  // candidate documents the collector looked at and did not admit as requirements: [path, reason]
+  const rej = rejected.slice(0, 10).map(([p, why]) => `- Considered, not admitted: \`${cell(p)}\` — ${cell(why)} (add to \`requirements_paths\` to include)\n`).join('') + (rejected.length > 10 ? `- +${rejected.length - 10} more considered, not admitted\n` : '');
+  return `<details><summary>Sources read</summary>\n\n- Requirement documents: ${list(reqDocs)}\n- Standards files: ${list(standards)}\n- Trace: ${cell(trace)}\n${rej}- Commits: head \`${cell(String(head).slice(0, 7))}\`, base \`${cell(String(base).slice(0, 7))}\`\n\n</details>\n`;
 }
 // Sections in order of importance (findings, pre-existing drift, Traceability, then the long tables). Each section's items are
 // added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [] }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts }) {
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
-  let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}## SpecGuard\n\n${neutralize(status)}\n\n`;
+  let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}## SpecGuard\n\n${neutralize(status)}\n\n`;
   if (engine) head += `${usageLine({ engine, model, raw: usage, notes })}\n\n`;
+  const sn = counts && counts.complete && counts.since;
+  if (sn && counts.since_total) head += `<sub>Since earlier reviews: ${sn.addressed} addressed · ${sn.open} still open · ${sn.dismissed} dismissed · ${sn.not_observed} not observed (not proof of a fix)</sub>\n\n`;
   if (partial) head += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
   if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
   if (traceNote) head += `> Traceability unavailable for this PR (${cell(traceNote)}).\n\n`;
@@ -582,12 +614,17 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
     return c.side === 'LEFT' ? locate(c, changed(c), keys(c)) : locate(c, (l) => lines?.[l - 1], lines ? lines.map((_, i) => i + 1) : []);
   };
   for (const c of data.coverage) {
-    const { change } = c;
-    const ok = [!change || (reviewable.has(change.path) && locate(change, changed(change), keys(change))), !c.behaviour || exact(c.behaviour), ...c.evidence.map((e) => exact(e))];
-    if (ok.includes(false)) {
+    const { change } = c, fails = []; // every citation is checked (locate corrects lines in place); the failures are named
+    const check = (label, x, pass) => { if (!pass) fails.push(`${label} ${x.path}:${x.line}`); };
+    if (change) check('changed line', change, reviewable.has(change.path) && locate(change, changed(change), keys(change)));
+    if (c.behaviour) check('behaviour', c.behaviour, exact(c.behaviour));
+    c.evidence.forEach((e, i) => check(`evidence ${i + 1}`, e, exact(e)));
+    if (fails.length) {
+      const why = `could not verify citation: ${fails.join('; ')}`;
       c.status = 'unknown';
-      c.reason = 'Could not verify the changed-line, behaviour or test citation.';
-      c.alignment = unknownAlign('A citation could not be verified.');
+      c.reason = `Could not verify the citation: ${fails.join('; ')}.`;
+      c.alignment = unknownAlign(`A citation could not be verified (${fails.join('; ')}).`);
+      (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${why}.`);
     }
   }
   const invalid = new Set(data.coverage.filter((c) => c.status === 'unknown').map((c) => c.id));
@@ -614,7 +651,8 @@ function quoteLine(lines, quote) {
 function verifyRequirements(data, context, read = readFile) {
   const allow = context.specFiles ? new Set(context.specFiles) : null;
   const note = (s) => { data.not_reviewed = [data.not_reviewed, s].filter(Boolean).join(' '); };
-  const invalid = new Set(), unassessed = [];
+  const invalid = new Map(), unassessed = []; // invalid: obligation id -> the requirement citation that failed
+  const fail = (r, why) => r.obligation_ids.forEach((id) => invalid.set(id, `requirement ${r.id} ${r.source}${r.line ? `:${r.line}` : ''}: ${why}`));
   const texts = new Map(); // normalised once per source, not once per criterion
   const textOf = (key, get) => { if (!texts.has(key)) { const text = get(); texts.set(key, { text, n: norm(text) }); } return texts.get(key); };
   const byId = new Map(data.requirements.map((r) => [r.id, r]));
@@ -624,7 +662,7 @@ function verifyRequirements(data, context, read = readFile) {
     const r = byId.get(expected.id);
     if (!r) { if (!expected.optional) data.requirements.push({ id: expected.id, source: expected.source, quote: expected.quote, ...(expected.ref && { ref: expected.ref }), ...(expected.line && { line: expected.line }), obligation_ids: [], reason: 'Structured acceptance criterion was not assessed.' }); } // optional (history) criteria are never re-added
     else if (!(r.source === expected.source || r.source.startsWith(`${expected.source} AC `) && /^\d+$/.test(r.source.slice(expected.source.length + 4))) || norm(r.quote) !== norm(expected.quote)) {
-      r.obligation_ids.forEach((id) => invalid.add(id));
+      fail(r, 'its ID did not match the collected source text');
       Object.assign(r, { source: expected.source, quote: expected.quote, obligation_ids: [], reason: 'Criterion ID did not match its collected source text.' });
     } else { // "PR body AC 1" is accepted; the collected label and ref are canonical (the model's own ref is never trusted)
       r.source = expected.source;
@@ -640,7 +678,7 @@ function verifyRequirements(data, context, read = readFile) {
     const rejected = !collected && isPath && !(file && (!allow || allow.has(file)));
     const T = rejected ? { text: '', n: '' } : textOf(collected ? `label:${label}` : `file:${file}`, () => (collected ? collected.text : isPath ? (read(file) || []).join('\n') : ''));
     if (rejected || !T.n.includes(norm(r.quote))) {
-      if (rejected || !context.unavailable) r.obligation_ids.forEach((id) => invalid.add(id)); // no status file: citations that verify on their own keep their findings
+      if (rejected || !context.unavailable) fail(r, rejected ? 'not a collected requirement document' : 'quote not found in its source'); // no status file: citations that verify on their own keep their findings
       r.obligation_ids = [];
       r.reason = rejected ? 'The cited file is not a collected requirement document.' : 'Could not verify the original criterion wording against its source.';
     } else if (specPath(label)) { // re-derive the line from the quote; a model-supplied line is never trusted
@@ -655,8 +693,10 @@ function verifyRequirements(data, context, read = readFile) {
   }
   if (unassessed.length) note(unassessed.slice(0, 10).join(' ') + (unassessed.length > 10 ? ` ${unassessed.length - 10} more requirements are not assessed.` : ''));
   for (const c of data.coverage) if (invalid.has(c.id)) {
-    c.status = 'unknown'; c.reason = 'The linked requirement citation could not be verified.';
-    c.alignment = unknownAlign('The linked requirement citation could not be verified.');
+    const why = `The linked requirement citation could not be verified (${invalid.get(c.id)})`;
+    c.status = 'unknown'; c.reason = `${why}.`;
+    c.alignment = unknownAlign(`${why}.`);
+    (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${why}.`);
   }
   data.findings = data.findings.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !invalid.has(id)) }))
     .filter((f) => f.kind === 'standard' || f.obligation_ids.length);
@@ -750,25 +790,89 @@ function renameMaps(base, head, cwd, git = (...a) => execFileSync('git', a, { cw
   return out;
 }
 
+// All review threads (first 300), each { id, isResolved, resolvedBy, comments: { nodes: [first two] } }. Throws on a GraphQL error.
+const THREADS_Q = 'query($o:String!,$r:String!,$n:Int!,$a:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$a){pageInfo{hasNextPage endCursor}nodes{id isResolved resolvedBy{login __typename} comments(first:2){nodes{author{login __typename} body}}}}}}}';
+async function fetchThreads({ github, owner, repo, number, maxThreads = 300 }) {
+  const nodes = [];
+  let after = null;
+  while (nodes.length < maxThreads) {
+    const t = (await github.graphql(THREADS_Q, { o: owner, r: repo, n: number, a: after })).repository.pullRequest.reviewThreads;
+    nodes.push(...t.nodes);
+    if (!t.pageInfo.hasNextPage) break;
+    after = t.pageInfo.endCursor;
+  }
+  return nodes;
+}
+
 // Resolve review threads whose only comment is our own bot comment for a finding this run no longer reports. Any failure is a limitation note, never a run failure.
-async function resolveStale({ github, core, owner, repo, number, current, actor = null, maxThreads = 300, maxResolve = 20 }) {
-  const q = 'query($o:String!,$r:String!,$n:Int!,$a:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$a){pageInfo{hasNextPage endCursor}nodes{id isResolved comments(first:2){nodes{author{login __typename} body}}}}}}}';
+// threads: the already fetched thread list (the telemetry read), else fetched here.
+async function resolveStale({ github, core, owner, repo, number, current, actor = null, maxResolve = 20, threads }) {
   try {
     const stale = [];
-    let after = null, seen = 0;
-    while (seen < maxThreads) {
-      const t = (await github.graphql(q, { o: owner, r: repo, n: number, a: after })).repository.pullRequest.reviewThreads;
-      for (const th of t.nodes) {
-        seen++;
-        const cs = th.comments.nodes;
-        const m = cs.length === 1 && !th.isResolved && ours(cs[0].author, actor) && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(cs[0].body || '');
-        if (m && !current.has(m[1])) stale.push(th.id);
-      }
-      if (!t.pageInfo.hasNextPage) break;
-      after = t.pageInfo.endCursor;
+    for (const th of threads || await fetchThreads({ github, owner, repo, number })) {
+      const cs = th.comments.nodes;
+      const m = cs.length === 1 && !th.isResolved && ours(cs[0].author, actor) && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(cs[0].body || '');
+      if (m && !current.has(m[1])) stale.push(th.id);
     }
     for (const threadId of stale.slice(0, maxResolve)) await github.graphql('mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{id}}}', { t: threadId });
   } catch (e) { core.warning(`SpecGuard: stale review threads could not be resolved: ${e.message}`); }
+}
+
+// Did the diff from `from` to `to` change a line of the old side of `file` in [start, end]? true / false, or null when git cannot say
+// (commit not fetched, shallow clone, file deleted or renamed: that is not evidence about the anchor). Whitespace-only edits do not count.
+function anchorTouched(from, to, file, start, end, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 26 })) {
+  if (!/^[0-9a-f]{7,64}$/i.test(String(from)) || !file || !(end >= 1)) return null;
+  try {
+    const d = git('diff', '-U0', '-w', '--no-color', '--no-ext-diff', '--no-renames', from, to, '--', file);
+    if (/^(?:deleted file mode|\+\+\+ \/dev\/null)/m.test(d)) return null;
+    for (const m of d.matchAll(/^@@ -(\d+)(?:,(\d+))? \+/gm)) {
+      const a = +m[1], n = m[2] === undefined ? 1 : +m[2]; // n === 0: pure insertion after old line a
+      if (n ? a <= end && a + n - 1 >= start : a >= start && a < end) return true;
+    }
+    return false;
+  } catch { return null; }
+}
+
+// One record per earlier SpecGuard finding (priors: Map fp -> REST review comment, oldest first). Only called on a complete run:
+// `survive` is then every fingerprint still reported. Each lookup failing degrades that field to unknown, never the run.
+async function followUp({ github, core, owner, repo, number, priors, survive, me, headSha, cwd, threads }) {
+  const byFp = new Map();
+  for (const th of threads || []) {
+    const c = th.comments.nodes[0], m = c && ours(c.author, me) && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || '');
+    if (m) byFp.set(m[1], th);
+  }
+  const out = [];
+  for (const [fp, c] of [...priors].slice(-HARD_CAP)) {
+    let up = 0, down = 0;
+    const roll = c.reactions || {}, n = (k) => (Number.isInteger(roll[k]) ? roll[k] : 0);
+    if (n('+1') || n('-1')) {
+      try { // our own 👍/👎 (G2) are not feedback
+        for (const r of await github.paginate(github.rest.reactions.listForPullRequestReviewComment, { owner, repo, comment_id: c.id, per_page: 100 })) {
+          if (ours(r.user, me)) continue;
+          if (r.content === '+1') up++; else if (r.content === '-1') down++;
+        }
+      } catch { [up, down] = [Math.max(0, n('+1') - 1), Math.max(0, n('-1') - 1)]; } // assume our own pair is in the rollup
+    }
+    const th = byFp.get(fp);
+    const link = /\]\(https?:\/\/[^)\s]*\/blob\/[0-9a-f]+\/[^)\s]*#L(\d+)(?:-L(\d+))?\)/.exec(c.body || ''); // a file-level comment names its lines only in this link
+    const end = c.original_line ?? (link ? +(link[2] || link[1]) : null), start = c.original_start_line ?? (link ? +link[1] : end);
+    const rec = {
+      fp, kind: (/kind: (\w+), confidence/.exec(c.body || '') || [])[1] || null, still_reported: survive.has(fp),
+      anchor_touched: anchorTouched(c.original_commit_id, headSha, c.path, start, end, cwd),
+      thread: !th ? 'unknown' : !th.isResolved ? 'open' : th.resolvedBy && ours(th.resolvedBy, me) ? 'specguard' : 'human', up, down,
+    };
+    out.push({ ...rec, outcome: outcome(rec) });
+  }
+  return out;
+}
+
+// Adds 👍 and 👎 from our token to each new comment (the review's comments, then file-level ones) so a reviewer can rate it with one click.
+// Stops at the first failure (a rate limit would repeat); any failure is a warning, never a run failure.
+async function react({ github, core, owner, repo, number, reviewId, ids = [] }) {
+  try {
+    const all = [...(reviewId ? (await github.paginate(github.rest.pulls.listCommentsForReview, { owner, repo, pull_number: number, review_id: reviewId, per_page: 100 })).map((c) => c.id) : []), ...ids];
+    for (const comment_id of all) for (const content of ['+1', '-1']) await github.rest.reactions.createForPullRequestReviewComment({ owner, repo, comment_id, content });
+  } catch (e) { core.warning(`SpecGuard: could not add 👍/👎 reactions: ${e.message}`); }
 }
 
 async function run({ github, context, core }) {
@@ -897,13 +1001,13 @@ async function run({ github, context, core }) {
   const pre = new Set(data.coverage.filter((c) => ['mismatch', 'impacted'].includes(c.alignment.status) && c.alignment.since === 'pre_existing').map((c) => c.id));
   const preExisting = []; // drift this PR did not cause: summary section only, never inline
 
-  const known = new Set();
+  const known = new Set(), priors = new Map(); // priors: fp -> our latest earlier comment with it, oldest first
   let withheld = ''; // why inline comments cannot be posted safely
   try {
     const me = await actor();
     for (const c of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: pr.number, per_page: 100 })) {
       const m = /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || ''); // the marker is always last; outdated comments have line=null: fingerprint only
-      if (m && ours(c.user, me)) known.add(m[1]);
+      if (m && ours(c.user, me)) { known.add(m[1]); priors.delete(m[1]); priors.set(m[1], c); }
     }
   } catch (e) {
     withheld = `existing review comments could not be listed (${e.status ? `${e.status}: ` : ''}${String(e.message).split('\n')[0]}), so inline comments were withheld to avoid duplicates`;
@@ -978,8 +1082,9 @@ async function run({ github, context, core }) {
   const degraded = proposed > data.findings.length;
 
   const p = plan(kept, maps, maxComments);
+  const reqFor = (f) => data.requirements.find((r) => r.obligation_ids.some((id) => (f.obligation_ids || []).includes(id))) || null; // a linked requirement (its quote is verified)
   const comments = p.inline.map((f) => ({
-    path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp),
+    path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp, true, reqFor(f)),
     ...(f.start_line !== undefined && { start_line: f.start_line, start_side: 'RIGHT' }),
   }));
   const prov = proven(data.coverage);
@@ -993,9 +1098,11 @@ async function run({ github, context, core }) {
     for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: withheld ? 'withheld: could not deduplicate' : `not posted: ${stop}` });
     inline = filed = 0;
   }
+  let reviewId; // the posted review: its comments get the 👍/👎 reactions
+  const fileIds = [];
   if (!stop && comments.length) {
     const post = (body, cs) => github.rest.pulls.createReview({ owner, repo, pull_number: pr.number, commit_id: headSha, event: 'COMMENT', body: clean(body), ...(cs && { comments: cs }) });
-    try { await post(head, comments); }
+    try { reviewId = (await post(head, comments))?.data?.id; }
     catch (e) {
       if (e.status === 422) {
         try { await post(`${head}\n\nInline anchors were rejected; unanchored findings:\n\n${p.inline.map((f) => item({ f })).join('\n')}`); }
@@ -1014,17 +1121,39 @@ async function run({ github, context, core }) {
     const range = f.start_line ? `#L${f.start_line}-L${f.line}` : `#L${f.line}`;
     const link = `${context.serverUrl}/${owner}/${repo}/blob/${headSha}/${f.path}${range}`;
     try {
-      await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
+      const r = await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false, reqFor(f)) });
+      if (r?.data?.id) fileIds.push(r.data.id);
     } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); filed--; }
   }
-  if (!stop && !incomplete.length && !degraded && env.RESOLVE_STALE !== 'false') await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: await actor() });
+  if (reviewId || fileIds.length) await react({ github, core, owner, repo, number: pr.number, reviewId, ids: fileIds });
+
+  // Fix-through telemetry. Only a complete run can say an earlier finding is no longer reported: otherwise counts only (complete:false, no outcomes).
+  const complete = !incomplete.length && !degraded;
+  const me = await actor();
+  let threads, outcomes = [];
+  if (complete && priors.size) {
+    try { threads = await fetchThreads({ github, owner, repo, number: pr.number }); }
+    catch (e) { core.warning(`SpecGuard: review threads could not be read for telemetry: ${e.message}`); }
+    outcomes = await followUp({ github, core, owner, repo, number: pr.number, priors, survive, me, headSha, cwd: root, threads });
+  }
+  const byKind = {};
+  const tally = (list, k) => list.forEach((f) => { (byKind[f.kind] ||= { posted: 0, already: 0, summary: 0 })[k]++; });
+  const unplaced = new Set(unanchored.map((x) => x.f));
+  tally(merged.filter((f) => known.has(f.fp)), 'already');
+  tally([...p.inline, ...p.file].filter((f) => !unplaced.has(f)), 'posted');
+  tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
+  const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
+  for (const o of outcomes) since[o.outcome]++;
+  const tele = { v: 1, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, outcomes };
+  if (!stop && complete && env.RESOLVE_STALE !== 'false') await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads });
 
   const clean_ = noGaps(data) && !incomplete.length;
   await publish(buildSummary({ status: `${clean_ ? 'No test gaps found in the assessed obligations.' : `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
-    manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base } }));
+    manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
+    rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele }));
 }
 
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { agentPrompt, outcome, anchorTouched, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
