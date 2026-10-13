@@ -285,14 +285,14 @@ function repo(t, files, ctxFiles = {}, env = {}) {
 }
 const lineText = (n) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
 
-test('context pack: rest of a cut diff, rule files, changed files (focus order), their tests, requirement docs, in that order; line-numbered, de-duplicated, deleted files skipped; one note', async (t) => {
+test('context pack: rule files, changed files (focus order) each followed by its tests, rest of a cut diff, requirement docs, in that order; line-numbered, de-duplicated, deleted files skipped; one note', async (t) => {
   const diff = Array.from({ length: 5000 }, (_, i) => `${String(i + 1).padStart(4)}| +code ${i}`).join('\n') + '\n'; // far above the 40 KiB prompt limit
   const r = repo(t, { 'RULES.md': 'Rule one\n', 'src/a.js': 'const a = 1;\nconst b = 2;\n', 'src/b.js': 'b();\n', 'test/a.test.js': 'test(a);\n', 'docs/req.md': 'REQ text\n' }, {
     'diff.numbered.txt': diff, 'standards.txt': 'RULES.md\n', 'files.txt': 'src/a.js\nsrc/b.js\nsrc/gone.js\n', 'focus.txt': 'src/b.js\t9\tx\nsrc/a.js\t5\ty\nsrc/gone.js\t1\tz\n',
     'test-candidates.txt': 'src/a.js\n  test/a.test.js  (same stem)\n  src/b.js  (dup)\nsrc/b.js\n  (no candidate test file found)\n', 'spec-files.txt': 'docs/req.md\nRULES.md\n' });
   await r.go();
   const u = r.user(), at = (s) => u.indexOf(s);
-  assert.ok(at('diff.numbered.txt (rest)') > 0 && at('diff.numbered.txt (rest)') < at('name="RULES.md"') && at('name="RULES.md"') < at('name="src/b.js"') && at('name="src/b.js"') < at('name="src/a.js"') && at('name="src/a.js"') < at('name="test/a.test.js"') && at('name="test/a.test.js"') < at('name="docs/req.md"'), 'priority order');
+  assert.ok(at('name="RULES.md"') > 0 && at('name="RULES.md"') < at('name="src/b.js"') && at('name="src/b.js"') < at('name="src/a.js"') && at('name="src/a.js"') < at('name="test/a.test.js"') && at('name="test/a.test.js"') < at('diff.numbered.txt (rest)') && at('diff.numbered.txt (rest)') < at('name="docs/req.md"'), 'priority order');
   assert.match(u, /name="diff\.numbered\.txt \(rest\)" note="lines \d+ to 5000 of 5000; continues the diff block above"/);
   assert.match(u, /name="src\/a\.js" note="full file, line-numbered">\n {3}1\| const a = 1;\n {3}2\| const b = 2;\n<\/untrusted-data>/);
   assert.match(u, /name="RULES\.md" note="full file">\nRule one\n/);
@@ -300,6 +300,13 @@ test('context pack: rest of a cut diff, rule files, changed files (focus order),
   assert.ok(!u.includes('gone.js"'));
   assert.match(u, /no file tools[\s\S]*Repository files[\s\S]*full current text/);
   assert.match(r.h.file('engine-notes'), /^context pack: 5 files, \d+ KB$/);
+});
+
+test('context pack: a source file is followed at once by its tests, before the next source file', async (t) => {
+  const r = repo(t, { 'src/a.js': 'a();\n', 'src/b.js': 'b();\n', 'test/a.test.js': 'ta();\n', 'test/b.test.js': 'tb();\n' }, { 'files.txt': 'src/a.js\nsrc/b.js\n', 'test-candidates.txt': 'src/a.js\n  test/a.test.js  (same stem)\nsrc/b.js\n  test/b.test.js  (same stem)\n' });
+  await r.go();
+  const u = r.user(), at = (n) => u.indexOf(`name="${n}"`);
+  assert.ok(at('src/a.js') > 0 && at('src/a.js') < at('test/a.test.js') && at('test/a.test.js') < at('src/b.js') && at('src/b.js') < at('test/b.test.js'), 'a, its test, b, its test');
 });
 
 test('context pack: files.txt order without focus.txt; the byte budget cuts a file at a line boundary and lists what did not fit', async (t) => {
@@ -314,13 +321,13 @@ test('context pack: files.txt order without focus.txt; the byte budget cuts a fi
   assert.match(r.h.file('engine-notes'), /^context pack: 2 files, \d KB; not included: c\.js, d\.js, e\.js, f\.js \(\+2 more\)$/);
 });
 
-test('context pack: a file over 48 KiB is cut at a line boundary and says so', async (t) => {
+test('context pack: a file over the per-file cap (limit/6, here 25000 bytes) is cut at a line boundary and says so', async (t) => {
   const r = repo(t, { 'big.js': lineText(20000) }, { 'files.txt': 'big.js\n' });
   await r.go();
   const m = /name="big\.js" note="first (\d+) of 20000 lines, line-numbered">\n([\s\S]*?)\n<\/untrusted-data>/.exec(r.user());
   assert.ok(m && +m[1] > 1000 && +m[1] < 20000);
   assert.equal(m[2].split('\n').length, +m[1]);
-  assert.ok(Buffer.byteLength(m[2]) <= 48 * 1024);
+  assert.ok(Buffer.byteLength(m[2]) <= 150000 / 6);
   assert.doesNotMatch(r.h.file('engine-notes'), /not included/, 'a cut file is not an omitted file');
 });
 
