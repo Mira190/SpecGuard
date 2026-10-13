@@ -218,3 +218,170 @@ test('collect with testPaths writes the configured layout to test-layout.txt', (
   collect({ cwd: r.root, ctx: r.ctx, testPaths: 'qa/checks' });
   assert.match(fs.readFileSync(path.join(r.ctx, 'test-layout.txt'), 'utf8'), /configured test locations[^\n]*: qa\/checks\ntest directories: qa\/checks \(1\)/);
 });
+
+// ---- evidence candidates, scan_paths, rotation ----
+const { select, scopeFn, loadPrior } = require('./audit-collect');
+const audit = require('./audit-post');
+const evRows = (ctx) => rows(ctx, 'audit-evidence.txt');
+const SCHED_DOC = '# Delivery\n\nThe scheduler MUST double the retry delay after each failed delivery attempt, up to the maxDelay limit.\n\nThe community team MUST publish the release notes every month.\n';
+const SCHED_SRC = '// Delivery retry scheduling\nfunction nextRetryDelay(retryDelay, maxDelay) {\n  // double the retry delay after each failed delivery attempt, capped at maxDelay\n  return Math.min(retryDelay * 2, maxDelay);\n}\nmodule.exports = { nextRetryDelay };\n';
+const SCHED_TEST = "test('doubles the retry delay after a failed delivery attempt', () => {\n  assert.equal(nextRetryDelay(100, 1000), 200);\n});\ntest('caps the retry delay at maxDelay', () => {\n  assert.equal(nextRetryDelay(800, 1000), 1000);\n});\n";
+const SCHED = {
+  'docs/design.md': SCHED_DOC,
+  'src/scheduler.js': SCHED_SRC,
+  'src/invoice.js': 'exports.total = (items) => items.reduce((a, i) => a + i.price, 0);\n',
+  'tests/scheduler.test.js': SCHED_TEST,
+  'data/results/run1.json': '{"note": "double the retry delay after each failed delivery attempt maxDelay limit"}\n',
+};
+const cidOfText = (ctx, re) => cands(ctx).find((c) => re.test(c[3]))[0];
+
+test('evidence: a block gets code and test locations (path:line and the matching line); an unrelated block, a data file and a document get none', (t) => {
+  const { root, ctx } = repo(t, SCHED);
+  const r = collect({ cwd: root, ctx });
+  const ev = evRows(ctx), retry = cidOfText(ctx, /retry delay/), notes = cidOfText(ctx, /release notes/);
+  const mine = ev.filter((e) => e[0] === retry), code = mine.filter((e) => e[1] === 'code'), tests = mine.filter((e) => e[1] === 'test');
+  assert.deepEqual(code.map((e) => e[2].split(':')[0]), ['src/scheduler.js']);
+  assert.deepEqual(tests.map((e) => e[2].split(':')[0]), ['tests/scheduler.test.js']);
+  assert.ok(code.length <= 3 && tests.length <= 3);
+  const [p, l] = code[0].slice(2, 3)[0].split(':');
+  assert.equal(fs.readFileSync(path.join(root, p), 'utf8').split('\n')[l - 1].trim(), code[0][3], 'the line number points at the snippet');
+  assert.match(code[0][3], /double the retry delay/);
+  assert.deepEqual(ev.filter((e) => e[0] === notes), [[notes, 'none']], 'a block with no match says none');
+  assert.ok(ev.every((e) => !/results|\.json|\.md/.test(e[2] || '')));
+  assert.deepEqual([r.evidence.blocks, r.evidence.with_code, r.evidence.with_tests], [2, 1, 1]);
+  assert.deepEqual(metaOf(ctx).evidence, { blocks: 2, with_code: 1, with_tests: 1, cut: false, files: 5 });
+  assert.ok(metaOf(ctx).limitations.some((x) => /capped at 3 code and 3 test locations per block/.test(x)), 'the cap is stated');
+});
+
+test('evidence: the time budget ends the search; every block says none and the limitation names it', (t) => {
+  const { root, ctx } = repo(t, SCHED);
+  const r = collect({ cwd: root, ctx, evidenceBudgetMs: 0 });
+  assert.ok(evRows(ctx).length === 2 && evRows(ctx).every((e) => e[1] === 'none'));
+  assert.equal(r.evidence.cut, true);
+  assert.ok(metaOf(ctx).limitations.some((x) => /time budget ended the evidence search/.test(x)));
+});
+
+const MONO = {
+  'packages/a/docs/design.md': SCHED_DOC, 'packages/a/src/scheduler.js': SCHED_SRC, 'packages/a/tests/scheduler.test.js': SCHED_TEST,
+  'packages/b/docs/design.md': '# Billing\n\nThe billing service MUST round every invoice total to two decimals before sending it.\n\nThe billing service MUST NOT send an invoice twice.\n',
+  'packages/b/src/billing.js': 'function roundInvoiceTotal(total) { return Math.round(total * 100) / 100; } // round every invoice total to two decimals before sending it\n',
+  'packages/b/src/scheduler.js': SCHED_SRC, // the same names in another package: must not be offered to package a
+  'packages/b/tests/billing.test.js': "test('rounds every invoice total to two decimals before sending it', () => { assert.equal(roundInvoiceTotal(1.005), 1.01); });\n",
+};
+
+test('scan_paths: documents, code and tests are searched only in the scope (! excludes); without it the whole repository is', (t) => {
+  const all = repo(t, MONO);
+  collect({ cwd: all.root, ctx: all.ctx });
+  assert.deepEqual(rows(all.ctx, 'audit-docs.txt').map((d) => d[0]).sort(), ['packages/a/docs/design.md', 'packages/b/docs/design.md']);
+  const retry = cidOfText(all.ctx, /retry delay/);
+  assert.deepEqual(evRows(all.ctx).filter((e) => e[0] === retry && e[1] === 'code').map((e) => e[2].split(':')[0]).sort(), ['packages/a/src/scheduler.js', 'packages/b/src/scheduler.js']);
+
+  const a = repo(t, MONO);
+  collect({ cwd: a.root, ctx: a.ctx, scanPaths: 'packages/a/**' });
+  assert.deepEqual(rows(a.ctx, 'audit-docs.txt').map((d) => d[0]), ['packages/a/docs/design.md']);
+  assert.ok(cands(a.ctx).every((c) => c[1].startsWith('packages/a/')));
+  const ev = evRows(a.ctx).filter((e) => e[1] !== 'none');
+  assert.ok(ev.length > 0 && ev.every((e) => e[2].startsWith('packages/a/')), JSON.stringify(ev));
+  assert.deepEqual(metaOf(a.ctx).scope, ['packages/a/**']);
+  assert.deepEqual(metaOf(a.ctx).candidates, 2);
+
+  const x = repo(t, MONO);
+  collect({ cwd: x.root, ctx: x.ctx, scanPaths: 'packages/a/**\n!packages/a/tests/**' });
+  assert.ok(evRows(x.ctx).some((e) => e[1] === 'code') && !evRows(x.ctx).some((e) => e[1] === 'test'), 'the excluded tests are not offered');
+  const only = scopeFn('!packages/b/**');
+  assert.ok(only('packages/a/x.js') && !only('packages/b/x.js'), 'an exclude-only scope keeps the rest');
+  assert.equal(scopeFn(''), null);
+  assert.ok(scopeFn('packages/a')('packages/a/src/x.js') && !scopeFn('packages/a')('packages/ab/x.js'), 'a plain path is a folder');
+});
+
+const B = (cid, p) => ({ cid, path: p, line: 1, heading: '', text: cid, full: cid });
+const [A1, A2, A3, B1, B2, B3, B4, B5, B6, C1] = ['aaaaaaa1', 'aaaaaaa2', 'aaaaaaa3', 'bbbbbbb1', 'bbbbbbb2', 'bbbbbbb3', 'bbbbbbb4', 'bbbbbbb5', 'bbbbbbb6', 'ccccccc1'];
+const at = (date) => ({ head: 'h', date });
+const ALL = [B(A1, 'docs/a.md'), B(A2, 'docs/a.md'), B(A3, 'docs/a.md'), B(B1, 'docs/b.md'), B(B2, 'docs/b.md'), B(B3, 'docs/b.md'), B(B4, 'docs/b.md'), B(B5, 'docs/b.md'), B(B6, 'docs/b.md'), B(C1, 'docs/c.md')];
+const STATE = { head: 'old', blocks: [
+  { cid: A1, status: 'gap', since: 'x', runs: 2, at: at('2026-09-15') }, { cid: A2, status: 'covered', since: 'x', runs: 3, at: at('2026-10-01') }, { cid: A3, status: 'gap', since: 'x', runs: 1, at: at('2026-09-10') },
+  { cid: B2, status: 'covered', since: 'x', runs: 1, at: at('2026-01-01') }, { cid: B4, status: 'recheck', since: 'x', runs: 1, at: at('2026-09-30') }, { cid: B5, status: 'not_req', since: 'x', runs: 1, at: at('2026-05-01') },
+  { cid: B6, status: 'covered', since: 'x', runs: 1, at: null } ] };
+const CHANGED = new Map([['docs/b.md', new Set([B2, B3, B4, B5, B6])]]); // B1 is new or edited in the changed document; B3 existed (never audited)
+
+test('select: changed first, then gaps to confirm, then never-audited, then the least recently audited (an unknown date first); no state is document order', () => {
+  const order = (cap) => select(ALL, cap, STATE, CHANGED);
+  assert.deepEqual(order(99).picked.map((b) => b.cid), [B1, A3, B4, B3, C1, B6, B2, B5, A1, A2]);
+  const four = order(4);
+  assert.deepEqual(four.picked.map((b) => b.cid), [B1, A3, B4, B3]);
+  assert.deepEqual(four.tally, { d: 1, c: 2, n: 1, o: 0 });
+  assert.deepEqual(order(7).tally, { d: 1, c: 2, n: 2, o: 2 });
+  assert.deepEqual(select(ALL, 3, STATE, null).picked.map((b) => b.cid), [A3, B4, B1], 'no diff available: the new blocks are plain new ones, in document order');
+  const plain = select(ALL, 3, null);
+  assert.deepEqual([plain.picked.map((b) => b.cid), plain.tally], [[A1, A2, A3], { d: 0, c: 0, n: 3, o: 0 }]);
+  assert.deepEqual(select(ALL, 4, { head: 'old', blocks: STATE.blocks.map((b) => (b.cid === A3 ? { ...b, runs: 2 } : b)) }, CHANGED).picked.map((b) => b.cid), [B1, B4, B3, C1], 'a confirmed gap (two runs) is not a gap to confirm');
+});
+
+const AB = {
+  'docs/a.md': '# A\n\nThe alpha service MUST retry failed uploads three times.\n\nThe alpha service MUST log every rejected upload.\n\nThe alpha service MUST NOT store passwords in plain text.\n',
+  'docs/b.md': '# B\n\nThe beta service MUST cache every lookup for ten minutes.\n\nThe beta service MUST evict the oldest entry first.\n\nThe beta service MUST NOT cache failed lookups.\n',
+  'src/a.js': 'x\n',
+};
+
+test('collect with the issue state: the edited block first, then the gap to confirm, then the oldest; the others are carried by cid; the meta says how many of each', (t) => {
+  const { root, ctx, git } = repo(t, AB);
+  collect({ cwd: root, ctx });
+  const [a1, a2, a3, b1, b2, b3] = cands(ctx).map((c) => c[0]);
+  const head1 = git('rev-parse', 'HEAD');
+  const state = { head: head1, blocks: [
+    { cid: a1, status: 'gap', since: 's', runs: 1, at: at('2026-09-01') }, { cid: a2, status: 'covered', since: 's', runs: 1, at: at('2026-08-01') }, { cid: a3, status: 'covered', since: 's', runs: 1, at: at('2026-09-20') },
+    { cid: b1, status: 'covered', since: 's', runs: 1, at: at('2026-07-01') }, { cid: b2, status: 'covered', since: 's', runs: 1, at: at('2026-06-01') }, { cid: b3, status: 'covered', since: 's', runs: 1, at: at('2026-10-01') }] };
+  fs.writeFileSync(path.join(root, 'docs/b.md'), AB['docs/b.md'].replace('evict the oldest entry first', 'evict the least recently used entry first'));
+  git('add', '.'); git('commit', '-m', 'edit b');
+  const r = collect({ cwd: root, ctx, maxRequirements: 3, rotate: true, prior: state });
+  const picked = cands(ctx);
+  assert.deepEqual(picked.map((c) => c[0]).filter((c) => c !== a1 && c !== b1), picked.map((c) => c[0]).filter((c) => ![a1, b1].includes(c)));
+  assert.equal(picked.length, 3);
+  assert.deepEqual(picked.slice(0, 2).map((c) => c[0]), [a1, b1], 'listed in document order');
+  assert.match(picked[2][3], /least recently used/, 'the edited block (a new cid in a changed document) is chosen');
+  assert.deepEqual(r.rotation, { rotate: true, state: true, picked: 3, changed: 1, confirming: 1, new: 0, oldest: 1, carried: 3 });
+  assert.deepEqual(rows(ctx, 'audit-carried.txt').map((c) => c[0]), [a2, a3, b3], 'the edited block replaced b2: its old cid is gone from the documents');
+  assert.ok(rows(ctx, 'audit-carried.txt').every((c) => /^docs\/[ab]\.md:\d+$/.test(c[1]) && c[3]));
+  assert.ok(metaOf(ctx).cap_left.some((l) => /3 of 6 blocks were not audited this run \(scan_max_blocks 3\); 3 keep the status of their last audit, 0 have never been audited/.test(l)), JSON.stringify(metaOf(ctx).cap_left));
+  assert.deepEqual(metaOf(ctx).rotation, r.rotation);
+});
+
+test('collect with a state head this clone does not have: the run goes on without the changed-document priority and says so', (t) => {
+  const { root, ctx } = repo(t, AB);
+  collect({ cwd: root, ctx });
+  const state = { head: 'f'.repeat(40), blocks: cands(ctx).map((c) => ({ cid: c[0], status: 'covered', since: 's', runs: 1, at: at('2026-09-01') })) };
+  const r = collect({ cwd: root, ctx, maxRequirements: 2, rotate: true, prior: state });
+  assert.equal(r.rotation.picked, 2);
+  assert.ok(metaOf(ctx).limitations.some((l) => /could not diff against the last scanned commit fffffff \(shallow clone\? use fetch-depth: 0\)/.test(l)));
+});
+
+test('collect without a state keeps document order and the per-document leftovers', (t) => {
+  const { root, ctx } = repo(t, AB);
+  const r = collect({ cwd: root, ctx, maxRequirements: 4, rotate: true });
+  assert.deepEqual(r.rotation, { rotate: true, state: false, picked: 4, changed: 0, confirming: 0, new: 4, oldest: 0, carried: 0 });
+  assert.deepEqual(cands(ctx).map((c) => c[1].split(':')[0]), ['docs/a.md', 'docs/a.md', 'docs/a.md', 'docs/b.md']);
+  assert.deepEqual(metaOf(ctx).cap_left, ['docs/b.md § B: 2 blocks not scanned (cap)']);
+  assert.equal(fs.readFileSync(path.join(ctx, 'audit-carried.txt'), 'utf8'), '');
+});
+
+test('loadPrior: reads the state of this scope\'s issue over REST (an unscoped scan finds the old unscoped issue); a failure warns and gives no state', async () => {
+  const body = (mark, cid) => `${mark}\n## SpecGuard unit test gap scan\n<!-- specguard:audit-state {"v":4,"head":"abc","audits":[["abc","2026-10-01"]],"blocks":[["${cid}","gap","abc",1,0]]} -->`;
+  const bot = { type: 'Bot', login: 'github-actions[bot]' };
+  const issues = [{ number: 1, body: body(audit.MARK, 'aaaaaaa1'), user: bot }, { number: 2, body: body(audit.scopeOf('packages/a/**').mark, 'bbbbbbb1'), user: bot }, { number: 3, body: body(audit.MARK, 'cccccccc'), user: { type: 'User', login: 'mallory' } }];
+  const seen = [];
+  const fetchFn = async (url, init) => {
+    seen.push([url, init.headers.authorization]);
+    if (url.endsWith('/user')) return { ok: false, status: 403, json: async () => ({}) };
+    return { ok: true, json: async () => issues };
+  };
+  const env = (SCAN_PATHS) => ({ GH_REPO: 'o/r', GH_TOKEN: 'tok', SCAN_PATHS });
+  const first = (p) => p && p.blocks.map((b) => b.cid);
+  assert.deepEqual(first(await loadPrior(env(''), fetchFn)), ['aaaaaaa1'], 'the pre-scope issue still belongs to the unscoped scan');
+  assert.deepEqual(first(await loadPrior(env('packages/a/**'), fetchFn)), ['bbbbbbb1']);
+  assert.equal(await loadPrior(env('packages/z/**'), fetchFn), null);
+  assert.ok(seen.some(([u, a]) => u === 'https://api.github.com/repos/o/r/issues?state=all&per_page=100&page=1' && a === 'Bearer tok'));
+  const logs = [], log = console.log;
+  console.log = (m) => logs.push(m);
+  try { assert.equal(await loadPrior(env(''), async () => ({ ok: false, status: 500, json: async () => ({}) })), null); } finally { console.log = log; }
+  assert.match(logs.join('\n'), /::warning::SpecGuard: could not read the previous scan state/);
+});

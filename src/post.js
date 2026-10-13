@@ -1193,6 +1193,8 @@ async function run({ github, context, core }) {
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
   catch (e) {
     if (st === 'timeout') return failed(`the review timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; raise review_timeout_minutes or split the PR`);
+    const why = (readCtx('engine-error') || '').split('\n')[1]?.trim(); // the engine step's classified failure (quota, policy, auth, rate); absent = unknown
+    if (why && st === 'failed') return failed(why);
     if (st === 'failed') return failed('the review engine failed; see the job log');
     return failed(`no valid findings.json (${e.code || 'parse error'}); see the job log`);
   }

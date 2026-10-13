@@ -7,6 +7,7 @@ const { execFileSync } = require('node:child_process');
 const audit = require('./audit-post');
 const { validate, verify, render, MARK, TITLE, HEADING } = audit;
 
+const DATE = '2026-10-13'; // the audit date stored in the scan state
 const SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, 'audit.schema.json'), 'utf8'));
 const FILES = {
   'docs/design.md': ['# Plan design', '', 'A repeating plan stays on after it fires.', 'A plan must start in the future.'],
@@ -306,7 +307,7 @@ async function runPost(t, { ctxFiles = {}, env = {}, mock = {}, files } = {}) {
   const m = mocks(mock);
   const saved = { ...process.env };
   Object.assign(process.env, { CTX: w.ctx, GITHUB_WORKSPACE: w.root, ENGINE: '', MODEL: '', SKIP: '', AUDIT_ISSUE: 'false', ...env });
-  try { await audit({ github: m.github, context: m.context, core: m.core }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
+  try { await audit({ github: m.github, context: m.context, core: m.core, date: DATE }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
   return { ...m, w };
 }
 
@@ -383,7 +384,7 @@ test('run: the issue body fits GitHub\'s limit by dropping whole rows and says s
   const body = r.calls.created[0].body;
   assert.ok(Buffer.byteLength(body) <= 65536, String(Buffer.byteLength(body)));
   assert.match(body, /_\d+ rows omitted: the report exceeded the size limit/);
-  assert.match(body, /<!-- specguard:audit-state \{"v":3,/, 'the previous state survives the cut');
+  assert.match(body, /<!-- specguard:audit-state \{"v":4,/, 'the previous state survives the cut');
   for (const l of body.split('\n').filter((x) => x.startsWith('| ['))) assert.match(l, /\| unit \| code: .* \|$/);
   assert.ok(r.calls.summary.length > body.length, 'the job summary keeps every row');
   assert.doesNotMatch(r.calls.summary, /rows omitted/);
@@ -514,11 +515,20 @@ test('changed since last audit: only 2-run-stable changes are listed; status chu
   assert.match(chain({ [A]: 'covered' }, { [A]: 'covered' })[1].md, /### Changed since the last scan \(`h1`\)\n\nNo confirmed changes\.\n/);
 });
 
-test('state: v3 round trip and tamper check; a v2 (per-row) state reads as one prior run; v1 and foreign comments are no state', () => {
+test('state: v4 round trip and tamper check; v3 and a v2 (per-row) state still read as one prior run; v1 and foreign comments are no state', () => {
   const rows = verify(result([req(), req({ id: C2, source: cite('docs/design.md', 4), status: 'missing_test', tests: [], text: 'A plan must start in the future.' })]), { read, cands: TWO() });
-  const state = audit.stateComment('abc123def', rows);
-  assert.match(state, /^<!-- specguard:audit-state \{"v":3,"head":"abc123def","blocks":\[\["1111111a","covered","abc123d",1\],\["2222222b","gap","abc123d",1\]\]\} -->$/);
-  assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1 }, { cid: C2, status: 'gap', since: 'abc123d', runs: 1 }] });
+  const state = audit.stateComment('abc123def', rows, null, { date: DATE });
+  assert.match(state, /^<!-- specguard:audit-state \{"v":4,"head":"abc123def","audits":\[\["abc123d","2026-10-13"\]\],"blocks":\[\["1111111a","covered","abc123d",1,0\],\["2222222b","gap","abc123d",1,0\]\]\} -->$/);
+  const at = { head: 'abc123d', date: '2026-10-13' };
+  assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1, at }, { cid: C2, status: 'gap', since: 'abc123d', runs: 1, at }] });
+  // v3 (no audit dates) is the previous format: it reads with an unknown audit date
+  const v3 = audit.readState('<!-- specguard:audit-state {"v":3,"head":"abc123def","blocks":[["1111111a","covered","abc123d",1],["2222222b","gap","abc123d",2]]} -->');
+  assert.deepEqual(v3, { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1, at: null }, { cid: C2, status: 'gap', since: 'abc123d', runs: 2, at: null }] });
+  const bad4 = (audits, blocks) => audit.readState(`<!-- specguard:audit-state ${JSON.stringify({ v: 4, head: 'a', audits, blocks })} -->`);
+  assert.equal(bad4([['abc', '2026-10-13']], [[C1, 'gap', 'a', 1, 1]]), null, 'an audit index out of range');
+  assert.equal(bad4([['abc', 'yesterday']], [[C1, 'gap', 'a', 1, 0]]), null, 'a date must be ISO');
+  assert.equal(bad4([['abc', '2026-10-13']], [[C1, 'gap', 'a', 1, 0]]).blocks[0].at.date, '2026-10-13');
+  assert.equal(bad4([], [[C1, 'gap', 'a', 1, -1]]).blocks[0].at, null);
   assert.ok(!state.includes('plan'), 'ids and statuses only');
   const bad = (blocks) => audit.readState(`<!-- specguard:audit-state ${JSON.stringify({ v: 3, head: 'a', blocks })} -->`);
   assert.equal(bad([['<script>', 'gap', 'a', 1]]), null);
@@ -531,21 +541,21 @@ test('state: v3 round trip and tamper check; a v2 (per-row) state reads as one p
   assert.equal(audit.readState('no state'), null);
   // v2: per-row [id, status]; sub-rows fold into the block, and it counts as one run
   const v2 = audit.readState('<!-- specguard:audit-state {"v":2,"head":"abcdef123456","rows":[["1111111a.1","covered"],["1111111a.2","missing_test"],["2222222b","covered"],["3333333c","unknown"]]} -->');
-  assert.deepEqual(v2, { head: 'abcdef123456', blocks: [{ cid: C1, status: 'gap', since: 'abcdef1', runs: 1 }, { cid: C2, status: 'covered', since: 'abcdef1', runs: 1 }, { cid: C3, status: 'unsure', since: 'abcdef1', runs: 1 }] });
+  assert.deepEqual(v2, { head: 'abcdef123456', blocks: [{ cid: C1, status: 'gap', since: 'abcdef1', runs: 1, at: null }, { cid: C2, status: 'covered', since: 'abcdef1', runs: 1, at: null }, { cid: C3, status: 'unsure', since: 'abcdef1', runs: 1, at: null }] });
   const now = dataOf({ [C1]: 'missing_test', [C2]: 'missing_test', [C3]: 'unknown' });
   const md = render({ data: now, prior: v2, head: 'h2' });
   assert.match(md, /### Confirmed gaps \(1\)[\s\S]*`1111111a`/, 'gap in the v2 run and now: confirmed');
   assert.match(md, /### New gaps, unconfirmed \(1\)[\s\S]*`2222222b`/);
   assert.match(md, /Unstable: 1 block changed status/);
-  assert.match(audit.stateComment('h2', now, v2), /"blocks":\[\["1111111a","gap","abcdef1",2\],\["2222222b","gap","h2",1\],\["3333333c","unsure","abcdef1",2\]\]/);
+  assert.match(audit.stateComment('h2', now, v2, { date: DATE }), /"blocks":\[\["1111111a","gap","abcdef1",2,0\],\["2222222b","gap","h2",1,0\],\["3333333c","unsure","abcdef1",2,0\]\]/);
 });
 
-test('run: a previous issue state drives confirmation in summary and issue; the issue ends with the new v3 state', async (t) => {
+test('run: a previous issue state drives confirmation in summary and issue; the issue ends with the new v4 state', async (t) => {
   const first = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' } });
   const old = first.calls.created[0].body;
   assert.doesNotMatch(old, /Changed since the last scan/);
   assert.match(old, /first scan run/);
-  assert.match(old, /<!-- specguard:audit-state \{"v":3,"head":"abc123","blocks":\[\["1111111a","covered","abc123",1\]\]\} -->$/);
+  assert.match(old, /<!-- specguard:audit-state \{"v":4,"head":"abc123","audits":\[\["abc123","2026-10-13"\]\],"blocks":\[\["1111111a","covered","abc123",1,0\]\]\} -->$/);
   const rs = [req({ status: 'missing_test', tests: [] }), req({ id: C2, source: cite('docs/design.md', 4), text: 'A plan must start in the future.', status: 'missing_test', tests: [] })];
   const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(TWO()) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT }] } });
   const second = r.calls.updated[0].body;
@@ -555,13 +565,13 @@ test('run: a previous issue state drives confirmation in summary and issue; the 
     assert.match(md, /### New gaps, unconfirmed \(2\)/);
     assert.doesNotMatch(md, /### Confirmed gaps/);
   }
-  assert.match(second, /"blocks":\[\["1111111a","gap","abc123",1\],\["2222222b","gap","abc123",1\]\]/);
+  assert.match(second, /"blocks":\[\["1111111a","gap","abc123",1,0\],\["2222222b","gap","abc123",1,0\]\]/);
   const third = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(TWO()) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: second, user: BOT }] } });
   for (const md of [third.calls.summary, third.calls.updated[0].body]) {
     assert.match(md, /### Confirmed gaps \(2\)/);
     assert.match(md, /Confirmed gaps that appeared \(2\):/);
   }
-  assert.match(third.calls.updated[0].body, /"blocks":\[\["1111111a","gap","abc123",2\],\["2222222b","gap","abc123",2\]\]/);
+  assert.match(third.calls.updated[0].body, /"blocks":\[\["1111111a","gap","abc123",2,0\],\["2222222b","gap","abc123",2,0\]\]/);
 });
 
 // Real audits of one commit (same model, 80 fixed blocks): set SPECGUARD_REPLAY to the directory holding r1/ and r2/ (each with audit.json, or specguard-audit-1/audit.json).
@@ -710,4 +720,96 @@ test('verify: a citation under .specguard-src/ fails like any unreadable one', (
   const code = (p) => verify(result([req({ code: [{ path: p, line: 2, quote: FILES['src/plan.js'][1] }], tests: [] })]), { read: (x) => (x === 'docs/design.md' ? FILES[x] : require('./post').readFile(x)) }).requirements[0].code.length;
   assert.equal(code('plan.js'), 1);
   assert.equal(code('.specguard-src/plan.js'), 0);
+});
+
+// ---- scan_paths scopes, rotation, coverage ----
+const stateBody = (mark, head, audits, blocks) => `${mark}\n## SpecGuard unit test gap scan\n\n<!-- specguard:audit-state ${JSON.stringify({ v: 4, head, audits, blocks })} -->`;
+
+test('scopeOf: no scope keeps the original marker and title; a scope has its own marker (order-insensitive) and names itself in the title', () => {
+  const none = audit.scopeOf('');
+  assert.deepEqual([none.mark, none.title, none.lines], [MARK, TITLE, []]);
+  assert.deepEqual(audit.scopeOf(undefined), none);
+  const a = audit.scopeOf('packages/payments/**'), a2 = audit.scopeOf(' packages/payments/** \r\n'), b = audit.scopeOf('packages/search/**');
+  assert.match(a.mark, /^<!-- specguard:audit scope=[0-9a-f]{8} -->$/);
+  assert.equal(a.title, 'SpecGuard: unit test gap scan (packages/payments/**)');
+  assert.equal(a.mark, a2.mark);
+  assert.notEqual(a.mark, b.mark);
+  const two = audit.scopeOf('packages/b/**\npackages/a/**\n!packages/a/legacy/**'), swapped = audit.scopeOf('!packages/a/legacy/**\npackages/a/**\npackages/b/**');
+  assert.equal(two.mark, swapped.mark);
+  assert.equal(two.title, 'SpecGuard: unit test gap scan (packages/a/**, packages/b/**)', 'the title lists the includes');
+  assert.ok(audit.scopeOf('x'.repeat(300)).title.length < 120 && !/[<>\n]/.test(audit.scopeOf('<b>\nx').title));
+  assert.ok(!a.mark.startsWith(MARK) && !MARK.startsWith(a.mark.slice(0, 24)), 'a scoped marker is never mistaken for the unscoped one');
+});
+
+test('run: per-scope issues do not collide; the unscoped scan still finds the issue created before scopes existed', async (t) => {
+  const unscoped = { number: 1, body: `${MARK}\nold`, user: BOT, state: 'open', title: TITLE };
+  const payments = { number: 2, body: `${audit.scopeOf('packages/payments/**').mark}\nold`, user: BOT, state: 'open', title: 'x' };
+  const issues = [unscoped, payments];
+  const go = (SCAN_PATHS) => runPost(t, { ctxFiles: { 'findings.json': result() }, env: { SCAN_ISSUE: 'true', SCAN_PATHS }, mock: { issues } });
+  const u = await go('');
+  assert.deepEqual([u.calls.updated.map((x) => x.issue_number), u.calls.created.length], [[1], 0]);
+  assert.equal(u.calls.updated[0].title, TITLE);
+  assert.ok(u.calls.updated[0].body.startsWith(`${MARK}\n`));
+  const p = await go('packages/payments/**');
+  assert.deepEqual([p.calls.updated.map((x) => x.issue_number), p.calls.created.length], [[2], 0]);
+  assert.equal(p.calls.updated[0].title, 'SpecGuard: unit test gap scan (packages/payments/**)');
+  assert.ok(p.calls.updated[0].body.startsWith(`${audit.scopeOf('packages/payments/**').mark}\n`));
+  const s = await go('packages/search/**');
+  assert.deepEqual([s.calls.updated.length, s.calls.created.length], [0, 1], 'a new scope gets its own issue');
+  assert.equal(s.calls.created[0].title, 'SpecGuard: unit test gap scan (packages/search/**)');
+  assert.match(s.calls.created[0].body, /Scope \(scan_paths\): `packages\/search\/\*\*`\./);
+});
+
+const ROT = { rotate: true, state: true, picked: 1, changed: 0, confirming: 1, new: 0, oldest: 0, carried: 3 };
+
+test('run: runs that rotate keep the blocks they did not audit, marked from their date, in the report and in the next state; blocks gone from the documents are dropped', async (t) => {
+  const old = stateBody(MARK, 'oldhead', [['aaaa111', '2026-09-01'], ['bbbb222', '2026-08-01'], ['cccc333', '2026-09-15']],
+    [[C1, 'gap', 'aaaa111', 1, 0], [C2, 'covered', 'bbbb222', 1, 1], [C3, 'gap', 'bbbb222', 2, 2], ['deadbeef', 'gap', 'bbbb222', 2, 1]]);
+  const carriedTxt = `${C2}\tdocs/design.md:4\tPlan design\tA plan must start in the future.\n${C3}\tdocs/design.md:3\tPlan design\tPlans fire at most once a minute.\n`; // deadbeef is not in the documents any more
+  const r = await runPost(t, { ctxFiles: { 'findings.json': result(), 'audit-carried.txt': carriedTxt,
+    'audit-meta.json': { head: 'abc123', max_requirements: 1, docs: 1, candidates: 3, limitations: [], rotation: ROT, evidence: { blocks: 1, with_code: 1, with_tests: 0, cut: false } } },
+    env: { SCAN_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT, state: 'open', title: TITLE }] } });
+  for (const md of [r.calls.summary, r.calls.updated[0].body]) {
+    assert.match(md, /1 block audited this run\b/);
+    assert.match(md, /Coverage: 3 of 3 blocks audited at least once; this run audited 1 \(changed 0, confirming 1, new 0, oldest 0\)\./);
+    assert.match(md, /Evidence candidates found before the model ran: 1 of 1 blocks have a code location, 0 a test location\./);
+    assert.match(md, /A gap is \*\*confirmed\*\* when the block was a gap in this run and the last time it was audited/);
+    assert.match(md, /### Confirmed gaps \(1\)[\s\S]*`3333333c`[^\n]*gap \(confirmed since bbbb222\)<br><sub>from 2026-09-15<\/sub>/, 'a carried confirmed gap keeps its label and shows its date');
+    assert.match(md, /<summary>Covered \(2\)<\/summary>[\s\S]*`1111111a`[\s\S]*`2222222b`[^\n]*covered<br><sub>from 2026-08-01<\/sub>/);
+    assert.doesNotMatch(md, /deadbeef/);
+    assert.match(md, /By block: confirmed gap 1 · covered 2/);
+  }
+  assert.doesNotMatch(r.calls.updated[0].body, /Confirmed gaps that appeared/, 'a carried confirmed gap is not announced again');
+  const next = audit.readState(r.calls.updated[0].body);
+  assert.deepEqual(next.blocks.map((b) => [b.cid, b.status, b.runs, b.at.date]).sort(), [[C1, 'covered', 1, '2026-10-13'], [C2, 'covered', 1, '2026-08-01'], [C3, 'gap', 2, '2026-09-15']].sort());
+  assert.equal(next.head, 'abc123');
+  assert.equal(next.blocks.find((b) => b.cid === C1).since, 'abc123', 'this run is stored with the head and date it was audited at');
+});
+
+test('render: coverage without an issue says to schedule with scan_issue: true; with it the first run is "audited at least once" too; a full scan needs neither', () => {
+  const data = sample();
+  const plain = render({ data, candidates: 9, cap: 5, rotation: { rotate: false, state: false, picked: 3, changed: 0, confirming: 0, new: 3, oldest: 0, carried: 0 } });
+  assert.match(plain, /Scanned in document order: the first 3 of 9 blocks \(cap 5\)\. Schedule with scan_issue: true to rotate through all blocks\./);
+  assert.doesNotMatch(plain, /Coverage:/);
+  const first = render({ data, candidates: 9, cap: 5, rotation: { rotate: true, state: false, picked: 3, changed: 0, confirming: 0, new: 3, oldest: 0, carried: 0 } });
+  assert.match(first, /Coverage: 3 of 9 blocks audited at least once; this run audited 3 \(changed 0, confirming 0, new 3, oldest 0\)\./);
+  const full = render({ data, candidates: 3, cap: 5, rotation: { rotate: false, state: false, picked: 3, changed: 0, confirming: 0, new: 3, oldest: 0, carried: 0 } });
+  assert.doesNotMatch(full, /Schedule with scan_issue|Coverage:/);
+  const dropped = render({ data, candidates: 9, cap: 5, stateDropped: 7, rotation: ROT });
+  assert.match(dropped, /the scan issue state keeps at most 600 blocks: 7 older block\(s\) are dropped and will count as never audited/, 'a state cap is visible');
+  const scoped = render({ data, candidates: 9, cap: 5, scope: ['packages/payments/**', '!**/legacy/**'], rotation: ROT });
+  assert.match(scoped, /Scope \(scan_paths\): `packages\/payments\/\*\*`, `!\*\*\/legacy\/\*\*`\./);
+});
+
+test('state: only the newest runs fit STATE_MAX; covered, long-ago blocks go first and the drop is counted', () => {
+  const data = dataOf({ [C1]: 'missing_test' });
+  const mk = (i, status, date) => ({ cid: cid(0x1000 + i), status, since: 'h', runs: 1, at: { head: 'h', date } });
+  const carried = Array.from({ length: 620 }, (_, i) => mk(i, i % 2 ? 'covered' : 'gap', `2026-0${1 + (i % 9)}-01`));
+  const s = audit.stateOf('h9', data, null, { carried, date: DATE });
+  const back = audit.readState(s.raw);
+  assert.equal(back.blocks.length, 600);
+  assert.equal(s.dropped, 21);
+  assert.equal(back.blocks[0].cid, C1, 'this run first');
+  assert.ok(back.blocks.filter((b) => b.status === 'gap').length === 311, 'all 310 carried gaps and this run\'s are kept');
+  assert.ok(Buffer.byteLength(s.raw) < 40000, `${Buffer.byteLength(s.raw)} bytes`);
 });
