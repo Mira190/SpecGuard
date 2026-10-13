@@ -25,9 +25,7 @@
           "behaviour",
           "evidence",
           "status",
-          "reason",
-          "change",
-          "alignment"
+          "reason"
         ],
         "properties": {
           "id": {
@@ -84,10 +82,7 @@
               "required": [
                 "path",
                 "line",
-                "quote",
-                "layer",
-                "proves",
-                "kind"
+                "quote"
               ],
               "properties": {
                 "path": {
@@ -362,8 +357,6 @@
         "type": "object",
         "required": [
           "id",
-          "source",
-          "quote",
           "obligation_ids",
           "reason"
         ],

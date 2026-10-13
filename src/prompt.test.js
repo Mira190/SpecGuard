@@ -46,7 +46,7 @@ test('assemble: engine only changes the JSON wording; static prefix is identical
   assert.ok(build(a, 'copilot').includes('JSON only, matching this schema'));
   assert.ok(build(a, 'copilot').includes('"coverage"'));
   const c = build(a, 'claude');
-  assert.ok(c.includes('structured-output tool') && !c.includes('"coverage"'));
+  assert.ok(c.includes('structured-output tool') && !c.includes('"properties"')); // the enforced schema is not repeated (the example is)
   assert.ok(c.length < build(a, 'copilot').length - 3000);
 });
 
@@ -263,4 +263,35 @@ test('assemble: test-candidates.txt is inlined when present and reported empty w
   assert.ok(dyn(build(ctx({ 'test-candidates.txt': body }))).includes(`name="test-candidates.txt"`) );
   assert.ok(dyn(build(ctx({ 'test-candidates.txt': body }))).includes('  test/a.test.js  (same name)'));
   assert.match(dyn(build(ctx())), /Empty or absent[^\n]*test-candidates\.txt/);
+});
+
+// ---- contract shrink v2: the exemplar and the obligation cap ----
+const { maxObligations } = require('./prompt.js');
+test('maxObligations: clamp(8 + changed lines / 25, 8, 40); headers and context lines do not count', () => {
+  const diff = (n) => `diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n context\n${'+added\n'.repeat(n)}`;
+  assert.deepEqual([0, 24, 25, 250, 5000].map((n) => maxObligations(diff(n))), [8, 8, 9, 18, 40]);
+  assert.equal(maxObligations(`${diff(25)}${'-removed\n'.repeat(25)}`), 10);
+});
+
+test('assemble: the review-meta block carries max_obligations in the dynamic part only, so the static prefix still caches', () => {
+  const small = build(ctx({ 'diff.patch': 'diff --git a/x b/x\n+x\n' })), big = build(ctx({ 'diff.patch': `diff --git a/x b/x\n${'+x\n'.repeat(500)}` }));
+  assert.match(dyn(small), /<untrusted-data name="review-meta\.json"[^>]*>\n\{"max_obligations":8\}\n<\/untrusted-data>/);
+  assert.match(dyn(big), /"max_obligations":28\}/);
+  assert.equal(stat(small), stat(big));
+  assert.ok(!stat(small).includes('"max_obligations":'));
+  assert.match(stat(small), /At most `max_obligations`.*`not_reviewed` how many/);
+  assert.ok(!build(ctx({ 'diff.patch': '' })).includes('review-meta.json"'));
+});
+
+test('assemble: example.json is inlined once after the schema (copilot and claude), small, and the skill points at it', () => {
+  const ex = fs.readFileSync(path.join(SKILL, 'references', 'example.json'), 'utf8').trim();
+  assert.ok(Buffer.byteLength(ex) <= 2048, 'the exemplar stays small');
+  for (const engine of ['copilot', 'claude']) {
+    const p = stat(build(ctx(), engine));
+    assert.equal(p.split(ex).length - 1, 1, engine);
+    assert.ok(p.indexOf(ex) > p.indexOf(engine === 'copilot' ? 'matching this schema' : 'structured-output tool'), engine);
+    assert.ok(p.trimEnd().endsWith(ex), 'the example is the last static thing');
+  }
+  assert.ok(!build(ctx(), 'copilot').includes('# references/example.json'), 'not duplicated as a reference section');
+  assert.match(stat(build(ctx())), /Output shape: copy `references\/example\.json`/);
 });

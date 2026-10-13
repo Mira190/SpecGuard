@@ -60,8 +60,14 @@ function statusBlock(ctxDir) {
   return block('requirements-status.json', render(), omitted ? `${omitted} of ${criteria.length} criteria omitted; Read requirements-status.json for the rest` : 'documents omitted: see requirements.md');
 }
 
+// Upper bound on the obligations the model is asked for, from the size of the change: clamp(8 + changed lines / 25, 8, 40). It bounds the ask
+// (output length and the tail rows most at risk), never the poster: extra rows are accepted.
+const maxObligations = (diff) => Math.min(40, 8 + Math.floor(diff.split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l)).length / 25));
+
 function dynamic(ctxDir) {
   const empty = [], parts = [];
+  const patch = read(ctxDir, 'diff.patch');
+  if (nonEmpty(patch)) parts.push(block('review-meta.json', JSON.stringify({ max_obligations: maxObligations(patch) }), 'computed from the size of the diff'));
   const add = (name, body, max, extraNote = '') => {
     if (!nonEmpty(body)) { empty.push(name); return; }
     const c = cut(body, max);
@@ -115,6 +121,9 @@ function assemble({ skillDir, ctxDir, schemaPath, engine = 'claude' }) {
   out += engine === 'copilot'
     ? `\n\nYour final answer must be JSON only, matching this schema: ${JSON.stringify(JSON.parse(fs.readFileSync(schemaPath, 'utf8')))}`
     : '\n\nYour final answer must be the JSON object of the structured-output tool, whose schema is enforced there.';
+
+  const example = read(refsDir, 'example.json').trim();
+  if (example) out += `\n\nExample of a complete valid answer; copy its shape. Fields it leaves out (\`change\`, \`alignment\` on a row that links no requirement, \`layer\` of a unit test, \`kind\`, \`proves\`, a collected criterion's \`source\` and \`quote\`) are optional:\n${example}`;
 
   // Everything above is identical for PRs of the same class; everything below is per-PR.
   const { parts, empty } = dynamic(ctxDir);
@@ -175,4 +184,4 @@ function main(argv) {
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
-module.exports = { assemble, assembleAudit, strip, traceNeeded, cut, LIMITS, main };
+module.exports = { assemble, assembleAudit, strip, traceNeeded, cut, LIMITS, main, maxObligations };

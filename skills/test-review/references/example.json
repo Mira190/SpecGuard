@@ -1,0 +1,16 @@
+{
+"requirements_source":"PR body",
+"coverage":[
+{"id":"O1","obligation":"Orders of 100 or more get a 10% discount","source":"PR body AC 1","behaviour":{"path":"src/discount.js","line":4,"quote":"if (total >= 100) return total * 0.9;"},"evidence":[{"path":"test/discount.test.js","line":9,"quote":"assert.equal(discount(100), 90);"}],"status":"covered","reason":"The unit test asserts the boundary 100 against the literal 90.","alignment":{"status":"consistent","reason":"R: 100 or more; C: total >= 100"}},
+{"id":"O2","obligation":"A negative total is rejected","source":"from behaviour","behaviour":{"path":"src/discount.js","line":2,"quote":"if (total < 0) throw new RangeError('total');"},"evidence":[],"status":"missing_test","reason":"Searched test/ and the repo for RangeError and discount(-: no assertion reaches this branch."}
+],
+"findings":[
+{"kind":"missing_test","obligation_ids":["O2"],"path":"src/discount.js","line":2,"quote":"if (total < 0) throw new RangeError('total');","title":"Negative total is not tested","body":"discount(-1) throws, but no test asserts it, so a change that returns a number passes the suite. Add `assert.throws(() => discount(-1), RangeError);`.","confidence":"high"}
+],
+"not_reviewed":"",
+"standards":{"status":"no_rules","sources":[],"reason":"standards.txt is empty."},
+"layering":{"status":"checked","reason":"Only unit tests exist here; nothing to push down."},
+"requirements":[
+{"id":"R1","obligation_ids":["O1"],"reason":"The boundary is asserted with an independent value."}
+]
+}
