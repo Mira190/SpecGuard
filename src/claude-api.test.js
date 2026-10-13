@@ -368,6 +368,18 @@ test('context pack: the smallest other source files beside a review file come af
   assert.equal(tight.h.file('pack-cut.txt'), 'a.ts', 'the review file is cut; the sibling that did not fit is not listed');
 });
 
+test('context pack: files of the extra tiers (siblings, named files) stop at 60% of the budget, so a later requirement document still fits', async (t) => {
+  const big = Array.from({ length: 25 }, () => 'x'.repeat(99)).join('\n') + '\n'; // ~2.6 KB numbered: s1 is cut at the 60% line, nothing is left for s2
+  const r = repo(t, { 'src/a.ts': 'a();\n', 'src/s1.ts': big, 'src/s2.ts': big + 'y\n', 'src/s3.ts': big + 'y\ny\n', 'docs/req.md': 'REQ-TEXT\n' }, { 'files.txt': 'src/a.ts\n', 'spec-files.txt': 'docs/req.md\n' }, { CONTEXT_PACK_BYTES: '4000' });
+  track(r.root);
+  await r.go();
+  const u = r.user(), has = (n) => u.includes(`name="${n}"`);
+  assert.deepEqual(['src/a.ts', 'src/s1.ts'].map(has), [true, true]);
+  assert.deepEqual(['src/s2.ts', 'src/s3.ts'].map(has), [false, false], 'past 60% of 4000 bytes the other siblings are skipped');
+  assert.ok(has('docs/req.md'), 'the requirement document fits in the rest');
+  assert.equal(r.h.file('pack-cut.txt'), '', 'skipped extra-tier files are not listed as cut');
+});
+
 test('context pack: a file over the per-file cap (limit/6, here 41666 bytes) is cut at a line boundary and says so', async (t) => {
   const r = repo(t, { 'big.js': lineText(20000) }, { 'files.txt': 'big.js\n' });
   await r.go();
