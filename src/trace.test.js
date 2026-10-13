@@ -792,3 +792,17 @@ test('F3: spec-rejected.txt lists the strongest rejected candidates (most items 
   T.run({ cwd: r3.dir, base: r3.base, head: r3.head, ctx: r3.ctx, trace: 'off' });
   assert.equal(out(r3, 'spec-rejected.txt'), '');
 });
+
+test('requirement_to_code keeps the top 3 code and top 3 test windows per criterion, in ranking order', (t) => {
+  const doc = 'AC-1: the gizmo quota resets after 30 days\n';
+  const src = (v) => Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`src/gizmo${i}.js`, `// gizmo quota resets after ${v} days\nexport const gizmoQuota${i} = ${v};\n`]));
+  const tst = (v) => Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`test/gizmo${i}.test.js`, `// gizmo quota resets after ${v} days\ntest('gizmo quota ${i}', () => {});\n`]));
+  const r = repo(t, { 'docs/spec.md': doc, ...src(30), ...tst(30) }, { 'docs/spec.md': doc.replace('30', '45') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const rows = cands(r).requirement_to_code;
+  assert.ok(rows.length >= 1);
+  for (const row of rows) {
+    assert.deepEqual([row.code.length, row.tests.length], [3, 3]);
+    assert.deepEqual(row.code.map((c) => c.score), row.code.map((c) => c.score).sort((a, b) => b - a));
+  }
+});

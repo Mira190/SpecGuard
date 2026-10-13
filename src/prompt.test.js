@@ -243,3 +243,24 @@ test('audit prompt: --mode audit selects it on the CLI, an unknown mode exits 2,
   assert.equal(pr.stdout, build(d, 'copilot'));
   assert.equal(run('--skill', SKILL, '--schema', SCHEMA, '--mode', 'pr').stdout, pr.stdout);
 });
+
+test('assemble: the numbered diff replaces the raw one, with its citation note; the raw diff is the fallback', () => {
+  const raw = 'diff --git a/x.js b/x.js\n+++ b/x.js\n@@ -1 +1 @@\n+RAWMARK\n';
+  const num = 'diff --git a/x.js b/x.js\n+++ b/x.js\n@@ -1 +1 @@\n   1 | +NUMMARK\n';
+  const p = dyn(build(ctx({ 'diff.patch': raw, 'diff.numbered.txt': num })));
+  assert.match(p, /<untrusted-data name="diff\.numbered\.txt" note="[^"]*cite line from these numbers[^"]*">/);
+  assert.ok(p.includes('   1 | +NUMMARK') && !p.includes('RAWMARK') && !p.includes('name="diff.patch"'));
+  assert.doesNotMatch(p, /Empty or absent[^\n]*diff\.patch/);
+  const q = dyn(build(ctx({ 'diff.patch': raw, 'diff.numbered.txt': '' })));
+  assert.ok(q.includes('name="diff.patch"') && q.includes('RAWMARK') && !q.includes('diff.numbered.txt'));
+  const big = Array.from({ length: 4000 }, (_, i) => `${String(i + 1).padStart(4)} | +${'y'.repeat(30)}`).join('\n') + '\n';
+  const t = dyn(build(ctx({ 'diff.numbered.txt': big })));
+  assert.match(t, /name="diff\.numbered\.txt" note="first \d+ lines of 4001; Read [^"]*diff\.numbered\.txt from line \d+ for the rest; /);
+});
+
+test('assemble: test-candidates.txt is inlined when present and reported empty when absent', () => {
+  const body = 'src/a.js\n  test/a.test.js  (same name)\n';
+  assert.ok(dyn(build(ctx({ 'test-candidates.txt': body }))).includes(`name="test-candidates.txt"`) );
+  assert.ok(dyn(build(ctx({ 'test-candidates.txt': body }))).includes('  test/a.test.js  (same name)'));
+  assert.match(dyn(build(ctx())), /Empty or absent[^\n]*test-candidates\.txt/);
+});
