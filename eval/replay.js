@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { buildPrompt, fakeGithub } = require('./local.js');
-const { parseComment } = require('./grade.js');
+const { parseComment, parseSummary } = require('./grade.js');
 
 const ROOT = path.join(__dirname, '..');
 const fwd = (p) => path.resolve(p).replace(/\\/g, '/');
@@ -54,8 +54,8 @@ function prepareReal({ repoDir, base, head, prTitle = '', prBody = '', out, id, 
   return meta;
 }
 
-// Counts from the posted comments and the sticky summary. Summary-only = findings carried in full by the summary (`- **title** (`path:line`, kind, why)`),
-// outside the collapsed Pre-existing drift block; findings posted as comments appear there as `- **title** — [link]` and are not counted.
+// Counts from the posted comments and the sticky summary. Summary-only = findings carried in full by the summary (`- ❌ **Missing test:** title `path:line` (why)`),
+// outside the Pre-existing drift block of Details; findings posted as comments appear there with a linked title (`[title](url)`) and are not counted.
 function countFindings(comments, summary) {
   const inline = { total: 0, byKind: {}, byConfidence: { high: 0, low: 0 } };
   for (const c of comments.map(parseComment).filter(Boolean)) {
@@ -63,9 +63,10 @@ function countFindings(comments, summary) {
     inline.byKind[c.kind] = (inline.byKind[c.kind] || 0) + 1;
   }
   let s = String(summary || '');
-  const pre = /<details><summary>Pre-existing drift[^<]*<\/summary>([^]*?)<\/details>/.exec(s);
+  // the Pre-existing drift block (a bold heading in Details) runs to the next bold heading or the end of Details
+  const pre = /\*\*Pre-existing drift[^*\n]*\*\*\n\n([^]*?)(?=\n\*\*[^\n]+\*\*\n|<\/details>|$)/.exec(s);
   if (pre) s = s.replace(pre[0], '');
-  const count = (t) => (t.match(/^- \*\*[^\n]*?\*\* \(`[^`\n]+`, \w+/gm) || []).length;
+  const count = (t) => parseSummary(t).items.length;
   return { inline, summary_only: count(s), pre_existing: pre ? count(pre[1]) : 0 };
 }
 

@@ -208,64 +208,67 @@ const sample = () => {
   return verify(result(rs, { not_reviewed: ['docs/old.md: unreadable'] }), { read });
 };
 
-test('render: header counts by block status, no percentage, the disclaimer; one line per block, sub-row evidence collapsed per document', () => {
-  const md = render({ data: sample(), docs: [['docs/design.md', 'discovered']], blob: 'https://github.com/o/r/blob/abc', usage: '<sub>Engine: copilot</sub>', cap: 80, candidates: 131 });
-  const head = md.slice(0, md.indexOf('### '));
-  assert.match(head, /^## SpecGuard unit test gap scan\n\nBehaviour described in the design documents, checked for unit-test evidence\.\n\n\*\*3 requirements\*\* from 1 document\n\n3 blocks scanned of 131 in the documents \(cap 80\)\.\n\nBy block/);
-  assert.doesNotMatch(head, /the model chose/);
-  assert.match(head, /By block: new gap \(unconfirmed\) 1 · unsure 1 · covered 1\n/);
-  assert.match(head, /first scan run[^\n]*every gap is \*\*unconfirmed\*\*; one more scan run will confirm/);
-  assert.match(head, /Static review; not coverage; not for scoring people\./);
+test('render: the verdict counts gaps, the visible tables are what to act on, everything else is in one Details block', () => {
+  const md = render({ data: sample(), docs: [['docs/design.md', 'discovered']], blob: 'https://github.com/o/r/blob/abc', usage: '<sub>Engine: copilot</sub>', cap: 80, candidates: 131, head: 'abc1234def' });
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.match(vis, /^## SpecGuard scan\n\n\*\*❌ 1 new gap to confirm\*\* in the design documents at `abc1234`\. Static review; tests were not run\.\n\n### New gaps to confirm \(1\)\n\n\| Document says \| Next step \|\n\|---\|---\|\n\| \[docs\/design\.md:4\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/docs\/design\.md#L4\) A plan must start in the future\. \| Add a unit test that checks it\. \|\n\n$/);
+  assert.doesNotMatch(vis, /\d\s*%|percent|Unsure|Covered|Sub-row|missing_test|needs_human/i, 'nothing else is visible');
+  assert.equal((md.match(/<details>/g) || []).length, 1, 'one disclosure layer');
+  const det = md.slice(md.indexOf('<details>'));
+  assert.match(det, /\*\*This scan\*\*\n\n\*\*3 requirements\*\* from 1 document\n\n3 blocks scanned of 131 in the documents \(cap 80\)\.\n\nBy block: new gap \(unconfirmed\) 1 · unsure 1 · covered 1\n\nThis is the first scan run[^\n]*every gap is \*\*unconfirmed\*\*; one more scan run will confirm/);
   assert.doesNotMatch(md, /\d\s*%|percent/i);
-  assert.match(md, /### New gaps, unconfirmed \(1\)\n\n\| Block \| Line \| Requirement \| Status \| Sub-rows \|\n\|---\|---\|---\|---\|---\|\n/);
-  assert.match(md, /\| \`2222222b\` \| \[docs\/design\.md:4\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/docs\/design\.md#L4\) \| A plan must start in the future\. \| gap \(unconfirmed\) \| missing_test ×1 \|\n/);
-  assert.doesNotMatch(md, /### Confirmed gaps/, 'nothing to confirm on a first run');
-  // unsure and covered blocks are collapsed, in that order, after the gaps
-  assert.match(md, /<details><summary>Unsure \(1\)<\/summary>\n\n\| Block[^\n]*\n\|---[^\n]*\n\| \`3333333c\`[^\n]*\| unsure \| needs_human ×1 \|\n\n<\/details>/);
-  assert.match(md, /<details><summary>Covered \(1\)<\/summary>\n\n\| Block[^\n]*\n\|---[^\n]*\n\| \`1111111a\`[^\n]*\| covered \| covered ×1 \|\n\n<\/details>/);
+  assert.match(det, /\*\*How to read this scan\*\*\n\nStatic review; not coverage; not for scoring people\./);
+  assert.match(det, /\*\*Unsure \(1\)\*\*\n\n\| Block[^\n]*\n\|---[^\n]*\n\| `3333333c`[^\n]*\| unsure \| needs human ×1 \|\n/);
+  assert.match(det, /\*\*Covered \(1\)\*\*\n\n\| Block[^\n]*\n\|---[^\n]*\n\| `1111111a`[^\n]*\| covered \| covered ×1 \|\n/);
   const at = (x) => md.indexOf(x);
-  assert.ok(at('### New gaps') < at('<summary>Unsure') && at('<summary>Unsure') < at('<summary>Covered') && at('<summary>Covered') < at('<summary>Sub-row evidence'));
-  // the per-sub-row evidence is one collapsed table per document
-  assert.match(md, /<details><summary>Sub-row evidence: docs\/design\.md \(3 rows\)<\/summary>\n\n\| Requirement \| Status \| Class \| Evidence \|\n\|---\|---\|---\|---\|\n/);
-  assert.match(md, /\| \[2222222b\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/docs\/design\.md#L4\) A plan must start in the future\.<br><sub>No test rejects a past start\.<\/sub> \| missing_test \| unit \| code: \[src\/plan\.js:2\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/plan\.js#L2\) \|/);
-  assert.match(md.slice(md.indexOf('<summary>Sub-row evidence')), /tests: unit \[tests\/plan\.test\.js:2\]/);
-  assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /\| covered \|/);
-  assert.match(md, /\`not_implemented\` and \`missing_test\` are model claims \(not verified statically\)/);
-  assert.match(md, /<details><summary>Not reviewed: 1 item<\/summary>\n\n- docs\/old\.md: unreadable\n\n<\/details>/, 'a complete run collapses Not reviewed to one line');
+  assert.ok(at('### New gaps') < at('<details>') && at('**Unsure') < at('**Covered') && at('**Covered') < at('**Sub-row evidence') && at('**Sub-row evidence') < at('**Sources**'));
+  // the per-sub-row evidence is one table per document
+  assert.match(det, /\*\*Sub-row evidence: docs\/design\.md \(3 rows\)\*\*\n\n\| Requirement \| Status \| Class \| Evidence \|\n\|---\|---\|---\|---\|\n/);
+  assert.match(md, /\| \[2222222b\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/docs\/design\.md#L4\) A plan must start in the future\.<br><sub>No test rejects a past start\.<\/sub> \| missing test \| unit \| code: \[src\/plan\.js:2\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/plan\.js#L2\) \|/);
+  assert.match(md.slice(md.indexOf('**Sub-row evidence')), /tests: unit \[tests\/plan\.test\.js:2\]/);
+  assert.match(md, /`not_implemented` and `missing_test` are model claims|Not implemented and missing test are model claims \(not verified statically\)/);
+  assert.match(md, /\*\*Not reviewed \(1 item\)\*\*\n\n- docs\/old\.md: unreadable\n/, 'a complete run lists Not reviewed in Details');
   assert.doesNotMatch(md, /### Not reviewed/);
-  assert.match(render({ data: sample(), partial: 'engine timeout' }), /### Not reviewed\n\n- docs\/old\.md: unreadable\n/, 'an incomplete run keeps the reasons visible');
-  assert.doesNotMatch(md, /not requirements<\/summary>/, 'no details block when every block was a requirement');
-  assert.ok(md.trimEnd().endsWith('<sub>Engine: copilot</sub>'));
+  const part = render({ data: sample(), partial: 'engine timeout' });
+  assert.match(part, /### Not reviewed\n\n- docs\/old\.md: unreadable\n/, 'an incomplete run keeps the reasons visible');
+  assert.doesNotMatch(part, /\*\*Not reviewed \(/);
+  assert.doesNotMatch(md, /not requirements\*\*/, 'no block when every block was a requirement');
+  assert.ok(md.trimEnd().endsWith('<sub>Engine: copilot</sub>\n</details>'.trimEnd()) || md.trimEnd().endsWith('</details>'));
+  assert.ok(md.indexOf('<sub>Engine: copilot</sub>') > md.indexOf('**Sources**'), 'usage is the last item of Details');
 });
 
 test('render: rejected candidate documents say how to include them; unread admitted documents are listed; markup in model text is neutralised', () => {
   const data = result([req({ text: 'Click <img src=x> @team <!-- hidden --> | pipe', note: '' })]);
   const md = render({ data, docs: [['docs/design.md', 'discovered'], ['docs/other.md', 'discovered']], rejected: [['README.md', 'only 1 normative item']] });
   assert.doesNotMatch(md, /### Documents not included/, 'never in the visible body');
-  const src = md.slice(md.indexOf('<details><summary>Sources</summary>'));
-  assert.match(src, /^<details><summary>Sources<\/summary>\n\n- Requirement documents: `docs\/design\.md` \(discovered\), `docs\/other\.md` \(discovered\)\n- 1 candidate document was not admitted \(add to `requirements_paths` to include\)\n\n<details><summary>Candidates not admitted<\/summary>\n\n- `README\.md`: only 1 normative item\n\n<\/details>\n\n<\/details>/);
-  assert.equal(md.replace(/<details>[\s\S]*?<\/details>/g, '').includes('README.md'), false, 'the rejected document appears only inside details');
+  const src = md.slice(md.indexOf('**Sources**'));
+  assert.match(src, /^\*\*Sources\*\*\n\n- Requirement documents: `docs\/design\.md` \(discovered\), `docs\/other\.md` \(discovered\)\n- 1 candidate document was not admitted \(add to `requirements_paths` to include\):\n {2}- `README\.md`: only 1 normative item\n/);
+  assert.equal(md.replace(/<details>[\s\S]*?<\/details>/g, '').includes('README.md'), false, 'the rejected document appears only inside Details');
+  assert.doesNotMatch(md, /Candidates not admitted/, 'a plain list, no third disclosure level');
   assert.match(md, /`docs\/other\.md` was admitted but is not in docs_reviewed\./);
   assert.doesNotMatch(md, /<img|<!--|@team/);
   assert.match(md, /\\\| pipe/);
 });
 
 test('render: no documents and failures say so', () => {
-  assert.match(render({ data: null, rejected: [['README.md', 'x']] }), /No design documents were found, so nothing was scanned\.[\s\S]*<details><summary>Sources<\/summary>[\s\S]*1 candidate document was not admitted/);
-  assert.match(render({ failure: 'the engine timed out' }), /Could not complete: the engine timed out/);
+  assert.match(render({ data: null, rejected: [['README.md', 'x']] }), /\*\*No design documents were found, so nothing was scanned\.\*\*[\s\S]*\*\*Sources\*\*[\s\S]*1 candidate document was not admitted/);
+  const failed = render({ failure: 'the engine timed out', usage: '<sub>Engine: copilot</sub>' });
+  assert.match(failed, /^## SpecGuard scan\n\n\*\*⚠️ Could not complete: the engine timed out\*\*\n/);
+  assert.doesNotMatch(failed.slice(0, failed.indexOf('<details>')), /###/);
+  assert.match(failed, /<details><summary>Details: run information<\/summary>[\s\S]*Engine: copilot/);
 });
 
 test('render: blocks that were not requirements are counted in the header and listed in a collapsed block, not in the tables', () => {
   const data = verify(result([req()], { not_requirements: [{ cid: C2, reason: 'rationale, not behaviour <b>x</b>' }] }), { read, cands: TWO() });
   const md = render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 9, cap: 5, capLeft: ['docs/design.md § 4. After: 3 blocks not scanned (cap)'] });
   assert.match(md, /2 blocks scanned of 9 in the documents \(cap 5\)\./);
-  assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /not a requirement|not requirements/, 'only the collapsed line says it');
-  assert.ok(md.includes('<details><summary>1 block was not a requirement</summary>\n\n- [docs/design.md:4](https://github.com/o/r/blob/abc/docs/design.md#L4) `2222222b` A plan must start in the future. (rationale, not behaviour &lt;b>x&lt;/b>)'), md);
+  assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /not a requirement|not requirements/, 'only Details says it');
+  assert.ok(md.includes('**1 block was not a requirement**\n\n- [docs/design.md:4](https://github.com/o/r/blob/abc/docs/design.md#L4) `2222222b` A plan must start in the future. (rationale, not behaviour &lt;b>x&lt;/b>)'), md);
   assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /2222222b/, 'not in the main tables');
-  assert.match(md, /<details><summary>Not reviewed: 1 item<\/summary>\n\n- docs\/design\.md § 4\. After: 3 blocks not scanned \(cap\)\n/);
+  assert.match(md, /\*\*Not reviewed \(1 item\)\*\*\n\n- docs\/design\.md § 4\. After: 3 blocks not scanned \(cap\)\n/);
   assert.doesNotMatch(md, /<b>/, "markup in the reason is neutralised");
   const two = render({ data: { ...data, not_requirements: [data.not_requirements[0], data.not_requirements[0]] }, candidates: 2 });
-  assert.match(two, /2 blocks were not requirements/);
+  assert.match(two, /\*\*2 blocks were not requirements\*\*/);
 });
 
 test('render: over the limit, whole rows are dropped (never cut mid-row) and the omission is stated', () => {
@@ -274,7 +277,7 @@ test('render: over the limit, whole rows are dropped (never cut mid-row) and the
   const full = render({ data });
   const small = render({ data, max: 9000 });
   assert.ok(Buffer.byteLength(small) <= 9000 && small.length < full.length);
-  const tableRows = small.split('\n').filter((l) => /^\| [\`[]/.test(l));
+  const tableRows = small.split('\n').filter((l) => /^\| (?:\[|docs\/)/.test(l));
   assert.ok(tableRows.length > 0);
   for (const l of tableRows) assert.match(l, /\|$/, 'every kept row is complete');
   assert.match(small, /_\d+ rows omitted: the report exceeded the size limit/);
@@ -441,14 +444,12 @@ test('contradicted: both quotes must verify, and it renders as a disagreement wi
   assert.equal(bad.status, 'unknown');
   const data = { ...result(), requirements: [ok] };
   const md = render({ data, blob: 'https://github.com/o/r/blob/abc' });
-  assert.match(md, /### Doc and code disagree \(unconfirmed\)[\s\S]*\| Requirement \| Document says \| Code says \|\n\|---\|---\|---\|\n/);
+  assert.match(md, /### Documents and code disagree \(1\)\n\nA model judgement: only the existence of both quotes was verified\.[^\n]*\n\n\| Document says \| Code says \|\n\|---\|---\|\n/);
   assert.match(md, /\| "A repeating plan stays on after it fires\."<br>\[docs\/design\.md:3\][^\n]*\| "  if \(p\.repeat\) return p;"<br>\[src\/plan\.js:2\]/);
-  assert.doesNotMatch(md, /Doc and code disagree \(confirmed\)/);
-  assert.match(md, /\| gap \(unconfirmed\) \| contradicted ×1 \|/, 'the block line carries the sub-row statuses');
+  assert.match(md, /\| The code contradicts it: see Documents and code disagree\. \|/, 'the gap row points at the disagreement');
   const prior = audit.readState(audit.stateComment('aaaaaaa1', data)); // the same block was a gap in the previous run
   const two = render({ data, prior });
-  assert.match(two, /### Doc and code disagree \(confirmed\)/);
-  assert.doesNotMatch(two, /Doc and code disagree \(unconfirmed\)/);
+  assert.match(two, /### Confirmed gaps \(1\)[\s\S]*### Documents and code disagree \(1\)/);
 });
 
 // ---- block aggregation and confirmation across runs ----
@@ -471,7 +472,9 @@ test('blocks: sub-rows aggregate to one status per block (gap beats everything, 
   const bs = audit.blocksOf(d);
   assert.deepEqual(bs.map((b) => [b.cid, b.status]), [[cid(1), 'gap'], [cid(2), 'covered'], [cid(3), 'unsure'], [cid(4), 'unsure'], [cid(5), 'gap'], [cid(6), 'gap'], [cid(7), 'gap'], [cid(8), 'unsure'], [cid(9), 'not_req']]);
   assert.equal(bs[0].rows.length, 2);
-  assert.match(render({ data: d }), /\| gap \(unconfirmed\) \| missing_test ×1, covered ×1 \|/);
+  const md = render({ data: d });
+  assert.match(md, /### New gaps to confirm \(4\)/);
+  for (const next of ['Add a unit test that checks it.', 'Strengthen the unit test: it checks only part of it.', 'The code contradicts it: see Documents and code disagree.', 'Not implemented: add the behaviour and a unit test.']) assert.ok(md.includes(`| ${next} |`), next);
 });
 
 test('confirmation: gap twice is confirmed, a new gap is unconfirmed, a confirmed gap covered once is "resolved? recheck", covered twice is resolved', () => {
@@ -501,24 +504,24 @@ test('render: first run says one more run will confirm; later runs list confirme
   assert.doesNotMatch(md, /first scan run/);
   assert.match(md, /By block: confirmed gap 1 · new gap \(unconfirmed\) 1 · unsure 1 · covered 2\n/);
   assert.match(md, /A gap is \*\*confirmed\*\* when the block was a gap in this run and in the previous one \(`h1`\)/);
-  assert.match(md, new RegExp(`### Confirmed gaps \\(1\\)\\n\\n\\| Block[^\\n]*\\n\\|---[^\\n]*\\n\\| \`${A}\`[^\\n]*\\| gap \\(confirmed since h1\\) \\|`));
-  assert.match(md, new RegExp(`### New gaps, unconfirmed \\(1\\)[\\s\\S]*\`${cid(14)}\`[^\\n]*gap \\(unconfirmed\\)`));
+  assert.match(md, /### Confirmed gaps \(1\)\n\n\| Document says \| Next step \|\n\|---\|---\|\n\| docs\/design\.md:\d+ /);
+  assert.match(md, /### New since the last scan \(1\)\n\n\| Document says \| Next step \|/);
   const at = (x) => md.indexOf(x);
-  assert.ok(at('### Changed since') < at('### Confirmed gaps') && at('### Confirmed gaps') < at('### New gaps') && at('### New gaps') < at('<summary>Unsure (1)') && at('<summary>Unsure (1)') < at('<summary>Covered (2)') && at('<summary>Covered (2)') < at('<summary>Sub-row evidence'));
-  assert.match(md, /<details><summary>Unsure \(1\)<\/summary>\n\n\| Block/);
-  assert.match(md, /<details><summary>Covered \(2\)<\/summary>\n\n\| Block/);
+  assert.ok(at('### Confirmed gaps') < at('### New since') && at('### New since') < at('<details>') && at('<details>') < at('**Changed since') && at('**Changed since') < at('**Unsure (1)**') && at('**Unsure (1)**') < at('**Covered (2)**') && at('**Covered (2)**') < at('**Sub-row evidence'));
+  assert.match(md, /\*\*Unsure \(1\)\*\*\n\n\| Block/);
+  assert.match(md, /\*\*Covered \(2\)\*\*\n\n\| Block/);
 });
 
 test('changed since last audit: only 2-run-stable changes are listed; status churn is a count line', () => {
   const [, second, third, fourth] = chain({ [A]: 'missing_test', [U]: 'unknown', [Z]: 'covered', [B]: 'missing_test' }, { [A]: 'missing_test', [U]: 'missing_test', [Z]: 'unknown', [B]: 'covered' },
     { [A]: 'covered', [U]: 'unknown', [Z]: 'covered', [B]: 'covered' }, { [A]: 'covered', [U]: 'unknown', [Z]: 'covered', [B]: 'covered' });
-  assert.match(second.md, new RegExp(`### Changed since the last scan \\(\`h1\`\\)\\n\\n- Confirmed gaps that appeared \\(1\\):\\n  - \`${A}\` [^\\n]*\\n\\nUnstable: 3 blocks changed status between the last two runs \\(not listed\\)\\.\\n`));
-  assert.doesNotMatch(second.md.slice(second.md.indexOf('### Changed'), second.md.indexOf('### Confirmed gaps')), new RegExp(`${U}|${Z}|${B}`), 'unsure churn is counted, not listed');
+  assert.match(second.md, new RegExp(`\\*\\*Changed since the last scan \\(\`h1\`\\)\\*\\*\\n\\n- Confirmed gaps that appeared \\(1\\):\\n  - \`${A}\` [^\\n]*\\n\\nUnstable: 3 blocks changed status between the last two runs \\(not listed\\)\\.\\n`));
+  assert.doesNotMatch(second.md.slice(second.md.indexOf('**Changed'), second.md.indexOf('**This scan**')), new RegExp(`${U}|${Z}|${B}`), 'unsure churn is counted, not listed');
   assert.match(third.md, new RegExp(`- Resolved\\? Covered once, recheck next run \\(1\\):\\n  - \`${A}\``));
   assert.match(third.md, /Unstable: 2 blocks changed status/);
   assert.match(fourth.md, new RegExp(`- Resolved \\(covered in two runs\\) \\(1\\):\\n  - \`${A}\``));
   assert.doesNotMatch(fourth.md, /Unstable/);
-  assert.match(chain({ [A]: 'covered' }, { [A]: 'covered' })[1].md, /### Changed since the last scan \(`h1`\)\n\nNo confirmed changes\.\n/);
+  assert.match(chain({ [A]: 'covered' }, { [A]: 'covered' })[1].md, /\*\*Changed since the last scan \(`h1`\)\*\*\n\nNo confirmed changes\.\n/);
 });
 
 test('state: v4 round trip and tamper check; v3 and a v2 (per-row) state still read as one prior run; v1 and foreign comments are no state', () => {
@@ -551,7 +554,7 @@ test('state: v4 round trip and tamper check; v3 and a v2 (per-row) state still r
   const now = dataOf({ [C1]: 'missing_test', [C2]: 'missing_test', [C3]: 'unknown' });
   const md = render({ data: now, prior: v2, head: 'h2' });
   assert.match(md, /### Confirmed gaps \(1\)[\s\S]*`1111111a`/, 'gap in the v2 run and now: confirmed');
-  assert.match(md, /### New gaps, unconfirmed \(1\)[\s\S]*`2222222b`/);
+  assert.match(md, /### New since the last scan \(1\)/);
   assert.match(md, /Unstable: 1 block changed status/);
   assert.match(audit.stateComment('h2', now, v2, { date: DATE }), /"blocks":\[\["1111111a","gap","abcdef1",2,0\],\["2222222b","gap","h2",1,0\],\["3333333c","unsure","abcdef1",2,0\]\]/);
 });
@@ -566,9 +569,9 @@ test('run: a previous issue state drives confirmation in summary and issue; the 
   const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(TWO()) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT }] } });
   const second = r.calls.updated[0].body;
   for (const md of [r.calls.summary, second]) {
-    assert.match(md, /### Changed since the last scan \(`abc123`\)/);
+    assert.match(md, /\*\*Changed since the last scan \(`abc123`\)\*\*/);
     assert.match(md, /No confirmed changes\.[\s\S]*Unstable: 1 block changed status between the last two runs \(not listed\)\./);
-    assert.match(md, /### New gaps, unconfirmed \(2\)/);
+    assert.match(md, /### New since the last scan \(2\)/);
     assert.doesNotMatch(md, /### Confirmed gaps/);
   }
   assert.match(second, /"blocks":\[\["1111111a","gap","abc123",1,0\],\["2222222b","gap","abc123",1,0\]\]/);
@@ -594,15 +597,15 @@ test('replay: two real audits of the same commit confirm the gaps that agree (46
 
 test('run (A5): an engine that did not succeed gives a Partial scan banner, keeps verified rows, writes no issue', async (t) => {
   const r = await runPost(t, { ctxFiles: { 'findings.json': result(), 'engine-status': 'timeout\n' }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: `${MARK}\nold`, user: BOT }] } });
-  assert.match(r.calls.summary, /> \*\*Partial scan: engine timeout\.\*\*/);
-  assert.match(r.calls.summary.slice(0, r.calls.summary.indexOf('**1 requirement**')), /Partial scan/, 'the banner comes first');
+  assert.match(r.calls.summary, /\*\*⚠️ Incomplete scan: no unit test gaps found so far\*\*\n\n> \*\*⚠️ Incomplete scan\.\*\* The rows below passed verification but the list may be incomplete \(engine timeout\)\./);
+  assert.ok(r.calls.summary.indexOf('Incomplete scan') < r.calls.summary.indexOf('**1 requirement**'), 'the banner comes first');
   assert.match(r.calls.summary, /\*\*1 requirement\*\*/);
   assert.deepEqual([r.calls.created, r.calls.updated], [[], []]);
   assert.equal(JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8')).partial, 'engine timeout');
   const ok = await runPost(t, { ctxFiles: { 'findings.json': result(), 'engine-status': 'success\n' } });
   assert.doesNotMatch(ok.calls.summary, /Partial scan/);
   const rf = await runPost(t, { ctxFiles: { 'findings.json': result(), 'engine-repair': 'repair_failed\n' } });
-  assert.match(rf.calls.summary, /Partial scan: engine JSON repair failed/);
+  assert.match(rf.calls.summary, /Incomplete scan\.\*\* [^\n]*\(engine JSON repair failed\)/);
 });
 
 test('run (A19): a closed issue is reopened, an unchanged body is not rewritten, an open one is preferred', async (t) => {
@@ -636,7 +639,8 @@ test('run (A19): no admitted document updates the existing issue (state kept) an
 
 test('rename: the head names the unit test gap scan and the short sha; no "audit" wording is left in the report', () => {
   const md = render({ data: sample(), head: 'abcdef1234567', prior: { head: 'h1', blocks: [{ cid: C1, status: 'covered', since: 'h1', runs: 1 }] }, cap: 80, candidates: 9 });
-  assert.ok(md.startsWith('## SpecGuard unit test gap scan\n\nBehaviour described in the design documents, checked for unit-test evidence at `abcdef1`.\n\n'));
+  assert.ok(md.startsWith('## SpecGuard scan\n\n**❌ '));
+  assert.match(md.split('\n')[2], /in the design documents at `abcdef1`\. Static review; tests were not run\.$/);
   assert.doesNotMatch(md, /audit/i);
   assert.doesNotMatch(render({ data: null, head: 'abcdef1' }), /audit/i);
   assert.doesNotMatch(render({ data: sample(), failure: 'x', partial: 'engine timeout' }), /audit/i);
@@ -645,12 +649,12 @@ test('rename: the head names the unit test gap scan and the short sha; no "audit
 
 test('run (rename): an issue created under the old title and marker is found and updated, not duplicated', async (t) => {
   const first = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' } });
-  const legacy = { number: 11, title: 'SpecGuard requirements audit', body: first.calls.created[0].body.replace('## SpecGuard unit test gap scan', '## SpecGuard requirements audit'), user: BOT };
+  const legacy = { number: 11, title: 'SpecGuard requirements audit', body: first.calls.created[0].body.replace('## SpecGuard scan', '## SpecGuard requirements audit'), user: BOT };
   assert.ok(legacy.body.startsWith('<!-- specguard:audit -->\n## SpecGuard requirements audit'), 'the old marker is the one still in use');
   const r = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { SCAN_ISSUE: 'true' }, mock: { issues: [legacy] } });
   assert.equal(r.calls.created.length, 0, 'no duplicate');
   assert.deepEqual(r.calls.updated.map((u) => [u.issue_number, u.title]), [[11, TITLE]]);
-  assert.ok(r.calls.updated[0].body.startsWith(`${MARK}\n## SpecGuard unit test gap scan`));
+  assert.ok(r.calls.updated[0].body.startsWith(`${MARK}\n## SpecGuard scan`));
   assert.match(r.calls.updated[0].body, /No confirmed changes\./, 'the hidden state of the old issue is still read');
 });
 
@@ -693,8 +697,8 @@ test('run: the header counts blocks from the candidate file and meta, the not-a-
     'audit-meta.json': { head: 'abc123', max_requirements: 2, docs: 1, candidates: 14, candidates_listed: 2, cap_left: ['docs/design.md § 4. After: 12 blocks not scanned (cap)'], limitations: [] } } });
   const md = r.calls.summary;
   assert.match(md, /\*\*1 requirement\*\* from 1 document\n\n2 blocks scanned of 14 in the documents \(cap 2\)\./);
-  assert.match(md, /<details><summary>1 block was not a requirement<\/summary>[\s\S]*2222222b[\s\S]*\(rationale, not behaviour\)/);
-  assert.match(md, /<details><summary>Not reviewed: 1 item<\/summary>\n\n- docs\/design\.md § 4\. After: 12 blocks not scanned \(cap\)\n/);
+  assert.match(md, /\*\*1 block was not a requirement\*\*[\s\S]*2222222b[\s\S]*\(rationale, not behaviour\)/);
+  assert.match(md, /\*\*Not reviewed \(1 item\)\*\*\n\n- docs\/design\.md § 4\. After: 12 blocks not scanned \(cap\)\n/);
   const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
   assert.deepEqual(saved.not_requirements.map((x) => [x.cid, x.path, x.line, x.reason]), [[C2, 'docs/design.md', 4, 'rationale, not behaviour']]);
 });
@@ -780,8 +784,8 @@ test('run: runs that rotate keep the blocks they did not audit, marked from thei
     assert.match(md, /Coverage: 3 of 3 blocks audited at least once; this run audited 1 \(changed 0, confirming 1, new 0, oldest 0\)\./);
     assert.match(md, /Evidence candidates found before the model ran: 1 of 1 blocks have a code location, 0 a test location\./);
     assert.match(md, /A gap is \*\*confirmed\*\* when the block was a gap in this run and the last time it was audited/);
-    assert.match(md, /### Confirmed gaps \(1\)[\s\S]*`3333333c`[^\n]*gap \(confirmed since bbbb222\)<br><sub>from 2026-09-15<\/sub>/, 'a carried confirmed gap keeps its label and shows its date');
-    assert.match(md, /<summary>Covered \(2\)<\/summary>[\s\S]*`1111111a`[\s\S]*`2222222b`[^\n]*covered<br><sub>from 2026-08-01<\/sub>/);
+    assert.match(md, /### Confirmed gaps \(1\)[\s\S]*docs\/design\.md:3[^\n]*Plans fire at most once a minute\.<br><sub>from 2026-09-15<\/sub> \|/, 'a carried confirmed gap shows its date');
+    assert.match(md, /\*\*Covered \(2\)\*\*[\s\S]*`1111111a`[\s\S]*`2222222b`[^\n]*covered<br><sub>from 2026-08-01<\/sub>/);
     assert.doesNotMatch(md, /deadbeef/);
     assert.match(md, /By block: confirmed gap 1 · covered 2/);
   }
@@ -824,8 +828,8 @@ test('render: blocks skipped by rule are listed in their own collapsed block wit
   const data = verify(result([req()], {}), { read, cands: TWO() });
   const ruled = [{ cid: '3333333c', path: 'docs/design.md', line: 9, text: '| Pilot run | 88% |', reason: 'results/data table row' }];
   const md = render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 2, cap: 5, ruled });
-  assert.ok(md.includes('<details><summary>1 block was skipped by rule</summary>\n\n- [docs/design.md:9](https://github.com/o/r/blob/abc/docs/design.md#L9) `3333333c` \\| Pilot run \\| 88% \\| (skipped by rule: results/data table row)'), md);
-  assert.equal(md.replace(/<details><summary>1 block was skipped by rule[\s\S]*?<\/details>\n\n/, ''), render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 2, cap: 5 }), 'only the extra block differs');
+  assert.ok(md.includes('**1 block was skipped by rule**\n\n- [docs/design.md:9](https://github.com/o/r/blob/abc/docs/design.md#L9) `3333333c` \\| Pilot run \\| 88% \\| (skipped by rule: results/data table row)'), md);
+  assert.equal(md.replace(/\*\*1 block was skipped by rule\*\*\n\n- [^\n]*\n\n/, ''), render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 2, cap: 5 }), 'only the extra block differs');
 });
 
 test('run: the status output (and the reason when failed) is set in scan mode for every outcome', async (t) => {
@@ -842,4 +846,29 @@ test('run: the status output (and the reason when failed) is set in scan mode fo
   assert.deepEqual(quota.calls.outputs, { status: 'failed', reason: 'You have exceeded your monthly quota' });
   assert.match(quota.calls.summary, /Could not complete: You have exceeded your monthly quota/);
   assert.deepEqual((await runPost(t, { ctxFiles: { 'engine-status': 'failed\n' } })).calls.outputs, { status: 'failed', reason: 'the engine failed; see the job log' });
+});
+
+test('scan layout: clean, person-check and incomplete verdicts; icons carry labels; no internal tokens outside Details', () => {
+  const clean = render({ data: dataOf({ [A]: 'covered' }), head: 'abc1234def' });
+  assert.match(clean, /^## SpecGuard scan\n\n\*\*✅ No unit test gaps found\*\* in the design documents at `abc1234`\. Static review; tests were not run\.\n\n<details>/);
+  assert.doesNotMatch(clean.slice(0, clean.indexOf('<details>')), /###/);
+  const unsure = render({ data: dataOf({ [A]: 'needs_human' }), head: 'abc1234def' });
+  assert.match(unsure, /\*\*❔ No gaps found; 1 block needs a person to check\*\* in the design documents/);
+  const gaps = render({ data: dataOf({ [A]: 'missing_test', [B]: 'missing_test', [U]: 'unknown' }), head: 'abc1234def' });
+  const vis = gaps.slice(0, gaps.indexOf('<details>'));
+  assert.match(vis, /\*\*❌ 2 new gaps to confirm\*\*/);
+  assert.doesNotMatch(vis, /missing_test|needs_human|not_implemented|unsure|Unsure|Covered/);
+  const partial = render({ data: dataOf({ [A]: 'missing_test' }), partial: 'engine timeout' });
+  assert.match(partial, /\*\*⚠️ Incomplete scan: 1 new gap to confirm found so far\*\*/);
+  assert.equal((gaps.match(/<details>/g) || []).length, 1);
+});
+
+test('scan layout: every SpecGuard-authored string is English; repository text only inside quotes', () => {
+  const ZH = '重复计划触发后保持开启';
+  const cjk = /[぀-ヿ㐀-鿿가-힯豈-﫿]/;
+  const d = dataOf({ [A]: 'missing_test', [B]: 'contradicted', [U]: 'needs_human' });
+  for (const r of d.requirements) { r.text = ZH; r.source = { ...r.source, quote: ZH }; r.note = `The document says "${ZH}".`; }
+  const md = render({ data: d, head: 'abc1234def', rejected: [['docs/说明.md', 'no items']], docs: [['docs/说明.md', 'discovered']] });
+  assert.ok(cjk.test(md));
+  assert.doesNotMatch(md.split(ZH).join('').split('说明').join(''), cjk);
 });

@@ -15,7 +15,7 @@ const RISK = ['contradicted', 'not_implemented', 'missing_test', 'partial', 'unk
 const CLASS = ['static', 'unit', 'higher_level', 'human'];
 const LAYER = ['unit', 'component', 'integration', 'e2e'];
 // MARK (and the state marker) stay 'specguard:audit': an issue created before the rename is still found and updated, not duplicated. TITLE: issue title; HEADING: summary head.
-const MARK = '<!-- specguard:audit -->', TITLE = 'SpecGuard: unit test gap scan', HEADING = 'SpecGuard unit test gap scan';
+const MARK = '<!-- specguard:audit -->', TITLE = 'SpecGuard: unit test gap scan', HEADING = 'SpecGuard scan';
 // One scan issue per scope (scan_paths): the marker carries a short hash of the sorted globs and the title names the scope. No scope keeps the original marker and title, so an older issue is still found.
 function scopeOf(spec, target = '') {
   const ls = [...new Set(String(spec || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean))].sort();
@@ -36,6 +36,7 @@ const lines = (s) => String(s || '').split('\n').filter(Boolean);
 const bytes = (s) => Buffer.byteLength(s);
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const cell = (s, n = Infinity) => oneLine(neutralize(String(s)), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
 const solid = (q) =>String(q).replace(/\s/g, '').length >= MIN_QUOTE;
 const CID = /^([0-9a-f]{8})(?:\.[1-9]\d*)?$/; // a block id, or block id + .1, .2 for the atomic requirements a block bundles
@@ -312,18 +313,16 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const first = (r) => `${name(r)} ${cell(r.text, 300)}${r.note ? `<br><sub>${cell(r.note, 300)}</sub>` : ''}`;
   const label = (b) => (b.status === 'gap' ? (b.mark === 'confirmed' ? `gap (confirmed${b.next[2] ? ` since ${cell(b.next[2], 12)}` : ''})` : 'gap (unconfirmed)')
     : b.mark === 'resolved' ? 'covered (resolved)' : b.mark === 'recheck' ? 'covered (resolved? recheck next run)' : b.status);
-  const subs = (b) => count(b.rows, 'status', RISK).map(([v, n]) => `${v} ×${n}`).join(', ');
+  const subs = (b) => count(b.rows, 'status', RISK).map(([v, n]) => `${v.replace(/_/g, ' ')} ×${n}`).join(', ');
   const bline = (b) => `| \`${b.cid}\` | ${link(b.path, b.line, `${b.path}:${b.line}`)} | ${cell(b.text, 120)} | ${label(b)}${b.carried ? `<br><sub>from ${b.at ? cell(b.at.date, 12) : 'an earlier run'}</sub>` : ''} | ${subs(b)} |\n`;
   const BTOP = '| Block | Line | Requirement | Status | Sub-rows |\n|---|---|---|---|---|\n';
   const of = (s, m) => blocks.concat(old).filter((b) => b.status === s && (!m || b.mark === m));
   const confirmed = of('gap', 'confirmed'), fresh = of('gap', 'new'), unsure = of('unsure'), covered = of('covered');
-  const clash = (ok) => rows.filter((r) => r.status === 'contradicted' && ((byCid.get(cidOf(r.id) || r.id) || {}).mark === 'confirmed') === ok)
-    .map((r) => `| ${first(r)} | "${cell(r.source.quote, 200)}"<br>${at(r.source)} | "${cell(r.code[0].quote, 200)}"<br>${r.code.map(at).join('; ')} |\n`);
   const evid = []; // per-document sub-row evidence
   for (const r of rows) {
     let g = evid.find((x) => x.path === r.source.path);
     if (!g) evid.push(g = { path: r.source.path, rows: [] });
-    g.rows.push(`| ${first(r)} | ${r.status} | ${r.class} | ${evidence(r) || 'none'} |\n`);
+    g.rows.push(`| ${first(r)} | ${r.status.replace(/_/g, ' ')} | ${r.class.replace(/_/g, ' ')} | ${evidence(r) || 'none'} |\n`);
   }
 
   const by = (pairs) => pairs.map(([v, n]) => `${v} ${n}`).join(' · ') || 'none';
@@ -337,45 +336,63 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     if (!rotation.rotate) return `${where}${k < candidates ? `Scanned in document order: the first ${k} of ${candidates} blocks (cap ${cap}). Schedule with scan_issue: true to rotate through all blocks.\n\n` : ''}${found}`;
     return `${where}Coverage: ${k + carried.length} of ${candidates} blocks audited at least once; this run audited ${k} (changed ${rotation.changed}, confirming ${rotation.confirming}, new ${rotation.new}, oldest ${rotation.oldest}).\n\n${found}`;
   };
-  let top = `## ${HEADING}\n\nBehaviour described in the design documents, checked for unit-test evidence${sha ? ` at \`${cell(sha.slice(0, 7), 12)}\`` : ''}.\n\n`;
-  if (partial) top += `> **Partial scan: ${cell(partial, 200)}.** The rows below passed verification but the list may be incomplete. The scan issue, if enabled, was not updated.\n\n`;
-  if (failure) top += `Could not complete: ${cell(failure, 400)}\n\n`;
-  else if (!data) top += 'No design documents were found, so nothing was scanned.\n\n';
-  else {
-    const skipped = data.not_requirements || [], n = new Set(rows.map((r) => cidOf(r.id) || r.id)).size + skipped.length;
-    const tally = [['confirmed gap', confirmed.length], ['new gap (unconfirmed)', fresh.length], ['unsure', unsure.length], ['covered', covered.length]].filter(([, k]) => k);
-    top += `**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${docCount} document${docCount === 1 ? '' : 's'}\n\n`
-      + `${rotation ? `${n} block${n === 1 ? '' : 's'} audited this run` : candidates ? `${n} block${n === 1 ? '' : 's'} scanned of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${n} block${n === 1 ? '' : 's'} scanned`}.\n\n`
-      + coverage()
-      + `By block: ${by(tally)}\n\n`
-      + (prior ? `A gap is **confirmed** when the block was a gap in this run and ${rotation && rotation.rotate ? 'the last time it was audited' : 'in the previous one'}${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}; one run alone is unconfirmed. \`unsure\` and sub-row detail vary from run to run and are not confirmed.\n\n`
-        : 'This is the first scan run (no earlier result to compare with), so every gap is **unconfirmed**; one more scan run will confirm the ones that persist.\n\n')
-      + 'The blocks are fixed by the documents (every paragraph, list item and table row, in document order) and the publisher, not the model, picks the ones a run assesses (up to the cap): the same commit and state list the same blocks. The model only assesses each one; the counts describe that list, not the repository.\n\n';
-  }
-  top += '> Static review; not coverage; not for scoring people. Tests were not executed: a requirement is `covered` when a cited unit assertion with an independent expected value proves it. `not_implemented` and `missing_test` are model claims (not verified statically): the search that found nothing is not checked. A block is a `gap` when any of its sub-rows is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise. Blocks are identified by a stable id (a hash of the document, heading and block text), so a reworded block shows as removed and new.\n\n';
-  if (prior && data) top += changedSince(prior, blocks);
+  // Visible = what to act on: confirmed gaps, new gaps to confirm, documents and code that disagree, and "Not reviewed" when the scan is incomplete. Everything else sits in ONE Details block.
+  const skipped = data ? data.not_requirements || [] : [], gapN = confirmed.length + fresh.length;
+  const NEXT = { contradicted: 'The code contradicts it: see Documents and code disagree.', not_implemented: 'Not implemented: add the behaviour and a unit test.', missing_test: 'Add a unit test that checks it.', partial: 'Strengthen the unit test: it checks only part of it.' };
+  const nextStep = (b) => NEXT[RISK.find((v) => GAP.includes(v) && b.rows.some((r) => r.status === v))] || NEXT.missing_test;
+  const grow = (b) => `| ${link(b.path, b.line, `${b.path}:${b.line}`)} ${cell(b.text, 120)}${b.carried ? `<br><sub>from ${b.at ? cell(b.at.date, 12) : 'an earlier run'}</sub>` : ''} | ${nextStep(b)} |\n`;
+  const GTOP = '| Document says | Next step |\n|---|---|\n';
+  const clashes = rows.filter((r) => r.status === 'contradicted').map((r) => `| "${cell(r.source.quote, 200)}"<br>${at(r.source)} | "${cell(r.code[0].quote, 200)}"<br>${r.code.map(at).join('; ')} |\n`);
+  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...(stateDropped ? [`the scan issue state keeps at most ${STATE_MAX} blocks: ${stateDropped} older block(s) are dropped and will count as never audited`] : [])];
+  const unread = data ? docs.filter(([p]) => !data.docs_reviewed.includes(p)).map(([p]) => `\`${p}\` was admitted but is not in docs_reviewed.`) : [];
+  const nrAll = [...nr, ...unread];
+  const where = sha ? ` in the design documents at \`${cell(sha.slice(0, 7), 12)}\`` : ' in the design documents';
+  const found = [confirmed.length && plural(confirmed.length, 'confirmed gap'), fresh.length && (confirmed.length ? `${fresh.length} new to confirm` : `${plural(fresh.length, 'new gap')} to confirm`)].filter(Boolean).join(', ');
+  let verdict;
+  if (failure) verdict = `**⚠️ Could not complete: ${cell(failure, 400)}**`;
+  else if (!data) verdict = '**No design documents were found, so nothing was scanned.**';
+  else if (partial) verdict = `**⚠️ Incomplete scan: ${found ? `${found} found so far` : 'no unit test gaps found so far'}**`;
+  else if (gapN) verdict = `**❌ ${found}**${where}. Static review; tests were not run.`;
+  else if (unsure.length) verdict = `**❔ No gaps found; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${where}. Static review; tests were not run.`;
+  else verdict = `**✅ No unit test gaps found**${where}. Static review; tests were not run.`;
+  let top = `## ${HEADING}\n\n${verdict}\n\n`;
+  if (partial && !failure) top += `> **⚠️ Incomplete scan.** The rows below passed verification but the list may be incomplete${partial ? ` (${cell(partial, 200)})` : ''}. The scan issue, if enabled, was not updated.\n\n`;
+  const items = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
+  // an incomplete or failed scan keeps its reasons visible; a complete one lists them in Details
+  const visibleNr = partial && !failure && nrAll.length ? `### Not reviewed\n\n${items(nrAll, 40, (s) => `- ${cell(s, 400)}\n`)}\n` : '';
 
-  const list = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
-  let foot = '';
-  // what was read and what was not admitted: reference material, collapsed (a candidate document is not something the reader acts on)
+  // Details: what the scan looked at and the rest of its result. Fixed text first (counted against the size limit), then tables whole rows at a time.
+  let dhead = '', dfoot = '';
+  const stats = [];
+  if (data) {
+    const n = new Set(rows.map((r) => cidOf(r.id) || r.id)).size + skipped.length;
+    const tally = [['confirmed gap', confirmed.length], ['new gap (unconfirmed)', fresh.length], ['unsure', unsure.length], ['covered', covered.length]].filter(([, k]) => k);
+    stats.push(`**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${docCount} document${docCount === 1 ? '' : 's'}`);
+    stats.push(`${rotation ? `${n} block${n === 1 ? '' : 's'} audited this run` : candidates ? `${n} block${n === 1 ? '' : 's'} scanned of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${n} block${n === 1 ? '' : 's'} scanned`}.`);
+    const cv = coverage().trim();
+    if (cv) stats.push(cv);
+    stats.push(`By block: ${by(tally)}`);
+    stats.push(prior ? `A gap is **confirmed** when the block was a gap in this run and ${rotation && rotation.rotate ? 'the last time it was audited' : 'in the previous one'}${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}; one run alone is unconfirmed. Unsure blocks and sub-row detail vary from run to run and are not confirmed.`
+      : 'This is the first scan run (no earlier result to compare with), so every gap is **unconfirmed**; one more scan run will confirm the ones that persist.');
+    stats.push('The blocks are fixed by the documents (every paragraph, list item and table row, in document order) and the publisher, not the model, picks the ones a run assesses (up to the cap): the same commit and state list the same blocks. The model only assesses each one; the counts describe that list, not the repository.');
+  }
+  if (prior && data) dhead += changedSince(prior, blocks);
+  if (stats.length) dhead += `**This scan**\n\n${stats.join('\n\n')}\n\n`;
+  if (data) dhead += '**How to read this scan**\n\nStatic review; not coverage; not for scoring people. Tests were not executed: a requirement is covered when a cited unit assertion with an independent expected value proves it. Not implemented and missing test are model claims (not verified statically): the search that found nothing is not checked. A block is a gap when any of its sub-rows is a missing test, partial, contradicted or not implemented, covered when all are, unsure otherwise. Blocks are identified by a stable id (a hash of the document, heading and block text), so a reworded block shows as removed and new.\n\n';
+  // what was read and what was not admitted: a plain list (a candidate document is not something the reader acts on)
   if (docs.length || rejected.length) {
     const k = rejected.length;
     const read = docs.length ? `- Requirement documents: ${docs.slice(0, 15).map(([p, how]) => `\`${cell(p, 200)}\`${how ? ` (${cell(how, 40)})` : ''}`).join(', ')}${docs.length > 15 ? `, +${docs.length - 15} more` : ''}\n` : '';
-    const nope = k ? `- ${k} candidate document${k === 1 ? ' was' : 's were'} not admitted (add to \`requirements_paths\` to include)\n\n<details><summary>Candidates not admitted</summary>\n\n${list(rejected, 20, ([p, why]) => `- \`${cell(p, 200)}\`: ${cell(why, 200)}\n`)}\n</details>\n` : '';
-    foot += `<details><summary>Sources</summary>\n\n${read}${nope}\n</details>\n\n`;
+    const nope = k ? `- ${k} candidate document${k === 1 ? ' was' : 's were'} not admitted (add to \`requirements_paths\` to include):\n${items(rejected, 20, ([p, why]) => `  - \`${cell(p, 200)}\`: ${cell(why, 200)}\n`)}` : '';
+    dfoot += `**Sources**\n\n${read}${nope}\n`;
   }
-  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...(stateDropped ? [`the scan issue state keeps at most ${STATE_MAX} blocks: ${stateDropped} older block(s) are dropped and will count as never audited`] : [])];
-  const nrq = data && data.not_requirements ? data.not_requirements : [];
-  if (nrq.length) foot += `<details><summary>${nrq.length} block${nrq.length === 1 ? ' was' : 's were'} not ${nrq.length === 1 ? 'a requirement' : 'requirements'}</summary>\n\n${list(nrq, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(${cell(n.reason, 80)})\n`)}\n</details>\n\n`;
+  if (skipped.length) dfoot += `**${skipped.length} block${skipped.length === 1 ? ' was' : 's were'} not ${skipped.length === 1 ? 'a requirement' : 'requirements'}**\n\n${items(skipped, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(${cell(n.reason, 80)})\n`)}\n`;
   // blocks the collector's prefilter dropped (audit-ruled.txt): data and status, not behaviour; never sent to the model, so not part of the counts above
-  if (ruled.length) foot += `<details><summary>${ruled.length} block${ruled.length === 1 ? ' was' : 's were'} skipped by rule</summary>\n\n${list(ruled, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(skipped by rule: ${cell(n.reason, 80)})\n`)}\n</details>\n\n`;
-  const unread = data ? docs.filter(([p]) => !data.docs_reviewed.includes(p)).map(([p]) => `\`${p}\` was admitted but is not in docs_reviewed.`) : [];
-  const all = [...nr, ...unread], items = list(all, 40, (s) => `- ${cell(s, 400)}\n`);
-  // an incomplete run (partial or failed) keeps the reasons visible; a complete one is one line with the list inside
-  if (all.length) foot += partial || failure ? `### Not reviewed\n\n${items}\n` : `<details><summary>Not reviewed: ${all.length} item${all.length === 1 ? '' : 's'}</summary>\n\n${items}\n</details>\n\n`;
-  if (usage) foot += `${usage}\n`;
+  if (ruled.length) dfoot += `**${ruled.length} block${ruled.length === 1 ? ' was' : 's were'} skipped by rule**\n\n${items(ruled, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(skipped by rule: ${cell(n.reason, 80)})\n`)}\n`;
+  if (nrAll.length && !visibleNr) dfoot += `**Not reviewed (${plural(nrAll.length, 'item')})**\n\n${items(nrAll, 40, (s) => `- ${cell(s, 400)}\n`)}\n`;
+  const dusage = usage ? `${usage}\n` : '';
 
-  let room = max - bytes(top) - bytes(foot) - 300, omitted = 0, body = '';
+  let room = max - bytes(top) - bytes(visibleNr) - 700, omitted = 0; // the visible tables come first
   const take = (title, rs, end = '') => { // whole rows while they fit
     const kept = [];
     let used = bytes(title) + bytes(end) + 1;
@@ -385,15 +402,24 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     room -= used;
     return `${title}${kept.join('')}${end}\n`;
   };
-  const CLASH = (kind) => `### Doc and code disagree (${kind})\n\nThe requirement line and the code line below look contradictory. A model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Requirement | Document says | Code says |\n|---|---|---|\n`;
-  const fold = (s, bs) => take(`<details><summary>${s} (${bs.length})</summary>\n\n${BTOP}`, bs.map(bline), '\n</details>\n');
-  body += take(CLASH('confirmed'), clash(true)) + take(CLASH('unconfirmed'), clash(false));
-  body += take(`### Confirmed gaps (${confirmed.length})\n\n${BTOP}`, confirmed.map(bline));
-  body += take(`### New gaps, unconfirmed (${fresh.length})\n\n${BTOP}`, fresh.map(bline));
-  body += fold('Unsure', unsure) + fold('Covered', covered);
-  for (const g of evid) body += take(`<details><summary>Sub-row evidence: ${cell(g.path, 200).replace(/[<>&]/g, '')} (${g.rows.length} row${g.rows.length === 1 ? '' : 's'})</summary>\n\n| Requirement | Status | Class | Evidence |\n|---|---|---|---|\n`, g.rows, '\n</details>\n');
-  if (omitted) body += `_${omitted} row${omitted === 1 ? '' : 's'} omitted: the report exceeded the size limit; \`audit.json\` in the run artifact has them all._\n\n`;
-  return top + body + foot;
+  const CAP = 15; // rows shown per visible table; the rest are in Details
+  const vis = (title, rs, head) => (rs.length ? take(`### ${title} (${rs.length})\n\n${head}`, rs.slice(0, CAP), rs.length > CAP ? `\n+${rs.length - CAP} more in Details.\n` : '') : '');
+  let body = '';
+  body += vis('Confirmed gaps', confirmed.map(grow), GTOP);
+  body += vis(prior ? 'New since the last scan' : 'New gaps to confirm', fresh.map(grow), GTOP);
+  body += clashes.length ? take(`### Documents and code disagree (${clashes.length})\n\nA model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Document says | Code says |\n|---|---|\n`, clashes.slice(0, CAP), clashes.length > CAP ? `\n+${clashes.length - CAP} more in Details.\n` : '') : '';
+  // Details: the usage line is reserved, then the fixed text while it fits, then the tables with what is left
+  room -= bytes(dusage);
+  const fit = (t) => { if (!t || bytes(t) > room) return ''; room -= bytes(t); return t; };
+  const dh = fit(dhead), df = fit(dfoot);
+  const more = (title, rs, head) => (rs.length > CAP ? take(`**${title} (${rs.length - CAP} more)**\n\n${head}`, rs.slice(CAP), '') : '');
+  let det = [more('More confirmed gaps', confirmed.map(grow), GTOP), more('More new gaps', fresh.map(grow), GTOP), more('More disagreements', clashes, '| Document says | Code says |\n|---|---|\n')].join('');
+  const fold = (s, bs) => take(`**${s} (${bs.length})**\n\n${BTOP}`, bs.map(bline), '');
+  det += fold('Unsure', unsure) + fold('Covered', covered);
+  for (const g of evid) det += take(`**Sub-row evidence: ${cell(g.path, 200).replace(/[<>&]/g, '')} (${g.rows.length} row${g.rows.length === 1 ? '' : 's'})**\n\n| Requirement | Status | Class | Evidence |\n|---|---|---|---|\n`, g.rows, '');
+  const details = dh || det || df || dusage ?`<details><summary>${failure ? 'Details: run information' : 'Details: changed since last scan, evidence per block, skipped blocks, coverage of rotation, sources'}</summary>\n\n${dh}${det}${df}${dusage}\n</details>\n` : '';
+  const omit = omitted ? `\n_${omitted} row${omitted === 1 ? '' : 's'} omitted: the report exceeded the size limit; \`audit.json\` in the run artifact has them all._\n` : '';
+  return top + visibleNr + body + omit + details;
 }
 
 // Only 2-run-stable changes are listed (confirmed gaps that appeared or resolved); status churn between the last two runs is counted, not listed.
@@ -402,7 +428,7 @@ function changedSince(prior, blocks) {
   const at = (m) => blocks.filter((b) => b.mark === m);
   const body = sec('Confirmed gaps that appeared', at('confirmed').filter((b) => b.next[3] === 2)) + sec('Resolved (covered in two runs)', at('resolved')) + sec('Resolved? Covered once, recheck next run', at('recheck'));
   const n = blocks.filter((b) => b.was && b.was !== b.status && b.mark !== 'resolved' && b.mark !== 'recheck').length;
-  return `### Changed since the last scan${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}\n\n${body || 'No confirmed changes.\n'}${n ? `\nUnstable: ${n} block${n === 1 ? '' : 's'} changed status between the last two runs (not listed).\n` : ''}\n`;
+  return `**Changed since the last scan${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}**\n\n${body || 'No confirmed changes.\n'}${n ? `\nUnstable: ${n} block${n === 1 ? '' : 's'} changed status between the last two runs (not listed).\n` : ''}\n`;
 }
 
 // Our scan issue among open and closed issues (marker plus identity); an open one wins.
