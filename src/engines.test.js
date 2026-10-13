@@ -19,6 +19,7 @@ function sandbox(t, { copilotRc = 0, copilotErr = '', copilotOut = JSON.stringif
   for (const d of [bin, ctx]) fs.mkdirSync(d);
   fs.writeFileSync(path.join(dir, 'prompt.txt'), 'REVIEW PROMPT');
   fs.writeFileSync(path.join(bin, 'copilot'), `#!/usr/bin/env bash
+[ "$1" = --version ] && { echo "GitHub Copilot CLI 1.0.92."; exit 0; }
 { printf '%s\\n' "$@"; echo '---'; } >> "${fwd(log)}"
 cat > /dev/null
 prev=''; for a in "$@"; do [ "$prev" = --usage-output-file ] && echo '{"totalNanoAiu":1000000000,"currentModel":"fake-model"}' > "$a"; prev=$a; done
@@ -146,6 +147,7 @@ test('auto tier: a CLI that rejects the tier is retried once without --auto-tier
   // first call is rejected like the real CLI; the fake keys on the flag being present
   const s = sandbox(t);
   fs.writeFileSync(path.join(path.dirname(s.ctx), 'bin', 'copilot'), `#!/usr/bin/env bash
+[ "$1" = --version ] && { echo "GitHub Copilot CLI 1.0.92."; exit 0; }
 { printf '%s\\n' "$@"; echo '---'; } >> "${fwd(path.join(path.dirname(s.ctx), 'argv.log'))}"
 cat > /dev/null
 for a in "$@"; do [ "$a" = --auto-tier ] && { echo 'error: Auto preference requires the selected model to be \`auto\`' >&2; exit 1; }; done

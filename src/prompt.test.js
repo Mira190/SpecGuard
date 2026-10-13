@@ -342,4 +342,10 @@ test('focused prompt: only the chosen files in the numbered diff, a short not-in
   assert.ok(dyn(p).indexOf('Large PR, focused review') < dyn(p).indexOf('<untrusted-data name='), 'the budget precedes the data blocks');
   const many = ctx({ 'diff.patch': a + Array.from({ length: 500 }, (_, i) => `diff --git a/z${i} b/z${i}\n@@ -1 +1 @@\n+${i}\n`).join(''), 'focus.txt': 'src/a.js\t9.0\tlogic\n', 'focus-skipped.txt': 'z1\t1\n' });
   assert.ok(build(many).includes('"max_obligations":8'), 'the obligation cap sees the focused diff only');
+  const chosen = (n) => Array.from({ length: n }, (_, i) => `${i ? `src/f${i}.js` : 'src/a.js'}\t9.0\tlogic +3.0\n`).join('') + 'src/a.test.js\t0.0\tchanged test of src/a.js\n';
+  assert.ok(build(ctx({ 'diff.patch': a, 'focus.txt': chosen(12) })).includes('"max_obligations":18,"behaviour_reserved":9'), 'focused cap: 6 + chosen files, a ride-along test does not count');
+  assert.ok(build(ctx({ 'diff.patch': a, 'focus.txt': chosen(30) })).includes('"max_obligations":20'), 'focused cap is at most 20');
+  const rq = build(ctx({ 'diff.patch': a, 'focus.txt': 'src/a.js\t9.0\tlogic\n', 'focus-requirements.txt': 'docs/spec.md\t40\n' }));
+  assert.match(rq, /<untrusted-data name="focus-requirements\.txt" note="requirement changes \(criteria\)[^"]*">\ndocs\/spec\.md\n<\/untrusted-data>/);
+  assert.match(rq, /may stop after its first hunks \(a marker line says how many changed lines are not shown\)/);
 });

@@ -20,6 +20,7 @@ function setup(t, turns, env = {}) {
   turns.forEach(([out, rc = 0, err = '', sleep = 0, x = {}], i) => { if (x.events) fs.writeFileSync(path.join(fake, `${i + 1}.events`), x.events.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).join('\n') + '\n'); if (x.usage) fs.writeFileSync(path.join(fake, `${i + 1}.usage`), JSON.stringify(x.usage)); if (x.reject) fs.writeFileSync(path.join(fake, `${i + 1}.reject`), x.reject); fs.writeFileSync(path.join(fake, `${i + 1}.sleep`), String(sleep)); fs.writeFileSync(path.join(fake, `${i + 1}.out`), out); fs.writeFileSync(path.join(fake, `${i + 1}.err`), err); fs.writeFileSync(path.join(fake, `${i + 1}.rc`), String(rc)); });
   fs.writeFileSync(path.join(bin, 'copilot'), `#!/usr/bin/env bash
 F="${fake.replace(/\\/g, '/')}"
+if [ "$1" = --version ]; then cat "$F/version" 2>/dev/null || echo "GitHub Copilot CLI 1.0.92."; exit 0; fi
 n=$(( $(cat "$F/count" 2>/dev/null || echo 0) + 1 )); echo $n > "$F/count"
 { printf '%s\\n' "$@"; echo '---'; } >> "$F/argv.log"
 cat > "$F/$n.stdin"
@@ -280,4 +281,23 @@ test('action.yml wires the new inputs, runs the Copilot script, and never uses a
   const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
   for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "60"/m, /^ {2}ctx_retention_days: \{[^}]*default: "1"/m, /TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/, /^ {2}engine: \{[^}]*default: copilot/m, /ENGINE: \$\{\{ inputs\.engine \}\}/, /COPILOT_VERSION: \$\{\{ inputs\.copilot_version \}\}/, /ENGINE: \$\{\{ steps\.engine\.outputs\.engine \}\}/, /PROMPT_FILE="\$PROMPT_FILE" bash "\$GITHUB_ACTION_PATH\/src\/engines\/\$ENGINE\.sh"/,/EFFORT: \$\{\{ inputs\.effort \}\}/, /^ {2}auto_tier: \{[^}]*default: intelligence/m, /^ {2}fast_models: \{[^}]*default: ""/m, /AUTO_TIER: \$\{\{ inputs\.auto_tier \}\}/, /FAST_MODELS: \$\{\{ inputs\.fast_models \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/validate-inputs\.sh/]) assert.match(y, m);
   assert.doesNotMatch(y + ['copilot.sh'].map((n) => fs.readFileSync(path.join(__dirname, 'engines', n), 'utf8').replace(/^#.*$/gm, '')).join(''), /--allow-all\b(?!-tools)|--allow-all-paths|--yolo/);
+});
+
+test('a stub copilot (prints "Cannot find GitHub Copilot CLI", exit 0): failed before any turn, first line in the notes', (t) => {
+  const s = setup(t, [[VALID]]);
+  fs.writeFileSync(path.join(path.dirname(s.ctx), 'fake', 'version'), 'Cannot find GitHub Copilot CLI (https://docs.github.com/copilot/x)\nmore\n');
+  const r = s.run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(s.calls().length, 0);
+  assert.equal(s.ctxFile('engine-status'), 'failed');
+  assert.match(s.ctxFile('engine-notes'), /^Copilot CLI not found or not runnable \(Cannot find GitHub Copilot CLI \(https:\/\/docs\.github\.com\/copilot\/x\)\)$/);
+});
+
+test('a real-looking version passes the check; a turn that prints the stub message is failed, not repaired', (t) => {
+  const s = setup(t, [['Cannot find GitHub Copilot CLI (https://docs.github.com/x)\n']]);
+  fs.writeFileSync(path.join(path.dirname(s.ctx), 'fake', 'version'), 'GitHub Copilot CLI 1.0.92.\nRun copilot update\n');
+  assert.equal(s.run().status, 0);
+  assert.equal(s.calls().length, 1); // no repair turn
+  assert.equal(s.ctxFile('engine-status'), 'failed');
+  assert.equal(s.ctxFile('engine-repair'), null);
 });
