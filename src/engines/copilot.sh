@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# Copilot review run: one turn, then ONE repair turn on the same session when its JSON is missing or fails post.js's validator.
+# Engine adapter: GitHub Copilot CLI. Contract: src/engines/README.md.
+# One turn, then ONE repair turn on the same session when its JSON is missing or fails post.js's validator.
 # Every prompt goes to copilot on stdin from a file in $CTX: one argv entry is capped at 128 KiB on Linux and ~32K characters on Windows, an env var too.
-# Env: CTX PROMPT_FILE (path of the prompt; or PROMPT, small prompts only, written to $CTX/prompt.txt) MODEL EFFORT AUTO_TIER FAST_MODELS MAX_CREDITS TIMEOUT (minutes, shared by both turns); engine-model.js records the model each turn used. CHECK=audit validates with audit-post.js (audit mode; read by extract-json.js). Never --allow-all, --allow-all-paths, --yolo.
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-bash "$here/validate-inputs.sh" || exit 1
+# Env: CTX PROMPT_FILE (path of the prompt; or PROMPT, small prompts only, written to $CTX/prompt.txt) MODEL EFFORT AUTO_TIER FAST_MODELS MAX_CREDITS TIMEOUT (minutes, install included, shared by all turns); engine-model.js records the model each turn used.
+# COPILOT_VERSION (npm install -g @github/copilot@V; empty = use the copilot already on PATH). CHECK=audit validates with audit-post.js (audit mode; read by extract-json.js). Never --allow-all, --allow-all-paths, --yolo.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; src="$(cd "$here/.." && pwd)"
+bash "$src/validate-inputs.sh" || exit 1
 TIMEOUT="${TIMEOUT:-12}" # validated above
 unset GH_TOKEN # Copilot CLI token precedence is COPILOT_GITHUB_TOKEN > GH_TOKEN > GITHUB_TOKEN: a job-level GH_TOKEN would hijack the auth
+[ -n "${COPILOT_GITHUB_TOKEN:-}" ] || unset COPILOT_GITHUB_TOKEN
 SECONDS=0; budget=$((10#$TIMEOUT * 60))
+mkdir -p "$CTX"
+if [ -n "${COPILOT_VERSION:-}" ]; then # an unbounded install once hung the whole job: at most 5 minutes, and never more than the budget
+  cap=300; [ "$budget" -ge "$cap" ] || cap=$budget
+  timeout -k 10s "${cap}s" npm install -g "@github/copilot@$COPILOT_VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$COPILOT_VERSION (failed or over ${cap}s)"; echo failed > "$CTX/engine-status"; echo "engine install failed: @github/copilot@$COPILOT_VERSION" >> "$CTX/engine-notes"; exit 0; }
+fi
 SID="$(node -e "console.log(require('crypto').randomUUID())")"
 out="$CTX/copilot.out"; err="$CTX/copilot.err"
 if [ -z "${PROMPT_FILE:-}" ]; then PROMPT_FILE="$CTX/prompt.txt"; printf '%s' "$PROMPT" > "$PROMPT_FILE"; fi
@@ -14,7 +22,9 @@ common=(--available-tools view,glob,grep --allow-all-tools --no-ask-user -s --ma
 
 model_args=(); effort_args=(); tier_args=(); effort_note=''; fallback_note=''; usage_note=''; repair_note=''; tier_note=''
 [ -n "${MODEL:-}" ] && model_args=(--model "$MODEL")
-set_tier() { tier_args=(); { [ -z "${MODEL:-}" ] || [ "${model_args[1]:-}" = auto ]; } && [ -n "${AUTO_TIER-intelligence}" ] && tier_args=(--auto-tier "${AUTO_TIER-intelligence}"); return 0; } # the router profile only exists for auto
+# The router profile only exists for auto, and the CLI rejects --auto-tier unless --model auto is explicit ("Auto preference requires the selected model to be `auto`"):
+# an empty MODEL with a tier therefore becomes `--model auto --auto-tier X`; without a tier the CLI default applies and no model flag is passed.
+set_tier() { tier_args=(); { [ -z "${MODEL:-}" ] || [ "${model_args[1]:-}" = auto ]; } && [ -n "${AUTO_TIER-intelligence}" ] && { tier_args=(--auto-tier "${AUTO_TIER-intelligence}"); model_args=(--model auto); }; return 0; }
 set_tier
 if [ -n "${EFFORT:-}" ]; then # auto does not support reasoning effort (hard error), so it is never passed with it
   if [ -n "${MODEL:-}" ] && [ "$MODEL" != auto ]; then effort_args=(--reasoning-effort "$EFFORT"); effort_note="effort: $EFFORT"
@@ -29,12 +39,12 @@ turn() { # <prompt file> <usage file> <stdout file>; the time left of the shared
   cat "$err" >&2
   [ $rc = 137 ] && rc=124 # timeout -k had to KILL it: still a timeout
   if [ $rc != 0 ] && [ ${#tier_args[@]} != 0 ] && grep -qiE 'auto-tier|auto tier|auto preference' "$err"; then # old CLI or a strict org policy: run this turn once more without the flag
-    tier_args=(); tier_note='auto_tier ignored'; turn "$@"; return $?
+    tier_args=(); [ -n "${MODEL:-}" ] || model_args=(); tier_note='auto_tier ignored'; turn "$@"; return $?
   fi
   return $rc
 }
-record() { MSYS2_ENV_CONV_EXCL=FAST_MODELS SID="$SID" FAST_MODELS="${FAST_MODELS:-}" node "$here/engine-model.js" --turn "$1" --usage "$2" || true; } # <turn label> <usage file>; never fails the step
-check() { node "$here/extract-json.js" "$1" "$CTX/findings.json" --check; } # prints the problem (if any); findings.json = what was extracted
+record() { MSYS2_ENV_CONV_EXCL=FAST_MODELS SID="$SID" FAST_MODELS="${FAST_MODELS:-}" node "$src/engine-model.js" --turn "$1" --usage "$2" || true; } # <turn label> <usage file>; never fails the step
+check() { node "$src/extract-json.js" "$1" "$CTX/findings.json" --check; } # prints the problem (if any); findings.json = what was extracted
 
 rc=0; turn "$PROMPT_FILE" "$CTX/usage.json" "$out" || rc=$?
 record main "$CTX/usage.json"

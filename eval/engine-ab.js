@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Engine A/B: the same prepared eval cases through the Copilot CLI engine (src/copilot-run.sh: JSON in prose + repair turn) and the Copilot SDK engine
+// Engine A/B: the same prepared eval cases through the Copilot CLI engine (src/engines/copilot.sh: JSON in prose + repair turn) and the Copilot SDK engine
 // (src/copilot-sdk-run.js: submit_review tool call), then graded with eval/local.js's finish logic (the real post.js on a fake GitHub).
 // Uses the local Copilot login; each engine run costs real AI credits, so the default is 5 cases x 2 engines x 1 run.
 //   node eval/engine-ab.js --out DIR [--case l1,t3,r1,s1,tr1] [--model auto] [--timeout 10] [--engines cli,sdk] [--cli-bin DIR] [--sdk-modules DIR] [--json]
@@ -51,7 +51,7 @@ function runEngine({ engine, dir, id, model, timeout, cliBin, sdkModules }) {
   const env = { ...process.env, CTX: fwd(ctx), PROMPT: prompt, MODEL: model, EFFORT: '', MAX_CREDITS: '60', TIMEOUT: String(timeout), FAST_MODELS: '', MSYS2_ENV_CONV_EXCL: 'PROMPT' };
   if (cliBin) env.PATH = shim(path.dirname(dir), cliBin) + path.delimiter + cliBin + path.delimiter + env.PATH;
   if (sdkModules) env.NODE_PATH = sdkModules + (process.env.NODE_PATH ? path.delimiter + process.env.NODE_PATH : '');
-  const [cmd, args] = engine === 'sdk' ? ['node', [fwd(path.join(ROOT, 'src', 'copilot-sdk-run.js'))]] : ['bash', [fwd(path.join(ROOT, 'src', 'copilot-run.sh'))]];
+  const [cmd, args] = engine === 'sdk' ? ['node', [fwd(path.join(ROOT, 'src', 'copilot-sdk-run.js'))]] : ['bash', [fwd(path.join(ROOT, 'src', 'engines', 'copilot.sh'))]];
   const t0 = Date.now();
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { cwd: repo, env, stdio: ['ignore', 'pipe', 'pipe'] });

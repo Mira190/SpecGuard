@@ -41,7 +41,7 @@ test('action.yml contract: every PR step is guarded by mode pr, audit steps by m
   for (const re of [/src\/audit-collect\.js/, /src\/audit-post\.js'/, /name: specguard-audit-\$\{\{ github\.run_attempt \}\}/]) assert.equal(touches(kinds.audit, re), 1, String(re));
   // shared: setup-node, engine selection, the Copilot run
   assert.equal(kinds.both.length, 3);
-  for (const re of [/actions\/setup-node/, /^id: engine/m, /Review with Copilot CLI/]) assert.equal(touches(kinds.both, re), 1, String(re));
+  for (const re of [/actions\/setup-node/, /^id: engine/m, /Run the review engine/]) assert.equal(touches(kinds.both, re), 1, String(re));
   for (const s of kinds.pr) assert.doesNotMatch(cond(s), /audit/);
   for (const s of kinds.audit) assert.doesNotMatch(cond(s), /preflight|steps\.collect/);
   for (const s of kinds.both) {
@@ -68,7 +68,7 @@ test('action.yml: the PR post step stays the first github-script step (the M1 en
 test('action.yml: audit collect gets the globs and the cap; the Copilot step switches skill, schema and prompt mode on MODE; Copilot validates with CHECK=audit', () => {
   const c = find(/id: audit_collect/);
   for (const m of [/REQ_PATHS: \$\{\{ inputs\.requirements_paths \}\}/, /IGNORE_EXTRA: \$\{\{ inputs\.ignore \}\}/, /MAX_REQUIREMENTS: \$\{\{ inputs\.audit_max_requirements \}\}/, /CTX: \$\{\{ github\.workspace \}\}\/\.specguard-ctx/]) assert.match(c, m);
-  const copilot = find(/Review with Copilot CLI/);
+  const copilot = find(/Run the review engine/);
   assert.match(copilot, /MODE: \$\{\{ inputs\.mode \}\}/);
   assert.match(copilot, /skills\/spec-audit/);
   assert.match(copilot, /src\/audit\.schema\.json/);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Pre-push SpecGuard review on the developer's machine: the real collect.sh, prompt, copilot-run.sh and post.js, with no GitHub.
+// Pre-push SpecGuard review on the developer's machine: the real collect.sh, prompt, engines/copilot.sh and post.js, with no GitHub.
 // Committed changes only. Runs in a throwaway git worktree because collect.sh checks out and restores files.
 const fs = require('node:fs');
 const os = require('node:os');
@@ -94,13 +94,13 @@ async function run({ cwd = process.cwd(), opts = {}, log = (m) => console.error(
     else {
       log('running Copilot (this takes a few minutes and spends AI credits)...');
       const prompt = assemble({ skillDir: path.join(ROOT, 'skills', 'test-review'), ctxDir: ctx, schemaPath: path.join(ROOT, 'src', 'findings.schema.json') });
-      // copilot-run.sh pipes the prompt file to copilot on stdin: no command-line or environment limit, so this works on Windows too (it needs bash: Git for Windows)
+      // engines/copilot.sh pipes the prompt file to copilot on stdin: no command-line or environment limit, so this works on Windows too (it needs bash: Git for Windows)
       const promptFile = path.join(ctx, 'prompt.txt');
       fs.writeFileSync(promptFile, prompt);
       const engineEnv = { ...process.env, CTX: fwd(ctx), PROMPT_FILE: fwd(promptFile), MODEL: opts.model || '', EFFORT: opts.effort || '' };
-      if (opts['auto-tier'] !== undefined) engineEnv.AUTO_TIER = opts['auto-tier']; // unset = copilot-run.sh's default (intelligence), like the action
-      const e = spawnSync('bash', [fwd(path.join(ROOT, 'src', 'copilot-run.sh'))], { cwd: wt, env: engineEnv, stdio: ['ignore', 2, 2] });
-      if (e.status !== 0) log(`copilot-run.sh exited ${e.status}`); // post.js reports "could not complete"
+      if (opts['auto-tier'] !== undefined) engineEnv.AUTO_TIER = opts['auto-tier']; // unset = engines/copilot.sh's default (intelligence), like the action
+      const e = spawnSync('bash', [fwd(path.join(ROOT, 'src', 'engines', 'copilot.sh'))], { cwd: wt, env: engineEnv, stdio: ['ignore', 2, 2] });
+      if (e.status !== 0) log(`engines/copilot.sh exited ${e.status}`); // post.js reports "could not complete"
     }
 
     const { github, core, posted } = fakeGithub({ headSha: head });

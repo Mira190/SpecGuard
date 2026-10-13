@@ -243,13 +243,17 @@ node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null |
 # (imports, references), then tests in the same directory. ponytail: names and a word grep only, no per-language import parsing.
 timeout 60 node - "$HERE/trace.js" "$CTX" <<'JS' || { echo "::warning::test candidates failed; continuing without them"; rm -f "$CTX/test-candidates.txt"; }
 const fs = require('node:fs'), path = require('node:path'), { execFileSync } = require('node:child_process');
-const { isTestPath } = require(path.resolve(process.argv[2]));
+const { isTestPath, testScope } = require(path.resolve(process.argv[2]));
 const ctx = process.argv[3], CAP = 16 * 1024, PER = 5, MAX_FILES = 60;
 const lines = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
 const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter((p) => p && !/[\x00-\x1F]/.test(p));
-const tests = tracked.filter(isTestPath), testSet = new Set(tests);
+// TEST_PATHS (test_paths): the repo owner's authoritative test locations; files there are the tests, whatever their name. Empty = discovery by name.
+const scope = testScope(process.env.TEST_PATHS), DOC = /\.(md|mdx|markdown|rst|adoc|txt)$/i;
+const isTest = scope ? (p) => scope(p) && !DOC.test(p) : isTestPath;
+const tests = tracked.filter(isTest), testSet = new Set(tests);
+if (scope) fs.writeFileSync(path.join(ctx, 'test-paths.txt'), String(process.env.TEST_PATHS).split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join('\n') + '\n');
 const specs = new Set(lines('spec-files.txt'));
-const changed = lines('files.txt').filter((f) => !isTestPath(f) && !specs.has(f) && !/\.(md|mdx|markdown|rst|adoc|txt|feature|json|ya?ml|toml|lock)$/i.test(f));
+const changed = lines('files.txt').filter((f) => !isTest(f) && !isTestPath(f) && !specs.has(f) && !/\.(md|mdx|markdown|rst|adoc|txt|feature|json|ya?ml|toml|lock)$/i.test(f));
 const key = (s) => s.toLowerCase().replace(/[-_.]/g, '');
 const noExt = (p) => path.posix.basename(p).replace(/\.[^.]*$/, '');
 // FooTest -> foo, foo_test -> foo, foo.spec -> foo, test_foo -> foo, FooTests -> foo; a stem without affix stays (tests/foo.py)

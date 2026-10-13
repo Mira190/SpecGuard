@@ -34,7 +34,7 @@ done
 if [ -f "$F/$n.events" ] && [ -n "$COPILOT_HOME" ]; then mkdir -p "$COPILOT_HOME/session-state/$sid"; cat "$F/$n.events" >> "$COPILOT_HOME/session-state/$sid/events.jsonl"; fi
 cat "$F/$n.out" 2>/dev/null; cat "$F/$n.err" >&2 2>/dev/null; exit $(cat "$F/$n.rc" 2>/dev/null || echo 0)
 `, { mode: 0o755 });
-  const run = (extra = {}, args = []) => spawnSync(bash, [path.join(__dirname, 'copilot-run.sh'), ...args], {
+  const run = (extra = {}, args = []) => spawnSync(bash, [path.join(__dirname, 'engines', 'copilot.sh'), ...args], {
     encoding: 'utf8', env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, CTX: ctx, COPILOT_HOME: home, PROMPT: 'REVIEW PROMPT', MODEL: '', EFFORT: '', MAX_CREDITS: '200', TIMEOUT: '5', ...env, ...extra },
   });
   const calls = () => (fs.existsSync(path.join(fake, 'argv.log')) ? fs.readFileSync(path.join(fake, 'argv.log'), 'utf8').split('---\n').filter(Boolean).map((c) => c.split('\n').filter(Boolean)) : []);
@@ -56,7 +56,9 @@ test('a valid first answer: one call, no repair, safety flags and credit cap kep
   assert.equal(s.stdin(1), 'REVIEW PROMPT'); // the prompt arrives on stdin, never as an argument
   assert.ok(!c.includes('-p') && !c.includes('REVIEW PROMPT'));
   for (const f of ['--available-tools', '--allow-all-tools', '--no-ask-user', '-s', '--session-id', '--usage-output-file', '--max-ai-credits']) assert.ok(c.includes(f), f);
-  for (const f of ['--allow-all', '--allow-all-paths', '--yolo', '--model', '--reasoning-effort']) assert.ok(!c.includes(f), f);
+  for (const f of ['--allow-all', '--allow-all-paths', '--yolo', '--reasoning-effort']) assert.ok(!c.includes(f), f);
+  assert.equal(flag(c, '--model'), 'auto'); // an empty model with the default tier is explicit auto: the CLI rejects --auto-tier otherwise
+  assert.equal(flag(c, '--auto-tier'), 'intelligence');
   assert.equal(flag(c, '--available-tools'), 'view,glob,grep');
   assert.equal(flag(c, '--max-ai-credits'), '200');
   assert.match(flag(c, '--session-id'), /^[0-9a-f-]{36}$/);
@@ -168,7 +170,7 @@ test('effort with auto or no model is not passed and is noted; with an explicit 
     assert.equal(s.run({ MODEL, EFFORT: 'high' }).status, 0);
     const [c] = s.calls();
     assert.ok(!c.includes('--reasoning-effort'));
-    assert.equal(c.includes('--model') ? flag(c, '--model') : '', MODEL);
+    assert.equal(flag(c, '--model'), 'auto');
     assert.equal(s.ctxFile('engine-notes'), 'effort ignored: model auto');
   }
   const s = setup(t, [[VALID]]);
@@ -276,6 +278,6 @@ test('validate-inputs.sh alone (the engine step) rejects the same values', (t) =
 
 test('action.yml wires the new inputs, runs the Copilot script, and never uses an allow-all flag', () => {
   const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
-  for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "60"/m, /^ {2}ctx_retention_days: \{[^}]*default: "1"/m, /TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/, /^ {2}engine: \{[^}]*default: copilot/m, /engine must be copilot \(other engines are not enabled\)/, /ENGINE: \$\{\{ steps\.engine\.outputs\.engine \}\}/, /PROMPT_FILE="\$PROMPT_FILE" bash "\$GITHUB_ACTION_PATH\/src\/copilot-run\.sh"/,/EFFORT: \$\{\{ inputs\.effort \}\}/, /^ {2}auto_tier: \{[^}]*default: intelligence/m, /^ {2}fast_models: \{[^}]*default: ""/m, /AUTO_TIER: \$\{\{ inputs\.auto_tier \}\}/, /FAST_MODELS: \$\{\{ inputs\.fast_models \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/copilot-run\.sh/, /src\/validate-inputs\.sh/]) assert.match(y, m);
-  assert.doesNotMatch(y + fs.readFileSync(path.join(__dirname, 'copilot-run.sh'), 'utf8').replace(/^#.*$/gm, ''), /--allow-all\b(?!-tools)|--allow-all-paths|--yolo/);
+  for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "60"/m, /^ {2}ctx_retention_days: \{[^}]*default: "1"/m, /TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/, /^ {2}engine: \{[^}]*default: copilot/m, /ENGINE: \$\{\{ inputs\.engine \}\}/, /COPILOT_VERSION: \$\{\{ inputs\.copilot_version \}\}/, /SDK_VERSION: \$\{\{ inputs\.copilot_sdk_version \}\}/, /^ {2}copilot_sdk_version: \{[^}]*default: "1\.0\.15"/m, /ENGINE: \$\{\{ steps\.engine\.outputs\.engine \}\}/, /PROMPT_FILE="\$PROMPT_FILE" bash "\$GITHUB_ACTION_PATH\/src\/engines\/\$ENGINE\.sh"/,/EFFORT: \$\{\{ inputs\.effort \}\}/, /^ {2}auto_tier: \{[^}]*default: intelligence/m, /^ {2}fast_models: \{[^}]*default: ""/m, /AUTO_TIER: \$\{\{ inputs\.auto_tier \}\}/, /FAST_MODELS: \$\{\{ inputs\.fast_models \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/validate-inputs\.sh/]) assert.match(y, m);
+  assert.doesNotMatch(y + ['copilot.sh', 'copilot-sdk.sh'].map((n) => fs.readFileSync(path.join(__dirname, 'engines', n), 'utf8').replace(/^#.*$/gm, '')).join(''), /--allow-all\b(?!-tools)|--allow-all-paths|--yolo/);
 });

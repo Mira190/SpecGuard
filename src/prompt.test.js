@@ -307,3 +307,10 @@ test('assemble: example.json is inlined once after the schema, small, and the sk
   assert.ok(!build(ctx()).includes('# references/example.json'), 'not duplicated as a reference section');
   assert.match(stat(build(ctx())), /Output shape: copy `references\/example\.json`/);
 });
+
+test('assemble: test-paths.txt tells the model the configured test locations are authoritative; absent when none are configured', () => {
+  const t = dyn(build(ctx({ 'test-paths.txt': 'qa/checks\n!qa/checks/fixtures/\n' })));
+  assert.match(t, /name="test-paths\.txt" note="the repository owner's authoritative test locations[^"]*search here first/);
+  assert.ok(t.includes('qa/checks\n!qa/checks/fixtures/'));
+  assert.match(dyn(build(ctx())), /Empty or absent[^\n]*test-paths\.txt/);
+});

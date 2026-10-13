@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const LIMITS = { diff: 40 * 1024, requirements: 8 * 1024, status: 6 * 1024, index: 6 * 1024, trace: 8 * 1024, small: 4 * 1024, cands: 16 * 1024 };
-// Total worst case is about 128 KiB; copilot-run.sh pipes it on stdin, so no single-argument limit applies.
+// Total worst case is about 128 KiB; engines/copilot.sh pipes it on stdin, so no single-argument limit applies.
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
 const read = (dir, name) => { try { return lf(fs.readFileSync(path.join(dir, name), 'utf8')); } catch { return ''; } };
@@ -102,6 +102,7 @@ function dynamic(ctxDir) {
   let tc = read(ctxDir, 'trace-candidates.json');
   try { const j = JSON.parse(tc); tc = Object.values(j).some((v) => Array.isArray(v) ? v.length : v) ? JSON.stringify(j) : ''; } catch {}
   add('trace-candidates.json', tc, LIMITS.trace);
+  add('test-paths.txt', read(ctxDir, 'test-paths.txt'), LIMITS.small, "the repository owner's authoritative test locations (a ! line is excluded): unit tests live here, whatever the file names; search here first and treat tests elsewhere as secondary");
   add('test-candidates.txt', read(ctxDir, 'test-candidates.txt'), LIMITS.cands, 'per changed file: existing test files most likely to cover it; start the evidence search here');
   // The numbered diff replaces the raw one when present (same byte limit); diff.patch stays on disk. A truncation note points at the numbered file.
   const numbered = read(ctxDir, 'diff.numbered.txt');
