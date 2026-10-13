@@ -1,4 +1,5 @@
-name: "SpecGuard reusable (called from target repos; no Run button here, use SpecGuard manual run)"
+name: SpecGuard reusable
+# Called from target repositories, so it has no Run button here; to run SpecGuard from this repository, use "SpecGuard manual run".
 # Reusable workflow (on: workflow_call): runs SpecGuard against the CALLER's repository with the caller's GITHUB_TOKEN (repository access never needs a PAT). The caller writes ~10 lines (README: "Enterprise setup").
 # Credential: pass the optional secret llm_token (a GitHub fine-grained PAT runs Copilot, an Anthropic API key sk-ant-... runs Claude; detected by prefix), or the copilot_token alias below.
 # Copilot: pass the optional secret copilot_token (user-owned fine-grained PAT, Copilot Requests; billed to that user's seat) with `secrets: { copilot_token: ${{ secrets.SPECGUARD_COPILOT_TOKEN }} }`
