@@ -15,7 +15,9 @@ const USAGE = `Usage:
   node eval/ab.js tokens --ab ABDIR [--transcripts f1.jsonl,f2.jsonl]`;
 
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
-const fwd = (p) => path.resolve(p).replace(/\\/g, '/').toLowerCase();
+// one comparison form for kickoff paths and manifest dirs: '\' is a separator on every platform, then resolve, '/' separators, case-folded
+// ponytail: folds case on Linux too (two dirs differing only by case would collide); fine for ab dirs
+const fwd = (p) => path.resolve(String(p).replace(/\\/g, '/')).replace(/\\/g, '/').toLowerCase();
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const median = (a) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const pad = (rows) => { const w = rows[0].map((_, i) => Math.max(...rows.map((r) => String(r[i]).length))); return rows.map((r) => r.map((x, i) => String(x).padEnd(w[i])).join('  ').trimEnd()).join('\n'); };
