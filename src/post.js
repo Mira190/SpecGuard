@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { inspectChecks } = require('./checks');
 const { ours, recordedLogin } = require('./preflight');
+const { isFactLimitation } = require('./limitations');
 
 const KINDS = ['spec_mismatch', 'missing_test', 'weak_test', 'standard', 'pushdown'];
 const ALIGN = ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
@@ -122,6 +123,28 @@ const layerOf = (p) => { const s = String(p);
   return /(^|[/._-])(e2e|end-to-end|cypress|playwright)([/._-]|$)/i.test(s) ? 'e2e' : /(^|[/._-])(integration|acceptance|functional)([/._-]|$)/i.test(s) ? 'integration'
     : /(^|[/._-])components?([/._-]|$)/i.test(s) ? 'component' : require('./trace').isTestPath(s) ? 'unit' : undefined; };
 
+// A path that is clearly a plain unit test: a test file outside integration/e2e/api/db/ui/component folders and name tokens, not a React component test (.tsx/.jsx),
+// not an IT/integration-named class. Only such a path may omit `layer` on a row that claims `covered`.
+// ponytail: names only, no framework config; a Playwright `.spec.ts`, an Angular TestBed `.spec.ts` or a unit test under tests/api/ needs `layer: unit` stated. Read the repo's test config if this bites.
+const NOT_PLAIN_UNIT = /(^|[/._-])(integration|integ|e2e|end-to-end|acceptance|functional|api|apis|db|database|components?|ui|cypress|playwright|contract|smoke|it|itests?)([/._-]|$)|(?:IT|ITCase|Integration(?:Tests?)?|E2E)\.[A-Za-z]+$|\.(?:test|spec)\.[jt]sx$|(^|\/)__tests__\/[^/]+\//i;
+const clearlyUnit = (p) => layerOf(p) === 'unit' && !NOT_PLAIN_UNIT.test(String(p));
+
+// Does the cited line (or the quoted block) look like an assertion, and is its test disabled? Common frameworks only.
+// ponytail: regex over the cited text; a custom helper (checkTotal(x)) or an assertion wrapped in a local function reads as no_assertion, and
+// a skip marker is looked for only on the enclosing test declaration (up to 3 stacked lines above it), never on describe-level skips or runner config.
+const ASSERTION = /\b(?:[Aa]ssert\w*|[Ee]xpect\w*|[Ss]hould\w*|[Vv]erify\w*|[Ff]ail\w*\(|require\.\w+|t\.(?:Errorf|Fatalf|Error|Fatal|Fail\w*)|XCTAssert\w*|raises?|[Tt]hrows?|(?:Is|Has|Does|Contains)\.\w+)\b|\.(?:to[A-Z]\w*|not\.to\w+)\(|\bassert\s/;
+const SKIPPED = /\.skip\(|\bx(?:it|describe|test)\(|\.todo\(|@Disabled\b|@Ignore\b|\[Ignore\b|\bt\.Skip\w*\(|pytest\.mark\.(?:skip|xfail)|@unittest\.skip|\bskipIf\b/;
+const TEST_DECL = /\bx?(?:it|test|describe)(?:\.\w+)?\s*\(|^\s*(?:async\s+)?def\s+test_|^\s*func\s+Test|@Test\b|\[(?:Test|Fact|Theory|TestCase)\b|\bvoid\s+test/;
+function assertionKind(lines, line, quote) {
+  const at = (i) => String(lines[i - 1] ?? '');
+  let d = line;
+  for (let n = 0; d > 0 && n < 30 && !TEST_DECL.test(at(d)); n++) d--;
+  let from = d;
+  if (TEST_DECL.test(at(d))) while (from > 1 && d - from < 3 && at(from - 1).trim() && !/[;}]\s*$/.test(at(from - 1))) from--; // annotations and decorators stack directly above the declaration
+  const span = TEST_DECL.test(at(d)) ? Array.from({ length: line - from + 1 }, (_, i) => at(from + i)).join('\n') : at(line);
+  return SKIPPED.test(span) ? 'disabled' : ASSERTION.test(quote) ? 'assertion' : 'no_assertion';
+}
+
 // Hand-rolled mirror of findings.schema.json. ponytail: swap for ajv if the schema grows.
 // Structural problems (not an object, core arrays missing, more than half of the coverage rows unusable) reject the output and
 // say which JSON path failed. Every other problem degrades only the affected part, is repaired in place, and is listed in o.validation_notes.
@@ -158,17 +181,20 @@ function validate(o) {
     if (!(c.behaviour === null || citation(c.behaviour)) || !(c.change === null || citation(c.change))) return shape('malformed citation');
     if (!Array.isArray(c.evidence)) return shape('evidence must be an array');
     if (!STATUSES.includes(c.status)) return shape('invalid status');
+    const loose = new Set(); // evidence whose layer was omitted on a path that is not clearly a unit test: shown as unit, never counted for `covered`
     for (const [j, e] of c.evidence.entries()) {
       if (e && typeof e === 'object') {
         if (e.kind === undefined) e.kind = 'assertion'; // the documented meaning of an evidence quote; the quote is still verified
-        if (e.layer === undefined) e.layer = layerOf(e.path); // omitted = unit in a test file (the contract); a higher-layer name in the path wins
+        if (e.layer === undefined) { e.layer = layerOf(e.path); if (e.layer === 'unit' && !clearlyUnit(e.path)) loose.add(e); } // omitted: a higher-layer name in the path wins, else unit only for a test file
         if (!text(e.proves)) delete e.proves; // optional: the row's reason says what the assertion checks
       }
       if (!citation(e) || !['unit', 'component', 'integration', 'e2e'].includes(e.layer)
         || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return shape(`evidence[${j}] malformed`);
       if (e.kind === 'removed' && e.side !== 'LEFT') return shape("removed evidence must cite the diff's LEFT side");
     }
-    if (c.status === 'covered' && (!c.behaviour || !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT'))) return 'covered needs a current unit assertion';
+    const unitProof = (e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT';
+    if (c.status === 'covered' && (!c.behaviour || !c.evidence.some(unitProof))) return 'covered needs a current unit assertion';
+    if (c.status === 'covered' && !c.evidence.some((e) => unitProof(e) && !loose.has(e))) return 'layer not stated (the test path is not clearly a unit test)';
     if (c.status === 'weak_test' && !c.evidence.some((e) => e.layer === 'unit')) return 'weak_test needs a unit test location';
     if (c.status === 'higher_level_only' && (!c.evidence.length || c.evidence.some((e) => e.layer === 'unit'))) return 'higher_level_only needs higher-layer evidence only';
     if (c.status === 'missing_test' && c.evidence.some((e) => e.kind === 'assertion')) { // citing the nearby test that shows the gap is how a model explains a missing_test; drop the claim of proof, keep the row and its finding
@@ -724,7 +750,7 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
 
 // Workspace file as lines. Never anything under .git/ or the collection context, never a path that escapes the workspace
 // (also after symlinks): those hold credentials and the collector's own state.
-const DENIED = /^(?:\.git|\.specguard-ctx)(?:\/|$)/i;
+const DENIED = /^(?:\.git|\.specguard-ctx|\.specguard-src)(?:\/|$)/i; // .specguard-src: the reviewer's own checkout in manual runs, not the repository under review
 const readFile = (p) => {
   try {
     const rel = safeRel(p);
@@ -773,6 +799,15 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
     if (change) check('changed line', change, reviewable.has(change.path) && locate(change, changed(change), keys(change)));
     if (c.behaviour) check('behaviour', c.behaviour, exact(c.behaviour));
     c.evidence.forEach((e, i) => check(`evidence ${i + 1}`, e, exact(e)));
+    if (!fails.length && c.status === 'covered') { // a quote that exists must also be an assertion in a test that runs
+      const bad = [];
+      for (const e of c.evidence) if (e.kind === 'assertion' && e.side !== 'LEFT') { const k = assertionKind(read(e.path) || [], e.line, e.quote); if (k !== 'assertion') { e.kind = k; bad.push(`${e.path}:${e.line} is ${k === 'disabled' ? 'in a skipped or disabled test' : 'not an assertion'}`); } }
+      if (bad.length && !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT')) {
+        c.status = 'unknown';
+        c.reason = `Not covered: the cited evidence is not a running assertion (${bad.join('; ')}).`;
+        (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${bad.join('; ')}.`);
+      }
+    }
     if (fails.length) {
       const why = `could not verify citation: ${fails.join('; ')}`;
       c.status = 'unknown';
@@ -1136,6 +1171,11 @@ async function run({ github, context, core }) {
   // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)
   const used = Array.isArray(em?.used) && strs(em.used).length ? strs(em.used) : strs([usage?.currentModel, ...Object.keys(usage?.modelMetrics && typeof usage.modelMetrics === 'object' ? usage.modelMetrics : {})]), tier = em?.tier === 'fast' ? 'fast' : undefined;
   const dropped = (readCtx('diff-dropped.txt') || '').split('\n').map((x) => x.trim()).filter(Boolean);
+  // What the run cost, for the owner's own accounting: attempt count, engine time (recorded wall time, else API time), credits (nano AI units / 1e9), where it ran and how it was delivered.
+  const measure = () => {
+    const nano = fin(usage?.totalNanoAiu), ms = fin(em?.ms) ?? fin(usage?.totalApiDurationMs), runs = parseInt(env.GITHUB_RUN_ATTEMPT, 10), ev = context.eventName || env.GITHUB_EVENT_NAME;
+    return { ...(runs > 0 && { runs }), ...(ms !== undefined && { ms }), ...(nano !== undefined && { nanoAiu: nano, credits: nano / 1e9 }), model: used.join(', ') || model || undefined, mode: 'pr', delivery: summaryOnly ? 'summary' : 'pr', ...(ev && { event: ev }) };
+  };
   const failed = (why) => publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial, dropped, state: 'failed', used, tier }), 'failed');
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
@@ -1195,8 +1235,8 @@ async function run({ github, context, core }) {
   if (requirements) {
     data.requirements_source = requirements.sources.join(', ') || 'unavailable; changed behaviour only';
     if (requirements.status !== 'available') addNote((requirements.limitations || []).join(' '));
-    // What the collector did not collect. Not these: an empty PR body (a fact about the PR) and the capped requirements-index.md (the documents stay readable).
-    const lims = [...(requirements.limitations || []), ...(requirements.spec?.limitations || [])].filter((l) => !/^No requirement text available|^requirements-index\.md exceeded |^Referenced but not readable: |^Context trimmed: /.test(l));
+    // What the collector did not collect. Not facts: an empty PR body, the capped requirements-index.md, an unreadable or other-repository reference (all notes).
+    const lims = [...(requirements.limitations || []), ...(requirements.spec?.limitations || [])].filter((l) => !isFactLimitation(l)); // facts and unreadable references are notes (requirements.js decides the kind); the rest lost requirement text
     if (lims.length) incomplete.push(`Requirement collection did not cover everything: ${lims.slice(0, 10).join(' ')}${lims.length > 10 ? ` (+${lims.length - 10} more)` : ''}`);
   } else { // no collected documents: quotes verify only against files; unverifiable ones are unassessed but their obligations keep their own citations
     verifyRequirements(data, { unavailable: true, specFiles }, readLines);
@@ -1379,7 +1419,8 @@ async function run({ github, context, core }) {
   tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  if (ctx) try { fs.writeFileSync(path.join(ctx, 'counts.json'), JSON.stringify(tele) + '\n'); } catch { /* ctx not writable: the sticky comment still carries the counts */ } // summary-only and manual runs have no sticky comment: the artifact carries it
   const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
   const clean_ = noGaps(data) && !incomplete.length && !reduced, state = incomplete.length || reduced ? 'incomplete' : 'complete';

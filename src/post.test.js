@@ -1975,7 +1975,7 @@ test('M1: every env var post.js reads is mapped in the Action post step (runner-
   const src = fs.readFileSync(path.join(__dirname, 'post.js'), 'utf8');
   const read = new Set([...src.matchAll(/\benv\.([A-Z][A-Z_]+)/g)].map((m) => m[1]));
   const mapped = new Set(Object.keys(postStepEnv()));
-  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA']); // set by the runner / optional fallback to the event payload
+  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA', 'GITHUB_RUN_ATTEMPT', 'GITHUB_EVENT_NAME']); // set by the runner / optional fallback to the event payload
   assert.ok(read.has('RESOLVE_STALE') && read.has('MAX_COMMENTS'), 'the scan found the known variables');
   assert.deepEqual([...read].filter((k) => !mapped.has(k) && !runner.has(k)), []);
 });
@@ -2038,10 +2038,28 @@ test('M3: a capped requirements-index.md or an empty PR body is not "not collect
     assert.deepEqual(s.resolved, ['gone']);
   }
   const top = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
-  writeCtx(top, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: ['Could not read issue #2.'] });
+  writeCtx(top, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: ['2 linked issue(s) omitted by the five-issue limit.'] });
   await post(top);
-  assert.match(top.calls.summary[0].body, /Incomplete review[\s\S]*Could not read issue #2/);
+  assert.match(top.calls.summary[0].body, /Incomplete review[\s\S]*2 linked issue\(s\) omitted/);
   assert.deepEqual(top.resolved, []);
+});
+
+test('V7: an unreadable or other-repository reference is a note in the summary, never an incompleteness reason', async (t) => {
+  const lims = ['Could not read issue #2.', 'Referenced but not readable: ENG-9 (Jira). Paste the acceptance criteria into the PR body to have them reviewed.',
+    'Not read: other-repo reference secretorg/vault#12 (only issues of this repository are read)', 'Context trimmed: 1 mentioned issue(s) omitted by the five-issue limit (context only, not acceptance criteria).'];
+  const s = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
+  writeCtx(s, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: lims });
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.doesNotMatch(body, /Incomplete review/);
+  assert.match(body, /specguard:head=HEADSHA/, 'the head marker is written: the preflight may skip an unchanged head');
+  assert.match(body, /"complete":true/);
+  assert.match(body, /Could not read issue #2/, 'the note still reaches the summary');
+  assert.deepEqual(s.resolved, ['gone']);
+  const lost = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] })); // a real collection failure stays incomplete
+  writeCtx(lost, 'requirements-status.json', { status: 'unavailable', sources: [], limitations: ['PR requirements could not be loaded; review is limited to changed behaviour.'] });
+  await post(lost);
+  assert.match(lost.calls.summary[0].body, /Incomplete review/);
 });
 
 test('M4: an engine timeout or failure beside valid findings.json posts the verified findings but marks the run incomplete', async (t) => {
@@ -2818,4 +2836,79 @@ test('reduced: a garbled engine-model.json means a normal review; the used model
   assert.match(post.usageLine({ engine: 'copilot', model: 'auto', raw: COPILOT_USAGE, used: ['gpt-6-luna'] }), /Model: gpt-6-luna \(requested auto\)/);
   assert.match(post.usageLine({ engine: 'copilot', model: 'gpt-6', raw: null, used: ['a-mini', 'b'], tier: 'fast' }), /Models: a-mini, b \(fast tier\)/);
   assert.equal(post.usageLine({ engine: 'copilot', model: 'a-flash', raw: null, used: ['a-flash'], tier: 'fast' }), '<sub>Engine: copilot · Model: a-flash (fast tier)</sub>');
+});
+
+// ---- round 3: V3 layer and assertion evidence, V8 counts for measurement, the reviewer's own checkout ----
+const evOf = (path_, extra = {}) => ({ path: path_, line: 2, quote: evidence.quote, proves: 'p', ...extra });
+
+test('V3: a covered row needs an explicit unit layer unless the path is clearly a plain unit test; otherwise unknown "layer not stated"', () => {
+  const run = (e) => { const d = report({ coverage: [row('covered', { evidence: [e] })], findings: [] }); assert.equal(post.validate(d).ok, true); return d.coverage[0]; };
+  for (const p of ['test/a.test.js', 'src/foo.test.js', 'test_quote.py', 'pkg/calc_test.go', 'src/__tests__/calc.test.js', 'src/test/java/FooTest.java']) assert.equal(run(evOf(p)).status, 'covered', p);
+  for (const p of ['tests/api/orders.test.js', 'src/__tests__/db/users.test.js', 'src/Checkout.test.tsx', 'test_quote_api.py', 'src/foo.e2e.test.js', 'src/foo.it.test.js', 'src/test/java/FooIT.java', 'src/__tests__/auth/login.test.js', 'src/ui/Menu.test.js']) {
+    const r = run(evOf(p));
+    assert.deepEqual([p, r.status, /layer not stated|unit assertion/.test(r.reason)], [p, 'unknown', true]);
+    assert.equal(run(evOf(p, { layer: 'unit' })).status, 'covered', `${p}: a stated unit layer is the model's claim and is kept`);
+  }
+  assert.match(run(evOf('tests/api/orders.test.js')).reason, /layer not stated/);
+  assert.equal(run(evOf('tests/api/orders.test.js', { layer: 'integration' })).status, 'unknown');
+  const w = report({ coverage: [row('weak_test', { evidence: [evOf('tests/api/orders.test.js')] })], findings: [finding('weak_test')] });
+  assert.equal(post.validate(w).ok, true);
+  assert.equal(w.coverage[0].status, 'weak_test', 'only a covered claim needs the explicit layer');
+});
+
+test('V3: the cited line must be an assertion in a test that runs; otherwise the row is not covered', () => {
+  const kind = (lines, line, p = 'test.js') => {
+    const d = report({ coverage: [row('covered', { evidence: [{ ...evidence, path: p, line, quote: lines[line - 1].trim() }] })], findings: [] });
+    post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (x) => (x === 'src.js' ? ['l1', 'l2', behaviour.quote] : lines), new Map([['src.js', post.parsePatch(patch)]]));
+    return [d.coverage[0].status, d.coverage[0].evidence[0].kind];
+  };
+  const ok = ['  expect(total(1)).toBe(42);', '  assert.equal(total(1), 42);', '    self.assertEqual(total(1), 42)', '    assert total(1) == 42', '  assertEquals(42, total(1));', '  assertThat(total(1)).isEqualTo(42);',
+    '  require.Equal(t, 42, Total(1))', '  t.Errorf("got %d", got)', '  Assert.That(Total(1), Is.EqualTo(42));', '  XCTAssertEqual(total(1), 42)', '  total(1).should.equal(42)', '  with pytest.raises(ValueError):', '  verify(repo).save(order);', '  assert_eq!(total(1), 42);'];
+  for (const l of ok) assert.deepEqual(kind(['t', l], 2), ['covered', 'assertion'], l);
+  for (const l of ['  const got = total(1);', '  console.log(total(1));', '  checkTotal(1, 42);', '  total(1);']) assert.deepEqual(kind(['t', l], 2), ['unknown', 'no_assertion'], l);
+  // skipped or disabled tests: the marker sits on or just above the test declaration
+  const skipped = [['it.skip("a", () => {', '  expect(total(1)).toBe(42);', '});'], ['xit("a", () => {', '  expect(total(1)).toBe(42);', '});'], ['@Disabled', '@Test', 'void a() {', '  assertEquals(42, total(1));'],
+    ['@Test', '@Ignore("flaky")', 'public void a() {', '  assertEquals(42, total(1));'], ['@pytest.mark.skip(reason="x")', 'def test_a():', '    assert total(1) == 42'], ['func TestA(t *testing.T) {', '  t.Skip("flaky")', '  require.Equal(t, 42, Total(1))']];
+  for (const lines of skipped) assert.deepEqual(kind(lines, lines.length), ['unknown', 'disabled'], lines.join(' | '));
+  assert.deepEqual(kind(['it.skip("a", () => {});', '', 'it("b", () => {', '  expect(total(1)).toBe(42);', '});'], 4), ['covered', 'assertion'], 'a neighbouring skipped test is not this one');
+  assert.deepEqual(kind(['@Test', 'void a() {}', '', '@Test', 'void b() {', '  assertEquals(42, total(1));'], 6), ['covered', 'assertion']);
+  const weak = report({ coverage: [row('weak_test', { evidence: [{ ...evidence, quote: 'const got = 1;' }] })], findings: [finding('weak_test')] });
+  post.verifyEvidence(weak, new Set(['src.js']), new Set(['RULES.md']), (x) => (x === 'src.js' ? ['l1', 'l2', behaviour.quote] : ['t', 'const got = 1;']), new Map([['src.js', post.parsePatch(patch)]]));
+  assert.equal(weak.coverage[0].status, 'weak_test', 'only a covered claim is checked for being an assertion');
+});
+
+test('V8: the counts carry runs, ms, nanoAiu, credits, model, mode, delivery and event; the same object is written to ctx/counts.json', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx/usage.json'), JSON.stringify(COPILOT_USAGE));
+  process.env.GITHUB_RUN_ATTEMPT = '2';
+  t.after(() => { delete process.env.GITHUB_RUN_ATTEMPT; delete process.env.GITHUB_EVENT_NAME; });
+  s.context.eventName = 'pull_request';
+  await post(s);
+  const c = countsOf(s.calls.summary[0].body);
+  assert.deepEqual({ runs: c.runs, ms: c.ms, nanoAiu: c.nanoAiu, credits: c.credits, model: c.model, mode: c.mode, delivery: c.delivery, event: c.event },
+    { runs: 2, ms: 192000, nanoAiu: 17.6e9, credits: 17.6, model: 'gpt-5.4', mode: 'pr', delivery: 'pr', event: 'pull_request' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(s.dir, 'ctx/counts.json'), 'utf8')), c);
+  // summary-only (manual) run: nothing is posted, the counts still reach the artifact; an engine-recorded wall time wins over API time
+  const m = setup(t);
+  fs.writeFileSync(path.join(m.dir, 'ctx/engine-model.json'), JSON.stringify({ used: ['gpt-6-luna'], ms: 5000 }));
+  process.env.DELIVERY = 'summary'; delete process.env.GITHUB_RUN_ATTEMPT; process.env.GITHUB_EVENT_NAME = 'workflow_dispatch';
+  await post(m);
+  assert.deepEqual(m.calls, { review: [], file: [], summary: [], list: 0 });
+  const mc = JSON.parse(fs.readFileSync(path.join(m.dir, 'ctx/counts.json'), 'utf8'));
+  assert.deepEqual([mc.delivery, mc.event, mc.model, mc.ms, mc.runs, mc.nanoAiu], ['summary', 'workflow_dispatch', 'gpt-6-luna', 5000, undefined, undefined]);
+});
+
+test("a citation under .specguard-src/ (the reviewer's own checkout in manual runs) is unverifiable", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-own-'));
+  const old = process.env.GITHUB_WORKSPACE; process.env.GITHUB_WORKSPACE = dir;
+  t.after(() => { fs.rmSync(dir, { recursive: true, force: true }); if (old === undefined) delete process.env.GITHUB_WORKSPACE; else process.env.GITHUB_WORKSPACE = old; });
+  fs.mkdirSync(path.join(dir, '.specguard-src'));
+  for (const p of ['.specguard-src/own.test.js', 'own.test.js']) fs.writeFileSync(path.join(dir, p), ['test', evidence.quote, ''].join('\n'));
+  fs.writeFileSync(path.join(dir, 'src.js'), ['l1', 'l2', behaviour.quote, ''].join('\n'));
+  assert.equal(post.readFile('.specguard-src/own.test.js'), null);
+  assert.equal(post.readFile('.SpecGuard-Src/own.test.js'), null);
+  assert.deepEqual(post.readFile('own.test.js').slice(0, 2), ['test', evidence.quote]);
+  const verified = (p) => { const d = report({ coverage: [row('covered', { evidence: [{ ...evidence, path: p }] })], findings: [] }); post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), undefined, new Map([['src.js', post.parsePatch(patch)]])); return d.coverage[0].status; };
+  assert.equal(verified('.specguard-src/own.test.js'), 'unknown');
+  assert.equal(verified('own.test.js'), 'covered');
 });

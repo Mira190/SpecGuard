@@ -72,7 +72,7 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 
 - **Pin a full commit SHA**, not a branch or `@v1` (the `v1` tag predates this behaviour). Update it deliberately.
 - **Org prerequisites:** an org admin enables Copilot CLI and the policy "Allow use of Copilot CLI billed to the organization" for `GITHUB_TOKEN` billing. Without it every PR shows "Could not complete" while the job stays green. Run a **canary PR** first and watch the `status` output (or the summary); alert on `failed`.
-- **Never make SpecGuard a required check, and never put `paths:` on its trigger.** A skipped workflow leaves a required check pending, a merge queue (`merge_group`) gets no result, and a superseded push cancels the older run. It is advisory and always green.
+- **Never make SpecGuard a required check, and never put `paths:` on its trigger.** A skipped workflow leaves a required check pending, a merge queue (`merge_group`) gets no result, and a superseded push cancels the older run. It is advisory and always green. The same goes for "Require conversation resolution": its review threads are advisory, so `resolve_stale` is off by default (the job token cannot resolve threads); where that branch-protection rule is on, give the action a `github_token` that can resolve threads and set `resolve_stale: "true"`, or developers must resolve each thread by hand.
 - **Least-privilege permissions** (job-level; `github_token` and `copilot-requests` as below):
 
 | Mode | Permissions |
@@ -89,46 +89,54 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 
 ## Configuration
 
+### Core inputs
+
 | Input | Default | Meaning |
 |---|---|---|
-| `engine` | `copilot` | The engine adapter: `copilot` (Copilot CLI) or `copilot-sdk` (Copilot SDK, opt-in). Any other value fails the step. See [Engines](#engines). |
-| `copilot_token` | | Fine-grained PAT (Copilot Requests), only if the job token cannot be used. |
-| `github_token` | `github.token` | Needs `pull-requests: write`. |
-| `model` | Copilot default | Model name passed to the Copilot CLI (`auto` or a name of letters, digits and `. _ : [ ] -`). Copilot: the models you can use depend on the token owner's Copilot plan (Free/Student: `auto` only); an unavailable model falls back to `auto` once, and the summary says so. |
+| `github_token` | `github.token` | Needs `pull-requests: write` (PR review). |
+| `model` | Copilot Auto | Model name passed to the Copilot CLI (`auto` or a name of letters, digits and `. _ : [ ] -`). The models you can use depend on the token owner's Copilot plan (Free/Student: `auto` only); an unavailable model falls back to `auto` once, and the summary says so. |
 | `effort` | Copilot default | `low`, `medium`, `high`, `xhigh` or `max`. Passed to Copilot as `--reasoning-effort`, only with an explicit non-`auto` model (Free and Student plans can only use `auto`, so effort never applies there; the summary notes "effort ignored: model auto"). |
+| `max_comments` | `10` | Max inline comments (hard cap 30). |
+| `requirements_paths` | | Globs, one per line, that add requirement documents to the ones found by content; `!glob` excludes noisy docs (e.g. `!docs/**`). Empty = content-based discovery only. |
+| `standards_paths` | | Globs, one per line, that add coding-standard or review-guideline documents (e.g. `docs/testing-guidelines.md`) to the instruction files found automatically. Read from the base commit like every rule file; `!glob` excludes. |
+| `test_paths` | | Globs or folders, one per line (`!glob` excludes), that are the authoritative unit-test locations: files there are the tests whatever their names, they are searched first, and the prompt says so. A bare name (`qa/checks`) is a file or a folder. Empty = tests are discovered by name and layout. |
+| `standards_checks` | | Your own lint/format checks to report, `check:NAME` or `status:CONTEXT`, one per line. See [Standards evidence](#standards-evidence). |
+| `mode` | `pr` | `pr` reviews a pull request; `scan` runs the unit test gap scan on the checked-out repository (`audit` is accepted as an alias). See [Unit test gap scan](#unit-test-gap-scan-whole-repository). |
+| `scan_issue` | `false` | Scan mode: `true` also creates or updates one issue titled "SpecGuard: unit test gap scan" (needs `issues: write`). It is what lets a gap be confirmed across runs. |
+
+<details>
+<summary>Advanced inputs</summary>
+
+| Input | Default | Meaning |
+|---|---|---|
+| `copilot_token` | | Fine-grained PAT (Copilot Requests), only if the job token cannot be used. |
+| `engine` | `copilot` | The engine adapter; `copilot` (Copilot CLI) is the only one. Any other value fails the step. See [Engines](#engines). |
 | `auto_tier` | `intelligence` | Copilot Auto routing profile when `model` is empty or `auto`: `intelligence` (default), `balance`, `efficiency`, or empty to omit. Ignored with a note if rejected; does not change which models your plan offers. |
 | `fast_models` | | Extra model names treated as fast tier: exact names or `/regex/`, one per line or comma separated. Built-in: flash, mini, haiku, nano, lite, small. |
 | `copilot_max_ai_credits` | `60` | Copilot soft cap on AI credits per turn, integer 30-2000. A run is one turn plus at most one repair turn on the same session, so the worst case per push is about twice this. |
 | `review_timeout_minutes` | `12` | Engine time limit, a positive integer (a timeout is reported as such, not as a green review). The job `timeout-minutes` must exceed it by at least 3. |
-| `max_comments` | `10` | Max inline comments (hard cap 30). |
 | `max_diff_kb` | `300` | Above this the diff is cut at file boundaries: whole files that fit are reviewed, the dropped files are listed, and the run is marked incomplete. |
 | `ignore` | | Extra ignore globs, one per line, added to the defaults (lockfiles, `dist/`, `build/`, `vendor/`, `node_modules/`, minified files, snapshots, generated code such as `*.pb.go` and `*.g.cs`, non-standard `.md`). |
-| `standards_checks` | | Your own lint/format checks to report, `check:NAME` or `status:CONTEXT`, one per line. See [Standards evidence](#standards-evidence). |
-| `standards_ref` | `head` | `head` or `merge`: the commit those checks ran on. |
-| `requirements_paths` | | Globs, one per line, that add requirement documents to the ones found by content; `!glob` excludes noisy docs (e.g. `!docs/**`). Empty = content-based discovery only. |
-| `test_paths` | | Globs or folders, one per line (`!glob` excludes), that are the authoritative unit-test locations: files there are the tests whatever their names, they are searched first, and the prompt says so. A bare name (`qa/checks`) is a file or a folder. Empty = tests are discovered by name and layout. |
-| `standards_paths` | | Globs, one per line, that add coding-standard or review-guideline documents (e.g. `docs/testing-guidelines.md`) to the instruction files found automatically. Read from the base commit like every rule file; `!glob` excludes. |
+| `standards_ref` | `head` | `head` or `merge`: the commit the `standards_checks` ran on. |
 | `trace` | `auto` | `auto` links requirement docs and changed code in both directions when any requirement doc exists; `off` disables it. |
 | `include_bots` | `false` | Bot-authored PRs (Dependabot, Renovate, any `[bot]` author) are skipped before the model runs; `true` reviews them. |
 | `force` | `false` | A head SHA that already has a complete SpecGuard summary from this Action's own bot is skipped (an incomplete run records none, so it is retried) (idempotent rerun, no tokens spent); `true` reviews it again. Closed PRs are always skipped. |
 | `ctx_retention_days` | `1` | Days to keep the `specguard-ctx-<PR>-<attempt>` artifact (diff, prompt context and raw engine output, for diagnosing a failed review). Anyone who can read the repo's Actions runs can download it: set `0` (no upload) on public repositories and wherever the diff must not be stored. |
-| `resolve_stale` | `true` | After a complete review (diff not truncated, engine finished, requirement collection and comment delivery not degraded; an incomplete run says so in the summary), resolves SpecGuard's own review threads that have no replies and whose finding is no longer reported anywhere, including the summary (at most 20 per run). Resolving threads needs a token allowed to resolve review threads: the default `GITHUB_TOKEN` with `pull-requests: write` was refused in a live run ("Resource not accessible by integration"), so either pass a `github_token` that can (e.g. a fine-grained PAT with Pull requests: write; adding `contents: write` to the job is unverified), or rely on the summary's "Since earlier reviews" line; when the token is refused the summary says the threads were left open. Failures never fail the run. `false` disables it. |
+| `resolve_stale` | `false` | `true` resolves SpecGuard's own review threads that have no replies and whose finding is no longer reported anywhere, including the summary (at most 20 per run), after a complete review (diff not truncated, engine finished, requirement collection and comment delivery not degraded). Enable it only with a `github_token` that can resolve review threads: the default `GITHUB_TOKEN` with `pull-requests: write` was refused in a live run ("Resource not accessible by integration"; for example a fine-grained PAT with Pull requests: write; adding `contents: write` to the job is unverified), and when the token is refused the summary says the threads were left open. Off by default because of "Require conversation resolution": where it is on, every unresolved advisory thread blocks the merge, and a token that cannot resolve means the developer must resolve each one by hand. Failures never fail the run. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
-| `copilot_sdk_version` | `1.0.15` | Pinned `@github/copilot-sdk`, installed only with `engine: copilot-sdk`. |
-| `mode` | `pr` | `pr` reviews a pull request; `scan` runs the unit test gap scan on the checked-out repository (`audit` is accepted as an alias). See [Unit test gap scan](#unit-test-gap-scan-whole-repository). |
 | `scan_max_blocks` | `80` | Scan mode: most document blocks scanned per run, taken in document order; the rest are listed under not reviewed (integer 1-500). |
-| `scan_issue` | `false` | Scan mode: `true` also creates or updates one issue titled "SpecGuard: unit test gap scan" (needs `issues: write`). |
 | `audit_max_requirements`, `audit_issue` | | Deprecated aliases of `scan_max_blocks` and `scan_issue`; when both names are set, the `scan_*` one wins. |
 | `delivery`, `repository`, `pr_number`, `base_sha`, `head_sha` | | For [manual runs](#manual-run-specguard-repo) that review another repository on a `workflow_dispatch`: `delivery: summary` writes nothing to the PR (job summary only); the others replace what a `pull_request` event would supply. Leave them empty in your own workflow. |
+
+</details>
 
 ## Engines
 
 An engine is one script, `src/engines/<name>.sh`: it reads the prompt file and leaves `findings.json`, `usage.json`, `engine-status` and a few notes in the context directory; everything before it (collect, prompt) and after it (`post.js`) is engine-agnostic. The `engine` input is checked against an allow-list, then the action runs `src/engines/$ENGINE.sh`.
 
-- `engine: copilot` (default): Copilot CLI, the answer is JSON in prose with one repair turn.
-- `engine: copilot-sdk` (opt-in): Copilot SDK pinned by `copilot_sdk_version`; the answer is the arguments of a `submit_review` tool, validated by the same validator as `post.js`. **Its authentication with the job `GITHUB_TOKEN` in Actions is unverified**: try it with `copilot_token` if the default fails, and compare results before relying on it (`eval/engine-ab.js` runs both on the same cases).
+- `engine: copilot` (default and only): Copilot CLI, the answer is JSON in prose with one repair turn.
 
-The contract (inputs, output files, rules, how to add an engine such as gh-aw) is in [src/engines/README.md](src/engines/README.md). Adding an engine means one script and one line in the allow-list; `post.js` does not change.
+A Copilot SDK adapter was trialled on 2026-10-13 (it tied with the CLI) and removed; it can be restored from commit `58d8937`. The contract (inputs, output files, rules, how to add an engine) is in [src/engines/README.md](src/engines/README.md). Adding an engine means one script and one line in the allow-list; `post.js` does not change.
 
 ## Unit test gap scan (whole repository)
 
@@ -160,29 +168,33 @@ jobs:
           # scan_issue: "true"
 ```
 
-The result is the job summary: one line per document block (link, text, block status, and its sub-rows' statuses; a block is a `gap` when any sub-row is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise) with counts by block status, the per-sub-row evidence in a collapsed table per document, the candidate documents that were not admitted ("add to `requirements_paths` to include"), and what was not reviewed (skipped documents, rows whose citation did not verify, the `scan_max_blocks` cap). Every citation is checked against the file at HEAD: a requirement whose quote is not found is moved to "not reviewed"; test or code evidence that is not found is removed and a `covered` row becomes `unknown`. `audit.json` (the validated result) stays in the `specguard-audit-<attempt>` artifact (`ctx_retention_days`). Reporting is per block and confirmed across runs, because a model's detail varies from run to run (the same commit scanned twice agreed on a block's gap about two times in three, and on individual sub-rows far less): with `scan_issue: true` the issue keeps a hidden per-block state, a gap is listed as **confirmed** only when the block was a gap in this run and the previous one (otherwise "new gap, unconfirmed"), a confirmed gap that is covered is "resolved? recheck next run" until it is covered twice, and "Changed since the last scan" lists only those two-run-stable changes plus a count of unstable blocks. Schedule the scan weekly so each run confirms the last; without `scan_issue` every gap stays unconfirmed. With `scan_issue: true` the same report is written to a single issue (found by a hidden marker and authored by this action; whole rows are dropped, never cut, to fit GitHub's body limit).
+The result is the job summary: one line per document block (link, text, block status, and its sub-rows' statuses; a block is a `gap` when any sub-row is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise) with counts by block status, the per-sub-row evidence in a collapsed table per document, the candidate documents that were not admitted ("add to `requirements_paths` to include"), and what was not reviewed (skipped documents, rows whose citation did not verify, the `scan_max_blocks` cap). Every citation is checked against the file at HEAD: a requirement whose quote is not found is moved to "not reviewed"; test or code evidence that is not found is removed and a `covered` row becomes `unknown`. `audit.json` (the validated result) stays in the `specguard-audit-<attempt>` artifact (`ctx_retention_days`). Reporting is per block and confirmed across runs, because a model's detail varies from run to run (the same commit scanned twice agreed on a block's gap about two times in three, and on individual sub-rows far less): with `scan_issue: true` the issue keeps a hidden per-block state, a gap is listed as **confirmed** only when the block was a gap in this run and the previous one (otherwise "new gap, unconfirmed"), a confirmed gap that is covered is "resolved? recheck next run" until it is covered twice, and "Changed since the last scan" lists only those two-run-stable changes plus a count of unstable blocks. Schedule the scan weekly so each run confirms the last; without `scan_issue` every gap stays unconfirmed (a [manual run](#manual-run-specguard-repo) is always one-off for this reason). With `scan_issue: true` the same report is written to a single issue (found by a hidden marker and authored by this action; whole rows are dropped, never cut, to fit GitHub's body limit).
 
 Cost: the model reads every admitted document in full (at most 60), so a scan uses far more tokens than a PR review. Cap it with `copilot_max_ai_credits` (per turn), lower `scan_max_blocks`, narrow the documents with `requirements_paths` (`!glob` excludes), and raise `review_timeout_minutes` and the job `timeout-minutes` for large repositories.
 
 ## Manual run (SpecGuard repo)
 
-`.github/workflows/specguard-run.yml` runs SpecGuard on demand against **another repository** from the SpecGuard repo's Actions tab (`workflow_dispatch`). It is not shipped to target repos; their own workflow stays the `pull_request` one above.
+`.github/workflows/specguard-run.yml` runs SpecGuard on demand against **another repository** from the SpecGuard repo's Actions tab (`workflow_dispatch`). It is not shipped to target repos; their own workflow stays the `pull_request` one above. The form has one required field and four optional ones:
 
 | Input | Meaning |
 |---|---|
-| `repo` (required) | `owner/name` or a github.com URL (a `.../pull/N` URL also sets `pr`). |
-| `pr` | PR number to review. |
-| `ref` | Branch, tag or SHA to scan (default: the default branch). |
-| `design_docs`, `rules_docs`, `test_dirs` | Requirement/design documents, coding-standard documents and unit-test folders, one per line: repository paths, globs (`!` excludes), or github.com blob/tree URLs of the **same** repository. A folder (`docs/specs`) means everything under it. Empty = auto-discovery. They become `requirements_paths`, `standards_paths` and `test_paths`. |
-| `mode` | `auto` (default: `pr` when `pr` is set, else `scan`), `pr` or `scan` (`audit` is accepted as an alias of `scan`). |
-| `post_to_pr` | PR mode, default off: results go to the job summary only. On: the normal review and summary comment are posted to the target PR. |
-| `model`, `effort` | As in the action. |
+| `target` (required) | A **PR link** reviews that PR. A **repo link**, `owner/name` or a **branch (tree) link** runs the unit test gap scan of that branch (the default branch when the link names none). |
+| `design_docs`, `rules_docs`, `test_dirs` | Requirement/design documents, coding-standard documents and unit-test folders, one per line: repository paths, globs (`!` excludes), or github.com blob/tree links of the **same** repository. A folder (`docs/specs`) means everything under it. Empty = auto-discovery. They become `requirements_paths`, `standards_paths` and `test_paths`. |
+| `post_to_pr` | PR links only, default off: results stay on the run page. On: the normal review and summary comment are also posted to the target PR. |
 
-`src/resolve-inputs.js` turns the inputs into repository paths first. A URL of another repository is rejected (copy the document into the target repository); a non-GitHub URL (Confluence, Google Docs, ...) fails with "not readable from GitHub Actions; add the document to the repository or paste it". PR mode reviews an open PR (head and base from the API, checked out with `fetch-depth: 0`); scan mode scans `ref` or the default branch. There is no issue, and `ctx_retention_days` is `0`: no artifact is uploaded.
+Model and effort are not on the form: the run uses Copilot Auto with `auto_tier: intelligence`. To pick a model or effort, use the action in your own workflow (`model`, `effort` above).
 
-**The token.** For other private or internal repositories, add the repository secret `SPECGUARD_PAT` (without it the job token is used, which reads only the SpecGuard repository itself and public repositories): a fine-grained PAT whose resource owner is the target repos' owner, with **Contents: read, Issues: read, Pull requests: read** on the target repositories. Add **Pull requests: write** only if you will use `post_to_pr`. Copilot itself runs on the job token (`copilot-requests: write`). The checkout does not persist the token.
+`src/resolve-inputs.js` turns the form into repository paths first. A link into another repository is rejected (copy the document into the target repository); a non-GitHub link (Confluence, Google Docs, ...) fails with "not readable from GitHub Actions; add the document to the repository or paste it". PR mode reviews an open PR (head and base from the API, checked out with `fetch-depth: 0`). With a token that can read the target, the resolver also looks up which part of a branch link is the branch name (branches may contain slashes: the longest existing branch or tag wins) and whether an extension-less path (`Makefile`, `docs/specs`) is a file or a folder; without access it reads the link literally (the first segment is the branch, a path without a trailing slash stays as given, so end a folder with `/`). Nothing is kept after the run (`ctx_retention_days` is `0`), and a scan has no issue.
 
-**Security rule.** The summary of a manual run quotes the reviewed repository's code and requirement text, and anyone who can read the SpecGuard repo's Actions runs can read it. Keep the SpecGuard repo's access a subset of the access to every repository you point it at (a private SpecGuard repo, collaborators who can already read the targets). Artifacts are off (`0` days) for the same reason; do not add one.
+**A manual scan is one-off.** The summary starts with "One-off scan: gaps are unconfirmed; schedule the scan in the target repo to confirm across runs." Two-run confirmation and "changed since the last scan" need state: put the [scan workflow](#unit-test-gap-scan-whole-repository) with `scan_issue: true` in the target repository on a schedule.
+
+**Setup (do this once, in the SpecGuard repo).**
+
+1. Settings > Environments > New environment `specguard`. Under "Deployment branches and tags" choose **Selected branches and tags** and allow only `main`. Both jobs of the workflow run in this environment, so a branch that edits the workflow or `src/` and is dispatched cannot start the job, and the token is never exposed to code that is not on `main`.
+2. Put `SPECGUARD_PAT` in that environment's **secrets** (not in the repository secrets: the workflow never reads it outside the environment, and an environment secret of the same name would shadow a repository one anyway). The PAT is a fine-grained token whose resource owner is the target repos' owner, with **Contents: read, Issues: read, Pull requests: read** on the target repositories. Add **Pull requests: write** only if you will use `post_to_pr`. Without it the job token is used, which reads only the SpecGuard repository and public repositories. Copilot itself runs on the job token (`copilot-requests: write`). The checkout does not persist the token.
+3. Keep the SpecGuard repository **private**, with access that is a subset of the access to every repository you point it at (collaborators who can already read the targets). The run page quotes the reviewed repository's code and requirement text, and anyone who can read the SpecGuard repo's Actions runs can read it (logs and summaries are kept 90 days). Artifacts are off for the same reason; do not add one.
+
+SpecGuard itself is checked out next to the target in a path that must not exist (`.specguard-src`), after the target, and the job fails if the reviewed repository already has a path of that name; the review ignores that folder.
 
 ## Standards evidence
 
@@ -225,16 +237,29 @@ Recommended: the runner. It runs the same pipeline as CI before the PR exists: t
 ```sh
 node bin/specguard-local.js                       # branch vs the remote default branch
 node bin/specguard-local.js --base origin/develop --model auto --json
-node bin/specguard-local.js --fail-on-gaps        # exit 1 when unit test gaps exist
+node bin/specguard-local.js --fail-on-gaps        # exit 1 when the validated review holds a unit test gap
+node bin/specguard-local.js --requirements-paths 'docs/**' --requirements-paths '!docs/old/**' --standards-paths docs/testing.md --test-paths qa/ --ignore generated/
 ```
 
-It reviews committed changes only (uncommitted work is ignored, with a warning), in a throwaway git worktree, so your checkout is untouched. The PR text is your commit messages (or `--body FILE`); linked issues are unavailable offline. The exit code is 0 unless the tool crashed (advisory), or 1 with `--fail-on-gaps`. Options: `--base`, `--body`, `--model`, `--effort`, `--auto-tier`, `--json`, `--keep`.
+It reviews committed changes only (uncommitted work is ignored, with a warning), in a throwaway git worktree, so your checkout is untouched (Ctrl-C or `kill` removes the worktree too). A remote base such as `origin/main` is fetched first, so a branch that merged a newer main does not review main's commits; offline, it warns and uses the base you have. The PR text is your commit messages (or `--body FILE`); linked issues are unavailable offline.
 
-As a pre-push hook (`.git/hooks/pre-push`, made executable):
+Config parity with CI: `--requirements-paths`, `--standards-paths`, `--test-paths` and `--ignore` are the action inputs of the same names (repeat a flag for each line; `!glob` excludes). Copy them from your workflow; the runner does not read the workflow or any config file, and ignores `REQ_PATHS`-style environment variables.
+
+The exit code is 0 unless the tool crashed (advisory), or 1 with `--fail-on-gaps`. The gate reads what the post step delivered after validation (citations verified, anchored to the diff): a high-confidence missing or weak unit test in the comments, or in the summary list when it is not marked "low confidence". Findings the validator drops never block.
+
+It takes a few minutes and spends AI credits, so run it on demand, not on every push:
+
+```sh
+node path/to/SpecGuard/bin/specguard-local.js --fail-on-gaps
+```
+
+If you want a push gate, make it opt-in per push (`.git/hooks/pre-push`, made executable). It does nothing unless you ask:
 
 ```sh
 #!/bin/sh
-node path/to/SpecGuard/bin/specguard-local.js --fail-on-gaps || { echo "SpecGuard found unit test gaps (git push --no-verify to skip)"; exit 1; }
+# SPECGUARD=1 git push   -> review first; a plain git push is untouched
+[ "$SPECGUARD" = 1 ] || exit 0
+node path/to/SpecGuard/bin/specguard-local.js --fail-on-gaps || { echo "SpecGuard found unit test gaps (push again without SPECGUARD=1 to skip)"; exit 1; }
 ```
 
 CI skips draft PRs by default: remove `!github.event.pull_request.draft` from the workflow `if` to review drafts too (costs one run per push).
@@ -293,7 +318,7 @@ Native CCR remains optional. Its comments cannot reconstruct the complete obliga
 
 Before step 1, `src/preflight.js` skips the run (one log line, green job, no model tokens) for a closed PR, a bot author or an already-reviewed head SHA. `src/standards-map.js` records where each base-branch rule file applies (`applyTo`, `paths:`, directory-scoped `AGENTS.md`/`CLAUDE.md`) in `standards-map.json`; a standards finding that cites a rule not covering its file is dropped with a note. The sticky summary ends with collapsed reference sections, the last being "Sources read".
 
-Contributors: run `node --test src/*.test.js eval/*.test.js` from a POSIX shell (a bare `node --test` would also discover the `eval/cases` fixtures) and `bash -n src/collect.sh`. Keep `skills/test-review/` identical to `.github/skills/test-review/`; CI checks this. Changes to the report schema require matching validator, prompt and fixture updates. Older findings JSON without evidence and assessment fields is intentionally rejected as incomplete.
+Contributors: run `node --test src/*.test.js eval/*.test.js bin/*.test.js` from a POSIX shell (a bare `node --test` would also discover the `eval/cases` fixtures) and `bash -n src/collect.sh`. Keep `skills/test-review/` identical to `.github/skills/test-review/`; CI checks this. Changes to the report schema require matching validator, prompt and fixture updates. Older findings JSON without evidence and assessment fields is intentionally rejected as incomplete.
 
 Design and rationale: [docs/design.md](docs/design.md).
 
