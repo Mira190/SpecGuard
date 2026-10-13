@@ -1,0 +1,5 @@
+
+# local secrets never belong in the repository
+.env
+*.env
+.env.*
