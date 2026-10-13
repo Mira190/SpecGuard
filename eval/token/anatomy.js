@@ -55,8 +55,8 @@ async function parse(file) {
     }
   }
   if (!first || !/review model inside a CI code-review Action/.test(first)) return null;
-  const pm = first.match(/([A-Za-z]:\\[^\s`]*?)\\(?:prompt|task)\.md/);
-  const dir = pm ? pm[1] : ''; const caseName = dir.split('\\').pop();
+  const pm = first.match(/(?:^|[\s`'"(])([A-Za-z]:[^\s`'"]*?|[\\/][^\s`'"]*?)[\\/](?:prompt|task)\.md/); // Windows (C:\ or C:/) or POSIX absolute; \ or / separators
+  const dir = pm ? pm[1] : ''; const caseName = dir.split(/[\\/]/).pop();
   const turns = order.map(k => calls.get(k)).filter(c => c.usage);
   if (turns.length < 2) return null;
   const ctx = turns.map(c => (c.usage.input_tokens || 0) + (c.usage.cache_read_input_tokens || 0) + (c.usage.cache_creation_input_tokens || 0));
