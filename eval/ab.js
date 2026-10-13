@@ -75,7 +75,6 @@ Reminder: write only the JSON object to ${dir}/review.json.
 }
 
 // Free-form ctx/review.json -> what bundle.js reads: ctx/findings.json (kind review_comment, origin free), posted.json (every comment inline), summary.md.
-const TRAILER = '\n\n<details><summary>Why this was flagged</summary>'; // bundle.js parseInline splits on this
 function convertFree(dir) {
   const rp = path.join(dir, 'ctx', 'review.json');
   if (!fs.existsSync(rp)) return null;
@@ -88,7 +87,7 @@ function convertFree(dir) {
   const fence = '```';
   fs.writeFileSync(path.join(dir, 'ctx', 'findings.json'), JSON.stringify({ origin: 'free', findings: cs.map((c) => ({ kind: 'review_comment', origin: 'free', confidence: c.severity, path: c.path || null, line: c.line, title: c.title, body: c.body, ...(c.suggestion ? { suggestion: c.suggestion } : {}) })) }, null, 2) + '\n');
   const comments = cs.map((c) => ({ path: c.path || '', line: c.line, side: 'RIGHT',
-    body: `**${c.title}**\n\n${c.body}${c.suggestion ? `\n\nSuggested fix (not applied automatically):\n\n${fence}\n${c.suggestion}\n${fence}` : ''}${TRAILER}\n\nkind: review_comment, confidence: ${c.severity}</details>` }));
+    body: `**${c.title}**\n\n${c.body}${c.suggestion ? `\n\nSuggested fix (not applied automatically):\n\n${fence}\n${c.suggestion}\n${fence}` : ''}\n\n<!--\nkind: review_comment, confidence: ${c.severity}\n-->` })); // the hidden trailer bundle.js parseInline splits on
   fs.writeFileSync(path.join(dir, 'posted.json'), JSON.stringify({ comments, reviews: [], warnings: [] }, null, 2) + '\n');
   fs.writeFileSync(path.join(dir, 'summary.md'), String(r.summary || '') + '\n');
   const n = { high: 0, medium: 0, low: 0 };
