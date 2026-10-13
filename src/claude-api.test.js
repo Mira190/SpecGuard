@@ -321,13 +321,13 @@ test('context pack: files.txt order without focus.txt; the byte budget cuts a fi
   assert.match(r.h.file('engine-notes'), /^context pack: 2 files, \d KB; not included: c\.js, d\.js, e\.js, f\.js \(\+2 more\)$/);
 });
 
-test('context pack: a file over the per-file cap (limit/6, here 25000 bytes) is cut at a line boundary and says so', async (t) => {
+test('context pack: a file over the per-file cap (limit/6, here 41666 bytes) is cut at a line boundary and says so', async (t) => {
   const r = repo(t, { 'big.js': lineText(20000) }, { 'files.txt': 'big.js\n' });
   await r.go();
   const m = /name="big\.js" note="first (\d+) of 20000 lines, line-numbered">\n([\s\S]*?)\n<\/untrusted-data>/.exec(r.user());
   assert.ok(m && +m[1] > 1000 && +m[1] < 20000);
   assert.equal(m[2].split('\n').length, +m[1]);
-  assert.ok(Buffer.byteLength(m[2]) <= 150000 / 6);
+  assert.ok(Buffer.byteLength(m[2]) <= 250000 / 6);
   assert.doesNotMatch(r.h.file('engine-notes'), /not included/, 'a cut file is not an omitted file');
 });
 
@@ -387,24 +387,19 @@ test('pre-flight counts 1.5 bytes per token: a budget that 3.5 would pass is ref
   assert.equal(h.file('engine-error').split('\n')[0], 'budget');
 });
 
-test('context pack on a model with a price step (haiku 5.5): shrunk so the prompt stays under 90% of 100k tokens at 2 bytes/token; skipped with a note when the prompt alone is that big', async (t) => {
+test('context pack on a model with a price step (haiku 5.5): not shrunk for the step; the pre-flight still refuses when the budget is too low for the prompt', async (t) => {
   const files = Object.fromEntries('abcdef'.split('').map((c) => [`${c}.js`, lineText(20000)])), ctxFiles = { 'files.txt': Object.keys(files).join('\n') + '\n' };
   const r = repo(t, files, ctxFiles);
-  fs.writeFileSync(r.h.pf, `${STATIC}${'s'.repeat(40000)}\n\n---\n\nContext directory (absolute path): /ctx\n${'c'.repeat(40000)}\n`);
+  fs.writeFileSync(r.h.pf, PROMPT + 'z'.repeat(190000));
   await r.go();
+  assert.equal(r.h.calls.length, 1, r.h.file('engine-error'));
   const b = r.h.calls[0].body, total = Buffer.byteLength(b.system[0].text) + Buffer.byteLength(b.messages[0].content);
-  assert.ok(total / 2 <= 0.9 * api.PRICES['claude-haiku-5-5'].longFrom, String(total));
-  assert.ok(total > 0.8 * 180000 && /^context pack: [1-9]\d* files/.test(r.h.file('engine-notes')), 'the pack was shrunk, not dropped: ' + total);
-  const none = repo(t, files, ctxFiles);
-  fs.writeFileSync(none.h.pf, PROMPT + 'z'.repeat(190000));
-  await none.go();
-  assert.equal(none.h.calls.length, 1, none.h.file('engine-error') + none.h.file('engine-notes'));
-  assert.ok(!none.user().includes('Repository files'));
-  assert.equal(none.h.file('engine-notes'), 'context pack: skipped, prompt already near the 100k-token price step');
-  const opus = repo(t, files, ctxFiles, { MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '20' }); // no price step: the plain upper bound
-  fs.writeFileSync(opus.h.pf, PROMPT + 'z'.repeat(190000));
-  await opus.go();
-  assert.ok(opus.user().includes('Repository files'));
+  assert.ok(total / 2 > api.PRICES['claude-haiku-5-5'].longFrom && /^context pack: [1-9]\d* files/.test(r.h.file('engine-notes')), 'the pack went in past the step: ' + total);
+  const low = repo(t, files, ctxFiles, { MAX_BUDGET_USD: '0.05' }); // over 100k tokens is the long card
+  fs.writeFileSync(low.h.pf, PROMPT + 'z'.repeat(190000));
+  await low.go();
+  assert.equal(low.h.calls.length, 0);
+  assert.equal(low.h.file('engine-error').split('\n')[0], 'budget');
 });
 
 // --- claude.sh dispatch: api (default) needs no CLI and no install; agent runs the CLI ---
