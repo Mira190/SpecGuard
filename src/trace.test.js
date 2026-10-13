@@ -191,6 +191,11 @@ test('isSpecDoc admits structured items, RFC capitals, dense prose and spec dire
   assert.equal(T.isSpecDoc([{ kind: 'id', raw: 'R1: x' }], 'a.md', 90000), true);
   assert.equal(T.isSpecDoc([n('a must b.')], 'openspec/specs/x/spec.md', 300), true); // a single requirement in a spec directory
   assert.equal(T.isSpecDoc([n('a must b.')], 'docs/x.md', 300), false);
+  // a file named like a spec is as strong as a spec directory, in any directory (long English design doc, sparse "must")
+  const two = [n('a must b.'), n('c should d.')];
+  for (const f of ['docs/design.md', 'design.md', 'api-spec.md', 'docs/design_doc.md', 'product-requirements.md', 'docs/PRD.md', 'acceptance-criteria.md']) assert.equal(T.isSpecDoc(two, f, 27600), true, f);
+  for (const f of ['docs/guide.md', 'README.md', 'docs/architecture.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'designer-notes.md']) assert.equal(T.isSpecDoc(two, f, 27600), false, f);
+  assert.equal(T.isSpecDoc([n('a must b.')], 'docs/design.md', 27600), false); // the requirement-doc gate still applies
 });
 
 test('classify: .txt files are documents only when named like requirements', (t) => {
