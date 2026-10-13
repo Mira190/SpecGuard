@@ -39,7 +39,7 @@ exit $(pick rc)
   const run = (extra = {}) => spawnSync(bash, [fwd(path.join(__dirname, 'engines', 'claude.sh'))], {
     encoding: 'utf8', timeout: 60000,
     env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, CTX: fwd(ctx), PROMPT_FILE: fwd(path.join(dir, 'prompt.txt')), ANTHROPIC_API_KEY: KEY, GH_TOKEN: 'job-token',
-      MODEL: 'claude-haiku-5-5', EFFORT: '', MAX_BUDGET_USD: '', TIMEOUT: '5', CLAUDE_VERSION: '', CHECK: '', ...extra },
+      MODEL: 'claude-haiku-5-5', EFFORT: '', MAX_BUDGET_USD: '', TIMEOUT: '5', CLAUDE_VERSION: '', CHECK: '', CLAUDE_MODE: 'agent', ...extra },
   });
   const file = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').trim(); } catch { return null; } };
   const read = (n) => { try { return fs.readFileSync(path.join(fake, n), 'utf8'); } catch { return ''; } };
@@ -276,4 +276,18 @@ test('a Could not complete summary carries the usage line exactly once (comment 
   const { buildSummary } = require('./post.js');
   const body = buildSummary({ status: 'Could not complete: x', engine: 'claude', model: 'claude-haiku-5-5', usage: { totalCostUsd: 3.58 }, notes: ['n'], state: 'failed', used: ['claude-haiku-5-5'], tooling: { status: 'not_configured', checks: [] } });
   assert.equal(body.split('<sub>Engine:').length - 1, 1);
+});
+
+test('engine notes are de-duplicated: the finalize note and the repair label say the same fact once', (t) => {
+  const { engineNotes } = require('./post.js');
+  const s = setup(t, { out: BUDGET_STOP, rc: 1, then: [{ out: BUDGET_STOP, rc: 1 }] });
+  s.run();
+  const raw = s.file('engine-notes');
+  assert.doesNotMatch(raw, /:\s*(\n|$)/, 'no dangling colon when the CLI gave no message');
+  const notes = engineNotes(raw, s.file('engine-repair'));
+  assert.equal(notes.filter((n) => /^finalize turn failed/.test(n)).length, 1, notes.join(' | '));
+  assert.deepEqual(engineNotes('finalize turn failed: error_max_budget_usd\nfinalize turn failed: error_max_budget_usd\n', 'finalize_failed'), ['finalize turn failed: error_max_budget_usd']);
+  assert.deepEqual(engineNotes('finalized: budget reached; answered from what it had read', 'finalized'), ['finalized: budget reached; answered from what it had read']);
+  assert.deepEqual(engineNotes('effort ignored: claude engine', 'finalize_failed'), ['effort ignored: claude engine', 'finalize turn failed']);
+  assert.deepEqual(engineNotes('', ''), []);
 });

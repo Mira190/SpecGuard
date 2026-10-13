@@ -46,7 +46,7 @@ exit 0
   const run = (name, extra = {}) => spawnSync(bash, [fwd(path.join(ENGINES_DIR, `${name}.sh`))], {
     encoding: 'utf8', timeout: 60000,
     env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, CTX: fwd(ctx), PROMPT_FILE: fwd(path.join(dir, 'prompt.txt')), RUNNER_TEMP: fwd(path.join(dir, 'tmp')),
-      MODEL: '', EFFORT: '', AUTO_TIER: undefined, MAX_CREDITS: '60', TIMEOUT: '5', COPILOT_VERSION: '', CLAUDE_VERSION: extra.COPILOT_VERSION && name === 'claude' ? '2.1.284' : '', COPILOT_GITHUB_TOKEN: '', ANTHROPIC_API_KEY: '', CHECK: '', ...extra },
+      MODEL: '', EFFORT: '', AUTO_TIER: undefined, MAX_CREDITS: '60', TIMEOUT: '5', COPILOT_VERSION: '', CLAUDE_VERSION: extra.COPILOT_VERSION && name === 'claude' ? '2.1.284' : '', COPILOT_GITHUB_TOKEN: '', ANTHROPIC_API_KEY: '', CHECK: '', CLAUDE_MODE: 'agent', ...extra },
   });
   const file = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').trim(); } catch { return null; } };
   const calls = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('---\n').filter(Boolean).map((c) => c.split('\n').filter(Boolean)) : []);

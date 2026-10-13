@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Engine adapter: Claude Code CLI on an Anthropic API key. Contract: src/engines/README.md.
+# Engine adapter for an Anthropic API key. Contract: src/engines/README.md.
+# CLAUDE_MODE=api (default): ONE Messages API call with the prompt SpecGuard already built, schema-enforced JSON, cost checked against max_budget_usd BEFORE the call (src/engines/claude-api.js; no CLI, no install).
+# CLAUDE_MODE=agent: the Claude Code CLI as an agent (below). Not the default: the tool loop re-sends the whole context every turn, and the CLI's --max-budget-usd is a soft cap checked between turns (a live run with a $1.00 budget cost $3.44; the finalize turn then failed because the budget is cumulative across the resumed session). max_budget_usd is therefore NOT a hard bound in this mode.
 # One main turn with a JSON schema (structured output), session id ours. When it ends without an answer because the per-run budget or the turn limit was reached, ONE finalize turn resumes the same session with no tools and asks for the final JSON from what was already read (engine-repair = finalized | finalize_failed). Other failures are reported by post.js as "could not complete".
 # The prompt goes to claude on stdin from a file in $CTX (never argv). Read-only tools only: Read, Grep, Glob; dontAsk denies everything else; --restricted confines the file tools to the workspace (no reading /proc/self/environ, where the key lives); --bare ignores the reviewed repo's settings, hooks, MCP servers and CLAUDE.md.
-# Env: CTX PROMPT_FILE (or PROMPT, small prompts) ANTHROPIC_API_KEY (environment only) MODEL (empty = the CLI default) EFFORT (ignored, noted) MAX_BUDGET_USD (per-run budget in USD, default 1.00; the finalize turn gets 20% of it, at least 0.10) TIMEOUT (minutes, install included)
+# Env: CTX PROMPT_FILE (or PROMPT, small prompts) ANTHROPIC_API_KEY (environment only) CLAUDE_MODE (api | agent, default api) MODEL (empty = claude-haiku-5-5 in api mode, the CLI default in agent mode) EFFORT (ignored, noted) MAX_BUDGET_USD (USD, default 1.00; api: hard pre-flight bound; agent: soft cap per run, the finalize turn gets 20% of it, at least 0.10) MAX_OUTPUT_TOKENS (api mode, default 16000) TIMEOUT (minutes, install included)
 # CLAUDE_VERSION (npm install -g @anthropic-ai/claude-code@V; empty = use the claude already on PATH). CHECK=audit selects audit.schema.json. Never --dangerously-skip-permissions.
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; src="$(cd "$here/.." && pwd)"
 . "$here/_redact.sh"
@@ -10,6 +12,8 @@ bash "$src/validate-inputs.sh" || exit 1
 TIMEOUT="${TIMEOUT:-12}" # validated above
 unset GH_TOKEN GITHUB_TOKEN COPILOT_GITHUB_TOKEN # an Anthropic key is the only credential this engine gets
 [ -n "${ANTHROPIC_API_KEY:-}" ] || unset ANTHROPIC_API_KEY
+if [ -z "${PROMPT_FILE:-}" ]; then mkdir -p "$CTX"; PROMPT_FILE="$CTX/prompt.txt"; printf '%s' "$PROMPT" > "$PROMPT_FILE"; fi
+if [ "${CLAUDE_MODE:-api}" = api ]; then PROMPT_FILE="$PROMPT_FILE" node "$here/claude-api.js"; exit 0; fi # never fails the step: claude-api.js reports in $CTX
 SECONDS=0; budget=$((10#$TIMEOUT * 60))
 mkdir -p "$CTX"
 fail() { echo "::warning::$1"; echo failed > "$CTX/engine-status"; printf '%s\n' "$2" >> "$CTX/engine-notes"; exit 0; } # <warning> <note>
@@ -22,7 +26,6 @@ if ! printf '%s\n' "$ver" | grep -qE '[0-9]+\.[0-9]+\.[0-9]+.*Claude Code'; then
   first="$(printf '%s\n' "$ver" | grep . | head -n 1 | redact)"; first="${first:0:200}"
   fail "Claude Code CLI not found or not runnable (${first:-no output})" "Claude Code CLI not found or not runnable (${first:-no output})"
 fi
-if [ -z "${PROMPT_FILE:-}" ]; then PROMPT_FILE="$CTX/prompt.txt"; printf '%s' "$PROMPT" > "$PROMPT_FILE"; fi
 schema="$src/findings.schema.json"; [ "${CHECK:-}" = audit ] && schema="$src/audit.schema.json"
 usd="$(awk -v b="${MAX_BUDGET_USD:-1.00}" 'BEGIN{printf "%.2f", b}')"; fusd="$(awk -v b="$usd" 'BEGIN{x = b * 0.2; if (x < 0.1) x = 0.1; printf "%.2f", x}')"
 sid="$(node -e 'console.log(require("node:crypto").randomUUID())')" # ours, so the finalize turn can resume this session (no --no-session-persistence)
@@ -60,7 +63,7 @@ if [ $rc != 124 ] && { [ $rc != 0 ] || [ "$status" != ok ]; }; then
   elif has 'not_found_error|model.*(not found|not available|does not exist)|invalid model|issue with the selected model'; then reason=model; why="The model '${MODEL:-default}' is not available to this API key (check the model input)"
   fi
   if [ -n "$reason" ]; then
-    raw="$(printf '%s\n%s\n' "$(cat "$err" 2>/dev/null)" "$status" | grep -m1 '[^[:space:]]' | cut -c1-200 | redact)"
+    raw="$(printf '%s\n%s\n' "$(cat "$err" 2>/dev/null)" "$status" | grep -m1 '[^[:space:]]' | cut -c1-200 | sed -E 's/^error //; s/:[[:space:]]*$//' | redact)"; case "$reason" in budget|turns) raw='' ;; esac # the subtype only repeats the reason"
     printf '%s\n%s\n' "$reason" "$why" > "$CTX/engine-error"; class_note="$why${raw:+: $raw}"
   fi
 fi
@@ -78,7 +81,7 @@ if [ $rc != 124 ] && [ "$status" != ok ] && { [ "$reason" = budget ] || [ "$reas
     node "$src/engine-model.js" --turn repair --usage "$CTX/usage-repair.json" || true
     fproblem=''; [ $frc = 124 ] || fproblem="$(node "$src/extract-json.js" "$CTX/claude-finalize.answer" "$CTX/findings.json" --check)"
     if [ $frc != 124 ] && [ "$fstatus" = ok ] && [ -z "$fproblem" ]; then finalized=1; echo finalized > "$CTX/engine-repair"
-    else echo finalize_failed > "$CTX/engine-repair"; spent_note="finalize turn failed: ${fstatus#error }"; [ -z "$fproblem" ] || problem="$fproblem"; fi
+    else echo finalize_failed > "$CTX/engine-repair"; spent_note="finalize turn failed: $(printf '%s' "${fstatus#error }" | sed -E 's/:[[:space:]]*$//')"; [ -z "$fproblem" ] || problem="$fproblem"; fi
   fi
 fi
 if [ -n "$finalized" ]; then
