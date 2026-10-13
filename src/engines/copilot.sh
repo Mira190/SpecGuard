@@ -26,7 +26,7 @@ out="$CTX/copilot.out"; err="$CTX/copilot.err"
 if [ -z "${PROMPT_FILE:-}" ]; then PROMPT_FILE="$CTX/prompt.txt"; printf '%s' "$PROMPT" > "$PROMPT_FILE"; fi
 common=(--available-tools view,glob,grep --allow-all-tools --no-ask-user -s --max-ai-credits "${MAX_CREDITS:-60}")
 
-model_args=(); effort_args=(); tier_args=(); effort_note=''; fallback_note=''; usage_note=''; repair_note=''; tier_note=''
+model_args=(); effort_args=(); tier_args=(); effort_note=''; fallback_note=''; usage_note=''; repair_note=''; tier_note=''; exit_note=''
 [ -n "${MODEL:-}" ] && model_args=(--model "$MODEL")
 # The router profile only exists for auto, and the CLI rejects --auto-tier unless --model auto is explicit ("Auto preference requires the selected model to be `auto`"):
 # an empty MODEL with a tier therefore becomes `--model auto --auto-tier X`; without a tier the CLI default applies and no model flag is passed.
@@ -36,7 +36,7 @@ if [ -n "${EFFORT:-}" ]; then # auto does not support reasoning effort (hard err
   if [ -n "${MODEL:-}" ] && [ "$MODEL" != auto ]; then effort_args=(--reasoning-effort "$EFFORT"); effort_note="effort: $EFFORT"
   else effort_note='effort ignored: model auto'; fi
 fi
-save_notes() { printf '%s\n' "$effort_note" "$fallback_note" "$tier_note" "$usage_note" "$repair_note" | grep . > "$CTX/engine-notes"; }
+save_notes() { printf '%s\n' "$effort_note" "$exit_note" "$fallback_note" "$tier_note" "$usage_note" "$repair_note" | grep . > "$CTX/engine-notes"; }
 
 turn() { # <prompt file> <usage file> <stdout file>; the time left of the shared budget is the limit
   local left=$((budget - SECONDS)) rc=0
@@ -53,12 +53,20 @@ turn() { # <prompt file> <usage file> <stdout file>; the time left of the shared
 record() { MSYS2_ENV_CONV_EXCL=FAST_MODELS SID="$SID" FAST_MODELS="${FAST_MODELS:-}" node "$src/engine-model.js" --turn "$1" --usage "$2" || true; } # <turn label> <usage file>; never fails the step
 check() { node "$src/extract-json.js" "$1" "$CTX/findings.json" --check; } # prints the problem (if any); findings.json = what was extracted
 
+settle() { # <label> <rc> <stdout file> -> $settled. A non-zero exit that is not a timeout, after a complete answer (the repair trigger's own rule), still counts as a success; otherwise the exit code goes to the notes (one line either way: 3+ notes make the review reduced)
+  settled=$2; [ "$2" = 0 ] || [ "$2" = 124 ] && return 0
+  if [ -z "$(check "$3")" ]; then settled=0; exit_note+="Copilot exited with code $2 after a complete answer"$'\n'; echo success > "$CTX/engine-status"
+  else exit_note+="copilot exit $2 ($1)"$'\n'; fi
+}
+
 rc=0; turn "$PROMPT_FILE" "$CTX/usage.json" "$out" || rc=$?
 record main "$CTX/usage.json"
 if [ $rc != 0 ] && grep -q 'from --model flag is not available' "$err"; then # not on this token owner's plan: no credits were spent, run once on auto
   fallback_note="model_fallback: $MODEL → auto"; effort_note=''; model_args=(--model auto); effort_args=(); set_tier
   rc=0; turn "$PROMPT_FILE" "$CTX/usage.json" "$out" || rc=$?
   record fallback "$CTX/usage.json"
+  settle fallback $rc "$out"; rc=$settled
+else settle main $rc "$out"; rc=$settled
 fi
 [ $rc = 0 ] || usage_note='usage partial' # a killed or failed turn leaves whatever usage file it wrote; its total cannot be trusted
 save_notes
@@ -72,6 +80,7 @@ if [ $rc = 0 ] && [ -n "$problem" ]; then
   printf '%s' "$repair" > "$CTX/prompt-repair.txt"
   rrc=0; turn "$CTX/prompt-repair.txt" "$CTX/usage-repair.json" "$CTX/copilot-repair.out" || rrc=$?
   record repair "$CTX/usage-repair.json"
+  settle repair $rrc "$CTX/copilot-repair.out"; rrc=$settled; save_notes
   [ $rrc = 0 ] || { [ $rrc = 124 ] && echo timeout || echo failed; } > "$CTX/engine-status"
   [ $rrc = 0 ] || { usage_note='usage partial'; save_notes; }
   if check "$CTX/copilot-repair.out" > /dev/null; then echo repaired; else echo repair_failed; fi > "$CTX/engine-repair"
