@@ -5,12 +5,12 @@ on:
   workflow_dispatch:
     inputs:
       repo: { description: "Target repository: owner/name or a github.com URL (a /pull/N URL also sets the PR).", required: true, type: string }
-      pr: { description: "PR number to review. Empty = audit the repository (mode auto).", required: false, type: string }
-      ref: { description: "Branch, tag or SHA to audit (audit mode; empty = the default branch).", required: false, type: string }
-      design_docs: { description: "Requirement / design documents: paths, globs or github.com blob/tree URLs of the target repo, one per line (! excludes). Empty = auto-discovery.", required: false, type: string }
+      pr: { description: "PR number to review. Empty = unit test gap scan of the repository (mode auto).", required: false, type: string }
+      ref: { description: "Branch, tag or SHA to scan (scan mode; empty = the default branch).", required: false, type: string }
+      design_docs: { description: "Design documents (the oracle for the scan): paths, globs or github.com blob/tree URLs of the target repo, one per line (! excludes). Empty = auto-discovery.", required: false, type: string }
       rules_docs: { description: "Coding-standard / rules documents, same format. Empty = auto-discovery.", required: false, type: string }
       test_dirs: { description: "Unit-test folders or globs, same format. Empty = discovery by name and layout.", required: false, type: string }
-      mode: { description: "auto = pr when pr is set, else audit.", required: false, type: choice, default: auto, options: [auto, pr, audit] }
+      mode: { description: "auto = pr when pr is set, else scan (unit test gap scan; audit is accepted as an alias of scan).", required: false, type: choice, default: auto, options: [auto, pr, scan] }
       post_to_pr: { description: "PR mode: also post the review and summary comment to the target PR (needs Pull requests write on the PAT). Off = job summary only.", required: false, type: boolean, default: false }
       model: { description: "Copilot model (empty = Copilot Auto).", required: false, type: string }
       effort: { description: "Reasoning effort (empty | low | medium | high | xhigh | max; ignored with Auto).", required: false, type: string }
@@ -62,7 +62,7 @@ jobs:
         run: |
           row=$(gh api "repos/$REPO/pulls/$PR" --jq '[.head.sha, .base.sha, .state] | @tsv') || { echo "::error::could not read $REPO#$PR (does SPECGUARD_PAT have Pull requests: read on it?)"; exit 1; }
           IFS=$'\t' read -r head base state <<< "$row"
-          [ "$state" = open ] || { echo "::error::$REPO#$PR is $state; SpecGuard reviews open PRs (to review the code, run mode audit with a ref)"; exit 1; }
+          [ "$state" = open ] || { echo "::error::$REPO#$PR is $state; SpecGuard reviews open PRs (to review the code, run mode scan with a ref)"; exit 1; }
           echo "head_sha=$head" >> "$GITHUB_OUTPUT"; echo "base_sha=$base" >> "$GITHUB_OUTPUT"
 
   review:
@@ -81,7 +81,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with: { path: .specguard-src, persist-credentials: false }
-      - id: head # audit mode: the reviewed commit, for source links in the summary
+      - id: head # scan mode: the reviewed commit, for source links in the summary
         shell: bash
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: ./.specguard-src

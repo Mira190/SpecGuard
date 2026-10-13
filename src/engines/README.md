@@ -13,7 +13,7 @@ An engine runs the model for one review. Everything before it (collect, prompt) 
 |---|---|
 | `CTX` | context directory (exists, holds the collector's files). All outputs go here. |
 | `PROMPT_FILE` | the prompt (can be 128 KiB or more: never pass it as an argument or an environment variable). `PROMPT` is accepted for small prompts and written to `$CTX/prompt.txt`. |
-| `CHECK` | `audit` when the run is a requirements audit (validate with `audit-post.js`, schema `audit.schema.json`); empty for a PR review (`post.js`, `findings.schema.json`). |
+| `CHECK` | `audit` when the run is a unit test gap scan (mode scan; validate with `audit-post.js`, schema `audit.schema.json`); empty for a PR review (`post.js`, `findings.schema.json`). |
 | `MODEL`, `EFFORT`, `AUTO_TIER`, `FAST_MODELS` | model choice. Empty `MODEL` means Copilot Auto; effort is never sent with Auto; `AUTO_TIER` only applies to Auto (the CLI needs an explicit `--model auto` for it, so an empty `MODEL` with a tier is sent as `--model auto --auto-tier X`). |
 | `MAX_CREDITS` | soft cap of AI credits per turn. |
 | `TIMEOUT` | minutes for the WHOLE run, install included. |

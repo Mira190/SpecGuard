@@ -138,7 +138,7 @@ test('collect: the cap takes the first blocks in document order across documents
   assert.deepEqual(cands(ctx).map((x) => x[1]), ['docs/design.md:9', 'docs/design.md:10', 'docs/design.md:12', 'docs/design.md:14']);
   const meta = metaOf(ctx);
   assert.deepEqual([meta.candidates, meta.candidates_listed, r.candidates], [10, 4, 10]);
-  assert.deepEqual(meta.cap_left, ['docs/design.md § 2. Window structure: 1 block not audited (cap)', 'docs/design.md § 3. Rules: 2 blocks not audited (cap)', 'docs/design.md § 4. After: 1 block not audited (cap)', 'docs/spec.md § Limits: 2 blocks not audited (cap)']);
+  assert.deepEqual(meta.cap_left, ['docs/design.md § 2. Window structure: 1 block not scanned (cap)', 'docs/design.md § 3. Rules: 2 blocks not scanned (cap)', 'docs/design.md § 4. After: 1 block not scanned (cap)', 'docs/spec.md § Limits: 2 blocks not scanned (cap)']);
 });
 
 test('collect: a candidate file over 60 KB lowers the cap instead of cutting a row, and says so', (t) => {
@@ -152,16 +152,16 @@ test('collect: a candidate file over 60 KB lowers the cap instead of cutting a r
   const meta = metaOf(ctx);
   assert.equal(meta.candidates, 300);
   assert.equal(meta.cap_left[0], `audit-candidates.txt would pass 60 KB: the cap was lowered to ${c.length} blocks`);
-  assert.match(meta.cap_left[1], /^docs\/design\.md § Big design: \d+ blocks not audited \(cap\)$/);
+  assert.match(meta.cap_left[1], /^docs\/design\.md § Big design: \d+ blocks not scanned \(cap\)$/);
 });
 
-test('branchGuard: only the default branch is audited; unknown ref or payload warns and continues', (t) => {
+test('branchGuard: only the default branch is scanned; unknown ref or payload warns and continues', (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-event-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const ev = path.join(dir, 'event.json');
   fs.writeFileSync(ev, JSON.stringify({ repository: { default_branch: 'main' } }));
   assert.deepEqual(branchGuard({ refName: 'main', eventPath: ev }), {});
-  assert.match(branchGuard({ refName: 'feature/x', eventPath: ev }).error, /audits the default branch \(main\); this run is on feature\/x/);
+  assert.match(branchGuard({ refName: 'feature/x', eventPath: ev }).error, /reads the default branch \(main\); this run is on feature\/x/);
   assert.match(branchGuard({ refName: 'main', eventPath: path.join(dir, 'none.json') }).warn, /could not tell/);
   assert.match(branchGuard({ refName: '', eventPath: ev }).warn, /could not tell/);
 });
@@ -174,20 +174,28 @@ test('testLayout: names the directories, file-name patterns and config that exis
   assert.doesNotMatch(l, /test-plan/);
 });
 
-test('CLI: rejects a bad audit_max_requirements and writes the skip output', (t) => {
+test('CLI: rejects a bad audit_max_requirements (deprecated) or scan_max_blocks and writes the skip output', (t) => {
   const { root, ctx } = repo(t, FILES);
   const run = (env) => spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_REF_NAME: '', GITHUB_EVENT_PATH: '', ...env } });
   for (const bad of ['0', '501', 'x', '-3', '8.5']) assert.equal(run({ MAX_REQUIREMENTS: bad }).status, 1, bad);
+  for (const bad of ['0', '501', 'x']) { const r = run({ SCAN_MAX_BLOCKS: bad }); assert.equal(r.status, 1, bad); assert.match(r.stdout, /::error::scan_max_blocks must be an integer from 1 to 500/); }
+  assert.match(run({ MAX_REQUIREMENTS: '0' }).stdout, /::error::audit_max_requirements must be an integer/);
   const out = path.join(root, 'out.txt');
   const ok = run({ MAX_REQUIREMENTS: '80', GITHUB_OUTPUT: out });
   assert.equal(ok.status, 0, ok.stderr);
   assert.equal(fs.readFileSync(out, 'utf8'), 'skip=false\n');
   assert.match(ok.stdout, /::warning::could not tell whether this ref is the default branch/);
+  const cap = (env) => { assert.equal(run(env).status, 0); return JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8')).max_requirements; };
+  assert.equal(cap({ MAX_REQUIREMENTS: '3' }), 3, 'the deprecated name still works alone');
+  assert.equal(cap({ SCAN_MAX_BLOCKS: '7' }), 7);
+  assert.equal(cap({ SCAN_MAX_BLOCKS: '7', MAX_REQUIREMENTS: '3' }), 7, 'scan_max_blocks wins over audit_max_requirements');
+  assert.equal(cap({ SCAN_MAX_BLOCKS: '', MAX_REQUIREMENTS: '3' }), 3, 'an unset (empty) scan_max_blocks falls back to the alias');
+  assert.equal(cap({ SCAN_MAX_BLOCKS: '', MAX_REQUIREMENTS: '' }), 80);
   const ev = path.join(root, 'event.json');
   fs.writeFileSync(ev, JSON.stringify({ repository: { default_branch: 'main' } }));
   const off = run({ GITHUB_REF_NAME: 'dev', GITHUB_EVENT_PATH: ev });
   assert.equal(off.status, 1);
-  assert.match(off.stdout, /::error::mode audit audits the default branch \(main\); this run is on dev/);
+  assert.match(off.stdout, /::error::mode scan reads the default branch \(main\); this run is on dev/);
   assert.equal(run({ GITHUB_REF_NAME: 'main', GITHUB_EVENT_PATH: ev }).status, 0);
   const none = repo(t, { 'a.js': 'x\n' });
   spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: none.root, env: { ...process.env, CTX: none.ctx, GITHUB_REF_NAME: '', GITHUB_OUTPUT: path.join(none.root, 'o.txt') } });

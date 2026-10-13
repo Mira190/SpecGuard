@@ -1,5 +1,5 @@
-// Audit mode, last step (actions/github-script): validates the model's result and every citation against the checked-out HEAD,
-// renders it to the job summary and, with audit_issue, to ONE issue we own. Advisory; never fails the run.
+// Unit test gap scan (mode scan; audit is an alias), last step (actions/github-script): validates the model's result and every citation against the checked-out HEAD,
+// renders it to the job summary and, with scan_issue (deprecated alias audit_issue), to ONE issue we own. Advisory; never fails the run.
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -13,7 +13,8 @@ const STATUS = ['covered', 'partial', 'missing_test', 'not_implemented', 'contra
 const RISK = ['contradicted', 'not_implemented', 'missing_test', 'partial', 'unknown', 'needs_human', 'covered']; // header order: worst first
 const CLASS = ['static', 'unit', 'higher_level', 'human'];
 const LAYER = ['unit', 'component', 'integration', 'e2e'];
-const MARK = '<!-- specguard:audit -->', TITLE = 'SpecGuard requirements audit';
+// MARK (and the state marker) stay 'specguard:audit': an issue created before the rename is still found and updated, not duplicated. TITLE: issue title; HEADING: summary head.
+const MARK = '<!-- specguard:audit -->', TITLE = 'SpecGuard: unit test gap scan', HEADING = 'SpecGuard unit test gap scan';
 const SUMMARY_MAX = 1000000, ISSUE_MAX = 64000; // bytes: job summary 1 MiB; issue body 65536
 const NEAR = 5; // a quote may sit this many lines from the cited one
 const MIN_QUOTE = 12; // non-space characters a quote needs to count as evidence
@@ -204,7 +205,7 @@ const count = (rows, key, values) => values.map((v) => [v, rows.filter((r) => r[
 
 // One status per document block, the stable signal across runs: gap = any sub-row says missing_test/partial/contradicted/not_implemented,
 // covered = all sub-rows covered, unsure = anything else (unknown, needs_human, a mix).
-const GAP = ['missing_test', 'partial', 'contradicted', 'not_implemented'], MAXRUN = 3, // runs only matter up to 2 (confirmed, covered twice); 3 lets an unchanged audit settle so its issue body stops changing
+const GAP = ['missing_test', 'partial', 'contradicted', 'not_implemented'], MAXRUN = 3, // runs only matter up to 2 (confirmed, covered twice); 3 lets an unchanged scan settle so its issue body stops changing
    BSTATE = ['gap', 'covered', 'unsure', 'not_req', 'recheck'];
 const blockStatus = (ss) => (ss.some((s) => GAP.includes(s)) ? 'gap' : ss.every((s) => s === 'covered') ? 'covered' : 'unsure');
 function blocksOf(data) {
@@ -258,7 +259,7 @@ function readState(body) {
 }
 
 // Markdown that fits `max` bytes: header and footer first, then whole table rows while they fit (never cut mid-row).
-// partial: why the audit is incomplete (shown first); prior: readState() of the last full audit; head: this commit; cap: audit_max_requirements.
+// partial: why the scan is incomplete (shown first); prior: readState() of the last full scan; head: this commit; cap: scan_max_blocks.
 function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', failure = '', partial = '', prior = null, head: sha = '', cap = 0, candidates = 0, max = SUMMARY_MAX }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
@@ -289,18 +290,18 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
 
   const by = (pairs) => pairs.map(([v, n]) => `${v} ${n}`).join(' · ') || 'none';
   const docCount = new Set(rows.map((r) => r.source.path)).size;
-  let top = `## ${TITLE}\n\n`;
-  if (partial) top += `> **Partial audit: ${cell(partial, 200)}.** The rows below passed verification but the list may be incomplete. The audit issue, if enabled, was not updated.\n\n`;
+  let top = `## ${HEADING}\n\nBehaviour described in the design documents, checked for unit-test evidence${sha ? ` at \`${cell(sha.slice(0, 7), 12)}\`` : ''}.\n\n`;
+  if (partial) top += `> **Partial scan: ${cell(partial, 200)}.** The rows below passed verification but the list may be incomplete. The scan issue, if enabled, was not updated.\n\n`;
   if (failure) top += `Could not complete: ${cell(failure, 400)}\n\n`;
-  else if (!data) top += 'No requirement documents were found, so nothing was audited.\n\n';
+  else if (!data) top += 'No design documents were found, so nothing was scanned.\n\n';
   else {
     const skipped = data.not_requirements || [], n = new Set(rows.map((r) => cidOf(r.id) || r.id)).size + skipped.length;
     const tally = [['confirmed gap', confirmed.length], ['new gap (unconfirmed)', fresh.length], ['unsure', unsure.length], ['covered', covered.length], ['not a requirement', skipped.length]].filter(([, k]) => k);
     top += `**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${docCount} document${docCount === 1 ? '' : 's'}\n\n`
-      + `${candidates ? `${n} block${n === 1 ? '' : 's'} audited of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${n} block${n === 1 ? '' : 's'} audited`}; ${skipped.length} block${skipped.length === 1 ? ' was' : 's were'} not ${skipped.length === 1 ? 'a requirement' : 'requirements'}.\n\n`
+      + `${candidates ? `${n} block${n === 1 ? '' : 's'} scanned of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${n} block${n === 1 ? '' : 's'} scanned`}; ${skipped.length} block${skipped.length === 1 ? ' was' : 's were'} not ${skipped.length === 1 ? 'a requirement' : 'requirements'}.\n\n`
       + `By block: ${by(tally)}\n\n`
       + (prior ? `A gap is **confirmed** when the block was a gap in this run and in the previous one${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}; one run alone is unconfirmed. \`unsure\` and sub-row detail vary from run to run and are not confirmed.\n\n`
-        : 'This is the first audit run (no earlier result to compare with), so every gap is **unconfirmed**; one more audit run will confirm the ones that persist.\n\n')
+        : 'This is the first scan run (no earlier result to compare with), so every gap is **unconfirmed**; one more scan run will confirm the ones that persist.\n\n')
       + 'The blocks are fixed by the documents (every paragraph, list item and table row, in document order, up to the cap), not chosen by the model: the same commit lists the same blocks. The model only assesses each one; the counts describe that list, not the repository.\n\n';
   }
   top += '> Static review; not coverage; not for scoring people. Tests were not executed: a requirement is `covered` when a cited unit assertion with an independent expected value proves it. `not_implemented` and `missing_test` are model claims (not verified statically): the search that found nothing is not checked. A block is a `gap` when any of its sub-rows is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise. Blocks are identified by a stable id (a hash of the document, heading and block text), so a reworded block shows as removed and new.\n\n';
@@ -343,10 +344,10 @@ function changedSince(prior, blocks) {
   const at = (m) => blocks.filter((b) => b.mark === m);
   const body = sec('Confirmed gaps that appeared', at('confirmed').filter((b) => b.next[3] === 2)) + sec('Resolved (covered in two runs)', at('resolved')) + sec('Resolved? Covered once, recheck next run', at('recheck'));
   const n = blocks.filter((b) => b.was && b.was !== b.status && b.mark !== 'resolved' && b.mark !== 'recheck').length;
-  return `### Changed since last audit${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}\n\n${body || 'No confirmed changes.\n'}${n ? `\nUnstable: ${n} block${n === 1 ? '' : 's'} changed status between the last two runs (not listed).\n` : ''}\n`;
+  return `### Changed since the last scan${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}\n\n${body || 'No confirmed changes.\n'}${n ? `\nUnstable: ${n} block${n === 1 ? '' : 's'} changed status between the last two runs (not listed).\n` : ''}\n`;
 }
 
-// Our audit issue among open and closed issues (marker plus identity); an open one wins.
+// Our scan issue among open and closed issues (marker plus identity); an open one wins.
 async function findIssue({ github, owner, repo, me }) {
   // ponytail: lists every issue; narrow with a label or `creator` if a repo has thousands
   const all = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
@@ -371,9 +372,9 @@ async function main({ github, context, core }) {
   const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
   const cap = meta && meta.max_requirements;
   const cands = readCandidates(readCtx('audit-candidates.txt'));
-  const shared = { docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0 };
+  const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0 };
   const finish = async (md) => { try { await core.summary.addRaw(md).write(); } catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); } };
-  const wantIssue = String(env.AUDIT_ISSUE).toLowerCase() === 'true';
+  const wantIssue = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
   // issue lookup: our open or closed issue and the state it holds; a failure only warns
   let mine = null, prior = null;
   const lookup = async () => {
@@ -382,7 +383,7 @@ async function main({ github, context, core }) {
       const me = await (async () => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } })();
       mine = await findIssue({ github, owner, repo, me });
       prior = mine && readState(mine.body);
-    } catch (e) { core.warning(`SpecGuard: could not write the audit issue (needs permissions: issues: write): ${e.message}`); mine = null; return false; }
+    } catch (e) { core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); mine = null; return false; }
     return true;
   };
   const publish = async (md, state) => {
@@ -391,16 +392,16 @@ async function main({ github, context, core }) {
       const flat = (s) => String(s).replace(/\r\n/g, '\n').trim();
       if (mine) {
         const closed = mine.state === 'closed';
-        if (flat(body) !== flat(mine.body) || closed) await github.rest.issues.update({ owner, repo, issue_number: mine.number, title: TITLE, body, ...(closed ? { state: 'open' } : {}) });
+        if (flat(body) !== flat(mine.body) || mine.title !== TITLE || closed) await github.rest.issues.update({ owner, repo, issue_number: mine.number, title: TITLE, body, ...(closed ? { state: 'open' } : {}) });
       } else await github.rest.issues.create({ owner, repo, title: TITLE, body });
-    } catch (e) { core.warning(`SpecGuard: could not write the audit issue (needs permissions: issues: write): ${e.message}`); }
+    } catch (e) { core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); }
   };
   const room = (state) => ISSUE_MAX - bytes(MARK) - bytes(state) - 4;
 
   if (!meta) return finish(render({ ...shared, failure: 'the collection step did not produce its context.' }));
   if (env.SKIP === 'true') {
     await finish(render({ ...shared, data: null }));
-    // no document admitted: a stale issue must not keep claiming old results (none is created for an empty audit)
+    // no document admitted: a stale issue must not keep claiming old results (none is created for an empty scan)
     if (wantIssue && await lookup() && mine) {
       const keep = prior ? priorState(prior) : '';
       await publish(render({ ...shared, data: null, max: room(keep) }), keep);
@@ -418,14 +419,14 @@ async function main({ github, context, core }) {
   const checked = verify(data, { tracked: trackedFiles(process.env.GITHUB_WORKSPACE || process.cwd()), docs: new Set(docs.map(([p]) => p)), cands });
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
-  await finish(render({ ...shared, data: checked, partial, prior, head: meta.head }));
+  await finish(render({ ...shared, data: checked, partial, prior }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
   const state = stateComment(meta.head, checked, prior);
-  await publish(render({ ...shared, data: checked, prior, head: meta.head, max: room(state) }), state);
+  await publish(render({ ...shared, data: checked, prior, max: room(state) }), state);
 }
 
 // Never fails the run: any error here is a warning.
 module.exports = async (args) => {
-  try { await main(args); } catch (e) { try { args.core.warning(`SpecGuard: audit report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
+  try { await main(args); } catch (e) { try { args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { readCandidates, validate, verify, render, gap, readState, stateComment, blocksOf, track, STATUS, CLASS, MARK, TITLE });
+Object.assign(module.exports, { readCandidates, validate, verify, render, gap, readState, stateComment, blocksOf, track, STATUS, CLASS, MARK, TITLE, HEADING });

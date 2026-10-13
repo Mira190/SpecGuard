@@ -151,7 +151,7 @@ Reminder: output only the JSON object matching the schema.\n`;
   return out;
 }
 
-// Audit mode (no diff): the same untrusted-data framing around the admitted documents, rule files and test layout the collector wrote.
+// Unit test gap scan, mode scan or its alias audit (no diff): the same untrusted-data framing around the admitted documents, rule files and test layout the collector wrote.
 function assembleAudit({ skillDir, ctxDir, schemaPath }) {
   const skill = lf(fs.readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).split('\n');
   const close = skill.findIndex((l, i) => i > 0 && l === '---');
@@ -185,11 +185,11 @@ Reminder: output only the JSON object matching the schema.
 function main(argv) {
   const { values: o } = require('node:util').parseArgs({ args: argv, options: {
     skill: { type: 'string' }, ctx: { type: 'string' }, schema: { type: 'string' }, mode: { type: 'string', default: 'pr' } } });
-  if (!o.skill || !o.ctx || !o.schema || !['pr', 'audit'].includes(o.mode)) {
-    console.error('Usage: node src/prompt.js --skill <dir> --ctx <dir> --schema <file> [--mode pr|audit]');
+  if (!o.skill || !o.ctx || !o.schema || !['pr', 'scan', 'audit'].includes(o.mode)) {
+    console.error('Usage: node src/prompt.js --skill <dir> --ctx <dir> --schema <file> [--mode pr|scan]');
     return 2;
   }
-  process.stdout.write((o.mode === 'audit' ? assembleAudit : assemble)({ skillDir: o.skill, ctxDir: o.ctx, schemaPath: o.schema }));
+  process.stdout.write((o.mode !== 'pr' ? assembleAudit : assemble)({ skillDir: o.skill, ctxDir: o.ctx, schemaPath: o.schema }));
   return 0;
 }
 

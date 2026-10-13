@@ -27,9 +27,11 @@ inputs:
   resolve_stale: { description: "true to resolve SpecGuard's own unreplied review threads whose finding is no longer reported.", default: "true" }
   force: { description: "true to review again although this head SHA already has a SpecGuard summary.", default: "false" }
   ctx_retention_days: { description: "Days to keep the specguard-ctx debug artifact (diff, prompt context, raw engine output; repo readers can download it). 0 disables the upload.", default: "1" }
-  mode: { description: "pr (review a pull request) | audit (audit the checked-out repository against its requirement documents; run it on the default branch, on demand or on a schedule).", default: pr }
-  audit_max_requirements: { description: "Audit mode: most document blocks audited per run, taken in document order; the rest are listed under not reviewed (integer 1-500).", default: "80" }
-  audit_issue: { description: "Audit mode: true to also create or update one issue titled 'SpecGuard requirements audit' (needs issues write).", default: "false" }
+  mode: { description: "pr (review a pull request) | scan (unit test gap scan: find behaviour in the design documents of the checked-out repository that lacks unit-test evidence; run it on the default branch, on demand or on a schedule). audit is accepted as an alias of scan.", default: pr }
+  scan_max_blocks: { description: "Scan mode: most document blocks scanned per run, taken in document order; the rest are listed under not reviewed (integer 1-500; empty = 80).", default: "" }
+  scan_issue: { description: "Scan mode: true to also create or update one issue titled 'SpecGuard: unit test gap scan' (needs issues write; empty = false).", default: "" }
+  audit_max_requirements: { description: "Deprecated alias of scan_max_blocks (scan_max_blocks wins when both are set).", default: "" }
+  audit_issue: { description: "Deprecated alias of scan_issue (scan_issue wins when both are set).", default: "" }
   delivery: { description: "pr (post the review and the summary comment to the PR) | summary (job summary only; nothing is written to the PR). For runs that review another repository (.github/workflows/specguard-run.yml).", default: pr }
   repository: { description: "owner/name of the repository under review when the checkout is not the workflow's own repository (manual runs). Empty = the workflow's repository.", default: "" }
   pr_number: { description: "PR number to review when the run is not a pull_request event (manual runs). Empty = the event's PR.", default: "" }
@@ -53,14 +55,16 @@ runs:
         fi
 
     - name: Check mode
+      id: mode
       shell: bash
       env:
         MODE: ${{ inputs.mode }}
         EVENT: ${{ github.event_name }}
       run: |
-        case "$MODE" in pr|audit) ;; *) echo "::error::mode must be pr or audit"; exit 1 ;; esac
-        # audit trusts the checked-out docs as requirements: never a PR head
-        [ "$MODE" != audit ] || case "$EVENT" in pull_request*) echo "::error::mode audit runs on workflow_dispatch or schedule, not on pull_request"; exit 1 ;; esac
+        case "$MODE" in pr) m=pr ;; scan|audit) m=scan ;; *) echo "::error::mode must be pr or scan (audit is an alias of scan)"; exit 1 ;; esac
+        echo "mode=$m" >> "$GITHUB_OUTPUT" # the canonical name: later steps test this, never inputs.mode
+        # scan trusts the checked-out docs as the oracle: never a PR head
+        [ "$m" != scan ] || case "$EVENT" in pull_request*) echo "::error::mode scan runs on workflow_dispatch or schedule, not on pull_request"; exit 1 ;; esac
 
     # Closed PR, bot author or an already-reviewed head: skip before any model tokens are spent; the job stays green.
     - id: preflight
@@ -93,9 +97,9 @@ runs:
         TRACE: ${{ inputs.trace }}
       run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
-    # Audit mode: requirement documents, rule files and test layout at the checked-out HEAD (src/audit-collect.js).
+    # Scan mode: design documents, rule files and test layout at the checked-out HEAD (src/audit-collect.js).
     - id: audit_collect
-      if: inputs.mode == 'audit'
+      if: steps.mode.outputs.mode == 'scan'
       shell: bash
       env:
         CTX: ${{ github.workspace }}/.specguard-ctx
@@ -103,17 +107,18 @@ runs:
         REQ_PATHS: ${{ inputs.requirements_paths }}
         STANDARDS_PATHS: ${{ inputs.standards_paths }}
         TEST_PATHS: ${{ inputs.test_paths }}
-        MAX_REQUIREMENTS: ${{ inputs.audit_max_requirements }}
+        SCAN_MAX_BLOCKS: ${{ inputs.scan_max_blocks }}
+        MAX_REQUIREMENTS: ${{ inputs.audit_max_requirements }} # deprecated alias; the new name wins
         AUDIT_BRANCH_GUARD: ${{ inputs.repository && inputs.repository != github.repository && 'off' || 'on' }} # the guard compares this workflow's ref; another repository is not on it
       run: node "$GITHUB_ACTION_PATH/src/audit-collect.js"
 
-    - if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
+    - if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: 22
 
     - id: engine
-      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
+      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
         ENGINE: ${{ inputs.engine }}
@@ -131,14 +136,14 @@ runs:
 
     # The engine step never fails the job: post reports "could not complete" instead. Config errors above fail loudly.
     - name: Run the review engine
-      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
+      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
         ENGINE: ${{ steps.engine.outputs.engine }}
         COPILOT_GITHUB_TOKEN: ${{ inputs.copilot_token }}
         GITHUB_TOKEN: ${{ github.token }}
-        MODE: ${{ inputs.mode }}
-        CHECK: ${{ inputs.mode == 'audit' && 'audit' || '' }}
+        MODE: ${{ steps.mode.outputs.mode }}
+        CHECK: ${{ steps.mode.outputs.mode == 'scan' && 'audit' || '' }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         COPILOT_VERSION: ${{ inputs.copilot_version }}
         SDK_VERSION: ${{ inputs.copilot_sdk_version }}
@@ -149,7 +154,7 @@ runs:
         MAX_CREDITS: ${{ inputs.copilot_max_ai_credits }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
-        if [ "$MODE" = audit ]; then skill="$GITHUB_ACTION_PATH/skills/spec-audit"; schema_file="$GITHUB_ACTION_PATH/src/audit.schema.json"
+        if [ "$MODE" = scan ]; then skill="$GITHUB_ACTION_PATH/skills/spec-audit"; schema_file="$GITHUB_ACTION_PATH/src/audit.schema.json"
         else skill="$GITHUB_ACTION_PATH/skills/test-review"; schema_file="$GITHUB_ACTION_PATH/src/findings.schema.json"; fi
         # the model can only read the workspace, so inline the skill, the references that can matter and the per-PR context (src/prompt.js)
         # a file, handed to the engine: the prompt is too big for one argument or environment variable (128 KiB on Linux)
@@ -196,8 +201,8 @@ runs:
         if-no-files-found: ignore
         include-hidden-files: true # the ctx dir is a dot-directory, which upload-artifact skips by default
 
-    # Audit mode: validate citations at HEAD, write the job summary (and with audit_issue the one audit issue), keep audit.json in the artifact.
-    - if: ${{ !cancelled() && inputs.mode == 'audit' }}
+    # Scan mode: validate citations at HEAD, write the job summary (and with scan_issue the one scan issue), keep audit.json in the artifact.
+    - if: ${{ !cancelled() && steps.mode.outputs.mode == 'scan' }}
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
@@ -205,7 +210,8 @@ runs:
         ENGINE: ${{ steps.engine.outputs.engine }}
         MODEL: ${{ inputs.model }}
         SKIP: ${{ steps.audit_collect.outputs.skip }}
-        AUDIT_ISSUE: ${{ inputs.audit_issue }}
+        SCAN_ISSUE: ${{ inputs.scan_issue }}
+        AUDIT_ISSUE: ${{ inputs.audit_issue }} # deprecated alias; the new name wins
         TARGET_REPO: ${{ inputs.repository }}
         TARGET_SHA: ${{ inputs.head_sha }}
       with:
@@ -215,7 +221,7 @@ runs:
           const env = process.env
           await require(env.ACTION_PATH + '/src/audit-post.js')({ github, context: require(env.ACTION_PATH + '/src/target.js').withTarget(context, env), core })
 
-    - if: ${{ !cancelled() && inputs.mode == 'audit' && inputs.ctx_retention_days != '0' }}
+    - if: ${{ !cancelled() && steps.mode.outputs.mode == 'scan' && inputs.ctx_retention_days != '0' }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: specguard-audit-${{ github.run_attempt }}

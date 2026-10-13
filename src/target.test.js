@@ -59,7 +59,7 @@ test('action.yml wires the manual-run overrides and test_paths without changing 
   for (const re of [
     /^ {2}test_paths: /m, /^ {2}delivery: \{[^}]*default: pr \}/m, /^ {2}repository: \{[^}]*default: ""/m, /^ {2}pr_number: \{[^}]*default: ""/m,
     /TEST_PATHS: \$\{\{ inputs\.test_paths \}\}\n {8}TRACE:/, // collect
-    /TEST_PATHS: \$\{\{ inputs\.test_paths \}\}\n {8}MAX_REQUIREMENTS:/, // audit collect
+    /TEST_PATHS: \$\{\{ inputs\.test_paths \}\}\n {8}SCAN_MAX_BLOCKS:/, // scan collect
     /AUDIT_BRANCH_GUARD: \$\{\{ inputs\.repository && inputs\.repository != github\.repository && 'off' \|\| 'on' \}\}/,
     /GH_REPO: \$\{\{ inputs\.repository \|\| github\.repository \}\}/,
     /PR_NUMBER: \$\{\{ inputs\.pr_number \|\| github\.event\.pull_request\.number \}\}/,

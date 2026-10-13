@@ -60,6 +60,7 @@ What this does not show:
 - **QA happens in the PR action, on every push.** Incremental review and trigger tuning are deferred.
 - **Pilot repo:** Kite (private, Electron/React/TypeScript), Copilot engine on a personal repo.
 - **The summary follows the goal order** (2026-10-13): verdict, unit test gaps, requirements, coding standards, test layers, not reviewed; traceability, obligations, drift and sources are collapsed reference material. Traceability and audit are means: they reach the author only as a requirement row or a spec_mismatch finding.
+- **Repository-wide mode renamed** (2026-10-13): "audit" / "requirements audit" became the "unit test gap scan" (`mode: scan`, `audit` kept as an alias; inputs `scan_issue` / `scan_max_blocks`, the `audit_*` names deprecated). SpecGuard is a shift-left unit test tool: the design docs are the oracle, the output is unit test gaps. File names, the issue marker and the artifact name are unchanged.
 
 ---
 
