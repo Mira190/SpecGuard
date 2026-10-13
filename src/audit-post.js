@@ -9,7 +9,7 @@ const { ours } = require('./preflight');
 // trace.js's test-path rule; the fallback is a local copy of it in case the export moves (ponytail: keep in sync).
 const { isTestPath = (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/.test(p) } = require('./trace');
 
-const { neutralize, quoteLine, safeRel, readFile, usageLine, mergeUsage } = post;
+const { neutralize, quoteLine, safeRel, readFile, usageLine, runLine, mergeUsage } = post;
 const STATUS = ['covered', 'partial', 'missing_test', 'not_implemented', 'contradicted', 'unknown', 'needs_human'];
 const RISK = ['contradicted', 'not_implemented', 'missing_test', 'partial', 'unknown', 'needs_human', 'covered']; // header order: worst first
 const CLASS = ['static', 'unit', 'higher_level', 'human'];
@@ -155,7 +155,7 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 // A requirement whose own citation fails goes to not_reviewed; failed code/test citations are removed and the status downgraded to unknown when the rest cannot carry it.
 // A quote under MIN_QUOTE non-space characters, a test outside a test path, or code that is a document or a test file does not count as evidence.
 // The row id is the block cid (cid.N for a bundled block), the heading comes from the candidate, and rows keep document order. A block the model
-// skipped, or whose rows all failed verification, becomes an `unknown` row ("not assessed"); not_requirements gains the block's location and text.
+// skipped, or whose rows all failed verification, becomes an `unknown` row ("unconfirmed"); not_requirements gains the block's location and text.
 // docs: the admitted documents (null = any); cands: the candidate blocks (Map from readCandidates; null = unknown).
 function verify(data, { read = readFile, tracked = null, docs = null, cands = null } = {}) {
   const cache = new Map();
@@ -202,7 +202,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
       if (kept.has(c.cid) || skipped.has(c.cid)) continue;
       const quote = String((file(c.path) || [])[c.line - 1] || c.text).trim().slice(0, 200);
       out.requirements.push({ id: c.cid, text: oneLine(c.text, 200), source: { path: c.path, line: c.line, quote }, heading: c.heading, class: 'human', status: 'unknown', code: [], tests: [],
-        note: failed.has(c.cid) ? "Not assessed: the model's citation for this block did not verify." : 'Not assessed by the model.' });
+        note: failed.has(c.cid) ? "Unconfirmed: the model's citation for this block did not verify." : 'Unconfirmed: the model did not assess this block.' });
     }
     const at = new Map([...cands.keys()].map((k, i) => [k, i])), pos = (id) => at.get(cidOf(id)) ?? Infinity;
     out.requirements.sort((a, b) => pos(a.id) - pos(b.id)); // stable: a block's .1, .2 rows keep the model's order
@@ -295,7 +295,7 @@ function readState(body) {
 // partial: why the scan is incomplete (shown first); prior: readState() of the last full scan; head: this commit; cap: scan_max_blocks.
 // carried: prior blocks this run did not audit ({ cid, path, line, text, status, since, runs, at }); they keep their status in the tables, marked "from <date>".
 // rotation / search (evidence candidates): audit-meta.json's; scope: the scan_paths lines; stateDropped: carried blocks that no longer fit the state.
-function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', failure = '', partial = '', prior = null, head: sha = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
+function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', run = '', failure = '', partial = '', prior = null, head: sha = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
   carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [] }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
@@ -390,9 +390,9 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   // blocks the collector's prefilter dropped (audit-ruled.txt): data and status, not behaviour; never sent to the model, so not part of the counts above
   if (ruled.length) dfoot += `**${ruled.length} block${ruled.length === 1 ? ' was' : 's were'} skipped by rule**\n\n${items(ruled, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(skipped by rule: ${cell(n.reason, 80)})\n`)}\n`;
   if (nrAll.length && !visibleNr) dfoot += `**Not reviewed (${plural(nrAll.length, 'item')})**\n\n${items(nrAll, 40, (s) => `- ${cell(s, 400)}\n`)}\n`;
-  const dusage = usage ? `${usage}\n` : '';
+  const drun = run ? `${run}\n` : '', tail = usage ? `\n${usage}\n` : ''; // the cost line is the last visible line, outside Details (a failed scan spent money too)
 
-  let room = max - bytes(top) - bytes(visibleNr) - 700, omitted = 0; // the visible tables come first
+  let room = max - bytes(top) - bytes(visibleNr) - bytes(tail) - 700, omitted = 0; // the visible tables come first
   const take = (title, rs, end = '') => { // whole rows while they fit
     const kept = [];
     let used = bytes(title) + bytes(end) + 1;
@@ -408,8 +408,8 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   body += vis('❌ Confirmed gaps', confirmed.map(grow), GTOP);
   body += vis(prior ? '❔ New since the last scan' : '❔ New gaps to confirm', fresh.map(grow), GTOP);
   body += clashes.length ? take(`### ❌ Documents and code disagree (${clashes.length})\n\nA model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Document says | Code says |\n|---|---|\n`, clashes.slice(0, CAP), clashes.length > CAP ? `\n+${clashes.length - CAP} more in Details.\n` : '') : '';
-  // Details: the usage line is reserved, then the fixed text while it fits, then the tables with what is left
-  room -= bytes(dusage);
+  // Details: the run line is reserved, then the fixed text while it fits, then the tables with what is left
+  room -= bytes(drun);
   const fit = (t) => { if (!t || bytes(t) > room) return ''; room -= bytes(t); return t; };
   const dh = fit(dhead), df = fit(dfoot);
   const more = (title, rs, head) => (rs.length > CAP ? take(`**${title} (${rs.length - CAP} more)**\n\n${head}`, rs.slice(CAP), '') : '');
@@ -417,9 +417,9 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const fold = (s, bs) => take(`**${s} (${bs.length})**\n\n${BTOP}`, bs.map(bline), '');
   det += fold('Unsure', unsure) + fold('Covered', covered);
   for (const g of evid) det += take(`**Sub-row evidence: ${cell(g.path, 200).replace(/[<>&]/g, '')} (${g.rows.length} row${g.rows.length === 1 ? '' : 's'})**\n\n| Requirement | Status | Class | Evidence |\n|---|---|---|---|\n`, g.rows, '');
-  const details = dh || det || df || dusage ?`<details><summary>${failure ? 'Details: run information' : 'Details: changed since last scan, evidence per block, skipped blocks, coverage of rotation, sources'}</summary>\n\n${dh}${det}${df}${dusage}\n</details>\n` : '';
+  const details = dh || det || df || drun ? `<details><summary>${failure ? 'Details: run information' : 'Details: changed since last scan, evidence per block, skipped blocks, coverage of rotation, sources'}</summary>\n\n${dh}${det}${df}${drun}\n</details>\n` : '';
   const omit = omitted ? `\n_${omitted} row${omitted === 1 ? '' : 's'} omitted: the report exceeded the size limit; \`audit.json\` in the run artifact has them all._\n` : '';
-  return top + visibleNr + body + omit + details;
+  return top + visibleNr + body + omit + details + tail;
 }
 
 // Only 2-run-stable changes are listed (confirmed gaps that appeared or resolved); status churn between the last two runs is counted, not listed.
@@ -457,7 +457,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   usage = mergeUsage(usage, json('usage-repair.json')); // copilot repair turn, claude finalize turn
   const repair = (readCtx('engine-repair') || '').trim();
   const notes = [...lines(readCtx('engine-notes')).map((x) => x.trim()).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])];
-  const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
+  const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '', runHtml = engine ? runLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
   const cap = meta && meta.max_requirements;
   const cands = readCandidates(readCtx('audit-candidates.txt'));
   let wantIssue = wantsIssue(env);
@@ -466,7 +466,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   if (env.ISSUE_REPO && !ir && wantIssue) { wantIssue = false; core.warning('SpecGuard: scan_issue_repo is not owner/name; no scan issue is written'); }
   const igh = issueGithub || github, issueRepo = away ? { owner: ir[1], repo: ir[2] } : { owner, repo };
   const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
-  const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0,
+  const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, run: runHtml, cap, candidates: (meta && meta.candidates) || 0,
     ruled, rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   const outcome = (status, reason = '') => { core.setOutput?.('status', status); if (reason) core.setOutput?.('reason', reason); }; // the action's `status` output (fail_on_error)
   const finish = async (md) => { try { await core.summary.addRaw(md).write(); } catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); } };
