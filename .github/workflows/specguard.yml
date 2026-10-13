@@ -1,4 +1,4 @@
-name: SpecGuard (reusable)
+name: "SpecGuard reusable (called from target repos; no Run button here, use SpecGuard manual run)"
 # Reusable workflow (on: workflow_call): runs SpecGuard against the CALLER's repository with the caller's GITHUB_TOKEN (repository access never needs a PAT). The caller writes ~10 lines (README: "Enterprise setup").
 # Copilot: pass the optional secret copilot_token (user-owned fine-grained PAT, Copilot Requests; billed to that user's seat) with `secrets: { copilot_token: ${{ secrets.SPECGUARD_COPILOT_TOKEN }} }`
 # or `secrets: inherit` (then a caller secret named SPECGUARD_COPILOT_TOKEN is read). Without it Copilot runs on the job token, which needs the org policy "Allow use of Copilot CLI billed to the organization".

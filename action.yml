@@ -38,6 +38,7 @@ inputs:
   audit_max_requirements: { description: "Deprecated alias of scan_max_blocks (scan_max_blocks wins when both are set).", default: "" }
   audit_issue: { description: "Deprecated alias of scan_issue (scan_issue wins when both are set).", default: "" }
   delivery: { description: "pr (post the review and the summary comment to the PR) | summary (job summary only; nothing is written to the PR). For runs that review another repository (.github/workflows/specguard-run.yml).", default: pr }
+  fail_on_error: { description: "true to fail the job when SpecGuard could not complete (status failed: engine error, quota, timeout, unusable output); an incomplete result only warns. Default false: SpecGuard is advisory and never fails a PR check. Manual runs set it.", default: "false" }
   repository: { description: "owner/name of the repository under review when the checkout is not the workflow's own repository (manual runs). Empty = the workflow's repository.", default: "" }
   pr_number: { description: "PR number to review when the run is not a pull_request event (manual runs). Empty = the event's PR.", default: "" }
   base_sha: { description: "Base commit of that PR (with pr_number). Empty = the event's.", default: "" }
@@ -45,7 +46,7 @@ inputs:
 
 outputs:
   skip: { description: "true when nothing reviewable changed", value: "${{ steps.preflight.outputs.skip == 'true' && 'true' || steps.collect.outputs.skip }}" }
-  status: { description: "complete | incomplete | failed for the PR review; empty when skipped", value: "${{ steps.post.outputs.status }}" }
+  status: { description: "complete | incomplete | failed (PR review and scan); empty when skipped", value: "${{ steps.post.outputs.status || steps.scan_post.outputs.status }}" }
   partial: { description: "true when the diff was truncated", value: "${{ steps.collect.outputs.partial }}" }
   superseded: { description: "true when a newer commit was pushed (or the PR closed) before the model was called; the review was skipped and no AI credits were spent", value: "${{ steps.superseded.outputs.superseded }}" }
 
@@ -235,7 +236,8 @@ runs:
         include-hidden-files: true # the ctx dir is a dot-directory, which upload-artifact skips by default
 
     # Scan mode: validate citations at HEAD, write the job summary (and with scan_issue the one scan issue), keep audit.json in the artifact.
-    - if: ${{ !cancelled() && steps.mode.outputs.mode == 'scan' }}
+    - id: scan_post
+      if: ${{ !cancelled() && steps.mode.outputs.mode == 'scan' }}
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
@@ -266,3 +268,11 @@ runs:
         retention-days: ${{ inputs.ctx_retention_days }}
         if-no-files-found: ignore
         include-hidden-files: true
+
+    # fail_on_error: a manual run that could not complete must not look green (the steps above never fail the job).
+    - if: ${{ !cancelled() && inputs.fail_on_error == 'true' }}
+      shell: bash
+      env:
+        STATUS: ${{ steps.post.outputs.status || steps.scan_post.outputs.status }}
+        REASON: ${{ steps.post.outputs.reason || steps.scan_post.outputs.reason }}
+      run: node "$GITHUB_ACTION_PATH/src/fail-on-error.js"

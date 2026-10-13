@@ -565,6 +565,11 @@ function traceTable(data, blob, specFiles = [], covById = new Map(data.coverage.
 
 const MAX_ROWS = 30;
 // Files the collector left out of the diff (diff-dropped.txt, one path per line).
+// Complete run: one line, the list inside. The text is one string (model text plus the notes the publisher appends), so an item is a sentence.
+const notReviewedLine = (text) => {
+  const n = String(text).split(/(?<=[.;])\s+/).filter((x) => x.trim()).length;
+  return `<details><summary>Not reviewed: ${n} item${n === 1 ? '' : 's'}</summary>\n\n${neutralize(text)}\n\n</details>\n\n`;
+};
 const notReviewed = (paths) => `Not reviewed (diff over max_diff_kb): ${paths.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${paths.length > 10 ? `, … (+${paths.length - 10} more)` : ''}`;
 // Large PR (src/focus.js): the files outside the focused review, riskiest first, as focus-skipped.txt lists them.
 const focusNote = (n, of, paths) => `Large PR: focused review of ${n} of ${of} files (highest risk first); not reviewed: ${paths.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${paths.length > 10 ? `, … (+${paths.length - 10} more)` : ''}`;
@@ -635,8 +640,10 @@ function sourcesRead({ reqDocs = [], standards = [], trace, head, base, rejected
   const one = (x) => (typeof x === 'string' ? `\`${cell(x)}\`` : `\`${cell(x.path)}\`${Number.isInteger(x.bytes) ? ` (${x.bytes} bytes, ${x.lines} lines${x.truncated ? '; truncated in prompt' : ''})` : x.truncated ? ' (truncated in prompt)' : ''}`);
   const list = (a) => (a.length ? a.slice(0, 15).map(one).join(', ') + (a.length > 15 ? `, +${a.length - 15} more` : '') : 'none');
   // candidate documents the collector looked at and did not admit as requirements: [path, reason]
-  const rej = rejected.slice(0, 10).map(([p, why]) => `- Considered, not admitted: \`${cell(p)}\` — ${cell(why)} (add to \`requirements_paths\` to include)\n`).join('') + (rejected.length > 10 ? `- +${rejected.length - 10} more considered, not admitted\n` : '');
-  return `<details><summary>Sources read</summary>\n\n- Requirement documents: ${list(reqDocs)}\n- Standards files: ${list(standards)}\n- Trace: ${cell(trace)}\n${rej}- Commits: head \`${cell(String(head).slice(0, 7))}\`, base \`${cell(String(base).slice(0, 7))}\`\n\n</details>\n`;
+  // one line in the list; the candidates themselves sit in a nested collapsed block
+  const n = rejected.length, rej = n ? `- ${n} candidate document${n === 1 ? ' was' : 's were'} not admitted (add to \`requirements_paths\` to include)\n` : '';
+  const nested = n ? `\n<details><summary>Candidates not admitted</summary>\n\n${rejected.slice(0, 10).map(([p, why]) => `- \`${cell(p)}\` — ${cell(why)}\n`).join('')}${n > 10 ? `- +${n - 10} more\n` : ''}\n</details>\n` : '';
+  return `<details><summary>Sources read</summary>\n\n- Requirement documents: ${list(reqDocs)}\n- Standards files: ${list(standards)}\n- Trace: ${cell(trace)}\n${rej}- Commits: head \`${cell(String(head).slice(0, 7))}\`, base \`${cell(String(base).slice(0, 7))}\`\n${nested}\n</details>\n`;
 }
 // One compact result line for a finding: where it is, what it is, why, linked to its inline comment when posted (else to the blob line).
 const sentence = (s) => { const t = neutralize(String(s)).replace(/```[\s\S]*?```/g, ' ').replace(/\s+/g, ' ').trim(); return oneLine((/^.*?[.!?](?=\s|$)/.exec(t) || [t])[0], 200); };
@@ -711,7 +718,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     g = '### Test layers\n\n';
     add(`**Test layers: ${cell(data.layering.status)}.** ${cell(data.layering.reason)}\n\n`, of(['pushdown']), '\n');
     g = '';
-    if (data.not_reviewed) add(`**Not reviewed:** ${neutralize(data.not_reviewed)}\n\n`);
+    if (data.not_reviewed) add(incomplete.length ? `**Not reviewed:** ${neutralize(data.not_reviewed)}\n\n` : notReviewedLine(data.not_reviewed)); // a complete run: coverage is not in doubt, so the list is collapsed
   } else if (tooling) {
     g = '### Coding standards\n\n';
     toolingAdd();
@@ -1226,7 +1233,7 @@ async function run({ github, context, core }) {
     const nano = fin(usage?.totalNanoAiu), ms = fin(em?.ms) ?? fin(usage?.totalApiDurationMs), runs = parseInt(env.GITHUB_RUN_ATTEMPT, 10), ev = context.eventName || env.GITHUB_EVENT_NAME;
     return { ...(runs > 0 && { runs }), ...(ms !== undefined && { ms }), ...(nano !== undefined && { nanoAiu: nano, credits: nano / 1e9 }), model: used.join(', ') || model || undefined, mode: 'pr', delivery: summaryOnly ? 'summary' : 'pr', ...(ev && { event: ev }) };
   };
-  const failed = (why) => publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes: notes.filter((n) => !n.startsWith(why)), partial, dropped, state: 'failed', used, tier }), 'failed');
+  const failed = (why) => (core.setOutput?.('reason', why), publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes: notes.filter((n) => !n.startsWith(why)), partial, dropped, state: 'failed', used, tier }), 'failed'));
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();

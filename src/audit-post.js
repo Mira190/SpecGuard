@@ -307,7 +307,6 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   // carried blocks: the previous status, no sub-rows; a pending recheck stays pending; blocks that were not requirements are only counted
   const old = carried.filter((p) => p.status !== 'not_req').map((p) => ({ cid: p.cid, path: p.path, line: p.line, text: p.text, rows: [], carried: true, at: p.at, next: [p.cid, p.status, p.since, p.runs],
     status: p.status === 'recheck' ? 'covered' : p.status, mark: p.status === 'recheck' ? 'recheck' : p.status === 'gap' ? (p.runs >= 2 ? 'confirmed' : 'new') : '' }));
-  const oldNotReq = carried.length - old.length;
   const name = (r) => `${link(r.source.path, r.source.line, r.id)}`;
   const evidence = (r) => [r.code.length ? `code: ${r.code.map(at).join('; ')}` : '', r.tests.length ? `tests: ${r.tests.map((t) => `${t.layer} ${at(t)}`).join('; ')}` : ''].filter(Boolean).join('<br>');
   const first = (r) => `${name(r)} ${cell(r.text, 300)}${r.note ? `<br><sub>${cell(r.note, 300)}</sub>` : ''}`;
@@ -344,9 +343,9 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   else if (!data) top += 'No design documents were found, so nothing was scanned.\n\n';
   else {
     const skipped = data.not_requirements || [], n = new Set(rows.map((r) => cidOf(r.id) || r.id)).size + skipped.length;
-    const tally = [['confirmed gap', confirmed.length], ['new gap (unconfirmed)', fresh.length], ['unsure', unsure.length], ['covered', covered.length], ['not a requirement', skipped.length + oldNotReq]].filter(([, k]) => k);
+    const tally = [['confirmed gap', confirmed.length], ['new gap (unconfirmed)', fresh.length], ['unsure', unsure.length], ['covered', covered.length]].filter(([, k]) => k);
     top += `**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${docCount} document${docCount === 1 ? '' : 's'}\n\n`
-      + `${rotation ? `${n} block${n === 1 ? '' : 's'} audited this run` : candidates ? `${n} block${n === 1 ? '' : 's'} scanned of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${n} block${n === 1 ? '' : 's'} scanned`}; ${skipped.length} block${skipped.length === 1 ? ' was' : 's were'} not ${skipped.length === 1 ? 'a requirement' : 'requirements'}.\n\n`
+      + `${rotation ? `${n} block${n === 1 ? '' : 's'} audited this run` : candidates ? `${n} block${n === 1 ? '' : 's'} scanned of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${n} block${n === 1 ? '' : 's'} scanned`}.\n\n`
       + coverage()
       + `By block: ${by(tally)}\n\n`
       + (prior ? `A gap is **confirmed** when the block was a gap in this run and ${rotation && rotation.rotate ? 'the last time it was audited' : 'in the previous one'}${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}; one run alone is unconfirmed. \`unsure\` and sub-row detail vary from run to run and are not confirmed.\n\n`
@@ -358,14 +357,22 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
 
   const list = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
   let foot = '';
-  if (rejected.length) foot += `### Documents not included\n\nThese looked like requirement documents but were not admitted (add them to \`requirements_paths\` to include):\n\n${list(rejected, 20, ([p, why]) => `- \`${cell(p, 200)}\`: ${cell(why, 200)}\n`)}\n`;
+  // what was read and what was not admitted: reference material, collapsed (a candidate document is not something the reader acts on)
+  if (docs.length || rejected.length) {
+    const k = rejected.length;
+    const read = docs.length ? `- Requirement documents: ${docs.slice(0, 15).map(([p, how]) => `\`${cell(p, 200)}\`${how ? ` (${cell(how, 40)})` : ''}`).join(', ')}${docs.length > 15 ? `, +${docs.length - 15} more` : ''}\n` : '';
+    const nope = k ? `- ${k} candidate document${k === 1 ? ' was' : 's were'} not admitted (add to \`requirements_paths\` to include)\n\n<details><summary>Candidates not admitted</summary>\n\n${list(rejected, 20, ([p, why]) => `- \`${cell(p, 200)}\`: ${cell(why, 200)}\n`)}\n</details>\n` : '';
+    foot += `<details><summary>Sources</summary>\n\n${read}${nope}\n</details>\n\n`;
+  }
   const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...(stateDropped ? [`the scan issue state keeps at most ${STATE_MAX} blocks: ${stateDropped} older block(s) are dropped and will count as never audited`] : [])];
   const nrq = data && data.not_requirements ? data.not_requirements : [];
   if (nrq.length) foot += `<details><summary>${nrq.length} block${nrq.length === 1 ? ' was' : 's were'} not ${nrq.length === 1 ? 'a requirement' : 'requirements'}</summary>\n\n${list(nrq, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(${cell(n.reason, 80)})\n`)}\n</details>\n\n`;
   // blocks the collector's prefilter dropped (audit-ruled.txt): data and status, not behaviour; never sent to the model, so not part of the counts above
   if (ruled.length) foot += `<details><summary>${ruled.length} block${ruled.length === 1 ? ' was' : 's were'} skipped by rule</summary>\n\n${list(ruled, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(skipped by rule: ${cell(n.reason, 80)})\n`)}\n</details>\n\n`;
   const unread = data ? docs.filter(([p]) => !data.docs_reviewed.includes(p)).map(([p]) => `\`${p}\` was admitted but is not in docs_reviewed.`) : [];
-  if (nr.length || unread.length) foot += `### Not reviewed\n\n${list([...nr, ...unread], 40, (s) => `- ${cell(s, 400)}\n`)}\n`;
+  const all = [...nr, ...unread], items = list(all, 40, (s) => `- ${cell(s, 400)}\n`);
+  // an incomplete run (partial or failed) keeps the reasons visible; a complete one is one line with the list inside
+  if (all.length) foot += partial || failure ? `### Not reviewed\n\n${items}\n` : `<details><summary>Not reviewed: ${all.length} item${all.length === 1 ? '' : 's'}</summary>\n\n${items}\n</details>\n\n`;
   if (usage) foot += `${usage}\n`;
 
   let room = max - bytes(top) - bytes(foot) - 300, omitted = 0, body = '';
@@ -435,6 +442,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
   const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0,
     ruled, rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
+  const outcome = (status, reason = '') => { core.setOutput?.('status', status); if (reason) core.setOutput?.('reason', reason); }; // the action's `status` output (fail_on_error)
   const finish = async (md) => { try { await core.summary.addRaw(md).write(); } catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); } };
   // issue lookup: our open or closed issue (of this scope) and the state it holds; a failure only warns
   let mine = null, prior = null;
@@ -458,8 +466,9 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   };
   const room = (state) => ISSUE_MAX - bytes(scope.mark) - bytes(state) - 4;
 
-  if (!meta) return finish(render({ ...shared, failure: 'the collection step did not produce its context.' }));
+  if (!meta) { outcome('failed', 'the collection step did not produce its context.'); return finish(render({ ...shared, failure: 'the collection step did not produce its context.' })); }
   if (env.SKIP === 'true') {
+    outcome('complete');
     await finish(render({ ...shared, data: null }));
     // no document admitted: a stale issue must not keep claiming old results (none is created for an empty scan)
     if (wantIssue && await lookup() && mine) {
@@ -472,7 +481,12 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const v = validate(data, cands);
   const why = v.ok ? '' : data ? `the result failed validation: ${v.error}` : 'the engine returned no usable JSON';
   const st = (readCtx('engine-status') || '').trim();
-  if (why) return finish(render({ ...shared, failure: st === 'timeout' ? 'the engine timed out (raise review_timeout_minutes)' : st === 'failed' ? 'the engine failed; see the job log' : why }));
+  if (why) {
+    const engineWhy = (readCtx('engine-error') || '').split('\n')[1]?.trim(); // the engine step's classified failure (quota, policy, auth, rate)
+    const failure = st === 'timeout' ? 'the engine timed out (raise review_timeout_minutes)' : st === 'failed' ? engineWhy || 'the engine failed; see the job log' : why;
+    outcome('failed', failure);
+    return finish(render({ ...shared, failure }));
+  }
   // valid JSON can still come from a run that timed out or failed (or whose repair turn failed): show what verifies, change nothing else
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
@@ -482,6 +496,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   // the blocks this run did not audit: the state's blocks that are still in the documents (audit-carried.txt), with the text and place from the collector
   const left = readCandidates(readCtx('audit-carried.txt')), carried = prior && shared.rotation && shared.rotation.rotate
     ? prior.blocks.filter((b) => left.has(b.cid) && !cands.has(b.cid)).map((b) => ({ ...left.get(b.cid), ...b })) : [];
+  outcome(partial ? 'incomplete' : 'complete', partial);
   await finish(render({ ...shared, data: checked, partial, prior, carried }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
   const state = stateOf(meta.head, checked, prior, { carried, date });
@@ -490,6 +505,6 @@ async function main({ github, issueGithub, context, core, date = today() }) {
 
 // Never fails the run: any error here is a warning.
 module.exports = async (args) => {
-  try { await main(args); } catch (e) { try { args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
+  try { await main(args); } catch (e) { try { args.core.setOutput?.('status', 'failed'); args.core.setOutput?.('reason', `the scan report failed: ${e.message}`); args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
 Object.assign(module.exports, { readCandidates, validate, verify, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, STATUS, CLASS, MARK, TITLE, HEADING });
