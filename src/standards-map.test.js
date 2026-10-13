@@ -60,3 +60,12 @@ test('build reads each listed rule file and labels its kind', () => {
     ]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('F4: BUGBOT.md, styleguide and STANDARDS_PATHS docs apply repo-wide unless they carry their own applyTo', () => {
+  for (const p of ['.cursor/BUGBOT.md', 'pkg/BUGBOT.md', '.gemini/styleguide.md', '.greptile/rules.md', 'docs/team-style.md']) {
+    assert.deepEqual(scopeOf(p, 'Always check tests.'), ['**'], p);
+    assert.equal(build([p], () => 'x')[0].kind, 'repo');
+  }
+  assert.deepEqual(scopeOf('.gemini/styleguide.md', '---\napplyTo: "src/**/*.ts"\n---\nbody'), ['src/**/*.ts']);
+  assert.deepEqual(scopeOf('docs/team-style.md', '---\r\napplyTo: "**/*.py, tools/**"\r\n---\r\n'), ['**/*.py', 'tools/**']);
+});

@@ -378,11 +378,12 @@ test('run records a removed item as a criterion and a (removed) document, and a 
   assert.ok(cands(r).occurrences[0].hits.some((h) => h.path === 'src/a.js'));
 });
 
-test('run counts added items and ignores whitespace-only and non-normative edits', (t) => {
+test('run counts added items, ignores whitespace-only edits and reads an edited descriptive paragraph as a changed item (F1)', (t) => {
   const r = repo(t, { 'docs/specs/c.md': '# C\n\nR1: Keep   this one.\n\nSome intro text.\n' }, { 'docs/specs/c.md': '# C\n\nR1: Keep this one.\nR2: New rule added.\n\nSome intro text, edited.\n' });
-  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }), 1);
-  const c = status(r).criteria[0];
+  assert.equal(T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx }), 2);
+  const [c, e] = status(r).criteria;
   assert.deepEqual([c.ref, c.change, 'previous' in c], ['R2', 'added', false]);
+  assert.deepEqual([e.quote, e.previous, e.change], ['Some intro text, edited.', 'Some intro text.', 'modified']);
 });
 
 test('run with trace off writes empty outputs and returns 0', (t) => {
@@ -673,4 +674,115 @@ test('M11: the CLI pairs changed spec items against DIFF_BASE_SHA, so a target b
   assert.match(good.previous, /30 days/);
   const stale = cli({}); // no DIFF_BASE_SHA: falls back to BASE_SHA, the old behaviour this fix replaces
   assert.match(stale.previous, /60 days/);
+});
+
+// ---- F1-F3: changed blocks, docs named by the PR, rejected candidates ----
+const DESIGN = (extra = []) => ['# Design', '', 'The app records the screen and writes a file.', '', 'The recorder must keep running while the window is hidden.', '', 'Files are saved under the movies folder.', '',
+  'The tray icon must show the state.', '', 'The settings dialog has three tabs.', '', 'Exports must never block the UI.', '', ...extra].join('\n');
+const SECTION = ['## 4.5 Scheduled recording', '', 'A repeating plan stays on after it fires.', '', 'If a recording is already running, that occurrence is skipped.', '', '- the plan can be paused', '- a paused plan never fires', '',
+  '| Field | Meaning |', '|---|---|', '| repeat | daily or weekly |', ''];
+const lineOf = (text, s) => text.split('\n').findIndex((l) => l.includes(s)) + 1;
+
+test('F1: every block the PR adds or edits in an admitted descriptive doc is an S criterion, unchanged blocks are not', (t) => {
+  const r = repo(t, { 'docs/design.md': DESIGN() + '\n', 'src/a.js': 'x\n' }, { 'docs/design.md': DESIGN(SECTION).replace('has three tabs', 'has four tabs') + '\n', 'src/a.js': 'y\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const head = DESIGN(SECTION).replace('has three tabs', 'has four tabs');
+  const crit = status(r).criteria;
+  assert.deepEqual(crit.map((c) => [c.line, c.change, c.quote]), [
+    [lineOf(head, 'four tabs'), 'modified', 'The settings dialog has four tabs.'],
+    [lineOf(head, 'repeating plan'), 'added', 'A repeating plan stays on after it fires.'],
+    [lineOf(head, 'already running'), 'added', 'If a recording is already running, that occurrence is skipped.'],
+    [lineOf(head, 'can be paused'), 'added', 'the plan can be paused'],
+    [lineOf(head, 'never fires'), 'added', 'a paused plan never fires'],
+    [lineOf(head, '| repeat'), 'added', '| repeat | daily or weekly |'],
+  ]);
+  assert.equal(crit.find((c) => /four tabs/.test(c.quote)).previous, 'The settings dialog has three tabs.');
+  assert.deepEqual(crit.map((c) => c.id), ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']);
+  assert.ok(!crit.some((c) => /records the screen|Files are saved|must keep running/.test(c.quote)));
+});
+
+test('F1: a removed block pairs as a removal and an edited normative sentence stays one criterion', (t) => {
+  const r = repo(t, { 'docs/design.md': DESIGN() + '\n' }, { 'docs/design.md': DESIGN().replace('Files are saved under the movies folder.\n\n', '').replace('must show the state', 'must show the recording state') + '\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  assert.deepEqual(status(r).criteria.map((c) => [c.change, c.quote]), [['modified', 'The tray icon must show the recording state.'], ['removed', 'Files are saved under the movies folder.']]);
+});
+
+test('F1: a descriptive doc that no rule admits yields no criteria; the criteria cap still applies', (t) => {
+  const prose = ['# Notes', '', 'Plain prose.', ''].join('\n');
+  const r = repo(t, { 'notes/n.md': prose, 'src/a.js': 'x\n' }, { 'notes/n.md': prose + 'More prose added.\n', 'src/a.js': 'y\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  assert.deepEqual(status(r).criteria || [], []);
+  const many = Array.from({ length: 30 }, (_, i) => `Added paragraph ${i}.`).join('\n\n');
+  const r2 = repo(t, { 'docs/design.md': DESIGN() + '\n' }, { 'docs/design.md': DESIGN() + '\n\n' + many + '\n' });
+  T.run({ cwd: r2.dir, base: r2.base, head: r2.head, ctx: r2.ctx, maxCriteria: 10 });
+  assert.equal(status(r2).criteria.length, 10);
+  assert.match(status(r2).spec.limitations.join('\n'), /20 changed requirement item\(s\) beyond the 10-criteria limit/);
+});
+
+const named = (r, ...texts) => fs.writeFileSync(path.join(r.ctx, 'requirements-status.json'), JSON.stringify({ status: 'available', sources: ['PR body'], limitations: [], criteria: [],
+  documents: texts.map((text, i) => ({ source: i ? `issue #${i}` : 'PR body', text })) }));
+
+test('F2: a doc the PR body names is admitted although the heuristics reject it; a path that does not exist admits nothing', (t) => {
+  const base = { 'docs/notes/overview.md': '# Overview\n\nThe app records.\n\nIt saves files.\n', 'docs/notes/other.md': '# Other\n\nText.\n', 'src/a.js': 'x\n' };
+  const head = { ...base, 'docs/notes/overview.md': '# Overview\n\nThe app records.\n\nIt saves files.\n\nA new paragraph about scheduling.\n', 'docs/notes/other.md': '# Other\n\nText, edited.\n' };
+  const r = repo(t, base, head);
+  named(r, 'Implements the plan in docs/notes/overview.md section 2, see also docs/notes/gone.md and docs/missing/other.md');
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  assert.deepEqual(out(r, 'spec-files.txt').split('\n').filter(Boolean), ['docs/notes/overview.md']);
+  assert.deepEqual(status(r).criteria.map((c) => [c.source, c.change, c.quote]), [['docs/notes/overview.md', 'added', 'A new paragraph about scheduling.']]);
+  const r2 = repo(t, base, head);
+  named(r2, 'Implements docs/notes/gone.md and docs/missing/other.md');
+  T.run({ cwd: r2.dir, base: r2.base, head: r2.head, ctx: r2.ctx });
+  assert.equal(out(r2, 'spec-files.txt'), '');
+  assert.deepEqual(status(r2).criteria || [], []);
+  const r3 = repo(t, base, head); // without any PR text the heuristics reject it, as before
+  T.run({ cwd: r3.dir, base: r3.base, head: r3.head, ctx: r3.ctx });
+  assert.equal(out(r3, 'spec-files.txt'), '');
+});
+
+test('F2: a linked issue names a doc by unique basename; classify admits it so its diff is kept; requirements_paths exclude wins', (t) => {
+  const base = { 'docs/notes/overview.md': '# Overview\n\nThe app records.\n', 'src/a.js': 'x\n' };
+  const r = repo(t, base, { ...base, 'docs/notes/overview.md': '# Overview\n\nThe app records.\n\nNew.\n' });
+  named(r, 'Fixes #1', 'Update `overview.md` (section 4.5)');
+  assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths: ['docs/notes/overview.md'], ctx: r.ctx }), ['docs/notes/overview.md']);
+  assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths: ['docs/notes/overview.md'], ctx: r.ctx, reqPaths: '!docs/notes/**' }), []);
+  assert.deepEqual(T.classify({ cwd: r.dir, base: r.base, head: r.head, paths: ['docs/notes/overview.md'], ctx: path.join(r.ctx, 'none') }), []);
+  const rule = repo(t, { 'CLAUDE.md': 'a\n', 'docs/testing-standards.md': 'a\n' }, { 'CLAUDE.md': 'b\n', 'docs/testing-standards.md': 'b\n' }); // a rule file named in the PR is still a rule file
+  named(rule, 'Update CLAUDE.md and docs/testing-standards.md');
+  assert.deepEqual(T.classify({ cwd: rule.dir, base: rule.base, head: rule.head, paths: ['CLAUDE.md', 'docs/testing-standards.md'], ctx: rule.ctx }), []);
+  const hist = repo(t, base, { ...base, 'docs/notes/overview.md': '# Overview\n\nThe app records.\n\nNew.\n' });
+  fs.writeFileSync(path.join(hist.ctx, 'requirements-status.json'), JSON.stringify({ documents: [{ source: 'history PR #3', untrusted: true, text: 'docs/notes/overview.md' }] }));
+  assert.deepEqual(T.classify({ cwd: hist.dir, base: hist.base, head: hist.head, paths: ['docs/notes/overview.md'], ctx: hist.ctx }), []); // history text never admits a doc
+});
+
+test('F2: namedDocs matches exact paths, markdown links, blob URLs and unique basenames only; README, changelog, rule and pip files are not specs', () => {
+  const paths = ['docs/design.md', 'docs/a/guide.md', 'docs/b/guide.md', 'README.md', 'CHANGELOG.md', 'requirements.txt', 'docs/spec.rst', 'src/design.md.js', 'docs/prompts/p.md'];
+  const t = (text) => [...T.namedDocs([text], paths)].sort();
+  assert.deepEqual(t('design.md §4.5'), ['docs/design.md']);
+  assert.deepEqual(t('see [the design](docs/design.md#scheduling) and `docs/spec.rst`'), ['docs/design.md', 'docs/spec.rst']);
+  assert.deepEqual(t('https://github.com/o/r/blob/main/docs/design.md#L10'), ['docs/design.md']);
+  assert.deepEqual(t('./docs/design.md, /docs/spec.rst'), ['docs/design.md', 'docs/spec.rst']);
+  assert.deepEqual(t('guide.md is ambiguous; docs/a/guide.md is not'), ['docs/a/guide.md']);
+  assert.deepEqual(t('docs/other/design.md and elsewhere/design.md and mydesign.md and design.mdx'), []); // a path that is not tracked, whatever its basename
+  assert.deepEqual(t('Updated README.md, CHANGELOG.md, requirements.txt and docs/prompts/p.md'), []);
+});
+
+test('F3: spec-rejected.txt lists the strongest rejected candidates (most items first, at most 20) with the reason; admitted docs are absent', (t) => {
+  const sentences = (n) => Array.from({ length: n }, (_, i) => `Item ${i} must hold.`).join(' ');
+  const filler = (kbs) => ('lorem ipsum dolor sit amet '.repeat(40) + '\n\n').repeat(kbs); // about 1.1 KB each
+  const files = { 'notes/one.md': `# One\n\n${sentences(1)}\n\n${filler(2)}`, 'notes/many.md': `# Many\n\n${sentences(5)}\n\n${filler(9)}`, 'docs/specs/ok.md': 'R1: A must hold.\nR2: B must hold.\n' };
+  for (let i = 0; i < 25; i++) files[`notes/n${String(i).padStart(2, '0')}.md`] = `# N\n\n${sentences(2)}\n\n${filler(3)}`;
+  const r = repo(t, { 'src/a.js': 'x\n' }, { ...files, 'src/a.js': 'y\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const lines = out(r, 'spec-rejected.txt').split('\n').filter(Boolean);
+  assert.equal(lines.length, 20);
+  assert.match(lines[0], /^notes\/many\.md\tdensity 1 per \d+ KB below 1 per 300 B$/);
+  assert.match(lines[1], /^notes\/n00\.md\tdensity 1 per \d+ KB below 1 per 300 B$/);
+  assert.ok(lines.every((l) => /^[^\t]+\t[^\t]+$/.test(l)) && !lines.some((l) => /one\.md|ok\.md/.test(l)));
+  const r2 = repo(t, { 'src/a.js': 'x\n' }, { 'notes/one.md': `# One\n\n${sentences(1)}\n`, 'src/a.js': 'y\n' });
+  T.run({ cwd: r2.dir, base: r2.base, head: r2.head, ctx: r2.ctx });
+  assert.equal(out(r2, 'spec-rejected.txt'), 'notes/one.md\tonly 1 normative item\n');
+  const r3 = repo(t, { 'src/a.js': 'x\n' }, { 'notes/one.md': `# One\n\n${sentences(1)}\n`, 'src/a.js': 'y\n' });
+  T.run({ cwd: r3.dir, base: r3.base, head: r3.head, ctx: r3.ctx, trace: 'off' });
+  assert.equal(out(r3, 'spec-rejected.txt'), '');
 });

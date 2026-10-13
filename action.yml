@@ -19,6 +19,7 @@ inputs:
   standards_checks: { description: "Exact check:NAME or status:CONTEXT entries, one per line. Requires checks/statuses read permission. Empty means not configured.", default: "" }
   standards_ref: { description: "head or merge: commit on which your lint/format jobs run. Defaults to head.", default: head }
   requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes. Empty = content-based discovery only.", default: "" }
+  standards_paths: { description: "Globs (one per line) that add coding-standard or review-guideline documents, read from the base commit; a !glob line excludes.", default: "" }
   trace: { description: "auto | off. auto traces requirement docs and code when any requirement doc is found.", default: auto }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
   review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it.", default: "12" }
@@ -82,6 +83,7 @@ runs:
         IGNORE_EXTRA: ${{ inputs.ignore }}
         MAX_DIFF_KB: ${{ inputs.max_diff_kb }}
         REQ_PATHS: ${{ inputs.requirements_paths }}
+        STANDARDS_PATHS: ${{ inputs.standards_paths }}
         TRACE: ${{ inputs.trace }}
       run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
@@ -93,6 +95,7 @@ runs:
         CTX: ${{ github.workspace }}/.specguard-ctx
         IGNORE_EXTRA: ${{ inputs.ignore }}
         REQ_PATHS: ${{ inputs.requirements_paths }}
+        STANDARDS_PATHS: ${{ inputs.standards_paths }}
         MAX_REQUIREMENTS: ${{ inputs.audit_max_requirements }}
       run: node "$GITHUB_ACTION_PATH/src/audit-collect.js"
 
