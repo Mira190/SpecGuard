@@ -10,6 +10,8 @@ inputs:
   github_token: { description: "Token for collect and post (needs pull-requests write).", default: "${{ github.token }}" }
   model: { description: "Model name passed to the engine CLI. Empty = engine default. Copilot: what is available depends on the token owner's plan; an unavailable model falls back to auto.", default: "" }
   effort: { description: "Reasoning effort: empty (engine default) | low | medium | high | xhigh | max. Copilot: only passed with an explicit model other than auto.", default: "" }
+  auto_tier: { description: "Copilot Auto routing profile when model is empty or auto: intelligence | balance | efficiency | empty (engine default). Ignored, with a note, if the CLI or an org policy rejects it.", default: intelligence }
+  fast_models: { description: "Copilot: extra model names (exact, or /regex/; one per line or comma separated) to treat as fast-tier on top of the built-in name patterns (flash, mini, haiku, nano, lite, small).", default: "" }
   copilot_max_ai_credits: { description: "Copilot soft cap on AI credits per turn (integer 30-2000). A Copilot run is one turn plus at most one repair turn on the same session, so the worst case per push is about twice this.", default: "60" }
   max_turns: { description: "Agent turn cap (Claude only for now).", default: "30" }
   max_budget_usd: { description: "Spend cap per run (Claude only).", default: "2" }
@@ -113,6 +115,8 @@ runs:
         HAS_CLAUDE: ${{ inputs.claude_code_oauth_token != '' || inputs.anthropic_api_key != '' }}
         MODEL: ${{ inputs.model }}
         EFFORT: ${{ inputs.effort }}
+        AUTO_TIER: ${{ inputs.auto_tier }}
+        FAST_MODELS: ${{ inputs.fast_models }}
         MAX_CREDITS: ${{ inputs.copilot_max_ai_credits }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
@@ -172,6 +176,8 @@ runs:
         VERSION: ${{ inputs.copilot_version }}
         MODEL: ${{ inputs.model }}
         EFFORT: ${{ inputs.effort }}
+        AUTO_TIER: ${{ inputs.auto_tier }}
+        FAST_MODELS: ${{ inputs.fast_models }}
         MAX_CREDITS: ${{ inputs.copilot_max_ai_credits }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
