@@ -284,3 +284,8 @@ JS
 # 7. Large PR (over FOCUS_THRESHOLD lines,files): rank the changed files by risk and give the model only the top FOCUS_FILES (src/focus.js).
 # Writes focus.txt, focus-skipped.txt and focus-requirements.txt and narrows diff.numbered.txt; diff.patch stays whole. Fail-soft: the full numbered diff comes back.
 timeout 60 node "$HERE/focus.js" "$CTX" || { echo "::warning::focused review failed; the whole diff is used"; rm -f "$CTX/focus.txt" "$CTX/focus-skipped.txt" "$CTX/focus-requirements.txt"; node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null || rm -f "$CTX/diff.numbered.txt"; }
+
+# 8. Deterministic leads (src/leads.js): changed symbols with/without a test reference, suspected mirror assertions. Hints for the reviewer, never findings.
+# Runs after focus.js so a focused review only sees leads for the chosen files. Fail-soft: no leads.txt is the normal prompt.
+rm -f "$CTX/leads.txt"
+timeout 30 node "$HERE/leads.js" "$CTX" || { echo "::warning::leads failed; continuing without them"; rm -f "$CTX/leads.txt"; }

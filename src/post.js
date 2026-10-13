@@ -608,11 +608,12 @@ function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
     const actual = used[0] || models[0]?.n, n = actual || model;
     if (n) parts.push(`Model: ${nm(n)}${fast}${actual && model && actual !== model && !notes.some((x) => x.startsWith('model_fallback')) ? ` (requested ${nm(model)})` : ''}`);
     const t = total || models[0]?.t;
-    if (t) parts.push(`Tokens: ${show(t)}`);
+    if (t && (t.i || t.o)) parts.push(`Tokens: ${show(t)}`); // a run that failed before the model answered records zeros: no noise
   }
-  if (usd !== undefined) parts.push(`Cost ${engine === 'copilot' ? '≈ ' : ''}$${usd.toFixed(usd < 0.01 ? 4 : 2)}${credits !== undefined ? ` (${credits.toFixed(credits < 10 ? 2 : 1)} AI credits)` : ''}`);
-  if (ms !== undefined) parts.push(`API time ${ms < 6e4 ? `${(ms / 1e3).toFixed(1)}s` : `${Math.floor(ms / 6e4)}m${String(Math.round((ms % 6e4) / 1e3)).padStart(2, '0')}s`}`);
-  for (const x of notes) parts.push(nm(x));
+  const recorded = !!(usd || ms || (total && (total.i || total.o)) || models.some((m) => m.t && (m.t.i || m.t.o)));
+  if (usd) parts.push(`Cost ${engine === 'copilot' ? '≈ ' : ''}$${usd.toFixed(usd < 0.01 ? 4 : 2)}${credits !== undefined ? ` (${credits.toFixed(credits < 10 ? 2 : 1)} AI credits)` : ''}`);
+  if (ms) parts.push(`API time ${ms < 6e4 ? `${(ms / 1e3).toFixed(1)}s` : `${Math.floor(ms / 6e4)}m${String(Math.round((ms % 6e4) / 1e3)).padStart(2, '0')}s`}`);
+  for (const x of notes) if (x !== 'usage partial' || recorded) parts.push(nm(x)); // 'usage partial' qualifies a total that exists
   return `<sub>${parts.join(' · ')}</sub>`;
 }
 // Fix-through telemetry (0 tokens). The outcome of an earlier finding, conservatively: nothing here is ever "fixed", only observed.
@@ -660,7 +661,7 @@ function verdict(data, fs_) {
 // Sections in goal order, which is also the importance order: unit test gaps, requirements, standards, layers, completeness, then collapsed reference
 // material. Each section's items are added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier }) {
+function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier }) {
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)];
   if (data && !status) status = `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}${verdict(data, all)}`;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
@@ -686,6 +687,7 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
   const appendix = [];
   const reference = (h, atoms, tail) => appendix.push({ g: '', h, atoms, tail });
   g = '### Unit test gaps\n\n';
+  if (data) add('', coverageAtoms(cov));
   add('', of(['missing_test', 'weak_test']), '\n');
   if (data) {
     const covById = new Map(data.coverage.map((c) => [c.id, c]));
@@ -931,6 +933,49 @@ function definedNames(t) {
 function definesUsedBy(change, behaviour) {
   const b = String(behaviour || '');
   return definedNames(change).some((w) => new RegExp('(?:^|[^\\w])' + w + '(?![\\w])').test(b));
+}
+
+// Execution evidence from src/coverage.js (coverage.json); null = off (no report, unreadable, or none usable). `miss` = [[from, to]] lines of a changed file that are
+// instrumented and never ran (whole file); `never` = the same restricted to lines this PR added. Only a changed file has an entry: elsewhere nothing is known.
+function loadCoverage(raw) {
+  try {
+    const j = JSON.parse(raw);
+    return j && j.v === 1 && j.files && typeof j.files === 'object' ? j : null;
+  } catch { return null; }
+}
+const neverRan = (cov, p, l) => {
+  const f = cov && cov.reports > 0 && Number.isInteger(l) && Object.hasOwn(cov.files, p) ? cov.files[p] : null;
+  return !!f && Array.isArray(f.miss) && f.miss.some((r) => Array.isArray(r) && l >= r[0] && l <= r[1]);
+};
+// A row the model marked covered whose behaviour line never ran in the report is not covered. Never an upgrade.
+function applyCoverage(data, cov) {
+  if (!cov || !(cov.reports > 0)) return;
+  const down = new Set();
+  for (const c of data.coverage) {
+    const b = c.behaviour;
+    if (c.status === 'covered' && b && b.side !== 'LEFT' && neverRan(cov, b.path, b.line)) {
+      Object.assign(c, { status: 'unknown', reason: `The coverage report shows this line never ran (${b.path}:${b.line}).` });
+      (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: the coverage report shows ${b.path}:${b.line} never ran.`);
+      down.add(c.id);
+    }
+  }
+  if (!down.size) return;
+  data.findings = data.findings.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !down.has(id)) })).filter((f) => f.kind === 'standard' || f.obligation_ids.length);
+  settle(data, data.validation_notes ||= []);
+}
+// Summary facts for the Unit test gaps section; deterministic, not model findings. Compact and capped.
+function coverageAtoms(cov) {
+  if (!cov) return [];
+  if (!(cov.reports > 0)) return cov.notes?.length ? [`<sub>Coverage evidence not used: ${cell(String(cov.notes[0]), 200)}</sub>\n\n`] : [];
+  const n = (x) => (Number.isInteger(x) && x >= 0 ? x : 0), t = cov.total || {}, out = [];
+  if (n(t.instrumented)) out.push(`Changed lines executed by tests: ${n(t.executed)} of ${n(t.instrumented)} instrumented (coverage report)\n\n`);
+  const lines = (f) => (f.never || []).reduce((a, r) => a + (Array.isArray(r) ? n(r[1]) - n(r[0]) + 1 : 0), 0);
+  const rows = Object.entries(cov.files).filter(([, f]) => f && Array.isArray(f.never) && f.never.length).sort((a, b) => lines(b[1]) - lines(a[1]));
+  if (rows.length) {
+    const rs = (f) => f.never.slice(0, 8).filter(Array.isArray).map(([a, b]) => (a === b ? `L${n(a)}` : `L${n(a)}-L${n(b)}`)).join(', ') + (f.never.length > 8 ? `, +${f.never.length - 8} more` : '');
+    out.push(`Changed lines no test executed (coverage report):\n${rows.slice(0, 10).map(([p, f]) => `- \`${cell(p, 120)}\`: ${rs(f)}\n`).join('')}${rows.length > 10 ? `- +${rows.length - 10} more files\n` : ''}\n`);
+  }
+  return out;
 }
 
 function differential(data, maps) {
@@ -1181,7 +1226,7 @@ async function run({ github, context, core }) {
     const nano = fin(usage?.totalNanoAiu), ms = fin(em?.ms) ?? fin(usage?.totalApiDurationMs), runs = parseInt(env.GITHUB_RUN_ATTEMPT, 10), ev = context.eventName || env.GITHUB_EVENT_NAME;
     return { ...(runs > 0 && { runs }), ...(ms !== undefined && { ms }), ...(nano !== undefined && { nanoAiu: nano, credits: nano / 1e9 }), model: used.join(', ') || model || undefined, mode: 'pr', delivery: summaryOnly ? 'summary' : 'pr', ...(ev && { event: ev }) };
   };
-  const failed = (why) => publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial, dropped, state: 'failed', used, tier }), 'failed');
+  const failed = (why) => publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes: notes.filter((n) => !n.startsWith(why)), partial, dropped, state: 'failed', used, tier }), 'failed');
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();
@@ -1213,6 +1258,7 @@ async function run({ github, context, core }) {
   const readRule = memoed(readFile); // the trusted rule inventory may include base-restored files that are not tracked at head
   data.tooling = tooling; // Always overwrite any model-supplied tooling claim.
 
+  const cov = loadCoverage(readCtx('coverage.json')); // optional: the target's own coverage report, joined with the diff by src/coverage.js
   let local = '';
   try { local = fs.readFileSync(path.join(ctx, 'diff.patch'), 'utf8'); } catch {}
   const maps = parseDiff(local);
@@ -1253,6 +1299,7 @@ async function run({ github, context, core }) {
     incomplete.push('Requirement collection status was unavailable; only changed behaviour was assessed.');
   }
   if (partial) addNote('Diff truncated; obligations outside the reviewed portion are unknown.');
+  applyCoverage(data, cov);
   const base = env.BASE_SHA || pr.base?.sha;
   const dmaps = new Map([...maps, ...(base ? renameMaps(base, headSha, process.env.GITHUB_WORKSPACE || process.cwd()) : [])]);
   differential(data, dmaps);
@@ -1347,7 +1394,7 @@ async function run({ github, context, core }) {
     if (seen.has(exact)) continue;
     seen.add(exact);
     assessed.push(f);
-    cands.push({ ...verified(f, rl, f.line + d), line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }) });
+    cands.push({ ...verified(f.kind === 'missing_test' && neverRan(cov, f.path, f.line + d) ? { ...f, title: `${f.title} (coverage: never executed)` } : f, rl, f.line + d), line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }) });
 
   }
   const merged = merge(cands);
@@ -1433,7 +1480,7 @@ async function run({ github, context, core }) {
 
   const clean_ = noGaps(data) && !incomplete.length && !reduced, state = incomplete.length || reduced ? 'incomplete' : 'complete';
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: summaryOnly ? '' : counts(), banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt; the reviewer read the files directly`] : []), ...(summaryOnly ? ['Delivery: summary only (manual run; nothing was posted to the PR).', ...(livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [])] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: summaryOnly ? '' : counts(), banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt; the reviewer read the files directly`] : []), ...(summaryOnly ? ['Delivery: summary only (manual run; nothing was posted to the PR).', ...(livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [])] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
@@ -1441,4 +1488,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
