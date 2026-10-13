@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with: { fetch-depth: 0, persist-credentials: false }
-      - uses: Mira190/SpecGuard@07320e5632da0f97b6e61d1e8ce158c1daed4b33 # specguard-pin
+      - uses: Mira190/SpecGuard@33a3c75f9fbbaffa0b3143a5f2a28ab17de6913d # specguard-pin
         with:
           mode: ${{ inputs.mode }}
           github_token: ${{ github.token }}
