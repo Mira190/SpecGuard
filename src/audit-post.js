@@ -17,11 +17,12 @@ const LAYER = ['unit', 'component', 'integration', 'e2e'];
 // MARK (and the state marker) stay 'specguard:audit': an issue created before the rename is still found and updated, not duplicated. TITLE: issue title; HEADING: summary head.
 const MARK = '<!-- specguard:audit -->', TITLE = 'SpecGuard: unit test gap scan', HEADING = 'SpecGuard unit test gap scan';
 // One scan issue per scope (scan_paths): the marker carries a short hash of the sorted globs and the title names the scope. No scope keeps the original marker and title, so an older issue is still found.
-function scopeOf(spec) {
+function scopeOf(spec, target = '') {
   const ls = [...new Set(String(spec || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean))].sort();
-  if (!ls.length) return { lines: [], mark: MARK, title: TITLE };
+  const base = target ? `${TITLE}: ${target}` : TITLE; // target: the scanned repository when the issue lives in another one
+  if (!ls.length) return { lines: [], mark: MARK, title: base };
   const shown = (ls.filter((l) => !l.startsWith('!')).join(', ') || ls.join(', ')).replace(/[\x00-\x1F\x7F<>]/g, ' ');
-  return { lines: ls, mark: `<!-- specguard:audit scope=${sha8(...ls)} -->`, title: `${TITLE} (${oneLine(shown, 60)})` };
+  return { lines: ls, mark: `<!-- specguard:audit scope=${sha8(...ls)} -->`, title: `${base} (${oneLine(shown, 60)})` };
 }
 const SUMMARY_MAX = 1000000, ISSUE_MAX = 64000; // bytes: job summary 1 MiB; issue body 65536
 const NEAR = 5; // a quote may sit this many lines from the cited one
@@ -396,17 +397,17 @@ function changedSince(prior, blocks) {
 }
 
 // Our scan issue among open and closed issues (marker plus identity); an open one wins.
-async function findIssue({ github, owner, repo, me, mark = MARK }) {
+async function findIssue({ github, owner, repo, me, mark = MARK, title = '' }) {
   // ponytail: lists every issue; narrow with a label or `creator` if a repo has thousands
   const all = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
-  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && typeof i.body === 'string' && i.body.startsWith(mark));
+  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (!title || i.title === title) && typeof i.body === 'string' && i.body.startsWith(mark));
   return mine.find((i) => i.state !== 'closed') || mine[0] || null;
 }
 
 const whoami = async (github) => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } };
 const wantsIssue = (env) => String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
 
-async function main({ github, context, core, date = today() }) {
+async function main({ github, issueGithub, context, core, date = today() }) {
   const env = process.env, ctx = env.CTX;
   const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
   const { owner, repo } = context.repo, sha = context.sha || env.GITHUB_SHA || '';
@@ -423,17 +424,21 @@ async function main({ github, context, core, date = today() }) {
   const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
   const cap = meta && meta.max_requirements;
   const cands = readCandidates(readCtx('audit-candidates.txt'));
-  const scope = scopeOf(env.SCAN_PATHS);
+  let wantIssue = wantsIssue(env);
+  // ISSUE_REPO (scan_issue_repo): the issue lives in another repository under its own client (issueGithub); one issue per scanned repository, told apart by the title
+  const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(ir[1] === owner && ir[2] === repo);
+  if (env.ISSUE_REPO && !ir && wantIssue) { wantIssue = false; core.warning('SpecGuard: scan_issue_repo is not owner/name; no scan issue is written'); }
+  const igh = issueGithub || github, issueRepo = away ? { owner: ir[1], repo: ir[2] } : { owner, repo };
+  const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
   const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0,
     rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   const finish = async (md) => { try { await core.summary.addRaw(md).write(); } catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); } };
-  const wantIssue = wantsIssue(env);
   // issue lookup: our open or closed issue (of this scope) and the state it holds; a failure only warns
   let mine = null, prior = null;
   const lookup = async () => {
     if (!wantIssue) return;
     try {
-      mine = await findIssue({ github, owner, repo, me: await whoami(github), mark: scope.mark });
+      mine = await findIssue({ github: igh, ...issueRepo, me: await whoami(igh), mark: scope.mark, title: away ? scope.title : '' });
       prior = mine && readState(mine.body);
     } catch (e) { core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); mine = null; return false; }
     return true;
@@ -444,8 +449,8 @@ async function main({ github, context, core, date = today() }) {
       const flat = (s) => String(s).replace(/\r\n/g, '\n').trim();
       if (mine) {
         const closed = mine.state === 'closed';
-        if (flat(body) !== flat(mine.body) || mine.title !== scope.title || closed) await github.rest.issues.update({ owner, repo, issue_number: mine.number, title: scope.title, body, ...(closed ? { state: 'open' } : {}) });
-      } else await github.rest.issues.create({ owner, repo, title: scope.title, body });
+        if (flat(body) !== flat(mine.body) || mine.title !== scope.title || closed) await igh.rest.issues.update({ ...issueRepo, issue_number: mine.number, title: scope.title, body, ...(closed ? { state: 'open' } : {}) });
+      } else await igh.rest.issues.create({ ...issueRepo, title: scope.title, body });
     } catch (e) { core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); }
   };
   const room = (state) => ISSUE_MAX - bytes(scope.mark) - bytes(state) - 4;
