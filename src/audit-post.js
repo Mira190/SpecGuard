@@ -359,7 +359,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   if (partial && !failure) top += `> **⚠️ Incomplete scan.** The rows below passed verification but the list may be incomplete${partial ? ` (${cell(partial, 200)})` : ''}. The scan issue, if enabled, was not updated.\n\n`;
   const items = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
   // an incomplete or failed scan keeps its reasons visible; a complete one lists them in Details
-  const visibleNr = partial && !failure && nrAll.length ? `### Not reviewed\n\n${items(nrAll, 40, (s) => `- ${cell(s, 400)}\n`)}\n` : '';
+  const visibleNr = partial && !failure && nrAll.length ? `### ⚠️ Not reviewed (${nrAll.length})\n\n${items(nrAll, 40, (s) => `- ${cell(s, 400)}\n`)}\n` : '';
 
   // Details: what the scan looked at and the rest of its result. Fixed text first (counted against the size limit), then tables whole rows at a time.
   let dhead = '', dfoot = '';
@@ -405,9 +405,9 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const CAP = 15; // rows shown per visible table; the rest are in Details
   const vis = (title, rs, head) => (rs.length ? take(`### ${title} (${rs.length})\n\n${head}`, rs.slice(0, CAP), rs.length > CAP ? `\n+${rs.length - CAP} more in Details.\n` : '') : '');
   let body = '';
-  body += vis('Confirmed gaps', confirmed.map(grow), GTOP);
-  body += vis(prior ? 'New since the last scan' : 'New gaps to confirm', fresh.map(grow), GTOP);
-  body += clashes.length ? take(`### Documents and code disagree (${clashes.length})\n\nA model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Document says | Code says |\n|---|---|\n`, clashes.slice(0, CAP), clashes.length > CAP ? `\n+${clashes.length - CAP} more in Details.\n` : '') : '';
+  body += vis('❌ Confirmed gaps', confirmed.map(grow), GTOP);
+  body += vis(prior ? '❔ New since the last scan' : '❔ New gaps to confirm', fresh.map(grow), GTOP);
+  body += clashes.length ? take(`### ❌ Documents and code disagree (${clashes.length})\n\nA model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Document says | Code says |\n|---|---|\n`, clashes.slice(0, CAP), clashes.length > CAP ? `\n+${clashes.length - CAP} more in Details.\n` : '') : '';
   // Details: the usage line is reserved, then the fixed text while it fits, then the tables with what is left
   room -= bytes(dusage);
   const fit = (t) => { if (!t || bytes(t) > room) return ''; room -= bytes(t); return t; };
