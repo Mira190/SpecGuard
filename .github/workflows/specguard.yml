@@ -1,5 +1,6 @@
 name: "SpecGuard reusable (called from target repos; no Run button here, use SpecGuard manual run)"
 # Reusable workflow (on: workflow_call): runs SpecGuard against the CALLER's repository with the caller's GITHUB_TOKEN (repository access never needs a PAT). The caller writes ~10 lines (README: "Enterprise setup").
+# Credential: pass the optional secret llm_token (a GitHub fine-grained PAT runs Copilot, an Anthropic API key sk-ant-... runs Claude Code; detected by prefix), or the copilot_token alias below.
 # Copilot: pass the optional secret copilot_token (user-owned fine-grained PAT, Copilot Requests; billed to that user's seat) with `secrets: { copilot_token: ${{ secrets.SPECGUARD_COPILOT_TOKEN }} }`
 # or `secrets: inherit` (then a caller secret named SPECGUARD_COPILOT_TOKEN is read). Without it Copilot runs on the job token, which needs the org policy "Allow use of Copilot CLI billed to the organization".
 # github.* in here is always the caller's context (repository, event, token), so actions/checkout below checks out the caller's repository.
@@ -19,6 +20,7 @@ on:
       model: { description: "Copilot model name. Empty = Copilot Auto.", required: false, type: string, default: "" }
       effort: { description: "Reasoning effort: low | medium | high | xhigh | max. Empty = Copilot default.", required: false, type: string, default: "" }
     secrets:
+      llm_token: { description: "Optional. A GitHub fine-grained PAT (Copilot Requests) or an Anthropic API key (sk-ant-...), detected by prefix; wins over copilot_token.", required: false }
       copilot_token: { description: "Optional. Fine-grained PAT owned by a user, account permission Copilot Requests; Copilot is then billed to that user's seat. Empty = the job token (needs the org policy 'Allow use of Copilot CLI billed to the organization').", required: false }
 
 jobs:
@@ -34,6 +36,7 @@ jobs:
         with:
           mode: ${{ inputs.mode }}
           github_token: ${{ github.token }}
+          llm_token: ${{ secrets.llm_token || secrets.SPECGUARD_LLM_TOKEN }} # explicit "secrets: { llm_token: ... }", or "secrets: inherit" with a secret of that name
           copilot_token: ${{ secrets.copilot_token || secrets.SPECGUARD_COPILOT_TOKEN }} # explicit "secrets: { copilot_token: ... }", or "secrets: inherit" with a secret of that name
           requirements_paths: ${{ inputs.requirements_paths }}
           standards_paths: ${{ inputs.standards_paths }}

@@ -349,7 +349,7 @@ test('validate-inputs.sh alone (the engine step) rejects the same values', (t) =
 
 test('action.yml wires the new inputs, runs the Copilot script, and never uses an allow-all flag', () => {
   const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
-  for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "60"/m, /^ {2}ctx_retention_days: \{[^}]*default: "1"/m, /TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/, /^ {2}engine: \{[^}]*default: copilot/m, /ENGINE: \$\{\{ inputs\.engine \}\}/, /COPILOT_VERSION: \$\{\{ inputs\.copilot_version \}\}/, /ENGINE: \$\{\{ steps\.engine\.outputs\.engine \}\}/, /PROMPT_FILE="\$PROMPT_FILE" bash "\$GITHUB_ACTION_PATH\/src\/engines\/\$ENGINE\.sh"/,/EFFORT: \$\{\{ inputs\.effort \}\}/, /^ {2}auto_tier: \{[^}]*default: intelligence/m, /^ {2}fast_models: \{[^}]*default: ""/m, /AUTO_TIER: \$\{\{ inputs\.auto_tier \}\}/, /FAST_MODELS: \$\{\{ inputs\.fast_models \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/validate-inputs\.sh/]) assert.match(y, m);
+  for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "60"/m, /^ {2}ctx_retention_days: \{[^}]*default: "1"/m, /TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/, /^ {2}engine: \{[^}]*default: auto/m, /ENGINE: \$\{\{ inputs\.engine \}\}/, /COPILOT_VERSION: \$\{\{ inputs\.copilot_version \}\}/, /ENGINE: \$\{\{ steps\.engine\.outputs\.engine \}\}/, /PROMPT_FILE="\$PROMPT_FILE" bash "\$GITHUB_ACTION_PATH\/src\/engines\/\$ENGINE\.sh"/,/EFFORT: \$\{\{ inputs\.effort \}\}/, /^ {2}auto_tier: \{[^}]*default: intelligence/m, /^ {2}fast_models: \{[^}]*default: ""/m, /AUTO_TIER: \$\{\{ inputs\.auto_tier \}\}/, /FAST_MODELS: \$\{\{ inputs\.fast_models \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/validate-inputs\.sh/]) assert.match(y, m);
   assert.doesNotMatch(y + ['copilot.sh'].map((n) => fs.readFileSync(path.join(__dirname, 'engines', n), 'utf8').replace(/^#.*$/gm, '')).join(''), /--allow-all\b(?!-tools)|--allow-all-paths|--yolo/);
 });
 
@@ -381,4 +381,14 @@ test('model fallback turn that exits non-zero after a complete answer is a succe
   assert.ok(notes.includes('Copilot exited with code 3 after a complete answer'), notes.join('|'));
   assert.ok(notes.includes('model_fallback: gpt-9 → auto'), notes.join('|'));
   assert.equal(s.ctxFile('findings.json'), VALID);
+});
+
+test('token-shaped text in the CLI stderr is replaced by *** in the notes, the error file and the log', (t) => {
+  const bare = ['github_pat_11ABCDEFG0abcdefghijkl_MNOPQRSTUV', 'ghu_AbCdEf0123456789xyz', 'sk-ant-api03-AbC_dEf-123', 'abc.DEF-123'];
+  const s = setup(t, [['', 1, `not authorized: ${bare[0]} ${bare[1]} ${bare[2]} Bearer ${bare[3]}`]]);
+  const r = s.run();
+  assert.equal(r.status, 0);
+  assert.match(s.ctxFile('engine-notes'), /\*\*\*/);
+  for (const f of ['engine-notes', 'engine-error']) for (const x of bare) assert.ok(!s.ctxFile(f).includes(x), `${f} leaks ${x.slice(0, 8)}`);
+  for (const x of bare) assert.ok(!(r.stdout + r.stderr).includes(x), 'log');
 });

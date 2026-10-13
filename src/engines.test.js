@@ -11,7 +11,7 @@ const VALID = { coverage: [], findings: [], requirements: [] };
 const fwd = (p) => p.replace(/\\/g, '/');
 const allowList = () => /^ENGINES=\(([^)]*)\)/m.exec(fs.readFileSync(path.join(__dirname, 'validate-inputs.sh'), 'utf8'))[1].trim().split(/\s+/);
 
-// A fake `copilot` and a fake `npm` on PATH.
+// A fake `copilot`, a fake `claude` (same answer as a structured_output result) and a fake `npm` on PATH.
 function sandbox(t, { copilotRc = 0, copilotErr = '', copilotOut = JSON.stringify(VALID), npmRc = 0 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-engines-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -27,6 +27,17 @@ printf '%s' '${copilotOut.replace(/'/g, "'\\''")}'
 printf '%s' '${copilotErr.replace(/'/g, "'\\''")}' >&2
 exit ${copilotRc}
 `, { mode: 0o755 });
+  const answer = (() => { try { return JSON.parse(copilotOut); } catch { return undefined; } })();
+  const claudeOut = copilotOut === '' ? '' : JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: answer ? '' : copilotOut, ...(answer && { structured_output: answer }), total_cost_usd: 0.0123, duration_api_ms: 1500,
+    usage: { input_tokens: 10, output_tokens: 5 }, modelUsage: { 'fake-model': { inputTokens: 10, outputTokens: 5, cacheReadInputTokens: 100, cacheCreationInputTokens: 20, costUSD: 0.0123 } } });
+  fs.writeFileSync(path.join(bin, 'claude'), `#!/usr/bin/env bash
+[ "$1" = --version ] && { echo "2.1.284 (Claude Code)"; exit 0; }
+{ printf '%s\\n' "$@"; echo '---'; } >> "${fwd(log)}"
+cat > /dev/null
+printf '%s' '${claudeOut.replace(/'/g, "'\\''")}'
+printf '%s' '${copilotErr.replace(/'/g, "'\\''")}' >&2
+exit ${copilotRc}
+`, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'npm'), `#!/usr/bin/env bash
 { echo "npm $*"; } >> "${fwd(log)}"
 [ ${npmRc} = 0 ] || exit ${npmRc}
@@ -35,7 +46,7 @@ exit 0
   const run = (name, extra = {}) => spawnSync(bash, [fwd(path.join(ENGINES_DIR, `${name}.sh`))], {
     encoding: 'utf8', timeout: 60000,
     env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, CTX: fwd(ctx), PROMPT_FILE: fwd(path.join(dir, 'prompt.txt')), RUNNER_TEMP: fwd(path.join(dir, 'tmp')),
-      MODEL: '', EFFORT: '', AUTO_TIER: undefined, MAX_CREDITS: '60', TIMEOUT: '5', COPILOT_VERSION: '', COPILOT_GITHUB_TOKEN: '', CHECK: '', ...extra },
+      MODEL: '', EFFORT: '', AUTO_TIER: undefined, MAX_CREDITS: '60', TIMEOUT: '5', COPILOT_VERSION: '', CLAUDE_VERSION: extra.COPILOT_VERSION && name === 'claude' ? '2.1.284' : '', COPILOT_GITHUB_TOKEN: '', ANTHROPIC_API_KEY: '', CHECK: '', ...extra },
   });
   const file = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').trim(); } catch { return null; } };
   const calls = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('---\n').filter(Boolean).map((c) => c.split('\n').filter(Boolean)) : []);
@@ -43,14 +54,14 @@ exit 0
 }
 const flag = (c, f) => (c.includes(f) ? c[c.indexOf(f) + 1] : undefined);
 
-test('engine allow-list: copilot passes, anything else (incl. path tricks and the removed copilot-sdk) fails, and every allowed engine has its script', () => {
+test('engine allow-list: copilot and claude pass, anything else (incl. path tricks, auto and the removed copilot-sdk) fails, and every allowed engine has its script', () => {
   const v = (env) => spawnSync(bash, [fwd(path.join(__dirname, 'validate-inputs.sh'))], { encoding: 'utf8', env: { ...process.env, MODEL: '', EFFORT: '', MAX_CREDITS: '60', TIMEOUT: '5', ...env } });
-  assert.deepEqual(allowList(), ['copilot']);
+  assert.deepEqual(allowList(), ['copilot', 'claude']);
   for (const ENGINE of allowList()) { assert.equal(v({ ENGINE }).status, 0, ENGINE); assert.ok(fs.existsSync(path.join(ENGINES_DIR, `${ENGINE}.sh`)), `${ENGINE}.sh`); }
-  for (const ENGINE of ['', 'claude', 'copilot ', '../copilot', 'copilot.sh', 'copilot-sdk', 'copilot;id', 'COPILOT']) {
+  for (const ENGINE of ['', 'auto', 'claude ', 'CLAUDE', 'claude;id', 'copilot ', '../copilot', 'copilot.sh', 'copilot-sdk', 'copilot;id', 'COPILOT']) {
     const r = v({ ENGINE });
     assert.equal(r.status, 1, JSON.stringify(ENGINE));
-    assert.match(r.stdout, /^::error::engine must be one of: copilot$/m);
+    assert.match(r.stdout, /^::error::engine must be one of: copilot claude$/m);
   }
   assert.equal(v({}).status, 0, 'no ENGINE (an adapter run directly) is not checked');
   for (const bad of [{ COPILOT_VERSION: '1.0.92; rm -rf /' }, { COPILOT_VERSION: '-g' }, { COPILOT_VERSION: 'latest' }]) assert.equal(v(bad).status, 1, JSON.stringify(bad));
@@ -70,7 +81,7 @@ test('action.yml dispatches on the validated engine: one engine step runs src/en
 });
 
 // The adapter contract (src/engines/README.md): the same env in, the same files out, exit 0, never a write to anything but $CTX.
-const ADAPTERS = ['copilot']; // one adapter today; add a name when src/engines/README.md's "Add an engine" is followed
+const ADAPTERS = ['copilot', 'claude']; // add a name when src/engines/README.md's "Add an engine" is followed
 for (const name of ADAPTERS) {
   test(`contract: ${name} succeeds: exit 0, findings.json is the raw answer, no failure status, usage in the documented shape, engine-model.json`, (t) => {
     const s = sandbox(t);

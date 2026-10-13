@@ -585,7 +585,7 @@ function mergeUsage(a, b) {
   const add = (x, y) => (fin(x) ?? 0) + (fin(y) ?? 0), both = (x, y) => fin(x) !== undefined || fin(y) !== undefined;
   const sum = (x, y, keys) => Object.fromEntries(keys.map((k) => [k, add(x?.[k], y?.[k])]));
   const out = { ...a };
-  for (const k of ['totalNanoAiu', 'totalApiDurationMs']) if (both(a[k], b[k])) out[k] = add(a[k], b[k]);
+  for (const k of ['totalNanoAiu', 'totalCostUsd', 'totalApiDurationMs']) if (both(a[k], b[k])) out[k] = add(a[k], b[k]);
   if (ok(a.tokenDetails) || ok(b.tokenDetails)) out.tokenDetails = Object.fromEntries(['input', 'cache_read', 'cache_write', 'output'].map((k) => [k, { tokenCount: add(a.tokenDetails?.[k]?.tokenCount, b.tokenDetails?.[k]?.tokenCount) }]));
   const ma = ok(a.modelMetrics) ? a.modelMetrics : {}, mb = ok(b.modelMetrics) ? b.modelMetrics : {};
   out.modelMetrics = Object.fromEntries([...new Set([...Object.keys(ma), ...Object.keys(mb)])].map((n) => [n, { usage: sum(ma[n]?.usage, mb[n]?.usage, ['inputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'outputTokens']) }]));
@@ -598,10 +598,11 @@ function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
   // copilot's per-model inputTokens already include cache read and write (tokenDetails.input is the uncached part): tok adds them back once
   let models = [], total, usd, credits, ms;
   const u = raw && typeof raw === 'object' ? raw : {};
-  if (engine === 'copilot') {
+  { // the copilot shape; the claude adapter writes the same one (src/engines/claude-result.js) plus totalCostUsd
     for (const [n, m] of Object.entries(u.modelMetrics || {})) { const x = m?.usage; if (x) models.push({ n, t: tok(Math.max(0, (fin(x.inputTokens) ?? 0) - (fin(x.cacheReadTokens) ?? 0) - (fin(x.cacheWriteTokens) ?? 0)), x.cacheReadTokens, x.cacheWriteTokens, x.outputTokens) }); }
     const d = u.tokenDetails; if (d) total = tok(d.input?.tokenCount, d.cache_read?.tokenCount, d.cache_write?.tokenCount, d.output?.tokenCount);
     if (fin(u.totalNanoAiu) !== undefined) { credits = u.totalNanoAiu / 1e9; usd = credits * USD_PER_AI_CREDIT; }
+    else if (fin(u.totalCostUsd)) usd = u.totalCostUsd; // exact, reported by the engine
     ms = fin(u.totalApiDurationMs);
     if (!models.length && typeof u.currentModel === 'string') models = [{ n: u.currentModel }];
   }

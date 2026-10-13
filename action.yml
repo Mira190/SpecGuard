@@ -3,10 +3,11 @@ description: Requirement-aware PR reviewer that finds missing and weak unit test
 branding: { icon: shield, color: blue }
 
 inputs:
-  engine: { description: "Review engine adapter: copilot (Copilot CLI, the only one). Each engine is one script in src/engines/ (see src/engines/README.md).", default: copilot }
-  copilot_token: { description: "Fallback fine-grained PAT (Copilot Requests). Empty = use the job token with permissions copilot-requests write.", default: "" }
+  engine: { description: "Review engine adapter: auto (default: by the credential kind when llm_token is set, else copilot on the job token) | copilot (Copilot CLI) | claude (Claude Code CLI on an Anthropic API key). Each engine is one script in src/engines/ (see src/engines/README.md).", default: auto }
+  llm_token: { description: "The model credential, detected by prefix and never printed: a GitHub fine-grained PAT with Copilot Requests (github_pat_..., gho_..., ghu_...) runs the copilot engine; an Anthropic API key (sk-ant-...) runs the claude engine. Classic ghp_ tokens and other values fail. Empty = copilot on the job token with permissions copilot-requests write (org billing).", default: "" }
+  copilot_token: { description: "Alias of llm_token (llm_token wins when both are set).", default: "" }
   github_token: { description: "Token for collect and post (needs pull-requests write).", default: "${{ github.token }}" }
-  model: { description: "Model name passed to the Copilot CLI. Empty = Copilot Auto. What is available depends on the token owner's plan; an unavailable model falls back to auto.", default: "" }
+  model: { description: "Model name passed to the engine. Empty = Copilot Auto (copilot) or the CLI default (claude). Short alias: haiku-5.5. Any full id passes through. What is available depends on the token owner's plan; with Copilot an unavailable model falls back to auto.", default: "" }
   effort: { description: "Reasoning effort: empty (Copilot default) | low | medium | high | xhigh | max. Only passed with an explicit model other than auto.", default: "" }
   auto_tier: { description: "Copilot Auto routing profile when model is empty or auto: intelligence | balance | efficiency | empty (Copilot default). Ignored, with a note, if the CLI or an org policy rejects it.", default: intelligence }
   fast_models: { description: "Copilot: extra model names (exact, or /regex/; one per line or comma separated) to treat as fast-tier on top of the built-in name patterns (flash, mini, haiku, nano, lite, small).", default: "" }
@@ -23,6 +24,7 @@ inputs:
   standards_paths: { description: "Globs (one per line) that add coding-standard or review-guideline documents, read from the base commit; a !glob line excludes.", default: "" }
   coverage_files: { description: "Optional. Coverage report globs, one per line, relative to the workspace (LCOV, Cobertura XML, JaCoCo XML, Go cover profile, Istanbul coverage-final.json). SpecGuard never runs tests: your workflow must run them with coverage BEFORE this step, in the same job. With a report, changed lines that no test executed are reported as facts and a 'covered' judgement for such a line is downgraded. Empty = off.", default: "" }
   trace: { description: "auto | off. auto traces requirement docs and code when any requirement doc is found.", default: auto }
+  claude_version: { description: "Pinned @anthropic-ai/claude-code version (claude engine).", default: "2.1.284" }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
   review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it.", default: "12" }
   include_bots: { description: "true to review PRs opened by bots (skipped by default).", default: "false" }
@@ -153,13 +155,24 @@ runs:
         HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
       run: node "$GITHUB_ACTION_PATH/src/coverage.js" || true
 
+    # What the credential is (by prefix; the value is never printed), which engine it selects and the model's real name.
+    - id: credential
+      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true' && steps.superseded.outputs.superseded != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
+      shell: bash
+      env:
+        LLM_TOKEN: ${{ inputs.llm_token || inputs.copilot_token }}
+        ENGINE: ${{ inputs.engine }}
+        MODEL: ${{ inputs.model }}
+      run: node "$GITHUB_ACTION_PATH/src/credential.js"
+
     - id: engine
       if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true' && steps.superseded.outputs.superseded != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
-        ENGINE: ${{ inputs.engine }}
+        ENGINE: ${{ steps.credential.outputs.engine }}
         COPILOT_VERSION: ${{ inputs.copilot_version }}
-        MODEL: ${{ inputs.model }}
+        CLAUDE_VERSION: ${{ inputs.claude_version }}
+        MODEL: ${{ steps.credential.outputs.model }}
         EFFORT: ${{ inputs.effort }}
         AUTO_TIER: ${{ inputs.auto_tier }}
         FAST_MODELS: ${{ inputs.fast_models }}
@@ -175,13 +188,15 @@ runs:
       shell: bash
       env:
         ENGINE: ${{ steps.engine.outputs.engine }}
-        COPILOT_GITHUB_TOKEN: ${{ inputs.copilot_token }}
+        COPILOT_GITHUB_TOKEN: ${{ steps.credential.outputs.kind != 'anthropic' && (inputs.llm_token || inputs.copilot_token) || '' }}
+        ANTHROPIC_API_KEY: ${{ steps.credential.outputs.kind == 'anthropic' && (inputs.llm_token || inputs.copilot_token) || '' }}
         GITHUB_TOKEN: ${{ github.token }}
         MODE: ${{ steps.mode.outputs.mode }}
         CHECK: ${{ steps.mode.outputs.mode == 'scan' && 'audit' || '' }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         COPILOT_VERSION: ${{ inputs.copilot_version }}
-        MODEL: ${{ inputs.model }}
+        CLAUDE_VERSION: ${{ inputs.claude_version }}
+        MODEL: ${{ steps.credential.outputs.model }}
         EFFORT: ${{ inputs.effort }}
         AUTO_TIER: ${{ inputs.auto_tier }}
         FAST_MODELS: ${{ inputs.fast_models }}
@@ -207,7 +222,7 @@ runs:
         MAX_COMMENTS: ${{ inputs.max_comments }}
         RESOLVE_STALE: ${{ inputs.resolve_stale }}
         ENGINE: ${{ steps.engine.outputs.engine }}
-        MODEL: ${{ inputs.model }}
+        MODEL: ${{ steps.credential.outputs.model }}
         SKIP: ${{ steps.collect.outputs.skip }}
         PARTIAL: ${{ steps.collect.outputs.partial }}
         HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
@@ -243,7 +258,7 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         ENGINE: ${{ steps.engine.outputs.engine }}
-        MODEL: ${{ inputs.model }}
+        MODEL: ${{ steps.credential.outputs.model }}
         SKIP: ${{ steps.audit_collect.outputs.skip }}
         SCAN_ISSUE: ${{ inputs.scan_issue }}
         SCAN_PATHS: ${{ inputs.scan_paths }}
