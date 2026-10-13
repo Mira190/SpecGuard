@@ -220,4 +220,4 @@ function main(argv) {
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
-module.exports = { assemble, assembleAudit, strip, traceNeeded, cut, LIMITS, main, maxObligations, standardsCut };
+module.exports = { assemble, assembleAudit, strip, traceNeeded, cut, block, LIMITS, main, maxObligations, standardsCut };
