@@ -91,6 +91,9 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `resolve_stale` | `true` | After a complete review (diff not truncated, engine finished, requirement collection and comment delivery not degraded; an incomplete run says so in the summary), resolves SpecGuard's own review threads that have no replies and whose finding is no longer reported anywhere, including the summary (at most 20 per run). Needs `pull-requests: write`; failures are noted and never fail the run. `false` disables it. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
 | `claude_version` | `2.1.290` | Pinned `@anthropic-ai/claude-code` (>= 2.1.205). |
+| `mode` | `pr` | `pr` reviews a pull request; `audit` audits the checked-out repository against its requirement documents. See [Audit mode](#audit-mode). |
+| `audit_max_requirements` | `80` | Audit mode: most requirements listed in one audit (integer 1-500). |
+| `audit_issue` | `false` | Audit mode: `true` also creates or updates one issue titled "SpecGuard requirements audit" (needs `issues: write`). |
 
 Claude engine:
 
@@ -99,6 +102,40 @@ Claude engine:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
+
+## Audit mode
+
+`mode: audit` is a repository-wide risk list for QA, not a PR review. On demand or on a schedule it reads the requirement documents at the checked-out commit (found by content, plus `requirements_paths`), extracts the atomic requirements (descriptive design prose counts: "a repeating plan stays on after it fires" is a requirement) and, for each, says whether it has unit-test evidence, only higher-level tests, no test, or looks unimplemented or contradicted by the code, or needs a human. It is advisory and static: tests are not executed, the counts are not a coverage figure, and they are not for scoring people.
+
+Run it on the default branch (that is the trusted base for rule and requirement files), not on a pull request:
+
+```yaml
+name: SpecGuard audit
+on:
+  workflow_dispatch:
+  schedule: [{ cron: "0 6 * * 1" }]
+permissions:
+  contents: read
+  copilot-requests: write
+  # issues: write # only with audit_issue: true
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { persist-credentials: false }
+      - uses: Mira190/SpecGuard@v1
+        with:
+          mode: audit
+          review_timeout_minutes: 25
+          copilot_max_ai_credits: "400"
+          # audit_issue: "true"
+```
+
+The result is the job summary: counts by status and by class, one table per requirement document (requirement, status, class, evidence links at the audited commit), the candidate documents that were not admitted ("add to `requirements_paths` to include"), and what was not reviewed (skipped documents, rows whose citation did not verify, the `audit_max_requirements` cap). Every citation is checked against the file at HEAD: a requirement whose quote is not found is moved to "not reviewed"; test or code evidence that is not found is removed and a `covered` row becomes `unknown`. `audit.json` (the validated result) stays in the `specguard-audit-<attempt>` artifact (`ctx_retention_days`). With `audit_issue: true` the same report is written to a single issue (found by a hidden marker and authored by this action; whole rows are dropped, never cut, to fit GitHub's body limit).
+
+Cost: the model reads every admitted document in full (at most 60), so an audit uses far more tokens than a PR review. Cap it with `copilot_max_ai_credits` (per turn) or `max_budget_usd` and `max_turns` (Claude, raise them for large repositories), lower `audit_max_requirements`, narrow the documents with `requirements_paths` (`!glob` excludes), and raise `review_timeout_minutes` and the job `timeout-minutes` for large repositories.
 
 ## Standards evidence
 

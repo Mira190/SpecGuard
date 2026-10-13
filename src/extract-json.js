@@ -25,10 +25,10 @@ function extract(s) {
     i = end;
   }
   found.reverse();
-  return found.find((t) => { const o = JSON.parse(t); return 'findings' in o || 'coverage' in o; }) || (bad ? undefined : found[0]); // a corrupt span means the rest is not trustworthy
+  return found.find((t) => { const o = JSON.parse(t); return 'findings' in o || 'coverage' in o || 'docs_reviewed' in o; }) || (bad ? undefined : found[0]); // a corrupt span means the rest is not trustworthy
 }
 
-// CLI: node extract-json.js <in> <out> [--check]. --check also runs post.js's validator and exits 1 when the output is unusable (the repair turn's trigger).
+// CLI: node extract-json.js <in> <out> [--check]. --check also runs post.js's validator (audit-post.js's with CHECK=audit) and exits 1 when the output is unusable (the repair turn's trigger).
 if (require.main === module) {
   const [inp, outp, flag] = process.argv.slice(2);
   const j = extract(fs.readFileSync(inp, 'utf8'));
@@ -36,7 +36,7 @@ if (require.main === module) {
   if (j) {
     fs.writeFileSync(outp, j);
     if (flag === '--check') {
-      try { const v = require('./post').validate(JSON.parse(j)); if (!v.ok) why = `output failed validation: ${v.error}`; } catch (e) { why = `output failed validation: ${e.message}`; }
+      try { const v = require(process.env.CHECK === 'audit' ? './audit-post' : './post').validate(JSON.parse(j)); if (!v.ok) why = `output failed validation: ${v.error}`; } catch (e) { why = `output failed validation: ${e.message}`; }
     }
   }
   if (why) console.log(`::warning::${why}`);
