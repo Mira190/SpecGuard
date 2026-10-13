@@ -149,10 +149,10 @@ test('validatedGaps: inline comments need high confidence; summary items count u
   assert.strictEqual(validatedGaps({ comments: [comment('weak_test', 'high')], summary: '' }), true);
   assert.strictEqual(validatedGaps({ comments: [comment('missing_test', 'low')], summary: '' }), false);
   assert.strictEqual(validatedGaps({ comments: [comment('standards_violation', 'high')], summary: '' }), false);
-  assert.strictEqual(validatedGaps({ comments: [], summary: '- **Test it** (`src/a.js:3`, missing_test, over the comment cap)\n' }), true);
-  assert.strictEqual(validatedGaps({ comments: [], summary: '- **Test it** (`src/a.js:3`, weak_test)\n' }), true);
-  assert.strictEqual(validatedGaps({ comments: [], summary: '- **Test it** (`src/a.js:3`, missing_test, low confidence)\n' }), false);
-  assert.strictEqual(validatedGaps({ comments: [], summary: '- **Style** (`src/a.js:3`, standards_violation)\n' }), false);
+  assert.strictEqual(validatedGaps({ comments: [], summary: '- ❌ **Missing test:** Test it `src/a.js:3` (inline limit reached) — x\n' }), true);
+  assert.strictEqual(validatedGaps({ comments: [], summary: '- ❌ **Weak test:** Test it `src/a.js:3` — x\n' }), true);
+  assert.strictEqual(validatedGaps({ comments: [], summary: '- ❌ **Missing test:** Test it `src/a.js:3` (low confidence) — x\n' }), false);
+  assert.strictEqual(validatedGaps({ comments: [], summary: '- ❌ **Violation:** Style `src/a.js:3` — rule: `R.md`\n' }), false);
   assert.strictEqual(validatedGaps({}), false);
 });
 

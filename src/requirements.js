@@ -24,33 +24,52 @@ const sanitize = (s) => {
 };
 
 const AC_HEAD = /^(acceptance criteria|acceptance tests|验收标准|验收条件|AC)\s*[:：]?$/i;
+// The same words (plus "definition of done" and "requirements") as a plain line: "Acceptance criteria:", "**Acceptance criteria**", "AC:".
+const PLAIN_HEAD = /^\s{0,3}(?:\*\*|__|\*|_)?\s*(?:acceptance criteria|acceptance tests|验收标准|验收条件|AC|definition of done|requirements)\s*[:：]?\s*(?:\*\*|__|\*|_)?\s*[:：]?\s*$/i;
+const LIST_ITEM = /^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)(.+)$/;
+// Per line: is it inside an acceptance-criteria section (the header line included)? A section starts at an AC heading (it runs until a heading of the same or
+// a higher level) or at a plain AC line (it runs until a heading, or a blank line followed by a line that is not a list item). Fenced code never changes it.
+function acMask(lines) {
+  let depth = 0, plain = false, blank = false, fenced = false;
+  return lines.map((line) => {
+    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; return depth > 0 || plain; }
+    if (fenced) return depth > 0 || plain;
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (heading) {
+      plain = false; blank = false;
+      if (AC_HEAD.test(heading[2].trim())) depth = heading[1].length;
+      else if (heading[1].length <= depth) depth = 0;
+      return depth > 0;
+    }
+    if (!line.trim()) { blank = true; return depth > 0 || plain; }
+    if (PLAIN_HEAD.test(line)) { plain = true; blank = false; return true; }
+    if (plain && blank && !LIST_ITEM.test(line)) plain = false;
+    blank = false;
+    return depth > 0 || plain;
+  });
+}
 // Deliberately narrow: structured AC sections only. Narrative still needs model
 // interpretation; this inventory is a lower bound, never a completeness claim.
 function extractCriteria(documents) {
   const criteria = [];
   for (const { source, text } of documents) {
-    let depth = 0, active = null, fenced = false, top = 0;
-    for (const line of text.split(/\r\n?|\n/)) {
-      if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
-      if (fenced) continue;
-      const heading = /^(#{1,6})\s+(.+)$/.exec(line);
-      if (heading) {
-        if (AC_HEAD.test(heading[2].trim())) depth = heading[1].length;
-        else if (heading[1].length <= depth) depth = 0;
-        active = null;
-        continue;
-      }
+    let active = null, fenced = false, top = 0;
+    const lines = text.split(/\r\n?|\n/), inAc = acMask(lines);
+    lines.forEach((line, i) => {
+      if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; return; }
+      if (fenced) return;
+      if (/^#{1,6}\s+\S/.test(line) || PLAIN_HEAD.test(line)) { active = null; return; }
       const labelled = /^\s*AC\s*\d+\s*[:：]\s*(.+)$/i.exec(line);
       const indent = /^\s*/.exec(line)[0].length;
       // an item indented deeper than the current criterion is a sub-point of it (continuation below)
-      const item = depth && !(active && indent > top) && /^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)(.+)$/.exec(line);
+      const item = inAc[i] && !(active && indent > top) && LIST_ITEM.exec(line);
       if (labelled || item) {
         top = indent;
         active = { id: `R${criteria.length + 1}`, source, quote: (labelled || item)[1].trim() };
         criteria.push(active);
       } else if (active && /^\s+\S/.test(line)) active.quote += '\n' + line.trim();
       else if (line.trim()) active = null;
-    }
+    });
   }
   return criteria;
 }
@@ -193,13 +212,8 @@ function trustedComments(comments, cap = COMMENT_CAP) {
 // An issue body over `cap` keeps its acceptance-criteria sections and `AC n:` lines whole and fills the rest with the other lines in order.
 function fitBody(body, cap = ISSUE_CAP) {
   if (body.length <= cap) return { text: body, cut: false };
-  const lines = body.split('\n');
-  let depth = 0;
-  const keep = lines.map((l) => {
-    const h = /^(#{1,6})\s+(.+)$/.exec(l);
-    if (h) { if (AC_HEAD.test(h[2].trim())) { depth = h[1].length; return true; } if (h[1].length <= depth) depth = 0; return depth > 0; }
-    return depth > 0 || /^\s*AC\s*\d+\s*[:：]/i.test(l);
-  });
+  const lines = body.split('\n'), inAc = acMask(lines);
+  const keep = lines.map((l, i) => inAc[i] || /^\s*AC\s*\d+\s*[:：]/i.test(l));
   let room = cap - lines.reduce((n, l, i) => n + (keep[i] ? l.length + 1 : 0), 0), cut = false;
   const out = [];
   lines.forEach((l, i) => {
