@@ -410,3 +410,47 @@ test('D6: generated code and lock files are ignored by default', (t) => {
   const r = scenario(t, { 'src.js': 'a\n', ...Object.fromEntries(gen.map((f) => [f, 'old\n'])) }, ({ write }) => { write('src.js', 'b\n'); for (const f of gen) write(f, 'new\n'); });
   assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean), ['src.js']);
 });
+
+test('diff.numbered.txt: numbered copy of diff.patch (which stays raw) is written', (t) => {
+  const r = scenario(t, { 'src.js': 'a\nb\nc\nd\n' }, ({ write }) => write('src.js', 'a\nB\nc\nd\ne\n'));
+  const lines = r.ctxFile('diff.numbered.txt').split('\n');
+  assert.ok(lines.includes('   2 | -b') && lines.includes('   2 | +B') && lines.includes('   1 |  a') && lines.includes('   5 | +e'));
+  assert.doesNotMatch(r.ctxFile('diff.patch'), /\|/);
+  assert.match(r.ctxFile('diff.patch'), /^\+B$/m);
+});
+
+test('test-candidates.txt: name match in any directory, mentions of the stem, same directory, cap of 5, no tests listed for tests', (t) => {
+  const base = {
+    'src/main/java/com/acme/Foo.java': 'class Foo {}\n', 'src/test/java/com/acme/FooTest.java': 'class FooTest {}\n',
+    'pkg/ledger.go': 'package pkg\n', 'pkg/ledger_test.go': 'package pkg\n',
+    'app/parser.py': 'x = 1\n', 'tests/test_parser.py': 'import foo\n',
+    'web/widget.ts': 'export {}\n', 'web/__tests__/widget.spec.ts': 'x\n',
+    'lib/pricing.js': 'module.exports = 1;\n', 'lib/misc.test.js': 'x\n', 'tests/checkout.test.js': "require('../lib/pricing');\n", 'tests/other.test.js': 'nothing\n',
+    'lib/cap.js': 'x\n', 'lib/lonely.js': 'x\n',
+    ...Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`d${i}/cap.test.js`, 'x\n'])),
+  };
+  const touch = Object.keys(base).filter((f) => !/test|spec/i.test(f));
+  const r = scenario(t, base, ({ write }) => { for (const f of [...touch, 'lib/misc.test.js']) write(f, base[f] + '// changed\n'); });
+  const blocks = Object.fromEntries(r.ctxFile('test-candidates.txt').split(/\n(?=\S)/).map((b) => { const [h, ...rest] = b.trim().split('\n'); return [h, rest.map((l) => l.trim())]; }));
+  assert.deepEqual(blocks['src/main/java/com/acme/Foo.java'], ['src/test/java/com/acme/FooTest.java  (same name)']);
+  assert.deepEqual(blocks['pkg/ledger.go'], ['pkg/ledger_test.go  (same name)']);
+  assert.equal(blocks['app/parser.py'][0], 'tests/test_parser.py  (same name)');
+  assert.deepEqual(blocks['web/widget.ts'], ['web/__tests__/widget.spec.ts  (same name)']);
+  assert.deepEqual(blocks['lib/pricing.js'], ['tests/checkout.test.js  (mentions pricing)', 'lib/misc.test.js  (same directory)']);
+  assert.equal(blocks['lib/cap.js'].length, 5);
+  assert.ok(blocks['lib/cap.js'].every((l) => l.endsWith('(same name)')));
+  assert.deepEqual(blocks['lib/lonely.js'], ['lib/misc.test.js  (same directory)']);
+  assert.ok(!('lib/misc.test.js' in blocks), 'a changed test file is not a subject');
+  assert.ok(Buffer.byteLength(r.ctxFile('test-candidates.txt')) <= 16 * 1024);
+});
+
+test('test-candidates.txt: files with no candidate say so, and the file is capped at 16 KB with a count of the rest', (t) => {
+  const many = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`${'long/'.repeat(8)}module${i}/${'x'.repeat(60)}${i}.js`, 'a\n']));
+  const r = scenario(t, { 'solo.js': 'a\n', ...many }, ({ write }) => { write('solo.js', 'b\n'); for (const f of Object.keys(many)) write(f, 'b\n'); });
+  const s = r.ctxFile('test-candidates.txt');
+  assert.match(s, /^solo\.js\n  \(no candidate test file found\)\n/m);
+  assert.ok(Buffer.byteLength(s) <= 16 * 1024);
+  const spare = Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`src/m${i}.js`, 'a\n']));
+  const r2 = scenario(t, { 'x.test.js': 'a\n', ...spare }, ({ write }) => { for (const f of Object.keys(spare)) write(f, 'b\n'); });
+  assert.match(r2.ctxFile('test-candidates.txt'), /\(10 more changed file\(s\) not listed\)\n$/); // MAX_FILES = 60
+});

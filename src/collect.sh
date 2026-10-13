@@ -215,3 +215,44 @@ END { flush() }
   ' "$CTX/diff.patch" && mv "$CTX/diff.tmp" "$CTX/diff.patch"
   out partial true
 fi
+
+# 6. Deterministic scaffolding for weak models (fail-soft, no AI): the PR diff with explicit line numbers, and per changed file the
+# existing test files most likely to cover it. diff.patch stays on disk untouched. Written last so they match the truncated diff.patch.
+node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null || { rm -f "$CTX/diff.numbered.txt"; echo "::warning::numbered diff failed; the raw diff is used"; }
+# Up to 5 per changed non-test file: same basename stem with test/spec affixes (any directory), tests that mention the stem as a whole word
+# (imports, references), then tests in the same directory. ponytail: names and a word grep only, no per-language import parsing.
+timeout 60 node - "$HERE/trace.js" "$CTX" <<'JS' || { echo "::warning::test candidates failed; continuing without them"; rm -f "$CTX/test-candidates.txt"; }
+const fs = require('node:fs'), path = require('node:path'), { execFileSync } = require('node:child_process');
+const { isTestPath } = require(path.resolve(process.argv[2]));
+const ctx = process.argv[3], CAP = 16 * 1024, PER = 5, MAX_FILES = 60;
+const lines = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
+const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter((p) => p && !/[\x00-\x1F]/.test(p));
+const tests = tracked.filter(isTestPath), testSet = new Set(tests);
+const specs = new Set(lines('spec-files.txt'));
+const changed = lines('files.txt').filter((f) => !isTestPath(f) && !specs.has(f) && !/\.(md|mdx|markdown|rst|adoc|txt|feature|json|ya?ml|toml|lock)$/i.test(f));
+const key = (s) => s.toLowerCase().replace(/[-_.]/g, '');
+const noExt = (p) => path.posix.basename(p).replace(/\.[^.]*$/, '');
+// FooTest -> foo, foo_test -> foo, foo.spec -> foo, test_foo -> foo, FooTests -> foo; a stem without affix stays (tests/foo.py)
+const testStem = (p) => key(noExt(p).replace(/^tests?[_-]/i, '').replace(/[._-]?(tests?|spec)$/i, ''));
+const near = (a, b) => { const x = path.posix.dirname(a).split('/'), y = path.posix.dirname(b).split('/'); let i = 0; while (i < x.length && x[i] === y[i]) i++; return i; };
+const GENERIC = new Set(['index', 'main', 'mod', 'init', '__init__', 'lib', 'app', 'utils', 'util', 'types']);
+const out = []; let size = 0, omitted = 0;
+for (const [k, f] of changed.entries()) {
+  if (k >= MAX_FILES) { omitted = changed.length - k; break; }
+  const stem = noExt(f), want = key(stem), dir = path.posix.dirname(f), got = new Map();
+  const add = (list, why) => { for (const t of list.sort((a, b) => near(f, b) - near(f, a) || (a < b ? -1 : 1))) if (got.size < PER && !got.has(t)) got.set(t, why); };
+  add(tests.filter((t) => testStem(t) === want), 'same name');
+  if (got.size < PER && stem.length >= 3 && !GENERIC.has(stem.toLowerCase())) {
+    try {
+      const hit = execFileSync('git', ['grep', '-l', '-w', '-F', '-I', '-e', stem], { encoding: 'utf8', timeout: 15000, maxBuffer: 1 << 26, env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } }).split('\n');
+      add(hit.filter((t) => testSet.has(t)), 'mentions ' + stem);
+    } catch { /* exit 1: no match; a timeout just skips this tier */ }
+  }
+  add(tests.filter((t) => { const d = path.posix.dirname(t).replace(/\/__tests__$/, ''); return d === dir; }), 'same directory');
+  const block = f + '\n' + (got.size ? [...got].map(([t, why]) => `  ${t}  (${why})\n`).join('') : '  (no candidate test file found)\n');
+  if (size + block.length > CAP) { omitted = changed.length - k; break; }
+  out.push(block); size += block.length;
+}
+if (omitted) out.push(`(${omitted} more changed file(s) not listed)\n`);
+fs.writeFileSync(path.join(ctx, 'test-candidates.txt'), out.join(''));
+JS

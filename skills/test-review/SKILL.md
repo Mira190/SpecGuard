@@ -16,6 +16,8 @@ If the references are already included below this skill, do not read them again.
 ## Modes
 
 - **CI mode**: the prompt names a context directory with `diff.patch`, `files.txt` (reviewable changes), `standards.txt` (base-branch rule files), `requirements.md` (PR and issue text, or `none`), `requirements-status.json` (sources, limitations) and, with requirement documents, `trace-candidates.json`, `requirements-index.md`, `spec-files.txt`. The prompt may inline them; do not re-read what is inlined. Output only the JSON object. Existing tests outside the diff may supply assertion evidence and summary-only weak-test findings.
+  - `diff.numbered.txt` (inlined in place of `diff.patch` when present): every `+` and context line carries its new-side line number and every `-` line its old-side number before the `|`. Cite `line` from these numbers; `quote` is the code text after the `|` marker.
+  - `test-candidates.txt`: per changed file, existing test files most likely to cover it (same name, mention the file, same directory). Start the evidence search there and keep searching other test directories when they do not settle an obligation.
 <!-- mode:local -->
 - **Local mode**: no context directory. Diff against the default branch, find rule files yourself, and take requirements from the PR body, issue references in commit messages and the PR body (not only "Closes #N"), and spec or ADR files under `docs/` or `specs/` that the change touches or names. Print the report from `references/output.md`.
 <!-- /mode -->

@@ -20,7 +20,7 @@ const MAX_BIG = 2 << 20; // a requirement doc over MAX_FILE is read (only when c
 const SIMILAR = 0.3; // token overlap (Jaccard) at which an edited block pairs with its old version
 const MAX_REJECTED = 20; // spec-rejected.txt lines
 const BUDGET_MS = 40000, MAX_DEEP = 25, MAX_DELTAS = 20, MAX_LITS = 200, MAX_VALUES = 40; // time budget; S items traced to code; per-item / per-run search breadth
-const MAX_HUNKS = 60, CAND_CAP = 60 * 1024, PER_HUNK = 5, FLOOR = 0.3, SURE = 3; // trace-candidates.json caps; a BM25 floor (share of the hunk best) applies after the first SURE candidates
+const MAX_HUNKS = 60, CAND_CAP = 60 * 1024, PER_HUNK = 5, FLOOR = 0.3, SURE = 3, TOP_CAND = 3; // trace-candidates.json caps; a BM25 floor (share of the hunk best) applies after the first SURE candidates
 const NOT_CODE_DIR = /(^|\/)(testdata|fixtures?|__fixtures__|__snapshots__|vendor|third_party|generated)\//i; // hunks there rarely trace to a requirement
 // A wall-clock budget shared by the expensive loops; they stop early and the run records a limitation instead of being killed.
 const makeClock = (ms) => { const end = Date.now() + ms; return { left: () => end - Date.now(), over: () => Date.now() >= end }; };
@@ -807,6 +807,8 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   }
   if (info.cut) cand.limitations.push(`The ${Math.round(budgetMs / 1000)} s time budget was reached; code, test and occurrence search for the changed requirements is partial.`);
   if (info.valuesCapped) cand.limitations.push(`Occurrence search covers only the first ${MAX_VALUES} changed values.`);
+  // Weak models drown in long lists (pilot: 33.7 KB, truncated in the prompt): keep the top TOP_CAND ranked code and test windows per criterion. Ranking is unchanged.
+  for (const r of cand.requirement_to_code) { r.code = r.code.slice(0, TOP_CAND); r.tests = r.tests.slice(0, TOP_CAND); }
   const note = fitCandidates(cand);
   if (note) cand.limitations.push(note);
 

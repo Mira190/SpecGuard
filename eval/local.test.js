@@ -70,7 +70,7 @@ test('prepare: builds repos, runs collect, writes prompt and meta', () => {
 
   const prompt = fs.readFileSync(path.join(out, 'tr3', 'prompt.md'), 'utf8');
   assert.ok(prompt.includes('"coverage"') && prompt.includes(fs.readFileSync(path.join(__dirname, '..', 'skills', 'test-review', 'references', 'trace.md'), 'utf8').replaceAll(String.fromCharCode(13), '').slice(0, 200)));
-  assert.ok(prompt.includes(path.join(out, 'tr3', 'ctx').split(path.sep).join('/')) && prompt.includes('<untrusted-data name="diff.patch"'));
+  assert.ok(prompt.includes(path.join(out, 'tr3', 'ctx').split(path.sep).join('/')) && prompt.includes('<untrusted-data name="diff.numbered.txt"'));
 });
 
 test('prepareOne: trace off skips spec classification', () => {

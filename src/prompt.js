@@ -5,7 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const LIMITS = { diff: 40 * 1024, requirements: 8 * 1024, status: 6 * 1024, index: 6 * 1024, trace: 8 * 1024, small: 4 * 1024 };
+const LIMITS = { diff: 40 * 1024, requirements: 8 * 1024, status: 6 * 1024, index: 6 * 1024, trace: 8 * 1024, small: 4 * 1024, cands: 16 * 1024 };
 // Total worst case stays well under the 128 KiB single-argument limit that `claude -p "$PROMPT"` hits on Linux.
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
@@ -82,10 +82,15 @@ function dynamic(ctxDir) {
   let tc = read(ctxDir, 'trace-candidates.json');
   try { const j = JSON.parse(tc); tc = Object.values(j).some((v) => Array.isArray(v) ? v.length : v) ? JSON.stringify(j) : ''; } catch {}
   add('trace-candidates.json', tc, LIMITS.trace);
-  const diff = read(ctxDir, 'diff.patch');
+  add('test-candidates.txt', read(ctxDir, 'test-candidates.txt'), LIMITS.cands, 'per changed file: existing test files most likely to cover it; start the evidence search here');
+  // The numbered diff replaces the raw one when present (same byte limit); diff.patch stays on disk. A truncation note points at the numbered file.
+  const numbered = read(ctxDir, 'diff.numbered.txt');
+  const [dname, diff, dnote] = nonEmpty(numbered)
+    ? ['diff.numbered.txt', numbered, 'new-side line number on + and context lines, old-side on - lines; cite line from these numbers; quote is the code text after the | marker']
+    : ['diff.patch', read(ctxDir, 'diff.patch'), ''];
   if (nonEmpty(diff)) {
     const c = cut(diff, LIMITS.diff);
-    parts.push(block('diff.patch', c.text, c.cut ? `first ${c.lines} lines of ${diff.split('\n').length}; Read ${path.join(ctxDir, 'diff.patch').replace(/\\/g, '/')} from line ${c.lines + 1} for the rest` : ''));
+    parts.push(block(dname, c.text, c.cut ? `first ${c.lines} lines of ${diff.split('\n').length}; Read ${path.join(ctxDir, dname).replace(/\\/g, '/')} from line ${c.lines + 1} for the rest${dnote ? `; ${dnote}` : ''}` : dnote));
   } else empty.push('diff.patch');
   return { parts, empty };
 }
