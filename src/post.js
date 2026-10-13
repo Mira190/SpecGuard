@@ -220,7 +220,7 @@ function validate(o) {
     if (structural) { unusable++; firstBad ||= `coverage[${i}]: ${why}`; }
     if (!why) {
       if (c.alignment === undefined || c.alignment === null) { // optional in practice: derived, never invented
-        if (links.has(c.id)) { c.alignment = unknownAlign('not stated'); notes.push(`Obligation ${c.id} alignment unknown: not stated.`); }
+        if (links.has(c.id)) { c.alignment = unknownAlign('not stated'); }
         else c.alignment = { status: 'not_applicable', reason: 'not stated; no requirement is linked to this obligation' };
       }
       const a = align(c.alignment);
@@ -686,7 +686,7 @@ function criteriaOf(data, all) {
     const cs = r.obligation_ids.map((id) => covById.get(id)), mine = (kinds) => all.filter((f) => kinds.includes(f.kind) && f.obligation_ids.some((id) => r.obligation_ids.includes(id)));
     const mismatch = cs.some((c) => c?.alignment?.status === 'mismatch') && mine(['spec_mismatch']).length > 0, gap = hasGap(r, covById, gaps) && mine(['missing_test', 'weak_test']).length > 0; // a pre-existing drift, or a gap with no verified finding, is not an action here
     const kind = !cs.length ? 'unassessed' : mismatch ? 'mismatch' : gap ? 'gap' : cs.every((c) => c?.status === 'covered') ? 'evidenced' : 'check';
-    return { r, kind, f: (mismatch ? mine(['spec_mismatch']) : mine(['missing_test', 'weak_test']))[0], higher: cs.some((c) => c?.status === 'higher_level_only') };
+    return { r, kind, cs, f: (mismatch ? mine(['spec_mismatch']) : mine(['missing_test', 'weak_test']))[0], higher: cs.some((c) => c?.status === 'higher_level_only') };
   });
 }
 const STD_WORD = { checked: 'reviewed', no_rules: 'no rule files found', not_reviewed: 'not reviewed' };
@@ -719,9 +719,9 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   else if (isClean) verdict = `**✅ No unit test gaps found** in ${rows.length ? `the ${rows.length} assessed ${rows.length === 1 ? 'criterion' : 'criteria'}` : 'the changed behaviour'}. Static review; tests were not run.`;
   else verdict = '**❔ No gaps found; part of the review could not be assessed**';
 
-  // line 2: the shape of the result in one glance (complete runs only: an incomplete or reduced run does not claim a pass)
+  // line 2: the shape of the result in one glance (not for an incomplete run; a reduced run shows the counts, never a pass line)
   let line2 = '';
-  if (data && !failed && !inc && !reduced) {
+  if (data && !failed && !inc) {
     const n = (k) => rows.filter((x) => x.kind === k).length, nk = (k) => all.filter((f) => f.kind === k).length;
     const crit = rows.length && !isClean ? [`Criteria: ${n('evidenced')} of ${rows.length} ✅ evidenced`, n('gap') && `${n('gap')} ❌ gap`, n('mismatch') && `${n('mismatch')} ❌ mismatch`, (n('unassessed') + n('check')) && `${n('unassessed') + n('check')} ❔ not assessed`].filter(Boolean) : [];
     const tool = tooling && !['passed', 'not_configured'].includes(tooling.status) ? `; tool checks ${cell(tooling.status)}` : '';
@@ -767,7 +767,8 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
       const link = (x) => { const u = x.f && (urls.get(x.f) || pin(x.f, blob)); return u ? ` ([finding](${/^https:\/\//.test(u) ? parens(u) : u}))` : ''; };
       const next = (x) => (x.kind === 'gap' ? (x.f ? `${KIND_LABEL[x.f.kind]}: ${cell(title1(x.f.title), 110)}${link(x)}` : 'Add a unit test.')
         : x.kind === 'mismatch' ? (x.f ? `${cell(title1(x.f.title), 130)}${link(x)}` : 'Check the code against the requirement.')
-          : x.kind === 'check' && x.higher ? 'Only higher-level tests cover it; add a unit test or confirm that is enough.' : 'Check by hand.');
+          : x.kind === 'check' && x.higher ? 'Only higher-level tests cover it; add a unit test or confirm that is enough.'
+            : cell(x.cs.find((c) => c?.status === 'unknown' && c.reason)?.reason.replace(/^Not assessed:\s*/i, '') || 'Check by hand.', 160));
       const row = (x) => `| ${x.kind === 'gap' ? '❌ Gap' : x.kind === 'mismatch' ? '❌ Mismatch' : '❔ Not assessed'} | **${cell(x.r.id, 40)}** ${cell(x.r.quote, 120)} | ${next(x)} |\n`;
       const th = '| Status | Criterion | Next step |\n|---|---|---|\n';
       add(vis, `### ${todo.some((x) => x.kind === 'gap' || x.kind === 'mismatch') ? '❌' : '❔'} Requirements to check (${todo.length})\n\n${th}`, todo.slice(0, ROW_CAP).map(row), todo.length > ROW_CAP ? `\n+${todo.length - ROW_CAP} more in Details.\n\n` : '\n');
@@ -892,10 +893,16 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
     const lines = c.side === 'LEFT' ? null : read(c.path);
     return c.side === 'LEFT' ? locate(c, changed(c), keys(c)) : locate(c, (l) => lines?.[l - 1], lines ? lines.map((_, i) => i + 1) : []);
   };
+  const stray = []; // obligations whose change citation is an unchanged line of a changed file
   for (const c of data.coverage) {
     const { change } = c, fails = []; // every citation is checked (locate corrects lines in place); the failures are named
     const check = (label, x, pass) => { if (!pass) fails.push(`${label} ${x.path}:${x.line}`); };
-    if (change) check('changed line', change, reviewable.has(change.path) && locate(change, changed(change), keys(change)));
+    if (change) {
+      const rev = reviewable.has(change.path), onChange = rev && locate(change, changed(change), keys(change));
+      const unchanged = rev && !onChange && change.side !== 'LEFT' && exact(change); // a real line of the file at head that the PR did not change: the citation is dropped, not the obligation
+      if (unchanged) c.change = null;
+      else check('changed line', change, onChange);
+    }
     if (c.behaviour) check('behaviour', c.behaviour, exact(c.behaviour));
     c.evidence.forEach((e, i) => check(`evidence ${i + 1}`, e, exact(e)));
     if (!fails.length && c.status === 'covered') { // a quote that exists must also be an assertion in a test that runs
@@ -907,6 +914,7 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
         (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${bad.join('; ')}.`);
       }
     }
+    if (change && !c.change && !fails.length) stray.push(c.id);
     if (fails.length) {
       const why = `could not verify citation: ${fails.join('; ')}`;
       c.status = 'unknown';
@@ -915,6 +923,7 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
       (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${why}.`);
     }
   }
+  if (stray.length) (data.validation_notes ||= []).push(`${stray.length} ${stray.length === 1 ? 'obligation cites an unchanged line' : 'obligations cite unchanged lines'} of changed files (${stray.join(', ')}); their tests were still checked.`);
   const invalid = new Set(data.coverage.filter((c) => c.status === 'unknown').map((c) => c.id));
   data.findings = data.findings.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !invalid.has(id)) }))
     .filter((f) => f.kind === 'standard' || f.obligation_ids.length);

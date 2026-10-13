@@ -237,7 +237,8 @@ test('a refused output schema: ONE retry asking for plain JSON (no output_config
   assert.equal(h.calls.length, 2);
   assert.ok(h.calls[0].body.output_config && !h.calls[1].body.output_config);
   assert.deepEqual(JSON.parse(h.file('findings.json')), VALID);
-  assert.equal(h.file('engine-notes'), 'structured output unavailable for this schema; plain JSON requested');
+  assert.equal(h.file('engine-notes'), '', 'the usage line carries no engine note for it');
+  assert.ok(!/structured output/.test(h.everything()), 'and no file or call carries it');
   assert.ok([null, 'success'].includes(h.file('engine-status')));
 });
 
@@ -333,6 +334,50 @@ test('context pack: pack-cut.txt lists every file that was cut or not included, 
   const off = repo(t, { 'a.js': body }, { 'files.txt': 'a.js\n' }, { CONTEXT_PACK_BYTES: '0' });
   await off.go();
   assert.equal(off.h.file('pack-cut.txt'), null);
+});
+
+const track = (root) => { for (const a of [['init', '-q'], ['add', '-A']]) spawnSync('git', a, { cwd: root }); }; // the extra tiers read `git ls-files`
+
+test('context pack: a file the requirements name (by file name or folder name) is inlined with its sibling test; generic tokens and tokens that match nothing are skipped; at most 8 files', async (t) => {
+  const files = { 'src/core/subMonths/index.ts': 'export const subMonths = 1;\n', 'src/core/subMonths/test.ts': 'test(subMonths);\n', 'src/core/addMonths/index.ts': 'export const addMonths = 1;\n', 'src/changed.ts': 'c();\n', 'src/other/index.ts': 'o();\n' };
+  for (let i = 0; i < 4; i++) files[`pkg${i}/shared_thing.ts`] = 'x();\n'; // 4 files with the same stem: generic
+  for (let i = 0; i < 10; i++) files[`many/helper_${i}.ts`] = `h${i}();\n`;
+  const r = repo(t, files, { 'files.txt': 'src/changed.ts\n', 'requirements.md': 'subMonths delegates to `addMonths`; see `shared_thing` and `nothing_here` and helper_0 helper_1 helper_2 helper_3 helper_4 helper_5 helper_6 helper_7 helper_8 helper_9.\n' });
+  track(r.root);
+  await r.go();
+  const u = r.user(), at = (n) => u.indexOf(`name="${n}"`);
+  assert.ok(at('src/changed.ts') > 0 && at('src/changed.ts') < at('src/core/subMonths/index.ts') && at('src/core/subMonths/index.ts') < at('src/core/subMonths/test.ts'), 'review file, then the named file, then its sibling test');
+  assert.ok(at('src/core/addMonths/index.ts') > 0, 'a backticked identifier matches a folder name');
+  assert.equal(at('pkg0/shared_thing.ts'), -1, 'a token that matches more than 3 files is generic');
+  assert.match(u, /name="src\/core\/subMonths\/index\.ts" note="full file, line-numbered"/);
+  assert.equal((u.match(/name="many\/helper_\d\.ts"/g) || []).length, 6, 'addMonths and subMonths first, then helper_0..5: 8 named files; helper_6..9 are over the cap');
+  assert.equal(r.h.file('pack-cut.txt'), '', 'nothing from the review-file tier was cut');
+});
+
+test('context pack: the smallest other source files beside a review file come after it, at most 3 per folder, each <= 16 KiB, never tests; their omission is not listed in pack-cut.txt', async (t) => {
+  const r = repo(t, { 'src/a.ts': 'a();\n', 'src/s1.ts': 's1();\n', 'src/s2.ts': 's2();\ns2();\n', 'src/s3.ts': 's3();\n\n\n\n', 'src/s4.ts': 's4();\n'.repeat(20), 'src/big.ts': 'x'.repeat(17 * 1024), 'src/a.test.ts': 'ta();\n', 'src/notes.md': 'doc\n' }, { 'files.txt': 'src/a.ts\n' });
+  track(r.root);
+  await r.go();
+  const u = r.user(), has = (n) => u.includes(`name="${n}"`);
+  assert.deepEqual(['src/s1.ts', 'src/s2.ts', 'src/s3.ts'].map(has), [true, true, true]);
+  assert.deepEqual(['src/s4.ts', 'src/big.ts', 'src/a.test.ts', 'src/notes.md'].map(has), [false, false, false, false], 'a fourth sibling, a big file, a test and a document are left out');
+  assert.equal(r.h.file('pack-cut.txt'), '');
+  const tight = repo(t, { 'a.ts': 'a();\n'.repeat(300), 'b.ts': 'b();\n' }, { 'files.txt': 'a.ts\n' }, { CONTEXT_PACK_BYTES: '1500' });
+  track(tight.root);
+  await tight.go();
+  assert.equal(tight.h.file('pack-cut.txt'), 'a.ts', 'the review file is cut; the sibling that did not fit is not listed');
+});
+
+test('context pack: files of the extra tiers (siblings, named files) stop at 60% of the budget, so a later requirement document still fits', async (t) => {
+  const big = Array.from({ length: 25 }, () => 'x'.repeat(99)).join('\n') + '\n'; // ~2.6 KB numbered: s1 is cut at the 60% line, nothing is left for s2
+  const r = repo(t, { 'src/a.ts': 'a();\n', 'src/s1.ts': big, 'src/s2.ts': big + 'y\n', 'src/s3.ts': big + 'y\ny\n', 'docs/req.md': 'REQ-TEXT\n' }, { 'files.txt': 'src/a.ts\n', 'spec-files.txt': 'docs/req.md\n' }, { CONTEXT_PACK_BYTES: '4000' });
+  track(r.root);
+  await r.go();
+  const u = r.user(), has = (n) => u.includes(`name="${n}"`);
+  assert.deepEqual(['src/a.ts', 'src/s1.ts'].map(has), [true, true]);
+  assert.deepEqual(['src/s2.ts', 'src/s3.ts'].map(has), [false, false], 'past 60% of 4000 bytes the other siblings are skipped');
+  assert.ok(has('docs/req.md'), 'the requirement document fits in the rest');
+  assert.equal(r.h.file('pack-cut.txt'), '', 'skipped extra-tier files are not listed as cut');
 });
 
 test('context pack: a file over the per-file cap (limit/6, here 41666 bytes) is cut at a line boundary and says so', async (t) => {

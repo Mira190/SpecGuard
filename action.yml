@@ -248,7 +248,7 @@ runs:
         script: |
           const env = process.env, t = require(env.ACTION_PATH + '/src/target.js')
           // manual runs: the PR and repository come from inputs, not the event; delivery=summary also makes every write fail (a safety net beside post.js's own DELIVERY switch)
-          await require(env.ACTION_PATH + '/src/post.js')({ github: env.DELIVERY === 'summary' ? t.readOnly(github) : github, context: t.withTarget(context, env), core })
+          await require(env.ACTION_PATH + '/src/post.js')({ github: env.DELIVERY === 'summary' ? t.readOnly(github) : github, context: t.withTarget(context, env), core: require(env.ACTION_PATH + '/src/tee-summary.js')(core, env.CTX + '/summary.md') })
 
     - if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && inputs.ctx_retention_days != '0' }} # raw engine output otherwise dies with the runner
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -282,7 +282,7 @@ runs:
         script: |
           const env = process.env
           // the scan issue may live in another repository (scan_issue_repo) under its own token; every read of the scanned repository uses github_token
-          await require(env.ACTION_PATH + '/src/audit-post.js')({ github, issueGithub: env.ISSUE_TOKEN ? getOctokit(env.ISSUE_TOKEN) : github, context: require(env.ACTION_PATH + '/src/target.js').withTarget(context, env), core })
+          await require(env.ACTION_PATH + '/src/audit-post.js')({ github, issueGithub: env.ISSUE_TOKEN ? getOctokit(env.ISSUE_TOKEN) : github, context: require(env.ACTION_PATH + '/src/target.js').withTarget(context, env), core: require(env.ACTION_PATH + '/src/tee-summary.js')(core, env.CTX + '/summary.md') })
 
     - if: ${{ !cancelled() && steps.mode.outputs.mode == 'scan' && inputs.ctx_retention_days != '0' }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -299,4 +299,5 @@ runs:
       env:
         STATUS: ${{ steps.post.outputs.status || steps.scan_post.outputs.status }}
         REASON: ${{ steps.post.outputs.reason || steps.scan_post.outputs.reason }}
+        CTX: ${{ github.workspace }}/.specguard-ctx # counts.json: a reduced review is told apart from an incomplete one
       run: node "$GITHUB_ACTION_PATH/src/fail-on-error.js"

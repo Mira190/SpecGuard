@@ -453,11 +453,21 @@ test('preserves removed assertions from deleted test files as LEFT-side summary 
   assert.match(s.calls.summary[0].body, /### ❌ Weak unit tests \(\d+\)\n\n- .*removed test or assertion/);
 });
 
-test('does not accept an unrelated historical line as the changed-line citation', () => {
-  const d = report({ coverage: [row('weak_test', { change: { ...behaviour, line: 1, quote: 'l1' } })], findings: [finding('weak_test')] });
-  post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (p) => p === 'src.js' ? ['l1', 'l2', behaviour.quote] : ['test', evidence.quote], new Map([['src.js', post.parsePatch(patch)]]));
-  assert.equal(d.coverage[0].status, 'unknown');
-  assert.equal(d.findings.length, 0);
+test('a change citation on an unchanged line of a changed file drops the citation, keeps the obligation, one aggregated note; a quote absent from the file still fails', () => {
+  const run = (cs) => { const d = report({ coverage: cs, findings: [finding('weak_test')] }); post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (p) => p === 'src.js' ? ['l1', 'l2', behaviour.quote] : ['test', evidence.quote], new Map([['src.js', post.parsePatch(patch)]])); return d; };
+  const stray = { ...behaviour, line: 1, quote: 'l1' };
+  const d = run([row('weak_test', { change: stray }), row('weak_test', { id: 'O2', change: { ...stray } })]);
+  assert.deepEqual(d.coverage.map((c) => [c.status, c.change]), [['weak_test', null], ['weak_test', null]]);
+  assert.equal(d.findings.length, 1);
+  assert.deepEqual(d.validation_notes, ['2 obligations cite unchanged lines of changed files (O1, O2); their tests were still checked.']);
+  const covered = run([row('covered', { change: stray })]);
+  assert.equal(covered.coverage[0].status, 'covered');
+  assert.equal(covered.coverage[0].evidence.length, 1);
+  assert.deepEqual(covered.validation_notes, ['1 obligation cites an unchanged line of changed files (O1); their tests were still checked.']);
+  const absent = run([row('weak_test', { change: { ...stray, quote: 'nowhere in the file' } })]);
+  assert.equal(absent.coverage[0].status, 'unknown');
+  assert.match(absent.validation_notes.join('|'), /changed line src\.js:1/);
+  assert.equal(absent.findings.length, 0);
 });
 
 test('restores omitted collected criteria to the report as unassessed', () => {
@@ -905,8 +915,9 @@ test('r4: coverage citations snap +-5 lines to the quote; a missing quote or an 
   const far = run(report({ coverage: [row('covered', { behaviour: { ...behaviour, line: 30, quote: 'absent' }, change: { ...behaviour } })], findings: [] }));
   assert.equal(far.coverage[0].status, 'unknown');
   const ctxLine = run(report({ coverage: [row('weak_test', { change: { path: 'src.js', line: 2, quote: 'l1' } })], findings: [finding('weak_test')] }));
-  assert.equal(ctxLine.coverage[0].status, 'unknown');
-  assert.equal(ctxLine.findings.length, 0);
+  assert.deepEqual([ctxLine.coverage[0].status, ctxLine.coverage[0].change, ctxLine.findings.length], ['weak_test', null, 1]); // a real but unchanged line: the citation goes, the row stays
+  const absent = run(report({ coverage: [row('weak_test', { change: { path: 'src.js', line: 2, quote: 'not there' } })], findings: [finding('weak_test')] }));
+  assert.deepEqual([absent.coverage[0].status, absent.findings.length], ['unknown', 0]);
 });
 
 test('s2: the summary names rule or agent-config files the PR modified and says they were not reviewed', async (t) => {
@@ -972,7 +983,7 @@ test('a missing alignment is derived, never invented: not_applicable without a l
   delete linked.coverage[0].alignment;
   assert.equal(post.validate(linked).ok, true);
   assert.deepEqual(linked.coverage[0].alignment, { status: 'unknown', reason: 'not stated' });
-  assert.match(linked.validation_notes.join('|'), /alignment unknown: not stated/);
+  assert.deepEqual(linked.validation_notes, []); // derived, not noisy
   assert.equal(post.noGaps(linked), false); // an unstated alignment on a linked row is never a clean review
 });
 
@@ -2521,6 +2532,11 @@ test('layout: gap, mismatch and not-assessed rows say what to do and link their 
   assert.equal(row_('R3'), '| ❔ Not assessed | **R3** Criterion R3 text. | Check by hand. |');
   assert.equal(row_('R4'), '| ❔ Not assessed | **R4** Criterion R4 text. | Only higher-level tests cover it; add a unit test or confirm that is enough. |');
   assert.equal(row_('R5'), '| ❔ Not assessed | **R5** Criterion R5 text. | Check by hand. |');
+  const u = (reason) => post.buildSummary({ data: report({ requirements: [reqOf('R1', ['O1'])], coverage: [row('unknown', { reason })], findings: [] }) }).split('\n').find((l) => l.startsWith('| ❔'));
+  assert.equal(u('Not assessed: subMonths/index.ts and subMonths/test.ts are neither in the diff nor inlined.'), '| ❔ Not assessed | **R1** Criterion R1 text. | subMonths/index.ts and subMonths/test.ts are neither in the diff nor inlined. |');
+  assert.match(u(`Could not verify ${'x'.repeat(300)}`), /\| Could not verify x+… \|$/);
+  assert.equal(u('Could not verify ' + 'x'.repeat(300)).split(' | ')[2].length, 160 + 2);
+  assert.match(u(''), /\| Check by hand\. \|$/);
   assert.match(s, /^\*\*❌ 1 unit test gap and 1 spec mismatch to fix\*\*\nUnit tests: 1 missing · Criteria: 0 of 5 ✅ evidenced · 1 ❌ gap · 1 ❌ mismatch · 3 ❔ not assessed/m);
   assert.doesNotMatch(s.slice(0, s.indexOf('<details>')), /### ❌ Spec mismatches/, 'a posted mismatch is a row, not a second list');
 });
@@ -2564,7 +2580,8 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   assert.match(inc, /specguard:status=incomplete/);
   const red = post.buildSummary({ ...common, reduced: { reasons: ['fast-tier model', '3 engine notes'], model: 'mini' } });
   assert.match(red, /## SpecGuard\n\n\*\*⚠️ Reduced review: only high-confidence findings are shown\.\*\* Absence of a finding is not evidence of a pass\.\n/);
-  assert.doesNotMatch(red, /✅|No unit test gaps found|Criteria:/);
+  assert.match(red, /Absence of a finding is not evidence of a pass\.\nUnit tests: 1 missing · Criteria: 0 of 1 ✅ evidenced · 1 ❌ gap · Standards: none found · Test layers: nothing to move down\n/);
+  assert.doesNotMatch(red, /No unit test gaps found|✅ No/);
   assert.match(red, /\*\*Reduced review\*\*\n\nReasons: fast-tier model; 3 engine notes \(model: mini\)\. Only high-confidence findings were posted inline\./);
   const fail = post.buildSummary({ status: 'Could not complete: the review timed out after 12 minutes', state: 'failed', engine: 'copilot', rules: ['x.md'], lint: { count: 2, changed: ['biome.json'] }, tooling: { status: 'failed', checks: [], ref: 'a' } });
   assert.match(fail, /<!-- specguard:status=failed -->\n## SpecGuard\n\n\*\*⚠️ Could not complete: the review timed out after 12 minutes\*\*\n\n<details><summary>Details: run information<\/summary>\n\n<sub>Engine: copilot<\/sub>\n\n<\/details>\n$/);

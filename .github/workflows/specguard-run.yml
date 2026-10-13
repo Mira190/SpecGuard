@@ -158,3 +158,18 @@ jobs:
           fail_on_error: "true" # a manual run that cannot complete (quota, auth, engine error) goes red; PR checks stay advisory
           include_bots: "true"
           ctx_retention_days: "0" # the context holds snippets of the target repository: no artifact
+      # The results of the run, nothing else: the rendered summary, the findings, the requirement/obligation status and the usage. NOT the prompt files, the diff, repository files or the whole context dir.
+      # These files quote the target repository, so this repository must stay private with access no wider than the targets' (same rule as the scan issue above).
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: specguard-result-${{ github.run_id }}
+          path: |
+            ${{ github.workspace }}/.specguard-ctx/summary.md
+            ${{ github.workspace }}/.specguard-ctx/findings.json
+            ${{ github.workspace }}/.specguard-ctx/requirements-status.json
+            ${{ github.workspace }}/.specguard-ctx/audit.json
+            ${{ github.workspace }}/.specguard-ctx/usage.json
+          retention-days: 14
+          if-no-files-found: ignore
+          include-hidden-files: true # the ctx dir is a dot-directory, which upload-artifact skips by default
