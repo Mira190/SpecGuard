@@ -364,7 +364,7 @@ async function main({ github, context, core }) {
   const tab = (n) => lines(readCtx(n)).map((l) => l.split('\t'));
   const docs = tab('audit-docs.txt'), rejected = tab('audit-rejected.txt');
   const engine = env.ENGINE || '';
-  let usage = json(engine === 'claude' ? 'claude.json' : 'usage.json');
+  let usage = json('usage.json');
   if (engine === 'copilot') usage = mergeUsage(usage, json('usage-repair.json'));
   const repair = (readCtx('engine-repair') || '').trim();
   const notes = [...lines(readCtx('engine-notes')).map((x) => x.trim()).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])];

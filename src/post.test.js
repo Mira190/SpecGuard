@@ -217,23 +217,13 @@ test('usage line: copilot shows model, tokens, estimated cost and credits', () =
   assert.equal(l, '<sub>Engine: copilot · Model: gpt-5.4 · Tokens: 412.3k in (301.0k cached) · 3.1k out · Cost ≈ $0.18 (17.6 AI credits) · API time 3m12s</sub>');
 });
 
-test('usage line: claude cost is exact; several models are listed, cost once', () => {
-  const raw = { total_cost_usd: 0.4321, duration_api_ms: 5400, usage: { input_tokens: 1000, cache_read_input_tokens: 2000000, cache_creation_input_tokens: 500, output_tokens: 70 },
-    modelUsage: { 'claude-sonnet-4-6': { inputTokens: 1000, outputTokens: 50, cacheReadInputTokens: 2000000, cacheCreationInputTokens: 500, costUSD: 0.4 }, 'claude-haiku-4-5': { inputTokens: 5, outputTokens: 20, costUSD: 0.0321 } } };
-  const l = post.usageLine({ engine: 'claude', raw });
-  assert.match(l, /Models: claude-sonnet-4-6 \(2\.0M in \(2\.0M cached\) · 50 out\), claude-haiku-4-5 \(5 in · 20 out\)/);
-  assert.match(l, /Cost \$0\.43 · API time 5\.4s/);
-  assert.doesNotMatch(l, /≈|credits/);
-  assert.match(post.usageLine({ engine: 'claude', model: 'm', raw: { total_cost_usd: 1, usage: { input_tokens: 10, output_tokens: 2 } } }), /Model: m · Tokens: 10 in · 2 out · Cost \$1\.00/);
-});
-
 test('usage line: missing or garbage data degrades to the plain engine line', () => {
   assert.equal(post.usageLine({ engine: 'copilot', raw: null }), '<sub>Engine: copilot</sub>');
-  assert.equal(post.usageLine({ engine: 'claude', model: 'opus', raw: 'junk' }), '<sub>Engine: claude · Model: opus</sub>');
-  for (const raw of [{}, [], { totalNanoAiu: 'x', tokenDetails: { input: { tokenCount: NaN } }, modelMetrics: { m: { usage: { inputTokens: 'a', outputTokens: -1 } } } }, { total_cost_usd: Infinity, usage: { input_tokens: {} }, modelUsage: { 'a<img src=x>@b': null } }]) {
-    for (const engine of ['copilot', 'claude']) assert.doesNotMatch(post.usageLine({ engine, raw }), /NaN|undefined|Infinity|<img/);
+  assert.equal(post.usageLine({ engine: 'copilot', model: 'opus', raw: 'junk' }), '<sub>Engine: copilot · Model: opus</sub>');
+  for (const raw of [{}, [], { totalNanoAiu: 'x', tokenDetails: { input: { tokenCount: NaN } }, modelMetrics: { m: { usage: { inputTokens: 'a', outputTokens: -1 } } } }, { totalNanoAiu: Infinity, tokenDetails: { input: { tokenCount: {} } }, modelMetrics: { 'a<img src=x>@b': null } }]) {
+    assert.doesNotMatch(post.usageLine({ engine: 'copilot', raw }), /NaN|undefined|Infinity|<img/);
   }
-  assert.doesNotMatch(post.usageLine({ engine: 'claude', raw: { modelUsage: { '<img src=x onerror=1> @team': { inputTokens: 1 } } } }), /<img|@team/);
+  assert.doesNotMatch(post.usageLine({ engine: 'copilot', raw: { modelMetrics: { '<img src=x onerror=1> @team': { usage: { inputTokens: 1 } } } } }), /<img|@team/);
 });
 
 test('a Could not complete summary and a complete one both carry the usage line', async (t) => {
@@ -248,11 +238,6 @@ test('a Could not complete summary and a complete one both carry the usage line'
   assert.match(f.calls.summary[0].body, /Could not complete/);
   assert.match(f.calls.summary[0].body, /Cost ≈ \$0\.18 \(17\.6 AI credits\)/);
   assert.match(f.jobSummary[0], /<sub>Engine: copilot/);
-  const c = setup(t); // claude engine reads claude.json
-  process.env.ENGINE = 'claude';
-  fs.writeFileSync(path.join(c.dir, 'ctx/claude.json'), JSON.stringify({ total_cost_usd: 0.25, usage: { input_tokens: 9, output_tokens: 1 } }));
-  await post(c);
-  assert.match(c.calls.summary[0].body, /<sub>Engine: claude · Tokens: 9 in · 1 out · Cost \$0\.25<\/sub>/);
 });
 
 test('usage line: the repair turn is summed into tokens, credits and API time; notes follow in the same line', () => {
@@ -2286,10 +2271,10 @@ const layoutPre = [{ ...finding('spec_mismatch'), title: 'OLD DRIFT' }];
 
 test('layout: the verdict leads, results follow in goal order, reference material is collapsed at the end', () => {
   const posted = [{ f: finding('missing_test', { title: 'POSTED GAP' }), url: 'https://github.com/o/r/pull/1#discussion_r5' }, { f: finding('standard', { title: 'POSTED STD' }) }, { f: finding('pushdown', { title: 'POSTED PUSH' }) }];
-  const s = post.buildSummary({ data: layoutData(), posted, usage: null, engine: 'claude', blob: 'https://github.com/o/r/blob/HEADSHA', specFiles: [], pre: layoutPre, manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } });
+  const s = post.buildSummary({ data: layoutData(), posted, usage: null, engine: 'copilot', blob: 'https://github.com/o/r/blob/HEADSHA', specFiles: [], pre: layoutPre, manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } });
   const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
   assert.match(s, /## SpecGuard\n\nUnit tests: 1 missing, 0 weak · Requirements: 1 criterion · 1 with a unit test gap · Standards: 1 finding · Pushdown: 1\n/);
-  const order = ['## SpecGuard', '### Unit test gaps', '### Requirements', '| Criterion | Source', '### Coding standards', '### Test layers', '**Not reviewed:**', '<sub>Engine: claude', '<summary>Obligations (1)', '<summary>Pre-existing drift', '<summary>Validation notes', '<summary>Sources read'].map(at);
+  const order = ['## SpecGuard', '### Unit test gaps', '### Requirements', '| Criterion | Source', '### Coding standards', '### Test layers', '**Not reviewed:**', '<sub>Engine: copilot', '<summary>Obligations (1)', '<summary>Pre-existing drift', '<summary>Validation notes', '<summary>Sources read'].map(at);
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   assert.ok(at('POSTED GAP') > at('### Unit test gaps') && at('POSTED GAP') < at('### Requirements'));
   assert.ok(at('POSTED STD') > at('### Coding standards') && at('POSTED STD') < at('### Test layers'));

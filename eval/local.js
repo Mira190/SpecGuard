@@ -32,7 +32,7 @@ function resolveCases(arg) {
 
 // The production prompt: src/prompt.js is the single assembler (action.yml calls it too). Local agents have no --json-schema flag, hence 'copilot' wording.
 function buildPrompt(ctx) {
-  return assemble({ skillDir: SKILL, ctxDir: ctx, schemaPath: path.join(ROOT, 'src', 'findings.schema.json'), engine: 'copilot' });
+  return assemble({ skillDir: SKILL, ctxDir: ctx, schemaPath: path.join(ROOT, 'src', 'findings.schema.json') });
 }
 
 // Preloaded into collect.sh's node processes: requirements.js calls `gh`, which has no network here. Serves the case's PR from a file.

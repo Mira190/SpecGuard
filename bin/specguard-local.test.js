@@ -39,7 +39,7 @@ test('parse: flags, defaults, rejects unknown flags', () => {
   assert.deepStrictEqual(parse([]), {});
   const o = parse(['--base', 'origin/dev', '--model', 'gpt-5', '--effort', 'high', '--auto-tier', 'balance', '--json', '--fail-on-gaps', '--body', 'b.md']);
   assert.deepStrictEqual(o, { base: 'origin/dev', model: 'gpt-5', effort: 'high', 'auto-tier': 'balance', json: true, 'fail-on-gaps': true, body: 'b.md' });
-  assert.throws(() => parse(['--engine', 'claude']));
+  assert.throws(() => parse(['--engine', 'copilot']));
   assert.throws(() => parse(['--base']));
 });
 

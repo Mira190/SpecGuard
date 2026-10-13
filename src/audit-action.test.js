@@ -39,9 +39,9 @@ test('action.yml contract: every PR step is guarded by mode pr, audit steps by m
   // audit-only: audit_collect, the audit post step and its artifact
   assert.equal(kinds.audit.length, 3);
   for (const re of [/src\/audit-collect\.js/, /src\/audit-post\.js'/, /name: specguard-audit-\$\{\{ github\.run_attempt \}\}/]) assert.equal(touches(kinds.audit, re), 1, String(re));
-  // shared: setup-node, engine selection, both engines
-  assert.equal(kinds.both.length, 4);
-  for (const re of [/actions\/setup-node/, /^id: engine/m, /Review with Claude Code/, /Review with Copilot CLI/]) assert.equal(touches(kinds.both, re), 1, String(re));
+  // shared: setup-node, engine selection, the Copilot run
+  assert.equal(kinds.both.length, 3);
+  for (const re of [/actions\/setup-node/, /^id: engine/m, /Review with Copilot CLI/]) assert.equal(touches(kinds.both, re), 1, String(re));
   for (const s of kinds.pr) assert.doesNotMatch(cond(s), /audit/);
   for (const s of kinds.audit) assert.doesNotMatch(cond(s), /preflight|steps\.collect/);
   for (const s of kinds.both) {
@@ -65,20 +65,16 @@ test('action.yml: the PR post step stays the first github-script step (the M1 en
   assert.match(s, /SKIP: \$\{\{ steps\.audit_collect\.outputs\.skip \}\}/);
 });
 
-test('action.yml: audit collect gets the globs and the cap; engines switch skill, schema and prompt mode on MODE; Copilot validates with CHECK=audit', () => {
+test('action.yml: audit collect gets the globs and the cap; the Copilot step switches skill, schema and prompt mode on MODE; Copilot validates with CHECK=audit', () => {
   const c = find(/id: audit_collect/);
   for (const m of [/REQ_PATHS: \$\{\{ inputs\.requirements_paths \}\}/, /IGNORE_EXTRA: \$\{\{ inputs\.ignore \}\}/, /MAX_REQUIREMENTS: \$\{\{ inputs\.audit_max_requirements \}\}/, /CTX: \$\{\{ github\.workspace \}\}\/\.specguard-ctx/]) assert.match(c, m);
-  const claude = find(/Review with Claude Code/), copilot = find(/Review with Copilot CLI/);
-  for (const e of [claude, copilot]) {
-    assert.match(e, /MODE: \$\{\{ inputs\.mode \}\}/);
-    assert.match(e, /skills\/spec-audit/);
-    assert.match(e, /src\/audit\.schema\.json/);
-    assert.match(e, /skills\/test-review/);
-    assert.match(e, /src\/findings\.schema\.json/);
-    assert.match(e, /--mode "\$MODE"/);
-  }
-  assert.match(claude, /schema=\$\(jq -c \. "\$schema_file"\)/);
-  assert.match(claude, /--json-schema "\$schema"/, 'the audit schema reaches --json-schema in audit mode');
+  const copilot = find(/Review with Copilot CLI/);
+  assert.match(copilot, /MODE: \$\{\{ inputs\.mode \}\}/);
+  assert.match(copilot, /skills\/spec-audit/);
+  assert.match(copilot, /src\/audit\.schema\.json/);
+  assert.match(copilot, /skills\/test-review/);
+  assert.match(copilot, /src\/findings\.schema\.json/);
+  assert.match(copilot, /--mode "\$MODE"/);
   assert.match(copilot, /CHECK: \$\{\{ inputs\.mode == 'audit' && 'audit' \|\| '' \}\}/);
 });
 

@@ -552,12 +552,12 @@ function mergeUsage(a, b) {
   out.modelMetrics = Object.fromEntries([...new Set([...Object.keys(ma), ...Object.keys(mb)])].map((n) => [n, { usage: sum(ma[n]?.usage, mb[n]?.usage, ['inputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'outputTokens']) }]));
   return out;
 }
-// One small-print line: engine, model(s), tokens, cost, API time, then `notes` (effort, model fallback, JSON repair). `raw` is the engine's usage JSON (copilot --usage-output-file, or claude --output-format json) or null; only numbers and model names are read from it.
+// One small-print line: engine, model(s), tokens, cost, API time, then `notes` (effort, model fallback, JSON repair). `raw` is the Copilot usage JSON (--usage-output-file) or null; only numbers and model names are read from it.
 function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
   const tok = (i, cr, cw, o) => { i = (fin(i) ?? 0) + (fin(cr) ?? 0) + (fin(cw) ?? 0); return { i, c: fin(cr) ?? 0, o: fin(o) ?? 0 }; };
   const show = (t) => `${kM(t.i)} in${t.c ? ` (${kM(t.c)} cached)` : ''} · ${kM(t.o)} out`;
   // copilot's per-model inputTokens already include cache read and write (tokenDetails.input is the uncached part): tok adds them back once
-  let models = [], total, usd, credits, ms, timeLabel = 'API time';
+  let models = [], total, usd, credits, ms;
   const u = raw && typeof raw === 'object' ? raw : {};
   if (engine === 'copilot') {
     for (const [n, m] of Object.entries(u.modelMetrics || {})) { const x = m?.usage; if (x) models.push({ n, t: tok(Math.max(0, (fin(x.inputTokens) ?? 0) - (fin(x.cacheReadTokens) ?? 0) - (fin(x.cacheWriteTokens) ?? 0)), x.cacheReadTokens, x.cacheWriteTokens, x.outputTokens) }); }
@@ -565,11 +565,6 @@ function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
     if (fin(u.totalNanoAiu) !== undefined) { credits = u.totalNanoAiu / 1e9; usd = credits * USD_PER_AI_CREDIT; }
     ms = fin(u.totalApiDurationMs);
     if (!models.length && typeof u.currentModel === 'string') models = [{ n: u.currentModel }];
-  } else if (engine === 'claude') {
-    for (const [n, m] of Object.entries(u.modelUsage || {})) if (m) models.push({ n, t: tok(m.inputTokens, m.cacheReadInputTokens, m.cacheCreationInputTokens, m.outputTokens), usd: fin(m.costUSD) });
-    const x = u.usage; if (x) total = tok(x.input_tokens, x.cache_read_input_tokens, x.cache_creation_input_tokens, x.output_tokens);
-    usd = fin(u.total_cost_usd) ?? (models.some((m) => m.usd !== undefined) ? models.reduce((a, m) => a + (m.usd || 0), 0) : undefined);
-    ms = fin(u.duration_api_ms); if (ms === undefined) { ms = fin(u.duration_ms); timeLabel = 'Time'; }
   }
   const nm = (s) => cell(s, 80);
   const parts = [`Engine: ${nm(engine)}`], fast = tier === 'fast' ? ' (fast tier)' : ''; // used: the model(s) the engine step recorded (engine-model.json), more exact than the request
@@ -582,7 +577,7 @@ function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
     if (t) parts.push(`Tokens: ${show(t)}`);
   }
   if (usd !== undefined) parts.push(`Cost ${engine === 'copilot' ? '≈ ' : ''}$${usd.toFixed(usd < 0.01 ? 4 : 2)}${credits !== undefined ? ` (${credits.toFixed(credits < 10 ? 2 : 1)} AI credits)` : ''}`);
-  if (ms !== undefined) parts.push(`${timeLabel} ${ms < 6e4 ? `${(ms / 1e3).toFixed(1)}s` : `${Math.floor(ms / 6e4)}m${String(Math.round((ms % 6e4) / 1e3)).padStart(2, '0')}s`}`);
+  if (ms !== undefined) parts.push(`API time ${ms < 6e4 ? `${(ms / 1e3).toFixed(1)}s` : `${Math.floor(ms / 6e4)}m${String(Math.round((ms % 6e4) / 1e3)).padStart(2, '0')}s`}`);
   for (const x of notes) parts.push(nm(x));
   return `<sub>${parts.join(' · ')}</sub>`;
 }
@@ -1110,7 +1105,7 @@ async function run({ github, context, core }) {
     : { status: 'unavailable', ref: '', checks: [], reason: target === 'merge' ? 'PR has no current test-merge commit' : 'Configured standards ref must be head or an available current merge commit.' };
   const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
   let usage = null; // engine usage JSON (tokens, cost); shown on every summary that ran the engine, including failed runs
-  try { usage = JSON.parse(readCtx(engine === 'claude' ? 'claude.json' : 'usage.json')); } catch { /* no usage data */ }
+  try { usage = JSON.parse(readCtx('usage.json')); } catch { /* no usage data */ }
   if (engine === 'copilot') try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair turn */ }
   const repair = (readCtx('engine-repair') || '').trim();
   const notes = [...(readCtx('engine-notes') || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])]; // written by the engine step, never by the model

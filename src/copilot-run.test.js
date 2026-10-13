@@ -9,7 +9,7 @@ const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 
 const VALID = JSON.stringify({ coverage: [], findings: [], requirements: [] });
 const INVALID = JSON.stringify({ findings: [] }); // coverage must be an array
 
-// A fake `copilot` on PATH: call N prints N.out and N.err, exits with N.rc, records its argv, and writes a usage file when asked.
+// A fake `copilot` on PATH: call N reads its prompt from stdin into N.stdin, prints N.out and N.err, exits with N.rc, records its argv, and writes a usage file when asked.
 // Optional 5th element per turn: { events: [objects appended to COPILOT_HOME/session-state/<sid>/events.jsonl], usage: object for the usage file, reject: stderr text when --auto-tier is passed (exit 1) }.
 function setup(t, turns, env = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-copilot-'));
@@ -22,6 +22,7 @@ function setup(t, turns, env = {}) {
 F="${fake.replace(/\\/g, '/')}"
 n=$(( $(cat "$F/count" 2>/dev/null || echo 0) + 1 )); echo $n > "$F/count"
 { printf '%s\\n' "$@"; echo '---'; } >> "$F/argv.log"
+cat > "$F/$n.stdin"
 echo "\${GH_TOKEN-unset}" >> "$F/gh.log"
 sleep "$(cat "$F/$n.sleep")"
 if [ -f "$F/$n.reject" ]; then for a in "$@"; do [ "$a" = --auto-tier ] && { cat "$F/$n.reject" >&2; exit 1; }; done; fi
@@ -39,8 +40,9 @@ cat "$F/$n.out" 2>/dev/null; cat "$F/$n.err" >&2 2>/dev/null; exit $(cat "$F/$n.
   const calls = () => (fs.existsSync(path.join(fake, 'argv.log')) ? fs.readFileSync(path.join(fake, 'argv.log'), 'utf8').split('---\n').filter(Boolean).map((c) => c.split('\n').filter(Boolean)) : []);
   const ctxFile = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').trim(); } catch { return null; } };
   const ghLog = () => fs.readFileSync(path.join(fake, 'gh.log'), 'utf8').split('\n').filter(Boolean);
+  const stdin = (n) => fs.readFileSync(path.join(fake, `${n}.stdin`), 'utf8'); // the prompt of call n (1-based) as copilot received it
   const ctxJson = (n) => { try { return JSON.parse(ctxFile(n)); } catch { return null; } };
-  return { run, calls, ctxFile, ctxJson, ctx, ghLog };
+  return { run, calls, ctxFile, ctxJson, ctx, ghLog, stdin, dir };
 }
 const flag = (c, f) => c[c.indexOf(f) + 1];
 const ev = (chosen, extra = {}) => ({ type: 'session.auto_mode_resolved', data: { chosenModel: chosen, candidateModels: [chosen], availableModels: [chosen], routingMethod: 'auto_v2', fallback: false, categoryScores: { reasoning: 0.2 }, ...extra } });
@@ -51,6 +53,8 @@ test('a valid first answer: one call, no repair, safety flags and credit cap kep
   assert.equal(r.status, 0, r.stderr);
   const [c, ...more] = s.calls();
   assert.equal(more.length, 0);
+  assert.equal(s.stdin(1), 'REVIEW PROMPT'); // the prompt arrives on stdin, never as an argument
+  assert.ok(!c.includes('-p') && !c.includes('REVIEW PROMPT'));
   for (const f of ['--available-tools', '--allow-all-tools', '--no-ask-user', '-s', '--session-id', '--usage-output-file', '--max-ai-credits']) assert.ok(c.includes(f), f);
   for (const f of ['--allow-all', '--allow-all-paths', '--yolo', '--model', '--reasoning-effort']) assert.ok(!c.includes(f), f);
   assert.equal(flag(c, '--available-tools'), 'view,glob,grep');
@@ -60,6 +64,29 @@ test('a valid first answer: one call, no repair, safety flags and credit cap kep
   assert.equal(s.ctxFile('findings.json'), VALID);
 });
 
+test('a prompt far over the single-argument limit (300 KB, multibyte, quotes) reaches every turn intact on stdin: main, auto-tier retry and model fallback', (t) => {
+  const prompt = 'x"y\'z $HOME `id` é\n'.repeat(15000); // ~300 KB
+  assert.ok(Buffer.byteLength(prompt) > 200 * 1024);
+  const cases = [[[['', 1, "error: unknown option '--auto-tier'"], [VALID]], {}, 2], [[['', 1, 'Error: Model "gpt-9" from --model flag is not available.'], [VALID]], { MODEL: 'gpt-9' }, 2], [[[VALID]], {}, 1]];
+  for (const [turns, env, n] of cases) {
+    const s = setup(t, turns);
+    const file = path.join(s.dir, 'big-prompt.txt');
+    fs.writeFileSync(file, prompt);
+    const r = s.run({ ...env, PROMPT: '', PROMPT_FILE: file.replace(/\\/g, '/') });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(s.calls().length, n);
+    for (let i = 1; i <= n; i++) assert.ok(s.stdin(i) === prompt, `call ${i}`);
+    assert.equal(s.ctxFile('findings.json'), VALID);
+  }
+});
+
+test('PROMPT_FILE unset: PROMPT is written to $CTX/prompt.txt and piped', (t) => {
+  const s = setup(t, [[VALID]]);
+  assert.equal(s.run({ PROMPT: 'multi\nline "prompt"' }).status, 0);
+  assert.equal(s.stdin(1), 'multi\nline "prompt"');
+  assert.equal(s.ctxFile('prompt.txt'), 'multi\nline "prompt"');
+});
+
 test('prose without JSON: one repair turn on the same session quotes the error, and a valid answer is repaired', (t) => {
   const s = setup(t, [['I looked at everything and found nothing wrong.'], [VALID]]);
   const r = s.run();
@@ -67,8 +94,10 @@ test('prose without JSON: one repair turn on the same session quotes the error, 
   const [a, b, ...more] = s.calls();
   assert.equal(more.length, 0);
   assert.equal(flag(b, '--session-id'), flag(a, '--session-id'));
-  assert.match(flag(b, '-p'), /no JSON found in Copilot output/);
-  assert.match(flag(b, '-p'), /ONLY the complete corrected JSON/);
+  assert.equal(s.stdin(1), 'REVIEW PROMPT');
+  assert.match(s.stdin(2), /no JSON found in Copilot output/);
+  assert.match(s.stdin(2), /ONLY the complete corrected JSON/);
+  assert.ok(!b.includes('-p'));
   assert.equal(flag(b, '--usage-output-file').replace(/\\/g, '/').split('/').pop(), 'usage-repair.json');
   assert.equal(flag(a, '--usage-output-file').replace(/\\/g, '/').split('/').pop(), 'usage.json');
   assert.equal(s.ctxFile('engine-repair'), 'repaired');
@@ -81,7 +110,7 @@ test('invalid twice: repair_failed after exactly two calls; the validator error 
   assert.equal(s.run().status, 0);
   const calls = s.calls();
   assert.equal(calls.length, 2);
-  assert.match(flag(calls[1], '-p'), /output failed validation: coverage must be an array/);
+  assert.match(s.stdin(2), /output failed validation: coverage must be an array/);
   assert.equal(s.ctxFile('engine-repair'), 'repair_failed');
 });
 
@@ -241,12 +270,12 @@ test('validate-inputs.sh alone (the engine step) rejects the same values', (t) =
   assert.equal(v({ EFFORT: 'turbo' }), 1);
   assert.equal(v({ AUTO_TIER: 'turbo' }), 1);
   assert.equal(v({ AUTO_TIER: 'balance' }), 0);
-  for (const TIMEOUT of ['0', '00', 'x', '-5', '12345', '1.5']) assert.equal(v({ TIMEOUT }), 1, TIMEOUT); // the Claude path is checked by the same script (engine step)
+  for (const TIMEOUT of ['0', '00', 'x', '-5', '12345', '1.5']) assert.equal(v({ TIMEOUT }), 1, TIMEOUT); // the engine step checks them with the same script
   for (const TIMEOUT of ['1', '12', '9999']) assert.equal(v({ TIMEOUT }), 0, TIMEOUT);
 });
 
 test('action.yml wires the new inputs, runs the Copilot script, and never uses an allow-all flag', () => {
   const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
-  for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "60"/m, /^ {2}ctx_retention_days: \{[^}]*default: "1"/m, /TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/, /timeout -k 10s "\$\{TIMEOUT\}m" claude/,/EFFORT: \$\{\{ inputs\.effort \}\}/, /^ {2}auto_tier: \{[^}]*default: intelligence/m, /^ {2}fast_models: \{[^}]*default: ""/m, /AUTO_TIER: \$\{\{ inputs\.auto_tier \}\}/, /FAST_MODELS: \$\{\{ inputs\.fast_models \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/copilot-run\.sh/, /src\/validate-inputs\.sh/, /--effort "\$EFFORT"/]) assert.match(y, m);
+  for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "60"/m, /^ {2}ctx_retention_days: \{[^}]*default: "1"/m, /TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/, /^ {2}engine: \{[^}]*default: copilot/m, /engine must be copilot \(other engines are not enabled\)/, /ENGINE: \$\{\{ steps\.engine\.outputs\.engine \}\}/, /PROMPT_FILE="\$PROMPT_FILE" bash "\$GITHUB_ACTION_PATH\/src\/copilot-run\.sh"/,/EFFORT: \$\{\{ inputs\.effort \}\}/, /^ {2}auto_tier: \{[^}]*default: intelligence/m, /^ {2}fast_models: \{[^}]*default: ""/m, /AUTO_TIER: \$\{\{ inputs\.auto_tier \}\}/, /FAST_MODELS: \$\{\{ inputs\.fast_models \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/copilot-run\.sh/, /src\/validate-inputs\.sh/]) assert.match(y, m);
   assert.doesNotMatch(y + fs.readFileSync(path.join(__dirname, 'copilot-run.sh'), 'utf8').replace(/^#.*$/gm, ''), /--allow-all\b(?!-tools)|--allow-all-paths|--yolo/);
 });

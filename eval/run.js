@@ -170,7 +170,7 @@ async function rawOutput(repo, runId, tries = 5, waitMs = 10e3) {
     try {
       sh('gh', ['run', 'download', String(runId), '--repo', repo, '-n', 'specguard-ctx', '-D', tmp]);
       const files = walk(tmp), at = (n) => files.find((f) => path.basename(f) === n);
-      const first = ['copilot.out', 'claude.json', 'findings.json'].map(at).find(Boolean);
+      const first = ['copilot.out', 'findings.json'].map(at).find(Boolean);
       const found = at('findings.json');
       let valid = false;
       if (found) try { JSON.parse(fs.readFileSync(path.join(tmp, found), 'utf8')); valid = true; } catch {}

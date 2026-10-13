@@ -22,12 +22,12 @@ const pad = (rows) => { const w = rows[0].map((_, i) => Math.max(...rows.map((r)
 
 // ---- variants -------------------------------------------------------------------------------------------------------------
 
-// Worktree with src/prompt.js: assemble() with local-eval (copilot) wording and schema. Otherwise eval/local.js buildPrompt(ctx).
+// Worktree with src/prompt.js: assemble() with the schema inlined (old worktrees: copilot wording). Otherwise eval/local.js buildPrompt(ctx).
 function promptBuilder(worktree) {
   const wt = path.resolve(worktree), pj = path.join(wt, 'src', 'prompt.js'), lj = path.join(wt, 'eval', 'local.js');
   if (fs.existsSync(pj)) {
     const { assemble } = require(pj);
-    return (ctxDir) => assemble({ skillDir: path.join(wt, 'skills', 'test-review'), ctxDir, schemaPath: path.join(wt, 'src', 'findings.schema.json'), engine: 'copilot' });
+    return (ctxDir) => assemble({ skillDir: path.join(wt, 'skills', 'test-review'), ctxDir, schemaPath: path.join(wt, 'src', 'findings.schema.json'), engine: 'copilot' }); // engine: older variant worktrees still take it
   }
   if (fs.existsSync(lj)) return require(lj).buildPrompt;
   throw new Error(`${wt}: neither src/prompt.js nor eval/local.js found`);
