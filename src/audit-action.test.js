@@ -208,6 +208,36 @@ test('fail-on-error.js: failed exits 1 with ::error::, incomplete only warns, co
   for (const s of ['complete', '']) assert.deepEqual([run(s).status, run(s).stdout], [0, '']);
 });
 
+test('fail-on-error.js: an incomplete status whose counts.json says reduced prints the reduced wording; real incomplete keeps its wording; the exit code is unchanged', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-foe-'));
+  try {
+    const run = (STATUS, REASON = '', CTX = dir) => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, REASON, CTX } });
+    assert.match(run('incomplete').stdout, /^::warning::SpecGuard result is incomplete \(see the job summary\)/, 'no counts.json');
+    fs.writeFileSync(path.join(dir, 'counts.json'), JSON.stringify({ v: 1, complete: false, reduced: true }));
+    const r = run('incomplete');
+    assert.equal(r.status, 0);
+    assert.equal(r.stdout.trim(), '::warning::SpecGuard ran a reduced review (fast-tier model): only high-confidence findings are shown (see the job summary)');
+    assert.equal(run('failed', 'quota').status, 1, 'failed stays red');
+    assert.match(run('failed', 'quota').stdout, /could not complete: quota/);
+    assert.equal(run('complete').stdout, '');
+    fs.writeFileSync(path.join(dir, 'counts.json'), JSON.stringify({ v: 1, complete: false }));
+    assert.match(run('incomplete', 'diff truncated').stdout, /is incomplete: diff truncated/, 'not reduced: the old wording');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('tee-summary.js: the summary markdown also lands in CTX/summary.md while the real summary still gets it; both post steps use it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-tee-'));
+  try {
+    const got = [], core = { warning() {}, summary: { addRaw(t) { got.push(t); return { write: async () => 'written' }; } } };
+    const tee = require('./tee-summary.js')(core, path.join(dir, 'ctx', 'summary.md'));
+    assert.equal(typeof tee.warning, 'function', 'the rest of core is inherited');
+    tee.summary.addRaw('## SpecGuard');
+    assert.deepEqual(got, ['## SpecGuard']);
+    assert.equal(fs.readFileSync(path.join(dir, 'ctx', 'summary.md'), 'utf8'), '## SpecGuard');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  assert.equal(yml.split("src/tee-summary.js')(core, env.CTX + '/summary.md')").length, 3);
+});
+
 test('the manual-run workflow turns fail_on_error on; the PR workflow examples leave it off', () => {
   const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
   assert.match(read('.github', 'workflows', 'specguard-run.yml'), /^ +fail_on_error: "true"/m);

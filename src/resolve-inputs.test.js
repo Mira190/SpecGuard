@@ -215,7 +215,7 @@ test('specguard-run.yml: both jobs run in the specguard environment and the PAT 
   assert.match(y, /GH_TOKEN: \$\{\{ steps\.app\.outputs\.token \|\| secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
 });
 
-test('specguard-run.yml: minimal permissions, PAT checkout without persisted credentials, no input interpolated into shell text, nothing uploaded', () => {
+test('specguard-run.yml: minimal permissions, PAT checkout without persisted credentials, no input interpolated into shell text, only the results artifact uploaded', () => {
   const y = workflow();
   assert.match(y, /^permissions: \{\}$/m);
   assert.match(y, /permissions: \{ contents: read, pull-requests: read \}/); // read-only: the job token is the fallback when SPECGUARD_PAT is unset
@@ -233,7 +233,7 @@ test('specguard-run.yml: minimal permissions, PAT checkout without persisted cre
   assert.match(y, /test_paths: \$\{\{ needs\.resolve\.outputs\.tests \}\}/);
   assert.doesNotMatch(y, /resolve_stale/, 'the action default (false) applies: the manual PAT is not known to resolve threads');
   assert.doesNotMatch(y, /^ +(model|effort): (?!haiku-5\.5$)/m, 'Copilot Auto with the action defaults (the temporary haiku-5.5 test pin excepted: remove it with `|| secrets.SPEC`)');
-  assert.doesNotMatch(y, /upload-artifact/);
+  assert.equal(y.split('upload-artifact@').length, 2, 'the one results artifact (enterprise-workflows.test.js checks what it holds); the action-level ctx artifact stays off via ctx_retention_days 0');
   // a ${{ }} inside a run: block is shell-injectable; inputs go through env: only
   for (const m of y.matchAll(/^ +run: \|\n((?: {10,}.*\n?)+)/gm)) assert.doesNotMatch(m[1], /\$\{\{/, m[1]);
   for (const m of y.matchAll(/^ +run: (.+)$/gm)) assert.doesNotMatch(m[1], /\$\{\{/);

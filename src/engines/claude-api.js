@@ -5,6 +5,7 @@
 // Files in CTX as in src/engines/README.md: findings.json usage.json engine-status engine-notes engine-error engine-model.json. Never throws, never prints the key.
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { block, cut, LIMITS } = require('../prompt.js');
 const { parseCandidates } = require('../focus.js');
 
@@ -73,23 +74,35 @@ function packRead(root, rel) { // text of a regular, small, non-binary file insi
     return buf.subarray(0, 8192).includes(0) ? null : buf.toString('utf8').replace(/\r\n/g, '\n');
   } catch { return null; }
 }
+// Tiers after the review files: files the requirements name, and small neighbours of review files. Source files only (docs, data and tests are not candidates here).
+const NOT_CODE = /\.(md|mdx|markdown|rst|txt|json|ya?ml|toml|lock|svg|png|jpe?g|gif|snap)$/i, TESTISH = /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/i, SIBLING = 16 * 1024, NAMED_MAX = 8, NAMED_GENERIC = 3, PER_DIR = 3;
+const dirOf = (p) => path.posix.dirname(p), stemOf = (p) => path.posix.basename(p).replace(/\.[^.]*$/, '');
+function tracked(root) { try { return execFileSync('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 1 << 28, timeout: 10000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().split('\0').filter(Boolean); } catch { return []; } }
+function mentioned(text) { // identifiers and path-like tokens (length >= 5, extension dropped) that a requirement text names
+  const out = new Set(), add = (s) => { const t = s.replace(/\.[A-Za-z0-9]{1,5}$/, ''); if (t.length >= 5) out.add(t); };
+  for (const m of text.matchAll(/`([^`\n]{3,200})`/g)) for (const p of m[1].match(/[\w.\/-]+/g) || []) add(p.split('/').pop());
+  for (const m of text.matchAll(/[\w.-]+(?:\/[\w.-]+)+/g)) add(m[0].split('/').pop());
+  for (const m of text.matchAll(/\b[A-Za-z][A-Za-z0-9]*(?:[a-z0-9][A-Z]|_)[A-Za-z0-9_]*\b/g)) add(m[0]);
+  return [...out];
+}
+const criteriaText = (raw) => { try { return (JSON.parse(raw).criteria || []).map((c) => `${c?.quote ?? ''} ${c?.text ?? ''}`).join('\n'); } catch { return ''; } };
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
   const parts = [], seen = new Set(), omitted = [], partial = []; // partial: cut at the budget
   let used = 0, files = 0;
   const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit
-  const addFile = (p, num) => { // num: line-numbered
+  const addFile = (p, num, quiet) => { // num: line-numbered; quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
     const rel = path.posix.normalize(p.replace(/\\/g, '/'));
     if (seen.has(rel)) return;
     seen.add(rel);
     const text = packRead(root, rel);
     if (!text || !text.trim()) return;
-    const room = Math.min(num ? cap : PER_FILE, limit - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
-    if (room < 200) return void omitted.push(rel);
+    const room = Math.min(num ? cap : PER_FILE, (quiet ? limit * 0.6 : limit) - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
+    if (room < 200) return void (quiet || omitted.push(rel));
     const c = cut(num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text, room);
-    if (c.cut && c.lines < 1) return void omitted.push(rel);
-    if (c.cut) partial.push(rel);
+    if (c.cut && c.lines < 1) return void (quiet || omitted.push(rel));
+    if (c.cut && !quiet) partial.push(rel);
     const b = block(rel, c.text, `${c.cut ? `first ${c.lines} of ${src.length} lines` : 'full file'}${num ? ', line-numbered' : ''}`);
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
@@ -97,6 +110,19 @@ function contextPack(ctx, root, limit) {
   const focus = list('focus.txt').map((l) => l.split('\t')[0]), review = focus.length ? focus : list('files.txt');
   const cands = parseCandidates(rd('test-candidates.txt'));
   for (const p of review) { addFile(p, true); for (const t of cands.get(p) || []) addFile(t, true); } // each file, then its tests
+  const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
+  if (ls.length) {
+    const named = [], crit = criteriaText(rd('requirements-status.json'));
+    for (const t of mentioned(`${rd('requirements.md')}\n${crit}`)) {
+      const m = code.filter((p) => stemOf(p) === t || path.posix.basename(dirOf(p)) === t);
+      if (m.length && m.length <= NAMED_GENERIC) for (const p of m) if (!named.includes(p) && named.length < NAMED_MAX) named.push(p);
+    }
+    for (const p of named) { addFile(p, true, true); const own = cands.get(p) || ls.filter((q) => dirOf(q) === dirOf(p) && !NOT_CODE.test(q) && /(^|\/)(test\.[^/]*|[^/]*\.(test|spec)\.[^/]*)$/.test(q)); for (const t of own) addFile(t, true, true); }
+    for (const d of new Set(review.map((p) => dirOf(path.posix.normalize(p.replace(/\\/g, '/')))))) { // b: the smallest other source files beside a review file
+      const sib = code.filter((p) => dirOf(p) === d && !seen.has(p)).map((p) => { try { return [p, fs.statSync(path.join(root, p)).size]; } catch { return [p, Infinity]; } }).filter((x) => x[1] <= SIBLING).sort((x, y) => x[1] - y[1]);
+      for (const [p] of sib.slice(0, PER_DIR)) addFile(p, true, true);
+    }
+  }
   const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch');
   const head = cut(diff, LIMITS.diff);
   if (head.cut && limit - used - OVERHEAD >= 200) { // the part of the diff prompt.js cut ("Read ... for the rest")
@@ -104,7 +130,7 @@ function contextPack(ctx, root, limit) {
     if (c.lines > 0) { const b = block(`${dname} (rest)`, c.text, `lines ${head.lines + 1} to ${head.lines + c.lines} of ${all}; continues the diff block above${c.cut ? '; cut at the context budget' : ''}`); parts.push(b); used += Buffer.byteLength(b); }
   }
   for (const p of list('spec-files.txt')) addFile(p, false);
-  const text = parts.length ? `Repository files (read from the checked-out repository; rule files, each file under review followed by its candidate tests, the rest of a cut diff, requirement documents):\n\n${parts.join('\n\n')}` : '';
+  const text = parts.length ? `Repository files (read from the checked-out repository; rule files, each file under review followed by its candidate tests, files the requirements name and small neighbours of reviewed files, the rest of a cut diff, requirement documents):\n\n${parts.join('\n\n')}` : '';
   const note = files || omitted.length ? `context pack: ${files} files, ${Math.round(used / 1024)} KB${omitted.length ? `; not included: ${omitted.slice(0, 4).join(', ')}${omitted.length > 4 ? ` (+${omitted.length - 4} more)` : ''}` : ''}` : '';
   return { text, note, notWhole: [...partial, ...omitted] };
 }
@@ -177,7 +203,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       if (res.ok) break;
       const m = String(res.json?.error?.message || '');
       if (res.status === 400 && !plain && /schema|output_config|output_format|too complex/i.test(m) && !/credit balance/i.test(m)) { // the structured-output grammar was refused: ask for plain JSON once (post.js validates it)
-        plain = true; delete body.output_config; notes.push('structured output unavailable for this schema; plain JSON requested'); continue;
+        plain = true; delete body.output_config; console.error('claude-api: structured output unavailable for this schema; plain JSON requested'); continue;
       }
       const wait = Number.isFinite(res.retryAfter) ? res.retryAfter : 2;
       if (!retried && (res.status === 0 || res.status === 429 || res.status >= 500) && wait <= 30 && deadline - Date.now() > wait * 1000 + 1000) { retried = true; await sleep(wait * 1000); continue; }
