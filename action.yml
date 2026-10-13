@@ -147,7 +147,7 @@ runs:
         MAX_BUDGET: ${{ inputs.max_budget_usd }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
-        npm install -g "@anthropic-ai/claude-code@$VERSION" >/dev/null || { echo "::warning::could not install claude-code@$VERSION"; exit 0; }
+        timeout -k 10s 300s npm install -g "@anthropic-ai/claude-code@$VERSION" >/dev/null || { echo "::warning::could not install claude-code@$VERSION (failed or over 5 minutes)"; echo failed > "$CTX/engine-status"; echo "engine install failed: claude-code@$VERSION" >> "$CTX/engine-notes"; exit 0; } # an unbounded install once hung the whole job
         if [ "$MODE" = audit ]; then skill="$GITHUB_ACTION_PATH/skills/spec-audit"; schema_file="$GITHUB_ACTION_PATH/src/audit.schema.json"
         else skill="$GITHUB_ACTION_PATH/skills/test-review"; schema_file="$GITHUB_ACTION_PATH/src/findings.schema.json"; fi
         schema=$(jq -c . "$schema_file")
@@ -182,7 +182,7 @@ runs:
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
         [ -n "$COPILOT_GITHUB_TOKEN" ] || unset COPILOT_GITHUB_TOKEN
-        npm install -g "@github/copilot@$VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$VERSION"; exit 0; }
+        timeout -k 10s 300s npm install -g "@github/copilot@$VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$VERSION (failed or over 5 minutes)"; echo failed > "$CTX/engine-status"; echo "engine install failed: @github/copilot@$VERSION" >> "$CTX/engine-notes"; exit 0; } # an unbounded install once hung the whole job
         if [ "$MODE" = audit ]; then skill="$GITHUB_ACTION_PATH/skills/spec-audit"; schema_file="$GITHUB_ACTION_PATH/src/audit.schema.json"
         else skill="$GITHUB_ACTION_PATH/skills/test-review"; schema_file="$GITHUB_ACTION_PATH/src/findings.schema.json"; fi
         # the model can only read the workspace, so inline the skill, the references that can matter and the per-PR context (src/prompt.js)
