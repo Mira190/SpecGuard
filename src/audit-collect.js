@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // Audit mode, step 1: deterministic context for the checked-out HEAD (no diff, no AI, no repo code executed).
 // Env: CTX REQ_PATHS STANDARDS_PATHS IGNORE_EXTRA MAX_REQUIREMENTS (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
-// Writes audit-docs.txt, audit-candidates.txt, audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
+// Writes audit-docs.txt, audit-candidates.txt (cid, path:line, heading, text: the blocks the model must assess), audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
 const fs = require('node:fs');
 const os = require('node:os');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { run, matchGlob, isTestPath, parseItems } = require('./trace');
 
 const MAX_AUDIT_DOCS = 60; // the model reads every admitted document in full
-const CAND_CAP = 60 * 1024, CAND_TEXT = 240; // audit-candidates.txt bytes; characters of requirement text per line
+const CAND_CAP = 60 * 1024, CAND_TEXT = 240; // audit-candidates.txt bytes (the cap is lowered, never a row cut); characters of block text per line
 const CONTROL = /[\x00-\x1F\x7F]/;
 // Same list as STANDARDS and OWN in collect.sh. ponytail: duplicated, keep in sync (trace.js RULE_GLOBS is a third copy).
 const E5 = ['md', 'mdx', 'rst', 'txt', 'adoc'];
@@ -53,20 +54,72 @@ const globs = (s) => {
   return { inc, exc };
 };
 
-// One line per deterministic requirement candidate (parseItems, the same parser the PR review uses): path:line, nearest heading, text.
-// The model starts from this fixed list; it may still add descriptive requirements. Capped by bytes; the total is recorded.
-function candidates(cwd, head, docs) {
-  let out = '', total = 0, listed = 0;
+// The deterministic requirement universe: every requirement-bearing block (paragraph, list item, table row, ID/AC/Gherkin item) of each admitted
+// document, in document order (parseItems with every line "touched"). The model assesses these; it does not choose them.
+const ALL = { has: () => true };
+const MIN_BLOCK = 20; // characters of text a block needs to be a candidate
+const SKIP_HEAD = /^(?:change ?logs?|(?:revision |version |document |release )?history|release notes|references?)$/i; // blocks under these are not requirements
+const LINKREF = /^\s*(?:[-*+]\s+)?\[[^\]]+\]:\s*\S+/, ROW = /^\s*\|.*\|\s*$/, RULE = /^\s*\|[\s:|-]+\|\s*$/, FENCE = /^ {0,3}(?:`{3,}|~{3,})/;
+const NORM_WORD = /\b(?:shall|must|should|will)\b/i;
+const normText = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).digest('hex').slice(0, 8);
+
+// Lines under a Changelog/History/References heading, until the next heading of the same or a higher level.
+function skippedLines(ls) {
+  const skip = new Array(ls.length).fill(false);
+  let fence = false, level = 0;
+  ls.forEach((l, i) => {
+    if (FENCE.test(l)) fence = !fence;
+    const h = !fence && /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(l);
+    if (h) {
+      if (level && h[1].length <= level) level = 0;
+      if (!level && SKIP_HEAD.test(h[2].replace(/^[\d.\s§]+/, '').replace(/[*_`]/g, '').trim())) level = h[1].length;
+    }
+    skip[i] = level > 0;
+  });
+  return skip;
+}
+
+// All candidate blocks of one document: { path, line, heading, text, raw }.
+function blocksOf(p, text) {
+  const ls = String(text).replace(/\r\n/g, '\n').replace(/\r/g, ' ').split('\n'), skip = skippedLines(ls);
+  return parseItems(p, text, ALL).filter((i) => {
+    const l = ls[i.line - 1] || '';
+    if (skip[i.line - 1] || LINKREF.test(l) || i.text.replace(/[|\s]+/g, ' ').trim().length < MIN_BLOCK) return false;
+    if (ROW.test(l) && RULE.test(ls[i.line] || '')) return false; // a table header row
+    return !(i.end === i.line && /^\s*#/.test(l) && !NORM_WORD.test(l)); // a bare heading
+  });
+}
+
+// cid = sha1(path, heading, normalised block text)[0..8]: stable while the block is unchanged, wherever it moves. A repeated block gets its own cid.
+function candidates(cwd, head, docs, cap) {
+  const all = [], seen = new Set();
   for (const p of docs) {
     let items = [];
-    try { items = parseItems(p, git(cwd, ['show', `${head}:${p}`])); } catch { /* unreadable: the model still reads the document */ }
+    try { items = blocksOf(p, git(cwd, ['show', `${head}:${p}`])); } catch { /* unreadable: the model still reads the document */ }
     for (const i of items) {
-      total++;
-      const l = `${i.path}:${i.line}\t${i.heading || ''}\t${i.text.replace(/\s+/g, ' ').trim().slice(0, CAND_TEXT)}\n`;
-      if (Buffer.byteLength(out) + Buffer.byteLength(l) <= CAND_CAP) { out += l; listed++; }
+      const h = i.heading || '', t = normText(i.raw);
+      let cid = sha8(p, h, t);
+      for (let k = 2; seen.has(cid); k++) cid = sha8(p, h, t, `#${k}`);
+      seen.add(cid);
+      const flat = (s) => s.replace(/\s+/g, ' ').trim();
+      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT) });
     }
   }
-  return { text: out, total, listed };
+  let text = '', n = 0;
+  for (const c of all.slice(0, cap)) {
+    const l = `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`;
+    if (Buffer.byteLength(text) + Buffer.byteLength(l) > CAND_CAP) break;
+    text += l; n++;
+  }
+  const notAudited = [];
+  for (const c of all.slice(n)) {
+    const where = c.heading ? `${c.path} § ${c.heading}` : `${c.path} (before the first heading)`, last = notAudited[notAudited.length - 1];
+    if (last && last.where === where) last.n++; else notAudited.push({ where, n: 1 });
+  }
+  const left = notAudited.map(({ where, n: k }) => `${where}: ${k} block${k === 1 ? '' : 's'} not audited (cap)`);
+  if (n < Math.min(cap, all.length)) left.unshift(`audit-candidates.txt would pass ${CAND_CAP / 1024} KB: the cap was lowered to ${n} blocks`);
+  return { text, total: all.length, listed: n, left };
 }
 
 // The audit reads the default branch only: another ref's documents would overwrite the one audit issue. Returns { error } or { warn } or {}.
@@ -105,12 +158,12 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', ignoreExt
   const standards = files.filter((f) => listed.some((g) => matchGlob(f, g)) && !std.exc.some((g) => matchGlob(f, g)) && !OWN.some((g) => matchGlob(f, g)));
   const w = (n, s) => fs.writeFileSync(path.join(ctx, n), s);
   w('audit-docs.txt', docs.map((p) => `${p}\t${forced(p) ? 'requirements_paths' : 'discovered'}\n`).join(''));
-  const cand = candidates(cwd, head, docs);
+  const cand = candidates(cwd, head, docs, maxRequirements);
   w('audit-candidates.txt', cand.text);
   w('audit-rejected.txt', rejected.map(([p, why]) => `${p}\t${why}\n`).join(''));
   w('standards.txt', standards.map((f) => `${f}\n`).join(''));
   w('test-layout.txt', testLayout(files));
-  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, docs: docs.length, candidates: cand.total, candidates_listed: cand.listed, limitations }) + '\n');
+  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, docs: docs.length, candidates: cand.total, candidates_listed: cand.listed, cap_left: cand.left, limitations }) + '\n');
   return { docs, rejected, standards, head, candidates: cand.total };
 }
 
@@ -126,4 +179,4 @@ if (require.main === module) {
   console.log(`SpecGuard audit: ${r.docs.length} requirement document(s), ${r.rejected.length} not admitted`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length ? 'false' : 'true'}\n`);
 }
-module.exports = { collect, testLayout, branchGuard, STANDARDS };
+module.exports = { collect, testLayout, branchGuard, blocksOf, STANDARDS };

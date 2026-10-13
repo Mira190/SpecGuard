@@ -3,8 +3,8 @@
   "type": "object",
   "required": [
     "docs_reviewed",
-    "requirements_found",
     "requirements",
+    "not_requirements",
     "not_reviewed"
   ],
   "properties": {
@@ -14,10 +14,6 @@
         "type": "string",
         "minLength": 1
       }
-    },
-    "requirements_found": {
-      "type": "integer",
-      "minimum": 0
     },
     "requirements": {
       "type": "array",
@@ -36,7 +32,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "The block cid (8 hex characters), or cid.1, cid.2 for several requirements from one block."
           },
           "source": {
             "type": "object",
@@ -147,6 +144,30 @@
           },
           "note": {
             "type": "string"
+          }
+        }
+      },
+      "description": "Atomic requirements derived from the listed blocks. id is the block cid from audit-candidates.txt, or cid.1, cid.2 when one block bundles several behaviours."
+    },
+    "not_requirements": {
+      "type": "array",
+      "description": "Blocks that state no checkable requirement (rationale, example, description of UI with no checkable behaviour). Every listed block appears here or in requirements.",
+      "items": {
+        "type": "object",
+        "required": [
+          "cid",
+          "reason"
+        ],
+        "properties": {
+          "cid": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 8
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80
           }
         }
       }

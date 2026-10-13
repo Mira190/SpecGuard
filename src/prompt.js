@@ -134,14 +134,14 @@ function assembleAudit({ skillDir, ctxDir, schemaPath, engine = 'claude' }) {
     ? `\n\nYour final answer must be JSON only, matching this schema: ${JSON.stringify(JSON.parse(fs.readFileSync(schemaPath, 'utf8')))}`
     : '\n\nYour final answer must be the JSON object of the structured-output tool, whose schema is enforced there.';
   const parts = [], empty = [], dir = ctxDir.replace(/\\/g, '/');
-  let max = 80;
-  try { max = JSON.parse(read(ctxDir, 'audit-meta.json')).max_requirements || max; } catch {}
-  parts.push(block('audit-meta.json', JSON.stringify({ max_requirements: max })));
-  for (const [name, limit] of [['audit-docs.txt', 8 * 1024], ['audit-candidates.txt', 40 * 1024], ['standards.txt', LIMITS.small], ['test-layout.txt', LIMITS.small]]) {
+  let meta = { max_requirements: 80 };
+  try { const m = JSON.parse(read(ctxDir, 'audit-meta.json')); meta = { max_requirements: m.max_requirements || 80, ...(Number.isInteger(m.candidates) ? { candidates: m.candidates, candidates_listed: m.candidates_listed } : {}) }; } catch {}
+  parts.push(block('audit-meta.json', JSON.stringify(meta)));
+  for (const [name, limit] of [['audit-docs.txt', 8 * 1024], ['audit-candidates.txt', 64 * 1024], ['standards.txt', LIMITS.small], ['test-layout.txt', LIMITS.small]]) {
     const body = read(ctxDir, name);
     if (!nonEmpty(body)) { empty.push(name); continue; }
     const c = cut(body, limit);
-    parts.push(block(name, c.text, c.cut ? `truncated; Read ${dir}/${name} for the rest` : name === 'audit-docs.txt' ? 'path, then why it was admitted' : ''));
+    parts.push(block(name, c.text, c.cut ? `truncated; Read ${dir}/${name} for the rest` : name === 'audit-docs.txt' ? 'path, then why it was admitted' : name === 'audit-candidates.txt' ? 'the fixed list of blocks to assess: cid, path:line, heading, text' : ''));
   }
   return `${out}
 

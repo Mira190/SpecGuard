@@ -83,15 +83,76 @@ test('collect: standards use the PR review globs, STANDARDS_PATHS adds and exclu
   assert.ok(docs.includes('docs/design.md') && !docs.includes('docs/house-rules.md'), docs.join());
 });
 
-test('collect: audit-candidates.txt seeds one line per deterministic requirement (path:line, heading, text); the total is in the meta', (t) => {
-  const { root, ctx } = repo(t, FILES);
+const DOC = [
+  '# Window design', '', 'Short.', '', '## 2. Window structure', '',
+  '| Window | Form |', '|---|---|', '| Main window | Regular window, 1000x740, minimum 820x600 |', '| Ball | 76x76 collapsed control bar |', '',
+  'The main window is hidden once recording starts and returns on stop.', '',
+  '- The first row of the recording list is selected by default', '- Renaming starts only when the button is clicked', '', '```js', 'const hiddenInCode = "a code line that is long enough";', '```', '',
+  '[design-1]: https://example.invalid/some/long/link/reference', '', '## 3. Rules', '', 'A plan MUST be rejected when its start is in the past.', '', 'A plan SHALL NOT fire twice in one minute.', '',
+  '## Changelog', '', '- 2025-01-02 changed the window height to 800 pixels', '', '### 2025-01', '', 'Renamed the navigation rail in this release.', '', '## 4. After', '', 'The completion card stays until the user closes it.', ''];
+const cands = (ctx) => rows(ctx, 'audit-candidates.txt');
+const textOf = (c) => c.map((x) => x[3]);
+const metaOf = (ctx) => JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
+
+test('collect: audit-candidates.txt lists every requirement-bearing block in document order (cid, path:line, heading, text)', (t) => {
+  const { root, ctx } = repo(t, { 'docs/design.md': DOC.join('\n') });
   const r = collect({ cwd: root, ctx });
-  const c = rows(ctx, 'audit-candidates.txt');
-  assert.deepEqual(c.map((x) => x[0]), ['docs/design.md:5', 'docs/design.md:7']);
-  assert.equal(c[0][1], 'Plan design');
-  assert.match(c[0][2], /^A plan MUST be rejected when its start is in the past\./);
-  const meta = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
-  assert.deepEqual([meta.candidates, meta.candidates_listed, r.candidates], [2, 2, 2]);
+  const c = cands(ctx);
+  assert.deepEqual(textOf(c).map((x) => x.slice(0, 20)), ['| Main window | Regu', '| Ball | 76x76 colla', 'The main window is h', 'The first row of the', 'Renaming starts only', 'A plan MUST be rejec', 'A plan SHALL NOT fir', 'The completion card ']);
+  assert.deepEqual(c.map((x) => x[1]), ['docs/design.md:9', 'docs/design.md:10', 'docs/design.md:12', 'docs/design.md:14', 'docs/design.md:15', 'docs/design.md:25', 'docs/design.md:27', 'docs/design.md:39']);
+  assert.deepEqual(c.map((x) => x[2]), ['2. Window structure', '2. Window structure', '2. Window structure', '2. Window structure', '2. Window structure', '3. Rules', '3. Rules', '4. After']);
+  for (const x of c) assert.match(x[0], /^[0-9a-f]{8}$/);
+  assert.equal(new Set(c.map((x) => x[0])).size, c.length);
+  const meta = metaOf(ctx);
+  assert.deepEqual([meta.candidates, meta.candidates_listed, r.candidates, meta.cap_left], [8, 8, 8, []]);
+});
+
+test('collect: headings, table header and separator rows, code fences, link references, short blocks and Changelog sections are not candidates', (t) => {
+  const { root, ctx } = repo(t, { 'docs/design.md': DOC.join('\n') });
+  collect({ cwd: root, ctx });
+  const all = textOf(cands(ctx)).join('\n');
+  for (const gone of ['Window structure', '| Window | Form |', '|---|', 'hiddenInCode', 'design-1', 'Short.', '800 pixels', 'navigation rail']) assert.ok(!all.includes(gone), gone);
+});
+
+test('collect: a cid ignores line moves but not the block text or heading; a repeated block gets its own cid', (t) => {
+  const ids = (doc) => { const { root, ctx } = repo(t, { 'docs/design.md': doc }); collect({ cwd: root, ctx }); return new Map(cands(ctx).map((x) => [x[3], x[0]])); };
+  const pick = (m, start) => [...m.entries()].find(([x]) => x.startsWith(start))[1];
+  const base = ids(DOC.join('\n'));
+  const moved = ids(['Intro paragraph that was added above everything else.', '', ...DOC].join('\n'));
+  for (const [text, cid] of base) assert.equal(moved.get(text), cid, text);
+  const reworded = ids(DOC.join('\n').replace('is selected by default', 'is highlighted by default'));
+  assert.notEqual(pick(reworded, 'The first row'), pick(base, 'The first row'));
+  assert.equal(pick(reworded, '| Main window'), pick(base, '| Main window'), 'other blocks keep their cid');
+  const reheaded = ids(DOC.join('\n').replace('## 4. After', '## 4. Afterwards'));
+  assert.notEqual(pick(reheaded, 'The completion'), pick(base, 'The completion'));
+  const { root, ctx } = repo(t, { 'docs/design.md': `${DOC.join('\n')}\nThe completion card stays until the user closes it.\n` });
+  collect({ cwd: root, ctx });
+  const same = cands(ctx).filter((x) => x[3].startsWith('The completion'));
+  assert.equal(same.length, 2);
+  assert.notEqual(same[0][0], same[1][0]);
+});
+
+test('collect: the cap takes the first blocks in document order across documents; the rest are counted by document and heading', (t) => {
+  const { root, ctx } = repo(t, { 'docs/design.md': DOC.join('\n'), 'docs/spec.md': '# Other\n\n## Limits\n\nThe name MUST be at most 40 characters long.\n\nThe list MUST show 50 rows per page at most.\n' });
+  const r = collect({ cwd: root, ctx, maxRequirements: 4 });
+  assert.deepEqual(cands(ctx).map((x) => x[1]), ['docs/design.md:9', 'docs/design.md:10', 'docs/design.md:12', 'docs/design.md:14']);
+  const meta = metaOf(ctx);
+  assert.deepEqual([meta.candidates, meta.candidates_listed, r.candidates], [10, 4, 10]);
+  assert.deepEqual(meta.cap_left, ['docs/design.md § 2. Window structure: 1 block not audited (cap)', 'docs/design.md § 3. Rules: 2 blocks not audited (cap)', 'docs/design.md § 4. After: 1 block not audited (cap)', 'docs/spec.md § Limits: 2 blocks not audited (cap)']);
+});
+
+test('collect: a candidate file over 60 KB lowers the cap instead of cutting a row, and says so', (t) => {
+  const para = (i) => `Block ${i} ${'the window keeps its size '.repeat(12)}and must stay ${i} px wide.`;
+  const { root, ctx } = repo(t, { 'docs/design.md': `# Big design\n\n${Array.from({ length: 300 }, (_, i) => para(i)).join('\n\n')}\n` });
+  collect({ cwd: root, ctx, maxRequirements: 500 });
+  const text = fs.readFileSync(path.join(ctx, 'audit-candidates.txt'), 'utf8');
+  const c = cands(ctx);
+  assert.ok(Buffer.byteLength(text) <= 60 * 1024 && c.length > 150 && c.length < 300, String(c.length));
+  assert.ok(c.every((x) => x.length === 4 && /^Block \d+ /.test(x[3])), 'whole rows only');
+  const meta = metaOf(ctx);
+  assert.equal(meta.candidates, 300);
+  assert.equal(meta.cap_left[0], `audit-candidates.txt would pass 60 KB: the cap was lowered to ${c.length} blocks`);
+  assert.match(meta.cap_left[1], /^docs\/design\.md § Big design: \d+ blocks not audited \(cap\)$/);
 });
 
 test('branchGuard: only the default branch is audited; unknown ref or payload warns and continues', (t) => {

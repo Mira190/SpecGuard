@@ -14,12 +14,19 @@ const FILES = {
   'tests/plan.test.js': ['test("repeat stays on", () => {', '  assert.equal(fire({ repeat: true }).on, true);', '});'],
 };
 const read = (p) => FILES[p] || null;
+const C1 = '1111111a', C2 = '2222222b', C3 = '3333333c';
+const cand = (cid, line, text) => ({ cid, path: 'docs/design.md', line, heading: 'Plan design', text });
+const candsOf = (...cs) => new Map(cs.map((c) => [c.cid, c]));
+const ONE = () => candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'));
+const TWO = () => candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), cand(C2, 4, 'A plan must start in the future.'));
+const candTxt = (m) => [...m.values()].map((c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`).join('');
+const cid = (i) => i.toString(16).padStart(8, '0');
 const cite = (path, line) => ({ path, line, quote: FILES[path][line - 1] });
 const req = (over = {}) => ({
-  id: 'R1', source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered',
+  id: C1, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered',
   code: [cite('src/plan.js', 2)], tests: [{ ...cite('tests/plan.test.js', 2), layer: 'unit' }], note: '', ...over,
 });
-const result = (rs = [req()], over = {}) => ({ docs_reviewed: ['docs/design.md'], requirements_found: rs.length, requirements: rs, not_reviewed: [], ...over });
+const result = (rs = [req()], over = {}) => ({ docs_reviewed: ['docs/design.md'], requirements: rs, not_requirements: [], not_reviewed: [], ...over });
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 test('validate: accepts a good result and the enum lists match audit.schema.json', () => {
@@ -30,6 +37,9 @@ test('validate: accepts a good result and the enum lists match audit.schema.json
   assert.deepEqual(item.class.enum, audit.CLASS);
   assert.deepEqual(item.tests.items.properties.layer.enum, ['unit', 'component', 'integration', 'e2e']);
   assert.deepEqual(SCHEMA.properties.requirements.items.required.sort(), ['class', 'code', 'id', 'note', 'source', 'status', 'tests', 'text']);
+  assert.deepEqual(SCHEMA.required.slice().sort(), ['docs_reviewed', 'not_requirements', 'not_reviewed', 'requirements']);
+  assert.deepEqual(SCHEMA.properties.not_requirements.items.required, ['cid', 'reason']);
+  assert.equal(SCHEMA.properties.requirements_found, undefined);
 });
 
 test('validate: rejects bad enums, missing fields, duplicate ids and bad citations; clips long quotes', () => {
@@ -45,7 +55,9 @@ test('validate: rejects bad enums, missing fields, duplicate ids and bad citatio
   bad((o) => { o.requirements.push(req()); }, /duplicate id/);
   bad((o) => { delete o.docs_reviewed; }, /docs_reviewed/);
   bad((o) => { o.not_reviewed = 'none'; }, /not_reviewed/);
-  bad((o) => { o.requirements_found = -1; }, /requirements_found/);
+  bad((o) => { o.not_requirements = 'none'; }, /not_requirements must be an array/);
+  bad((o) => { o.not_requirements = [{ cid: 'nope', reason: 'rationale text' }]; }, /not_requirements\[0\] needs a block cid and a reason/);
+  bad((o) => { o.not_requirements = [{ cid: C2 }]; }, /needs a block cid and a reason/);
   bad((o) => { delete o.requirements; }, /requirements must be an array/);
   for (const x of [null, [], 'x', 3]) assert.equal(validate(x).ok, false);
   const long = result([req({ source: { ...cite('docs/design.md', 3), quote: 'x'.repeat(300) } })]);
@@ -112,34 +124,82 @@ test('verify: evidence that cannot carry the status downgrades; a sound row is l
   assert.equal(ok({ status: 'contradicted', code: [], tests: [] }).status, 'unknown');
 });
 
-test('verify: the row cap keeps the first rows and says what was cut', () => {
-  const rs = [1, 2, 3].map((n) => req({ id: `R${n}` }));
-  const v = verify(result(rs), { read, max: 2 });
-  assert.equal(v.requirements.length, 2);
-  assert.match(v.not_reviewed.join('\n'), /1 further requirement\(s\) beyond audit_max_requirements \(2\)/);
+test('validate: every result names a listed block; unknown, doubly answered and duplicate blocks are rejected; cid.N ids are accepted', () => {
+  const rej = (o, re, cands = TWO()) => { const v = validate(o, cands); assert.equal(v.ok, false); assert.match(v.error, re); };
+  const nr = (c, reason = 'rationale, not behaviour') => ({ cid: c, reason });
+  rej(result([req({ id: 'R1' })], { not_requirements: [nr(C2)] }), /id R1 is not a listed block id/);
+  rej(result([req({ id: 'ffffffff' })], { not_requirements: [nr(C2)] }), /not a listed block id/);
+  rej(result([req({ id: `${C1}.0` })], { not_requirements: [nr(C2)] }), /not a listed block id/);
+  rej(result([req()], { not_requirements: [nr('ffffffff')] }), /unknown block ffffffff/);
+  rej(result([req()], { not_requirements: [nr(C1)] }), /answered both as not_a_requirement and as a requirement/);
+  rej(result([req()], { not_requirements: [nr(C2), nr(C2)] }), /duplicate block/);
+  assert.deepEqual(validate(result([req()], { not_requirements: [nr(C2)] }), TWO()), { ok: true });
+  assert.deepEqual(validate(result([req({ id: `${C1}.1` }), req({ id: `${C1}.2` })], { not_requirements: [nr(C2)] }), TWO()), { ok: true }, 'a bundled block yields cid.1, cid.2');
+});
+
+test('validate: up to 20% of the blocks may be unanswered (they become unknown); more is rejected and names the missing cids', () => {
+  const five = candsOf(...[1, 2, 3, 4, 5].map((i) => cand(cid(i), 3, `block ${i}`)));
+  const row = (i) => req({ id: cid(i) });
+  const nr = (i) => ({ cid: cid(i), reason: 'an example only' });
+  assert.deepEqual(validate(result([row(1), row(2), row(3)], { not_requirements: [nr(4)] }), five), { ok: true }, '1 of 5 missing = 20%');
+  const v = validate(result([row(1), row(2), row(3)]), five);
+  assert.equal(v.ok, false);
+  assert.match(v.error, /2 of 5 listed blocks were not answered \(e\.g\. 00000004, 00000005\)/);
+  assert.equal(validate(result([]), five).ok, false);
+  assert.deepEqual(validate(result([]), candsOf()), { ok: true }, 'no candidates, nothing to answer');
+  assert.deepEqual(validate(result([row(1), row(2), row(3), row(4)], { not_requirements: [nr(5)] }), five), { ok: true });
+  assert.equal(validate(result([req({ id: 'R1' })]), null).ok, true, 'without a candidate list only the structure is checked');
+});
+
+test('verify: the id is the block cid, the heading comes from the candidate, and rows keep document order across .N rows', () => {
+  const three = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), cand(C2, 4, 'A plan must start in the future.'), cand(C3, 3, 'x'));
+  const o = result([req({ id: C2, source: cite('docs/design.md', 4) }), req({ id: `${C1}.2`, text: 'second' }), req({ id: `${C1}.1`, text: 'first' })], { not_requirements: [{ cid: C3, reason: 'rationale only' }] });
+  assert.equal(validate(o, three).ok, true);
+  const v = verify(o, { read, cands: three });
+  assert.deepEqual(v.requirements.map((x) => x.id), [`${C1}.2`, `${C1}.1`, C2], 'candidate order first, the model order within a block');
+  assert.deepEqual(v.requirements.map((x) => x.heading), ['Plan design', 'Plan design', 'Plan design']);
+  assert.equal(v.requirements[0].doc_id, undefined);
+  assert.deepEqual(v.not_requirements, [{ ...three.get(C3), reason: 'rationale only' }]);
+});
+
+test('verify: a block the model skipped, or whose rows all failed verification, becomes an unknown "not assessed" row', () => {
+  const missed = verify(result([req()]), { read, cands: TWO() });
+  assert.deepEqual(missed.requirements.map((x) => [x.id, x.status]), [[C1, 'covered'], [C2, 'unknown']]);
+  assert.equal(missed.requirements[1].note, 'Not assessed by the model.');
+  assert.deepEqual(missed.requirements[1].source, { path: 'docs/design.md', line: 4, quote: 'A plan must start in the future.' });
+  assert.equal(missed.requirements[1].text, 'A plan must start in the future.');
+  const bad = req({ id: C2, source: { path: 'docs/design.md', line: 4, quote: 'A plan never turns off at all.' } });
+  const failed = verify(result([req(), bad]), { read, cands: TWO() });
+  assert.deepEqual(failed.requirements.map((x) => [x.id, x.status]), [[C1, 'covered'], [C2, 'unknown']]);
+  assert.match(failed.requirements[1].note, /Not assessed: the model's citation for this block did not verify\./);
+  assert.match(failed.not_reviewed.join('\n'), new RegExp(`${C2} \\(docs/design\\.md:4\\): the requirement quote was not found`));
+  const skipped = verify(result([req()], { not_requirements: [{ cid: C2, reason: 'rationale only' }] }), { read, cands: TWO() });
+  assert.equal(skipped.requirements.length, 1, 'a not_a_requirement block gets no row');
 });
 
 const sample = () => {
-  const rs = [req(), req({ id: 'AC-4', text: 'A plan must start in the future.', source: cite('docs/design.md', 4), class: 'unit', status: 'missing_test', tests: [], note: 'No test rejects a past start.' }),
-    req({ id: 'R3', status: 'needs_human', class: 'human', code: [], tests: [], text: 'The plan list looks calm.' })];
-  return verify(result(rs, { requirements_found: 5, not_reviewed: ['docs/old.md: unreadable'] }), { read });
+  const rs = [req(), req({ id: C2, text: 'A plan must start in the future.', source: cite('docs/design.md', 4), class: 'unit', status: 'missing_test', tests: [], note: 'No test rejects a past start.' }),
+    req({ id: C3, status: 'needs_human', class: 'human', code: [], tests: [], text: 'The plan list looks calm.' })];
+  return verify(result(rs, { not_reviewed: ['docs/old.md: unreadable'] }), { read });
 };
 
 test('render: header counts by status and class, no percentage, the disclaimer, a table per document', () => {
-  const md = render({ data: sample(), docs: [['docs/design.md', 'discovered']], blob: 'https://github.com/o/r/blob/abc', usage: '<sub>Engine: copilot</sub>', cap: 80 });
+  const md = render({ data: sample(), docs: [['docs/design.md', 'discovered']], blob: 'https://github.com/o/r/blob/abc', usage: '<sub>Engine: copilot</sub>', cap: 80, candidates: 131 });
   const head = md.slice(0, md.indexOf('### '));
-  assert.match(head, /^## SpecGuard requirements audit\n\n\*\*3 requirements\*\* from 1 document \(listed 3 of 5 found; the model chose which rows to list, the cap of 80 was not reached; see not reviewed\)/);
+  assert.match(head, /^## SpecGuard requirements audit\n\n\*\*3 requirements\*\* from 1 document\n\n3 blocks audited of 131 in the documents \(cap 80\); 0 blocks were not requirements\./);
+  assert.doesNotMatch(head, /the model chose/);
   assert.match(head, /By status: missing_test 1 · needs_human 1 · covered 1\n/);
   assert.match(head, /By class: unit 2 · human 1\n/);
   assert.match(head, /Static review; not coverage; not for scoring people\./);
   assert.doesNotMatch(md, /\d\s*%|percent/i);
   assert.match(md, /### `docs\/design\.md`\n\n\| Requirement \| Status \| Class \| Evidence \|\n\|---\|---\|---\|---\|\n/);
-  assert.match(md, /\| \[[0-9a-f]{8}\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/docs\/design\.md#L4\) \(AC-4\) A plan must start in the future\.<br><sub>No test rejects a past start\.<\/sub> \| missing_test \| unit \| code: \[src\/plan\.js:2\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/plan\.js#L2\) \|/);
+  assert.match(md, /\| \[2222222b\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/docs\/design\.md#L4\) A plan must start in the future\.<br><sub>No test rejects a past start\.<\/sub> \| missing_test \| unit \| code: \[src\/plan\.js:2\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/plan\.js#L2\) \|/);
   // covered rows are not listed with the gaps: one collapsed table
   assert.match(md, /<details><summary>Covered in full \(1\)<\/summary>\n\n\| Requirement \| Class \| Evidence \|\n\|---\|---\|---\|\n\| \[[0-9a-f]{8}\][^\n]*tests: unit \[tests\/plan\.test\.js:2\][^\n]*\|\n\n<\/details>/);
   assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /\| covered \|/);
   assert.match(md, /`not_implemented` and `missing_test` are model claims \(not verified statically\)/);
   assert.match(md, /### Not reviewed\n\n- docs\/old\.md: unreadable\n/);
+  assert.doesNotMatch(md, /not requirements<\/summary>/, 'no details block when every block was a requirement');
   assert.ok(md.trimEnd().endsWith('<sub>Engine: copilot</sub>'));
 });
 
@@ -157,13 +217,25 @@ test('render: no documents and failures say so', () => {
   assert.match(render({ failure: 'the engine timed out' }), /Could not complete: the engine timed out/);
 });
 
+test('render: blocks that were not requirements are counted in the header and listed in a collapsed block, not in the tables', () => {
+  const data = verify(result([req()], { not_requirements: [{ cid: C2, reason: 'rationale, not behaviour <b>x</b>' }] }), { read, cands: TWO() });
+  const md = render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 9, cap: 5, capLeft: ['docs/design.md § 4. After: 3 blocks not audited (cap)'] });
+  assert.match(md, /2 blocks audited of 9 in the documents \(cap 5\); 1 block was not a requirement\./);
+  assert.ok(md.includes('<details><summary>1 block was not a requirement</summary>\n\n- [docs/design.md:4](https://github.com/o/r/blob/abc/docs/design.md#L4) `2222222b` A plan must start in the future. (rationale, not behaviour &lt;b>x&lt;/b>)'), md);
+  assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /2222222b/, 'not in the main tables');
+  assert.match(md, /### Not reviewed\n\n- docs\/design\.md § 4\. After: 3 blocks not audited \(cap\)\n/);
+  assert.doesNotMatch(md, /<b>/, "markup in the reason is neutralised");
+  const two = render({ data: { ...data, not_requirements: [data.not_requirements[0], data.not_requirements[0]] }, candidates: 2 });
+  assert.match(two, /2 blocks were not requirements/);
+});
+
 test('render: over the limit, whole rows are dropped (never cut mid-row) and the omission is stated', () => {
-  const rs = Array.from({ length: 60 }, (_, i) => req({ id: `R${i + 1}`, note: 'n'.repeat(250) }));
+  const rs = Array.from({ length: 60 }, (_, i) => req({ id: cid(i + 1), note: 'n'.repeat(250) }));
   const data = verify(result(rs), { read });
   const full = render({ data });
   const small = render({ data, max: 9000 });
   assert.ok(Buffer.byteLength(small) <= 9000 && small.length < full.length);
-  const tableRows = small.split('\n').filter((l) => /^\| [0-9a-f]{8}(-\d+)? /.test(l));
+  const tableRows = small.split('\n').filter((l) => /^\| [0-9a-f]{8}(\.\d+)? /.test(l));
   assert.ok(tableRows.length > 0 && tableRows.length < 60);
   for (const l of tableRows) assert.match(l, /\| unit \| code: .* \|$/, 'every kept row is complete');
   assert.match(small, new RegExp(`_${60 - tableRows.length} rows omitted: the report exceeded the size limit`));
@@ -197,6 +269,7 @@ async function runPost(t, { ctxFiles = {}, env = {}, mock = {}, files } = {}) {
   const w = workspace(t, files);
   w.put('audit-meta.json', { head: 'abc123', max_requirements: 80, docs: 1, limitations: [] });
   w.put('audit-docs.txt', 'docs/design.md\tdiscovered\n');
+  w.put('audit-candidates.txt', candTxt(ONE()));
   for (const [n, v] of Object.entries(ctxFiles)) w.put(n, v);
   const m = mocks(mock);
   const saved = { ...process.env };
@@ -206,16 +279,17 @@ async function runPost(t, { ctxFiles = {}, env = {}, mock = {}, files } = {}) {
 }
 
 test('run: validates citations at HEAD, renders the summary, writes audit.json, usage line included, no issue by default', async (t) => {
-  const bad = req({ id: 'R2', source: { path: 'docs/design.md', line: 3, quote: 'not in the doc at all' } });
-  const r = await runPost(t, { ctxFiles: { 'findings.json': result([req(), bad]), 'usage.json': { totalNanoAiu: 2e9 } }, env: { ENGINE: 'copilot', MODEL: 'auto' } });
-  assert.match(r.calls.summary, /\*\*1 requirement\*\* from 1 document/);
-  assert.match(r.calls.summary, /R2 \(docs\/design\.md:3\): the requirement quote was not found/);
+  const bad = req({ id: C2, source: { path: 'docs/design.md', line: 4, quote: 'not in the doc at all' } });
+  const r = await runPost(t, { ctxFiles: { 'findings.json': result([req(), bad]), 'audit-candidates.txt': candTxt(TWO()), 'usage.json': { totalNanoAiu: 2e9 } }, env: { ENGINE: 'copilot', MODEL: 'auto' } });
+  assert.match(r.calls.summary, /\*\*2 requirements\*\* from 1 document/);
+  assert.match(r.calls.summary, /2222222b \(docs\/design\.md:4\): the requirement quote was not found/);
+  assert.match(r.calls.summary, /Not assessed: the model's citation for this block did not verify/);
   assert.match(r.calls.summary, /<sub>Engine: copilot · Model: auto · Cost ≈ \$0\.02/);
   assert.match(r.calls.summary, /\]\(https:\/\/github\.com\/o\/r\/blob\/abc123\/src\/plan\.js#L2\)/);
   const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
   assert.equal(saved.head, 'abc123');
-  assert.equal(saved.requirements.length, 1);
-  assert.match(saved.requirements[0].id, /^[0-9a-f]{8}$/);
+  assert.equal(saved.requirements.length, 2);
+  assert.equal(saved.requirements[0].id, C1);
   assert.deepEqual([r.calls.created, r.calls.updated], [[], []]);
 });
 
@@ -224,6 +298,10 @@ test('run: missing, invalid or failed engine output is reported as could not com
   assert.match(none.calls.summary, /Could not complete: the engine returned no usable JSON/);
   const invalid = await runPost(t, { ctxFiles: { 'findings.json': result([req({ status: 'great' })]) } });
   assert.match(invalid.calls.summary, /Could not complete: the result failed validation: requirements\[0\]: status must be one of/);
+  const unlisted = await runPost(t, { ctxFiles: { 'findings.json': result([req({ id: 'R1' })]) } });
+  assert.match(unlisted.calls.summary, /Could not complete: the result failed validation: requirements\[0\]: id R1 is not a listed block id/);
+  const gaps = await runPost(t, { ctxFiles: { 'findings.json': result([]) } });
+  assert.match(gaps.calls.summary, /failed validation: 1 of 1 listed blocks were not answered \(e\.g\. 1111111a\)/);
   const timeout = await runPost(t, { ctxFiles: { 'engine-status': 'timeout\n' } });
   assert.match(timeout.calls.summary, /the engine timed out/);
   assert.equal(fs.existsSync(path.join(timeout.w.ctx, 'audit.json')), false);
@@ -231,7 +309,7 @@ test('run: missing, invalid or failed engine output is reported as could not com
   assert.match(skip.calls.summary, /No requirement documents were found[\s\S]*README\.md/);
   const failed = await runPost(t, { mock: {}, ctxFiles: { 'audit-meta.json': 'not json' } });
   assert.match(failed.calls.summary, /the collection step did not produce its context/);
-  assert.deepEqual([none, invalid, timeout, skip, failed].flatMap((x) => [...x.calls.created, ...x.calls.updated]), []);
+  assert.deepEqual([none, invalid, unlisted, gaps, timeout, skip, failed].flatMap((x) => [...x.calls.created, ...x.calls.updated]), []);
 });
 
 test('run: audit_issue true creates one issue titled and marked for us', async (t) => {
@@ -267,12 +345,12 @@ test('run: an issue failure only warns; the summary is still written', async (t)
 });
 
 test('run: the issue body fits GitHub\'s limit by dropping whole rows and says so', async (t) => {
-  const rs = Array.from({ length: 80 }, (_, i) => req({ id: `R${i + 1}`, text: `Requirement ${i + 1} ${'w'.repeat(280)}`, note: 'n'.repeat(290) }));
-  const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs) }, env: { AUDIT_ISSUE: 'true' } });
+  const rs = Array.from({ length: 80 }, (_, i) => req({ id: cid(i + 1), text: `Requirement ${i + 1} ${'w'.repeat(280)}`, note: 'n'.repeat(290) }));
+  const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(candsOf(...rs.map((x) => cand(x.id, 3, 'x')))) }, env: { AUDIT_ISSUE: 'true' } });
   const body = r.calls.created[0].body;
   assert.ok(Buffer.byteLength(body) <= 65536, String(Buffer.byteLength(body)));
   assert.match(body, /_\d+ rows omitted: the report exceeded the size limit/);
-  assert.match(body, /<!-- specguard:audit-state \{"v":1,/, 'the previous state survives the cut');
+  assert.match(body, /<!-- specguard:audit-state \{"v":2,/, 'the previous state survives the cut');
   for (const l of body.split('\n').filter((x) => x.startsWith('| ['))) assert.match(l, /\| unit \| code: .* \|$/);
   assert.ok(r.calls.summary.length > body.length, 'the job summary keeps every row');
   assert.doesNotMatch(r.calls.summary, /rows omitted/);
@@ -305,20 +383,15 @@ test('verify: tests must sit in a test path, code must be neither a document nor
   assert.equal(row({ class: 'static', tests: [] }).status, 'covered');
 });
 
-test('verify: stable ids hash path, nearest heading and the source line; the model id survives only as doc_id', () => {
-  const id = (over, read_ = read) => verify(result([req(over)]), { read: read_ }).requirements[0];
-  const a = id({ id: 'R1' }), b = id({ id: 'R9', text: 'worded differently by the model' }), c = id({ id: 'AC-4' });
-  assert.match(a.id, /^[0-9a-f]{8}$/);
-  assert.equal(a.id, b.id, 'the model\'s numbering and wording do not change it');
-  assert.equal(a.doc_id, undefined);
-  assert.deepEqual([c.id, c.doc_id], [a.id, 'AC-4']);
+test('verify: the id is the block cid whatever the model wrote in the text or the quoted line, so a moved line keeps it', () => {
+  const id = (over, read_ = read) => verify(result([req(over)]), { read: read_, cands: ONE() }).requirements[0];
+  const a = id({}), b = id({ text: 'worded differently by the model' });
+  assert.equal(a.id, C1);
+  assert.equal(a.id, b.id, 'the model\'s wording does not change it');
   assert.equal(a.heading, 'Plan design');
-  const sub = { ...FILES, 'docs/design.md': ['# Other heading', '', 'A repeating plan stays on after it fires.'] };
-  assert.notEqual(id({}, (p) => sub[p] || null).id, a.id, 'the heading is part of the id');
   const moved = { ...FILES, 'docs/design.md': ['# Plan design', '', '', 'A repeating plan stays on after it fires.'] };
-  assert.equal(id({ source: { path: 'docs/design.md', line: 4, quote: 'A repeating plan stays on after it fires.' } }, (p) => moved[p] || null).id, a.id, 'a moved line keeps its id');
-  const twice = verify(result([req({ id: 'R1' }), req({ id: 'R2', text: 'a second behaviour on the same line' })]), { read }).requirements.map((r) => r.id);
-  assert.equal(new Set(twice).size, 2, 'two rows on one line still get distinct ids');
+  const m = id({ source: { path: 'docs/design.md', line: 4, quote: 'A repeating plan stays on after it fires.' } }, (p) => moved[p] || null);
+  assert.deepEqual([m.id, m.source.line], [C1, 4], 'the cited line moved, the id did not');
 });
 
 test('contradicted: both quotes must verify, and it renders as an unconfirmed disagreement with the two quotes side by side', () => {
@@ -332,26 +405,20 @@ test('contradicted: both quotes must verify, and it renders as an unconfirmed di
   assert.doesNotMatch(md, /\| contradicted \|/);
 });
 
-test('verify: "over the cap" is only kept when the cap was reached', () => {
-  const nr = ['docs/a.md: left out, over the cap', 'docs/b.md: unreadable'];
-  assert.deepEqual(verify(result([req()], { not_reviewed: nr }), { read, max: 80 }).not_reviewed, ['docs/b.md: unreadable']);
-  assert.deepEqual(verify(result([req(), req({ id: 'R2', text: 'again' })], { not_reviewed: nr }), { read, max: 2 }).not_reviewed, nr);
-  const md = render({ data: { ...result([req()], { requirements_found: 5 }) }, cap: 80 });
-  assert.match(md, /listed 1 of 5 found; the model chose which rows to list, the cap of 80 was not reached/);
-  assert.match(render({ data: { ...result([req()], { requirements_found: 5 }) }, cap: 1 }), /the rest are over the cap of 1/);
-});
-
 test('changed since last audit: new, removed and status-changed rows from the hidden state; round trip and tamper check', () => {
-  const rows = verify(result([req(), req({ source: cite('docs/design.md', 4), status: 'missing_test', tests: [], text: 'A plan must start in the future.' })]), { read }).requirements;
+  const rows = verify(result([req(), req({ id: C2, source: cite('docs/design.md', 4), status: 'missing_test', tests: [], text: 'A plan must start in the future.' })]), { read, cands: TWO() }).requirements;
   const [a, b] = rows;
   const prior = { head: 'abcdef123456', rows: [{ id: a.id, status: 'partial' }, { id: 'deadbeef', status: 'missing_test' }] };
+  assert.equal(a.id, C1, 'rows are compared by block cid');
   const md = render({ data: { ...result(), requirements: rows }, prior });
   assert.match(md, /### Changed since last audit \(`abcdef1`\)\n\n- New \(1\):\n  - `[0-9a-f]{8}` A plan must start in the future\. \(missing_test\)\n- Status changed \(1\):\n  - `[0-9a-f]{8}` A repeating plan[^\n]*: partial → covered\n- Removed or not listed this time \(1\):\n  - `deadbeef` \(was missing_test\)\n/);
   assert.ok(md.indexOf('### Changed since') < md.indexOf('Covered in full'));
   assert.match(render({ data: { ...result(), requirements: rows }, prior: { head: '', rows: rows.map((r) => ({ id: r.id, status: r.status })) } }), /No changes in the listed requirements\./);
   const state = audit.stateComment('abc123', rows);
   assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123', rows: rows.map((r) => ({ id: r.id, status: r.status })) });
-  assert.equal(audit.readState('<!-- specguard:audit-state {"v":1,"rows":[["<script>","covered"]]} -->'), null);
+  assert.equal(audit.readState('<!-- specguard:audit-state {"v":2,"rows":[["<script>","covered"]]} -->'), null);
+  assert.equal(audit.readState('<!-- specguard:audit-state {"v":1,"head":"a","rows":[["1111111a","covered"]]} -->'), null, 'a v1 state (quote-hash ids) cannot be compared with cids');
+  assert.deepEqual(audit.readState('<!-- specguard:audit-state {"v":2,"head":"a","rows":[["1111111a.2","covered"]]} -->').rows, [{ id: '1111111a.2', status: 'covered' }]);
   assert.equal(audit.readState('<!-- specguard:audit-state {nope} -->'), null);
   assert.equal(audit.readState('no state'), null);
   assert.ok(!state.includes(b.text) && !state.includes('plan'), 'ids and statuses only');
@@ -361,15 +428,15 @@ test('run: a previous issue state drives the changed-since section in summary an
   const first = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' } });
   const old = first.calls.created[0].body;
   assert.doesNotMatch(old, /Changed since last audit/);
-  assert.match(old, /<!-- specguard:audit-state \{"v":1,"head":"abc123","rows":\[\["[0-9a-f]{8}","covered"\]\]\} -->$/);
-  const rs = [req({ status: 'missing_test', tests: [] }), req({ id: 'R2', source: cite('docs/design.md', 4), text: 'A plan must start in the future.', status: 'missing_test', tests: [] })];
-  const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT }] } });
+  assert.match(old, /<!-- specguard:audit-state \{"v":2,"head":"abc123","rows":\[\["1111111a","covered"\]\]\} -->$/);
+  const rs = [req({ status: 'missing_test', tests: [] }), req({ id: C2, source: cite('docs/design.md', 4), text: 'A plan must start in the future.', status: 'missing_test', tests: [] })];
+  const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(TWO()) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT }] } });
   for (const md of [r.calls.summary, r.calls.updated[0].body]) {
     assert.match(md, /### Changed since last audit \(`abc123`\)/);
     assert.match(md, /- New \(1\):/);
     assert.match(md, /: covered → missing_test/);
   }
-  assert.match(r.calls.updated[0].body, /"rows":\[\["[0-9a-f]{8}","missing_test"\],\["[0-9a-f]{8}","missing_test"\]\]/);
+  assert.match(r.calls.updated[0].body, /"rows":\[\["1111111a","missing_test"\],\["2222222b","missing_test"\]\]/);
 });
 
 test('run (A5): an engine that did not succeed gives a Partial audit banner, keeps verified rows, writes no issue', async (t) => {
@@ -414,13 +481,14 @@ test('run (A19): no admitted document updates the existing issue (state kept) an
 });
 
 test('run (A18): the size caps are bytes, and a failing summary write or lookup never throws', async (t) => {
-  const rs = Array.from({ length: 80 }, (_, i) => req({ id: `R${i + 1}`, text: `需求${i + 1} ${'要'.repeat(95)}`, note: '注'.repeat(98) }));
-  const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs) }, env: { AUDIT_ISSUE: 'true' } });
+  const rs = Array.from({ length: 80 }, (_, i) => req({ id: cid(i + 1), text: `需求${i + 1} ${'要'.repeat(95)}`, note: '注'.repeat(98) }));
+  const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(candsOf(...rs.map((x) => cand(x.id, 3, 'x')))) }, env: { AUDIT_ISSUE: 'true' } });
   assert.ok(Buffer.byteLength(r.calls.created[0].body) <= 65536, String(Buffer.byteLength(r.calls.created[0].body)));
   assert.ok(Buffer.byteLength(r.calls.summary) <= 1048576);
   const w = workspace(t);
   w.put('audit-meta.json', { head: 'abc123', max_requirements: 80, docs: 1, limitations: [] });
   w.put('findings.json', result());
+  w.put('audit-candidates.txt', candTxt(ONE()));
   const m = mocks();
   m.core.summary = { addRaw() { return this; }, async write() { throw new Error('summary too large'); } };
   const saved = process.env.CTX; process.env.CTX = w.ctx;
@@ -430,4 +498,34 @@ test('run (A18): the size caps are bytes, and a failing summary write or lookup 
   boom.context = null; // anything unexpected is a warning, not a red job
   await audit({ github: boom.github, context: boom.context, core: boom.core });
   assert.match(boom.calls.warnings.join('\n'), /audit report failed/);
+});
+
+test('run: the header counts blocks from the candidate file and meta, the not-a-requirement block is listed collapsed, and the cap leftovers are in not reviewed', async (t) => {
+  const r = await runPost(t, { ctxFiles: {
+    'findings.json': result([req()], { not_requirements: [{ cid: C2, reason: 'rationale, not behaviour' }] }),
+    'audit-candidates.txt': candTxt(TWO()),
+    'audit-meta.json': { head: 'abc123', max_requirements: 2, docs: 1, candidates: 14, candidates_listed: 2, cap_left: ['docs/design.md § 4. After: 12 blocks not audited (cap)'], limitations: [] } } });
+  const md = r.calls.summary;
+  assert.match(md, /\*\*1 requirement\*\* from 1 document\n\n2 blocks audited of 14 in the documents \(cap 2\); 1 block was not a requirement\./);
+  assert.match(md, /<details><summary>1 block was not a requirement<\/summary>[\s\S]*2222222b[\s\S]*\(rationale, not behaviour\)/);
+  assert.match(md, /### Not reviewed\n\n- docs\/design\.md § 4\. After: 12 blocks not audited \(cap\)\n/);
+  const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
+  assert.deepEqual(saved.not_requirements.map((x) => [x.cid, x.path, x.line, x.reason]), [[C2, 'docs/design.md', 4, 'rationale, not behaviour']]);
+});
+
+test('validate: without an explicit list it reads audit-candidates.txt from $CTX, which is how the engine repair check sees the blocks', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-audit-ctx-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, 'audit-candidates.txt'), candTxt(TWO()));
+  const saved = process.env.CTX;
+  try {
+    process.env.CTX = dir;
+    assert.match(validate(result([req({ id: 'R1' })])).error, /not a listed block id/);
+    assert.match(validate(result([])).error, /2 of 2 listed blocks were not answered/);
+    assert.deepEqual(validate(result([req()], { not_requirements: [{ cid: C2, reason: 'an example only' }] })), { ok: true });
+    delete process.env.CTX;
+    assert.deepEqual(validate(result([req({ id: 'R1' })])), { ok: true });
+  } finally { if (saved === undefined) delete process.env.CTX; else process.env.CTX = saved; }
+  assert.deepEqual([...audit.readCandidates(candTxt(TWO())).keys()], [C1, C2]);
+  assert.equal(audit.readCandidates('bad line\n\n').size, 0);
 });
