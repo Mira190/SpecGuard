@@ -371,10 +371,30 @@ const gapFree = (data) => !data.findings.length && !(data.validation_notes || []
 const reqChanged = (data) => data.requirements.some((r) => r.req_change || (r.reflected_in && r.reflected_in.spec));
 const noGaps = (data) => gapFree(data) && !reqChanged(data);
 
-// A criterion split into several obligations is covered only when every one is.
-const met = (r, covById) => {
-  const n = r.obligation_ids.length, k = r.obligation_ids.filter((id) => covById.get(id)?.status === 'covered').length;
-  return n ? `${k}/${n} obligations covered${k < n ? ' (not fully covered)' : ''}. ` : '';
+// Per obligation: a unit test gap (its own status or a finding on it), unit-evidenced, or left to a human / a higher layer.
+const gapIds = (fs_) => new Set(fs_.filter((f) => ['missing_test', 'weak_test'].includes(f.kind)).flatMap((f) => f.obligation_ids || []));
+const hasGap = (r, covById, gaps) => r.obligation_ids.some((id) => gaps.has(id) || ['missing_test', 'weak_test'].includes(covById.get(id)?.status));
+const STATE_LABEL = { missing_test: ['missing test', 'missing test'], weak_test: ['weak test', 'weak test'], needs_human: ['needs human review', 'need human review'], higher_level_only: ['higher-level only', 'higher-level only'], unknown: ['unknown', 'unknown'] };
+// A criterion split into several obligations is unit-evidenced only when every one is: "1/3 unit-evidenced, 2 need human review".
+const met = (r, covById, gaps) => {
+  const n = r.obligation_ids.length;
+  if (!n) return '';
+  const st = r.obligation_ids.map((id) => covById.get(id)?.status || 'unknown'), k = st.filter((x) => x === 'covered').length;
+  const rest = Object.keys(STATE_LABEL).map((x) => [x, st.filter((y) => y === x).length]).filter(([, c]) => c).map(([x, c]) => `${c} ${STATE_LABEL[x][c === 1 ? 0 : 1]}`);
+  return `${k}/${n} unit-evidenced${rest.length ? `, ${rest.join(', ')}` : ''}${k < n && hasGap(r, covById, gaps) ? ' (not fully covered)' : ''}. `;
+};
+// Criteria the model filed under not_reviewed as process or CI results ("npm test passes") are not requirements to assess: they stay in Not reviewed only.
+// Hidden: no obligations, and the model's own not_reviewed text names the criterion (its id or quote; the automatic "Requirement X is not assessed"
+// notes do not count), or it is CI-style wording while that text also talks CI. Wording alone never hides a criterion.
+const PROCESS = /\b(?:npm|yarn|pnpm|pytest|mvn|gradle|cargo|go|make)\s+(?:run\s+)?(?:test|build|lint|check)|\b(?:ci|build|lint(?:ing)?|pipeline|workflow|checks?|tests?)\s+(?:\w+\s+){0,2}(?:pass(?:es)?|succeeds?|green)\b|\bgreen\b/i;
+const reqRows = (data) => {
+  const text = data.requirements.filter((r) => !r.obligation_ids.length).reduce((t, r) => t.split(`Requirement ${r.id} is not assessed: ${r.reason}`).join(' '), data.not_reviewed || '');
+  if (!text.trim()) return data.requirements;
+  const n = norm(text).toLowerCase(), esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const said = (r) => (norm(r.quote || '') && n.includes(norm(r.quote).toLowerCase()))
+    || (/[A-Za-z]/.test(r.id) && new RegExp(`(^|[^\\w-])${esc(String(r.id))}(?![\\w-])`, 'i').test(text))
+    || (PROCESS.test(r.quote || '') && PROCESS.test(text));
+  return data.requirements.filter((r) => r.obligation_ids.length || !said(r));
 };
 const cell = (s, n = Infinity) => oneLine(neutralize(s), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const item = ({ f, why }) => `- **${title1(f.title)}** (\`${cell(`${f.path}:${f.line}`)}\`, ${cell(f.kind)}${why ? `, ${cell(why)}` : ''})\n\n  ${(neutralize(f.body) + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
@@ -509,18 +529,22 @@ const compact = (f, url, blob) => {
 function verdict(data, fs_) {
   const n = (k) => fs_.filter((f) => f.kind === k).length;
   const covById = new Map(data.coverage.map((c) => [c.id, c]));
-  const ok = data.requirements.filter((r) => r.obligation_ids.length && r.obligation_ids.every((id) => covById.get(id)?.status === 'covered')).length;
+  const gaps = gapIds(fs_), reqs = reqRows(data);
+  const g = reqs.filter((r) => hasGap(r, covById, gaps)).length;
+  const h = reqs.filter((r) => r.obligation_ids.length && !hasGap(r, covById, gaps) && r.obligation_ids.some((id) => covById.get(id)?.status !== 'covered')).length;
+  const u = reqs.filter((r) => !r.obligation_ids.length).length;
+  const req = reqs.length && `Requirements: ${reqs.length} criteri${reqs.length === 1 ? 'on' : 'a'} · ${g} with a unit test gap${h ? ` · ${h} need human or higher-level review` : ''}${u ? ` · ${u} not assessed` : ''}${n('spec_mismatch') ? ` · ${n('spec_mismatch')} spec mismatch` : ''}`;
   const std = data.standards.status === 'checked' ? (n('standard') ? `${n('standard')} finding${n('standard') === 1 ? '' : 's'}` : 'confirmed') : data.standards.status === 'no_rules' ? 'no rules' : 'not reviewed';
-  return [`Unit tests: ${n('missing_test')} missing, ${n('weak_test')} weak`, data.requirements.length && `Requirements: ${ok}/${data.requirements.length} criteria with unit evidence${n('spec_mismatch') ? `, ${n('spec_mismatch')} spec mismatch` : ''}`, `Standards: ${std}`, `Pushdown: ${data.layering.status === 'checked' ? n('pushdown') : 'not reviewed'}`].filter(Boolean).join(' · ');
+  return [`Unit tests: ${n('missing_test')} missing, ${n('weak_test')} weak`, req, `Standards: ${std}`, `Pushdown: ${data.layering.status === 'checked' ? n('pushdown') : 'not reviewed'}`].filter(Boolean).join(' · ');
 }
 // Sections in goal order, which is also the importance order: unit test gaps, requirements, standards, layers, completeness, then collapsed reference
 // material. Each section's items are added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, prov, partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [] }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [] }) {
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)];
   if (data && !status) status = `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}${verdict(data, all)}`;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
-  let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}<!-- specguard:status=${state || (incomplete.length ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n${neutralize(status)}${prov ? `\n\n${neutralize(prov)}.` : ''}\n\n`;
+  let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}<!-- specguard:status=${state || (incomplete.length ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n${neutralize(status)}\n\n`;
   if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
   if (partial || dropped.length) head += `${partial ? '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.' : ''}${dropped.length ? `${partial ? '\n' : ''}> ${notReviewed(dropped)}` : ''}\n\n`;
   if (rules.length) head += `> This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.\n\n`;
@@ -532,7 +556,8 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
   let g = '';
   const add = (h, atoms = [], tail = '') => sections.push({ g, h, atoms, tail });
   const of = (kinds) => [...posted.filter((x) => kinds.includes(x.f.kind)).map((x) => compact(x.f, x.url, blob)), ...items.filter((x) => kinds.includes(x.f.kind)).map((x) => `${item(x)}\n`)];
-  const toolingAdd = () => add(`**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`,
+  const toolingAdd = () => tooling.status !== 'not_configured' && add( // nothing to report when no standards_checks are configured
+`**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`,
     (tooling.checks || []).map((c) => `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`), '\n');
   const appendix = [];
   const reference = (h, atoms, tail) => appendix.push({ g: '', h, atoms, tail });
@@ -543,11 +568,12 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
     g = '### Requirements\n\n';
     add(`**Requirements source:** ${cell(data.requirements_source)}\n\n`);
     if (reqChanged(data)) add('> Requirement changed in this PR: consistency with the changed text does not prove the change itself is approved.\n\n');
-    if (data.requirements.length) {
-      const assessed = data.requirements.filter((r) => r.obligation_ids.length), open = data.requirements.filter((r) => !r.obligation_ids.length);
+    const reqs = reqRows(data), gaps = gapIds(all);
+    if (reqs.length) {
+      const assessed = reqs.filter((r) => r.obligation_ids.length), open = reqs.filter((r) => !r.obligation_ids.length);
       const shown = [...assessed, ...open.slice(0, MAX_ROWS)];
       add('| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n',
-        shown.map((r) => `| ${cell(r.id, 40)} | ${cell(`${r.source}: ${r.quote}`, 500)} | ${cell(r.obligation_ids.join(', ') || 'NOT ASSESSED')} | ${cell(`${met(r, covById)}${r.reason}`, 400)} |\n`),
+        shown.map((r) => `| ${cell(r.id, 40)} | ${cell(`${r.source}: ${r.quote}`, 500)} | ${cell(r.obligation_ids.join(', ') || 'NOT ASSESSED')} | ${cell(`${met(r, covById, gaps)}${r.reason}`, 400)} |\n`),
         open.length > MAX_ROWS ? `\n_+${open.length - MAX_ROWS} more NOT ASSESSED criteria not shown._\n\n` : '\n');
     }
     add('', of(['spec_mismatch']), '\n');
@@ -566,11 +592,11 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
     g = '';
   }
   if (engine) add(`${usageLine({ engine, model, raw: usage, notes })}\n\n`);
-  if (delivery) add(`<sub>Comments: ${neutralize(delivery)}</sub>\n\n`);
+  if (delivery && !/^0 inline, 0 file-level, 0 in summary$/.test(delivery)) add(`<sub>Comments: ${neutralize(delivery)}</sub>\n\n`);
   if (data) {
     const covById = new Map(data.coverage.map((c) => [c.id, c]));
     if (data.coverage.length) {
-      reference(`<details><summary>Obligations (${data.coverage.length})</summary>\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n`,
+      reference(`<details><summary>Obligations (${data.coverage.length})${proven(data.coverage) ? ` · ${proven(data.coverage)}` : ''}</summary>\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n`,
         data.coverage.map((c) => `| ${cell(`${c.id}: ${c.obligation}`, 500)} | ${cell(`${c.source}; ${c.behaviour ? `${c.behaviour.path}:${c.behaviour.line} — ${c.behaviour.quote}` : 'implementation not located'}`, 500)} | ${cell(c.evidence.map((e) => `${e.layer}: ${e.path}:${e.line} — ${e.quote} (${e.kind}; ${e.proves})`).join('; ') || 'none', 800)} | ${cell(`${c.status}: ${c.reason}`, 500)} |\n`), '\n</details>\n\n');
     }
     const t = traceTable(data, blob, specFiles, covById);
@@ -1216,7 +1242,7 @@ async function run({ github, context, core }) {
 
   const clean_ = noGaps(data) && !incomplete.length, state = incomplete.length ? 'incomplete' : 'complete';
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ status: clean_ ? 'No test gaps found in the assessed obligations.' : undefined, prov, delivery: counts(), traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ status: clean_ ? 'No test gaps found in the assessed obligations.' : undefined, delivery: counts(), traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }

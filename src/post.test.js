@@ -419,9 +419,9 @@ test('a compound criterion is covered only when all its obligations are', () => 
   const r = { id: 'R1', source: 'PR body', quote: 'Rejects empty names and trims whitespace.', obligation_ids: ['O1', 'O2'], reason: 'Split in two.' };
   const d = report({ requirements: [r], coverage: [row(), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { obligation_ids: ['O2'] })] });
   assert.equal(post.validate(d).ok, true);
-  assert.match(post.buildSummary({ status: 'Reviewed', data: d }), /1\/2 obligations covered \(not fully covered\)/);
+  assert.match(post.buildSummary({ status: 'Reviewed', data: d }), /1\/2 unit-evidenced, 1 missing test \(not fully covered\)/);
   const all = report({ requirements: [r], coverage: [row(), row('covered', { id: 'O2' })], findings: [] });
-  assert.match(post.buildSummary({ status: 'Reviewed', data: all }), /2\/2 obligations covered\. Split/);
+  assert.match(post.buildSummary({ status: 'Reviewed', data: all }), /2\/2 unit-evidenced\. Split/);
 });
 
 test('invalid requirement wording cannot support a covered obligation', () => {
@@ -2162,7 +2162,7 @@ test('layout: the verdict leads, results follow in goal order, reference materia
   const posted = [{ f: finding('missing_test', { title: 'POSTED GAP' }), url: 'https://github.com/o/r/pull/1#discussion_r5' }, { f: finding('standard', { title: 'POSTED STD' }) }, { f: finding('pushdown', { title: 'POSTED PUSH' }) }];
   const s = post.buildSummary({ data: layoutData(), posted, usage: null, engine: 'claude', blob: 'https://github.com/o/r/blob/HEADSHA', specFiles: [], pre: layoutPre, manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } });
   const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
-  assert.match(s, /## SpecGuard\n\nUnit tests: 1 missing, 0 weak · Requirements: 0\/1 criteria with unit evidence · Standards: 1 finding · Pushdown: 1\n/);
+  assert.match(s, /## SpecGuard\n\nUnit tests: 1 missing, 0 weak · Requirements: 1 criterion · 1 with a unit test gap · Standards: 1 finding · Pushdown: 1\n/);
   const order = ['## SpecGuard', '### Unit test gaps', '### Requirements', '| Criterion | Source', '### Coding standards', '### Test layers', '**Not reviewed:**', '<sub>Engine: claude', '<summary>Obligations (1)', '<summary>Pre-existing drift', '<summary>Validation notes', '<summary>Sources read'].map(at);
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   assert.ok(at('POSTED GAP') > at('### Unit test gaps') && at('POSTED GAP') < at('### Requirements'));
@@ -2337,4 +2337,79 @@ test('A4 a finding whose thread SpecGuard resolved is posted again when reported
   await post(unread);
   assert.equal(unread.calls.review.length, 0, 'threads unreadable: nothing is guessed, the finding stays deduplicated');
   assert.match(unread.warnings.join('|'), /review threads could not be read/);
+});
+
+// Summary readability: one consistent requirements verdict, human-review states are not failures, process criteria and noise lines are hidden.
+const sumOf = (data, extra = {}) => post.buildSummary({ data, ...extra });
+const reqOf = (id, ids, extra = {}) => ({ id, source: 'PR body', quote: `Criterion ${id} text.`, obligation_ids: ids, reason: 'r', ...extra });
+const mixed = () => report({
+  requirements: [reqOf('R1', ['O1', 'O2', 'O3']), reqOf('R2', ['O4']), reqOf('R3', ['O5']), reqOf('R4', ['O6'])],
+  coverage: [row('covered', { id: 'O1' }), row('needs_human', { id: 'O2', evidence: [] }), row('higher_level_only', { id: 'O3', evidence: [{ ...evidence, layer: 'integration' }] }),
+    row('missing_test', { id: 'O4' }), row('needs_human', { id: 'O5', evidence: [] }), row('covered', { id: 'O6' })],
+  findings: [finding('missing_test', { obligation_ids: ['O4'] })],
+});
+
+test('verdict: one consistent requirements line, grouped per criterion; unit evidence moves into the Obligations summary', () => {
+  const d = mixed();
+  const s = sumOf(d, { items: [{ f: d.findings[0], why: 'x' }] });
+  assert.match(s, /## SpecGuard\n\nUnit tests: 1 missing, 0 weak · Requirements: 4 criteria · 1 with a unit test gap · 2 need human or higher-level review · Standards/);
+  assert.doesNotMatch(s, /criteria with unit evidence/);
+  assert.doesNotMatch(s.split('### ')[0], /Unit evidence/);
+  assert.match(s, /<summary>Obligations \(6\) · Unit evidence: 2\/4 obligations \(static review; tests not executed\)<\/summary>/);
+});
+
+test('verdict: criteria only a human or higher layer can judge are not failures; zero parts are omitted but G stays', () => {
+  const d = report({ requirements: [reqOf('R1', ['O1'])], coverage: [row('needs_human', { evidence: [] })], findings: [] });
+  assert.match(sumOf(d), /Requirements: 1 criterion · 0 with a unit test gap · 1 need human or higher-level review · Standards/);
+  const covered = report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] });
+  assert.match(sumOf(covered), /Requirements: 1 criterion · 0 with a unit test gap · Standards/);
+  assert.doesNotMatch(sumOf(covered), /need human/);
+  assert.equal(post.noGaps(covered), true);
+  assert.match(sumOf(covered, { status: 'No test gaps found in the assessed obligations.' }), /## SpecGuard\n\nNo test gaps found in the assessed obligations\.\n\n/);
+});
+
+test('requirements table: k/n unit-evidenced then the other states; "(not fully covered)" only with a unit gap', () => {
+  const d = mixed();
+  const s = sumOf(d, { items: [{ f: d.findings[0], why: 'x' }] });
+  const r1 = s.split('\n').find((l) => l.startsWith('| R1 |'));
+  assert.match(r1, /1\/3 unit-evidenced, 1 needs human review, 1 higher-level only\. r \|/);
+  assert.doesNotMatch(r1, /not fully covered/);
+  assert.match(s, /\| R2 \|.*\| 0\/1 unit-evidenced, 1 missing test \(not fully covered\)\. r \|/);
+  assert.match(s, /\| R3 \|.*\| 0\/1 unit-evidenced, 1 needs human review\. r \|/);
+  assert.match(s, /\| R4 \|.*\| 1\/1 unit-evidenced\. r \|/);
+  // a finding on an obligation counts as a unit gap even when its row says otherwise
+  const g = report({ requirements: [reqOf('R1', ['O1', 'O2'])], coverage: [row(), row('needs_human', { id: 'O2', evidence: [] })], findings: [finding('weak_test', { obligation_ids: ['O2'] })] });
+  assert.match(sumOf(g, { items: [{ f: g.findings[0], why: 'x' }] }), /1\/2 unit-evidenced, 1 needs human review \(not fully covered\)/);
+});
+
+test('process-only criteria stay in Not reviewed and out of the Requirements table and counts', () => {
+  const real = reqOf('R1', ['O1']);
+  const ci = reqOf('R2', [], { quote: 'npm test passes', reason: 'Could not verify the original criterion wording against its source.' });
+  const named = reqOf('AC-7', [], { quote: 'Deploys cleanly', reason: 'r' });
+  const unassessed = reqOf('R9', [], { quote: 'Handles the empty list.', reason: 'Structured acceptance criterion was not assessed.' });
+  const auto = (r) => `Requirement ${r.id} is not assessed: ${r.reason}`;
+  const d = report({ requirements: [real, ci, named, unassessed], coverage: [row()], findings: [], not_reviewed: `Process results (CI): npm test passes was not reviewed. AC-7 is a deployment matter. ${auto(ci)} ${auto(unassessed)}` });
+  const s = sumOf(d);
+  const table = s.split('### Coding standards')[0];
+  assert.doesNotMatch(table, /Deploys cleanly|\| R2 \||\| AC-7 \|/);
+  assert.match(table, /\| R9 \|.*NOT ASSESSED/); // an unassessed criterion the model did not file as process stays visible
+  assert.match(s, /Requirements: 2 criteria · 0 with a unit test gap · 1 not assessed · Standards/);
+  assert.equal(s.match(/npm test passes/g).length, 1); // once, in Not reviewed
+  assert.match(s, /\*\*Not reviewed:\*\*.*npm test passes/);
+  // wording alone never hides: without the model naming it in not_reviewed, the row stays
+  const lone = report({ requirements: [real, ci], coverage: [row()], findings: [], not_reviewed: auto(ci) });
+  assert.match(sumOf(lone), /\| R2 \|.*NOT ASSESSED/);
+  // only process rows: no table and no requirements count
+  const only = sumOf(report({ requirements: [ci], coverage: [row()], findings: [], not_reviewed: 'CI: npm test passes.' }));
+  assert.doesNotMatch(only, /\| Criterion \||Requirements: \d/);
+});
+
+test('noise lines: tooling only when configured, comment counts only when non-zero', () => {
+  const d = report({ requirements: [], coverage: [row()], findings: [] });
+  const off = sumOf(d, { tooling: { status: 'not_configured', checks: [], ref: 'abc', reason: 'No standards_checks configured.' }, delivery: '0 inline, 0 file-level, 0 in summary' });
+  assert.doesNotMatch(off, /Standards tooling|Comments:/);
+  for (const status of ['passed', 'failed', 'pending', 'ambiguous', 'unavailable']) assert.match(sumOf(d, { tooling: { status, checks: [], reason: 'x' } }), new RegExp(`Standards tooling: ${status}\\.`));
+  assert.match(sumOf(d, { delivery: '0 inline, 0 file-level, 1 in summary' }), /<sub>Comments: 0 inline, 0 file-level, 1 in summary<\/sub>/);
+  assert.match(sumOf(d, { delivery: '0 inline, 0 file-level, 0 in summary, 2 already posted' }), /Comments: 0 inline, 0 file-level, 0 in summary, 2 already posted/);
+  assert.doesNotMatch(post.buildSummary({ status: 'Could not complete: x', tooling: { status: 'not_configured', checks: [] } }), /Standards tooling/); // failed run, no data
 });
