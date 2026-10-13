@@ -409,11 +409,88 @@ test('a compound criterion is covered only when all its obligations are', () => 
   assert.match(post.buildSummary({ status: 'Reviewed', data: all }), /2\/2 unit-evidenced\. Split/);
 });
 
-test('invalid requirement wording cannot support a covered obligation', () => {
-  const d = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Made up.', obligation_ids: ['O1'], reason: 'Covered' }], coverage: [row()], findings: [] });
+test('invalid requirement wording leaves its criterion unassessed and its obligations on their own citations', () => {
+  const d = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Made up.', obligation_ids: ['O1'], reason: 'Covered' }], coverage: [row('covered', { alignment: { status: 'consistent', reason: 'ok' } })], findings: [] });
   post.verifyRequirements(d, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [] });
-  assert.equal(d.coverage[0].status, 'unknown');
-  assert.equal(post.noGaps(d), false);
+  assert.equal(d.coverage[0].status, 'covered'); // no cascade: the behaviour and evidence citations are verified independently
+  assert.deepEqual(d.coverage[0].alignment, { status: 'unknown', reason: 'Requirement wording not verified.' });
+  assert.deepEqual(d.requirements[0].obligation_ids, []);
+  assert.match(d.requirements[0].reason, /^Requirement wording not verified/);
+  assert.ok(d.validation_notes.includes('Obligation O1 alignment unknown: requirement wording not verified.'));
+  assert.equal(post.noGaps(d), false); // an unassessed criterion is never a clean pass
+});
+
+// ---- requirement quote normalisation ----
+const AC_BODY = [
+  'Acceptance criteria',
+  "- [ ] `parseHms('23:59:59')` returns 86399 (MAX_DUR) and `parseHms('00:00:01')` returns 1.",
+  '- [x] **Bold** and _emphasised_ words, see [the spec](https://x.test/a_b) for “smart” quotes and it’s fine.',
+  '* A star bullet with `code`.',
+  '1. Numbered item here.',
+  '## A heading line',
+  'Plain line, MAX_DUR stays.',
+].join('\n');
+const verifyQuote = (quote, text = AC_BODY, extra = {}) => {
+  const d = report({ requirements: [{ id: 'X1', source: 'PR body AC 1', quote, obligation_ids: ['O1'], reason: 'r', ...extra }], coverage: [row('covered', { alignment: { status: 'consistent', reason: 'ok' } })], findings: [] });
+  post.validate(d);
+  post.verifyRequirements(d, { documents: [{ source: 'PR body', text }], criteria: [] });
+  return d;
+};
+
+test('requirement quotes: markdown, checkbox and smart quotes in the source do not make a plain quote unverifiable (Kite PR #5)', () => {
+  const pr5 = verifyQuote("parseHms('23:59:59') returns 86399 (MAX_DUR) and parseHms('00:00:01') returns 1.");
+  assert.deepEqual(pr5.requirements[0].obligation_ids, ['O1']);
+  assert.equal(pr5.coverage[0].alignment.status, 'consistent');
+  assert.equal(pr5.requirements[0].quote, "`parseHms('23:59:59')` returns 86399 (MAX_DUR) and `parseHms('00:00:01')` returns 1."); // the source's own line, minus the list marker
+  for (const q of [
+    "- [ ] `parseHms('23:59:59')` returns 86399 (MAX_DUR) and `parseHms('00:00:01')` returns 1.", // the model kept the markdown
+    'Bold and emphasised words, see the spec for "smart" quotes and it\'s fine.',
+    'A star bullet with code.', 'Numbered item here.', 'A heading line', '## A heading line', 'Plain line, MAX_DUR stays.',
+    'Numbered   item\nhere.',
+  ]) assert.deepEqual(verifyQuote(q).requirements[0].obligation_ids, ['O1'], q);
+  assert.equal(verifyQuote('Plain line, MAX_DUR stays.').requirements[0].quote, 'Plain line, MAX_DUR stays.');
+});
+
+test('requirement quotes: a wrong or empty-after-stripping quote still fails; code citations stay exact', () => {
+  for (const q of ["parseHms('23:59:59') returns 86400.", 'Numbered item there.', '**', '``', 'MAX DUR stays']) {
+    const d = verifyQuote(q);
+    assert.deepEqual(d.requirements[0].obligation_ids, [], q);
+    assert.match(d.requirements[0].reason, /^Requirement wording not verified/);
+  }
+  assert.equal(post.quoteLine(['a', '- [ ] `x()` is 1.', 'b'], 'x() is 1.'), 2);
+  const readOf = (p) => ({ 'src.js': ['l1', 'l2', 'if (x) {'], 'test.js': ['t', evidence.quote] })[p] || null;
+  const cited = (quote) => {
+    const d = report({ coverage: [row('covered', { behaviour: { ...behaviour, quote } })], findings: [] });
+    post.validate(d);
+    post.verifyEvidence(d, new Set(['src.js']), new Set(), readOf, new Map([['src.js', post.parsePatch(patch)]]));
+    return d.coverage[0].status;
+  };
+  assert.equal(cited('if  (x)  {'), 'covered'); // whitespace only: the existing exact rule
+  assert.equal(cited('if (**x**) {'), 'unknown'); // markdown stripping is never applied to code
+});
+
+test('requirement quotes: the same normalisation covers pr_quote and a collected criterion the model re-typed without markdown', () => {
+  const d = verifyQuote('Numbered item here.', AC_BODY, { pr_quote: "parseHms('00:00:01') returns 1." });
+  assert.equal(d.requirements[0].pr_quote, "parseHms('00:00:01') returns 1.");
+  assert.equal(verifyQuote('Numbered item here.', AC_BODY, { pr_quote: 'not in the body' }).requirements[0].pr_quote, null);
+  const crit = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'it is fine and bold', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('covered')], findings: [] });
+  post.validate(crit);
+  post.verifyRequirements(crit, { documents: [{ source: 'PR body', text: '- [ ] it is **fine** and _bold_' }], criteria: [{ id: 'R1', source: 'PR body', quote: 'it is **fine** and _bold_' }] });
+  assert.deepEqual([crit.requirements[0].obligation_ids, crit.requirements[0].quote], [['O1'], 'it is **fine** and _bold_']); // the collected text is the stored copy
+});
+
+test('no cascade: an unverified criterion wording leaves the other criterion and a doubly-linked obligation intact', () => {
+  const al = () => ({ status: 'consistent', reason: 'ok' });
+  const d = report({
+    requirements: [{ id: 'X1', source: 'PR body AC 1', quote: 'Invented wording.', obligation_ids: ['O1', 'O2'], reason: 'r' }, { id: 'X2', source: 'PR body AC 2', quote: 'Numbered item here.', obligation_ids: ['O2'], reason: 'r' }],
+    coverage: [row('covered', { alignment: al() }), row('covered', { id: 'O2', alignment: al() })], findings: [],
+  });
+  post.validate(d);
+  post.verifyRequirements(d, { documents: [{ source: 'PR body', text: AC_BODY }], criteria: [] });
+  assert.deepEqual(d.coverage.map((c) => c.status), ['covered', 'covered']);
+  assert.deepEqual(d.coverage.map((c) => c.alignment.status), ['unknown', 'consistent']); // O2 is still linked to a verified criterion
+  assert.deepEqual(d.requirements.map((r) => r.obligation_ids), [[], ['O2']]);
+  assert.deepEqual(post.reducedReasons({ data: d, engineNotes: [] }), []);
 });
 
 test('retains unimplemented requirements without a fabricated production location', () => {
@@ -669,7 +746,7 @@ test('c1: a model-added requirement cited as "PR body AC 3" resolves to the coll
   const bad = report({ requirements: [{ id: 'X1', source: 'PR body AC 3', quote: 'Invented.', obligation_ids: ['O1'], reason: 'Added.' }] });
   post.verifyRequirements(bad, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [] });
   assert.deepEqual(bad.requirements[0].obligation_ids, []);
-  assert.equal(bad.findings.length, 0);
+  assert.equal(bad.findings.length, 1); // the finding's own citations are verified elsewhere; an unverified criterion wording does not drop it
 });
 
 test('c2: findings with a suggestion or a start_line are never merged', () => {
@@ -2252,9 +2329,14 @@ test('R3 G4: a demoted row names the citation that failed (behaviour, evidence N
   post.verifyEvidence(req, new Set(['src.js']), new Set(), readOf, new Map([['src.js', post.parsePatch(patch)]]));
   assert.equal(req.coverage[0].status, 'covered');
   post.verifyRequirements(req, { documents: [{ source: 'PR body', text: 'Something else.' }], criteria: [] });
-  assert.equal(req.coverage[0].status, 'unknown');
-  assert.match(req.coverage[0].reason, /requirement citation could not be verified \(requirement R1 PR body: quote not found in its source\)\./);
-  assert.ok(req.validation_notes.some((n) => /Obligation O1 marked unknown: .*requirement R1 PR body/.test(n)));
+  assert.equal(req.coverage[0].status, 'covered'); // wording not verified: no cascade onto the obligation
+  assert.equal(req.coverage[0].alignment.status, 'unknown');
+  assert.match(req.requirements[0].reason, /^Requirement wording not verified/);
+  const other = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Return 42.', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('covered')], findings: [] });
+  post.validate(other);
+  post.verifyRequirements(other, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [{ id: 'R1', source: 'PR body', quote: 'Different criterion.' }] }); // an ID that does not match its collected text still cascades
+  assert.equal(other.coverage[0].status, 'unknown');
+  assert.ok(other.validation_notes.some((n) => /Obligation O1 marked unknown: .*requirement R1 PR body/.test(n)));
 });
 
 // Result-first summary layout: verdict, unit test gaps, requirements, standards, test layers, completeness, then collapsed reference material.
@@ -2618,6 +2700,9 @@ test('reduced: each of the four triggers, and none for a normal run', () => {
   assert.deepEqual(r({ engineNotes: ['a', 'b', 'c'] }), ['3 engine notes']);
   assert.deepEqual(r({ data: data(['Obligation O0 marked unknown: x.', 'Obligation O1 marked unknown: y.']) }), ['2 of 4 obligations degraded by validation']);
   assert.deepEqual(r({ data: data(['Obligation O0 marked unknown: x.', 'Obligation O0 marked unknown: again.', 'Obligation O1 alignment unknown: not stated.']) }), [], '25% exactly is not more than 25%; a derived alignment is not a degraded row');
+  const viaRequirement = (i) => `Obligation O${i} marked unknown: The linked requirement citation could not be verified (requirement X1 PR body: its ID did not match the collected source text).`;
+  assert.deepEqual(r({ data: data([0, 1, 2, 3].map(viaRequirement).concat('Obligation O0 alignment unknown: requirement wording not verified.')) }), [], 'rows reached only through an unverified requirement link do not count');
+  assert.deepEqual(r({ data: data([viaRequirement(0), viaRequirement(1), 'Obligation O2 marked unknown: could not verify citation: behaviour a.js:1.', 'Obligation O3 marked unknown: could not verify citation: evidence 1 t.js:2.']) }), ['2 of 4 obligations degraded by validation'], 'only the own-citation failures count');
 });
 
 const reducedData = () => {

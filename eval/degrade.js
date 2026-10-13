@@ -126,6 +126,8 @@ const MUTATIONS = [
   { id: 'quote trimmed', expect: 'ok', text: obj(trim('')) },
   { id: 'quote trimmed + ellipsis', expect: 'ok', text: obj(trim('...')) },
   { id: 'quote lower-cased (paraphrase)', expect: 'soft', text: obj((d) => { every(d, (c) => { if (typeof c.quote === 'string') c.quote = c.quote.toLowerCase(); }); return d; }) },
+  // Kite PR #5: the AC reads "- [ ] `f(x)` returns 1." and the model quoted "f(x) returns 1." A requirement quote compares as plain text (post.js plain), so no row may be lost.
+  { id: 'requirement quote with markdown stripped', expect: 'ok', text: obj((d) => { for (const r of d.requirements || []) if (typeof r.quote === 'string') r.quote = r.quote.replace(/^\s*(?:[-*]\s+)?(?:\[[ xX]\]\s+)?/, '').replace(/`/g, ''); return d; }) },
   { id: 'all cosmetic at once', expect: 'ok', text: (d) => `Here is the review:\n\`\`\`json\n${J(trim('')(shiftBy(1, 5)(strNums(enumCase((lateRows(d, (c) => { delete c.alignment; }), d))))), 2)}\n\`\`\`\nDone.` },
   { id: 'truncated mid-ledger', expect: 'reject', text: (d) => J(d).slice(0, Math.floor(J(d).length * 0.6)) },
   { id: 'ledger missing', expect: 'reject', text: obj((d) => { delete d.coverage; return d; }) },

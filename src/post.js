@@ -291,6 +291,11 @@ function anchor(f, maps, fileUsed = 0) {
 }
 
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
+// Requirement wording as plain text: a model quotes a criterion without its markdown (backticks, checkbox, emphasis, link syntax, heading #s)
+// and with straight quotes. Both sides of every requirement-quote comparison go through this; code citations stay exact (norm).
+const MARKER = /^[ \t]*(?:#{1,6}[ \t]+|>[ \t]?|(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)/gm;
+const plain = (s) => norm(String(s).replace(MARKER, '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`+/g, '').replace(/\*\*|__/g, '')
+  .replace(/(^|[^\w*])[*_](?=\S)|(?<=\S)[*_](?![\w*])/g, '$1').replace(/[‘’]/g, "'").replace(/[“”]/g, '"'));
 // An acceptance-criterion source is stabler than a quote: the model re-anchors the same finding on different lines between runs.
 // ponytail: AC-only means a new gap on the same AC and file at another line is hidden once the first is posted; add the line to the key if that bites.
 const AC = /^(issue (?:[\w.-]+\/[\w.-]+)?#\d+|PR body) AC \d+$/;
@@ -409,7 +414,8 @@ function reducedReasons({ em, repair, engineNotes = [], data }) {
   if (em?.tier === 'fast') out.push('fast-tier model');
   if (repair === 'repaired' || repair === 'repair_failed') out.push(repair === 'repaired' ? 'the JSON needed a repair turn' : 'the JSON repair turn failed');
   if (engineNotes.length >= 3) out.push(`${engineNotes.length} engine notes`);
-  const bad = new Set((data.validation_notes || []).map((n) => /^Obligation (.+?) marked unknown:/.exec(n)?.[1]).filter(Boolean));
+  // its own citations failed; a row only reached through an unverified requirement link is not counted
+  const bad = new Set((data.validation_notes || []).map((n) => /^Obligation (.+?) marked unknown: (?!The linked requirement)/.exec(n)?.[1]).filter(Boolean));
   if (bad.size * 4 > data.coverage.length) out.push(`${bad.size} of ${data.coverage.length} obligations degraded by validation`);
   return out;
 }
@@ -788,20 +794,20 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
 
 // 1-based first line of text where the (normalised) quote starts, or 0. Never guesses.
 function quoteLine(lines, quote) {
-  const q = norm(quote), qs = String(quote).split('\n').map(norm).filter(Boolean);
+  const q = plain(quote), qs = String(quote).split('\n').map(plain).filter(Boolean), N = lines.map(plain);
   if (!qs.length) return 0;
-  const win = (i) => norm(lines.slice(i, i + qs.length + 6).join(' ')).includes(q); // tolerates a quote wrapped over a few lines
-  return lines.findIndex((l, i) => norm(l) && win(i) && !win(i + 1)) + 1; // the quote starts on the last line from which it still fits
+  const win = (i) => N.slice(i, i + qs.length + 6).join(' ').includes(q); // tolerates a quote wrapped over a few lines
+  return N.findIndex((l, i) => l && win(i) && !win(i + 1)) + 1; // the quote starts on the last line from which it still fits
 }
 
 // context.specFiles (optional): the trusted spec-files.txt allow-list. A requirement citing a repository file outside it is unlinked.
 function verifyRequirements(data, context, read = readFile) {
   const allow = context.specFiles ? new Set(context.specFiles) : null;
   const note = (s) => { data.not_reviewed = [data.not_reviewed, s].filter(Boolean).join(' '); };
-  const invalid = new Map(), unassessed = []; // invalid: obligation id -> the requirement citation that failed
+  const invalid = new Map(), unassessed = [], unverified = new Set(); // invalid: obligation id -> the requirement citation that failed; unverified: obligations behind a criterion whose wording is not in its source
   const fail = (r, why) => r.obligation_ids.forEach((id) => invalid.set(id, `requirement ${r.id} ${r.source}${r.line ? `:${r.line}` : ''}: ${why}`));
   const texts = new Map(); // normalised once per source, not once per criterion
-  const textOf = (key, get) => { if (!texts.has(key)) { const text = get(); texts.set(key, { text, n: norm(text) }); } return texts.get(key); };
+  const textOf = (key, get) => { if (!texts.has(key)) { const text = get(); texts.set(key, { text, n: plain(text), x: norm(text) }); } return texts.get(key); };
   const byId = new Map(data.requirements.map((r) => [r.id, r]));
   const docs = new Map();
   for (const d of context.documents || []) if (!docs.has(d.source)) docs.set(d.source, d);
@@ -809,11 +815,12 @@ function verifyRequirements(data, context, read = readFile) {
     const r = byId.get(expected.id);
     if (r) { if (!r.source) r.source = expected.source; if (!r.quote) r.quote = expected.quote; } // omitted by the model: the collected text is the trusted copy
     if (!r) { if (!expected.optional) data.requirements.push({ id: expected.id, source: expected.source, quote: expected.quote, ...(expected.ref && { ref: expected.ref }), ...(expected.line && { line: expected.line }), obligation_ids: [], reason: 'Structured acceptance criterion was not assessed.' }); } // optional (history) criteria are never re-added
-    else if (!(r.source === expected.source || r.source.startsWith(`${expected.source} AC `) && /^\d+$/.test(r.source.slice(expected.source.length + 4))) || norm(r.quote) !== norm(expected.quote)) {
+    else if (!(r.source === expected.source || r.source.startsWith(`${expected.source} AC `) && /^\d+$/.test(r.source.slice(expected.source.length + 4))) || plain(r.quote) !== plain(expected.quote)) {
       fail(r, 'its ID did not match the collected source text');
       Object.assign(r, { source: expected.source, quote: expected.quote, obligation_ids: [], reason: 'Criterion ID did not match its collected source text.' });
     } else { // "PR body AC 1" is accepted; the collected label and ref are canonical (the model's own ref is never trusted)
       r.source = expected.source;
+      r.quote = expected.quote;
       if (expected.ref) r.ref = safeRef(expected.ref); else delete r.ref;
     }
   }
@@ -831,21 +838,33 @@ function verifyRequirements(data, context, read = readFile) {
     const isPath = specPath(label);
     const rejected = !collected && isPath && !(file && (!allow || allow.has(file)));
     const T = rejected ? { text: '', n: '' } : textOf(collected ? `label:${label}` : `file:${file}`, () => (collected ? collected.text : isPath ? (read(file) || []).join('\n') : ''));
-    if (rejected || !T.n.includes(norm(r.quote))) {
-      if (rejected || !context.unavailable) fail(r, rejected ? 'not a collected requirement document' : 'quote not found in its source'); // no status file: citations that verify on their own keep their findings
+    const has = (q) => { const p = plain(q); return !!p && T.n.includes(p); };
+    const found = !rejected && has(r.quote);
+    if (!found) {
+      if (rejected) fail(r, 'not a collected requirement document');
+      else if (!context.unavailable) r.obligation_ids.forEach((id) => unverified.add(id)); // the criterion is unassessed; the obligations' own citations are verified independently
       r.obligation_ids = [];
-      r.reason = rejected ? 'The cited file is not a collected requirement document.' : 'Could not verify the original criterion wording against its source.';
-    } else if (specPath(label)) { // re-derive the line from the quote; a model-supplied line is never trusted
+      r.reason = rejected ? 'The cited file is not a collected requirement document.' : 'Requirement wording not verified: the quote was not found in its source, so this criterion is not assessed.';
+    } else if (!T.x.includes(norm(r.quote))) { // matched only as plain text: store the source's own line when the quote is one whole line
+      const line = T.text.split(/\r\n|\r|\n/).find((l) => plain(l) === plain(r.quote));
+      if (line !== undefined) r.quote = line.replace(MARKER, '').trim();
+    }
+    if (found && specPath(label)) { // re-derive the line from the quote; a model-supplied line is never trusted
       const at = quoteLine(T.text.split('\n'), r.quote);
       if (at) { r.line = at; r.end = at + String(r.quote).split('\n').length - 1; } else delete r.line;
     }
     if (r.pr_quote !== undefined) { // a verified sentence from the PR body, else null
       const pr = docs.get('PR body');
-      if (!(typeof r.pr_quote === 'string' && pr && textOf('label:PR body', () => pr.text).n.includes(norm(r.pr_quote)))) r.pr_quote = null;
+      if (!(typeof r.pr_quote === 'string' && pr && plain(r.pr_quote) && textOf('label:PR body', () => pr.text).n.includes(plain(r.pr_quote)))) r.pr_quote = null;
     }
     if (!r.obligation_ids.length) unassessed.push(`Requirement ${r.id} is not assessed: ${r.reason}`);
   }
   if (unassessed.length) note(unassessed.slice(0, 10).join(' ') + (unassessed.length > 10 ? ` ${unassessed.length - 10} more requirements are not assessed.` : ''));
+  const linked = new Set(data.requirements.flatMap((r) => r.obligation_ids));
+  for (const c of data.coverage) if (unverified.has(c.id) && !invalid.has(c.id) && !linked.has(c.id) && c.alignment.status !== 'unknown') { // status and citations stand; only the alignment needs the requirement
+    (data.validation_notes ||= []).push(`Obligation ${c.id} alignment unknown: requirement wording not verified.`);
+    c.alignment = unknownAlign('Requirement wording not verified.');
+  }
   for (const c of data.coverage) if (invalid.has(c.id)) {
     const why = `The linked requirement citation could not be verified (${invalid.get(c.id)})`;
     c.status = 'unknown'; c.reason = `${why}.`;
