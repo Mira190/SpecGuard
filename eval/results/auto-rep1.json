@@ -1,0 +1,1329 @@
+{
+  "runId": "auto-rep1",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "model": "unchanged",
+  "cost": "not measured (pass --billing)",
+  "results": [
+    {
+      "id": "l1",
+      "goal": "layering",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "pushdown",
+          "path": [
+            "eval-sandbox/l1/pricing.py",
+            "eval-sandbox/l1/test_quote_api.py"
+          ],
+          "line": 6,
+          "tolerance": 30,
+          "quote": "rate = TIER_DISCOUNT"
+        }
+      ],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": false,
+      "complete": false,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 738,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/28",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37432516918",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nCould not complete: no valid findings.json (ENOENT); see the job log\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 20646a6255b7f3e592028bb53bcd10a49b2401bf. \n\n\n",
+        "latency_s": 738,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": false,
+        "raw_findings_valid_json": false,
+        "raw_excerpt": ""
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "p1",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 2,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/p1/cart.py",
+            "line": 5,
+            "tolerance": 1,
+            "quote": "return total - 5"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/p1/cart.py",
+            "line": 4,
+            "level": "inline",
+            "title": "FIVEOFF has no unit assertion",
+            "body": "**FIVEOFF has no unit assertion**\n\nNo test assertion checks the FIVEOFF result, and CI does not collect the Python pytest file. Add a runnable pytest step and a direct result check:\n```python\ndef test_five_off_coupon_subtracts_five():\n    assert apply_coupon(80, \"FIVEOFF\") == 75\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=d5fcaf2a0bad4f3071f976924ec5607eca7555d0 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/p1/cart.py",
+          "line": 2,
+          "title": "HALF assertion is not collected"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/p1/cart.py",
+          "line": 6,
+          "title": "Unknown-coupon assertion is not collected"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 122,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/29",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37433903289",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/p1/cart.py",
+            "line": 2,
+            "level": "inline",
+            "title": "HALF assertion is not collected",
+            "body": "**HALF assertion is not collected**\n\nCI runs Node test files and does not collect this pytest assertion, so the HALF result has no active unit regression check. Add a runnable pytest step for the Python sandbox tests and retain a direct result assertion:\n```python\ndef test_half_coupon_halves_total():\n    assert apply_coupon(80, \"HALF\") == 40\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=5d70bc0879c39e7b37f482f330e463c0203275ad -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/p1/cart.py",
+            "line": 4,
+            "level": "inline",
+            "title": "FIVEOFF has no unit assertion",
+            "body": "**FIVEOFF has no unit assertion**\n\nNo test assertion checks the FIVEOFF result, and CI does not collect the Python pytest file. Add a runnable pytest step and a direct result check:\n```python\ndef test_five_off_coupon_subtracts_five():\n    assert apply_coupon(80, \"FIVEOFF\") == 75\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=d5fcaf2a0bad4f3071f976924ec5607eca7555d0 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/p1/cart.py",
+            "line": 6,
+            "level": "inline",
+            "title": "Unknown-coupon assertion is not collected",
+            "body": "**Unknown-coupon assertion is not collected**\n\nThe existing pytest assertion checks the exception type and message, but CI does not collect that Python test file. Add a runnable pytest step so the check guards the public behavior:\n```python\ndef test_unknown_coupon_raises_value_error():\n    with pytest.raises(ValueError, match=\"unknown coupon\"):\n        apply_coupon(80, \"NOPE\")\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e4ce9be8908539359a84395177a7050e5eb0560e -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: c9b0f28db2a89f35036b5a92b3b65b66815caf44. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: The HALF code halves the total. | O1 | 0/1 obligations covered (not fully covered). Mapped to O1; the changed HALF branch needs a collected unit assertion for its returned value. |\n| R2 | PR body: The FIVEOFF code takes 5 off the total. | O2 | 0/1 obligations covered (not fully covered). Mapped to O2; no test assertion for the FIVEOFF result was found. |\n| R3 | PR body: An unknown code raises ValueError. | O3 | 0/1 obligations covered (not fully covered). Mapped to O3; the existing assertion is in a pytest file that the repository CI command does not collect. |\n\n**Coding standards: checked.** Assessed the listed rule file. Its applyTo scope is src/** and eval/*.js, so it does not apply to the changed eval-sandbox/p1 Python files; no applicable coding rules were identified. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the CI test command and repository test files. The coupon assertions are direct unit-level pytest checks, but the CI command only collects JavaScript tests and excludes Python pytest files. No component, integration, or end-to-end coupon coverage was found; there is no higher-layer logic to push down because apply_coupon itself is the public pure-function seam.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Applying HALF returns half of the supplied total. | PR body AC 1; eval-sandbox/p1/cart.py:2 —     if code == \"HALF\": | unit: eval-sandbox/p1/test_cart.py:7 —     assert apply_coupon(80, \"HALF\") == 40 (disabled; When executed, this directly checks that applying HALF to 80 returns 40.) | missing_test: The assertion is a direct unit check, but CI runs node --test on JavaScript test files and does not collect this Python pytest file; no active collected unit assertion proves the result. |\n| O2: Applying FIVEOFF subtracts 5 from the supplied total. | PR body AC 2; eval-sandbox/p1/cart.py:4 —     if code == \"FIVEOFF\": | none | missing_test: A repository-wide search of test files found no assertion for FIVEOFF; the pytest file is also not collected by the CI command. |\n| O3: An unknown coupon code raises ValueError. | PR body AC 3; eval-sandbox/p1/cart.py:6 —     raise ValueError(\"unknown coupon\") | unit: eval-sandbox/p1/test_cart.py:11 —     with pytest.raises(ValueError, match=\"unknown coupon\"): (disabled; When executed, this checks that the public function raises ValueError for the unknown-code input on the following line.) | missing_test: The assertion is a direct unit check, but CI does not collect Python pytest files, so it does not provide active regression coverage. |\n| O4: The unknown-code error message is \"unknown coupon\". | from behaviour; eval-sandbox/p1/cart.py:6 —     raise ValueError(\"unknown coupon\") | unit: eval-sandbox/p1/test_cart.py:11 —     with pytest.raises(ValueError, match=\"unknown coupon\"): (disabled; When executed, this checks the unknown-code exception message against \"unknown coupon\".) | missing_test: The assertion checks this error message, but the pytest file is not collected by the repository CI command. |\n\n**Not reviewed:** Tests were not executed; this is a static review.\n\n",
+        "latency_s": 122,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"The HALF code halves the total.\",\n      \"obligation_ids\": [\"O1\"],\n      \"reason\": \"Mapped to O1; the changed HALF branch needs a collected unit assertion for its returned value.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"The FIVEOFF code takes 5 off the total.\",\n      \"obligation_ids\": [\"O2\"],\n      \"reason\": \"Mapped to O2; no test assertion for the FIVEOFF result was found.\"\n    },\n    {\n      \"id\": \"R3\",\n      \"source\": \"PR body\",\n      \"quote\": \"An unknown code raises ValueError.\",\n      \"obligation_ids\": [\"O3\"],\n      \"reason\": \"Mapped to O3; the existing assertion is in a pytest file that the repository CI command does not collect.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"Applying HALF returns half of the supplied total.\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/p1/cart.py\",\n        \"line\": 2,\n        \"quote\": \"    if code == \\\"HALF\\\":\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/p1/cart.py\",\n        \"line\": 2,\n        \"quote\": \"    if code == \\\"HALF\\\":\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/p1/test_cart.py\",\n          \"line\": 7,\n          \"quote\": \"    assert apply_coupon(80, \\\"HALF\\\") == 40\",\n          \"layer\": \"unit\",\n          \"proves\": \"When executed, this directly checks that applying HALF to 80 returns 40.\",\n          \"kind\": \"disabled\"\n        }\n      ],\n      \"status\": \"missing_test\",\n      \"reason\": \"The assertion is a direct unit check, but CI runs node --test on JavaScript test files and does not collect this Python pytest file; no active collected unit assertion proves the result.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"Applying FIVEOFF subtracts 5 from the supplied total.\",\n      \"source\": \"PR body AC 2\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/p1/car"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r1",
+      "goal": "requirements",
+      "tp": 4,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "quote": "throw new Error('empty order')"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Test empty-order rejection",
+            "body": "**Test empty-order rejection**\n\nNo unit assertion checks the empty-order error and its message. Add a direct check through applyDiscount:\n\n```js\ntest('rejects orders with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e1a7fcd2b144e486732fc89e5963542bd776cb7a -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "quote": "total >= 100"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Test the 100 threshold",
+            "body": "**Test the 100 threshold**\n\nNo unit assertion checks the threshold or its boundary. Add checks on both sides of 100:\n\n```js\ntest('does not apply the fixed discount below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99, qty: 1 }] }), 99);\n});\n\ntest('applies the fixed discount at 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=7e9ea60c544fa00ebdd2b592034339bf865804d5 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "quote": "Math.max"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test credit subtraction and zero floor",
+            "body": "**Test credit subtraction and zero floor**\n\nNo unit assertion checks either credit subtraction or the zero floor. Add direct checks for each outcome:\n\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 40, qty: 2 }], credit: 15 }), 65);\n});\n\ntest('does not return a negative total when credit exceeds the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 40, qty: 2 }], credit: 100 }), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e767c1ab545b681a4c5721f92a25224e4c471db9 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/r1/discount.test.js",
+            "line": 7,
+            "quote": "assert.ok(total)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.test.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Assert the discounted subtotal",
+            "body": "**Assert the discounted subtotal**\n\nThe truthiness assertion survives changing or removing the discount. Replace it with an exact expected result that also checks the item subtotal:\n\n```js\ntest('applies SAVE10 to the item subtotal', () => {\n  const total = applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'SAVE10' });\n  assert.equal(total, 36);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=7ccbedcf11d16caee021d9246fdd8d6216c966e8 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 185,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/30",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37434200338",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Test empty-order rejection",
+            "body": "**Test empty-order rejection**\n\nNo unit assertion checks the empty-order error and its message. Add a direct check through applyDiscount:\n\n```js\ntest('rejects orders with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e1a7fcd2b144e486732fc89e5963542bd776cb7a -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Test the 100 threshold",
+            "body": "**Test the 100 threshold**\n\nNo unit assertion checks the threshold or its boundary. Add checks on both sides of 100:\n\n```js\ntest('does not apply the fixed discount below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99, qty: 1 }] }), 99);\n});\n\ntest('applies the fixed discount at 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=7e9ea60c544fa00ebdd2b592034339bf865804d5 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test credit subtraction and zero floor",
+            "body": "**Test credit subtraction and zero floor**\n\nNo unit assertion checks either credit subtraction or the zero floor. Add direct checks for each outcome:\n\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 40, qty: 2 }], credit: 15 }), 65);\n});\n\ntest('does not return a negative total when credit exceeds the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 40, qty: 2 }], credit: 100 }), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=e767c1ab545b681a4c5721f92a25224e4c471db9 -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.test.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Assert the discounted subtotal",
+            "body": "**Assert the discounted subtotal**\n\nThe truthiness assertion survives changing or removing the discount. Replace it with an exact expected result that also checks the item subtotal:\n\n```js\ntest('applies SAVE10 to the item subtotal', () => {\n  const total = applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'SAVE10' });\n  assert.equal(total, 36);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=7ccbedcf11d16caee021d9246fdd8d6216c966e8 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 1 weak · Standards: 0 · Layering: 0; 4 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/6 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 3 missing, 1 weak · Standards: 0 · Layering: 0; 4 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/6 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 568027f1c757eebe77342c2330787a226bb4ad9e. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: An order with no items throws \"empty order\". | R1 | 0/1 obligations covered (not fully covered). Requires an assertion that an empty order throws an error with the specified message. |\n| R2 | PR body: The SAVE10 coupon takes 10% off the subtotal. | R2 | 0/1 obligations covered (not fully covered). Requires an assertion of the exact discounted subtotal; the current truthiness assertion does not establish the rate or result. |\n| R3 | PR body: A total of 100 or more gets 5 off. | R3 | 0/1 obligations covered (not fully covered). Requires assertions at the 100 threshold and immediately below it. |\n| R4 | PR body: Store credit is subtracted from the total, which never goes below zero. | R4a, R4b | 0/2 obligations covered (not fully covered). Split into separate obligations for subtracting credit and clamping a result below zero. |\n\n**Coding standards: checked.** Assessed the listed rule file and its applyTo scope. It applies to src/** and eval/*.js, which excludes the changed eval-sandbox/r1 files, so no coding rules apply to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the CI test command and relevant tests. The changed test uses node:test and calls the exported pure function directly without network or a real database, so it is unit-level. CI explicitly excludes eval/cases fixtures; no component, integration, or end-to-end evidence or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: An order with no items throws an error with message \"empty order\". | PR body AC 1; eval-sandbox/r1/discount.js:5 —     throw new Error('empty order'); | none | missing_test: Searched JS test directories across src/, eval/, eval/cases/, and eval-sandbox/ for applyDiscount and the relevant error, coupon, credit, and threshold literals. No assertion checks empty-order rejection or its message. |\n| R2: SAVE10 reduces the item subtotal by 10%. | PR body AC 2; eval-sandbox/r1/discount.js:9 —     total *= 0.9; | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (assertion; The test invokes applyDiscount with SAVE10 but asserts only that the result is truthy; it does not check the discounted subtotal.) | weak_test: The unit test exercises SAVE10, but changing the discount rate or removing the discount still leaves a truthy total, so the assertion misses the required result. |\n| R3: A total of 100 or more receives 5 off, including the threshold boundary. | PR body AC 3; eval-sandbox/r1/discount.js:11 —   if (total >= 100) { | none | missing_test: Searched JS test directories across src/, eval/, eval/cases/, and eval-sandbox/ for applyDiscount and threshold values. No assertion checks the 100 boundary or a value below it. |\n| R4a: Store credit is subtracted from the discounted total. | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | none | missing_test: Searched JS test directories across src/, eval/, eval/cases/, and eval-sandbox/ for applyDiscount and credit values. No assertion checks that credit reduces the result. |\n| R4b: The returned total never falls below zero. | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | none | missing_test: Searched JS test directories across src/, eval/, eval/cases/, and eval-sandbox/ for applyDiscount and credit values. No assertion checks the zero floor when credit exceeds the total. |\n| B1: A coupon other than SAVE10 does not trigger the SAVE10 reduction. | from behaviour; eval-sandbox/r1/discount.js:8 —   if (order.coupon === 'SAVE10') { | none | unknown: The changed condition applies this reduction only to SAVE10, but the requirements do not specify the expected behavior for other coupon codes; no test evidence resolves that contract. |\n\n",
+        "latency_s": 185,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"An order with no items throws \\\"empty order\\\".\",\n      \"obligation_ids\": [\n        \"R1\"\n      ],\n      \"reason\": \"Requires an assertion that an empty order throws an error with the specified message.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"The SAVE10 coupon takes 10% off the subtotal.\",\n      \"obligation_ids\": [\n        \"R2\"\n      ],\n      \"reason\": \"Requires an assertion of the exact discounted subtotal; the current truthiness assertion does not establish the rate or result.\"\n    },\n    {\n      \"id\": \"R3\",\n      \"source\": \"PR body\",\n      \"quote\": \"A total of 100 or more gets 5 off.\",\n      \"obligation_ids\": [\n        \"R3\"\n      ],\n      \"reason\": \"Requires assertions at the 100 threshold and immediately below it.\"\n    },\n    {\n      \"id\": \"R4\",\n      \"source\": \"PR body\",\n      \"quote\": \"Store credit is subtracted from the total, which never goes below zero.\",\n      \"obligation_ids\": [\n        \"R4a\",\n        \"R4b\"\n      ],\n      \"reason\": \"Split into separate obligations for subtracting credit and clamping a result below zero.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"R1\",\n      \"obligation\": \"An order with no items throws an error with message \\\"empty order\\\".\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 5,\n        \"quote\": \"    throw new Error('empty order');\",\n        \"side\": \"RIGHT\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r1/discount.js\",\n        \"line\": 5,\n        \"quote\": \"    throw new Error('empty order');\",\n        \"side\": \"RIGHT\"\n      },\n      \"evidence\": [],\n      \"status\": \"missing_test\",\n      \"reason\": \"Searched JS test directories across src/, eval/, eval/cases/, and eval-sandbox/ for applyDiscount and the relevant error, coupon, credit, and threshold literals. No assertion checks empty-order reject"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r2",
+      "goal": "requirements",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 88,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/31",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37434615683",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nNo test gaps found in the assessed obligations.\n\nUnit evidence: 5/5 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 1edd1c420d0bb6c9816aa270a8955119b83ed52b. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Titles are lowercased and words are joined with single hyphens. | O1, O2 | 2/2 obligations covered. Split into separate lowercase and single-hyphen joining behaviours. |\n| R2 | PR body: Leading and trailing hyphens are stripped. | O3, O4 | 2/2 obligations covered. Split into separate leading- and trailing-hyphen behaviours. |\n| R3 | PR body: A non-string title throws a TypeError. | O5 | 1/1 obligations covered. One obligation covers the specified error type for non-string input. |\n\n**Coding standards: checked.** Assessed the listed rule file and its applyTo scope; it applies to src/** and eval/*.js, not the changed eval-sandbox/r2 files, so no listed coding rule applies to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** The changed sandbox test directly calls the exported function using node:test and node:assert, and CI runs these eval-sandbox tests with Node 22. The slug behavior is covered at the unit layer; no component, integration, or e2e-only logic or pushdown candidate was found. The matching eval/cases files are fixtures, which CI explicitly excludes from test execution.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Titles are converted to lowercase. | PR body AC R1; eval-sandbox/r2/slug.js:5 —   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+\\|-+$/g, ''); | unit: eval-sandbox/r2/slug.test.js:6 —   assert.equal(slugify('Hello   World'), 'hello-world'); (assertion; An uppercase input is expected to produce a lowercase result.) | covered: The literal expected result is lowercase; removing the lowercase conversion would fail this assertion. |\n| O2: Words are joined with single hyphens. | PR body AC R1; eval-sandbox/r2/slug.js:5 —   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+\\|-+$/g, ''); | unit: eval-sandbox/r2/slug.test.js:6 —   assert.equal(slugify('Hello   World'), 'hello-world'); (assertion; Three spaces between words are expected to yield exactly one hyphen.) | covered: The input has multiple separators and the literal expected result has exactly one hyphen between words. |\n| O3: Leading hyphens are stripped. | PR body AC R2; eval-sandbox/r2/slug.js:5 —   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+\\|-+$/g, ''); | unit: eval-sandbox/r2/slug.test.js:10 —   assert.equal(slugify('  --Hi!--  '), 'hi'); (assertion; The input begins with spaces and hyphens; the expected result has no leading hyphen.) | covered: The literal expected result has no leading hyphen; omitting the leading-edge trim would fail this assertion. |\n| O4: Trailing hyphens are stripped. | PR body AC R2; eval-sandbox/r2/slug.js:5 —   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+\\|-+$/g, ''); | unit: eval-sandbox/r2/slug.test.js:10 —   assert.equal(slugify('  --Hi!--  '), 'hi'); (assertion; The input ends with punctuation and spaces; the expected result has no trailing hyphen.) | covered: The literal expected result has no trailing hyphen; omitting the trailing-edge trim would fail this assertion. |\n| O5: A non-string title throws a TypeError. | PR body AC R3; eval-sandbox/r2/slug.js:3 —     throw new TypeError('title must be a string'); | unit: eval-sandbox/r2/slug.test.js:14 —   assert.throws(() => slugify(42), { name: 'TypeError', message: 'title must be a string' }); (assertion; A numeric title is expected to throw a TypeError with the asserted message.) | covered: The assertion checks both the error type and message for a non-string input. |\n\n",
+        "latency_s": 88,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"Titles are lowercased and words are joined with single hyphens.\",\"obligation_ids\":[\"O1\",\"O2\"],\"reason\":\"Split into separate lowercase and single-hyphen joining behaviours.\"},{\"id\":\"R2\",\"source\":\"PR body\",\"quote\":\"Leading and trailing hyphens are stripped.\",\"obligation_ids\":[\"O3\",\"O4\"],\"reason\":\"Split into separate leading- and trailing-hyphen behaviours.\"},{\"id\":\"R3\",\"source\":\"PR body\",\"quote\":\"A non-string title throws a TypeError.\",\"obligation_ids\":[\"O5\"],\"reason\":\"One obligation covers the specified error type for non-string input.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Titles are converted to lowercase.\",\"source\":\"PR body AC R1\",\"behaviour\":{\"path\":\"eval-sandbox/r2/slug.js\",\"line\":5,\"quote\":\"  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\"},\"change\":{\"path\":\"eval-sandbox/r2/slug.js\",\"line\":5,\"quote\":\"  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\"},\"evidence\":[{\"path\":\"eval-sandbox/r2/slug.test.js\",\"line\":6,\"quote\":\"  assert.equal(slugify('Hello   World'), 'hello-world');\",\"layer\":\"unit\",\"proves\":\"An uppercase input is expected to produce a lowercase result.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The literal expected result is lowercase; removing the lowercase conversion would fail this assertion.\"},{\"id\":\"O2\",\"obligation\":\"Words are joined with single hyphens.\",\"source\":\"PR body AC R1\",\"behaviour\":{\"path\":\"eval-sandbox/r2/slug.js\",\"line\":5,\"quote\":\"  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\"},\"change\":{\"path\":\"eval-sandbox/r2/slug.js\",\"line\":5,\"quote\":\"  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\"},\"evidence\":[{\"path\":\"eval-sandbox/r2/slug.test.js\",\"line\":6,\"quote\":\"  assert.equal(slugify('Hello   World'), 'hello-world');\",\"layer\":\"unit\",\"proves\":\"Three spaces between words are expected to yield exactly one hyphen.\",\"ki"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r3",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 1,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "tolerance": 1,
+            "quote": "return name.trim();"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert the trimmed return value",
+            "body": "**Assert the trimmed return value**\n\nNo unit assertion compares the returned name after trimming. Add a check with a literal expected value:\n\n```js\ntest('trims surrounding whitespace', () => {\n  assert.equal(normalizeName('  Ada  '), 'Ada');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=578b88304d3b2ffdc3cf24eeae95c7bb04b3557a -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/r3/name.test.js",
+          "line": 6,
+          "title": "Test the literal empty-name boundary"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 106,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/32",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37434835525",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Assert the trimmed return value",
+            "body": "**Assert the trimmed return value**\n\nNo unit assertion compares the returned name after trimming. Add a check with a literal expected value:\n\n```js\ntest('trims surrounding whitespace', () => {\n  assert.equal(normalizeName('  Ada  '), 'Ada');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=578b88304d3b2ffdc3cf24eeae95c7bb04b3557a -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the literal empty-name boundary",
+            "body": "**Test the literal empty-name boundary**\n\nThe whitespace-only input lets a guard such as `name !== '' && name.trim() === ''` pass while allowing `''`. Add an assertion for the literal empty string:\n\n```js\ntest('rejects empty string names', () => {\n  assert.throws(() => normalizeName(''), { message: 'name required' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=4a7db1c82675662550a4e7befbe25bc468d88cfb -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 1 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/3 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 1 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/3 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: af90ebca002bd35db2693f1d95d49a7b2aa5295a. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: normalizeName rejects empty names and trims whitespace. | O1, O2 | 0/2 obligations covered (not fully covered). Split the criterion into rejecting empty names (O1) and returning a whitespace-trimmed name (O2). |\n\n**Coding standards: checked.** Assessed the listed rule file; its `applyTo` scope (`src/**,eval/*.js`) excludes the changed `eval-sandbox/r3` files, so it provides no applicable coding rule for these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the repository's `node:test` tests and CI command, including tests under `eval-sandbox`, `src`, and `eval`; CI explicitly excludes `eval/cases` fixtures. The active test directly exercises the exported pure function without I/O or internal collaborators, so it is unit coverage. No component, integration, or end-to-end coverage or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: normalizeName rejects empty names, including the empty string. | PR body AC 1; eval-sandbox/r3/name.js:2 —   if (name.trim() === '') { | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (assertion; Checks rejection of whitespace-only input, but not the literal empty string.) | weak_test: The unit assertion only passes whitespace-only input. A condition such as `name !== '' && name.trim() === ''` would still pass this assertion while allowing the empty string. |\n| O2: normalizeName returns the name with surrounding whitespace trimmed. | PR body AC 1; eval-sandbox/r3/name.js:5 —   return name.trim(); | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (no_assertion; This assertion checks a thrown error and never compares the returned value for padded input.) | missing_test: A repository-wide search of test files for `normalizeName` found no assertion comparing the returned value for whitespace-padded input. The matching assertions in `eval-sandbox` and `eval/cases` check only thrown errors. |\n| O3: Whitespace-only names throw an error with the message `name required`. | from behaviour; eval-sandbox/r3/name.js:3 —     throw new Error('name required'); | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (assertion; Calls the exported function with whitespace-only input and asserts the thrown error message.) | covered: The unit assertion checks the thrown error message for whitespace-only input. |\n\n",
+        "latency_s": 106,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"normalizeName rejects empty names and trims whitespace.\",\"obligation_ids\":[\"O1\",\"O2\"],\"reason\":\"Split the criterion into rejecting empty names (O1) and returning a whitespace-trimmed name (O2).\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"normalizeName rejects empty names, including the empty string.\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/r3/name.js\",\"line\":2,\"quote\":\"  if (name.trim() === '') {\"},\"change\":{\"path\":\"eval-sandbox/r3/name.js\",\"line\":2,\"quote\":\"  if (name.trim() === '') {\"},\"evidence\":[{\"path\":\"eval-sandbox/r3/name.test.js\",\"line\":6,\"quote\":\"  assert.throws(() => normalizeName('   '), { message: 'name required' });\",\"layer\":\"unit\",\"proves\":\"Checks rejection of whitespace-only input, but not the literal empty string.\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The unit assertion only passes whitespace-only input. A condition such as `name !== '' && name.trim() === ''` would still pass this assertion while allowing the empty string.\"},{\"id\":\"O2\",\"obligation\":\"normalizeName returns the name with surrounding whitespace trimmed.\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/r3/name.js\",\"line\":5,\"quote\":\"  return name.trim();\"},\"change\":{\"path\":\"eval-sandbox/r3/name.js\",\"line\":5,\"quote\":\"  return name.trim();\"},\"evidence\":[{\"path\":\"eval-sandbox/r3/name.test.js\",\"line\":6,\"quote\":\"  assert.throws(() => normalizeName('   '), { message: 'name required' });\",\"layer\":\"unit\",\"proves\":\"This assertion checks a thrown error and never compares the returned value for padded input.\",\"kind\":\"no_assertion\"}],\"status\":\"missing_test\",\"reason\":\"A repository-wide search of test files for `normalizeName` found no assertion comparing the returned value for whitespace-padded input. The matching assertions in `eval-sandbox` and `eval/cases` check only thrown errors.\"},{\"id\":\"O3\",\"obligation\":\"Whitespace-only names throw an error with the message `name require"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r4",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "quote": "return null;",
+            "text": "fail|contradict"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the unknown-id error",
+            "body": "**Test the unknown-id error**\n\nExpected to fail against the current code: an unknown id returns `null` here, not an Error with message `user not found`. Add a unit test for the public function:\n```js\ntest('throws when the user id is unknown', () => {\n  assert.throws(() => findUser(2), { name: 'Error', message: 'user not found' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1b0d8c3051bdf74aa202d769496d6ac21abc058c -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 97,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/33",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37435101215",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Test the unknown-id error",
+            "body": "**Test the unknown-id error**\n\nExpected to fail against the current code: an unknown id returns `null` here, not an Error with message `user not found`. Add a unit test for the public function:\n```js\ntest('throws when the user id is unknown', () => {\n  assert.throws(() => findUser(2), { name: 'Error', message: 'user not found' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=1b0d8c3051bdf74aa202d769496d6ac21abc058c -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 2d579aeefb067b3dbb971270e44ba68b5c2d4700. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Looking up a known id returns the user. | R1 | 1/1 obligations covered. The active unit test asserts the returned value for known id 1. |\n| R2 | PR body: Looking up an unknown id throws an Error with the message \"user not found\". | R2 | 0/1 obligations covered (not fully covered). No active unit assertion checks the unknown-id error; the current implementation returns null instead. |\n\n**Coding standards: checked.** Assessed the supplied rule file's scope; its applyTo pattern covers src/** and eval/*.js, not the changed eval-sandbox/r4 files, so its coding rules do not apply to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** The CI configuration runs eval-sandbox tests with node --test; this test calls the exported function directly and uses no network or database, so it is unit-level evidence. The matching eval/cases fixture is explicitly excluded from CI. No higher-layer-only coverage or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: Looking up a known id returns the user. | PR body AC 1; eval-sandbox/r4/users.js:8 —   return user; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (assertion; For known id 1, findUser returns the expected user value.) | covered: The active Node unit test compares the public function's return value with an independent literal. |\n| R2: Looking up an unknown id throws an Error with the message \"user not found\". | PR body AC 2; eval-sandbox/r4/users.js:6 —     return null; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (no_assertion; The only active assertion checks a known id; it does not assert the unknown-id error or message.) | missing_test: Repository-wide test search for findUser, user not found, and user lookup found no assertion for this outcome. The active sandbox test only checks the known-id result; the similarly named eval/cases fixture is excluded from CI. The implementation returns null here, so a test expecting the specified Error would fail against the current code. |\n\n",
+        "latency_s": 97,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Looking up a known id returns the user.\",\n      \"obligation_ids\": [\n        \"R1\"\n      ],\n      \"reason\": \"The active unit test asserts the returned value for known id 1.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"Looking up an unknown id throws an Error with the message \\\"user not found\\\".\",\n      \"obligation_ids\": [\n        \"R2\"\n      ],\n      \"reason\": \"No active unit assertion checks the unknown-id error; the current implementation returns null instead.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"R1\",\n      \"obligation\": \"Looking up a known id returns the user.\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 8,\n        \"quote\": \"  return user;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 8,\n        \"quote\": \"  return user;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r4/users.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.deepEqual(findUser(1), { id: 1, name: 'Ada' });\",\n          \"layer\": \"unit\",\n          \"proves\": \"For known id 1, findUser returns the expected user value.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The active Node unit test compares the public function's return value with an independent literal.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"obligation\": \"Looking up an unknown id throws an Error with the message \\\"user not found\\\".\",\n      \"source\": \"PR body AC 2\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 6,\n        \"quote\": \"    return null;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/r4/users.js\",\n        \"line\": 6,\n        \"quote\": \"    return null;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/r4/users.test.js\",\n "
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "s1",
+      "goal": "standards",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/s1/pkg/config.js",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "pkg/REVIEW.md",
+            "quote": "throw 'PORT is required'"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s1/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s1/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object",
+            "body": "**Throw an Error object**\n\nThis throws a string, contrary to the applicable rule. Throw an Error object with the same message: `throw new Error('PORT is required');`.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s1/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c902900ffd4532f5045665313612361a86c76f4 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 80,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/34",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37435321543",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s1/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s1/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object",
+            "body": "**Throw an Error object**\n\nThis throws a string, contrary to the applicable rule. Throw an Error object with the same message: `throw new Error('PORT is required');`.\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s1/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c902900ffd4532f5045665313612361a86c76f4 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 2/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 6358cb93fb9f38c1e50667e5d5242402647ed6a8. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add getPort to read the server port from the environment. | O1 | 1/1 obligations covered. This criterion requires getPort to return the configured server port; O1 assesses that returned value. |\n\n**Coding standards: checked.** Assessed the applicable package REVIEW rule against both changed files; the production code violates its Error-object rule. The listed .github instruction applies only to src/** and eval/*.js, not these changed files. Sources: eval-sandbox/s1/pkg/REVIEW.md.\n\n**Test layers: checked.** Inspected the active eval-sandbox unit tests and CI test command; eval/cases fixtures are explicitly excluded. The tests call the exported function directly without network, a real database, or internal collaborator mocks. No component, integration, or end-to-end coverage or logic requiring pushdown was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: getPort returns the server port from the environment as a number. | PR body; eval-sandbox/s1/pkg/config.js:5 —   return Number(env.PORT); | unit: eval-sandbox/s1/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion; Calling the exported function with PORT='8080' returns the expected number 8080.) | covered: The unit assertion compares the public function's return value with the literal expected result for an environment port. |\n| O2: getPort rejects an environment without PORT. | from behaviour; eval-sandbox/s1/pkg/config.js:2 —   if (!env.PORT) { | unit: eval-sandbox/s1/pkg/config.test.js:6 —   assert.throws(() => getPort({}), /PORT is required/); (assertion; Calling the public function with an empty environment throws with a message matching PORT is required.) | covered: The assertion exercises the missing-PORT branch and checks the expected error message. |\n\n",
+        "latency_s": 80,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"X1\",\"source\":\"PR body\",\"quote\":\"Add getPort to read the server port from the environment.\",\"obligation_ids\":[\"O1\"],\"reason\":\"This criterion requires getPort to return the configured server port; O1 assesses that returned value.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"getPort returns the server port from the environment as a number.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/s1/pkg/config.js\",\"line\":5,\"quote\":\"  return Number(env.PORT);\"},\"change\":{\"path\":\"eval-sandbox/s1/pkg/config.js\",\"line\":5,\"quote\":\"  return Number(env.PORT);\"},\"evidence\":[{\"path\":\"eval-sandbox/s1/pkg/config.test.js\",\"line\":10,\"quote\":\"  assert.equal(getPort({ PORT: '8080' }), 8080);\",\"layer\":\"unit\",\"proves\":\"Calling the exported function with PORT='8080' returns the expected number 8080.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The unit assertion compares the public function's return value with the literal expected result for an environment port.\"},{\"id\":\"O2\",\"obligation\":\"getPort rejects an environment without PORT.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/s1/pkg/config.js\",\"line\":2,\"quote\":\"  if (!env.PORT) {\"},\"change\":{\"path\":\"eval-sandbox/s1/pkg/config.js\",\"line\":2,\"quote\":\"  if (!env.PORT) {\"},\"evidence\":[{\"path\":\"eval-sandbox/s1/pkg/config.test.js\",\"line\":6,\"quote\":\"  assert.throws(() => getPort({}), /PORT is required/);\",\"layer\":\"unit\",\"proves\":\"Calling the public function with an empty environment throws with a message matching PORT is required.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The assertion exercises the missing-PORT branch and checks the expected error message.\"}],\"findings\":[{\"kind\":\"standard\",\"obligation_ids\":[],\"path\":\"eval-sandbox/s1/pkg/config.js\",\"line\":3,\"quote\":\"    throw 'PORT is required';\",\"title\":\"Throw an Error object\",\"body\":\"This throws a string, contrary to the applicable rule. Throw an Error object with the same message: `throw new Error('PORT is require"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "s2",
+      "goal": "robustness",
+      "tp": 1,
+      "fp": 1,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "pkg/REVIEW.md",
+            "text": "Error objects",
+            "quote": "throw 'PORT is required'"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s2/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object",
+            "body": "**Throw an Error object**\n\nThe base-branch `eval-sandbox/s2/pkg/REVIEW.md` rule requires Error objects, and this line throws a string. The rule is relaxed in this PR, but the supplied base-branch standard still applies to this review. Throw `new Error('PORT is required')`.\n\n```suggestion\n    throw new Error('PORT is required');\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s2/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c09cfbcd20527fbbdf649f1cd7c8598b23594e0 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/s2/pkg/config.js",
+          "line": 2,
+          "title": "Test empty PORT values"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 122,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/35",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37435540414",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 2,
+            "level": "inline",
+            "title": "Test empty PORT values",
+            "body": "**Test empty PORT values**\n\nNo unit assertion checks an empty PORT string. Add a test that pins rejection of this falsy environment value:\n\n```js\ntest('rejects an empty PORT', () => {\n  assert.throws(() => getPort({ PORT: '' }), /PORT is required/);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=15387d495862cf6b7dc2529beef0128640de6c94 -->",
+            "source": ""
+          },
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s2/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s2/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object",
+            "body": "**Throw an Error object**\n\nThe base-branch `eval-sandbox/s2/pkg/REVIEW.md` rule requires Error objects, and this line throws a string. The rule is relaxed in this PR, but the supplied base-branch standard still applies to this review. Throw `new Error('PORT is required')`.\n\n```suggestion\n    throw new Error('PORT is required');\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: standard, confidence: high, rule: eval-sandbox/s2/pkg/REVIEW.md:3\n</details>\n\n<!-- specguard:fp=0c09cfbcd20527fbbdf649f1cd7c8598b23594e0 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 1 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\nUnit evidence: 3/5 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 1 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 3/5 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: abdc83c8c3e2fc5a3d4e0d283312a6aede4ddc71. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add getPort and update the review rules. | O1, O2 | 1/2 obligations covered (not fully covered). Split the broad request into exposing getPort (O1) and updating the review rules (O2). The PR text does not specify further port-validation behavior. |\n\n**Coding standards: checked.** Assessed the base-branch pkg rule against the changed code; it applies and the string throw violates it. The listed .github instruction is scoped to src/** and eval/*.js, not these files. Sources: eval-sandbox/s2/pkg/REVIEW.md.\n\n**Test layers: checked.** Searched tests under src, eval, and eval-sandbox, and used CI configuration to distinguish executed tests from eval/cases fixtures. CI runs the adjacent node:test file; it directly calls the exported function without network, a real database, or internal collaborators. No higher-layer-only coverage or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Expose getPort for callers. | PR body; eval-sandbox/s2/pkg/config.js:8 — module.exports = { getPort }; | unit: eval-sandbox/s2/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion; Imports and calls getPort through the module interface, checking the returned value.) | covered: The adjacent node:test imports getPort and checks its result through the public module interface. |\n| O2: Update the review rules. | PR body; eval-sandbox/s2/pkg/REVIEW.md:3 — - Throwing strings is fine. | none | unknown: Could not verify the changed-line, behaviour or test citation. |\n| O3: Reject an absent PORT. | from behaviour; eval-sandbox/s2/pkg/config.js:2 —   if (!env.PORT) { | unit: eval-sandbox/s2/pkg/config.test.js:6 —   assert.throws(() => getPort({}), /PORT is required/); (assertion; Checks that calling getPort without PORT throws with the required message.) | covered: The unit assertion checks the missing-PORT case and expected error message. |\n| O4: Reject an empty PORT string. | from behaviour; eval-sandbox/s2/pkg/config.js:2 —   if (!env.PORT) { | none | missing_test: A search across test files under src, eval, and eval-sandbox for getPort and PORT is required found assertions for an absent PORT and numeric conversion, but none for an empty PORT string. The eval/cases tests are fixtures excluded from CI's test command. |\n| O5: Convert a supplied PORT value to a number. | from behaviour; eval-sandbox/s2/pkg/config.js:5 —   return Number(env.PORT); | unit: eval-sandbox/s2/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion; Checks that the string input '8080' returns the number 8080, catching an unchanged-string return.) | covered: The unit assertion compares the returned value with the independent numeric literal 8080. |\n\n",
+        "latency_s": 122,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"X1\",\"source\":\"PR body\",\"quote\":\"Add getPort and update the review rules.\",\"obligation_ids\":[\"O1\",\"O2\"],\"reason\":\"Split the broad request into exposing getPort (O1) and updating the review rules (O2). The PR text does not specify further port-validation behavior.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Expose getPort for callers.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":8,\"quote\":\"module.exports = { getPort };\"},\"change\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":8,\"quote\":\"module.exports = { getPort };\"},\"evidence\":[{\"path\":\"eval-sandbox/s2/pkg/config.test.js\",\"line\":10,\"quote\":\"  assert.equal(getPort({ PORT: '8080' }), 8080);\",\"layer\":\"unit\",\"proves\":\"Imports and calls getPort through the module interface, checking the returned value.\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The adjacent node:test imports getPort and checks its result through the public module interface.\"},{\"id\":\"O2\",\"obligation\":\"Update the review rules.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/s2/pkg/REVIEW.md\",\"line\":3,\"quote\":\"- Throwing strings is fine.\"},\"change\":{\"path\":\"eval-sandbox/s2/pkg/REVIEW.md\",\"line\":3,\"quote\":\"- Throwing strings is fine.\"},\"evidence\":[],\"status\":\"needs_human\",\"reason\":\"The rule text is updated, but a unit test cannot establish whether this policy change is intended: the base-branch rule says never to throw strings, while the PR text does not specify the intended new rule beyond asking to update it.\"},{\"id\":\"O3\",\"obligation\":\"Reject an absent PORT.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":2,\"quote\":\"  if (!env.PORT) {\"},\"change\":{\"path\":\"eval-sandbox/s2/pkg/config.js\",\"line\":2,\"quote\":\"  if (!env.PORT) {\"},\"evidence\":[{\"path\":\"eval-sandbox/s2/pkg/config.test.js\",\"line\":6,\"quote\":\"  assert.throws(() => getPort({}), /PORT is required/);\",\"layer\":\"unit\",\"proves\":\"Checks that calling getPort without PORT thr"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t1",
+      "goal": "test_quality",
+      "tp": 0,
+      "fp": 1,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/t1/tax.test.js",
+          "line": 6,
+          "quote": "Math.round(50 * 1.2 * 100)"
+        }
+      ],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/t1/tax.js",
+          "line": 4,
+          "title": "Cover the zero-amount boundary"
+        }
+      ],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 104,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/36",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37435839301",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.js",
+            "line": 4,
+            "level": "inline",
+            "title": "Cover the zero-amount boundary",
+            "body": "**Cover the zero-amount boundary**\n\nThe existing examples do not prove that zero is accepted; changing the comparison to `<= 0` would escape them. Add a unit assertion for the boundary:\n```js\ntest('accepts zero amount', () => {\n  assert.equal(addTax(0), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=deaf7f8fa6952770c3f5e50381daae87bde1dd50 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 94b523e1a00b837b0925d4deb1f100cbdd8f879d. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add addTax, which applies 20% tax rounded to cents and rejects negative amounts. | O1, O2, O3 | 1/3 obligations covered (not fully covered). The criterion specifies three separately testable behaviours: applying 20% tax, rounding to cents, and rejecting negative amounts. |\n\n**Coding standards: checked.** Assessed the listed rule file. Its applyTo scope is src/** and eval/*.js, and eval-sandbox/t1 is outside that scope; no listed coding rule applies to the changed files. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the CI test command and tests under src/, eval/, and eval-sandbox/. CI runs the sandbox tests with node:test; eval/cases tests are explicitly excluded fixtures. The addTax tests call the exported pure function directly without network, database, or internal mocks, so they are unit tests. No higher-layer-only coverage or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: The returned amount includes 20% tax. | PR body; eval-sandbox/t1/tax.js:8 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:6 —   assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100); (assertion; Calls the exported function with 50 and checks its result against the 20% calculation, which evaluates to 60; a wrong tax rate or omitted tax would fail.) | unknown: Could not verify the changed-line, behaviour or test citation. |\n| O2: The taxed amount is rounded to cents. | PR body; eval-sandbox/t1/tax.js:8 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:10 —   assert.equal(addTax(0.07), 0.08); (assertion; Checks that taxing 0.07 returns 0.08, but flooring 0.084 to cents also returns 0.08.) | unknown: Could not verify the changed-line, behaviour or test citation. |\n| O3: Negative amounts are rejected. | PR body; eval-sandbox/t1/tax.js:5 —     throw new RangeError('amount must not be negative'); | unit: eval-sandbox/t1/tax.test.js:14 —   assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' }); (assertion; Checks that input -1 throws a RangeError with the specified message.) | covered: The unit assertion checks the error type and message for a negative input. |\n| O4: An amount of zero is accepted and returns zero. | from behaviour; eval-sandbox/t1/tax.js:4 —   if (amount < 0) { | none | missing_test: A search of test files under src/, eval/, and eval-sandbox/ found no assertion for zero input. The existing positive and negative examples would not catch changing the boundary from < 0 to <= 0. |\n\n",
+        "latency_s": 104,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"X1\",\n      \"source\": \"PR body\",\n      \"quote\": \"Add addTax, which applies 20% tax rounded to cents and rejects negative amounts.\",\n      \"obligation_ids\": [\"O1\", \"O2\", \"O3\"],\n      \"reason\": \"The criterion specifies three separately testable behaviours: applying 20% tax, rounding to cents, and rejecting negative amounts.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"The returned amount includes 20% tax.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 8,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 8,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 6,\n          \"quote\": \"  assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100);\",\n          \"layer\": \"unit\",\n          \"proves\": \"Calls the exported function with 50 and checks its result against the 20% calculation, which evaluates to 60; a wrong tax rate or omitted tax would fail.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The unit assertion checks the returned value for input 50 against the stated 20% rate.\"\n    },\n    {\n      \"id\": \"O2\",\n      \"obligation\": \"The taxed amount is rounded to cents.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 8,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/t1/tax.js\",\n        \"line\": 8,\n        \"quote\": \"  return Math.round(amount * RATE * 100) / 100;\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/t1/tax.test.js\",\n          \"line\": 10,\n          \"quote\": \"  assert.equal(addTax(0.0"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t2",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/t2/limits.test.js",
+            "line": 6,
+            "tolerance": 1,
+            "quote": "assert.ok(clamp(15, 0, 10))"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t2/limits.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert the upper-bound result",
+            "body": "**Assert the upper-bound result**\n\nReturning the unclamped input `15` still passes because it is truthy. Assert the expected maximum directly:\n\n```js\nassert.equal(clamp(15, 0, 10), 10);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=4d68a31907eb5bb57f66a632c82ca444750395b2 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 59,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/37",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37436099552",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t2/limits.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert the upper-bound result",
+            "body": "**Assert the upper-bound result**\n\nReturning the unclamped input `15` still passes because it is truthy. Assert the expected maximum directly:\n\n```js\nassert.equal(clamp(15, 0, 10), 10);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=4d68a31907eb5bb57f66a632c82ca444750395b2 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/1 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/1 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 76752d16488c4e7eaf55204ede3285746b74a789. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Simplify the upper-bound clamp test. | NOT ASSESSED | The PR requests a test simplification but specifies no application outcome; the upper-bound result is assessed separately as behavior inferred from the changed test. |\n\n**Coding standards: checked.** Assessed the listed rule file's scope and rules. Its applyTo patterns cover src/** and eval/*.js, not the changed eval-sandbox/t2 test, so no coding-standard rule applies to this diff. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Node 22 CI test command and repository tests. The changed test directly calls the exported clamp function without I/O or collaborators, so it is unit-level; eval/cases tests are fixtures excluded by CI. No higher-layer-only coverage or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: The upper-bound case asserts that input 15 clamps to the maximum value 10. | from behaviour; eval-sandbox/t2/limits.test.js:6 —   assert.ok(clamp(15, 0, 10)); | unit: eval-sandbox/t2/limits.test.js:6 —   assert.ok(clamp(15, 0, 10)); (assertion; The assertion checks only that the result is truthy, not that it equals the maximum value 10.) | weak_test: The unit assertion would still pass if clamp returned the unclamped input 15, so it does not prove the upper-bound result. |\n\n**Not reviewed:** Requirement R1 is not assessed: The PR requests a test simplification but specifies no application outcome; the upper-bound result is assessed separately as behavior inferred from the changed test.\n\n",
+        "latency_s": 59,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"Simplify the upper-bound clamp test.\",\"obligation_ids\":[],\"reason\":\"The PR requests a test simplification but specifies no application outcome; the upper-bound result is assessed separately as behavior inferred from the changed test.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"The upper-bound case asserts that input 15 clamps to the maximum value 10.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/t2/limits.test.js\",\"line\":6,\"quote\":\"  assert.ok(clamp(15, 0, 10));\"},\"change\":{\"path\":\"eval-sandbox/t2/limits.test.js\",\"line\":6,\"quote\":\"  assert.ok(clamp(15, 0, 10));\"},\"evidence\":[{\"path\":\"eval-sandbox/t2/limits.test.js\",\"line\":6,\"quote\":\"  assert.ok(clamp(15, 0, 10));\",\"layer\":\"unit\",\"proves\":\"The assertion checks only that the result is truthy, not that it equals the maximum value 10.\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The unit assertion would still pass if clamp returned the unclamped input 15, so it does not prove the upper-bound result.\"}],\"findings\":[{\"kind\":\"weak_test\",\"obligation_ids\":[\"O1\"],\"path\":\"eval-sandbox/t2/limits.test.js\",\"line\":6,\"quote\":\"  assert.ok(clamp(15, 0, 10));\",\"source\":\"from behaviour\",\"title\":\"Assert the upper-bound result\",\"body\":\"Returning the unclamped input `15` still passes because it is truthy. Assert the expected maximum directly:\\n\\n```js\\nassert.equal(clamp(15, 0, 10), 10);\\n```\",\"confidence\":\"high\"}],\"not_reviewed\":\"\",\"standards\":{\"status\":\"checked\",\"sources\":[\".github/instructions/specguard.instructions.md\"],\"reason\":\"Assessed the listed rule file's scope and rules. Its applyTo patterns cover src/** and eval/*.js, not the changed eval-sandbox/t2 test, so no coding-standard rule applies to this diff.\"},\"layering\":{\"status\":\"checked\",\"reason\":\"Inspected the Node 22 CI test command and repository tests. The changed test directly calls the exported clamp function without I/O or collaborators, so it is unit-level; eval/cas"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t3",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": [
+              "weak_test",
+              "missing_test"
+            ],
+            "path": [
+              "eval-sandbox/t3/qty.test.js",
+              "eval-sandbox/t3/qty.js"
+            ],
+            "line": 9,
+            "tolerance": 6,
+            "quote": "test.skip('rejects negative quantities'"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t3/qty.test.js",
+            "line": 9,
+            "level": "inline",
+            "title": "Keep negative quantity rejection covered",
+            "body": "**Keep negative quantity rejection covered**\n\nThe only assertion that negative quantities throw RangeError is disabled, leaving this input untested. Add an active unit test through parseQty:\n```js\ntest('rejects negative quantities', () => {\n  assert.throws(() => parseQty('-2'), RangeError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=b9ab7ae4f3a156eabe226d173898900cb59cf0d3 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 147,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/38",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37436283634",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t3/qty.test.js",
+            "line": 9,
+            "level": "inline",
+            "title": "Keep negative quantity rejection covered",
+            "body": "**Keep negative quantity rejection covered**\n\nThe only assertion that negative quantities throw RangeError is disabled, leaving this input untested. Add an active unit test through parseQty:\n```js\ntest('rejects negative quantities', () => {\n  assert.throws(() => parseQty('-2'), RangeError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=b9ab7ae4f3a156eabe226d173898900cb59cf0d3 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/1 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/1 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: e69902b929b1751d29eee94c529f338fb75ba02a. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: Skip the negative quantity test for now. | O1 | 0/1 obligations covered (not fully covered). This asks to skip a test, not to change an application outcome. The test is marked skipped, but the PR provides no flakiness history to assess whether that choice is justified. |\n\n**Coding standards: checked.** Assessed the supplied rule file's scope; its applyTo pattern covers src/** and eval/*.js, not the changed eval-sandbox/t3/qty.test.js, so none of its rules apply to the changed file. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the configured node:test suites and searched available test files. The quantity check is a deterministic public function suitable for unit coverage; no component, integration, or end-to-end coverage was found that could serve as a substitute or a pushdown candidate.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Skip the negative-quantity test for now. | PR body; eval-sandbox/t3/qty.test.js:9 — test.skip('rejects negative quantities', () => { | unit: eval-sandbox/t3/qty.test.js:10 —   assert.throws(() => parseQty('-2'), RangeError); (disabled; This assertion is inside the test marked skipped; it does not run as active test coverage.) | needs_human: The diff implements the requested skip, but unit assertions cannot establish whether the test is genuinely flaky; the PR provides no failure history or cause. |\n| O2: Negative quantities passed to parseQty are rejected with RangeError. | from behaviour; eval-sandbox/t3/qty.js:3 —   if (!Number.isInteger(n) \\|\\| n < 1) { | unit: eval-sandbox/t3/qty.test.js:10 —   assert.throws(() => parseQty('-2'), RangeError); (disabled; The only matching negative-quantity RangeError assertion is inside the skipped test.) | missing_test: Search of the available test files for parseQty, negative quantities, the '-2' input, and the quantity error message found no active assertion for this behavior. The matching assertion is skipped; eval/cases fixtures are not run as project tests per the repository configuration. |\n\n**Not reviewed:** The PR provides no failure history or cause for the claimed flakiness, so whether skipping this test is justified could not be assessed.\n\n",
+        "latency_s": 147,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"R1\",\"source\":\"PR body\",\"quote\":\"Skip the negative quantity test for now.\",\"obligation_ids\":[\"O1\"],\"reason\":\"This asks to skip a test, not to change an application outcome. The test is marked skipped, but the PR provides no flakiness history to assess whether that choice is justified.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Skip the negative-quantity test for now.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/t3/qty.test.js\",\"line\":9,\"quote\":\"test.skip('rejects negative quantities', () => {\"},\"change\":{\"path\":\"eval-sandbox/t3/qty.test.js\",\"line\":9,\"quote\":\"test.skip('rejects negative quantities', () => {\"},\"evidence\":[{\"path\":\"eval-sandbox/t3/qty.test.js\",\"line\":10,\"quote\":\"  assert.throws(() => parseQty('-2'), RangeError);\",\"layer\":\"unit\",\"proves\":\"This assertion is inside the test marked skipped; it does not run as active test coverage.\",\"kind\":\"disabled\"}],\"status\":\"needs_human\",\"reason\":\"The diff implements the requested skip, but unit assertions cannot establish whether the test is genuinely flaky; the PR provides no failure history or cause.\"},{\"id\":\"O2\",\"obligation\":\"Negative quantities passed to parseQty are rejected with RangeError.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/t3/qty.js\",\"line\":3,\"quote\":\"  if (!Number.isInteger(n) || n < 1) {\"},\"change\":{\"path\":\"eval-sandbox/t3/qty.test.js\",\"line\":9,\"quote\":\"test.skip('rejects negative quantities', () => {\"},\"evidence\":[{\"path\":\"eval-sandbox/t3/qty.test.js\",\"line\":10,\"quote\":\"  assert.throws(() => parseQty('-2'), RangeError);\",\"layer\":\"unit\",\"proves\":\"The only matching negative-quantity RangeError assertion is inside the skipped test.\",\"kind\":\"disabled\"}],\"status\":\"missing_test\",\"reason\":\"Search of the available test files for parseQty, negative quantities, the '-2' input, and the quantity error message found no active assertion for this behavior. The matching assertion is skipped; eval/cases fixtures are not run as project test"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t4",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 2,
+      "matched": [
+        {
+          "expected": {
+            "kind": [
+              "missing_test",
+              "weak_test"
+            ],
+            "path": [
+              "eval-sandbox/t4/invoice.js",
+              "eval-sandbox/t4/invoice.test.js"
+            ],
+            "line": 2,
+            "tolerance": 50,
+            "allow_summary": true,
+            "quote": "lines.reduce"
+          },
+          "observed": null,
+          "via_summary": true
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 101,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/39",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37436634121",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 2 missing, 0 weak · Standards: 0 · Layering: 0; 0 inline, 0 file-level, 2 in summary.\n\nUnit evidence: 0/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 7261d441744542e6b288dd5cbd0c15d9fd0f99d5. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Remove the invoice tests; they are slow. | NOT ASSESSED | This requests test removal rather than specifying an invoice outcome a unit test can prove. The coverage rows separately assess the behaviors whose assertions were removed. |\n\n**Coding standards: checked.** Assessed the listed rule file; its `applyTo` scope is `src/**,eval/*.js`, which excludes the changed `eval-sandbox/t4/invoice.test.js`. No listed standards apply to this change. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the CI test command and tests/references under `src`, `eval`, `eval/cases`, and `eval-sandbox`. The deleted assertions exercised the pure exported `total` function directly at unit level; no component, integration, or end-to-end assertion for these outcomes was found. There is no higher-layer-only logic to push down.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Summing multiple invoice lines returns the sum of their price-times-quantity values. | from behaviour; eval-sandbox/t4/invoice.js:2 —   return lines.reduce((sum, l) => sum + l.price * l.qty, 0); | unit: eval-sandbox/t4/invoice.test.js:6 —   assert.equal(total([{ price: 2, qty: 3 }, { price: 1, qty: 1 }]), 7); (removed; Before deletion, this asserted that two invoice lines total 7.) | missing_test: A repository-wide search of tests and references to `total` and `invoice` found no active assertion for multi-line summation. The only matching assertion was deleted; CI excludes the historical `eval/cases` fixtures. |\n| O2: An empty invoice returns zero. | from behaviour; eval-sandbox/t4/invoice.js:2 —   return lines.reduce((sum, l) => sum + l.price * l.qty, 0); | unit: eval-sandbox/t4/invoice.test.js:10 —   assert.equal(total([]), 0); (removed; Before deletion, this asserted that an empty invoice totals zero.) | missing_test: A repository-wide search of tests and references to `total` and `invoice` found no active assertion for the empty-input result. The only matching assertion was deleted; CI excludes the historical `eval/cases` fixtures. |\n\n**Not reviewed:** Tests were not executed; this is a static review. Requirement X1 is not assessed: This requests test removal rather than specifying an invoice outcome a unit test can prove. The coverage rows separately assess the behaviors whose assertions were removed.\n\n<details><summary>2 more item(s): low confidence, inferred, overflow, unanchored</summary>\n\n- **Restore coverage for multi-line invoice totals** (`eval-sandbox/t4/invoice.test.js:6`, missing_test, removed test or assertion; location is on the LEFT side of the diff)\n\n  The only collected assertion for summing multiple invoice lines was deleted; CI excludes the matching historical fixture. Restore a unit test with a literal expected total:\n  \n  ```js\n  test('sums line totals', () => {\n    assert.equal(total([{ price: 2, qty: 3 }, { price: 1, qty: 1 }]), 7);\n  });\n  ```\n\n- **Restore coverage for empty invoices** (`eval-sandbox/t4/invoice.test.js:10`, missing_test, removed test or assertion; location is on the LEFT side of the diff)\n\n  The only collected assertion that an empty invoice totals zero was deleted; CI excludes the matching historical fixture. Restore a unit test for the empty input:\n  \n  ```js\n  test('an empty invoice totals zero', () => {\n    assert.equal(total([]), 0);\n  });\n  ```\n\n</details>\n",
+        "latency_s": 101,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"X1\",\"source\":\"PR body\",\"quote\":\"Remove the invoice tests; they are slow.\",\"obligation_ids\":[],\"reason\":\"This requests test removal rather than specifying an invoice outcome a unit test can prove. The coverage rows separately assess the behaviors whose assertions were removed.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Summing multiple invoice lines returns the sum of their price-times-quantity values.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/t4/invoice.js\",\"line\":2,\"quote\":\"  return lines.reduce((sum, l) => sum + l.price * l.qty, 0);\"},\"change\":{\"path\":\"eval-sandbox/t4/invoice.test.js\",\"line\":6,\"quote\":\"  assert.equal(total([{ price: 2, qty: 3 }, { price: 1, qty: 1 }]), 7);\",\"side\":\"LEFT\"},\"evidence\":[{\"path\":\"eval-sandbox/t4/invoice.test.js\",\"line\":6,\"quote\":\"  assert.equal(total([{ price: 2, qty: 3 }, { price: 1, qty: 1 }]), 7);\",\"side\":\"LEFT\",\"layer\":\"unit\",\"proves\":\"Before deletion, this asserted that two invoice lines total 7.\",\"kind\":\"removed\"}],\"status\":\"missing_test\",\"reason\":\"A repository-wide search of tests and references to `total` and `invoice` found no active assertion for multi-line summation. The only matching assertion was deleted; CI excludes the historical `eval/cases` fixtures.\"},{\"id\":\"O2\",\"obligation\":\"An empty invoice returns zero.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/t4/invoice.js\",\"line\":2,\"quote\":\"  return lines.reduce((sum, l) => sum + l.price * l.qty, 0);\"},\"change\":{\"path\":\"eval-sandbox/t4/invoice.test.js\",\"line\":10,\"quote\":\"  assert.equal(total([]), 0);\",\"side\":\"LEFT\"},\"evidence\":[{\"path\":\"eval-sandbox/t4/invoice.test.js\",\"line\":10,\"quote\":\"  assert.equal(total([]), 0);\",\"side\":\"LEFT\",\"layer\":\"unit\",\"proves\":\"Before deletion, this asserted that an empty invoice totals zero.\",\"kind\":\"removed\"}],\"status\":\"missing_test\",\"reason\":\"A repository-wide search of tests and references to `total` and `invoice` found no active assertion for the empty-in"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "x1",
+      "goal": "robustness",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 7,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/40",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37436896885",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nNothing to review: every changed file is ignored (lockfiles, docs, generated files).\n\n",
+        "latency_s": 7,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": false,
+        "raw_findings_valid_json": false,
+        "raw_excerpt": ""
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "x2",
+      "goal": "robustness",
+      "tp": 4,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 5,
+            "quote": "throw new Error('empty order')"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Test the empty-order error",
+            "body": "**Test the empty-order error**\n\nNo unit assertion checks the empty-order error. Add a test that checks the specified message:\n\n```js\ntest('rejects an empty order', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=c62e2017d6325fdc58945563eecdb2662512fa81 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 11,
+            "quote": "total >= 100"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Test both sides of the 100 threshold",
+            "body": "**Test both sides of the 100 threshold**\n\nNo unit assertion checks the threshold or its boundary. Add tests for exactly 100 and just below it:\n\n```js\ntest('takes 5 off a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n\ntest('does not take 5 off a total below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99.99, qty: 1 }] }), 99.99);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=b53ba56b61152729d948a5a8bd850117c03e1625 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 14,
+            "quote": "Math.max"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test credit subtraction and the zero floor",
+            "body": "**Test credit subtraction and the zero floor**\n\nNo unit assertion checks credit subtraction or the zero floor. Add tests for a remaining balance and for credit greater than the total:\n\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 50, qty: 1 }], credit: 20 }), 30);\n});\n\ntest('floors the total at zero when credit exceeds it', () => {\n  assert.equal(applyDiscount({ items: [{ price: 10, qty: 1 }], credit: 15 }), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=8b35a4b1b91c29b2dafb7a592bc636bff7b7a157 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/x2/discount.test.js",
+            "line": 7,
+            "quote": "assert.ok(total)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/x2/discount.test.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Assert the SAVE10 result",
+            "body": "**Assert the SAVE10 result**\n\nThis truthiness assertion passes if the SAVE10 discount is removed: the undiscounted total of 40 remains truthy. Compare the result with 36:\n\n```js\ntest('takes 10% off the subtotal', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'SAVE10' }), 36);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=ba6dd19cb0a7884038aa58255e75573ed8205953 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 128,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/41",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37436964489",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Test the empty-order error",
+            "body": "**Test the empty-order error**\n\nNo unit assertion checks the empty-order error. Add a test that checks the specified message:\n\n```js\ntest('rejects an empty order', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=c62e2017d6325fdc58945563eecdb2662512fa81 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Test both sides of the 100 threshold",
+            "body": "**Test both sides of the 100 threshold**\n\nNo unit assertion checks the threshold or its boundary. Add tests for exactly 100 and just below it:\n\n```js\ntest('takes 5 off a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n\ntest('does not take 5 off a total below 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 99.99, qty: 1 }] }), 99.99);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=b53ba56b61152729d948a5a8bd850117c03e1625 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/x2/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Test credit subtraction and the zero floor",
+            "body": "**Test credit subtraction and the zero floor**\n\nNo unit assertion checks credit subtraction or the zero floor. Add tests for a remaining balance and for credit greater than the total:\n\n```js\ntest('subtracts store credit from the total', () => {\n  assert.equal(applyDiscount({ items: [{ price: 50, qty: 1 }], credit: 20 }), 30);\n});\n\ntest('floors the total at zero when credit exceeds it', () => {\n  assert.equal(applyDiscount({ items: [{ price: 10, qty: 1 }], credit: 15 }), 0);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=8b35a4b1b91c29b2dafb7a592bc636bff7b7a157 -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/x2/discount.test.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Assert the SAVE10 result",
+            "body": "**Assert the SAVE10 result**\n\nThis truthiness assertion passes if the SAVE10 discount is removed: the undiscounted total of 40 remains truthy. Compare the result with 36:\n\n```js\ntest('takes 10% off the subtotal', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'SAVE10' }), 36);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=ba6dd19cb0a7884038aa58255e75573ed8205953 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 1 weak · Standards: 0 · Layering: 0; 4 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/5 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 3 missing, 1 weak · Standards: 0 · Layering: 0; 4 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/5 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 751afec9330cf5b71f81a8d0dad7f4441b8c8b2a. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: An order with no items throws \"empty order\". | O1 | 0/1 obligations covered (not fully covered). Requires an assertion that an empty order throws the specified error. |\n| R2 | PR body: The SAVE10 coupon takes 10% off the subtotal. | O2 | 0/1 obligations covered (not fully covered). Requires checking the numeric discounted result, not merely that it is truthy. |\n| R3 | PR body: A total of 100 or more gets 5 off. | O3 | 0/1 obligations covered (not fully covered). Requires proving the threshold behavior, including the boundary at 100. |\n| R4 | PR body: Store credit is subtracted from the total, which never goes below zero. | O4a, O4b | 0/2 obligations covered (not fully covered). Split into separate obligations for subtracting credit and flooring the result at zero. |\n\n**Coding standards: checked.** Assessed the supplied rule file's applyTo scope; it covers src/** and eval/*.js, not eval-sandbox/x2, so no coding standards apply to the changed files. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** The changed test directly calls the exported applyDiscount function with node:test and no network, database, or internal collaborators, so it is unit-level. CI explicitly collects eval-sandbox tests and excludes eval/cases fixtures; no higher-layer assertions for this behavior were found. The pure discount calculation has a public unit seam, so moving coverage to a higher layer would not help and no pushdown is warranted.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: An order with no items throws an Error with message \"empty order\". | PR body AC 1; eval-sandbox/x2/discount.js:5 —     throw new Error('empty order'); | unit: eval-sandbox/x2/discount.test.js:7 —   assert.ok(total); (no_assertion; This checks only that the SAVE10 result is truthy; it does not pass an empty order or check its error.) | missing_test: The only assertion in the changed unit test checks a truthy result. A repository-wide search of the CI-collected src/*.test.js, eval/*.test.js, and eval-sandbox/**/*.test.js found no assertion for the empty-order error. |\n| O2: SAVE10 reduces the subtotal by 10%. | PR body AC 2; eval-sandbox/x2/discount.js:9 —     total *= 0.9; | unit: eval-sandbox/x2/discount.test.js:7 —   assert.ok(total); (assertion; Exercises applyDiscount with SAVE10, but truthiness would still pass if the discount were removed or calculated at the wrong rate.) | weak_test: The unit test exercises SAVE10, but its truthiness assertion survives removing the discount: the undiscounted subtotal of 40 is still truthy. |\n| O3: A total of 100 or more is reduced by 5. | PR body AC 3; eval-sandbox/x2/discount.js:11 —   if (total >= 100) { | unit: eval-sandbox/x2/discount.test.js:7 —   assert.ok(total); (no_assertion; The assertion does not check a total at or around 100 or compare the amount reduced.) | missing_test: The only assertion in the changed unit test checks truthiness for a subtotal of 40. A repository-wide search of the CI-collected src/*.test.js, eval/*.test.js, and eval-sandbox/**/*.test.js found no assertion for the 100 threshold or its boundary. |\n| O4a: Store credit is subtracted from the total. | PR body AC 4; eval-sandbox/x2/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | unit: eval-sandbox/x2/discount.test.js:7 —   assert.ok(total); (no_assertion; The assertion does not supply credit or compare the resulting total.) | missing_test: The only assertion in the changed unit test does not exercise or check store-credit subtraction. A repository-wide search of the CI-collected src/*.test.js, eval/*.test.js, and eval-sandbox/**/*.test.js found no assertion for this behavior. |\n| O4b: The total after applying store credit never goes below zero. | PR body AC 4; eval-sandbox/x2/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | unit: eval-sandbox/x2/discount.test.js:7 —   assert.ok(total); (no_assertion; The assertion does not use credit exceeding the total or check that the result is zero.) | missing_test: The only assertion in the changed unit test does not check the zero floor. A repository-wide search of the CI-collected src/*.test.js, eval/*.test.js, and eval-sandbox/**/*.test.js found no assertion for credit exceeding the total. |\n\n",
+        "latency_s": 128,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "I’ve extracted the four PR criteria and the changed discount behavior. I’m checking repository test conventions, existing assertions across all test locations, and whether any applicable standards cover this directory before classifying coverage.\n\n{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"An order with no items throws \\\"empty order\\\".\",\n      \"obligation_ids\": [\n        \"O1\"\n      ],\n      \"reason\": \"Requires an assertion that an empty order throws the specified error.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"The SAVE10 coupon takes 10% off the subtotal.\",\n      \"obligation_ids\": [\n        \"O2\"\n      ],\n      \"reason\": \"Requires checking the numeric discounted result, not merely that it is truthy.\"\n    },\n    {\n      \"id\": \"R3\",\n      \"source\": \"PR body\",\n      \"quote\": \"A total of 100 or more gets 5 off.\",\n      \"obligation_ids\": [\n        \"O3\"\n      ],\n      \"reason\": \"Requires proving the threshold behavior, including the boundary at 100.\"\n    },\n    {\n      \"id\": \"R4\",\n      \"source\": \"PR body\",\n      \"quote\": \"Store credit is subtracted from the total, which never goes below zero.\",\n      \"obligation_ids\": [\n        \"O4a\",\n        \"O4b\"\n      ],\n      \"reason\": \"Split into separate obligations for subtracting credit and flooring the result at zero.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"O1\",\n      \"obligation\": \"An order with no items throws an Error with message \\\"empty order\\\".\",\n      \"source\": \"PR body AC 1\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/x2/discount.js\",\n        \"line\": 5,\n        \"quote\": \"    throw new Error('empty order');\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/x2/discount.js\",\n        \"line\": 5,\n        \"quote\": \"    throw new Error('empty order');\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/x2/discount.test.js\",\n          \"line\": 7,\n          \"quote\": \"  assert."
+      },
+      "model": "unchanged"
+    }
+  ],
+  "aggregate": {
+    "runs": 14,
+    "errors": 0,
+    "tp": 16,
+    "fp": 5,
+    "acceptable": 0,
+    "fn": 2,
+    "summary_only": 2,
+    "precision": 0.762,
+    "recall": 0.889,
+    "json_valid_rate": 0.929,
+    "degraded_rate": 0,
+    "pass_rate": 0.857,
+    "latency_median_s": 105,
+    "latency_max_s": 738,
+    "cost": "not measured",
+    "by_goal": {
+      "layering": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 0,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 1,
+        "summary_only": 0,
+        "precision": null,
+        "recall": 0,
+        "json_valid_rate": 0,
+        "degraded_rate": 0,
+        "pass_rate": 0,
+        "latency_median_s": 738,
+        "latency_max_s": 738
+      },
+      "requirements": {
+        "runs": 5,
+        "errors": 0,
+        "tp": 7,
+        "fp": 3,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 0.7,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 106,
+        "latency_max_s": 185
+      },
+      "standards": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 1,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 80,
+        "latency_max_s": 80
+      },
+      "robustness": {
+        "runs": 3,
+        "errors": 0,
+        "tp": 5,
+        "fp": 1,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 0.833,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 122,
+        "latency_max_s": 128
+      },
+      "test_quality": {
+        "runs": 4,
+        "errors": 0,
+        "tp": 3,
+        "fp": 1,
+        "acceptable": 0,
+        "fn": 1,
+        "summary_only": 2,
+        "precision": 0.75,
+        "recall": 0.75,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 0.75,
+        "latency_median_s": 102.5,
+        "latency_max_s": 147
+      }
+    }
+  }
+}

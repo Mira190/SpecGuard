@@ -1,58 +1,282 @@
-// Step 3: the only step holding a write token. Validates, filters, anchors and posts. Never throws, never blocks the PR.
+// Validates, filters, anchors and posts an advisory review. Never blocks the PR.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
+const { inspectChecks } = require('./checks');
+const { ours, recordedLogin } = require('./preflight');
 
-const KINDS = ['missing_test', 'weak_test', 'standard', 'pushdown'];
-const STATUSES = ['covered', 'weak_test', 'missing_test', 'needs_human'];
+const KINDS = ['spec_mismatch', 'missing_test', 'weak_test', 'standard', 'pushdown'];
+const ALIGN = ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
+const unknownAlign = (reason) => ({ status: 'unknown', reason });
+const STATUSES = ['covered', 'weak_test', 'missing_test', 'higher_level_only', 'needs_human', 'unknown'];
 const FILE_CAP = 3, HARD_CAP = 30, BODY_MAX = 65000;
-const SECRET = /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,})/g;
+// Tokens, plus the credential lines `actions/checkout` leaves in .git/config (a base64 "AUTHORIZATION: basic ..." extraheader).
+const SECRET = /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,})|authorization:\s*(?:basic|bearer|token)\s+[A-Za-z0-9+/=._-]{8,}|\S*extraheader[^\n]*/gi;
 
 const redact = (s) => String(s).replace(SECRET, '[REDACTED]');
-const truncate = (s, n = BODY_MAX) => (s.length > n ? s.slice(0, n - 20) + '\n...(truncated)' : s);
+// Cut at a code point (never between the halves of a surrogate pair).
+const truncate = (s, n = BODY_MAX) => {
+  if (s.length <= n) return s;
+  let end = n - 20;
+  if (end > 0 && /[\uD800-\uDBFF]/.test(s[end - 1])) end--;
+  return s.slice(0, end) + '\n...(truncated)';
+};
+const { matches } = require('./standards-map');
+const { standardsCut } = require('./prompt');
 const clean = (s) => truncate(redact(s));
+const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+// The one sanitiser for every piece of model- or document-derived text that reaches a comment or the summary.
+// Idempotent. Removes HTML comments (our markers live in them), neutralises tags, @mentions and images, and drops control and bidi characters.
+const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F\u00AD\u034F\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu; // control, bidi, zero-width, tag and variation-selector characters, and the blank Hangul/Braille fillers
+function neutralize(s) {
+  let t = String(s).replace(INVISIBLE, '');
+  for (let prev; prev !== t;) { prev = t; t = t.replace(/<!--[\s\S]*?-->/g, ''); }
+  t = t.replace(/<!--[\s\S]*$/, '').replace(/!\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])?/g, '')
+    .replace(/<(?=[A-Za-z/!?])/g, '&lt;').replace(/@(?=[A-Za-z0-9_])/g, '@​');
+  return redact(t);
+}
 
 // line -> hunk index per side. RIGHT: '+' and ' ' lines, LEFT: '-' lines.
 function parsePatch(patch) {
-  const m = { RIGHT: new Map(), LEFT: new Map() };
+  const m = { RIGHT: new Map(), LEFT: new Map(), changed: { RIGHT: new Map(), LEFT: new Map() } };
   let h = -1, l = 0, r = 0;
-  for (const ln of String(patch || '').split('\n')) {
+  for (const ln of String(patch || '').split(/\r?\n/)) { // CRLF files: content lines end in CR
     const hd = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(ln);
     if (hd) { h++; l = +hd[1]; r = +hd[2]; continue; }
     if (h < 0 || ln === '' || ln[0] === '\\') continue;
-    if (ln[0] === '+') m.RIGHT.set(r++, h);
-    else if (ln[0] === '-') m.LEFT.set(l++, h);
+    if (ln[0] === '+') { m.changed.RIGHT.set(r, ln.slice(1)); m.RIGHT.set(r++, h); }
+    else if (ln[0] === '-') { m.changed.LEFT.set(l, ln.slice(1)); m.LEFT.set(l++, h); }
     else { m.RIGHT.set(r++, h); l++; }
   }
   return m;
 }
 
+// Git C-quotes paths with special or non-ASCII bytes ("b/\344\270\255.js"): decode the escapes to bytes, then UTF-8.
+const ESC = { a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' };
+const unquote = (s) => (/^".*"$/.test(s) ? Buffer.concat([...s.slice(1, -1).matchAll(/\\([0-7]{3})|\\(.)|([^\\]+)/gs)]
+  .map((m) => (m[1] ? Buffer.from([parseInt(m[1], 8)]) : Buffer.from(m[3] ?? ESC[m[2]] ?? m[2])))).toString('utf8') : s);
+const diffPath = (re, prefix, chunk) => { const m = re.exec(chunk), p = m ? unquote(m[1]) : ''; return p === '/dev/null' ? '' : p.replace(prefix, ''); };
+
+// Local diff.patch -> Map(path -> parsePatch). Keyed by the new path, or the old path for a deletion.
+function parseDiff(text) {
+  const maps = new Map();
+  for (const chunk of String(text || '').split(/^diff --git /m).slice(1)) {
+    const p = diffPath(/^\+\+\+ (.+?)\t?$/m, /^b\//, chunk) || diffPath(/^--- (.+?)\t?$/m, /^a\//, chunk);
+    const at = chunk.search(/^@@ /m);
+    if (p && at >= 0) maps.set(p, parsePatch(chunk.slice(at)));
+  }
+  return maps;
+}
+
+// Deterministic alignment rules (a failure only degrades, never upgrades), run after every step that can unlink a requirement or finding.
+// Idempotent. Mutates d.coverage[].alignment/status and d.findings.
+function settle(d, notes) {
+  const links = new Set(d.requirements.flatMap((r) => r.obligation_ids));
+  const linked = (id) => links.has(id);
+  const down = (c, why) => { notes.push(`Obligation ${c.id} alignment unknown: ${why}.`); c.alignment = unknownAlign(`Alignment ${c.alignment.status} degraded: ${why}.`); };
+  for (const c of d.coverage) {
+    const { status: s, since } = c.alignment;
+    if (['consistent', 'mismatch', 'impacted'].includes(s) && !linked(c.id)) down(c, 'needs a linked requirement');
+    else if (['consistent', 'mismatch', 'impacted'].includes(s) && !c.behaviour) down(c, 'needs a located behaviour');
+    else if (['mismatch', 'impacted'].includes(s) && !since) down(c, 'needs since');
+    else if (s === 'not_verifiable' && (!linked(c.id) || !String(c.alignment.reason).trim())) down(c, 'not_verifiable needs a linked requirement and a reason');
+    else if (s === 'not_applicable' && linked(c.id)) down(c, 'not_applicable cannot have a linked requirement');
+  }
+  for (const c of d.coverage) if (c.alignment.status === 'mismatch') {
+    if (d.findings.filter((f) => f.kind === 'spec_mismatch' && f.obligation_ids.includes(c.id)).length !== 1) down(c, 'needs exactly one spec_mismatch finding');
+    else if (c.status === 'covered') Object.assign(c, { status: 'needs_human', reason: 'A mismatch row cannot be covered: a test of the contradicting behaviour does not prove the requirement.' });
+  }
+  const mm = new Set(d.coverage.filter((c) => c.alignment.status === 'mismatch').map((c) => c.id));
+  d.findings = d.findings.map((f) => (['missing_test', 'weak_test'].includes(f.kind) ? { ...f, obligation_ids: f.obligation_ids.filter((id) => !mm.has(id)) } : f)) // the spec_mismatch finding replaces them
+    .filter((f) => (f.kind === 'spec_mismatch' ? f.obligation_ids.length === 1 && mm.has(f.obligation_ids[0]) : f.kind === 'standard' || f.obligation_ids.length));
+}
+
+// Cosmetic differences a weak model produces: enum case, spaces or hyphens for underscores, whole numbers as strings, a missing line
+// (the quote locates it). Normalised in place before validation; the verifier still decides every fact.
+const slug = (v) => (typeof v === 'string' ? v.trim().toLowerCase().replace(/[\s-]+/g, '_') : v);
+const whole = (v) => (typeof v === 'string' && /^\s*\d+\s*$/.test(v) ? Number(v) : v);
+function tidy(o) {
+  const set = (x, k, f) => { if (x[k] === null) delete x[k]; else if (x[k] !== undefined) x[k] = f(x[k]); };
+  const cite = (x) => {
+    if (!x || typeof x !== 'object') return;
+    x.line = whole(x.line);
+    if (!Number.isInteger(x.line) || x.line < 1) x.line = 1; // a hint only: the quote locates the line, or the citation stays unverified
+    set(x, 'start_line', whole); set(x, 'side', (v) => String(v).trim().toUpperCase()); set(x, 'layer', slug);
+  };
+  for (const c of o.coverage) {
+    if (!c || typeof c !== 'object') continue;
+    set(c, 'status', slug); cite(c.behaviour); cite(c.change);
+    if (Array.isArray(c.evidence)) for (const e of c.evidence) { cite(e); if (e && typeof e === 'object') set(e, 'kind', slug); }
+    if (c.alignment && typeof c.alignment === 'object') { set(c.alignment, 'status', slug); set(c.alignment, 'since', slug); }
+  }
+  for (const f of o.findings) if (f && typeof f === 'object') { cite(f); set(f, 'kind', slug); set(f, 'confidence', slug); }
+  for (const r of o.requirements) if (r && typeof r === 'object') set(r, 'line', whole);
+  for (const k of ['standards', 'layering']) if (o[k] && typeof o[k] === 'object') set(o[k], 'status', slug);
+}
+
+// Layer of an evidence citation that omits it: a higher-layer word in the path, else unit for a test file, else undefined (malformed).
+// ponytail: names only; the model states layer whenever it is not a plain unit test, and a stated layer is never overridden.
+const layerOf = (p) => { const s = String(p);
+  return /(^|[/._-])(e2e|end-to-end|cypress|playwright)([/._-]|$)/i.test(s) ? 'e2e' : /(^|[/._-])(integration|acceptance|functional)([/._-]|$)/i.test(s) ? 'integration'
+    : /(^|[/._-])components?([/._-]|$)/i.test(s) ? 'component' : require('./trace').isTestPath(s) ? 'unit' : undefined; };
+
 // Hand-rolled mirror of findings.schema.json. ponytail: swap for ajv if the schema grows.
+// Structural problems (not an object, core arrays missing, more than half of the coverage rows unusable) reject the output and
+// say which JSON path failed. Every other problem degrades only the affected part, is repaired in place, and is listed in o.validation_notes.
 function validate(o) {
   const bad = (m) => ({ ok: false, error: m });
   const str = (v) => typeof v === 'string';
   const int = (v) => Number.isInteger(v) && v >= 1;
-  if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('not an object');
-  if (!str(o.requirements_source)) return bad('requirements_source must be a string');
-  if (!str(o.not_reviewed)) return bad('not_reviewed must be a string');
-  if (!Array.isArray(o.coverage)) return bad('coverage must be an array');
+  const text = (v) => str(v) && v.trim().length > 0;
+  const citation = (v) => v && text(v.path) && int(v.line) && text(v.quote) && (v.side === undefined || ['LEFT', 'RIGHT'].includes(v.side));
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('$ is not an object');
+  for (const k of ['coverage', 'findings', 'requirements']) if (!Array.isArray(o[k])) return bad(`${k} must be an array`);
+  tidy(o);
+  const notes = [];
+  if (!str(o.requirements_source)) { o.requirements_source = ''; notes.push('requirements_source was not a string; ignored.'); }
+  if (!str(o.not_reviewed)) { o.not_reviewed = ''; notes.push('not_reviewed was not a string; ignored.'); }
+  const demote = (key, why) => {
+    notes.push(`${key} assessment ignored: ${why}.`);
+    o[key] = { status: 'not_reviewed', ...(key === 'standards' && { sources: [] }), reason: `The ${key} assessment was unusable (${why}); not reviewed.` };
+  };
+  const s = o.standards, l = o.layering;
+  if (!s || typeof s !== 'object' || !['checked', 'no_rules', 'not_reviewed'].includes(s.status)
+    || !Array.isArray(s.sources) || !s.sources.every(text) || !text(s.reason)) demote('standards', 'missing or malformed');
+  else if (s.status === 'checked' && !s.sources.length) demote('standards', 'checked standards need sources');
+  if (!l || typeof l !== 'object' || !['checked', 'not_reviewed'].includes(l.status) || !text(l.reason)) demote('layering', 'missing or malformed');
+
+  // A row problem is structural (the row says nothing usable: it counts toward rejecting the whole ledger) or semantic (the row is
+  // well formed but its status is not supported: it becomes unknown and the rest of the review stands).
+  let structural = false;
+  const shape = (why) => { structural = true; return why; };
+  const rowError = (c) => {
+    structural = false;
+    if (!text(c.obligation) || !text(c.source) || !text(c.reason)) return shape('obligation, source and reason are required');
+    if (c.change === undefined) c.change = c.behaviour; // ponytail: omitted change = the cited behaviour; verifyEvidence still checks it against the diff
+    if (!(c.behaviour === null || citation(c.behaviour)) || !(c.change === null || citation(c.change))) return shape('malformed citation');
+    if (!Array.isArray(c.evidence)) return shape('evidence must be an array');
+    if (!STATUSES.includes(c.status)) return shape('invalid status');
+    for (const [j, e] of c.evidence.entries()) {
+      if (e && typeof e === 'object') {
+        if (e.kind === undefined) e.kind = 'assertion'; // the documented meaning of an evidence quote; the quote is still verified
+        if (e.layer === undefined) e.layer = layerOf(e.path); // omitted = unit in a test file (the contract); a higher-layer name in the path wins
+        if (!text(e.proves)) delete e.proves; // optional: the row's reason says what the assertion checks
+      }
+      if (!citation(e) || !['unit', 'component', 'integration', 'e2e'].includes(e.layer)
+        || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return shape(`evidence[${j}] malformed`);
+      if (e.kind === 'removed' && e.side !== 'LEFT') return shape("removed evidence must cite the diff's LEFT side");
+    }
+    if (c.status === 'covered' && (!c.behaviour || !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT'))) return 'covered needs a current unit assertion';
+    if (c.status === 'weak_test' && !c.evidence.some((e) => e.layer === 'unit')) return 'weak_test needs a unit test location';
+    if (c.status === 'higher_level_only' && (!c.evidence.length || c.evidence.some((e) => e.layer === 'unit'))) return 'higher_level_only needs higher-layer evidence only';
+    if (c.status === 'missing_test' && c.evidence.some((e) => e.kind === 'assertion')) { // citing the nearby test that shows the gap is how a model explains a missing_test; drop the claim of proof, keep the row and its finding
+      const n = c.evidence.length;
+      c.evidence = c.evidence.filter((e) => e.kind !== 'assertion');
+      notes.push(`Obligation ${c.id}: missing_test cannot claim assertion evidence; ignored ${n - c.evidence.length} evidence ${n - c.evidence.length === 1 ? 'entry' : 'entries'} and kept the row.`);
+    }
+    if (!c.change && !['unknown', 'needs_human'].includes(c.status)) return 'needs a changed-line citation';
+    return '';
+  };
+  const ids = new Set(), rows = [];
+  const links = new Set(o.requirements.flatMap((r) => (r && Array.isArray(r.obligation_ids) ? r.obligation_ids : [])));
+  let unusable = 0, firstBad = '';
+  const align = (a) => {
+    if (!a || typeof a !== 'object' || !ALIGN.includes(a.status) || !text(a.reason) || (a.since !== undefined && !['introduced', 'pre_existing'].includes(a.since))) return null;
+    return { status: a.status, ...(a.since && { since: a.since }), reason: a.reason };
+  };
   for (const [i, c] of o.coverage.entries()) {
-    if (!c || !str(c.obligation) || !str(c.source) || !Array.isArray(c.tests) || !c.tests.every(str)) return bad(`coverage[${i}] malformed`);
-    if (!STATUSES.includes(c.status)) return bad(`coverage[${i}].status invalid`);
+    if (!c || typeof c !== 'object' || !text(c.id) || ids.has(c.id)) { notes.push(`Dropped coverage[${i}]: missing or duplicate id.`); unusable++; firstBad ||= `coverage[${i}]: missing or duplicate id`; continue; }
+    ids.add(c.id);
+    const why = rowError(c);
+    if (structural) { unusable++; firstBad ||= `coverage[${i}]: ${why}`; }
+    if (!why) {
+      if (c.alignment === undefined || c.alignment === null) { // optional in practice: derived, never invented
+        if (links.has(c.id)) { c.alignment = unknownAlign('not stated'); notes.push(`Obligation ${c.id} alignment unknown: not stated.`); }
+        else c.alignment = { status: 'not_applicable', reason: 'not stated; no requirement is linked to this obligation' };
+      }
+      const a = align(c.alignment);
+      if (!a) notes.push(`Obligation ${c.id} alignment unknown: malformed alignment.`);
+      const al = a || unknownAlign('Malformed alignment.');
+      if (al.status === 'mismatch' && ['unknown', 'covered'].includes(c.status)) { // never covered; 'unknown' would drop its spec_mismatch finding
+        notes.push(`Obligation ${c.id}: mismatch row with status ${c.status} normalised to needs_human.`);
+        rows.push({ ...c, status: 'needs_human', reason: 'A mismatch row cannot be covered: a test of the contradicting behaviour does not prove the requirement.', alignment: al });
+      } else rows.push({ ...c, alignment: al });
+      continue;
+    }
+    notes.push(`Obligation ${c.id} marked unknown: ${why}.`);
+    rows.push({ id: c.id, obligation: text(c.obligation) ? c.obligation : '(not stated)', source: text(c.source) ? c.source : '(not stated)',
+      behaviour: citation(c.behaviour) ? c.behaviour : null, change: citation(c.change) ? c.change : null, evidence: [], status: 'unknown', reason: `Malformed coverage row: ${why}.`, alignment: unknownAlign('Malformed coverage row.') });
   }
-  if (!Array.isArray(o.findings)) return bad('findings must be an array');
+  if (unusable * 2 > o.coverage.length) return bad(`${firstBad} (${unusable} of ${o.coverage.length} coverage rows are unusable)`);
+  const status = (id) => rows.find((c) => c.id === id).status;
+
+  const reqIds = new Set(), reqs = [];
+  for (const [i, r] of o.requirements.entries()) {
+    // a collected criterion (R*, S*, H*) may give only id, obligation_ids and reason: verifyRequirements fills source and quote from requirements-status.json
+    const collected = r && typeof r === 'object' && /^[RSH]\d+$/.test(String(r.id));
+    if (!r || typeof r !== 'object' || !text(r.id) || reqIds.has(r.id) || (!collected && (!text(r.source) || !text(r.quote)))) { notes.push(`Dropped requirements[${i}]: malformed or duplicate.`); continue; }
+    reqIds.add(r.id);
+    const linked = Array.isArray(r.obligation_ids) ? r.obligation_ids.filter((id) => ids.has(id)) : [];
+    const broken = !Array.isArray(r.obligation_ids) || linked.length !== r.obligation_ids.length;
+    if (broken) notes.push(`Requirement ${r.id}: unknown or malformed obligation links removed.`);
+    reqs.push({ id: r.id, source: text(r.source) ? r.source : '', quote: text(r.quote) ? r.quote : '', obligation_ids: linked,
+      ...(text(r.ref) && safeRef(r.ref) && { ref: safeRef(r.ref) }), ...(int(r.line) && { line: r.line }), ...((r.pr_quote === null || text(r.pr_quote)) && { pr_quote: r.pr_quote }),
+      reason: broken && !linked.length ? 'Its obligation links were missing or invalid.' : text(r.reason) ? r.reason : 'No reason given.' });
+  }
+
+  const findingError = (f) => {
+    if (!f || typeof f !== 'object') return 'not an object';
+    if (!KINDS.includes(f.kind)) return 'invalid kind';
+    if (!str(f.path) || !str(f.title) || !str(f.body) || !str(f.quote)) return 'path, title, body and quote must be strings';
+    if (!int(f.line)) return 'line must be an integer >= 1';
+    if (f.start_line !== undefined && !int(f.start_line)) return 'invalid start_line';
+    if (f.side !== undefined && !['LEFT', 'RIGHT'].includes(f.side)) return 'invalid side';
+    for (const k of ['suggestion', 'rule_source', 'rule_quote', 'source']) if (f[k] !== undefined && !str(f[k])) return `invalid ${k}`;
+    if (!['high', 'low'].includes(f.confidence)) { notes.push(`findings: ${f.kind} ${f.path} had no valid confidence; kept at low.`); f.confidence = 'low'; } // a failure only degrades
+    if (!Array.isArray(f.obligation_ids)) return 'obligation_ids must be an array';
+    f.obligation_ids = [...new Set(f.obligation_ids.filter((id) => ids.has(id)))];
+    if (f.kind !== 'standard' && !f.obligation_ids.length) return 'no valid obligation';
+    if (f.kind === 'spec_mismatch' && f.obligation_ids.length !== 1) return 'spec_mismatch needs exactly one obligation';
+    const expected = { missing_test: 'missing_test', weak_test: 'weak_test', pushdown: 'higher_level_only' }[f.kind];
+    if (expected && f.obligation_ids.some((id) => status(id) !== expected)) return 'contradicts coverage';
+    if (f.kind === 'standard' && o.standards.status !== 'checked') return 'standards were not reviewed';
+    if (f.kind === 'pushdown' && o.layering.status !== 'checked') return 'layering was not reviewed';
+    return '';
+  };
+  // A finding whose row the model marked `covered` is a bookkeeping slip, not evidence against the finding: its own citations are verified later.
+  // Keep it, make the row agree, and demote it to the summary. Only `covered` rows are repaired; unknown or malformed rows still drop the finding.
+  const repair = (f) => {
+    const want = f && { missing_test: 'missing_test', weak_test: 'weak_test', pushdown: 'higher_level_only' }[f.kind];
+    if (!want || !Array.isArray(f.obligation_ids)) return;
+    let fixed = false;
+    for (const id of f.obligation_ids) {
+      const r = rows.find((c) => c.id === id);
+      if (r && r.status === 'covered') { r.status = want; r.reason = `The model raised a ${f.kind} finding on this obligation although it marked it covered.`; fixed = true; }
+    }
+    if (fixed) { f.confidence = 'low'; notes.push(`Obligation row contradicted finding ${f.kind} ${f.path}: kept the finding at low confidence and marked the row ${want}.`); }
+  };
+  let kept = [];
   for (const [i, f] of o.findings.entries()) {
-    if (!f || typeof f !== 'object') return bad(`findings[${i}] not an object`);
-    if (!KINDS.includes(f.kind)) return bad(`findings[${i}].kind invalid`);
-    if (!str(f.path) || !str(f.title) || !str(f.body) || !str(f.quote)) return bad(`findings[${i}] path/title/body/quote must be strings`);
-    if (!int(f.line)) return bad(`findings[${i}].line must be an integer >= 1`);
-    if (f.start_line !== undefined && !int(f.start_line)) return bad(`findings[${i}].start_line invalid`);
-    if (f.suggestion !== undefined && !str(f.suggestion)) return bad(`findings[${i}].suggestion invalid`);
-    if (f.rule_source !== undefined && !str(f.rule_source)) return bad(`findings[${i}].rule_source invalid`);
-    if (f.rule_quote !== undefined && !str(f.rule_quote)) return bad(`findings[${i}].rule_quote invalid`);
-    if (f.source !== undefined && !str(f.source)) return bad(`findings[${i}].source invalid`);
-    if (!['high', 'low'].includes(f.confidence)) return bad(`findings[${i}].confidence invalid`);
+    repair(f);
+    const why = findingError(f);
+    if (why) notes.push(`Dropped ${[`findings[${i}]`, ...(f && typeof f === 'object' ? [f.kind, f.path, f.title].filter(text) : [])].join(' ')}: ${why}.`);
+    else kept.push(f);
   }
+  const d = { coverage: rows, requirements: reqs, findings: kept };
+  settle(d, notes);
+  kept = d.findings;
+  const demoted = new Set();
+  for (const c of rows) {
+    if (c.alignment.status !== 'mismatch' && ['missing_test', 'weak_test'].includes(c.status) && kept.filter((f) => f.kind === c.status && f.obligation_ids.includes(c.id)).length !== 1) {
+      notes.push(`Obligation ${c.id} marked unknown: needs exactly one ${c.status} finding.`);
+      demoted.add(c.id);
+      Object.assign(c, { status: 'unknown', reason: 'Inconsistent findings for this gap.' });
+    }
+  }
+  kept = kept.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !demoted.has(id)) })).filter((f) => f.kind === 'standard' || f.obligation_ids.length);
+  Object.assign(o, { coverage: rows, requirements: reqs, findings: kept, validation_notes: notes });
   return { ok: true };
 }
 
@@ -67,20 +291,67 @@ function anchor(f, maps, fileUsed = 0) {
 }
 
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
+// Requirement wording as plain text: a model quotes a criterion without its markdown (backticks, checkbox, emphasis, link syntax, heading #s)
+// and with straight quotes. Both sides of every requirement-quote comparison go through this; code citations stay exact (norm).
+const MARKER = /^[ \t]*(?:#{1,6}[ \t]+|>[ \t]?|(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)/gm;
+const plain = (s) => norm(String(s).replace(MARKER, '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`+/g, '').replace(/\*\*|__/g, '')
+  .replace(/(^|[^\w*])[*_](?=\S)|(?<=\S)[*_](?![\w*])/g, '$1').replace(/[‘’]/g, "'").replace(/[“”]/g, '"'));
 // An acceptance-criterion source is stabler than a quote: the model re-anchors the same finding on different lines between runs.
-const AC = /^(issue #\d+|PR body) AC \d+$/;
-const fingerprint = (kind, p, quote, source) => crypto.createHash('sha1').update(`${kind}\0${p}\0${AC.test(source) ? source : norm(quote)}`).digest('hex');
+// ponytail: AC-only means a new gap on the same AC and file at another line is hidden once the first is posted; add the line to the key if that bites.
+const AC = /^(issue (?:[\w.-]+\/[\w.-]+)?#\d+|PR body) AC \d+$/;
+const SPEC = /^(?=\S*[./])\S+ \S.*$/; // "docs/specs/pricing.md R3": a spec source keys on path + ref, never on line numbers
+const fingerprint = (kind, p, quote, ...sources) => {
+  const ac = sources.filter((s) => AC.test(s) || SPEC.test(s)).sort();
+  return crypto.createHash('sha1').update(`${kind}\0${p}\0${ac.length ? ac.join('\0') : norm(quote)}`).digest('hex');
+};
 
-// Line delta (0, -1, +1, ... up to +-5) that puts the quote on the cited line, or null. Never guesses.
+// Quote-first location: the model's line is only a hint. Returns the 1-based line that holds the quote, or 0. Never chooses among duplicates.
+//  1. the same text within +-5 lines of the hint (nearest first)   2. the one line in `all` with that text
+//  3. a quote of at least 20 non-space characters cut short: the hint line if it starts with the quote's first 20, else the one line in `all` that does.
+// at(l): text of line l (or undefined); all: candidate line numbers; ok(l): a line the caller can use. A trailing "..." or "…" is not part of the quote.
+const PREFIX = 20;
+function findLine(quote, hint, at, all = [], ok = () => true) {
+  const raw = norm(quote ?? ''), cut = norm(raw.replace(/\s*(?:\.\.\.|…)$/, ''));
+  const qs = [...new Set([raw, cut].filter(Boolean))];
+  if (!qs.length) return 0;
+  const text = (l) => norm(at(l) ?? ''), L = [...all], one = (hits) => (hits.length === 1 && ok(hits[0]) ? hits[0] : 0);
+  for (const q of qs) for (let d = 0; d <= 5; d++) for (const s of d ? [-d, d] : [0]) if (hint + s >= 1 && ok(hint + s) && text(hint + s) === q) return hint + s;
+  for (const q of qs) { const l = one(L.filter((x) => text(x) === q)); if (l) return l; }
+  for (const q of qs) {
+    let n = 0, i = 0;
+    for (; i < q.length && n < PREFIX; i++) if (q[i] !== ' ') n++;
+    if (n < PREFIX) continue;
+    const p = q.slice(0, i);
+    if (hint >= 1 && ok(hint) && text(hint).startsWith(p)) return hint;
+    const l = one(L.filter((x) => text(x).startsWith(p)));
+    if (l) return l;
+  }
+  return 0;
+}
+// Line delta that puts the quote on the cited line (see findLine), or null.
 function snap(f, lines) {
   if (!lines) return null;
-  const q = norm(f.quote);
-  if (!q) return null;
-  for (let d = 0; d <= 5; d++) for (const s of d ? [-d, d] : [0]) {
-    const at = f.line - 1 + s;
-    if (at >= 0 && at < lines.length && norm(lines[at]) === q && (f.start_line === undefined || f.start_line + s >= 1)) return s;
-  }
-  return null;
+  const l = findLine(f.quote, f.line, (x) => lines[x - 1], lines.map((_, i) => i + 1), (x) => f.start_line === undefined || f.start_line + (x - f.line) >= 1);
+  return l ? l - f.line : null;
+}
+// The finding with its quote replaced by the line's own text when the model gave a trimmed one (the verified text is what is posted and fingerprinted).
+const verified = (f, lines, line) => (norm(lines[line - 1]) === norm(f.quote) ? f : { ...f, quote: lines[line - 1].trim() });
+
+// One comment per kind, path, line and confidence (a low finding never rides on a high comment). One fingerprint per
+// merged comment from stable data only (kind, path, quote or the members' AC sources), so reruns dedupe without dropping findings.
+// A finding with a suggestion or a range is never merged: the block would replace a range it was not written for.
+function merge(fs_) {
+  const groups = new Map();
+  for (const [i, f] of fs_.entries()) { const k = `${f.kind}\0${f.path}\0${f.line}\0${f.confidence}${f.suggestion || f.start_line !== undefined ? `\0${i}` : ''}`; groups.set(k, [...(groups.get(k) || []), f]); }
+  return [...groups.values()].map((g) => ({
+    ...g[0],
+    fp: fingerprint(g[0].kind, g[0].path, g[0].quote, ...g.map((f) => f.source)),
+    ...(g.length > 1 && {
+    title: oneLine(g.map((f) => f.title).join('; '), 200),
+    body: g.map((f) => `**${f.title}**\n\n${f.body}`).join('\n\n---\n\n'),
+    obligation_ids: [...new Set(g.flatMap((f) => f.obligation_ids))],
+    }),
+  }));
 }
 
 // 1-based line of the rule text nearest to n, or 0. Never guesses.
@@ -89,6 +360,34 @@ function ruleLine(quote, lines, n) {
   let best = 0;
   if (q) lines.forEach((l, i) => { if (norm(l).includes(q) && (!best || Math.abs(i + 1 - n) < Math.abs(best - n))) best = i + 1; });
   return best;
+}
+
+// Quality gate: a code block with unresolved placeholders (<expected SQL>, TODO, a lone "...") is not a usable skeleton: keep the prose, drop the block.
+// Pure; returns { f, note } and leaves a validation note when it fires. Blind adjudication: all 4 such skeletons were judged unusable.
+const PLACEHOLDER_WORD = /^(?:expected|actual|sql|value|result|output|input|your|fill|placeholder|todo)(?![a-z])/i;
+function placeholder(code) {
+  const t = String(code).replace(/&lt;/g, '<');
+  if (/\bTODO\b/.test(t) || /^\s*(?:\.\.\.|…)\s*$/m.test(t)) return true;
+  // <expected SQL ...> or <some words>; not Foo<T> generics (preceded by a word), not comparisons (a < b), not single-word tags (<div>)
+  for (const m of t.matchAll(/(?<![\w)\]>])<([a-z_][^<>\n]{1,300})>/gi)) if (PLACEHOLDER_WORD.test(m[1]) || /^[a-z_]+(?: [a-z_]+){1,6}$/i.test(m[1])) return true;
+  return false;
+}
+function skeletonGate(f) {
+  const out = [];
+  let dropped = 0, open = null, buf = [];
+  const close = () => { if (placeholder(buf.slice(1, buf.length - (open.closed ? 1 : 0)).join('\n'))) dropped++; else out.push(...buf); open = null; };
+  for (const line of String(f.body).split(/\r?\n/)) {
+    const m = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (!open && m) { open = { ch: m[1][0], n: m[1].length }; buf = [line]; continue; }
+    if (!open) { out.push(line); continue; }
+    buf.push(line);
+    if (m && m[1][0] === open.ch && m[1].length >= open.n) { open.closed = true; close(); }
+  }
+  if (open) close(); // an unclosed fence runs to the end
+  const sug = f.kind === 'standard' && typeof f.suggestion === 'string' && placeholder(f.suggestion);
+  if (!dropped && !sug) return { f, note: '' };
+  const { suggestion, ...rest } = f;
+  return { f: { ...(sug ? rest : f), body: `${out.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n\n_Skeleton omitted: placeholder._` }, note: `Finding ${f.kind} ${f.path}:${f.line}: skeleton omitted: placeholder.` };
 }
 
 // Order, cap, and route findings. Summary items carry the reason they are there.
@@ -107,148 +406,990 @@ function plan(findings, maps, maxComments = 10) {
   return out;
 }
 
+// Reduced review: a fast-tier model or a struggling run gives weaker evidence, so it publishes less (never wrong beats complete).
+// ponytail: the triggers are the four cheap signals the engine step and validation already leave behind; add one here when a new failure mode shows up in telemetry.
+const REDUCED_INLINE = 3;
+function reducedReasons({ em, repair, engineNotes = [], data }) {
+  const out = [];
+  if (em?.tier === 'fast') out.push('fast-tier model');
+  if (repair === 'repaired' || repair === 'repair_failed') out.push(repair === 'repaired' ? 'the JSON needed a repair turn' : 'the JSON repair turn failed');
+  if (engineNotes.length >= 3) out.push(`${engineNotes.length} engine notes`);
+  // its own citations failed; a row only reached through an unverified requirement link is not counted
+  const bad = new Set((data.validation_notes || []).map((n) => /^Obligation (.+?) marked unknown: (?!The linked requirement)/.exec(n)?.[1]).filter(Boolean));
+  if (bad.size * 4 > data.coverage.length) out.push(`${bad.size} of ${data.coverage.length} obligations degraded by validation`);
+  return out;
+}
+// Verified citations behind a finding: the located behaviour, plus its test evidence or a linked requirement (a standard: its own line and the rule line).
+function citationsOf(f, data) {
+  if (f.kind === 'standard') return f.rule_source ? 2 : 1;
+  return Math.max(0, ...data.coverage.filter((c) => f.obligation_ids.includes(c.id))
+    .map((c) => (c.behaviour ? 1 : 0) + (c.evidence.length || data.requirements.some((r) => r.obligation_ids.includes(c.id)) ? 1 : 0)));
+}
+
 // Fenced block longer than any backtick run inside. A "suggestion" block is only valid on an inline range.
 function fence(lang, text) {
   const f = '`'.repeat(Math.max(3, ...(text.match(/`+/g) || []).map((r) => r.length + 1)));
   return `${f}${lang}\n${text}\n${f}`;
 }
+// A one-click suggestion replaces the quoted line, so it must be a single line for a single-line finding and carry nothing
+// the sanitiser would change (markup, mentions, images, invisible characters, secrets). Anything else is shown as plain text.
+const oneClick = (f) => typeof f.suggestion === 'string' && f.suggestion.length > 0 && f.suggestion.length <= 300
+  && !/[\n\r]/.test(f.suggestion) && !/[\n\r]/.test(f.quote || '') && f.start_line === undefined
+  && !/```|~~~/.test(f.suggestion) && neutralize(f.suggestion) === f.suggestion;
 const fix = (f, inline) => (f.kind === 'standard' && typeof f.suggestion === 'string' && f.suggestion
-  ? `\n\n${inline ? fence('suggestion', f.suggestion) : `Suggested fix:\n\n${fence('', f.suggestion)}`}` : '');
+  ? `\n\n${inline && oneClick(f) ? fence('suggestion', f.suggestion) : `Suggested fix (not applied automatically):\n\n${fence('', neutralize(f.suggestion))}`}` : '');
+const title1 = (t) => oneLine(neutralize(t).replace(/\s+/g, ' ').trim(), 200);
 
+// The one fixed hint on a test-gap comment: the mirror-test trap.
+const ADVICE = 'Take the expected value from the requirement or an independent literal, not from the code under test.';
+
+// kind and confidence stay machine-readable in a hidden comment (the eval graders and the fix-through telemetry read them); only the fp marker comes after it.
 function commentBody(f, fp, inline = true) {
-  const why = `kind: ${f.kind}, confidence: ${f.confidence}${f.rule_source ? `, rule: ${f.rule_source}` : ''}`;
-  return clean(`**${f.title}**\n\n${f.body}${fix(f, inline)}\n\n<details><summary>Why this was flagged</summary>\n\n${why}\n</details>\n\n<!-- specguard:fp=${fp} -->`);
+  const rule = f.rule_source ? `, rule: ${neutralize(f.rule_source).replace(/[<>\r\n]|--/g, ' ')}` : '';
+  // the trailer (suggestion, hint, hidden markers) is never cut: only the model's own text is truncated
+  const trailer = `${fix(f, inline)}${['missing_test', 'weak_test'].includes(f.kind) ? `\n\n${ADVICE}` : ''}\n\n<!--\nkind: ${f.kind}, confidence: ${f.confidence}${rule}\n-->\n<!-- specguard:fp=${fp} -->`;
+  return truncate(`**${title1(f.title)}${f.confidence === 'low' ? ' (low confidence)' : ''}**\n\n${neutralize(f.body)}`, BODY_MAX - trailer.length) + trailer;
 }
 
-const axes = (fs) => { const n = (k) => fs.filter((f) => f.kind === k).length; return `Tests: ${n('missing_test')} missing, ${n('weak_test')} weak · Standards: ${n('standard')} · Layering: ${n('pushdown')}`; };
+const axes = (fs) => { const n = (k) => fs.filter((f) => f.kind === k).length; return `Tests: ${n('missing_test')} missing, ${n('weak_test')} weak · Standards: ${n('standard')} · Layering: ${n('pushdown')}${n('spec_mismatch') ? ` · Spec: ${n('spec_mismatch')} mismatch` : ''}`; };
 const proven = (cov) => {
   const rows = cov.filter((c) => c.status !== 'needs_human');
-  return rows.length ? `Proven: ${rows.filter((c) => c.status === 'covered').length}/${rows.length} obligations` : '';
+  return rows.length ? `Unit evidence: ${rows.filter((c) => c.status === 'covered').length}/${rows.length} obligations (static review; tests not executed)` : '';
 };
-// Nothing found and nothing unproven: covered and needs_human rows are not gaps.
-const noGaps = (data) => !data.findings.length && data.coverage.every((c) => c.status === 'covered' || c.status === 'needs_human');
+const gapFree = (data) => !data.findings.length && !(data.validation_notes || []).length && data.coverage.length > 0 && !data.not_reviewed
+  && data.standards.status !== 'not_reviewed' && data.layering.status === 'checked'
+  && data.requirements.every((r) => r.obligation_ids.length > 0)
+  && (!data.tooling || ['passed', 'not_configured'].includes(data.tooling.status))
+  && data.coverage.every((c) => c.status === 'covered' && !['mismatch', 'unknown'].includes(c.alignment?.status));
+// The requirement text is read from the PR head, so a PR can weaken it and still be "consistent": never clean when it did.
+const reqChanged = (data) => data.requirements.some((r) => r.req_change || (r.reflected_in && r.reflected_in.spec));
+const noGaps = (data) => gapFree(data) && !reqChanged(data);
 
-const cell = (s) => redact(s).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
-const item = ({ f, why }) => `- **${f.title}** (\`${f.path}:${f.line}\`, ${f.kind}${why ? `, ${why}` : ''})\n\n  ${redact(f.body + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
+// Per obligation: a unit test gap (its own status or a finding on it), unit-evidenced, or left to a human / a higher layer.
+const gapIds = (fs_) => new Set(fs_.filter((f) => ['missing_test', 'weak_test'].includes(f.kind)).flatMap((f) => f.obligation_ids || []));
+const hasGap = (r, covById, gaps) => r.obligation_ids.some((id) => gaps.has(id) || ['missing_test', 'weak_test'].includes(covById.get(id)?.status));
+const STATE_LABEL = { missing_test: ['missing test', 'missing test'], weak_test: ['weak test', 'weak test'], needs_human: ['needs human review', 'need human review'], higher_level_only: ['higher-level only', 'higher-level only'], unknown: ['unknown', 'unknown'] };
+// A criterion split into several obligations is unit-evidenced only when every one is: "1/3 unit-evidenced, 2 need human review".
+const met = (r, covById, gaps) => {
+  const n = r.obligation_ids.length;
+  if (!n) return '';
+  const st = r.obligation_ids.map((id) => covById.get(id)?.status || 'unknown'), k = st.filter((x) => x === 'covered').length;
+  const rest = Object.keys(STATE_LABEL).map((x) => [x, st.filter((y) => y === x).length]).filter(([, c]) => c).map(([x, c]) => `${c} ${STATE_LABEL[x][c === 1 ? 0 : 1]}`);
+  return `${k}/${n} unit-evidenced${rest.length ? `, ${rest.join(', ')}` : ''}${k < n && hasGap(r, covById, gaps) ? ' (not fully covered)' : ''}. `;
+};
+// Criteria the model filed under not_reviewed as process or CI results ("npm test passes") are not requirements to assess: they stay in Not reviewed only.
+// Hidden: no obligations, and the model's own not_reviewed text names the criterion (its id or quote; the automatic "Requirement X is not assessed"
+// notes do not count), or it is CI-style wording while that text also talks CI. Wording alone never hides a criterion.
+const PROCESS = /\b(?:npm|yarn|pnpm|pytest|mvn|gradle|cargo|go|make)\s+(?:run\s+)?(?:test|build|lint|check)|\b(?:ci|build|lint(?:ing)?|pipeline|workflow|checks?|tests?)\s+(?:\w+\s+){0,2}(?:pass(?:es)?|succeeds?|green)\b|\bgreen\b/i;
+const reqRows = (data) => {
+  const text = data.requirements.filter((r) => !r.obligation_ids.length).reduce((t, r) => t.split(`Requirement ${r.id} is not assessed: ${r.reason}`).join(' '), data.not_reviewed || '');
+  if (!text.trim()) return data.requirements;
+  const n = norm(text).toLowerCase(), esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const said = (r) => (norm(r.quote || '') && n.includes(norm(r.quote).toLowerCase()))
+    || (/[A-Za-z]/.test(r.id) && new RegExp(`(^|[^\\w-])${esc(String(r.id))}(?![\\w-])`, 'i').test(text))
+    || (PROCESS.test(r.quote || '') && PROCESS.test(text));
+  return data.requirements.filter((r) => r.obligation_ids.length || !said(r));
+};
+const cell = (s, n = Infinity) => oneLine(neutralize(s), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+const item = ({ f, why }) => `- **${title1(f.title)}** (\`${cell(`${f.path}:${f.line}`)}\`, ${cell(f.kind)}${why ? `, ${cell(why)}` : ''})\n\n  ${(neutralize(f.body) + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
 
-function buildSummary({ status, data, items = [], partial, engine, model }) {
-  let s = `<!-- specguard:summary -->\n## SpecGuard\n\n${status}\n\n`;
-  if (engine) s += `_Engine: ${engine}${model ? ` (${model})` : ''}_\n\n`;
-  if (partial) s += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
-  if (data) {
-    s += `**Requirements source:** ${redact(data.requirements_source)}\n\n`;
-    if (data.coverage.length) {
-      s += '| Obligation | Source | Tests | Status |\n|---|---|---|---|\n';
-      for (const c of data.coverage) s += `| ${cell(c.obligation)} | ${cell(c.source)} | ${cell(c.tests.join(', '))} | ${c.status} |\n`;
-      s += '\n';
+// A requirement source is either exactly a collected document label or a repository path; nothing in between.
+const LABEL = /^(?:PR body|issue (?:[\w.-]+\/[\w.-]+)?#\d+|history (?:PR|issue) (?:[\w.-]+\/[\w.-]+)?#\d+)$/;
+const REMOVED = / [(]removed[)]$/;
+const specPath = (src) => !LABEL.test(String(src).replace(/ AC \d+$/, '')); // the source cites a repository file, not a PR/issue label
+// Normalised workspace-relative path, or null for anything absolute, parent-relative, backslashed or with control characters.
+function safeRel(p) {
+  if (typeof p !== 'string' || !p || /[\\\u0000-\u001F\u007F]/.test(p) || p.startsWith('/') || /^[A-Za-z]:/.test(p)) return null;
+  const segs = p.replace(/^(\.\/)+/, '').split('/');
+  return segs.some((s) => s === '' || s === '.' || s === '..') ? null : segs.join('/');
+}
+const safeRef = (s) => oneLine(neutralize(String(s).replace(/[\[\]()<>`*|\\]/g, '')).replace(/\s+/g, ' ').trim(), 60); // an identifier, not markup
+
+// Traceability rows: one per spec-sourced requirement and linked obligation. blob = permalink prefix at HEAD_SHA (no links when absent).
+function traceTable(data, blob, specFiles = [], covById = new Map(data.coverage.map((c) => [c.id, c]))) {
+  const link = (p, line, label) => {
+    const t = String(label).replace(/[\[\]]/g, '');
+    return blob && line ? `[${t}](${blob}/${p.split('/').map(encodeURIComponent).join('/')}#L${line})` : t;
+  };
+  const at = (c) => (c ? link(c.path, c.line, `${c.path}:${c.line}`) : '');
+  const rows = [];
+  let flagged = false;
+  for (const r of data.requirements) {
+    if (!specPath(r.source) || !r.obligation_ids.length) continue;
+    const removed = REMOVED.test(r.source), p = r.source.replace(REMOVED, '');
+    let req = removed ? `${p} ${r.ref || ''} (removed)` : link(p, r.line, `${p}${r.ref ? ` ${r.ref}` : ''}`);
+    const ch = r.req_change;
+    if (ch) {
+      flagged = true;
+      req += ch.kind === 'authored' ? ' ⚠ Requirement document authored in this PR (no base version)'
+        : ` ⚠ Requirement ${ch.kind === 'removed' ? 'removed' : ch.kind === 'added' ? 'added' : 'changed'} in this PR${ch.previous ? ` — was: "${oneLine(String(ch.previous).replace(/\s+/g, ' '), 160)}"` : ''}`;
     }
-    if (data.not_reviewed) s += `**Not reviewed:** ${redact(data.not_reviewed)}\n\n`;
+    for (const id of r.obligation_ids) {
+      const c = covById.get(id);
+      if (!c) continue;
+      const a = c.alignment, ri = r.reflected_in;
+      const kind = c.change && (specFiles.includes(c.change.path) ? 'spec' : 'code');
+      rows.push(`| ${cell(req)} | ${cell(c.change ? `${kind}: ${at(c.change)}` : 'none')} | ${cell(c.behaviour ? at(c.behaviour) : 'not located')} | ${cell(c.evidence.map((e) => at(e)).join('; ') || 'none')} | ${cell(`${a.status}${a.since ? ` (${a.since})` : ''}: ${a.reason}`, 600)} | ${ri ? cell(`spec ${ri.spec ? '✓' : '✗'}, tests ${ri.tests ? '✓' : '✗'}, PR ${ri.pr ? '✓' : '✗'}`) : 'n/a'} |`);
+    }
   }
-  if (items.length) s += `<details><summary>${items.length} more item(s): low confidence, inferred, overflow, unanchored</summary>\n\n${items.map(item).join('\n')}\n</details>\n`;
-  return clean(s);
+  if (!rows.length) return null;
+  const banner = flagged ? '> Requirement text was changed by this PR: consistency with the changed text does not prove the change itself is approved.\n\n' : '';
+  return { head: `**Traceability**\n\n${banner}| Requirement | Changed | Implementation | Tests | Alignment | Reflected in |\n|---|---|---|---|---|---|\n`, atoms: rows.map((x) => `${x}\n`) };
 }
 
-const readLines = (p) => {
-  try { return fs.readFileSync(path.join(process.env.GITHUB_WORKSPACE || process.cwd(), p), 'utf8').split('\n'); } catch { return null; }
+const MAX_ROWS = 30;
+// Files the collector left out of the diff (diff-dropped.txt, one path per line).
+const notReviewed = (paths) => `Not reviewed (diff over max_diff_kb): ${paths.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${paths.length > 10 ? `, … (+${paths.length - 10} more)` : ''}`;
+// ponytail: 1 nano-AIU = 1e-9 AI credit = $0.01 / credit (GitHub AI Credit price since 2026-06-01); update this one constant if GitHub reprices. The billing API stays authoritative.
+const USD_PER_AI_CREDIT = 0.01;
+const fin = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : undefined);
+const kM = (n) => (n < 1e3 ? String(n) : n < 1e6 ? `${(n / 1e3).toFixed(1)}k` : `${(n / 1e6).toFixed(1)}M`);
+// Sums two copilot usage files (the first turn and the repair turn): tokens per model and in total, credits, API time.
+function mergeUsage(a, b) {
+  const ok = (x) => x && typeof x === 'object' && !Array.isArray(x);
+  if (!ok(b)) return a;
+  if (!ok(a)) return b;
+  const add = (x, y) => (fin(x) ?? 0) + (fin(y) ?? 0), both = (x, y) => fin(x) !== undefined || fin(y) !== undefined;
+  const sum = (x, y, keys) => Object.fromEntries(keys.map((k) => [k, add(x?.[k], y?.[k])]));
+  const out = { ...a };
+  for (const k of ['totalNanoAiu', 'totalApiDurationMs']) if (both(a[k], b[k])) out[k] = add(a[k], b[k]);
+  if (ok(a.tokenDetails) || ok(b.tokenDetails)) out.tokenDetails = Object.fromEntries(['input', 'cache_read', 'cache_write', 'output'].map((k) => [k, { tokenCount: add(a.tokenDetails?.[k]?.tokenCount, b.tokenDetails?.[k]?.tokenCount) }]));
+  const ma = ok(a.modelMetrics) ? a.modelMetrics : {}, mb = ok(b.modelMetrics) ? b.modelMetrics : {};
+  out.modelMetrics = Object.fromEntries([...new Set([...Object.keys(ma), ...Object.keys(mb)])].map((n) => [n, { usage: sum(ma[n]?.usage, mb[n]?.usage, ['inputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'outputTokens']) }]));
+  return out;
+}
+// One small-print line: engine, model(s), tokens, cost, API time, then `notes` (effort, model fallback, JSON repair). `raw` is the Copilot usage JSON (--usage-output-file) or null; only numbers and model names are read from it.
+function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
+  const tok = (i, cr, cw, o) => { i = (fin(i) ?? 0) + (fin(cr) ?? 0) + (fin(cw) ?? 0); return { i, c: fin(cr) ?? 0, o: fin(o) ?? 0 }; };
+  const show = (t) => `${kM(t.i)} in${t.c ? ` (${kM(t.c)} cached)` : ''} · ${kM(t.o)} out`;
+  // copilot's per-model inputTokens already include cache read and write (tokenDetails.input is the uncached part): tok adds them back once
+  let models = [], total, usd, credits, ms;
+  const u = raw && typeof raw === 'object' ? raw : {};
+  if (engine === 'copilot') {
+    for (const [n, m] of Object.entries(u.modelMetrics || {})) { const x = m?.usage; if (x) models.push({ n, t: tok(Math.max(0, (fin(x.inputTokens) ?? 0) - (fin(x.cacheReadTokens) ?? 0) - (fin(x.cacheWriteTokens) ?? 0)), x.cacheReadTokens, x.cacheWriteTokens, x.outputTokens) }); }
+    const d = u.tokenDetails; if (d) total = tok(d.input?.tokenCount, d.cache_read?.tokenCount, d.cache_write?.tokenCount, d.output?.tokenCount);
+    if (fin(u.totalNanoAiu) !== undefined) { credits = u.totalNanoAiu / 1e9; usd = credits * USD_PER_AI_CREDIT; }
+    ms = fin(u.totalApiDurationMs);
+    if (!models.length && typeof u.currentModel === 'string') models = [{ n: u.currentModel }];
+  }
+  const nm = (s) => cell(s, 80);
+  const parts = [`Engine: ${nm(engine)}`], fast = tier === 'fast' ? ' (fast tier)' : ''; // used: the model(s) the engine step recorded (engine-model.json), more exact than the request
+  if (models.length > 1) parts.push(`Models: ${models.map((m) => `${nm(m.n)}${m.t ? ` (${show(m.t)})` : ''}`).join(', ')}${fast}`);
+  else if (used.length > 1) { parts.push(`Models: ${used.map(nm).join(', ')}${fast}`); const t = total || models[0]?.t; if (t) parts.push(`Tokens: ${show(t)}`); }
+  else {
+    const actual = used[0] || models[0]?.n, n = actual || model;
+    if (n) parts.push(`Model: ${nm(n)}${fast}${actual && model && actual !== model && !notes.some((x) => x.startsWith('model_fallback')) ? ` (requested ${nm(model)})` : ''}`);
+    const t = total || models[0]?.t;
+    if (t) parts.push(`Tokens: ${show(t)}`);
+  }
+  if (usd !== undefined) parts.push(`Cost ${engine === 'copilot' ? '≈ ' : ''}$${usd.toFixed(usd < 0.01 ? 4 : 2)}${credits !== undefined ? ` (${credits.toFixed(credits < 10 ? 2 : 1)} AI credits)` : ''}`);
+  if (ms !== undefined) parts.push(`API time ${ms < 6e4 ? `${(ms / 1e3).toFixed(1)}s` : `${Math.floor(ms / 6e4)}m${String(Math.round((ms % 6e4) / 1e3)).padStart(2, '0')}s`}`);
+  for (const x of notes) parts.push(nm(x));
+  return `<sub>${parts.join(' · ')}</sub>`;
+}
+// Fix-through telemetry (0 tokens). The outcome of an earlier finding, conservatively: nothing here is ever "fixed", only observed.
+//   dismissed: a person resolved the thread with neither the anchor nor any test changed, or 👎 outnumber 👍 by 2 (we add no reactions: all are people's)
+//   open: reported again; addressed: not reported and the author changed the anchored lines or any test file since the comment (first-parent, no base merges)
+//   not_observed: not reported, nothing observed to change, or unknown (could be a miss)
+const outcome = (p) => ((p.thread === 'human' && p.anchor_touched === false && p.tests_changed !== true) || p.down - p.up >= 2 ? 'dismissed' : p.still_reported ? 'open' : p.anchor_touched === true || p.tests_changed === true ? 'addressed' : 'not_observed');
+const COUNTS_MAX = 8192;
+// Hidden machine-readable line in the sticky summary. `outcomes` drops its oldest entries first to stay under COUNTS_MAX; the tally in `since` always covers all of them.
+function countsComment(c) {
+  const o = { ...c, outcomes: [...(c.outcomes || [])] };
+  const json = () => JSON.stringify(o).replace(/[<>]/g, (ch) => (ch === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d'); // can never close the HTML comment
+  while (json().length > COUNTS_MAX && o.outcomes.length) { o.outcomes.shift(); o.dropped = (o.dropped || 0) + 1; }
+  return `<!-- specguard:counts ${json()} -->`;
+}
+// Collapsed list of what the review read. Paths are repo-relative and come from the collector, not the model.
+function sourcesRead({ reqDocs = [], standards = [], trace, head, base, rejected = [] }) {
+  // an entry is a path, or { path, bytes, lines, truncated } for a standards file (size, line count, cut off in the prompt)
+  const one = (x) => (typeof x === 'string' ? `\`${cell(x)}\`` : `\`${cell(x.path)}\`${Number.isInteger(x.bytes) ? ` (${x.bytes} bytes, ${x.lines} lines${x.truncated ? '; truncated in prompt' : ''})` : x.truncated ? ' (truncated in prompt)' : ''}`);
+  const list = (a) => (a.length ? a.slice(0, 15).map(one).join(', ') + (a.length > 15 ? `, +${a.length - 15} more` : '') : 'none');
+  // candidate documents the collector looked at and did not admit as requirements: [path, reason]
+  const rej = rejected.slice(0, 10).map(([p, why]) => `- Considered, not admitted: \`${cell(p)}\` — ${cell(why)} (add to \`requirements_paths\` to include)\n`).join('') + (rejected.length > 10 ? `- +${rejected.length - 10} more considered, not admitted\n` : '');
+  return `<details><summary>Sources read</summary>\n\n- Requirement documents: ${list(reqDocs)}\n- Standards files: ${list(standards)}\n- Trace: ${cell(trace)}\n${rej}- Commits: head \`${cell(String(head).slice(0, 7))}\`, base \`${cell(String(base).slice(0, 7))}\`\n\n</details>\n`;
+}
+// One compact result line for a finding: where it is, what it is, why, linked to its inline comment when posted (else to the blob line).
+const sentence = (s) => { const t = neutralize(String(s)).replace(/```[\s\S]*?```/g, ' ').replace(/\s+/g, ' ').trim(); return oneLine((/^.*?[.!?](?=\s|$)/.exec(t) || [t])[0], 200); };
+const parens = (u) => u.replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
+const compact = (f, url, blob) => {
+  const label = neutralize(`${f.path}:${f.line}`).replace(/[\[\]]/g, '');
+  const to = /^https:\/\//.test(url || '') ? parens(url) : blob ? parens(`${blob}/${String(f.path).split('/').map(encodeURIComponent).join('/')}#L${f.line}`) : '';
+  return `- **${title1(f.title)}** — ${to ? `[${label}](${to})` : `\`${cell(`${f.path}:${f.line}`)}\``} · ${cell(f.kind)} · ${sentence(f.body)}\n`;
 };
+// The one-line verdict: results in goal order (unit tests, requirements, standards, layering). Counts cover every finding of this run, wherever it was delivered.
+function verdict(data, fs_) {
+  const n = (k) => fs_.filter((f) => f.kind === k).length;
+  const covById = new Map(data.coverage.map((c) => [c.id, c]));
+  const gaps = gapIds(fs_), reqs = reqRows(data);
+  const g = reqs.filter((r) => hasGap(r, covById, gaps)).length;
+  const h = reqs.filter((r) => r.obligation_ids.length && !hasGap(r, covById, gaps) && r.obligation_ids.some((id) => covById.get(id)?.status !== 'covered')).length;
+  const u = reqs.filter((r) => !r.obligation_ids.length).length;
+  const req = reqs.length && `Requirements: ${reqs.length} criteri${reqs.length === 1 ? 'on' : 'a'} · ${g} with a unit test gap${h ? ` · ${h} need human or higher-level review` : ''}${u ? ` · ${u} not assessed` : ''}${n('spec_mismatch') ? ` · ${n('spec_mismatch')} spec mismatch` : ''}`;
+  const std = data.standards.status === 'checked' ? (n('standard') ? `${n('standard')} finding${n('standard') === 1 ? '' : 's'}` : 'confirmed') : data.standards.status === 'no_rules' ? 'no rules' : 'not reviewed';
+  return [`Unit tests: ${n('missing_test')} missing, ${n('weak_test')} weak`, req, `Standards: ${std}`, `Pushdown: ${data.layering.status === 'checked' ? n('pushdown') : 'not reviewed'}`].filter(Boolean).join(' · ');
+}
+// Sections in goal order, which is also the importance order: unit test gaps, requirements, standards, layers, completeness, then collapsed reference
+// material. Each section's items are added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
+// posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
+function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier }) {
+  const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)];
+  if (data && !status) status = `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}${verdict(data, all)}`;
+  // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
+  let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}<!-- specguard:status=${state || (incomplete.length ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n${neutralize(status)}\n\n`;
+  if (reduced) head += `> Reduced review: ${reduced.reasons.map((r) => cell(r)).join('; ')} (model: ${cell(reduced.model || 'unknown', 80)}). Only high-confidence findings were posted inline.\n\n`;
+  if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
+  if (banner.length) head += `${banner.map((r) => `> ${cell(r)}`).join('\n')}\n\n`;
+  if (partial || dropped.length) head += `${partial ? '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.' : ''}${dropped.length ? `${partial ? '\n' : ''}> ${notReviewed(dropped)}` : ''}\n\n`;
+  const lintChanged = lint.changed || [];
+  if (rules.length || lintChanged.length) head += `> ${[rules.length && `This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`, lintChanged.length && `Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`].filter(Boolean).join(' ')}\n\n`;
+  if (traceNote) head += `> Traceability unavailable for this PR (${cell(traceNote)}).\n\n`;
+  const sn = counts && counts.complete && counts.since;
+  if (sn && counts.since_total) head += `<sub>Since earlier reviews${counts.prior_total > counts.since_total ? `, of the ${counts.since_total} most recent` : ''}: ${sn.addressed} addressed · ${sn.open} still open · ${sn.dismissed} dismissed · ${sn.not_observed} not observed (not proof of a fix)</sub>\n\n`;
+  if (resolveNote) head += `<sub>Threads for findings no longer reported were left open: ${resolveNote} (see README, resolve_stale).</sub>\n\n`;
+  const sections = []; // { g: group heading, h, atoms, tail }
+  let g = '';
+  const add = (h, atoms = [], tail = '') => sections.push({ g, h, atoms, tail });
+  const of = (kinds) => [...posted.filter((x) => kinds.includes(x.f.kind)).map((x) => compact(x.f, x.url, blob)), ...items.filter((x) => kinds.includes(x.f.kind)).map((x) => (x.brief ? `- **${title1(x.f.title)}** (\`${cell(`${x.f.path}:${x.f.line}`)}\`, ${cell(x.f.kind)}, ${cell(x.why)}) — ${sentence(x.f.body)}\n` : `${item(x)}\n`))];
+  const toolingAdd = () => tooling.status !== 'not_configured' ? add(
+`**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`,
+    (tooling.checks || []).map((c) => `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`), '\n')
+    : lint.count > 0 && add(`Lint/format tools are configured (${lint.count} file${lint.count === 1 ? '' : 's'}) but no \`standards_checks\` are set, so their results are not confirmed.\n\n`);
+  const appendix = [];
+  const reference = (h, atoms, tail) => appendix.push({ g: '', h, atoms, tail });
+  g = '### Unit test gaps\n\n';
+  add('', of(['missing_test', 'weak_test']), '\n');
+  if (data) {
+    const covById = new Map(data.coverage.map((c) => [c.id, c]));
+    g = '### Requirements\n\n';
+    add(`**Requirements source:** ${cell(data.requirements_source)}\n\n`);
+    if (reqChanged(data)) add('> Requirement changed in this PR: consistency with the changed text does not prove the change itself is approved.\n\n');
+    const reqs = reqRows(data), gaps = gapIds(all);
+    if (reqs.length) {
+      const assessed = reqs.filter((r) => r.obligation_ids.length), open = reqs.filter((r) => !r.obligation_ids.length);
+      const shown = [...assessed, ...open.slice(0, MAX_ROWS)];
+      add('| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n',
+        shown.map((r) => `| ${cell(r.id, 40)} | ${cell(`${r.source}: ${r.quote}`, 500)} | ${cell(r.obligation_ids.join(', ') || 'NOT ASSESSED')} | ${cell(`${met(r, covById, gaps)}${r.reason}`, 400)} |\n`),
+        open.length > MAX_ROWS ? `\n_+${open.length - MAX_ROWS} more NOT ASSESSED criteria not shown._\n\n` : '\n');
+    }
+    add('', of(['spec_mismatch']), '\n');
+    if (!data.coverage.length) add('**No obligations assessed.** This is not evidence that tests are sufficient.\n\n');
+    if (specFiles && !specFiles.length && !traceNote) add('No requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n');
+    g = '### Coding standards\n\n';
+    add(`**Coding standards: ${cell(data.standards.status)}.** ${cell(data.standards.reason)} Sources: ${cell(data.standards.sources.join(', ') || 'none')}.\n\n`, of(['standard']), '\n');
+    if (tooling) toolingAdd();
+    g = '### Test layers\n\n';
+    add(`**Test layers: ${cell(data.layering.status)}.** ${cell(data.layering.reason)}\n\n`, of(['pushdown']), '\n');
+    g = '';
+    if (data.not_reviewed) add(`**Not reviewed:** ${neutralize(data.not_reviewed)}\n\n`);
+  } else if (tooling) {
+    g = '### Coding standards\n\n';
+    toolingAdd();
+    g = '';
+  }
+  if (engine) add(`${usageLine({ engine, model, raw: usage, notes, used, tier })}\n\n`);
+  if (delivery && !/^0 inline, 0 file-level, 0 in summary$/.test(delivery)) add(`<sub>Comments: ${neutralize(delivery)}</sub>\n\n`);
+  if (data) {
+    const covById = new Map(data.coverage.map((c) => [c.id, c]));
+    if (data.coverage.length) {
+      reference(`<details><summary>Obligations (${data.coverage.length})${proven(data.coverage) ? ` · ${proven(data.coverage)}` : ''}</summary>\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n`,
+        data.coverage.map((c) => `| ${cell(`${c.id}: ${c.obligation}`, 500)} | ${cell(`${c.source}; ${c.behaviour ? `${c.behaviour.path}:${c.behaviour.line} — ${c.behaviour.quote}` : 'implementation not located'}`, 500)} | ${cell(c.evidence.map((e) => `${e.layer}: ${e.path}:${e.line} — ${e.quote} (${e.kind}${e.proves ? `; ${e.proves}` : ''})`).join('; ') || 'none', 800)} | ${cell(`${c.status}: ${c.reason}`, 500)} |\n`), '\n</details>\n\n');
+    }
+    const t = traceTable(data, blob, specFiles, covById);
+    if (t) reference(`<details><summary>Traceability (${t.atoms.length})</summary>\n\n${t.head}`, t.atoms, '\n</details>\n\n');
+  }
+  if (pre.length) reference('<details><summary>Pre-existing drift (not caused by this PR)</summary>\n\n', pre.map((f) => `${item({ f })}\n`), '</details>\n\n');
+  const vn = data?.validation_notes || [];
+  if (vn.length) reference(`<details><summary>Validation notes (${vn.length})</summary>\n\n`, vn.map((m) => `- ${neutralize(m).replace(/\s*\n\s*/g, ' ')}\n`), '</details>\n\n');
+  sections.push(...appendix);
+  const RESERVE = 200; // for the closing "(truncated)" line
+  let out = head, cut = false, lastG = '';
+  for (const { g: grp, h, atoms, tail } of sections) {
+    if (!atoms.length && !h) continue; // no findings of this kind
+    const gh = grp && grp !== lastG ? grp : '';
+    let body = '', n = 0;
+    for (const a of atoms) { if (out.length + gh.length + h.length + body.length + a.length + tail.length + RESERVE > BODY_MAX) break; body += a; n++; }
+    if (n < atoms.length || (!atoms.length && out.length + gh.length + h.length + RESERVE > BODY_MAX)) {
+      cut = true;
+      if (!n) continue;
+      body += `_+${atoms.length - n} more not shown._\n`;
+    }
+    out += gh + h + body + tail;
+    if (gh) lastG = grp;
+  }
+  const src = manifest && sourcesRead(manifest); // metadata: dropped before anything else, and never alongside a cut section
+  if (src && !cut && out.length + src.length + RESERVE <= BODY_MAX) out += src;
+  return clean(cut ? `${out}\n_(truncated: the summary exceeded the comment size limit; the most important sections come first)_\n` : out);
+}
+
+// Workspace file as lines. Never anything under .git/ or the collection context, never a path that escapes the workspace
+// (also after symlinks): those hold credentials and the collector's own state.
+const DENIED = /^(?:\.git|\.specguard-ctx)(?:\/|$)/i;
+const readFile = (p) => {
+  try {
+    const rel = safeRel(p);
+    if (!rel || DENIED.test(rel)) return null;
+    const root = fs.realpathSync(process.env.GITHUB_WORKSPACE || process.cwd());
+    const target = fs.realpathSync(path.resolve(root, rel));
+    const relative = path.relative(root, target);
+    if (!relative || relative.startsWith('..' + path.sep) || relative === '..' || path.isAbsolute(relative)) return null;
+    if (DENIED.test(relative.split(path.sep).join('/'))) return null;
+    if (process.env.CTX) { // the context directory, wherever it sits
+      let ctx = null;
+      try { ctx = fs.realpathSync(path.resolve(root, process.env.CTX)); } catch { /* no such directory: nothing to protect */ }
+      if (ctx && (target === ctx || target.startsWith(ctx + path.sep))) return null;
+    }
+    return fs.readFileSync(target, 'utf8').split(/\r?\n/);
+  } catch { return null; }
+};
+// Tracked files at the checked-out head (git ls-files), or null when git cannot say. Evidence, behaviour and finding citations
+// are only read from these: an untracked or ignored file is never something the PR changed or tests exercise.
+function trackedFiles(root) {
+  try { return new Set(execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter(Boolean)); }
+  catch { return null; }
+}
+
+// Verifies citations, not the model's semantic judgement. Never upgrades missing evidence.
+function verifyEvidence(data, reviewable, standards, read = readFile, maps = new Map()) {
+  // Corrects c.line (a hint) to where the quote is, by findLine: within +-5 lines, else the one line among `all` (candidate line numbers)
+  // holding it (e.g. when the model cited a diff.patch line number), else the one line starting with its first 20 non-space characters.
+  // Several matches or none keep the citation unverified. A trimmed quote is replaced by the line's own text.
+  const locate = (c, at, all = []) => {
+    const l = findLine(c.quote, c.line, at, all);
+    if (!l) return false;
+    c.line = l;
+    if (norm(at(l)) !== norm(c.quote)) c.quote = String(at(l)).trim();
+    return true;
+  };
+  const changed = (c) => (l) => maps.get(c.path)?.changed[c.side || 'RIGHT'].get(l);
+  const keys = (c) => maps.get(c.path)?.changed[c.side || 'RIGHT'].keys() || []; // the known (changed) line range of that side
+  const exact = (c) => {
+    const lines = c.side === 'LEFT' ? null : read(c.path);
+    return c.side === 'LEFT' ? locate(c, changed(c), keys(c)) : locate(c, (l) => lines?.[l - 1], lines ? lines.map((_, i) => i + 1) : []);
+  };
+  for (const c of data.coverage) {
+    const { change } = c, fails = []; // every citation is checked (locate corrects lines in place); the failures are named
+    const check = (label, x, pass) => { if (!pass) fails.push(`${label} ${x.path}:${x.line}`); };
+    if (change) check('changed line', change, reviewable.has(change.path) && locate(change, changed(change), keys(change)));
+    if (c.behaviour) check('behaviour', c.behaviour, exact(c.behaviour));
+    c.evidence.forEach((e, i) => check(`evidence ${i + 1}`, e, exact(e)));
+    if (fails.length) {
+      const why = `could not verify citation: ${fails.join('; ')}`;
+      c.status = 'unknown';
+      c.reason = `Could not verify the citation: ${fails.join('; ')}.`;
+      c.alignment = unknownAlign(`A citation could not be verified (${fails.join('; ')}).`);
+      (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${why}.`);
+    }
+  }
+  const invalid = new Set(data.coverage.filter((c) => c.status === 'unknown').map((c) => c.id));
+  data.findings = data.findings.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !invalid.has(id)) }))
+    .filter((f) => f.kind === 'standard' || f.obligation_ids.length);
+  settle(data, data.validation_notes ||= []);
+  if ((data.standards.status === 'no_rules' && standards.size) || data.standards.sources.some((s) => !standards.has(s))) {
+    data.standards = { status: 'not_reviewed', sources: [], reason: 'The standards assessment does not match the trusted rule inventory.' };
+    data.findings = data.findings.filter((f) => f.kind !== 'standard');
+    (data.validation_notes ||= []).push('Standards assessment does not match the trusted rule inventory; not reviewed.');
+  }
+  return data;
+}
+
+// 1-based first line of text where the (normalised) quote starts, or 0. Never guesses.
+function quoteLine(lines, quote) {
+  const q = plain(quote), qs = String(quote).split('\n').map(plain).filter(Boolean), N = lines.map(plain);
+  if (!qs.length) return 0;
+  const win = (i) => N.slice(i, i + qs.length + 6).join(' ').includes(q); // tolerates a quote wrapped over a few lines
+  return N.findIndex((l, i) => l && win(i) && !win(i + 1)) + 1; // the quote starts on the last line from which it still fits
+}
+
+// context.specFiles (optional): the trusted spec-files.txt allow-list. A requirement citing a repository file outside it is unlinked.
+function verifyRequirements(data, context, read = readFile) {
+  const allow = context.specFiles ? new Set(context.specFiles) : null;
+  const note = (s) => { data.not_reviewed = [data.not_reviewed, s].filter(Boolean).join(' '); };
+  const invalid = new Map(), unassessed = [], unverified = new Set(); // invalid: obligation id -> the requirement citation that failed; unverified: obligations behind a criterion whose wording is not in its source
+  const fail = (r, why) => r.obligation_ids.forEach((id) => invalid.set(id, `requirement ${r.id} ${r.source}${r.line ? `:${r.line}` : ''}: ${why}`));
+  const texts = new Map(); // normalised once per source, not once per criterion
+  const textOf = (key, get) => { if (!texts.has(key)) { const text = get(); texts.set(key, { text, n: plain(text), x: norm(text) }); } return texts.get(key); };
+  const byId = new Map(data.requirements.map((r) => [r.id, r]));
+  const docs = new Map();
+  for (const d of context.documents || []) if (!docs.has(d.source)) docs.set(d.source, d);
+  for (const expected of context.criteria || []) {
+    const r = byId.get(expected.id);
+    if (r) { if (!r.source) r.source = expected.source; if (!r.quote) r.quote = expected.quote; } // omitted by the model: the collected text is the trusted copy
+    if (!r) { if (!expected.optional) data.requirements.push({ id: expected.id, source: expected.source, quote: expected.quote, ...(expected.ref && { ref: expected.ref }), ...(expected.line && { line: expected.line }), obligation_ids: [], reason: 'Structured acceptance criterion was not assessed.' }); } // optional (history) criteria are never re-added
+    else if (!(r.source === expected.source || r.source.startsWith(`${expected.source} AC `) && /^\d+$/.test(r.source.slice(expected.source.length + 4))) || plain(r.quote) !== plain(expected.quote)) {
+      fail(r, 'its ID did not match the collected source text');
+      Object.assign(r, { source: expected.source, quote: expected.quote, obligation_ids: [], reason: 'Criterion ID did not match its collected source text.' });
+    } else { // "PR body AC 1" is accepted; the collected label and ref are canonical (the model's own ref is never trusted)
+      r.source = expected.source;
+      r.quote = expected.quote;
+      if (expected.ref) r.ref = safeRef(expected.ref); else delete r.ref;
+    }
+  }
+  for (const r of data.requirements) {
+    if (!r.source || !r.quote) { // an id with nothing to fill it from: not a collected criterion, so nothing to assess against
+      if (!context.unavailable) fail(r, 'its ID is not a collected criterion');
+      Object.assign(r, { source: r.source || '(not stated)', quote: r.quote || '(not stated)', obligation_ids: [], reason: 'Criterion ID is not a collected criterion.' });
+      unassessed.push(`Requirement ${r.id} is not assessed: ${r.reason}`);
+      continue;
+    }
+    const label = r.source.replace(/ AC \d+$/, '');// "PR body AC 3" -> the collected document label
+    const collected = docs.get(label);
+    // A source is exactly a collected document label, or a normalised repository path that the allow-list names (when there is one).
+    const file = safeRel(label.replace(REMOVED, ''));
+    const isPath = specPath(label);
+    const rejected = !collected && isPath && !(file && (!allow || allow.has(file)));
+    const T = rejected ? { text: '', n: '' } : textOf(collected ? `label:${label}` : `file:${file}`, () => (collected ? collected.text : isPath ? (read(file) || []).join('\n') : ''));
+    const has = (q) => { const p = plain(q); return !!p && T.n.includes(p); };
+    const found = !rejected && has(r.quote);
+    if (!found) {
+      if (rejected) fail(r, 'not a collected requirement document');
+      else if (!context.unavailable) r.obligation_ids.forEach((id) => unverified.add(id)); // the criterion is unassessed; the obligations' own citations are verified independently
+      r.obligation_ids = [];
+      r.reason = rejected ? 'The cited file is not a collected requirement document.' : 'Requirement wording not verified: the quote was not found in its source, so this criterion is not assessed.';
+    } else if (!T.x.includes(norm(r.quote))) { // matched only as plain text: store the source's own line when the quote is one whole line
+      const line = T.text.split(/\r\n|\r|\n/).find((l) => plain(l) === plain(r.quote));
+      if (line !== undefined) r.quote = line.replace(MARKER, '').trim();
+    }
+    if (found && specPath(label)) { // re-derive the line from the quote; a model-supplied line is never trusted
+      const at = quoteLine(T.text.split('\n'), r.quote);
+      if (at) { r.line = at; r.end = at + String(r.quote).split('\n').length - 1; } else delete r.line;
+    }
+    if (r.pr_quote !== undefined) { // a verified sentence from the PR body, else null
+      const pr = docs.get('PR body');
+      if (!(typeof r.pr_quote === 'string' && pr && plain(r.pr_quote) && textOf('label:PR body', () => pr.text).n.includes(plain(r.pr_quote)))) r.pr_quote = null;
+    }
+    if (!r.obligation_ids.length) unassessed.push(`Requirement ${r.id} is not assessed: ${r.reason}`);
+  }
+  if (unassessed.length) note(unassessed.slice(0, 10).join(' ') + (unassessed.length > 10 ? ` ${unassessed.length - 10} more requirements are not assessed.` : ''));
+  const linked = new Set(data.requirements.flatMap((r) => r.obligation_ids));
+  for (const c of data.coverage) if (unverified.has(c.id) && !invalid.has(c.id) && !linked.has(c.id) && c.alignment.status !== 'unknown') { // status and citations stand; only the alignment needs the requirement
+    (data.validation_notes ||= []).push(`Obligation ${c.id} alignment unknown: requirement wording not verified.`);
+    c.alignment = unknownAlign('Requirement wording not verified.');
+  }
+  for (const c of data.coverage) if (invalid.has(c.id)) {
+    const why = `The linked requirement citation could not be verified (${invalid.get(c.id)})`;
+    c.status = 'unknown'; c.reason = `${why}.`;
+    c.alignment = unknownAlign(`${why}.`);
+    (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${why}.`);
+  }
+  data.findings = data.findings.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !invalid.has(id)) }))
+    .filter((f) => f.kind === 'standard' || f.obligation_ids.length);
+  settle(data, data.validation_notes ||= []);
+  return data;
+}
+
+// Differential check: an 'introduced' mismatch/impacted becomes 'pre_existing' unless this PR touched the relation, i.e. the
+// requirement item's lines (either side), the behaviour line (RIGHT), or a change in the same hunk as the behaviour.
+// Cross-language keywords that are never a defined name. ponytail: tiny stoplist; upgrade = parse the declaration with the language's own tooling.
+const KW = new Set('return const let var function async await class this self true false null none nil else elif throw raise import from export public private static void string number bool int float then with while for if not and or new def func type'.split(' '));
+// Names a line DEFINES (assignment, declaration, object/keyword property, function or class head), not names it merely mentions.
+function definedNames(t) {
+  const s = String(t || ''), out = new Set();
+  for (const m of s.matchAll(/(?:^|[^\w.])([A-Za-z_]\w{2,})\s*(?::[^=\n]*)?=(?![=>])/g)) out.add(m[1]);
+  for (const m of s.matchAll(/(?:function|def|func|fn|class|let|var|const)\s+([A-Za-z_]\w{2,})/g)) out.add(m[1]);
+  for (const m of s.matchAll(/^\s*["']?([A-Za-z_]\w{2,})["']?\s*:(?!:)/g)) out.add(m[1]);
+  return [...out].filter((w) => !KW.has(w.toLowerCase()));
+}
+// True when the changed line defines a name the behaviour line uses (a constant defined away from its use).
+function definesUsedBy(change, behaviour) {
+  const b = String(behaviour || '');
+  return definedNames(change).some((w) => new RegExp('(?:^|[^\\w])' + w + '(?![\\w])').test(b));
+}
+
+function differential(data, maps) {
+  for (const c of data.coverage) {
+    const a = c.alignment;
+    if (!['mismatch', 'impacted'].includes(a.status) || !['introduced', 'pre_existing'].includes(a.since)) continue;
+    const specTouched = data.requirements.filter((r) => r.obligation_ids.includes(c.id)).some((r) => {
+      if (REMOVED.test(r.source)) return true;
+      const m = maps.get(r.source);
+      if (!m || !r.line) return false;
+      for (let l = r.line; l <= (r.end || r.line); l++) if (m.changed.RIGHT.has(l) || m.changed.LEFT.has(l)) return true;
+      return false;
+    });
+    const b = c.behaviour, ch = c.change, mb = b && maps.get(b.path);
+    const behaviourChanged = !!mb && mb.changed.RIGHT.has(b.line);
+    const hunk = mb && ch && ch.path === b.path ? (ch.side === 'LEFT' ? mb.LEFT : mb.RIGHT).get(ch.line) : undefined;
+    const linked = !!ch && !!b && definesUsedBy(ch.quote, b.quote); // a nearby edit only counts when it defines something the behaviour line uses
+    const sameHunk = linked && hunk !== undefined && hunk === mb.RIGHT.get(b.line);
+    // (d) the PR modified existing text (hunk has removed lines) at `change`, e.g. a constant defined away from its use.
+    // ponytail: (c) and (d) need `change` to DEFINE a name that `behaviour` uses (the constant defined away from its use). Misses an indirect change (a callee body); upgrade = the call graph.
+    const mc = ch && ch.side !== 'LEFT' && maps.get(ch.path), ch_h = mc && mc.changed.RIGHT.has(ch.line) ? mc.RIGHT.get(ch.line) : undefined;
+    const modified = linked && ch_h !== undefined && !data.requirements.some((r) => r.source === ch.path) && [...mc.LEFT.values()].includes(ch_h);
+    const touched = specTouched || behaviourChanged || sameHunk || modified;
+    if (a.since === 'introduced' && !touched) c.alignment = { ...a, since: 'pre_existing', reason: `${a.reason} (Downgraded to pre_existing: this PR changed neither the requirement nor the behaviour.)` };
+    else if (a.since === 'pre_existing' && touched) { // symmetric: a model-emitted pre_existing cannot hide drift this PR touched
+      c.alignment = { ...a, since: 'introduced', reason: `${a.reason} (Upgraded to introduced: this PR changed the requirement or the behaviour.)` };
+      (data.validation_notes ||= []).push(`Obligation ${c.id}: pre_existing claim overridden to introduced; the PR touched the requirement or the behaviour.`);
+    }
+  }
+}
+
+// Marks requirement rows whose text this PR changed (from the collected S criteria, else the spec item lines in the diff) or whose
+// document it authored. The requirement text is read from the PR head, so this is shown, never silently trusted.
+function markChanged(data, status) {
+  const crit = new Map(((status && status.criteria) || []).filter((c) => c.change).map((c) => [c.id, c]));
+  const added = new Set((status && status.spec && status.spec.added) || []);
+  for (const r of data.requirements) {
+    const label = r.source.replace(REMOVED, ''), c = crit.get(r.id);
+    if (added.has(label)) r.req_change = { kind: 'authored' };
+    else if (c && c.source === label) r.req_change = { kind: c.change, ...(c.previous && { previous: c.previous }) };
+    else if (r.reflected_in && r.reflected_in.spec) r.req_change = { kind: 'modified' };
+  }
+}
+
+// reflected_in per requirement with an assessed alignment: did the PR also update the spec, the tests, and say so in its description?
+function reflect(data, maps, reviewable) {
+  for (const r of data.requirements) {
+    const rows = data.coverage.filter((c) => r.obligation_ids.includes(c.id) && ['consistent', 'mismatch', 'impacted'].includes(c.alignment.status));
+    if (!rows.length) continue;
+    const m = maps.get(r.source);
+    let spec = REMOVED.test(r.source);
+    if (m && r.line) for (let l = r.line; l <= (r.end || r.line); l++) if (m.changed.RIGHT.has(l)) spec = true;
+    r.reflected_in = { spec, tests: rows.some((c) => c.evidence.some((e) => reviewable.has(e.path))), pr: typeof r.pr_quote === 'string' && r.pr_quote.length > 0 };
+  }
+}
+
+// Rename-aware maps (git diff -M) for the differential only: diff.patch is written with --no-renames, so a moved file would look wholly changed.
+function renameMaps(base, head, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 })) {
+  const out = new Map();
+  try {
+    const t = git('diff', '-M', '--name-status', '-z', `${base}...${head}`).split('\0');
+    for (let i = 0; i < t.length - 1;) {
+      if (!/^[RC]/.test(t[i++])) { i++; continue; }
+      const [from, to] = [t[i++], t[i++]];
+      out.set(to, parseDiff(git('diff', '-M', '--no-color', '--no-ext-diff', `${base}...${head}`, '--', from, to)).get(to) || parsePatch(''));
+    }
+  } catch { /* fall back to the plain maps */ }
+  return out;
+}
+
+// All review threads (first 300), each { id, isResolved, resolvedBy, comments: { nodes: [first two] } }. Throws on a GraphQL error.
+const THREADS_Q = 'query($o:String!,$r:String!,$n:Int!,$a:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$a){pageInfo{hasNextPage endCursor}nodes{id isResolved resolvedBy{login __typename} comments(first:2){nodes{author{login __typename} body}}}}}}}';
+async function fetchThreads({ github, owner, repo, number, maxThreads = 300 }) {
+  const nodes = [];
+  let after = null;
+  while (nodes.length < maxThreads) {
+    const t = (await github.graphql(THREADS_Q, { o: owner, r: repo, n: number, a: after })).repository.pullRequest.reviewThreads;
+    nodes.push(...t.nodes);
+    if (!t.pageInfo.hasNextPage) break;
+    after = t.pageInfo.endCursor;
+  }
+  return nodes;
+}
+
+// Resolve review threads whose only comment is our own bot comment for a finding this run no longer reports. Any failure is a limitation note, never a run failure.
+// threads: the already fetched thread list (the telemetry read), else fetched here.
+async function resolveStale({ github, core, owner, repo, number, current, actor = null, maxResolve = 20, threads }) {
+  try {
+    const stale = [];
+    for (const th of threads || await fetchThreads({ github, owner, repo, number })) {
+      const cs = th.comments.nodes;
+      const m = cs.length === 1 && !th.isResolved && ours(cs[0].author, actor) && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(cs[0].body || '');
+      if (m && !current.has(m[1])) stale.push(th.id);
+    }
+    for (const threadId of stale.slice(0, maxResolve)) await github.graphql('mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{id}}}', { t: threadId });
+  } catch (e) {
+    core.warning(`SpecGuard: stale review threads could not be resolved: ${e.message}`);
+    // returns a short reason when the token itself is not allowed to resolve threads, so the summary can say why they stayed open
+    if (e.status === 403 || /Resource not accessible by integration/i.test(e.message)) return 'this token cannot resolve review threads';
+  }
+}
+
+// Did the author's own commits from `from` to `to` change a line of the old side of `file` in [start, end]? true / false, or null when git
+// cannot say (commit not fetched, shallow clone, the PR was rewritten so `from` is no ancestor, file deleted or renamed: not evidence about the anchor).
+// First-parent, non-merge commits only (a base branch merged into the PR is not the author's change); the range is followed through each commit in turn.
+// Whitespace-only edits do not count.
+function anchorTouched(from, to, file, start, end, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 26 })) {
+  if (!/^[0-9a-f]{7,64}$/i.test(String(from)) || !file || !(end >= 1)) return null;
+  try {
+    git('merge-base', '--is-ancestor', from, to);
+    const log = git('log', '--first-parent', '--no-merges', '--reverse', '-p', '-U0', '-w', '--no-color', '--no-ext-diff', '--no-renames', '--format=%x00', `${from}..${to}`, '--', file);
+    let s = start, e = end;
+    for (const d of log.split('\0')) {
+      if (/^(?:deleted file mode|\+\+\+ \/dev\/null)/m.test(d)) return null;
+      let shift = 0;
+      for (const m of d.matchAll(/^@@ -(\d+)(?:,(\d+))? \+\d+(?:,(\d+))? @@/gm)) {
+        const a = +m[1], n = m[2] === undefined ? 1 : +m[2], k = m[3] === undefined ? 1 : +m[3]; // n === 0: pure insertion after old line a
+        if (n ? a <= e && a + n - 1 >= s : a >= s && a < e) return true;
+        if ((n ? a + n - 1 : a) < s) shift += k - n; // wholly before the range: it moves
+      }
+      s += shift; e += shift;
+    }
+    return false;
+  } catch { return null; }
+}
+
+// Did the author's own commits from `from` to `to` (first-parent, no merges) change any test file? true / false, or null when git cannot say.
+const isTest = (p) => require('./trace').isTestPath(p); // lazily: trace.js requires this module
+function testsChanged(from, to, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 26 })) {
+  if (!/^[0-9a-f]{7,64}$/i.test(String(from))) return null;
+  try {
+    git('merge-base', '--is-ancestor', from, to);
+    return git('log', '--first-parent', '--no-merges', '--name-only', '--format=', '--no-renames', `${from}..${to}`).split('\n').some((p) => p && isTest(p));
+  } catch { return null; }
+}
+
+// fp -> its review thread (the latest when several share one), for threads whose first comment is ours.
+const threadsByFp = (threads, me) => {
+  const m = new Map();
+  for (const th of threads || []) {
+    const c = th.comments.nodes[0], f = c && ours(c.author, me) && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || '');
+    if (f) m.set(f[1], th);
+  }
+  return m;
+};
+
+// One record per earlier SpecGuard finding (priors: Map fp -> REST review comment, oldest first). Only called on a complete run:
+// `survive` is then every fingerprint still reported. Each lookup failing degrades that field to unknown, never the run.
+function followUp({ priors, survive, me, headSha, cwd, threads }) {
+  const byFp = threadsByFp(threads, me);
+  const out = [];
+  for (const [fp, c] of [...priors].slice(-HARD_CAP)) {
+    const roll = c.reactions || {}, n = (k) => (Number.isInteger(roll[k]) ? roll[k] : 0); // we add no reactions: every one is a person's
+    const th = byFp.get(fp);
+    const link = /\]\(https?:\/\/[^)\s]*\/blob\/[0-9a-f]+\/[^)\s]*#L(\d+)(?:-L(\d+))?\)/.exec(c.body || ''); // a file-level comment names its lines only in this link
+    const end = c.original_line ?? (link ? +(link[2] || link[1]) : null), start = c.original_start_line ?? (link ? +link[1] : end);
+    const rec = {
+      fp, kind: (/kind: (\w+), confidence/.exec(c.body || '') || [])[1] || null, still_reported: survive.has(fp),
+      anchor_touched: anchorTouched(c.original_commit_id, headSha, c.path, start, end, cwd),
+      tests_changed: testsChanged(c.original_commit_id, headSha, cwd),
+      thread: !th ? 'unknown' : !th.isResolved ? 'open' : th.resolvedBy && ours(th.resolvedBy, me) ? 'specguard' : 'human', up: n('+1'), down: n('-1'),
+    };
+    out.push({ ...rec, outcome: outcome(rec) });
+  }
+  return out;
+}
 
 async function run({ github, context, core }) {
   const { owner, repo } = context.repo;
   const pr = context.payload.pull_request;
   if (!pr) return core.warning('SpecGuard: not a pull_request event');
   const env = process.env;
+  const summaryOnly = env.DELIVERY === 'summary'; // manual run: results go to the job summary only; nothing is ever written to the PR
   const ctx = env.CTX || '';
   const engine = env.ENGINE || '', model = env.MODEL || '';
   const partial = env.PARTIAL === 'true';
   const maxComments = Math.max(1, parseInt(env.MAX_COMMENTS, 10) || 10);
   const headSha = env.HEAD_SHA || pr.head.sha;
+  // '' when the PR is still open at our head; else why not. Not being able to tell is also a reason: nothing is posted then (no atomicity is claimed: a push can still land right after).
+  let livePR, rechecked = true;
+  const current = async () => {
+    try { livePR = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })).data; rechecked = true; }
+    catch (e) { rechecked = false; core.warning(`SpecGuard: could not recheck HEAD: ${e.message}`); return 'could not recheck HEAD'; }
+    return livePR.head.sha !== headSha ? 'superseded HEAD' : livePR.state === 'closed' && !summaryOnly ? 'PR is no longer open' : '';
+  };
+  const early = await current();
+  if (early && rechecked) return core.warning(`SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary
+  // Our login: the authenticated user (a PAT), else the login our earlier summary recorded (an App token cannot call /user), else null
+  // (GITHUB_TOKEN: github-actions[bot]). A null is replaced once, by the author of the first thing we post.
+  let who;
+  const actor = async () => {
+    if (who === undefined) {
+      try { who = (await github.rest.users.getAuthenticated()).data.login || null; }
+      catch {
+        try { who = recordedLogin(await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 })); } catch { who = null; }
+      }
+    }
+    return who;
+  };
+  const learn = (r) => { const l = r?.data?.user?.login; if (who === null && typeof l === 'string' && /^[\w-]+(?:\[bot\])?$/.test(l)) who = l; };
+  const stamp = (text) => (who ? text.replace('<!-- specguard:summary -->\n', (m) => `${m}<!-- specguard:by=${who} -->\n`) : text); // preflight reads it back
 
-  const publish = async (text) => {
+  const publish = async (text, state) => {
+    core.setOutput?.('status', state);
     await core.summary.addRaw(text).write();
+    if (summaryOnly) return;
     try {
+      const stop = await current();
+      if (stop) return core.warning(`SpecGuard: ${stop}; summary comment not updated`);
       const cs = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 });
-      const mine = cs.find((c) => c.body && c.body.includes('<!-- specguard:summary -->') && c.user && c.user.type === 'Bot');
-      if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body: text });
-      else await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: text });
+      const me = await actor();
+      const mine = cs.find((c) => ours(c.user, me) && typeof c.body === 'string' && c.body.startsWith('<!-- specguard:summary -->'));
+      const r = mine ? await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body: stamp(text) })
+        : await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: stamp(text) });
+      if (who === null) { // first contact with an unknown identity: record it in the summary
+        learn(r);
+        const id = mine?.id ?? r?.data?.id;
+        if (who && id) await github.rest.issues.updateComment({ owner, repo, comment_id: id, body: stamp(text) });
+      }
     } catch (e) { core.warning(`SpecGuard: could not post summary comment: ${e.message}`); }
   };
 
-  if (env.SKIP === 'true') return publish(buildSummary({ status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }));
-  const failed = (why) => publish(buildSummary({ status: `Could not complete: ${why}`, engine, model, partial }));
+  let rules = [];
+  try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
+  const ctxLines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
+  const lint = { count: ctxLines('lint-configs.txt').length, changed: ctxLines('lint-changes.txt') }; // linter/formatter configs at base; those the PR changes
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
+  const target = env.STANDARDS_REF || 'head';
+  const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
+  const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
+    : { status: 'unavailable', ref: '', checks: [], reason: target === 'merge' ? 'PR has no current test-merge commit' : 'Configured standards ref must be head or an available current merge commit.' };
+  const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
+  let usage = null; // engine usage JSON (tokens, cost); shown on every summary that ran the engine, including failed runs
+  try { usage = JSON.parse(readCtx('usage.json')); } catch { /* no usage data */ }
+  if (engine === 'copilot') try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair turn */ }
+  const repair = (readCtx('engine-repair') || '').trim();
+  const notes = [...(readCtx('engine-notes') || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])]; // written by the engine step, never by the model
+  let em = null; try { em = JSON.parse(readCtx('engine-model.json')); } catch { /* absent or garbled: normal mode */ }
+  const strs = (xs) => [...new Set(xs.filter((x) => typeof x === 'string' && x))];
+  // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)
+  const used = Array.isArray(em?.used) && strs(em.used).length ? strs(em.used) : strs([usage?.currentModel, ...Object.keys(usage?.modelMetrics && typeof usage.modelMetrics === 'object' ? usage.modelMetrics : {})]), tier = em?.tier === 'fast' ? 'fast' : undefined;
+  const dropped = (readCtx('diff-dropped.txt') || '').split('\n').map((x) => x.trim()).filter(Boolean);
+  const failed = (why) => publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial, dropped, state: 'failed', used, tier }), 'failed');
+  // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
+  const incomplete = [];
+  const st = (readCtx('engine-status') || '').trim();
+  if (partial) incomplete.push('The diff exceeded `max_diff_kb` and was truncated; obligations outside the reviewed portion are unknown.');
+  if (dropped.length) incomplete.push(notReviewed(dropped));
 
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
-  catch (e) { return failed(`no valid findings.json (${e.code || 'parse error'}); see the job log`); }
+  catch (e) {
+    if (st === 'timeout') return failed(`the review timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; raise review_timeout_minutes or split the PR`);
+    if (st === 'failed') return failed('the review engine failed; see the job log');
+    return failed(`no valid findings.json (${e.code || 'parse error'}); see the job log`);
+  }
+  const proposed = Array.isArray(data?.findings) ? data.findings.length : 0; // what the model reported: a finding dropped or demoted later is a degrade, not a fix
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
+  // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
+  if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);
+  const addNote = (m) => { data.not_reviewed = [data.not_reviewed, m].filter(Boolean).join(' '); };
+  const memoed = (read) => { const m = new Map(); return (p) => (m.has(p) ? m : m.set(p, read(p))).get(p); }; // files do not change during a run
+  const root = env.GITHUB_WORKSPACE || process.cwd();
+  const tracked = trackedFiles(root);
+  if (!tracked) (data.validation_notes ||= []).push('Tracked files could not be listed; no workspace file was read as evidence.');
+  // citations (evidence, behaviour, findings, requirement files) are read only from files tracked at the checked-out head
+  const readLines = memoed((p) => { const rel = safeRel(p); return rel && tracked && tracked.has(rel) ? readFile(rel) : null; });
+  const readRule = memoed(readFile); // the trusted rule inventory may include base-restored files that are not tracked at head
+  data.tooling = tooling; // Always overwrite any model-supplied tooling claim.
 
-  const maps = new Map();
-  for (const f of await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 })) maps.set(f.filename, parsePatch(f.patch));
+  let local = '';
+  try { local = fs.readFileSync(path.join(ctx, 'diff.patch'), 'utf8'); } catch {}
+  const maps = parseDiff(local);
   const lines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
   const reviewable = new Set(lines('files.txt')), standards = new Set(lines('standards.txt'));
-
-  const known = new Set();
-  for (const c of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: pr.number, per_page: 100 })) {
-    const m = /specguard:fp=([0-9a-f]{40})/.exec(c.body || ''); // outdated comments have line=null: fingerprint only
-    if (m) known.add(m[1]);
+  if ([...reviewable].some((p) => !maps.has(p))) { // the API is the fallback only: it can fail under load
+    try {
+      for (const f of await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 })) if (!maps.has(f.filename)) maps.set(f.filename, parsePatch(f.patch));
+    } catch { (data.validation_notes ||= []).push('GitHub diff API unavailable; anchored with the local diff only.'); }
   }
+  // The trusted spec allow-list. trace-status says whether tracing ran: failed/unavailable means an EMPTY list (fail closed) and a visible
+  // notice; an absent list with no status is an older collector (no restriction, but paths are still normalised and tracked-only).
+  let specFiles, traceNote = '';
+  const traceStatus = (readCtx('trace-status') || '').trim(), listed = readCtx('spec-files.txt');
+  if (listed !== null) specFiles = listed.split('\n').filter(Boolean);
+  if (['failed', 'unavailable'].includes(traceStatus)) {
+    specFiles = [];
+    traceNote = traceStatus === 'failed' ? 'requirement tracing failed or timed out' : 'requirement tracing is not available';
+    incomplete.push(`Requirement tracing was not done: ${traceNote}.`);
+  } else if (traceStatus === 'off') specFiles = [];
+  let smap = null, sentries = []; // path -> scope; absent for older collectors, which skips the applicability check
+  try { sentries = JSON.parse(readCtx('standards-map.json')); smap = new Map(sentries.map((e) => [e.path, e.scope])); } catch { /* no map */ }
+  const cutInPrompt = standardsCut(ctx);
+  for (const l of (readCtx('collect-limits.txt') || '').split('\n').filter(Boolean)) addNote(l);
+  verifyEvidence(data, reviewable, standards, readLines, maps);
+  let requirements = null;
+  try { requirements = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')); verifyRequirements(data, { ...requirements, specFiles }, readLines); } catch { requirements = null; }
+  if (requirements) {
+    data.requirements_source = requirements.sources.join(', ') || 'unavailable; changed behaviour only';
+    if (requirements.status !== 'available') addNote((requirements.limitations || []).join(' '));
+    // What the collector did not collect. Not these: an empty PR body (a fact about the PR) and the capped requirements-index.md (the documents stay readable).
+    const lims = [...(requirements.limitations || []), ...(requirements.spec?.limitations || [])].filter((l) => !/^No requirement text available|^requirements-index\.md exceeded |^Referenced but not readable: |^Context trimmed: /.test(l));
+    if (lims.length) incomplete.push(`Requirement collection did not cover everything: ${lims.slice(0, 10).join(' ')}${lims.length > 10 ? ` (+${lims.length - 10} more)` : ''}`);
+  } else { // no collected documents: quotes verify only against files; unverifiable ones are unassessed but their obligations keep their own citations
+    verifyRequirements(data, { unavailable: true, specFiles }, readLines);
+    data.requirements_source = 'unavailable; changed behaviour only';
+    addNote('Requirement collection status unavailable.');
+    incomplete.push('Requirement collection status was unavailable; only changed behaviour was assessed.');
+  }
+  if (partial) addNote('Diff truncated; obligations outside the reviewed portion are unknown.');
+  const base = env.BASE_SHA || pr.base?.sha;
+  const dmaps = new Map([...maps, ...(base ? renameMaps(base, headSha, process.env.GITHUB_WORKSPACE || process.cwd()) : [])]);
+  differential(data, dmaps);
+  reflect(data, dmaps, reviewable);
+  markChanged(data, requirements);
+  const pre = new Set(data.coverage.filter((c) => ['mismatch', 'impacted'].includes(c.alignment.status) && c.alignment.since === 'pre_existing').map((c) => c.id));
+  const preExisting = []; // drift this PR did not cause: summary section only, never inline
+
+  const known = new Set(), priors = new Map(); // priors: fp -> our latest earlier comment with it, oldest first
+  let withheld = ''; // why inline comments cannot be posted safely
+  try {
+    const me = await actor();
+    for (const c of await github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: pr.number, per_page: 100 })) {
+      const m = /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || ''); // the marker is always last; outdated comments have line=null: fingerprint only
+      if (m && ours(c.user, me)) { known.add(m[1]); priors.delete(m[1]); priors.set(m[1], c); }
+    }
+  } catch (e) {
+    if (summaryOnly) core.warning(`SpecGuard: existing review comments could not be read: ${e.message}`);
+    else {
+    withheld = `existing review comments could not be listed (${e.status ? `${e.status}: ` : ''}${String(e.message).split('\n')[0]}), so inline comments were withheld to avoid duplicates`;
+    core.warning(`SpecGuard: ${withheld}`);
+    incomplete.push(`Delivery degraded: ${withheld}; the findings are in this summary.`);
+    }
+  }
+  if (summaryOnly) known.clear(); // nothing is posted, so no finding is "already posted": every one carries its full text here
+  let threads; // review threads (first 300), read once for the dedup below, the telemetry and the stale resolver
+  if (priors.size) {
+    try { threads = await fetchThreads({ github, owner, repo, number: pr.number }); }
+    catch (e) { core.warning(`SpecGuard: review threads could not be read: ${e.message}`); }
+    const me = await actor();
+    // a thread we resolved ourselves (its finding was absent from an earlier run) does not hide the finding when it is reported again; a person's resolution is respected
+    for (const [fp, th] of threadsByFp(threads, me)) if (th.isResolved && th.resolvedBy && ours(th.resolvedBy, me)) known.delete(fp);
+  }
+  const survive = new Set(); // fingerprints of every finding still present after validation, wherever it ends up (inline, summary, capped, unverifiable)
 
   const kept = [];
   let already = 0;
   const seen = new Set();
+  const cands = [];
+  const assessed = [];
   const unanchored = []; // items that failed to post or anchor; they go to the summary
+  const gate = (r) => { if (r.note) (data.validation_notes ||= []).push(r.note); return r.f; }; // quality gates only demote or trim; each leaves a validation note
   for (let f of data.findings) {
-    if (!maps.has(f.path) || !reviewable.has(f.path)) continue;
+    if (f.kind === 'spec_mismatch') {
+      const req = data.requirements.find((r) => r.obligation_ids.includes(f.obligation_ids[0]));
+      if (req && specPath(req.source) && req.ref) f = { ...f, source: `${req.source.replace(REMOVED, '')} ${req.ref}` };
+    }
+    survive.add(fingerprint(f.kind, f.path, f.quote, f.source)); // before any route or drop below
+    if (f.kind === 'spec_mismatch' && f.obligation_ids.every((id) => pre.has(id))) {
+      const rl = readLines(f.path), d = snap(f, rl);
+      if (d === null) addNote(`Finding citation did not match: ${f.path}:${f.line}.`); else preExisting.push({ ...verified(f, rl, f.line + d), line: f.line + d });
+      continue;
+    }
+    f = gate(skeletonGate(f));
+    if (f.side === 'LEFT') {
+      const ch = maps.get(f.path)?.changed.LEFT, l = f.kind !== 'standard' && reviewable.has(f.path) && ch ? findLine(f.quote, f.line, (x) => ch.get(x), ch.keys()) : 0;
+      if (l) {
+        const g = norm(ch.get(l)) === norm(f.quote) ? { ...f, line: l } : { ...f, line: l, quote: ch.get(l).trim() };
+        assessed.push(g);
+        unanchored.push({ f: g, why: 'removed test or assertion; location is on the LEFT side of the diff' });
+      } else addNote(`Removed-line citation could not be verified: ${f.path}:${f.line}.`);
+      continue;
+    }
+    if (!maps.has(f.path) || !reviewable.has(f.path)) {
+      const rl = readLines(f.path), d = f.kind !== 'standard' ? snap(f, rl) : null;
+      if (d !== null) {
+        assessed.push(f);
+        unanchored.push({ f: { ...verified(f, rl, f.line + d), line: f.line + d }, why: 'assertion outside the reviewed diff' });
+      } else addNote(`Finding location could not be verified: ${f.path}:${f.line}.`);
+      continue;
+    }
     if (f.kind === 'standard') {
       const m = /^(.+):(\d+)$/.exec(f.rule_source || '');
-      const rl = m && standards.has(m[1]) ? readLines(m[1]) : null;
+      const rl = m && standards.has(m[1]) ? readRule(m[1]) : null;
       const at = rl && ruleLine(f.rule_quote, rl, +m[2]);
+      if (at && smap?.get(m[1]) && !matches(smap.get(m[1]), f.path)) {
+        addNote(`Standards finding omitted: ${m[1]} does not apply to ${f.path} (its scope: ${smap.get(m[1]).join(', ')}).`);
+        continue;
+      }
       if (at) f = { ...f, rule_source: `${m[1]}:${at}` };
-      else if (!(f.confidence === 'low' && !f.rule_source)) continue; // inferred (no rule, low) stays; bad citations drop
+      else if (!(f.confidence === 'low' && !f.rule_source)) {
+        addNote(`Unverified standards finding omitted: ${f.title}.`);
+        continue;
+      }
     }
-    const d = snap(f, readLines(f.path));
-    if (d === null) { unanchored.push({ f, why: 'citation did not match the file' }); continue; }
-    const fp = fingerprint(f.kind, f.path, f.quote, f.source);
-    if (known.has(fp)) already++;
-    else if (!seen.has(fp)) { seen.add(fp); kept.push({ ...f, line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }), fp }); }
-  }
+    const rl = readLines(f.path), d = snap(f, rl);
+    if (d === null) {
+      addNote(`Finding citation did not match: ${f.path}:${f.line}.`);
+      continue;
+    }
+    const exact = [f.kind, f.path, f.line + d, f.title, f.body].join('\0'); // only a verbatim repeat is dropped
+    if (seen.has(exact)) continue;
+    seen.add(exact);
+    assessed.push(f);
+    cands.push({ ...verified(f, rl, f.line + d), line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }) });
 
-  const p = plan(kept, maps, maxComments);
+  }
+  const merged = merge(cands);
+  for (const f of merged) { survive.add(f.fp); known.has(f.fp) ? already++ : kept.push(f); } // a merged comment's fp covers all its members
+  // ponytail: a finding that validation/verification dropped (its citation or requirement link failed) cannot be fingerprinted like its comment was; hold all resolving instead of guessing.
+  const degraded = proposed > data.findings.length;
+
+  // Reduced review: only a high-confidence finding with two verified citations goes inline (at most REDUCED_INLINE); the rest are one-liners in the summary.
+  const reasons = reducedReasons({ em, repair, engineNotes: (readCtx('engine-notes') || '').split('\n').filter((x) => x.trim()), data }), reduced = reasons.length > 0;
+  const p = plan(reduced ? kept.filter((f) => f.confidence === 'high' && citationsOf(f, data) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
+  if (reduced) {
+    const brief = (f, why) => ({ f, why, brief: true });
+    p.summary = [...p.summary.map((x) => brief(x.f, x.why === 'over max_comments' ? 'reduced review: inline limit' : x.why)), ...p.file.map((f) => brief(f, 'reduced review: not inline')),
+      ...kept.filter((f) => !p.inline.includes(f) && !p.file.includes(f) && !p.summary.some((x) => x.f === f)).map((f) => brief(f, 'reduced review: not high confidence with two citations'))];
+    p.file = [];
+  }
   const comments = p.inline.map((f) => ({
-    path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp),
+    path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp, true),
     ...(f.start_line !== undefined && { start_line: f.start_line, start_side: 'RIGHT' }),
   }));
   const prov = proven(data.coverage);
-  const counts = `${comments.length} inline, ${p.file.length} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
-  const head = `<!-- specguard:review -->\nSpecGuard found ${axes(kept)}; ${counts}.${prov ? `\n${prov}.` : ''}\nEngine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
+  let inline = comments.length, filed = p.file.length;
+  const counts = () => `${inline} inline, ${filed} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
+  const head = `<!-- specguard:review -->\nSpecGuard found ${axes(assessed)}; ${counts()}.${prov ? `\n${prov}.` : ''}\nEngine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
 
-  if (comments.length) {
+  const stop = summaryOnly ? '' : withheld ? 'inline comments withheld: could not deduplicate' : await current(); // never post what cannot be deduplicated or what may be stale
+  if (summaryOnly) {
+    for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: 'summary only' });
+    inline = filed = 0;
+  } else if (stop) {
+    if (!withheld) { core.warning(`SpecGuard: ${stop}; no review published`); incomplete.push(`Delivery degraded: ${stop}; the review comments and PR summary were not updated (this text is the job summary).`); }
+    for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: withheld ? 'withheld: could not deduplicate' : `not posted: ${stop}` });
+    inline = filed = 0;
+  }
+  const urls = new Map(); // fp -> link to our comment, for the result lines in the summary
+  for (const [fp, c] of priors) if (c.html_url) urls.set(fp, c.html_url);
+  if (!stop && !summaryOnly && comments.length) {
     const post = (body, cs) => github.rest.pulls.createReview({ owner, repo, pull_number: pr.number, commit_id: headSha, event: 'COMMENT', body: clean(body), ...(cs && { comments: cs }) });
-    try { await post(head, comments); }
+    try {
+      const posted = await post(head, comments), reviewId = posted?.data?.id;
+      learn(posted);
+      try { for (const c of await github.paginate(github.rest.pulls.listCommentsForReview, { owner, repo, pull_number: pr.number, review_id: reviewId, per_page: 100 })) { const m = /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || ''); if (m && c.html_url) urls.set(m[1], c.html_url); } } catch { /* the blob line is the fallback link */ }
+    }
     catch (e) {
       if (e.status === 422) {
         try { await post(`${head}\n\nInline anchors were rejected; unanchored findings:\n\n${p.inline.map((f) => item({ f })).join('\n')}`); }
         catch (e2) { core.warning(`SpecGuard: review retry failed: ${e2.message}`); }
         p.inline.forEach((f) => unanchored.push({ f, why: 'anchor rejected' }));
+        inline = 0;
       } else {
         core.warning(`SpecGuard: could not post review (${e.status}): ${e.message}`);
         if (e.status === 403 || e.status === 404) p.inline.slice(0, 10).forEach((f) => core.warning(f.title, { file: f.path, startLine: f.start_line || f.line, title: `SpecGuard ${f.kind}` }));
         p.inline.forEach((f) => unanchored.push({ f, why: 'could not post' }));
+        inline = 0;
       }
     }
   }
-  for (const f of p.file) {
+  for (const f of stop || summaryOnly ? [] : p.file) {
     const range = f.start_line ? `#L${f.start_line}-L${f.line}` : `#L${f.line}`;
     const link = `${context.serverUrl}/${owner}/${repo}/blob/${headSha}/${f.path}${range}`;
     try {
-      await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
-    } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); }
+      const r = await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
+      learn(r);
+      if (r?.data?.html_url) urls.set(f.fp, r.data.html_url);
+    } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); filed--; }
   }
 
-  await publish(buildSummary({ status: `${noGaps(data) ? 'No test gaps found.' : `Reviewed: ${axes(kept)}; ${counts}.`}${prov ? `\n\n${prov}.` : ''}`, data, items: [...p.summary, ...unanchored], partial, engine, model }));
+  // Fix-through telemetry. Only a complete run can say an earlier finding is no longer reported: otherwise counts only (complete:false, no outcomes).
+  const complete = !incomplete.length && !degraded && !reduced; // a reduced run cannot say an earlier finding is gone
+  const me = await actor();
+  const outcomes = complete && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads }) : [];
+  const byKind = {};
+  const tally = (list, k) => list.forEach((f) => { (byKind[f.kind] ||= { posted: 0, already: 0, summary: 0 })[k]++; });
+  const unplaced = new Set(unanchored.map((x) => x.f));
+  tally(merged.filter((f) => known.has(f.fp)), 'already');
+  tally([...p.inline, ...p.file].filter((f) => !unplaced.has(f)), 'posted');
+  tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
+  const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
+  for (const o of outcomes) since[o.outcome]++;
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
+
+  const clean_ = noGaps(data) && !incomplete.length && !reduced, state = incomplete.length || reduced ? 'incomplete' : 'complete';
+  const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
+  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: summaryOnly ? '' : counts(), banner: summaryOnly ? ['Delivery: summary only (manual run; nothing was posted to the PR).', ...(livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [])] : [], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+    manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
+    rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
 
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { parsePatch, validate, anchor, snap, ruleLine, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps });
+Object.assign(module.exports, { reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

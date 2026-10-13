@@ -1,0 +1,13 @@
+{
+  "count": 0,
+  "specFiles": [
+    "README.md"
+  ],
+  "a": [
+    {
+      "path": "src/premium.ts",
+      "spec": "README.md",
+      "specLine": 7
+    }
+  ]
+}

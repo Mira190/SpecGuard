@@ -3,22 +3,42 @@ description: Requirement-aware PR reviewer that finds missing and weak unit test
 branding: { icon: shield, color: blue }
 
 inputs:
-  engine: { description: "auto | copilot | claude", default: auto }
-  claude_code_oauth_token: { description: "From `claude setup-token`. Selects the Claude engine.", default: "" }
-  anthropic_api_key: { description: "Alternative Claude credential.", default: "" }
+  engine: { description: "Review engine adapter: copilot (Copilot CLI, default) | copilot-sdk (Copilot SDK, opt-in; its GITHUB_TOKEN auth in Actions is unverified). Each is one script in src/engines/ (see src/engines/README.md).", default: copilot }
   copilot_token: { description: "Fallback fine-grained PAT (Copilot Requests). Empty = use the job token with permissions copilot-requests write.", default: "" }
   github_token: { description: "Token for collect and post (needs pull-requests write).", default: "${{ github.token }}" }
-  model: { description: "Model name passed to the engine CLI. Empty = engine default.", default: "" }
-  max_turns: { description: "Agent turn cap (Claude only for now).", default: "30" }
-  max_budget_usd: { description: "Spend cap per run (Claude only).", default: "2" }
+  model: { description: "Model name passed to the Copilot CLI. Empty = Copilot Auto. What is available depends on the token owner's plan; an unavailable model falls back to auto.", default: "" }
+  effort: { description: "Reasoning effort: empty (Copilot default) | low | medium | high | xhigh | max. Only passed with an explicit model other than auto.", default: "" }
+  auto_tier: { description: "Copilot Auto routing profile when model is empty or auto: intelligence | balance | efficiency | empty (Copilot default). Ignored, with a note, if the CLI or an org policy rejects it.", default: intelligence }
+  fast_models: { description: "Copilot: extra model names (exact, or /regex/; one per line or comma separated) to treat as fast-tier on top of the built-in name patterns (flash, mini, haiku, nano, lite, small).", default: "" }
+  copilot_max_ai_credits: { description: "Copilot soft cap on AI credits per turn (integer 30-2000). A Copilot run is one turn plus at most one repair turn on the same session, so the worst case per push is about twice this.", default: "60" }
   max_comments: { description: "Max inline comments (hard cap 30).", default: "10" }
   max_diff_kb: { description: "Diff size above which the review is partial.", default: "300" }
   ignore: { description: "Extra ignore globs, one per line, appended to the defaults.", default: "" }
+  standards_checks: { description: "Exact check:NAME or status:CONTEXT entries, one per line. Requires checks/statuses read permission. Empty means not configured.", default: "" }
+  standards_ref: { description: "head or merge: commit on which your lint/format jobs run. Defaults to head.", default: head }
+  requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes. Empty = content-based discovery only.", default: "" }
+  test_paths: { description: "Globs or folders (one per line; a !glob line excludes) that are the authoritative unit-test locations. Empty = discover test files by name and layout.", default: "" }
+  standards_paths: { description: "Globs (one per line) that add coding-standard or review-guideline documents, read from the base commit; a !glob line excludes.", default: "" }
+  trace: { description: "auto | off. auto traces requirement docs and code when any requirement doc is found.", default: auto }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
-  claude_version: { description: "Pinned @anthropic-ai/claude-code version (>= 2.1.205).", default: "2.1.290" }
+  copilot_sdk_version: { description: "Pinned @github/copilot-sdk version, used only with engine copilot-sdk.", default: "1.0.15" }
+  review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it.", default: "12" }
+  include_bots: { description: "true to review PRs opened by bots (skipped by default).", default: "false" }
+  resolve_stale: { description: "true to resolve SpecGuard's own unreplied review threads whose finding is no longer reported.", default: "true" }
+  force: { description: "true to review again although this head SHA already has a SpecGuard summary.", default: "false" }
+  ctx_retention_days: { description: "Days to keep the specguard-ctx debug artifact (diff, prompt context, raw engine output; repo readers can download it). 0 disables the upload.", default: "1" }
+  mode: { description: "pr (review a pull request) | audit (audit the checked-out repository against its requirement documents; run it on the default branch, on demand or on a schedule).", default: pr }
+  audit_max_requirements: { description: "Audit mode: most document blocks audited per run, taken in document order; the rest are listed under not reviewed (integer 1-500).", default: "80" }
+  audit_issue: { description: "Audit mode: true to also create or update one issue titled 'SpecGuard requirements audit' (needs issues write).", default: "false" }
+  delivery: { description: "pr (post the review and the summary comment to the PR) | summary (job summary only; nothing is written to the PR). For runs that review another repository (.github/workflows/specguard-run.yml).", default: pr }
+  repository: { description: "owner/name of the repository under review when the checkout is not the workflow's own repository (manual runs). Empty = the workflow's repository.", default: "" }
+  pr_number: { description: "PR number to review when the run is not a pull_request event (manual runs). Empty = the event's PR.", default: "" }
+  base_sha: { description: "Base commit of that PR (with pr_number). Empty = the event's.", default: "" }
+  head_sha: { description: "Head commit of that PR (with pr_number). Empty = the event's.", default: "" }
 
 outputs:
-  skip: { description: "true when nothing reviewable changed", value: "${{ steps.collect.outputs.skip }}" }
+  skip: { description: "true when nothing reviewable changed", value: "${{ steps.preflight.outputs.skip == 'true' && 'true' || steps.collect.outputs.skip }}" }
+  status: { description: "complete | incomplete | failed for the PR review; empty when skipped", value: "${{ steps.post.outputs.status }}" }
   partial: { description: "true when the diff was truncated", value: "${{ steps.collect.outputs.partial }}" }
 
 runs:
@@ -32,114 +52,174 @@ runs:
           exit 1
         fi
 
-    - id: collect
+    - name: Check mode
       shell: bash
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        MODE: ${{ inputs.mode }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        case "$MODE" in pr|audit) ;; *) echo "::error::mode must be pr or audit"; exit 1 ;; esac
+        # audit trusts the checked-out docs as requirements: never a PR head
+        [ "$MODE" != audit ] || case "$EVENT" in pull_request*) echo "::error::mode audit runs on workflow_dispatch or schedule, not on pull_request"; exit 1 ;; esac
+
+    # Closed PR, bot author or an already-reviewed head: skip before any model tokens are spent; the job stays green.
+    - id: preflight
+      if: inputs.mode == 'pr'
+      shell: bash
+      env:
+        HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
         GH_TOKEN: ${{ inputs.github_token }}
-        GH_REPO: ${{ github.repository }}
+        GH_REPO: ${{ inputs.repository || github.repository }}
+        INCLUDE_BOTS: ${{ inputs.include_bots }}
+        FORCE: ${{ inputs.force }}
+      run: node "$GITHUB_ACTION_PATH/src/preflight.js"
+
+    - id: collect
+      if: inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true'
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        GH_REPO: ${{ inputs.repository || github.repository }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         IGNORE_EXTRA: ${{ inputs.ignore }}
         MAX_DIFF_KB: ${{ inputs.max_diff_kb }}
+        REQ_PATHS: ${{ inputs.requirements_paths }}
+        STANDARDS_PATHS: ${{ inputs.standards_paths }}
+        TEST_PATHS: ${{ inputs.test_paths }}
+        TRACE: ${{ inputs.trace }}
       run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
-    - if: steps.collect.outputs.skip != 'true'
+    # Audit mode: requirement documents, rule files and test layout at the checked-out HEAD (src/audit-collect.js).
+    - id: audit_collect
+      if: inputs.mode == 'audit'
+      shell: bash
+      env:
+        CTX: ${{ github.workspace }}/.specguard-ctx
+        IGNORE_EXTRA: ${{ inputs.ignore }}
+        REQ_PATHS: ${{ inputs.requirements_paths }}
+        STANDARDS_PATHS: ${{ inputs.standards_paths }}
+        TEST_PATHS: ${{ inputs.test_paths }}
+        MAX_REQUIREMENTS: ${{ inputs.audit_max_requirements }}
+        AUDIT_BRANCH_GUARD: ${{ inputs.repository && inputs.repository != github.repository && 'off' || 'on' }} # the guard compares this workflow's ref; another repository is not on it
+      run: node "$GITHUB_ACTION_PATH/src/audit-collect.js"
+
+    - if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: 22
 
     - id: engine
-      if: steps.collect.outputs.skip != 'true'
+      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
-        WANT: ${{ inputs.engine }}
-        HAS_CLAUDE: ${{ inputs.claude_code_oauth_token != '' || inputs.anthropic_api_key != '' }}
-      run: |
-        case "$WANT" in
-          auto) [ "$HAS_CLAUDE" = true ] && e=claude || e=copilot ;;
-          claude)
-            [ "$HAS_CLAUDE" = true ] || { echo "::error::engine=claude needs claude_code_oauth_token (run 'claude setup-token') or anthropic_api_key"; exit 1; }
-            e=claude ;;
-          copilot) e=copilot ;;
-          *) echo "::error::engine must be auto, copilot or claude"; exit 1 ;;
-        esac
-        echo "engine=$e" >> "$GITHUB_OUTPUT"
-
-    # Engine steps never fail the job: post reports "could not complete" instead. Config errors above fail loudly.
-    - name: Review with Claude Code
-      if: steps.collect.outputs.skip != 'true' && steps.engine.outputs.engine == 'claude'
-      shell: bash
-      env: # no GitHub write token here
-        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
-        CTX: ${{ github.workspace }}/.specguard-ctx
-        VERSION: ${{ inputs.claude_version }}
+        ENGINE: ${{ inputs.engine }}
+        COPILOT_VERSION: ${{ inputs.copilot_version }}
+        SDK_VERSION: ${{ inputs.copilot_sdk_version }}
         MODEL: ${{ inputs.model }}
-        MAX_TURNS: ${{ inputs.max_turns }}
-        MAX_BUDGET: ${{ inputs.max_budget_usd }}
+        EFFORT: ${{ inputs.effort }}
+        AUTO_TIER: ${{ inputs.auto_tier }}
+        FAST_MODELS: ${{ inputs.fast_models }}
+        MAX_CREDITS: ${{ inputs.copilot_max_ai_credits }}
+        TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
-        npm install -g "@anthropic-ai/claude-code@$VERSION" >/dev/null || { echo "::warning::could not install claude-code@$VERSION"; exit 0; }
-        schema=$(jq -c . "$GITHUB_ACTION_PATH/src/findings.schema.json")
-        skill="$GITHUB_ACTION_PATH/skills/test-review"
-        # the model can only read the workspace, so inline the skill and its references
-        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
+        bash "$GITHUB_ACTION_PATH/src/validate-inputs.sh" || exit 1 # includes the engine allow-list
+        echo "engine=$ENGINE" >> "$GITHUB_OUTPUT"
 
-        Context directory (absolute path): $CTX
-        Your final answer must be JSON matching this schema: $schema"
-        # --tools (not --allowedTools) removes every tool but these; --setting-sources user skips the PR's hooks/MCP; never --bare (ignores the OAuth token)
-        claude -p "$PROMPT" --tools "Read,Grep,Glob" --setting-sources user --strict-mcp-config \
-          --settings '{"disableAllHooks":true}' --max-turns "$MAX_TURNS" --max-budget-usd "$MAX_BUDGET" \
-          --output-format json --json-schema "$schema" ${MODEL:+--model "$MODEL"} > "$CTX/claude.json" \
-          && jq -e '.structured_output | objects' "$CTX/claude.json" > "$CTX/findings.json" \
-          || echo "::warning::Claude review failed or returned no structured output"
-        exit 0
-
-    - name: Review with Copilot CLI
-      if: steps.collect.outputs.skip != 'true' && steps.engine.outputs.engine == 'copilot'
+    # The engine step never fails the job: post reports "could not complete" instead. Config errors above fail loudly.
+    - name: Run the review engine
+      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
+        ENGINE: ${{ steps.engine.outputs.engine }}
         COPILOT_GITHUB_TOKEN: ${{ inputs.copilot_token }}
         GITHUB_TOKEN: ${{ github.token }}
+        MODE: ${{ inputs.mode }}
+        CHECK: ${{ inputs.mode == 'audit' && 'audit' || '' }}
         CTX: ${{ github.workspace }}/.specguard-ctx
-        VERSION: ${{ inputs.copilot_version }}
+        COPILOT_VERSION: ${{ inputs.copilot_version }}
+        SDK_VERSION: ${{ inputs.copilot_sdk_version }}
         MODEL: ${{ inputs.model }}
+        EFFORT: ${{ inputs.effort }}
+        AUTO_TIER: ${{ inputs.auto_tier }}
+        FAST_MODELS: ${{ inputs.fast_models }}
+        MAX_CREDITS: ${{ inputs.copilot_max_ai_credits }}
+        TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
-        [ -n "$COPILOT_GITHUB_TOKEN" ] || unset COPILOT_GITHUB_TOKEN
-        npm install -g "@github/copilot@$VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$VERSION"; exit 0; }
-        schema=$(jq -c . "$GITHUB_ACTION_PATH/src/findings.schema.json")
-        skill="$GITHUB_ACTION_PATH/skills/test-review"
-        # the model can only read the workspace, so inline the skill and its references
-        PROMPT="$({ awk 'f>=2{print} /^---$/{f++}' "$skill/SKILL.md"; for r in "$skill"/references/*.md; do echo; echo "# references/${r##*/}"; echo; cat "$r"; done; })
-
-        Context directory (absolute path): $CTX
-        Your final answer must be JSON only, matching this schema: $schema"
-        # verify-in-S4: no documented turn-cap flag (timeout is the cap); tool names view,glob,grep and --output-format json (text kept) unconfirmed
-        # never --allow-all, --allow-all-paths, --yolo
-        timeout 12m copilot -p "$PROMPT" --available-tools view,glob,grep --allow-all-tools --no-ask-user -s \
-          ${MODEL:+--model "$MODEL"} > "$CTX/copilot.out" \
-          || echo "::warning::Copilot review failed (needs 'permissions: copilot-requests: write' or a copilot_token)"
-        node -e '
-          const fs = require("fs"), s = fs.readFileSync(process.argv[1], "utf8"), ok = (t) => { try { JSON.parse(t); return t; } catch {} };
-          const blocks = [...s.matchAll(/```json\s*\n([\s\S]*?)```/g)].map((m) => m[1]);
-          const j = ok(s) || blocks.reverse().map(ok).find(Boolean);
-          if (j) fs.writeFileSync(process.argv[2], j); else console.log("::warning::no JSON found in Copilot output");
-        ' "$CTX/copilot.out" "$CTX/findings.json"
+        if [ "$MODE" = audit ]; then skill="$GITHUB_ACTION_PATH/skills/spec-audit"; schema_file="$GITHUB_ACTION_PATH/src/audit.schema.json"
+        else skill="$GITHUB_ACTION_PATH/skills/test-review"; schema_file="$GITHUB_ACTION_PATH/src/findings.schema.json"; fi
+        # the model can only read the workspace, so inline the skill, the references that can matter and the per-PR context (src/prompt.js)
+        # a file, handed to the engine: the prompt is too big for one argument or environment variable (128 KiB on Linux)
+        PROMPT_FILE="$CTX/prompt.txt"
+        node "$GITHUB_ACTION_PATH/src/prompt.js" --skill "$skill" --ctx "$CTX" --schema "$schema_file" --mode "$MODE" > "$PROMPT_FILE" || { echo "::warning::could not assemble the review prompt"; echo failed > "$CTX/engine-status"; exit 0; }
+        # src/engines/<engine>.sh owns the install, the time budget, the model fallback and the safety flags (contract: src/engines/README.md)
+        PROMPT_FILE="$PROMPT_FILE" bash "$GITHUB_ACTION_PATH/src/engines/$ENGINE.sh" || exit 1
         exit 0
 
-    - if: ${{ !cancelled() }} # failures still report; a cancelled run (superseded push) posts nothing
+    - id: post
+      if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' }} # failures still report; a cancelled run (superseded push) posts nothing
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         MAX_COMMENTS: ${{ inputs.max_comments }}
+        RESOLVE_STALE: ${{ inputs.resolve_stale }}
         ENGINE: ${{ steps.engine.outputs.engine }}
         MODEL: ${{ inputs.model }}
         SKIP: ${{ steps.collect.outputs.skip }}
         PARTIAL: ${{ steps.collect.outputs.partial }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
+        BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
+        TARGET_REPO: ${{ inputs.repository }}
+        TARGET_PR: ${{ inputs.pr_number }}
+        DELIVERY: ${{ inputs.delivery }}
+        STANDARDS_CHECKS: ${{ inputs.standards_checks }}
+        STANDARDS_REF: ${{ inputs.standards_ref }}
+        REVIEW_TIMEOUT_MINUTES: ${{ inputs.review_timeout_minutes }}
       with:
         github-token: ${{ inputs.github_token }}
         retries: 3 # GitHub API 5xx (e.g. "diff temporarily unavailable") would otherwise drop the review
-        script: await require(process.env.ACTION_PATH + '/src/post.js')({github, context, core})
+        script: |
+          const env = process.env, t = require(env.ACTION_PATH + '/src/target.js')
+          // manual runs: the PR and repository come from inputs, not the event; delivery=summary also makes every write fail (a safety net beside post.js's own DELIVERY switch)
+          await require(env.ACTION_PATH + '/src/post.js')({ github: env.DELIVERY === 'summary' ? t.readOnly(github) : github, context: t.withTarget(context, env), core })
+
+    - if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && inputs.ctx_retention_days != '0' }} # raw engine output otherwise dies with the runner
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: specguard-ctx-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+        path: ${{ github.workspace }}/.specguard-ctx
+        retention-days: ${{ inputs.ctx_retention_days }}
+        if-no-files-found: ignore
+        include-hidden-files: true # the ctx dir is a dot-directory, which upload-artifact skips by default
+
+    # Audit mode: validate citations at HEAD, write the job summary (and with audit_issue the one audit issue), keep audit.json in the artifact.
+    - if: ${{ !cancelled() && inputs.mode == 'audit' }}
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CTX: ${{ github.workspace }}/.specguard-ctx
+        ENGINE: ${{ steps.engine.outputs.engine }}
+        MODEL: ${{ inputs.model }}
+        SKIP: ${{ steps.audit_collect.outputs.skip }}
+        AUDIT_ISSUE: ${{ inputs.audit_issue }}
+        TARGET_REPO: ${{ inputs.repository }}
+        TARGET_SHA: ${{ inputs.head_sha }}
+      with:
+        github-token: ${{ inputs.github_token }}
+        retries: 3
+        script: |
+          const env = process.env
+          await require(env.ACTION_PATH + '/src/audit-post.js')({ github, context: require(env.ACTION_PATH + '/src/target.js').withTarget(context, env), core })
+
+    - if: ${{ !cancelled() && inputs.mode == 'audit' && inputs.ctx_retention_days != '0' }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: specguard-audit-${{ github.run_attempt }}
+        path: ${{ github.workspace }}/.specguard-ctx
+        retention-days: ${{ inputs.ctx_retention_days }}
+        if-no-files-found: ignore
+        include-hidden-files: true

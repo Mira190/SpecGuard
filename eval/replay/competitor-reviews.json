@@ -1,0 +1,2887 @@
+{
+ "generated": "2026-10-09T03:28:01.723Z",
+ "method": "gh api pulls/{n}/reviews, pulls/{n}/comments, issues/{n}/comments --paginate; authors classified by login. Grades by reading comment text against bug_card. Excerpts <=300 chars.",
+ "repos": {
+  "tobymao/sqlglot": {
+   "last30_merged": {
+    "n": 30,
+    "from": "2026-10-06T13:32:11Z",
+    "to": "2026-10-09T01:44:21Z",
+    "prs_with_ai_reviewer": {
+     "copilot": 5
+    }
+   },
+   "last100_merged_2026": {
+    "n": 100,
+    "from": "2026-09-17T18:45:07Z",
+    "to": "2026-10-09T01:44:21Z",
+    "prs_with_bot": {
+     "copilot": 25,
+     "github-actions[bot]": 52
+    },
+    "note": "github-actions/codecov/codspeed/pkg-pr-new/cloudflare are CI or infra bots, not AI reviewers; pullfrog is an LLM review agent"
+   }
+  },
+  "rqlite/rqlite": {
+   "last30_merged": {
+    "n": 30,
+    "from": "2026-09-29T14:18:11Z",
+    "to": "2026-10-09T02:42:09Z",
+    "prs_with_ai_reviewer": {}
+   },
+   "last100_merged_2026": {
+    "n": 100,
+    "from": "2026-07-22T12:25:25Z",
+    "to": "2026-10-09T02:42:09Z",
+    "prs_with_bot": {
+     "gemini": 2
+    },
+    "note": "github-actions/codecov/codspeed/pkg-pr-new/cloudflare are CI or infra bots, not AI reviewers; pullfrog is an LLM review agent"
+   }
+  },
+  "middleapi/orpc": {
+   "last30_merged": {
+    "n": 30,
+    "from": "2026-10-01T05:58:07Z",
+    "to": "2026-10-09T02:36:03Z",
+    "prs_with_ai_reviewer": {
+     "pullfrog": 30
+    }
+   },
+   "last100_merged_2026": {
+    "n": 100,
+    "from": "2026-09-22T03:43:36Z",
+    "to": "2026-10-09T02:36:03Z",
+    "prs_with_bot": {
+     "pullfrog": 100,
+     "cloudflare-workers-and-pages[bot]": 35,
+     "pkg-pr-new[bot]": 97,
+     "codspeed[bot]": 98,
+     "codecov[bot]": 98
+    },
+    "note": "github-actions/codecov/codspeed/pkg-pr-new/cloudflare are CI or infra bots, not AI reviewers; pullfrog is an LLM review agent"
+   }
+  }
+ },
+ "prs": [
+  {
+   "pr": "tobymao/sqlglot#7641",
+   "url": "https://github.com/tobymao/sqlglot/pull/7641",
+   "roles": [
+    "bug:sqlglot-8514<-7641"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 4,
+    "inline": 5,
+    "conv": 7
+   },
+   "infra_bot_comments": 0,
+   "bug_judgement": {
+    "grade": "not_covered",
+    "reason": "no AI reviewer present (Copilot reviews in this repo first appear 2026-08-06; PR merged 2026-05-19)",
+    "evidence_url": null
+   }
+  },
+  {
+   "pr": "tobymao/sqlglot#8514",
+   "url": "https://github.com/tobymao/sqlglot/pull/8514",
+   "roles": [
+    "fix:sqlglot-8514<-7641"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 4,
+    "inline": 3,
+    "conv": 0
+   },
+   "infra_bot_comments": 1
+  },
+  {
+   "pr": "tobymao/sqlglot#7036",
+   "url": "https://github.com/tobymao/sqlglot/pull/7036",
+   "roles": [
+    "bug:sqlglot-8460<-7036"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 3,
+    "inline": 2,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "bug_judgement": {
+    "grade": "not_covered",
+    "reason": "no AI reviewer present",
+    "evidence_url": null
+   }
+  },
+  {
+   "pr": "tobymao/sqlglot#8460",
+   "url": "https://github.com/tobymao/sqlglot/pull/8460",
+   "roles": [
+    "fix:sqlglot-8460<-7036"
+   ],
+   "ai": {
+    "copilot": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "copilot-pull-request-reviewer[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "copilot",
+     "login": "copilot-pull-request-reviewer[bot]",
+     "kind": "review_summary",
+     "id": 5354169789,
+     "at": "2026-09-29T14:39:45Z",
+     "url": "https://github.com/tobymao/sqlglot/pull/8460#pullrequestreview-5354169789",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Copilot review overview ### 🟢 Approval recommended The implementation is focused, consistent with existing dialect metadata, and adequately tests the conversion boundaries. **Review effort:** Balanced **Findings:** None <details> <summary><strong>What changed in this PR</strong></summary> Adds d"
+    }
+   ],
+   "human": {
+    "reviews": 3,
+    "inline": 2,
+    "conv": 1
+   },
+   "infra_bot_comments": 0
+  },
+  {
+   "pr": "middleapi/orpc#2113",
+   "url": "https://github.com/middleapi/orpc/pull/2113",
+   "roles": [
+    "bug:orpc-2117<-2113"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5335423430,
+     "at": "2026-09-28T07:48:24Z",
+     "url": "https://github.com/middleapi/orpc/pull/2113#pullrequestreview-5335423430",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** Fixes an infinite hang when the handler `errors` constructor map is awaited or returned from an async handler. The proxy returned a constructor for every string key including `then`, making it a never-settling thenable; promise resolution against it bloc"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3,
+   "bug_judgement": {
+    "grade": "miss",
+    "reason": "Pullfrog \"No new issues\". It describes the over-broad unwrap-key behaviour change (toString/valueOf/... can no longer be constructors) but endorses it as the intended trade-off, so no defect was raised.",
+    "evidence_url": "https://github.com/middleapi/orpc/pull/2113#pullrequestreview-5335423430"
+   }
+  },
+  {
+   "pr": "middleapi/orpc#2117",
+   "url": "https://github.com/middleapi/orpc/pull/2117",
+   "roles": [
+    "fix:orpc-2117<-2113"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5360797396,
+     "at": "2026-09-30T02:30:38Z",
+     "url": "https://github.com/middleapi/orpc/pull/2117#pullrequestreview-5360797396",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — narrowed error-map key reservation plus its regression tests. - **Proxy guard narrowed to `then`** — `createORPCErrorConstructorMap` now returns the raw value only for symbols and the literal key `then`, dropping the `RECURSIVE_CLIENT_UNWRAP_KEYS` depe"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3
+  },
+  {
+   "pr": "middleapi/orpc#1961",
+   "url": "https://github.com/middleapi/orpc/pull/1961",
+   "roles": [
+    "bug:orpc-2107<-1961"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 5,
+     "inline": 2,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5038219620,
+     "at": "2026-08-27T07:21:57Z",
+     "url": "https://github.com/middleapi/orpc/pull/1961#pullrequestreview-5038219620",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ Minor suggestions only — the plugin is correct, well-tested, and consistent with existing plugin conventions. One robustness edge worth a look. **Reviewed changes** - **`PrototypePollutionProtectionHandlerPlugin`** — new `StandardHandlerPlugin` that prepends a client interceptor rejecting any m"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5038301638,
+     "at": "2026-08-27T07:32:09Z",
+     "url": "https://github.com/middleapi/orpc/pull/1961#pullrequestreview-5038301638",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ The new streaming-input guard is correct, well-tested, and consistent with the shared `override`/`wrapAsyncIterator` pattern. One previously-noted robustness edge remains open (see the existing thread on the recursion walk). **Reviewed changes** * **Streaming-input guard** — the interceptor now"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5038317396,
+     "at": "2026-08-27T07:34:12Z",
+     "url": "https://github.com/middleapi/orpc/pull/1961#pullrequestreview-5038317396",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ Docs-only change reviewed — one informational note on the removed \"Limitations\" section. **Reviewed changes** * **Removed the \"Limitations\" section** from the plugin docs page — dropping the \"defense in depth, not a substitute for safe code\" bullet and the \"rejection is all-or-nothing with a ge"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5038418742,
+     "at": "2026-08-27T07:47:51Z",
+     "url": "https://github.com/middleapi/orpc/pull/1961#pullrequestreview-5038418742",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": ""
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5038423806,
+     "at": "2026-08-27T07:48:34Z",
+     "url": "https://github.com/middleapi/orpc/pull/1961#pullrequestreview-5038423806",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. The prior recursion-thread concern is resolved; the iterative walk is correct and well-tested. **Reviewed changes** * **Iterative prototype-pollution walk** — replaced the recursive `containsPollutingKey` with an explicit-stack `while` loop. Semantically equivalent (same `We"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3869572372,
+     "at": "2026-08-27T07:21:56Z",
+     "url": "https://github.com/middleapi/orpc/pull/1961#discussion_r3869572372",
+     "path": "packages/server/src/plugins/prototype-pollution-protection.ts",
+     "state": null,
+     "excerpt": "This recursion has no depth bound, and on a schemaless procedure it may be the only deep recursion on the request path. I tested it: a nested-object body only 3000 levels deep parses fine with `JSON.parse` but overflows the stack here (`RangeError`). For a plugin whose whole job is to make the handl"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3869740780,
+     "at": "2026-08-27T07:47:51Z",
+     "url": "https://github.com/middleapi/orpc/pull/1961#discussion_r3869740780",
+     "path": "packages/server/src/plugins/prototype-pollution-protection.ts",
+     "state": null,
+     "excerpt": "Addressed in 1379f9e7 by replacing the recursion with an iterative, explicit-stack walk; deep-nesting tests added. <sup><a href=\"https://pullfrog.com\"></a>&nbsp;&nbsp;｜ [View workflow run](https://github.com/middleapi/orpc/actions/runs/33050941175/job/98446018270) ｜ via [Pullfrog](https://pullfrog.c"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "bug_judgement": {
+    "grade": "near",
+    "reason": "Pullfrog inline thread is on the same containsPollutingKey walk (unbounded recursion -> RangeError/500), a real but different defect; the array-named-key bypass in the bug card is not mentioned. Weak near: same function, different defect.",
+    "evidence_url": "https://github.com/middleapi/orpc/pull/1961#discussion_r3869572372"
+   }
+  },
+  {
+   "pr": "middleapi/orpc#2107",
+   "url": "https://github.com/middleapi/orpc/pull/2107",
+   "roles": [
+    "fix:orpc-2107<-1961"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5330309866,
+     "at": "2026-09-27T12:39:59Z",
+     "url": "https://github.com/middleapi/orpc/pull/2107#pullrequestreview-5330309866",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — the fix to array handling in the prototype pollution protection plugin, its tests, and the plugin docs. - **`prototype-pollution-protection.ts`** — the array fast-path is removed so arrays go through the same own-key checks as plain objects; traversal "
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3
+  },
+  {
+   "pr": "rqlite/rqlite#1722",
+   "url": "https://github.com/rqlite/rqlite/pull/1722",
+   "roles": [
+    "bug:rqlite-2533<-1722"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "bug_judgement": {
+    "grade": "not_covered",
+    "reason": "no bot reviewed (predates Gemini Code Assist on this repo, first seen 2025-04-04)",
+    "evidence_url": null
+   }
+  },
+  {
+   "pr": "rqlite/rqlite#2533",
+   "url": "https://github.com/rqlite/rqlite/pull/2533",
+   "roles": [
+    "fix:rqlite-2533<-1722"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 1,
+     "inline": 1,
+     "conversation": 1,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 3911612470,
+     "at": "2026-03-08T15:42:14Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2533#pullrequestreview-3911612470",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request introduces a new Raft configuration option `raft-commit-timeout`, renames `-raft-timeout` to `-raft-heartbeat-timeout` for clarity, and fixes a bug in the database layer where errors were not being propagated correctly. The changes are well-implemented, and the bug f"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2902005282,
+     "at": "2026-03-08T15:42:14Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2533#discussion_r2902005282",
+     "path": "CHANGELOG.md",
+     "state": null,
+     "excerpt": "![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg) There's a typo in `timeoout`. It should be `timeout`. ```suggestion - [PR #2532](https://github.com/rqlite/rqlite/pull/2532): Change `-raft-timeout` flag to `-raft-heartbeat-timeout`. ```"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "conversation",
+     "id": 4019281382,
+     "at": "2026-03-08T15:38:34Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2533#issuecomment-4019281382",
+     "path": null,
+     "state": null,
+     "excerpt": "## Summary of Changes Hello, I'm Gemini Code Assist[^1]! I'm currently reviewing this pull request and will post my feedback shortly. In the meantime, here's a summary to help you and other reviewers quickly get up to speed! This pull request refines the Raft consensus configuration by renaming an e"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0
+  },
+  {
+   "pr": "middleapi/orpc#2037",
+   "url": "https://github.com/middleapi/orpc/pull/2037",
+   "roles": [
+    "fix:orpc-2037<-2032"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 3,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5233292132,
+     "at": "2026-09-17T08:50:34Z",
+     "url": "https://github.com/middleapi/orpc/pull/2037#pullrequestreview-5233292132",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** - **Request span is now started active** — `TracingHandlerPlugin` opens the request span with `tracer.startActiveSpan(...)` and runs `next()` plus the streaming-body wrapping inside its callback, instead of the `startSpan` + `withActiveSpan` pair from #2"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5233297908,
+     "at": "2026-09-17T08:51:12Z",
+     "url": "https://github.com/middleapi/orpc/pull/2037#pullrequestreview-5233297908",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** (since prior review at `be9f807`) - **Whole request-span callback wrapped in one try/catch** — `59f0903` moves the entire `startActiveSpan` callback body under a single `try`, so failures while accessing `result.response.body` or building the async-itera"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5233346676,
+     "at": "2026-09-17T08:56:20Z",
+     "url": "https://github.com/middleapi/orpc/pull/2037#pullrequestreview-5233346676",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** (since prior review at `59f0903`) * **Static file tracing test double updated** — `2b809cfe` swaps the mocked tracer's `startSpan` for `startActiveSpan` in `static-file-handler-plugin.test.ts`, matching the now-active request span that `TracingHandlerPlu"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3
+  },
+  {
+   "pr": "rqlite/rqlite#1556",
+   "url": "https://github.com/rqlite/rqlite/pull/1556",
+   "roles": [
+    "bug:rqlite-2403<-1556"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "bug_judgement": {
+    "grade": "not_covered",
+    "reason": "no bot reviewed (predates Gemini Code Assist)",
+    "evidence_url": null
+   }
+  },
+  {
+   "pr": "rqlite/rqlite#2403",
+   "url": "https://github.com/rqlite/rqlite/pull/2403",
+   "roles": [
+    "fix:rqlite-2403<-1556"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0
+  },
+  {
+   "pr": "middleapi/orpc#1846",
+   "url": "https://github.com/middleapi/orpc/pull/1846",
+   "roles": [
+    "bug:orpc-1955<-1846"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4912404134,
+     "at": "2026-08-12T02:22:05Z",
+     "url": "https://github.com/middleapi/orpc/pull/1846#pullrequestreview-4912404134",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** - **New `SafeMethodCsrfProtectionHandlerPlugin`** (`packages/server/src/plugins/safe-method-csrf-protection.ts:20`) — a zero-config plugin that blocks `GET`/`HEAD` requests which are cross-site or `none`-site top-level navigations (`Sec-Fetch-Site` ∈ {`c"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4912409659,
+     "at": "2026-08-12T02:23:09Z",
+     "url": "https://github.com/middleapi/orpc/pull/1846#pullrequestreview-4912409659",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** Incremental review of commit `7c8a773` (`refactor(server): guard GET only and rename to GetMethodCsrfProtectionHandlerPlugin`) on top of the previously-approved `369be220`. - **Rename** `SafeMethodCsrfProtectionHandlerPlugin` → `GetMethodCsrfProtectionHa"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "bug_judgement": {
+    "grade": "miss",
+    "reason": "Pullfrog approved twice (\"No new issues\"); verifies the pre-routing 403 design as intended, never asks about unmatched paths falling through.",
+    "evidence_url": "https://github.com/middleapi/orpc/pull/1846#pullrequestreview-4912404134"
+   }
+  },
+  {
+   "pr": "middleapi/orpc#1955",
+   "url": "https://github.com/middleapi/orpc/pull/1955",
+   "roles": [
+    "fix:orpc-1955<-1846"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 3,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5018105576,
+     "at": "2026-08-25T11:02:12Z",
+     "url": "https://github.com/middleapi/orpc/pull/1955#pullrequestreview-5018105576",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ Minor suggestions only. **Reviewed changes** **Move GET-CSRF check from pre-routing to post-routing.** The plugin dropped its `routingInterceptor` + `after = ['~batch']` and now registers a regular `interceptor`, which the standard handler only runs after `resolveProcedure` matches. Requests ma"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5018117974,
+     "at": "2026-08-25T11:03:50Z",
+     "url": "https://github.com/middleapi/orpc/pull/1955#pullrequestreview-5018117974",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No new issues in the incremental changes — the two new commits are test-name renames only, no behavioral surface. **Reviewed changes (incremental)** The two new commits since the last review are test-name renames with no behavior change: - **`attribute cookie withholding to browsers in CSRF tes"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5018709881,
+     "at": "2026-08-25T12:12:22Z",
+     "url": "https://github.com/middleapi/orpc/pull/1955#pullrequestreview-5018709881",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** - **Sharpened the batch sub-request assertion.** The new commit replaces the loose `?? 200` sentinel with `expect(body[0].json.status).not.toBe(403)`, directly asserting the sub-request isn't the CSRF rejection and addressing the earlier nit. The CSRF te"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3852302506,
+     "at": "2026-08-25T11:02:12Z",
+     "url": "https://github.com/middleapi/orpc/pull/1955#discussion_r3852302506",
+     "path": "packages/server/src/plugins/get-method-csrf-protection.test.ts",
+     "state": null,
+     "excerpt": "The `?? 200` sentinel would make the assertion pass even if sub-request status is absent or mistyped, weakening the pin. Assert the actual value directly — `expect(body[0].json.status).toBe(200)` — since `deletePlanet`'s `toHaveBeenCalledOnce()` already pins that the procedure ran."
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3
+  },
+  {
+   "pr": "middleapi/orpc#1851",
+   "url": "https://github.com/middleapi/orpc/pull/1851",
+   "roles": [
+    "bug:orpc-2099<-1851"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 2,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4924792515,
+     "at": "2026-08-13T08:08:38Z",
+     "url": "https://github.com/middleapi/orpc/pull/1851#pullrequestreview-4924792515",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — this is the first Pullfrog review of the PR (prior run had none), covering the full feature plus the latest increment. The newest commit (`edebd65e`) refines the `mergeTwoLevels` loop to `for (const key in second)` with an `Object.hasOwn(first, key)` g"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "conversation",
+     "id": 5276883838,
+     "at": "2026-08-13T06:37:06Z",
+     "url": "https://github.com/middleapi/orpc/pull/1851#issuecomment-5276883838",
+     "path": null,
+     "state": null,
+     "excerpt": "**Run failed.** [View the logs →](https://github.com/middleapi/orpc/actions/runs/31674506117) <sup><a href=\"https://pullfrog.com\"></a>&nbsp;&nbsp;｜ [Rerun failed job ➔](https://pullfrog.com/trigger/middleapi/orpc/31674506117?action=rerun) ｜ [View workflow run](https://github.com/middleapi/orpc/actio"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "conversation",
+     "id": 5277540512,
+     "at": "2026-08-13T07:47:14Z",
+     "url": "https://github.com/middleapi/orpc/pull/1851#issuecomment-5277540512",
+     "path": null,
+     "state": null,
+     "excerpt": "**Run failed.** [View the logs →](https://github.com/middleapi/orpc/actions/runs/31677784415) <sup><a href=\"https://pullfrog.com\"></a>&nbsp;&nbsp;｜ [Rerun failed job ➔](https://pullfrog.com/trigger/middleapi/orpc/31677784415?action=rerun) ｜ [View workflow run](https://github.com/middleapi/orpc/actio"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "bug_judgement": {
+    "grade": "miss",
+    "reason": "Pullfrog \"No new issues\"; notes stacked object schemas with a differently-typed transform \"fail either way - not a regression\", i.e. considered the area and dismissed it.",
+    "evidence_url": "https://github.com/middleapi/orpc/pull/1851#pullrequestreview-4924792515"
+   }
+  },
+  {
+   "pr": "middleapi/orpc#2099",
+   "url": "https://github.com/middleapi/orpc/pull/2099",
+   "roles": [
+    "fix:orpc-2099<-1851"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5329355753,
+     "at": "2026-09-27T07:37:23Z",
+     "url": "https://github.com/middleapi/orpc/pull/2099#pullrequestreview-5329355753",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — the runtime fix, its client/AI-SDK mirrors, the updated docs, and the new/strengthened tests at `e2047db`: - **Server stacked input validation** (`procedure-client.ts:224`) — each schema after the first now validates `mergeTwoLevels(options.input, curr"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3
+  },
+  {
+   "pr": "middleapi/orpc#1705",
+   "url": "https://github.com/middleapi/orpc/pull/1705",
+   "roles": [
+    "bug:orpc-2098<-1705"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 9,
+     "inline": 4,
+     "conversation": 1,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    },
+    "copilot": {
+     "review_summary": 1,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "copilot-pull-request-reviewer[bot]",
+      "Copilot"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4744057860,
+     "at": "2026-07-21T11:30:38Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4744057860",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No critical issues — one minor API-surface note inline. **Reviewed changes** — added `tanstackQueryMeta`, `getTanstackQueryMeta`, and `ContractMetaPlugin` so base TanStack Query options and interceptors can be defined on a procedure contract and applied automatically as the default layer under "
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4744063675,
+     "at": "2026-07-21T11:31:25Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4744063675",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": ""
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4765383742,
+     "at": "2026-07-23T15:00:35Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4765383742",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ One minor suggestion inline. **Reviewed changes** — adds `tanstackQuery` for defining base TanStack Query options/interceptors on procedure contracts, and `ContractOptionsUtilsPlugin` for applying them automatically via the plugin system. Also refactors `router-utils.ts` to use a shared `mergeP"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4769586934,
+     "at": "2026-07-24T02:03:12Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4769586934",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "**Reviewed changes** — the new commit changes mixed object/function modifier merging from \"replace\" to \"compose,\" so a plain-object modifier now spreads into a function modifier's input rather than being discarded. - **Compose mixed object and function modifiers** — `mergeProcedureUtilsModifier` now"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4769724042,
+     "at": "2026-07-24T02:39:06Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4769724042",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No new issues — the refactor is clean. The one open thread from the prior review remains a pre-existing concern unrelated to this delta. **Reviewed changes** — refactored `isProcedureUtilsOptions` from a private function in `router-utils.ts` into an exported utility in `procedure-utils.ts` with"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4769745331,
+     "at": "2026-07-24T02:44:36Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4769745331",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "**Reviewed changes** — `isProcedureUtilsOptions` now accepts unknown keys instead of rejecting them, and the router-utils test for invalid scoped options was simplified and aligned with the new detection logic. - **`isProcedureUtilsOptions` allows unknown keys** — the loop skips unrecognized keys ra"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4769778588,
+     "at": "2026-07-24T02:53:14Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4769778588",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No new issues from this delta — the one open thread from a prior review (`9b1fdac`) remains unaddressed. **Reviewed changes** — tightened `isProcedureUtilsOptions` validation so interceptor array elements are checked for function type, and simplified the modifier-key check by removing a now-red"
+    },
+    {
+     "tool": "copilot",
+     "login": "copilot-pull-request-reviewer[bot]",
+     "kind": "review_summary",
+     "id": 4769853528,
+     "at": "2026-07-24T03:14:26Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4769853528",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Pull request overview Adds a contract-level configuration mechanism for the TanStack Query integration by storing “base” procedure utils options/interceptors in contract meta and applying them automatically when building router utils. This fits the `@orpc/tanstack-query` package by enabling reusa"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4777813070,
+     "at": "2026-07-25T01:06:02Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4777813070",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — refactored `mergeProcedureUtilsOptions` from per-key manual code to loop-based merging, added `undefined` reset semantics so explicit `undefined` on any interceptor or modifier key clears the base value, and switched `router-utils.ts` to use `mergeProc"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4777847132,
+     "at": "2026-07-25T01:22:57Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#pullrequestreview-4777847132",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — relocated `mergeProcedureUtilsOptions` unit tests from `meta.test.ts` to `procedure-utils.test.ts`, removed now-unnecessary `toArray` wrapping of interceptor values in `router-utils.ts`, and updated test assertions to reflect that `mergeProcedureUtilsO"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3621706869,
+     "at": "2026-07-21T11:30:37Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#discussion_r3621706869",
+     "path": "packages/tanstack-query/src/index.ts",
+     "state": null,
+     "excerpt": "```suggestion export { RouterUtilsPlugin, type RouterUtilsPlugin } from './plugin' export { CompositeRouterUtilsPlugin } from './plugin' // or keep the wildcard if `CompositeRouterUtilsPlugin` is intended to be public export * from './plugin' export * from './router-utils' export { createRouterUtils"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3621711689,
+     "at": "2026-07-21T11:31:25Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#discussion_r3621711689",
+     "path": "packages/tanstack-query/src/index.ts",
+     "state": null,
+     "excerpt": "Please ignore the code suggestion above — it included extra lines by mistake. I’m posting a corrected review comment separately. <sup><a href=\"https://pullfrog.com\"></a>&nbsp;&nbsp;｜ [View workflow run](https://github.com/middleapi/orpc/actions/runs/29825720436/job/88618499618) ｜ via [Pullfrog](http"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3639138667,
+     "at": "2026-07-23T15:00:35Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#discussion_r3639138667",
+     "path": "packages/tanstack-query/src/index.ts",
+     "state": null,
+     "excerpt": "ℹ️ `export * from './plugin'` now makes `CompositeRouterUtilsPlugin` part of the public API. It's an internal composition primitive that users shouldn't need to construct directly — they pass plain plugin arrays to `createTanstackQueryUtils`. Consider exporting only `RouterUtilsPlugin` explicitly or"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3642489175,
+     "at": "2026-07-24T02:03:11Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#discussion_r3642489175",
+     "path": "packages/tanstack-query/src/procedure-utils.ts",
+     "state": null,
+     "excerpt": "ℹ️ When `override` is a plain object, the wrapper `(options) => ({ ...override, ...options })` puts override's keys before options, so the base function's result (when base is a function) can overwrite override keys if they overlap. For example, a base function that sets `retry: 3` combined with ove"
+    },
+    {
+     "tool": "copilot",
+     "login": "Copilot",
+     "kind": "inline",
+     "id": 3642703579,
+     "at": "2026-07-24T03:14:25Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#discussion_r3642703579",
+     "path": "packages/tanstack-query/src/procedure-utils.ts",
+     "state": null,
+     "excerpt": "`mergeProcedureUtilsModifier` can violate the documented “override takes priority” behavior when `base` is a function and `override` is a plain object: the current composition uses `{ ...override, ...baseResult }`, so any keys produced by the base function will overwrite the override object on confl"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "conversation",
+     "id": 5033411265,
+     "at": "2026-07-21T11:31:52Z",
+     "url": "https://github.com/middleapi/orpc/pull/1705#issuecomment-5033411265",
+     "path": null,
+     "state": null,
+     "excerpt": "Heads-up: the inline suggestion in my review on `packages/tanstack-query/src/index.ts` was malformed — the suggested replacement included extra lines by mistake. Please ignore that suggestion entirely. The actual feedback is just a nit: `export * from './plugin'` now also makes `CompositeRouterUtils"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "bug_judgement": {
+    "grade": "miss",
+    "reason": "Nothing on meta interceptors dropped when utils define none. Real but different findings: Pullfrog and Copilot flagged object/function modifier priority in mergeProcedureUtilsModifier (procedure-utils.ts). Different function/file from the bug card region (router-utils.ts:101).",
+    "evidence_url": "https://github.com/middleapi/orpc/pull/1705#discussion_r3642703579"
+   }
+  },
+  {
+   "pr": "middleapi/orpc#2098",
+   "url": "https://github.com/middleapi/orpc/pull/2098",
+   "roles": [
+    "fix:orpc-2098<-1705",
+    "fix:orpc-2098<-1718"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5328737315,
+     "at": "2026-09-27T03:49:43Z",
+     "url": "https://github.com/middleapi/orpc/pull/2098#pullrequestreview-5328737315",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** - **Root cause fixed** — `createRouterUtilsInternal` built a per-procedure options object that always materialized every interceptor key, turning an unset key into an own property set to `undefined`. Since `mergeProcedureUtilsOptions` does `{ ...base, .."
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3
+  },
+  {
+   "pr": "middleapi/orpc#1718",
+   "url": "https://github.com/middleapi/orpc/pull/1718",
+   "roles": [
+    "bug:orpc-2098<-1718"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 4,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4770003289,
+     "at": "2026-07-24T04:00:45Z",
+     "url": "https://github.com/middleapi/orpc/pull/1718#pullrequestreview-4770003289",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> [!IMPORTANT] > `isProcedureUtilsOptions` incorrectly rejects function modifiers in scoped options — see inline comment. Otherwise looks solid. **Reviewed changes** — ports the contract-options-via-meta pattern to `@orpc/pinia-colada`, allowing base options and interceptors to be defined on procedu"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4770031951,
+     "at": "2026-07-24T04:09:01Z",
+     "url": "https://github.com/middleapi/orpc/pull/1718#pullrequestreview-4770031951",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "**Reviewed changes** — adds `UseMutationGlobalContext` to `UseMutationFnContext` so augmented global values are typed inside mutation interceptors, and documents the optimistic-update pattern via contract meta and global `onMutate`. - **`UseMutationFnContext` includes `UseMutationGlobalContext`** — "
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4770057583,
+     "at": "2026-07-24T04:16:19Z",
+     "url": "https://github.com/middleapi/orpc/pull/1718#pullrequestreview-4770057583",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "**Reviewed changes** — added a runtime test validating the optimistic-update-through-contract-meta pattern from the docs. - **New `meta.test.tsx`** — end-to-end test mount using Vue, Pinia Colada, `ContractOptionsUtilsPlugin`, and a global `onMutate` that injects router utils and a query cache into "
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4777886508,
+     "at": "2026-07-25T01:43:21Z",
+     "url": "https://github.com/middleapi/orpc/pull/1718#pullrequestreview-4777886508",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — adds `undefined` reset semantics to `mergeProcedureUtilsOptions`, tightens the merger API, and moves composition tests to the right module. - **`mergeProcedureUtilsOptions` supports explicit `undefined` reset** — a key set to `undefined` in the overrid"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3642828076,
+     "at": "2026-07-24T04:00:44Z",
+     "url": "https://github.com/middleapi/orpc/pull/1718#discussion_r3642828076",
+     "path": "packages/pinia-colada/src/procedure-utils.ts",
+     "state": null,
+     "excerpt": "⚠️ `isProcedureUtilsOptions` rejects function modifiers on modifier keys, but `ProcedureUtilsModifier<T>` = `Partial<T> | ((options: T) => T)` — functions are valid. When `options.scoped` has a function modifier like `{ queryOptions: (opts) => ({ ...opts, staleTime: 1000 }) }`, the guard returns `fa"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "bug_judgement": {
+    "grade": "miss",
+    "reason": "Pullfrog inline found a different real bug (isProcedureUtilsOptions rejects function modifiers); nothing on interceptors dropped from meta.",
+    "evidence_url": "https://github.com/middleapi/orpc/pull/1718#discussion_r3642828076"
+   }
+  },
+  {
+   "pr": "middleapi/orpc#1743",
+   "url": "https://github.com/middleapi/orpc/pull/1743",
+   "roles": [
+    "bug:orpc-1745<-1743"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 3,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4803439935,
+     "at": "2026-07-29T02:22:23Z",
+     "url": "https://github.com/middleapi/orpc/pull/1743#pullrequestreview-4803439935",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — headers in `detailed` input/output structures now flow through `OpenAPISerializer` instead of being strictly validated as `string | string[]`, matching how `query` and `body` values are handled. - **Add `serializeHeaders` utility** — new function seria"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4804939250,
+     "at": "2026-07-29T06:59:13Z",
+     "url": "https://github.com/middleapi/orpc/pull/1743#pullrequestreview-4804939250",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — `serializeHeaders` was rewritten between `d9285a4` and `27a17d6` with three refinements: - **Serialize array elements individually** — each element passes through `OpenAPISerializer` before filtering and string conversion, matching the behavior for sca"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4804999932,
+     "at": "2026-07-29T07:07:09Z",
+     "url": "https://github.com/middleapi/orpc/pull/1743#pullrequestreview-4804999932",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — `serializeHeaders` was refactored between `27a17d6` and `bb30c53a` for clarity: - **Serialize once, branch on the result** — the old code serialized array elements individually inside an early-return branch; the new code calls `serializer.serialize(val"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 1
+   },
+   "infra_bot_comments": 4,
+   "bug_judgement": {
+    "grade": "miss",
+    "reason": "Pullfrog \"No new issues\" x3; nothing on non-array values that serialize to arrays.",
+    "evidence_url": "https://github.com/middleapi/orpc/pull/1743#pullrequestreview-4803439935"
+   }
+  },
+  {
+   "pr": "middleapi/orpc#1745",
+   "url": "https://github.com/middleapi/orpc/pull/1745",
+   "roles": [
+    "fix:orpc-1745<-1743"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4805316153,
+     "at": "2026-07-29T07:43:01Z",
+     "url": "https://github.com/middleapi/orpc/pull/1745#pullrequestreview-4805316153",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — fixes header serialization so that only actual `Array` input values produce multi-value headers; non-array values whose serialized form happens to be an array (e.g. `Set`, `Map`, custom handlers) are now merged into a single comma-delimited line instea"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4
+  },
+  {
+   "pr": "middleapi/orpc#1766",
+   "url": "https://github.com/middleapi/orpc/pull/1766",
+   "roles": [
+    "bug:orpc-1913<-1766"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4838785093,
+     "at": "2026-08-02T14:30:25Z",
+     "url": "https://github.com/middleapi/orpc/pull/1766#pullrequestreview-4838785093",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — adds `catchORPCError` and `catchORPCErrorByCode` to `@orpc/experimental-effect` for recovering from `ORPCError` failures in an effect's error channel. - **`catchORPCError` / `catchORPCErrorByCode` (`error.ts`)** — two `Function.dual` utilities wrapping"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4838863471,
+     "at": "2026-08-02T14:55:30Z",
+     "url": "https://github.com/middleapi/orpc/pull/1766#pullrequestreview-4838863471",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — renames `catchORPCErrorByCode` to `catchORPCErrorCode` and adds `catchORPCErrorCodes` for multi-code recovery. - **Renamed `catchORPCErrorByCode` → `catchORPCErrorCode`** — aligns with Effect's `catchTag` naming convention, dropping the `By` prefix. Al"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "bug_judgement": {
+    "grade": "miss",
+    "reason": "Pullfrog \"No new issues\" x2; nothing on codes colliding with Object.prototype names.",
+    "evidence_url": "https://github.com/middleapi/orpc/pull/1766#pullrequestreview-4838785093"
+   }
+  },
+  {
+   "pr": "middleapi/orpc#1913",
+   "url": "https://github.com/middleapi/orpc/pull/1913",
+   "roles": [
+    "fix:orpc-1913<-1766"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4994088200,
+     "at": "2026-08-21T14:04:46Z",
+     "url": "https://github.com/middleapi/orpc/pull/1913#pullrequestreview-4994088200",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ One regression test cannot fail without its guard — minor. **Reviewed changes** - **`getOwn` helper (`@orpc/shared`)**: new `Object.hasOwn`-based property read returning `undefined` for inherited keys like `toString`, with targeted unit tests. - **Error-code lookups hardened at five sites**: `r"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4998694191,
+     "at": "2026-08-22T02:30:21Z",
+     "url": "https://github.com/middleapi/orpc/pull/1913#pullrequestreview-4998694191",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** - Dropped the unfalsifiable `does not resolve error codes through Object.prototype` regression test from `smart-coercion-link-plugin.test.ts` — it passed with or without the `getOwn` guard (no `Object.prototype` member carries `.data`), so it pinned noth"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3830857473,
+     "at": "2026-08-21T14:04:45Z",
+     "url": "https://github.com/middleapi/orpc/pull/1913#discussion_r3830857473",
+     "path": "packages/json-schema/src/smart-coercion-link-plugin.test.ts",
+     "state": null,
+     "excerpt": "This test passes even without the guard. I temporarily reverted `smart-coercion-link-plugin.ts:71` to `errorMap[error.code]?.data` and the test still passes (6/6): for a plain-object errorMap, `errorMap['toString']` resolves to `Object.prototype.toString` — truthy, but `.data` is `undefined`, so the"
+    }
+   ],
+   "human": {
+    "reviews": 1,
+    "inline": 1,
+    "conv": 0
+   },
+   "infra_bot_comments": 4
+  },
+  {
+   "pr": "tobymao/sqlglot#7054",
+   "url": "https://github.com/tobymao/sqlglot/pull/7054",
+   "roles": [
+    "bug:sqlglot-8474<-7054"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 4,
+    "inline": 4,
+    "conv": 0
+   },
+   "infra_bot_comments": 1,
+   "bug_judgement": {
+    "grade": "not_covered",
+    "reason": "no AI reviewer present",
+    "evidence_url": null
+   }
+  },
+  {
+   "pr": "tobymao/sqlglot#8474",
+   "url": "https://github.com/tobymao/sqlglot/pull/8474",
+   "roles": [
+    "fix:sqlglot-8474<-7054",
+    "fix:sqlglot-8474<-7097"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 1,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0
+  },
+  {
+   "pr": "tobymao/sqlglot#7097",
+   "url": "https://github.com/tobymao/sqlglot/pull/7097",
+   "roles": [
+    "bug:sqlglot-8474<-7097"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 1,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 1,
+   "bug_judgement": {
+    "grade": "not_covered",
+    "reason": "no AI reviewer present",
+    "evidence_url": null
+   }
+  },
+  {
+   "pr": "tobymao/sqlglot#7315",
+   "url": "https://github.com/tobymao/sqlglot/pull/7315",
+   "roles": [
+    "bug:sqlglot-8424<-7315"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 6,
+    "inline": 10,
+    "conv": 3
+   },
+   "infra_bot_comments": 1,
+   "bug_judgement": {
+    "grade": "not_covered",
+    "reason": "no AI reviewer present",
+    "evidence_url": null
+   }
+  },
+  {
+   "pr": "tobymao/sqlglot#8424",
+   "url": "https://github.com/tobymao/sqlglot/pull/8424",
+   "roles": [
+    "fix:sqlglot-8424<-7315"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 1,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0
+  },
+  {
+   "pr": "rqlite/rqlite#2318",
+   "url": "https://github.com/rqlite/rqlite/pull/2318",
+   "roles": [
+    "bug:rqlite-2706<-2318"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 2,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 3212693401,
+     "at": "2025-09-11T16:32:42Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2318#pullrequestreview-3212693401",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Summary of Changes Hello @otoolep, I'm Gemini Code Assist[^1]! I'm currently reviewing this pull request and will post my feedback shortly. In the meantime, here's a summary to help you and other reviewers quickly get up to speed! This pull request enhances the database interaction layer by addin"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 3212696234,
+     "at": "2025-09-11T16:33:44Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2318#pullrequestreview-3212696234",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request introduces a new `ColumnNames` method to the `DB` object, which retrieves the column names for a given table. The implementation is efficient, using a `LIMIT 0` query to avoid fetching data. The change also includes comprehensive unit tests for the new functionality,"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2341706253,
+     "at": "2025-09-11T16:33:44Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2318#discussion_r2341706253",
+     "path": "db/db_common_test.go",
+     "state": null,
+     "excerpt": "![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg) The failure messages in this test refer to 'column types' but the function being tested is `ColumnNames`. This appears to be a copy-paste from `Test_DB_TableColumnTypes` and could be confusing. I've suggested updating the message"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "bug_judgement": {
+    "grade": "miss",
+    "reason": "Gemini only flagged copy-pasted test failure messages; its summary praises the SQL-injection test. Never mentions the broken double-quote escape.",
+    "evidence_url": "https://github.com/rqlite/rqlite/pull/2318#discussion_r2341706253"
+   }
+  },
+  {
+   "pr": "rqlite/rqlite#2706",
+   "url": "https://github.com/rqlite/rqlite/pull/2706",
+   "roles": [
+    "fix:rqlite-2706<-2318",
+    "fix:rqlite-2706<-2313"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 1,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 4631234132,
+     "at": "2026-07-05T11:34:41Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2706#pullrequestreview-4631234132",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request fixes double-quote escaping in the `TableColumnTypes` function in `db/db.go` and adds a corresponding unit test. It also improves robustness in `IsValidSQLiteFile` by using `io.ReadFull` instead of `f.Read`. The reviewer correctly pointed out that the adjacent `Colum"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 3524815214,
+     "at": "2026-07-05T11:34:41Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2706#discussion_r3524815214",
+     "path": "db/db.go",
+     "state": null,
+     "excerpt": "![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg) While the fix for double-quote escaping in `TableColumnTypes` is correct, the adjacent function `ColumnNames` (at line 1054) contains the exact same bug where it escapes double quotes as `\\\\\\\"\\\\\\\"` instead of `\\\"\\\"`.\\n\\nPlease up"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0
+  },
+  {
+   "pr": "rqlite/rqlite#2313",
+   "url": "https://github.com/rqlite/rqlite/pull/2313",
+   "roles": [
+    "bug:rqlite-2706<-2313"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 2,
+     "inline": 3,
+     "conversation": 0,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 3208626747,
+     "at": "2025-09-11T04:08:32Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2313#pullrequestreview-3208626747",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Summary of Changes Hello @otoolep, I'm Gemini Code Assist[^1]! I'm currently reviewing this pull request and will post my feedback shortly. In the meantime, here's a summary to help you and other reviewers quickly get up to speed! This pull request extends the database layer's capabilities by add"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 3208628749,
+     "at": "2025-09-11T04:09:57Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2313#pullrequestreview-3208628749",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request introduces a new function `TableColumnTypes` to the database layer, allowing retrieval of column types for a given table. While this is a useful addition, the current implementation has a critical SQL injection vulnerability because the table name is not sanitized be"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2338463597,
+     "at": "2025-09-11T04:09:57Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2313#discussion_r2338463597",
+     "path": "db/db.go",
+     "state": null,
+     "excerpt": "![critical](https://www.gstatic.com/codereviewagent/critical.svg) This line is vulnerable to SQL injection. The `table` parameter is used directly in `fmt.Sprintf` to construct the SQL query without any sanitization or quoting. A malicious table name could be used to execute arbitrary SQL commands. "
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2338463601,
+     "at": "2025-09-11T04:09:57Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2313#discussion_r2338463601",
+     "path": "db/db.go",
+     "state": null,
+     "excerpt": "![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg) The variable `colNames` is misleading as it stores column types, not names. Renaming it to `colTypes` would improve clarity. ```suggestion colTypes := make([]string, len(rows.Values)) for i, v := range rows.Values { if len(v.Para"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2338463603,
+     "at": "2025-09-11T04:09:57Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2313#discussion_r2338463603",
+     "path": "db/db_common_test.go",
+     "state": null,
+     "excerpt": "![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg) It would be beneficial to add test cases for table names containing special characters, such as spaces or quotes (e.g., 'foo bar', 'foo\"bar'). This would ensure that the table name quoting is handled correctly and protects agains"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "bug_judgement": {
+    "grade": "near",
+    "reason": "Gemini flagged the unquoted table name (critical SQL injection) and asked for tests with special characters such as foo\"bar. The merged escape was wrong and no quote test was added; the comment preceded the author fix and did not name the escaping defect.",
+    "evidence_url": "https://github.com/rqlite/rqlite/pull/2313#discussion_r2338463603"
+   }
+  },
+  {
+   "pr": "rqlite/rqlite#2061",
+   "url": "https://github.com/rqlite/rqlite/pull/2061",
+   "roles": [
+    "bug:rqlite-2391<-2061"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 2,
+     "inline": 3,
+     "conversation": 0,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 2741610708,
+     "at": "2025-04-04T02:06:43Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2061#pullrequestreview-2741610708",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "Hello @otoolep, I'm Gemini Code Assist[^1]! I'm currently reviewing this pull request and will post my feedback shortly. In the meantime, here's a summary to help you and other reviewers quickly get up to speed! ## Summary of Changes This pull request introduces the ability to register update hooks "
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 2741611005,
+     "at": "2025-04-04T02:06:58Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2061#pullrequestreview-2741611005",
+     "path": null,
+     "state": "CHANGES_REQUESTED",
+     "excerpt": "## Code Review This pull request introduces a new feature to register update hooks at the database level, enhancing the database's functionality by allowing users to trigger custom actions before row modifications. The implementation involves changes to the command protocol buffer, database structur"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2027980561,
+     "at": "2025-04-04T02:06:58Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2061#discussion_r2027980561",
+     "path": "db/db.go",
+     "state": null,
+     "excerpt": "![critical](https://img.shields.io/badge/priority-critical-red) The increment of `numUpdateHooks` and `numUpdateHooksCBErrors` are not thread-safe. Consider using atomic operations or a mutex to protect these counters to prevent data races. ```go var updateHooksMu sync.Mutex cb = func(op int, dbName"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2027980564,
+     "at": "2025-04-04T02:06:58Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2061#discussion_r2027980564",
+     "path": "db/db.go",
+     "state": null,
+     "excerpt": "![high](https://img.shields.io/badge/priority-high-orange) It seems that `numPreupdatesErrors` is being incremented here, but this should be `numUpdateHooksErrors` since the error is happening in the update hook conversion function. ```suggestion if err != nil { stats.Add(numUpdateHooksErrors, 1) ev"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2027980569,
+     "at": "2025-04-04T02:06:58Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2061#discussion_r2027980569",
+     "path": "db/db.go",
+     "state": null,
+     "excerpt": "![medium](https://img.shields.io/badge/priority-medium-yellow) If `convertFn` returns an error, the `ev.Error` field is set, but the hook is still called. Should the hook be skipped if `convertFn` fails? Also, the error is not being returned, so the caller of `RegisterUpdateHook` will not know if th"
+    }
+   ],
+   "human": {
+    "reviews": 2,
+    "inline": 2,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "bug_judgement": {
+    "grade": "direct",
+    "reason": "Gemini inline (high): the conversion-error branch increments the wrong stat and should increment numUpdateHooksErrors; matches the bug card (error counter never incremented).",
+    "evidence_url": "https://github.com/rqlite/rqlite/pull/2061#discussion_r2027980564"
+   }
+  },
+  {
+   "pr": "rqlite/rqlite#2391",
+   "url": "https://github.com/rqlite/rqlite/pull/2391",
+   "roles": [
+    "fix:rqlite-2391<-2061"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 2,
+     "inline": 3,
+     "conversation": 1,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 3464994620,
+     "at": "2025-11-14T13:38:43Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2391#pullrequestreview-3464994620",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request introduces a couple of minor fixes. It corrects an issue with statistics collection for update hooks and adds a comment to the SQL processor. The fix for the update hook statistics is correct. However, the new comment in the SQL processor is inaccurate and highlights"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 3465042533,
+     "at": "2025-11-14T13:50:35Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2391#pullrequestreview-3465042533",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": ""
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2527541919,
+     "at": "2025-11-14T13:38:43Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2391#discussion_r2527541919",
+     "path": "command/sql/processor.go",
+     "state": null,
+     "excerpt": "![high](https://www.gstatic.com/codereviewagent/high-priority.svg) The added comment is incorrect. `strftime(` is not matched by any of the existing targets, and `datetime(` is only matched implicitly because it contains `date(`. This is subtle and brittle. Because `strftime` is not detected, it wil"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2527541936,
+     "at": "2025-11-14T13:38:43Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2391#discussion_r2527541936",
+     "path": "CHANGELOG.md",
+     "state": null,
+     "excerpt": "![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg) The changelog entry is a bit vague. It would be more helpful to briefly describe the fixes. For example: \"Fix update-hook error stat and clarify SQL time-function processing.\" ```suggestion - [PR #2391](https://github.com/rqlite/"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 2527579967,
+     "at": "2025-11-14T13:50:35Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2391#discussion_r2527579967",
+     "path": "command/sql/processor.go",
+     "state": null,
+     "excerpt": "You are absolutely correct, @otoolep. My apologies for the oversight. `strings.Contains(\"strftime(\", \"time(\")` indeed returns true, and similarly for `datetime(` and `date(`. My statement that `strftime` would not be detected was incorrect. However, while the current implementation correctly identif"
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "conversation",
+     "id": 3532854876,
+     "at": "2025-11-14T13:37:29Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2391#issuecomment-3532854876",
+     "path": null,
+     "state": null,
+     "excerpt": "## Summary of Changes Hello @otoolep, I'm Gemini Code Assist[^1]! I'm currently reviewing this pull request and will post my feedback shortly. In the meantime, here's a summary to help you and other reviewers quickly get up to speed! This pull request introduces a set of minor, targeted fixes and im"
+    }
+   ],
+   "human": {
+    "reviews": 1,
+    "inline": 1,
+    "conv": 0
+   },
+   "infra_bot_comments": 0
+  },
+  {
+   "pr": "tobymao/sqlglot#8065",
+   "url": "https://github.com/tobymao/sqlglot/pull/8065",
+   "roles": [
+    "clean:sqlglot-clean-1"
+   ],
+   "ai": {
+    "copilot": {
+     "review_summary": 1,
+     "inline": 2,
+     "conversation": 0,
+     "logins": [
+      "copilot-pull-request-reviewer[bot]",
+      "Copilot"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "copilot",
+     "login": "copilot-pull-request-reviewer[bot]",
+     "kind": "review_summary",
+     "id": 4877670919,
+     "at": "2026-08-06T19:20:38Z",
+     "url": "https://github.com/tobymao/sqlglot/pull/8065#pullrequestreview-4877670919",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Pull request overview This PR updates the Databricks dialect parser to support `and(...)` / `or(...)` being used as function calls (in addition to the `AND`/`OR` operators), while avoiding a parsing side-effect where `AND (` / `OR (` could be misinterpreted during interval parsing. **Changes:** -"
+    },
+    {
+     "tool": "copilot",
+     "login": "Copilot",
+     "kind": "inline",
+     "id": 3731385914,
+     "at": "2026-08-06T19:20:38Z",
+     "url": "https://github.com/tobymao/sqlglot/pull/8065#discussion_r3731385914",
+     "path": "sqlglot/parsers/databricks.py",
+     "state": null,
+     "excerpt": "This adds new Databricks parsing behavior (supporting `and(...)`/`or(...)` as functions) and introduces an interval-parsing guard, but there is no accompanying test coverage. Adding a small assertion in `tests/dialects/test_databricks.py` for `SELECT and(a IS NOT NULL, b IS NOT NULL) ...` (and a reg"
+    },
+    {
+     "tool": "copilot",
+     "login": "Copilot",
+     "kind": "inline",
+     "id": 3731385941,
+     "at": "2026-08-06T19:20:38Z",
+     "url": "https://github.com/tobymao/sqlglot/pull/8065#discussion_r3731385941",
+     "path": "sqlglot/parsers/databricks.py",
+     "state": null,
+     "excerpt": "The PR title mentions `optimizer`, but the change is in the Databricks parser (`sqlglot/parsers/databricks.py`). Consider updating the PR title to reflect that this is a parser change, to keep the PR metadata consistent with the actual modifications."
+    }
+   ],
+   "human": {
+    "reviews": 8,
+    "inline": 10,
+    "conv": 0
+   },
+   "infra_bot_comments": 1,
+   "clean_findings": [
+    {
+     "url": "https://github.com/tobymao/sqlglot/pull/8065#discussion_r3731385914",
+     "label": "wrong",
+     "why": "Claims no tests; tests live in a private submodule (see adjudication-clean.json), so the premise is wrong."
+    },
+    {
+     "url": "https://github.com/tobymao/sqlglot/pull/8065#discussion_r3731385941",
+     "label": "nit",
+     "why": "PR title mentions optimizer; metadata only."
+    }
+   ]
+  },
+  {
+   "pr": "tobymao/sqlglot#8377",
+   "url": "https://github.com/tobymao/sqlglot/pull/8377",
+   "roles": [
+    "clean:sqlglot-clean-2"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 2,
+    "inline": 1,
+    "conv": 0
+   },
+   "infra_bot_comments": 1,
+   "clean_findings": []
+  },
+  {
+   "pr": "tobymao/sqlglot#8535",
+   "url": "https://github.com/tobymao/sqlglot/pull/8535",
+   "roles": [
+    "clean:sqlglot-clean-3"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 1,
+    "inline": 1,
+    "conv": 2
+   },
+   "infra_bot_comments": 1,
+   "clean_findings": []
+  },
+  {
+   "pr": "tobymao/sqlglot#8048",
+   "url": "https://github.com/tobymao/sqlglot/pull/8048",
+   "roles": [
+    "clean:sqlglot-clean-4"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 2,
+    "inline": 1,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "tobymao/sqlglot#8068",
+   "url": "https://github.com/tobymao/sqlglot/pull/8068",
+   "roles": [
+    "clean:sqlglot-clean-5"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 5,
+    "inline": 8,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "tobymao/sqlglot#8256",
+   "url": "https://github.com/tobymao/sqlglot/pull/8256",
+   "roles": [
+    "clean:sqlglot-clean-6"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 3,
+    "inline": 2,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "middleapi/orpc#2041",
+   "url": "https://github.com/middleapi/orpc/pull/2041",
+   "roles": [
+    "clean:orpc-clean-1"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5243914729,
+     "at": "2026-09-18T03:19:52Z",
+     "url": "https://github.com/middleapi/orpc/pull/2041#pullrequestreview-5243914729",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No critical issues — one documentation nit inline. **Reviewed changes** - **Dependency representation** — `Array<Set<number>>` becomes `number[][]`, with edges appended through `plugin.before ?? []` / `plugin.after ?? []` guards instead of explicit `undefined` checks. Duplicate edges are now po"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5243917889,
+     "at": "2026-09-18T03:20:40Z",
+     "url": "https://github.com/middleapi/orpc/pull/2041#pullrequestreview-5243917889",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ The new commit introduces no issues. The prior inline note on the removed stability JSDoc is still open (the doc sentence has not been restored), which is the only thing preventing approval. **Reviewed changes** (since `ee6eed9`) - **Edge-loop guards** — `b13259de` replaces the `plugin.before ?"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 4043515280,
+     "at": "2026-09-18T03:19:51Z",
+     "url": "https://github.com/middleapi/orpc/pull/2041#discussion_r4043515280",
+     "path": "packages/shared/src/plugin.ts",
+     "state": null,
+     "excerpt": "This sentence documented a non-obvious invariant — that unrelated plugins keep their registration order — which is exactly the behavior #2040 fixed. The simplified loops below no longer make that guarantee self-evident, so a future change could silently reintroduce the bug. Consider restoring a one-"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3,
+   "clean_findings": [
+    {
+     "url": "https://github.com/middleapi/orpc/pull/2041#discussion_r4043515280",
+     "label": "nit",
+     "why": "Asks to restore a JSDoc sentence on sortPlugins."
+    }
+   ]
+  },
+  {
+   "pr": "middleapi/orpc#1983",
+   "url": "https://github.com/middleapi/orpc/pull/1983",
+   "roles": [
+    "clean:orpc-clean-2"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 4,
+     "inline": 2,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5119727021,
+     "at": "2026-09-05T04:07:41Z",
+     "url": "https://github.com/middleapi/orpc/pull/1983#pullrequestreview-5119727021",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ Minor suggestion only — the change is correct, consistent with the runtime, and well tested. **Reviewed changes** This run reviewed the full PR: relaxing the OpenAPI generator so an optional path-param field in the input schema no longer throws, with the parameter documented as `required: true`"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5119753675,
+     "at": "2026-09-05T04:16:30Z",
+     "url": "https://github.com/middleapi/orpc/pull/1983#pullrequestreview-5119753675",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No issues in this delta — the new e2e test is well-constructed and genuinely pins the behavior, so no Fixing needed. Approval is withheld only because the one minor doc note from the prior review remains unaddressed. **Reviewed changes** This run covered the delta since the prior Pullfrog revie"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5120379578,
+     "at": "2026-09-05T07:54:43Z",
+     "url": "https://github.com/middleapi/orpc/pull/1983#pullrequestreview-5120379578",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": ""
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5120380019,
+     "at": "2026-09-05T07:55:00Z",
+     "url": "https://github.com/middleapi/orpc/pull/1983#pullrequestreview-5120380019",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. The one open thread from the prior review is now addressed, so the doc-only delta is good to merge. **Reviewed changes** This run reviewed the delta since the prior Pullfrog review ([80880d3](https://github.com/middleapi/orpc/pull/1983#pullrequestreview-5119753675) → [f75908"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3939393850,
+     "at": "2026-09-05T04:07:40Z",
+     "url": "https://github.com/middleapi/orpc/pull/1983#discussion_r3939393850",
+     "path": "apps/content/docs/openapi/routing.mdx",
+     "state": null,
+     "excerpt": "The generated OpenAPI now always documents a path param as `required: true`, even when the schema field is optional. A one-line note here (e.g. \"OpenAPI path parameters are always documented as `required: true`, regardless of the schema field's optionality\") would spare users who write `z.string().o"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3939927302,
+     "at": "2026-09-05T07:54:43Z",
+     "url": "https://github.com/middleapi/orpc/pull/1983#discussion_r3939927302",
+     "path": "apps/content/docs/openapi/routing.mdx",
+     "state": null,
+     "excerpt": "Addressed in f7590840 — routing.mdx now notes path params are always documented as required, even when optional in the schema. <sup><a href=\"https://pullfrog.com\"></a>&nbsp;&nbsp;｜ [View workflow run](https://github.com/middleapi/orpc/actions/runs/33953772226/job/101273244688) ｜ via [Pullfrog](https"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3,
+   "clean_findings": [
+    {
+     "url": "https://github.com/middleapi/orpc/pull/1983#discussion_r3939393850",
+     "label": "nit",
+     "why": "Asks for a docs note that path params are always required:true; useful docs, not a defect."
+    }
+   ]
+  },
+  {
+   "pr": "middleapi/orpc#2026",
+   "url": "https://github.com/middleapi/orpc/pull/2026",
+   "roles": [
+    "clean:orpc-clean-3"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5205354570,
+     "at": "2026-09-15T03:59:17Z",
+     "url": "https://github.com/middleapi/orpc/pull/2026#pullrequestreview-5205354570",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No critical issues. One completeness note on the new lint rule is inline; everything else checked out. **Reviewed changes** - **Enabled `guard-for-in`** — added to `eslint.config.js`, then the 26 unguarded `for...in` loops it flagged were rewritten across RPC/OpenAPI serializers, the JSON-schem"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5205357929,
+     "at": "2026-09-15T04:00:04Z",
+     "url": "https://github.com/middleapi/orpc/pull/2026#pullrequestreview-5205357929",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found in the new commit. **Reviewed changes (incremental)** - **Merge of `middleapi/main`** (`c15b96c`) — the only delta since the prior review. It brings main's `packages/json-schema/src/coercer.ts` refactor (`propertySchemas: Record<string, JsonSchema> = schema.properties ?? {}` "
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 4011803280,
+     "at": "2026-09-15T03:59:16Z",
+     "url": "https://github.com/middleapi/orpc/pull/2026#discussion_r4011803280",
+     "path": "eslint.config.js",
+     "state": null,
+     "excerpt": "`guard-for-in` is purely syntactic — it passes as soon as the first statement of the loop body is an `if` whose consequent is a `continue`. Three `for...in` loops already satisfy that shape while still enumerating inherited enumerable properties, so the PR's \"inherited enumerable properties are no l"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 1
+   },
+   "infra_bot_comments": 4,
+   "clean_findings": [
+    {
+     "url": "https://github.com/middleapi/orpc/pull/2026#discussion_r4011803280",
+     "label": "valuable",
+     "why": "guard-for-in is syntactic; three loops still iterate inherited keys, contradicting the PR claim. Accurate and specific."
+    }
+   ]
+  },
+  {
+   "pr": "middleapi/orpc#2169",
+   "url": "https://github.com/middleapi/orpc/pull/2169",
+   "roles": [
+    "clean:orpc-clean-4"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5379690697,
+     "at": "2026-10-01T13:11:54Z",
+     "url": "https://github.com/middleapi/orpc/pull/2169#pullrequestreview-5379690697",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — extracted schema-optionality detection into a shared `isStandardSchemaOptional` helper and rewired the converters to use it. - **New helper** — `isStandardSchemaOptional(schema, direction)` in `packages/json-schema/src/standard-json-schema-converter.ts"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "clean_findings": []
+  },
+  {
+   "pr": "middleapi/orpc#1881",
+   "url": "https://github.com/middleapi/orpc/pull/1881",
+   "roles": [
+    "clean:orpc-clean-5"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4950036233,
+     "at": "2026-08-17T09:07:01Z",
+     "url": "https://github.com/middleapi/orpc/pull/1881#pullrequestreview-4950036233",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** - `maxBodySize` resolver: `TmpFileUploadHandlerPluginOptions<T>` is now generic in the handler context and `maxBodySize` accepts either the fixed object or a sync/async resolver over `StandardHandlerRoutingInterceptorOptions<T>` (`context`, `request`, `p"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "clean_findings": []
+  },
+  {
+   "pr": "middleapi/orpc#1858",
+   "url": "https://github.com/middleapi/orpc/pull/1858",
+   "roles": [
+    "clean:orpc-clean-6"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4935891033,
+     "at": "2026-08-14T09:29:25Z",
+     "url": "https://github.com/middleapi/orpc/pull/1858#pullrequestreview-4935891033",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ Minor suggestions only — the plugin is solid and well-tested; one ergonomic nit inline. **Reviewed changes** - **`TimeoutHandlerPlugin` implementation** — new `packages/server/src/plugins/timeout.ts` that aborts the merged request signal with an `AbortError` after `timeout` (response production"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4935899739,
+     "at": "2026-08-14T09:30:42Z",
+     "url": "https://github.com/middleapi/orpc/pull/1858#pullrequestreview-4935899739",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ The new `14339e0e` \"fix\" commit is clean (generated-file version bump only); not approving because the prior review's `timeout`-required nit thread is still open on `timeout.ts`. **Reviewed changes (delta since previous review, commit `14339e0e` \"fix\")** - **Wrangler types regeneration** — `pac"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 3782599065,
+     "at": "2026-08-14T09:29:24Z",
+     "url": "https://github.com/middleapi/orpc/pull/1858#discussion_r3782599065",
+     "path": "packages/server/src/plugins/timeout.ts",
+     "state": null,
+     "excerpt": "Nit: `timeout` is required, so a handler that only wants to bound streaming via `streamingTimeout` — without bounding head production — still has to supply a `timeout` (e.g. `() => undefined`) to satisfy the type. Consider making `timeout` optional and defaulting to disabled, mirroring `streamingTim"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "clean_findings": [
+    {
+     "url": "https://github.com/middleapi/orpc/pull/1858#discussion_r3782599065",
+     "label": "nit",
+     "why": "timeout option required; reviewer calls it defensible either way."
+    }
+   ]
+  },
+  {
+   "pr": "rqlite/rqlite#2679",
+   "url": "https://github.com/rqlite/rqlite/pull/2679",
+   "roles": [
+    "clean:rqlite-clean-1"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 4332903082,
+     "at": "2026-05-20T23:31:10Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2679#pullrequestreview-4332903082",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request refactors the mTLS peer Common Name verification logic in internal/rtls/config.go by replacing the setVerifyCN function with makeVerifyCNCallback, which allows for a more direct assignment of the VerifyPeerCertificate callback. Additionally, the CHANGELOG.md was upda"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "rqlite/rqlite#2828",
+   "url": "https://github.com/rqlite/rqlite/pull/2828",
+   "roles": [
+    "clean:rqlite-clean-2"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "rqlite/rqlite#2841",
+   "url": "https://github.com/rqlite/rqlite/pull/2841",
+   "roles": [
+    "clean:rqlite-clean-3"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "rqlite/rqlite#2752",
+   "url": "https://github.com/rqlite/rqlite/pull/2752",
+   "roles": [
+    "clean:rqlite-clean-4"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "rqlite/rqlite#2695",
+   "url": "https://github.com/rqlite/rqlite/pull/2695",
+   "roles": [
+    "clean:rqlite-clean-5"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 4534676947,
+     "at": "2026-06-19T18:23:33Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2695#pullrequestreview-4534676947",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request refactors the snapshot store's integrity verification process. It replaces the eager CRC32 checksum verification during store initialization with a lazy, one-time verification mechanism (`ensureVerified`) that runs when snapshot data is first read or reaped. An expli"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 1
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "rqlite/rqlite#2819",
+   "url": "https://github.com/rqlite/rqlite/pull/2819",
+   "roles": [
+    "clean:rqlite-clean-6"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 1
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "tobymao/sqlglot#8470",
+   "url": "https://github.com/tobymao/sqlglot/pull/8470",
+   "roles": [
+    "clean:sqlglot-hclean-1"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 1,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 1,
+   "clean_findings": []
+  },
+  {
+   "pr": "tobymao/sqlglot#8038",
+   "url": "https://github.com/tobymao/sqlglot/pull/8038",
+   "roles": [
+    "clean:sqlglot-hclean-2"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 4,
+    "inline": 3,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "tobymao/sqlglot#8148",
+   "url": "https://github.com/tobymao/sqlglot/pull/8148",
+   "roles": [
+    "clean:sqlglot-hclean-3"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 7,
+    "inline": 7,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "tobymao/sqlglot#7875",
+   "url": "https://github.com/tobymao/sqlglot/pull/7875",
+   "roles": [
+    "clean:sqlglot-hclean-4"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 1,
+    "inline": 0,
+    "conv": 1
+   },
+   "infra_bot_comments": 1,
+   "clean_findings": []
+  },
+  {
+   "pr": "middleapi/orpc#2025",
+   "url": "https://github.com/middleapi/orpc/pull/2025",
+   "roles": [
+    "clean:orpc-hclean-1"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5204912683,
+     "at": "2026-09-15T02:35:12Z",
+     "url": "https://github.com/middleapi/orpc/pull/2025#pullrequestreview-5204912683",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** - **`getRouter` and `getRouterContract` stop walking the prototype chain** — `current[segment]` becomes `getOwn(current, segment)`, so `__proto__`, `constructor`, `toString`, etc. return `undefined` instead of `Object.prototype` / `Object`. This is the P"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5204986247,
+     "at": "2026-09-15T02:50:16Z",
+     "url": "https://github.com/middleapi/orpc/pull/2025#pullrequestreview-5204986247",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** This run re-reviewed the delta since the prior pullfrog review (`987ad554`): commit `5dabce22` reverts the prototype-chain hardening that commit introduced, leaving a behavior-preserving refactor. * **Reverted the router and deserializer hardening** — `g"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3,
+   "clean_findings": []
+  },
+  {
+   "pr": "middleapi/orpc#1695",
+   "url": "https://github.com/middleapi/orpc/pull/1695",
+   "roles": [
+    "clean:orpc-hclean-2"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4733118900,
+     "at": "2026-07-20T08:07:09Z",
+     "url": "https://github.com/middleapi/orpc/pull/1695#pullrequestreview-4733118900",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — added v1-style typed JSON Schema registries to `@orpc/zod` so users can customize generated schemas, with direction-specific registries taking precedence over the general one. - Added `JSON_SCHEMA_REGISTRY`, `JSON_SCHEMA_INPUT_REGISTRY`, and `JSON_SCHE"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 4733183570,
+     "at": "2026-07-20T08:17:06Z",
+     "url": "https://github.com/middleapi/orpc/pull/1695#pullrequestreview-4733183570",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — the follow-up commit added the missing `json-schema-typed` dependency to `@orpc/zod` and refreshed `pnpm-lock.yaml` so the registry types resolve correctly for consumers. - Added `json-schema-typed@^8.0.2` to `packages/zod/package.json`. - Updated `pnp"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 4,
+   "clean_findings": []
+  },
+  {
+   "pr": "middleapi/orpc#2158",
+   "url": "https://github.com/middleapi/orpc/pull/2158",
+   "roles": [
+    "clean:orpc-hclean-3"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5362991636,
+     "at": "2026-09-30T07:35:44Z",
+     "url": "https://github.com/middleapi/orpc/pull/2158#pullrequestreview-5362991636",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — the `±Infinity` half of #2152, keeping the inlined fast path so it does not carry #2152's custom-handler perf regression. - **New `infinity` built-in handler** — `RPCJsonSerializer` now round-trips `±Infinity` via the `\"Infinity\"` / `\"-Infinity\"` wire "
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5363076666,
+     "at": "2026-09-30T07:43:55Z",
+     "url": "https://github.com/middleapi/orpc/pull/2158#pullrequestreview-5363076666",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ✅ No new issues found. **Reviewed changes** — the OpenAPI half of the `±Infinity` support added since the prior pullfrog review at `9cc8beb` (the RPC half was reviewed there). - **New `infinity` built-in handler in `OpenAPIJsonSerializer`** — serializes `±Infinity` to `null`, mirroring the `nan` h"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 3,
+   "clean_findings": []
+  },
+  {
+   "pr": "middleapi/orpc#2039",
+   "url": "https://github.com/middleapi/orpc/pull/2039",
+   "roles": [
+    "clean:orpc-hclean-4"
+   ],
+   "ai": {
+    "pullfrog": {
+     "review_summary": 2,
+     "inline": 2,
+     "conversation": 0,
+     "logins": [
+      "pullfrog[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5237362996,
+     "at": "2026-09-17T14:46:01Z",
+     "url": "https://github.com/middleapi/orpc/pull/2039#pullrequestreview-5237362996",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No critical issues — one minor perf observation inline. **Reviewed changes** - **Serializer loops** — `rpc-json-serializer`, `openapi-json-serializer`, `bracket-notation` and the batch header loops now iterate with guarded `for...in` instead of `Object.entries`, dropping the per-object entries "
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "review_summary",
+     "id": 5243363770,
+     "at": "2026-09-18T01:47:18Z",
+     "url": "https://github.com/middleapi/orpc/pull/2039#pullrequestreview-5243363770",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "> ℹ️ No critical issues — the rework resolves the prior perf note. One minor coverage suggestion inline. **Reviewed changes** - **Every loop moved to `Object.keys`** — the guarded `for...in` conversions from the previous revision are reverted to `Object.keys(...)` across the serializers, schema/rout"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 4038182488,
+     "at": "2026-09-17T14:46:00Z",
+     "url": "https://github.com/middleapi/orpc/pull/2039#discussion_r4038182488",
+     "path": "packages/server/src/router-utils.ts",
+     "state": null,
+     "excerpt": "This loop already used `Object.keys`, which is inherently own-enumerable-string-key only, so the guard adds cost without changing semantics. `Object.keys` also benches faster than guarded `for...in` — the PR body's own dictionary-mode numbers are 68 vs 105 ns/key, and an independent Node 24 run I di"
+    },
+    {
+     "tool": "pullfrog",
+     "login": "pullfrog[bot]",
+     "kind": "inline",
+     "id": 4043054706,
+     "at": "2026-09-18T01:47:17Z",
+     "url": "https://github.com/middleapi/orpc/pull/2039#discussion_r4043054706",
+     "path": "packages/tanstack-query/src/procedure-utils.ts",
+     "state": null,
+     "excerpt": "`Object.keys` makes the inherited-key fix explicit here, but this commit also deleted the regression tests that asserted it (`Object.create({ prefix: 123 })` → `true`) for both tanstack-query and its pinia-colada twin. Since the behavior is still intentional and documented in the PR description, con"
+    }
+   ],
+   "human": {
+    "reviews": 1,
+    "inline": 1,
+    "conv": 0
+   },
+   "infra_bot_comments": 3,
+   "clean_findings": [
+    {
+     "url": "https://github.com/middleapi/orpc/pull/2039#discussion_r4038182488",
+     "label": "valuable",
+     "why": "Guarded for...in vs Object.keys perf claim in a speed PR, backed by measurement; author reverted to Object.keys."
+    },
+    {
+     "url": "https://github.com/middleapi/orpc/pull/2039#discussion_r4043054706",
+     "label": "nit",
+     "why": "Restore deleted regression tests for intended behaviour."
+    }
+   ]
+  },
+  {
+   "pr": "rqlite/rqlite#2649",
+   "url": "https://github.com/rqlite/rqlite/pull/2649",
+   "roles": [
+    "clean:rqlite-hclean-1"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 1,
+     "inline": 0,
+     "conversation": 0,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 4231745723,
+     "at": "2026-05-05T21:33:08Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2649#pullrequestreview-4231745723",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request simplifies the CRC check fallback logic in store/store.go by flattening the conditional structure and adding a return statement in the test-specific handler path. It also updates the changelog to reflect these changes. I have no feedback to provide."
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "rqlite/rqlite#2708",
+   "url": "https://github.com/rqlite/rqlite/pull/2708",
+   "roles": [
+    "clean:rqlite-hclean-2"
+   ],
+   "ai": {
+    "gemini": {
+     "review_summary": 1,
+     "inline": 1,
+     "conversation": 0,
+     "logins": [
+      "gemini-code-assist[bot]"
+     ]
+    }
+   },
+   "ai_comments": [
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "review_summary",
+     "id": 4631428357,
+     "at": "2026-07-05T13:59:58Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2708#pullrequestreview-4631428357",
+     "path": null,
+     "state": "COMMENTED",
+     "excerpt": "## Code Review This pull request removes the explicit database-level read-only check from the query path, relying instead on SQLite's native read-only enforcement by adding the _query_only=true parameter to the connection string. SQLite read-only errors are now remapped to ErrQueryWrite to maintain "
+    },
+    {
+     "tool": "gemini",
+     "login": "gemini-code-assist[bot]",
+     "kind": "inline",
+     "id": 3525020611,
+     "at": "2026-07-05T13:59:58Z",
+     "url": "https://github.com/rqlite/rqlite/pull/2708#discussion_r3525020611",
+     "path": "db/db.go",
+     "state": null,
+     "excerpt": "![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg) The `numQueryErrors` metric is currently being double-counted when a query execution fails.\\n\\n### Cause\\n1. Inside `db.queryStmtWithConn`, the metric is already incremented for major failure paths (such as `q.QueryContext` and `"
+    }
+   ],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": [
+    {
+     "url": "https://github.com/rqlite/rqlite/pull/2708#discussion_r3525020611",
+     "label": "valuable",
+     "why": "numQueryErrors double-counting; plausible and specific (final merged code has no outer increment, so likely fixed)."
+    }
+   ]
+  },
+  {
+   "pr": "rqlite/rqlite#2829",
+   "url": "https://github.com/rqlite/rqlite/pull/2829",
+   "roles": [
+    "clean:rqlite-hclean-3"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  },
+  {
+   "pr": "rqlite/rqlite#2837",
+   "url": "https://github.com/rqlite/rqlite/pull/2837",
+   "roles": [
+    "clean:rqlite-hclean-4"
+   ],
+   "ai": {},
+   "ai_comments": [],
+   "human": {
+    "reviews": 0,
+    "inline": 0,
+    "conv": 0
+   },
+   "infra_bot_comments": 0,
+   "clean_findings": []
+  }
+ ],
+ "clean_noise_totals": {
+  "clean_prs": 30,
+  "prs_with_any_ai": 15,
+  "findings": {
+   "valuable": 3,
+   "nit": 5,
+   "wrong": 1
+  }
+ },
+ "bug_tally": {
+  "any": {
+   "direct": 1,
+   "near": 2,
+   "miss": 8,
+   "not_covered": 7
+  },
+  "pullfrog": {
+   "present": 8,
+   "direct": 0,
+   "near": 1,
+   "miss": 7
+  },
+  "copilot": {
+   "present": 1,
+   "direct": 0,
+   "near": 0,
+   "miss": 1
+  },
+  "gemini": {
+   "present": 3,
+   "direct": 1,
+   "near": 1,
+   "miss": 1
+  }
+ },
+ "specguard_first_batch": {
+  "direct": 3,
+  "miss": 3,
+  "note": "eval/replay/adjudication-bugs.json; direct on sqlglot-7036, rqlite-1722, rqlite-1556, i.e. exactly the PRs with no AI reviewer present. Hold-out 12 not replayed by SpecGuard yet."
+ }
+}

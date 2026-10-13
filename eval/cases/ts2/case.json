@@ -1,0 +1,53 @@
+{
+  "id": "ts2",
+  "goal": "test_quality",
+  "description": "TypeScript (vitest): a pure applyCoupon is asserted only with toBeDefined and toBeTypeOf.",
+  "pr_title": "Add applyCoupon",
+  "pr_body": "Add applyCoupon, which applies a coupon code to an order total.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/ts2/coupon.test.ts",
+        "line": 6,
+        "tolerance": 1,
+        "quote": "toBeDefined()"
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/ts2/coupon.test.ts",
+        "line": 10,
+        "tolerance": 1,
+        "reason": "The second assertion (toBeTypeOf number) is equally weak."
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/ts2/coupon.ts",
+        "line": 4,
+        "tolerance": 1,
+        "reason": "Coupon rates (SAVE10, HALF, unknown codes) are never checked against a value."
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/ts2/coupon.ts",
+        "line": 5,
+        "tolerance": 0,
+        "reason": "Rounding to cents is never checked against a value."
+      },
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/ts2/coupon.ts",
+        "line": 1,
+        "tolerance": 0,
+        "reason": "The HALF coupon rate is untested."
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "weak_test on the toBeDefined line; the toBeTypeOf line is a second weak assertion, so acceptable."
+  }
+}

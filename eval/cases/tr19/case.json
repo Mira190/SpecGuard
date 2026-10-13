@@ -1,0 +1,35 @@
+{
+  "id": "tr19",
+  "goal": "traceability",
+  "description": "B-stale (Python): REQ-7 retention goes from 90 to 180 days in the requirements doc; purge.py still uses 90 and its test asserts 90.",
+  "pr_title": "Longer audit log retention (REQ-7)",
+  "pr_body": "Update the requirements: audit logs are now kept for 180 days.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr19/docs/requirements.md",
+        "line": 5,
+        "quote": "180 days",
+        "text": "purge[.]py:3|RETENTION_DAYS"
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": [
+          "weak_test",
+          "missing_test"
+        ],
+        "path": "eval-sandbox/tr19/retention/test_purge.py",
+        "line": 11,
+        "tolerance": 8,
+        "reason": "the test asserts the old 90-day value, so it pins the stale behaviour"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the REQ-7 line; text cites purge.py:3 (RETENTION_DAYS = 90)."
+  }
+}

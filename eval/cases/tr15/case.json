@@ -1,0 +1,23 @@
+{
+  "id": "tr15",
+  "goal": "traceability",
+  "description": "Source conflict (U9): the PR body AC says 45 days, the unchanged spec says 30, and the code moves to 45.",
+  "pr_title": "Extend the claim filing window",
+  "pr_body": "Extend the claim filing window.\n\n## Acceptance criteria\n- A claim may be filed up to 45 days after the incident.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr15/src/deadline.js"
+      }
+    ],
+    "summary_has": [
+      "conflict"
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "The summary reports that the PR AC (45) and the spec (30) disagree; no spec_mismatch picks the spec over the PR."
+  }
+}

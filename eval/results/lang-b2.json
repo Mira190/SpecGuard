@@ -1,0 +1,397 @@
+{
+  "runId": "lang-b2",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "model": "unchanged",
+  "cost": "not measured (pass --billing)",
+  "results": [
+    {
+      "id": "rx3",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": [
+              "eval-sandbox/rx3/CartSummary.test.tsx",
+              "eval-sandbox/rx3/CartSummary.tsx"
+            ],
+            "line": 10,
+            "tolerance": 5,
+            "quote": "expect(useCart).toHaveBeenCalled()"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx3/CartSummary.test.tsx",
+            "line": 10,
+            "level": "inline",
+            "title": "Assert the displayed cart summary",
+            "body": "**Assert the displayed cart summary**\n\nThis call-count assertion still passes if the item count is removed or the total is omitted or wrong. Replace it with an assertion on the rendered summary using distinct, nonzero cart values:\n```tsx\ntest('shows the cart item count and total', () => {\n  (useCart as jest.Mock).mockReturnValue({\n    items: [\n      { id: 'a', name: 'Book', price: 3 },\n      { id: 'b', name: 'Pen', price: 4 },\n    ],\n    total: 7,\n  });\n  expect(render(<CartSummary />).container.textContent).toBe('2 items, total 7');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=f4a5d68e128211280ed94fb39525f1662c1134ae -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 88,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/104",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37477951200",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx3/CartSummary.test.tsx",
+            "line": 10,
+            "level": "inline",
+            "title": "Assert the displayed cart summary",
+            "body": "**Assert the displayed cart summary**\n\nThis call-count assertion still passes if the item count is removed or the total is omitted or wrong. Replace it with an assertion on the rendered summary using distinct, nonzero cart values:\n```tsx\ntest('shows the cart item count and total', () => {\n  (useCart as jest.Mock).mockReturnValue({\n    items: [\n      { id: 'a', name: 'Book', price: 3 },\n      { id: 'b', name: 'Pen', price: 4 },\n    ],\n    total: 7,\n  });\n  expect(render(<CartSummary />).container.textContent).toBe('2 items, total 7');\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=f4a5d68e128211280ed94fb39525f1662c1134ae -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/2 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/2 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 3c94ed9c6a62bc102d0ec7b5e35ac903fe512696. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add a CartSummary component that shows the item count and total from the cart. | O1, O2 | 0/2 obligations covered (not fully covered). This criterion requires two distinct displayed values: the cart item count and the cart total. |\n\n**Coding standards: checked.** Assessed the supplied rule file; its applyTo scope (src/**,eval/*.js) excludes both changed eval-sandbox/rx3 files, so it provides no applicable coding rules for these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Jest/jsdom and React Testing Library setup and searched repository test files for CartSummary and useCart. The relevant component-render test is unit-level; the other matched fixture repeats its weak assertion. No higher-layer assertion was found, and the display contract belongs at the component-facing seam, so pushing it down would not help.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Display the number of items in the cart. | PR body; eval-sandbox/rx3/CartSummary.tsx:5 —   return <p>{items.length} items, total {total}</p>; | unit: eval-sandbox/rx3/CartSummary.test.tsx:10 —   expect(useCart).toHaveBeenCalled(); (assertion; Only that the hook was called; it does not verify the displayed item count.) | weak_test: The unit test renders the component, but this assertion would still pass if the item count were removed or displayed incorrectly. |\n| O2: Display the total from the cart. | PR body; eval-sandbox/rx3/CartSummary.tsx:5 —   return <p>{items.length} items, total {total}</p>; | unit: eval-sandbox/rx3/CartSummary.test.tsx:10 —   expect(useCart).toHaveBeenCalled(); (assertion; Only that the hook was called; it does not verify the displayed total.) | weak_test: The unit test renders the component, but this assertion would still pass if the total were omitted or displayed incorrectly. |\n\n",
+        "latency_s": 88,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"X1\",\"source\":\"PR body\",\"quote\":\"Add a CartSummary component that shows the item count and total from the cart.\",\"obligation_ids\":[\"O1\",\"O2\"],\"reason\":\"This criterion requires two distinct displayed values: the cart item count and the cart total.\"}],\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Display the number of items in the cart.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/rx3/CartSummary.tsx\",\"line\":5,\"quote\":\"  return <p>{items.length} items, total {total}</p>;\"},\"change\":{\"path\":\"eval-sandbox/rx3/CartSummary.tsx\",\"line\":5,\"quote\":\"  return <p>{items.length} items, total {total}</p>;\"},\"evidence\":[{\"path\":\"eval-sandbox/rx3/CartSummary.test.tsx\",\"line\":10,\"quote\":\"  expect(useCart).toHaveBeenCalled();\",\"layer\":\"unit\",\"proves\":\"Only that the hook was called; it does not verify the displayed item count.\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The unit test renders the component, but this assertion would still pass if the item count were removed or displayed incorrectly.\"},{\"id\":\"O2\",\"obligation\":\"Display the total from the cart.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/rx3/CartSummary.tsx\",\"line\":5,\"quote\":\"  return <p>{items.length} items, total {total}</p>;\"},\"change\":{\"path\":\"eval-sandbox/rx3/CartSummary.tsx\",\"line\":5,\"quote\":\"  return <p>{items.length} items, total {total}</p>;\"},\"evidence\":[{\"path\":\"eval-sandbox/rx3/CartSummary.test.tsx\",\"line\":10,\"quote\":\"  expect(useCart).toHaveBeenCalled();\",\"layer\":\"unit\",\"proves\":\"Only that the hook was called; it does not verify the displayed total.\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The unit test renders the component, but this assertion would still pass if the total were omitted or displayed incorrectly.\"}],\"findings\":[{\"kind\":\"weak_test\",\"obligation_ids\":[\"O1\",\"O2\"],\"path\":\"eval-sandbox/rx3/CartSummary.test.tsx\",\"line\":10,\"quote\":\"  expect(useCart).toHaveBeenCalled();\",\"source\":\"PR body\",\"title\":\"Assert the displayed"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "ts2",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 3,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "tolerance": 1,
+            "quote": "toBeDefined()"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert the discounted total",
+            "body": "**Assert the discounted total**\n\nThe `toBeDefined()` assertion passes if SAVE10 returns the undiscounted total or another incorrect defined value. Assert the expected total instead:\n```ts\nexpect(applyCoupon(100, 'SAVE10')).toBe(90);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=6c8b76380ad79f90fa02a68187037a667137da8e -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "false_positives": [],
+      "acceptable_findings": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/ts2/coupon.ts",
+          "line": 1,
+          "title": "Test the HALF coupon rate",
+          "reason": "The HALF coupon rate is untested."
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/ts2/coupon.ts",
+          "line": 4,
+          "title": "Test unknown coupon codes",
+          "reason": "Coupon rates (SAVE10, HALF, unknown codes) are never checked against a value."
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/ts2/coupon.ts",
+          "line": 5,
+          "title": "Test cent rounding",
+          "reason": "Rounding to cents is never checked against a value."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 106,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/105",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37478702262",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.ts",
+            "line": 1,
+            "level": "inline",
+            "title": "Test the HALF coupon rate",
+            "body": "**Test the HALF coupon rate**\n\nNo unit assertion checks the HALF rate. Add a direct result assertion:\n```ts\nit('applies HALF to the order total', () => {\n  expect(applyCoupon(100, 'HALF')).toBe(50);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=c1f906ed68b1a4e7180c4076ae0c847b37f024e9 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.ts",
+            "line": 4,
+            "level": "inline",
+            "title": "Test unknown coupon codes",
+            "body": "**Test unknown coupon codes**\n\nNo unit assertion checks the unknown-code fallback. Add a direct result assertion:\n```ts\nit('leaves the total unchanged for an unknown coupon', () => {\n  expect(applyCoupon(100, 'UNKNOWN')).toBe(100);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=dab67330935607940bb473519ed1125e27c4bd79 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.ts",
+            "line": 5,
+            "level": "inline",
+            "title": "Test cent rounding",
+            "body": "**Test cent rounding**\n\nNo unit assertion checks cent rounding for a fractional discounted result. Add a direct result assertion:\n```ts\nit('rounds the discounted total to cents', () => {\n  expect(applyCoupon(10.01, 'SAVE10')).toBe(9.01);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=18f6c05bf6efb97f0888318dce763ebb3fe2a056 -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert the discounted total",
+            "body": "**Assert the discounted total**\n\nThe `toBeDefined()` assertion passes if SAVE10 returns the undiscounted total or another incorrect defined value. Assert the expected total instead:\n```ts\nexpect(applyCoupon(100, 'SAVE10')).toBe(90);\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: weak_test, confidence: high\n</details>\n\n<!-- specguard:fp=6c8b76380ad79f90fa02a68187037a667137da8e -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 1 weak · Standards: 0 · Layering: 0; 4 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/5 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 3 missing, 1 weak · Standards: 0 · Layering: 0; 4 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 0/5 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 84dac07c7e85201f82c2a91db89959ad2ffc8859. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| X1 | PR body: Add applyCoupon, which applies a coupon code to an order total. | X1 | 0/1 obligations covered (not fully covered). The PR body supplies one criterion: applying a coupon code to an order total. |\n\n**Coding standards: checked.** Assessed the provided rule file and its applyTo scope; it applies only to src/** and eval/*.js, not eval-sandbox/ts2, so no coding rules apply to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Vitest tests and repository-wide matches across test files. The matching tests are isolated calls to a pure exported function, so they are unit-layer evidence; no component, integration, or end-to-end evidence or pushdown candidate was found.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| X1: applyCoupon applies a coupon code to an order total. | PR body; eval-sandbox/ts2/coupon.ts:5 —   return Math.round(total * (1 - rate) * 100) / 100; | unit: eval-sandbox/ts2/coupon.test.ts:6 —     expect(applyCoupon(100, 'SAVE10')).toBeDefined(); (assertion; Calls applyCoupon for SAVE10 but checks only that the result is defined, not that the coupon changes the total as required.) | weak_test: The unit assertion passes for an undiscounted or otherwise incorrect defined result. A repository-wide search for applyCoupon, SAVE10, and HALF found only this test and an identical test in eval/cases/ts2/head/coupon.test.ts; neither asserts the resulting total. |\n| B1: SAVE10 reduces the total by 10%. | from behaviour; eval-sandbox/ts2/coupon.ts:1 — const COUPON_RATES: Record<string, number> = { SAVE10: 0.1, HALF: 0.5 }; | unit: eval-sandbox/ts2/coupon.test.ts:6 —     expect(applyCoupon(100, 'SAVE10')).toBeDefined(); (assertion; Exercises SAVE10, but the defined-value assertion would survive a wrong discount rate or an unchanged total.) | weak_test: The SAVE10 input is exercised, but the assertion does not check its expected discounted total; mutations that change or remove the discount can still pass. |\n| B2: HALF reduces the total by 50%. | from behaviour; eval-sandbox/ts2/coupon.ts:1 — const COUPON_RATES: Record<string, number> = { SAVE10: 0.1, HALF: 0.5 }; | unit: eval-sandbox/ts2/coupon.test.ts:6 —     expect(applyCoupon(100, 'SAVE10')).toBeDefined(); (no_assertion; The assertion invokes SAVE10, not HALF, and provides no assertion for the HALF rate.) | missing_test: The repository-wide search for applyCoupon, HALF, and related coupon tests found no unit assertion using HALF. |\n| B3: An unknown coupon code leaves the total unchanged. | from behaviour; eval-sandbox/ts2/coupon.ts:4 —   const rate = COUPON_RATES[code] ?? 0; | unit: eval-sandbox/ts2/coupon.test.ts:6 —     expect(applyCoupon(100, 'SAVE10')).toBeDefined(); (no_assertion; The assertion invokes SAVE10, not an unknown code, and does not check fallback behavior.) | missing_test: The repository-wide search for applyCoupon and coupon tests found no unit assertion using an unknown code or checking the unchanged-total fallback. |\n| B4: The discounted total is rounded to cents. | from behaviour; eval-sandbox/ts2/coupon.ts:5 —   return Math.round(total * (1 - rate) * 100) / 100; | unit: eval-sandbox/ts2/coupon.test.ts:6 —     expect(applyCoupon(100, 'SAVE10')).toBeDefined(); (no_assertion; The assertion uses an input with a whole-number discounted result and does not check cent rounding.) | missing_test: The repository-wide search for applyCoupon and coupon tests found no unit assertion with a fractional discounted result that verifies cent rounding. |\n\n",
+        "latency_s": 106,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"requirements\":[{\"id\":\"X1\",\"source\":\"PR body\",\"quote\":\"Add applyCoupon, which applies a coupon code to an order total.\",\"obligation_ids\":[\"X1\"],\"reason\":\"The PR body supplies one criterion: applying a coupon code to an order total.\"}],\"coverage\":[{\"id\":\"X1\",\"obligation\":\"applyCoupon applies a coupon code to an order total.\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/ts2/coupon.ts\",\"line\":5,\"quote\":\"  return Math.round(total * (1 - rate) * 100) / 100;\"},\"change\":{\"path\":\"eval-sandbox/ts2/coupon.ts\",\"line\":5,\"quote\":\"  return Math.round(total * (1 - rate) * 100) / 100;\"},\"evidence\":[{\"path\":\"eval-sandbox/ts2/coupon.test.ts\",\"line\":6,\"quote\":\"    expect(applyCoupon(100, 'SAVE10')).toBeDefined();\",\"layer\":\"unit\",\"proves\":\"Calls applyCoupon for SAVE10 but checks only that the result is defined, not that the coupon changes the total as required.\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The unit assertion passes for an undiscounted or otherwise incorrect defined result. A repository-wide search for applyCoupon, SAVE10, and HALF found only this test and an identical test in eval/cases/ts2/head/coupon.test.ts; neither asserts the resulting total.\"},{\"id\":\"B1\",\"obligation\":\"SAVE10 reduces the total by 10%.\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/ts2/coupon.ts\",\"line\":1,\"quote\":\"const COUPON_RATES: Record<string, number> = { SAVE10: 0.1, HALF: 0.5 };\"},\"change\":{\"path\":\"eval-sandbox/ts2/coupon.ts\",\"line\":1,\"quote\":\"const COUPON_RATES: Record<string, number> = { SAVE10: 0.1, HALF: 0.5 };\"},\"evidence\":[{\"path\":\"eval-sandbox/ts2/coupon.test.ts\",\"line\":6,\"quote\":\"    expect(applyCoupon(100, 'SAVE10')).toBeDefined();\",\"layer\":\"unit\",\"proves\":\"Exercises SAVE10, but the defined-value assertion would survive a wrong discount rate or an unchanged total.\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The SAVE10 input is exercised, but the assertion does not check its expected discounted total; mutations th"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "js2",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 1,
+      "acceptable": 1,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 3,
+            "tolerance": 4,
+            "quote": "for (let attempt = 1; attempt <= retries; attempt++) {"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Test the configured retry limit",
+            "body": "**Test the configured retry limit**\n\nNo unit test verifies that network errors retry up to the supplied limit. Add a test that checks two failed attempts for `retries: 2`:\n```js\ntest('retries up to the configured attempt count', async () => {\n  const error = new Error('network');\n  const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(error);\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(error);\n  expect(fetchSpy).toHaveBeenCalledTimes(2);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=9443cd378caa997c915f85c7445c495126651149 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 10,
+          "tolerance": 1,
+          "quote": "throw lastError"
+        }
+      ],
+      "false_positives": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 7,
+          "title": "Test that the final error is thrown"
+        }
+      ],
+      "acceptable_findings": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 1,
+          "title": "Test the default retry count",
+          "reason": "The default of three attempts (AC 2) is untested."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 117,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/106",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37479711174",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Test the configured retry limit",
+            "body": "**Test the configured retry limit**\n\nNo unit test verifies that network errors retry up to the supplied limit. Add a test that checks two failed attempts for `retries: 2`:\n```js\ntest('retries up to the configured attempt count', async () => {\n  const error = new Error('network');\n  const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(error);\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(error);\n  expect(fetchSpy).toHaveBeenCalledTimes(2);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=9443cd378caa997c915f85c7445c495126651149 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 1,
+            "level": "inline",
+            "title": "Test the default retry count",
+            "body": "**Test the default retry count**\n\nNo unit test verifies the default of three attempts when `retries` is omitted. Add a test that checks three failed attempts:\n```js\ntest('uses three attempts by default', async () => {\n  const error = new Error('network');\n  const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(error);\n  await expect(fetchWithRetry('https://api.test/items')).rejects.toBe(error);\n  expect(fetchSpy).toHaveBeenCalledTimes(3);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=58665913728a71c19f317cc418003744dda53480 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 7,
+            "level": "inline",
+            "title": "Test that the final error is thrown",
+            "body": "**Test that the final error is thrown**\n\nNo unit test distinguishes the final error from an earlier failed attempt. Add a test with different errors on successive attempts and assert that the last one is thrown:\n```js\ntest('throws the last error after retries fail', async () => {\n  const firstError = new Error('first network error');\n  const lastError = new Error('last network error');\n  jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(firstError)\n    .mockRejectedValueOnce(lastError);\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toBe(lastError);\n});\n```\n\n<details><summary>Why this was flagged</summary>\n\nkind: missing_test, confidence: high\n</details>\n\n<!-- specguard:fp=df836da54c9bf66992fea1da9e4ea4e137e4139d -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/4 obligations (static review; tests not executed).\nEngine: copilot."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nReviewed: Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\n\nUnit evidence: 1/4 obligations (static review; tests not executed).\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: 95433fe6d986d7ef18a68c6717eeca02230718f4. \n\n\n**Requirements source:** PR body\n\n| Criterion | Source / original wording | Obligations | Assessment |\n|---|---|---|---|\n| R1 | PR body: It returns the response when a fetch attempt succeeds. | R1 | 1/1 obligations covered. The unit assertion checks that a successful fetch returns the exact response object. |\n| R2 | PR body: A network error is retried until `retries` attempts have been made (default 3). | R2a, R2b | 0/2 obligations covered (not fully covered). Assessed the configured retry limit and the default of three attempts as separate testable behaviors. |\n| R3 | PR body: After `retries` failed attempts it throws the last error. | R3 | 0/1 obligations covered (not fully covered). The criterion requires verifying that the final rejected attempt's error is thrown. |\n\n**Coding standards: checked.** Reviewed the listed rule file; its applyTo pattern (src/**,eval/*.js) excludes both changed eval-sandbox/js2 files, so no rules from it apply to these changes. Sources: .github/instructions/specguard.instructions.md.\n\n**Test layers: checked.** Inspected the Jest ESM package configuration and searched test/spec files across the repository. The changed test uses a mocked global fetch and calls the exported function directly, so it is unit-level evidence; no component, integration, or end-to-end coverage for this function was found. The behavior has a direct public unit seam and no higher-layer logic to push down.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| R1: Return the response when a fetch attempt succeeds. | PR body; eval-sandbox/js2/fetchWithRetry.js:5 —       return await fetch(url); | unit: eval-sandbox/js2/fetchWithRetry.spec.js:11 —   await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response); (assertion; When the first fetch succeeds, the function resolves to the same response object.) | covered: The test mocks the external fetch boundary to succeed and asserts the exact returned response through the public function. |\n| R2a: Retry network errors up to the configured attempt count. | PR body; eval-sandbox/js2/fetchWithRetry.js:3 —   for (let attempt = 1; attempt <= retries; attempt++) { | unit: eval-sandbox/js2/fetchWithRetry.spec.js:11 —   await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response); (no_assertion; This assertion covers a successful first attempt only; it does not assert retry behavior or attempt count.) | missing_test: A repository-wide search of test and spec files found only first-attempt success coverage; no unit assertion exercises a network failure or verifies the configured attempt count. |\n| R2b: Use three attempts when the retry count is omitted. | PR body; eval-sandbox/js2/fetchWithRetry.js:1 — export async function fetchWithRetry(url, { retries = 3 } = {}) { | unit: eval-sandbox/js2/fetchWithRetry.spec.js:11 —   await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response); (no_assertion; This assertion supplies no failure and does not check the default number of attempts.) | missing_test: A repository-wide search of test and spec files found no unit assertion that omits retries and verifies the default attempt count. |\n| R3: Throw the error from the final failed attempt. | PR body; eval-sandbox/js2/fetchWithRetry.js:7 —       lastError = error; | unit: eval-sandbox/js2/fetchWithRetry.spec.js:11 —   await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response); (no_assertion; This assertion covers a successful attempt and makes no assertion about errors after failed attempts.) | missing_test: A repository-wide search of test and spec files found no unit assertion for repeated failures or the identity of the final error. |\n\n",
+        "latency_s": 117,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\n  \"requirements_source\": \"PR body\",\n  \"requirements\": [\n    {\n      \"id\": \"R1\",\n      \"source\": \"PR body\",\n      \"quote\": \"It returns the response when a fetch attempt succeeds.\",\n      \"obligation_ids\": [\n        \"R1\"\n      ],\n      \"reason\": \"The unit assertion checks that a successful fetch returns the exact response object.\"\n    },\n    {\n      \"id\": \"R2\",\n      \"source\": \"PR body\",\n      \"quote\": \"A network error is retried until `retries` attempts have been made (default 3).\",\n      \"obligation_ids\": [\n        \"R2a\",\n        \"R2b\"\n      ],\n      \"reason\": \"Assessed the configured retry limit and the default of three attempts as separate testable behaviors.\"\n    },\n    {\n      \"id\": \"R3\",\n      \"source\": \"PR body\",\n      \"quote\": \"After `retries` failed attempts it throws the last error.\",\n      \"obligation_ids\": [\n        \"R3\"\n      ],\n      \"reason\": \"The criterion requires verifying that the final rejected attempt's error is thrown.\"\n    }\n  ],\n  \"coverage\": [\n    {\n      \"id\": \"R1\",\n      \"obligation\": \"Return the response when a fetch attempt succeeds.\",\n      \"source\": \"PR body\",\n      \"behaviour\": {\n        \"path\": \"eval-sandbox/js2/fetchWithRetry.js\",\n        \"line\": 5,\n        \"quote\": \"      return await fetch(url);\"\n      },\n      \"change\": {\n        \"path\": \"eval-sandbox/js2/fetchWithRetry.js\",\n        \"line\": 5,\n        \"quote\": \"      return await fetch(url);\"\n      },\n      \"evidence\": [\n        {\n          \"path\": \"eval-sandbox/js2/fetchWithRetry.spec.js\",\n          \"line\": 11,\n          \"quote\": \"  await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response);\",\n          \"layer\": \"unit\",\n          \"proves\": \"When the first fetch succeeds, the function resolves to the same response object.\",\n          \"kind\": \"assertion\"\n        }\n      ],\n      \"status\": \"covered\",\n      \"reason\": \"The test mocks the external fetch boundary to succeed and asserts the exact returned response through the public function.\"\n    },\n    {\n      \"id"
+      },
+      "model": "unchanged"
+    }
+  ],
+  "aggregate": {
+    "runs": 3,
+    "errors": 0,
+    "tp": 3,
+    "fp": 1,
+    "acceptable": 4,
+    "fn": 1,
+    "summary_only": 0,
+    "precision": 0.75,
+    "recall": 0.75,
+    "json_valid_rate": 1,
+    "degraded_rate": 0,
+    "pass_rate": 0.667,
+    "latency_median_s": 106,
+    "latency_max_s": 117,
+    "cost": "not measured",
+    "by_goal": {
+      "test_quality": {
+        "runs": 2,
+        "errors": 0,
+        "tp": 2,
+        "fp": 0,
+        "acceptable": 3,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 97,
+        "latency_max_s": 106
+      },
+      "requirements": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 1,
+        "fp": 1,
+        "acceptable": 1,
+        "fn": 1,
+        "summary_only": 0,
+        "precision": 0.5,
+        "recall": 0.5,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 0,
+        "latency_median_s": 117,
+        "latency_max_s": 117
+      }
+    }
+  }
+}

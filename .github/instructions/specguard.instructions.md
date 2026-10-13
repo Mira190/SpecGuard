@@ -1,3 +1,6 @@
+---
+applyTo: "src/**,eval/*.js"
+---
 # SpecGuard coding standard
 
 - JavaScript targets Node 22 and uses only Node built-ins: no npm dependencies.

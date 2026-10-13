@@ -1,0 +1,45 @@
+{
+  "id": "tr14",
+  "goal": "traceability",
+  "description": "Units/boundary (U6): AC-4 \"more than 30 days\" becomes \"more than 45 days\"; the code is ageMs > 30 * 864e5 and its only test checks day 60.",
+  "pr_title": "Extend the claim filing window in the spec (AC-4)",
+  "pr_body": "Update the claims spec: claims are late after 45 days.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr14/docs/specs/claims.md",
+        "line": 7,
+        "quote": "more than 45 days",
+        "text": "deadline\\.js"
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": [
+          "weak_test",
+          "missing_test"
+        ],
+        "path": "eval-sandbox/tr14/src/deadline.test.js",
+        "line": 5,
+        "tolerance": 3,
+        "reason": "the only test checks day 60, so no boundary (n-1, n, n+1) is asserted"
+      },
+      {
+        "kind": [
+          "weak_test",
+          "missing_test"
+        ],
+        "path": "eval-sandbox/tr14/src/deadline.js",
+        "line": 1,
+        "tolerance": 2,
+        "reason": "the comparison has no boundary test"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the spec line; a missing boundary test is acceptable."
+  }
+}

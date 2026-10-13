@@ -1,0 +1,23 @@
+{
+  "id": "r4",
+  "goal": "requirements",
+  "description": "An AC says unknown ids throw; the code returns null.",
+  "pr_title": "Add user lookup",
+  "pr_body": "Add findUser.\n\n## Acceptance criteria\n- Looking up a known id returns the user.\n- Looking up an unknown id throws an Error with the message \"user not found\".\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/r4/users.js",
+        "line": 6,
+        "quote": "return null;",
+        "text": "fail|contradict"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "Body should say the test is expected to fail against the current code (text is a regex over title and body; a miss fails the case)."
+  }
+}

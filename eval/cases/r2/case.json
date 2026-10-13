@@ -1,0 +1,15 @@
+{
+  "id": "r2",
+  "goal": "requirements",
+  "description": "Negative control: every AC has a strong unit assertion.",
+  "pr_title": "Add slugify",
+  "pr_body": "Add slugify for URLs.\n\n## Acceptance criteria\n- Titles are lowercased and words are joined with single hyphens.\n- Leading and trailing hyphens are stripped.\n- A non-string title throws a TypeError.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": true,
+    "notes": "No high-confidence finding."
+  }
+}

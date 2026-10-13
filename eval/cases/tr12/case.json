@@ -1,0 +1,23 @@
+{
+  "id": "tr12",
+  "goal": "traceability",
+  "description": "Partial propagation (U4): AC-4 goes 30 to 45; the backend and its test are updated but web/validate.js, the i18n string and a snapshot still say 30.",
+  "pr_title": "Update the claim filing window to 45 days (AC-4)",
+  "pr_body": "Update the claim filing window to 45 days. The backend deadline and its test are updated.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "spec_mismatch",
+        "path": "eval-sandbox/tr12/docs/specs/claims.md",
+        "line": 11,
+        "quote": "45 days",
+        "text": "(?=[\\s\\S]*validate\\.js)(?=[\\s\\S]*en\\.json)(?=[\\s\\S]*snap)"
+      }
+    ],
+    "must_not": [],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "spec_mismatch on the AC-4 line whose text names all three stale sites."
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "runId": "smoke2",
+  "repo": "Mira190/SpecGuard",
+  "target": "feature/verified-review",
+  "results": [
+    {
+      "id": "r1",
+      "goal": "requirements",
+      "tp": 0,
+      "fp": 0,
+      "fn": 4,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 5,
+          "quote": "throw new Error('empty order')"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 11,
+          "quote": "total >= 100"
+        },
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/r1/discount.js",
+          "line": 14,
+          "quote": "Math.max"
+        },
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/r1/discount.spec.js",
+          "line": 7,
+          "quote": "assert.ok(total)"
+        }
+      ],
+      "false_positives": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": false,
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 176,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/10",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/37418316473",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n## SpecGuard\n\nCould not complete: findings.json failed validation: checked standards need sources\n\n_Engine: copilot_\n\n**Standards tooling: not_configured.** Commit: fdce2601ab2a18bf0962b26b73b53bd10f2701a1. \n\n\n",
+        "latency_s": 176,
+        "conclusion": "success",
+        "job_conclusion": "success"
+      }
+    }
+  ],
+  "aggregate": {
+    "runs": 1,
+    "errors": 0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 4,
+    "summary_only": 0,
+    "precision": null,
+    "recall": 0,
+    "json_valid_rate": 0,
+    "pass_rate": 0,
+    "latency_median_s": 176,
+    "latency_max_s": 176,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4,
+        "summary_only": 0,
+        "precision": null,
+        "recall": 0,
+        "json_valid_rate": 0,
+        "pass_rate": 0,
+        "latency_median_s": 176,
+        "latency_max_s": 176
+      }
+    }
+  }
+}

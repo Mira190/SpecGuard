@@ -1,0 +1,158 @@
+{
+  "head": "eaa60cedaf3a523751443e5a448e9559d3a1ad0d",
+  "method": "Local deterministic probes using existing fixture helpers and mocked GitHub APIs; no live publishing or model calls.",
+  "results": [
+    {
+      "name": "unknown_citation_resolves_old_thread",
+      "result": {
+        "resolved": [
+          "old"
+        ],
+        "unknown": true
+      }
+    },
+    {
+      "name": "unrelated_bot_thread_resolved",
+      "result": {
+        "resolved": [
+          "other-bot"
+        ]
+      }
+    },
+    {
+      "name": "timeout_with_valid_json",
+      "result": {
+        "reviewCount": 1,
+        "resolved": [
+          "old"
+        ],
+        "completedMarker": true,
+        "timeoutVisible": false
+      }
+    },
+    {
+      "name": "review_comments_api_failure",
+      "result": {
+        "summaryCount": 0,
+        "reviewCount": 0,
+        "warnings": [
+          "SpecGuard post failed: simulated 503"
+        ]
+      }
+    },
+    {
+      "name": "head_recheck_failure",
+      "result": {
+        "summaryCount": 1,
+        "reviewCount": 1,
+        "warnings": [
+          "SpecGuard: could not recheck HEAD: simulated 503",
+          "SpecGuard: could not recheck HEAD: simulated 503",
+          "SpecGuard: could not recheck HEAD: simulated 503"
+        ]
+      }
+    },
+    {
+      "name": "pr_only_alignment_contract",
+      "result": {
+        "traceNeeded": false,
+        "instructsNA": true,
+        "actualAlignment": {
+          "status": "unknown",
+          "reason": "Alignment not_applicable degraded: not_applicable cannot have a linked requirement."
+        },
+        "notes": [
+          "Obligation O1 alignment unknown: not_applicable cannot have a linked requirement."
+        ]
+      }
+    },
+    {
+      "name": "check_name_collision",
+      "result": {
+        "status": "passed",
+        "ref": "HEAD",
+        "checks": [
+          {
+            "name": "check:lint",
+            "state": "success",
+            "url": "",
+            "producer": "other-app",
+            "id": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "grade_false_positive_passes",
+      "result": {
+        "tp": 1,
+        "fp": 1,
+        "pass": true
+      }
+    },
+    {
+      "name": "preflight_changed_body_or_other_bot",
+      "result": "head same already has a SpecGuard summary (set force: true to rerun)"
+    },
+    {
+      "name": "trace_limitations_hidden",
+      "result": {
+        "clean": true,
+        "omissionVisible": false,
+        "completedMarker": true
+      }
+    },
+    {
+      "name": "out_of_diff_current_finding_resolved",
+      "result": {
+        "resolved": [
+          "still-present"
+        ],
+        "findingVisible": true
+      }
+    },
+    {
+      "name": "pr_body_merge_rule_retained",
+      "result": [
+        {
+          "id": "orpc-2098<-1705",
+          "mergeRuleRetained": true,
+          "structuredCriteria": 0
+        },
+        {
+          "id": "orpc-2098<-1718",
+          "mergeRuleRetained": true,
+          "structuredCriteria": 0
+        }
+      ]
+    },
+    {
+      "name": "merge_base_history_coordinates",
+      "result": {
+        "leftRange": {
+          "path": "a.js",
+          "a": 7,
+          "b": 13
+        },
+        "expectedMergeBaseLines": [
+          "L7",
+          "L8",
+          "L9",
+          "L10",
+          "L11",
+          "L12",
+          "L13"
+        ],
+        "actualBaseLinesUsedForBlame": [
+          "INSERT7",
+          "INSERT8",
+          "INSERT9",
+          "INSERT10",
+          "L1",
+          "L2",
+          "L3"
+        ]
+      }
+    }
+  ]
+}

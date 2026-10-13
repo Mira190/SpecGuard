@@ -1,0 +1,1865 @@
+{
+  "repo": "rqlite/rqlite",
+  "window": {
+    "since": "2025-10-09",
+    "until": null
+  },
+  "generated": "2026-10-09T02:14:41.481Z",
+  "contamination": "Public repo: the model may have seen the later fix in its training data. Report public and private pilots separately; prefer fixes from the last ~4 months.",
+  "stats": {
+    "commits": 877,
+    "candidates": 38,
+    "signals": {
+      "title_prefix": 23,
+      "branch": 5,
+      "keyword": 10
+    },
+    "excluded_docs_tests": 20,
+    "located": 31,
+    "unlocatable": 5,
+    "no_introducing": 2,
+    "revert_direct": 0,
+    "introducing_pairs": 77,
+    "pairs_with_pr": 70
+  },
+  "candidates": [
+    {
+      "fix": {
+        "sha": "18bf670f67075d35939660eeaff95fa28cef058d",
+        "parent": "0e0af0b85d01391413bc7cabdb43cd73f5d5af83",
+        "title": "Fix off-by-one error in CDC retry logic",
+        "date": "2026-10-06T14:42:33-04:00",
+        "pr": 2856
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-10-06T14:42:33-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "f8bd839ce9201635ea514984afdb7499165fff3f",
+          "title": "Add initial CDC Service skeleton",
+          "date": "2025-06-26T20:55:19-04:00",
+          "pr": 2106,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "636c2cc2a8cec3d6fdff33c18810b622b8107379",
+          "title": "Ensure there are always sensible CDC defaults",
+          "date": "2025-08-31T13:27:18-04:00",
+          "pr": 2288,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": false,
+          "scope": "in",
+          "grade": null,
+          "note": "The `nAttempts == s.transmitMaxRetries` comparison was already present before 2288 (context line in its diff); 2288 only added the retryForever guard, so the off-by-one is not its. Scope: Off-by-one in a retry count is a boundary error.",
+          "category": "boundary"
+        },
+        {
+          "sha": "b509fd2cb6597d09a6c085051525dc0f1ebb01be",
+          "title": "Move batching into CDC to front",
+          "date": "2025-09-08T10:04:59-04:00",
+          "pr": 2305,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0b3efe2dd589898d66aa1517ed2e0b8e40291e0d",
+        "parent": "3881e59ce2b6e366baea4ef0719137f60b15d1f6",
+        "title": "Merge pull request #2812 from goingforstudying-ctrl/fix/snapshot-naming-backwards-clock",
+        "date": "2026-09-21T21:07:58-04:00",
+        "pr": 2812
+      },
+      "signals": [
+        {
+          "signal": "branch",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-21T21:07:58-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "898678496bc257b115011adfeea5468893651e38",
+          "title": "Snapshot IDs now contain generation",
+          "date": "2026-09-20T11:36:34-04:00",
+          "pr": 2807,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a962e0d60be4fbe246f840ae34cdb4fc44689668",
+          "title": "Bump generation ID if snapshot IDs collide",
+          "date": "2026-09-20T12:01:10-04:00",
+          "pr": 2808,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "30ae9dd2cbdad2b8b1f5b180297bcf3fac8ad870",
+        "parent": "abdb01d26c13f4b2bc421850f74bc419515b7ab2",
+        "title": "Fix HTTP logic error for queued statements",
+        "date": "2026-09-18T10:04:31-04:00",
+        "pr": 2802
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-18T10:04:31-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "61fb89d418e404ae4507e36cefbc531338066324",
+          "title": "More refactoring",
+          "date": "2023-12-11T13:19:51-05:00",
+          "pr": 1471,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "994db9eb923e09163fc9a4babd5cfddaf3ade62c",
+        "parent": "c2105159279b26d1131bd9d1243df74fb94d8fe6",
+        "title": "UI console fixes",
+        "date": "2026-09-18T09:32:18-04:00",
+        "pr": 2804
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-18T09:32:18-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "68da71b6d16933643d716faeb5e953ef04f5a896",
+          "title": "Console supports Restore",
+          "date": "2026-05-20T21:43:02-04:00",
+          "pr": 2681,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "9cb6108dca3e2943b4fe24cc0429d982972435f3",
+          "title": "Add a built-in UI",
+          "date": "2026-02-18T08:51:20-05:00",
+          "pr": 2480,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "724f6d3e314c607d873a2e4aeee2876c0a12a039",
+        "parent": "723ae113974d5f18e184301b662f43d45a468c4e",
+        "title": "Merge pull request #2790 from rqlite/fix/snapshot-reap-single-full",
+        "date": "2026-09-13T12:47:15-04:00",
+        "pr": 2790
+      },
+      "signals": [
+        {
+          "signal": "branch",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-13T12:47:15-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "2bbb4560215d4d476b2acec9dd9d05df46b6812d",
+        "parent": "188b75b38353ee63513ed5a5930856cb2002ee4c",
+        "title": "Merge pull request #2789 from rqlite/fix/snapshot-restore-header",
+        "date": "2026-09-13T12:24:32-04:00",
+        "pr": 2789
+      },
+      "signals": [
+        {
+          "signal": "branch",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-13T12:24:32-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "188b75b38353ee63513ed5a5930856cb2002ee4c",
+        "parent": "823c730871bce5153cc8d431018d1ddd294d1be5",
+        "title": "Merge pull request #2786 from rqlite/fix/snapshot-checkpoint-stat-errors",
+        "date": "2026-09-13T12:22:35-04:00",
+        "pr": 2786
+      },
+      "signals": [
+        {
+          "signal": "branch",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-13T12:22:35-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9d2b1232f149ece7d8f714de2bc05477239285d5",
+        "parent": "fb42461a95e70d6e8c2c12cbf358ba1358511d34",
+        "title": "Fix rejoin with changed node ID",
+        "date": "2026-09-13T10:24:41-04:00",
+        "pr": 2778
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-13T10:24:41-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4591e2df3516ba311b8a704770d106ac638def3e",
+          "title": "Don't ignore -join even if previous state exists",
+          "date": "2021-06-26T11:13:22-04:00",
+          "pr": 822,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "f57ace7da25eb405971e26c0da5613a4f54219b0",
+          "title": "Broadcast Store meta via standard consensus",
+          "date": "2019-12-23T19:21:18-05:00",
+          "pr": 605,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4e92305e647b2c93a895b5b5a6c7eab55e9267b1",
+        "parent": "271e5ec22a63b489bff188ac8938b55289ce6e55",
+        "title": "Fix Astra-detected bugs",
+        "date": "2026-09-11T08:24:51-04:00",
+        "pr": 2776
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-11T08:24:51-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "92757bfbf26f10fe21a3be4a21a3261354fad740",
+          "title": "Add read-consistency level \"auto\"",
+          "date": "2024-06-07T23:46:56-04:00",
+          "pr": 1796,
+          "lines": 4,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "8c47746074bedb751d936c1ac7b58acbb66d9b88",
+          "title": "Don't modify supplied Query Level",
+          "date": "2025-10-07T10:52:21-04:00",
+          "pr": 2359,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "0efa215118107697a74df130176f3d6fe2db761f",
+          "title": "Return actual consistency level from store.Query",
+          "date": "2025-10-10T13:21:06-04:00",
+          "pr": 2362,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "0951f30290db24e6ad5c5325d0ed5f2e2c6ffa9a",
+          "title": "Don't snapshot closing Store",
+          "date": "2024-09-19T16:56:40Z",
+          "pr": 1899,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "bfc3cc921346bf33210ff63b9d3ed86b2d7c9009",
+          "title": "Trivial refactor of Auto Read Consistency logic",
+          "date": "2024-10-07T14:11:22-04:00",
+          "pr": 1932,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "92170879f0d99a9a831ab0c8cb1de1b1e427d81a",
+        "parent": "6be3bd6b509a1796385a0c8761f79d983ab9b3b5",
+        "title": "Fix magic strings",
+        "date": "2026-09-05T23:51:06-04:00",
+        "pr": 2767
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-05T23:51:06-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "07eebf29277edf7ac6f4ab2926fc5b5b6c8b4137",
+          "title": "Unit test SwappableDB and driver (#2016)",
+          "date": "2025-01-09T00:09:18-05:00",
+          "pr": 2016,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1e5eb88f8892c972c0205409c4cee96d9f562344",
+        "parent": "48ab1eef2ce50cfd42d838841ccc2fa42ff9092a",
+        "title": "Fix test",
+        "date": "2026-09-03T21:37:02-04:00",
+        "pr": 2760
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-03T21:37:02-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "4c3e4279ebb45607dcf39da579ce1dca33fc67dd",
+          "title": "Plump Term and Index through during restore",
+          "date": "2026-09-03T20:53:31-04:00",
+          "pr": 2760,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "b3d61e13d098032f45ac14f30f25cdab1336f31c",
+          "title": " FSM Finalizer takes a Sink",
+          "date": "2026-08-31T19:47:39-04:00",
+          "pr": 2753,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "44ef2bf96e87879315c6eeed96209c68f15bf6b8",
+        "parent": "7586a4d1bdbd9a5a80021664c5a863cd850adb60",
+        "title": "Merge pull request #2758 from karangupta982/fix/consolidating-drivers",
+        "date": "2026-09-03T09:27:48-04:00",
+        "pr": 2758
+      },
+      "signals": [
+        {
+          "signal": "branch",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-09-03T09:27:48-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "d1bf01b3477d9bb92d2f60fa9b621ca3a766dc6c",
+          "title": "Feat-447: initial query logging configurations",
+          "date": "2026-08-25T00:54:16+05:30",
+          "pr": 2741,
+          "lines": 35,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6f7d2f0e1c341c93ff233ad3422c5c3917e3a365",
+          "title": "feat-447: improvement asked in code done",
+          "date": "2026-08-25T23:17:44+05:30",
+          "pr": 2741,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "36b4884ee4ad68eb202a51ecf851e243822c664f",
+          "title": "No checkpoint on close (#1877)",
+          "date": "2024-09-06T20:08:23-04:00",
+          "pr": 1877,
+          "lines": 7,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "56bae0eaf4fcea76b36f1627fc79b56bb1aa092a",
+          "title": "Create explicit Driver at DB level",
+          "date": "2024-08-08T11:58:37-04:00",
+          "pr": 1844,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6cc6cbbaa5c1ab054437aa011e8fff4e22ada085",
+          "title": "Store contains its own SQL database driver (#2013)",
+          "date": "2025-01-08T23:01:55-05:00",
+          "pr": 2013,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f1af9b33bc2c9039788a3cf96d89eabadec854e2",
+        "parent": "0a14bf6866af5bff4967e8b708d74fedc78684f4",
+        "title": "Fix empty DATE build-arg in release Docker builds",
+        "date": "2026-07-11T10:32:59-04:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-11T10:32:59-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "21712825c2e4a4d1982819e7cfdf6e5734dc52f1",
+          "title": "GHCR publishing",
+          "date": "2025-10-03T09:39:13-04:00",
+          "pr": 2351,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "0a14bf6866af5bff4967e8b708d74fedc78684f4",
+        "parent": "647e908d322dc79e066eb40f4f7d4f3b62f91cef",
+        "title": "Merge pull request #2718 from TechBEK/fix-postinstall-chroot",
+        "date": "2026-07-11T08:30:03-04:00",
+        "pr": 2718
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-11T08:30:03-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "d12f8e3411949b74825bf18b93cef35d6ce2ed05",
+        "parent": "015d51a78794bf8cff61ce57e8c6dc4a8f029d94",
+        "title": "`http` fixes including SQL rewriting control",
+        "date": "2026-07-05T14:14:57-04:00",
+        "pr": 2712
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-05T14:14:57-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "d03f44b0d8be23458a0b0552da6f71bb667973c8",
+          "title": "Rewrite time and date functions so they are deterministic (#1976)",
+          "date": "2024-11-07T21:26:16-05:00",
+          "pr": 1976,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a106df55f9ec4f6463bca74212a2204f976aad2c",
+          "title": "New type for Nodes",
+          "date": "2023-11-26T09:25:58-05:00",
+          "pr": 1433,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "cb706af68a5b17ec0c43aab5a001b6cd6b365d7b",
+          "title": "Add friendly string version of time",
+          "date": "2023-12-05T22:57:52-05:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "015d51a78794bf8cff61ce57e8c6dc4a8f029d94",
+        "parent": "783ae010c73759de538194320883fa47fecbfff8",
+        "title": "Minor fixes to the cluster package",
+        "date": "2026-07-05T13:10:41-04:00",
+        "pr": 2711
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-05T13:10:41-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "dbca70898bfc1dad2f0427f42b0795d09b50d34f",
+          "title": "Refactor cluster client",
+          "date": "2022-10-24T10:30:52-04:00",
+          "pr": 1089,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "079783be924caf7311137179332979bdd982d740",
+          "title": "Try a new connection if retries failed",
+          "date": "2026-03-28T15:38:40-04:00",
+          "pr": 2585,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "0b8beb6a5d56c861e28d5a30d87c0c7480d8e497",
+          "title": "Implmenet Request Forwarding timeout support",
+          "date": "2021-08-19T07:42:14-04:00",
+          "pr": 859,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "b6227e079429c9c4d461821940e777afdae98384",
+        "parent": "91785b37fe7bea85263d434b1d7e1dbb77f0b543",
+        "title": "Store-level fixes",
+        "date": "2026-07-05T12:09:15-04:00",
+        "pr": 2709
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-05T12:09:15-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "a325a9b9c7f0dd5bec87a223ed0461a72f00eb2f",
+          "title": "Handle possible WAL checkpoint failure",
+          "date": "2026-01-03T22:54:51-05:00",
+          "pr": 2423,
+          "lines": 9,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ce37c1210cc433fbced9ab1d2db376e6d726e15b",
+          "title": "Thread context.Context through DB, Store, Cluster, and HTTP layers",
+          "date": "2026-02-03T18:56:36-05:00",
+          "pr": 2467,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ad7b40a0473367d45c12700f7b01c9f03f875824",
+          "title": "Fix test",
+          "date": "2026-02-03T19:43:42-05:00",
+          "pr": null,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "57eabce89938bde420c1b6452dda571948cd1b07",
+          "title": "Protect against double-close of NodeTransport",
+          "date": "2023-09-02T10:07:36-04:00",
+          "pr": 1380,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "a9ed45b68d21013089d18b3222d018c0462e7241",
+          "title": "add support for sql query timeout",
+          "date": "2024-02-02T18:14:33-03:00",
+          "pr": 1666,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+        "parent": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+        "title": "Fixes for minor issues in data handling at the `db` layer",
+        "date": "2026-07-05T07:51:17-04:00",
+        "pr": 2706
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-07-05T07:51:17-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "bbf2afc300de123cedcc1b88d7c6e7da86326190",
+          "title": "Add ColumnNames() to DB object",
+          "date": "2025-09-11T12:45:25-04:00",
+          "pr": 2318,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "09439d38135a746b09daa0ed0ed1d68f2510a5d4",
+          "title": "DB layer supports querying table's column types",
+          "date": "2025-09-11T00:25:30-04:00",
+          "pr": 2313,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ac1af31a08c90d7bb2ccdd0efed53017130bdc1c",
+          "title": "Move standalone functions into own file",
+          "date": "2024-01-15T10:38:50-05:00",
+          "pr": 1604,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "3958e1a204b8f5fb255c1f402cf960db8efe0fee",
+        "parent": "c74c936db41c9abf4afa3a4342bb92b0c1d51067",
+        "title": "fix: add max-redirects limit to cluster Join",
+        "date": "2026-05-16T09:05:54-04:00",
+        "pr": 2664
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-05-16T09:05:54-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "84c284c2eba9990617c138cc034009b9785e74ff",
+          "title": "Joining now redirects to leader if necessary",
+          "date": "2023-11-20T08:42:17-05:00",
+          "pr": 1420,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "93e7270c0f589c32719565def39b12cecd75fe8e",
+        "parent": "cf486fb879b6ac175ec4ad6609c46b9221e84f94",
+        "title": "Fix HTTP CA cert help",
+        "date": "2026-05-06T22:05:47-04:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-05-06T22:05:47-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "3213f19a239805636c93523062f7197b1f84d3da",
+          "title": "Remove all but one help diffs (#1997)",
+          "date": "2024-12-23T10:56:33-05:00",
+          "pr": 1997,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "686b08b8978b12f5c48dd807fea99e68bff3449b",
+          "title": "Generate flags using code generation (#1995)",
+          "date": "2024-12-20T10:14:25-05:00",
+          "pr": 1995,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "3716a38cd98b1cfa96cbeb9776eeba367e055497",
+          "title": "Fix typos in help strings",
+          "date": "2025-01-17T09:42:54+02:00",
+          "pr": 2021,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f9d5a860aa3445bea5023d0c52a71315085f10fa",
+        "parent": "960ad4716d27ed93f48f3a28962e2505169da387",
+        "title": "Fix http/console package name (#2644)",
+        "date": "2026-05-02T19:04:08-04:00",
+        "pr": 2644
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-05-02T19:04:08-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "9cb6108dca3e2943b4fe24cc0429d982972435f3",
+          "title": "Add a built-in UI",
+          "date": "2026-02-18T08:51:20-05:00",
+          "pr": 2480,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "960a86278afc99b4aa30019385d59bc04bcb6f07",
+          "title": "Change UI serving path from /ui to /console",
+          "date": "2026-02-19T22:57:13-05:00",
+          "pr": 2487,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5404cbbf0c932cdc73b55b919267fa8f3c7b0cc0",
+        "parent": "462a7da2490131e597b33fdce72c4cdc52fe5142",
+        "title": "Fix release note script",
+        "date": "2026-04-27T21:38:52-04:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-04-27T21:38:52-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "8fbdbf9ba7746b5b96056a14cef1c2b05e91ddb7",
+          "title": "Remove manual instructions",
+          "date": "2026-02-12T08:37:22-05:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "7f078ca9bfc3e870515ba96abb5f5ca71f5369e6",
+        "parent": "32d0c769f40998c705cb86386ec81515f391b95f",
+        "title": "Fix connection handling on DB open",
+        "date": "2026-04-27T00:20:35-04:00",
+        "pr": 2635
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-04-27T00:20:35-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "884313e4d2434adf2a9fefaf5fef1c2113eeb05a",
+          "title": "Truncate any created WAL file",
+          "date": "2024-09-09T08:18:58-04:00",
+          "pr": 1882,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "f6984f4134d045855943308cb2c4310407ea8b14",
+          "title": "Small wrapper around sqlite3",
+          "date": "2016-02-20T16:34:03-08:00",
+          "pr": 54,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6dc9583dab58b6d0d12cfb2bcfc7987f7cda7494",
+          "title": "Implement concurrent reads and writes",
+          "date": "2021-08-03T14:35:53-04:00",
+          "pr": 842,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ceab400720638e409edcc1cfa450f8a937ebc947",
+          "title": "Refactor DB open",
+          "date": "2024-01-15T10:31:33-05:00",
+          "pr": 1604,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "56bae0eaf4fcea76b36f1627fc79b56bb1aa092a",
+          "title": "Create explicit Driver at DB level",
+          "date": "2024-08-08T11:58:37-04:00",
+          "pr": 1844,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a7a7bc3cbd8ee76f95c2d6070368d1afd2a21112",
+        "parent": "063e449450499c49309c5671c5bc3aabc8b8d493",
+        "title": "Fix Go versioning in appyveyor config",
+        "date": "2026-04-20T07:45:57-04:00",
+        "pr": 2612
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-04-20T07:45:57-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "50b4bc488661b896bccaa9409597919689d35eed",
+          "title": "AppVeyor to Go 1.23 (#1980)",
+          "date": "2024-11-15T05:54:19-05:00",
+          "pr": 1980,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "0cbff00dc99261576cc7dd95b902ec1fd7d7bb8f",
+          "title": "Better appveyor build flags (#919)",
+          "date": "2021-10-27T16:44:11-04:00",
+          "pr": 919,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "2e3165db695eb4d6d63ea8dbfa12e933fef44e03",
+        "parent": "6db74e23942e9cfe157cd850d6f2a5e3e71a5b40",
+        "title": "Fix copy-n-paste error and missing returns in cluster package",
+        "date": "2026-04-07T06:51:31-04:00",
+        "pr": 2593
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-04-07T06:51:31-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "c8edfa93dc2a634a3c0da7c744deacb2ba8c4cd2",
+          "title": "Use new types with Joiner",
+          "date": "2023-12-26T18:41:35-05:00",
+          "pr": 1526,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6037fc4822837a560a61f89723efa1864bc8ee9a",
+          "title": "More unit testing of Bootstrapper",
+          "date": "2023-06-01T21:44:41-04:00",
+          "pr": 1291,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "9ff03d3028b910e7ec230bbec9588842b4f8ff99",
+          "title": "Client-level unit testing of Load",
+          "date": "2022-10-22T12:39:33-04:00",
+          "pr": 1084,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "5827696f446c842048e7ca7ff13a4f97548360d0",
+        "parent": "6db74e23942e9cfe157cd850d6f2a5e3e71a5b40",
+        "title": "Fix copy-n-paste error",
+        "date": "2026-04-07T06:38:50-04:00",
+        "pr": 2593
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-04-07T06:38:50-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "9ff03d3028b910e7ec230bbec9588842b4f8ff99",
+          "title": "Client-level unit testing of Load",
+          "date": "2022-10-22T12:39:33-04:00",
+          "pr": 1084,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "e175801b44294b604ea8c3aa3d48ba40647e0c40",
+        "parent": "4c0b114a780f5183802471f9a2b0dea82ed5c359",
+        "title": "Fix expired CA certs",
+        "date": "2026-03-28T00:34:10-04:00",
+        "pr": 2580
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-03-28T00:34:10-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "2c2be47edec6b52e7b60af340e5ca3143ff025d6",
+          "title": "And end-to-end node encryption test",
+          "date": "2022-02-07T08:42:58-05:00",
+          "pr": 999,
+          "lines": 80,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "4bfe7b21eb8023913025ceae56507236a2e9964e",
+          "title": "End-to-end testing of setting ServerName",
+          "date": "2023-12-23T10:53:02-05:00",
+          "pr": 1520,
+          "lines": 67,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "fd55385a801edf8e9d0938d65b115ceddb29191b",
+        "parent": "b17d17b20f32d17eac1db2e3c17087e10c9c5dd2",
+        "title": "Fix comment",
+        "date": "2026-03-16T08:58:11-04:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-03-16T08:58:11-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "196e3040b6bd7ad47c3fd85e34e73aebcb725fc2",
+        "parent": "4330a8456559c6f43d8eaecef79a7f187034074f",
+        "title": "ABL via `go fix`",
+        "date": "2026-03-13T14:31:26-04:00",
+        "pr": 2562
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-03-13T14:31:26-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "1c81f6b1e9810600442e4506516efd4c225e28c3",
+          "title": "Refactor rqlite shell",
+          "date": "2026-03-11T19:40:08-04:00",
+          "pr": 2557,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "dcc29ed76f57da8a4606e1267de0f3263f456677",
+          "title": "Add new chunker and chunked load proto",
+          "date": "2023-07-11T23:51:33-04:00",
+          "pr": 1339,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "316ee52b4ce768f15e13f9aaf06f1cfe68c76729",
+          "title": "Fill in empty types using actual queried data",
+          "date": "2023-07-07T19:41:14-04:00",
+          "pr": 1333,
+          "lines": 6,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "87c54f1549d6f70dcda1de218db504f13b5a2d23",
+          "title": "Add stress program by https://github.com/hrissan",
+          "date": "2026-03-10T16:08:33-04:00",
+          "pr": null,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "6e4082ad452d066d78c1b0c1cf157ee8dcc8acb3",
+          "title": "Simple INSERT-only benchmarking tool",
+          "date": "2017-10-29T22:48:49-07:00",
+          "pr": 373,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "9fdca6fc6398a6aaae97b78df1644fa4780217a2",
+        "parent": "f86870f6d49d31c3fdc2702598527b8bd2b30488",
+        "title": "Fix code in `db` package which hits an error, but was actually returning `nil`",
+        "date": "2026-03-08T11:52:12-04:00",
+        "pr": 2533
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-03-08T11:52:12-04:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "b37582528f69c459e98effede522eb0030b4e62d",
+          "title": "Implement ForceQuery at DB level",
+          "date": "2024-03-10T11:40:22-04:00",
+          "pr": 1722,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": true,
+          "scope": "in",
+          "grade": null,
+          "note": "1722 added the ForceQuery (RETURNING) branch of executeStmtWithConn which returns `response, nil` when queryStmtWithConn fails, whereas the plain ExecContext path returns the error; 2533 changes both to `return response, err`. Scope: Swallowed error that prevents transaction rollback is an error-handling defect.",
+          "category": "error_handling"
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "60bc2f6e99e81e4ac5899c64c3de19ff714827cc",
+        "parent": "cf017e091097abc4de4defffe22da02861f255f0",
+        "title": "More logging fixes",
+        "date": "2026-02-22T21:52:41-05:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-02-22T21:52:41-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "no_introducing",
+      "introducing": [],
+      "dropped": {
+        "mass_change": 1
+      },
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "a4572a4875e0d806f9d5da79ff3b402b10b7c62d",
+        "parent": "e03f96896ee244afcf92560c7e0d934ad39ba5c6",
+        "title": "Various FSM Snapshot fixes",
+        "date": "2026-02-20T12:58:57-05:00",
+        "pr": 2492
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-02-20T12:58:57-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "584897555553023fd9e7804e41e21e06825f4b8f",
+          "title": "Support automatic PRAGMA optimize (#1879)",
+          "date": "2024-09-05T08:54:38-04:00",
+          "pr": 1879,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "9d2c698910d7fdff2c605c9314b7a20e5e1f5fd0",
+          "title": "Initial implementation of automatic VACUUM",
+          "date": "2024-01-19T21:58:09-05:00",
+          "pr": 1619,
+          "lines": 5,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "1cc4b64614a62fe25800e96fb288bd985e2ddb08",
+          "title": "Split out \"auto vac needed\" logic",
+          "date": "2024-01-20T08:52:25-05:00",
+          "pr": 1619,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "305f1cfdbbff3ffbfcb5a400e25c0b2eaa9a5bad",
+          "title": "Make Vacuum an exported function",
+          "date": "2024-01-20T08:24:14-05:00",
+          "pr": 1619,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "860246900d6e757e0c4fb84714fc0a8674c79fac",
+          "title": "Unit test Snapshots and Auto-Vacuums",
+          "date": "2024-01-20T09:47:15-05:00",
+          "pr": 1619,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "f468b8326c54bcac12d1cdcf771eb80dd5790014",
+        "parent": "b94c4a722b2b93c8b5b2894909d918c5979f74b1",
+        "title": "Fix uiHandler to use FileServerFS",
+        "date": "2026-02-18T12:06:48-05:00",
+        "pr": 2482
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-02-18T12:06:48-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "9cb6108dca3e2943b4fe24cc0429d982972435f3",
+          "title": "Add a built-in UI",
+          "date": "2026-02-18T08:51:20-05:00",
+          "pr": 2480,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "ad7b40a0473367d45c12700f7b01c9f03f875824",
+        "parent": "ce37c1210cc433fbced9ab1d2db376e6d726e15b",
+        "title": "Fix test",
+        "date": "2026-02-03T19:43:42-05:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-02-03T19:43:42-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "unlocatable",
+      "introducing": [],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "97fa800f56b1888a76808881f137007b59b04d3c",
+        "parent": "3533ce18d9d725d1a17ba2fbef211e3a85bbd854",
+        "title": "Fix up release github action from dev",
+        "date": "2026-01-29T10:01:41-05:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-01-29T10:01:41-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "214ef755b41dce2e4c24a4932db3d93428e2bb35",
+          "title": "Remove whitespace",
+          "date": "2026-01-29T00:01:56-05:00",
+          "pr": null,
+          "lines": 10,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "ecfc5a9e4e4abd3be850f57ae6272696b13a27ae",
+          "title": "Correct GHCR publishing",
+          "date": "2026-01-28T23:17:56-05:00",
+          "pr": null,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        },
+        {
+          "sha": "21712825c2e4a4d1982819e7cfdf6e5734dc52f1",
+          "title": "GHCR publishing",
+          "date": "2025-10-03T09:39:13-04:00",
+          "pr": 2351,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "1599bc7d0e1f4a54b0de38e85357d68c52cf7e7c",
+        "parent": "214ef755b41dce2e4c24a4932db3d93428e2bb35",
+        "title": "Fix digest handling",
+        "date": "2026-01-29T08:43:14-05:00",
+        "pr": null
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2026-01-29T08:43:14-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "214ef755b41dce2e4c24a4932db3d93428e2bb35",
+          "title": "Remove whitespace",
+          "date": "2026-01-29T00:01:56-05:00",
+          "pr": null,
+          "lines": 8,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "c93e734b9502b84d660c2f98489e602b0ea09d58",
+        "parent": "d03879ce517910a8261a059992cbb2ed9a83b6a6",
+        "title": "Fix sendRequest returning empty byte slice in restore command",
+        "date": "2025-12-07T21:50:35-05:00",
+        "pr": 2403
+      },
+      "signals": [
+        {
+          "signal": "title_prefix",
+          "strength": "medium"
+        }
+      ],
+      "issue": null,
+      "report_date": "2025-12-07T21:50:35-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "585feb473f1460a81b2ec5ef4955e09d3c71f31b",
+          "title": "rqlite CLI backs up and dumps using streaming",
+          "date": "2024-01-03T00:30:21-05:00",
+          "pr": 1556,
+          "lines": 3,
+          "via": "blame",
+          "confirmed": true,
+          "scope": "in",
+          "grade": null,
+          "note": "1556 rewrote sendRequest to `var buf []byte; w := bytes.NewBuffer(buf); sendRequestW(..., w); return &buf, nil`; bytes.Buffer writes to its own storage so buf stays empty and the HTTP response is lost; 2403 returns w.Bytes(). Scope: Function returns the wrong value (empty slice), a logic error.",
+          "category": "logic"
+        },
+        {
+          "sha": "ff0d5d1d39f24baffa87f46b487f44e107b9f2f4",
+          "title": "Add restore command to CLI",
+          "date": "2019-11-29T14:13:22-05:00",
+          "pr": 589,
+          "lines": 2,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    },
+    {
+      "fix": {
+        "sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+        "parent": "4aec74f5a44071a6bdea40a990f66373d530515f",
+        "title": "Minor fixes",
+        "date": "2025-11-14T08:51:17-05:00",
+        "pr": 2391
+      },
+      "signals": [
+        {
+          "signal": "keyword",
+          "strength": "weak"
+        }
+      ],
+      "issue": null,
+      "report_date": "2025-11-14T08:51:17-05:00",
+      "report_date_source": "fix_commit_upper_bound",
+      "status": "located",
+      "introducing": [
+        {
+          "sha": "568030f17f4ab82fe26009708d848252b0496e7e",
+          "title": "Support registering Update Hooks at the database level (#2061)",
+          "date": "2025-04-03T22:21:41-04:00",
+          "pr": 2061,
+          "lines": 1,
+          "via": "blame",
+          "confirmed": null,
+          "scope": null,
+          "grade": null,
+          "note": null
+        }
+      ],
+      "confirmed": null,
+      "scope": null,
+      "grade": null
+    }
+  ]
+}

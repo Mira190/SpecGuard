@@ -1,0 +1,19 @@
+{
+  "id": "tr23",
+  "goal": "traceability",
+  "description": "A-consistent negative control: the constant is renamed and 30000 becomes 30 * 1000; the value is still 30 seconds, as the unchanged R2 requires.",
+  "pr_title": "Name the timeout constant clearly",
+  "pr_body": "Rename TIMEOUT to REQUEST_TIMEOUT_MS and write the value as 30 * 1000. No behaviour change.\n",
+  "delete": [],
+  "expected": {
+    "findings": [],
+    "must_not": [
+      {
+        "kind": "spec_mismatch"
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "30 * 1000 ms equals 30 seconds, matching R2; a unit-conversion or rename false positive fails the case."
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "docs_reviewed",
+    "requirements",
+    "not_requirements",
+    "not_reviewed"
+  ],
+  "properties": {
+    "docs_reviewed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "text",
+          "class",
+          "status",
+          "code",
+          "tests",
+          "note"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The block cid (8 hex characters), or cid.1, cid.2 for several requirements from one block."
+          },
+          "source": {
+            "type": "object",
+            "required": [
+              "path",
+              "line",
+              "quote"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "quote": {
+                "type": "string",
+                "minLength": 12,
+                "maxLength": 200
+              }
+            }
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "class": {
+            "enum": [
+              "static",
+              "unit",
+              "higher_level",
+              "human"
+            ]
+          },
+          "status": {
+            "enum": [
+              "covered",
+              "partial",
+              "missing_test",
+              "not_implemented",
+              "contradicted",
+              "unknown",
+              "needs_human"
+            ]
+          },
+          "code": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "line",
+                "quote"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 12,
+                  "maxLength": 200
+                }
+              }
+            }
+          },
+          "tests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "line",
+                "quote",
+                "layer"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 12,
+                  "maxLength": 200
+                },
+                "layer": {
+                  "enum": [
+                    "unit",
+                    "component",
+                    "integration",
+                    "e2e"
+                  ]
+                }
+              }
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Atomic requirements derived from the listed blocks. id is the block cid from audit-candidates.txt, or cid.1, cid.2 when one block bundles several behaviours."
+    },
+    "not_requirements": {
+      "type": "array",
+      "description": "Blocks that state no checkable requirement (rationale, example, description of UI with no checkable behaviour). Every listed block appears here or in requirements.",
+      "items": {
+        "type": "object",
+        "required": [
+          "cid",
+          "reason"
+        ],
+        "properties": {
+          "cid": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 8
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80
+          }
+        }
+      }
+    },
+    "not_reviewed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

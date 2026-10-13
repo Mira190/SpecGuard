@@ -1,0 +1,104 @@
+name: SpecGuard manual run
+# Run SpecGuard on demand against ANOTHER repository (README: "Manual run (SpecGuard repo)"). This workflow lives in the SpecGuard repo only; it is not shipped to target repos.
+# The secret SPECGUARD_PAT (a fine-grained PAT with Contents, Issues and Pull requests read on the target repositories; Pull requests write only for post_to_pr) is needed for other private or internal repositories. Without it the job token is used, which reads only this repository and public ones.
+on:
+  workflow_dispatch:
+    inputs:
+      repo: { description: "Target repository: owner/name or a github.com URL (a /pull/N URL also sets the PR).", required: true, type: string }
+      pr: { description: "PR number to review. Empty = audit the repository (mode auto).", required: false, type: string }
+      ref: { description: "Branch, tag or SHA to audit (audit mode; empty = the default branch).", required: false, type: string }
+      design_docs: { description: "Requirement / design documents: paths, globs or github.com blob/tree URLs of the target repo, one per line (! excludes). Empty = auto-discovery.", required: false, type: string }
+      rules_docs: { description: "Coding-standard / rules documents, same format. Empty = auto-discovery.", required: false, type: string }
+      test_dirs: { description: "Unit-test folders or globs, same format. Empty = discovery by name and layout.", required: false, type: string }
+      mode: { description: "auto = pr when pr is set, else audit.", required: false, type: choice, default: auto, options: [auto, pr, audit] }
+      post_to_pr: { description: "PR mode: also post the review and summary comment to the target PR (needs Pull requests write on the PAT). Off = job summary only.", required: false, type: boolean, default: false }
+      model: { description: "Copilot model (empty = Copilot Auto).", required: false, type: string }
+      effort: { description: "Reasoning effort (empty | low | medium | high | xhigh | max; ignored with Auto).", required: false, type: string }
+permissions: {}
+concurrency: { group: "specguard-run-${{ inputs.repo }}-${{ inputs.pr }}", cancel-in-progress: false }
+
+jobs:
+  # Inputs -> repository paths and PR commits. A separate job: the review job checks the target out at the workspace root, which would wipe this checkout.
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: { contents: read, pull-requests: read }
+    outputs:
+      repo: ${{ steps.in.outputs.repo }}
+      pr: ${{ steps.in.outputs.pr }}
+      ref: ${{ steps.in.outputs.ref }}
+      mode: ${{ steps.in.outputs.mode }}
+      design: ${{ steps.in.outputs.design }}
+      rules: ${{ steps.in.outputs.rules }}
+      tests: ${{ steps.in.outputs.tests }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      base_sha: ${{ steps.pr.outputs.base_sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22 }
+      - id: in
+        shell: bash
+        env: # inputs reach the script as environment variables only, never as part of the shell text
+          PAT: ${{ secrets.SPECGUARD_PAT }}
+          REPO: ${{ inputs.repo }}
+          PR: ${{ inputs.pr }}
+          REF: ${{ inputs.ref }}
+          MODE: ${{ inputs.mode }}
+          DESIGN_DOCS: ${{ inputs.design_docs }}
+          RULES_DOCS: ${{ inputs.rules_docs }}
+          TEST_DIRS: ${{ inputs.test_dirs }}
+        run: |
+          [ -n "$PAT" ] || echo "::notice::SPECGUARD_PAT is not set: using the job token, which reads only this repository and public repositories"
+          node src/resolve-inputs.js
+      - id: pr
+        if: steps.in.outputs.mode == 'pr'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SPECGUARD_PAT || github.token }}
+          REPO: ${{ steps.in.outputs.repo }}
+          PR: ${{ steps.in.outputs.pr }}
+        run: |
+          row=$(gh api "repos/$REPO/pulls/$PR" --jq '[.head.sha, .base.sha, .state] | @tsv') || { echo "::error::could not read $REPO#$PR (does SPECGUARD_PAT have Pull requests: read on it?)"; exit 1; }
+          IFS=$'\t' read -r head base state <<< "$row"
+          [ "$state" = open ] || { echo "::error::$REPO#$PR is $state; SpecGuard reviews open PRs (to review the code, run mode audit with a ref)"; exit 1; }
+          echo "head_sha=$head" >> "$GITHUB_OUTPUT"; echo "base_sha=$base" >> "$GITHUB_OUTPUT"
+
+  review:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: read, pull-requests: read, issues: read, copilot-requests: write }
+    steps:
+      # the target first, at the workspace root where the action works; then SpecGuard itself beside it (a checkout of the root would delete a folder created before it)
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: ${{ needs.resolve.outputs.repo }}
+          token: ${{ secrets.SPECGUARD_PAT || github.token }}
+          ref: ${{ needs.resolve.outputs.head_sha || needs.resolve.outputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { path: .specguard-src, persist-credentials: false }
+      - id: head # audit mode: the reviewed commit, for source links in the summary
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: ./.specguard-src
+        with:
+          mode: ${{ needs.resolve.outputs.mode }}
+          repository: ${{ needs.resolve.outputs.repo }}
+          pr_number: ${{ needs.resolve.outputs.pr }}
+          base_sha: ${{ needs.resolve.outputs.base_sha }}
+          head_sha: ${{ needs.resolve.outputs.head_sha || steps.head.outputs.sha }}
+          github_token: ${{ secrets.SPECGUARD_PAT || github.token }}
+          delivery: ${{ inputs.post_to_pr && 'pr' || 'summary' }}
+          resolve_stale: ${{ inputs.post_to_pr && 'true' || 'false' }}
+          requirements_paths: ${{ needs.resolve.outputs.design }}
+          standards_paths: ${{ needs.resolve.outputs.rules }}
+          test_paths: ${{ needs.resolve.outputs.tests }}
+          model: ${{ inputs.model }}
+          effort: ${{ inputs.effort }}
+          force: "true"
+          include_bots: "true"
+          ctx_retention_days: "0" # the context holds snippets of the target repository: no artifact
