@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Manual run (.github/workflows/specguard-run.yml), step 1: turn the dispatch inputs into what the review needs. No network, no repo access.
-// Env: REPO (owner/name or a github.com URL; a /pull/N URL also sets the PR), PR, REF, MODE (auto|pr|audit), DESIGN_DOCS, RULES_DOCS, TEST_DIRS (newline separated:
+// Env: REPO (owner/name or a github.com URL; a /pull/N URL also sets the PR), PR, REF, MODE (auto|pr|scan; audit is an alias of scan), DESIGN_DOCS, RULES_DOCS, TEST_DIRS (newline separated:
 // repository paths, globs, or github.com blob/tree URLs of the SAME repository; a leading ! excludes). Writes repo, pr, ref, mode, design, rules, tests to $GITHUB_OUTPUT
 // and fails with ::error:: on anything it cannot honour. A URL of another repository is rejected (simple choice: fetching it would need a second token scope and checkout).
 const fs = require('node:fs');
@@ -73,8 +73,8 @@ function resolve(env) {
   const ref = String(env.REF || '').trim();
   if (ref && !/^[A-Za-z0-9._][A-Za-z0-9._/-]{0,199}$/.test(ref)) throw new Error('ref must be a branch, tag or commit SHA (letters, digits and . _ / -)');
   const want = String(env.MODE || 'auto').trim() || 'auto';
-  if (!['auto', 'pr', 'audit'].includes(want)) throw new Error('mode must be auto, pr or audit');
-  const mode = want === 'auto' ? (pr ? 'pr' : 'audit') : want;
+  if (!['auto', 'pr', 'scan', 'audit'].includes(want)) throw new Error('mode must be auto, pr or scan');
+  const mode = want === 'auto' ? (pr ? 'pr' : 'scan') : want === 'audit' ? 'scan' : want;
   if (mode === 'pr' && !pr) throw new Error('mode pr needs a PR number (pr)');
   return {
     repo, pr: mode === 'pr' ? pr : '', ref, mode,

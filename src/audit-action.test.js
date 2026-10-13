@@ -12,20 +12,47 @@ const cond = (s) => (/^(?:- )?if: (.*)$/m.exec(s) || [])[1] || '';
 const find = (re) => { const m = steps.filter((s) => re.test(s)); assert.equal(m.length, 1, `exactly one step matches ${re}`); return m[0]; };
 const input = (name) => new RegExp(`^  ${name}: \\{[^}]*\\}`, 'm').exec(yml)[0];
 
-test('action.yml: mode, audit_max_requirements and audit_issue inputs with the documented defaults', () => {
+test('action.yml: mode, scan_max_blocks and scan_issue inputs; the audit_* names stay as deprecated aliases; unset means the documented defaults', () => {
   assert.match(input('mode'), /default: pr \}$/);
-  assert.match(input('audit_max_requirements'), /default: "80"/);
-  assert.match(input('audit_issue'), /default: "false"/);
+  assert.match(input('mode'), /scan \(unit test gap scan/);
+  assert.match(input('scan_max_blocks'), /empty = 80/);
+  assert.match(input('scan_issue'), /empty = false/);
+  assert.match(input('scan_issue'), /SpecGuard: unit test gap scan/);
+  for (const n of ['scan_max_blocks', 'scan_issue', 'audit_max_requirements', 'audit_issue']) assert.match(input(n), /default: "" \}$/, n);
+  for (const [old, now] of [['audit_max_requirements', 'scan_max_blocks'], ['audit_issue', 'scan_issue']]) assert.match(input(old), new RegExp(`Deprecated alias of ${now}`));
 });
 
 test('action.yml: the mode is validated first, and the refuse-env guard stays unconditional', () => {
   assert.ok(steps[0].includes('COPILOT_ALLOW_ALL') && !cond(steps[0]));
-  assert.match(steps[1], /name: Check mode[\s\S]*MODE: \$\{\{ inputs\.mode \}\}[\s\S]*pr\|audit\) ;; \*\) echo "::error::mode must be pr or audit"; exit 1/);
+  assert.match(steps[1], /name: Check mode\nid: mode[\s\S]*MODE: \$\{\{ inputs\.mode \}\}[\s\S]*scan\|audit\) m=scan ;; \*\) echo "::error::mode must be pr or scan/);
   assert.equal(cond(steps[1]), '');
 });
 
+test('action.yml: the Check mode step accepts pr, scan and the alias audit, and outputs the canonical name; scan never runs on a pull_request', (t) => {
+  const script = steps[1].split('run: |\n')[1].replace(/^ {2}/gm, '');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-mode-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const run = (MODE, EVENT = 'workflow_dispatch') => {
+    const out = path.join(dir, 'out.txt');
+    fs.writeFileSync(out, '');
+    const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, MODE, EVENT, GITHUB_OUTPUT: out } });
+    return { status: r.status, out: fs.readFileSync(out, 'utf8').trim(), stdout: r.stdout };
+  };
+  assert.deepEqual(run('pr', 'pull_request'), { status: 0, out: 'mode=pr', stdout: '' });
+  assert.deepEqual(run('scan', 'schedule'), { status: 0, out: 'mode=scan', stdout: '' });
+  assert.deepEqual(run('audit', 'workflow_dispatch'), { status: 0, out: 'mode=scan', stdout: '' }, 'audit is an alias of scan');
+  for (const m of ['scan', 'audit']) {
+    const r = run(m, 'pull_request');
+    assert.equal(r.status, 1, m);
+    assert.match(r.stdout, /::error::mode scan runs on workflow_dispatch or schedule, not on pull_request/);
+  }
+  const bad = run('both');
+  assert.equal(bad.status, 1);
+  assert.match(bad.stdout, /::error::mode must be pr or scan \(audit is an alias of scan\)/);
+});
+
 test('action.yml contract: every PR step is guarded by mode pr, audit steps by mode audit, shared steps by both', () => {
-  const pr = /inputs\.mode == 'pr'/, au = /inputs\.mode == 'audit'/;
+  const pr = /inputs\.mode == 'pr'/, au = /steps\.mode\.outputs\.mode == 'scan'/; // scan is the canonical name; audit is normalised to it by the Check mode step
   const kinds = { pr: [], audit: [], both: [], none: [] };
   for (const s of steps) {
     const c = cond(s);
@@ -46,7 +73,7 @@ test('action.yml contract: every PR step is guarded by mode pr, audit steps by m
   for (const s of kinds.audit) assert.doesNotMatch(cond(s), /preflight|steps\.collect/);
   for (const s of kinds.both) {
     assert.match(cond(s), /inputs\.mode == 'pr' && steps\.preflight\.outputs\.skip != 'true' && steps\.collect\.outputs\.skip != 'true'/, 'the PR condition is the old one');
-    assert.match(cond(s), /inputs\.mode == 'audit' && steps\.audit_collect\.outputs\.skip != 'true'/);
+    assert.match(cond(s), /steps\.mode\.outputs\.mode == 'scan' && steps\.audit_collect\.outputs\.skip != 'true'/);
   }
 });
 
@@ -59,23 +86,25 @@ test('action.yml: the PR post step stays the first github-script step (the M1 en
   const src = fs.readFileSync(path.join(__dirname, 'audit-post.js'), 'utf8');
   const read = new Set([...src.matchAll(/\benv\.([A-Z][A-Z_]+)/g)].map((m) => m[1]));
   const runner = new Set(['GITHUB_WORKSPACE', 'GITHUB_SERVER_URL', 'GITHUB_SHA']);
-  assert.ok(read.has('AUDIT_ISSUE') && read.has('SKIP') && read.has('ENGINE'));
+  assert.ok(read.has('SCAN_ISSUE') && read.has('AUDIT_ISSUE') && read.has('SKIP') && read.has('ENGINE'));
   assert.deepEqual([...read].filter((k) => !mapped.has(k) && !runner.has(k)), []);
+  assert.match(s, /SCAN_ISSUE: \$\{\{ inputs\.scan_issue \}\}/);
   assert.match(s, /AUDIT_ISSUE: \$\{\{ inputs\.audit_issue \}\}/);
   assert.match(s, /SKIP: \$\{\{ steps\.audit_collect\.outputs\.skip \}\}/);
 });
 
 test('action.yml: audit collect gets the globs and the cap; the Copilot step switches skill, schema and prompt mode on MODE; Copilot validates with CHECK=audit', () => {
   const c = find(/id: audit_collect/);
-  for (const m of [/REQ_PATHS: \$\{\{ inputs\.requirements_paths \}\}/, /IGNORE_EXTRA: \$\{\{ inputs\.ignore \}\}/, /MAX_REQUIREMENTS: \$\{\{ inputs\.audit_max_requirements \}\}/, /CTX: \$\{\{ github\.workspace \}\}\/\.specguard-ctx/]) assert.match(c, m);
+  for (const m of [/REQ_PATHS: \$\{\{ inputs\.requirements_paths \}\}/, /IGNORE_EXTRA: \$\{\{ inputs\.ignore \}\}/, /SCAN_MAX_BLOCKS: \$\{\{ inputs\.scan_max_blocks \}\}/, /MAX_REQUIREMENTS: \$\{\{ inputs\.audit_max_requirements \}\}/,/CTX: \$\{\{ github\.workspace \}\}\/\.specguard-ctx/]) assert.match(c, m);
   const copilot = find(/Run the review engine/);
-  assert.match(copilot, /MODE: \$\{\{ inputs\.mode \}\}/);
+  assert.match(copilot, /MODE: \$\{\{ steps\.mode\.outputs\.mode \}\}/);
+  assert.match(copilot, /if \[ "\$MODE" = scan \]; then skill=/);
   assert.match(copilot, /skills\/spec-audit/);
   assert.match(copilot, /src\/audit\.schema\.json/);
   assert.match(copilot, /skills\/test-review/);
   assert.match(copilot, /src\/findings\.schema\.json/);
   assert.match(copilot, /--mode "\$MODE"/);
-  assert.match(copilot, /CHECK: \$\{\{ inputs\.mode == 'audit' && 'audit' \|\| '' \}\}/);
+  assert.match(copilot, /CHECK: \$\{\{ steps\.mode\.outputs\.mode == 'scan' && 'audit' \|\| '' \}\}/);
 });
 
 // ---- extract-json --check with CHECK=audit ----

@@ -63,14 +63,17 @@ test('URLs of another repository are rejected with the reason; non-GitHub URLs s
   }
 });
 
-test('mode and PR: auto = pr when a PR is given else audit; pr mode needs a PR; bad numbers and refs are rejected; the three lists resolve together', () => {
+test('mode and PR: auto = pr when a PR is given else scan (audit is an alias of scan); pr mode needs a PR; bad numbers and refs are rejected; the three lists resolve together', () => {
   const base = { REPO: 'acme/shop' };
-  assert.equal(resolve(base).mode, 'audit');
+  assert.equal(resolve(base).mode, 'scan');
+  assert.equal(resolve({ ...base, MODE: 'scan' }).mode, 'scan');
+  assert.equal(resolve({ ...base, MODE: 'audit' }).mode, 'scan', 'audit is accepted and normalised to scan');
   assert.deepEqual(resolve({ ...base, PR: '12' }), { repo: 'acme/shop', pr: '12', ref: '', mode: 'pr', design: '', rules: '', tests: '' });
   assert.equal(resolve({ REPO: 'https://github.com/acme/shop/pull/9' }).pr, '9');
   assert.equal(resolve({ ...base, PR: '5', REPO: 'https://github.com/acme/shop/pull/9' }).pr, '5', 'the pr input wins over the URL');
-  assert.equal(resolve({ ...base, MODE: 'audit', PR: '12' }).pr, '', 'audit ignores the PR');
-  assert.equal(resolve({ ...base, MODE: 'audit', REF: 'release/1.0' }).ref, 'release/1.0');
+  assert.equal(resolve({ ...base, MODE: 'scan', PR: '12' }).pr, '', 'scan ignores the PR');
+  assert.equal(resolve({ ...base, MODE: 'audit', PR: '12' }).pr, '', 'the alias ignores it too');
+  assert.equal(resolve({ ...base, MODE: 'scan', REF: 'release/1.0' }).ref, 'release/1.0');
   err(() => resolve({ ...base, MODE: 'pr' }), /needs a PR number/);
   err(() => resolve({ ...base, PR: 'abc' }), /pull request number/);
   err(() => resolve({ ...base, PR: '0' }), /pull request number/);
@@ -101,7 +104,7 @@ test('specguard-run.yml: dispatch inputs, minimal permissions, PAT checkout with
   for (const k of ['repo', 'pr', 'ref', 'design_docs', 'rules_docs', 'test_dirs', 'mode', 'post_to_pr', 'model', 'effort']) assert.match(y, new RegExp(`^ {6}${k}: \\{`, 'm'), k);
   assert.match(y, /^ {6}repo: \{[^}]*required: true/m);
   assert.match(y, /^ {6}post_to_pr: \{[^}]*type: boolean, default: false/m);
-  assert.match(y, /^ {6}mode: \{[^}]*options: \[auto, pr, audit\]/m);
+  assert.match(y, /^ {6}mode: \{[^}]*options: \[auto, pr, scan\]/m);
   assert.match(y, /^permissions: \{\}$/m);
   assert.match(y, /permissions: \{ contents: read, pull-requests: read \}/); // read-only: the job token is the fallback when SPECGUARD_PAT is unset
   assert.match(y, /permissions: \{ contents: read, pull-requests: read, issues: read, copilot-requests: write \}/);

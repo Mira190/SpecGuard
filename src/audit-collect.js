@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Audit mode, step 1: deterministic context for the checked-out HEAD (no diff, no AI, no repo code executed).
-// Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA MAX_REQUIREMENTS (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
+// Unit test gap scan (mode scan; audit is an alias), step 1: deterministic context for the checked-out HEAD (no diff, no AI, no repo code executed).
+// Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
 // Writes audit-docs.txt, audit-candidates.txt (cid, path:line, heading, text: the blocks the model must assess), audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
 const fs = require('node:fs');
 const os = require('node:os');
@@ -86,17 +86,17 @@ function candidates(cwd, head, docs, cap) {
     const where = c.heading ? `${c.path} § ${c.heading}` : `${c.path} (before the first heading)`, last = notAudited[notAudited.length - 1];
     if (last && last.where === where) last.n++; else notAudited.push({ where, n: 1 });
   }
-  const left = notAudited.map(({ where, n: k }) => `${where}: ${k} block${k === 1 ? '' : 's'} not audited (cap)`);
+  const left = notAudited.map(({ where, n: k }) => `${where}: ${k} block${k === 1 ? '' : 's'} not scanned (cap)`);
   if (n < Math.min(cap, all.length)) left.unshift(`audit-candidates.txt would pass ${CAND_CAP / 1024} KB: the cap was lowered to ${n} blocks`);
   return { text, total: all.length, listed: n, left };
 }
 
-// The audit reads the default branch only: another ref's documents would overwrite the one audit issue. Returns { error } or { warn } or {}.
+// The scan reads the default branch only: another ref's documents would overwrite the one scan issue. Returns { error } or { warn } or {}.
 function branchGuard({ refName = '', eventPath = '' } = {}) {
   let def = '';
   try { def = JSON.parse(fs.readFileSync(eventPath, 'utf8')).repository.default_branch || ''; } catch { /* no event file */ }
-  if (!refName || !def) return { warn: 'could not tell whether this ref is the default branch (GITHUB_REF_NAME or the event payload is missing); auditing the checked-out ref' };
-  return refName === def ? {} : { error: `mode audit audits the default branch (${def}); this run is on ${refName}. Run it from the default branch (a schedule or workflow_dispatch there).` };
+  if (!refName || !def) return { warn: 'could not tell whether this ref is the default branch (GITHUB_REF_NAME or the event payload is missing); scanning the checked-out ref' };
+  return refName === def ? {} : { error: `mode scan reads the default branch (${def}); this run is on ${refName}. Run it from the default branch (a schedule or workflow_dispatch there).` };
 }
 
 function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80 }) {
@@ -138,14 +138,15 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
 
 if (require.main === module) {
   const env = process.env;
-  const max = /^\d{1,3}$/.test(env.MAX_REQUIREMENTS || '80') ? +(env.MAX_REQUIREMENTS || 80) : 0;
-  if (max < 1 || max > 500) { console.log('::error::audit_max_requirements must be an integer from 1 to 500'); process.exit(1); }
+  const raw = env.SCAN_MAX_BLOCKS || env.MAX_REQUIREMENTS || '80', input = env.SCAN_MAX_BLOCKS ? 'scan_max_blocks' : 'audit_max_requirements';
+  const max = /^\d{1,3}$/.test(raw) ? +raw : 0;
+  if (max < 1 || max > 500) { console.log(`::error::${input} must be an integer from 1 to 500`); process.exit(1); }
   if (!env.CTX) { console.error('CTX is required'); process.exit(2); }
   const g = env.AUDIT_BRANCH_GUARD === 'off' ? {} : branchGuard({ refName: env.GITHUB_REF_NAME, eventPath: env.GITHUB_EVENT_PATH }); // off: manual run on another repository
   if (g.error) { console.log(`::error::${g.error}`); process.exit(1); }
   if (g.warn) console.log(`::warning::${g.warn}`);
   const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max });
-  console.log(`SpecGuard audit: ${r.docs.length} requirement document(s), ${r.rejected.length} not admitted`);
+  console.log(`SpecGuard unit test gap scan: ${r.docs.length} design document(s), ${r.rejected.length} not admitted`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length ? 'false' : 'true'}\n`);
 }
 module.exports = { collect, testLayout, branchGuard, blocksOf, STANDARDS };
