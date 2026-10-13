@@ -24,7 +24,9 @@ const MAX_HUNKS = 60, CAND_CAP = 60 * 1024, PER_HUNK = 5, FLOOR = 0.3, SURE = 3,
 const BLOCK_PER_HUNK = 3, BLOCK_TOTAL = 20, BLOCK_MIN = 2; // descriptive-block candidates: per hunk, overall, and the BM25 score a block must exceed, in units of the idf of a term seen in one block (about two rare terms' worth; idf grows with the corpus)
 // Words that match every doc and every program: dropped from the hunk query when ranking descriptive blocks. ponytail: English and JS-flavoured, extend when another language floods the candidates.
 const BLOCK_STOP = new Set('the is it an of to in and or as are be for from with that this on by at not no use src ts tsx js cjs return const let var function async await export import true false null undefined string number boolean type interface class void if else'.split(' '));
-const NOT_CODE_DIR = /(^|\/)(testdata|fixtures?|__fixtures__|__snapshots__|vendor|third_party|generated)\//i; // hunks there rarely trace to a requirement
+// Sample and vendored trees are never requirement-document candidates (a requirements_paths entry or a PR-named document still admits one).
+const FIXTURE_PATH = /(^|\/)(fixtures|__fixtures__|testdata|test-data|vendor|node_modules|third_party)\/|^eval\/cases\/|(^|\/)(tests?|__tests__|spec)\/(?:.*\/)?examples\//i;
+const NOT_CODE_DIR =/(^|\/)(testdata|fixtures?|__fixtures__|__snapshots__|vendor|third_party|generated)\//i; // hunks there rarely trace to a requirement
 // A wall-clock budget shared by the expensive loops; they stop early and the run records a limitation instead of being killed.
 const makeClock = (ms) => { const end = Date.now() + ms; return { left: () => end - Date.now(), over: () => Date.now() >= end }; };
 // Mirrors the globs in collect.sh. ponytail: duplicated, keep in sync (collect.sh could export them later).
@@ -564,11 +566,12 @@ function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [], bra
   const excluded = (p) => exc.some((g) => matchGlob(p, g)), named = namedSet({ cwd, base, head, texts, ruled, excluded, branch });
   const forced = (p) => inc.some((g) => matchGlob(p, g)) || named.has(p); // a doc the PR or a linked issue names is admitted like a requirements_paths entry
   for (const e of entries) if (UNREADABLE.test(e.path) && UNREADABLE_NAME.test(path.basename(e.path)) && !excluded(e.path)) limitations.push(`requirement-like file not readable: ${e.path}`);
-  let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
-    && ((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
+  const sample = (p) => FIXTURE_PATH.test(p) && !forced(p);
+  let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path) && !sample(e.path)
+    &&((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
   // Documents over MAX_FILE are not indexed. Those that read like a spec (RFC 2119 capitals) are listed so the skip is visible,
   // and run() still parses one when the PR changes it.
-  const bigAll = entries.filter((e) => e.size > MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
+  const bigAll = entries.filter((e) => e.size > MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path) && !sample(e.path)
     && ((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).slice(0, 60);
   const bigBufs = catBatch(cwd, bigAll.map((e) => (e.size <= MAX_BIG ? e.sha : '0'.repeat(40))));
   const must = bigAll.map((e, k) => (bigBufs[k] ? (bigBufs[k].toString('utf8').match(/\b(MUST|SHALL)\b/g) || []).length : 0));
