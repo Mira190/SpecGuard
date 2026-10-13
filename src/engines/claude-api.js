@@ -78,32 +78,32 @@ function contextPack(ctx, root, limit) {
   const list = (n) => rd(n).split('\n').filter(Boolean);
   const parts = [], seen = new Set(), omitted = [];
   let used = 0, files = 0;
+  const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit
   const addFile = (p, num) => { // num: line-numbered
     const rel = path.posix.normalize(p.replace(/\\/g, '/'));
     if (seen.has(rel)) return;
     seen.add(rel);
     const text = packRead(root, rel);
     if (!text || !text.trim()) return;
-    const room = Math.min(PER_FILE, limit - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
+    const room = Math.min(num ? cap : PER_FILE, limit - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
     if (room < 200) return void omitted.push(rel);
     const c = cut(num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text, room);
     if (c.cut && c.lines < 1) return void omitted.push(rel);
     const b = block(rel, c.text, `${c.cut ? `first ${c.lines} of ${src.length} lines` : 'full file'}${num ? ', line-numbered' : ''}`);
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
-  const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch');
-  const head = cut(diff, LIMITS.diff);
-  if (head.cut && limit - OVERHEAD >= 200) { // the part of the diff prompt.js cut ("Read ... for the rest")
-    const dl = diff.replace(/\n$/, '').split('\n'), c = cut(dl.slice(head.lines).join('\n'), limit - OVERHEAD), all = dl.length;
-    if (c.lines > 0) { const b = block(`${dname} (rest)`, c.text, `lines ${head.lines + 1} to ${head.lines + c.lines} of ${all}; continues the diff block above${c.cut ? '; cut at the context budget' : ''}`); parts.push(b); used += Buffer.byteLength(b); }
-  }
   for (const p of list('standards.txt')) addFile(p, false);
   const focus = list('focus.txt').map((l) => l.split('\t')[0]), review = focus.length ? focus : list('files.txt');
-  for (const p of review) addFile(p, true);
   const cands = parseCandidates(rd('test-candidates.txt'));
-  for (const p of review) for (const t of cands.get(p) || []) addFile(t, true);
+  for (const p of review) { addFile(p, true); for (const t of cands.get(p) || []) addFile(t, true); } // each file, then its tests
+  const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch');
+  const head = cut(diff, LIMITS.diff);
+  if (head.cut && limit - used - OVERHEAD >= 200) { // the part of the diff prompt.js cut ("Read ... for the rest")
+    const dl = diff.replace(/\n$/, '').split('\n'), c = cut(dl.slice(head.lines).join('\n'), limit - used - OVERHEAD), all = dl.length;
+    if (c.lines > 0) { const b = block(`${dname} (rest)`, c.text, `lines ${head.lines + 1} to ${head.lines + c.lines} of ${all}; continues the diff block above${c.cut ? '; cut at the context budget' : ''}`); parts.push(b); used += Buffer.byteLength(b); }
+  }
   for (const p of list('spec-files.txt')) addFile(p, false);
-  const text = parts.length ? `Repository files (read from the checked-out repository; the rest of a cut diff, rule files, the files under review, their candidate tests, requirement documents):\n\n${parts.join('\n\n')}` : '';
+  const text = parts.length ? `Repository files (read from the checked-out repository; rule files, each file under review followed by its candidate tests, the rest of a cut diff, requirement documents):\n\n${parts.join('\n\n')}` : '';
   const note = files || omitted.length ? `context pack: ${files} files, ${Math.round(used / 1024)} KB${omitted.length ? `; not included: ${omitted.slice(0, 4).join(', ')}${omitted.length > 4 ? ` (+${omitted.length - 4} more)` : ''}` : ''}` : '';
   return { text, note };
 }
