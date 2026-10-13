@@ -43,7 +43,7 @@ Requirement documents anywhere in the repo (IDs such as `AC-4`, acceptance-crite
 
 - Inline comments from `github-actions[bot]`: test skeletons for missing tests, one-click suggested fixes for standard violations.
 - A sticky summary maps each requirement or changed behaviour to an obligation, an exact behaviour citation, assertion quotes, test layers, and an explained status. Low-confidence items are collapsed in it.
-- Every summary that ran the engine carries a small-print line: model, tokens (in, cached, out), cost and API time. Copilot cost is an estimate from AI credits (1 credit = $0.01); the billing API remains authoritative.
+- Every summary that ran the engine carries a small-print line: model, tokens (in, cached, out), cost and API time. Copilot cost is an estimate from AI credits (1 credit = $0.01); the billing API remains authoritative. Copilot has no schema enforcement, so an answer with missing or invalid JSON gets one repair turn on the same session; its usage is added to the line.
 - Separate coding-standard and test-layer assessments, including when no violations or pushdown candidates were found.
 - `covered` requires a unit assertion; `higher_level_only` records component/integration/e2e evidence without counting it as unit coverage. Pushdown suggestions identify a public unit seam and preserve necessary integration checks.
 - Unknown evidence, inaccessible issues and partial reviews remain visible. Empty findings never imply that requirements were fully reviewed.
@@ -72,7 +72,9 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `anthropic_api_key` | | Alternative Claude credential. |
 | `copilot_token` | | Fine-grained PAT (Copilot Requests), only if the job token cannot be used. |
 | `github_token` | `github.token` | Needs `pull-requests: write`. |
-| `model` | engine default | Model name passed to the CLI. |
+| `model` | engine default | Model name passed to the CLI (`auto` or a name of letters, digits and `. _ : [ ] -`). Copilot: the models you can use depend on the token owner's Copilot plan (Free/Student: `auto` only); an unavailable model falls back to `auto` once, and the summary says so. |
+| `effort` | engine default | `low`, `medium`, `high`, `xhigh` or `max`. Claude: `--effort`. Copilot: `--reasoning-effort`, passed only with an explicit model other than `auto` (effort cannot be set with `auto`; the summary notes "effort ignored: model auto"). |
+| `copilot_max_ai_credits` | `200` | Copilot soft cap on AI credits per turn, integer 30-2000. |
 | `max_turns` | `30` | Agent turn cap (Claude only). |
 | `max_budget_usd` | `2` | Spend cap per run (Claude only). |
 | `review_timeout_minutes` | `12` | Engine time limit. The job `timeout-minutes` must exceed it by at least 3. |

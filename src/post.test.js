@@ -255,6 +255,40 @@ test('a Could not complete summary and a complete one both carry the usage line'
   assert.match(c.calls.summary[0].body, /<sub>Engine: claude · Tokens: 9 in · 1 out · Cost \$0\.25<\/sub>/);
 });
 
+test('usage line: the repair turn is summed into tokens, credits and API time; notes follow in the same line', () => {
+  const rep = { totalNanoAiu: 2.4e9, tokenDetails: { input: { tokenCount: 1000 }, cache_read: { tokenCount: 4000 }, cache_write: { tokenCount: 0 }, output: { tokenCount: 900 } }, totalApiDurationMs: 8000, modelMetrics: { 'gpt-5.4': { usage: { inputTokens: 1000, outputTokens: 900, cacheReadTokens: 4000, cacheWriteTokens: 0 } } } };
+  const l = post.usageLine({ engine: 'copilot', model: 'gpt-5.4', raw: post.mergeUsage(COPILOT_USAGE, rep), notes: ['effort: high', 'JSON repaired in one extra turn'] });
+  assert.equal(l, '<sub>Engine: copilot · Model: gpt-5.4 · Tokens: 417.3k in (305.0k cached) · 4.0k out · Cost ≈ $0.20 (20.0 AI credits) · API time 3m20s · effort: high · JSON repaired in one extra turn</sub>');
+  assert.deepEqual(post.mergeUsage(null, rep), rep); // the first turn left no usage file
+  assert.deepEqual(post.mergeUsage(COPILOT_USAGE, null), COPILOT_USAGE);
+  assert.doesNotMatch(post.usageLine({ engine: 'copilot', raw: post.mergeUsage({}, {}) }), /NaN|undefined|Cost/);
+});
+
+test('usage line: requested model shown when it differs from what ran, unless the fallback note already says so', () => {
+  assert.match(post.usageLine({ engine: 'copilot', model: 'auto', raw: COPILOT_USAGE }), /Model: gpt-5\.4 \(requested auto\)/);
+  assert.doesNotMatch(post.usageLine({ engine: 'copilot', model: 'gpt-5.4', raw: COPILOT_USAGE }), /requested/);
+  const l = post.usageLine({ engine: 'copilot', model: 'gpt-9', raw: COPILOT_USAGE, notes: ['model_fallback: gpt-9 → auto'] });
+  assert.doesNotMatch(l, /requested/);
+  assert.match(l, /model_fallback: gpt-9 → auto<\/sub>$/);
+});
+
+test('engine notes, the repair note and the second usage file reach the summary, also on a Could not complete run', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx/usage.json'), JSON.stringify(COPILOT_USAGE));
+  fs.writeFileSync(path.join(s.dir, 'ctx/usage-repair.json'), JSON.stringify({ totalNanoAiu: 2.4e9, totalApiDurationMs: 8000 }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/engine-notes'), 'effort ignored: model auto\nmodel_fallback: gpt-9 → auto\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/engine-repair'), 'repaired\n');
+  await post(s);
+  assert.match(s.calls.summary[0].body, /Cost ≈ \$0\.20 \(20\.0 AI credits\) · API time 3m20s · effort ignored: model auto · model_fallback: gpt-9 → auto · JSON repaired in one extra turn<\/sub>/);
+  const f = setup(t);
+  fs.writeFileSync(path.join(f.dir, 'ctx/usage.json'), JSON.stringify(COPILOT_USAGE));
+  fs.writeFileSync(path.join(f.dir, 'ctx/engine-repair'), 'repair_failed\n');
+  fs.writeFileSync(path.join(f.dir, 'ctx/findings.json'), JSON.stringify({ findings: [] }));
+  await post(f);
+  assert.match(f.calls.summary[0].body, /Could not complete: findings\.json failed validation: coverage must be an array/);
+  assert.match(f.calls.summary[0].body, /JSON repair turn failed<\/sub>/);
+});
+
 test('verifies unit assertions and displays their text and layer without claiming execution', async (t) => {
   const s = setup(t, report({ coverage: [row()], findings: [] }));
   await post(s);
