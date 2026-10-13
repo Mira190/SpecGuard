@@ -581,8 +581,8 @@ function engineNotes(raw, repair) {
   const label = { repaired: 'JSON repaired in one extra turn', repair_failed: 'JSON repair turn failed', finalized: 'finalized after the budget ran out', finalize_failed: 'finalize turn failed' }[repair];
   return label && !notes.some((n) => n.toLowerCase().startsWith(label.slice(0, 8).toLowerCase())) ? [...notes, label] : notes;
 }
-// One small-print line: engine, model(s), tokens, cost, API time, then `notes` (effort, model fallback, JSON repair). `raw` is the Copilot usage JSON (--usage-output-file) or null; only numbers and model names are read from it.
-function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
+// The parts of the small-print cost line: cost, model(s), tokens, API time. `raw` is the Copilot usage JSON (--usage-output-file) or null; only numbers and model names are read from it.
+function usageParts({ engine, model, raw, notes = [], used = [], tier }) {
   const tok = (i, cr, cw, o) => { i = (fin(i) ?? 0) + (fin(cr) ?? 0) + (fin(cw) ?? 0); return { i, c: fin(cr) ?? 0, o: fin(o) ?? 0 }; };
   const show = (t) => `${kM(t.i)} in${t.c ? ` (${kM(t.c)} cached)` : ''} · ${kM(t.o)} out`;
   // copilot's per-model inputTokens already include cache read and write (tokenDetails.input is the uncached part): tok adds them back once
@@ -596,22 +596,27 @@ function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
     ms = fin(u.totalApiDurationMs);
     if (!models.length && typeof u.currentModel === 'string') models = [{ n: u.currentModel }];
   }
-  const nm = (s) => cell(s, 80);
-  const parts = [`Engine: ${nm(engine)}`], fast = tier === 'fast' ? ' (fast tier)' : ''; // used: the model(s) the engine step recorded (engine-model.json), more exact than the request
-  if (models.length > 1) parts.push(`Models: ${models.map((m) => `${nm(m.n)}${m.t ? ` (${show(m.t)})` : ''}`).join(', ')}${fast}`);
-  else if (used.length > 1) { parts.push(`Models: ${used.map(nm).join(', ')}${fast}`); const t = total || models[0]?.t; if (t) parts.push(`Tokens: ${show(t)}`); }
+  const nm = (s) => cell(s, 80), parts = [], tokens = [], fast = tier === 'fast' ? ' (fast tier)' : ''; // used: the model(s) the engine step recorded (engine-model.json), more exact than the request
+  const recorded = !!(usd || ms || (total && (total.i || total.o)) || models.some((m) => m.t && (m.t.i || m.t.o)));
+  if (usd) parts.push(`Cost ${engine === 'copilot' ? '≈ ' : ''}$${usd.toFixed(usd < 0.01 ? 4 : 2)}${credits !== undefined ? ` (${credits.toFixed(credits < 10 ? 2 : 1)} AI credits)` : ''}`); // cost first; with no price there is no Cost part, never a guess
+  let model1 = ''; // the model(s), also for the run line when no usage was recorded
+  if (models.length > 1) model1 = `Models: ${models.map((m) => `${nm(m.n)}${m.t ? ` (${show(m.t)})` : ''}`).join(', ')}${fast}`;
+  else if (used.length > 1) { model1 = `Models: ${used.map(nm).join(', ')}${fast}`; const t = total || models[0]?.t; if (t) tokens.push(show(t)); }
   else {
     const actual = used[0] || models[0]?.n, n = actual || model;
-    if (n) parts.push(`Model: ${nm(n)}${fast}${actual && model && actual !== model && !notes.some((x) => x.startsWith('model_fallback')) ? ` (requested ${nm(model)})` : ''}`);
+    if (n) model1 = `${nm(n)}${fast}${actual && model && actual !== model && !notes.some((x) => x.startsWith('model_fallback')) ? ` (requested ${nm(model)})` : ''}`;
     const t = total || models[0]?.t;
-    if (t && (t.i || t.o)) parts.push(`Tokens: ${show(t)}`); // a run that failed before the model answered records zeros: no noise
+    if (t && (t.i || t.o)) tokens.push(show(t)); // a run that failed before the model answered records zeros: no noise
   }
-  const recorded = !!(usd || ms || (total && (total.i || total.o)) || models.some((m) => m.t && (m.t.i || m.t.o)));
-  if (usd) parts.push(`Cost ${engine === 'copilot' ? '≈ ' : ''}$${usd.toFixed(usd < 0.01 ? 4 : 2)}${credits !== undefined ? ` (${credits.toFixed(credits < 10 ? 2 : 1)} AI credits)` : ''}`);
-  if (ms) parts.push(`API time ${ms < 6e4 ? `${(ms / 1e3).toFixed(1)}s` : `${Math.floor(ms / 6e4)}m${String(Math.round((ms % 6e4) / 1e3)).padStart(2, '0')}s`}`);
-  for (const x of notes) if (x !== 'usage partial' || recorded) parts.push(nm(x)); // 'usage partial' qualifies a total that exists
-  return `<sub>${parts.join(' · ')}</sub>`;
+  parts.push(...(model1 ? [model1] : []), ...tokens);
+  if (ms) parts.push(ms < 6e4 ? `${Math.round(ms / 1e3)}s` : `${Math.floor(ms / 6e4)}m${String(Math.round((ms % 6e4) / 1e3)).padStart(2, '0')}s`);
+  if (recorded && notes.includes('usage partial')) parts.push('usage partial'); // qualifies a total that exists
+  return Object.assign(recorded ? parts : [], { model: model1, recorded }); // nothing recorded (a failed run): no cost line, just the model for the run line
 }
+// The visible cost line: cost first, then model and tokens; '' when nothing was recorded.
+const usageLine = (a) => { const p = usageParts(a); return p.length ? `<sub>${p.join(' · ')}</sub>` : ''; };
+// The run information that stays in Details: engine and the engine's notes (effort, context pack, model fallback, JSON repair).
+const runLine = (a) => `Run: engine ${cell(a.engine, 80)}${[usageParts(a).recorded ? '' : usageParts(a).model, ...(a.notes || []).filter((x) => x !== 'usage partial')].filter(Boolean).map((x) => ` · ${cell(x, 160)}`).join('')}`;
 // Fix-through telemetry (0 tokens). The outcome of an earlier finding, conservatively: nothing here is ever "fixed", only observed.
 //   dismissed: a person resolved the thread with neither the anchor nor any test changed, or 👎 outnumber 👍 by 2 (we add no reactions: all are people's)
 //   open: reported again; addressed: not reported and the author changed the anchored lines or any test file since the comment (first-parent, no base merges)
@@ -643,7 +648,7 @@ function sourcesRead({ reqDocs = [], standards = [], trace, head, base, rejected
 // Icons, always beside a text label: ❌ needs action, ✅ met by static review (labelled "Evidenced"), ❔ not assessed or a person must check, ⚠️ incomplete or reduced review.
 // Every string SpecGuard writes is English; repository text appears only inside quotes.
 const KIND_LABEL = { missing_test: 'Missing test', weak_test: 'Weak test', spec_mismatch: 'Mismatch', standard: 'Violation', pushdown: 'Move down' };
-const STATUS_LABEL = { covered: 'Evidenced', weak_test: 'Weak test', missing_test: 'Missing test', higher_level_only: 'Higher-level only', needs_human: 'Needs a person', unknown: 'Not assessed' };
+const STATUS_LABEL = { covered: 'Evidenced', weak_test: 'Weak test', missing_test: 'Missing test', higher_level_only: 'Higher-level only', needs_human: 'Needs a person', unknown: 'Unconfirmed' };
 // Why a finding is in the summary instead of an inline comment, in words.
 const ROUTES = [[/^low confidence$/, 'low confidence'], [/^summary only$/, ''], [/over max_comments|inline limit/, 'inline limit reached'], [/not in a diff hunk/, 'outside the diff'], [/removed test or assertion/, 'removed test or assertion'],
   [/outside the reviewed diff/, 'outside the reviewed diff'], [/withheld/, 'withheld: could not deduplicate'], [/anchor rejected|could not post/, 'could not be posted inline'], [/^not posted/, 'not posted'], [/not high confidence/, 'reduced review: needs high confidence and two citations'], [/reduced review/, 'reduced review']];
@@ -651,6 +656,17 @@ const route = (why) => (ROUTES.find(([re]) => re.test(String(why || ''))) || [0,
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const andList = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : xs[0] || '');
 const sentence = (s) => { const t = neutralize(String(s)).replace(/```[\s\S]*?```/g, ' ').replace(/\s+/g, ' ').trim(); return oneLine((/^.*?[.!?](?=\s|$)/.exec(t) || [t])[0], 200); };
+// A requirement as plain text for a table cell: emphasis and link syntax removed, code spans kept; cut at a word, never mid-code.
+const mdPlain = (s) => String(s).replace(/\s+/g, ' ').trim().replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').split(/(`[^`]*`)/)
+  .map((p, i) => (i % 2 ? p : p.replace(/\*\*|__/g, '').replace(/(^|[^\w*])[*_](?=\S)|(?<=\S)[*_](?![\w*])/g, '$1'))).join('');
+function words(s, n) {
+  if (s.length <= n) return s;
+  let t = s.slice(0, n - 1);
+  if (/\S/.test(s[n - 1])) t = t.replace(/\s+\S*$/, '');
+  if ((t.match(/`/g) || []).length % 2) t = t.slice(0, t.lastIndexOf('`'));
+  return `${t.replace(/[\s,;:(–—-]+$/, '')}…`;
+}
+const INTERNAL = /malformed|coverage row|layer not stated|citation|alignment|obligation/i; // validator wording: never shown to a developer
 const parens = (u) => u.replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
 const pin = (f, blob) => (blob ? parens(`${blob}/${String(f.path).split('/').map(encodeURIComponent).join('/')}#L${f.line}`) : '');
 const LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 8, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
@@ -710,7 +726,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   let verdict = '';
   if (failed) verdict = `**⚠️ Could not complete: ${neutralize(String(status || '').replace(/^Could not complete:\s*/i, ''))}**`;
   else if (!data) verdict = status ? `**${neutralize(status)}**` : '';
-  else if (reduced) verdict = '**⚠️ Reduced review: only high-confidence findings are shown.** Absence of a finding is not evidence of a pass.';
+  else if (reduced) verdict = act.length ? `**❌ ${andList(act)} to fix**` : '**⚠️ Reduced review: no high-confidence gaps**'; // the explanation is a blockquote after the table; never a pass line
   else if (inc) verdict = `**⚠️ Incomplete review: ${act.length ? `${andList(act)} found so far` : 'no unit test gaps found so far'}**`;
   else if (act.length) verdict = `**❌ ${andList(act)} to fix**`;
   else if (checks) verdict = `**❔ No gaps found; ${plural(checks, 'criterion', 'criteria')} need${checks === 1 ? 's' : ''} a person to check**`;
@@ -719,16 +735,17 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   else if (isClean) verdict = `**✅ No unit test gaps found** in ${rows.length ? `the ${rows.length} assessed ${rows.length === 1 ? 'criterion' : 'criteria'}` : 'the changed behaviour'}. Static review; tests were not run.`;
   else verdict = '**❔ No gaps found; part of the review could not be assessed**';
 
-  // line 2: the shape of the result in one glance (not for an incomplete run; a reduced run shows the counts, never a pass line)
+  // under the verdict: the shape of the result in one glance, as a 4-column table (not for an incomplete run; a reduced run never shows a pass)
   let line2 = '';
   if (data && !failed && !inc) {
     const n = (k) => rows.filter((x) => x.kind === k).length, nk = (k) => all.filter((f) => f.kind === k).length;
-    const crit = rows.length && !isClean ? [`Criteria: ${n('evidenced')} of ${rows.length} ✅ evidenced`, n('gap') && `${n('gap')} ❌ gap`, n('mismatch') && `${n('mismatch')} ❌ mismatch`, (n('unassessed') + n('check')) && `${n('unassessed') + n('check')} ❔ not assessed`].filter(Boolean) : [];
+    const req = [n('evidenced') && `✅ ${n('evidenced')}`, (n('gap') + n('mismatch')) && `❌ ${n('gap') + n('mismatch')}`, (n('unassessed') + n('check')) && `❔ ${n('unassessed') + n('check')}`].filter(Boolean).join(' · ');
     const tool = tooling && !['passed', 'not_configured'].includes(tooling.status) ? `; tool checks ${cell(tooling.status)}` : '';
-    const std = data.standards.status === 'checked' ? (nk('standard') ? plural(nk('standard'), 'violation') : 'none found') : data.standards.status === 'no_rules' ? 'no rules found' : 'not reviewed';
-    const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
+    const std = data.standards.status === 'checked' ? (nk('standard') ? `❌ ${plural(nk('standard'), 'violation')}` : '✅ no violations') : data.standards.status === 'no_rules' ? 'none found' : 'not reviewed';
+    const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `❌ ${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
+    const unit = nk('missing_test') || nk('weak_test') ? `❌ ${[nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ')}` : reduced ? 'no high-confidence gaps' : '✅ no gaps';
     const snc = counts && counts.complete && counts.since_total && counts.since, delta = snc ? [snc.addressed && `${snc.addressed} fixed`, Math.max(0, all.length - snc.open) && `${Math.max(0, all.length - snc.open)} new`].filter(Boolean) : []; // push-to-push: addressed earlier findings, and findings not reported before
-    line2 = [`Unit tests: ${nk('missing_test') || nk('weak_test') ? [nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ') : 'no gaps'}`, ...crit, `Standards: ${std}${tool}`, `Test layers: ${lay}`, ...(delta.length ? [`Since last push: ${delta.join(' · ')}`] : [])].join(' · ');
+    line2 = `| Unit tests | Requirements${rows.length ? ` (${rows.length})` : ''} | Coding standards | Test layers |\n|---|---|---|---|\n| ${unit} | ${req || 'none found'} | ${std}${tool} | ${lay} |\n${delta.length ? `\nSince last push: ${delta.join(' · ')}\n` : ''}`;
   }
 
   // notices: one blockquote, one bullet each. The incomplete sentence leads; rule and lint notices stay visible only because they change how to read the result.
@@ -736,7 +753,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const bullets = [...banner.map((r) => cell(r)), ...(changed ? ['Requirement text was changed by this PR: consistency with the changed text does not prove the change itself is approved.'] : []),
     ...(rules.length ? [`This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`] : []),
     ...(lintChanged.length ? [`Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`] : [])];
-  const notice = failed ? '' : [inc ? '> **⚠️ Incomplete review.** Not everything was covered; the findings below were verified, and the next push or rerun reviews again.' : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
+  const notice = failed ? '' : [inc ? '> **⚠️ Incomplete review.** Not everything was covered; the findings below were verified, and the next push or rerun reviews again.' : '', reduced ? `> ⚠️ Reduced review${reduced.reasons?.includes('fast-tier model') ? ' (fast model)' : ''}: only high-confidence findings are shown, so no finding is not a pass.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
   // the model's not_reviewed text as sentences; the automatic "Requirement X is not assessed" note is dropped when X has its own row in the table
   const shownIds = new Set(rows.map((x) => String(x.r.id)));
   const nrParts = (t) => String(t || '').split(/(?<=[.!?])\s+(?=[A-Z0-9`"'(])/).filter((x) => x.trim() && !shownIds.has((/^Requirement (\S+) is not assessed: /.exec(x) || [])[1]));
@@ -748,45 +765,51 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const add = (target, h, atoms = [], tail = '') => target.push({ h, atoms, tail });
   const detail = (h, atoms, tail = '\n') => atoms.length && add(det, h, atoms, tail);
   if (nrAll.length) {
-    add(vis, `### ⚠️ Not reviewed (${nrAll.length})\n\n`, nrAll.slice(0, NR_CAP).map((x) => `- ${x}\n`), nrAll.length > NR_CAP ? `- +${nrAll.length - NR_CAP} more in Details\n\n` : '\n');
     detail('**Not reviewed (more)**\n\n', nrAll.slice(NR_CAP).map((x) => `- ${x}\n`));
   }
   if (!failed && data) {
     const entry = (kinds) => [...posted.filter((x) => kinds.includes(x.f.kind)).map((x) => ({ f: x.f, url: x.url, posted: true })), ...items.filter((x) => kinds.includes(x.f.kind))];
     let rank = 0; // the top three findings overall keep their skeleton visible
+    const listed = new Set(); // findings whose title is in a visible list: a requirement row then only points to them
     const listOf = (title, kinds, more, onlyItems) => {
       const es = entry(kinds).filter((e) => !(onlyItems && e.posted));
       if (!es.length) return;
+      es.slice(0, LIST_CAP).forEach((e) => listed.add(e.f));
       const atoms = es.map((e) => { const r = rank++; return e.posted ? findingHead(e.f, { url: e.url, posted: true, bare: true }, blob) : findingBlock(e, blob, r, { bare: true }); });
       add(vis, `### ${title} (${es.length})\n\n`, atoms.slice(0, LIST_CAP), es.length > LIST_CAP ? `- +${es.length - LIST_CAP} more in Details\n\n` : '\n');
       detail(`**${more} (${es.length - LIST_CAP})**\n\n`, es.slice(LIST_CAP).map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: e.posted }, blob)));
     };
     listOf('❌ Missing unit tests', ['missing_test'], 'More missing unit tests');
     listOf('❌ Weak unit tests', ['weak_test'], 'More weak unit tests');
+    // a posted mismatch is a row below and a comment; one that was not posted carries its full text here, since no comment holds it
+    listOf('❌ Spec mismatches', ['spec_mismatch'], 'More spec mismatches', true);
     if (todo.length) {
       const link = (x) => { const u = x.f && (urls.get(x.f) || pin(x.f, blob)); return u ? ` ([finding](${/^https:\/\//.test(u) ? parens(u) : u}))` : ''; };
-      const next = (x) => (x.kind === 'gap' ? (x.f ? `${KIND_LABEL[x.f.kind]}: ${cell(title1(x.f.title), 110)}${link(x)}` : 'Add a unit test.')
-        : x.kind === 'mismatch' ? (x.f ? `${cell(title1(x.f.title), 130)}${link(x)}` : 'Check the code against the requirement.')
-          : x.kind === 'check' && x.higher ? 'Only higher-level tests cover it; add a unit test or confirm that is enough.'
-            : cell(x.cs.find((c) => c?.status === 'unknown' && c.reason)?.reason.replace(/^Not assessed:\s*/i, '') || 'Check by hand.', 160));
-      const row = (x) => `| ${x.kind === 'gap' ? '❌ Gap' : x.kind === 'mismatch' ? '❌ Mismatch' : '❔ Not assessed'} | **${cell(x.r.id, 40)}** ${cell(x.r.quote, 120)} | ${next(x)} |\n`;
-      const th = '| Status | Criterion | Next step |\n|---|---|---|\n';
-      add(vis, `### ${todo.some((x) => x.kind === 'gap' || x.kind === 'mismatch') ? '❌' : '❔'} Requirements to check (${todo.length})\n\n${th}`, todo.slice(0, ROW_CAP).map(row), todo.length > ROW_CAP ? `\n+${todo.length - ROW_CAP} more in Details.\n\n` : '\n');
-      detail(`**More criteria to check (${todo.length - ROW_CAP})**\n\n${th}`, todo.slice(ROW_CAP, ROW_CAP + MORE_CAP).map(row), todo.length > ROW_CAP + MORE_CAP ? `\n+${todo.length - ROW_CAP - MORE_CAP} more not shown.\n\n` : '\n');
+      const ask = 'Point to the unit test or add one';
+      const why = (x) => { // a short human reason; the validator's own wording is never shown
+        const t = String(x.higher ? 'only higher-level tests cover it.' : x.cs.find((c) => c?.status === 'unknown' && c.reason)?.reason || '').replace(/^(?:Not assessed|Unconfirmed):\s*/i, '').trim();
+        return t && !INTERNAL.test(t) ? `: ${words(t.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase()), 160 - ask.length - 2)}` : '.';
+      };
+      // each fact once: a finding listed above is only pointed to; its title stays here only when no visible list holds it (overflow, or a posted mismatch)
+      const act = (x, say) => (x.f && listed.has(x.f) ? `${say}${link(x) || '.'}` : x.f ? `${say}: ${cell(title1(x.f.title), 110)}${link(x)}` : `${say}.`);
+      const next = (x) => (x.kind === 'gap' ? act(x, x.f?.kind === 'weak_test' ? 'Strengthen the test' : 'Add the test') : x.kind === 'mismatch' ? act(x, 'Fix the code or the requirement') : cell(`${ask}${why(x)}`, 160));
+      const row = (ids) => (x) => `| ${x.kind === 'gap' ? '❌ Gap' : x.kind === 'mismatch' ? '❌ Mismatch' : '❔ Unconfirmed'} | ${ids ? `**${cell(x.r.id, 40)}** ` : ''}${cell(words(mdPlain(x.r.sentence || x.r.quote), 120))} | ${next(x)} |\n`;
+      const th = '| Status | Requirement | What to do |\n|---|---|---|\n';
+      add(vis, `### ${todo.some((x) => x.kind === 'gap' || x.kind === 'mismatch') ? '❌' : '❔'} Requirements to check (${todo.length})\n\n${th}`, todo.slice(0, ROW_CAP).map(row(false)), todo.length > ROW_CAP ? `\n+${todo.length - ROW_CAP} more in Details.\n\n` : '\n');
+      detail(`**More criteria to check (${todo.length - ROW_CAP})**\n\n${th}`, todo.slice(ROW_CAP, ROW_CAP + MORE_CAP).map(row(true)), todo.length > ROW_CAP + MORE_CAP ? `\n+${todo.length - ROW_CAP - MORE_CAP} more not shown.\n\n` : '\n');
     }
-    // a posted mismatch is a row above and a comment; one that was not posted carries its full text here, since no comment holds it
-    listOf('❌ Spec mismatches', ['spec_mismatch'], 'More spec mismatches', true);
     listOf('❌ Coding standard violations', ['standard'], 'More standards violations');
     listOf('❌ Tests to move down', ['pushdown'], 'More tests to move down');
     detail(`**Low-confidence findings (${lows.length})**\n\n`, lows.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)));
   }
+  if (nrAll.length) add(vis, `### ⚠️ Not reviewed (${nrAll.length})\n\n`, nrAll.slice(0, NR_CAP).map((x) => `- ${x}\n`), nrAll.length > NR_CAP ? `- +${nrAll.length - NR_CAP} more in Details\n\n` : '\n');
 
   // ---- Details: the rest of the result, then run information
   let preDone = false; // pre-existing drift sits after Traceability whether or not there is findings data
   const addPre = () => { if (!preDone && !failed && pre.length) detail('**Pre-existing drift (not caused by this PR)**\n\n', pre.map((f, i) => `${findingBlock({ f }, blob, i, { icon: '', flat: true })}\n`)); preDone = true; };
   if (!failed && data) {
     const covById = new Map(data.coverage.map((c) => [c.id, c]));
-    detail(`**Evidenced criteria (${rows.length - todo.length})**\n\n`, rows.filter((x) => x.kind === 'evidenced').slice(0, 50).map((x) => `- ✅ Evidenced: **${cell(x.r.id, 40)}** ${cell(x.r.quote, 120)}\n`), rows.length - todo.length > 50 ? `- +${rows.length - todo.length - 50} more\n\n` : '\n');
+    detail(`**Evidenced criteria (${rows.length - todo.length})**\n\n`, rows.filter((x) => x.kind === 'evidenced').slice(0, 50).map((x) => `- ✅ Evidenced: **${cell(x.r.id, 40)}** ${cell(words(mdPlain(x.r.sentence || x.r.quote), 120))}\n`), rows.length - todo.length > 50 ? `- +${rows.length - todo.length - 50} more\n\n` : '\n');
     const std = data.standards, lay = data.layering;
     detail('**Coding standards and test layers**\n\n', [`- Coding standards: ${STD_WORD[std.status] || cell(std.status)}. ${cell(std.reason)}${std.sources.length ? ` Sources: ${std.sources.map((s) => `\`${cell(s)}\``).join(', ')}.` : ''}\n`, `- Test layers: ${lay.status === 'checked' ? 'reviewed' : 'not reviewed'}. ${cell(lay.reason)}\n`]);
     if (tooling && tooling.status !== 'not_configured') add(det, `**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`, (tooling.checks || []).map((c) => `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`), '\n');
@@ -820,12 +843,14 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
       ...(resolveNote ? [`Threads for findings no longer reported were left open: ${cell(resolveNote)} (see README, resolve_stale).\n`] : [])];
     detail('**Run notes**\n\n', more);
   }
-  const usageAtom = engine ? `${usageLine({ engine, model, raw: usage, notes, used, tier })}\n` : '';
-  const delivered = delivery ? `\n<sub>Delivery: ${neutralize(delivery)}</sub>\n` : '';
+  // the cost stays visible (money was spent, a failed run too): the last line, in small text, merged with the delivery
+  const runAtom = engine ? `${runLine({ engine, model, raw: usage, notes, used, tier })}\n` : '';
+  const tailParts = [...(engine ? usageParts({ engine, model, raw: usage, notes, used, tier }) : []), ...(delivery ? [`Delivery: ${neutralize(delivery)}`] : [])];
+  const delivered = tailParts.length ? `\n<sub>${tailParts.join(' · ')}</sub>\n` : '';
 
   // ---- assemble under BODY_MAX: visible first, then Details with what is left
   const RESERVE = 200; // for the closing "(truncated)" line
-  let out = `${markers}${verdict}\n${line2 ? `${line2}\n` : ''}\n${notice ? `${notice}\n\n` : ''}`, cut = false;
+  let out = `${markers}${verdict}\n${line2 ? `\n${line2}` : ''}\n${notice ? `${notice}\n\n` : ''}`, cut = false;
   const room = () => BODY_MAX - RESERVE - out.length - delivered.length;
   for (const { h, atoms, tail } of vis) {
     if (!atoms.length && !h) continue;
@@ -836,14 +861,14 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   }
   const open = `<details><summary>${failed ? 'Details: run information' : 'Details: evidenced criteria, obligations, sources, run information'}</summary>\n\n`, close = '</details>\n';
   let inner = '', dropped_ = 0;
-  const left = () => room() - open.length - close.length - usageAtom.length - 2;
+  const left = () => room() - open.length - close.length - runAtom.length - 2;
   for (const { h, atoms, tail } of det) {
     let body = '', n = 0;
     for (const a of atoms) { if (h.length + inner.length + body.length + a.length + tail.length > left()) break; body += a; n++; }
     dropped_ += atoms.length - n;
     if (n || !atoms.length) inner += `${h}${body}${n < atoms.length ? `_+${atoms.length - n} more not shown._\n` : ''}${tail}`;
   }
-  if (inner || usageAtom) out += `${open}${inner}${usageAtom}\n${close}`;
+  if (inner || runAtom) out += `${open}${inner}${runAtom}\n${close}`;
   if (dropped_ || cut) out += `\n_(truncated: the summary exceeded the comment size limit; ${cut ? 'the most important sections come first' : 'details were dropped first'})_\n`;
   return clean(out + delivered);
 }
@@ -968,7 +993,7 @@ function verifyRequirements(data, context, read = readFile) {
   const invalid = new Map(), unassessed = [], unverified = new Set(); // invalid: obligation id -> the requirement citation that failed; unverified: obligations behind a criterion whose wording is not in its source
   const fail = (r, why) => r.obligation_ids.forEach((id) => invalid.set(id, `requirement ${r.id} ${r.source}${r.line ? `:${r.line}` : ''}: ${why}`));
   const texts = new Map(); // normalised once per source, not once per criterion
-  const textOf = (key, get) => { if (!texts.has(key)) { const text = get(); texts.set(key, { text, n: plain(text), x: norm(text) }); } return texts.get(key); };
+  const textOf = (key, get) => { if (!texts.has(key)) { const text = get(); const lines = text.split(/\r\n|\r|\n/), pl = lines.map(plain); texts.set(key, { text, n: plain(text), x: norm(text), lines, pl, at: new Map(pl.map((p, i) => [p, i]).reverse()) }); } return texts.get(key); }; // at: first line index per plain line
   const byId = new Map(data.requirements.map((r) => [r.id, r]));
   const docs = new Map();
   for (const d of context.documents || []) if (!docs.has(d.source)) docs.set(d.source, d);
@@ -1009,6 +1034,10 @@ function verifyRequirements(data, context, read = readFile) {
     } else if (!T.x.includes(norm(r.quote))) { // matched only as plain text: store the source's own line when the quote is one whole line
       const line = T.text.split(/\r\n|\r|\n/).find((l) => plain(l) === plain(r.quote));
       if (line !== undefined) r.quote = line.replace(MARKER, '').trim();
+    }
+    if (found) { // the display text is the source's whole line (a model quotes a fragment of the bullet), without its list marker; a quote wrapped over lines stays as is
+      const pq = plain(r.quote), i = T.at.has(pq) ? T.at.get(pq) : T.pl.findIndex((l) => l.includes(pq));
+      if (i >= 0) r.sentence = T.lines[i].replace(MARKER, '').trim();
     }
     if (found && specPath(label)) { // re-derive the line from the quote; a model-supplied line is never trusted
       const at = quoteLine(T.text.split('\n'), r.quote);
@@ -1619,4 +1648,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

@@ -73,7 +73,7 @@ test('the usage file feeds the summary usage line (cost without the copilot appr
   const h = harness(t, [good()]);
   await h.go();
   const line = require('./post.js').usageLine({ engine: 'claude', model: 'claude-haiku-5-5', raw: JSON.parse(h.file('usage.json')), used: ['claude-haiku-5-5'] });
-  assert.match(line, /Model: claude-haiku-5-5/);
+  assert.match(line, /^<sub>Cost [^\n]*· claude-haiku-5-5 · /);
   assert.match(line, /21\.0k in \(0 cached\)|21\.0k in/);
   assert.match(line, /Cost \$0\.0(?!.*≈)/);
 });

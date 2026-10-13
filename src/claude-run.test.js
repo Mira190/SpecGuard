@@ -87,8 +87,7 @@ test('usage.json feeds the summary usage line: exact cost in USD, model, tokens'
   s.run();
   const { usageLine } = require('./post.js');
   const line = usageLine({ engine: 'claude', model: 'claude-haiku-5-5', raw: JSON.parse(s.file('usage.json')), used: ['claude-haiku-5-5'] });
-  assert.match(line, /Engine: claude/);
-  assert.match(line, /Model: claude-haiku-5-5/);
+  assert.match(line, /^<sub>Cost \$0\.04[^\n]*· claude-haiku-5-5 · /);
   assert.match(line, /4\.5k in \(3\.0k cached\) · 200 out/);
   assert.match(line, /Cost \$0\.04(?!.*≈)/);
 });
@@ -272,10 +271,12 @@ test('messages are engine-neutral: no JSON found in the engine output; validate-
   for (const bad of ['0', '20.01', '-1', 'abc', '1.234', '100']) { const x = v(bad); assert.equal(x.status, 1, bad); assert.match(x.stdout, /^::error::max_budget_usd must be a positive decimal of at most 20/m); }
 });
 
-test('a Could not complete summary carries the usage line exactly once (comment and job summary)', () => {
+test('a Could not complete summary carries the cost line exactly once, outside Details (comment and job summary)', () => {
   const { buildSummary } = require('./post.js');
   const body = buildSummary({ status: 'Could not complete: x', engine: 'claude', model: 'claude-haiku-5-5', usage: { totalCostUsd: 3.58 }, notes: ['n'], state: 'failed', used: ['claude-haiku-5-5'], tooling: { status: 'not_configured', checks: [] } });
-  assert.equal(body.split('<sub>Engine:').length - 1, 1);
+  assert.equal(body.split('<sub>Cost \$3.58').length - 1, 1);
+  assert.ok(body.trimEnd().endsWith('</sub>') && body.lastIndexOf('<sub>Cost') > body.lastIndexOf('</details>'));
+  assert.match(body, /Run: engine claude · n\n/);
 });
 
 test('engine notes are de-duplicated: the finalize note and the repair label say the same fact once', (t) => {

@@ -93,6 +93,8 @@ test('parses Action comments and summaries', () => {
   assert.equal(parseComment({ body: 'a human comment' }), null);
   const s = parseSummary(summaryWith('- ❌ **Weak test:** A `x.js:5` (low confidence) — b\n') + '| O1: a \\| b | src; x.js:5 — q | none | Weak test: r |\n');
   assert.deepEqual([s.items.length, s.rows.length, s.rows[0].path, s.rows[0].status, s.items[0].kind, s.items[0].why], [1, 1, 'x.js', 'weak_test', 'weak_test', 'low confidence']);
+  const u = parseSummary(summaryWith('') + '| O1: a | src; x.js:5 — q | none | Unconfirmed: r |\n| O2: a | src; y.js:6 — q | none | Not assessed: r |\n');
+  assert.deepEqual(u.rows.map((r) => [r.status, r.path]), [['unknown', 'x.js'], ['unknown', 'y.js']], 'the new label and the old one both parse');
 });
 
 test('aggregate: precision, recall, validity, pass rate, latency and per-goal split', () => {
@@ -244,7 +246,7 @@ test('parseSummary takes an item kind from its section heading (bare items) and 
     '## SpecGuard', '', '**❌ 4 unit test gaps to fix**', '', '### ❌ Missing unit tests (2)', '',
     '- [Posted](https://github.com/o/r/pull/1#discussion_r1) `a.js:3` — posted', '- Kept here [`b.js:7`](https://github.com/o/r/blob/x/b.js#L7) (inline limit reached) — text', '',
     '### ❌ Weak unit tests (1)', '', '- Weak one `c.js:9` — why', '',
-    '### ❌ Requirements to check (1)', '', '| Status | Criterion | Next step |', '|---|---|---|', '| ❌ Gap | **R1** x | Missing test: y |', '',
+    '### ❌ Requirements to check (1)', '', '| Status | Requirement | What to do |', '|---|---|---|', '| ❌ Gap | x | Add the test: y |', '',
     '### ❌ Coding standard violations (1)', '', '- Throw an Error `d.js:1` — rule: `RULES.md`', '',
     '<details><summary>Details: x</summary>', '', '**Low-confidence findings (1)**', '', '- ❌ **Weak test:** Old label `e.js:2` (low confidence) — z', '- Bare in Details `f.js:5` — must not inherit the Weak heading', '', '</details>'].join('\n');
   assert.deepEqual(parseSummary(md).items.map((i) => [i.kind, i.path, i.line, i.why]), [['missing_test', 'b.js', 7, 'inline limit reached'], ['weak_test', 'c.js', 9, ''], ['standard', 'd.js', 1, ''], ['weak_test', 'e.js', 2, 'low confidence']]);
