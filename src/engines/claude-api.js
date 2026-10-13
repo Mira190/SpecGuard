@@ -25,8 +25,8 @@ const cost = (model, u) => { // u = the API usage object
   const i = u.input_tokens || 0, cr = u.cache_read_input_tokens || 0, cw = u.cache_creation_input_tokens || 0, o = u.output_tokens || 0, p = priceOf(model, i + cr + cw);
   return (i * p.in + cr * p.in * 0.1 + cw * p.in * 1.25 + o * p.out) / 1e6;
 };
-// Bytes per token. PRE_FLIGHT is deliberately low so the estimate over-counts: line-numbered code measured 1.7-2 bytes/token live (168.6k tokens for 293 KB), English is about 4. PACK_SIZING is the realistic figure used to size the pack under a price step.
-const PRE_FLIGHT_BPT = 1.5, PACK_SIZING_BPT = 2.0;
+// Bytes per token. PRE_FLIGHT is deliberately low so the estimate over-counts: line-numbered code measured 1.7-2 bytes/token live (168.6k tokens for 293 KB), English is about 4.
+const PRE_FLIGHT_BPT = 1.5;
 // Worst case before the call: the whole prompt as cache WRITE for the static part (1.25x) and plain input for the rest, and every allowed output token.
 const worstCase = (model, sysBytes, userBytes, maxTokens) => {
   const s = Math.ceil(sysBytes / PRE_FLIGHT_BPT), u = Math.ceil(userBytes / PRE_FLIGHT_BPT), p = priceOf(model, s + u);
@@ -142,15 +142,8 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const model = env.MODEL || 'claude-haiku-5-5';
     const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
     const schema = strict(JSON.parse(fs.readFileSync(path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json'), 'utf8')));
-    let packBytes = env.CONTEXT_PACK_BYTES === undefined || env.CONTEXT_PACK_BYTES === '' ? 150000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) || 0);
-    const step = PRICES[model]?.longFrom;
-    let skip = '';
-    if (packBytes > 0 && step) { // keep system + user + pack under 90% of the price step; 500 bytes: the pack header and joins
-      const base = messages(prompt, 'x'), room = Math.floor(0.9 * step * PACK_SIZING_BPT) - Buffer.byteLength(base.system) - Buffer.byteLength(base.user) - 500;
-      packBytes = Math.min(packBytes, room);
-      if (packBytes < 200) { packBytes = 0; skip = `context pack: skipped, prompt already near the ${Math.round(step / 1000)}k-token price step`; }
-    }
-    let pack = { text: '', note: skip };
+    const packBytes = env.CONTEXT_PACK_BYTES === undefined || env.CONTEXT_PACK_BYTES === '' ? 250000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) || 0);
+    let pack = { text: '', note: '' };
     if (packBytes > 0) try { pack = contextPack(ctx, fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd()), packBytes); } catch { /* the pack is optional */ }
     const { system, user } = messages(prompt, pack.text); // the pre-flight below sees the pack
     const est = worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user), maxTokens);
