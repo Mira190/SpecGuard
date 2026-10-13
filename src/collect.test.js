@@ -499,3 +499,20 @@ test('test_paths: a changed file inside a configured test folder is not a subjec
   assert.match(s, /^src\/a\.js\n/m);
   assert.doesNotMatch(s, /^qa\/helpers\.js/m);
 });
+
+test('focused review: over the gate collect.sh writes focus.txt / focus-skipped.txt and narrows the numbered diff; under it nothing changes', (t) => {
+  const mod = (tag, n) => Array.from({ length: n }, (_, i) => `${tag} ${i}\n`).join('');
+  const base = { 'src/a.js': 'a\n', 'src/b.js': 'b\n', 'src/a.test.js': 't\n', 'conf.yml': 'k: 1\n' };
+  const edit = ({ write }) => { write('src/a.js', mod('A', 40)); write('src/b.js', mod('B', 8)); write('src/a.test.js', mod('T', 10)); write('conf.yml', mod('k', 30)); };
+  const small = scenario(t, base, edit, {});
+  assert.equal(small.ctxFile('focus.txt'), null);
+  const r = scenario(t, base, edit, { FOCUS_THRESHOLD: '50,2', FOCUS_FILES: '1' });
+  const focus = r.ctxFile('focus.txt').split('\n').filter(Boolean);
+  assert.match(focus[0], /^src\/a\.js\t[\d.]+\tlogic/);
+  assert.ok(focus.some((l) => l.startsWith('src/a.test.js\t')), 'the changed test of the chosen file rides along');
+  assert.deepEqual(r.ctxFile('focus-skipped.txt').split('\n').filter(Boolean).map((l) => l.split('\t')[0]).sort(), ['conf.yml', 'src/b.js']);
+  const numbered = r.ctxFile('diff.numbered.txt');
+  assert.match(numbered, /diff --git a\/src\/a\.js/);
+  assert.doesNotMatch(numbered, /conf\.yml|src\/b\.js/);
+  assert.match(r.ctxFile('diff.patch'), /diff --git a\/conf\.yml/); // diff.patch stays whole
+});
