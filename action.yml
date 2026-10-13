@@ -3,7 +3,7 @@ description: Requirement-aware PR reviewer that finds missing and weak unit test
 branding: { icon: shield, color: blue }
 
 inputs:
-  engine: { description: "Review engine adapter: copilot (Copilot CLI, default) | copilot-sdk (Copilot SDK, opt-in; its GITHUB_TOKEN auth in Actions is unverified). Each is one script in src/engines/ (see src/engines/README.md).", default: copilot }
+  engine: { description: "Review engine adapter: copilot (Copilot CLI, the only one). Each engine is one script in src/engines/ (see src/engines/README.md).", default: copilot }
   copilot_token: { description: "Fallback fine-grained PAT (Copilot Requests). Empty = use the job token with permissions copilot-requests write.", default: "" }
   github_token: { description: "Token for collect and post (needs pull-requests write).", default: "${{ github.token }}" }
   model: { description: "Model name passed to the Copilot CLI. Empty = Copilot Auto. What is available depends on the token owner's plan; an unavailable model falls back to auto.", default: "" }
@@ -21,10 +21,9 @@ inputs:
   standards_paths: { description: "Globs (one per line) that add coding-standard or review-guideline documents, read from the base commit; a !glob line excludes.", default: "" }
   trace: { description: "auto | off. auto traces requirement docs and code when any requirement doc is found.", default: auto }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
-  copilot_sdk_version: { description: "Pinned @github/copilot-sdk version, used only with engine copilot-sdk.", default: "1.0.15" }
   review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it.", default: "12" }
   include_bots: { description: "true to review PRs opened by bots (skipped by default).", default: "false" }
-  resolve_stale: { description: "true to resolve SpecGuard's own unreplied review threads whose finding is no longer reported.", default: "true" }
+  resolve_stale: { description: "true to resolve SpecGuard's own unreplied review threads whose finding is no longer reported. Needs a token that can resolve review threads (the job token cannot).", default: "false" }
   force: { description: "true to review again although this head SHA already has a SpecGuard summary.", default: "false" }
   ctx_retention_days: { description: "Days to keep the specguard-ctx debug artifact (diff, prompt context, raw engine output; repo readers can download it). 0 disables the upload.", default: "1" }
   mode: { description: "pr (review a pull request) | scan (unit test gap scan: find behaviour in the design documents of the checked-out repository that lacks unit-test evidence; run it on the default branch, on demand or on a schedule). audit is accepted as an alias of scan.", default: pr }
@@ -123,7 +122,6 @@ runs:
       env:
         ENGINE: ${{ inputs.engine }}
         COPILOT_VERSION: ${{ inputs.copilot_version }}
-        SDK_VERSION: ${{ inputs.copilot_sdk_version }}
         MODEL: ${{ inputs.model }}
         EFFORT: ${{ inputs.effort }}
         AUTO_TIER: ${{ inputs.auto_tier }}
@@ -146,7 +144,6 @@ runs:
         CHECK: ${{ steps.mode.outputs.mode == 'scan' && 'audit' || '' }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         COPILOT_VERSION: ${{ inputs.copilot_version }}
-        SDK_VERSION: ${{ inputs.copilot_sdk_version }}
         MODEL: ${{ inputs.model }}
         EFFORT: ${{ inputs.effort }}
         AUTO_TIER: ${{ inputs.auto_tier }}
