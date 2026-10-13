@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { assemble, strip, traceNeeded, cut, LIMITS, main } = require('./prompt.js');
+const { assemble, strip, traceNeeded, cut, LIMITS, main, standardsCut } = require('./prompt.js');
 
 const ROOT = path.join(__dirname, '..');
 const SKILL = path.join(ROOT, 'skills', 'test-review');
@@ -142,6 +142,24 @@ test('main / CLI: prints the prompt, exits 2 on missing flags', () => {
   assert.match(bad.stderr, /Usage/);
   const orig = console.error; console.error = () => {};
   try { assert.equal(main([]), 2); } finally { console.error = orig; }
+});
+
+test('assemble: lint-configs.txt is inlined with the do-not-raise note; an empty one adds nothing', () => {
+  const p = build(ctx({ 'lint-configs.txt': '.eslintrc.json\npyproject.toml\n' }));
+  const m = /<untrusted-data name="lint-configs\.txt" note="([^"]*)">\n([\s\S]+?)\n<\/untrusted-data>/.exec(p);
+  assert.ok(m);
+  assert.match(m[1], /not a `standard` finding/);
+  assert.deepEqual(m[2].split('\n'), ['.eslintrc.json', 'pyproject.toml']);
+  assert.doesNotMatch(build(ctx({ 'lint-configs.txt': '' })), /<untrusted-data name="lint-configs/);
+});
+
+test('standardsCut: rule files whose path was cut from standards.txt or the inlined map are reported; an unknown scope is flagged in the map', () => {
+  const paths = Array.from({ length: 400 }, (_, i) => `docs/team/standards-${String(i).padStart(3, '0')}.md`);
+  const map = paths.map((p) => ({ path: p, scope: ['**'], kind: 'repo' }));
+  const cut_ = standardsCut(ctx({ 'standards.txt': paths.join('\n') + '\n', 'standards-map.json': JSON.stringify(map) }));
+  assert.ok(!cut_.has(paths[0]) && cut_.has(paths[399]) && cut_.size < 400);
+  assert.equal(standardsCut(ctx({ 'standards.txt': 'REVIEW.md\n', 'standards-map.json': JSON.stringify([{ path: 'REVIEW.md', scope: ['**'], kind: 'repo' }]) })).size, 0);
+  assert.match(build(ctx({ 'standards.txt': 'a.mdc\n', 'standards-map.json': JSON.stringify([{ path: 'a.mdc', scope: ['**'], kind: 'cursor-rule', unknown: true }]) })), /a\.mdc applies to: \*\* \(scope unknown/);
 });
 
 test('assemble: standards-map.json is inlined as one compact line per rule file (path and scope, never contents)', () => {

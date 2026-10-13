@@ -42,6 +42,47 @@ test('scope: Copilot applyTo (comma separated, quoted), Claude paths (list, inli
   assert.deepEqual(scopeOf('docs/testing-standards.md', 'x'), ['**']);
 });
 
+test('braces: {a,b} expands in a glob, commas inside braces do not split the list', () => {
+  assert.ok(matches(['**/*.{ts,tsx}'], 'src/a/b.tsx') && matches(['**/*.{ts,tsx}'], 'x.ts') && !matches(['**/*.{ts,tsx}'], 'src/b.js'));
+  assert.ok(matches(['src/**/*.{ts,tsx}'], 'src/a/b.ts') && !matches(['src/**/*.{ts,tsx}'], 'lib/b.ts'));
+  assert.ok(matches(['*.{py,pyi}'], 'pkg/m.pyi')); // slash-free: basename at any depth
+  assert.ok(matches(['{src,lib}/**'], 'lib/a.js') && !matches(['{src,lib}/**'], 'test/a.js'));
+  assert.ok(matches(['a/{b,c{d,e}}.js'], 'a/ce.js')); // nested works too
+  assert.ok(matches(['a{.js'], 'a{.js')); // an unmatched brace stays literal
+  const cop = '.github/instructions/ts.instructions.md';
+  assert.deepEqual(scopeOf(cop, '---\napplyTo: "**/*.{ts,tsx}"\n---\n'), ['**/*.{ts,tsx}']);
+  assert.deepEqual(scopeOf(cop, '---\napplyTo: "src/**/*.{js,jsx},test/**"\n---\n'), ['src/**/*.{js,jsx}', 'test/**']);
+  assert.deepEqual(scopeOf('.claude/rules/a.md', '---\npaths: ["src/**/*.{ts,tsx}", lib/**]\n---\n'), ['src/**/*.{ts,tsx}', 'lib/**']);
+  assert.deepEqual(scopeOf('.claude/rules/a.md', '---\npaths:\n  - "src/**/*.{ts,tsx}"\n---\n'), ['src/**/*.{ts,tsx}']);
+});
+
+test('directory scope ignores the tool folder: .claude/CLAUDE.md is repo-wide, x/.claude/CLAUDE.md and x/.cursor/BUGBOT.md govern x/', () => {
+  assert.deepEqual(scopeOf('.claude/CLAUDE.md', 'x'), ['**']);
+  assert.deepEqual(scopeOf('services/api/.claude/CLAUDE.md', 'x'), ['services/api/**']);
+  assert.deepEqual(scopeOf('.cursor/BUGBOT.md', 'x'), ['**']);
+  assert.deepEqual(scopeOf('services/api/.cursor/BUGBOT.md', 'x'), ['services/api/**']);
+  assert.deepEqual(scopeOf('pkg/BUGBOT.md', 'x'), ['pkg/**']);
+  assert.deepEqual(scopeOf('pkg/.cursor/AGENTS.md', 'x'), ['pkg/**']);
+  assert.deepEqual(scopeOf('pkg/.claudex/CLAUDE.md', 'x'), ['pkg/.claudex/**']); // only the exact folder names
+  assert.ok(matches(scopeOf('.claude/CLAUDE.md', 'x'), 'src/a.js'));
+});
+
+test('Cursor rules: globs (comma, list, braces) scope, alwaysApply is repo-wide, neither is repo-wide with unknown scope', () => {
+  const r = '.cursor/rules/ts.mdc';
+  assert.deepEqual(scopeOf(r, '---\ndescription: x\nglobs: src/**/*.ts, lib/*.{js,jsx}\nalwaysApply: false\n---\n'), ['src/**/*.ts', 'lib/*.{js,jsx}']);
+  assert.deepEqual(scopeOf(r, '---\nglobs:\n  - "a/**"\n  - b/**\n---\n'), ['a/**', 'b/**']);
+  assert.deepEqual(scopeOf(r, '---\nglobs: ["a/**", b/**]\n---\n'), ['a/**', 'b/**']);
+  assert.deepEqual(scopeOf(r, '---\nalwaysApply: true\n---\n'), ['**']);
+  assert.deepEqual(scopeOf(r, '---\nglobs: src/**\nalwaysApply: true\n---\n'), ['**']); // alwaysApply wins
+  assert.deepEqual(scopeOf(r, '---\ndescription: only when asked\n---\n'), ['**']);
+  assert.deepEqual(scopeOf('.cursor/rules/plain.md', 'no frontmatter'), ['**']);
+  const mk = (text) => build([r], () => text)[0];
+  assert.deepEqual(mk('---\nglobs: src/**\n---\n'), { path: r, scope: ['src/**'], kind: 'cursor-rule' });
+  assert.deepEqual(mk('---\nalwaysApply: true\n---\n'), { path: r, scope: ['**'], kind: 'cursor-rule' });
+  assert.deepEqual(mk('---\nalwaysApply: false\n---\n'), { path: r, scope: ['**'], kind: 'cursor-rule', unknown: true });
+  assert.equal(build(['.cursorrules'], () => 'x')[0].unknown, undefined); // legacy file: ordinary repo-wide rule
+});
+
 test('build reads each listed rule file and labels its kind', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-map-'));
   try {
@@ -61,8 +102,8 @@ test('build reads each listed rule file and labels its kind', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('F4: BUGBOT.md, styleguide and STANDARDS_PATHS docs apply repo-wide unless they carry their own applyTo', () => {
-  for (const p of ['.cursor/BUGBOT.md', 'pkg/BUGBOT.md', '.gemini/styleguide.md', '.greptile/rules.md', 'docs/team-style.md']) {
+test('F4: root BUGBOT.md, styleguide and STANDARDS_PATHS docs apply repo-wide unless they carry their own applyTo', () => {
+  for (const p of ['.cursor/BUGBOT.md', '.gemini/styleguide.md', '.greptile/rules.md', 'docs/team-style.md']) {
     assert.deepEqual(scopeOf(p, 'Always check tests.'), ['**'], p);
     assert.equal(build([p], () => 'x')[0].kind, 'repo');
   }
