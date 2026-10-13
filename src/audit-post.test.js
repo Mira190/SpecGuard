@@ -207,21 +207,29 @@ const sample = () => {
   return verify(result(rs, { not_reviewed: ['docs/old.md: unreadable'] }), { read });
 };
 
-test('render: header counts by status and class, no percentage, the disclaimer, a table per document', () => {
+test('render: header counts by block status, no percentage, the disclaimer; one line per block, sub-row evidence collapsed per document', () => {
   const md = render({ data: sample(), docs: [['docs/design.md', 'discovered']], blob: 'https://github.com/o/r/blob/abc', usage: '<sub>Engine: copilot</sub>', cap: 80, candidates: 131 });
   const head = md.slice(0, md.indexOf('### '));
   assert.match(head, /^## SpecGuard requirements audit\n\n\*\*3 requirements\*\* from 1 document\n\n3 blocks audited of 131 in the documents \(cap 80\); 0 blocks were not requirements\./);
   assert.doesNotMatch(head, /the model chose/);
-  assert.match(head, /By status: missing_test 1 · needs_human 1 · covered 1\n/);
-  assert.match(head, /By class: unit 2 · human 1\n/);
+  assert.match(head, /By block: new gap \(unconfirmed\) 1 · unsure 1 · covered 1\n/);
+  assert.match(head, /first audit run[^\n]*every gap is \*\*unconfirmed\*\*; one more audit run will confirm/);
   assert.match(head, /Static review; not coverage; not for scoring people\./);
   assert.doesNotMatch(md, /\d\s*%|percent/i);
-  assert.match(md, /### `docs\/design\.md`\n\n\| Requirement \| Status \| Class \| Evidence \|\n\|---\|---\|---\|---\|\n/);
+  assert.match(md, /### New gaps, unconfirmed \(1\)\n\n\| Block \| Line \| Requirement \| Status \| Sub-rows \|\n\|---\|---\|---\|---\|---\|\n/);
+  assert.match(md, /\| \`2222222b\` \| \[docs\/design\.md:4\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/docs\/design\.md#L4\) \| A plan must start in the future\. \| gap \(unconfirmed\) \| missing_test ×1 \|\n/);
+  assert.doesNotMatch(md, /### Confirmed gaps/, 'nothing to confirm on a first run');
+  // unsure and covered blocks are collapsed, in that order, after the gaps
+  assert.match(md, /<details><summary>Unsure \(1\)<\/summary>\n\n\| Block[^\n]*\n\|---[^\n]*\n\| \`3333333c\`[^\n]*\| unsure \| needs_human ×1 \|\n\n<\/details>/);
+  assert.match(md, /<details><summary>Covered \(1\)<\/summary>\n\n\| Block[^\n]*\n\|---[^\n]*\n\| \`1111111a\`[^\n]*\| covered \| covered ×1 \|\n\n<\/details>/);
+  const at = (x) => md.indexOf(x);
+  assert.ok(at('### New gaps') < at('<summary>Unsure') && at('<summary>Unsure') < at('<summary>Covered') && at('<summary>Covered') < at('<summary>Sub-row evidence'));
+  // the per-sub-row evidence is one collapsed table per document
+  assert.match(md, /<details><summary>Sub-row evidence: docs\/design\.md \(3 rows\)<\/summary>\n\n\| Requirement \| Status \| Class \| Evidence \|\n\|---\|---\|---\|---\|\n/);
   assert.match(md, /\| \[2222222b\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/docs\/design\.md#L4\) A plan must start in the future\.<br><sub>No test rejects a past start\.<\/sub> \| missing_test \| unit \| code: \[src\/plan\.js:2\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/plan\.js#L2\) \|/);
-  // covered rows are not listed with the gaps: one collapsed table
-  assert.match(md, /<details><summary>Covered in full \(1\)<\/summary>\n\n\| Requirement \| Class \| Evidence \|\n\|---\|---\|---\|\n\| \[[0-9a-f]{8}\][^\n]*tests: unit \[tests\/plan\.test\.js:2\][^\n]*\|\n\n<\/details>/);
+  assert.match(md.slice(md.indexOf('<summary>Sub-row evidence')), /tests: unit \[tests\/plan\.test\.js:2\]/);
   assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /\| covered \|/);
-  assert.match(md, /`not_implemented` and `missing_test` are model claims \(not verified statically\)/);
+  assert.match(md, /\`not_implemented\` and \`missing_test\` are model claims \(not verified statically\)/);
   assert.match(md, /### Not reviewed\n\n- docs\/old\.md: unreadable\n/);
   assert.doesNotMatch(md, /not requirements<\/summary>/, 'no details block when every block was a requirement');
   assert.ok(md.trimEnd().endsWith('<sub>Engine: copilot</sub>'));
@@ -254,15 +262,15 @@ test('render: blocks that were not requirements are counted in the header and li
 });
 
 test('render: over the limit, whole rows are dropped (never cut mid-row) and the omission is stated', () => {
-  const rs = Array.from({ length: 60 }, (_, i) => req({ id: cid(i + 1), note: 'n'.repeat(250) }));
+  const rs = Array.from({ length: 60 }, (_, i) => req({ id: cid(i + 1), status: 'missing_test', tests: [], note: 'n'.repeat(250) }));
   const data = verify(result(rs), { read });
   const full = render({ data });
   const small = render({ data, max: 9000 });
   assert.ok(Buffer.byteLength(small) <= 9000 && small.length < full.length);
-  const tableRows = small.split('\n').filter((l) => /^\| [0-9a-f]{8}(\.\d+)? /.test(l));
-  assert.ok(tableRows.length > 0 && tableRows.length < 60);
-  for (const l of tableRows) assert.match(l, /\| unit \| code: .* \|$/, 'every kept row is complete');
-  assert.match(small, new RegExp(`_${60 - tableRows.length} rows omitted: the report exceeded the size limit`));
+  const tableRows = small.split('\n').filter((l) => /^\| [\`[]/.test(l));
+  assert.ok(tableRows.length > 0);
+  for (const l of tableRows) assert.match(l, /\|$/, 'every kept row is complete');
+  assert.match(small, /_\d+ rows omitted: the report exceeded the size limit/);
   assert.match(small, /Static review; not coverage/, 'header survives');
 });
 
@@ -374,7 +382,7 @@ test('run: the issue body fits GitHub\'s limit by dropping whole rows and says s
   const body = r.calls.created[0].body;
   assert.ok(Buffer.byteLength(body) <= 65536, String(Buffer.byteLength(body)));
   assert.match(body, /_\d+ rows omitted: the report exceeded the size limit/);
-  assert.match(body, /<!-- specguard:audit-state \{"v":2,/, 'the previous state survives the cut');
+  assert.match(body, /<!-- specguard:audit-state \{"v":3,/, 'the previous state survives the cut');
   for (const l of body.split('\n').filter((x) => x.startsWith('| ['))) assert.match(l, /\| unit \| code: .* \|$/);
   assert.ok(r.calls.summary.length > body.length, 'the job summary keeps every row');
   assert.doesNotMatch(r.calls.summary, /rows omitted/);
@@ -418,49 +426,153 @@ test('verify: the id is the block cid whatever the model wrote in the text or th
   assert.deepEqual([m.id, m.source.line], [C1, 4], 'the cited line moved, the id did not');
 });
 
-test('contradicted: both quotes must verify, and it renders as an unconfirmed disagreement with the two quotes side by side', () => {
+test('contradicted: both quotes must verify, and it renders as a disagreement with the two quotes side by side, labelled unconfirmed until a second run', () => {
   const ok = verify(result([req({ status: 'contradicted', class: 'unit', tests: [], note: 'the code turns it off' })]), { read }).requirements[0];
   assert.equal(ok.status, 'contradicted');
   const bad = verify(result([req({ status: 'contradicted', tests: [], code: [{ path: 'src/plan.js', line: 2, quote: 'this line is not in the code' }] })]), { read }).requirements[0];
   assert.equal(bad.status, 'unknown');
-  const md = render({ data: { ...result(), requirements: [ok] }, blob: 'https://github.com/o/r/blob/abc' });
+  const data = { ...result(), requirements: [ok] };
+  const md = render({ data, blob: 'https://github.com/o/r/blob/abc' });
   assert.match(md, /### Doc and code disagree \(unconfirmed\)[\s\S]*\| Requirement \| Document says \| Code says \|\n\|---\|---\|---\|\n/);
   assert.match(md, /\| "A repeating plan stays on after it fires\."<br>\[docs\/design\.md:3\][^\n]*\| "  if \(p\.repeat\) return p;"<br>\[src\/plan\.js:2\]/);
-  assert.doesNotMatch(md, /\| contradicted \|/);
+  assert.doesNotMatch(md, /Doc and code disagree \(confirmed\)/);
+  assert.match(md, /\| gap \(unconfirmed\) \| contradicted ×1 \|/, 'the block line carries the sub-row statuses');
+  const prior = audit.readState(audit.stateComment('aaaaaaa1', data)); // the same block was a gap in the previous run
+  const two = render({ data, prior });
+  assert.match(two, /### Doc and code disagree \(confirmed\)/);
+  assert.doesNotMatch(two, /Doc and code disagree \(unconfirmed\)/);
 });
 
-test('changed since last audit: new, removed and status-changed rows from the hidden state; round trip and tamper check', () => {
-  const rows = verify(result([req(), req({ id: C2, source: cite('docs/design.md', 4), status: 'missing_test', tests: [], text: 'A plan must start in the future.' })]), { read, cands: TWO() }).requirements;
-  const [a, b] = rows;
-  const prior = { head: 'abcdef123456', rows: [{ id: a.id, status: 'partial' }, { id: 'deadbeef', status: 'missing_test' }] };
-  assert.equal(a.id, C1, 'rows are compared by block cid');
-  const md = render({ data: { ...result(), requirements: rows }, prior });
-  assert.match(md, /### Changed since last audit \(`abcdef1`\)\n\n- New \(1\):\n  - `[0-9a-f]{8}` A plan must start in the future\. \(missing_test\)\n- Status changed \(1\):\n  - `[0-9a-f]{8}` A repeating plan[^\n]*: partial → covered\n- Removed or not listed this time \(1\):\n  - `deadbeef` \(was missing_test\)\n/);
-  assert.ok(md.indexOf('### Changed since') < md.indexOf('Covered in full'));
-  assert.match(render({ data: { ...result(), requirements: rows }, prior: { head: '', rows: rows.map((r) => ({ id: r.id, status: r.status })) } }), /No changes in the listed requirements\./);
-  const state = audit.stateComment('abc123', rows);
-  assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123', rows: rows.map((r) => ({ id: r.id, status: r.status })) });
-  assert.equal(audit.readState('<!-- specguard:audit-state {"v":2,"rows":[["<script>","covered"]]} -->'), null);
+// ---- block aggregation and confirmation across runs ----
+const one = (id, status) => req({ id, status, class: 'unit', code: [cite('src/plan.js', 2)], tests: [] });
+const dataOf = (spec, notReq = []) => ({ ...result(), requirements: Object.entries(spec).flatMap(([c, ss]) => [].concat(ss).map((s, i) => one(`${c}${[].concat(ss).length > 1 ? `.${i + 1}` : ''}`, s))), not_requirements: notReq });
+// one audit run after another: the state of each run is read back as the next run's prior
+function chain(...runs) {
+  let state = '';
+  return runs.map((spec, i) => {
+    const d = dataOf(spec), prior = audit.readState(state), blocks = audit.track(audit.blocksOf(d), prior, `h${i + 1}`);
+    state = audit.stateComment(`h${i + 1}`, d, prior);
+    return { blocks, marks: Object.fromEntries(blocks.map((b) => [b.cid, b.mark])), md: render({ data: d, prior, head: `h${i + 1}` }), state, prior };
+  });
+}
+const A = cid(10), B = cid(11), U = cid(12), Z = cid(13);
+
+test('blocks: sub-rows aggregate to one status per block (gap beats everything, covered needs all, the rest is unsure, skipped blocks are not_req)', () => {
+  const d = dataOf({ [cid(1)]: ['missing_test', 'covered'], [cid(2)]: ['covered', 'covered'], [cid(3)]: ['covered', 'unknown'], [cid(4)]: 'needs_human', [cid(5)]: 'partial', [cid(6)]: 'contradicted', [cid(7)]: ['unknown', 'not_implemented'], [cid(8)]: 'unknown' },
+    [{ cid: cid(9), path: 'docs/design.md', line: 4, text: 'why', reason: 'rationale' }]);
+  const bs = audit.blocksOf(d);
+  assert.deepEqual(bs.map((b) => [b.cid, b.status]), [[cid(1), 'gap'], [cid(2), 'covered'], [cid(3), 'unsure'], [cid(4), 'unsure'], [cid(5), 'gap'], [cid(6), 'gap'], [cid(7), 'gap'], [cid(8), 'unsure'], [cid(9), 'not_req']]);
+  assert.equal(bs[0].rows.length, 2);
+  assert.match(render({ data: d }), /\| gap \(unconfirmed\) \| missing_test ×1, covered ×1 \|/);
+});
+
+test('confirmation: gap twice is confirmed, a new gap is unconfirmed, a confirmed gap covered once is "resolved? recheck", covered twice is resolved', () => {
+  const r = chain({ [A]: 'missing_test', [U]: 'unknown', [Z]: 'covered' }, { [A]: 'partial', [B]: 'missing_test', [U]: 'missing_test', [Z]: 'unknown' }, { [A]: 'covered', [B]: 'missing_test', [U]: 'unknown', [Z]: 'covered' }, { [A]: 'covered', [B]: 'covered', [U]: 'unknown', [Z]: 'covered' }, { [A]: 'covered', [B]: 'covered', [U]: 'unknown', [Z]: 'covered' });
+  assert.deepEqual(r.map((x) => x.marks[A]), ['new', 'confirmed', 'recheck', 'resolved', '']);
+  assert.deepEqual(r.map((x) => x.marks[B]), [undefined, 'new', 'confirmed', 'recheck', 'resolved']);
+  assert.deepEqual(r.map((x) => x.marks[U]), ['', 'new', '', '', ''], 'an unsure block becoming a gap is unconfirmed');
+  // counters: [cid, status, firstSeenHead, consecutive runs]; the first-seen head survives while the status holds
+  assert.deepEqual(r[1].blocks.find((b) => b.cid === A).next, [A, 'gap', 'h1', 2]);
+  assert.deepEqual(r[2].blocks.find((b) => b.cid === A).next, [A, 'recheck', 'h3', 1]);
+  assert.deepEqual(r[3].blocks.find((b) => b.cid === A).next, [A, 'covered', 'h3', 2]);
+  assert.deepEqual(r[4].blocks.find((b) => b.cid === A).next, [A, 'covered', 'h3', 3]);
+  const many = chain(...Array.from({ length: 14 }, () => ({ [A]: 'missing_test' })));
+  assert.equal(many[13].blocks[0].next[3], 3, 'the run counter is capped');
+  assert.equal(many[13].marks[A], 'confirmed');
+  // a recheck that turns into a gap again is a new, unconfirmed gap
+  const flap = chain({ [A]: 'missing_test' }, { [A]: 'missing_test' }, { [A]: 'covered' }, { [A]: 'missing_test' });
+  assert.equal(flap[3].marks[A], 'new');
+});
+
+test('render: first run says one more run will confirm; later runs list confirmed gaps first, then new gaps, then collapsed unsure and covered', () => {
+  const [first, second] = chain({ [A]: 'missing_test', [B]: 'missing_test', [U]: 'unknown', [Z]: 'covered' }, { [A]: 'missing_test', [B]: 'covered', [cid(14)]: 'partial', [U]: 'unknown', [Z]: 'covered' });
+  assert.match(first.md, /first audit run[^\n]*every gap is \*\*unconfirmed\*\*; one more audit run will confirm/);
+  assert.doesNotMatch(first.md, /### Confirmed gaps|Changed since last audit/);
+  assert.match(first.md, /By block: new gap \(unconfirmed\) 2 · unsure 1 · covered 1\n/);
+  const md = second.md;
+  assert.doesNotMatch(md, /first audit run/);
+  assert.match(md, /By block: confirmed gap 1 · new gap \(unconfirmed\) 1 · unsure 1 · covered 2\n/);
+  assert.match(md, /A gap is \*\*confirmed\*\* when the block was a gap in this run and in the previous one \(`h1`\)/);
+  assert.match(md, new RegExp(`### Confirmed gaps \\(1\\)\\n\\n\\| Block[^\\n]*\\n\\|---[^\\n]*\\n\\| \`${A}\`[^\\n]*\\| gap \\(confirmed since h1\\) \\|`));
+  assert.match(md, new RegExp(`### New gaps, unconfirmed \\(1\\)[\\s\\S]*\`${cid(14)}\`[^\\n]*gap \\(unconfirmed\\)`));
+  const at = (x) => md.indexOf(x);
+  assert.ok(at('### Changed since') < at('### Confirmed gaps') && at('### Confirmed gaps') < at('### New gaps') && at('### New gaps') < at('<summary>Unsure (1)') && at('<summary>Unsure (1)') < at('<summary>Covered (2)') && at('<summary>Covered (2)') < at('<summary>Sub-row evidence'));
+  assert.match(md, /<details><summary>Unsure \(1\)<\/summary>\n\n\| Block/);
+  assert.match(md, /<details><summary>Covered \(2\)<\/summary>\n\n\| Block/);
+});
+
+test('changed since last audit: only 2-run-stable changes are listed; status churn is a count line', () => {
+  const [, second, third, fourth] = chain({ [A]: 'missing_test', [U]: 'unknown', [Z]: 'covered', [B]: 'missing_test' }, { [A]: 'missing_test', [U]: 'missing_test', [Z]: 'unknown', [B]: 'covered' },
+    { [A]: 'covered', [U]: 'unknown', [Z]: 'covered', [B]: 'covered' }, { [A]: 'covered', [U]: 'unknown', [Z]: 'covered', [B]: 'covered' });
+  assert.match(second.md, new RegExp(`### Changed since last audit \\(\`h1\`\\)\\n\\n- Confirmed gaps that appeared \\(1\\):\\n  - \`${A}\` [^\\n]*\\n\\nUnstable: 3 blocks changed status between the last two runs \\(not listed\\)\\.\\n`));
+  assert.doesNotMatch(second.md.slice(second.md.indexOf('### Changed'), second.md.indexOf('### Confirmed gaps')), new RegExp(`${U}|${Z}|${B}`), 'unsure churn is counted, not listed');
+  assert.match(third.md, new RegExp(`- Resolved\\? Covered once, recheck next run \\(1\\):\\n  - \`${A}\``));
+  assert.match(third.md, /Unstable: 2 blocks changed status/);
+  assert.match(fourth.md, new RegExp(`- Resolved \\(covered in two runs\\) \\(1\\):\\n  - \`${A}\``));
+  assert.doesNotMatch(fourth.md, /Unstable/);
+  assert.match(chain({ [A]: 'covered' }, { [A]: 'covered' })[1].md, /### Changed since last audit \(`h1`\)\n\nNo confirmed changes\.\n/);
+});
+
+test('state: v3 round trip and tamper check; a v2 (per-row) state reads as one prior run; v1 and foreign comments are no state', () => {
+  const rows = verify(result([req(), req({ id: C2, source: cite('docs/design.md', 4), status: 'missing_test', tests: [], text: 'A plan must start in the future.' })]), { read, cands: TWO() });
+  const state = audit.stateComment('abc123def', rows);
+  assert.match(state, /^<!-- specguard:audit-state \{"v":3,"head":"abc123def","blocks":\[\["1111111a","covered","abc123d",1\],\["2222222b","gap","abc123d",1\]\]\} -->$/);
+  assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1 }, { cid: C2, status: 'gap', since: 'abc123d', runs: 1 }] });
+  assert.ok(!state.includes('plan'), 'ids and statuses only');
+  const bad = (blocks) => audit.readState(`<!-- specguard:audit-state ${JSON.stringify({ v: 3, head: 'a', blocks })} -->`);
+  assert.equal(bad([['<script>', 'gap', 'a', 1]]), null);
+  assert.equal(bad([[C1, 'fine', 'a', 1]]), null);
+  assert.equal(bad([[C1, 'gap', 'a', 0]]), null);
+  assert.equal(bad([[C1, 'gap', 'a', 4]]), null);
+  assert.equal(bad([[C1, 'gap', '<b>', 1]]), null);
   assert.equal(audit.readState('<!-- specguard:audit-state {"v":1,"head":"a","rows":[["1111111a","covered"]]} -->'), null, 'a v1 state (quote-hash ids) cannot be compared with cids');
-  assert.deepEqual(audit.readState('<!-- specguard:audit-state {"v":2,"head":"a","rows":[["1111111a.2","covered"]]} -->').rows, [{ id: '1111111a.2', status: 'covered' }]);
   assert.equal(audit.readState('<!-- specguard:audit-state {nope} -->'), null);
   assert.equal(audit.readState('no state'), null);
-  assert.ok(!state.includes(b.text) && !state.includes('plan'), 'ids and statuses only');
+  // v2: per-row [id, status]; sub-rows fold into the block, and it counts as one run
+  const v2 = audit.readState('<!-- specguard:audit-state {"v":2,"head":"abcdef123456","rows":[["1111111a.1","covered"],["1111111a.2","missing_test"],["2222222b","covered"],["3333333c","unknown"]]} -->');
+  assert.deepEqual(v2, { head: 'abcdef123456', blocks: [{ cid: C1, status: 'gap', since: 'abcdef1', runs: 1 }, { cid: C2, status: 'covered', since: 'abcdef1', runs: 1 }, { cid: C3, status: 'unsure', since: 'abcdef1', runs: 1 }] });
+  const now = dataOf({ [C1]: 'missing_test', [C2]: 'missing_test', [C3]: 'unknown' });
+  const md = render({ data: now, prior: v2, head: 'h2' });
+  assert.match(md, /### Confirmed gaps \(1\)[\s\S]*`1111111a`/, 'gap in the v2 run and now: confirmed');
+  assert.match(md, /### New gaps, unconfirmed \(1\)[\s\S]*`2222222b`/);
+  assert.match(md, /Unstable: 1 block changed status/);
+  assert.match(audit.stateComment('h2', now, v2), /"blocks":\[\["1111111a","gap","abcdef1",2\],\["2222222b","gap","h2",1\],\["3333333c","unsure","abcdef1",2\]\]/);
 });
 
-test('run: a previous issue state drives the changed-since section in summary and issue; the issue ends with the new state', async (t) => {
+test('run: a previous issue state drives confirmation in summary and issue; the issue ends with the new v3 state', async (t) => {
   const first = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' } });
   const old = first.calls.created[0].body;
   assert.doesNotMatch(old, /Changed since last audit/);
-  assert.match(old, /<!-- specguard:audit-state \{"v":2,"head":"abc123","rows":\[\["1111111a","covered"\]\]\} -->$/);
+  assert.match(old, /first audit run/);
+  assert.match(old, /<!-- specguard:audit-state \{"v":3,"head":"abc123","blocks":\[\["1111111a","covered","abc123",1\]\]\} -->$/);
   const rs = [req({ status: 'missing_test', tests: [] }), req({ id: C2, source: cite('docs/design.md', 4), text: 'A plan must start in the future.', status: 'missing_test', tests: [] })];
   const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(TWO()) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT }] } });
-  for (const md of [r.calls.summary, r.calls.updated[0].body]) {
+  const second = r.calls.updated[0].body;
+  for (const md of [r.calls.summary, second]) {
     assert.match(md, /### Changed since last audit \(`abc123`\)/);
-    assert.match(md, /- New \(1\):/);
-    assert.match(md, /: covered → missing_test/);
+    assert.match(md, /No confirmed changes\.[\s\S]*Unstable: 1 block changed status between the last two runs \(not listed\)\./);
+    assert.match(md, /### New gaps, unconfirmed \(2\)/);
+    assert.doesNotMatch(md, /### Confirmed gaps/);
   }
-  assert.match(r.calls.updated[0].body, /"rows":\[\["1111111a","missing_test"\],\["2222222b","missing_test"\]\]/);
+  assert.match(second, /"blocks":\[\["1111111a","gap","abc123",1\],\["2222222b","gap","abc123",1\]\]/);
+  const third = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(TWO()) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: second, user: BOT }] } });
+  for (const md of [third.calls.summary, third.calls.updated[0].body]) {
+    assert.match(md, /### Confirmed gaps \(2\)/);
+    assert.match(md, /Confirmed gaps that appeared \(2\):/);
+  }
+  assert.match(third.calls.updated[0].body, /"blocks":\[\["1111111a","gap","abc123",2\],\["2222222b","gap","abc123",2\]\]/);
+});
+
+// Real audits of one commit (same model, 80 fixed blocks): set SPECGUARD_REPLAY to the directory holding r1/ and r2/ (each with audit.json, or specguard-audit-1/audit.json).
+test('replay: two real audits of the same commit confirm the gaps that agree (46 of the 80 blocks)', { skip: !process.env.SPECGUARD_REPLAY }, () => {
+  const load = (n) => { const d = path.join(process.env.SPECGUARD_REPLAY, n), f = fs.existsSync(path.join(d, 'audit.json')) ? d : path.join(d, 'specguard-audit-1'); return JSON.parse(fs.readFileSync(path.join(f, 'audit.json'), 'utf8')); };
+  const r1 = load('r1'), r2 = load('r2');
+  const prior = audit.readState(audit.stateComment(r1.head, r1));
+  const bs = audit.track(audit.blocksOf(r2), prior, r2.head), n = (m) => bs.filter((b) => b.mark === m).length;
+  assert.deepEqual([bs.length, n('confirmed'), n('new')], [80, 46, 14]);
+  const first = render({ data: r1, head: r1.head }), md = render({ data: r2, prior, head: r2.head });
+  assert.match(first, /new gap \(unconfirmed\) \d+/);
+  assert.match(md, /By block: confirmed gap 46 · new gap \(unconfirmed\) 14 · unsure 11 · covered 6 · not a requirement 3/);
 });
 
 test('run (A5): an engine that did not succeed gives a Partial audit banner, keeps verified rows, writes no issue', async (t) => {
@@ -483,8 +595,9 @@ test('run (A19): a closed issue is reopened, an unchanged body is not rewritten,
   const r = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [closed] } });
   assert.deepEqual([r.calls.updated.length, r.calls.updated[0].issue_number, r.calls.updated[0].state, r.calls.created.length], [1, 4, 'open', 0]);
   const next = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 5, body, user: BOT }] } });
-  assert.match(next.calls.updated[0].body, /No changes in the listed requirements\./);
-  const same = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 5, body: next.calls.updated[0].body.replace(/\n/g, '\r\n') + '\n', user: BOT }] } });
+  assert.match(next.calls.updated[0].body, /No confirmed changes\./);
+  const again = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 5, body: next.calls.updated[0].body, user: BOT }] } }); // run counters settle after three runs
+  const same = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 5, body: again.calls.updated[0].body.replace(/\n/g, '\r\n') + '\n', user: BOT }] } });
   assert.deepEqual([same.calls.updated, same.calls.created], [[], []]);
   const both = await runPost(t, { ctxFiles: { 'findings.json': result() }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [closed, { number: 6, state: 'open', body: `${MARK}\nold`, user: BOT }] } });
   assert.deepEqual(both.calls.updated.map((u) => [u.issue_number, u.state]), [[6, undefined]]);
