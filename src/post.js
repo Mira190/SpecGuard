@@ -420,6 +420,41 @@ function traceTable(data, blob, specFiles = [], covById = new Map(data.coverage.
 }
 
 const MAX_ROWS = 30;
+// ponytail: 1 nano-AIU = 1e-9 AI credit = $0.01 / credit (GitHub AI Credit price since 2026-06-01); update this one constant if GitHub reprices. The billing API stays authoritative.
+const USD_PER_AI_CREDIT = 0.01;
+const fin = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : undefined);
+const kM = (n) => (n < 1e3 ? String(n) : n < 1e6 ? `${(n / 1e3).toFixed(1)}k` : `${(n / 1e6).toFixed(1)}M`);
+// One small-print line: engine, model(s), tokens, cost, API time. `raw` is the engine's usage JSON (copilot --usage-output-file, or claude --output-format json) or null; only numbers and model names are read from it.
+function usageLine({ engine, model, raw }) {
+  const tok = (i, cr, cw, o) => { i = (fin(i) ?? 0) + (fin(cr) ?? 0) + (fin(cw) ?? 0); return { i, c: fin(cr) ?? 0, o: fin(o) ?? 0 }; };
+  const show = (t) => `${kM(t.i)} in${t.c ? ` (${kM(t.c)} cached)` : ''} · ${kM(t.o)} out`;
+  let models = [], total, usd, credits, ms, timeLabel = 'API time';
+  const u = raw && typeof raw === 'object' ? raw : {};
+  if (engine === 'copilot') {
+    for (const [n, m] of Object.entries(u.modelMetrics || {})) { const x = m?.usage; if (x) models.push({ n, t: tok(x.inputTokens, x.cacheReadTokens, x.cacheWriteTokens, x.outputTokens) }); }
+    const d = u.tokenDetails; if (d) total = tok(d.input?.tokenCount, d.cache_read?.tokenCount, d.cache_write?.tokenCount, d.output?.tokenCount);
+    if (fin(u.totalNanoAiu) !== undefined) { credits = u.totalNanoAiu / 1e9; usd = credits * USD_PER_AI_CREDIT; }
+    ms = fin(u.totalApiDurationMs);
+    if (!models.length && typeof u.currentModel === 'string') models = [{ n: u.currentModel }];
+  } else if (engine === 'claude') {
+    for (const [n, m] of Object.entries(u.modelUsage || {})) if (m) models.push({ n, t: tok(m.inputTokens, m.cacheReadInputTokens, m.cacheCreationInputTokens, m.outputTokens), usd: fin(m.costUSD) });
+    const x = u.usage; if (x) total = tok(x.input_tokens, x.cache_read_input_tokens, x.cache_creation_input_tokens, x.output_tokens);
+    usd = fin(u.total_cost_usd) ?? (models.some((m) => m.usd !== undefined) ? models.reduce((a, m) => a + (m.usd || 0), 0) : undefined);
+    ms = fin(u.duration_api_ms); if (ms === undefined) { ms = fin(u.duration_ms); timeLabel = 'Time'; }
+  }
+  const nm = (s) => cell(s, 80);
+  const parts = [`Engine: ${nm(engine)}`];
+  if (models.length > 1) parts.push(`Models: ${models.map((m) => `${nm(m.n)}${m.t ? ` (${show(m.t)})` : ''}`).join(', ')}`);
+  else {
+    const n = models[0]?.n || model;
+    if (n) parts.push(`Model: ${nm(n)}`);
+    const t = total || models[0]?.t;
+    if (t) parts.push(`Tokens: ${show(t)}`);
+  }
+  if (usd !== undefined) parts.push(`Cost ${engine === 'copilot' ? '≈ ' : ''}$${usd.toFixed(usd < 0.01 ? 4 : 2)}${credits !== undefined ? ` (${credits.toFixed(credits < 10 ? 2 : 1)} AI credits)` : ''}`);
+  if (ms !== undefined) parts.push(`${timeLabel} ${ms < 6e4 ? `${(ms / 1e3).toFixed(1)}s` : `${Math.floor(ms / 6e4)}m${String(Math.round((ms % 6e4) / 1e3)).padStart(2, '0')}s`}`);
+  return `<sub>${parts.join(' · ')}</sub>`;
+}
 // Collapsed list of what the review read. Paths are repo-relative and come from the collector, not the model.
 function sourcesRead({ reqDocs = [], standards = [], trace, head, base }) {
   const list = (a) => (a.length ? a.slice(0, 15).map((x) => `\`${cell(x)}\``).join(', ') + (a.length > 15 ? `, +${a.length - 15} more` : '') : 'none');
@@ -427,10 +462,10 @@ function sourcesRead({ reqDocs = [], standards = [], trace, head, base }) {
 }
 // Sections in order of importance (findings, pre-existing drift, Traceability, then the long tables). Each section's items are
 // added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [] }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], partial, engine, model, usage, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [] }) {
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
   let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}## SpecGuard\n\n${neutralize(status)}\n\n`;
-  if (engine) head += `_Engine: ${cell(`${engine}${model ? ` (${model})` : ''}`)}_\n\n`;
+  if (engine) head += `${usageLine({ engine, model, raw: usage })}\n\n`;
   if (partial) head += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
   if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
   if (traceNote) head += `> Traceability unavailable for this PR (${cell(traceNote)}).\n\n`;
@@ -766,9 +801,10 @@ async function run({ github, context, core }) {
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
     : { status: 'unavailable', ref: '', checks: [], reason: target === 'merge' ? 'PR has no current test-merge commit' : 'Configured standards ref must be head or an available current merge commit.' };
-  const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, partial }));
-
   const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
+  let usage = null; // engine usage JSON (tokens, cost); shown on every summary that ran the engine, including failed runs
+  try { usage = JSON.parse(readCtx(engine === 'claude' ? 'claude.json' : 'usage.json')); } catch { /* no usage data */ }
+  const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, usage, partial }));
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();
@@ -966,11 +1002,11 @@ async function run({ github, context, core }) {
   if (!stop && !incomplete.length && !degraded && env.RESOLVE_STALE !== 'false') await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: await actor() });
 
   const clean_ = noGaps(data) && !incomplete.length;
-  await publish(buildSummary({ status: `${clean_ ? 'No test gaps found in the assessed obligations.' : `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ status: `${clean_ ? 'No test gaps found in the assessed obligations.' : `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}Reviewed: ${axes(assessed)}; ${counts()}.`}${prov ? `\n\n${prov}.` : ''}`, traceNote, data, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base } }));
 }
 
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

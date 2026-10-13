@@ -211,6 +211,50 @@ test('reports missing model output as incomplete', async (t) => {
   assert.match(s.calls.summary[0].body, /Could not complete/);
 });
 
+const COPILOT_USAGE = { totalNanoAiu: 17.6e9, tokenDetails: { input: { tokenCount: 111300 }, cache_read: { tokenCount: 301000 }, cache_write: { tokenCount: 0 }, output: { tokenCount: 3100 } }, totalApiDurationMs: 192000, modelMetrics: { 'gpt-5.4': { usage: { inputTokens: 111300, outputTokens: 3100, cacheReadTokens: 301000, cacheWriteTokens: 0 } } }, currentModel: 'gpt-5.4' };
+test('usage line: copilot shows model, tokens, estimated cost and credits', () => {
+  const l = post.usageLine({ engine: 'copilot', model: '', raw: COPILOT_USAGE });
+  assert.equal(l, '<sub>Engine: copilot · Model: gpt-5.4 · Tokens: 412.3k in (301.0k cached) · 3.1k out · Cost ≈ $0.18 (17.6 AI credits) · API time 3m12s</sub>');
+});
+
+test('usage line: claude cost is exact; several models are listed, cost once', () => {
+  const raw = { total_cost_usd: 0.4321, duration_api_ms: 5400, usage: { input_tokens: 1000, cache_read_input_tokens: 2000000, cache_creation_input_tokens: 500, output_tokens: 70 },
+    modelUsage: { 'claude-sonnet-4-6': { inputTokens: 1000, outputTokens: 50, cacheReadInputTokens: 2000000, cacheCreationInputTokens: 500, costUSD: 0.4 }, 'claude-haiku-4-5': { inputTokens: 5, outputTokens: 20, costUSD: 0.0321 } } };
+  const l = post.usageLine({ engine: 'claude', raw });
+  assert.match(l, /Models: claude-sonnet-4-6 \(2\.0M in \(2\.0M cached\) · 50 out\), claude-haiku-4-5 \(5 in · 20 out\)/);
+  assert.match(l, /Cost \$0\.43 · API time 5\.4s/);
+  assert.doesNotMatch(l, /≈|credits/);
+  assert.match(post.usageLine({ engine: 'claude', model: 'm', raw: { total_cost_usd: 1, usage: { input_tokens: 10, output_tokens: 2 } } }), /Model: m · Tokens: 10 in · 2 out · Cost \$1\.00/);
+});
+
+test('usage line: missing or garbage data degrades to the plain engine line', () => {
+  assert.equal(post.usageLine({ engine: 'copilot', raw: null }), '<sub>Engine: copilot</sub>');
+  assert.equal(post.usageLine({ engine: 'claude', model: 'opus', raw: 'junk' }), '<sub>Engine: claude · Model: opus</sub>');
+  for (const raw of [{}, [], { totalNanoAiu: 'x', tokenDetails: { input: { tokenCount: NaN } }, modelMetrics: { m: { usage: { inputTokens: 'a', outputTokens: -1 } } } }, { total_cost_usd: Infinity, usage: { input_tokens: {} }, modelUsage: { 'a<img src=x>@b': null } }]) {
+    for (const engine of ['copilot', 'claude']) assert.doesNotMatch(post.usageLine({ engine, raw }), /NaN|undefined|Infinity|<img/);
+  }
+  assert.doesNotMatch(post.usageLine({ engine: 'claude', raw: { modelUsage: { '<img src=x onerror=1> @team': { inputTokens: 1 } } } }), /<img|@team/);
+});
+
+test('a Could not complete summary and a complete one both carry the usage line', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx/usage.json'), JSON.stringify(COPILOT_USAGE));
+  await post(s);
+  assert.match(s.calls.summary[0].body, /<sub>Engine: copilot · Model: gpt-5.4 · Tokens: 412\.3k in/);
+  const f = setup(t);
+  fs.writeFileSync(path.join(f.dir, 'ctx/usage.json'), JSON.stringify(COPILOT_USAGE));
+  fs.unlinkSync(path.join(f.dir, 'ctx/findings.json'));
+  await post(f);
+  assert.match(f.calls.summary[0].body, /Could not complete/);
+  assert.match(f.calls.summary[0].body, /Cost ≈ \$0\.18 \(17\.6 AI credits\)/);
+  assert.match(f.jobSummary[0], /<sub>Engine: copilot/);
+  const c = setup(t); // claude engine reads claude.json
+  process.env.ENGINE = 'claude';
+  fs.writeFileSync(path.join(c.dir, 'ctx/claude.json'), JSON.stringify({ total_cost_usd: 0.25, usage: { input_tokens: 9, output_tokens: 1 } }));
+  await post(c);
+  assert.match(c.calls.summary[0].body, /<sub>Engine: claude · Tokens: 9 in · 1 out · Cost \$0\.25<\/sub>/);
+});
+
 test('verifies unit assertions and displays their text and layer without claiming execution', async (t) => {
   const s = setup(t, report({ coverage: [row()], findings: [] }));
   await post(s);
