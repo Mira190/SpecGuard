@@ -51,3 +51,24 @@ test('M7: ours matches REST and GraphQL author shapes and rejects humans, other 
   assert.equal(ours(null), false);
   assert.equal(ours({ type: 'Bot', login: 'review-app[bot]' }, 'review-app[bot]'), true);
 });
+
+const { recordedLogin } = require('./preflight');
+const APP = { type: 'Bot', login: 'my-app[bot]' }, PAT = { type: 'User', login: 'dev-pat' };
+
+test('A3 preflight: the recorded login lets an App-token run skip; a person or another bot cannot make themselves ours', () => {
+  const SHA = 'a'.repeat(40), pr = { state: 'open', user: { login: 'alice', type: 'User' } };
+  const head = (by) => `<!-- specguard:summary -->\n${by ? `<!-- specguard:by=${by} -->\n` : ''}<!-- specguard:head=${SHA} -->\n`;
+  const c = (user, body) => ({ user, body });
+  assert.match(decide({ pr, comments: [c(APP, head('my-app[bot]'))], headSha: SHA }), /already/); // App token: /user is unreadable, actor null
+  assert.equal(decide({ pr, comments: [c(APP, head(''))], headSha: SHA }), '', 'no recorded login: an App comment is not recognised');
+  assert.equal(decide({ pr, comments: [c({ type: 'Bot', login: 'other[bot]' }, head('my-app[bot]'))], headSha: SHA }), '', 'author differs from the recorded login');
+  assert.equal(decide({ pr, comments: [c({ type: 'User', login: 'mallory' }, head('mallory'))], headSha: SHA }), '', 'a person cannot record themselves');
+  assert.match(decide({ pr, comments: [c(PAT, head(''))], headSha: SHA, actor: 'dev-pat' }), /already/); // PAT: /user answers
+  assert.equal(decide({ pr, comments: [c({ type: 'User', login: 'mallory' }, head(''))], headSha: SHA, actor: 'dev-pat' }), '');
+  assert.equal(recordedLogin([c(APP, `quote\n${head('my-app[bot]')}`)]), null, 'the summary marker must open the comment');
+  assert.equal(ours({ type: 'User', login: 'Dev-Pat' }, 'dev-pat'), true);
+  assert.equal(ours({ type: 'User', login: 'github-actions[bot]' }), false);
+  assert.match(decide({ pr, comments: [c({ type: 'Bot', login: 'github-actions[bot]' }, head(''))], headSha: SHA }), /already/); // GITHUB_TOKEN: no /user, no marker
+  assert.match(decide({ pr, comments: [c({ type: 'Bot', login: 'github-actions[bot]' }, head('github-actions[bot]'))], headSha: SHA }), /already/);
+  assert.equal(decide({ pr, comments: [c(APP, head('my-app[bot]'))], headSha: SHA, actor: 'github-actions[bot]' }), '', 'a known actor wins over a recorded login');
+});

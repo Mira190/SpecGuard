@@ -54,18 +54,19 @@ function prepareReal({ repoDir, base, head, prTitle = '', prBody = '', out, id, 
   return meta;
 }
 
-// Counts from the posted comments and the sticky summary. Summary-only = items in the collapsed "more item(s)" block.
+// Counts from the posted comments and the sticky summary. Summary-only = findings carried in full by the summary (`- **title** (`path:line`, kind, why)`),
+// outside the collapsed Pre-existing drift block; findings posted as comments appear there as `- **title** — [link]` and are not counted.
 function countFindings(comments, summary) {
   const inline = { total: 0, byKind: {}, byConfidence: { high: 0, low: 0 } };
   for (const c of comments.map(parseComment).filter(Boolean)) {
     inline.total++; inline.byConfidence[c.confidence]++;
     inline.byKind[c.kind] = (inline.byKind[c.kind] || 0) + 1;
   }
-  const s = String(summary || '');
-  const item = /^- \*\*/gm;
-  const pre = /### Pre-existing drift[^\n]*\n([\s\S]*?)(?=\n#{1,3} |\n<details>|$)/.exec(s);
-  const det = /<details><summary>\d+ more item[\s\S]*?<\/details>/.exec(s);
-  return { inline, summary_only: det ? (det[0].match(item) || []).length : 0, pre_existing: pre ? (pre[1].match(item) || []).length : 0 };
+  let s = String(summary || '');
+  const pre = /<details><summary>Pre-existing drift[^<]*<\/summary>([^]*?)<\/details>/.exec(s);
+  if (pre) s = s.replace(pre[0], '');
+  const count = (t) => (t.match(/^- \*\*[^\n]*?\*\* \(`[^`\n]+`, \w+/gm) || []).length;
+  return { inline, summary_only: count(s), pre_existing: pre ? count(pre[1]) : 0 };
 }
 
 async function finishRealOne(id, out) {

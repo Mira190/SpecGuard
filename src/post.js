@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { inspectChecks } = require('./checks');
-const { ours } = require('./preflight');
+const { ours, recordedLogin } = require('./preflight');
 
 const KINDS = ['spec_mismatch', 'missing_test', 'weak_test', 'standard', 'pushdown'];
 const ALIGN = ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
@@ -28,7 +28,7 @@ const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 // The one sanitiser for every piece of model- or document-derived text that reaches a comment or the summary.
 // Idempotent. Removes HTML comments (our markers live in them), neutralises tags, @mentions and images, and drops control and bidi characters.
-const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
+const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F\u00AD\u034F\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu; // control, bidi, zero-width, tag and variation-selector characters, and the blank Hangul/Braille fillers
 function neutralize(s) {
   let t = String(s).replace(INVISIBLE, '');
   for (let prev; prev !== t;) { prev = t; t = t.replace(/<!--[\s\S]*?-->/g, ''); }
@@ -346,27 +346,15 @@ const fix = (f, inline) => (f.kind === 'standard' && typeof f.suggestion === 'st
   ? `\n\n${inline && oneClick(f) ? fence('suggestion', f.suggestion) : `Suggested fix (not applied automatically):\n\n${fence('', neutralize(f.suggestion))}`}` : '');
 const title1 = (t) => oneLine(neutralize(t).replace(/\s+/g, ' ').trim(), 200);
 
-// Take expected values from the requirement, never from the code under test (the mirror-test trap). Verbatim in every agent prompt.
-const AGENT_RULE = 'Take expected values from the requirement quote or an independent literal; never compute them from the implementation under test. If the requirement is ambiguous, stop and ask.';
-const FENCED = /^[ \t]*(`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n[ \t]*\1[`~]*[ \t]*$/gm;
-// Paste-ready prompt for a coding agent, built only from validated fields (path, line, title, body, linked requirement). Style findings carry their own fix: none.
-// req: { source, quote } of a verified linked requirement, or null. Bounded (about 3 KB), so the comment trailer can never push a comment over the limit.
-function agentPrompt(f, req) {
-  if (f.kind === 'standard') return '';
-  const body = String(f.body), code = [...body.matchAll(FENCED)][0]?.[2];
-  const prose = body.replace(FENCED, '').replace(/\n{3,}/g, '\n\n').trim();
-  const parts = [`File: ${oneLine(String(f.path).replace(/\s+/g, ' '), 200)}:${f.line}`, `Gap: ${oneLine(String(f.title).replace(/\s+/g, ' ').trim(), 200)}\n${truncate(prose, 700)}`];
-  if (req && req.quote) parts.push(`Requirement (${oneLine(norm(req.source), 100)}): "${oneLine(norm(req.quote), 400)}"`);
-  if (code && code.length <= 1500) parts.push(`Test skeleton:\n${fence('', code)}`);
-  parts.push(AGENT_RULE);
-  return `\n\n<details><summary>Prompt for a coding agent</summary>\n\n${fence('text', neutralize(parts.join('\n\n')))}\n</details>`;
-}
+// The one fixed hint on a test-gap comment: the mirror-test trap.
+const ADVICE = 'Take the expected value from the requirement or an independent literal, not from the code under test.';
 
-function commentBody(f, fp, inline = true, req = null) {
-  const why = neutralize(`kind: ${f.kind}, confidence: ${f.confidence}${f.rule_source ? `, rule: ${f.rule_source}` : ''}`);
-  // the trailer (suggestion, agent prompt, rationale, rating hint, fingerprint marker) is never cut: only the model's own text is truncated
-  const trailer = `${fix(f, inline)}${agentPrompt(f, req)}\n\n<details><summary>Why this was flagged</summary>\n\n${why}\n</details>\n\n<sub>Useful? React 👍 / 👎.</sub>\n\n<!-- specguard:fp=${fp} -->`;
-  return truncate(`**${title1(f.title)}**\n\n${neutralize(f.body)}`, BODY_MAX - trailer.length) + trailer;
+// kind and confidence stay machine-readable in a hidden comment (the eval graders and the fix-through telemetry read them); only the fp marker comes after it.
+function commentBody(f, fp, inline = true) {
+  const rule = f.rule_source ? `, rule: ${neutralize(f.rule_source).replace(/[<>\r\n]|--/g, ' ')}` : '';
+  // the trailer (suggestion, hint, hidden markers) is never cut: only the model's own text is truncated
+  const trailer = `${fix(f, inline)}${['missing_test', 'weak_test'].includes(f.kind) ? `\n\n${ADVICE}` : ''}\n\n<!--\nkind: ${f.kind}, confidence: ${f.confidence}${rule}\n-->\n<!-- specguard:fp=${fp} -->`;
+  return truncate(`**${title1(f.title)}${f.confidence === 'low' ? ' (low confidence)' : ''}**\n\n${neutralize(f.body)}`, BODY_MAX - trailer.length) + trailer;
 }
 
 const axes = (fs) => { const n = (k) => fs.filter((f) => f.kind === k).length; return `Tests: ${n('missing_test')} missing, ${n('weak_test')} weak · Standards: ${n('standard')} · Layering: ${n('pushdown')}${n('spec_mismatch') ? ` · Spec: ${n('spec_mismatch')} mismatch` : ''}`; };
@@ -436,6 +424,8 @@ function traceTable(data, blob, specFiles = [], covById = new Map(data.coverage.
 }
 
 const MAX_ROWS = 30;
+// Files the collector left out of the diff (diff-dropped.txt, one path per line).
+const notReviewed = (paths) => `Not reviewed (diff over max_diff_kb): ${paths.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${paths.length > 10 ? `, … (+${paths.length - 10} more)` : ''}`;
 // ponytail: 1 nano-AIU = 1e-9 AI credit = $0.01 / credit (GitHub AI Credit price since 2026-06-01); update this one constant if GitHub reprices. The billing API stays authoritative.
 const USD_PER_AI_CREDIT = 0.01;
 const fin = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : undefined);
@@ -458,10 +448,11 @@ function mergeUsage(a, b) {
 function usageLine({ engine, model, raw, notes = [] }) {
   const tok = (i, cr, cw, o) => { i = (fin(i) ?? 0) + (fin(cr) ?? 0) + (fin(cw) ?? 0); return { i, c: fin(cr) ?? 0, o: fin(o) ?? 0 }; };
   const show = (t) => `${kM(t.i)} in${t.c ? ` (${kM(t.c)} cached)` : ''} · ${kM(t.o)} out`;
+  // copilot's per-model inputTokens already include cache read and write (tokenDetails.input is the uncached part): tok adds them back once
   let models = [], total, usd, credits, ms, timeLabel = 'API time';
   const u = raw && typeof raw === 'object' ? raw : {};
   if (engine === 'copilot') {
-    for (const [n, m] of Object.entries(u.modelMetrics || {})) { const x = m?.usage; if (x) models.push({ n, t: tok(x.inputTokens, x.cacheReadTokens, x.cacheWriteTokens, x.outputTokens) }); }
+    for (const [n, m] of Object.entries(u.modelMetrics || {})) { const x = m?.usage; if (x) models.push({ n, t: tok(Math.max(0, (fin(x.inputTokens) ?? 0) - (fin(x.cacheReadTokens) ?? 0) - (fin(x.cacheWriteTokens) ?? 0)), x.cacheReadTokens, x.cacheWriteTokens, x.outputTokens) }); }
     const d = u.tokenDetails; if (d) total = tok(d.input?.tokenCount, d.cache_read?.tokenCount, d.cache_write?.tokenCount, d.output?.tokenCount);
     if (fin(u.totalNanoAiu) !== undefined) { credits = u.totalNanoAiu / 1e9; usd = credits * USD_PER_AI_CREDIT; }
     ms = fin(u.totalApiDurationMs);
@@ -487,9 +478,10 @@ function usageLine({ engine, model, raw, notes = [] }) {
   return `<sub>${parts.join(' · ')}</sub>`;
 }
 // Fix-through telemetry (0 tokens). The outcome of an earlier finding, conservatively: nothing here is ever "fixed", only observed.
-//   dismissed: a human resolved the thread with the anchor untouched, or more 👎 than 👍 (people other than us)
-//   open: reported again; addressed: not reported and the anchored lines changed since the comment; not_observed: not reported, anchor untouched or unknown (could be a miss)
-const outcome = (p) => ((p.thread === 'human' && p.anchor_touched === false) || p.down > p.up ? 'dismissed' : p.still_reported ? 'open' : p.anchor_touched === true ? 'addressed' : 'not_observed');
+//   dismissed: a person resolved the thread with neither the anchor nor any test changed, or 👎 outnumber 👍 by 2 (we add no reactions: all are people's)
+//   open: reported again; addressed: not reported and the author changed the anchored lines or any test file since the comment (first-parent, no base merges)
+//   not_observed: not reported, nothing observed to change, or unknown (could be a miss)
+const outcome = (p) => ((p.thread === 'human' && p.anchor_touched === false && p.tests_changed !== true) || p.down - p.up >= 2 ? 'dismissed' : p.still_reported ? 'open' : p.anchor_touched === true || p.tests_changed === true ? 'addressed' : 'not_observed');
 const COUNTS_MAX = 8192;
 // Hidden machine-readable line in the sticky summary. `outcomes` drops its oldest entries first to stay under COUNTS_MAX; the tally in `since` always covers all of them.
 function countsComment(c) {
@@ -524,17 +516,17 @@ function verdict(data, fs_) {
 // Sections in goal order, which is also the importance order: unit test gaps, requirements, standards, layers, completeness, then collapsed reference
 // material. Each section's items are added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, prov, partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, prov, partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [] }) {
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)];
   if (data && !status) status = `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}${verdict(data, all)}`;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
-  let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}## SpecGuard\n\n${neutralize(status)}${prov ? `\n\n${neutralize(prov)}.` : ''}\n\n`;
+  let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}<!-- specguard:status=${state || (incomplete.length ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n${neutralize(status)}${prov ? `\n\n${neutralize(prov)}.` : ''}\n\n`;
   if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
-  if (partial) head += '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.\n\n';
+  if (partial || dropped.length) head += `${partial ? '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.' : ''}${dropped.length ? `${partial ? '\n' : ''}> ${notReviewed(dropped)}` : ''}\n\n`;
   if (rules.length) head += `> This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.\n\n`;
   if (traceNote) head += `> Traceability unavailable for this PR (${cell(traceNote)}).\n\n`;
   const sn = counts && counts.complete && counts.since;
-  if (sn && counts.since_total) head += `<sub>Since earlier reviews: ${sn.addressed} addressed · ${sn.open} still open · ${sn.dismissed} dismissed · ${sn.not_observed} not observed (not proof of a fix)</sub>\n\n`;
+  if (sn && counts.since_total) head += `<sub>Since earlier reviews${counts.prior_total > counts.since_total ? `, of the ${counts.since_total} most recent` : ''}: ${sn.addressed} addressed · ${sn.open} still open · ${sn.dismissed} dismissed · ${sn.not_observed} not observed (not proof of a fix)</sub>\n\n`;
   if (resolveNote) head += `<sub>Threads for findings no longer reported were left open: ${resolveNote} (see README, resolve_stale).</sub>\n\n`;
   const sections = []; // { g: group heading, h, atoms, tail }
   let g = '';
@@ -862,61 +854,69 @@ async function resolveStale({ github, core, owner, repo, number, current, actor 
   }
 }
 
-// Did the diff from `from` to `to` change a line of the old side of `file` in [start, end]? true / false, or null when git cannot say
-// (commit not fetched, shallow clone, file deleted or renamed: that is not evidence about the anchor). Whitespace-only edits do not count.
+// Did the author's own commits from `from` to `to` change a line of the old side of `file` in [start, end]? true / false, or null when git
+// cannot say (commit not fetched, shallow clone, the PR was rewritten so `from` is no ancestor, file deleted or renamed: not evidence about the anchor).
+// First-parent, non-merge commits only (a base branch merged into the PR is not the author's change); the range is followed through each commit in turn.
+// Whitespace-only edits do not count.
 function anchorTouched(from, to, file, start, end, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 26 })) {
   if (!/^[0-9a-f]{7,64}$/i.test(String(from)) || !file || !(end >= 1)) return null;
   try {
-    const d = git('diff', '-U0', '-w', '--no-color', '--no-ext-diff', '--no-renames', from, to, '--', file);
-    if (/^(?:deleted file mode|\+\+\+ \/dev\/null)/m.test(d)) return null;
-    for (const m of d.matchAll(/^@@ -(\d+)(?:,(\d+))? \+/gm)) {
-      const a = +m[1], n = m[2] === undefined ? 1 : +m[2]; // n === 0: pure insertion after old line a
-      if (n ? a <= end && a + n - 1 >= start : a >= start && a < end) return true;
+    git('merge-base', '--is-ancestor', from, to);
+    const log = git('log', '--first-parent', '--no-merges', '--reverse', '-p', '-U0', '-w', '--no-color', '--no-ext-diff', '--no-renames', '--format=%x00', `${from}..${to}`, '--', file);
+    let s = start, e = end;
+    for (const d of log.split('\0')) {
+      if (/^(?:deleted file mode|\+\+\+ \/dev\/null)/m.test(d)) return null;
+      let shift = 0;
+      for (const m of d.matchAll(/^@@ -(\d+)(?:,(\d+))? \+\d+(?:,(\d+))? @@/gm)) {
+        const a = +m[1], n = m[2] === undefined ? 1 : +m[2], k = m[3] === undefined ? 1 : +m[3]; // n === 0: pure insertion after old line a
+        if (n ? a <= e && a + n - 1 >= s : a >= s && a < e) return true;
+        if ((n ? a + n - 1 : a) < s) shift += k - n; // wholly before the range: it moves
+      }
+      s += shift; e += shift;
     }
     return false;
   } catch { return null; }
 }
 
+// Did the author's own commits from `from` to `to` (first-parent, no merges) change any test file? true / false, or null when git cannot say.
+const isTest = (p) => require('./trace').isTestPath(p); // lazily: trace.js requires this module
+function testsChanged(from, to, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 26 })) {
+  if (!/^[0-9a-f]{7,64}$/i.test(String(from))) return null;
+  try {
+    git('merge-base', '--is-ancestor', from, to);
+    return git('log', '--first-parent', '--no-merges', '--name-only', '--format=', '--no-renames', `${from}..${to}`).split('\n').some((p) => p && isTest(p));
+  } catch { return null; }
+}
+
+// fp -> its review thread (the latest when several share one), for threads whose first comment is ours.
+const threadsByFp = (threads, me) => {
+  const m = new Map();
+  for (const th of threads || []) {
+    const c = th.comments.nodes[0], f = c && ours(c.author, me) && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || '');
+    if (f) m.set(f[1], th);
+  }
+  return m;
+};
+
 // One record per earlier SpecGuard finding (priors: Map fp -> REST review comment, oldest first). Only called on a complete run:
 // `survive` is then every fingerprint still reported. Each lookup failing degrades that field to unknown, never the run.
-async function followUp({ github, core, owner, repo, number, priors, survive, me, headSha, cwd, threads }) {
-  const byFp = new Map();
-  for (const th of threads || []) {
-    const c = th.comments.nodes[0], m = c && ours(c.author, me) && /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || '');
-    if (m) byFp.set(m[1], th);
-  }
+function followUp({ priors, survive, me, headSha, cwd, threads }) {
+  const byFp = threadsByFp(threads, me);
   const out = [];
   for (const [fp, c] of [...priors].slice(-HARD_CAP)) {
-    let up = 0, down = 0;
-    const roll = c.reactions || {}, n = (k) => (Number.isInteger(roll[k]) ? roll[k] : 0);
-    if (n('+1') || n('-1')) {
-      try { // our own 👍/👎 (G2) are not feedback
-        for (const r of await github.paginate(github.rest.reactions.listForPullRequestReviewComment, { owner, repo, comment_id: c.id, per_page: 100 })) {
-          if (ours(r.user, me)) continue;
-          if (r.content === '+1') up++; else if (r.content === '-1') down++;
-        }
-      } catch { [up, down] = [Math.max(0, n('+1') - 1), Math.max(0, n('-1') - 1)]; } // assume our own pair is in the rollup
-    }
+    const roll = c.reactions || {}, n = (k) => (Number.isInteger(roll[k]) ? roll[k] : 0); // we add no reactions: every one is a person's
     const th = byFp.get(fp);
     const link = /\]\(https?:\/\/[^)\s]*\/blob\/[0-9a-f]+\/[^)\s]*#L(\d+)(?:-L(\d+))?\)/.exec(c.body || ''); // a file-level comment names its lines only in this link
     const end = c.original_line ?? (link ? +(link[2] || link[1]) : null), start = c.original_start_line ?? (link ? +link[1] : end);
     const rec = {
       fp, kind: (/kind: (\w+), confidence/.exec(c.body || '') || [])[1] || null, still_reported: survive.has(fp),
       anchor_touched: anchorTouched(c.original_commit_id, headSha, c.path, start, end, cwd),
-      thread: !th ? 'unknown' : !th.isResolved ? 'open' : th.resolvedBy && ours(th.resolvedBy, me) ? 'specguard' : 'human', up, down,
+      tests_changed: testsChanged(c.original_commit_id, headSha, cwd),
+      thread: !th ? 'unknown' : !th.isResolved ? 'open' : th.resolvedBy && ours(th.resolvedBy, me) ? 'specguard' : 'human', up: n('+1'), down: n('-1'),
     };
     out.push({ ...rec, outcome: outcome(rec) });
   }
   return out;
-}
-
-// Adds 👍 and 👎 from our token to each new comment (the review's comments, then file-level ones) so a reviewer can rate it with one click.
-// Stops at the first failure (a rate limit would repeat); any failure is a warning, never a run failure.
-async function react({ github, core, owner, repo, number, reviewId, ids = [] }) {
-  try {
-    const all = [...(reviewId ? (await github.paginate(github.rest.pulls.listCommentsForReview, { owner, repo, pull_number: number, review_id: reviewId, per_page: 100 })).map((c) => c.id) : []), ...ids];
-    for (const comment_id of all) for (const content of ['+1', '-1']) await github.rest.reactions.createForPullRequestReviewComment({ owner, repo, comment_id, content });
-  } catch (e) { core.warning(`SpecGuard: could not add 👍/👎 reactions: ${e.message}`); }
 }
 
 async function run({ github, context, core }) {
@@ -938,13 +938,23 @@ async function run({ github, context, core }) {
   };
   const early = await current();
   if (early && rechecked) return core.warning(`SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary
-  let actorId; // the authenticated login, or null (GITHUB_TOKEN cannot call /user: github-actions[bot])
+  // Our login: the authenticated user (a PAT), else the login our earlier summary recorded (an App token cannot call /user), else null
+  // (GITHUB_TOKEN: github-actions[bot]). A null is replaced once, by the author of the first thing we post.
+  let who;
   const actor = async () => {
-    if (actorId === undefined) { try { actorId = (await github.rest.users.getAuthenticated()).data.login; } catch { actorId = null; } }
-    return actorId;
+    if (who === undefined) {
+      try { who = (await github.rest.users.getAuthenticated()).data.login || null; }
+      catch {
+        try { who = recordedLogin(await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 })); } catch { who = null; }
+      }
+    }
+    return who;
   };
+  const learn = (r) => { const l = r?.data?.user?.login; if (who === null && typeof l === 'string' && /^[\w-]+(?:\[bot\])?$/.test(l)) who = l; };
+  const stamp = (text) => (who ? text.replace('<!-- specguard:summary -->\n', (m) => `${m}<!-- specguard:by=${who} -->\n`) : text); // preflight reads it back
 
-  const publish = async (text) => {
+  const publish = async (text, state) => {
+    core.setOutput?.('status', state);
     await core.summary.addRaw(text).write();
     try {
       const stop = await current();
@@ -952,14 +962,19 @@ async function run({ github, context, core }) {
       const cs = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 });
       const me = await actor();
       const mine = cs.find((c) => ours(c.user, me) && typeof c.body === 'string' && c.body.startsWith('<!-- specguard:summary -->'));
-      if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body: text });
-      else await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: text });
+      const r = mine ? await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body: stamp(text) })
+        : await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: stamp(text) });
+      if (who === null) { // first contact with an unknown identity: record it in the summary
+        learn(r);
+        const id = mine?.id ?? r?.data?.id;
+        if (who && id) await github.rest.issues.updateComment({ owner, repo, comment_id: id, body: stamp(text) });
+      }
     } catch (e) { core.warning(`SpecGuard: could not post summary comment: ${e.message}`); }
   };
 
   let rules = [];
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
-  if (env.SKIP === 'true') return publish(buildSummary({ rules, headSha, status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }));
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, headSha, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -970,11 +985,13 @@ async function run({ github, context, core }) {
   if (engine === 'copilot') try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair turn */ }
   const repair = (readCtx('engine-repair') || '').trim();
   const notes = [...(readCtx('engine-notes') || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])]; // written by the engine step, never by the model
-  const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial }));
+  const dropped = (readCtx('diff-dropped.txt') || '').split('\n').map((x) => x.trim()).filter(Boolean);
+  const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial, dropped, state: 'failed' }), 'failed');
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();
   if (partial) incomplete.push('The diff exceeded `max_diff_kb` and was truncated; obligations outside the reviewed portion are unknown.');
+  if (dropped.length) incomplete.push(notReviewed(dropped));
 
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
@@ -1058,6 +1075,14 @@ async function run({ github, context, core }) {
     core.warning(`SpecGuard: ${withheld}`);
     incomplete.push(`Delivery degraded: ${withheld}; the findings are in this summary.`);
   }
+  let threads; // review threads (first 300), read once for the dedup below, the telemetry and the stale resolver
+  if (priors.size) {
+    try { threads = await fetchThreads({ github, owner, repo, number: pr.number }); }
+    catch (e) { core.warning(`SpecGuard: review threads could not be read: ${e.message}`); }
+    const me = await actor();
+    // a thread we resolved ourselves (its finding was absent from an earlier run) does not hide the finding when it is reported again; a person's resolution is respected
+    for (const [fp, th] of threadsByFp(threads, me)) if (th.isResolved && th.resolvedBy && ours(th.resolvedBy, me)) known.delete(fp);
+  }
   const survive = new Set(); // fingerprints of every finding still present after validation, wherever it ends up (inline, summary, capped, unverifiable)
 
   const kept = [];
@@ -1126,9 +1151,8 @@ async function run({ github, context, core }) {
   const degraded = proposed > data.findings.length;
 
   const p = plan(kept, maps, maxComments);
-  const reqFor = (f) => data.requirements.find((r) => r.obligation_ids.some((id) => (f.obligation_ids || []).includes(id))) || null; // a linked requirement (its quote is verified)
   const comments = p.inline.map((f) => ({
-    path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp, true, reqFor(f)),
+    path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp, true),
     ...(f.start_line !== undefined && { start_line: f.start_line, start_side: 'RIGHT' }),
   }));
   const prov = proven(data.coverage);
@@ -1142,14 +1166,13 @@ async function run({ github, context, core }) {
     for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: withheld ? 'withheld: could not deduplicate' : `not posted: ${stop}` });
     inline = filed = 0;
   }
-  let reviewId; // the posted review: its comments get the 👍/👎 reactions
-  const fileIds = [];
   const urls = new Map(); // fp -> link to our comment, for the result lines in the summary
   for (const [fp, c] of priors) if (c.html_url) urls.set(fp, c.html_url);
   if (!stop && comments.length) {
     const post = (body, cs) => github.rest.pulls.createReview({ owner, repo, pull_number: pr.number, commit_id: headSha, event: 'COMMENT', body: clean(body), ...(cs && { comments: cs }) });
     try {
-      reviewId = (await post(head, comments))?.data?.id;
+      const posted = await post(head, comments), reviewId = posted?.data?.id;
+      learn(posted);
       try { for (const c of await github.paginate(github.rest.pulls.listCommentsForReview, { owner, repo, pull_number: pr.number, review_id: reviewId, per_page: 100 })) { const m = /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || ''); if (m && c.html_url) urls.set(m[1], c.html_url); } } catch { /* the blob line is the fallback link */ }
     }
     catch (e) {
@@ -1170,22 +1193,16 @@ async function run({ github, context, core }) {
     const range = f.start_line ? `#L${f.start_line}-L${f.line}` : `#L${f.line}`;
     const link = `${context.serverUrl}/${owner}/${repo}/blob/${headSha}/${f.path}${range}`;
     try {
-      const r = await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false, reqFor(f)) });
-      if (r?.data?.id) fileIds.push(r.data.id);
+      const r = await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
+      learn(r);
       if (r?.data?.html_url) urls.set(f.fp, r.data.html_url);
     } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); filed--; }
   }
-  if (reviewId || fileIds.length) await react({ github, core, owner, repo, number: pr.number, reviewId, ids: fileIds });
 
   // Fix-through telemetry. Only a complete run can say an earlier finding is no longer reported: otherwise counts only (complete:false, no outcomes).
   const complete = !incomplete.length && !degraded;
   const me = await actor();
-  let threads, outcomes = [];
-  if (complete && priors.size) {
-    try { threads = await fetchThreads({ github, owner, repo, number: pr.number }); }
-    catch (e) { core.warning(`SpecGuard: review threads could not be read for telemetry: ${e.message}`); }
-    outcomes = await followUp({ github, core, owner, repo, number: pr.number, priors, survive, me, headSha, cwd: root, threads });
-  }
+  const outcomes = complete && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads }) : [];
   const byKind = {};
   const tally = (list, k) => list.forEach((f) => { (byKind[f.kind] ||= { posted: 0, already: 0, summary: 0 })[k]++; });
   const unplaced = new Set(unanchored.map((x) => x.f));
@@ -1194,17 +1211,17 @@ async function run({ github, context, core }) {
   tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, outcomes };
+  const tele = { v: 1, pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
   const resolveNote = !stop && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
-  const clean_ = noGaps(data) && !incomplete.length;
+  const clean_ = noGaps(data) && !incomplete.length, state = incomplete.length ? 'incomplete' : 'complete';
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
   await publish(buildSummary({ status: clean_ ? 'No test gaps found in the assessed obligations.' : undefined, prov, delivery: counts(), traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
-    rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele }));
+    rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
 
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { agentPrompt, outcome, anchorTouched, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

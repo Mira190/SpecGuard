@@ -36,12 +36,30 @@ test('prepareReal clones at head, runs collect.sh, writes prompt.md and meta.jso
 
 test('countFindings splits inline by kind/confidence, summary-only and pre-existing', () => {
   const c = (kind, conf) => ({ path: 'a.js', line: 1, body: `**T**\n\nkind: ${kind}, confidence: ${conf}` });
-  const summary = '## S\n\n<details><summary>2 more item(s): low</summary>\n\n- **x** (`a.js:1`, k)\n- **y** (`a.js:2`, k)\n</details>\n\n### Pre-existing drift (not caused by this PR)\n\n- **z** (`a.js:3`, k)\n';
+  const summary = '## S\n\n### Unit test gaps\n\n- **x** (`a.js:1`, k, low confidence)\n\n  body\n\n- **y** (`a.js:2`, k)\n\n  body\n\n<details><summary>Pre-existing drift (not caused by this PR)</summary>\n\n- **z** (`a.js:3`, k)\n\n</details>\n';
   const r = countFindings([c('missing_test', 'high'), c('missing_test', 'low'), c('spec_mismatch', 'high')], summary);
   assert.deepStrictEqual(r.inline, { total: 3, byKind: { missing_test: 2, spec_mismatch: 1 }, byConfidence: { high: 2, low: 1 } });
   assert.strictEqual(r.summary_only, 2);
   assert.strictEqual(r.pre_existing, 1);
   assert.deepStrictEqual(countFindings([], ''), { inline: { total: 0, byKind: {}, byConfidence: { high: 0, low: 0 } }, summary_only: 0, pre_existing: 0 });
+});
+
+test('countFindings reads the summary src/post.js really builds: summary-only items and pre-existing drift are not silently 0', () => {
+  const { buildSummary } = require('../src/post.js');
+  const f = (kind, title, extra = {}) => ({ kind, path: 'src/a.js', line: 3, title, body: `${title} body. More text.`, confidence: 'high', obligation_ids: ['O1'], ...extra });
+  const data = { requirements: [], findings: [], requirements_source: 'none', not_reviewed: '', coverage: [], standards: { status: 'checked', sources: ['R.md'], reason: 'ok' }, layering: { status: 'checked', reason: 'ok' } };
+  const summary = buildSummary({
+    data, specFiles: [], blob: 'https://github.com/o/r/blob/abc',
+    posted: [{ f: f('missing_test', 'POSTED'), url: 'https://github.com/o/r/pull/1#discussion_r1' }],
+    items: [{ f: f('weak_test', 'SUM1', { confidence: 'low' }), why: 'low confidence' }, { f: f('weak_test', 'SUM2'), why: 'not in a diff hunk' }, { f: f('pushdown', 'SUM3'), why: 'over max_comments' }, { f: f('standard', 'SUM4'), why: 'not in a diff hunk' }],
+    pre: [{ ...f('spec_mismatch', 'DRIFT1') }, { ...f('spec_mismatch', 'DRIFT2') }],
+  });
+  assert.match(summary, /<details><summary>Pre-existing drift/); // the layout this parser depends on
+  assert.match(summary, /^- \*\*SUM1\*\* \(`src\/a\.js:3`, weak_test, low confidence\)$/m);
+  const r = countFindings([], summary);
+  assert.strictEqual(r.summary_only, 4, summary);
+  assert.strictEqual(r.pre_existing, 2, summary);
+  assert.notStrictEqual(countFindings([], '## SpecGuard\n\nnothing\n').summary_only, 4);
 });
 
 test('table prints a row per PR with kind columns and no pass/fail', () => {
