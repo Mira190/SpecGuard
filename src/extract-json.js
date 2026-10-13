@@ -1,10 +1,30 @@
 // Pulls the findings object out of Copilot's text output. Usage: node extract-json.js <in> <out>
 const fs = require('fs');
 
-const parse = (t) => { try { const v = JSON.parse(t); if (v && typeof v === 'object' && !Array.isArray(v)) return t; } catch {} };
+const object = (t) => { try { const v = JSON.parse(t); if (v && typeof v === 'object' && !Array.isArray(v)) return t; } catch {} };
+
+// The two syntax slips weak models make: a trailing comma before } or ], and a raw newline or tab inside a string. Nothing else is repaired
+// (a truncated or otherwise broken output still fails), and the result is still schema-, citation- and anchor-verified by post.js.
+function lenient(s) {
+  const close = /\s*[}\]]/y;
+  let out = '', str = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (str) {
+      if (c === '\\') { out += c + (s[++i] ?? ''); continue; }
+      if (c === '"') str = false;
+      else if (c === '\n' || c === '\t') { out += c === '\n' ? '\\n' : '\\t'; continue; }
+      else if (c === '\r') continue;
+    } else if (c === '"') str = true;
+    else if (c === ',' && (close.lastIndex = i + 1, close.test(s))) continue;
+    out += c;
+  }
+  return out;
+}
+const parse = (t) => object(t) || object(lenient(t));
 
 // Whole output, then every balanced top-level {...} span (JSON strings respected); the last findings-like object wins.
-// Never repairs invalid JSON; a span that fails to parse is skipped whole, not mined for inner objects.
+// Repairs only trailing commas and raw newlines in strings (see lenient); a span that still fails to parse is skipped whole, not mined for inner objects.
 function extract(s) {
   s = String(s).replace(/^﻿/, '').trim();
   const whole = parse(s);

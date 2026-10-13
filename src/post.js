@@ -92,17 +92,41 @@ function settle(d, notes) {
     .filter((f) => (f.kind === 'spec_mismatch' ? f.obligation_ids.length === 1 && mm.has(f.obligation_ids[0]) : f.kind === 'standard' || f.obligation_ids.length));
 }
 
+// Cosmetic differences a weak model produces: enum case, spaces or hyphens for underscores, whole numbers as strings, a missing line
+// (the quote locates it). Normalised in place before validation; the verifier still decides every fact.
+const slug = (v) => (typeof v === 'string' ? v.trim().toLowerCase().replace(/[\s-]+/g, '_') : v);
+const whole = (v) => (typeof v === 'string' && /^\s*\d+\s*$/.test(v) ? Number(v) : v);
+function tidy(o) {
+  const set = (x, k, f) => { if (x[k] === null) delete x[k]; else if (x[k] !== undefined) x[k] = f(x[k]); };
+  const cite = (x) => {
+    if (!x || typeof x !== 'object') return;
+    x.line = whole(x.line);
+    if (!Number.isInteger(x.line) || x.line < 1) x.line = 1; // a hint only: the quote locates the line, or the citation stays unverified
+    set(x, 'start_line', whole); set(x, 'side', (v) => String(v).trim().toUpperCase()); set(x, 'layer', slug);
+  };
+  for (const c of o.coverage) {
+    if (!c || typeof c !== 'object') continue;
+    set(c, 'status', slug); cite(c.behaviour); cite(c.change);
+    if (Array.isArray(c.evidence)) for (const e of c.evidence) { cite(e); if (e && typeof e === 'object') set(e, 'kind', slug); }
+    if (c.alignment && typeof c.alignment === 'object') { set(c.alignment, 'status', slug); set(c.alignment, 'since', slug); }
+  }
+  for (const f of o.findings) if (f && typeof f === 'object') { cite(f); set(f, 'kind', slug); set(f, 'confidence', slug); }
+  for (const r of o.requirements) if (r && typeof r === 'object') set(r, 'line', whole);
+  for (const k of ['standards', 'layering']) if (o[k] && typeof o[k] === 'object') set(o[k], 'status', slug);
+}
+
 // Hand-rolled mirror of findings.schema.json. ponytail: swap for ajv if the schema grows.
-// Structural problems (not an object, core arrays missing) reject the output. Every other problem degrades only
-// the affected part, is repaired in place, and is listed in o.validation_notes.
+// Structural problems (not an object, core arrays missing, more than half of the coverage rows unusable) reject the output and
+// say which JSON path failed. Every other problem degrades only the affected part, is repaired in place, and is listed in o.validation_notes.
 function validate(o) {
   const bad = (m) => ({ ok: false, error: m });
   const str = (v) => typeof v === 'string';
   const int = (v) => Number.isInteger(v) && v >= 1;
   const text = (v) => str(v) && v.trim().length > 0;
   const citation = (v) => v && text(v.path) && int(v.line) && text(v.quote) && (v.side === undefined || ['LEFT', 'RIGHT'].includes(v.side));
-  if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('not an object');
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('$ is not an object');
   for (const k of ['coverage', 'findings', 'requirements']) if (!Array.isArray(o[k])) return bad(`${k} must be an array`);
+  tidy(o);
   const notes = [];
   if (!str(o.requirements_source)) { o.requirements_source = ''; notes.push('requirements_source was not a string; ignored.'); }
   if (!str(o.not_reviewed)) { o.not_reviewed = ''; notes.push('not_reviewed was not a string; ignored.'); }
@@ -116,17 +140,22 @@ function validate(o) {
   else if (s.status === 'checked' && !s.sources.length) demote('standards', 'checked standards need sources');
   if (!l || typeof l !== 'object' || !['checked', 'not_reviewed'].includes(l.status) || !text(l.reason)) demote('layering', 'missing or malformed');
 
+  // A row problem is structural (the row says nothing usable: it counts toward rejecting the whole ledger) or semantic (the row is
+  // well formed but its status is not supported: it becomes unknown and the rest of the review stands).
+  let structural = false;
+  const shape = (why) => { structural = true; return why; };
   const rowError = (c) => {
-    if (!text(c.obligation) || !text(c.source) || !text(c.reason)) return 'obligation, source and reason are required';
+    structural = false;
+    if (!text(c.obligation) || !text(c.source) || !text(c.reason)) return shape('obligation, source and reason are required');
     if (c.change === undefined) c.change = c.behaviour; // ponytail: omitted change = the cited behaviour; verifyEvidence still checks it against the diff
-    if (!(c.behaviour === null || citation(c.behaviour)) || !(c.change === null || citation(c.change))) return 'malformed citation';
-    if (!Array.isArray(c.evidence)) return 'evidence must be an array';
-    if (!STATUSES.includes(c.status)) return 'invalid status';
-    for (const e of c.evidence) {
+    if (!(c.behaviour === null || citation(c.behaviour)) || !(c.change === null || citation(c.change))) return shape('malformed citation');
+    if (!Array.isArray(c.evidence)) return shape('evidence must be an array');
+    if (!STATUSES.includes(c.status)) return shape('invalid status');
+    for (const [j, e] of c.evidence.entries()) {
       if (e && e.kind === undefined) e.kind = 'assertion'; // the documented meaning of an evidence quote; the quote is still verified
       if (!citation(e) || !['unit', 'component', 'integration', 'e2e'].includes(e.layer) || !text(e.proves)
-        || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return 'evidence malformed';
-      if (e.kind === 'removed' && e.side !== 'LEFT') return "removed evidence must cite the diff's LEFT side";
+        || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return shape(`evidence[${j}] malformed`);
+      if (e.kind === 'removed' && e.side !== 'LEFT') return shape("removed evidence must cite the diff's LEFT side");
     }
     if (c.status === 'covered' && (!c.behaviour || !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT'))) return 'covered needs a current unit assertion';
     if (c.status === 'weak_test' && !c.evidence.some((e) => e.layer === 'unit')) return 'weak_test needs a unit test location';
@@ -140,16 +169,22 @@ function validate(o) {
     return '';
   };
   const ids = new Set(), rows = [];
-  for (const [i, c] of o.coverage.entries()) if (c && typeof c === 'object' && c.alignment === undefined) return bad(`coverage[${i}].alignment is required (old report format)`);
+  const links = new Set(o.requirements.flatMap((r) => (r && Array.isArray(r.obligation_ids) ? r.obligation_ids : [])));
+  let unusable = 0, firstBad = '';
   const align = (a) => {
     if (!a || typeof a !== 'object' || !ALIGN.includes(a.status) || !text(a.reason) || (a.since !== undefined && !['introduced', 'pre_existing'].includes(a.since))) return null;
     return { status: a.status, ...(a.since && { since: a.since }), reason: a.reason };
   };
   for (const [i, c] of o.coverage.entries()) {
-    if (!c || typeof c !== 'object' || !text(c.id) || ids.has(c.id)) { notes.push(`Dropped coverage[${i}]: missing or duplicate id.`); continue; }
+    if (!c || typeof c !== 'object' || !text(c.id) || ids.has(c.id)) { notes.push(`Dropped coverage[${i}]: missing or duplicate id.`); unusable++; firstBad ||= `coverage[${i}]: missing or duplicate id`; continue; }
     ids.add(c.id);
     const why = rowError(c);
+    if (structural) { unusable++; firstBad ||= `coverage[${i}]: ${why}`; }
     if (!why) {
+      if (c.alignment === undefined || c.alignment === null) { // optional in practice: derived, never invented
+        if (links.has(c.id)) { c.alignment = unknownAlign('not stated'); notes.push(`Obligation ${c.id} alignment unknown: not stated.`); }
+        else c.alignment = { status: 'not_applicable', reason: 'not stated; no requirement is linked to this obligation' };
+      }
       const a = align(c.alignment);
       if (!a) notes.push(`Obligation ${c.id} alignment unknown: malformed alignment.`);
       const al = a || unknownAlign('Malformed alignment.');
@@ -163,6 +198,7 @@ function validate(o) {
     rows.push({ id: c.id, obligation: text(c.obligation) ? c.obligation : '(not stated)', source: text(c.source) ? c.source : '(not stated)',
       behaviour: citation(c.behaviour) ? c.behaviour : null, change: citation(c.change) ? c.change : null, evidence: [], status: 'unknown', reason: `Malformed coverage row: ${why}.`, alignment: unknownAlign('Malformed coverage row.') });
   }
+  if (unusable * 2 > o.coverage.length) return bad(`${firstBad} (${unusable} of ${o.coverage.length} coverage rows are unusable)`);
   const status = (id) => rows.find((c) => c.id === id).status;
 
   const reqIds = new Set(), reqs = [];
@@ -185,7 +221,7 @@ function validate(o) {
     if (f.start_line !== undefined && !int(f.start_line)) return 'invalid start_line';
     if (f.side !== undefined && !['LEFT', 'RIGHT'].includes(f.side)) return 'invalid side';
     for (const k of ['suggestion', 'rule_source', 'rule_quote', 'source']) if (f[k] !== undefined && !str(f[k])) return `invalid ${k}`;
-    if (!['high', 'low'].includes(f.confidence)) return 'invalid confidence';
+    if (!['high', 'low'].includes(f.confidence)) { notes.push(`findings: ${f.kind} ${f.path} had no valid confidence; kept at low.`); f.confidence = 'low'; } // a failure only degrades
     if (!Array.isArray(f.obligation_ids)) return 'obligation_ids must be an array';
     f.obligation_ids = [...new Set(f.obligation_ids.filter((id) => ids.has(id)))];
     if (f.kind !== 'standard' && !f.obligation_ids.length) return 'no valid obligation';
@@ -251,17 +287,37 @@ const fingerprint = (kind, p, quote, ...sources) => {
   return crypto.createHash('sha1').update(`${kind}\0${p}\0${ac.length ? ac.join('\0') : norm(quote)}`).digest('hex');
 };
 
-// Line delta (0, -1, +1, ... up to +-5) that puts the quote on the cited line, or null. Never guesses.
+// Quote-first location: the model's line is only a hint. Returns the 1-based line that holds the quote, or 0. Never chooses among duplicates.
+//  1. the same text within +-5 lines of the hint (nearest first)   2. the one line in `all` with that text
+//  3. a quote of at least 20 non-space characters cut short: the hint line if it starts with the quote's first 20, else the one line in `all` that does.
+// at(l): text of line l (or undefined); all: candidate line numbers; ok(l): a line the caller can use. A trailing "..." or "…" is not part of the quote.
+const PREFIX = 20;
+function findLine(quote, hint, at, all = [], ok = () => true) {
+  const raw = norm(quote ?? ''), cut = norm(raw.replace(/\s*(?:\.\.\.|…)$/, ''));
+  const qs = [...new Set([raw, cut].filter(Boolean))];
+  if (!qs.length) return 0;
+  const text = (l) => norm(at(l) ?? ''), L = [...all], one = (hits) => (hits.length === 1 && ok(hits[0]) ? hits[0] : 0);
+  for (const q of qs) for (let d = 0; d <= 5; d++) for (const s of d ? [-d, d] : [0]) if (hint + s >= 1 && ok(hint + s) && text(hint + s) === q) return hint + s;
+  for (const q of qs) { const l = one(L.filter((x) => text(x) === q)); if (l) return l; }
+  for (const q of qs) {
+    let n = 0, i = 0;
+    for (; i < q.length && n < PREFIX; i++) if (q[i] !== ' ') n++;
+    if (n < PREFIX) continue;
+    const p = q.slice(0, i);
+    if (hint >= 1 && ok(hint) && text(hint).startsWith(p)) return hint;
+    const l = one(L.filter((x) => text(x).startsWith(p)));
+    if (l) return l;
+  }
+  return 0;
+}
+// Line delta that puts the quote on the cited line (see findLine), or null.
 function snap(f, lines) {
   if (!lines) return null;
-  const q = norm(f.quote);
-  if (!q) return null;
-  for (let d = 0; d <= 5; d++) for (const s of d ? [-d, d] : [0]) {
-    const at = f.line - 1 + s;
-    if (at >= 0 && at < lines.length && norm(lines[at]) === q && (f.start_line === undefined || f.start_line + s >= 1)) return s;
-  }
-  return null;
+  const l = findLine(f.quote, f.line, (x) => lines[x - 1], lines.map((_, i) => i + 1), (x) => f.start_line === undefined || f.start_line + (x - f.line) >= 1);
+  return l ? l - f.line : null;
 }
+// The finding with its quote replaced by the line's own text when the model gave a trimmed one (the verified text is what is posted and fingerprinted).
+const verified = (f, lines, line) => (norm(lines[line - 1]) === norm(f.quote) ? f : { ...f, quote: lines[line - 1].trim() });
 
 // One comment per kind, path, line and confidence (a low finding never rides on a high comment). One fingerprint per
 // merged comment from stable data only (kind, path, quote or the members' AC sources), so reruns dedupe without dropping findings.
@@ -655,15 +711,15 @@ function trackedFiles(root) {
 
 // Verifies citations, not the model's semantic judgement. Never upgrades missing evidence.
 function verifyEvidence(data, reviewable, standards, read = readFile, maps = new Map()) {
-  // Corrects c.line to the nearest line within +-5 whose text equals the quote (the way snap does for findings); false when none.
-  // Failing that, snaps to the one line among `all` (candidate line numbers) whose text equals the quote, e.g. when the model cited a
-  // diff.patch line number; several matches or none keep the citation unverified.
+  // Corrects c.line (a hint) to where the quote is, by findLine: within +-5 lines, else the one line among `all` (candidate line numbers)
+  // holding it (e.g. when the model cited a diff.patch line number), else the one line starting with its first 20 non-space characters.
+  // Several matches or none keep the citation unverified. A trimmed quote is replaced by the line's own text.
   const locate = (c, at, all = []) => {
-    const q = norm(c.quote);
-    for (let d = 0; d <= 5; d++) for (const s of d ? [-d, d] : [0]) if (c.line + s >= 1 && norm(at(c.line + s) || '') === q) { c.line += s; return true; }
-    const hits = [...all].filter((l) => norm(at(l) || '') === q);
-    if (hits.length === 1) { c.line = hits[0]; return true; }
-    return false;
+    const l = findLine(c.quote, c.line, at, all);
+    if (!l) return false;
+    c.line = l;
+    if (norm(at(l)) !== norm(c.quote)) c.quote = String(at(l)).trim();
+    return true;
   };
   const changed = (c) => (l) => maps.get(c.path)?.changed[c.side || 'RIGHT'].get(l);
   const keys = (c) => maps.get(c.path)?.changed[c.side || 'RIGHT'].keys() || []; // the known (changed) line range of that side
@@ -1125,23 +1181,25 @@ async function run({ github, context, core }) {
     }
     survive.add(fingerprint(f.kind, f.path, f.quote, f.source)); // before any route or drop below
     if (f.kind === 'spec_mismatch' && f.obligation_ids.every((id) => pre.has(id))) {
-      const d = snap(f, readLines(f.path));
-      if (d === null) addNote(`Finding citation did not match: ${f.path}:${f.line}.`); else preExisting.push({ ...f, line: f.line + d });
+      const rl = readLines(f.path), d = snap(f, rl);
+      if (d === null) addNote(`Finding citation did not match: ${f.path}:${f.line}.`); else preExisting.push({ ...verified(f, rl, f.line + d), line: f.line + d });
       continue;
     }
     f = gate(skeletonGate(f));
     if (f.side === 'LEFT') {
-      if (f.kind !== 'standard' && reviewable.has(f.path) && norm(maps.get(f.path)?.changed.LEFT.get(f.line) || '') === norm(f.quote)) {
-        assessed.push(f);
-        unanchored.push({ f, why: 'removed test or assertion; location is on the LEFT side of the diff' });
+      const ch = maps.get(f.path)?.changed.LEFT, l = f.kind !== 'standard' && reviewable.has(f.path) && ch ? findLine(f.quote, f.line, (x) => ch.get(x), ch.keys()) : 0;
+      if (l) {
+        const g = norm(ch.get(l)) === norm(f.quote) ? { ...f, line: l } : { ...f, line: l, quote: ch.get(l).trim() };
+        assessed.push(g);
+        unanchored.push({ f: g, why: 'removed test or assertion; location is on the LEFT side of the diff' });
       } else addNote(`Removed-line citation could not be verified: ${f.path}:${f.line}.`);
       continue;
     }
     if (!maps.has(f.path) || !reviewable.has(f.path)) {
-      const d = f.kind !== 'standard' ? snap(f, readLines(f.path)) : null;
+      const rl = readLines(f.path), d = f.kind !== 'standard' ? snap(f, rl) : null;
       if (d !== null) {
         assessed.push(f);
-        unanchored.push({ f: { ...f, line: f.line + d }, why: 'assertion outside the reviewed diff' });
+        unanchored.push({ f: { ...verified(f, rl, f.line + d), line: f.line + d }, why: 'assertion outside the reviewed diff' });
       } else addNote(`Finding location could not be verified: ${f.path}:${f.line}.`);
       continue;
     }
@@ -1159,7 +1217,7 @@ async function run({ github, context, core }) {
         continue;
       }
     }
-    const d = snap(f, readLines(f.path));
+    const rl = readLines(f.path), d = snap(f, rl);
     if (d === null) {
       addNote(`Finding citation did not match: ${f.path}:${f.line}.`);
       continue;
@@ -1168,7 +1226,7 @@ async function run({ github, context, core }) {
     if (seen.has(exact)) continue;
     seen.add(exact);
     assessed.push(f);
-    cands.push({ ...f, line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }) });
+    cands.push({ ...verified(f, rl, f.line + d), line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }) });
 
   }
   const merged = merge(cands);
@@ -1250,4 +1308,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

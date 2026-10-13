@@ -42,24 +42,19 @@ test('validate: accepts a good result and the enum lists match audit.schema.json
   assert.equal(SCHEMA.properties.requirements_found, undefined);
 });
 
-test('validate: rejects bad enums, missing fields, duplicate ids and bad citations; clips long quotes', () => {
+test('validate: rejects an unusable output and names the failing JSON path; clips long quotes', () => {
   const bad = (mutate, re) => { const o = result(); mutate(o); const v = validate(o); assert.equal(v.ok, false); assert.match(v.error, re); };
-  bad((o) => { o.requirements[0].status = 'fine'; }, /status must be one of/);
-  bad((o) => { o.requirements[0].class = 'integration'; }, /class must be one of/);
-  bad((o) => { o.requirements[0].tests[0].layer = 'system'; }, /tests must be/);
-  bad((o) => { delete o.requirements[0].text; }, /id and text/);
-  bad((o) => { delete o.requirements[0].source; }, /source needs/);
-  bad((o) => { o.requirements[0].source.line = 0; }, /source needs/);
-  bad((o) => { o.requirements[0].code = [{ path: 'a', line: 1 }]; }, /code must be/);
-  bad((o) => { o.requirements[0].code = 'none'; }, /code must be/);
-  bad((o) => { o.requirements.push(req()); }, /duplicate id/);
-  bad((o) => { delete o.docs_reviewed; }, /docs_reviewed/);
-  bad((o) => { o.not_reviewed = 'none'; }, /not_reviewed/);
-  bad((o) => { o.not_requirements = 'none'; }, /not_requirements must be an array/);
-  bad((o) => { o.not_requirements = [{ cid: 'nope', reason: 'rationale text' }]; }, /not_requirements\[0\] needs a block cid and a reason/);
-  bad((o) => { o.not_requirements = [{ cid: C2 }]; }, /needs a block cid and a reason/);
+  bad((o) => { o.requirements[0].status = 'fine'; }, /requirements\[0\]: status must be one of/);
+  bad((o) => { o.requirements[0].class = 'integration'; }, /requirements\[0\]: class not stated/);
+  bad((o) => { delete o.requirements[0].text; }, /requirements\[0\]: id and text/);
+  bad((o) => { delete o.requirements[0].source; }, /requirements\[0\]: source needs/);
+  bad((o) => { o.requirements[0].source.line = 0; }, /requirements\[0\]: source needs/);
+  bad((o) => { o.requirements[0].code = 'none'; }, /requirements\[0\]: code must be an array/);
+  bad((o) => { o.requirements = [null]; }, /requirements\[0\]: not an object/);
   bad((o) => { delete o.requirements; }, /requirements must be an array/);
+  bad((o) => { o.requirements.push({ id: 'x' }, { id: 'y' }); }, /requirements\[1\]: id and text are required \(2 of 3 requirement rows are unusable\)/);
   for (const x of [null, [], 'x', 3]) assert.equal(validate(x).ok, false);
+  assert.match(validate([]).error, /\$ is not an object/);
   const long = result([req({ source: { ...cite('docs/design.md', 3), quote: 'x'.repeat(300) } })]);
   assert.equal(validate(long).ok, true);
   assert.equal(long.requirements[0].source.quote.length, 200);
@@ -68,14 +63,45 @@ test('validate: rejects bad enums, missing fields, duplicate ids and bad citatio
   assert.equal(noNote.requirements[0].note, '');
 });
 
+test('validate: cosmetic defects are normalised and per-row problems degrade only the row, with a note', () => {
+  const ok = (mutate, extra = []) => { const o = result([req(), ...extra]); mutate(o); assert.deepEqual(validate(o), { ok: true }); return o; };
+  let o = ok((x) => { x.docs_reviewed = 3; x.not_reviewed = 'none'; x.not_requirements = 'none'; });
+  assert.deepEqual([o.docs_reviewed, o.not_requirements], [[], []]);
+  assert.match(o.not_reviewed.join('|'), /docs_reviewed was not an array[\s\S]*not_reviewed was not an array[\s\S]*not_requirements was not an array/);
+  o = ok((x) => { Object.assign(x.requirements[0], { status: 'Covered', class: ' UNIT ' }); x.requirements[0].source.line = '3'; x.requirements[0].tests[0].layer = 'Unit'; x.requirements[0].code[0].line = '2'; });
+  assert.deepEqual([o.requirements[0].status, o.requirements[0].class, o.requirements[0].source.line, o.requirements[0].tests[0].layer, o.requirements[0].code[0].line], ['covered', 'unit', 3, 'unit', 2]);
+  o = ok((x) => { x.requirements[0].status = 'Missing Test'; x.requirements[0].class = 'higher-level'; });
+  assert.deepEqual([o.requirements[0].status, o.requirements[0].class], ['missing_test', 'higher_level']);
+  o = ok((x) => { x.requirements[0].tests[0].layer = 'system'; x.requirements[0].code.push({ path: 'a', line: 1 }); });
+  assert.deepEqual([o.requirements[0].tests.length, o.requirements[0].code.length], [0, 1]);
+  assert.match(o.not_reviewed.join('|'), /requirements\[0\]: 1 malformed code citation\(s\) ignored[\s\S]*1 malformed tests citation/);
+  o = ok(() => {}, [req({ id: C2, status: 'great' })]); // one unusable row of two is not more than half
+  assert.deepEqual(o.requirements.map((r) => [r.id, r.status, r.class]), [[C1, 'covered', 'unit'], [C2, 'unknown', 'unit']]);
+  assert.match(o.not_reviewed.join('|'), /requirements\[1\] marked unknown: status must be one of/);
+  o = ok(() => {}, [req()]); // a duplicate id: dropped, the rest stands
+  assert.equal(o.requirements.length, 1);
+  assert.match(o.not_reviewed.join('|'), /requirements\[1\] dropped: duplicate id/);
+  const d = validate(result([req({ id: C1, text: undefined })]), ONE()); // the block's own text comes from the candidate list
+  assert.equal(d.ok, true);
+  const nr = (c) => ({ cid: c, reason: 'rationale, not behaviour' });
+  const w = result([req()], { not_requirements: [nr('nope'), { cid: C2 }, nr('ffffffff'), nr(C2), nr(C2)] });
+  assert.deepEqual(validate(w, TWO()), { ok: true });
+  assert.deepEqual(w.not_requirements, [nr(C2)]);
+  assert.match(w.not_reviewed.join('|'), /not_requirements\[0\] ignored: it needs a block cid[\s\S]*unknown block ffffffff[\s\S]*duplicate block/);
+});
+
 test('verify: good citations pass, a near-miss line is corrected, an untracked or escaping path fails', () => {
   const o = result([req({ code: [{ ...cite('src/plan.js', 2), line: 4 }] })]);
   const v = verify(o, { read, tracked: new Set(Object.keys(FILES)), docs: new Set(['docs/design.md']) });
   assert.equal(v.requirements.length, 1);
   assert.equal(v.requirements[0].status, 'covered');
   assert.equal(v.requirements[0].code[0].line, 2, 'line snapped to where the quote is');
-  const far = verify(result([req({ code: [{ ...cite('src/plan.js', 2), line: 40 }] })]), { read });
-  assert.equal(far.requirements[0].status, 'unknown');
+  const far = verify(result([req({ code: [{ ...cite('src/plan.js', 2), line: 40 }] })]), { read }); // the line is a hint: the one place the quote is wins
+  assert.equal(far.requirements[0].status, 'covered');
+  assert.equal(far.requirements[0].code[0].line, 2);
+  const twice = { ...FILES, 'src/plan.js': [...FILES['src/plan.js'], ...FILES['src/plan.js']] }; // the same quote twice: never choose
+  assert.equal(verify(result([req({ code: [{ ...cite('src/plan.js', 2), line: 40 }] })]), { read: (p) => twice[p] || null }).requirements[0].status, 'unknown');
+  assert.equal(verify(result([req({ code: [{ ...cite('src/plan.js', 2), line: 6 }] })]), { read: (p) => twice[p] || null }).requirements[0].code[0].line, 6, 'within 5 lines of the hint it is the near one');
   const untracked = verify(result([req({ code: [cite('src/plan.js', 2)] })]), { read, tracked: new Set(['docs/design.md', 'tests/plan.test.js']) });
   assert.equal(untracked.requirements[0].status, 'unknown');
   for (const p of ['../x.js', '/etc/passwd', 'src\\plan.js']) {
@@ -124,15 +150,13 @@ test('verify: evidence that cannot carry the status downgrades; a sound row is l
   assert.equal(ok({ status: 'contradicted', code: [], tests: [] }).status, 'unknown');
 });
 
-test('validate: every result names a listed block; unknown, doubly answered and duplicate blocks are rejected; cid.N ids are accepted', () => {
+test('validate: every result names a listed block (an unusable majority is rejected); cid.N ids are accepted', () => {
   const rej = (o, re, cands = TWO()) => { const v = validate(o, cands); assert.equal(v.ok, false); assert.match(v.error, re); };
   const nr = (c, reason = 'rationale, not behaviour') => ({ cid: c, reason });
   rej(result([req({ id: 'R1' })], { not_requirements: [nr(C2)] }), /id R1 is not a listed block id/);
   rej(result([req({ id: 'ffffffff' })], { not_requirements: [nr(C2)] }), /not a listed block id/);
   rej(result([req({ id: `${C1}.0` })], { not_requirements: [nr(C2)] }), /not a listed block id/);
-  rej(result([req()], { not_requirements: [nr('ffffffff')] }), /unknown block ffffffff/);
   rej(result([req()], { not_requirements: [nr(C1)] }), /answered both as not_a_requirement and as a requirement/);
-  rej(result([req()], { not_requirements: [nr(C2), nr(C2)] }), /duplicate block/);
   assert.deepEqual(validate(result([req()], { not_requirements: [nr(C2)] }), TWO()), { ok: true });
   assert.deepEqual(validate(result([req({ id: `${C1}.1` }), req({ id: `${C1}.2` })], { not_requirements: [nr(C2)] }), TWO()), { ok: true }, 'a bundled block yields cid.1, cid.2');
 });

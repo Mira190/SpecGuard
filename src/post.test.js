@@ -53,8 +53,8 @@ test('degrades only the part with a semantic problem and records a note', () => 
   assert.equal(d.findings.length, 0); noted(d, /contradicts coverage/);
   d = run(report({ findings: [finding(), finding('missing_test', { obligation_ids: ['absent'] })] }));
   assert.equal(d.findings.length, 1); noted(d, /no valid obligation/);
-  d = run(report({ findings: [finding(), finding('missing_test', { line: 0, title: 'Bad line' })] }));
-  assert.equal(d.findings.length, 1); noted(d, /Dropped findings\[1\] missing_test src.js Bad line/);
+  d = run(report({ findings: [finding(), finding('missing_test', { body: 5, title: 'Bad body' })] }));
+  assert.equal(d.findings.length, 1); noted(d, /Dropped findings\[1\] missing_test src.js Bad body/);
   d = run(report({ coverage: [row('missing_test'), row('missing_test')] }));
   assert.equal(d.coverage.length, 1); noted(d, /duplicate id/);
   d = run(report({ coverage: [row('missing_test', { evidence: [evidence] })] }));
@@ -791,12 +791,50 @@ test('schema requires coverage alignment, spec_mismatch, and optional requiremen
   for (const k of ['ref', 'line', 'pr_quote']) assert.ok(schema.requirements.items.properties[k]);
 });
 
-test('an old report without coverage alignment is rejected as incomplete', () => {
-  const old = report();
-  delete old.coverage[0].alignment;
-  const r = post.validate(old);
+test('a missing alignment is derived, never invented: not_applicable without a linked requirement, else unknown "not stated"', () => {
+  const unlinked = report();
+  delete unlinked.coverage[0].alignment;
+  assert.equal(post.validate(unlinked).ok, true);
+  assert.deepEqual([unlinked.coverage[0].alignment.status, unlinked.validation_notes], ['not_applicable', []]);
+  const linked = report({ requirements: [sreq()], coverage: [row('covered')], findings: [] });
+  delete linked.coverage[0].alignment;
+  assert.equal(post.validate(linked).ok, true);
+  assert.deepEqual(linked.coverage[0].alignment, { status: 'unknown', reason: 'not stated' });
+  assert.match(linked.validation_notes.join('|'), /alignment unknown: not stated/);
+  assert.equal(post.noGaps(linked), false); // an unstated alignment on a linked row is never a clean review
+});
+
+test('validate normalises enum case and spacing, numeric strings and a missing line; real problems still degrade', () => {
+  const d = report();
+  Object.assign(d.coverage[0], { status: 'Missing_Test', behaviour: { ...behaviour, line: '3' }, change: { ...behaviour, line: ' 3 ' } });
+  Object.assign(d.findings[0], { kind: 'Missing Test', confidence: 'HIGH', line: '3' });
+  d.standards.status = 'Checked'; d.layering.status = 'Checked';
+  d.coverage.push(row('Weak-Test', { id: 'O2', evidence: [{ ...evidence, layer: 'Unit', kind: 'Assertion', side: 'right', line: '2' }] }));
+  d.findings.push(finding('weak_test', { obligation_ids: ['O2'], line: undefined }));
+  assert.equal(post.validate(d).ok, true);
+  assert.deepEqual(d.coverage.map((c) => c.status), ['missing_test', 'weak_test']);
+  assert.deepEqual([d.findings[0].kind, d.findings[0].confidence, d.findings[0].line, d.coverage[0].behaviour.line], ['missing_test', 'high', 3, 3]);
+  assert.deepEqual([d.coverage[1].evidence[0].layer, d.coverage[1].evidence[0].side, d.coverage[1].evidence[0].line], ['unit', 'RIGHT', 2]);
+  assert.equal(d.findings.length, 2); // the second finding has no line: a hint of 1, its quote locates it
+  assert.equal(d.findings[1].line, 1);
+  assert.deepEqual([d.standards.status, d.layering.status], ['checked', 'checked']);
+  const bogus = report({ findings: [finding('missing_test', { confidence: 'sure' })] });
+  assert.equal(post.validate(bogus).ok, true);
+  assert.equal(bogus.findings[0].confidence, 'low'); // never upgraded
+  assert.match(bogus.validation_notes.join('|'), /no valid confidence; kept at low/);
+});
+
+test('validate rejects only an unusable ledger (more than half of the rows structurally broken) and names the JSON path', () => {
+  const rows = (n, broken) => Array.from({ length: n }, (_, i) => (i < broken ? { id: `B${i}`, obligation: 'x' } : row('unknown', { id: `O${i}` })));
+  const run = (n, broken) => post.validate(report({ coverage: rows(n, broken), findings: [] }));
+  assert.equal(run(4, 2).ok, true); // half is not more than half
+  const r = run(4, 3);
   assert.equal(r.ok, false);
-  assert.match(r.error, /alignment is required/);
+  assert.match(r.error, /^coverage\[0\]: obligation, source and reason are required \(3 of 4 coverage rows are unusable\)/);
+  const e = post.validate(report({ coverage: [row('covered', { evidence: [{ ...evidence, layer: 'nope' }] })], findings: [] }));
+  assert.match(e.error, /^coverage\[0\]: evidence\[0\] malformed/);
+  assert.match(post.validate([]).error, /^\$ is not an object/);
+  assert.equal(post.validate(report({ coverage: [row('covered', { evidence: [] })], findings: [] })).ok, true); // a semantic problem is only a note
 });
 
 test('alignment degrades to unknown unless its evidence rules hold', () => {
@@ -1623,6 +1661,67 @@ test('evidence cited at a wrong line (e.g. a diff.patch line) snaps to the file 
   assert.deepEqual(check(tenLines), { status: 'covered', line: 2 });
   assert.equal(check([evidence.quote, ...tenLines]).status, 'unknown'); // two matches: never guess
   assert.equal(check(['nothing', 'matches']).status, 'unknown');
+});
+
+test('quote-first location: the line is a hint; within 5 lines, else the one whole-file match, else the one match of the first 20 characters; never among duplicates', () => {
+  const Q = 'assert.equal(total(order), 42);';
+  const L = Array.from({ length: 40 }, (_, i) => `filler ${i}`);
+  L[29] = `  ${Q}`; // line 30
+  const at = (line, quote, extra = {}) => post.snap({ line, quote, ...extra }, L);
+  assert.equal(at(28, Q), 2); // within 5
+  assert.equal(at(3, Q), 27); // far hint: the unique whole-file match
+  assert.equal(at(500, Q), 30 - 500);
+  assert.equal(at(3, 'assert.equal(total(order), '), 27); // trimmed quote: the unique start of its first 20 non-space characters
+  assert.equal(at(3, `${Q.slice(0, -1)}...`), 27); // a trailing ellipsis is not part of the quote
+  assert.equal(at(3, `${Q.slice(0, -1)}…`), 27);
+  assert.equal(at(3, 'assert.equal('), null); // under 20 non-space characters: no prefix match
+  assert.equal(at(3, 'invented assertion over a long line'), null);
+  assert.equal(at(10, Q, { start_line: 5 }), 20); // a range moves with the line
+  assert.equal(at(40, Q, { start_line: 3 }), null); // ... but never before line 1
+  const twice = [...L]; twice[35] = `    ${Q}`; // line 36
+  assert.equal(post.snap({ line: 3, quote: Q }, twice), null); // duplicates: never choose
+  assert.equal(post.snap({ line: 3, quote: 'assert.equal(total(order), ' }, twice), null);
+  assert.equal(post.snap({ line: 31, quote: Q }, twice), -1); // the cited neighbourhood still decides
+  assert.equal(post.snap({ line: 36, quote: 'assert.equal(total(order), ' }, twice), 0); // the cited line itself starts with it
+  assert.equal(post.findLine('', 1, () => 'x'), 0);
+});
+
+test('evidence is located quote-first too: trimmed quotes and far lines verify only on a unique match, and the verified text replaces the quote', () => {
+  const full = 'assert.equal(computeTotal(order), 42);';
+  const file = Array.from({ length: 12 }, (_, i) => (i === 7 ? `    ${full}` : `other ${i}`));
+  const check = (ev, lines = file) => {
+    const d = report({ coverage: [row('covered', { evidence: [ev] })], findings: [] });
+    post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (p) => p === 'src.js' ? ['l1', 'l2', behaviour.quote] : lines, new Map([['src.js', post.parsePatch(patch)]]));
+    return [d.coverage[0].status, ev.line, ev.quote];
+  };
+  const ev = (o) => ({ ...evidence, path: 'test.js', ...o });
+  assert.deepEqual(check(ev({ line: 2, quote: full })), ['covered', 8, full]);
+  assert.deepEqual(check(ev({ line: 2, quote: 'assert.equal(computeTotal(order),' })), ['covered', 8, full.trim()]);
+  assert.deepEqual(check(ev({ line: 9, quote: 'assert.equal(computeTotal(order), 42)...' })), ['covered', 8, full.trim()]);
+  assert.equal(check(ev({ line: 2, quote: 'assert.equal(computeTotal(order),' }), [...file, `  ${full}`])[0], 'unknown'); // duplicate
+  assert.equal(check(ev({ line: 2, quote: 'assert.equal(' }))[0], 'unknown'); // too short to prefix-match
+});
+
+test('run: a finding with a far line is posted where its quote is; a duplicated quote is dropped with a note', async (t) => {
+  const s = setup(t, report({ findings: [finding('missing_test', { line: 99 })] }));
+  await post(s);
+  assert.equal(s.calls.review[0].comments[0].line, 3);
+  const dup = setup(t, report({ findings: [finding('missing_test', { line: 99 })] }));
+  fs.writeFileSync(path.join(dup.dir, 'src.js'), 'l1\nl2\nif (x) {\nl4\nl5\nl6\nif (x) {\nl8\n');
+  await post(dup);
+  assert.equal(dup.calls.review.length, 0);
+  assert.match(dup.calls.summary[0].body, /Finding citation did not match: src\.js:99/);
+});
+
+test('run: a cosmetically sloppy report (enum case, string numbers, no alignment) is posted, not rejected', async (t) => {
+  const d = report();
+  Object.assign(d.coverage[0], { status: 'Missing_Test' });
+  delete d.coverage[0].alignment;
+  Object.assign(d.findings[0], { kind: 'Missing-Test', confidence: 'High', line: '3' });
+  const s = setup(t, d);
+  await post(s);
+  assert.equal(s.calls.review[0].comments[0].line, 3);
+  assert.doesNotMatch(s.calls.summary[0].body, /Could not complete/);
 });
 
 // stale-thread resolution: a fake github.graphql serves reviewThreads pages and records resolveReviewThread calls
