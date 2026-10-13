@@ -279,7 +279,7 @@ const isRequirementDoc = (items) => items.some((i) => i.kind !== 'normative') ||
 const STRONG_DIR = /(^|\/)(specs?|requirements|design|rfcs?|proposals)\/|(^|\/)adrs?\/|^\.kiro\/specs\/|^openspec\//i
 // A file whose basename names itself a spec is as strong as a spec directory, in any directory: design.md, spec.md, api-spec.md, design_doc.md, product-requirements.md, prd.md, srs.txt, acceptance-criteria.md.
 // Not: README, architecture, CONTRIBUTING, CHANGELOG, designer-notes, respect.md (the stem must be a whole word between -/_/. separators).
-const STRONG_FILE = /(^|\/)([^/]*[-_.])?(design|specs?|specification|requirements?|prd|srs|acceptance(-criteria)?)([-_.][^/]*)?$/i;
+const STRONG_FILE = /(^|\/)([^/]*[-_.])?(design|specs?|specification|requirements?|prd|srs|acceptance(-criteria)?)([-_.](doc|docs|document|specs?|specification|requirements?|v?\d+))*(\.[^/.]+)?$/i; // after the spec word only doc/spec/version words: design-tokens.md, design-system.md are not specs
 const DENSITY = 300, DENSITY_CAPS = 7000; // prose-only: one normative sentence per 300 bytes, or per 7 KB when one has an RFC 2119 capital: a long tutorial with a few stray "must" lines is not a spec
 const SPEC_DIR = /(^|\/)(specs?|requirements)\/|^openspec\//i; // one normative sentence is enough for a file that lives in a spec directory
 const isSpecDoc = (items, file = '', size = 0) => (isRequirementDoc(items) || (items.length === 1 && SPEC_DIR.test(file))) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || STRONG_FILE.test(file) || items.length * DENSITY >= size || (items.length * DENSITY_CAPS >= size && items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw))));
@@ -338,7 +338,7 @@ function durationVariants(value) {
   return [...new Set(out)];
 }
 
-const isTestPath = (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/.test(p);
+const isTestPath = (p) => !/\.(md|mdx|markdown|rst|adoc)$/i.test(p) && (/(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/i.test(p) || /[a-z0-9](Tests?|Spec)\.[^/]*$/.test(p)); // words are case-insensitive (Foo.Tests/, Tests/); the PascalCase suffix (AppTests.swift, FooSpec.scala) is case-sensitive so latest.ts is not a test; docs are never tests (SPEC.md)
 function pathKind(p) {
   if (/(^|\/)__snapshots__\/|\.snap$/.test(p)) return 'snapshot';
   if (isTestPath(p)) return 'test';

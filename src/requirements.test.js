@@ -117,6 +117,12 @@ test('GitHub CRLF bodies: sanitised, criteria inventoried without CR, a lone CR 
 // ---- F10: history hardening ----
 const pr0 = (o = {}) => ({ number: 9, body: 'x', ...o });
 
+test('leftRanges skips PascalCase test files, not words that merely end in test', () => {
+  const d = (f) => ['diff --git a/' + f + ' b/' + f, '--- a/' + f, '+++ b/' + f, '@@ -1,2 +1,2 @@'].join('\n');
+  for (const f of ['AppTests.swift', 'src/FooTest.java', 'Foo.Tests/FooSpec.scala']) assert.deepEqual(leftRanges(d(f)), [], f);
+  for (const f of ['src/latest.ts', 'src/contest/x.ts']) assert.equal(leftRanges(d(f)).length, 1, f);
+});
+
 test('F10: leftRanges parses paths containing " b/" and spaces, ignores "--- " inside hunks, and caps the hunks', () => {
   const diff = ['diff --git a/src/x b/y.js b/src/x b/y.js', '--- a/src/x b/y.js', '+++ b/src/x b/y.js', '@@ -3,2 +3,2 @@', '--- a/evil.js', '+new',
     'diff --git a/my dir/z.js b/my dir/z.js', '--- a/my dir/z.js\t', '+++ b/my dir/z.js\t', '@@ -7 +7 @@'].join('\n');
@@ -190,8 +196,8 @@ test('F5: a bare #N is a plain issue number, never a hex colour, anchor or zero-
 test('F5: a same-repo issue number in the head branch name is linked as "branch name", after body refs and inside the cap', () => {
   assert.deepEqual(branchIssues('123-fix-bug'), [123]);
   assert.deepEqual(branchIssues('feat/issue-45-x'), [45]);
-  assert.deepEqual(branchIssues('fix/7_x'), [7]);
-  for (const ref of ['main', '2024-01-fix', 'v2-3-x', 'PROJ-123-x', 'release/1.2.3', undefined]) assert.deepEqual(branchIssues(ref), [], String(ref));
+  for (const [ref, n] of [['issue-45-x', 45], ['feat/gh-12-y', 12], ['fix/GH_12', 12], ['feat/issues/7-x', 7], ['bugfix-issue-45', 45], ['123-fix-bug', 123]]) assert.deepEqual(branchIssues(ref), [n], ref);
+  for (const ref of ['main', '2024-01-fix', 'v2-3-x', 'PROJ-123-x', 'release/1.2.3', 'feat/3-column-layout', 'fix/404-page', 'release/2024-summer', 'fix/7_x', 'reissue-45', 'high-5-x', undefined]) assert.deepEqual(branchIssues(ref), [], String(ref));
   const calls = [];
   const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'Closes #5', headRefName: '123-fix-bug' }, loadIssue: (repo, n) => { calls.push(n); return { title: 'T', body: 'Return 42' }; } });
   assert.deepEqual(calls, [5, 123]);
@@ -202,6 +208,14 @@ test('F5: a same-repo issue number in the head branch name is linked as "branch 
   const cap = collectRequirements({ repo: 'org/app', pr: { number: 9, body: '#1 #2 #3 #4 #5', headRefName: '123-x' }, loadIssue: () => ({ title: 'T', body: '' }) });
   assert.equal(cap.sources.length, 6);
   assert.match(cap.limitations[0], /1 linked issue/);
+});
+
+test('F5: a branch-name number that resolves to a pull request or another repository is never linked', () => {
+  const pr = (url) => collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'text', headRefName: '123-x' }, loadIssue: () => ({ title: 'T', body: 'Return 42', url }) });
+  for (const url of ['https://github.com/org/app/pull/123', 'https://github.com/other/app/issues/123']) { const r = pr(url); assert.deepEqual(r.sources, ['PR body'], url); assert.deepEqual(r.limitations, [], url); }
+  assert.deepEqual(pr('https://github.com/Org/App/issues/123').sources, ['PR body', 'issue #123 (branch name)']);
+  const body = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'Closes #5' }, loadIssue: () => ({ title: 'T', body: 'x', url: 'https://github.com/org/app/pull/5' }) }); // only the branch-name guess is filtered
+  assert.deepEqual(body.sources, ['PR body', 'issue #5']);
 });
 
 test('F5: a number taken from the branch name that is not an issue is skipped without a limitation', () => {

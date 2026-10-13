@@ -39,7 +39,7 @@ function extractCriteria(documents) {
 }
 
 const DOC_EXT = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
-const TEST_PATH = /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/i;
+const TEST_PATH = { test: (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/i.test(p) || /[a-z0-9](Tests?|Spec)\.[^/]*$/.test(p) }; // same rule as trace.isTestPath (not imported: trace pulls in post.js)
 
 const MAX_HUNKS = 50, MAX_SHAS = 20, MAX_HISTORY_DOCS = 3;
 
@@ -111,10 +111,11 @@ function collectHistory({ history, repo, mainPr, seen, loadIssue }) {
   return { documents, limitations };
 }
 
-// Same-repo issue numbers in a head branch name: 123-fix-bug, feat/45_x, fix/issue-45-x. Not dates or versions (2024-01-x, 1-2-x), not Jira keys (PROJ-123-x).
+// Same-repo issue numbers in a head branch name, from explicit markers only: issue-N, issues/N, gh-N anywhere, or N- at the very start (123-fix-bug).
+// Never a bare number after a slash (feat/3-column-layout, fix/404-page, release/2024-summer), dates or versions (2024-01-x, 1-2-x), Jira keys (PROJ-123-x).
 function branchIssues(ref) {
   const out = new Set();
-  for (const m of String(ref || '').matchAll(/(?:^|\/|issue[-_]|gh[-_])([1-9]\d{0,5})(?=[-_])(?![-_]\d)/gi)) out.add(+m[1]);
+  for (const m of String(ref || '').matchAll(/(?:^(?=[1-9]\d{0,5}-)|(?<![a-z0-9])(?:issues?[-_/]|gh[-_]))([1-9]\d{0,5})(?![a-z0-9])(?![-_]\d)/gi)) out.add(+m[1]);
   return [...out];
 }
 
@@ -144,6 +145,7 @@ function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
     const label = r.toLowerCase() === repo.toLowerCase() ? `issue #${number}` : `issue ${r}#${number}`;
     try {
       const issue = loadIssue(r, number);
+      if (fromBranch.has(`${r.toLowerCase()}#${number}`) && issue.url && !issue.url.toLowerCase().startsWith(`https://github.com/${r.toLowerCase()}/issues/`)) throw new Error('not an issue of this repository'); // a branch-name guess is never a pull request
       parts.push(`# ${label}: ${sanitize(issue.title)}\n\n${sanitize(issue.body)}`);
       sources.push(fromBranch.has(`${r.toLowerCase()}#${number}`) ? `${label} (branch name)` : label);
       documents.push({ source: label, text: sanitize(`${issue.title || ''}\n${issue.body || ''}`) });
@@ -178,7 +180,7 @@ if (require.main === module) {
         pr: (n) => gh(['pr', 'view', String(n), '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences']) };
     } catch { history = { error: true }; }
     result = collectRequirements({ pr, repo: env.GH_REPO, commits, history,
-      loadIssue: (repo, n) => gh(['issue', 'view', String(n), '--repo', repo, '--json', 'title,body']) });
+      loadIssue: (repo, n) => gh(['issue', 'view', String(n), '--repo', repo, '--json', 'title,body,url']) });
   } catch {
     result = { text: 'none', status: 'unavailable', sources: [], limitations: ['PR requirements could not be loaded; review is limited to changed behaviour.'], documents: [], criteria: [] };
   }

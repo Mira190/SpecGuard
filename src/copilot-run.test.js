@@ -15,11 +15,13 @@ function setup(t, turns, env = {}) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const bin = path.join(dir, 'bin'), ctx = path.join(dir, 'ctx'), fake = path.join(dir, 'fake');
   for (const d of [bin, ctx, fake]) fs.mkdirSync(d);
-  turns.forEach(([out, rc = 0, err = ''], i) => { fs.writeFileSync(path.join(fake, `${i + 1}.out`), out); fs.writeFileSync(path.join(fake, `${i + 1}.err`), err); fs.writeFileSync(path.join(fake, `${i + 1}.rc`), String(rc)); });
+  turns.forEach(([out, rc = 0, err = '', sleep = 0], i) => { fs.writeFileSync(path.join(fake, `${i + 1}.sleep`), String(sleep)); fs.writeFileSync(path.join(fake, `${i + 1}.out`), out); fs.writeFileSync(path.join(fake, `${i + 1}.err`), err); fs.writeFileSync(path.join(fake, `${i + 1}.rc`), String(rc)); });
   fs.writeFileSync(path.join(bin, 'copilot'), `#!/usr/bin/env bash
 F="${fake.replace(/\\/g, '/')}"
 n=$(( $(cat "$F/count" 2>/dev/null || echo 0) + 1 )); echo $n > "$F/count"
 { printf '%s\\n' "$@"; echo '---'; } >> "$F/argv.log"
+echo "\${GH_TOKEN-unset}" >> "$F/gh.log"
+sleep "$(cat "$F/$n.sleep")"
 prev=''; for a in "$@"; do [ "$prev" = --usage-output-file ] && echo '{"totalNanoAiu":1000000000}' > "$a"; prev=$a; done
 cat "$F/$n.out" 2>/dev/null; cat "$F/$n.err" >&2 2>/dev/null; exit $(cat "$F/$n.rc" 2>/dev/null || echo 0)
 `, { mode: 0o755 });
@@ -28,7 +30,8 @@ cat "$F/$n.out" 2>/dev/null; cat "$F/$n.err" >&2 2>/dev/null; exit $(cat "$F/$n.
   });
   const calls = () => (fs.existsSync(path.join(fake, 'argv.log')) ? fs.readFileSync(path.join(fake, 'argv.log'), 'utf8').split('---\n').filter(Boolean).map((c) => c.split('\n').filter(Boolean)) : []);
   const ctxFile = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').trim(); } catch { return null; } };
-  return { run, calls, ctxFile, ctx };
+  const ghLog = () => fs.readFileSync(path.join(fake, 'gh.log'), 'utf8').split('\n').filter(Boolean);
+  return { run, calls, ctxFile, ctx, ghLog };
 }
 const flag = (c, f) => c[c.indexOf(f) + 1];
 
@@ -78,6 +81,31 @@ test('a failed or timed-out first turn is not repaired', (t) => {
   assert.equal(s.calls().length, 1);
   assert.equal(s.ctxFile('engine-status'), 'failed');
   assert.equal(s.ctxFile('engine-repair'), null);
+  assert.equal(s.ctxFile('engine-notes'), 'usage partial'); // the usage file the turn wrote is kept, its total is not trusted
+  assert.ok(s.ctxFile('usage.json'));
+});
+
+test('a job-level GH_TOKEN never reaches the Copilot CLI (token precedence: COPILOT_GITHUB_TOKEN > GH_TOKEN > GITHUB_TOKEN)', (t) => {
+  const s = setup(t, [['prose'], [VALID]]);
+  assert.equal(s.run({ GH_TOKEN: 'job-token', COPILOT_GITHUB_TOKEN: 'copilot-pat' }).status, 0);
+  assert.deepEqual(s.ghLog(), ['unset', 'unset']);
+});
+
+test('a repair turn is not started with under 60 s of budget left; the notes say so', (t) => {
+  const s = setup(t, [['prose', 0, '', 2]]);
+  const r = s.run({ TIMEOUT: '1', MAX_CREDITS: '' }); // 58 s left after a 2 s turn
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(s.calls().length, 1);
+  assert.equal(flag(s.calls()[0], '--max-ai-credits'), '60'); // the default cap
+  assert.equal(s.ctxFile('engine-notes'), 'repair_skipped: no time');
+  assert.equal(s.ctxFile('engine-repair'), null);
+});
+
+test('a failed repair turn notes usage partial next to the other notes', (t) => {
+  const s = setup(t, [['prose'], ['', 1, 'boom']]);
+  assert.equal(s.run({ EFFORT: 'high', MODEL: 'claude-opus-4.5' }).status, 0);
+  assert.equal(s.ctxFile('engine-notes'), 'effort: high\nusage partial');
+  assert.equal(s.ctxFile('engine-status'), 'failed');
 });
 
 test('model not available: one rerun on --model auto without an effort flag, noted', (t) => {
@@ -131,10 +159,12 @@ test('validate-inputs.sh alone (the engine step) rejects the same values', (t) =
   assert.equal(v({ MODEL: '--yolo' }), 1);
   assert.equal(v({ MAX_CREDITS: '5' }), 1);
   assert.equal(v({ EFFORT: 'turbo' }), 1);
+  for (const TIMEOUT of ['0', '00', 'x', '-5', '12345', '1.5']) assert.equal(v({ TIMEOUT }), 1, TIMEOUT); // the Claude path is checked by the same script (engine step)
+  for (const TIMEOUT of ['1', '12', '9999']) assert.equal(v({ TIMEOUT }), 0, TIMEOUT);
 });
 
 test('action.yml wires the new inputs, runs the Copilot script, and never uses an allow-all flag', () => {
   const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
-  for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "200"/m, /EFFORT: \$\{\{ inputs\.effort \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/copilot-run\.sh/, /src\/validate-inputs\.sh/, /--effort "\$EFFORT"/]) assert.match(y, m);
+  for (const m of [/^ {2}effort: \{[^}]*default: ""/m, /^ {2}copilot_max_ai_credits: \{[^}]*default: "60"/m, /^ {2}ctx_retention_days: \{[^}]*default: "1"/m, /TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/, /timeout -k 10s "\$\{TIMEOUT\}m" claude/,/EFFORT: \$\{\{ inputs\.effort \}\}/, /MAX_CREDITS: \$\{\{ inputs\.copilot_max_ai_credits \}\}/, /src\/copilot-run\.sh/, /src\/validate-inputs\.sh/, /--effort "\$EFFORT"/]) assert.match(y, m);
   assert.doesNotMatch(y + fs.readFileSync(path.join(__dirname, 'copilot-run.sh'), 'utf8').replace(/^#.*$/gm, ''), /--allow-all\b(?!-tools)|--allow-all-paths|--yolo/);
 });

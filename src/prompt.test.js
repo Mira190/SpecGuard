@@ -126,6 +126,12 @@ test('mirror: skills/test-review is byte-identical to .github/skills/test-review
   for (const f of walk(a)) assert.ok(fs.readFileSync(path.join(a, f)).equals(fs.readFileSync(path.join(b, f))), f);
 });
 
+test('skill: no-unit-seam behaviour is never an inline missing_test, and a pass-through caller of an extracted pure function raises nothing', () => {
+  const s = fs.readFileSync(path.join(SKILL, 'SKILL.md'), 'utf8');
+  assert.match(s, /Behaviour with no unit seam.*`higher_level_only` when higher-layer evidence exists, else `needs_human`.*never an inline `missing_test`/);
+  assert.match(s, /one-line pass-through raises no new obligation or finding/);
+});
+
 test('main / CLI: prints the prompt, exits 2 on missing flags', () => {
   const d = ctx();
   const r = spawnSync(process.execPath, [path.join(__dirname, 'prompt.js'), '--skill', SKILL, '--ctx', d, '--schema', SCHEMA, '--engine', 'copilot'], { encoding: 'utf8' });

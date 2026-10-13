@@ -10,7 +10,7 @@ inputs:
   github_token: { description: "Token for collect and post (needs pull-requests write).", default: "${{ github.token }}" }
   model: { description: "Model name passed to the engine CLI. Empty = engine default. Copilot: what is available depends on the token owner's plan; an unavailable model falls back to auto.", default: "" }
   effort: { description: "Reasoning effort: empty (engine default) | low | medium | high | xhigh | max. Copilot: only passed with an explicit model other than auto.", default: "" }
-  copilot_max_ai_credits: { description: "Copilot soft cap on AI credits per turn (integer 30-2000).", default: "200" }
+  copilot_max_ai_credits: { description: "Copilot soft cap on AI credits per turn (integer 30-2000). A Copilot run is one turn plus at most one repair turn on the same session, so the worst case per push is about twice this.", default: "60" }
   max_turns: { description: "Agent turn cap (Claude only for now).", default: "30" }
   max_budget_usd: { description: "Spend cap per run (Claude only).", default: "2" }
   max_comments: { description: "Max inline comments (hard cap 30).", default: "10" }
@@ -27,7 +27,7 @@ inputs:
   include_bots: { description: "true to review PRs opened by bots (skipped by default).", default: "false" }
   resolve_stale: { description: "true to resolve SpecGuard's own unreplied review threads whose finding is no longer reported.", default: "true" }
   force: { description: "true to review again although this head SHA already has a SpecGuard summary.", default: "false" }
-  ctx_retention_days: { description: "Days to keep the specguard-ctx debug artifact (diff, prompt context, raw engine output). 0 disables the upload.", default: "7" }
+  ctx_retention_days: { description: "Days to keep the specguard-ctx debug artifact (diff, prompt context, raw engine output; repo readers can download it). 0 disables the upload.", default: "1" }
   mode: { description: "pr (review a pull request) | audit (audit the checked-out repository against its requirement documents; run it on the default branch, on demand or on a schedule).", default: pr }
   audit_max_requirements: { description: "Audit mode: most requirements listed in one audit (integer 1-500).", default: "80" }
   audit_issue: { description: "Audit mode: true to also create or update one issue titled 'SpecGuard requirements audit' (needs issues write).", default: "false" }
@@ -113,6 +113,7 @@ runs:
         MODEL: ${{ inputs.model }}
         EFFORT: ${{ inputs.effort }}
         MAX_CREDITS: ${{ inputs.copilot_max_ai_credits }}
+        TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
         bash "$GITHUB_ACTION_PATH/src/validate-inputs.sh" || exit 1
         case "$WANT" in
@@ -150,12 +151,12 @@ runs:
         # --tools (not --allowedTools) removes every tool but these; --setting-sources user skips the PR's hooks/MCP; never --bare (ignores the OAuth token)
         rc=0
         [ -z "$EFFORT" ] || echo "effort: $EFFORT" > "$CTX/engine-notes"
-        timeout "${TIMEOUT}m" claude -p "$PROMPT" --tools "Read,Grep,Glob" --setting-sources user --strict-mcp-config \
+        timeout -k 10s "${TIMEOUT}m" claude -p "$PROMPT" --tools "Read,Grep,Glob" --setting-sources user --strict-mcp-config \
           --settings '{"disableAllHooks":true}' --max-turns "$MAX_TURNS" --max-budget-usd "$MAX_BUDGET" \
           --output-format json --json-schema "$schema" ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} > "$CTX/claude.json" \
           && jq -e '.structured_output | objects' "$CTX/claude.json" > "$CTX/findings.json" \
           || rc=$?
-        [ $rc = 0 ] || { echo "::warning::Claude review failed, timed out or returned no structured output"; [ $rc = 124 ] && echo timeout > "$CTX/engine-status" || echo failed > "$CTX/engine-status"; }
+        [ $rc = 0 ] || { echo "::warning::Claude review failed, timed out or returned no structured output"; { [ $rc = 124 ] || [ $rc = 137 ]; } && echo timeout > "$CTX/engine-status" || echo failed > "$CTX/engine-status"; }
         exit 0
 
     - name: Review with Copilot CLI
