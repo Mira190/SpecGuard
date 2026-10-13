@@ -47,7 +47,7 @@ test('success: one POST with key and version headers, cached static system block
   assert.equal(init.headers['anthropic-version'], '2023-06-01');
   assert.equal(init.headers['content-type'], 'application/json');
   assert.equal(body.model, 'claude-haiku-5-5');
-  assert.equal(body.max_tokens, 16000);
+  assert.equal(body.max_tokens, 32000);
   assert.deepEqual(body.system, [{ type: 'text', text: STATIC, cache_control: { type: 'ephemeral' } }]);
   assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0].role, 'user');
@@ -135,7 +135,7 @@ test('cost: cache read 0.1x, write 1.25x, the long-prompt card of haiku 5.5, an 
 
 test('a typical PR review on haiku 5.5 costs well under a cent and a half; the worst case stays under the default budget', () => {
   const sys = 30 * 1024, user = 100 * 1024; // the largest prompt is about 128 KiB
-  const w = api.worstCase('claude-haiku-5-5', sys, user, 16000);
+  const w = api.worstCase('claude-haiku-5-5', sys, user, 32000);
   assert.ok(w.usd < 0.03 && w.usd < 1, String(w.usd));
   const typical = api.cost('claude-haiku-5-5', { input_tokens: 15000, cache_creation_input_tokens: 8000, output_tokens: 6000 });
   assert.ok(typical > 0.003 && typical < 0.015, String(typical));
@@ -143,7 +143,7 @@ test('a typical PR review on haiku 5.5 costs well under a cent and a half; the w
 
 test('pre-flight: a worst case above max_budget_usd makes NO call, status failed, reason budget, a message with both numbers; a larger budget passes', async (t) => {
   const h = harness(t, [good()]);
-  await h.go({ MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.05' }); // 16000 x $20/M alone is $0.32
+  await h.go({ MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.05' }); // 32000 x $20/M alone is $0.64
   assert.equal(h.calls.length, 0, 'nothing was sent');
   assert.equal(h.file('engine-status'), 'failed');
   const [reason, why] = h.file('engine-error').split('\n');
@@ -246,7 +246,7 @@ test('max_tokens and refusal stops, an answer with no JSON, a timeout and a netw
   await cut.go();
   assert.equal(cut.file('engine-status'), 'failed');
   assert.equal(cut.file('engine-error').split('\n')[0], 'length');
-  assert.match(cut.file('engine-error'), /max_output_tokens \(16000\)/);
+  assert.match(cut.file('engine-error'), /max_output_tokens \(32000\)/);
   assert.equal(cut.file('findings.json'), null);
   assert.ok(cut.file('usage.json'), 'the tokens were paid for: usage is kept');
   const ref = harness(t, [good({ stop_reason: 'refusal', content: [] })]);
@@ -370,6 +370,36 @@ test('context pack: the pre-flight cost check includes the pack', async (t) => {
   assert.equal(off.h.calls.length, 1);
 });
 
+test('pre-flight counts 1.5 bytes per token: a budget that 3.5 would pass is refused', async (t) => {
+  const big = PROMPT + 'y'.repeat(100000); // about 28.6k tokens at 3.5, 66.7k at 1.5; opus 5.5 is $4/M input
+  assert.equal(api.worstCase('claude-opus-5-5', 0, 90000, 1000).tokens, 60000);
+  const h = harness(t, [good()]);
+  fs.writeFileSync(h.pf, big);
+  await h.go({ MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.2', MAX_OUTPUT_TOKENS: '1000', CONTEXT_PACK_BYTES: '0' }); // 3.5: $0.13, 1.5: $0.29
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.file('engine-error').split('\n')[0], 'budget');
+});
+
+test('context pack on a model with a price step (haiku 5.5): shrunk so the prompt stays under 90% of 100k tokens at 2 bytes/token; skipped with a note when the prompt alone is that big', async (t) => {
+  const files = Object.fromEntries('abcdef'.split('').map((c) => [`${c}.js`, lineText(20000)])), ctxFiles = { 'files.txt': Object.keys(files).join('\n') + '\n' };
+  const r = repo(t, files, ctxFiles);
+  fs.writeFileSync(r.h.pf, `${STATIC}${'s'.repeat(40000)}\n\n---\n\nContext directory (absolute path): /ctx\n${'c'.repeat(40000)}\n`);
+  await r.go();
+  const b = r.h.calls[0].body, total = Buffer.byteLength(b.system[0].text) + Buffer.byteLength(b.messages[0].content);
+  assert.ok(total / 2 <= 0.9 * api.PRICES['claude-haiku-5-5'].longFrom, String(total));
+  assert.ok(total > 0.8 * 180000 && /^context pack: [1-9]\d* files/.test(r.h.file('engine-notes')), 'the pack was shrunk, not dropped: ' + total);
+  const none = repo(t, files, ctxFiles);
+  fs.writeFileSync(none.h.pf, PROMPT + 'z'.repeat(190000));
+  await none.go();
+  assert.equal(none.h.calls.length, 1, none.h.file('engine-error') + none.h.file('engine-notes'));
+  assert.ok(!none.user().includes('Repository files'));
+  assert.equal(none.h.file('engine-notes'), 'context pack: skipped, prompt already near the 100k-token price step');
+  const opus = repo(t, files, ctxFiles, { MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '20' }); // no price step: the plain upper bound
+  fs.writeFileSync(opus.h.pf, PROMPT + 'z'.repeat(190000));
+  await opus.go();
+  assert.ok(opus.user().includes('Repository files'));
+});
+
 // --- claude.sh dispatch: api (default) needs no CLI and no install; agent runs the CLI ---
 function shell(t, { mode, withClaude = false, validate } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-apish-'));
@@ -421,13 +451,13 @@ test('claude.sh: api mode with a budget below the worst case sends nothing and e
 });
 
 // --- action.yml contract ---
-test('action.yml: claude_mode defaults to api, max_output_tokens to 16000, and both reach the engine step as env', () => {
+test('action.yml: claude_mode defaults to api, max_output_tokens to 32000, and both reach the engine step as env', () => {
   const py = 'import sys,json,yaml\nprint(json.dumps(yaml.safe_load(open(sys.argv[1],encoding="utf8"))))\n';
   let a = null;
   for (const exe of ['python3', 'python']) { try { a = JSON.parse(require('node:child_process').execFileSync(exe, ['-c', py, path.join(__dirname, '..', 'action.yml')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })); break; } catch { /* next */ } }
   if (!a) return; // python yaml unavailable: the text checks below still run
   assert.equal(a.inputs.claude_mode.default, 'api');
-  assert.equal(a.inputs.max_output_tokens.default, '16000');
+  assert.equal(a.inputs.max_output_tokens.default, '32000');
   assert.match(a.inputs.claude_mode.description, /api.*agent/s);
   assert.match(a.inputs.max_budget_usd.description, /HARD bound/);
   for (const name of ['engine', 'Run the review engine']) {

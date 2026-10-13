@@ -15,7 +15,7 @@ c="${MAX_CREDITS:-60}"
 b="${MAX_BUDGET_USD:-1.00}" # the claude engine's per-run budget in USD
 [[ $b =~ ^[0-9]{1,2}(\.[0-9]{1,2})?$ ]] && awk -v b="$b" 'BEGIN{exit !(b > 0 && b <= 20)}' || die "max_budget_usd must be a positive decimal of at most 20 (for example 1.00)"
 case "${CLAUDE_MODE:-api}" in api|agent) ;; *) die "claude_mode must be api or agent" ;; esac
-o="${MAX_OUTPUT_TOKENS:-16000}"
+o="${MAX_OUTPUT_TOKENS:-32000}"
 [[ $o =~ ^[0-9]{4,6}$ ]] && ((10#$o >= 1000 && 10#$o <= 64000)) || die "max_output_tokens must be an integer from 1000 to 64000"
 t="${TIMEOUT:-12}"
 [[ $t =~ ^[0-9]{1,4}$ ]] && ((10#$t > 0)) || die "review_timeout_minutes must be a positive integer"
