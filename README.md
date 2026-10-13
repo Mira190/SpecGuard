@@ -43,6 +43,7 @@ Requirement documents anywhere in the repo (IDs such as `AC-4`, acceptance-crite
 
 - Inline comments from `github-actions[bot]`: test skeletons for missing tests, one-click suggested fixes for standard violations.
 - A sticky summary maps each requirement or changed behaviour to an obligation, an exact behaviour citation, assertion quotes, test layers, and an explained status. Low-confidence items are collapsed in it.
+- Every summary that ran the engine carries a small-print line: model, tokens (in, cached, out), cost and API time. Copilot cost is an estimate from AI credits (1 credit = $0.01); the billing API remains authoritative.
 - Separate coding-standard and test-layer assessments, including when no violations or pushdown candidates were found.
 - `covered` requires a unit assertion; `higher_level_only` records component/integration/e2e evidence without counting it as unit coverage. Pushdown suggestions identify a public unit seam and preserve necessary integration checks.
 - Unknown evidence, inaccessible issues and partial reviews remain visible. Empty findings never imply that requirements were fully reviewed.

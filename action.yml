@@ -139,7 +139,7 @@ runs:
         # verify-in-S4: no documented turn-cap flag (timeout is the cap); tool names view,glob,grep and --output-format json (text kept) unconfirmed
         # never --allow-all, --allow-all-paths, --yolo
         rc=0
-        timeout "${TIMEOUT}m" copilot -p "$PROMPT" --available-tools view,glob,grep --allow-all-tools --no-ask-user -s \
+        timeout "${TIMEOUT}m" copilot -p "$PROMPT" --available-tools view,glob,grep --allow-all-tools --no-ask-user -s --usage-output-file "$CTX/usage.json" \
           ${MODEL:+--model "$MODEL"} > "$CTX/copilot.out" \
           || rc=$?
         [ $rc = 0 ] || { echo "::warning::Copilot review failed or timed out (needs 'permissions: copilot-requests: write' or a copilot_token)"; [ $rc = 124 ] && echo timeout > "$CTX/engine-status" || echo failed > "$CTX/engine-status"; }
