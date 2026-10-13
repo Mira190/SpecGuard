@@ -439,6 +439,7 @@ function reducedReasons({ em, repair, engineNotes = [], data }) {
   const out = [];
   if (em?.tier === 'fast') out.push('fast-tier model');
   if (repair === 'repaired' || repair === 'repair_failed') out.push(repair === 'repaired' ? 'the JSON needed a repair turn' : 'the JSON repair turn failed');
+  if (repair === 'finalized') out.push('the engine ran out of budget and answered from what it had read so far');
   if (engineNotes.length >= 3) out.push(`${engineNotes.length} engine notes`);
   // its own citations failed; a row only reached through an unverified requirement link is not counted
   const bad = new Set((data.validation_notes || []).map((n) => /^Obligation (.+?) marked unknown: (?!The linked requirement)/.exec(n)?.[1]).filter(Boolean));
@@ -1218,9 +1219,9 @@ async function run({ github, context, core }) {
   const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
   let usage = null; // engine usage JSON (tokens, cost); shown on every summary that ran the engine, including failed runs
   try { usage = JSON.parse(readCtx('usage.json')); } catch { /* no usage data */ }
-  if (engine === 'copilot') try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair turn */ }
+  try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair or finalize turn */ } // copilot repair turn, claude finalize turn
   const repair = (readCtx('engine-repair') || '').trim();
-  const notes = [...(readCtx('engine-notes') || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])]; // written by the engine step, never by the model
+  const notes = [...(readCtx('engine-notes') || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : repair === 'finalized' ? ['finalized after the budget ran out'] : repair === 'finalize_failed' ? ['finalize turn failed'] : [])]; // written by the engine step, never by the model
   let em = null; try { em = JSON.parse(readCtx('engine-model.json')); } catch { /* absent or garbled: normal mode */ }
   const strs = (xs) => [...new Set(xs.filter((x) => typeof x === 'string' && x))];
   // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)

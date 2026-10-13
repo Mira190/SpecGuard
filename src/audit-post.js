@@ -428,7 +428,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const ruled = tab('audit-ruled.txt').flatMap(([cid, loc = '', , text = '', reason = ''], k) => (/^[0-9a-f]{8}$/.test(cid) && (k = loc.lastIndexOf(':')) > 0 ? [{ cid, path: loc.slice(0, k), line: +loc.slice(k + 1), text, reason }] : []));
   const engine = env.ENGINE || '';
   let usage = json('usage.json');
-  if (engine === 'copilot') usage = mergeUsage(usage, json('usage-repair.json'));
+  usage = mergeUsage(usage, json('usage-repair.json')); // copilot repair turn, claude finalize turn
   const repair = (readCtx('engine-repair') || '').trim();
   const notes = [...lines(readCtx('engine-notes')).map((x) => x.trim()).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])];
   const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
