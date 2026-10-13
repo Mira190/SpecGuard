@@ -385,3 +385,22 @@ test('loadPrior: reads the state of this scope\'s issue over REST (an unscoped s
   try { assert.equal(await loadPrior(env(''), async () => ({ ok: false, status: 500, json: async () => ({}) })), null); } finally { console.log = log; }
   assert.match(logs.join('\n'), /::warning::SpecGuard: could not read the previous scan state/);
 });
+
+test('collect: blocks the prefilter rules out are listed in audit-ruled.txt with the reason, never reach the candidates, and do not count against the cap', (t) => {
+  const design = [
+    '# Plan design', '', '## Behaviour', '',
+    'A plan MUST be rejected when its start is in the past.', '', 'A repeating plan stays on after it fires.', '', 'A plan SHALL NOT fire twice in one minute.', '',
+    '## Results', '', '| Pilot run on Kite | 88% | 2026-10-07 |', '', '| Pilot run on Rea | 93% | 2026-10-08 |', '', 'Node 20 locally vs 22 in CI.', '',
+  ].join('\n');
+  const { root, ctx } = repo(t, { 'docs/design.md': design });
+  const r = collect({ cwd: root, ctx, maxRequirements: 3 });
+  const meta = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
+  const ruled = rows(ctx, 'audit-ruled.txt'), cands = rows(ctx, 'audit-candidates.txt');
+  assert.deepEqual(ruled.map((x) => x[4]), ['results/data table row', 'results/data table row', 'under a results/status/sources heading']);
+  assert.ok(ruled.every(([cid, loc]) => /^[0-9a-f]{8}$/.test(cid) && /^docs\/design\.md:\d+$/.test(loc)));
+  assert.equal(cands.length, 3, 'the three behaviour blocks fit the cap of 3 because the ruled ones are not counted');
+  assert.ok(!cands.some(([cid]) => ruled.some(([c]) => c === cid)));
+  assert.equal(meta.candidates, 3);
+  assert.equal(meta.ruled, 3);
+  assert.equal(r.candidates, 3);
+});

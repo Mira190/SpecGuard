@@ -295,7 +295,7 @@ function readState(body) {
 // carried: prior blocks this run did not audit ({ cid, path, line, text, status, since, runs, at }); they keep their status in the tables, marked "from <date>".
 // rotation / search (evidence candidates): audit-meta.json's; scope: the scan_paths lines; stateDropped: carried blocks that no longer fit the state.
 function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', failure = '', partial = '', prior = null, head: sha = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
-  carried = [], rotation = null, search = null, scope = [], stateDropped = 0 }) {
+  carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [] }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
     const rel = safeRel(p);
@@ -362,6 +362,8 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...(stateDropped ? [`the scan issue state keeps at most ${STATE_MAX} blocks: ${stateDropped} older block(s) are dropped and will count as never audited`] : [])];
   const nrq = data && data.not_requirements ? data.not_requirements : [];
   if (nrq.length) foot += `<details><summary>${nrq.length} block${nrq.length === 1 ? ' was' : 's were'} not ${nrq.length === 1 ? 'a requirement' : 'requirements'}</summary>\n\n${list(nrq, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(${cell(n.reason, 80)})\n`)}\n</details>\n\n`;
+  // blocks the collector's prefilter dropped (audit-ruled.txt): data and status, not behaviour; never sent to the model, so not part of the counts above
+  if (ruled.length) foot += `<details><summary>${ruled.length} block${ruled.length === 1 ? ' was' : 's were'} skipped by rule</summary>\n\n${list(ruled, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(skipped by rule: ${cell(n.reason, 80)})\n`)}\n</details>\n\n`;
   const unread = data ? docs.filter(([p]) => !data.docs_reviewed.includes(p)).map(([p]) => `\`${p}\` was admitted but is not in docs_reviewed.`) : [];
   if (nr.length || unread.length) foot += `### Not reviewed\n\n${list([...nr, ...unread], 40, (s) => `- ${cell(s, 400)}\n`)}\n`;
   if (usage) foot += `${usage}\n`;
@@ -416,6 +418,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const meta = json('audit-meta.json');
   const tab = (n) => lines(readCtx(n)).map((l) => l.split('\t'));
   const docs = tab('audit-docs.txt'), rejected = tab('audit-rejected.txt');
+  const ruled = tab('audit-ruled.txt').flatMap(([cid, loc = '', , text = '', reason = ''], k) => (/^[0-9a-f]{8}$/.test(cid) && (k = loc.lastIndexOf(':')) > 0 ? [{ cid, path: loc.slice(0, k), line: +loc.slice(k + 1), text, reason }] : []));
   const engine = env.ENGINE || '';
   let usage = json('usage.json');
   if (engine === 'copilot') usage = mergeUsage(usage, json('usage-repair.json'));
@@ -431,7 +434,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const igh = issueGithub || github, issueRepo = away ? { owner: ir[1], repo: ir[2] } : { owner, repo };
   const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
   const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0,
-    rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
+    ruled, rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   const finish = async (md) => { try { await core.summary.addRaw(md).write(); } catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); } };
   // issue lookup: our open or closed issue (of this scope) and the state it holds; a failure only warns
   let mine = null, prior = null;

@@ -2971,3 +2971,82 @@ test('focused review with files skipped and diffs shortened: incomplete with the
   assert.doesNotMatch(b, /were shortened in the prompt|specguard:head=/);
   assert.deepEqual(countsOf(b).focused, { files: 1, of: 2, shortened: 1 });
 });
+
+// ---- coverage evidence (src/coverage.js) and the usage line ----
+const COV = (miss = [[3, 3]], never = miss) => ({ v: 1, reports: 1, total: { instrumented: 2, executed: 2 - never.length }, files: { 'src.js': { inst: 2, exec: 2 - never.length, never, miss } }, unreported: [], notes: [] });
+const withCov = (s, c) => fs.writeFileSync(path.join(s.dir, 'ctx', 'coverage.json'), typeof c === 'string' ? c : JSON.stringify(c));
+
+test('coverage: the summary states executed/instrumented and lists never-executed changed ranges; a missing_test anchor that never ran gains a suffix', async (t) => {
+  const s = setup(t);
+  withCov(s, COV());
+  await post(s);
+  const body = s.calls.summary[0].body, unit = body.slice(body.indexOf('### Unit test gaps'), body.indexOf('### Requirements'));
+  assert.match(unit, /Changed lines executed by tests: 1 of 2 instrumented \(coverage report\)/);
+  assert.match(unit, /Changed lines no test executed \(coverage report\):\n- `src\.js`: L3\n/);
+  assert.match(s.calls.review[0].comments[0].body, /Verify the boundary total \(coverage: never executed\)/);
+  const ran = setup(t);
+  withCov(ran, COV([[1, 1]], []));
+  await post(ran);
+  assert.doesNotMatch(ran.calls.review[0].comments[0].body, /coverage: never executed/);
+  assert.doesNotMatch(ran.calls.summary[0].body, /no test executed/);
+  assert.match(ran.calls.summary[0].body, /executed by tests: 2 of 2 instrumented/);
+});
+
+test('coverage: everything is off without a usable report (absent, garbled, wrong version, or none used)', async (t) => {
+  for (const c of [undefined, '{garbage', { v: 2, files: {} }, { v: 1, reports: 0, files: {}, notes: [] }]) {
+    const s = setup(t);
+    if (c !== undefined) withCov(s, c);
+    await post(s);
+    const all = s.calls.summary[0].body + s.calls.review[0].comments[0].body;
+    assert.doesNotMatch(all, /coverage|never executed|executed by tests/i, JSON.stringify(c));
+  }
+  const note = setup(t);
+  withCov(note, { v: 1, reports: 0, files: {}, notes: ['lcov.info is older than the head commit; not used'] });
+  await post(note);
+  assert.match(note.calls.summary[0].body, /<sub>Coverage evidence not used: lcov\.info is older than the head commit; not used<\/sub>/);
+  assert.doesNotMatch(note.calls.review[0].comments[0].body, /never executed/);
+});
+
+test('coverage: a covered row whose behaviour line never ran becomes unknown; a line that ran, or an uninstrumented one, keeps it', async (t) => {
+  const covered = () => report({ coverage: [row('covered')], findings: [] });
+  const s = setup(t, covered());
+  withCov(s, COV([[3, 3]], []));
+  await post(s);
+  assert.match(s.calls.summary[0].body, /\| unknown: The coverage report shows this line never ran \(src\.js:3\)\. \|/);
+  assert.match(s.calls.summary[0].body, /Obligation O1 marked unknown: the coverage report shows src\.js:3 never ran\./);
+  assert.doesNotMatch(s.calls.summary[0].body, /No test gaps found/);
+  for (const miss of [[[4, 9]], []]) {
+    const k = setup(t, covered());
+    withCov(k, COV(miss, []));
+    await post(k);
+    assert.match(k.calls.summary[0].body, /\| covered: /, JSON.stringify(miss));
+  }
+  const off = setup(t, covered());
+  await post(off);
+  assert.match(off.calls.summary[0].body, /\| covered: /);
+  assert.equal(post.neverRan(COV(), 'other.js', 3), false, 'only changed files carry an entry');
+  assert.equal(post.neverRan(COV(), 'constructor', 3), false);
+  assert.equal(post.neverRan(null, 'src.js', 3), false);
+});
+
+test('usage line: no zero cost, zero API time or zero tokens; "usage partial" only beside a recorded total', () => {
+  const zero = { totalNanoAiu: 0, totalApiDurationMs: 0, tokenDetails: { input: { tokenCount: 0 }, output: { tokenCount: 0 } } };
+  assert.equal(post.usageLine({ engine: 'copilot', model: 'auto', raw: zero, notes: ['copilot exit 1 (main)', 'usage partial'] }), '<sub>Engine: copilot · Model: auto · copilot exit 1 (main)</sub>');
+  assert.equal(post.usageLine({ engine: 'copilot', raw: null, notes: ['usage partial'] }), '<sub>Engine: copilot</sub>');
+  assert.match(post.usageLine({ engine: 'copilot', raw: COPILOT_USAGE, notes: ['usage partial'] }), /Cost ≈ \$[\d.]+ .*· usage partial<\/sub>$/);
+});
+
+test('usage line: a failed run does not repeat the classified engine error that the status already shows', async (t) => {
+  const s = setup(t);
+  const why = 'Copilot quota or budget exhausted for this token';
+  fs.rmSync(path.join(s.dir, 'ctx', 'findings.json'));
+  writeCtxR(s, 'engine-status', 'failed');
+  writeCtxR(s, 'engine-error', `quota\n${why}\n`);
+  writeCtxR(s, 'engine-notes', `${why}: HTTP 402 raw first line\ncopilot exit 1 (main)\nusage partial\n`);
+  writeCtxR(s, 'usage.json', JSON.stringify({ totalNanoAiu: 0, totalApiDurationMs: 0 }));
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.match(body, new RegExp(`Could not complete: ${why}`));
+  assert.match(body, /<sub>Engine: copilot · copilot exit 1 \(main\)<\/sub>/);
+  assert.doesNotMatch(body, /HTTP 402|Cost|API time|usage partial/);
+});

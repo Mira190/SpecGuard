@@ -60,9 +60,9 @@ test('action.yml contract: every PR step is guarded by mode pr, audit steps by m
   }
   assert.equal(kinds.none.length, 2, 'only the refuse-env and mode-check steps are unguarded');
   const touches = (list, re) => list.filter((s) => re.test(s)).length;
-  // PR-only: preflight, collect, the superseded check, the PR post step and its artifact
-  assert.equal(kinds.pr.length, 5);
-  for (const re of [/src\/preflight\.js/, /src\/collect\.sh/, /src\/superseded\.js/, /src\/post\.js'/, /name: specguard-ctx-\$\{\{ github\.event\.pull_request\.number \}\}/]) assert.equal(touches(kinds.pr, re), 1, String(re));
+  // PR-only: preflight, collect, the superseded check, the optional coverage evidence, the PR post step and its artifact
+  assert.equal(kinds.pr.length, 6);
+  for (const re of [/src\/preflight\.js/, /src\/collect\.sh/, /src\/superseded\.js/, /src\/coverage\.js/, /src\/post\.js'/, /name: specguard-ctx-\$\{\{ github\.event\.pull_request\.number \}\}/]) assert.equal(touches(kinds.pr, re), 1, String(re));
   // audit-only: audit_collect, the audit post step and its artifact
   assert.equal(kinds.audit.length, 3);
   for (const re of [/src\/audit-collect\.js/, /src\/audit-post\.js'/, /name: specguard-audit-\$\{\{ github\.run_attempt \}\}/]) assert.equal(touches(kinds.audit, re), 1, String(re));
@@ -161,4 +161,19 @@ test('action.yml: scan_paths scopes the scan and reaches both scan steps; the co
   const mapped = new Set([...collect.slice(collect.indexOf('env:'), collect.indexOf('run:')).matchAll(/^\s+([A-Z_]+): /gm)].map((m) => m[1]));
   const runner = new Set(['GITHUB_REF_NAME', 'GITHUB_EVENT_PATH', 'GITHUB_OUTPUT', 'GITHUB_API_URL', 'GITHUB_REPOSITORY']);
   assert.deepEqual([...read].filter((k) => !mapped.has(k) && !runner.has(k)), [], 'every variable the collector reads is mapped');
+});
+
+test('action.yml: coverage_files is off by default; its step runs between setup-node and the engine, only for a PR review that was not superseded, and never fails the job', () => {
+  assert.match(input('coverage_files'), /default: "" \}$/);
+  assert.match(input('coverage_files'), /SpecGuard never runs tests/);
+  const idx = (re) => steps.findIndex((x) => re.test(x));
+  const RUN = /node "\$GITHUB_ACTION_PATH\/src\/coverage\.js"/, c = find(RUN);
+  assert.ok(idx(/actions\/setup-node/) < idx(RUN) && idx(RUN) < idx(/^id: engine/m));
+  assert.match(cond(c), /inputs\.mode == 'pr' && inputs\.coverage_files != ''/);
+  assert.match(cond(c), /steps\.collect\.outputs\.skip != 'true'.*steps\.superseded\.outputs\.superseded != 'true'/);
+  assert.match(c, /continue-on-error: true/);
+  for (const m of [/COVERAGE_FILES: \$\{\{ inputs\.coverage_files \}\}/, /CTX: \$\{\{ github\.workspace \}\}\/\.specguard-ctx/, /HEAD_SHA: /]) assert.match(c, m);
+  const src = fs.readFileSync(path.join(__dirname, 'coverage.js'), 'utf8');
+  const mapped = new Set([...c.slice(c.indexOf('env:'), c.indexOf('run:')).matchAll(/^\s+([A-Z_]+): /gm)].map((m) => m[1]));
+  assert.deepEqual([...src.matchAll(/env\.([A-Z][A-Z_]+)/g)].map((m) => m[1]).filter((k) => !mapped.has(k) && k !== 'GITHUB_WORKSPACE'), []);
 });

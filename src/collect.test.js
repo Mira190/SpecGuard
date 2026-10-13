@@ -516,3 +516,15 @@ test('focused review: over the gate collect.sh writes focus.txt / focus-skipped.
   assert.doesNotMatch(numbered, /conf\.yml|src\/b\.js/);
   assert.match(r.ctxFile('diff.patch'), /diff --git a\/conf\.yml/); // diff.patch stays whole
 });
+
+test('leads.txt: changed symbols without a test reference and mirror assertions are written; absent when there is nothing to say', (t) => {
+  const r = scenario(t, { 'src/lib.js': 'export const MAX_DUR = 10;\n', 'test/lib.test.js': 'import { parseHms, MAX_DUR } from "../src/lib";\nassert.equal(parseHms("x"), MAX_DUR);\n' },
+    ({ write }) => write('src/lib.js', 'export const MAX_DUR = 10;\nexport function parseHms(s) {\n  return 1;\n}\nexport function orphanThing(s) {\n  return 2;\n}\n'));
+  const s = r.ctxFile('leads.txt');
+  assert.match(s, /^Changed symbols with no test reference:\n {2}src\/lib\.js:5 orphanThing\n/);
+  assert.match(s, /Changed symbols referenced by tests:\n {2}parseHms -> test\/lib\.test\.js\n/);
+  assert.match(s, /Possible mirror assertions \(expected value taken from production code\):\n {2}test\/lib\.test\.js:2 MAX_DUR\n/);
+  assert.ok(Buffer.byteLength(s) <= 6 * 1024);
+  const none = scenario(t, { 'src.js': 'return 1;\n' }, ({ write }) => write('src.js', 'return 2;\n'));
+  assert.equal(none.ctxFile('leads.txt'), null);
+});

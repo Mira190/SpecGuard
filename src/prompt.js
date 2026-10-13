@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { splitDiff } = require('./focus.js');
 
-const LIMITS = { diff: 40 * 1024, requirements: 8 * 1024, status: 6 * 1024, index: 6 * 1024, trace: 8 * 1024, small: 4 * 1024, cands: 16 * 1024 };
+const LIMITS = { diff: 40 * 1024, requirements: 8 * 1024, status: 6 * 1024, index: 6 * 1024, trace: 8 * 1024, small: 4 * 1024, cands: 16 * 1024, leads: 6 * 1024 };
 // Total worst case is about 128 KiB; engines/copilot.sh pipes it on stdin, so no single-argument limit applies.
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
@@ -87,6 +87,8 @@ function focusSet(ctxDir) {
 }
 const FOCUS_NOTE = `Large PR, focused review: the diff below holds only the highest-risk changed files (focus.txt), not the whole PR. A chosen file's diff may stop after its first hunks (a marker line says how many changed lines are not shown): read the file for the rest. Read at most about 20 files beyond the diff; stop searching once the obligations are settled; do not open files outside the chosen set except their tests and direct imports. The files under "Not in this review" are out of scope: assess and cite none of them.`;
 
+const LEADS_NOTE = "deterministic leads: verify each before using it; a symbol with no test reference is a missing_test candidate only if it is behaviour under review; a possible mirror assertion is a weak_test candidate only if the expected value really comes from the code under test";
+
 function dynamic(ctxDir) {
   const empty = [], parts = [];
   const focus = focusSet(ctxDir);
@@ -120,6 +122,10 @@ function dynamic(ctxDir) {
   add('trace-candidates.json', tc, LIMITS.trace);
   add('test-paths.txt', read(ctxDir, 'test-paths.txt'), LIMITS.small, "the repository owner's authoritative test locations (a ! line is excluded): unit tests live here, whatever the file names; search here first and treat tests elsewhere as secondary");
   add('test-candidates.txt', read(ctxDir, 'test-candidates.txt'), LIMITS.cands, 'per changed file: existing test files most likely to cover it; start the evidence search here');
+  const leads = read(ctxDir, 'leads.txt'); // absent = the prompt is unchanged (not listed as empty)
+  if (nonEmpty(leads)) add('leads.txt', leads, LIMITS.leads, LEADS_NOTE);
+  const coverage = read(ctxDir, 'coverage.txt'); // written only from a usable coverage report; absent = the prompt is unchanged
+  if (nonEmpty(coverage)) add('coverage.txt', coverage, LIMITS.small, "execution evidence from the repository's own test run: per changed file, executed/instrumented changed lines and the changed lines no test executed; a line listed as never executed is not covered by any test, whatever tests appear to exist");
   // The numbered diff replaces the raw one when present (same byte limit); diff.patch stays on disk. A truncation note points at the numbered file.
   const numbered = read(ctxDir, 'diff.numbered.txt');
   const [dname, diff, dnote] = nonEmpty(numbered)

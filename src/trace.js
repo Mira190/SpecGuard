@@ -312,14 +312,59 @@ function skippedLines(ls) {
   return skip;
 }
 
-// All candidate blocks of one document: { path, line, heading, text, raw }.
-function blocksOf(p, text) {
+// Deterministic prefilter: blocks that are data or status, not behavioural requirements, never reach the model (scan) or the candidate list (PR mode).
+// ponytail: English-only word lists and a numeric-cell share; a miss only costs a model call, so every rule leans to "keep the block". Tune by eye on real design docs.
+const RESULT_WORD = String.raw`results?|evaluation|status|change ?logs?|history|metrics|benchmarks?|measurements?`;
+const RESULT_ROW_HEAD = new RegExp(String.raw`\b(?:${RESULT_WORD})\b`, 'i'); // a table row under any heading that names one of these is a data row
+const RESULT_PROSE_HEAD = new RegExp(String.raw`^(?:live |current |latest |pilot )?(?:${RESULT_WORD}|sources?|bibliography)$`, 'i'); // prose only under a bare "Status (2026-10-07)" / "Results" heading
+const NUM_ROW = 0.6, NUM_SOME = 0.34; // share of non-empty cells that must be numeric-ish for a row to be data; and for a row under a results/status heading (a mutation-benchmark table of expectations has none)
+const MONTH = String.raw`(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*`;
+const DATE_CELL = new RegExp(String.raw`^(?:\d{4}-\d\d(?:-\d\d)?|\d{1,2}[/.]\d{1,2}[/.]\d{2,4}|${MONTH}\.?\s+\d{1,2}(?:,?\s+\d{4})?|\d{1,2}\s+${MONTH}(?:\s+\d{4})?)$`, 'i');
+const NUM_CELL = /^[~≈<>≥≤±+$€£\s-]*\d[\d.,]*\s*(?:%|x|×|ms|s|sec|min|h|d|k|m|b|kb|mb|gb|tb|pp|pts?|\/\d[\d.,]*)?$|^\d[\d.,]*\s*\/\s*\d[\d.,]*$|^[0-9a-f]{7,40}$/i;
+const CHECK_CELL = /^(?:[✓✔✅❌✗✘×☐☑☒⬜🟢🔴🟡]+|n\/a|na|-+|—|–|\?|tbd)$/i; // not yes/no/none: those are values of a behaviour table
+const cellsOf = (l) => l.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.replace(/[*_]/g, '').trim());
+function dataShare(l) { // share of the row's non-empty cells that are numeric-ish
+  const cs = cellsOf(l).filter(Boolean);
+  if (cs.length < 2) return 0;
+  const numeric = (c) => {
+    const bare = c.replace(/^`|`$/g, '').trim();
+    const flat = bare.replace(/[\s\p{P}\p{S}]/gu, '');
+    const digits = (flat.match(/\d/g) || []).length; // 3+ digits, half the cell: "9, 6, 8 (mean 7.7)" yes, an id like "Q7" or "R12" no
+    return NUM_CELL.test(bare) || (digits >= 3 && digits / flat.length >= 0.5) || DATE_CELL.test(bare) || CHECK_CELL.test(bare) || !c.replace(/\[[^\]]*\]\([^)]*\)|<?https?:\/\/\S+>?/g, '').trim(); // number, date, mark, or a cell that is only a link
+  };
+  return cs.filter(numeric).length / cs.length;
+}
+const linkOnly = (t) => !/\p{L}{3,}/u.test(t.replace(/\[[^\]]*\]\([^)]*\)|\[[^\]]*\]\[[^\]]*\]|<?https?:\/\/\S+>?/g, ' ').replace(/\b(?:see|also|and|or)\b/gi, ' ')) && /\[[^\]]*\]\(|https?:\/\//.test(t);
+// A block with no verb-like token is a label or a caption. Verb-like (keep): a modal/auxiliary, a common behaviour verb, an -ed/-ing/-ize word, a plural/3rd-person -s word of 4+ letters, or a call like `f()`.
+const VERBISH = new RegExp(String.raw`\b(?:at least|at most|up to|no more|no less|below|above|within|between|only|exactly|each|every|per|before|after|without|instead|except|maximum|minimum|is|are|was|were|be|been|am|has|have|had|do|does|did|will|would|shall|should|can|could|may|might|must|cannot|can't|won't|don't|doesn't|never|always|not|no|if|when|unless|until|else|then|use|run|set|add|create|write|return|send|read|show|display|reject|accept|validate|ensure|keep|store|log|emit|call|fail|skip|retry|pass|check|require|allow|prevent|block|support|open|close|get|put|make|take|give|let|stop|start|drop|find|match|apply|treat|mark|move|copy|load|save|post|fire|wait|hold|end|go|see|try|need|want|show|hide|click|press|tap|enter|choose|select|replace|remove|delete|update|build|ship|scale|fit|sort|split|join|merge|count|cap|limit|reset|clear)\b`, 'i');
+function verbless(t) {
+  const s = t.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+  if (/[^\p{Script=Latin}\P{L}]/u.test(s) || !/\b(?:the|a|an|of|to|in|on|for|with|and|or|by|at|from|vs)\b/i.test(s)) return false; // not English (another script, or no English function word): unknown, keep
+  if (/\w\(\)|`[^`]*\([^`]*\)`/.test(s) || /[≥≤<>=]/.test(s) || VERBISH.test(s)) return false; // a threshold (>= 70%, at most 10) is a constraint
+  return !(s.match(/\p{L}+/gu) || []).some((w) => (w.length >= 5 && /(?:ed|ing|ize|ise|ify)$/i.test(w)) || (w.length >= 4 && /s$/i.test(w) && !/(?:ss|us|is|ics)$/i.test(w)));
+}
+function ruleOut(i, l, row) {
+  const share = row ? dataShare(l) : 0;
+  if (share >= NUM_ROW) return 'results/data table row';
+  if (row ? share >= NUM_SOME && RESULT_ROW_HEAD.test(i.heading) : RESULT_PROSE_HEAD.test(i.heading.replace(/^[\d.\s§]+/, '').replace(/\s*\([^)]*\)\s*$/, '').replace(/[*_`:]/g, '').trim())) return 'under a results/status/sources heading';
+  if (linkOnly(i.text)) return 'link list';
+  if (!row && verbless(i.text)) return 'no verb, a label rather than behaviour';
+  return '';
+}
+
+// All candidate blocks of one document: { path, line, heading, text, raw }. ruled (optional array) receives the blocks the prefilter dropped, each with a `reason`.
+function blocksOf(p, text, ruled = null) {
   const ls = String(text).replace(/\r\n/g, '\n').replace(/\r/g, ' ').split('\n'), skip = skippedLines(ls);
   return parseItems(p, text, ALL).filter((i) => {
     const l = ls[i.line - 1] || '';
     if (skip[i.line - 1] || LINKREF.test(l) || i.text.replace(/[|\s]+/g, ' ').trim().length < MIN_BLOCK) return false;
-    if (TABLE_ROW.test(l) && TABLE_RULE.test(ls[i.line] || '')) return false; // a table header row
-    return !(i.end === i.line && /^\s*#/.test(l) && !NORM_WORD.test(l)); // a bare heading
+    const row = TABLE_ROW.test(l);
+    if (row && TABLE_RULE.test(ls[i.line] || '')) return false; // a table header row
+    if (i.end === i.line && /^\s*#/.test(l) && !NORM_WORD.test(l)) return false; // a bare heading
+    const reason = ruleOut(i, l, row);
+    if (reason && NORM_WORD.test(i.text)) return true; // an RFC 2119 word always keeps the block (a "Status" table row saying "must" stays)
+    if (reason && ruled) ruled.push({ ...i, reason });
+    return !reason;
   });
 }
 
