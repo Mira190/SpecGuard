@@ -428,3 +428,32 @@ test('V7: every limitation requirements.js (and trace.js) can emit is classified
   assert.ok(trace.length >= 8);
   assert.deepEqual(trace.filter(isFactLimitation).map((l) => l.slice(0, 30)), ['requirements-index.md exceeded']);
 });
+
+// Issue #1 of Mira190/SpecGuard (gh issue view 1 --json body): the criteria are a plain "Acceptance criteria:" line and a numbered list, no heading.
+const ISSUE1 = 'Checkout needs discount codes.\n\nAcceptance criteria:\n1. `SAVE10` takes 10% off the total, rounded to cents.\n2. `HALF` takes 50% off, but only when the total is 100 or more; below 100 the total is unchanged.\n3. An unknown code is rejected with an error.\n4. A negative total is rejected with an error.';
+
+test('extractCriteria: the exact issue #1 body (plain "Acceptance criteria:" line, numbered list) yields R1..R4', () => {
+  const c = extractCriteria([{ source: 'issue #1', text: ISSUE1 }]);
+  assert.deepEqual(c.map((x) => x.id), ['R1', 'R2', 'R3', 'R4']);
+  assert.equal(c[0].quote, '`SAVE10` takes 10% off the total, rounded to cents.');
+  assert.equal(c[3].quote, 'A negative total is rejected with an error.');
+});
+
+test('extractCriteria: plain AC headers (colon, bold, AC:, Definition of done:, Requirements:) open a section; it ends at a heading or at a blank line before a non-list line', () => {
+  const quotes = (text) => extractCriteria([{ source: 'PR body', text }]).map((c) => c.quote);
+  for (const head of ['Acceptance criteria:', '**Acceptance criteria**', '**Acceptance criteria:**', 'Acceptance Criteria', 'AC:', 'Definition of done:', 'Requirements:', '验收标准：'])
+    assert.deepEqual(quotes('Intro text.\n\n' + head + '\n- one\n- two'), ['one', 'two'], head);
+  assert.deepEqual(quotes('Acceptance criteria:\n\n- one\n- two\n\nSome closing prose.\n- not a criterion'), ['one', 'two'], 'a blank line then prose ends the section');
+  assert.deepEqual(quotes('Acceptance criteria:\n- one\n\n- two\n\n## Notes\n- not a criterion'), ['one', 'two'], 'a blank line before another list item continues; a heading ends');
+  assert.deepEqual(quotes('Checklist:\n- not a criterion\n\nAC:\n1. yes'), ['yes']);
+  assert.deepEqual(quotes('Just a list:\n- a\n- b'), [], 'no AC header, no criteria');
+  assert.deepEqual(quotes('Acceptance criteria:\n- one\n    continued\n- two'), ['one\ncontinued', 'two']);
+});
+
+test('fitBody: a plain "Acceptance criteria:" section is kept whole, like a heading section', () => {
+  const ac = 'Acceptance criteria:\n' + Array.from({ length: 20 }, (_, i) => (i + 1) + '. criterion number ' + (i + 1) + ' stays').join('\n');
+  const body = ['intro ' + 'x'.repeat(2500), '', ac, '', 'outro ' + 'y'.repeat(2500)].join('\n');
+  const fit = fitBody(body, 3000);
+  assert.ok(fit.cut);
+  assert.ok(fit.text.includes(ac), 'the whole section survived the cut');
+});

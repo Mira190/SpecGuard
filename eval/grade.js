@@ -1,8 +1,13 @@
 // Pure grading for the real-model evaluation. No I/O. See eval/README.md for the observation shape.
 const arr = (v) => (v === undefined ? [] : [].concat(v));
 const lc = (s) => String(s || '').toLowerCase();
-const STATUS = /^(covered|weak_test|missing_test|higher_level_only|needs_human|unknown): /;
-const ALIGN = ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
+// The obligations table shows a status as a word ("Weak test: reason", src/post.js STATUS_LABEL); the old tokens still parse.
+const STATUS_WORD = { Evidenced: 'covered', 'Weak test': 'weak_test', 'Missing test': 'missing_test', 'Higher-level only': 'higher_level_only', 'Needs a person': 'needs_human', 'Not assessed': 'unknown' };
+const STATUS = /^(covered|weak_test|missing_test|higher_level_only|needs_human|unknown|Evidenced|Weak test|Missing test|Higher-level only|Needs a person|Not assessed): /;
+// A summary list item that carries its own text: "- ❌ **Missing test:** Title `path:line` (why) — sentence". A posted finding links its title to the comment (`[Title](url)`) and is not counted here.
+const ITEM_KIND = { 'Missing test': 'missing_test', 'Weak test': 'weak_test', Mismatch: 'spec_mismatch', Violation: 'standard', 'Move down': 'pushdown' };
+const ITEM = /^- (?:❌ )?\*\*(Missing test|Weak test|Mismatch|Violation|Move down):\*\* (?!\[)(.+?) \[?`([^`\n]+):(\d+)`(?:\]\([^)\n]*\))?(?: \(([^)\n]*)\))?/gm;
+const ALIGN =['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
 const TRACE_HEAD = /^\|\s*Requirement\s*\|\s*Changed\s*\|\s*Implementation\s*\|\s*Tests\s*\|\s*Alignment\s*\|\s*Reflected in\s*\|/i;
 const YES = '✓✔✅', NO = '✗✘❌✕';
 // "spec ✓ tests ✗ PR ✗" (labelled) or "✓ ✗ ✓" (spec, tests, PR in that order). null = not stated.
@@ -37,8 +42,7 @@ function parseComment(c) {
 // Parses the sticky summary (src/post.js buildSummary): the collapsed items and the coverage table rows.
 function parseSummary(text) {
   const s = String(text || '');
-  const items = [...s.matchAll(/^- \*\*(.+?)\*\* \(`([^`]+):(\d+)`, (\w+)(?:, ([^)]*))?\)/gm)]
-    .map((m) => ({ title: m[1], path: m[2], line: +m[3], kind: m[4], why: m[5] || '' }));
+  const items = [...s.matchAll(ITEM)].map((m) => ({ title: m[2], path: m[3], line: +m[4], kind: ITEM_KIND[m[1]], why: m[5] || '' }));
   const rows = [], trace = [], lines = s.split('\n'), traceLines = new Set();
   // Traceability table: the header row, then table rows until the first other line.
   const th = lines.findIndex((l) => TRACE_HEAD.test(l));
@@ -46,23 +50,23 @@ function parseSummary(text) {
     traceLines.add(i);
     const c = lines[i].split(/(?<!\\)\|/).map((x) => x.trim());
     if (i === th || /^:?-+:?$/.test(c[1] || '')) continue;
-    trace.push({ requirement: c[1], changed: c[2], implementation: c[3], tests: c[4], alignment: ALIGN.find((a) => new RegExp(`\\b${a}\\b`, 'i').test(c[5] || '')) || '', reflected: parseReflected(c[6] || ''), raw: lines[i] });
+    trace.push({ requirement: c[1], changed: c[2], implementation: c[3], tests: c[4], alignment: ALIGN.find((a) => new RegExp(`\\b${a.replace('_', '[ _]')}\\b`, 'i').test(c[5] || '')) || '', reflected: parseReflected(c[6] || ''), raw: lines[i] });
   }
   lines.forEach((ln, i) => {
     if (!ln.startsWith('| ') || traceLines.has(i)) return;
     const c = ln.split(/(?<!\\)\|/).map((x) => x.trim());
     const st = STATUS.exec(c[4] || '');
     const at = /; (\S+?):(\d+) — /.exec(c[2] || '');
-    if (st && at) rows.push({ status: st[1], path: at[1], line: +at[2], text: ln });
+    if (st && at) rows.push({ status: STATUS_WORD[st[1]] || st[1], path: at[1], line: +at[2], text: ln });
   });
   // "Pre-existing drift (not caused by this PR)" section: up to the next heading or the end of its <details>. Null when absent.
   const pe = /Pre-existing drift \(not caused by this PR\)/.exec(s);
-  const preExisting = pe ? s.slice(pe.index + pe[0].length).split(/\n#{1,6} |<\/details>/)[0].trim() : null;
-  const notes = /<summary>Validation notes \(\d+\)<\/summary>\n\n([\s\S]*?)\n<\/details>/.exec(s);
+  const preExisting = pe ? s.slice(pe.index + pe[0].length).split(/\n#{1,6} |\n\*\*[^\n]+\*\*\n|<\/details>/)[0].replace(/^\*\*/, '').trim() : null;
+  const notes = /Validation notes \(\d+\)(?:<\/summary>|\*\*)\n\n([\s\S]*?)(?=\n\n\*\*|\n<\/details>|\n*$)/.exec(s);
   return {
     items, rows, trace, preExisting, noRequirementDocs: /No requirement documents found/.test(s), notes: notes ? notes[1].split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)) : [],
     skipped: /Nothing to review/.test(s),
-    incomplete: /Could not complete/i.test(s) || /Partially reviewed/.test(s) || /Standards tooling: incomplete/.test(s),
+    incomplete: /Could not complete/i.test(s) || /Partially reviewed|The diff exceeded `max_diff_kb`/.test(s) || /Standards tooling: incomplete/.test(s),
   };
 }
 
@@ -70,7 +74,7 @@ function parseSummary(text) {
 function filterSummary(text, prefix) {
   if (text == null) return text;
   return text.split('\n').filter((ln) => {
-    const m = /^- \*\*.+?\*\* \(`([^`:]+):\d+`, /.exec(ln) || (ln.startsWith('| ') ? /; (\S+?):\d+ — /.exec(ln.split(/(?<!\\)\|/)[2] || '') : null);
+    const m = /^- (?:❌ )?\*\*[^*\n]+:\*\* .*?\[?`([^`:\n]+):\d+`/.exec(ln) || (ln.startsWith('| ') ? /; (\S+?):\d+ — /.exec(ln.split(/(?<!\\)\|/)[2] || '') : null);
     return !m || m[1].startsWith(prefix);
   }).join('\n');
 }

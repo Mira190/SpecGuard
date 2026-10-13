@@ -7,7 +7,7 @@ const path = require('node:path');
 const { execFileSync, spawn, spawnSync } = require('node:child_process');
 const { parseArgs } = require('node:util');
 const { fakeGithub } = require('../eval/local.js');
-const { parseComment } = require('../eval/grade.js');
+const { parseComment, parseSummary } = require('../eval/grade.js');
 const { assemble } = require('../src/prompt.js');
 
 const ROOT = path.join(__dirname, '..');
@@ -76,10 +76,9 @@ cp.execFileSync = function (file, args) {
 // The gate for --fail-on-gaps: what post.js delivered after validation (citations verified, anchored to the diff, capped), never the raw findings.json.
 // A gap = a high-confidence missing_test / weak_test comment, or a summary item of those kinds that post.js did not mark "low confidence" (comment cap, outside the diff, ...).
 const GAP = ['missing_test', 'weak_test'];
-const SUMMARY_ITEM = /^- \*\*.+?\*\* \(`[^`]*`, (missing_test|weak_test)\b([^)\n]*)\)/gm; // post.js buildSummary: - **title** (`path:line`, kind, why)
-function validatedGaps(posted) {
+function validatedGaps(posted) { // a summary item is "- ❌ **Missing test:** title `path:line` (why) — sentence" (post.js buildSummary; eval/grade.js parseSummary reads it)
   const inline = (posted.comments || []).map(parseComment).filter(Boolean).some((c) => GAP.includes(c.kind) && c.confidence === 'high');
-  return inline || [...String(posted.summary || '').matchAll(SUMMARY_ITEM)].some((m) => !/low confidence/i.test(m[2]));
+  return inline || parseSummary(posted.summary).items.some((i) => GAP.includes(i.kind) && !/low confidence/i.test(i.why));
 }
 
 const hidden = (s) => s.replace(/<!--[\s\S]*?-->/g, '').replace(/\n{3,}/g, '\n\n').trim();
