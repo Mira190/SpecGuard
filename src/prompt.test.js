@@ -291,8 +291,10 @@ test('maxObligations: clamp(8 + changed lines / 25, 8, 40); headers and context 
 
 test('assemble: the review-meta block carries max_obligations in the dynamic part only, so the static prefix still caches', () => {
   const small = build(ctx({ 'diff.patch': 'diff --git a/x b/x\n+x\n' })), big = build(ctx({ 'diff.patch': `diff --git a/x b/x\n${'+x\n'.repeat(500)}` }));
-  assert.match(dyn(small), /<untrusted-data name="review-meta\.json"[^>]*>\n\{"max_obligations":8\}\n<\/untrusted-data>/);
-  assert.match(dyn(big), /"max_obligations":28\}/);
+  assert.match(dyn(small), /<untrusted-data name="review-meta\.json"[^>]*>\n\{"max_obligations":8,"behaviour_reserved":4\}\n<\/untrusted-data>/);
+  assert.match(dyn(big), /"max_obligations":28,"behaviour_reserved":14\}/);
+  assert.match(dyn(big), /at least behaviour_reserved obligations are changed-behaviour rows/);
+  assert.match(stat(small), /at least half of them \(`behaviour_reserved`\) are kept for changed-behaviour rows[^\n]*acceptance-criteria rows beyond the other half go to `not_reviewed` by name/);
   assert.equal(stat(small), stat(big));
   assert.ok(!stat(small).includes('"max_obligations":'));
   assert.match(stat(small), /At most `max_obligations`.*`not_reviewed` how many/);
@@ -315,4 +317,10 @@ test('assemble: test-paths.txt tells the model the configured test locations are
   assert.match(t, /name="test-paths\.txt" note="the repository owner's authoritative test locations[^"]*search here first/);
   assert.ok(t.includes('qa/checks\n!qa/checks/fixtures/'));
   assert.match(dyn(build(ctx())), /Empty or absent[^\n]*test-paths\.txt/);
+});
+
+test('both prompts tell the model that .specguard-src/ is the reviewer\'s own code: never read or cite it', () => {
+  const re = /\.specguard-src\/ \(if present\) is the reviewer's own code, not part of the repository under review: never read or cite it/;
+  assert.match(dyn(build(ctx())), re);
+  assert.match(abuild(actx()), re);
 });

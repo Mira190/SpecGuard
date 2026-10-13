@@ -699,3 +699,15 @@ test('validate: without an explicit list it reads audit-candidates.txt from $CTX
   assert.deepEqual([...audit.readCandidates(candTxt(TWO())).keys()], [C1, C2]);
   assert.equal(audit.readCandidates('bad line\n\n').size, 0);
 });
+
+test('verify: a citation under .specguard-src/ fails like any unreadable one', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-own-'));
+  const old = process.env.GITHUB_WORKSPACE; process.env.GITHUB_WORKSPACE = dir;
+  t.after(() => { fs.rmSync(dir, { recursive: true, force: true }); if (old === undefined) delete process.env.GITHUB_WORKSPACE; else process.env.GITHUB_WORKSPACE = old; });
+  fs.mkdirSync(path.join(dir, '.specguard-src'));
+  fs.writeFileSync(path.join(dir, '.specguard-src', 'plan.js'), FILES['src/plan.js'].join('\n') + '\n');
+  fs.writeFileSync(path.join(dir, 'plan.js'), FILES['src/plan.js'].join('\n') + '\n');
+  const code = (p) => verify(result([req({ code: [{ path: p, line: 2, quote: FILES['src/plan.js'][1] }], tests: [] })]), { read: (x) => (x === 'docs/design.md' ? FILES[x] : require('./post').readFile(x)) }).requirements[0].code.length;
+  assert.equal(code('plan.js'), 1);
+  assert.equal(code('.specguard-src/plan.js'), 0);
+});
