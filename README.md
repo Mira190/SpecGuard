@@ -83,6 +83,13 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | Unit test gap scan | `contents: read`, `copilot-requests: write` |
 | Unit test gap scan with `scan_issue: true` | the above plus `issues: write` |
 
+- **Bursts of pushes:** SpecGuard re-checks the PR head right before calling the model, so a run superseded by a newer push costs no credits (the example's `concurrency` group cancels it anyway). If your team pushes in quick bursts, an optional first step coalesces them:
+
+  ```yaml
+  - name: Wait for a push burst to settle
+    run: sleep 60
+  ```
+
 - **Cost control:** put the Copilot usage in a cost center with a budget and "stop usage when budget is reached", and lower `copilot_max_ai_credits` (the worst case per push is about twice the cap: one turn plus one repair turn). Limit triggers: `ready_for_review` only instead of every `synchronize`, or a label gate in the job `if:`. There is no incremental review: every run reviews the whole PR diff.
 - **Data handling:** Copilot content exclusion is not enforced by SpecGuard. Mirror excluded paths into `ignore` and set `ctx_retention_days: 0`: the `specguard-ctx` artifact holds the diff, prompt context and raw engine output, and anyone who can read the repository's Actions runs can download it (set `0` on public repositories).
 - **Runner requirements:** bash, GNU `timeout`, git, node (installed by the Action), and reachability of the npm registry and the Copilot endpoints. Self-hosted runners behind a proxy need both allow-listed.

@@ -123,8 +123,46 @@ test('a failed or timed-out first turn is not repaired', (t) => {
   assert.equal(s.calls().length, 1);
   assert.equal(s.ctxFile('engine-status'), 'failed');
   assert.equal(s.ctxFile('engine-repair'), null);
-  assert.equal(s.ctxFile('engine-notes'), 'usage partial'); // the usage file the turn wrote is kept, its total is not trusted
+  assert.equal(s.ctxFile('engine-notes'), 'copilot exit 1 (main)\nusage partial'); // the exit code is kept; the usage file the turn wrote is kept too, its total is not trusted
   assert.ok(s.ctxFile('usage.json'));
+});
+
+test('a complete valid answer with a non-zero exit (not a timeout) is a success with a note, and is not repaired', (t) => {
+  const s = setup(t, [[`Here:\n${VALID}`, 1]]);
+  assert.equal(s.run().status, 0);
+  assert.equal(s.calls().length, 1);
+  assert.equal(s.ctxFile('engine-status'), 'success');
+  assert.equal(s.ctxFile('engine-notes'), 'Copilot exited with code 1 after a complete answer');
+  assert.equal(s.ctxFile('engine-repair'), null);
+  assert.equal(s.ctxFile('findings.json'), VALID);
+});
+
+test('garbage or an invalid answer with a non-zero exit stays failed, with the exit code noted, and is not repaired', (t) => {
+  for (const out of ['I looked and found nothing.', INVALID]) {
+    const s = setup(t, [[out, 3]]);
+    assert.equal(s.run().status, 0);
+    assert.equal(s.calls().length, 1);
+    assert.equal(s.ctxFile('engine-status'), 'failed');
+    assert.equal(s.ctxFile('engine-notes'), 'copilot exit 3 (main)\nusage partial');
+    assert.equal(s.ctxFile('engine-repair'), null);
+  }
+});
+
+test('a valid answer with exit 124 (timeout) is still a timeout, not salvaged', (t) => {
+  const s = setup(t, [[VALID, 124]]);
+  assert.equal(s.run().status, 0);
+  assert.equal(s.calls().length, 1);
+  assert.equal(s.ctxFile('engine-status'), 'timeout');
+  assert.equal(s.ctxFile('engine-notes'), 'usage partial');
+});
+
+test('a repair turn that exits non-zero after a complete corrected answer is a success with the note', (t) => {
+  const s = setup(t, [['prose'], [VALID, 2]]);
+  assert.equal(s.run().status, 0);
+  assert.equal(s.calls().length, 2);
+  assert.equal(s.ctxFile('engine-status'), 'success');
+  assert.equal(s.ctxFile('engine-notes'), 'Copilot exited with code 2 after a complete answer');
+  assert.equal(s.ctxFile('engine-repair'), 'repaired');
 });
 
 test('a job-level GH_TOKEN never reaches the Copilot CLI (token precedence: COPILOT_GITHUB_TOKEN > GH_TOKEN > GITHUB_TOKEN)', (t) => {
@@ -146,7 +184,7 @@ test('a repair turn is not started with under 60 s of budget left; the notes say
 test('a failed repair turn notes usage partial next to the other notes', (t) => {
   const s = setup(t, [['prose'], ['', 1, 'boom']]);
   assert.equal(s.run({ EFFORT: 'high', MODEL: 'claude-opus-4.5' }).status, 0);
-  assert.equal(s.ctxFile('engine-notes'), 'effort: high\nusage partial');
+  assert.equal(s.ctxFile('engine-notes'), 'effort: high\ncopilot exit 1 (repair)\nusage partial');
   assert.equal(s.ctxFile('engine-status'), 'failed');
 });
 

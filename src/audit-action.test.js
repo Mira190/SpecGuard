@@ -60,9 +60,9 @@ test('action.yml contract: every PR step is guarded by mode pr, audit steps by m
   }
   assert.equal(kinds.none.length, 2, 'only the refuse-env and mode-check steps are unguarded');
   const touches = (list, re) => list.filter((s) => re.test(s)).length;
-  // PR-only: preflight, collect, the PR post step and its artifact
-  assert.equal(kinds.pr.length, 4);
-  for (const re of [/src\/preflight\.js/, /src\/collect\.sh/, /src\/post\.js'/, /name: specguard-ctx-\$\{\{ github\.event\.pull_request\.number \}\}/]) assert.equal(touches(kinds.pr, re), 1, String(re));
+  // PR-only: preflight, collect, the superseded check, the PR post step and its artifact
+  assert.equal(kinds.pr.length, 5);
+  for (const re of [/src\/preflight\.js/, /src\/collect\.sh/, /src\/superseded\.js/, /src\/post\.js'/, /name: specguard-ctx-\$\{\{ github\.event\.pull_request\.number \}\}/]) assert.equal(touches(kinds.pr, re), 1, String(re));
   // audit-only: audit_collect, the audit post step and its artifact
   assert.equal(kinds.audit.length, 3);
   for (const re of [/src\/audit-collect\.js/, /src\/audit-post\.js'/, /name: specguard-audit-\$\{\{ github\.run_attempt \}\}/]) assert.equal(touches(kinds.audit, re), 1, String(re));
@@ -136,4 +136,14 @@ test('extract-json --check with CHECK=audit uses the audit validator; without it
 test('extract: an audit object is preferred over a later unrelated object', () => {
   const s = `${JSON.stringify(AUDIT)}\ntrailing {"n":1}`;
   assert.deepEqual(JSON.parse(extract(s)), AUDIT);
+});
+
+test('action.yml: the superseded check sits between collect and the engine; engine and post skip when it says so', () => {
+  const idx = (re) => steps.findIndex((x) => re.test(x));
+  const sup = idx(/src\/superseded\.js/);
+  assert.ok(idx(/src\/collect\.sh/) < sup && sup < idx(/^id: engine/m) && sup < idx(/Run the review engine/));
+  assert.match(steps[sup], /^id: superseded/m);
+  assert.match(cond(steps[sup]), /steps\.collect\.outputs\.skip != 'true'/);
+  for (const re of [/^id: engine/m, /Run the review engine/, /src\/post\.js'/]) assert.match(cond(find(re)), /steps\.superseded\.outputs\.superseded != 'true'/, String(re));
+  assert.match(yml, /^ {2}superseded: \{[^}]*steps\.superseded\.outputs\.superseded/m);
 });
