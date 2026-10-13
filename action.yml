@@ -173,3 +173,4 @@ runs:
         path: ${{ github.workspace }}/.specguard-ctx
         retention-days: ${{ inputs.ctx_retention_days }}
         if-no-files-found: ignore
+        include-hidden-files: true # the ctx dir is a dot-directory, which upload-artifact skips by default
