@@ -61,18 +61,22 @@ The default Action runs the reviewer directly so it can require this complete re
 
 ## Who pays
 
-It is always the adopting repo's owner or org, never the action author's quota.
+It is never the action author's quota. Copilot CLI is billed by the token it runs on, and the tokens are separate:
 
-| Engine | Org repo | Personal repo |
-|---|---|---|
-| Copilot CLI | the org, via the policy above | the owner's Copilot plan |
+| Token | What it is | Billed to / used for | Where to store it |
+|---|---|---|---|
+| **Copilot token** (`copilot_token`, primary) | fine-grained PAT, resource owner = **a user** (not an org), account permission **Copilot Requests**. Classic `ghp_` tokens are rejected by the Copilot CLI | that user's Copilot seat (AI credits / premium requests) | `SPECGUARD_COPILOT_TOKEN`: environment secret in `specguard` for [manual runs](#manual-run-specguard-repo); repo or org secret for a [target-side caller](#enterprise-setup) |
+| **Repository-read token** (central runs on other repos only) | GitHub App (preferred) or fine-grained PAT owned by the org, Contents / Pull requests / Issues read | reads the target; costs nothing | `SPECGUARD_APP_ID` + `SPECGUARD_APP_PRIVATE_KEY`, or `SPECGUARD_PAT` (environment secrets) |
+| **Org billing** (alternative, no Copilot token) | job token with `copilot-requests: write` | the org, only if an owner enables "Allow use of Copilot CLI billed to the organization" (personal repo: the repo owner's seat) | nothing to store |
+
+One fine-grained PAT has a single resource owner, so the Copilot token (user-owned) and the repository-read PAT (org-owned) are two tokens; they cannot be merged. All runs on a Copilot token spend that user's own quota: use a service/bot account with its own Copilot seat if your company allows it, so a person's quota is not drained. When the quota is used up the run reports "Copilot quota or budget exhausted" (the job stays green). The org may also have to enable the Copilot CLI policy for that user, and an org that requires approval of fine-grained PATs affects only the repository-read PAT (the Copilot token touches no org resources).
 
 Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR and linked-issue text and any repo files the model reads are sent to GitHub Copilot. The Copilot step unsets a job-level `GH_TOKEN` (Copilot CLI would prefer it over the job token and hijack the auth).
 
 ## Rolling out in a company
 
 - **Pin a full commit SHA**, not a branch or `@v1` (the `v1` tag predates this behaviour). Update it deliberately.
-- **Org prerequisites:** an org admin enables Copilot CLI and the policy "Allow use of Copilot CLI billed to the organization" for `GITHUB_TOKEN` billing. Without it every PR shows "Could not complete" while the job stays green. Run a **canary PR** first and watch the `status` output (or the summary); alert on `failed`.
+- **Org prerequisites:** either a Copilot token (see [Who pays](#who-pays); the user needs a Copilot seat with Copilot CLI allowed), or an org admin enables Copilot CLI and the policy "Allow use of Copilot CLI billed to the organization" for `GITHUB_TOKEN` billing. Without one of them every PR shows "Could not complete" while the job stays green. Run a **canary PR** first and watch the `status` output (or the summary); alert on `failed`.
 - **Never make SpecGuard a required check, and never put `paths:` on its trigger.** A skipped workflow leaves a required check pending, a merge queue (`merge_group`) gets no result, and a superseded push cancels the older run. It is advisory and always green. The same goes for "Require conversation resolution": its review threads are advisory, so `resolve_stale` is off by default (the job token cannot resolve threads); where that branch-protection rule is on, give the action a `github_token` that can resolve threads and set `resolve_stale: "true"`, or developers must resolve each thread by hand.
 - **Least-privilege permissions** (job-level; `github_token` and `copilot-requests` as below):
 
@@ -108,6 +112,7 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | `requirements_paths` | | Globs, one per line, that add requirement documents to the ones found by content; `!glob` excludes noisy docs (e.g. `!docs/**`). Empty = content-based discovery only. |
 | `standards_paths` | | Globs, one per line, that add coding-standard or review-guideline documents (e.g. `docs/testing-guidelines.md`) to the instruction files found automatically. Read from the base commit like every rule file; `!glob` excludes. |
 | `test_paths` | | Globs or folders, one per line (`!glob` excludes), that are the authoritative unit-test locations: files there are the tests whatever their names, they are searched first, and the prompt says so. A bare name (`qa/checks`) is a file or a folder. Empty = tests are discovered by name and layout. |
+| `coverage_files` | | Optional. Coverage report globs, one per line, relative to the workspace (LCOV, Cobertura XML, JaCoCo XML, Go cover profile, Istanbul `coverage-final.json`). SpecGuard never runs tests: your workflow runs them with coverage before the SpecGuard step. See [Coverage evidence](#coverage-evidence-optional). Empty = off. |
 | `standards_checks` | | Your own lint/format checks to report, `check:NAME` or `status:CONTEXT`, one per line. See [Standards evidence](#standards-evidence). |
 | `mode` | `pr` | `pr` reviews a pull request; `scan` runs the unit test gap scan on the checked-out repository (`audit` is accepted as an alias). See [Unit test gap scan](#unit-test-gap-scan-whole-repository). |
 | `scan_issue` | `false` | Scan mode: `true` also creates or updates one issue titled "SpecGuard: unit test gap scan" (one per `scan_paths` scope; needs `issues: write`). It is what lets a gap be confirmed across runs and lets the runs rotate through all blocks. |
@@ -117,7 +122,7 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 
 | Input | Default | Meaning |
 |---|---|---|
-| `copilot_token` | | Fine-grained PAT (Copilot Requests), only if the job token cannot be used. |
+| `copilot_token` | | Fine-grained PAT owned by a user, permission Copilot Requests: Copilot runs on it and is billed to that user's seat ([Who pays](#who-pays)). Empty = the job token with `copilot-requests: write` (needs the org policy). |
 | `engine` | `copilot` | The engine adapter; `copilot` (Copilot CLI) is the only one. Any other value fails the step. See [Engines](#engines). |
 | `auto_tier` | `intelligence` | Copilot Auto routing profile when `model` is empty or `auto`: `intelligence` (default), `balance`, `efficiency`, or empty to omit. Ignored with a note if rejected; does not change which models your plan offers. |
 | `fast_models` | | Extra model names treated as fast tier: exact names or `/regex/`, one per line or comma separated. Built-in: flash, mini, haiku, nano, lite, small. |
@@ -140,6 +145,31 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | `delivery`, `repository`, `pr_number`, `base_sha`, `head_sha` | | For [manual runs](#manual-run-specguard-repo) that review another repository on a `workflow_dispatch`: `delivery: summary` writes nothing to the PR (job summary only); the others replace what a `pull_request` event would supply. Leave them empty in your own workflow. |
 
 </details>
+
+### Coverage evidence (optional)
+
+SpecGuard never executes tests, so its "covered" judgements are static. If your CI already produces a coverage report, point `coverage_files` at it and the changed lines get hard execution evidence. Run the tests with coverage **before** the SpecGuard step, in the same job (SpecGuard does not run them):
+
+```yaml
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { fetch-depth: 0 }
+      - run: npx c8 --reporter=lcov npm test       # JS: coverage/lcov.info (nyc/istanbul lcov works the same)
+      # Python: coverage run -m pytest && coverage xml     -> coverage.xml (Cobertura)
+      # Java:   mvn verify (JaCoCo plugin)                 -> target/site/jacoco/jacoco.xml (Gradle: build/reports/jacoco/test/jacocoTestReport.xml, xml enabled)
+      # Go:     go test -coverprofile=cover.out ./...      -> cover.out
+      - uses: Mira190/SpecGuard@<full-commit-sha>
+        with:
+          coverage_files: coverage/lcov.info
+```
+
+What it changes, all deterministic and only for the changed non-test files that the report covers:
+
+- The summary's Unit test gaps section states "Changed lines executed by tests: X of Y instrumented" and lists the added lines no test executed, per file.
+- A requirement the model judged `covered`, whose cited behaviour line never ran in the report, becomes `unknown` ("the coverage report shows this line never ran").
+- A `missing_test` finding on a line that never ran gains "(coverage: never executed)".
+- The model also sees the per-file numbers in its prompt (`coverage.txt` in the debug artifact).
+
+Paths in the report may be absolute CI paths, relative to a source root, JaCoCo package paths or Go import paths; they are matched to the changed files by suffix. A report older than the head commit (when it carries a timestamp: Cobertura, JaCoCo) is ignored and the summary says so. An unreadable or unmatched report only leaves a note; it never fails the job. Leave `coverage_files` empty to turn all of this off.
 
 ## Engines
 
@@ -235,7 +265,7 @@ Model and effort are not on the form: the run uses Copilot Auto with `auto_tier:
 **Setup (do this once, in the SpecGuard repo).**
 
 1. Settings > Environments > New environment `specguard`. Under "Deployment branches and tags" choose **Selected branches and tags** and allow only `main`. Both jobs of the workflow run in this environment, so a branch that edits the workflow or `src/` and is dispatched cannot start the job, and the token is never exposed to code that is not on `main`.
-2. Give the run read access to the targets, in the same environment's **secrets** (never the repository secrets). Preferred: a **GitHub App** (no personal token): secrets `SPECGUARD_APP_ID` (the App's Client ID or App ID) and `SPECGUARD_APP_PRIVATE_KEY`; the App needs **Contents, Pull requests and Issues: read** (add **Pull requests: write** for `post_to_pr`, **Issues: write** for `scan_issue: target`) and must be installed on the target repositories. Each job mints a one-hour installation token scoped to the single target repository with `actions/create-github-app-token`, read-only unless `post_to_pr` / `scan_issue: target` ask for write. Alternative: `SPECGUARD_PAT`, a fine-grained PAT whose resource owner is the target repos' owner with the same permissions. Order: App, else PAT, else the job token (this repository and public repositories only). Copilot itself always runs on the job token (`copilot-requests: write`), never on the App or PAT. The checkout does not persist the token.
+2. Give the run read access to the targets, in the same environment's **secrets** (never the repository secrets). Preferred: a **GitHub App** (no personal token): secrets `SPECGUARD_APP_ID` (the App's Client ID or App ID) and `SPECGUARD_APP_PRIVATE_KEY`; the App needs **Contents, Pull requests and Issues: read** (add **Pull requests: write** for `post_to_pr`, **Issues: write** for `scan_issue: target`) and must be installed on the target repositories. Each job mints a one-hour installation token scoped to the single target repository with `actions/create-github-app-token`, read-only unless `post_to_pr` / `scan_issue: target` ask for write. Alternative: `SPECGUARD_PAT`, a fine-grained PAT whose resource owner is the target repos' owner with the same permissions. Order: App, else PAT, else the job token (this repository and public repositories only). Copilot never runs on the App or `SPECGUARD_PAT` (an org-owned token cannot carry Copilot Requests): add the environment secret `SPECGUARD_COPILOT_TOKEN`, a fine-grained PAT owned by a user with the account permission **Copilot Requests** (billed to that user's seat; see [Who pays](#who-pays)). Without it Copilot runs on the job token (`copilot-requests: write`), which works only when the organization enables "Allow use of Copilot CLI billed to the organization". The checkout does not persist the token.
 3. Keep the SpecGuard repository **private**, with access that is a subset of the access to every repository you point it at (collaborators who can already read the targets). The run page quotes the reviewed repository's code and requirement text, and anyone who can read the SpecGuard repo's Actions runs can read it (logs and summaries are kept 90 days). Artifacts are off for the same reason; do not add one.
 
 SpecGuard itself is checked out next to the target in a path that must not exist (`.specguard-src`), after the target, and the job fails if the reviewed repository already has a path of that name; the review ignores that folder.
@@ -249,14 +279,23 @@ Which setup fits depends on where the code lives and who may hold a token. GitHu
 | Runs | in the target repo: PR review, on-demand scan, scheduled scan | in the SpecGuard repo, on demand: PR or whole-repo scan of any repo the App is installed on | same as 2 | in the SpecGuard repo, only for it and public repos |
 | Token | the target's own `GITHUB_TOKEN`: **no PAT, no secret** | App installation token, one repo, one hour | PAT in the `specguard` environment | job token |
 | Needs | SpecGuard repo Access setting (below); the caller job grants the permissions | an App (Contents, Pull requests, Issues read) installed on the targets; two environment secrets | PAT with the same read scopes, rotation by its owner | nothing |
-| Copilot billed to | the org that owns the target repo (policy "Allow use of Copilot CLI billed to the organization") | the org that owns the SpecGuard repo | same as 2 | same as 2 |
+| Copilot billed to (PAT-first) | the user who owns `SPECGUARD_COPILOT_TOKEN`, stored as a secret of the target repo or org and passed as `copilot_token` | the user who owns `SPECGUARD_COPILOT_TOKEN` (environment secret) | same as 2 | same as 2 |
+| Copilot billed to (alternative, no Copilot token) | the org that owns the target repo (policy "Allow use of Copilot CLI billed to the organization") | the org that owns the SpecGuard repo (same policy) | same as 2 | same as 2 |
 | Security | run pages and artifacts are visible to that repo's readers only | run pages and scan issues in the SpecGuard repo quote target code: keep it private, access no wider than the targets' | the PAT reads everything it was granted: smallest scope, short expiry | none beyond 2 |
 
 **1. Reusable workflow (recommended).** Org settings, once:
 
 1. In the SpecGuard repo: Settings > Actions > General > **Access** > "Accessible from repositories in the '*ORG*' organization" (for an organization owned by an enterprise, the enterprise option). It lets workflows of other repositories **use** the repository's actions and reusable workflows; the runner fetches them with a read token that expires after an hour. It does not let those repositories' `GITHUB_TOKEN` read the code, which is why SpecGuard is used by `uses:` and never checked out by the caller. Outside collaborators on a calling repository can see its run logs.
 2. In the calling organization (Settings > Actions > General) allow the actions in use: `actions/*` (checkout, github-script, setup-node, upload-artifact) and the SpecGuard repository, or actions from your enterprise. "Allow only actions and reusable workflows in this organization" also blocks GitHub's own actions.
-3. Copilot: an org owner enables Copilot CLI and "Allow use of Copilot CLI billed to the organization".
+3. Copilot, one of: (a) a Copilot token (the company default when the org does not bill Copilot CLI): create a fine-grained PAT owned by a user (a service account with its own Copilot seat is best), account permission **Copilot Requests**, and store it as the secret `SPECGUARD_COPILOT_TOKEN` in the calling repository or as an organization secret shared with it; (b) an org owner enables Copilot CLI and "Allow use of Copilot CLI billed to the organization", and no token is needed.
+
+Pass the token to the reusable workflow in either form (the secret is optional; without it Copilot uses the job token, i.e. (b)):
+
+```yaml
+    uses: ORG/SpecGuard/.github/workflows/specguard.yml@<full-commit-sha>
+    secrets: { copilot_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" }   # explicit
+    # secrets: inherit                                                   # or: passes all caller secrets; SPECGUARD_COPILOT_TOKEN is read by name
+```
 
 The caller job grants the permissions (a called workflow can only keep or reduce them): PR review `contents: read`, `pull-requests: write`, `issues: read`, `copilot-requests: write`; scan `contents: read`, `copilot-requests: write` (+ `issues: write` with `scan_issue`). Pin the reusable workflow by **full commit SHA**. It pins the action by SHA itself (the `# specguard-pin` line), so the caller's pin decides the exact SpecGuard code. After a change to `action.yml` or `src/`, run `node bin/pin-reusable.js` and commit (pass `owner/repo` as the second argument when your internal copy has another name). Inputs: `mode` (`pr` default or `scan`), `requirements_paths`, `standards_paths`, `test_paths`, `scan_issue`, `model`, `effort`. Fork and draft PRs are skipped inside the workflow.
 
@@ -269,8 +308,9 @@ on:
 concurrency: { group: "specguard-${{ github.event.pull_request.number }}", cancel-in-progress: true }
 jobs:
   review:
-    permissions: { contents: read, pull-requests: write, issues: read, copilot-requests: write }
+    permissions: { contents: read, pull-requests: write, issues: read, copilot-requests: write } # copilot-requests only for org billing; harmless with a Copilot token
     uses: ORG/SpecGuard/.github/workflows/specguard.yml@<full-commit-sha>
+    secrets: { copilot_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" } # omit when the org bills Copilot CLI
 ```
 
 ```yaml
@@ -284,9 +324,10 @@ jobs:
     permissions: { contents: read, issues: write, copilot-requests: write }
     uses: ORG/SpecGuard/.github/workflows/specguard.yml@<full-commit-sha>
     with: { mode: scan, scan_issue: true } # drop scan_issue and issues: write to keep results on the run page
+    secrets: { copilot_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" }
 ```
 
-**2 and 3. Central manual run.** See [Manual run](#manual-run-specguard-repo) for the environment, the App (preferred) or PAT, and `scan_issue` (default: an issue in the SpecGuard repo, so the target needs no write access). Choose the App when policy forbids personal tokens: its token is minted per job, limited to the one target repository, and revoked when the job ends. Install it on the target repositories only; a target in another organization needs the App installed there.
+**2 and 3. Central manual run.** See [Manual run](#manual-run-specguard-repo) for the environment, the App (preferred) or PAT, and `scan_issue` (default: an issue in the SpecGuard repo, so the target needs no write access). Copilot needs its own token in both: `SPECGUARD_COPILOT_TOKEN` in the `specguard` environment (the App or `SPECGUARD_PAT` is for reading the target only). Choose the App when policy forbids personal repository-read tokens (the Copilot token is still a user's PAT): its token is minted per job, limited to the one target repository, and revoked when the job ends. Install it on the target repositories only; a target in another organization needs the App installed there.
 
 **4. Job token.** The SpecGuard repo scanning itself, or a public repo.
 
@@ -401,7 +442,7 @@ Native CCR remains optional. Its comments cannot reconstruct the complete obliga
 
 ## Troubleshooting
 
-- "Could not complete" in the summary: the engine failed, timed out or returned invalid JSON; the job stays green and the `status` output is `failed`. Check the job log. Common causes are a missing `copilot-requests: write` permission or a Copilot policy that is not enabled.
+- "Could not complete" in the summary: the engine failed, timed out or returned invalid JSON; the job stays green and the `status` output is `failed`. Check the job log. Common causes: no usable Copilot token (set `SPECGUARD_COPILOT_TOKEN` / `copilot_token` when the organization does not bill Copilot CLI; a classic `ghp_` or org-owned PAT is rejected), a missing `copilot-requests: write` permission, a Copilot policy that is not enabled, or the token owner's quota used up. The summary names which one.
 - Fork and draft PRs are skipped: a fork's token is read-only and its code is untrusted.
 - Review not posted, with warning annotations (403/404): the token lacks `pull-requests: write`. Findings appear as annotations and in the job summary instead.
 - A false positive: open an issue with the finding, the cited rule or test line and why it is wrong. Add "do not report" rules to `REVIEW.md` meanwhile.

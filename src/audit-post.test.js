@@ -813,3 +813,11 @@ test('state: only the newest runs fit STATE_MAX; covered, long-ago blocks go fir
   assert.ok(back.blocks.filter((b) => b.status === 'gap').length === 311, 'all 310 carried gaps and this run\'s are kept');
   assert.ok(Buffer.byteLength(s.raw) < 40000, `${Buffer.byteLength(s.raw)} bytes`);
 });
+
+test('render: blocks skipped by rule are listed in their own collapsed block with the reason and do not change the counts', () => {
+  const data = verify(result([req()], {}), { read, cands: TWO() });
+  const ruled = [{ cid: '3333333c', path: 'docs/design.md', line: 9, text: '| Pilot run | 88% |', reason: 'results/data table row' }];
+  const md = render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 2, cap: 5, ruled });
+  assert.ok(md.includes('<details><summary>1 block was skipped by rule</summary>\n\n- [docs/design.md:9](https://github.com/o/r/blob/abc/docs/design.md#L9) `3333333c` \\| Pilot run \\| 88% \\| (skipped by rule: results/data table row)'), md);
+  assert.equal(md.replace(/<details><summary>1 block was skipped by rule[\s\S]*?<\/details>\n\n/, ''), render({ data, blob: 'https://github.com/o/r/blob/abc', candidates: 2, cap: 5 }), 'only the extra block differs');
+});

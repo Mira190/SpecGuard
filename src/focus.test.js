@@ -161,6 +161,29 @@ test('deleted files rank low, a requirement naming a file raises it, at most FOC
   assert.ok(r.skipped.some((f) => f.path === 'src/old.js'));
 });
 
+// "named by a requirement" is relative: a PR body that lists every changed file (PR #111) names them all, so the bonus must stop discriminating.
+const namedFixture = (named) => plan(ctx(Array.from({ length: 10 }, (_, i) => fileDiff(`src/m${i}.js`, { add: 70 })),
+  { 'requirements.md': named.map((i) => `Criterion: src/m${i}.js must validate\n`).join('') }), { FOCUS_FILES: '10' });
+const bonus = (r, p) => { const m = /named by a requirement[^+]*\+(\d\.\d)/.exec(r.chosen.find((f) => f.path === p).why.join(', ')); return m ? +m[1] : 0; };
+
+test('named bonus: all changed files named -> no bonus, said so in the components; 2 of 10 named -> they keep the full +3', () => {
+  const all = namedFixture([...Array(10).keys()]);
+  assert.equal(bonus(all, 'src/m0.js'), 0);
+  assert.match(all.chosen[0].why.join(', '), /named by a requirement \(10 of 10 changed files are named: bonus x0\.00\) \+0\.0/);
+  assert.equal(new Set(all.chosen.map((f) => f.score.toFixed(3))).size, 1, 'identical files score identically: naming no longer separates them');
+  const some = namedFixture([2, 7]);
+  assert.equal(bonus(some, 'src/m2.js'), 3);
+  assert.equal(bonus(some, 'src/m7.js'), 3);
+  assert.deepEqual(names(some).slice(0, 2).sort(), ['src/m2.js', 'src/m7.js']);
+  assert.ok(!some.chosen.find((f) => f.path === 'src/m0.js').why.some((w) => /named/.test(w)));
+  assert.doesNotMatch(some.chosen[0].why.join(), /changed files are named/, 'under half: no scaling note');
+});
+
+test('named bonus: above half it shrinks in proportion (6 of 10 -> x0.40 = +1.2); exactly half is not above half', () => {
+  assert.equal(bonus(namedFixture([0, 1, 2, 3, 4, 5]), 'src/m0.js'), 1.2);
+  assert.equal(bonus(namedFixture([0, 1, 2, 3, 4]), 'src/m0.js'), 3);
+});
+
 test('main: writes focus.txt, focus-skipped.txt and a numbered diff of the chosen files only; diff.patch is left whole; a small PR writes nothing', () => {
   const d = ctx(mixed(), { 'test-candidates.txt': candidates(new Set([5])) });
   const before = fs.readFileSync(path.join(d, 'diff.patch'), 'utf8');

@@ -914,3 +914,50 @@ test('requirementToCode: stop words leave the query, and cover is the share of t
   assert.ok(!withCover[0].hits.includes('the'), 'a stop word is not a query term');
   assert.ok(withCover.every((w) => w.path !== 'src/other.js' || w.cover < withCover[0].cover));
 });
+
+// ---- blocksOf prefilter: data and status blocks are marked up front (with a reason), real behaviour is kept ----
+const ruling = (md) => { const ruled = [], kept = T.blocksOf('docs/design.md', md, ruled); return { kept: kept.map((b) => b.text), ruled: ruled.map((b) => [b.text, b.reason]) }; };
+
+test('blocksOf prefilter: table rows that are mostly numbers, percentages, dates, links or checkmarks are data; a behaviour table row is kept', () => {
+  const r = ruling([
+    '# Design', '', '## Behaviour', '',
+    '| Case | Expected | Note |', '|---|---|---|',
+    '| Pilot run on Kite | 88% | 2026-10-07 |',
+    '| `abc1234` | 100% | [run](https://example.com/run/1) |',
+    '| Retry the failed upload | ✓ | 12/14 |',
+    '| Off | Off | No audio is recorded when both switches are off |',
+    '| Yes | No | The save button is disabled while a recording runs |',
+    '| Q7 | Does the team review agent PRs, and who decides? | N1 |', '',
+  ].join('\n'));
+  assert.deepEqual(r.ruled.map((x) => x[1]), ['results/data table row', 'results/data table row', 'results/data table row']);
+  assert.equal(r.kept.length, 3, r.kept.join(' // '));
+  assert.ok(r.kept.some((k) => /No audio is recorded/.test(k)) && r.kept.some((k) => /save button/.test(k)) && r.kept.some((k) => /Q7/.test(k)), 'yes/no and id cells are values, not data');
+});
+
+test('blocksOf prefilter: under a results/status heading a row goes only when it carries numbers, prose only under a bare status heading; a sub-heading keeps its blocks', () => {
+  const r = ruling([
+    '# Design', '', '## Status (2026-10-07)', '', 'The refactor below supersedes the v1 report contract and nothing else.', '', '### Evidence contract', '', 'The poster verifies every citation against the workspace files.', '',
+    '## Evaluation findings and decisions', '', '| Case | Expectation | Rows |', '|---|---|---|', '| mutation | The validator rejects a changed value with no test | 3 |', '| runs of the pilot | 12 | 340 ms |', '',
+    '## Notes on the evaluation', '', 'The harness retries a failed case twice before it grades.', '',
+  ].join('\n'));
+  assert.deepEqual(r.ruled.map((x) => [x[0].slice(0, 22), x[1]]), [['The refactor below sup', 'under a results/status/sources heading'], ['| runs of the pilot | ', 'results/data table row']]);
+  assert.ok(r.kept.some((k) => /poster verifies/.test(k)), 'the sub-heading of Status keeps its blocks');
+  assert.ok(r.kept.some((k) => /validator rejects/.test(k)), 'a row of expectations under an Evaluation heading stays');
+  assert.ok(r.kept.some((k) => /harness retries/.test(k)), 'a heading that merely mentions evaluation is not a status heading');
+});
+
+test('blocksOf prefilter: link-only items and verbless English labels go; an RFC 2119 word, a threshold, another script or any verb keeps the block', () => {
+  const r = ruling([
+    '# Design', '', '## Results', '', '| Latency | 120 ms | 130 ms | The service must stay below 200 ms |', '',
+    '## Links', '', '- [Design notes](notes/design.md)', '- [Spec](https://example.com/spec) and [API](https://example.com/api)', '- [Retry policy](retry.md): the client retries a failed call twice', '',
+    '## Misc', '', 'Node 20 locally vs 22 in CI.', '', 'Pilot repo: Kite (private), engine on a personal repo.', '', 'The client retries a failed call twice.', '', 'A/B detection >= 70% on the pilot set.',
+    '', '这是一个没有英文动词的中文说明段落，必须保留下来。', '', 'Retry policy and timeouts', '',
+  ].join('\n'));
+  assert.deepEqual(r.ruled.map((x) => x[1]), ['link list', 'link list', 'no verb, a label rather than behaviour', 'no verb, a label rather than behaviour']);
+  for (const k of ['must stay below 200 ms', 'the client retries', 'The client retries', 'A/B detection', '这是一个', 'Retry policy and timeouts']) assert.ok(r.kept.some((x) => x.includes(k)), `kept: ${k}`);
+});
+
+test('blocksOf without the ruled argument returns the kept blocks only', () => {
+  const md = '# Design\n\n| Pilot run on Kite | 88% | 2026-10-07 | 12/14 |\n\nThe tool must validate the input before it saves.\n';
+  assert.deepEqual(T.blocksOf('d.md', md).map((b) => b.text), ['The tool must validate the input before it saves.']);
+});

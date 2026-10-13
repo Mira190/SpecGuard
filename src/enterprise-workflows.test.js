@@ -18,14 +18,15 @@ test('specguard.yml: on workflow_call with exactly the core inputs, and no other
   assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['mode', 'requirements_paths', 'standards_paths', 'test_paths', 'scan_issue', 'model', 'effort']);
   assert.match(y, /^ {6}mode: \{[^}]*default: pr \}/m);
   assert.match(y, /^ {6}scan_issue: \{[^}]*type: boolean, default: false \}/m);
-  assert.doesNotMatch(y, /^ {4}secrets:/m, 'no secret is needed, so none is declared');
+  assert.match(y, /^ {4}secrets:\n {6}copilot_token: \{[^}]*required: false \}\n/m, 'the only secret is the optional Copilot token');
 });
 
-test('specguard.yml: caller token only, no PAT, no secret, no App token, no write permission asked', () => {
+test('specguard.yml: repository access is the caller job token; the only secret read is the optional Copilot PAT, forwarded to the action', () => {
   const y = reusable();
   assert.match(y, /github_token: \$\{\{ github\.token \}\}/);
-  assert.doesNotMatch(y, /secrets\./, 'the reusable path never reads a secret (the GITHUB_TOKEN is implicit)');
-  assert.doesNotMatch(y, /SPECGUARD_PAT|create-github-app-token|copilot_token|pull_request_target/);
+  assert.deepEqual([...y.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i).sort(), ['SPECGUARD_COPILOT_TOKEN', 'copilot_token']);
+  assert.match(y, /^ {10}copilot_token: \$\{\{ secrets\.copilot_token \|\| secrets\.SPECGUARD_COPILOT_TOKEN \}\}/m, 'explicit secrets: { copilot_token } or secrets: inherit');
+  assert.doesNotMatch(y, /SPECGUARD_PAT|create-github-app-token|pull_request_target/);
   assert.doesNotMatch(y, /^ *permissions: *write-all/m);
   assert.doesNotMatch(y, /^ *(contents|pull-requests|issues|actions|checks|statuses|id-token): write/m, 'it can only keep or reduce the caller\'s permissions, so it asks for none');
   assert.equal((y.match(/persist-credentials: false/g) || []).length, 1, 'the only checkout does not persist the token');
@@ -89,6 +90,22 @@ test('specguard-run.yml: the App token is minted only when both environment secr
   assert.equal(tokens.length, 3, 'resolve, checkout, action');
   for (const t of tokens) assert.equal(t, '${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}');
   assert.doesNotMatch(y, /^ +(SPECGUARD_APP_PRIVATE_KEY|PRIVATE_KEY): /m, 'the key reaches only the token action');
+});
+
+test('specguard-run.yml: Copilot runs on its own user-owned PAT from the environment (SPECGUARD_COPILOT_TOKEN), never on the repository-read token; org billing stays as the empty-secret fallback', () => {
+  const y = central(), jobs = y.slice(y.indexOf('\njobs:'));
+  const review = jobs.slice(jobs.indexOf('\n  review:'));
+  assert.equal((y.match(/copilot_token:/g) || []).length, 1);
+  assert.match(review, /^ {10}copilot_token: \$\{\{ secrets\.SPECGUARD_COPILOT_TOKEN \}\}/m, 'review job, action step');
+  assert.doesNotMatch(y, /copilot_token:[^\n]*SPECGUARD_PAT/, 'a repository-read PAT is org-owned and cannot carry Copilot Requests');
+  assert.match(review, /environment: specguard/);
+  assert.match(review, /copilot-requests: write/, 'org billing still works when no Copilot token is set');
+});
+
+test('specguard-run.yml and specguard.yml parse as YAML', () => {
+  const py = 'import sys,yaml\nfor f in sys.argv[1:]: yaml.safe_load(open(f,encoding="utf8"))\n';
+  const files = ['specguard-run.yml', 'specguard.yml'].map((f) => path.join(root, '.github', 'workflows', f));
+  try { execFileSync('python', ['-c', py, ...files], { stdio: 'pipe' }); } catch (e) { if (/No module named yaml|ENOENT/.test(String(e.stderr) + e.message)) return; throw e; }
 });
 
 test('specguard-run.yml: the scope step turns every accepted target spelling into owner and name', () => {

@@ -3,7 +3,7 @@
 // Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
 // Also SCAN_PATHS (scope globs), SCAN_ISSUE (rotate through the blocks), GH_TOKEN + GH_REPO (to read the scan issue's state when SCAN_ISSUE is true).
 // Writes audit-docs.txt, audit-candidates.txt (cid, path:line, heading, text: the blocks the model must assess this run), audit-evidence.txt (per block: up to 3 code and 3 test
-// locations found deterministically), audit-carried.txt (the blocks not audited this run), audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
+// locations found deterministically), audit-carried.txt (the blocks not audited this run), audit-ruled.txt (blocks the trace.js prefilter dropped: cid, path:line, heading, text, reason), audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
 const fs = require('node:fs');
 const os = require('node:os');
 const crypto = require('node:crypto');
@@ -76,16 +76,18 @@ function scopeFn(spec) {
 }
 
 // Every block of the admitted documents, in document order. cid = sha1(path, heading, normalised block text)[0..8]: stable while the block is unchanged, wherever it moves. A repeated block gets its own cid.
-function allBlocks(cwd, head, docs) {
+function allBlocks(cwd, head, docs, ruled = null) { // ruled (optional array) receives the blocks trace.js's prefilter dropped, with a `reason`: never audited, never counted against the cap
   const all = [], seen = new Set(), flat = (s) => s.replace(/\s+/g, ' ').trim();
   for (const p of docs) {
     let items = [];
-    try { items = blocksOf(p, git(cwd, ['show', `${head}:${p}`])); } catch { /* unreadable: the model still reads the document */ }
-    for (const i of items) {
+    const dropped = [];
+    try { items = blocksOf(p, git(cwd, ['show', `${head}:${p}`]), dropped); } catch { /* unreadable: the model still reads the document */ }
+    for (const i of [...items, ...dropped].sort((a, b) => a.line - b.line)) {
       const h = i.heading || '', t = normText(i.raw);
       let cid = sha8(p, h, t);
       for (let k = 2; seen.has(cid); k++) cid = sha8(p, h, t, `#${k}`);
       seen.add(cid);
+      if (i.reason) { if (ruled) ruled.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), reason: i.reason }); continue; }
       all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT) });
     }
   }
@@ -221,7 +223,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   const standards = files.filter((f) => listed.some((g) => matchGlob(f, g)) && !std.exc.some((g) => matchGlob(f, g)) && !OWN.some((g) => matchGlob(f, g)));
   const w = (n, s) => fs.writeFileSync(path.join(ctx, n), s);
   w('audit-docs.txt', docs.map((p) => `${p}\t${forced(p) ? 'requirements_paths' : 'discovered'}\n`).join(''));
-  const all = allBlocks(cwd, head, docs), notes = [];
+  const ruled = [], all = allBlocks(cwd, head, docs, ruled), notes = [];
   let changedDocs = null; // changed document -> the block cids it had at the last scanned head; null = unknown (no state, or the old head is not in this clone)
   if (prior && prior.head) {
     try {
@@ -240,13 +242,14 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   notes.push(`evidence candidates are capped at ${EV_PER} code and ${EV_PER} test locations per block`);
   w('audit-candidates.txt', cand.text);
   w('audit-evidence.txt', et.text);
+  w('audit-ruled.txt', ruled.map((c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\t${c.reason}\n`).join('')); // skipped by rule: listed in the report, not sent to the model
   w('audit-carried.txt', cand.carried.map((c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`).join(''));
   w('audit-rejected.txt', rejected.map(([p, why]) => `${p}\t${why}\n`).join(''));
   w('standards.txt', standards.map((f) => `${f}\n`).join(''));
   w('test-layout.txt', testLayout(inScope, testPaths));
   const rotation = { rotate, state: !!prior, picked: cand.fit.length, changed: cand.tally.d, confirming: cand.tally.c, new: cand.tally.n, oldest: cand.tally.o, carried: cand.carried.length };
   const evid = { blocks: cand.fit.length, with_code: et.withCode, with_tests: et.withTests, cut: ev.cut, files: ev.files };
-  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, cap_left: cand.left, limitations: [...limitations, ...notes],
+  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes],
     scope: lines(scanPaths).map((l) => l.trim()).filter(Boolean), rotation, evidence: evid }) + '\n');
   return { docs, rejected, standards, head, candidates: cand.total, picked: cand.fit.map((c) => c.cid), rotation, evidence: evid };
 }

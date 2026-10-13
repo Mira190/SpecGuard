@@ -144,8 +144,8 @@ test('known Copilot failures are classified from stderr: reason file, note with 
     ['Error: AI credits limit exceeded for this org', 'quota', /quota or budget exhausted/, false],
     ['Error: Access denied by policy settings', 'policy', /disabled by an organization or enterprise policy/, false],
     ['Error: Copilot is disabled by your organization', 'policy', /disabled by an organization/, false],
-    ['Error: 401 Unauthorized', 'auth', /cannot use Copilot/, true],
-    ['Error: No Copilot access for this account', 'auth', /cannot use Copilot/, true],
+    ['Error: 401 Unauthorized', 'auth', /cannot use Copilot: set SPECGUARD_COPILOT_TOKEN \(a user-owned fine-grained PAT with Copilot Requests\)/, true],
+    ['Error: No Copilot access for this account', 'auth', /cannot use Copilot: set SPECGUARD_COPILOT_TOKEN/, true],
     ['Error: 429 Too Many Requests', 'rate', /rate limit hit; the next push retries/, false],
     ['Error: rate limit reached', 'rate', /rate limit hit/, false],
   ];
