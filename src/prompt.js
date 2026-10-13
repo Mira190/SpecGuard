@@ -61,9 +61,11 @@ function statusBlock(ctxDir) {
   return block('requirements-status.json', render(), omitted ? `${omitted} of ${criteria.length} criteria omitted; Read requirements-status.json for the rest` : 'documents omitted: see requirements.md');
 }
 
-// Upper bound on the obligations the model is asked for, from the size of the change: clamp(8 + changed lines / 25, 8, 40). It bounds the ask
+// Upper bound on the obligations the model is asked for, from the size of the change: clamp(8 + changed lines / 25, 8, 40); focused review: clamp(6 + chosen files, 8, 20). It bounds the ask
 // (output length and the tail rows most at risk), never the poster: extra rows are accepted.
-const maxObligations = (diff) => Math.min(40, 8 + Math.floor(diff.split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l)).length / 25));
+const maxObligations = (diff, focusFiles) => focusFiles == null
+  ? Math.min(40, 8 + Math.floor(diff.split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l)).length / 25))
+  : Math.min(20, Math.max(8, 6 + focusFiles)); // focused review: a smaller ask, by the number of chosen files rather than the size of the PR
 
 const mapLine = (e) => `${e.path} applies to: ${e.scope.join(', ')}${e.unknown ? ' (scope unknown: no globs, not alwaysApply)' : ''}`;
 // Rule files the prompt cut off: their path is past the byte limit of standards.txt or of the inlined map (the model is told to Read the rest). Rule text itself is never inlined.
@@ -80,16 +82,16 @@ function standardsCut(ctxDir) {
 
 // Large PR (src/focus.js ran): the paths of the files chosen for review, else null. The prompt and the obligation cap then see only those.
 function focusSet(ctxDir) {
-  const names = read(ctxDir, 'focus.txt').split('\n').filter(Boolean).map((l) => l.split('\t')[0]);
-  return names.length ? new Set(names) : null;
+  const lines = read(ctxDir, 'focus.txt').split('\n').filter(Boolean);
+  return lines.length ? Object.assign(new Set(lines.map((l) => l.split('\t')[0])), { sources: lines.filter((l) => !l.includes('\tchanged test of ')).length }) : null;
 }
-const FOCUS_NOTE = `Large PR, focused review: the diff below holds only the highest-risk changed files (focus.txt), not the whole PR. Read at most about 20 files beyond the diff; stop searching once the obligations are settled; do not open files outside the chosen set except their tests and direct imports. The files under "Not in this review" are out of scope: assess and cite none of them.`;
+const FOCUS_NOTE = `Large PR, focused review: the diff below holds only the highest-risk changed files (focus.txt), not the whole PR. A chosen file's diff may stop after its first hunks (a marker line says how many changed lines are not shown): read the file for the rest. Read at most about 20 files beyond the diff; stop searching once the obligations are settled; do not open files outside the chosen set except their tests and direct imports. The files under "Not in this review" are out of scope: assess and cite none of them.`;
 
 function dynamic(ctxDir) {
   const empty = [], parts = [];
   const focus = focusSet(ctxDir);
   const patch = focus ? splitDiff(read(ctxDir, 'diff.patch')).filter((f) => focus.has(f.path)).map((f) => f.text).join('') : read(ctxDir, 'diff.patch');
-  if (nonEmpty(patch)) { const max = maxObligations(patch); parts.push(block('review-meta.json', JSON.stringify({ max_obligations: max, behaviour_reserved: Math.ceil(max / 2) }), 'computed from the size of the diff; at least behaviour_reserved obligations are changed-behaviour rows')); }
+  if (nonEmpty(patch)) { const max = maxObligations(patch, focus ? focus.sources : null); parts.push(block('review-meta.json', JSON.stringify({ max_obligations: max, behaviour_reserved: Math.ceil(max / 2) }), 'computed from the size of the diff; at least behaviour_reserved obligations are changed-behaviour rows')); }
   const add = (name, body, max, extraNote = '') => {
     if (!nonEmpty(body)) { empty.push(name); return; }
     const c = cut(body, max);
@@ -98,6 +100,7 @@ function dynamic(ctxDir) {
   add('files.txt', read(ctxDir, 'files.txt'), LIMITS.small);
   if (focus) {
     add('focus.txt', read(ctxDir, 'focus.txt'), LIMITS.small, 'the files chosen for this review, riskiest first: path, risk score, why');
+    add('focus-requirements.txt', read(ctxDir, 'focus-requirements.txt').split('\n').filter(Boolean).map((l) => l.split('\t')[0]).join('\n'), LIMITS.small, 'requirement changes (criteria): changed requirement documents, not review files; their changed blocks are already criteria');
     add('focus-skipped.txt', read(ctxDir, 'focus-skipped.txt').split('\n').filter(Boolean).map((l) => l.split('\t')[0]).join('\n'), LIMITS.small, 'Not in this review (large PR)');
   }
   add('standards.txt', read(ctxDir, 'standards.txt'), LIMITS.small);
