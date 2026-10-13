@@ -217,27 +217,84 @@ jobs:
 
 ## Manual run (SpecGuard repo)
 
-`.github/workflows/specguard-run.yml` runs SpecGuard on demand against **another repository** from the SpecGuard repo's Actions tab (`workflow_dispatch`). It is not shipped to target repos; their own workflow stays the `pull_request` one above. The form has one required field and four optional ones:
+`.github/workflows/specguard-run.yml` runs SpecGuard on demand against **another repository** from the SpecGuard repo's Actions tab (`workflow_dispatch`). It is not shipped to target repos; their own workflow stays the `pull_request` one above. The form has one required field and five optional ones:
 
 | Input | Meaning |
 |---|---|
 | `target` (required) | A **PR link** reviews that PR. A **repo link**, `owner/name` or a **branch (tree) link** runs the unit test gap scan of that branch (the default branch when the link names none). |
 | `design_docs`, `rules_docs`, `test_dirs` | Requirement/design documents, coding-standard documents and unit-test folders, one per line: repository paths, globs (`!` excludes), or github.com blob/tree links of the **same** repository. A folder (`docs/specs`) means everything under it. Empty = auto-discovery. They become `requirements_paths`, `standards_paths` and `test_paths`. |
 | `post_to_pr` | PR links only, default off: results stay on the run page. On: the normal review and summary comment are also posted to the target PR. |
+| `scan_issue` | Scans only: where the scan keeps its state. `specguard` (default): one issue per scanned repository in **this** repository, titled `SpecGuard: unit test gap scan: owner/name`, so the target needs no write access. `target`: the issue in the scanned repository (the token needs Issues write there). `none`: run page only, one-off. |
 
 Model and effort are not on the form: the run uses Copilot Auto with `auto_tier: intelligence`. To pick a model or effort, use the action in your own workflow (`model`, `effort` above).
 
-`src/resolve-inputs.js` turns the form into repository paths first. A link into another repository is rejected (copy the document into the target repository); a non-GitHub link (Confluence, Google Docs, ...) fails with "not readable from GitHub Actions; add the document to the repository or paste it". PR mode reviews an open PR (head and base from the API, checked out with `fetch-depth: 0`). With a token that can read the target, the resolver also looks up which part of a branch link is the branch name (branches may contain slashes: the longest existing branch or tag wins) and whether an extension-less path (`Makefile`, `docs/specs`) is a file or a folder; without access it reads the link literally (the first segment is the branch, a path without a trailing slash stays as given, so end a folder with `/`). Nothing is kept after the run (`ctx_retention_days` is `0`), and a scan has no issue.
+`src/resolve-inputs.js` turns the form into repository paths first. A link into another repository is rejected (copy the document into the target repository); a non-GitHub link (Confluence, Google Docs, ...) fails with "not readable from GitHub Actions; add the document to the repository or paste it". PR mode reviews an open PR (head and base from the API, checked out with `fetch-depth: 0`). With a token that can read the target, the resolver also looks up which part of a branch link is the branch name (branches may contain slashes: the longest existing branch or tag wins) and whether an extension-less path (`Makefile`, `docs/specs`) is a file or a folder; without access it reads the link literally (the first segment is the branch, a path without a trailing slash stays as given, so end a folder with `/`). No artifact is kept (`ctx_retention_days` is `0`); a scan keeps its state only in the scan issue chosen by `scan_issue`.
 
-**A manual scan is one-off.** The summary starts with "One-off scan: gaps are unconfirmed; schedule the scan in the target repo to confirm across runs." Two-run confirmation and "changed since the last scan" need state: put the [scan workflow](#unit-test-gap-scan-whole-repository) with `scan_issue: true` in the target repository on a schedule.
+**Confirming gaps across runs.** With `scan_issue: specguard` or `target` the issue keeps the per-block state, so re-running the manual scan (or scheduling it in the target, see [Enterprise setup](#enterprise-setup)) confirms gaps the same way as the scheduled scan. With `none` the summary starts with "One-off scan: gaps are unconfirmed".
 
 **Setup (do this once, in the SpecGuard repo).**
 
 1. Settings > Environments > New environment `specguard`. Under "Deployment branches and tags" choose **Selected branches and tags** and allow only `main`. Both jobs of the workflow run in this environment, so a branch that edits the workflow or `src/` and is dispatched cannot start the job, and the token is never exposed to code that is not on `main`.
-2. Put `SPECGUARD_PAT` in that environment's **secrets** (not in the repository secrets: the workflow never reads it outside the environment, and an environment secret of the same name would shadow a repository one anyway). The PAT is a fine-grained token whose resource owner is the target repos' owner, with **Contents: read, Issues: read, Pull requests: read** on the target repositories. Add **Pull requests: write** only if you will use `post_to_pr`. Without it the job token is used, which reads only the SpecGuard repository and public repositories. Copilot itself runs on the job token (`copilot-requests: write`). The checkout does not persist the token.
+2. Give the run read access to the targets, in the same environment's **secrets** (never the repository secrets). Preferred: a **GitHub App** (no personal token): secrets `SPECGUARD_APP_ID` (the App's Client ID or App ID) and `SPECGUARD_APP_PRIVATE_KEY`; the App needs **Contents, Pull requests and Issues: read** (add **Pull requests: write** for `post_to_pr`, **Issues: write** for `scan_issue: target`) and must be installed on the target repositories. Each job mints a one-hour installation token scoped to the single target repository with `actions/create-github-app-token`, read-only unless `post_to_pr` / `scan_issue: target` ask for write. Alternative: `SPECGUARD_PAT`, a fine-grained PAT whose resource owner is the target repos' owner with the same permissions. Order: App, else PAT, else the job token (this repository and public repositories only). Copilot itself always runs on the job token (`copilot-requests: write`), never on the App or PAT. The checkout does not persist the token.
 3. Keep the SpecGuard repository **private**, with access that is a subset of the access to every repository you point it at (collaborators who can already read the targets). The run page quotes the reviewed repository's code and requirement text, and anyone who can read the SpecGuard repo's Actions runs can read it (logs and summaries are kept 90 days). Artifacts are off for the same reason; do not add one.
 
 SpecGuard itself is checked out next to the target in a path that must not exist (`.specguard-src`), after the target, and the job fails if the reviewed repository already has a path of that name; the review ignores that folder.
+
+## Enterprise setup
+
+Which setup fits depends on where the code lives and who may hold a token. GitHub's `GITHUB_TOKEN` is scoped to the repository that runs the workflow: it cannot read another private or internal repository, even in the same organization or enterprise, and the "Access" setting below does not change that. A PAT-free setup therefore runs SpecGuard **in the repository under review**; reading other repositories needs a GitHub App or a PAT.
+
+| | 1. Reusable workflow in the target repo (recommended) | 2. Central manual run with a GitHub App | 3. Central manual run with a fine-grained PAT | 4. Same repo or public repos, job token |
+|---|---|---|---|---|
+| Runs | in the target repo: PR review, on-demand scan, scheduled scan | in the SpecGuard repo, on demand: PR or whole-repo scan of any repo the App is installed on | same as 2 | in the SpecGuard repo, only for it and public repos |
+| Token | the target's own `GITHUB_TOKEN`: **no PAT, no secret** | App installation token, one repo, one hour | PAT in the `specguard` environment | job token |
+| Needs | SpecGuard repo Access setting (below); the caller job grants the permissions | an App (Contents, Pull requests, Issues read) installed on the targets; two environment secrets | PAT with the same read scopes, rotation by its owner | nothing |
+| Copilot billed to | the org that owns the target repo (policy "Allow use of Copilot CLI billed to the organization") | the org that owns the SpecGuard repo | same as 2 | same as 2 |
+| Security | run pages and artifacts are visible to that repo's readers only | run pages and scan issues in the SpecGuard repo quote target code: keep it private, access no wider than the targets' | the PAT reads everything it was granted: smallest scope, short expiry | none beyond 2 |
+
+**1. Reusable workflow (recommended).** Org settings, once:
+
+1. In the SpecGuard repo: Settings > Actions > General > **Access** > "Accessible from repositories in the '*ORG*' organization" (for an organization owned by an enterprise, the enterprise option). It lets workflows of other repositories **use** the repository's actions and reusable workflows; the runner fetches them with a read token that expires after an hour. It does not let those repositories' `GITHUB_TOKEN` read the code, which is why SpecGuard is used by `uses:` and never checked out by the caller. Outside collaborators on a calling repository can see its run logs.
+2. In the calling organization (Settings > Actions > General) allow the actions in use: `actions/*` (checkout, github-script, setup-node, upload-artifact) and the SpecGuard repository, or actions from your enterprise. "Allow only actions and reusable workflows in this organization" also blocks GitHub's own actions.
+3. Copilot: an org owner enables Copilot CLI and "Allow use of Copilot CLI billed to the organization".
+
+The caller job grants the permissions (a called workflow can only keep or reduce them): PR review `contents: read`, `pull-requests: write`, `issues: read`, `copilot-requests: write`; scan `contents: read`, `copilot-requests: write` (+ `issues: write` with `scan_issue`). Pin the reusable workflow by **full commit SHA**. It pins the action by SHA itself (the `# specguard-pin` line), so the caller's pin decides the exact SpecGuard code. After a change to `action.yml` or `src/`, run `node bin/pin-reusable.js` and commit (pass `owner/repo` as the second argument when your internal copy has another name). Inputs: `mode` (`pr` default or `scan`), `requirements_paths`, `standards_paths`, `test_paths`, `scan_issue`, `model`, `effort`. Fork and draft PRs are skipped inside the workflow.
+
+```yaml
+# .github/workflows/specguard.yml in the target repo: PR review
+name: SpecGuard
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+concurrency: { group: "specguard-${{ github.event.pull_request.number }}", cancel-in-progress: true }
+jobs:
+  review:
+    permissions: { contents: read, pull-requests: write, issues: read, copilot-requests: write }
+    uses: ORG/SpecGuard/.github/workflows/specguard.yml@<full-commit-sha>
+```
+
+```yaml
+# .github/workflows/specguard-scan.yml in the target repo: on demand and weekly (a schedule runs on the default branch)
+name: SpecGuard scan
+on:
+  workflow_dispatch:
+  schedule: [{ cron: "0 6 * * 1" }]
+jobs:
+  scan:
+    permissions: { contents: read, issues: write, copilot-requests: write }
+    uses: ORG/SpecGuard/.github/workflows/specguard.yml@<full-commit-sha>
+    with: { mode: scan, scan_issue: true } # drop scan_issue and issues: write to keep results on the run page
+```
+
+**2 and 3. Central manual run.** See [Manual run](#manual-run-specguard-repo) for the environment, the App (preferred) or PAT, and `scan_issue` (default: an issue in the SpecGuard repo, so the target needs no write access). Choose the App when policy forbids personal tokens: its token is minted per job, limited to the one target repository, and revoked when the job ends. Install it on the target repositories only; a target in another organization needs the App installed there.
+
+**4. Job token.** The SpecGuard repo scanning itself, or a public repo.
+
+GitHub Enterprise Server: the setup avoids the `job.workflow_*` context values that GHES lacks, but needs the actions it uses available on the instance (`create-github-app-token` runs on node24, so the runner must support it) and Copilot CLI with `copilot-requests` on your version. Check these before rolling out; they are not verified here.
+
+## External documents (planned)
+
+Requirement documents in Confluence or other internal sites are not fetched today: a non-GitHub link fails with "not readable from GitHub Actions". The plan is a site token secret in the `specguard` environment and a fetch step that converts the page to Markdown before the run, handled as operator-trusted requirement documents. Until then, paste the content into the repository or commit it as Markdown.
 
 ## Standards evidence
 

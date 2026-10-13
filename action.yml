@@ -31,7 +31,9 @@ inputs:
   mode: { description: "pr (review a pull request) | scan (unit test gap scan: find behaviour in the design documents of the checked-out repository that lacks unit-test evidence; run it on the default branch, on demand or on a schedule). audit is accepted as an alias of scan.", default: pr }
   scan_max_blocks: { description: "Scan mode: most document blocks audited per run (integer 1-500; empty = 80). With scan_issue: true the runs rotate through all blocks (changed documents, gaps to confirm, never-audited blocks, then the least recently audited); without it the first blocks in document order.", default: "" }
   scan_paths: { description: "Scan mode: newline-separated globs (! excludes) that restrict both the requirement documents and the code and tests searched for evidence to a subtree, for a monorepo package (empty = the whole repository). The scan issue is per scope.", default: "" }
-  scan_issue: { description: "Scan mode: true to also create or update one issue titled 'SpecGuard: unit test gap scan' (with scan_paths: '... (<scope>)'; needs issues write; empty = false). It holds the state that lets runs confirm gaps and rotate through all blocks.", default: "" }
+  scan_issue: { description: "Scan mode: true to also create or update one issue titled 'SpecGuard: unit test gap scan' (with scan_paths: '... (<scope>)'; with scan_issue_repo: '...: owner/name', before the scope; needs issues write; empty = false). It holds the state that lets runs confirm gaps and rotate through all blocks.", default: "" }
+  scan_issue_repo: { description: "Scan mode with scan_issue: owner/name of the repository that holds the scan issue (title ends with the scanned repository). Empty = the scanned repository. For a manual run that scans another repository and keeps its state in this one.", default: "" }
+  scan_issue_token: { description: "Token for that issue (issues write on scan_issue_repo). Empty = github_token.", default: "" }
   audit_max_requirements: { description: "Deprecated alias of scan_max_blocks (scan_max_blocks wins when both are set).", default: "" }
   audit_issue: { description: "Deprecated alias of scan_issue (scan_issue wins when both are set).", default: "" }
   delivery: { description: "pr (post the review and the summary comment to the PR) | summary (job summary only; nothing is written to the PR). For runs that review another repository (.github/workflows/specguard-run.yml).", default: pr }
@@ -234,12 +236,15 @@ runs:
         AUDIT_ISSUE: ${{ inputs.audit_issue }} # deprecated alias; the new name wins
         TARGET_REPO: ${{ inputs.repository }}
         TARGET_SHA: ${{ inputs.head_sha }}
+        ISSUE_REPO: ${{ inputs.scan_issue_repo }}
+        ISSUE_TOKEN: ${{ inputs.scan_issue_token }}
       with:
         github-token: ${{ inputs.github_token }}
         retries: 3
         script: |
           const env = process.env
-          await require(env.ACTION_PATH + '/src/audit-post.js')({ github, context: require(env.ACTION_PATH + '/src/target.js').withTarget(context, env), core })
+          // the scan issue may live in another repository (scan_issue_repo) under its own token; every read of the scanned repository uses github_token
+          await require(env.ACTION_PATH + '/src/audit-post.js')({ github, issueGithub: env.ISSUE_TOKEN ? getOctokit(env.ISSUE_TOKEN) : github, context: require(env.ACTION_PATH + '/src/target.js').withTarget(context, env), core })
 
     - if: ${{ !cancelled() && steps.mode.outputs.mode == 'scan' && inputs.ctx_retention_days != '0' }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
