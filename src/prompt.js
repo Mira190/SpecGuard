@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Single source of truth for the CI reviewer prompt (used by action.yml, eval/local.js and eval/replay.js).
-// Layout: STATIC prefix (skill + only the references that can matter + schema for engines without --json-schema), identical across PRs of the same class
+// Layout: STATIC prefix (skill + only the references that can matter + the schema), identical across PRs of the same class
 // and therefore cacheable, then the per-PR DYNAMIC part (context inlined as delimited untrusted-data blocks).
 const fs = require('node:fs');
 const path = require('node:path');
 
 const LIMITS = { diff: 40 * 1024, requirements: 8 * 1024, status: 6 * 1024, index: 6 * 1024, trace: 8 * 1024, small: 4 * 1024, cands: 16 * 1024 };
-// Total worst case stays well under the 128 KiB single-argument limit that `claude -p "$PROMPT"` hits on Linux.
+// Total worst case is about 128 KiB; copilot-run.sh pipes it on stdin, so no single-argument limit applies.
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
 const read = (dir, name) => { try { return lf(fs.readFileSync(path.join(dir, name), 'utf8')); } catch { return ''; } };
@@ -115,7 +115,7 @@ function dynamic(ctxDir) {
   return { parts, empty };
 }
 
-function assemble({ skillDir, ctxDir, schemaPath, engine = 'claude' }) {
+function assemble({ skillDir, ctxDir, schemaPath }) {
   const trace = traceNeeded(ctxDir);
   const standards = nonEmpty(read(ctxDir, 'standards.txt'));
   const skill = lf(fs.readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).split('\n');
@@ -131,10 +131,7 @@ function assemble({ skillDir, ctxDir, schemaPath, engine = 'claude' }) {
   }
   if (omitted.length) out += `\n\nReferences not included because they cannot matter for this PR: ${omitted.join('; ')}.`;
 
-  // claude gets the schema through --json-schema (a structured-output tool whose input schema it already sees), so the prompt does not repeat it.
-  out += engine === 'copilot'
-    ? `\n\nYour final answer must be JSON only, matching this schema: ${JSON.stringify(JSON.parse(fs.readFileSync(schemaPath, 'utf8')))}`
-    : '\n\nYour final answer must be the JSON object of the structured-output tool, whose schema is enforced there.';
+  out += `\n\nYour final answer must be JSON only, matching this schema: ${JSON.stringify(JSON.parse(fs.readFileSync(schemaPath, 'utf8')))}`;
 
   const example = read(refsDir, 'example.json').trim();
   if (example) out += `\n\nExample of a complete valid answer; copy its shape. Fields it leaves out (\`change\`, \`alignment\` on a row that links no requirement, \`layer\` of a unit test, \`kind\`, \`proves\`, a collected criterion's \`source\` and \`quote\`) are optional:\n${example}`;
@@ -154,13 +151,11 @@ Reminder: output only the JSON object matching the schema.\n`;
 }
 
 // Audit mode (no diff): the same untrusted-data framing around the admitted documents, rule files and test layout the collector wrote.
-function assembleAudit({ skillDir, ctxDir, schemaPath, engine = 'claude' }) {
+function assembleAudit({ skillDir, ctxDir, schemaPath }) {
   const skill = lf(fs.readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).split('\n');
   const close = skill.findIndex((l, i) => i > 0 && l === '---');
   let out = strip(skill.slice(close + 1).join('\n'), { trace: false }).replace(/\n+$/, '');
-  out += engine === 'copilot'
-    ? `\n\nYour final answer must be JSON only, matching this schema: ${JSON.stringify(JSON.parse(fs.readFileSync(schemaPath, 'utf8')))}`
-    : '\n\nYour final answer must be the JSON object of the structured-output tool, whose schema is enforced there.';
+  out += `\n\nYour final answer must be JSON only, matching this schema: ${JSON.stringify(JSON.parse(fs.readFileSync(schemaPath, 'utf8')))}`;
   const parts = [], empty = [], dir = ctxDir.replace(/\\/g, '/');
   let meta = { max_requirements: 80 };
   try { const m = JSON.parse(read(ctxDir, 'audit-meta.json')); meta = { max_requirements: m.max_requirements || 80, ...(Number.isInteger(m.candidates) ? { candidates: m.candidates, candidates_listed: m.candidates_listed } : {}) }; } catch {}
@@ -188,12 +183,12 @@ Reminder: output only the JSON object matching the schema.
 
 function main(argv) {
   const { values: o } = require('node:util').parseArgs({ args: argv, options: {
-    skill: { type: 'string' }, ctx: { type: 'string' }, schema: { type: 'string' }, engine: { type: 'string', default: 'claude' }, mode: { type: 'string', default: 'pr' } } });
-  if (!o.skill || !o.ctx || !o.schema || !['claude', 'copilot'].includes(o.engine) || !['pr', 'audit'].includes(o.mode)) {
-    console.error('Usage: node src/prompt.js --skill <dir> --ctx <dir> --schema <file> [--engine claude|copilot] [--mode pr|audit]');
+    skill: { type: 'string' }, ctx: { type: 'string' }, schema: { type: 'string' }, mode: { type: 'string', default: 'pr' } } });
+  if (!o.skill || !o.ctx || !o.schema || !['pr', 'audit'].includes(o.mode)) {
+    console.error('Usage: node src/prompt.js --skill <dir> --ctx <dir> --schema <file> [--mode pr|audit]');
     return 2;
   }
-  process.stdout.write((o.mode === 'audit' ? assembleAudit : assemble)({ skillDir: o.skill, ctxDir: o.ctx, schemaPath: o.schema, engine: o.engine }));
+  process.stdout.write((o.mode === 'audit' ? assembleAudit : assemble)({ skillDir: o.skill, ctxDir: o.ctx, schemaPath: o.schema }));
   return 0;
 }
 

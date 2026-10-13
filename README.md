@@ -2,7 +2,7 @@
 
 A GitHub Action that reviews pull requests for missing or weak unit tests. It maps the linked issue's acceptance criteria and the changed behaviour to test obligations, checks the repo's own coding standards, and flags logic that is only covered by integration tests but belongs in unit tests. The goal is to catch gaps on the PR, before QA does. It is advisory: it posts `COMMENT` reviews and never blocks a merge.
 
-Coding standards come from your repo (Copilot/Claude/agent instruction files, `REVIEW.md`, `CONTRIBUTING.md`, `.editorconfig`). SpecGuard applies a framework-independent test-evidence rubric and reports which rules and test layers it assessed.
+Coding standards come from your repo (Copilot/CLAUDE.md/agent instruction files, `REVIEW.md`, `CONTRIBUTING.md`, `.editorconfig`). SpecGuard applies a framework-independent test-evidence rubric and reports which rules and test layers it assessed.
 
 ## Quick start
 
@@ -64,10 +64,9 @@ It is always the adopting repo's owner or org, never the action author's quota.
 
 | Engine | Org repo | Personal repo |
 |---|---|---|
-| Copilot CLI (default) | the org, via the policy above | the owner's Copilot plan |
-| Claude Code | the token owner's Claude subscription, or the API key | same |
+| Copilot CLI | the org, via the policy above | the owner's Copilot plan |
 
-Copilot usage is token-based, so cost grows with agent turns. Claude runs are capped by `max_budget_usd` and `max_turns`. The PR diff, PR and linked-issue text and any repo files the model reads are sent to GitHub Copilot or Anthropic, depending on the engine. The Copilot step unsets a job-level `GH_TOKEN` (Copilot CLI would prefer it over the job token and hijack the auth).
+Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR and linked-issue text and any repo files the model reads are sent to GitHub Copilot. The Copilot step unsets a job-level `GH_TOKEN` (Copilot CLI would prefer it over the job token and hijack the auth).
 
 ## Rolling out in a company
 
@@ -85,26 +84,22 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 
 - **Cost control:** put the Copilot usage in a cost center with a budget and "stop usage when budget is reached", and lower `copilot_max_ai_credits` (the worst case per push is about twice the cap: one turn plus one repair turn). Limit triggers: `ready_for_review` only instead of every `synchronize`, or a label gate in the job `if:`. There is no incremental review: every run reviews the whole PR diff.
 - **Data handling:** Copilot content exclusion is not enforced by SpecGuard. Mirror excluded paths into `ignore` and set `ctx_retention_days: 0`: the `specguard-ctx` artifact holds the diff, prompt context and raw engine output, and anyone who can read the repository's Actions runs can download it (set `0` on public repositories).
-- **Runner requirements:** bash, GNU `timeout`, git, node (installed by the Action), and reachability of the npm registry and the Copilot (or Anthropic) endpoints. Self-hosted runners behind a proxy need both allow-listed.
-- **Supply chain:** the Action pins its CLI versions (`copilot_version`, `claude_version`) and its third-party actions by SHA.
+- **Runner requirements:** bash, GNU `timeout`, git, node (installed by the Action), and reachability of the npm registry and the Copilot endpoints. Self-hosted runners behind a proxy need both allow-listed.
+- **Supply chain:** the Action pins its CLI versions (`copilot_version`) and its third-party actions by SHA.
 
 ## Configuration
 
 | Input | Default | Meaning |
 |---|---|---|
-| `engine` | `auto` | `auto`, `copilot` or `claude`. `auto` picks Claude when a Claude credential is passed, else Copilot. |
-| `claude_code_oauth_token` | | From `claude setup-token`. Selects Claude. |
-| `anthropic_api_key` | | Alternative Claude credential. |
+| `engine` | `copilot` | The review engine. Only `copilot` is enabled; the input is the extension point for others (any other value fails the step). |
 | `copilot_token` | | Fine-grained PAT (Copilot Requests), only if the job token cannot be used. |
 | `github_token` | `github.token` | Needs `pull-requests: write`. |
-| `model` | engine default | Model name passed to the CLI (`auto` or a name of letters, digits and `. _ : [ ] -`). Copilot: the models you can use depend on the token owner's Copilot plan (Free/Student: `auto` only); an unavailable model falls back to `auto` once, and the summary says so. |
-| `effort` | engine default | `low`, `medium`, `high`, `xhigh` or `max`. Claude: `--effort`. Copilot: `--reasoning-effort`, passed only with an explicit non-`auto` model (Free and Student plans can only use `auto`, so effort never applies there; the summary notes "effort ignored: model auto"). |
+| `model` | Copilot default | Model name passed to the Copilot CLI (`auto` or a name of letters, digits and `. _ : [ ] -`). Copilot: the models you can use depend on the token owner's Copilot plan (Free/Student: `auto` only); an unavailable model falls back to `auto` once, and the summary says so. |
+| `effort` | Copilot default | `low`, `medium`, `high`, `xhigh` or `max`. Passed to Copilot as `--reasoning-effort`, only with an explicit non-`auto` model (Free and Student plans can only use `auto`, so effort never applies there; the summary notes "effort ignored: model auto"). |
 | `auto_tier` | `intelligence` | Copilot Auto routing profile when `model` is empty or `auto`: `intelligence` (default), `balance`, `efficiency`, or empty to omit. Ignored with a note if rejected; does not change which models your plan offers. |
 | `fast_models` | | Extra model names treated as fast tier: exact names or `/regex/`, one per line or comma separated. Built-in: flash, mini, haiku, nano, lite, small. |
 | `copilot_max_ai_credits` | `60` | Copilot soft cap on AI credits per turn, integer 30-2000. A run is one turn plus at most one repair turn on the same session, so the worst case per push is about twice this. |
-| `max_turns` | `30` | Agent turn cap (Claude only). |
-| `max_budget_usd` | `2` | Spend cap per run (Claude only). |
-| `review_timeout_minutes` | `12` | Engine time limit, a positive integer, for both engines (a timeout is reported as such, not as a green review). The job `timeout-minutes` must exceed it by at least 3. |
+| `review_timeout_minutes` | `12` | Engine time limit, a positive integer (a timeout is reported as such, not as a green review). The job `timeout-minutes` must exceed it by at least 3. |
 | `max_comments` | `10` | Max inline comments (hard cap 30). |
 | `max_diff_kb` | `300` | Above this the diff is cut at file boundaries: whole files that fit are reviewed, the dropped files are listed, and the run is marked incomplete. |
 | `ignore` | | Extra ignore globs, one per line, added to the defaults (lockfiles, `dist/`, `build/`, `vendor/`, `node_modules/`, minified files, snapshots, generated code such as `*.pb.go` and `*.g.cs`, non-standard `.md`). |
@@ -118,18 +113,9 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `ctx_retention_days` | `1` | Days to keep the `specguard-ctx-<PR>-<attempt>` artifact (diff, prompt context and raw engine output, for diagnosing a failed review). Anyone who can read the repo's Actions runs can download it: set `0` (no upload) on public repositories and wherever the diff must not be stored. |
 | `resolve_stale` | `true` | After a complete review (diff not truncated, engine finished, requirement collection and comment delivery not degraded; an incomplete run says so in the summary), resolves SpecGuard's own review threads that have no replies and whose finding is no longer reported anywhere, including the summary (at most 20 per run). Resolving threads needs a token allowed to resolve review threads: the default `GITHUB_TOKEN` with `pull-requests: write` was refused in a live run ("Resource not accessible by integration"), so either pass a `github_token` that can (e.g. a fine-grained PAT with Pull requests: write; adding `contents: write` to the job is unverified), or rely on the summary's "Since earlier reviews" line; when the token is refused the summary says the threads were left open. Failures never fail the run. `false` disables it. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
-| `claude_version` | `2.1.290` | Pinned `@anthropic-ai/claude-code` (>= 2.1.205). |
 | `mode` | `pr` | `pr` reviews a pull request; `audit` audits the checked-out repository against its requirement documents. See [Audit mode](#audit-mode). |
 | `audit_max_requirements` | `80` | Audit mode: most document blocks audited per run, taken in document order; the rest are listed under not reviewed (integer 1-500). |
 | `audit_issue` | `false` | Audit mode: `true` also creates or updates one issue titled "SpecGuard requirements audit" (needs `issues: write`). |
-
-Claude engine:
-
-```yaml
-      - uses: Mira190/SpecGuard@<full-commit-sha>
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-```
 
 ## Audit mode
 
@@ -163,7 +149,7 @@ jobs:
 
 The result is the job summary: one line per document block (link, text, block status, and its sub-rows' statuses; a block is a `gap` when any sub-row is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise) with counts by block status, the per-sub-row evidence in a collapsed table per document, the candidate documents that were not admitted ("add to `requirements_paths` to include"), and what was not reviewed (skipped documents, rows whose citation did not verify, the `audit_max_requirements` cap). Every citation is checked against the file at HEAD: a requirement whose quote is not found is moved to "not reviewed"; test or code evidence that is not found is removed and a `covered` row becomes `unknown`. `audit.json` (the validated result) stays in the `specguard-audit-<attempt>` artifact (`ctx_retention_days`). Reporting is per block and confirmed across runs, because a model's detail varies from run to run (the same commit audited twice agreed on a block's gap about two times in three, and on individual sub-rows far less): with `audit_issue: true` the issue keeps a hidden per-block state, a gap is listed as **confirmed** only when the block was a gap in this run and the previous one (otherwise "new gap, unconfirmed"), a confirmed gap that is covered is "resolved? recheck next run" until it is covered twice, and "Changed since last audit" lists only those two-run-stable changes plus a count of unstable blocks. Schedule the audit weekly so each run confirms the last; without `audit_issue` every gap stays unconfirmed. With `audit_issue: true` the same report is written to a single issue (found by a hidden marker and authored by this action; whole rows are dropped, never cut, to fit GitHub's body limit).
 
-Cost: the model reads every admitted document in full (at most 60), so an audit uses far more tokens than a PR review. Cap it with `copilot_max_ai_credits` (per turn) or `max_budget_usd` and `max_turns` (Claude, raise them for large repositories), lower `audit_max_requirements`, narrow the documents with `requirements_paths` (`!glob` excludes), and raise `review_timeout_minutes` and the job `timeout-minutes` for large repositories.
+Cost: the model reads every admitted document in full (at most 60), so an audit uses far more tokens than a PR review. Cap it with `copilot_max_ai_credits` (per turn), lower `audit_max_requirements`, narrow the documents with `requirements_paths` (`!glob` excludes), and raise `review_timeout_minutes` and the job `timeout-minutes` for large repositories.
 
 ## Standards evidence
 
@@ -264,7 +250,7 @@ Native CCR remains optional. Its comments cannot reconstruct the complete obliga
 
 ## Security model
 
-`pull_request` only (never `pull_request_target`). No PR code is executed. The agent has read tools only, and rule and agent-config files are restored from the base commit so a PR cannot weaken its own rules or run its own hooks. CLI versions and third-party actions are pinned. The Claude step gets no GitHub token; the Copilot step authenticates with the job token, which also carries `pull-requests: write`, but the model only has view, glob and grep. All findings are filtered to the diff, redacted and capped before posting. The action refuses to run if `COPILOT_ALLOW_ALL` or `GITHUB_COPILOT_PROMPT_MODE_*` is set.
+`pull_request` only (never `pull_request_target`). No PR code is executed. The agent has read tools only, and rule and agent-config files are restored from the base commit so a PR cannot weaken its own rules or run its own hooks. CLI versions and third-party actions are pinned. The Copilot step authenticates with the job token, which also carries `pull-requests: write`, but the model only has view, glob and grep. All findings are filtered to the diff, redacted and capped before posting. The action refuses to run if `COPILOT_ALLOW_ALL` or `GITHUB_COPILOT_PROMPT_MODE_*` is set.
 
 ## How it works
 

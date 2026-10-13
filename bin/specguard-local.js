@@ -93,10 +93,11 @@ async function run({ cwd = process.cwd(), opts = {}, log = (m) => console.error(
     else if (canned) fs.copyFileSync(canned, path.join(ctx, 'findings.json'));
     else {
       log('running Copilot (this takes a few minutes and spends AI credits)...');
-      const prompt = assemble({ skillDir: path.join(ROOT, 'skills', 'test-review'), ctxDir: ctx, schemaPath: path.join(ROOT, 'src', 'findings.schema.json'), engine: 'copilot' });
-      // copilot-run.sh passes the prompt as `copilot -p "$PROMPT"`; Windows caps a command line at ~32K characters (8K through a .bat shim)
-      if (process.platform === 'win32' && prompt.length > 30000) throw new Error(`the review prompt is ${prompt.length} characters, over the Windows command-line limit that copilot -p hits; run this under WSL or Linux`);
-      const engineEnv = { ...process.env, CTX: fwd(ctx), PROMPT: prompt, MODEL: opts.model || '', EFFORT: opts.effort || '' };
+      const prompt = assemble({ skillDir: path.join(ROOT, 'skills', 'test-review'), ctxDir: ctx, schemaPath: path.join(ROOT, 'src', 'findings.schema.json') });
+      // copilot-run.sh pipes the prompt file to copilot on stdin: no command-line or environment limit, so this works on Windows too (it needs bash: Git for Windows)
+      const promptFile = path.join(ctx, 'prompt.txt');
+      fs.writeFileSync(promptFile, prompt);
+      const engineEnv = { ...process.env, CTX: fwd(ctx), PROMPT_FILE: fwd(promptFile), MODEL: opts.model || '', EFFORT: opts.effort || '' };
       if (opts['auto-tier'] !== undefined) engineEnv.AUTO_TIER = opts['auto-tier']; // unset = copilot-run.sh's default (intelligence), like the action
       const e = spawnSync('bash', [fwd(path.join(ROOT, 'src', 'copilot-run.sh'))], { cwd: wt, env: engineEnv, stdio: ['ignore', 2, 2] });
       if (e.status !== 0) log(`copilot-run.sh exited ${e.status}`); // post.js reports "could not complete"

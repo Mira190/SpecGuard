@@ -6,7 +6,7 @@ The refactor below supersedes the v1 report contract. The remaining v1 sections 
 
 ### Evidence contract refactor
 
-The default remains the direct Agent GitHub Action (Copilot CLI or Claude), advisory only. Native CCR is optional: its sparse comments cannot reconstruct a complete requirements/evidence table, so no hybrid coverage gate is introduced.
+The default remains the direct Agent GitHub Action (Copilot CLI), advisory only. Native CCR is optional: its sparse comments cannot reconstruct a complete requirements/evidence table, so no hybrid coverage gate is introduced.
 
 - Each obligation has a unique ID, requirement source, changed-behaviour citation, assertion evidence with a test layer, status and reasoning. Findings reference obligation IDs; missing/weak rows require one matching finding.
 - Unit evidence is distinct from component/integration/e2e evidence. Higher-layer-only obligations may get a pushdown finding when a suitable public seam exists; integration responsibilities remain.
@@ -33,7 +33,7 @@ What this does not show:
 - Fixtures are seeded, not real PRs, and each case ran 1-3 times. Model routing under `auto` varies between runs.
 - After inspecting each failure, genuinely untested behaviour the model reported was added to that case's `acceptable` list and the runs were regraded without new model calls. Seeded expectations were never removed.
 - Large PRs: recall drops (the model stops after about 10 findings). Split large PRs or raise `max_comments`; a per-module review pass is the upgrade path.
-- Not verified live: the org-billing path, the Claude engine, native CCR mode. Cost is not measured, because the billing API does not itemise Copilot AI Credits.
+- Not verified live: the org-billing path, native CCR mode. Cost is not measured, because the billing API does not itemise Copilot AI Credits.
 
 ## 0. Original Goal (verbatim, do not edit)
 
@@ -50,7 +50,7 @@ What this does not show:
 - **Purpose: shift QA left.** Missing or weak unit tests should be caught on the PR, before QA sees the build.
 - **v1 is one generic, reusable action.** It assumes no language, framework, or target repo. A repo adopts it with one workflow file.
 - **The standard comes from the repo itself**: its Copilot / Claude / agent instruction files. Style is inferred from existing code only when the repo has none. SpecGuard brings no rules of its own.
-- **AI is billed to the repo owner.** Default engine is GitHub Copilot via the built-in `GITHUB_TOKEN`, billed to the org, or to the owner's seat for a personal repo. The alternative engine is Claude, billed to the owner's Claude subscription. No SpecGuard-owned key.
+- **AI is billed to the repo owner.** The engine is GitHub Copilot via the built-in `GITHUB_TOKEN`, billed to the org, or to the owner's seat for a personal repo. No SpecGuard-owned key.
 - **Advisory only.** v1 posts `COMMENT` reviews and never fails or blocks a PR because of findings.
 - **Reuse before writing.** Section 4 lists the prior art that was checked and what each item contributes.
 
@@ -85,7 +85,7 @@ Each design decision maps to one factor of review value:
 A composite GitHub Action (`uses: <owner>/specguard@v1`) plus a copy-paste workflow (in the README). On every same-repo PR it runs three steps:
 
 1. **Collect** (deterministic, no AI). Gather the diff, the PR text and linked issues (requirements), and the repo's standard files. Restore every rule/config file from the base commit.
-2. **Review** (one agentic run, Copilot CLI or Claude Code CLI). Only the read tools are available. The prompt is the same for both engines and the output must match `findings.schema.json`. The model has no write access.
+2. **Review** (one agentic run, Copilot CLI). Only the read tools are available. The output must match `findings.schema.json`. The model has no write access.
 3. **Post** (`post.js`, the only step with a write token). Validate the findings, filter them, and post one inline `COMMENT` review, one sticky summary, and the job summary.
 
 Adoption, which is the whole contract for a consuming repo:
@@ -112,12 +112,11 @@ jobs:
         with: { fetch-depth: 0, persist-credentials: false }
       - uses: <owner>/specguard@v1
         # with:
-        #   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}   # switch engine to Claude
 ```
 
-The review contract ships as an **Agent Skill** (`skills/test-review/SKILL.md`, an open format read by Copilot CLI, Claude Code and Copilot code review). The same file drives:
+The review contract ships as an **Agent Skill** (`skills/test-review/SKILL.md`, an open format read by Copilot CLI and Copilot code review). The same file drives:
 - **CI**: both engines, through the action.
-- **Local pre-push**: `copilot -p` / `claude -p` with the skill. This is the earliest shift-left point.
+- **Local pre-push**: `copilot -p` with the skill, or `node bin/specguard-local.js` (needs bash; the prompt goes to copilot on stdin, so it also runs on Windows). This is the earliest shift-left point.
 - **Optional "lite" tier**: an adopter copies the skill to `.github/skills/` and native Copilot code review picks it up. There is no workflow and no guarantees (section 4.1 explains why that path is not the main one).
 
 ---
@@ -126,13 +125,12 @@ The review contract ships as an **Agent Skill** (`skills/test-review/SKILL.md`, 
 
 | Engine | Auth | Who pays | Notes |
 |---|---|---|---|
-| **Copilot CLI** (default) | built-in `GITHUB_TOKEN` + `permissions: copilot-requests: write` | org repo: the org (policy *"Allow use of Copilot CLI billed to the organization"*, on by default when Copilot CLI is enabled). Personal repo: the owner's Copilot seat | **0 secrets.** Since 2026-06-01 usage is token-based **AI Credits** (premium requests are gone), so cost grows with agent turns. A fine-grained PAT (Copilot Requests) is a fallback input only. |
-| **Claude Code CLI** | `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` | owner's Claude Pro/Max/Team subscription limits | 1 secret. `ANTHROPIC_API_KEY` is also accepted. The OAuth token is tied to one person, and every push draws on that person's interactive quota (README warns). |
-| GitHub Models | `models: read` | free tier | Rejected: 8k input tokens per request. |
+| **Copilot CLI** | built-in `GITHUB_TOKEN` + `permissions: copilot-requests: write` | org repo: the org (policy *"Allow use of Copilot CLI billed to the organization"*, on by default when Copilot CLI is enabled). Personal repo: the owner's Copilot seat | **0 secrets.** Since 2026-06-01 usage is token-based **AI Credits** (premium requests are gone), so cost grows with agent turns. A fine-grained PAT (Copilot Requests) is a fallback input only. |
+| GitHub Models | `models: read` | free tier | Rejected: 8k input tokens per request. Retired 2026-07-30. |
 
-**Engine selection** (`engine: auto|copilot|claude`, default `auto`): a Claude credential passed means Claude, otherwise Copilot. A missing credential or permission fails the step with a one-line setup hint. That is a config error, so it fails loudly.
+**Engine selection:** Copilot only as of 2026-10-13 (owner decision). The Claude Code CLI engine (OAuth token or API key) was removed; GitHub Models was retired 2026-07-30. The `engine` input stays as the extension point (any value other than `copilot` fails the step), and the files under `.specguard-ctx` (`findings.json`, `usage.json`, `engine-status`, `engine-notes`, `engine-model.json`) are the engine-neutral interface to `post.js`. A missing credential or permission fails the step with a one-line setup hint. That is a config error, so it fails loudly.
 
-**Cost guardrails:** pin the CLI versions. Always cap turns (`--max-turns` / Copilot equivalent) and, for Claude, set `--max-budget-usd`. Record credits/usage per run in S4 and publish a $/PR range in the README. For comparison: native Copilot code review costs about $0.25-$5 per review at Balanced effort, and the hosted Claude Code Review about $15-25.
+**Cost guardrails:** pin the CLI versions. Always cap spend (`--max-ai-credits`). Record credits/usage per run in S4 and publish a $/PR range in the README. For comparison: native Copilot code review costs about $0.25-$5 per review at Balanced effort, and the hosted Claude Code Review about $15-25.
 
 ---
 
@@ -210,7 +208,7 @@ Hard rules from the evidence:
 action.yml                 composite; inputs; the three steps; pinned CLI versions; env assertions
 src/collect.sh             step 1; writes ctx/: diff.patch, files.txt, standards.txt, requirements.md
 skills/test-review/SKILL.md  the review contract (section 6); engine-neutral; also used locally and as the CCR lite tier
-src/findings.schema.json   one schema: Claude --json-schema, Copilot output validation, post.js
+src/findings.schema.json   one schema: Copilot output validation, post.js
 src/post.js                step 3, run via actions/github-script (octokit included, no npm deps, no build)
 src/post.test.js           node --test: hunk parsing, anchor ladder, validation, filters
 NOTICE                     attribution for the borrowed rubric and code (section 4.1)
@@ -277,12 +275,7 @@ Output must match `findings.schema.json`: `requirements_source`, a `coverage[]` 
 ## 8. Safety (L1 hardening)
 
 - Triggered by `pull_request` only, with fork and Dependabot PRs skipped. Never `pull_request_target`. Checkout uses `persist-credentials: false`.
-- **Claude engine:** `claude -p --tools "Read,Grep,Glob" --setting-sources user --strict-mcp-config --settings '{"disableAllHooks":true}' --max-turns N --max-budget-usd X --output-format json --json-schema findings.schema.json`, then read `.structured_output`.
-  - `--allowedTools` only skips permission prompts; it does not remove tools. `--tools` does.
-  - Without `--setting-sources user`, `-p` runs the PR's `.claude/settings.json` hooks and its `.mcp.json` servers.
-  - Do **not** use `--bare`: it ignores `CLAUDE_CODE_OAUTH_TOKEN`.
-  - Requires CLI >= 2.1.205 (before that, an invalid schema was silently ignored).
-- **Copilot engine:** `copilot -p --available-tools view,glob,grep --allow-all-tools --no-ask-user -s` (plus a turn cap and the output flag, verified in S4). Never pass `--allow-all`, `--allow-all-paths` or `--yolo`. `action.yml` fails if `COPILOT_ALLOW_ALL` or `GITHUB_COPILOT_PROMPT_MODE_*` is set, because these load repo hooks and MCP. Requires CLI >= 1.0.85 (before that, a falsey `COPILOT_ALLOW_ALL` enabled auto-approval).
+- **Copilot engine:** `copilot --available-tools view,glob,grep --allow-all-tools --no-ask-user -s --max-ai-credits N` with the prompt piped on stdin from a file (one argv entry is capped at 128 KiB on Linux and about 32K characters on Windows, and the prompt can reach 128 KiB). Never pass `--allow-all`, `--allow-all-paths` or `--yolo`. `action.yml` fails if `COPILOT_ALLOW_ALL` or `GITHUB_COPILOT_PROMPT_MODE_*` is set, because these load repo hooks and MCP. Requires CLI >= 1.0.85 (before that, a falsey `COPILOT_ALLOW_ALL` enabled auto-approval).
 - The base-branch restore (section 5) is defence in depth whatever the flags do. SpecGuard is stricter than native CCR, which reads instructions from the head.
 - Prompt injection in the PR can at worst produce a bad finding. `post.js` keeps findings inside the diff, filtered, redacted and capped. Third-party actions are pinned by SHA. The README states what data is sent to which provider.
 
@@ -290,16 +283,16 @@ Output must match `findings.schema.json`: `requirements_source`, a `coverage[]` 
 
 ## 9. Build steps
 
-- [x] **S1 Skeleton.** `action.yml` with inputs (`engine`, `claude_code_oauth_token`, `anthropic_api_key`, `copilot_token` (fallback), `model`, `max_turns`, `max_comments`, `max_diff_kb`, `ignore`), the example workflow, a README stub, and a sandbox GitHub repo.
+- [x] **S1 Skeleton.** `action.yml` with inputs (`engine`, `copilot_token` (fallback), `model`, `max_comments`, `max_diff_kb`, `ignore`), the example workflow, a README stub, and a sandbox GitHub repo.
 - [x] **S2 `collect.sh`.** Diff, skip path, base restore, `standards.txt`, sanitized `requirements.md`. Check by running it on 3 unrelated local repos and inspecting `ctx/`.
 - [x] **S3 `post.js` + `post.test.js`.** Use canned findings, no AI. In the sandbox, verify: an inline comment, a multi-line suggestion block, an out-of-hunk finding routed to a file-level comment, the 422 body-only retry, a re-run that creates no duplicates, and the summary updated in place. Capture the real 422 bodies, and re-test whether the API now accepts comments on unchanged lines.
-- [ ] **S4 Engines.** (Copilot via GITHUB_TOKEN on a personal repo verified; Claude engine and org-repo billing not yet.) Verify the section 8 flags on both CLIs, including the Copilot output and turn-cap flags. Test `GITHUB_TOKEN` + `copilot-requests` on **a personal repo and an org repo**. Record credits/usage per run. Canary: a PR that adds a `.claude/settings.json` hook and a `.mcp.json` must not execute either. Exit criterion: the same skill yields valid JSON on both engines.
+- [ ] **S4 Engines.** (Copilot via GITHUB_TOKEN on a personal repo verified; org-repo billing not yet.) Verify the section 8 flags on the Copilot CLI, including the output and credit-cap flags. Test `GITHUB_TOKEN` + `copilot-requests` on **a personal repo and an org repo**. Record credits/usage per run. Canary: a PR that adds a `.claude/settings.json` hook and a `.mcp.json` must not execute either. Exit criterion: the skill yields valid JSON.
 - [x] **S5 Skill.** Write `SKILL.md` from the section 4.1 sources, add `NOTICE`, and iterate against the acceptance matrix.
 - [ ] **S6 Pilots.** (Kite pilot 2026-10-13: 6 PR runs + 1 audit, see `docs/pilot-kite.md`; still needs human-authored PRs and a paid-plan run) Install on 3 repos (section 10) and grade with the skill-creator style loop (expectations, then grader). Track useful / not useful in `eval/results.md`.
 - [x] **S7 Release.** Tag `v1` and finish the README.
 
 ### Success criteria
-- Adoption is one workflow file. **0 secrets with Copilot** (personal or org repo); 1 secret with Claude.
+- Adoption is one workflow file. **0 secrets** (personal or org repo).
 - No language-specific code; the 3 pilots use different languages.
 - Every acceptance case passes on all pilots, and every inline finding has a citation and a test skeleton.
 - High-confidence precision is >= 80% (seeded cases plus about 20 real PRs) before blocking mode is discussed.
@@ -357,7 +350,7 @@ Pilot mix: 3 languages, at least 2 with real test suites. One pilot has only Cop
 
 1. **Pilots:** which 3 repos (languages)? We need at least one org repo and one personal repo.
 2. **Owner plan:** paid Copilot (now AI Credits), Claude Pro/Max, or both? This decides the documented default and the per-PR budget.
-3. Is sending pilot code to GitHub Copilot / Anthropic acceptable?
+3. Is sending pilot code to GitHub Copilot acceptable?
 
 ---
 
