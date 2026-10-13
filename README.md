@@ -140,6 +140,7 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | `engine` | `auto` | `auto` (by the credential kind), `copilot` (Copilot CLI) or `claude` (Claude Code CLI). An explicit engine must match the credential. Any other value fails the step. See [Engines](#engines). |
 | `auto_tier` | `intelligence` | Copilot Auto routing profile when `model` is empty or `auto`: `intelligence` (default), `balance`, `efficiency`, or empty to omit. Ignored with a note if rejected; does not change which models your plan offers. |
 | `fast_models` | | Extra model names treated as fast tier: exact names or `/regex/`, one per line or comma separated. Built-in: flash, mini, haiku, nano, lite, small. |
+| `max_budget_usd` | `1.00` | `claude` engine: per-run budget in USD (positive decimal, at most 20). If the model reaches it before answering, one small no-tools finalize turn (20% of it, at least $0.10) asks for the JSON from what it already read, so a push can cost up to about 1.2 times this. |
 | `copilot_max_ai_credits` | `60` | Copilot soft cap on AI credits per turn, integer 30-2000. A run is one turn plus at most one repair turn on the same session, so the worst case per push is about twice this. |
 | `review_timeout_minutes` | `12` | Engine time limit, a positive integer (a timeout is reported as such, not as a green review). The job `timeout-minutes` must exceed it by at least 3. |
 | `max_diff_kb` | `300` | Above this the diff is cut at file boundaries: whole files that fit are reviewed, the dropped files are listed, and the run is marked incomplete. |
@@ -192,7 +193,7 @@ An engine is one script, `src/engines/<name>.sh`: it reads the prompt file and l
 
 - `engine: auto` (default): `claude` when `llm_token` is an Anthropic API key, otherwise `copilot`.
 - `engine: copilot`: Copilot CLI, the answer is JSON in prose with one repair turn.
-- `engine: claude`: Claude Code CLI on an Anthropic API key (Anthropic API usage is billed to the key's account). One turn with structured output (`--json-schema`), read-only tools (`Read`, `Grep`, `Glob`) confined to the workspace, no repair turn, cost reported exactly in the usage line. The per-run budget is `copilot_max_ai_credits` x $0.05 (default $3.00); `effort` is ignored.
+- `engine: claude`: Claude Code CLI on an Anthropic API key (Anthropic API usage is billed to the key's account). One turn with structured output (`--json-schema`), read-only tools (`Read`, `Grep`, `Glob`) confined to the workspace, cost reported exactly in the usage line. The per-run budget is `max_budget_usd` (default $1.00); if it is reached before an answer, one no-tools finalize turn on the same session asks for the JSON from what was already read. `effort` is ignored.
 
 A Copilot SDK adapter was trialled on 2026-10-13 (it tied with the CLI) and removed; it can be restored from commit `58d8937`. The contract (inputs, output files, rules, how to add an engine) is in [src/engines/README.md](src/engines/README.md). Adding an engine means one script and one line in the allow-list (and, for a new credential kind, one line in `src/credential.js`); `post.js` does not change.
 

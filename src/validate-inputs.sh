@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Config checks for the engine inputs (env: ENGINE (copilot or claude; auto is resolved before, by credential.js) MODEL EFFORT AUTO_TIER FAST_MODELS MAX_CREDITS TIMEOUT); fails the step with a clear error.
+# Config checks for the engine inputs (env: ENGINE (copilot or claude; auto is resolved before, by credential.js) MODEL EFFORT AUTO_TIER FAST_MODELS MAX_CREDITS MAX_BUDGET_USD TIMEOUT); fails the step with a clear error.
 die() { echo "::error::$1"; exit 1; }
 ENGINES=(copilot claude) # the engine allow-list: each name needs src/engines/NAME.sh (src/engines/README.md)
 if [[ -n ${ENGINE+x} ]]; then [[ " ${ENGINES[*]} " == *" $ENGINE "* ]] || die "engine must be one of: ${ENGINES[*]}"; fi
@@ -12,6 +12,8 @@ case "${AUTO_TIER-intelligence}" in ""|intelligence|balance|efficiency) ;; *) di
 [[ ${#FAST_MODELS} -le 500 ]] || die "fast_models must be at most 500 characters"
 c="${MAX_CREDITS:-60}"
 [[ $c =~ ^[0-9]{1,4}$ ]] && ((10#$c >= 30 && 10#$c <= 2000)) || die "copilot_max_ai_credits must be an integer from 30 to 2000"
+b="${MAX_BUDGET_USD:-1.00}" # the claude engine's per-run budget in USD
+[[ $b =~ ^[0-9]{1,2}(\.[0-9]{1,2})?$ ]] && awk -v b="$b" 'BEGIN{exit !(b > 0 && b <= 20)}' || die "max_budget_usd must be a positive decimal of at most 20 (for example 1.00)"
 t="${TIMEOUT:-12}"
 [[ $t =~ ^[0-9]{1,4}$ ]] && ((10#$t > 0)) || die "review_timeout_minutes must be a positive integer"
 exit 0

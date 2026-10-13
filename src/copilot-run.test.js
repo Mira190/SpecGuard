@@ -98,7 +98,7 @@ test('prose without JSON: one repair turn on the same session quotes the error, 
   assert.equal(more.length, 0);
   assert.equal(flag(b, '--session-id'), flag(a, '--session-id'));
   assert.equal(s.stdin(1), 'REVIEW PROMPT');
-  assert.match(s.stdin(2), /no JSON found in Copilot output/);
+  assert.match(s.stdin(2), /no JSON found in the engine output/);
   assert.match(s.stdin(2), /ONLY the complete corrected JSON/);
   assert.ok(!b.includes('-p'));
   assert.equal(flag(b, '--usage-output-file').replace(/\\/g, '/').split('/').pop(), 'usage-repair.json');
