@@ -51,7 +51,7 @@ function strict(s) {
 // The prompt is "static prefix (skill, references, schema) + --- + per-PR context" (src/prompt.js): the prefix becomes the cached system block, the rest the user message.
 const SPLIT = '\n\n---\n\nContext directory (absolute path):';
 const NO_TOOLS = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Use only the context inlined below; where the answer would need a file you cannot see, mark it unknown and say so. Output only the JSON object.\n\n';
-const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Output only the JSON object.\n\n';
+const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Do not report a missing or weak test when a candidate test file for that code was cut or not included: mark the obligation unknown and say which file was not fully visible. Output only the JSON object.\n\n';
 function messages(prompt, pack = '') {
   const at = prompt.indexOf(SPLIT);
   const system = at > 0 ? prompt.slice(0, at) : '', user = at > 0 ? prompt.slice(at + 2) : prompt; // keep "---" at the head of the user part
@@ -76,7 +76,7 @@ function packRead(root, rel) { // text of a regular, small, non-binary file insi
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
-  const parts = [], seen = new Set(), omitted = [];
+  const parts = [], seen = new Set(), omitted = [], partial = []; // partial: cut at the budget
   let used = 0, files = 0;
   const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit
   const addFile = (p, num) => { // num: line-numbered
@@ -89,6 +89,7 @@ function contextPack(ctx, root, limit) {
     if (room < 200) return void omitted.push(rel);
     const c = cut(num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text, room);
     if (c.cut && c.lines < 1) return void omitted.push(rel);
+    if (c.cut) partial.push(rel);
     const b = block(rel, c.text, `${c.cut ? `first ${c.lines} of ${src.length} lines` : 'full file'}${num ? ', line-numbered' : ''}`);
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
@@ -105,7 +106,7 @@ function contextPack(ctx, root, limit) {
   for (const p of list('spec-files.txt')) addFile(p, false);
   const text = parts.length ? `Repository files (read from the checked-out repository; rule files, each file under review followed by its candidate tests, the rest of a cut diff, requirement documents):\n\n${parts.join('\n\n')}` : '';
   const note = files || omitted.length ? `context pack: ${files} files, ${Math.round(used / 1024)} KB${omitted.length ? `; not included: ${omitted.slice(0, 4).join(', ')}${omitted.length > 4 ? ` (+${omitted.length - 4} more)` : ''}` : ''}` : '';
-  return { text, note };
+  return { text, note, notWhole: [...partial, ...omitted] };
 }
 
 const tokenRe = /github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|sk-ant-[A-Za-z0-9_-]+|Bearer [^\s]+/g;
@@ -144,7 +145,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const schema = strict(JSON.parse(fs.readFileSync(path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json'), 'utf8')));
     const packBytes = env.CONTEXT_PACK_BYTES === undefined || env.CONTEXT_PACK_BYTES === '' ? 250000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) || 0);
     let pack = { text: '', note: '' };
-    if (packBytes > 0) try { pack = contextPack(ctx, fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd()), packBytes); } catch { /* the pack is optional */ }
+    if (packBytes > 0) try { pack = contextPack(ctx, fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd()), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
     const { system, user } = messages(prompt, pack.text); // the pre-flight below sees the pack
     const est = worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user), maxTokens);
     if (est.usd > budget) { // the budget is hard here: nothing is sent

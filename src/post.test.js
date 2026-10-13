@@ -188,6 +188,29 @@ test('preserves weak assertions outside the diff in the summary', async (t) => {
   assert.match(s.calls.summary[0].body, /test.js:2/);
 });
 
+test('pack-cut.txt: a missing_test whose candidate test the model saw only partly goes to Details as low confidence and is not counted; fully visible tests and no pack-cut.txt change nothing', async (t) => {
+  const run = async (cut, cands = 'src.js\n  test.js  (same stem)\n') => {
+    const s = setup(t);
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), cands);
+    if (cut !== undefined) fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut);
+    await post(s);
+    return s;
+  };
+  const cut = await run('big.js\ntest.js\n');
+  assert.equal(cut.calls.review.length, 0, 'no inline comment');
+  assert.match(cut.calls.summary[0].body, /Low-confidence findings \(1\)/);
+  assert.doesNotMatch(cut.calls.summary[0].body, /1 unit test gap/);
+  assert.match(JSON.stringify(cut.calls.summary[0].body), /low confidence: a candidate test file was only partly visible \(test\.js\)/);
+  for (const s of [await run('big.js\n'), await run(undefined), await run('test.js\n', 'src.js\n  (no candidate test file found)\n')]) {
+    assert.equal(s.calls.review.length, 1, 'still posted inline');
+    assert.doesNotMatch(s.calls.summary[0].body, /Low-confidence findings/);
+  }
+  const weak = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', evidence)] }));
+  fs.writeFileSync(path.join(weak.dir, 'ctx', 'pack-cut.txt'), 'test.js\n'); // cited in the cut test file itself, no candidates listed
+  await post(weak);
+  assert.match(weak.calls.summary[0].body, /Low-confidence findings \(1\)/);
+});
+
 test('does not publish results for a superseded commit', async (t) => {
   const s = setup(t, report(), { head: 'NEWHEAD' });
   await post(s);

@@ -24,6 +24,7 @@ const truncate = (s, n = BODY_MAX) => {
   return s.slice(0, end) + '\n...(truncated)';
 };
 const { matches } = require('./standards-map');
+const { parseCandidates } = require('./focus');
 const { standardsCut } = require('./prompt');
 const clean = (s) => truncate(redact(s));
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -1357,6 +1358,14 @@ async function run({ github, context, core }) {
   const proposed = Array.isArray(data?.findings) ? data.findings.length : 0; // what the model reported: a finding dropped or demoted later is a degrade, not a fix
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
+  const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean)); // the claude engine's pack: files the model saw only partly or not at all
+  if (packCut.size) { // a missing/weak-test claim is only trustworthy when its candidate tests were fully visible
+    const cands = parseCandidates(readCtx('test-candidates.txt') || '');
+    for (const f of data.findings) {
+      const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
+      if (seen) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
+    }
+  }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
   if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);
   const addNote = (m) => { data.not_reviewed = [data.not_reviewed, m].filter(Boolean).join(' '); };
