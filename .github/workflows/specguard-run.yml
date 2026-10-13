@@ -142,6 +142,10 @@ jobs:
           head_sha: ${{ needs.resolve.outputs.head_sha || steps.head.outputs.sha }}
           github_token: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
           copilot_token: ${{ secrets.SPECGUARD_COPILOT_TOKEN }} # empty = Copilot runs on the job token (copilot-requests, org billing)
+          # TEMPORARY test credential and model (the Copilot quota is used up): remove `|| secrets.SPEC` and the model pin when done.
+          # llm_token wins over the Copilot alias above: a GitHub fine-grained PAT runs Copilot, an Anthropic API key (sk-ant-...) runs Claude Code (engine auto).
+          llm_token: ${{ secrets.SPECGUARD_LLM_TOKEN || secrets.SPEC }}
+          model: haiku-5.5
           delivery: ${{ inputs.post_to_pr && needs.resolve.outputs.mode == 'pr' && 'pr' || 'summary' }}
           requirements_paths: ${{ needs.resolve.outputs.design }}
           standards_paths: ${{ needs.resolve.outputs.rules }}

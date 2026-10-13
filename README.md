@@ -59,6 +59,18 @@ Requirement documents anywhere in the repo (IDs such as `AC-4`, acceptance-crite
 
 The default Action runs the reviewer directly so it can require this complete report. It reads tests but does not execute PR code: `Unit evidence: X/Y` is a static assessment of the listed obligations, not measured code coverage or proof that tests pass. AI can miss or misinterpret behaviour; source-quote validation checks citation existence, not semantic correctness. Run your normal test/lint CI alongside it.
 
+## Credentials
+
+Give the action one model credential as `llm_token` (a secret). It is detected by its prefix, never printed, and picks the engine (`engine: auto`, the default):
+
+| `llm_token` holds | Engine | Billed to |
+|---|---|---|
+| Copilot fine-grained PAT (`github_pat_...`, also `gho_...`, `ghu_...`), account permission **Copilot Requests** | `copilot` (Copilot CLI) | the token owner's Copilot seat |
+| Anthropic API key (`sk-ant-...`) | `claude` (default: one Messages API call, schema-enforced JSON, cost bounded up front; optional `claude_mode: agent` = Claude Code CLI) | the key's Anthropic account |
+| empty | `copilot` on the job token (`copilot-requests: write`, org billing) | the organization |
+
+A classic `ghp_` token (Copilot rejects it) and anything unrecognized fail with a clear error. `copilot_token` still works as an alias. The `model` input takes any model id, or the alias `haiku-5.5` (`claude-haiku-5.5` on Copilot, `claude-haiku-5-5` on Claude).
+
 ## Who pays
 
 It is never the action author's quota. Copilot CLI is billed by the token it runs on, and the tokens are separate:
@@ -122,10 +134,15 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 
 | Input | Default | Meaning |
 |---|---|---|
-| `copilot_token` | | Fine-grained PAT owned by a user, permission Copilot Requests: Copilot runs on it and is billed to that user's seat ([Who pays](#who-pays)). Empty = the job token with `copilot-requests: write` (needs the org policy). |
-| `engine` | `copilot` | The engine adapter; `copilot` (Copilot CLI) is the only one. Any other value fails the step. See [Engines](#engines). |
+| `llm_token` | | The model credential, detected by prefix ([Credentials](#credentials)): a Copilot fine-grained PAT runs Copilot, an Anthropic API key runs the `claude` engine (one Messages API call, billed to the key's Anthropic account). Empty = the job token with `copilot-requests: write` (needs the org policy). |
+| `copilot_token` | | Alias of `llm_token` (it wins when both are set). A fine-grained PAT owned by a user, permission Copilot Requests: Copilot runs on it and is billed to that user's seat ([Who pays](#who-pays)). |
+| `claude_mode` | `api` | `claude` engine: `api` (default) = ONE Anthropic Messages API call with the context SpecGuard already built, no CLI install, cost bounded up front; `agent` = Claude Code CLI with read-only tools (not bounded up front, see [Engines](#engines)). |
+| `max_output_tokens` | `32000` | `claude` engine, api mode: most output tokens the model may produce (1000-64000); part of the worst-case cost checked against `max_budget_usd`. |
+| `claude_version` | `2.1.284` | Pinned `@anthropic-ai/claude-code` version for `claude_mode: agent`. |
+| `engine` | `auto` | `auto` (by the credential kind), `copilot` (Copilot CLI) or `claude` (Anthropic API). An explicit engine must match the credential. Any other value fails the step. See [Engines](#engines). |
 | `auto_tier` | `intelligence` | Copilot Auto routing profile when `model` is empty or `auto`: `intelligence` (default), `balance`, `efficiency`, or empty to omit. Ignored with a note if rejected; does not change which models your plan offers. |
 | `fast_models` | | Extra model names treated as fast tier: exact names or `/regex/`, one per line or comma separated. Built-in: flash, mini, haiku, nano, lite, small. |
+| `max_budget_usd` | `1.00` | `claude` engine: budget in USD per run (positive decimal, at most 20). In api mode a HARD bound: the worst-case cost (prompt size plus `max_output_tokens` at the model's price) is computed before the call, and the call is not made, with the reason in the summary, when it exceeds this. In agent mode the Claude Code CLI's soft cap (checked between turns; a live run with $1.00 cost $3.44) plus a finalize turn of 20% of it. |
 | `copilot_max_ai_credits` | `60` | Copilot soft cap on AI credits per turn, integer 30-2000. A run is one turn plus at most one repair turn on the same session, so the worst case per push is about twice this. |
 | `review_timeout_minutes` | `12` | Engine time limit, a positive integer (a timeout is reported as such, not as a green review). The job `timeout-minutes` must exceed it by at least 3. |
 | `max_diff_kb` | `300` | Above this the diff is cut at file boundaries: whole files that fit are reviewed, the dropped files are listed, and the run is marked incomplete. |
@@ -176,9 +193,12 @@ Paths in the report may be absolute CI paths, relative to a source root, JaCoCo 
 
 An engine is one script, `src/engines/<name>.sh`: it reads the prompt file and leaves `findings.json`, `usage.json`, `engine-status` and a few notes in the context directory; everything before it (collect, prompt) and after it (`post.js`) is engine-agnostic. The `engine` input is checked against an allow-list, then the action runs `src/engines/$ENGINE.sh`.
 
-- `engine: copilot` (default and only): Copilot CLI, the answer is JSON in prose with one repair turn.
+- `engine: auto` (default): `claude` when `llm_token` is an Anthropic API key, otherwise `copilot`.
+- `engine: copilot`: Copilot CLI, the answer is JSON in prose with one repair turn.
+- `engine: claude`: an Anthropic API key (usage is billed to the key's account). **Default `claude_mode: api`: one Messages API call, no agent loop.** SpecGuard already builds the context a review needs (numbered diff, test candidates, leads, requirements, rule files, coverage) and inlines it in the prompt, so the model needs no tools. The static part of the prompt (skill, references, schema) is the cached `system` block, the per-PR context the user message, and the answer is schema-enforced JSON (`output_config.format`; the schema is reduced in memory to what structured outputs accept, `post.js` validates the full one). Before the call the worst-case cost is computed (input at bytes/1.5 tokens plus `max_output_tokens`, at the model's price) and the call is refused when it exceeds `max_budget_usd`, so the budget is hard. Cost is exact in the usage line, from the response's token counts and a small price table in `src/engines/claude-api.js`. Typical PR review on `claude-haiku-5-5` ($0.10 / $0.50 per million tokens up to 100K prompt tokens): with the context pack a small PR is about 40-80k input tokens, around one cent; a large PR crosses the 100K step ($0.50 / $2.50) and costs about $0.10-0.15. A 429, 529 or 5xx is retried once; no credit, a rejected key, a rate limit and an unavailable model are told apart in the summary. `effort` is ignored.  
+  `claude_mode: agent` runs the Claude Code CLI instead (read-only `Read`, `Grep`, `Glob` confined to the workspace, one finalize turn after a budget stop). It is not the default because the tool loop re-sends the whole context every turn and `--max-budget-usd` is a soft cap checked between turns: two live runs on `claude-haiku-5-5` cost $3.58 and $3.44 against a $1.00 budget, and the finalize turn failed because the budget is cumulative across the resumed session. Use it only when you want the model to explore files the prompt does not contain, and set `max_budget_usd` knowing it is not a ceiling.
 
-A Copilot SDK adapter was trialled on 2026-10-13 (it tied with the CLI) and removed; it can be restored from commit `58d8937`. The contract (inputs, output files, rules, how to add an engine) is in [src/engines/README.md](src/engines/README.md). Adding an engine means one script and one line in the allow-list; `post.js` does not change.
+A Copilot SDK adapter was trialled on 2026-10-13 (it tied with the CLI) and removed; it can be restored from commit `58d8937`. The contract (inputs, output files, rules, how to add an engine) is in [src/engines/README.md](src/engines/README.md). Adding an engine means one script and one line in the allow-list (and, for a new credential kind, one line in `src/credential.js`); `post.js` does not change.
 
 ## Unit test gap scan (whole repository)
 

@@ -52,7 +52,7 @@ function extract(s) {
 if (require.main === module) {
   const [inp, outp, flag] = process.argv.slice(2);
   const j = extract(fs.readFileSync(inp, 'utf8'));
-  let why = j ? '' : 'no JSON found in Copilot output';
+  let why = j ? '' : 'no JSON found in the engine output';
   if (j) {
     fs.writeFileSync(outp, j);
     if (flag === '--check') {

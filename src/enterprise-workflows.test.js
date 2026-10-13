@@ -18,13 +18,13 @@ test('specguard.yml: on workflow_call with exactly the core inputs, and no other
   assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['mode', 'requirements_paths', 'standards_paths', 'test_paths', 'scan_issue', 'model', 'effort']);
   assert.match(y, /^ {6}mode: \{[^}]*default: pr \}/m);
   assert.match(y, /^ {6}scan_issue: \{[^}]*type: boolean, default: false \}/m);
-  assert.match(y, /^ {4}secrets:\n {6}copilot_token: \{[^}]*required: false \}\n/m, 'the only secret is the optional Copilot token');
+  assert.match(y, /^ {4}secrets:\n {6}llm_token: \{[^}]*required: false \}\n {6}copilot_token: \{[^}]*required: false \}\n/m, 'the only secrets are the optional LLM token and its Copilot alias');
 });
 
 test('specguard.yml: repository access is the caller job token; the only secret read is the optional Copilot PAT, forwarded to the action', () => {
   const y = reusable();
   assert.match(y, /github_token: \$\{\{ github\.token \}\}/);
-  assert.deepEqual([...y.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i).sort(), ['SPECGUARD_COPILOT_TOKEN', 'copilot_token']);
+  assert.deepEqual([...y.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i).sort(), ['SPECGUARD_COPILOT_TOKEN', 'SPECGUARD_LLM_TOKEN', 'copilot_token', 'llm_token']);
   assert.match(y, /^ {10}copilot_token: \$\{\{ secrets\.copilot_token \|\| secrets\.SPECGUARD_COPILOT_TOKEN \}\}/m, 'explicit secrets: { copilot_token } or secrets: inherit');
   assert.doesNotMatch(y, /SPECGUARD_PAT|create-github-app-token|pull_request_target/);
   assert.doesNotMatch(y, /^ *permissions: *write-all/m);
