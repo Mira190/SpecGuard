@@ -362,7 +362,7 @@ test('summary preserves the integration assertion and proposed pushdown as a dis
   await post(s);
   assert.match(s.calls.summary[0].body, /integration: test.js:2/);
   assert.match(s.calls.summary[0].body, /Unit evidence: 0\/1/);
-  assert.match(s.calls.summary[0].body, /Layering: 1/);
+  assert.match(s.calls.summary[0].body, /Pushdown: 1/);
   assert.match(s.calls.review[0].comments[0].body, /keep the integration persistence check/);
 });
 
@@ -395,7 +395,7 @@ test('preserves removed assertions from deleted test files as LEFT-side summary 
   await post(s);
   assert.equal(s.calls.review.length, 0);
   assert.match(s.calls.summary[0].body, /removed test or assertion/);
-  assert.match(s.calls.summary[0].body, /Tests: 0 missing, 1 weak/);
+  assert.match(s.calls.summary[0].body, /Unit tests: 0 missing, 1 weak/);
 });
 
 test('does not accept an unrelated historical line as the changed-line citation', () => {
@@ -455,7 +455,7 @@ test('live failure: checked standards without sources do not discard valid test 
     findings: [finding(), finding('weak_test', { obligation_ids: ['O2'], ...evidence })], standards: { status: 'checked', sources: [], reason: 'Checked everything.' } }));
   await post(s);
   const body = s.calls.summary[0].body;
-  assert.match(body, /Tests: 1 missing, 1 weak/);
+  assert.match(body, /Unit tests: 1 missing, 1 weak/);
   assert.equal(s.calls.review[0].comments.length, 1);
   assert.match(body, /Coding standards: not_reviewed./);
   assert.match(body, /checked standards need sources/);
@@ -727,7 +727,7 @@ test('c7: the summary status counts reflect failed posts', async (t) => {
   const s = setup(t, report(), { retry422: true });
   await post(s);
   assert.match(s.calls.review[0].body, /1 inline, 0 file-level/);
-  assert.match(s.calls.summary[0].body, /Reviewed: [^\n]*0 inline, 0 file-level, 1 in summary/);
+  assert.match(s.calls.summary[0].body, /Comments: 0 inline, 0 file-level, 1 in summary/);
 });
 
 test('c8 (M8): a failing pulls.get posts nothing to the PR but the result still reaches the job summary', async (t) => {
@@ -1078,7 +1078,7 @@ test('summary renders a Traceability table with HEAD permalinks and the no-docum
   const removed = mismatchReport('introduced', { requirements: [sreq({ source: 'docs/spec.md (removed)' })] });
   assert.match(post.buildSummary({ status: 'Reviewed', data: removed, blob }), /docs\/spec\.md AC-4 \(removed\)/);
   const pre = post.buildSummary({ status: 'Reviewed', data: d, pre: [specFinding({ title: 'Old drift' })] });
-  assert.match(pre, /### Pre-existing drift \(not caused by this PR\)\n\n- \*\*Old drift\*\*/);
+  assert.match(pre, /<summary>Pre-existing drift \(not caused by this PR\)<\/summary>\n\n- \*\*Old drift\*\*/);
 });
 
 function specSetup(t, since, o = {}) {
@@ -1105,7 +1105,7 @@ test('end to end: an introduced spec_mismatch is posted inline and the summary s
   assert.match(s.calls.review[0].comments[0].body, /kind: spec_mismatch/);
   const body = s.calls.summary[0].body;
   assert.ok(body.includes('https://github.com/o/r/blob/HEADSHA/docs/spec.md#L1'));
-  assert.match(body, /Spec: 1 mismatch/);
+  assert.match(body, /1 spec mismatch/);
   assert.doesNotMatch(body, /Pre-existing drift/);
   assert.doesNotMatch(body, /No test gaps found/);
 });
@@ -1116,7 +1116,7 @@ test('end to end: pre-existing drift goes to its summary section, never inline',
   await post(s); // behaviour is untouched and in another file, and the spec is not in the diff: downgraded
   assert.equal(s.calls.review.length, 0);
   const body = s.calls.summary[0].body;
-  assert.match(body, /### Pre-existing drift \(not caused by this PR\)/);
+  assert.match(body, /<summary>Pre-existing drift \(not caused by this PR\)<\/summary>/);
   assert.match(body, /Code contradicts AC-4/);
   assert.match(body, /pre_existing/);
 });
@@ -1157,7 +1157,7 @@ test('a pre_existing mismatch row with its spec_mismatch finding renders in the 
   const s = specSetup(t, 'pre_existing', { behaviour: at, finding: at, change: null, status: 'needs_human' });
   await post(s);
   assert.equal(s.calls.review.length, 0);
-  assert.match(s.calls.summary[0].body, /### Pre-existing drift \(not caused by this PR\)/);
+  assert.match(s.calls.summary[0].body, /<summary>Pre-existing drift \(not caused by this PR\)<\/summary>/);
   assert.match(s.calls.summary[0].body, /Code contradicts AC-4/);
 });
 
@@ -1183,7 +1183,7 @@ test('pre-existing drift with no changed line: change null + needs_human + a fin
   track(s, 'other.js', 'docs/spec.md');
   await post(s);
   assert.equal(s.calls.review.length, 0);
-  assert.match(s.calls.summary[0].body, /### Pre-existing drift \(not caused by this PR\)/);
+  assert.match(s.calls.summary[0].body, /<summary>Pre-existing drift \(not caused by this PR\)<\/summary>/);
   assert.match(s.calls.summary[0].body, /Code contradicts AC-4/);
 });
 
@@ -1375,7 +1375,7 @@ test('F6: thousands of NOT ASSESSED rows keep the findings and the Traceability 
   const s = post.buildSummary({ status: 'x', data: { requirements_source: '', requirements: [traced, ...reqs], coverage: [cov], standards: { status: 'no_rules', sources: [], reason: 'r' }, layering: { status: 'checked', reason: 'r' } }, items: [{ f, why: 'not in a diff hunk' }], pre: [{ ...f, title: 'OLD DRIFT' }] });
   assert.ok(s.length <= 65536, `${s.length}`);
   assert.ok(s.indexOf('REAL FINDING') > 0 && s.indexOf('REAL FINDING') < s.indexOf('Traceability'), 'findings come before the Traceability table');
-  assert.ok(s.indexOf('OLD DRIFT') < s.indexOf('Traceability'));
+  assert.ok(s.indexOf('OLD DRIFT') > s.indexOf('Traceability'), 'the appendix comes last');
   assert.match(s, /\*\*Traceability\*\*/);
   assert.match(s, /\+\d+ more NOT ASSESSED criteria not shown/);
   assert.equal((s.match(/<details>/g) || []).length, (s.match(/<\/details>/g) || []).length);
@@ -2093,4 +2093,77 @@ test('R3 G4: a demoted row names the citation that failed (behaviour, evidence N
   assert.equal(req.coverage[0].status, 'unknown');
   assert.match(req.coverage[0].reason, /requirement citation could not be verified \(requirement R1 PR body: quote not found in its source\)\./);
   assert.ok(req.validation_notes.some((n) => /Obligation O1 marked unknown: .*requirement R1 PR body/.test(n)));
+});
+
+// Result-first summary layout: verdict, unit test gaps, requirements, standards, test layers, completeness, then collapsed reference material.
+const layoutData = () => {
+  const d = report({
+    requirements: [{ id: 'R1', source: 'issue #1', quote: 'Totals are exact.', obligation_ids: ['O1'], reason: 'r' }],
+    coverage: [row('missing_test')], findings: [finding('missing_test'), finding('standard', { title: 'Style rule broken', rule_source: 'RULES.md:1' }), finding('pushdown', { title: 'Move to unit' })],
+    not_reviewed: 'Generated files.', validation_notes: ['A note.'],
+  });
+  d.requirements_source = 'issue #1';
+  return d;
+};
+const layoutPre = [{ ...finding('spec_mismatch'), title: 'OLD DRIFT' }];
+
+test('layout: the verdict leads, results follow in goal order, reference material is collapsed at the end', () => {
+  const posted = [{ f: finding('missing_test', { title: 'POSTED GAP' }), url: 'https://github.com/o/r/pull/1#discussion_r5' }, { f: finding('standard', { title: 'POSTED STD' }) }, { f: finding('pushdown', { title: 'POSTED PUSH' }) }];
+  const s = post.buildSummary({ data: layoutData(), posted, usage: null, engine: 'claude', blob: 'https://github.com/o/r/blob/HEADSHA', specFiles: [], pre: layoutPre, manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } });
+  const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
+  assert.match(s, /## SpecGuard\n\nUnit tests: 1 missing, 0 weak · Requirements: 0\/1 criteria with unit evidence · Standards: 1 finding · Pushdown: 1\n/);
+  const order = ['## SpecGuard', '### Unit test gaps', '### Requirements', '| Criterion | Source', '### Coding standards', '### Test layers', '**Not reviewed:**', '<sub>Engine: claude', '<summary>Obligations (1)', '<summary>Pre-existing drift', '<summary>Validation notes', '<summary>Sources read'].map(at);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b));
+  assert.ok(at('POSTED GAP') > at('### Unit test gaps') && at('POSTED GAP') < at('### Requirements'));
+  assert.ok(at('POSTED STD') > at('### Coding standards') && at('POSTED STD') < at('### Test layers'));
+  assert.ok(at('POSTED PUSH') > at('### Test layers') && at('POSTED PUSH') < at('**Not reviewed:**'));
+  assert.ok(s.includes('- **POSTED GAP** — [src.js:3](https://github.com/o/r/pull/1#discussion_r5) · missing_test · The boundary has no assertion.'), 'linked to the inline comment, one sentence why');
+  assert.ok(s.includes('[src.js:3](https://github.com/o/r/blob/HEADSHA/src.js#L3)'), 'no comment link: the blob line');
+  assert.equal((s.match(/<details>/g) || []).length, (s.match(/<\/details>/g) || []).length);
+});
+
+test('layout: the Obligations and Traceability tables appear only inside <details>', () => {
+  const d = layoutData();
+  d.requirements = [sreq({ line: 3 })];
+  d.coverage = [row('weak_test')];
+  d.findings = [finding('weak_test')];
+  const s = post.buildSummary({ status: 'x', data: d, blob: 'https://github.com/o/r/blob/HEADSHA', specFiles: ['docs/spec.md'] });
+  const inside = (needle) => { const i = s.indexOf(needle); assert.ok(i >= 0, needle); return s.lastIndexOf('<details>', i) > s.lastIndexOf('</details>', i); };
+  assert.ok(inside('| Obligation | Source / behaviour |') && inside('| Requirement | Changed | Implementation |'));
+  assert.ok(!inside('| Criterion | Source / original wording |'), 'the criteria table is a result, not collapsed');
+  assert.ok(s.indexOf('<summary>Obligations') < s.indexOf('<summary>Traceability'));
+});
+
+test('layout: a summary-routed finding keeps its full text under Unit test gaps', () => {
+  const f = finding('weak_test', { title: 'ROUTED', body: 'First sentence. Second sentence with the whole explanation.' });
+  const s = post.buildSummary({ status: 'x', data: layoutData(), items: [{ f, why: 'not in a diff hunk' }, { f: finding('pushdown', { title: 'ROUTED PUSH', body: 'Whole pushdown text.' }), why: 'low confidence' }] });
+  const gaps = s.slice(s.indexOf('### Unit test gaps'), s.indexOf('### Requirements'));
+  assert.match(gaps, /- \*\*ROUTED\*\* \(`src.js:3`, weak_test, not in a diff hunk\)\n\n {2}First sentence\. Second sentence with the whole explanation\./);
+  assert.doesNotMatch(gaps, /ROUTED PUSH/);
+  assert.match(s.slice(s.indexOf('### Test layers')), /ROUTED PUSH[^\n]*\n\n {2}Whole pushdown text\./);
+  assert.doesNotMatch(s, /more item\(s\)/);
+});
+
+test('layout: an empty Unit test gaps section is omitted and a clean run keeps its wording', () => {
+  const clean = report({ coverage: [row()], findings: [] });
+  const s = post.buildSummary({ status: 'No test gaps found in the assessed obligations.', data: clean, specFiles: ['docs/spec.md'] });
+  assert.match(s, /## SpecGuard\n\nNo test gaps found in the assessed obligations\.\n/);
+  assert.doesNotMatch(s, /### Unit test gaps/);
+  assert.match(s, /### Coding standards/);
+  assert.match(post.buildSummary({ data: clean, specFiles: [] }), /## SpecGuard\n\nUnit tests: 0 missing, 0 weak · Standards: confirmed · Pushdown: 0\n/);
+});
+
+test('layout: size-limit overflow drops appendix items before results', () => {
+  const many = Array.from({ length: 700 }, (_, i) => ({ id: `O${i}`, obligation: 'o'.repeat(300), source: 's', behaviour: null, change: null, evidence: [], status: 'needs_human', reason: 'r'.repeat(300), alignment: { status: 'consistent', reason: 'ok' } }));
+  const d = layoutData();
+  d.coverage = [row('missing_test'), ...many];
+  const posted = Array.from({ length: 40 }, (_, i) => ({ f: finding('missing_test', { title: `GAP ${i}`, line: i + 1 }) }));
+  const s = post.buildSummary({ status: 'x', data: d, posted, pre: layoutPre, manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } });
+  assert.ok(s.length <= 65536, `${s.length}`);
+  for (let i = 0; i < 40; i++) assert.ok(s.includes(`GAP ${i}**`), `GAP ${i}`);
+  for (const h of ['### Requirements', '### Coding standards', '### Test layers', '**Not reviewed:**']) assert.ok(s.includes(h), h);
+  assert.match(s, /\+\d+ more not shown/);
+  assert.match(s, /\(truncated/);
+  assert.ok(!s.includes('<summary>Sources read'));
+  assert.equal((s.match(/<details>/g) || []).length, (s.match(/<\/details>/g) || []).length);
 });
