@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
-const { collect, testLayout } = require('./audit-collect');
+const { collect, testLayout, branchGuard } = require('./audit-collect');
 
 const DESIGN = '# Plan design\n\nA repeating plan stays on after it fires.\n\nA plan MUST be rejected when its start is in the past.\n\nA plan SHALL NOT fire twice in one minute.\n';
 
@@ -73,6 +73,38 @@ test('collect: the 60-document cap moves the rest to audit-rejected', (t) => {
   assert.equal(rows(ctx, 'audit-rejected.txt').filter(([, why]) => /audit limit/.test(why)).length, 2);
 });
 
+test('collect: standards use the PR review globs, STANDARDS_PATHS adds and excludes, and a STANDARDS_PATHS doc is not a requirement doc', (t) => {
+  const { root, ctx } = repo(t, { ...FILES, '.cursor/BUGBOT.md': 'Be nice.\n', 'pkg/BUGBOT.md': 'x\n', '.gemini/styleguide.md': 'x\n', '.greptile/rules.md': 'x\n',
+    'docs/house-rules.md': DESIGN, 'AGENTS.md': 'x\n' });
+  collect({ cwd: root, ctx, standardsPaths: 'docs/house-rules.md\n!AGENTS.md' });
+  const std = fs.readFileSync(path.join(ctx, 'standards.txt'), 'utf8').split('\n').filter(Boolean);
+  assert.deepEqual(std, ['.cursor/BUGBOT.md', '.gemini/styleguide.md', '.greptile/rules.md', 'CONTRIBUTING.md', 'docs/house-rules.md', 'pkg/BUGBOT.md']);
+  const docs = rows(ctx, 'audit-docs.txt').map((d) => d[0]);
+  assert.ok(docs.includes('docs/design.md') && !docs.includes('docs/house-rules.md'), docs.join());
+});
+
+test('collect: audit-candidates.txt seeds one line per deterministic requirement (path:line, heading, text); the total is in the meta', (t) => {
+  const { root, ctx } = repo(t, FILES);
+  const r = collect({ cwd: root, ctx });
+  const c = rows(ctx, 'audit-candidates.txt');
+  assert.deepEqual(c.map((x) => x[0]), ['docs/design.md:5', 'docs/design.md:7']);
+  assert.equal(c[0][1], 'Plan design');
+  assert.match(c[0][2], /^A plan MUST be rejected when its start is in the past\./);
+  const meta = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
+  assert.deepEqual([meta.candidates, meta.candidates_listed, r.candidates], [2, 2, 2]);
+});
+
+test('branchGuard: only the default branch is audited; unknown ref or payload warns and continues', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-event-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const ev = path.join(dir, 'event.json');
+  fs.writeFileSync(ev, JSON.stringify({ repository: { default_branch: 'main' } }));
+  assert.deepEqual(branchGuard({ refName: 'main', eventPath: ev }), {});
+  assert.match(branchGuard({ refName: 'feature/x', eventPath: ev }).error, /audits the default branch \(main\); this run is on feature\/x/);
+  assert.match(branchGuard({ refName: 'main', eventPath: path.join(dir, 'none.json') }).warn, /could not tell/);
+  assert.match(branchGuard({ refName: '', eventPath: ev }).warn, /could not tell/);
+});
+
 test('testLayout: names the directories, file-name patterns and config that exist', () => {
   const l = testLayout(['src/a.js', 'src/__tests__/a.test.ts', 'test/b_test.go', 'app/FooTests.cs', 'package.json', 'docs/test-plan.md']);
   assert.match(l, /^test directories: [^\n]*src\/__tests__ \(1\)/);
@@ -83,13 +115,20 @@ test('testLayout: names the directories, file-name patterns and config that exis
 
 test('CLI: rejects a bad audit_max_requirements and writes the skip output', (t) => {
   const { root, ctx } = repo(t, FILES);
-  const run = (env) => spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, ...env } });
+  const run = (env) => spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_REF_NAME: '', GITHUB_EVENT_PATH: '', ...env } });
   for (const bad of ['0', '501', 'x', '-3', '8.5']) assert.equal(run({ MAX_REQUIREMENTS: bad }).status, 1, bad);
   const out = path.join(root, 'out.txt');
   const ok = run({ MAX_REQUIREMENTS: '80', GITHUB_OUTPUT: out });
   assert.equal(ok.status, 0, ok.stderr);
   assert.equal(fs.readFileSync(out, 'utf8'), 'skip=false\n');
+  assert.match(ok.stdout, /::warning::could not tell whether this ref is the default branch/);
+  const ev = path.join(root, 'event.json');
+  fs.writeFileSync(ev, JSON.stringify({ repository: { default_branch: 'main' } }));
+  const off = run({ GITHUB_REF_NAME: 'dev', GITHUB_EVENT_PATH: ev });
+  assert.equal(off.status, 1);
+  assert.match(off.stdout, /::error::mode audit audits the default branch \(main\); this run is on dev/);
+  assert.equal(run({ GITHUB_REF_NAME: 'main', GITHUB_EVENT_PATH: ev }).status, 0);
   const none = repo(t, { 'a.js': 'x\n' });
-  spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: none.root, env: { ...process.env, CTX: none.ctx, GITHUB_OUTPUT: path.join(none.root, 'o.txt') } });
+  spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: none.root, env: { ...process.env, CTX: none.ctx, GITHUB_REF_NAME: '', GITHUB_OUTPUT: path.join(none.root, 'o.txt') } });
   assert.equal(fs.readFileSync(path.join(none.root, 'o.txt'), 'utf8'), 'skip=true\n');
 });

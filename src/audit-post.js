@@ -2,9 +2,12 @@
 // renders it to the job summary and, with audit_issue, to ONE issue we own. Advisory; never fails the run.
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const post = require('./post');
 const { ours } = require('./preflight');
+// trace.js's test-path rule; the fallback is a local copy of it in case the export moves (ponytail: keep in sync).
+const { isTestPath = (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/.test(p) } = require('./trace');
 
 const { neutralize, quoteLine, safeRel, readFile, usageLine, mergeUsage } = post;
 const STATUS = ['covered', 'partial', 'missing_test', 'not_implemented', 'contradicted', 'unknown', 'needs_human'];
@@ -12,12 +15,20 @@ const RISK = ['contradicted', 'not_implemented', 'missing_test', 'partial', 'unk
 const CLASS = ['static', 'unit', 'higher_level', 'human'];
 const LAYER = ['unit', 'component', 'integration', 'e2e'];
 const MARK = '<!-- specguard:audit -->', TITLE = 'SpecGuard requirements audit';
-const SUMMARY_MAX = 900000, ISSUE_MAX = 64000; // job summary 1 MiB; issue body 65536 characters
+const SUMMARY_MAX = 1000000, ISSUE_MAX = 64000; // bytes: job summary 1 MiB; issue body 65536
 const NEAR = 5; // a quote may sit this many lines from the cited one
+const MIN_QUOTE = 12; // non-space characters a quote needs to count as evidence
+const STATE_RE = /<!-- specguard:audit-state (\{[\s\S]*?\}) -->/, SHOW = 25; // hidden previous state in the issue body; rows listed per change kind
+// Not code evidence: a requirement document (admitted, or any document-like file) and anything in a test path.
+const DOCFILE = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
+const testFile = (p) => isTestPath(p) || /Tests?\.(java|kt|cs|swift|scala)$/.test(p);
 
 const lines = (s) => String(s || '').split('\n').filter(Boolean);
+const bytes = (s) => Buffer.byteLength(s);
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const cell = (s, n = Infinity) => oneLine(neutralize(String(s)), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+const solid = (q) => String(q).replace(/\s/g, '').length >= MIN_QUOTE;
+const norm = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 // Hand-rolled mirror of audit.schema.json: structural problems reject the output (the repair turn's trigger); evidence that does not
 // fit the status is not rejected here but downgraded by verify().
@@ -49,14 +60,14 @@ function validate(o) {
   return { ok: true };
 }
 
-// Why the cited evidence cannot carry the status, or ''.
+// Why the cited evidence cannot carry the status, or ''. A covered row needs a test whose layer fits the class.
 function gap(r) {
-  const unit = r.tests.some((t) => t.layer === 'unit');
+  const unit = r.tests.some((t) => t.layer === 'unit'), higher = r.tests.some((t) => t.layer !== 'unit');
   if (r.status === 'covered') {
     if (!r.code.length) return 'covered needs a code citation';
     if (r.class === 'human') return 'a human requirement is never covered';
     if (r.class === 'unit' && !unit) return 'covered needs a unit test citation';
-    if (r.class === 'higher_level' && !r.tests.length) return 'covered needs a test citation';
+    if (r.class === 'higher_level' && !higher) return 'covered needs a component, integration or e2e test citation';
   }
   if (r.status === 'partial' && !r.tests.length) return 'partial needs a test citation';
   if ((r.status === 'missing_test' || r.status === 'contradicted') && !r.code.length) return `${r.status} needs a code citation`;
@@ -67,13 +78,23 @@ function trackedFiles(root) {
   try { return new Set(execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter(Boolean)); } catch { return null; }
 }
 
+// Nearest markdown heading at or above a 1-based line of a file given as an array of lines (what readFile returns).
+function headingAt(ls, line) {
+  for (let i = Math.min(line, ls.length) - 1; i >= 0; i--) { const m = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(ls[i]); if (m) return m[1]; }
+  return '';
+}
+const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).digest('hex').slice(0, 8);
+
 // Checks every citation against the file at HEAD (tracked files only) and corrects the line when the quote sits within NEAR lines of it.
 // A requirement whose own citation fails goes to not_reviewed; failed code/test citations are removed and the status downgraded to unknown when the rest cannot carry it.
+// A quote under MIN_QUOTE non-space characters, a test outside a test path, or code that is a document or a test file does not count as evidence.
+// Every verified row gets a stable id: sha1(path, nearest heading, normalised source line)[0..8]; the model's own id stays as doc_id when it is not a generic Rn.
 // docs: the admitted documents (null = any); max: the row cap.
 function verify(data, { read = readFile, tracked = null, docs = null, max = Infinity } = {}) {
   const cache = new Map();
   const file = (p) => { if (!cache.has(p)) cache.set(p, read(p)); return cache.get(p); };
   const locate = (c) => {
+    if (!solid(c.quote)) return false;
     const rel = safeRel(c.path);
     if (!rel || (tracked && !tracked.has(rel))) return false;
     const all = file(rel);
@@ -85,20 +106,31 @@ function verify(data, { read = readFile, tracked = null, docs = null, max = Infi
     c.path = rel; c.line = a + k;
     return true;
   };
+  const isDoc = (p) => DOCFILE.test(p) || (docs && docs.has(p));
   const out = { ...data, requirements: [], not_reviewed: [...data.not_reviewed] };
+  const own = out.not_reviewed.length, seen = new Set();
   const drop = (r, why) => out.not_reviewed.push(`${r.id} (${r.source.path}:${r.source.line}): ${why}`);
   for (const r of data.requirements) {
     const source = { ...r.source };
     if (docs && !docs.has(safeRel(source.path))) { drop(r, 'its source is not an admitted requirement document'); continue; }
-    if (!locate(source)) { drop(r, 'the requirement quote was not found at the cited line'); continue; }
-    const code = r.code.map((c) => ({ ...c })).filter(locate), tests = r.tests.map((c) => ({ ...c })).filter(locate);
+    if (!locate(source)) { drop(r, solid(source.quote) ? 'the requirement quote was not found at the cited line' : `the requirement quote is under ${MIN_QUOTE} characters`); continue; }
+    const code = r.code.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && !testFile(c.path));
+    const tests = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
     const lost = r.code.length - code.length + r.tests.length - tests.length;
-    const row = { ...r, source, code, tests, note: r.note };
+    const ls = file(source.path), heading = headingAt(ls, source.line);
+    const srcLine = norm(ls.slice(source.line - 1, source.line - 1 + String(source.quote).split('\n').length).join(' '));
+    let id = sha8(source.path, heading, srcLine);
+    if (seen.has(id)) id = sha8(source.path, heading, srcLine, norm(r.text)); // two requirements on one line (a split bullet)
+    for (let k = 2, base = id; seen.has(id); k++) id = `${base}-${k}`;
+    seen.add(id);
+    const row = { ...r, id, ...(/^R\d+$/.test(r.id) ? {} : { doc_id: r.id }), heading, source, code, tests, note: r.note };
     if (lost) row.note = `${row.note} ${lost} citation(s) could not be verified and were removed.`.trim();
     const why = gap(row);
     if (why && row.status !== 'unknown') { row.note = `${row.note} Downgraded to unknown: ${why}.`.trim(); row.status = 'unknown'; }
     out.requirements.push(row);
   }
+  // the model's "over the cap" is only true when the cap was reached
+  if (out.requirements.length < max) out.not_reviewed = [...out.not_reviewed.slice(0, own).filter((s) => !/\bcap\b|max_requirements/i.test(s)), ...out.not_reviewed.slice(own)];
   if (out.requirements.length > max) {
     out.not_reviewed.push(`${out.requirements.length - max} further requirement(s) beyond audit_max_requirements (${max}) were not listed.`);
     out.requirements = out.requirements.slice(0, max);
@@ -108,8 +140,21 @@ function verify(data, { read = readFile, tracked = null, docs = null, max = Infi
 
 const count = (rows, key, values) => values.map((v) => [v, rows.filter((r) => r[key] === v).length]).filter(([, n]) => n);
 
-// Markdown that fits `max` characters: header and footer first, then whole table rows while they fit (never cut mid-row).
-function render({ data, docs = [], rejected = [], limitations = [], blob = '', usage = '', failure = '', max = SUMMARY_MAX }) {
+// Hidden machine-readable previous state: ids and statuses only (never row text), so the next run can say what changed.
+const stateComment = (head, rows) => `<!-- specguard:audit-state ${JSON.stringify({ v: 1, head: String(head || '').slice(0, 40), rows: rows.map((r) => [r.id, r.status]) }).replace(/[<>]/g, (c) => (c === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d')} -->`;
+function readState(body) {
+  const m = STATE_RE.exec(String(body || ''));
+  if (!m) return null;
+  try {
+    const o = JSON.parse(m[1]);
+    if (o && o.v === 1 && Array.isArray(o.rows) && o.rows.every((x) => Array.isArray(x) && /^[0-9a-f]{8}(-\d+)?$/.test(x[0]) && STATUS.includes(x[1]))) return { head: String(o.head || ''), rows: o.rows.map(([id, status]) => ({ id, status })) };
+  } catch { /* an edited or foreign comment is no state */ }
+  return null;
+}
+
+// Markdown that fits `max` bytes: header and footer first, then whole table rows while they fit (never cut mid-row).
+// partial: why the audit is incomplete (shown first); prior: { head, rows: [{id, status}] } of the last full audit; cap: audit_max_requirements.
+function render({ data, docs = [], rejected = [], limitations = [], blob = '', usage = '', failure = '', partial = '', prior = null, cap = 0, candidates = 0, max = SUMMARY_MAX }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
     const rel = safeRel(p);
@@ -117,24 +162,33 @@ function render({ data, docs = [], rejected = [], limitations = [], blob = '', u
   };
   const at = (c) => link(c.path, c.line, `${c.path}:${c.line}`);
   const rows = data ? data.requirements : [];
-  const groups = [];
+  const name = (r) => `${link(r.source.path, r.source.line, r.id)}${r.doc_id ? ` (${cell(r.doc_id, 40)})` : ''}`;
+  const evidence = (r) => [r.code.length ? `code: ${r.code.map(at).join('; ')}` : '', r.tests.length ? `tests: ${r.tests.map((t) => `${t.layer} ${at(t)}`).join('; ')}` : ''].filter(Boolean).join('<br>');
+  const first = (r) => `${name(r)} ${cell(r.text, 300)}${r.note ? `<br><sub>${cell(r.note, 300)}</sub>` : ''}`;
+  const groups = [], clash = [], done = [];
   for (const r of rows) {
+    if (r.status === 'contradicted') { clash.push(`| ${first(r)} | "${cell(r.source.quote, 200)}"<br>${at(r.source)} | "${cell(r.code[0].quote, 200)}"<br>${r.code.map(at).join('; ')} |\n`); continue; }
+    if (r.status === 'covered') { done.push(`| ${first(r)} | ${r.class} | ${evidence(r) || 'none'} |\n`); continue; }
     let g = groups.find((x) => x.path === r.source.path);
     if (!g) groups.push(g = { path: r.source.path, rows: [] });
-    const ev = [r.code.length ? `code: ${r.code.map(at).join('; ')}` : '', r.tests.length ? `tests: ${r.tests.map((t) => `${t.layer} ${at(t)}`).join('; ')}` : ''].filter(Boolean).join('<br>');
-    g.rows.push(`| ${link(r.source.path, r.source.line, r.id)} ${cell(r.text, 300)}${r.note ? `<br><sub>${cell(r.note, 300)}</sub>` : ''} | ${r.status} | ${r.class} | ${ev || 'none'} |\n`);
+    g.rows.push(`| ${first(r)} | ${r.status} | ${r.class} | ${evidence(r) || 'none'} |\n`);
   }
 
   const by = (rs, key, vs) => count(rs, key, vs).map(([v, n]) => `${v} ${n}`).join(' · ') || 'none';
+  const docCount = new Set(rows.map((r) => r.source.path)).size;
   let head = `## ${TITLE}\n\n`;
+  if (partial) head += `> **Partial audit: ${cell(partial, 200)}.** The rows below passed verification but the list may be incomplete. The audit issue, if enabled, was not updated.\n\n`;
   if (failure) head += `Could not complete: ${cell(failure, 400)}\n\n`;
   else if (!data) head += 'No requirement documents were found, so nothing was audited.\n\n';
   else {
     const found = data.requirements_found;
-    head += `**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${groups.length} document${groups.length === 1 ? '' : 's'}${found > rows.length ? ` (listed ${rows.length} of ${found} found; the rest are under not reviewed)` : ''}\n\n`
-      + `By status: ${by(rows, 'status', RISK)}\n\nBy class: ${by(rows, 'class', CLASS)}\n\n`;
+    const why = cap && rows.length < cap ? `; the model chose which rows to list, the cap of ${cap} was not reached` : cap && rows.length >= cap ? `; the rest are over the cap of ${cap}` : '';
+    head += `**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${docCount} document${docCount === 1 ? '' : 's'}${found > rows.length ? ` (listed ${rows.length} of ${found} found${why}; see not reviewed)` : ''}\n\n`
+      + `By status: ${by(rows, 'status', RISK)}\n\nBy class: ${by(rows, 'class', CLASS)}\n\n`
+      + `The rows are the requirements the model listed${candidates ? ` (${candidates} deterministic candidate${candidates === 1 ? '' : 's'} were in the documents)` : ''}; the counts describe that list, not the repository.\n\n`;
   }
-  head += '> Static review; not coverage; not for scoring people. Tests were not executed: a requirement is `covered` when a cited unit assertion with an independent expected value proves it.\n\n';
+  head += '> Static review; not coverage; not for scoring people. Tests were not executed: a requirement is `covered` when a cited unit assertion with an independent expected value proves it. `not_implemented` and `missing_test` are model claims (not verified statically): the search that found nothing is not checked. Rows are identified by a stable id (a hash of the document, heading and requirement line), so a reworded requirement shows as removed and new.\n\n';
+  if (prior && data) head += changedSince(prior, rows, cell);
 
   const list = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
   let foot = '';
@@ -144,20 +198,44 @@ function render({ data, docs = [], rejected = [], limitations = [], blob = '', u
   if (nr.length || unread.length) foot += `### Not reviewed\n\n${list([...nr, ...unread], 40, (s) => `- ${cell(s, 400)}\n`)}\n`;
   if (usage) foot += `${usage}\n`;
 
-  let room = max - head.length - foot.length - 300, omitted = 0, body = '';
-  for (const g of groups) {
-    const top = `### \`${cell(g.path, 200)}\`\n\n| Requirement | Status | Class | Evidence |\n|---|---|---|---|\n`;
+  let room = max - bytes(head) - bytes(foot) - 300, omitted = 0, body = '';
+  const take = (top, rs, end = '') => { // whole rows while they fit
     const kept = [];
-    let used = top.length + 1;
-    for (const r of g.rows) { if (used + r.length > room) break; kept.push(r); used += r.length; }
-    omitted += g.rows.length - kept.length;
-    if (kept.length) { body += `${top}${kept.join('')}\n`; room -= used; }
-  }
+    let used = bytes(top) + bytes(end) + 1;
+    for (const r of rs) { const b = bytes(r); if (used + b > room) break; kept.push(r); used += b; }
+    omitted += rs.length - kept.length;
+    if (!kept.length) return '';
+    room -= used;
+    return `${top}${kept.join('')}${end}\n`;
+  };
+  if (clash.length) body += take('### Doc and code disagree (unconfirmed)\n\nThe requirement line and the code line below look contradictory. A model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Requirement | Document says | Code says |\n|---|---|---|\n', clash);
+  for (const g of groups) body += take(`### \`${cell(g.path, 200)}\`\n\n| Requirement | Status | Class | Evidence |\n|---|---|---|---|\n`, g.rows);
+  if (done.length) body += take(`<details><summary>Covered in full (${done.length})</summary>\n\n| Requirement | Class | Evidence |\n|---|---|---|\n`, done, '\n</details>\n');
   if (omitted) body += `_${omitted} row${omitted === 1 ? '' : 's'} omitted: the report exceeded the size limit; \`audit.json\` in the run artifact has them all._\n\n`;
   return head + body + foot;
 }
 
-module.exports = async ({ github, context, core }) => {
+// New rows, removed rows (ids only: the state keeps no text) and status changes against the last full audit.
+function changedSince(prior, rows, cell) {
+  const was = new Map(prior.rows.map((r) => [r.id, r.status])), now = new Set(rows.map((r) => r.id));
+  const fresh = rows.filter((r) => !was.has(r.id)), moved = rows.filter((r) => was.has(r.id) && was.get(r.id) !== r.status);
+  const gone = prior.rows.filter((r) => !now.has(r.id));
+  const sec = (title, a, f) => (a.length ? `- ${title} (${a.length}):\n${a.slice(0, SHOW).map((x) => `  - ${f(x)}\n`).join('')}${a.length > SHOW ? `  - +${a.length - SHOW} more\n` : ''}` : '');
+  const body = sec('New', fresh, (r) => `\`${r.id}\` ${cell(r.text, 160)} (${r.status})`)
+    + sec('Status changed', moved, (r) => `\`${r.id}\` ${cell(r.text, 160)}: ${was.get(r.id)} → ${r.status}`)
+    + sec('Removed or not listed this time', gone, (r) => `\`${r.id}\` (was ${r.status})`);
+  return `### Changed since last audit${prior.head ? ` (\`${cell(prior.head.slice(0, 7), 12)}\`)` : ''}\n\n${body || 'No changes in the listed requirements.\n'}\n`;
+}
+
+// Our audit issue among open and closed issues (marker plus identity); an open one wins.
+async function findIssue({ github, owner, repo, me }) {
+  // ponytail: lists every issue; narrow with a label or `creator` if a repo has thousands
+  const all = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
+  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && typeof i.body === 'string' && i.body.startsWith(MARK));
+  return mine.find((i) => i.state !== 'closed') || mine[0] || null;
+}
+
+async function main({ github, context, core }) {
   const env = process.env, ctx = env.CTX;
   const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
   const { owner, repo } = context.repo, sha = context.sha || env.GITHUB_SHA || '';
@@ -172,31 +250,62 @@ module.exports = async ({ github, context, core }) => {
   const repair = (readCtx('engine-repair') || '').trim();
   const notes = [...lines(readCtx('engine-notes')).map((x) => x.trim()).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])];
   const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
-  const shared = { docs, rejected, limitations: (meta && meta.limitations) || [], blob, usage: usageHtml };
-  const finish = (md) => core.summary.addRaw(md).write();
+  const cap = meta && meta.max_requirements;
+  const shared = { docs, rejected, limitations: (meta && meta.limitations) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0 };
+  const finish = async (md) => { try { await core.summary.addRaw(md).write(); } catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); } };
+  const wantIssue = String(env.AUDIT_ISSUE).toLowerCase() === 'true';
+  // issue lookup: our open or closed issue and the state it holds; a failure only warns
+  let mine = null, prior = null;
+  const lookup = async () => {
+    if (!wantIssue) return;
+    try {
+      const me = await (async () => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } })();
+      mine = await findIssue({ github, owner, repo, me });
+      prior = mine && readState(mine.body);
+    } catch (e) { core.warning(`SpecGuard: could not write the audit issue (needs permissions: issues: write): ${e.message}`); mine = null; return false; }
+    return true;
+  };
+  const publish = async (md, state) => {
+    try {
+      const body = `${MARK}\n${[md.trimEnd(), state].filter(Boolean).join('\n\n')}`;
+      const flat = (s) => String(s).replace(/\r\n/g, '\n').trim();
+      if (mine) {
+        const closed = mine.state === 'closed';
+        if (flat(body) !== flat(mine.body) || closed) await github.rest.issues.update({ owner, repo, issue_number: mine.number, title: TITLE, body, ...(closed ? { state: 'open' } : {}) });
+      } else await github.rest.issues.create({ owner, repo, title: TITLE, body });
+    } catch (e) { core.warning(`SpecGuard: could not write the audit issue (needs permissions: issues: write): ${e.message}`); }
+  };
+  const room = (state) => ISSUE_MAX - bytes(MARK) - bytes(state) - 4;
 
   if (!meta) return finish(render({ ...shared, failure: 'the collection step did not produce its context.' }));
-  if (env.SKIP === 'true') return finish(render({ ...shared, data: null }));
+  if (env.SKIP === 'true') {
+    await finish(render({ ...shared, data: null }));
+    // no document admitted: a stale issue must not keep claiming old results (none is created for an empty audit)
+    if (wantIssue && await lookup() && mine) {
+      const keep = prior ? stateComment(prior.head, prior.rows) : '';
+      await publish(render({ ...shared, data: null, max: room(keep) }), keep);
+    }
+    return;
+  }
   const data = json('findings.json');
   const v = validate(data);
   const why = v.ok ? '' : data ? `the result failed validation: ${v.error}` : 'the engine returned no usable JSON';
   const st = (readCtx('engine-status') || '').trim();
   if (why) return finish(render({ ...shared, failure: st === 'timeout' ? 'the engine timed out (raise review_timeout_minutes)' : st === 'failed' ? 'the engine failed; see the job log' : why }));
+  // valid JSON can still come from a run that timed out or failed (or whose repair turn failed): show what verifies, change nothing else
+  const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
   const checked = verify(data, { tracked: trackedFiles(process.env.GITHUB_WORKSPACE || process.cwd()), docs: new Set(docs.map(([p]) => p)), max: meta.max_requirements });
-  try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
-  const md = render({ ...shared, data: checked });
-  await finish(md);
+  try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
+  const looked = wantIssue && !partial && await lookup();
+  await finish(render({ ...shared, data: checked, partial, prior }));
+  if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
+  const state = stateComment(meta.head, checked.requirements);
+  await publish(render({ ...shared, data: checked, prior, max: room(state) }), state);
+}
 
-  if (String(env.AUDIT_ISSUE).toLowerCase() !== 'true') return;
-  try {
-    const me = await (async () => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } })();
-    // ponytail: lists every open issue; narrow with a label or `creator` if a repo has thousands
-    const open = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'open', per_page: 100 });
-    const mine = open.find((i) => !i.pull_request && ours(i.user, me) && typeof i.body === 'string' && i.body.startsWith(MARK));
-    const body = `${MARK}\n${render({ ...shared, data: checked, max: ISSUE_MAX })}`;
-    if (mine) await github.rest.issues.update({ owner, repo, issue_number: mine.number, title: TITLE, body });
-    else await github.rest.issues.create({ owner, repo, title: TITLE, body });
-  } catch (e) { core.warning(`SpecGuard: could not write the audit issue (needs permissions: issues: write): ${e.message}`); }
+// Never fails the run: any error here is a warning.
+module.exports = async (args) => {
+  try { await main(args); } catch (e) { try { args.core.warning(`SpecGuard: audit report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { validate, verify, render, gap, STATUS, CLASS, MARK, TITLE });
+Object.assign(module.exports, { validate, verify, render, gap, readState, stateComment, STATUS, CLASS, MARK, TITLE });

@@ -137,7 +137,7 @@ function assembleAudit({ skillDir, ctxDir, schemaPath, engine = 'claude' }) {
   let max = 80;
   try { max = JSON.parse(read(ctxDir, 'audit-meta.json')).max_requirements || max; } catch {}
   parts.push(block('audit-meta.json', JSON.stringify({ max_requirements: max })));
-  for (const [name, limit] of [['audit-docs.txt', 8 * 1024], ['standards.txt', LIMITS.small], ['test-layout.txt', LIMITS.small]]) {
+  for (const [name, limit] of [['audit-docs.txt', 8 * 1024], ['audit-candidates.txt', 40 * 1024], ['standards.txt', LIMITS.small], ['test-layout.txt', LIMITS.small]]) {
     const body = read(ctxDir, name);
     if (!nonEmpty(body)) { empty.push(name); continue; }
     const c = cut(body, limit);
