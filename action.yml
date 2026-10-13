@@ -24,6 +24,7 @@ inputs:
   include_bots: { description: "true to review PRs opened by bots (skipped by default).", default: "false" }
   resolve_stale: { description: "true to resolve SpecGuard's own unreplied review threads whose finding is no longer reported.", default: "true" }
   force: { description: "true to review again although this head SHA already has a SpecGuard summary.", default: "false" }
+  ctx_retention_days: { description: "Days to keep the specguard-ctx debug artifact (diff, prompt context, raw engine output). 0 disables the upload.", default: "7" }
 
 outputs:
   skip: { description: "true when nothing reviewable changed", value: "${{ steps.preflight.outputs.skip == 'true' && 'true' || steps.collect.outputs.skip }}" }
@@ -164,3 +165,11 @@ runs:
         github-token: ${{ inputs.github_token }}
         retries: 3 # GitHub API 5xx (e.g. "diff temporarily unavailable") would otherwise drop the review
         script: await require(process.env.ACTION_PATH + '/src/post.js')({github, context, core})
+
+    - if: ${{ !cancelled() && steps.preflight.outputs.skip != 'true' && inputs.ctx_retention_days != '0' }} # raw engine output otherwise dies with the runner
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: specguard-ctx-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+        path: ${{ github.workspace }}/.specguard-ctx
+        retention-days: ${{ inputs.ctx_retention_days }}
+        if-no-files-found: ignore
