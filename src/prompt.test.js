@@ -208,7 +208,7 @@ test('audit prompt: per-run context is inlined as untrusted-data blocks after a 
   assert.equal(p.slice(0, i), abuild(b).slice(0, abuild(b).indexOf('Context directory (absolute path):')));
   for (const [n, body] of [['audit-meta.json', '{"max_requirements":25}'], ['audit-docs.txt', 'docs/design.md\tdiscovered'], ['standards.txt', 'CONTRIBUTING.md'], ['test-layout.txt', 'tests (3)']])
     assert.ok(new RegExp(`<untrusted-data name="${n}"[^>]*>\\n[\\s\\S]*${body.replace(/[()]/g, '\\$&')}[\\s\\S]*?\\n</untrusted-data>`).test(p.slice(i)), n);
-  assert.match(abuild(ctx({ 'audit-docs.txt': 'a.md\tdiscovered\n' })), /Empty or absent \(nothing to read\): standards\.txt, test-layout\.txt\./);
+  assert.match(abuild(ctx({ 'audit-docs.txt': 'a.md\tdiscovered\n' })), /Empty or absent \(nothing to read\): audit-candidates\.txt, standards\.txt, test-layout\.txt\./);
   assert.match(abuild(ctx({ 'audit-docs.txt': 'a.md\tdiscovered\n' })), /"max_requirements":80/, 'default cap when audit-meta.json is absent');
 });
 
