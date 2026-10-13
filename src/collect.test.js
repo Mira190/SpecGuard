@@ -476,3 +476,26 @@ test('test-candidates.txt: files with no candidate say so, and the file is cappe
   const r2 = scenario(t, { 'x.test.js': 'a\n', ...spare }, ({ write }) => { for (const f of Object.keys(spare)) write(f, 'b\n'); });
   assert.match(r2.ctxFile('test-candidates.txt'), /\(10 more changed file\(s\) not listed\)\n$/); // MAX_FILES = 60
 });
+
+test('test_paths (TEST_PATHS): the configured folders are the authoritative test locations; discovery by name applies only when empty', (t) => {
+  const base = { 'src/pay.js': 'module.exports = 1;\n', 'qa/checks/pay_check.js': "require('../../src/pay');\n", 'qa/checks/fixtures/pay.data.js': "// pay\n", 'tests/pay.test.js': 'x\n' };
+  const change = ({ write }) => write('src/pay.js', 'module.exports = 2;\n');
+  const candidates = (r) => Object.fromEntries(r.ctxFile('test-candidates.txt').split(/\n(?=\S)/).map((b) => { const [h, ...rest] = b.trim().split('\n'); return [h, rest.map((l) => l.trim())]; }));
+  const none = scenario(t, base, change);
+  assert.deepEqual(candidates(none)['src/pay.js'], ['tests/pay.test.js  (same name)']);
+  assert.equal(none.ctxFile('test-paths.txt'), null, 'nothing configured: no file, the prompt says nothing');
+
+  const set = scenario(t, base, change, { TEST_PATHS: 'qa/checks\n!qa/checks/fixtures/' });
+  assert.deepEqual(candidates(set)['src/pay.js'], ['qa/checks/pay_check.js  (mentions pay)'], 'a test file by location, whatever its name; others and excluded folders are not candidates');
+  assert.equal(set.ctxFile('test-paths.txt'), 'qa/checks\n!qa/checks/fixtures/\n');
+
+  const glob = scenario(t, base, change, { TEST_PATHS: '**/*.test.js' });
+  assert.deepEqual(candidates(glob)['src/pay.js'], ['tests/pay.test.js  (same name)']);
+});
+
+test('test_paths: a changed file inside a configured test folder is not a subject, even without a test-like name', (t) => {
+  const r = scenario(t, { 'src/a.js': 'a\n', 'qa/helpers.js': 'h\n' }, ({ write }) => { write('src/a.js', 'b\n'); write('qa/helpers.js', 'i\n'); }, { TEST_PATHS: 'qa' });
+  const s = r.ctxFile('test-candidates.txt');
+  assert.match(s, /^src\/a\.js\n/m);
+  assert.doesNotMatch(s, /^qa\/helpers\.js/m);
+});

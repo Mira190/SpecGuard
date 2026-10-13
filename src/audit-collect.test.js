@@ -193,3 +193,20 @@ test('CLI: rejects a bad audit_max_requirements and writes the skip output', (t)
   spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: none.root, env: { ...process.env, CTX: none.ctx, GITHUB_REF_NAME: '', GITHUB_OUTPUT: path.join(none.root, 'o.txt') } });
   assert.equal(fs.readFileSync(path.join(none.root, 'o.txt'), 'utf8'), 'skip=true\n');
 });
+
+test('testLayout with test_paths: the configured locations are listed as authoritative and every non-document file there counts as a test', () => {
+  const files = ['src/a.js', 'qa/checks/pay_check.js', 'qa/checks/README.md', 'qa/helpers/util.js', 'tests/a.test.js', 'package.json'];
+  const plain = testLayout(files);
+  assert.match(plain, /test directories: tests \(1\)/);
+  assert.doesNotMatch(plain, /configured test locations/);
+  const set = testLayout(files, 'qa\n!qa/helpers/');
+  assert.match(set, /^configured test locations \(authoritative, set by the repository owner; a ! line is excluded\): qa, !qa\/helpers\/\n/);
+  assert.match(set, /test directories: qa\/checks \(1\)\n/, 'the test-like file outside the configured folders is not listed; README and excluded folders do not count');
+  assert.equal(testLayout(files, ''), plain);
+});
+
+test('collect with testPaths writes the configured layout to test-layout.txt', (t) => {
+  const r = repo(t, { ...FILES, 'qa/checks/plan_check.js': 'x\n' });
+  collect({ cwd: r.root, ctx: r.ctx, testPaths: 'qa/checks' });
+  assert.match(fs.readFileSync(path.join(r.ctx, 'test-layout.txt'), 'utf8'), /configured test locations[^\n]*: qa\/checks\ntest directories: qa\/checks \(1\)/);
+});

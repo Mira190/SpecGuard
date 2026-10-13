@@ -2,7 +2,7 @@
 // Copilot SDK engine (spike): one session with read-only tools plus a `submit_review` tool whose parameters are the findings schema, so the
 // result arrives as tool-call arguments instead of JSON in prose. The handler validates (the runtime does NOT enforce the schema, verified 2026-10)
 // and rejects invalid calls so the model fixes them in-session; if the model ends without calling it, ONE follow-up message asks for the call.
-// Env: CTX PROMPT MODEL EFFORT AUTO_TIER MAX_CREDITS TIMEOUT (minutes, whole run) CHECK=audit (audit-post's validator). Writes in $CTX: findings.json,
+// Env: CTX PROMPT_FILE (or PROMPT, small prompts) MODEL EFFORT AUTO_TIER MAX_CREDITS TIMEOUT (minutes, whole run) CHECK=audit (audit-post's validator). Writes in $CTX: findings.json,
 // usage.json (the SDK's session.shutdown data: same shape as copilot --usage-output-file), engine-status (timeout|failed), engine-repair, engine-notes,
 // engine-model.json (engine-model.js), sdk-run.json (what happened, for eval). Never throws past the script; always exits 0.
 const fs = require('node:fs');
@@ -98,7 +98,7 @@ async function run({ sdk, env = process.env, check, now = Date.now, cwd = proces
       Promise.resolve().then(() => session.sendAndWait({ prompt }, left())).then(() => 'idle', (e) => { err = String(e?.message || e); return /time/i.test(err) ? 'timeout' : 'error'; }),
       submit.done.then(() => 'accepted'), deadline,
     ]);
-    let r = await turn(adaptPrompt(env.PROMPT || ''));
+    let r = await turn(adaptPrompt(env.PROMPT_FILE ? fs.readFileSync(env.PROMPT_FILE, 'utf8') : env.PROMPT || '')); // a file: the prompt can exceed one environment variable (128 KiB on Linux)
     if (r === 'idle' && !submit.state.accepted) { log.followups = 1; r = await turn(FOLLOW_UP); }
     if (r === 'timeout') log.status = 'timeout'; else if (r === 'error') log.status = 'failed';
     log.submits = submit.state.calls;

@@ -456,6 +456,12 @@ function parseReqPaths(s) {
   for (const l of String(s || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) (l.startsWith('!') ? exc : inc).push(l.replace(/^!/, ''));
   return { inc, exc };
 }
+// test_paths: same list syntax as requirements_paths. An entry without a glob character is a file or a folder (everything under it). Returns null when nothing is configured.
+function testScope(spec) {
+  const { inc, exc } = parseReqPaths(spec);
+  const hit = (list, f) => list.some((g) => matchGlob(f, g) || (!/[*?[]/.test(g) && matchGlob(f, g.replace(/\/*$/, '/'))));
+  return inc.length ? (f) => hit(inc, f) && !hit(exc, f) : null;
+}
 // Tracked doc paths that PR or issue text names: path-like tokens ending in a doc extension (also inside markdown links and blob URLs), resolved by
 // exact path or, for a slash-free token, a unique basename. Not a README, changelog or pip requirements.txt: a mention of those is not a spec.
 const DOC_MENTION = /[\w@+.\/-]*[\w@+-]\.(?:md|mdx|rst|adoc|txt)(?![\w-])/gi, NAME_SKIP = /(^|\/)(readme[^/]*|(requirements|constraints)[^/]*\.txt)$/i;
@@ -917,4 +923,4 @@ if (require.main === module) {
 }
 
 module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, isTestPath, pathKind,
-  codeHunks, matchGlob, classify, namedDocs, blocksOf, run };
+  codeHunks, matchGlob, testScope, classify, namedDocs, blocksOf, run };

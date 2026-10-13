@@ -3,7 +3,7 @@ description: Requirement-aware PR reviewer that finds missing and weak unit test
 branding: { icon: shield, color: blue }
 
 inputs:
-  engine: { description: "Review engine. Only copilot is enabled; the input is the extension point for other engines.", default: copilot }
+  engine: { description: "Review engine adapter: copilot (Copilot CLI, default) | copilot-sdk (Copilot SDK, opt-in; its GITHUB_TOKEN auth in Actions is unverified). Each is one script in src/engines/ (see src/engines/README.md).", default: copilot }
   copilot_token: { description: "Fallback fine-grained PAT (Copilot Requests). Empty = use the job token with permissions copilot-requests write.", default: "" }
   github_token: { description: "Token for collect and post (needs pull-requests write).", default: "${{ github.token }}" }
   model: { description: "Model name passed to the Copilot CLI. Empty = Copilot Auto. What is available depends on the token owner's plan; an unavailable model falls back to auto.", default: "" }
@@ -17,9 +17,11 @@ inputs:
   standards_checks: { description: "Exact check:NAME or status:CONTEXT entries, one per line. Requires checks/statuses read permission. Empty means not configured.", default: "" }
   standards_ref: { description: "head or merge: commit on which your lint/format jobs run. Defaults to head.", default: head }
   requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes. Empty = content-based discovery only.", default: "" }
+  test_paths: { description: "Globs or folders (one per line; a !glob line excludes) that are the authoritative unit-test locations. Empty = discover test files by name and layout.", default: "" }
   standards_paths: { description: "Globs (one per line) that add coding-standard or review-guideline documents, read from the base commit; a !glob line excludes.", default: "" }
   trace: { description: "auto | off. auto traces requirement docs and code when any requirement doc is found.", default: auto }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
+  copilot_sdk_version: { description: "Pinned @github/copilot-sdk version, used only with engine copilot-sdk.", default: "1.0.15" }
   review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it.", default: "12" }
   include_bots: { description: "true to review PRs opened by bots (skipped by default).", default: "false" }
   resolve_stale: { description: "true to resolve SpecGuard's own unreplied review threads whose finding is no longer reported.", default: "true" }
@@ -28,6 +30,11 @@ inputs:
   mode: { description: "pr (review a pull request) | audit (audit the checked-out repository against its requirement documents; run it on the default branch, on demand or on a schedule).", default: pr }
   audit_max_requirements: { description: "Audit mode: most document blocks audited per run, taken in document order; the rest are listed under not reviewed (integer 1-500).", default: "80" }
   audit_issue: { description: "Audit mode: true to also create or update one issue titled 'SpecGuard requirements audit' (needs issues write).", default: "false" }
+  delivery: { description: "pr (post the review and the summary comment to the PR) | summary (job summary only; nothing is written to the PR). For runs that review another repository (.github/workflows/specguard-run.yml).", default: pr }
+  repository: { description: "owner/name of the repository under review when the checkout is not the workflow's own repository (manual runs). Empty = the workflow's repository.", default: "" }
+  pr_number: { description: "PR number to review when the run is not a pull_request event (manual runs). Empty = the event's PR.", default: "" }
+  base_sha: { description: "Base commit of that PR (with pr_number). Empty = the event's.", default: "" }
+  head_sha: { description: "Head commit of that PR (with pr_number). Empty = the event's.", default: "" }
 
 outputs:
   skip: { description: "true when nothing reviewable changed", value: "${{ steps.preflight.outputs.skip == 'true' && 'true' || steps.collect.outputs.skip }}" }
@@ -60,10 +67,10 @@ runs:
       if: inputs.mode == 'pr'
       shell: bash
       env:
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
         GH_TOKEN: ${{ inputs.github_token }}
-        GH_REPO: ${{ github.repository }}
+        GH_REPO: ${{ inputs.repository || github.repository }}
         INCLUDE_BOTS: ${{ inputs.include_bots }}
         FORCE: ${{ inputs.force }}
       run: node "$GITHUB_ACTION_PATH/src/preflight.js"
@@ -72,16 +79,17 @@ runs:
       if: inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true'
       shell: bash
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
         GH_TOKEN: ${{ inputs.github_token }}
-        GH_REPO: ${{ github.repository }}
+        GH_REPO: ${{ inputs.repository || github.repository }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         IGNORE_EXTRA: ${{ inputs.ignore }}
         MAX_DIFF_KB: ${{ inputs.max_diff_kb }}
         REQ_PATHS: ${{ inputs.requirements_paths }}
         STANDARDS_PATHS: ${{ inputs.standards_paths }}
+        TEST_PATHS: ${{ inputs.test_paths }}
         TRACE: ${{ inputs.trace }}
       run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
@@ -94,7 +102,9 @@ runs:
         IGNORE_EXTRA: ${{ inputs.ignore }}
         REQ_PATHS: ${{ inputs.requirements_paths }}
         STANDARDS_PATHS: ${{ inputs.standards_paths }}
+        TEST_PATHS: ${{ inputs.test_paths }}
         MAX_REQUIREMENTS: ${{ inputs.audit_max_requirements }}
+        AUDIT_BRANCH_GUARD: ${{ inputs.repository && inputs.repository != github.repository && 'off' || 'on' }} # the guard compares this workflow's ref; another repository is not on it
       run: node "$GITHUB_ACTION_PATH/src/audit-collect.js"
 
     - if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
@@ -106,7 +116,9 @@ runs:
       if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
-        WANT: ${{ inputs.engine }}
+        ENGINE: ${{ inputs.engine }}
+        COPILOT_VERSION: ${{ inputs.copilot_version }}
+        SDK_VERSION: ${{ inputs.copilot_sdk_version }}
         MODEL: ${{ inputs.model }}
         EFFORT: ${{ inputs.effort }}
         AUTO_TIER: ${{ inputs.auto_tier }}
@@ -114,21 +126,22 @@ runs:
         MAX_CREDITS: ${{ inputs.copilot_max_ai_credits }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
-        bash "$GITHUB_ACTION_PATH/src/validate-inputs.sh" || exit 1
-        [ "$WANT" = copilot ] || { echo "::error::engine must be copilot (other engines are not enabled)"; exit 1; }
-        echo "engine=$WANT" >> "$GITHUB_OUTPUT"
+        bash "$GITHUB_ACTION_PATH/src/validate-inputs.sh" || exit 1 # includes the engine allow-list
+        echo "engine=$ENGINE" >> "$GITHUB_OUTPUT"
 
     # The engine step never fails the job: post reports "could not complete" instead. Config errors above fail loudly.
-    - name: Review with Copilot CLI
-      if: ((inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')) && steps.engine.outputs.engine == 'copilot'
+    - name: Run the review engine
+      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (inputs.mode == 'audit' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
+        ENGINE: ${{ steps.engine.outputs.engine }}
         COPILOT_GITHUB_TOKEN: ${{ inputs.copilot_token }}
         GITHUB_TOKEN: ${{ github.token }}
         MODE: ${{ inputs.mode }}
         CHECK: ${{ inputs.mode == 'audit' && 'audit' || '' }}
         CTX: ${{ github.workspace }}/.specguard-ctx
-        VERSION: ${{ inputs.copilot_version }}
+        COPILOT_VERSION: ${{ inputs.copilot_version }}
+        SDK_VERSION: ${{ inputs.copilot_sdk_version }}
         MODEL: ${{ inputs.model }}
         EFFORT: ${{ inputs.effort }}
         AUTO_TIER: ${{ inputs.auto_tier }}
@@ -136,16 +149,14 @@ runs:
         MAX_CREDITS: ${{ inputs.copilot_max_ai_credits }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
-        [ -n "$COPILOT_GITHUB_TOKEN" ] || unset COPILOT_GITHUB_TOKEN
-        timeout -k 10s 300s npm install -g "@github/copilot@$VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$VERSION (failed or over 5 minutes)"; echo failed > "$CTX/engine-status"; echo "engine install failed: @github/copilot@$VERSION" >> "$CTX/engine-notes"; exit 0; } # an unbounded install once hung the whole job
         if [ "$MODE" = audit ]; then skill="$GITHUB_ACTION_PATH/skills/spec-audit"; schema_file="$GITHUB_ACTION_PATH/src/audit.schema.json"
         else skill="$GITHUB_ACTION_PATH/skills/test-review"; schema_file="$GITHUB_ACTION_PATH/src/findings.schema.json"; fi
         # the model can only read the workspace, so inline the skill, the references that can matter and the per-PR context (src/prompt.js)
-        # a file, piped to copilot on stdin: the prompt is too big for one argument or environment variable (128 KiB on Linux)
+        # a file, handed to the engine: the prompt is too big for one argument or environment variable (128 KiB on Linux)
         PROMPT_FILE="$CTX/prompt.txt"
         node "$GITHUB_ACTION_PATH/src/prompt.js" --skill "$skill" --ctx "$CTX" --schema "$schema_file" --mode "$MODE" > "$PROMPT_FILE" || { echo "::warning::could not assemble the review prompt"; echo failed > "$CTX/engine-status"; exit 0; }
-        # one turn, then one repair turn on the same session when the JSON is missing or invalid (src/copilot-run.sh); it owns the time budget, model fallback and safety flags
-        PROMPT_FILE="$PROMPT_FILE" bash "$GITHUB_ACTION_PATH/src/copilot-run.sh" || exit 1
+        # src/engines/<engine>.sh owns the install, the time budget, the model fallback and the safety flags (contract: src/engines/README.md)
+        PROMPT_FILE="$PROMPT_FILE" bash "$GITHUB_ACTION_PATH/src/engines/$ENGINE.sh" || exit 1
         exit 0
 
     - id: post
@@ -160,14 +171,21 @@ runs:
         MODEL: ${{ inputs.model }}
         SKIP: ${{ steps.collect.outputs.skip }}
         PARTIAL: ${{ steps.collect.outputs.partial }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
+        BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
+        TARGET_REPO: ${{ inputs.repository }}
+        TARGET_PR: ${{ inputs.pr_number }}
+        DELIVERY: ${{ inputs.delivery }}
         STANDARDS_CHECKS: ${{ inputs.standards_checks }}
         STANDARDS_REF: ${{ inputs.standards_ref }}
         REVIEW_TIMEOUT_MINUTES: ${{ inputs.review_timeout_minutes }}
       with:
         github-token: ${{ inputs.github_token }}
         retries: 3 # GitHub API 5xx (e.g. "diff temporarily unavailable") would otherwise drop the review
-        script: await require(process.env.ACTION_PATH + '/src/post.js')({github, context, core})
+        script: |
+          const env = process.env, t = require(env.ACTION_PATH + '/src/target.js')
+          // manual runs: the PR and repository come from inputs, not the event; delivery=summary also makes every write fail (a safety net beside post.js's own DELIVERY switch)
+          await require(env.ACTION_PATH + '/src/post.js')({ github: env.DELIVERY === 'summary' ? t.readOnly(github) : github, context: t.withTarget(context, env), core })
 
     - if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && inputs.ctx_retention_days != '0' }} # raw engine output otherwise dies with the runner
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -188,10 +206,14 @@ runs:
         MODEL: ${{ inputs.model }}
         SKIP: ${{ steps.audit_collect.outputs.skip }}
         AUDIT_ISSUE: ${{ inputs.audit_issue }}
+        TARGET_REPO: ${{ inputs.repository }}
+        TARGET_SHA: ${{ inputs.head_sha }}
       with:
         github-token: ${{ inputs.github_token }}
         retries: 3
-        script: await require(process.env.ACTION_PATH + '/src/audit-post.js')({github, context, core})
+        script: |
+          const env = process.env
+          await require(env.ACTION_PATH + '/src/audit-post.js')({ github, context: require(env.ACTION_PATH + '/src/target.js').withTarget(context, env), core })
 
     - if: ${{ !cancelled() && inputs.mode == 'audit' && inputs.ctx_retention_days != '0' }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
