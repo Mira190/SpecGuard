@@ -20,8 +20,8 @@ test('combined overlay has no duplicate paths and excludes x1/x2', () => {
 });
 
 test('filterSummary keeps only items and coverage rows under the prefix', () => {
-  const s = ['intro', '- **A** (`eval-sandbox/r1/a.js:3`, missing_test, low)', '- **B** (`eval-sandbox/r2/b.js:4`, weak_test)',
-    '| R1 | x; eval-sandbox/r1/a.js:3 — y | z | w | missing_test: q |', '| R2 | x; eval-sandbox/r2/b.js:4 — y | z | w | missing_test: q |'].join('\n');
+  const s = ['intro', '- ❌ **Missing test:** A `eval-sandbox/r1/a.js:3` (low confidence) — x', '- ❌ **Weak test:** B `eval-sandbox/r2/b.js:4` — x',
+    '| R1 | x; eval-sandbox/r1/a.js:3 — y | z | w | Missing test: q |', '| R2 | x; eval-sandbox/r2/b.js:4 — y | z | w | Missing test: q |'].join('\n');
   const out = filterSummary(s, 'eval-sandbox/r1/');
   assert.deepEqual(out.split(String.fromCharCode(10)).map((l) => /r2/.test(l)), [false, false, false]);
   assert.equal(filterSummary(null, 'x'), null);

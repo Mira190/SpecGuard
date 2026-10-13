@@ -42,18 +42,18 @@ test('rule and text expectations', () => {
 });
 
 test('low-confidence and summary-only items are never TP or FP', () => {
-  const r = grade(spec(), obs([com({ confidence: 'low' })], { summary: summaryWith('- **Weak** (`a.js:10`, missing_test, low confidence)\n\n  body\n') }));
+  const r = grade(spec(), obs([com({ confidence: 'low' })], { summary: summaryWith('- ❌ **Missing test:** Weak `a.js:10` (low confidence) — body\n') }));
   assert.deepEqual([r.tp, r.fp, r.fn, r.summary_only], [0, 0, 1, 1]);
 });
 
 test('allow_summary counts a summary item or coverage row matching kind and path', () => {
   const e = exp({ allow_summary: true, path: ['p.js', 'p.spec.js'], kind: ['weak_test', 'missing_test'] });
-  const item = grade(spec([e]), obs([], { summary: summaryWith('- **Gone** (`p.spec.js:3`, weak_test, removed test)\n') }));
+  const item = grade(spec([e]), obs([], { summary: summaryWith('- ❌ **Weak test:** Gone `p.spec.js:3` (removed test or assertion) — x\n') }));
   assert.deepEqual([item.tp, item.fn, item.matched[0].via_summary], [1, 0, true]);
   const row = '| O1: sums | PR body; p.js:2 — return x | none | missing_test: no test |';
   assert.equal(grade(spec([e]), obs([], { summary: `Reviewed\n${row}\n` })).tp, 1);
   assert.equal(grade(spec([e]), obs([], { summary: 'Reviewed\n| O1: sums | PR body; p.js:2 — return x | e | covered: fine |\n' })).fn, 1);
-  assert.equal(grade(spec([{ ...e, allow_summary: false }]), obs([], { summary: summaryWith('- **Gone** (`p.spec.js:3`, weak_test)\n') })).fn, 1);
+  assert.equal(grade(spec([{ ...e, allow_summary: false }]), obs([], { summary: summaryWith('- ❌ **Weak test:** Gone `p.spec.js:3` — x\n') })).fn, 1);
 });
 
 test('expect_skip and expect_clean', () => {
@@ -91,8 +91,8 @@ test('parses Action comments and summaries', () => {
   const file = parseComment({ path: 'a.js', line: null, subject_type: 'file', body: `**T**\n\nx\n\n[a.js:42](https://github.com/o/r/blob/abc/a.js#L42)\n\nkind: pushdown, confidence: high` });
   assert.deepEqual([file.line, file.level], [42, 'file']);
   assert.equal(parseComment({ body: 'a human comment' }), null);
-  const s = parseSummary(summaryWith('- **A** (`x.js:5`, weak_test, low confidence)\n\n  b\n') + '| O1: a \\| b | src; x.js:5 — q | none | weak_test: r |\n');
-  assert.deepEqual([s.items.length, s.rows.length, s.rows[0].path], [1, 1, 'x.js']);
+  const s = parseSummary(summaryWith('- ❌ **Weak test:** A `x.js:5` (low confidence) — b\n') + '| O1: a \\| b | src; x.js:5 — q | none | Weak test: r |\n');
+  assert.deepEqual([s.items.length, s.rows.length, s.rows[0].path, s.rows[0].status, s.items[0].kind, s.items[0].why], [1, 1, 'x.js', 'weak_test', 'weak_test', 'low confidence']);
 });
 
 test('aggregate: precision, recall, validity, pass rate, latency and per-goal split', () => {
@@ -117,7 +117,7 @@ test('json_valid follows the raw model output when the artifact is available; de
   assert.equal(grade(spec([]), failed).json_valid, false);
   const skip = '<!-- specguard:summary -->\n## SpecGuard\n\nNothing to review: every changed file is ignored.';
   assert.equal(grade(spec([], { expect_skip: true }), { ...obs([], { summary: skip }), raw_findings_present: false }).pass, true);
-  const degraded = obs([], { summary: `${obs().summary}\n\n<details><summary>Validation notes (2)</summary>\n\n- Standards assessment ignored: checked standards need sources.\n- Dropped findings[1].\n</details>\n` });
+  const degraded = obs([], { summary: `${obs().summary}\n\n<details><summary>Details</summary>\n\n**Validation notes (2)**\n\n- Standards assessment ignored: checked standards need sources.\n- Dropped findings[1].\n\n**Sources read**\n\n- x\n</details>\n` });
   const r = grade(spec([]), degraded);
   assert.deepEqual([r.degraded, r.validation_notes.length, grade(spec([]), obs()).degraded], [true, 2, false]);
   assert.equal(aggregate([r, grade(spec([]), obs())]).degraded_rate, 0.5);
@@ -237,4 +237,24 @@ test('shipped traceability cases carry valid summary expectations', () => {
     const e = loadCase(id).expected;
     for (const p of [...(e.summary_has || []), ...(e.summary_lacks || []), ...(e.rows_not || []).map((r) => r.text).filter(Boolean), ...[e.pre_existing].filter((p) => typeof p === 'string'), ...e.findings.map((f) => f.text).filter(Boolean)]) new RegExp(p, 'i');
   }
+});
+
+test('parseSummary reads the redesigned summary: linked (posted) titles are not summary items, the obligations table uses status words, Details sections are bold headings', () => {
+  const md = [
+    '<!-- specguard:summary -->', '## SpecGuard', '', '**❌ 2 unit test gaps and 1 spec mismatch to fix**',
+    '- ❌ **Missing test:** [Posted one](https://github.com/o/r/pull/1#discussion_r1) `a.js:3` — posted',
+    '- ❌ **Weak test:** Kept here `b.js:7` (outside the diff) — text',
+    '- ❌ **Violation:** Throw an Error [`c.js:9`](https://github.com/o/r/blob/x/c.js#L9) — rule: `RULES.md`',
+    '', '<details><summary>Details: x</summary>', '',
+    '| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |', '|---|---|---|---|',
+    '| O1: a | PR body; a.js:3 — q | none | Missing test: no test |', '| O2: b | PR body; b.js:7 — q | unit | Evidenced: fine |', '',
+    '**Pre-existing drift (not caused by this PR)**', '', '- **Mismatch:** Old drift `d.js:1` — old', '  more text', '', '**Validation notes (1)**', '', '- One note.', '', '**Sources read**', '', '- x', '', '</details>'].join('\n');
+  const s = parseSummary(md);
+  assert.deepEqual(s.items.map((i) => [i.kind, i.path, i.line, i.why]), [['weak_test', 'b.js', 7, 'outside the diff'], ['standard', 'c.js', 9, ''], ['spec_mismatch', 'd.js', 1, '']]);
+  assert.deepEqual(s.rows.map((r) => [r.status, r.path]), [['missing_test', 'a.js'], ['covered', 'b.js']]);
+  assert.equal(s.preExisting.startsWith('- **Mismatch:** Old drift'), true);
+  assert.equal(s.preExisting.includes('Sources read'), false);
+  assert.deepEqual(s.notes, ['One note.']);
+  assert.equal(parseSummary('**⚠️ Could not complete: x**').incomplete, true);
+  assert.equal(parseSummary('> - The diff exceeded `max_diff_kb` and was truncated.').incomplete, true);
 });
