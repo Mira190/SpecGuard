@@ -26,7 +26,7 @@ out="$CTX/copilot.out"; err="$CTX/copilot.err"
 if [ -z "${PROMPT_FILE:-}" ]; then PROMPT_FILE="$CTX/prompt.txt"; printf '%s' "$PROMPT" > "$PROMPT_FILE"; fi
 common=(--available-tools view,glob,grep --allow-all-tools --no-ask-user -s --max-ai-credits "${MAX_CREDITS:-60}")
 
-model_args=(); effort_args=(); tier_args=(); effort_note=''; fallback_note=''; usage_note=''; repair_note=''; tier_note=''; exit_note=''
+model_args=(); effort_args=(); tier_args=(); effort_note=''; fallback_note=''; usage_note=''; repair_note=''; tier_note=''; exit_note=''; class_note=''
 [ -n "${MODEL:-}" ] && model_args=(--model "$MODEL")
 # The router profile only exists for auto, and the CLI rejects --auto-tier unless --model auto is explicit ("Auto preference requires the selected model to be `auto`"):
 # an empty MODEL with a tier therefore becomes `--model auto --auto-tier X`; without a tier the CLI default applies and no model flag is passed.
@@ -36,7 +36,7 @@ if [ -n "${EFFORT:-}" ]; then # auto does not support reasoning effort (hard err
   if [ -n "${MODEL:-}" ] && [ "$MODEL" != auto ]; then effort_args=(--reasoning-effort "$EFFORT"); effort_note="effort: $EFFORT"
   else effort_note='effort ignored: model auto'; fi
 fi
-save_notes() { printf '%s\n' "$effort_note" "$exit_note" "$fallback_note" "$tier_note" "$usage_note" "$repair_note" | grep . > "$CTX/engine-notes"; }
+save_notes() { printf '%s\n' "$class_note" "$effort_note" "$exit_note" "$fallback_note" "$tier_note" "$usage_note" "$repair_note" | grep . > "$CTX/engine-notes"; }
 
 turn() { # <prompt file> <usage file> <stdout file>; the time left of the shared budget is the limit
   local left=$((budget - SECONDS)) rc=0
@@ -69,8 +69,26 @@ if [ $rc != 0 ] && grep -q 'from --model flag is not available' "$err"; then # n
 else settle main $rc "$out"; rc=$settled
 fi
 [ $rc = 0 ] || usage_note='usage partial' # a killed or failed turn leaves whatever usage file it wrote; its total cannot be trusted
+# ponytail: heuristic substring table over a failed turn's stderr+stdout (the CLI has no machine-readable error codes); first match wins, the raw first line is always added. Unmatched = unknown = today's generic text.
+reason=''; why=''
+if [ $rc != 0 ] && [ $rc != 124 ]; then
+  text="$(cat "$err" "$out" 2>/dev/null)"
+  has() { printf '%s' "$text" | grep -qiE "$1"; }
+  if has 'exceeded your monthly quota|quota|budget limit|ai credits.*exceed|exceed.*ai credits'; then reason=quota; why="Copilot quota or budget exhausted for this token's account/org (raise the budget or wait for the reset)"
+  elif has 'access denied by policy|policy settings|not enabled|disabled by your organization'; then reason=policy; why='Copilot is disabled by an organization or enterprise policy for this token'
+  elif has 'not authorized|\b401\b|authentication|no copilot access|requires a copilot'; then reason=auth; why='The token cannot use Copilot (check copilot-requests: write or copilot_token)'
+  elif has 'rate limit|\b429\b|too many requests'; then reason=rate; why='Copilot rate limit hit; the next push retries'
+  fi
+  if [ -n "$reason" ]; then
+    raw="$(printf '%s\n' "$(cat "$err" 2>/dev/null)" "$text" | grep -m1 '[^[:space:]]' | cut -c1-200)"
+    printf '%s\n%s\n' "$reason" "$why" > "$CTX/engine-error"; class_note="$why${raw:+: $raw}"
+  fi
+fi
 save_notes
-[ $rc = 0 ] || { echo "::warning::Copilot review failed or timed out (needs 'permissions: copilot-requests: write' or a copilot_token)"; [ $rc = 124 ] && echo timeout > "$CTX/engine-status" || echo failed > "$CTX/engine-status"; }
+if [ $rc != 0 ]; then
+  case "$reason" in ''|auth) echo "::warning::Copilot review failed or timed out (needs 'permissions: copilot-requests: write' or a copilot_token)";; *) echo "::warning::Copilot review failed: $why";; esac
+  [ $rc = 124 ] && echo timeout > "$CTX/engine-status" || echo failed > "$CTX/engine-status"
+fi
 problem="$(check "$out")"
 if [ $rc = 0 ] && [ -n "$problem" ]; then
   echo "$problem"
