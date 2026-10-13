@@ -118,10 +118,14 @@ const AC_HEAD = /^(acceptance criteria|acceptance tests|验收标准|验收条�
 const LIST_ITEM = /^\s*(?:[-*+]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)(.+)$/;
 // Gherkin keywords count in .feature files and in fenced gherkin/feature blocks, or in a document that also has Given/When/Then steps.
 // A bare 'Example:' (prose, YAML front matter) is a scenario only in a .feature file.
-const GHERKIN = /^\s*(Feature|Rule|Scenario Outline|Scenario Template|Scenario|Background)\s*:\s*(.*)$/;
+// Also OpenSpec's '#### Scenario: name' headings and a bold keyword ('**Scenario:** name').
+const GHERKIN = /^\s*(?:#{1,6}\s+)?(?:\*\*)?(Feature|Rule|Scenario Outline|Scenario Template|Scenario|Background)(?:\*\*)?\s*:(?:\*\*)?\s*(.*)$/;
 const GHERKIN_EXAMPLE = /^\s*(Example)\s*:\s*(.*)$/;
-const GHERKIN_STEP = /^\s*(?:[-*+]\s+)?(?:\*\*)?(Given|When|Then)\b/;
-const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+// Steps are case-insensitive and may carry a bullet or number and bold: '- **WHEN** x', '1. **Given** x', 'then x'. ponytail: a prose line starting with 'When' also counts; harmless without a Scenario: line.
+const GHERKIN_STEP = /^\s*(?:(?:[-*+]|\d+[.)])\s+)?(?:\*\*)?(Given|When|Then)\b/i;
+// Spec Kit specs/<feature>/tasks.md, Kiro .kiro/specs/<feature>/tasks.md, OpenSpec openspec/changes/<change>/tasks.md.
+const TASKS_FILE = /(?:^|\/)(?:specs|openspec\/changes)\/(?:[^/]+\/)*tasks\.md$/i;
+const FENCE =/^ {0,3}(`{3,}|~{3,})(.*)$/;
 const ID_MAX_LINES = 60, ID_MAX_CHARS = 3000; // an ID'd item is a requirement, not a chapter
 const NORMATIVE = /(?<![\w-])(shall|must|required to)(?![\w-])|必须|应当|不得/i; // not inside an identifier like triage-must-have
 const TABLE_ROW = /^\s*\|.*\|\s*$/, TABLE_RULE = /^\s*\|[\s:|-]+\|\s*$/; // a Markdown table row pairs by its first cell
@@ -182,6 +186,14 @@ function parseItems(file, text, touch = null) {
     items.push({ path: file, ref, line: a + 1, end: z + 1, heading, text: raw.slice(0, 600), raw, kind, normative: true });
     for (let k = a; k <= z; k++) covered.add(k);
   };
+  // 0. tasks.md: one item per checkbox line. The [ ] / [x] state is part of the item, so ticking a task is a change.
+  if (TASKS_FILE.test(file)) for (let i = 0; i < n; i++) {
+    const m = !fenced[i] && /^\s*[-*+]\s+\[([ xX])\]\s+(\S.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const id = /^\**(T\d+|\d+(?:\.\d+)*)\b/.exec(m[2]), raw = `[${m[1] === ' ' ? ' ' : 'x'}] ${m[2].trim()}`;
+    items.push({ path: file, ref: `task#${id ? id[1] : slug(m[2]).slice(0, 40)}`, line: i + 1, end: i + 1, heading: head[i]?.text || '', text: raw.slice(0, 600), raw, kind: 'task', normative: true });
+    covered.add(i);
+  }
   // 1. ID'd items
   for (let i = 0; i < n; i++) {
     if (fenced[i] || covered.has(i)) continue;
@@ -461,12 +473,22 @@ function namedDocs(texts, paths) {
   return out;
 }
 const prTexts = (st) => ((st && st.documents) || []).filter((x) => x && !x.untrusted && typeof x.text === 'string').map((x) => x.text); // the PR body and linked issues, never history
-const namedSet = ({ cwd, base, head, texts, ruled, excluded }) => {
-  if (!texts.length) return new Set();
+// The spec folder a branch is named after: 'feat/003-photo-albums' -> specs/003-photo-albums/, .kiro/specs/<name>/, openspec/changes/<name>/.
+// The last path segment of the branch equals the folder name, or both are equal once a leading number is dropped ('photo-albums' <-> '003-photo-albums').
+// A leading zero is fine here: this is a folder name, not an issue number. ponytail: exact names only, no fuzzy match.
+const SPEC_FOLDER = /(?:^|\/)(?:specs|openspec\/changes)\/([^/]+)\//i, GENERIC_BRANCH = /^(?:main|master|develop|dev|trunk|staging|release|hotfix)$/i;
+function branchDocs(branch, paths) {
+  const name = String(branch || '').split('/').pop().toLowerCase();
+  if (name.length < 3 || GENERIC_BRANCH.test(name)) return [];
+  const bare = (x) => x.replace(/^\d+-/, '');
+  return paths.filter((p) => { const m = SPEC_FOLDER.exec(p), f = m && m[1].toLowerCase(); return f && docLike(p) && !NAME_SKIP.test(p) && !SKIP_NAME.test(p) && (f === name || (bare(f) === bare(name) && bare(name).includes('-'))); });
+}
+const namedSet = ({ cwd, base, head, texts, ruled, excluded, branch }) => {
+  if (!texts.length && !branch) return new Set();
   try {
     const paths = new Set(lsTree(cwd, head).map((e) => e.path));
     if (base) try { for (const e of lsTree(cwd, base)) paths.add(e.path); } catch { /* no base tree: head paths only */ }
-    return new Set([...namedDocs(texts, [...paths])].filter((p) => !ruled(p) && !excluded(p)));
+    return new Set([...namedDocs(texts, [...paths]), ...branchDocs(branch, [...paths])].filter((p) => !ruled(p) && !excluded(p)));
   } catch { return new Set(); }
 };
 const kb = (n) => (n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
@@ -481,13 +503,13 @@ const rank = (p) =>{ const i = HINTS.findIndex((h) => h.test(p)); return i < 0 ?
 const byRank = (a, b) => rank(a.path) - rank(b.path) || (a.path < b.path ? -1 : 1);
 
 // Which tracked files are requirement docs at `head` (content-based; globs only rank, includes/excludes adjust).
-function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [] }) {
+function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [], branch = '' }) {
   const { inc, exc } = parseReqPaths(reqPaths), limitations = [];
   const extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
   const skipped = { n: 0 }, entries = lsTree(cwd, head, skipped);
   if (skipped.n) limitations.push(`${skipped.n} tracked path(s) containing a control character were ignored.`);
   const ruled = (p) => RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g));
-  const excluded = (p) => exc.some((g) => matchGlob(p, g)), named = namedSet({ cwd, base, head, texts, ruled, excluded });
+  const excluded = (p) => exc.some((g) => matchGlob(p, g)), named = namedSet({ cwd, base, head, texts, ruled, excluded, branch });
   const forced = (p) => inc.some((g) => matchGlob(p, g)) || named.has(p); // a doc the PR or a linked issue names is admitted like a requirements_paths entry
   for (const e of entries) if (UNREADABLE.test(e.path) && UNREADABLE_NAME.test(path.basename(e.path)) && !excluded(e.path)) limitations.push(`requirement-like file not readable: ${e.path}`);
   let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
@@ -523,7 +545,7 @@ function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '
   const ruled = (p) => RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g)), excluded = (p) => exc.some((g) => matchGlob(p, g));
   let st = null;
   try { st = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')); } catch { /* collect.sh classifies before the requirements step (nothing named yet) and again after it */ }
-  const named = namedSet({ cwd, base, head, texts: prTexts(st), ruled, excluded });
+  const named = namedSet({ cwd, base, head, texts: prTexts(st), ruled, excluded, branch: st && st.branch });
   const eligible = (p) => !excluded(p) && (inc.some((g) => matchGlob(p, g)) || named.has(p) || (specLike(p) && !SKIP_NAME.test(p) && !ruled(p)));
   const todo = paths.filter((p) => !CONTROL.test(p) && eligible(p));
   const read = (rev) => catBatch(cwd, todo.map((p) => `${rev}:${p}`));
@@ -761,7 +783,7 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   };
   if (String(trace).toLowerCase() === 'off') return finish(0);
   const lim = (what, e) => cand.limitations.push(`${what} failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); continuing without it.`);
-  const d = discover({ cwd, base, head, reqPaths, ignoreExtra, texts: prTexts(status) });
+  const d = discover({ cwd, base, head, reqPaths, ignoreExtra, texts: prTexts(status), branch: status.branch });
   rejected = d.rejected;
   cand.limitations.push(...d.limitations);
   const docs = [...d.docs.values()], allItems = docs.flatMap((x) => x.items);

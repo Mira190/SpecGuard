@@ -1179,7 +1179,7 @@ async function run({ github, context, core }) {
     data.requirements_source = requirements.sources.join(', ') || 'unavailable; changed behaviour only';
     if (requirements.status !== 'available') addNote((requirements.limitations || []).join(' '));
     // What the collector did not collect. Not these: an empty PR body (a fact about the PR) and the capped requirements-index.md (the documents stay readable).
-    const lims = [...(requirements.limitations || []), ...(requirements.spec?.limitations || [])].filter((l) => !/^No requirement text available|^requirements-index\.md exceeded /.test(l));
+    const lims = [...(requirements.limitations || []), ...(requirements.spec?.limitations || [])].filter((l) => !/^No requirement text available|^requirements-index\.md exceeded |^Referenced but not readable: |^Context trimmed: /.test(l));
     if (lims.length) incomplete.push(`Requirement collection did not cover everything: ${lims.slice(0, 10).join(' ')}${lims.length > 10 ? ` (+${lims.length - 10} more)` : ''}`);
   } else { // no collected documents: quotes verify only against files; unverifiable ones are unassessed but their obligations keep their own citations
     verifyRequirements(data, { unavailable: true, specFiles }, readLines);
