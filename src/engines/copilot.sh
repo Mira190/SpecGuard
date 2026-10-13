@@ -15,6 +15,12 @@ if [ -n "${COPILOT_VERSION:-}" ]; then # an unbounded install once hung the whol
   cap=300; [ "$budget" -ge "$cap" ] || cap=$budget
   timeout -k 10s "${cap}s" npm install -g "@github/copilot@$COPILOT_VERSION" >/dev/null || { echo "::warning::could not install @github/copilot@$COPILOT_VERSION (failed or over ${cap}s)"; echo failed > "$CTX/engine-status"; echo "engine install failed: @github/copilot@$COPILOT_VERSION" >> "$CTX/engine-notes"; exit 0; }
 fi
+# A stub named copilot (VS Code's prints "Cannot find GitHub Copilot CLI" and exits 0) must not pass for a turn: the copilot on PATH (the one installed above when COPILOT_VERSION is set) has to report its version.
+ver="$(timeout -k 5s 30s copilot --version < /dev/null 2>&1 | head -n 3)" || true
+if ! printf '%s\n' "$ver" | grep -qiE 'GitHub Copilot CLI v?[0-9]+\.[0-9]+\.[0-9]+'; then
+  first="$(printf '%s\n' "$ver" | grep . | head -n 1)"; first="${first:0:200}"
+  echo "::warning::Copilot CLI not found or not runnable (${first:-no output})"; echo failed > "$CTX/engine-status"; echo "Copilot CLI not found or not runnable (${first:-no output})" >> "$CTX/engine-notes"; exit 0
+fi
 SID="$(node -e "console.log(require('crypto').randomUUID())")"
 out="$CTX/copilot.out"; err="$CTX/copilot.err"
 if [ -z "${PROMPT_FILE:-}" ]; then PROMPT_FILE="$CTX/prompt.txt"; printf '%s' "$PROMPT" > "$PROMPT_FILE"; fi
@@ -38,6 +44,7 @@ turn() { # <prompt file> <usage file> <stdout file>; the time left of the shared
   timeout -k 10s "${left}s" copilot --session-id "$SID" "${common[@]}" --usage-output-file "$2" "${model_args[@]}" "${effort_args[@]}" "${tier_args[@]}" < "$1" > "$3" 2> "$err" || rc=$?
   cat "$err" >&2
   [ $rc = 137 ] && rc=124 # timeout -k had to KILL it: still a timeout
+  [ $rc = 0 ] && grep -q 'Cannot find GitHub Copilot CLI' "$3" && rc=1 # a stub that exits 0: a failed turn, never one to repair
   if [ $rc != 0 ] && [ ${#tier_args[@]} != 0 ] && grep -qiE 'auto-tier|auto tier|auto preference' "$err"; then # old CLI or a strict org policy: run this turn once more without the flag
     tier_args=(); [ -n "${MODEL:-}" ] || model_args=(); tier_note='auto_tier ignored'; turn "$@"; return $?
   fi

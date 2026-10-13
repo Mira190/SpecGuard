@@ -160,7 +160,7 @@ test('SIGINT while the engine runs: the child is stopped, the worktree and temp 
   const { repo } = makeRepo('signal');
   const bin = path.join(tmp, 'signal-bin');
   fs.mkdirSync(bin);
-  fs.writeFileSync(path.join(bin, 'copilot'), '#!/usr/bin/env bash\nsleep 3\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, 'copilot'), '#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "GitHub Copilot CLI 1.0.92."; exit 0; }\nsleep 3\n', { mode: 0o755 });
   const before = new Set(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('specguard-local-') && !n.startsWith('specguard-local-bin-test-')));
   const proc = new EventEmitter(), codes = [];
   proc.exit = (c) => codes.push(c);
@@ -176,6 +176,17 @@ test('SIGINT while the engine runs: the child is stopped, the worktree and temp 
   const left = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('specguard-local-') && !n.startsWith('specguard-local-bin-test-') && !before.has(n));
   assert.deepStrictEqual(left, [], 'no temp dir is left');
   assert.strictEqual(proc.listenerCount('SIGINT') + proc.listenerCount('SIGTERM'), 0, 'the handlers are removed when the run ends');
+});
+
+test('a stub copilot (VS Code prints "Cannot find GitHub Copilot CLI", exit 0) fails up front: clear message, no worktree', async () => {
+  const { repo } = makeRepo('stub');
+  const bin = path.join(tmp, 'stub-bin');
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, 'copilot'), '#!/usr/bin/env bash\necho "Cannot find GitHub Copilot CLI (https://docs.github.com/copilot)"\n', { mode: 0o755 });
+  const oldPath = process.env.PATH;
+  process.env.PATH = bin + path.delimiter + oldPath;
+  try { await assert.rejects(run({ cwd: repo, opts: { base: 'main' }, log: quiet }), /Copilot CLI not found or not runnable \(Cannot find GitHub Copilot CLI.*; install @github\/copilot .*first on PATH/); } finally { process.env.PATH = oldPath; }
+  assert.strictEqual(git(repo, 'worktree', 'list').split('\n').length, 1, 'no worktree was created');
 });
 
 test('main: exit code is 0 (advisory) unless --fail-on-gaps and gaps exist; --json is parseable', async () => {

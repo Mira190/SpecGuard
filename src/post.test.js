@@ -2923,9 +2923,41 @@ test('focused (large PR) review: incomplete note naming the riskiest skipped fil
   assert.match(b, /> - Large PR: focused review of 2 of 14 files \(highest risk first\); not reviewed: `rest\/f0\.js`, `rest\/f1\.js`.*`rest\/f9\.js`, … \(\+2 more\)\n/);
   assert.doesNotMatch(b, /f10\.js|Reduced review|specguard:head=/);
   assert.match(b, /<!-- specguard:status=incomplete -->/);
-  assert.deepEqual(countsOf(b).focused, { files: 2, of: 14 });
+  assert.deepEqual(countsOf(b).focused, { files: 2, of: 14, shortened: 0 });
   const n = setup(t);
   await post(n);
   assert.doesNotMatch(n.calls.summary[0].body, /Large PR/);
   assert.equal('focused' in countsOf(n.calls.summary[0].body), false);
+});
+
+test('focused review with nothing skipped: shortened diffs are an info note only, the run stays complete (head marker kept)', async (t) => {
+  const s = setup(t);
+  writeCtx(s, 'focus.txt', 'a.js\t14.0\tlogic\nb.js\t9.0\tlogic\n');
+  writeCtx(s, 'focus-skipped.txt', '');
+  writeCtx(s, 'diff.numbered.txt', 'a.js\n@@ -1 +1 @@\n  1 | +x\n… 40 more changed lines in this file not shown (read the file for them)\nb.js\n… 7 more changed lines in this file not shown (read the file for them)\n');
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, /> Large PR: diffs of 2 large files were shortened in the prompt; the reviewer read the files directly\n/);
+  assert.doesNotMatch(b, /Incomplete review|not reviewed|focused review of/);
+  assert.match(b, /specguard:head=/);
+  assert.match(b, /<!-- specguard:status=complete -->/);
+  assert.deepEqual(countsOf(b).focused, { files: 2, of: 2, shortened: 2 });
+  const n = setup(t); // nothing skipped, nothing shortened: no note at all
+  writeCtx(n, 'focus.txt', 'a.js\t14.0\tlogic\n');
+  await post(n);
+  assert.doesNotMatch(n.calls.summary[0].body, /Large PR|Incomplete review/);
+  assert.deepEqual(countsOf(n.calls.summary[0].body).focused, { files: 1, of: 1, shortened: 0 });
+});
+
+test('focused review with files skipped and diffs shortened: incomplete with the list, no info note', async (t) => {
+  const s = setup(t);
+  writeCtx(s, 'focus.txt', 'a.js\t14.0\tlogic\n');
+  writeCtx(s, 'focus-skipped.txt', 'rest/f0.js\t40\n');
+  writeCtx(s, 'diff.numbered.txt', 'a.js\n… 5 more changed lines in this file not shown (read the file for them)\n');
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, /Incomplete review/);
+  assert.match(b, /focused review of 1 of 2 files.*not reviewed: `rest\/f0\.js`/);
+  assert.doesNotMatch(b, /were shortened in the prompt|specguard:head=/);
+  assert.deepEqual(countsOf(b).focused, { files: 1, of: 2, shortened: 1 });
 });

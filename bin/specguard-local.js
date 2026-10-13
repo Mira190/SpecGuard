@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFileSync, spawn } = require('node:child_process');
+const { execFileSync, spawn, spawnSync } = require('node:child_process');
 const { parseArgs } = require('node:util');
 const { fakeGithub } = require('../eval/local.js');
 const { parseComment } = require('../eval/grade.js');
@@ -96,12 +96,19 @@ function exec(state, cmd, args, { capture, ...opts }) {
     c.on('close', (status) => { state.child = null; if (state.interrupted) reject(new Error('interrupted')); else resolve({ status, out }); });
   });
 }
+// The same check as engines/copilot.sh, through bash so the same copilot is found: a stub that prints "Cannot find GitHub Copilot CLI" (VS Code's) must not pass.
+function copilotProblem() {
+  const r = spawnSync('bash', ['-c', 'timeout 30 copilot --version < /dev/null 2>&1 | head -n 3'], { encoding: 'utf8' });
+  const out = (r.stdout || '').trim();
+  return /GitHub Copilot CLI v?\d+\.\d+\.\d+/i.test(out) ? '' : `Copilot CLI not found or not runnable (${out.split('\n')[0] || r.error?.message || 'no output'}); install @github/copilot (npm install -g @github/copilot) or put it first on PATH`;
+}
 const lines = (v) => [].concat(v || []).join('\n');
 
 async function run({ cwd = process.cwd(), opts = {}, log = (m) => console.error(m), proc = process } = {}) {
   if (Object.keys(process.env).some((k) => k === 'COPILOT_ALLOW_ALL' || k.startsWith('GITHUB_COPILOT_PROMPT_MODE_'))) {
     throw new Error('COPILOT_ALLOW_ALL / GITHUB_COPILOT_PROMPT_MODE_* must not be set: they load repo hooks and MCP servers');
   }
+  if (!process.env.SPECGUARD_LOCAL_FINDINGS) { const p = copilotProblem(); if (p) throw new Error(p); } // exit 3 (main's caller) before any worktree exists
   const repoRoot = git(cwd, 'rev-parse', '--show-toplevel');
   fetchBase(repoRoot, baseRef(repoRoot, opts.base), log);
   const { ref, base, head } = resolveBase(repoRoot, opts.base);

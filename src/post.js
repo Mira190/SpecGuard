@@ -1173,7 +1173,8 @@ async function run({ github, context, core }) {
   // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)
   const used = Array.isArray(em?.used) && strs(em.used).length ? strs(em.used) : strs([usage?.currentModel, ...Object.keys(usage?.modelMetrics && typeof usage.modelMetrics === 'object' ? usage.modelMetrics : {})]), tier = em?.tier === 'fast' ? 'fast' : undefined;
   const chosen = (readCtx('focus.txt') || '').split('\n').filter(Boolean), skipped = (readCtx('focus-skipped.txt') || '').split('\n').map((x) => x.split('\t')[0].trim()).filter(Boolean);
-  const focused = chosen.length ? { files: chosen.length, of: chosen.length + skipped.length } : undefined; // not reduced mode, not a failure: the run is only incomplete, so the next push reviews again
+  const shortened = ((readCtx('diff.numbered.txt') || '').match(/^… \d+ more changed lines in this file not shown/gm) || []).length; // src/focus.js's trim marker, one per cut file
+  const focused = chosen.length ? { files: chosen.length, of: chosen.length + skipped.length, shortened } : undefined; // not reduced mode, not a failure: incomplete only when a changed file was left out, so the next push reviews again
   const dropped = (readCtx('diff-dropped.txt') || '').split('\n').map((x) => x.trim()).filter(Boolean);
   // What the run cost, for the owner's own accounting: attempt count, engine time (recorded wall time, else API time), credits (nano AI units / 1e9), where it ran and how it was delivered.
   const measure = () => {
@@ -1186,7 +1187,7 @@ async function run({ github, context, core }) {
   const st = (readCtx('engine-status') || '').trim();
   if (partial) incomplete.push('The diff exceeded `max_diff_kb` and was truncated; obligations outside the reviewed portion are unknown.');
   if (dropped.length) incomplete.push(notReviewed(dropped));
-  if (focused) incomplete.push(focusNote(focused.files, focused.of, skipped));
+  if (focused && skipped.length) incomplete.push(focusNote(focused.files, focused.of, skipped));
 
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
@@ -1430,7 +1431,7 @@ async function run({ github, context, core }) {
 
   const clean_ = noGaps(data) && !incomplete.length && !reduced, state = incomplete.length || reduced ? 'incomplete' : 'complete';
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: summaryOnly ? '' : counts(), banner: summaryOnly ? ['Delivery: summary only (manual run; nothing was posted to the PR).', ...(livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [])] : [], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: summaryOnly ? '' : counts(), banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt; the reviewer read the files directly`] : []), ...(summaryOnly ? ['Delivery: summary only (manual run; nothing was posted to the PR).', ...(livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [])] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
