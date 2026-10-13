@@ -7,7 +7,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { run, matchGlob, isTestPath, parseItems } = require('./trace');
+const { run, matchGlob, isTestPath, blocksOf } = require('./trace');
 
 const MAX_AUDIT_DOCS = 60; // the model reads every admitted document in full
 const CAND_CAP = 60 * 1024, CAND_TEXT = 240; // audit-candidates.txt bytes (the cap is lowered, never a row cut); characters of block text per line
@@ -54,42 +54,9 @@ const globs = (s) => {
   return { inc, exc };
 };
 
-// The deterministic requirement universe: every requirement-bearing block (paragraph, list item, table row, ID/AC/Gherkin item) of each admitted
-// document, in document order (parseItems with every line "touched"). The model assesses these; it does not choose them.
-const ALL = { has: () => true };
-const MIN_BLOCK = 20; // characters of text a block needs to be a candidate
-const SKIP_HEAD = /^(?:change ?logs?|(?:revision |version |document |release )?history|release notes|references?)$/i; // blocks under these are not requirements
-const LINKREF = /^\s*(?:[-*+]\s+)?\[[^\]]+\]:\s*\S+/, ROW = /^\s*\|.*\|\s*$/, RULE = /^\s*\|[\s:|-]+\|\s*$/, FENCE = /^ {0,3}(?:`{3,}|~{3,})/;
-const NORM_WORD = /\b(?:shall|must|should|will)\b/i;
+// Block ids: a stable hash of the block (blocksOf, the block universe, lives in trace.js).
 const normText = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).digest('hex').slice(0, 8);
-
-// Lines under a Changelog/History/References heading, until the next heading of the same or a higher level.
-function skippedLines(ls) {
-  const skip = new Array(ls.length).fill(false);
-  let fence = false, level = 0;
-  ls.forEach((l, i) => {
-    if (FENCE.test(l)) fence = !fence;
-    const h = !fence && /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(l);
-    if (h) {
-      if (level && h[1].length <= level) level = 0;
-      if (!level && SKIP_HEAD.test(h[2].replace(/^[\d.\s§]+/, '').replace(/[*_`]/g, '').trim())) level = h[1].length;
-    }
-    skip[i] = level > 0;
-  });
-  return skip;
-}
-
-// All candidate blocks of one document: { path, line, heading, text, raw }.
-function blocksOf(p, text) {
-  const ls = String(text).replace(/\r\n/g, '\n').replace(/\r/g, ' ').split('\n'), skip = skippedLines(ls);
-  return parseItems(p, text, ALL).filter((i) => {
-    const l = ls[i.line - 1] || '';
-    if (skip[i.line - 1] || LINKREF.test(l) || i.text.replace(/[|\s]+/g, ' ').trim().length < MIN_BLOCK) return false;
-    if (ROW.test(l) && RULE.test(ls[i.line] || '')) return false; // a table header row
-    return !(i.end === i.line && /^\s*#/.test(l) && !NORM_WORD.test(l)); // a bare heading
-  });
-}
 
 // cid = sha1(path, heading, normalised block text)[0..8]: stable while the block is unchanged, wherever it moves. A repeated block gets its own cid.
 function candidates(cwd, head, docs, cap) {

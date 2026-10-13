@@ -29,7 +29,7 @@ Never link on name similarity: a requirement governs a line only when its quoted
 
 ## Per behaviour-changing hunk (code changed)
 
-1. Check `code_to_requirement` candidates for the hunk, then `requirements-index.md`.
+1. Check `code_to_requirement` candidates for the hunk, then `requirements-index.md`. A candidate with `kind: "block"` is descriptive text (no normative word) from a requirement document that matched the hunk by identifiers and terms: it may govern the change. Treat it as a `G*` requirement only when the block states behaviour the changed code implements; otherwise ignore it and raise no finding from it.
 2. For each requirement that governs the changed line, add a `requirements[]` entry: `id` `G1`.. (at most 10), `source` = requirement path, `ref`, `line`, a verbatim `quote`, `obligation_ids`, and `pr_quote` (a verbatim PR-body sentence describing this behaviour change, else `null`).
 3. Set `alignment`: `mismatch` if the changed code contradicts the current text; `impacted` if it alters governed behaviour the text neither requires nor forbids; else `consistent`.
 

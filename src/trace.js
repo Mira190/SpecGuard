@@ -21,6 +21,9 @@ const SIMILAR = 0.3; // token overlap (Jaccard) at which an edited block pairs w
 const MAX_REJECTED = 20; // spec-rejected.txt lines
 const BUDGET_MS = 40000, MAX_DEEP = 25, MAX_DELTAS = 20, MAX_LITS = 200, MAX_VALUES = 40; // time budget; S items traced to code; per-item / per-run search breadth
 const MAX_HUNKS = 60, CAND_CAP = 60 * 1024, PER_HUNK = 5, FLOOR = 0.3, SURE = 3, TOP_CAND = 3; // trace-candidates.json caps; a BM25 floor (share of the hunk best) applies after the first SURE candidates
+const BLOCK_PER_HUNK = 3, BLOCK_TOTAL = 20, BLOCK_MIN = 2; // descriptive-block candidates: per hunk, overall, and the BM25 score a block must exceed, in units of the idf of a term seen in one block (about two rare terms' worth; idf grows with the corpus)
+// Words that match every doc and every program: dropped from the hunk query when ranking descriptive blocks. ponytail: English and JS-flavoured, extend when another language floods the candidates.
+const BLOCK_STOP = new Set('the is it an of to in and or as are be for from with that this on by at not no use src ts tsx js cjs return const let var function async await export import true false null undefined string number boolean type interface class void if else'.split(' '));
 const NOT_CODE_DIR = /(^|\/)(testdata|fixtures?|__fixtures__|__snapshots__|vendor|third_party|generated)\//i; // hunks there rarely trace to a requirement
 // A wall-clock budget shared by the expensive loops; they stop early and the run records a limitation instead of being killed.
 const makeClock = (ms) => { const end = Date.now() + ms; return { left: () => end - Date.now(), over: () => Date.now() >= end }; };
@@ -271,6 +274,41 @@ function parseItems(file, text, touch = null) {
     i = j;
   }
   return items.sort((x, y) => x.line - y.line);
+}
+
+// Block universe (shared by audit mode and the PR trace): every requirement-bearing block (paragraph, list item, table row, ID/AC/Gherkin item) of a
+// document, in document order (parseItems with every line "touched"), minus headings, table headers, link refs, tiny blocks and Changelog/History/References sections.
+const ALL = { has: () => true };
+const MIN_BLOCK = 20; // characters of text a block needs to be a candidate
+const SKIP_HEAD = /^(?:change ?logs?|(?:revision |version |document |release )?history|release notes|references?)$/i; // blocks under these are not requirements
+const LINKREF = /^\s*(?:[-*+]\s+)?\[[^\]]+\]:\s*\S+/;
+const NORM_WORD = /\b(?:shall|must|should|will)\b/i;
+
+// Lines under a Changelog/History/References heading, until the next heading of the same or a higher level.
+function skippedLines(ls) {
+  const skip = new Array(ls.length).fill(false);
+  let fence = false, level = 0;
+  ls.forEach((l, i) => {
+    if (FENCE.test(l)) fence = !fence;
+    const h = !fence && /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(l);
+    if (h) {
+      if (level && h[1].length <= level) level = 0;
+      if (!level && SKIP_HEAD.test(h[2].replace(/^[\d.\s§]+/, '').replace(/[*_`]/g, '').trim())) level = h[1].length;
+    }
+    skip[i] = level > 0;
+  });
+  return skip;
+}
+
+// All candidate blocks of one document: { path, line, heading, text, raw }.
+function blocksOf(p, text) {
+  const ls = String(text).replace(/\r\n/g, '\n').replace(/\r/g, ' ').split('\n'), skip = skippedLines(ls);
+  return parseItems(p, text, ALL).filter((i) => {
+    const l = ls[i.line - 1] || '';
+    if (skip[i.line - 1] || LINKREF.test(l) || i.text.replace(/[|\s]+/g, ' ').trim().length < MIN_BLOCK) return false;
+    if (TABLE_ROW.test(l) && TABLE_RULE.test(ls[i.line] || '')) return false; // a table header row
+    return !(i.end === i.line && /^\s*#/.test(l) && !NORM_WORD.test(l)); // a bare heading
+  });
 }
 
 const isRequirementDoc = (items) => items.some((i) => i.kind !== 'normative') || items.length >= 2;
@@ -528,15 +566,15 @@ function changedItems(files, maps) { // files: [{path, headItems, baseItems}] ->
 
 // Ranks requirement items for every code hunk: the best SURE candidates always stay, later ones must reach FLOOR of the hunk best score;
 // at most MAX_HUNKS hunks (best scores first) are kept. info.dropped counts the hunks left out.
-function codeToRequirement(hunks, items, info = {}) {
+function codeToRequirement(hunks, items, info = {}, { per: perHunk = PER_HUNK, total = 15, min = 0, stop = null } = {}) {
   const index = buildIndex(items.map((i) => tokenize(`${i.path} ${i.heading} ${i.ref} ${i.text}`)));
   const per = hunks.map((h) => {
-    const s = index.search(tokenize([h.context, h.identifiers.join(' '), h.literals.added.join(' '), h.literals.removed.join(' '), h.path].join(' ')));
-    const top = [...s.keys()].filter((k) => s[k] > 0).sort((a, b) => s[b] - s[a]).slice(0, PER_HUNK);
-    return top.filter((k, r) => r < SURE || s[k] >= FLOOR * s[top[0]]).map((k) => ({ path: items[k].path, ref: items[k].ref, line: items[k].line, score: round(s[k]), k }));
+    const s = index.search(tokenize([h.context, h.identifiers.join(' '), h.literals.added.join(' '), h.literals.removed.join(' '), h.path].join(' ')).filter((w) => !stop || (w.length > 1 && !stop.has(w))));
+    const top = [...s.keys()].filter((k) => s[k] > min).sort((a, b) => s[b] - s[a]).slice(0, perHunk);
+    return top.filter((k, r) => r < SURE || s[k] >= FLOOR * s[top[0]]).map((k) => ({ path: items[k].path, ref: items[k].ref, line: items[k].line, score: round(s[k]), kind: items[k].kind === 'block' ? 'block' : undefined, k }));
   });
   const keep = new Set();
-  for (const e of per.flat().sort((a, b) => b.score - a.score)) if (keep.size < 15 || keep.has(e.k)) keep.add(e.k);
+  for (const e of per.flat().sort((a, b) => b.score - a.score)) if (keep.size < total || keep.has(e.k)) keep.add(e.k);
   let out = hunks.map((h, i) => ({ path: h.path, line: h.line, context: h.context,
     candidates: per[i].filter((e) => keep.has(e.k)).map(({ k, ...e }) => e) })).filter((h) => h.candidates.length);
   info.dropped = Math.max(0, out.length - MAX_HUNKS);
@@ -784,12 +822,31 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
 
   const info = { cut: false };
   // A: code hunks -> requirement items
+  const blockItems = [];
   try {
     const hunks = codeHunks(patch).filter((h) => !h.is_test && !d.docs.has(h.path) && !d.ruled(h.path) && !docLike(h.path) && !NOT_CODE_DIR.test(h.path));
     if (allItems.length && hunks.length) {
       const c2r = {};
       cand.code_to_requirement = codeToRequirement(hunks, allItems, c2r);
       if (c2r.dropped) cand.limitations.push(`${c2r.dropped} weaker code hunk(s) beyond the ${MAX_HUNKS}-hunk limit were left out of code_to_requirement.`);
+    }
+    // Descriptive blocks (no normative word) of the admitted documents that match a hunk join as 'block' candidates; the model does not have to find them by reading.
+    if (docs.length && hunks.length) {
+      const taken = new Set(allItems.map((i) => `${i.path}:${i.line}`));
+      for (const x of docs) {
+        if (dl.over()) { cand.limitations.push('The time budget was reached before every document was searched for descriptive requirement blocks.'); break; }
+        for (const b of blocksOf(x.path, x.text)) if (!taken.has(`${b.path}:${b.line}`)) blockItems.push({ ...b, kind: 'block' });
+      }
+      if (blockItems.length) {
+        const bl = codeToRequirement(hunks, blockItems, {}, { per: BLOCK_PER_HUNK, total: BLOCK_TOTAL, min: BLOCK_MIN * Math.log(1 + (blockItems.length - 0.5) / 1.5), stop: BLOCK_STOP });
+        const seen = new Set();
+        for (const h of bl) {
+          for (const c of h.candidates) seen.add(`${c.path}:${c.line}`);
+          const mine = cand.code_to_requirement.find((o) => o.path === h.path && o.line === h.line);
+          if (mine) mine.candidates.push(...h.candidates); else cand.code_to_requirement.push(h);
+        }
+        blockItems.splice(0, blockItems.length, ...blockItems.filter((b) => seen.has(`${b.path}:${b.line}`)));
+      }
     }
   } catch (e) { lim('code-to-requirement ranking', e); }
   // B: changed requirement items -> code and tests; occurrence table. Only the MAX_DEEP largest changes are traced in depth.
@@ -814,11 +871,11 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
 
   // index: path:line [ref] text, hinted docs first, capped; over the cap only candidate and changed items remain
   const line = (i) => `${i.path}:${i.line} [${i.ref}] ${flat(i.text).slice(0, 160)}\n`;
-  let index = allItems.map(line).join('');
+  let index = allItems.concat(blockItems).map(line).join('');
   if (Buffer.byteLength(index) > INDEX_CAP) {
     const full = Buffer.byteLength(index);
     const want = new Set([...cand.code_to_requirement.flatMap((h) => h.candidates.map((c) => `${c.path}:${c.ref}`)), ...criteria.map((c) => `${c.source}:${c.ref}`)]);
-    index = allItems.filter((i) => want.has(`${i.path}:${i.ref}`)).map(line).join('');
+    index = allItems.concat(blockItems).filter((i) => want.has(`${i.path}:${i.ref}`)).map(line).join('');
     while (Buffer.byteLength(index) > INDEX_CAP) index = index.slice(0, index.lastIndexOf('\n', index.length - 2) + 1);
     cand.limitations.push(`requirements-index.md exceeded ${INDEX_CAP / 1024} KB (full index ${Math.round(full / 1024)} KB); it lists only candidate and changed items.`);
   }
@@ -838,4 +895,4 @@ if (require.main === module) {
 }
 
 module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, isTestPath, pathKind,
-  codeHunks, matchGlob, classify, namedDocs, run };
+  codeHunks, matchGlob, classify, namedDocs, blocksOf, run };

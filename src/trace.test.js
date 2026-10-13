@@ -806,3 +806,31 @@ test('requirement_to_code keeps the top 3 code and top 3 test windows per criter
     assert.deepEqual(row.code.map((c) => c.score), row.code.map((c) => c.score).sort((a, b) => b - a));
   }
 });
+
+// ---- descriptive blocks as governing candidates ----
+const BLOCK_DOC = ['# List design', '', 'The first row of the recording list carries a New badge and is selected by default.', '',
+  '| Window | Regular window, 1000x740 |', '|---|---|', '| Ball | A round 52 px floating button on the desktop |', '',
+  'The toolbar icons must be at least 32 px wide.', '', '## Changelog', '', 'The first row of the recording list was selected by default in an older release.', ''].join('\n');
+const PAGE_BASE = 'export function ListPage({ rows }) {\n  const [sel, setSel] = useState(undefined)\n  return sel\n}\n';
+const PAGE_HEAD = 'export function ListPage({ rows }) {\n  const [sel, setSel] = useState(defaultSelection(rows))\n  return sel\n}\n';
+test('a descriptive block that matches a changed hunk becomes a block candidate; unrelated and changelog blocks do not', (t) => {
+  const r = repo(t, { 'specs/design.md': BLOCK_DOC, 'src/ListPage.tsx': PAGE_BASE, 'src/other.ts': 'export const a = 1\n' }, { 'specs/design.md': BLOCK_DOC, 'src/ListPage.tsx': PAGE_HEAD, 'src/other.ts': 'export const a = 2\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const hunk = cands(r).code_to_requirement.find((h) => h.path === 'src/ListPage.tsx');
+  assert.deepEqual(hunk.candidates.filter((c) => c.kind === 'block').map((c) => [c.path, c.line]), [['specs/design.md', 3]]);
+  const index = out(r, 'requirements-index.md');
+  assert.ok(index.includes('specs/design.md:3 '));
+  assert.ok(!index.includes('specs/design.md:7 ') && !index.includes('specs/design.md:13 ')); // the unrelated table row and the changelog entry are not listed
+  assert.ok(!cands(r).code_to_requirement.some((h) => h.path === 'src/other.ts' && h.candidates.some((c) => c.kind === 'block')));
+});
+test('block candidates are capped per hunk and overall', (t) => {
+  const W = Array.from({ length: 40 }, (_, i) => String.fromCharCode(97 + (i % 26), 97 + Math.floor(i / 26)) + 'qx'); // unique letter-only words
+  const doc = '# D\n\nA row MUST exist.\n\n' + W.map((_, i) => `The ${[0, 1, 2, 3].map((j) => W[(i + j) % 40]).join(" ")} panel shows a recording list with rows selected by default.\n`).join('\n');
+  const code = (v, k) => `export function f${'abcdefghijklmnopqrstuvwxyzABCD'[k]}() {\n  return ${v} + [${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => W[(k + j) % 40]).map((w) => `'${w}'`).join(', ')}].length\n}\n`;
+  const files = (v) => ({ 'specs/d.md': doc, ...Object.fromEntries(Array.from({ length: 30 }, (_, k) => [`src/f${k}.ts`, code(v, k)])) });
+  const r = repo(t, files(1), files(2));
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const hs = cands(r).code_to_requirement, per = hs.map((h) => h.candidates.filter((c) => c.kind === 'block').length);
+  assert.equal(Math.max(...per), 3);
+  assert.ok(new Set(hs.flatMap((h) => h.candidates.filter((c) => c.kind === 'block').map((c) => c.line))).size <= 20);
+});
