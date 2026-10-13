@@ -43,6 +43,7 @@ outputs:
   skip: { description: "true when nothing reviewable changed", value: "${{ steps.preflight.outputs.skip == 'true' && 'true' || steps.collect.outputs.skip }}" }
   status: { description: "complete | incomplete | failed for the PR review; empty when skipped", value: "${{ steps.post.outputs.status }}" }
   partial: { description: "true when the diff was truncated", value: "${{ steps.collect.outputs.partial }}" }
+  superseded: { description: "true when a newer commit was pushed (or the PR closed) before the model was called; the review was skipped and no AI credits were spent", value: "${{ steps.superseded.outputs.superseded }}" }
 
 runs:
   using: composite
@@ -100,6 +101,17 @@ runs:
         TRACE: ${{ inputs.trace }}
       run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
+    # A push that landed while collecting context makes this run stale: skip the engine and post, no AI credits spent. Fails open on API errors.
+    - id: superseded
+      if: inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true'
+      shell: bash
+      env:
+        HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        GH_REPO: ${{ inputs.repository || github.repository }}
+      run: node "$GITHUB_ACTION_PATH/src/superseded.js"
+
     # Scan mode: design documents, rule files and test layout at the checked-out HEAD (src/audit-collect.js).
     - id: audit_collect
       if: steps.mode.outputs.mode == 'scan'
@@ -121,7 +133,7 @@ runs:
         node-version: 22
 
     - id: engine
-      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
+      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true' && steps.superseded.outputs.superseded != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
         ENGINE: ${{ inputs.engine }}
@@ -138,7 +150,7 @@ runs:
 
     # The engine step never fails the job: post reports "could not complete" instead. Config errors above fail loudly.
     - name: Run the review engine
-      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
+      if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true' && steps.superseded.outputs.superseded != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
       shell: bash
       env:
         ENGINE: ${{ steps.engine.outputs.engine }}
@@ -166,7 +178,7 @@ runs:
         exit 0
 
     - id: post
-      if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' }} # failures still report; a cancelled run (superseded push) posts nothing
+      if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.superseded.outputs.superseded != 'true' }} # failures still report; a cancelled run (superseded push) posts nothing
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
