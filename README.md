@@ -79,8 +79,8 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 |---|---|
 | PR review | `contents: read`, `pull-requests: write`, `issues: read`, `copilot-requests: write` (Copilot only) |
 | PR review with `standards_checks` | the above plus `checks: read`, `statuses: read` |
-| Audit | `contents: read`, `copilot-requests: write` |
-| Audit with `audit_issue: true` | the above plus `issues: write` |
+| Unit test gap scan | `contents: read`, `copilot-requests: write` |
+| Unit test gap scan with `scan_issue: true` | the above plus `issues: write` |
 
 - **Cost control:** put the Copilot usage in a cost center with a budget and "stop usage when budget is reached", and lower `copilot_max_ai_credits` (the worst case per push is about twice the cap: one turn plus one repair turn). Limit triggers: `ready_for_review` only instead of every `synchronize`, or a label gate in the job `if:`. There is no incremental review: every run reviews the whole PR diff.
 - **Data handling:** Copilot content exclusion is not enforced by SpecGuard. Mirror excluded paths into `ignore` and set `ctx_retention_days: 0`: the `specguard-ctx` artifact holds the diff, prompt context and raw engine output, and anyone who can read the repository's Actions runs can download it (set `0` on public repositories).
@@ -115,9 +115,10 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | `resolve_stale` | `true` | After a complete review (diff not truncated, engine finished, requirement collection and comment delivery not degraded; an incomplete run says so in the summary), resolves SpecGuard's own review threads that have no replies and whose finding is no longer reported anywhere, including the summary (at most 20 per run). Resolving threads needs a token allowed to resolve review threads: the default `GITHUB_TOKEN` with `pull-requests: write` was refused in a live run ("Resource not accessible by integration"), so either pass a `github_token` that can (e.g. a fine-grained PAT with Pull requests: write; adding `contents: write` to the job is unverified), or rely on the summary's "Since earlier reviews" line; when the token is refused the summary says the threads were left open. Failures never fail the run. `false` disables it. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
 | `copilot_sdk_version` | `1.0.15` | Pinned `@github/copilot-sdk`, installed only with `engine: copilot-sdk`. |
-| `mode` | `pr` | `pr` reviews a pull request; `audit` audits the checked-out repository against its requirement documents. See [Audit mode](#audit-mode). |
-| `audit_max_requirements` | `80` | Audit mode: most document blocks audited per run, taken in document order; the rest are listed under not reviewed (integer 1-500). |
-| `audit_issue` | `false` | Audit mode: `true` also creates or updates one issue titled "SpecGuard requirements audit" (needs `issues: write`). |
+| `mode` | `pr` | `pr` reviews a pull request; `scan` runs the unit test gap scan on the checked-out repository (`audit` is accepted as an alias). See [Unit test gap scan](#unit-test-gap-scan-whole-repository). |
+| `scan_max_blocks` | `80` | Scan mode: most document blocks scanned per run, taken in document order; the rest are listed under not reviewed (integer 1-500). |
+| `scan_issue` | `false` | Scan mode: `true` also creates or updates one issue titled "SpecGuard: unit test gap scan" (needs `issues: write`). |
+| `audit_max_requirements`, `audit_issue` | | Deprecated aliases of `scan_max_blocks` and `scan_issue`; when both names are set, the `scan_*` one wins. |
 | `delivery`, `repository`, `pr_number`, `base_sha`, `head_sha` | | For [manual runs](#manual-run-specguard-repo) that review another repository on a `workflow_dispatch`: `delivery: summary` writes nothing to the PR (job summary only); the others replace what a `pull_request` event would supply. Leave them empty in your own workflow. |
 
 ## Engines
@@ -129,23 +130,23 @@ An engine is one script, `src/engines/<name>.sh`: it reads the prompt file and l
 
 The contract (inputs, output files, rules, how to add an engine such as gh-aw) is in [src/engines/README.md](src/engines/README.md). Adding an engine means one script and one line in the allow-list; `post.js` does not change.
 
-## Audit mode
+## Unit test gap scan (whole repository)
 
-`mode: audit` is a repository-wide risk list for QA, not a PR review. On demand or on a schedule it reads the requirement documents at the checked-out commit (found by content, plus `requirements_paths`), extracts the atomic requirements (descriptive design prose counts: "a repeating plan stays on after it fires" is a requirement) and, for each, says whether it has unit-test evidence, only higher-level tests, no test, or looks unimplemented or contradicted by the code, or needs a human. It is advisory and static: tests are not executed, the counts are not a coverage figure, and they are not for scoring people.
+`mode: scan` is a repository-wide list of unit test gaps for QA, not a PR review and not a requirements audit: the design documents are the oracle, the output is the documented behaviour that lacks unit-test evidence. On demand or on a schedule it reads the design documents at the checked-out commit (found by content, plus `requirements_paths`), extracts the atomic behaviours they describe (descriptive design prose counts: "a repeating plan stays on after it fires" is a behaviour) and, for each, says whether it has unit-test evidence, only higher-level tests, no test, or looks unimplemented or contradicted by the code, or needs a human. (`mode: audit`, the earlier name, still works.) It is advisory and static: tests are not executed, the counts are not a coverage figure, and they are not for scoring people.
 
 Run it on the default branch (that is the trusted base for rule and requirement files), not on a pull request:
 
 ```yaml
-name: SpecGuard audit
+name: SpecGuard unit test gap scan
 on:
   workflow_dispatch:
   schedule: [{ cron: "0 6 * * 1" }]
 permissions:
   contents: read
   copilot-requests: write
-  # issues: write # only with audit_issue: true
+  # issues: write # only with scan_issue: true
 jobs:
-  audit:
+  scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -153,15 +154,15 @@ jobs:
         with: { persist-credentials: false }
       - uses: Mira190/SpecGuard@<full-commit-sha>
         with:
-          mode: audit
+          mode: scan
           review_timeout_minutes: 25
           copilot_max_ai_credits: "400"
-          # audit_issue: "true"
+          # scan_issue: "true"
 ```
 
-The result is the job summary: one line per document block (link, text, block status, and its sub-rows' statuses; a block is a `gap` when any sub-row is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise) with counts by block status, the per-sub-row evidence in a collapsed table per document, the candidate documents that were not admitted ("add to `requirements_paths` to include"), and what was not reviewed (skipped documents, rows whose citation did not verify, the `audit_max_requirements` cap). Every citation is checked against the file at HEAD: a requirement whose quote is not found is moved to "not reviewed"; test or code evidence that is not found is removed and a `covered` row becomes `unknown`. `audit.json` (the validated result) stays in the `specguard-audit-<attempt>` artifact (`ctx_retention_days`). Reporting is per block and confirmed across runs, because a model's detail varies from run to run (the same commit audited twice agreed on a block's gap about two times in three, and on individual sub-rows far less): with `audit_issue: true` the issue keeps a hidden per-block state, a gap is listed as **confirmed** only when the block was a gap in this run and the previous one (otherwise "new gap, unconfirmed"), a confirmed gap that is covered is "resolved? recheck next run" until it is covered twice, and "Changed since last audit" lists only those two-run-stable changes plus a count of unstable blocks. Schedule the audit weekly so each run confirms the last; without `audit_issue` every gap stays unconfirmed. With `audit_issue: true` the same report is written to a single issue (found by a hidden marker and authored by this action; whole rows are dropped, never cut, to fit GitHub's body limit).
+The result is the job summary: one line per document block (link, text, block status, and its sub-rows' statuses; a block is a `gap` when any sub-row is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise) with counts by block status, the per-sub-row evidence in a collapsed table per document, the candidate documents that were not admitted ("add to `requirements_paths` to include"), and what was not reviewed (skipped documents, rows whose citation did not verify, the `scan_max_blocks` cap). Every citation is checked against the file at HEAD: a requirement whose quote is not found is moved to "not reviewed"; test or code evidence that is not found is removed and a `covered` row becomes `unknown`. `audit.json` (the validated result) stays in the `specguard-audit-<attempt>` artifact (`ctx_retention_days`). Reporting is per block and confirmed across runs, because a model's detail varies from run to run (the same commit scanned twice agreed on a block's gap about two times in three, and on individual sub-rows far less): with `scan_issue: true` the issue keeps a hidden per-block state, a gap is listed as **confirmed** only when the block was a gap in this run and the previous one (otherwise "new gap, unconfirmed"), a confirmed gap that is covered is "resolved? recheck next run" until it is covered twice, and "Changed since the last scan" lists only those two-run-stable changes plus a count of unstable blocks. Schedule the scan weekly so each run confirms the last; without `scan_issue` every gap stays unconfirmed. With `scan_issue: true` the same report is written to a single issue (found by a hidden marker and authored by this action; whole rows are dropped, never cut, to fit GitHub's body limit).
 
-Cost: the model reads every admitted document in full (at most 60), so an audit uses far more tokens than a PR review. Cap it with `copilot_max_ai_credits` (per turn), lower `audit_max_requirements`, narrow the documents with `requirements_paths` (`!glob` excludes), and raise `review_timeout_minutes` and the job `timeout-minutes` for large repositories.
+Cost: the model reads every admitted document in full (at most 60), so a scan uses far more tokens than a PR review. Cap it with `copilot_max_ai_credits` (per turn), lower `scan_max_blocks`, narrow the documents with `requirements_paths` (`!glob` excludes), and raise `review_timeout_minutes` and the job `timeout-minutes` for large repositories.
 
 ## Manual run (SpecGuard repo)
 
@@ -171,13 +172,13 @@ Cost: the model reads every admitted document in full (at most 60), so an audit 
 |---|---|
 | `repo` (required) | `owner/name` or a github.com URL (a `.../pull/N` URL also sets `pr`). |
 | `pr` | PR number to review. |
-| `ref` | Branch, tag or SHA to audit (default: the default branch). |
+| `ref` | Branch, tag or SHA to scan (default: the default branch). |
 | `design_docs`, `rules_docs`, `test_dirs` | Requirement/design documents, coding-standard documents and unit-test folders, one per line: repository paths, globs (`!` excludes), or github.com blob/tree URLs of the **same** repository. A folder (`docs/specs`) means everything under it. Empty = auto-discovery. They become `requirements_paths`, `standards_paths` and `test_paths`. |
-| `mode` | `auto` (default: `pr` when `pr` is set, else `audit`), `pr` or `audit`. |
+| `mode` | `auto` (default: `pr` when `pr` is set, else `scan`), `pr` or `scan` (`audit` is accepted as an alias of `scan`). |
 | `post_to_pr` | PR mode, default off: results go to the job summary only. On: the normal review and summary comment are posted to the target PR. |
 | `model`, `effort` | As in the action. |
 
-`src/resolve-inputs.js` turns the inputs into repository paths first. A URL of another repository is rejected (copy the document into the target repository); a non-GitHub URL (Confluence, Google Docs, ...) fails with "not readable from GitHub Actions; add the document to the repository or paste it". PR mode reviews an open PR (head and base from the API, checked out with `fetch-depth: 0`); audit mode audits `ref` or the default branch. There is no issue, and `ctx_retention_days` is `0`: no artifact is uploaded.
+`src/resolve-inputs.js` turns the inputs into repository paths first. A URL of another repository is rejected (copy the document into the target repository); a non-GitHub URL (Confluence, Google Docs, ...) fails with "not readable from GitHub Actions; add the document to the repository or paste it". PR mode reviews an open PR (head and base from the API, checked out with `fetch-depth: 0`); scan mode scans `ref` or the default branch. There is no issue, and `ctx_retention_days` is `0`: no artifact is uploaded.
 
 **The token.** For other private or internal repositories, add the repository secret `SPECGUARD_PAT` (without it the job token is used, which reads only the SpecGuard repository itself and public repositories): a fine-grained PAT whose resource owner is the target repos' owner, with **Contents: read, Issues: read, Pull requests: read** on the target repositories. Add **Pull requests: write** only if you will use `post_to_pr`. Copilot itself runs on the job token (`copilot-requests: write`). The checkout does not persist the token.
 
