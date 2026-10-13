@@ -66,9 +66,9 @@ test('action.yml contract: every PR step is guarded by mode pr, audit steps by m
   // audit-only: audit_collect, the audit post step and its artifact
   assert.equal(kinds.audit.length, 3);
   for (const re of [/src\/audit-collect\.js/, /src\/audit-post\.js'/, /name: specguard-audit-\$\{\{ github\.run_attempt \}\}/]) assert.equal(touches(kinds.audit, re), 1, String(re));
-  // shared: setup-node, engine selection, the Copilot run
-  assert.equal(kinds.both.length, 3);
-  for (const re of [/actions\/setup-node/, /^id: engine/m, /Run the review engine/]) assert.equal(touches(kinds.both, re), 1, String(re));
+  // shared: setup-node, credential detection, engine selection, the engine run
+  assert.equal(kinds.both.length, 4);
+  for (const re of [/actions\/setup-node/, /^id: credential/m, /^id: engine/m, /Run the review engine/]) assert.equal(touches(kinds.both, re), 1, String(re));
   for (const s of kinds.pr) assert.doesNotMatch(cond(s), /audit/);
   for (const s of kinds.audit) assert.doesNotMatch(cond(s), /preflight|steps\.collect/);
   for (const s of kinds.both) {

@@ -5,6 +5,7 @@
 # Env: CTX PROMPT_FILE (path of the prompt; or PROMPT, small prompts only, written to $CTX/prompt.txt) MODEL EFFORT AUTO_TIER FAST_MODELS MAX_CREDITS TIMEOUT (minutes, install included, shared by all turns); engine-model.js records the model each turn used.
 # COPILOT_VERSION (npm install -g @github/copilot@V; empty = use the copilot already on PATH). CHECK=audit validates with audit-post.js (audit mode; read by extract-json.js). Never --allow-all, --allow-all-paths, --yolo.
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; src="$(cd "$here/.." && pwd)"
+. "$here/_redact.sh"
 bash "$src/validate-inputs.sh" || exit 1
 TIMEOUT="${TIMEOUT:-12}" # validated above
 unset GH_TOKEN # Copilot CLI token precedence is COPILOT_GITHUB_TOKEN > GH_TOKEN > GITHUB_TOKEN: a job-level GH_TOKEN would hijack the auth
@@ -18,7 +19,7 @@ fi
 # A stub named copilot (VS Code's prints "Cannot find GitHub Copilot CLI" and exits 0) must not pass for a turn: the copilot on PATH (the one installed above when COPILOT_VERSION is set) has to report its version.
 ver="$(timeout -k 5s 30s copilot --version < /dev/null 2>&1 | head -n 3)" || true
 if ! printf '%s\n' "$ver" | grep -qiE 'GitHub Copilot CLI v?[0-9]+\.[0-9]+\.[0-9]+'; then
-  first="$(printf '%s\n' "$ver" | grep . | head -n 1)"; first="${first:0:200}"
+  first="$(printf '%s\n' "$ver" | grep . | head -n 1 | redact)"; first="${first:0:200}"
   echo "::warning::Copilot CLI not found or not runnable (${first:-no output})"; echo failed > "$CTX/engine-status"; echo "Copilot CLI not found or not runnable (${first:-no output})" >> "$CTX/engine-notes"; exit 0
 fi
 SID="$(node -e "console.log(require('crypto').randomUUID())")"
@@ -42,7 +43,7 @@ turn() { # <prompt file> <usage file> <stdout file>; the time left of the shared
   local left=$((budget - SECONDS)) rc=0
   [ "$left" -ge 1 ] || return 124
   timeout -k 10s "${left}s" copilot --session-id "$SID" "${common[@]}" --usage-output-file "$2" "${model_args[@]}" "${effort_args[@]}" "${tier_args[@]}" < "$1" > "$3" 2> "$err" || rc=$?
-  cat "$err" >&2
+  redact_file "$err"; cat "$err" >&2 # redacted before it is copied anywhere (notes, errors, the log)
   [ $rc = 137 ] && rc=124 # timeout -k had to KILL it: still a timeout
   [ $rc = 0 ] && grep -q 'Cannot find GitHub Copilot CLI' "$3" && rc=1 # a stub that exits 0: a failed turn, never one to repair
   if [ $rc != 0 ] && [ ${#tier_args[@]} != 0 ] && grep -qiE 'auto-tier|auto tier|auto preference' "$err"; then # old CLI or a strict org policy: run this turn once more without the flag
@@ -80,7 +81,7 @@ if [ $rc != 0 ] && [ $rc != 124 ]; then
   elif has 'rate limit|\b429\b|too many requests'; then reason=rate; why='Copilot rate limit hit; the next push retries'
   fi
   if [ -n "$reason" ]; then
-    raw="$(printf '%s\n' "$(cat "$err" 2>/dev/null)" "$text" | grep -m1 '[^[:space:]]' | cut -c1-200)"
+    raw="$(printf '%s\n' "$(cat "$err" 2>/dev/null)" "$text" | grep -m1 '[^[:space:]]' | cut -c1-200 | redact)"
     printf '%s\n%s\n' "$reason" "$why" > "$CTX/engine-error"; class_note="$why${raw:+: $raw}"
   fi
 fi
