@@ -246,7 +246,7 @@ test('parseSummary takes an item kind from its section heading (bare items) and 
     '### ❌ Weak unit tests (1)', '', '- Weak one `c.js:9` — why', '',
     '### ❌ Requirements to check (1)', '', '| Status | Criterion | Next step |', '|---|---|---|', '| ❌ Gap | **R1** x | Missing test: y |', '',
     '### ❌ Coding standard violations (1)', '', '- Throw an Error `d.js:1` — rule: `RULES.md`', '',
-    '<details><summary>Details: x</summary>', '', '**Low-confidence findings (1)**', '', '- ❌ **Weak test:** Old label `e.js:2` (low confidence) — z', '- note `f.js:5` is not an item', '', '</details>'].join('\n');
+    '<details><summary>Details: x</summary>', '', '**Low-confidence findings (1)**', '', '- ❌ **Weak test:** Old label `e.js:2` (low confidence) — z', '- Bare in Details `f.js:5` — must not inherit the Weak heading', '', '</details>'].join('\n');
   assert.deepEqual(parseSummary(md).items.map((i) => [i.kind, i.path, i.line, i.why]), [['missing_test', 'b.js', 7, 'inline limit reached'], ['weak_test', 'c.js', 9, ''], ['standard', 'd.js', 1, ''], ['weak_test', 'e.js', 2, 'low confidence']]);
   assert.deepEqual(parseSummary('### Unit test gaps (1)\n\n- ❌ **Missing test:** Old `a.js:3` — x\n').items.map((i) => i.kind), ['missing_test']);
   assert.deepEqual(parseSummary('### ❌ Requirements to check (1)\n\n- stray `a.js:3` — x\n').items, []);
