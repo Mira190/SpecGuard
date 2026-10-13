@@ -1,0 +1,38 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const { assign, armOf } = require('./assign');
+
+test('assign: PR number mod 3 -> 0 SpecGuard only, 1 Copilot only, 2 both', () => {
+  assert.deepEqual(assign(3), { arm: 0, specguard: true, copilot: false });
+  assert.deepEqual(assign(4), { arm: 1, specguard: false, copilot: true });
+  assert.deepEqual(assign(5), { arm: 2, specguard: true, copilot: true });
+  assert.equal(assign(1000).arm, 1);
+  for (const bad of [0, -1, 1.5, NaN, '7']) assert.throws(() => assign(bad));
+});
+
+test('armOf reads the review-arm label (names or label objects)', () => {
+  assert.equal(armOf([{ name: 'bug' }, { name: 'review-arm:2' }]), 2);
+  assert.equal(armOf(['review-arm:0']), 0);
+  assert.equal(armOf([{ name: 'review-arm:3' }, 'x']), null);
+});
+
+test('the example workflow computes the same arm as assign() for 1..30', (t) => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8');
+  const m = /# BEGIN arm\n([\s\S]*?)\n\s*# END arm/.exec(yml);
+  assert.ok(m, 'BEGIN/END arm markers');
+  const script = m[1].split('\n').map((l) => l.replace(/^ {10}/, '')).join('\n');
+  if (spawnSync('sh', ['-c', 'true']).status !== 0) return t.skip('no sh');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arm-'));
+  for (let n = 1; n <= 30; n++) {
+    const out = path.join(dir, `o${n}`);
+    const r = spawnSync('sh', ['-c', script], { env: { ...process.env, PR_NUMBER: String(n), GITHUB_OUTPUT: out.split(path.sep).join('/') }, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    const o = Object.fromEntries(fs.readFileSync(out, 'utf8').trim().split('\n').map((l) => l.split('=')));
+    const a = assign(n);
+    assert.deepEqual({ arm: +o.arm, specguard: o.specguard === 'true', copilot: o.copilot === 'true' }, a, `PR ${n}`);
+  }
+});

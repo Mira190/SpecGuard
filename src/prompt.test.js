@@ -324,3 +324,22 @@ test('both prompts tell the model that .specguard-src/ is the reviewer\'s own co
   assert.match(dyn(build(ctx())), re);
   assert.match(abuild(actx()), re);
 });
+
+test('focused prompt: only the chosen files in the numbered diff, a short not-in-review list, a reading budget; the normal prompt carries none of it', () => {
+  const a = 'diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1 +1,3 @@\n+x\n+y\n+z\n';
+  const b = 'diff --git a/docs/b.yml b/docs/b.yml\n--- a/docs/b.yml\n+++ b/docs/b.yml\n@@ -1 +1,2 @@\n+p\n+q\n';
+  const plain = ctx({ 'diff.patch': a + b, 'diff.numbered.txt': 'NUMBERED-ALL\n' });
+  const p0 = build(plain);
+  assert.ok(!/Large PR|focus\.txt|focus-skipped|Not in this review/.test(p0), 'normal mode: no focused text at all');
+  assert.ok(p0.includes('NUMBERED-ALL') && p0.includes('"max_obligations":8'));
+  const d = ctx({ 'diff.patch': a + b, 'diff.numbered.txt': 'NUMBERED-A\n', 'focus.txt': 'src/a.js\t9.0\tlogic\n', 'focus-skipped.txt': 'docs/b.yml\t2\n' });
+  const p = build(d);
+  assert.match(p, /Large PR, focused review: .*at most about 20 files beyond the diff; stop searching once the obligations are settled; do not open files outside the chosen set except their tests and direct imports/);
+  assert.match(p, /<untrusted-data name="focus\.txt"[^>]*>\nsrc\/a\.js\t9\.0\tlogic\n<\/untrusted-data>/);
+  assert.match(p, /<untrusted-data name="focus-skipped\.txt" note="Not in this review \(large PR\)">\ndocs\/b\.yml\n<\/untrusted-data>/);
+  assert.ok(p.includes('NUMBERED-A') && !p.includes('NUMBERED-ALL'));
+  assert.equal(stat(p), stat(p0), 'the static prefix is unchanged');
+  assert.ok(dyn(p).indexOf('Large PR, focused review') < dyn(p).indexOf('<untrusted-data name='), 'the budget precedes the data blocks');
+  const many = ctx({ 'diff.patch': a + Array.from({ length: 500 }, (_, i) => `diff --git a/z${i} b/z${i}\n@@ -1 +1 @@\n+${i}\n`).join(''), 'focus.txt': 'src/a.js\t9.0\tlogic\n', 'focus-skipped.txt': 'z1\t1\n' });
+  assert.ok(build(many).includes('"max_obligations":8'), 'the obligation cap sees the focused diff only');
+});

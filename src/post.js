@@ -566,6 +566,8 @@ function traceTable(data, blob, specFiles = [], covById = new Map(data.coverage.
 const MAX_ROWS = 30;
 // Files the collector left out of the diff (diff-dropped.txt, one path per line).
 const notReviewed = (paths) => `Not reviewed (diff over max_diff_kb): ${paths.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${paths.length > 10 ? `, … (+${paths.length - 10} more)` : ''}`;
+// Large PR (src/focus.js): the files outside the focused review, riskiest first, as focus-skipped.txt lists them.
+const focusNote = (n, of, paths) => `Large PR: focused review of ${n} of ${of} files (highest risk first); not reviewed: ${paths.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${paths.length > 10 ? `, … (+${paths.length - 10} more)` : ''}`;
 // ponytail: 1 nano-AIU = 1e-9 AI credit = $0.01 / credit (GitHub AI Credit price since 2026-06-01); update this one constant if GitHub reprices. The billing API stays authoritative.
 const USD_PER_AI_CREDIT = 0.01;
 const fin = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : undefined);
@@ -1170,6 +1172,8 @@ async function run({ github, context, core }) {
   const strs = (xs) => [...new Set(xs.filter((x) => typeof x === 'string' && x))];
   // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)
   const used = Array.isArray(em?.used) && strs(em.used).length ? strs(em.used) : strs([usage?.currentModel, ...Object.keys(usage?.modelMetrics && typeof usage.modelMetrics === 'object' ? usage.modelMetrics : {})]), tier = em?.tier === 'fast' ? 'fast' : undefined;
+  const chosen = (readCtx('focus.txt') || '').split('\n').filter(Boolean), skipped = (readCtx('focus-skipped.txt') || '').split('\n').map((x) => x.split('\t')[0].trim()).filter(Boolean);
+  const focused = chosen.length ? { files: chosen.length, of: chosen.length + skipped.length } : undefined; // not reduced mode, not a failure: the run is only incomplete, so the next push reviews again
   const dropped = (readCtx('diff-dropped.txt') || '').split('\n').map((x) => x.trim()).filter(Boolean);
   // What the run cost, for the owner's own accounting: attempt count, engine time (recorded wall time, else API time), credits (nano AI units / 1e9), where it ran and how it was delivered.
   const measure = () => {
@@ -1182,6 +1186,7 @@ async function run({ github, context, core }) {
   const st = (readCtx('engine-status') || '').trim();
   if (partial) incomplete.push('The diff exceeded `max_diff_kb` and was truncated; obligations outside the reviewed portion are unknown.');
   if (dropped.length) incomplete.push(notReviewed(dropped));
+  if (focused) incomplete.push(focusNote(focused.files, focused.of, skipped));
 
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
@@ -1419,7 +1424,7 @@ async function run({ github, context, core }) {
   tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
   if (ctx) try { fs.writeFileSync(path.join(ctx, 'counts.json'), JSON.stringify(tele) + '\n'); } catch { /* ctx not writable: the sticky comment still carries the counts */ } // summary-only and manual runs have no sticky comment: the artifact carries it
   const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
