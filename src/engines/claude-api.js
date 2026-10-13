@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The claude adapter's default mode (claude_mode: api): ONE Anthropic Messages API call, no agent loop and no CLI. SpecGuard already inlines the diff, test candidates, leads, requirements and rule files
 // into the prompt (src/prompt.js), so the model needs no tools: the agent loop re-sends the whole context every turn and its cost cannot be bounded up front (two live runs: $3.58 and $3.44 against a $1 budget).
-// Env: CTX PROMPT_FILE (or PROMPT) ANTHROPIC_API_KEY (environment only) MODEL (empty = claude-haiku-5-5) MAX_BUDGET_USD (default 1.00; a HARD bound: checked before the call) MAX_OUTPUT_TOKENS (default 16000) CONTEXT_PACK_BYTES (repository files appended to the prompt, default 300000, 0 = off; read from GITHUB_WORKSPACE or the cwd) EFFORT (ignored, noted) TIMEOUT (minutes) CHECK (audit = scan schema) FAST_MODELS.
+// Env: CTX PROMPT_FILE (or PROMPT) ANTHROPIC_API_KEY (environment only) MODEL (empty = claude-haiku-5-5) MAX_BUDGET_USD (default 1.00; a HARD bound: checked before the call) MAX_OUTPUT_TOKENS (default 32000) CONTEXT_PACK_BYTES (repository files appended to the prompt, an upper bound, default 150000, 0 = off; shrunk to keep the prompt under 90% of a model's long-context price step; read from GITHUB_WORKSPACE or the cwd) EFFORT (ignored, noted) TIMEOUT (minutes) CHECK (audit = scan schema) FAST_MODELS.
 // Files in CTX as in src/engines/README.md: findings.json usage.json engine-status engine-notes engine-error engine-model.json. Never throws, never prints the key.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,9 +25,11 @@ const cost = (model, u) => { // u = the API usage object
   const i = u.input_tokens || 0, cr = u.cache_read_input_tokens || 0, cw = u.cache_creation_input_tokens || 0, o = u.output_tokens || 0, p = priceOf(model, i + cr + cw);
   return (i * p.in + cr * p.in * 0.1 + cw * p.in * 1.25 + o * p.out) / 1e6;
 };
-// Worst case before the call: the whole prompt as cache WRITE for the static part (1.25x) and plain input for the rest, and every allowed output token. bytes / 3.5 over-counts tokens for English and code.
+// Bytes per token. PRE_FLIGHT is deliberately low so the estimate over-counts: line-numbered code measured 1.7-2 bytes/token live (168.6k tokens for 293 KB), English is about 4. PACK_SIZING is the realistic figure used to size the pack under a price step.
+const PRE_FLIGHT_BPT = 1.5, PACK_SIZING_BPT = 2.0;
+// Worst case before the call: the whole prompt as cache WRITE for the static part (1.25x) and plain input for the rest, and every allowed output token.
 const worstCase = (model, sysBytes, userBytes, maxTokens) => {
-  const s = Math.ceil(sysBytes / 3.5), u = Math.ceil(userBytes / 3.5), p = priceOf(model, s + u);
+  const s = Math.ceil(sysBytes / PRE_FLIGHT_BPT), u = Math.ceil(userBytes / PRE_FLIGHT_BPT), p = priceOf(model, s + u);
   return { tokens: s + u, usd: (s * 1.25 * p.in + u * p.in + maxTokens * p.out) / 1e6 };
 };
 
@@ -138,10 +140,17 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     if (!key) return end('failed', 'auth', 'The Anthropic API key was rejected (check the llm_token secret)', 'no ANTHROPIC_API_KEY in the environment');
     const prompt = env.PROMPT_FILE ? fs.readFileSync(env.PROMPT_FILE, 'utf8') : env.PROMPT || '';
     const model = env.MODEL || 'claude-haiku-5-5';
-    const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 16000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
+    const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
     const schema = strict(JSON.parse(fs.readFileSync(path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json'), 'utf8')));
-    const packBytes = env.CONTEXT_PACK_BYTES === undefined || env.CONTEXT_PACK_BYTES === '' ? 300000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) || 0);
-    let pack = { text: '', note: '' };
+    let packBytes = env.CONTEXT_PACK_BYTES === undefined || env.CONTEXT_PACK_BYTES === '' ? 150000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) || 0);
+    const step = PRICES[model]?.longFrom;
+    let skip = '';
+    if (packBytes > 0 && step) { // keep system + user + pack under 90% of the price step; 500 bytes: the pack header and joins
+      const base = messages(prompt, 'x'), room = Math.floor(0.9 * step * PACK_SIZING_BPT) - Buffer.byteLength(base.system) - Buffer.byteLength(base.user) - 500;
+      packBytes = Math.min(packBytes, room);
+      if (packBytes < 200) { packBytes = 0; skip = `context pack: skipped, prompt already near the ${Math.round(step / 1000)}k-token price step`; }
+    }
+    let pack = { text: '', note: skip };
     if (packBytes > 0) try { pack = contextPack(ctx, fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd()), packBytes); } catch { /* the pack is optional */ }
     const { system, user } = messages(prompt, pack.text); // the pre-flight below sees the pack
     const est = worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user), maxTokens);
