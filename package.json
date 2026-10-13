@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "description": "SpecGuard runs as CommonJS even when checked out inside a target repository whose package.json declares \"type\": \"module\"."
+}
