@@ -262,10 +262,13 @@ function parseItems(file, text) {
 const isRequirementDoc = (items) => items.some((i) => i.kind !== 'normative') || items.length >= 2;
 // Stricter than isRequirementDoc, used to admit a document: prose alone needs 2+ items and either an RFC 2119 capital (MUST/SHALL/REQUIRED)
 // or a dense run of them (long documents need more); structured items (ID, acceptance criteria, Gherkin) always admit. Spec directories keep the loose rule.
-const STRONG_DIR = /(^|\/)(specs?|requirements|design|rfcs?|proposals)\/|(^|\/)adrs?\/|^\.kiro\/specs\/|^openspec\//i;
+const STRONG_DIR = /(^|\/)(specs?|requirements|design|rfcs?|proposals)\/|(^|\/)adrs?\/|^\.kiro\/specs\/|^openspec\//i
+// A file whose basename names itself a spec is as strong as a spec directory, in any directory: design.md, spec.md, api-spec.md, design_doc.md, product-requirements.md, prd.md, srs.txt, acceptance-criteria.md.
+// Not: README, architecture, CONTRIBUTING, CHANGELOG, designer-notes, respect.md (the stem must be a whole word between -/_/. separators).
+const STRONG_FILE = /(^|\/)([^/]*[-_.])?(design|specs?|specification|requirements?|prd|srs|acceptance(-criteria)?)([-_.][^/]*)?$/i;
 const DENSITY = 300, DENSITY_CAPS = 7000; // prose-only: one normative sentence per 300 bytes, or per 7 KB when one has an RFC 2119 capital: a long tutorial with a few stray "must" lines is not a spec
 const SPEC_DIR = /(^|\/)(specs?|requirements)\/|^openspec\//i; // one normative sentence is enough for a file that lives in a spec directory
-const isSpecDoc = (items, file = '', size = 0) => (isRequirementDoc(items) || (items.length === 1 && SPEC_DIR.test(file))) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || items.length * DENSITY >= size || (items.length * DENSITY_CAPS >= size && items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw))));
+const isSpecDoc = (items, file = '', size = 0) => (isRequirementDoc(items) || (items.length === 1 && SPEC_DIR.test(file))) && (items.some((i) => i.kind !== 'normative') || STRONG_DIR.test(file) || STRONG_FILE.test(file) || items.length * DENSITY >= size || (items.length * DENSITY_CAPS >= size && items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw))));
 // Directories of LLM prompts, command/workflow definitions and templates are instructions to a tool, not product requirements.
 const NON_SPEC_DIR = /(^|\/)(templates?|prompts?|commands|workflows|agents|skills)\/|-template\.md$/i;
 const specLike = (p) => docLike(p) && !NON_SPEC_DIR.test(p);
