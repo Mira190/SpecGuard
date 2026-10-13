@@ -137,6 +137,38 @@ test('a complete valid answer with a non-zero exit (not a timeout) is a success 
   assert.equal(s.ctxFile('findings.json'), VALID);
 });
 
+test('known Copilot failures are classified from stderr: reason file, note with the raw first line, matching warning, no repair; unknown keeps the generic text', (t) => {
+  const generic = /needs 'permissions: copilot-requests: write'/;
+  const cases = [
+    ['You have exceeded your monthly quota (Request ID: ABC)', 'quota', /quota or budget exhausted/, false],
+    ['Error: AI credits limit exceeded for this org', 'quota', /quota or budget exhausted/, false],
+    ['Error: Access denied by policy settings', 'policy', /disabled by an organization or enterprise policy/, false],
+    ['Error: Copilot is disabled by your organization', 'policy', /disabled by an organization/, false],
+    ['Error: 401 Unauthorized', 'auth', /cannot use Copilot/, true],
+    ['Error: No Copilot access for this account', 'auth', /cannot use Copilot/, true],
+    ['Error: 429 Too Many Requests', 'rate', /rate limit hit; the next push retries/, false],
+    ['Error: rate limit reached', 'rate', /rate limit hit/, false],
+  ];
+  for (const [err, reason, msg, keepsGeneric] of cases) {
+    const s = setup(t, [['', 1, `${err}\nstack line 2`]]);
+    const r = s.run();
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(s.calls().length, 1, err); // no repair turn
+    assert.equal(s.ctxFile('engine-status'), 'failed');
+    assert.equal(s.ctxFile('engine-error').split('\n')[0], reason, err);
+    assert.match(s.ctxFile('engine-error').split('\n')[1], msg);
+    const notes = s.ctxFile('engine-notes').split('\n');
+    assert.match(notes[0], msg);
+    assert.ok(notes[0].endsWith(`: ${err}`), notes[0]); // the raw first line, always
+    assert.equal(generic.test(r.stdout), keepsGeneric, err);
+    if (!keepsGeneric) assert.match(r.stdout, /::warning::Copilot review failed: /);
+  }
+  const s = setup(t, [['', 1, 'boom']]);
+  const r = s.run();
+  assert.equal(s.ctxFile('engine-error'), null);
+  assert.match(r.stdout, generic);
+});
+
 test('garbage or an invalid answer with a non-zero exit stays failed, with the exit code noted, and is not repaired', (t) => {
   for (const out of ['I looked and found nothing.', INVALID]) {
     const s = setup(t, [[out, 3]]);
@@ -338,4 +370,15 @@ test('a real-looking version passes the check; a turn that prints the stub messa
   assert.equal(s.calls().length, 1); // no repair turn
   assert.equal(s.ctxFile('engine-status'), 'failed');
   assert.equal(s.ctxFile('engine-repair'), null);
+});
+
+test('model fallback turn that exits non-zero after a complete answer is a success with both notes', (t) => {
+  const s = setup(t, [['', 1, 'Error: Model "gpt-9" from --model flag is not available.'], [VALID, 3]]);
+  assert.equal(s.run({ MODEL: 'gpt-9' }).status, 0);
+  assert.equal(s.calls().length, 2);
+  assert.equal(s.ctxFile('engine-status'), 'success');
+  const notes = s.ctxFile('engine-notes').split('\n');
+  assert.ok(notes.includes('Copilot exited with code 3 after a complete answer'), notes.join('|'));
+  assert.ok(notes.includes('model_fallback: gpt-9 → auto'), notes.join('|'));
+  assert.equal(s.ctxFile('findings.json'), VALID);
 });

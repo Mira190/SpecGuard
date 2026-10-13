@@ -110,7 +110,7 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | `test_paths` | | Globs or folders, one per line (`!glob` excludes), that are the authoritative unit-test locations: files there are the tests whatever their names, they are searched first, and the prompt says so. A bare name (`qa/checks`) is a file or a folder. Empty = tests are discovered by name and layout. |
 | `standards_checks` | | Your own lint/format checks to report, `check:NAME` or `status:CONTEXT`, one per line. See [Standards evidence](#standards-evidence). |
 | `mode` | `pr` | `pr` reviews a pull request; `scan` runs the unit test gap scan on the checked-out repository (`audit` is accepted as an alias). See [Unit test gap scan](#unit-test-gap-scan-whole-repository). |
-| `scan_issue` | `false` | Scan mode: `true` also creates or updates one issue titled "SpecGuard: unit test gap scan" (needs `issues: write`). It is what lets a gap be confirmed across runs. |
+| `scan_issue` | `false` | Scan mode: `true` also creates or updates one issue titled "SpecGuard: unit test gap scan" (one per `scan_paths` scope; needs `issues: write`). It is what lets a gap be confirmed across runs and lets the runs rotate through all blocks. |
 
 <details>
 <summary>Advanced inputs</summary>
@@ -134,7 +134,8 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | `ctx_retention_days` | `1` | Days to keep the `specguard-ctx-<PR>-<attempt>` artifact (diff, prompt context and raw engine output, for diagnosing a failed review). Anyone who can read the repo's Actions runs can download it: set `0` (no upload) on public repositories and wherever the diff must not be stored. |
 | `resolve_stale` | `false` | `true` resolves SpecGuard's own review threads that have no replies and whose finding is no longer reported anywhere, including the summary (at most 20 per run), after a complete review (diff not truncated, engine finished, requirement collection and comment delivery not degraded). Enable it only with a `github_token` that can resolve review threads: the default `GITHUB_TOKEN` with `pull-requests: write` was refused in a live run ("Resource not accessible by integration"; for example a fine-grained PAT with Pull requests: write; adding `contents: write` to the job is unverified), and when the token is refused the summary says the threads were left open. Off by default because of "Require conversation resolution": where it is on, every unresolved advisory thread blocks the merge, and a token that cannot resolve means the developer must resolve each one by hand. Failures never fail the run. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
-| `scan_max_blocks` | `80` | Scan mode: most document blocks scanned per run, taken in document order; the rest are listed under not reviewed (integer 1-500). |
+| `scan_max_blocks` | `80` | Scan mode: most document blocks audited per run (integer 1-500). With `scan_issue: true` the runs rotate through all blocks (see [Large repositories and monorepos](#large-repositories-and-monorepos)); without it the first blocks in document order are audited and the rest are listed under not reviewed. |
+| `scan_paths` | | Scan mode: newline-separated globs (`!glob` excludes) that restrict both the requirement documents and the code and tests searched for evidence to a subtree, for a monorepo package. The scan issue is per scope. Empty = the whole repository. |
 | `audit_max_requirements`, `audit_issue` | | Deprecated aliases of `scan_max_blocks` and `scan_issue`; when both names are set, the `scan_*` one wins. |
 | `delivery`, `repository`, `pr_number`, `base_sha`, `head_sha` | | For [manual runs](#manual-run-specguard-repo) that review another repository on a `workflow_dispatch`: `delivery: summary` writes nothing to the PR (job summary only); the others replace what a `pull_request` event would supply. Leave them empty in your own workflow. |
 
@@ -180,7 +181,39 @@ jobs:
 
 The result is the job summary: one line per document block (link, text, block status, and its sub-rows' statuses; a block is a `gap` when any sub-row is `missing_test`, `partial`, `contradicted` or `not_implemented`, `covered` when all are, `unsure` otherwise) with counts by block status, the per-sub-row evidence in a collapsed table per document, the candidate documents that were not admitted ("add to `requirements_paths` to include"), and what was not reviewed (skipped documents, rows whose citation did not verify, the `scan_max_blocks` cap). Every citation is checked against the file at HEAD: a requirement whose quote is not found is moved to "not reviewed"; test or code evidence that is not found is removed and a `covered` row becomes `unknown`. `audit.json` (the validated result) stays in the `specguard-audit-<attempt>` artifact (`ctx_retention_days`). Reporting is per block and confirmed across runs, because a model's detail varies from run to run (the same commit scanned twice agreed on a block's gap about two times in three, and on individual sub-rows far less): with `scan_issue: true` the issue keeps a hidden per-block state, a gap is listed as **confirmed** only when the block was a gap in this run and the previous one (otherwise "new gap, unconfirmed"), a confirmed gap that is covered is "resolved? recheck next run" until it is covered twice, and "Changed since the last scan" lists only those two-run-stable changes plus a count of unstable blocks. Schedule the scan weekly so each run confirms the last; without `scan_issue` every gap stays unconfirmed (a [manual run](#manual-run-specguard-repo) is always one-off for this reason). With `scan_issue: true` the same report is written to a single issue (found by a hidden marker and authored by this action; whole rows are dropped, never cut, to fit GitHub's body limit).
 
-Cost: the model reads every admitted document in full (at most 60), so a scan uses far more tokens than a PR review. Cap it with `copilot_max_ai_credits` (per turn), lower `scan_max_blocks`, narrow the documents with `requirements_paths` (`!glob` excludes), and raise `review_timeout_minutes` and the job `timeout-minutes` for large repositories.
+Cost: the model reads every admitted document in full (at most 60), so a scan uses far more tokens than a PR review. Cap it with `copilot_max_ai_credits` (per turn), lower `scan_max_blocks`, narrow the documents with `requirements_paths` (`!glob` excludes) or the whole scan with `scan_paths`, and raise `review_timeout_minutes` and the job `timeout-minutes` for large repositories.
+
+### Large repositories and monorepos
+
+A scan does bounded work per run and covers everything across runs:
+
+- **Evidence is searched before the model starts.** For every block of the run, a deterministic search (the same requirement-to-code ranking the PR review uses, bounded by a 40 s budget) finds up to 3 code and 3 test locations (`path:line` and the matching line) and hands them to the model as leads (`audit-evidence.txt`). The model verifies those first and searches the repository itself only when none fits; every citation is still checked against the file by the publisher. A block with no match says `none`; matches are a heuristic (a shared word is not a match, but prose-heavy tables can still match), so they are leads, never evidence.
+- **Runs rotate** (with `scan_issue: true`, because the issue holds the state: per block, its status and the commit and date it was last audited). Each run audits up to `scan_max_blocks` blocks in this order: blocks that are new or edited since the last scanned commit (needs `fetch-depth: 0`; a shallow clone is noted and skipped), gaps seen once that need confirming, blocks never audited (in document order), then the least recently audited. The other blocks keep their status from their last audit in the report, marked "from <date>", so the issue always shows the whole picture. The summary says `Coverage: X of Y blocks audited at least once; this run audited K (changed D, confirming C, new N, oldest O)`. Without `scan_issue` there is no state: each run audits the first blocks in document order and the summary says so ("schedule with scan_issue: true to rotate through all blocks").
+- **`scan_paths` scopes a package.** It limits the requirement documents and the code and tests searched (discovery limits of 2000 candidate files and 500 documents then count only the subtree). Each scope has its own issue (the title ends with the scope, e.g. "SpecGuard: unit test gap scan (packages/payments/**)"; the hidden marker carries a hash of the globs), so scans of different packages never overwrite each other. A scan without `scan_paths` keeps the original issue title and marker, so an issue created before scopes existed is still found.
+- **Every cap is shown** under "Not reviewed": the discovery limits, the 40 s evidence budget, 3 + 3 locations per block, the 64 KB evidence file, the blocks left for later runs, and the 600 blocks the issue state can keep (older ones count as never audited again).
+
+One job per package, each with its own issue:
+
+```yaml
+jobs:
+  scan:
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [packages/payments, packages/search, packages/web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: read, issues: write, copilot-requests: write }
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: Mira190/SpecGuard@<full-commit-sha>
+        with:
+          mode: scan
+          scan_paths: ${{ matrix.package }}/**
+          scan_issue: "true"
+          scan_max_blocks: "60"
+```
 
 ## Manual run (SpecGuard repo)
 

@@ -147,3 +147,18 @@ test('action.yml: the superseded check sits between collect and the engine; engi
   for (const re of [/^id: engine/m, /Run the review engine/, /src\/post\.js'/]) assert.match(cond(find(re)), /steps\.superseded\.outputs\.superseded != 'true'/, String(re));
   assert.match(yml, /^ {2}superseded: \{[^}]*steps\.superseded\.outputs\.superseded/m);
 });
+
+test('action.yml: scan_paths scopes the scan and reaches both scan steps; the collector may read the scan issue (token and repository) only through its own env', () => {
+  assert.match(input('scan_paths'), /default: "" \}$/);
+  assert.match(input('scan_paths'), /restrict both the requirement documents and the code and tests/);
+  assert.match(input('scan_issue'), /rotate through all blocks/);
+  assert.match(input('scan_max_blocks'), /rotate through all blocks/);
+  const collect = find(/id: audit_collect/), post = find(/audit-post\.js/);
+  for (const s of [collect, post]) assert.match(s, /SCAN_PATHS: \$\{\{ inputs\.scan_paths \}\}/);
+  for (const m of [/SCAN_ISSUE: \$\{\{ inputs\.scan_issue \}\}/, /AUDIT_ISSUE: \$\{\{ inputs\.audit_issue \}\}/, /GH_TOKEN: \$\{\{ inputs\.github_token \}\}/, /GH_REPO: \$\{\{ inputs\.repository \|\| github\.repository \}\}/]) assert.match(collect, m);
+  const src = fs.readFileSync(path.join(__dirname, 'audit-collect.js'), 'utf8');
+  const read = new Set([...src.matchAll(/\benv\.([A-Z][A-Z_]+)/g)].map((m) => m[1]));
+  const mapped = new Set([...collect.slice(collect.indexOf('env:'), collect.indexOf('run:')).matchAll(/^\s+([A-Z_]+): /gm)].map((m) => m[1]));
+  const runner = new Set(['GITHUB_REF_NAME', 'GITHUB_EVENT_PATH', 'GITHUB_OUTPUT', 'GITHUB_API_URL', 'GITHUB_REPOSITORY']);
+  assert.deepEqual([...read].filter((k) => !mapped.has(k) && !runner.has(k)), [], 'every variable the collector reads is mapped');
+});

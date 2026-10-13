@@ -886,3 +886,31 @@ test('Gherkin steps: case-insensitive, numbered, bold; OpenSpec scenario heading
   assert.deepEqual(kinds('**Scenario:** Bold\n- **GIVEN** a\n').map((k) => k[1]), ['Scenario: Bold']);
   assert.deepEqual(kinds('Scenario: S\nSomething else\n').map((k) => k[0]), [], 'a Scenario: line with no step in the document is prose');
 });
+
+// ---- scan support: a scope for discovery, and the requirement-to-code scorer reused for a whole-repo scan ----
+const DOC_A = '# A\n\nThe alpha service MUST retry failed uploads three times.\n\nThe alpha service MUST log every rejected upload.\n';
+test('run with a scope: documents outside it do not exist for discovery (and so do not count against the candidate caps)', (t) => {
+  const r = repo(t, { 'packages/a/docs/design.md': DOC_A, 'packages/b/docs/design.md': DOC_A.replace(/alpha/g, 'beta') }, {});
+  T.run({ cwd: r.dir, base: r.head, head: r.head, ctx: r.ctx });
+  assert.deepEqual(out(r, 'spec-files.txt').split('\n').filter(Boolean).sort(), ['packages/a/docs/design.md', 'packages/b/docs/design.md']);
+  T.run({ cwd: r.dir, base: r.head, head: r.head, ctx: r.ctx, scope: (p) => p.startsWith('packages/a/') });
+  assert.deepEqual(out(r, 'spec-files.txt').split('\n').filter(Boolean), ['packages/a/docs/design.md']);
+});
+
+test('requirementToCode: stop words leave the query, and cover is the share of the block\'s weighted terms a window holds (only when asked for)', (t) => {
+  const r = repo(t, {
+    'src/upload.js': '// retry failed uploads three times\nfunction retryFailedUpload(upload) { return upload; }\n',
+    'src/other.js': '// the quick brown fox\nfunction fox() {}\n',
+  }, {});
+  const entries = T.lsTree(r.dir, r.head);
+  const crit = { id: 'c', quote: 'The upload service must retry failed uploads three times.', previous: '', lits: [] };
+  const run = (extra) => T.requirementToCode({ cwd: r.dir, head: r.head, entries, skip: () => false, crits: [crit], dl: T.makeClock(5000), info: {}, ...extra })[0].code;
+  const plain = run({});
+  assert.equal(plain[0].path, 'src/upload.js');
+  assert.ok(!('cover' in plain[0]), 'PR mode output is unchanged');
+  const withCover = run({ cover: true, stop: T.BLOCK_STOP });
+  assert.equal(withCover[0].path, 'src/upload.js');
+  assert.ok(withCover[0].cover > 0.5 && withCover[0].cover <= 1, String(withCover[0].cover));
+  assert.ok(!withCover[0].hits.includes('the'), 'a stop word is not a query term');
+  assert.ok(withCover.every((w) => w.path !== 'src/other.js' || w.cover < withCover[0].cover));
+});
