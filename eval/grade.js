@@ -4,9 +4,11 @@ const lc = (s) => String(s || '').toLowerCase();
 // The obligations table shows a status as a word ("Weak test: reason", src/post.js STATUS_LABEL); the old tokens still parse.
 const STATUS_WORD = { Evidenced: 'covered', 'Weak test': 'weak_test', 'Missing test': 'missing_test', 'Higher-level only': 'higher_level_only', 'Needs a person': 'needs_human', 'Not assessed': 'unknown' };
 const STATUS = /^(covered|weak_test|missing_test|higher_level_only|needs_human|unknown|Evidenced|Weak test|Missing test|Higher-level only|Needs a person|Not assessed): /;
-// A summary list item that carries its own text: "- ❌ **Missing test:** Title `path:line` (why) — sentence". A posted finding links its title to the comment (`[Title](url)`) and is not counted here.
+// A summary list item that carries its own text: "- Title `path:line` (why) — sentence" under a kind heading ("### ❌ Missing unit tests (2)"), or the older labelled form "- ❌ **Missing test:** Title ...". A posted finding links its title to the comment (`[Title](url)`) and is not counted here.
 const ITEM_KIND = { 'Missing test': 'missing_test', 'Weak test': 'weak_test', Mismatch: 'spec_mismatch', Violation: 'standard', 'Move down': 'pushdown' };
-const ITEM = /^- (?:❌ )?\*\*(Missing test|Weak test|Mismatch|Violation|Move down):\*\* (?!\[)(.+?) \[?`([^`\n]+):(\d+)`(?:\]\([^)\n]*\))?(?: \(([^)\n]*)\))?/gm;
+const HEAD_KIND = { 'Missing unit tests': 'missing_test', 'Weak unit tests': 'weak_test', 'Spec mismatches': 'spec_mismatch', 'Coding standard violations': 'standard', 'Tests to move down': 'pushdown' };
+const HEAD = /^### \S+ (.+?)(?: \(\d+\))?[ \t]*$/gm;
+const ITEM = /^- (?:(?:❌ )?\*\*(Missing test|Weak test|Mismatch|Violation|Move down):\*\* )?(?!\[)(.+?) \[?`([^`\n]+):(\d+)`(?:\]\([^)\n]*\))?(?: \(([^)\n]*)\))?/gm;
 const ALIGN =['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown'];
 const TRACE_HEAD = /^\|\s*Requirement\s*\|\s*Changed\s*\|\s*Implementation\s*\|\s*Tests\s*\|\s*Alignment\s*\|\s*Reflected in\s*\|/i;
 const YES = '✓✔✅', NO = '✗✘❌✕';
@@ -42,7 +44,8 @@ function parseComment(c) {
 // Parses the sticky summary (src/post.js buildSummary): the collapsed items and the coverage table rows.
 function parseSummary(text) {
   const s = String(text || '');
-  const items = [...s.matchAll(ITEM)].map((m) => ({ title: m[2], path: m[3], line: +m[4], kind: ITEM_KIND[m[1]], why: m[5] || '' }));
+  const heads = [...s.matchAll(HEAD)], details = s.indexOf('<details><summary>Details:'); // a bare item takes its kind from the nearest heading above it, in the visible part only
+  const items = [...s.matchAll(ITEM)].map((m) => ({ title: m[2], path: m[3], line: +m[4], kind: m[1] ? ITEM_KIND[m[1]] : (details < 0 || m.index < details) && HEAD_KIND[(heads.filter((h) => h.index < m.index).pop() || [])[1]], why: m[5] || '' })).filter((i) => i.kind);
   const rows = [], trace = [], lines = s.split('\n'), traceLines = new Set();
   // Traceability table: the header row, then table rows until the first other line.
   const th = lines.findIndex((l) => TRACE_HEAD.test(l));
