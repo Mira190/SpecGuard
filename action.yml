@@ -29,7 +29,7 @@ inputs:
   force: { description: "true to review again although this head SHA already has a SpecGuard summary.", default: "false" }
   ctx_retention_days: { description: "Days to keep the specguard-ctx debug artifact (diff, prompt context, raw engine output; repo readers can download it). 0 disables the upload.", default: "1" }
   mode: { description: "pr (review a pull request) | audit (audit the checked-out repository against its requirement documents; run it on the default branch, on demand or on a schedule).", default: pr }
-  audit_max_requirements: { description: "Audit mode: most requirements listed in one audit (integer 1-500).", default: "80" }
+  audit_max_requirements: { description: "Audit mode: most document blocks audited per run, taken in document order; the rest are listed under not reviewed (integer 1-500).", default: "80" }
   audit_issue: { description: "Audit mode: true to also create or update one issue titled 'SpecGuard requirements audit' (needs issues write).", default: "false" }
 
 outputs:

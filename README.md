@@ -117,7 +117,7 @@ Copilot usage is token-based, so cost grows with agent turns. Claude runs are ca
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
 | `claude_version` | `2.1.290` | Pinned `@anthropic-ai/claude-code` (>= 2.1.205). |
 | `mode` | `pr` | `pr` reviews a pull request; `audit` audits the checked-out repository against its requirement documents. See [Audit mode](#audit-mode). |
-| `audit_max_requirements` | `80` | Audit mode: most requirements listed in one audit (integer 1-500). |
+| `audit_max_requirements` | `80` | Audit mode: most document blocks audited per run, taken in document order; the rest are listed under not reviewed (integer 1-500). |
 | `audit_issue` | `false` | Audit mode: `true` also creates or updates one issue titled "SpecGuard requirements audit" (needs `issues: write`). |
 
 Claude engine:

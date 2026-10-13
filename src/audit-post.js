@@ -2,7 +2,6 @@
 // renders it to the job summary and, with audit_issue, to ONE issue we own. Advisory; never fails the run.
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const post = require('./post');
 const { ours } = require('./preflight');
@@ -28,26 +27,54 @@ const bytes = (s) => Buffer.byteLength(s);
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const cell = (s, n = Infinity) => oneLine(neutralize(String(s)), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const solid = (q) => String(q).replace(/\s/g, '').length >= MIN_QUOTE;
-const norm = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const CID = /^([0-9a-f]{8})(?:\.[1-9]\d*)?$/; // a block id, or block id + .1, .2 for the atomic requirements a block bundles
+const cidOf = (id) => (CID.exec(String(id)) || [])[1];
+
+// audit-candidates.txt (cid TAB path:line TAB heading TAB text) -> Map cid -> { cid, path, line, heading, text }, in document order.
+function readCandidates(txt) {
+  const m = new Map();
+  for (const l of lines(txt)) {
+    const [cid, loc = '', heading = '', ...text] = l.split('\t'), k = loc.lastIndexOf(':');
+    if (/^[0-9a-f]{8}$/.test(cid) && k > 0) m.set(cid, { cid, path: loc.slice(0, k), line: +loc.slice(k + 1), heading, text: text.join(' ') });
+  }
+  return m;
+}
+const ctxCandidates = () => { try { return readCandidates(fs.readFileSync(path.join(process.env.CTX, 'audit-candidates.txt'), 'utf8')); } catch { return null; } };
+const MISSING_MAX = 0.2; // more unanswered blocks than this share of the candidates reject the output (the repair turn)
 
 // Hand-rolled mirror of audit.schema.json: structural problems reject the output (the repair turn's trigger); evidence that does not
-// fit the status is not rejected here but downgraded by verify().
-function validate(o) {
+// fit the status is not rejected here but downgraded by verify(). cands (default: audit-candidates.txt in $CTX; null = unknown): every
+// result must name a listed block, and more than MISSING_MAX of the blocks unanswered rejects the output (a few misses become `unknown` in verify()).
+function validate(o, cands = ctxCandidates()) {
   const bad = (m) => ({ ok: false, error: m });
   const text = (v) => typeof v === 'string' && v.trim().length > 0;
   const cite = (v) => !!v && typeof v === 'object' && text(v.path) && Number.isInteger(v.line) && v.line >= 1 && text(v.quote);
   if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('not an object');
   if (!Array.isArray(o.docs_reviewed) || !o.docs_reviewed.every(text)) return bad('docs_reviewed must be an array of paths');
   if (!Array.isArray(o.not_reviewed) || !o.not_reviewed.every(text)) return bad('not_reviewed must be an array of strings');
-  if (!Number.isInteger(o.requirements_found) || o.requirements_found < 0) return bad('requirements_found must be a non-negative integer');
   if (!Array.isArray(o.requirements)) return bad('requirements must be an array');
-  const ids = new Set();
+  if (o.not_requirements === undefined) o.not_requirements = [];
+  if (!Array.isArray(o.not_requirements)) return bad('not_requirements must be an array');
+  const ids = new Set(), answered = new Set(), skipped = new Set();
+  for (const [i, n] of o.not_requirements.entries()) {
+    const w = `not_requirements[${i}]`;
+    if (!n || typeof n !== 'object' || !/^[0-9a-f]{8}$/.test(n.cid) || !text(n.reason)) return bad(`${w} needs a block cid and a reason`);
+    if (cands && !cands.has(n.cid)) return bad(`${w}: unknown block ${n.cid}; only the listed candidates may be answered`);
+    if (skipped.has(n.cid)) return bad(`${w}: duplicate block ${n.cid}`);
+    skipped.add(n.cid);
+  }
   for (const [i, r] of o.requirements.entries()) {
     const w = `requirements[${i}]`;
     if (!r || typeof r !== 'object' || Array.isArray(r)) return bad(`${w} is not an object`);
     if (!text(r.id) || !text(r.text)) return bad(`${w}: id and text are required`);
     if (ids.has(r.id)) return bad(`${w}: duplicate id ${String(r.id).slice(0, 40)}`);
     ids.add(r.id);
+    const cid = cidOf(r.id);
+    if (cands) {
+      if (!cid || !cands.has(cid)) return bad(`${w}: id ${String(r.id).slice(0, 40)} is not a listed block id (the block cid, or cid.1, cid.2)`);
+      if (skipped.has(cid)) return bad(`${w}: block ${cid} is answered both as not_a_requirement and as a requirement`);
+      answered.add(cid);
+    }
     if (!cite(r.source)) return bad(`${w}: source needs path, line and quote`);
     if (!CLASS.includes(r.class)) return bad(`${w}: class must be one of ${CLASS.join(', ')}`);
     if (!STATUS.includes(r.status)) return bad(`${w}: status must be one of ${STATUS.join(', ')}`);
@@ -56,6 +83,10 @@ function validate(o) {
     if (r.note === undefined) r.note = '';
     else if (typeof r.note !== 'string') return bad(`${w}: note must be a string`);
     for (const c of [r.source, ...r.code, ...r.tests]) c.quote = c.quote.slice(0, 200); // a prefix of a verbatim quote still verifies
+  }
+  if (cands) {
+    const missing = [...cands.keys()].filter((k) => !answered.has(k) && !skipped.has(k));
+    if (missing.length > cands.size * MISSING_MAX) return bad(`${missing.length} of ${cands.size} listed blocks were not answered (e.g. ${missing.slice(0, 5).join(', ')}); answer every block exactly once`);
   }
   return { ok: true };
 }
@@ -88,9 +119,10 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 // Checks every citation against the file at HEAD (tracked files only) and corrects the line when the quote sits within NEAR lines of it.
 // A requirement whose own citation fails goes to not_reviewed; failed code/test citations are removed and the status downgraded to unknown when the rest cannot carry it.
 // A quote under MIN_QUOTE non-space characters, a test outside a test path, or code that is a document or a test file does not count as evidence.
-// Every verified row gets a stable id: sha1(path, nearest heading, normalised source line)[0..8]; the model's own id stays as doc_id when it is not a generic Rn.
-// docs: the admitted documents (null = any); max: the row cap.
-function verify(data, { read = readFile, tracked = null, docs = null, max = Infinity } = {}) {
+// The row id is the block cid (cid.N for a bundled block), the heading comes from the candidate, and rows keep document order. A block the model
+// skipped, or whose rows all failed verification, becomes an `unknown` row ("not assessed"); not_requirements gains the block's location and text.
+// docs: the admitted documents (null = any); cands: the candidate blocks (Map from readCandidates; null = unknown).
+function verify(data, { read = readFile, tracked = null, docs = null, cands = null } = {}) {
   const cache = new Map();
   const file = (p) => { if (!cache.has(p)) cache.set(p, read(p)); return cache.get(p); };
   const locate = (c) => {
@@ -107,9 +139,9 @@ function verify(data, { read = readFile, tracked = null, docs = null, max = Infi
     return true;
   };
   const isDoc = (p) => DOCFILE.test(p) || (docs && docs.has(p));
-  const out = { ...data, requirements: [], not_reviewed: [...data.not_reviewed] };
-  const own = out.not_reviewed.length, seen = new Set();
-  const drop = (r, why) => out.not_reviewed.push(`${r.id} (${r.source.path}:${r.source.line}): ${why}`);
+  const out = { ...data, requirements: [], not_requirements: [], not_reviewed: [...data.not_reviewed] };
+  const kept = new Set(), failed = new Set(), skipped = new Map((data.not_requirements || []).map((n) => [n.cid, n.reason]));
+  const drop = (r, why) => { failed.add(cidOf(r.id)); out.not_reviewed.push(`${r.id} (${r.source.path}:${r.source.line}): ${why}`); };
   for (const r of data.requirements) {
     const source = { ...r.source };
     if (docs && !docs.has(safeRel(source.path))) { drop(r, 'its source is not an admitted requirement document'); continue; }
@@ -117,44 +149,45 @@ function verify(data, { read = readFile, tracked = null, docs = null, max = Infi
     const code = r.code.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && !testFile(c.path));
     const tests = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
     const lost = r.code.length - code.length + r.tests.length - tests.length;
-    const ls = file(source.path), heading = headingAt(ls, source.line);
-    const srcLine = norm(ls.slice(source.line - 1, source.line - 1 + String(source.quote).split('\n').length).join(' '));
-    let id = sha8(source.path, heading, srcLine);
-    if (seen.has(id)) id = sha8(source.path, heading, srcLine, norm(r.text)); // two requirements on one line (a split bullet)
-    for (let k = 2, base = id; seen.has(id); k++) id = `${base}-${k}`;
-    seen.add(id);
-    const row = { ...r, id, ...(/^R\d+$/.test(r.id) ? {} : { doc_id: r.id }), heading, source, code, tests, note: r.note };
+    const cand = cands && cands.get(cidOf(r.id)), heading = cand ? cand.heading : headingAt(file(source.path), source.line);
+    kept.add(cidOf(r.id));
+    const row = { ...r, heading, source, code, tests, note: r.note };
     if (lost) row.note = `${row.note} ${lost} citation(s) could not be verified and were removed.`.trim();
     const why = gap(row);
     if (why && row.status !== 'unknown') { row.note = `${row.note} Downgraded to unknown: ${why}.`.trim(); row.status = 'unknown'; }
     out.requirements.push(row);
   }
-  // the model's "over the cap" is only true when the cap was reached
-  if (out.requirements.length < max) out.not_reviewed = [...out.not_reviewed.slice(0, own).filter((s) => !/\bcap\b|max_requirements/i.test(s)), ...out.not_reviewed.slice(own)];
-  if (out.requirements.length > max) {
-    out.not_reviewed.push(`${out.requirements.length - max} further requirement(s) beyond audit_max_requirements (${max}) were not listed.`);
-    out.requirements = out.requirements.slice(0, max);
-  }
+  if (cands) {
+    for (const c of cands.values()) {
+      if (kept.has(c.cid) || skipped.has(c.cid)) continue;
+      const quote = String((file(c.path) || [])[c.line - 1] || c.text).trim().slice(0, 200);
+      out.requirements.push({ id: c.cid, text: oneLine(c.text, 200), source: { path: c.path, line: c.line, quote }, heading: c.heading, class: 'human', status: 'unknown', code: [], tests: [],
+        note: failed.has(c.cid) ? "Not assessed: the model's citation for this block did not verify." : 'Not assessed by the model.' });
+    }
+    const at = new Map([...cands.keys()].map((k, i) => [k, i])), pos = (id) => at.get(cidOf(id)) ?? Infinity;
+    out.requirements.sort((a, b) => pos(a.id) - pos(b.id)); // stable: a block's .1, .2 rows keep the model's order
+    out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
+  } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
   return out;
 }
 
 const count = (rows, key, values) => values.map((v) => [v, rows.filter((r) => r[key] === v).length]).filter(([, n]) => n);
 
 // Hidden machine-readable previous state: ids and statuses only (never row text), so the next run can say what changed.
-const stateComment = (head, rows) => `<!-- specguard:audit-state ${JSON.stringify({ v: 1, head: String(head || '').slice(0, 40), rows: rows.map((r) => [r.id, r.status]) }).replace(/[<>]/g, (c) => (c === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d')} -->`;
+const stateComment = (head, rows) => `<!-- specguard:audit-state ${JSON.stringify({ v: 2, head: String(head || '').slice(0, 40), rows: rows.map((r) => [r.id, r.status]) }).replace(/[<>]/g, (c) => (c === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d')} -->`;
 function readState(body) {
   const m = STATE_RE.exec(String(body || ''));
   if (!m) return null;
   try {
     const o = JSON.parse(m[1]);
-    if (o && o.v === 1 && Array.isArray(o.rows) && o.rows.every((x) => Array.isArray(x) && /^[0-9a-f]{8}(-\d+)?$/.test(x[0]) && STATUS.includes(x[1]))) return { head: String(o.head || ''), rows: o.rows.map(([id, status]) => ({ id, status })) };
+    if (o && o.v === 2 && Array.isArray(o.rows) && o.rows.every((x) => Array.isArray(x) && CID.test(x[0]) && STATUS.includes(x[1]))) return { head: String(o.head || ''), rows: o.rows.map(([id, status]) => ({ id, status })) };
   } catch { /* an edited or foreign comment is no state */ }
   return null;
 }
 
 // Markdown that fits `max` bytes: header and footer first, then whole table rows while they fit (never cut mid-row).
 // partial: why the audit is incomplete (shown first); prior: { head, rows: [{id, status}] } of the last full audit; cap: audit_max_requirements.
-function render({ data, docs = [], rejected = [], limitations = [], blob = '', usage = '', failure = '', partial = '', prior = null, cap = 0, candidates = 0, max = SUMMARY_MAX }) {
+function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', failure = '', partial = '', prior = null, cap = 0, candidates = 0, max = SUMMARY_MAX }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
     const rel = safeRel(p);
@@ -162,7 +195,7 @@ function render({ data, docs = [], rejected = [], limitations = [], blob = '', u
   };
   const at = (c) => link(c.path, c.line, `${c.path}:${c.line}`);
   const rows = data ? data.requirements : [];
-  const name = (r) => `${link(r.source.path, r.source.line, r.id)}${r.doc_id ? ` (${cell(r.doc_id, 40)})` : ''}`;
+  const name = (r) => `${link(r.source.path, r.source.line, r.id)}`;
   const evidence = (r) => [r.code.length ? `code: ${r.code.map(at).join('; ')}` : '', r.tests.length ? `tests: ${r.tests.map((t) => `${t.layer} ${at(t)}`).join('; ')}` : ''].filter(Boolean).join('<br>');
   const first = (r) => `${name(r)} ${cell(r.text, 300)}${r.note ? `<br><sub>${cell(r.note, 300)}</sub>` : ''}`;
   const groups = [], clash = [], done = [];
@@ -181,19 +214,21 @@ function render({ data, docs = [], rejected = [], limitations = [], blob = '', u
   if (failure) head += `Could not complete: ${cell(failure, 400)}\n\n`;
   else if (!data) head += 'No requirement documents were found, so nothing was audited.\n\n';
   else {
-    const found = data.requirements_found;
-    const why = cap && rows.length < cap ? `; the model chose which rows to list, the cap of ${cap} was not reached` : cap && rows.length >= cap ? `; the rest are over the cap of ${cap}` : '';
-    head += `**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${docCount} document${docCount === 1 ? '' : 's'}${found > rows.length ? ` (listed ${rows.length} of ${found} found${why}; see not reviewed)` : ''}\n\n`
+    const skipped = data.not_requirements || [], blocks = new Set(rows.map((r) => cidOf(r.id) || r.id)).size + skipped.length;
+    head += `**${rows.length} requirement${rows.length === 1 ? '' : 's'}** from ${docCount} document${docCount === 1 ? '' : 's'}\n\n`
+      + `${candidates ? `${blocks} block${blocks === 1 ? '' : 's'} audited of ${candidates} in the documents${cap ? ` (cap ${cap})` : ''}` : `${blocks} block${blocks === 1 ? '' : 's'} audited`}; ${skipped.length} block${skipped.length === 1 ? ' was' : 's were'} not ${skipped.length === 1 ? 'a requirement' : 'requirements'}.\n\n`
       + `By status: ${by(rows, 'status', RISK)}\n\nBy class: ${by(rows, 'class', CLASS)}\n\n`
-      + `The rows are the requirements the model listed${candidates ? ` (${candidates} deterministic candidate${candidates === 1 ? '' : 's'} were in the documents)` : ''}; the counts describe that list, not the repository.\n\n`;
+      + 'The blocks are fixed by the documents (every paragraph, list item and table row, in document order, up to the cap), not chosen by the model: the same commit lists the same blocks. The model only assesses each one; the counts describe that list, not the repository.\n\n';
   }
-  head += '> Static review; not coverage; not for scoring people. Tests were not executed: a requirement is `covered` when a cited unit assertion with an independent expected value proves it. `not_implemented` and `missing_test` are model claims (not verified statically): the search that found nothing is not checked. Rows are identified by a stable id (a hash of the document, heading and requirement line), so a reworded requirement shows as removed and new.\n\n';
+  head += '> Static review; not coverage; not for scoring people. Tests were not executed: a requirement is `covered` when a cited unit assertion with an independent expected value proves it. `not_implemented` and `missing_test` are model claims (not verified statically): the search that found nothing is not checked. Rows are identified by a stable id (a hash of the document, heading and block text, plus .1, .2 when a block bundles several requirements), so a reworded block shows as removed and new.\n\n';
   if (prior && data) head += changedSince(prior, rows, cell);
 
   const list = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
   let foot = '';
   if (rejected.length) foot += `### Documents not included\n\nThese looked like requirement documents but were not admitted (add them to \`requirements_paths\` to include):\n\n${list(rejected, 20, ([p, why]) => `- \`${cell(p, 200)}\`: ${cell(why, 200)}\n`)}\n`;
-  const nr = [...(data ? data.not_reviewed : []), ...limitations];
+  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations];
+  const nrq = data && data.not_requirements ? data.not_requirements : [];
+  if (nrq.length) foot += `<details><summary>${nrq.length} block${nrq.length === 1 ? ' was' : 's were'} not ${nrq.length === 1 ? 'a requirement' : 'requirements'}</summary>\n\n${list(nrq, 60, (n) => `- ${n.path ? `${link(n.path, n.line, `${n.path}:${n.line}`)} ` : ''}\`${n.cid}\` ${n.text ? `${cell(n.text, 100)} ` : ''}(${cell(n.reason, 80)})\n`)}\n</details>\n\n`;
   const unread = data ? docs.filter(([p]) => !data.docs_reviewed.includes(p)).map(([p]) => `\`${p}\` was admitted but is not in docs_reviewed.`) : [];
   if (nr.length || unread.length) foot += `### Not reviewed\n\n${list([...nr, ...unread], 40, (s) => `- ${cell(s, 400)}\n`)}\n`;
   if (usage) foot += `${usage}\n`;
@@ -251,7 +286,8 @@ async function main({ github, context, core }) {
   const notes = [...lines(readCtx('engine-notes')).map((x) => x.trim()).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])];
   const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
   const cap = meta && meta.max_requirements;
-  const shared = { docs, rejected, limitations: (meta && meta.limitations) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0 };
+  const cands = readCandidates(readCtx('audit-candidates.txt'));
+  const shared = { docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, cap, candidates: (meta && meta.candidates) || 0 };
   const finish = async (md) => { try { await core.summary.addRaw(md).write(); } catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); } };
   const wantIssue = String(env.AUDIT_ISSUE).toLowerCase() === 'true';
   // issue lookup: our open or closed issue and the state it holds; a failure only warns
@@ -288,14 +324,14 @@ async function main({ github, context, core }) {
     return;
   }
   const data = json('findings.json');
-  const v = validate(data);
+  const v = validate(data, cands);
   const why = v.ok ? '' : data ? `the result failed validation: ${v.error}` : 'the engine returned no usable JSON';
   const st = (readCtx('engine-status') || '').trim();
   if (why) return finish(render({ ...shared, failure: st === 'timeout' ? 'the engine timed out (raise review_timeout_minutes)' : st === 'failed' ? 'the engine failed; see the job log' : why }));
   // valid JSON can still come from a run that timed out or failed (or whose repair turn failed): show what verifies, change nothing else
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
-  const checked = verify(data, { tracked: trackedFiles(process.env.GITHUB_WORKSPACE || process.cwd()), docs: new Set(docs.map(([p]) => p)), max: meta.max_requirements });
+  const checked = verify(data, { tracked: trackedFiles(process.env.GITHUB_WORKSPACE || process.cwd()), docs: new Set(docs.map(([p]) => p)), cands });
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
   await finish(render({ ...shared, data: checked, partial, prior }));
@@ -308,4 +344,4 @@ async function main({ github, context, core }) {
 module.exports = async (args) => {
   try { await main(args); } catch (e) { try { args.core.warning(`SpecGuard: audit report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { validate, verify, render, gap, readState, stateComment, STATUS, CLASS, MARK, TITLE });
+Object.assign(module.exports, { readCandidates, validate, verify, render, gap, readState, stateComment, STATUS, CLASS, MARK, TITLE });
