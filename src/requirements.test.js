@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { collectRequirements, extractCriteria, leftRanges, blameShas, blameAt } = require('./requirements');
+const { collectRequirements, extractCriteria, leftRanges, blameShas, blameAt, branchIssues } = require('./requirements');
 
 const pull = (number, o = {}) => ({ number, merged_at: '2024-01-01T00:00:00Z', base: { repo: { full_name: 'org/app' } }, ...o });
 
@@ -179,4 +179,33 @@ test('M11: blame at the merge-base hits the lines the three-dot diff points at, 
   assert.equal(git('merge-base', tip, head), mergeBase);
   assert.deepEqual(blameShas(diff, blameAt(mergeBase, dir)), [mergeBase]);
   assert.ok(blameShas(diff, blameAt(tip, dir)).includes(tip)); // the old behaviour: blame at the tip lands on the unrelated INSERT lines
+});
+
+test('F5: a bare #N is a plain issue number, never a hex colour, anchor or zero-padded id', () => {
+  const calls = [];
+  collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'colours #000000 #fff #L12 #007 #12ab #1234567 and see (#12), &#39; org/spec#7' }, loadIssue: (r, n) => { calls.push([r, n]); return { title: 't', body: '' }; } });
+  assert.deepEqual(calls, [['org/app', 12], ['org/spec', 7]]);
+});
+
+test('F5: a same-repo issue number in the head branch name is linked as "branch name", after body refs and inside the cap', () => {
+  assert.deepEqual(branchIssues('123-fix-bug'), [123]);
+  assert.deepEqual(branchIssues('feat/issue-45-x'), [45]);
+  assert.deepEqual(branchIssues('fix/7_x'), [7]);
+  for (const ref of ['main', '2024-01-fix', 'v2-3-x', 'PROJ-123-x', 'release/1.2.3', undefined]) assert.deepEqual(branchIssues(ref), [], String(ref));
+  const calls = [];
+  const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'Closes #5', headRefName: '123-fix-bug' }, loadIssue: (repo, n) => { calls.push(n); return { title: 'T', body: 'Return 42' }; } });
+  assert.deepEqual(calls, [5, 123]);
+  assert.deepEqual(r.sources, ['PR body', 'issue #5', 'issue #123 (branch name)']);
+  assert.ok(r.documents.some((d) => d.source === 'issue #123'));
+  const dup = collectRequirements({ repo: 'org/app', pr: { number: 9, body: '#123', headRefName: '123-fix-bug' }, loadIssue: () => ({ title: 'T', body: '' }) });
+  assert.deepEqual(dup.sources, ['PR body', 'issue #123']);
+  const cap = collectRequirements({ repo: 'org/app', pr: { number: 9, body: '#1 #2 #3 #4 #5', headRefName: '123-x' }, loadIssue: () => ({ title: 'T', body: '' }) });
+  assert.equal(cap.sources.length, 6);
+  assert.match(cap.limitations[0], /1 linked issue/);
+});
+
+test('F5: a number taken from the branch name that is not an issue is skipped without a limitation', () => {
+  const r = collectRequirements({ repo: 'org/app', pr: { number: 9, body: 'text', headRefName: '999-x' }, loadIssue: () => { throw new Error('404'); } });
+  assert.equal(r.status, 'available');
+  assert.deepEqual(r.limitations, []);
 });

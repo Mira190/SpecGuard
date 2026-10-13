@@ -67,7 +67,7 @@ test('collects changed behaviour with trusted base rules and explicit unavailabl
 });
 
 // Builds a repo: base files, then `change(root)` for the head commit. Returns a runner for collect.sh.
-function scenario(t, baseFiles, change, extraEnv = {}, stub = null) {
+function scenario(t, baseFiles, change, extraEnv = {}, stub = null, reqStub = null) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-collect-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -81,11 +81,12 @@ function scenario(t, baseFiles, change, extraEnv = {}, stub = null) {
   const head = git('rev-parse', 'HEAD');
   const ctx = path.join(root, 'ctx');
   let dir = __dirname;
-  if (stub !== null) { // run a copy of the collector with a fake trace.js beside it; the real one is never touched
+  if (stub !== null || reqStub !== null) { // run a copy of the collector with a fake trace.js (or, with reqStub, a fake requirements.js and the real trace.js) beside it; the real ones are never touched
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-stub-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-    for (const f of ['collect.sh', 'requirements.js']) fs.copyFileSync(path.join(__dirname, f), path.join(dir, f));
-    fs.writeFileSync(path.join(dir, 'trace.js'), stub);
+    for (const f of reqStub === null ? ['collect.sh', 'requirements.js'] : fs.readdirSync(__dirname).filter((n) => /.(js|sh)$/.test(n) && !/.test.js$/.test(n))) fs.copyFileSync(path.join(__dirname, f), path.join(dir, f));
+    if (stub !== null) fs.writeFileSync(path.join(dir, 'trace.js'), stub);
+    if (reqStub !== null) fs.writeFileSync(path.join(dir, 'requirements.js'), reqStub);
   }
   const script = path.resolve(dir, 'collect.sh').replace(/\\/g, '/');
   const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
@@ -321,4 +322,55 @@ test('M11: collect.sh records DIFF_BASE_SHA = merge-base and the node steps use 
   assert.deepEqual(s1.deltas, { removed: ['30 days'], added: ['45 days'] });
   assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), 'tip rule\n'); // trusted rules still come from BASE_SHA
   assert.match(fs.readFileSync(path.join(ctx, 'standards.txt'), 'utf8'), /AGENTS\.md/);
+});
+
+test('F4: BUGBOT.md, .gemini/styleguide.md, .greptile/rules.md and STANDARDS_PATHS docs are collected from BASE; a PR-head change is never used', (t) => {
+  const base = { 'src.js': 'a\n', '.cursor/BUGBOT.md': 'base bugbot\n', 'pkg/BUGBOT.md': 'base nested\n', '.gemini/styleguide.md': 'base gemini\n', '.greptile/rules.md': 'base greptile\n',
+    'docs/team-style.md': 'base team\n', 'docs/guides/api.md': 'base api\n', 'docs/other.md': 'base other\n' };
+  const r = scenario(t, base, ({ write }) => {
+    write('src.js', 'b\n');
+    for (const f of ['.cursor/BUGBOT.md', 'pkg/BUGBOT.md', '.gemini/styleguide.md', '.greptile/rules.md', 'docs/team-style.md', 'docs/guides/api.md', 'docs/other.md']) write(f, 'head\n');
+    write('new/BUGBOT.md', 'head only\n');
+  }, { STANDARDS_PATHS: 'docs/team-style.md\r\n\r\n  docs/guides/**  \n!docs/guides/api.md\n!pkg/BUGBOT.md\n' });
+  assert.deepEqual(r.standards.sort(), ['.cursor/BUGBOT.md', '.gemini/styleguide.md', '.greptile/rules.md', 'docs/team-style.md']);
+  assert.equal(r.read('.cursor/BUGBOT.md'), 'base bugbot\n');
+  assert.equal(r.read('.gemini/styleguide.md'), 'base gemini\n');
+  assert.equal(r.read('.greptile/rules.md'), 'base greptile\n');
+  assert.equal(r.read('docs/team-style.md'), 'base team\n');
+  assert.equal(fs.existsSync(path.join(r.root, 'new/BUGBOT.md')), false); // a rule file that exists only at head is removed
+  assert.equal(r.read('pkg/BUGBOT.md'), 'head\n'); // excluded by STANDARDS_PATHS: an ordinary file again
+  assert.equal(r.read('docs/guides/api.md'), 'head\n');
+  assert.equal(r.read('docs/other.md'), 'head\n');
+  const changed = r.ctxFile('rule-changes.txt').split('\n').filter(Boolean).sort();
+  assert.deepEqual(changed, ['.cursor/BUGBOT.md', '.gemini/styleguide.md', '.greptile/rules.md', 'docs/team-style.md', 'new/BUGBOT.md']);
+  assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean), ['src.js']);
+  const map = JSON.parse(r.ctxFile('standards-map.json'));
+  assert.deepEqual(map.map((e) => [e.path, e.kind, e.scope]).sort(), [['.cursor/BUGBOT.md', 'repo', ['**']], ['.gemini/styleguide.md', 'repo', ['**']], ['.greptile/rules.md', 'repo', ['**']], ['docs/team-style.md', 'repo', ['**']]]);
+});
+
+test('F4: without STANDARDS_PATHS only the built-in globs apply (a doc under docs/ stays an ordinary doc)', (t) => {
+  const r = scenario(t, { 'src.js': 'a\n', 'docs/team-style.md': 'base\n', '.gemini/styleguide.md': 'base\n' }, ({ write }) => { write('src.js', 'b\n'); write('docs/team-style.md', 'head\n'); write('.gemini/styleguide.md', 'head\n'); });
+  assert.equal(r.read('docs/team-style.md'), 'head\n');
+  assert.equal(r.read('.gemini/styleguide.md'), 'base\n');
+  assert.deepEqual(r.standards, ['.gemini/styleguide.md']);
+  assert.equal(r.ctxFile('spec-rejected.txt'), '');
+});
+
+test('F2: a changed .md that the PR text names is classified after the requirements step and its diff joins diff.patch; unnamed ones stay out', (t) => {
+  const req = `const fs = require('fs'), path = require('path');
+const doc = { source: 'PR body', text: 'Implements the scheduling in docs/notes/overview.md' };
+fs.writeFileSync(path.join(process.env.CTX, 'requirements.md'), 'x\\n');
+fs.writeFileSync(path.join(process.env.CTX, 'requirements-status.json'), JSON.stringify({ status: 'available', sources: ['PR body'], limitations: [], documents: [doc], criteria: [] }));`;
+  const only = (writes) => scenario(t, { 'docs/notes/overview.md': '# Overview\n\nThe app records.\n', 'docs/notes/other.md': '# Other\n\nText.\n', 'src.js': 'a\n' }, ({ write }) => writes(write), {}, null, req);
+  const r = only((write) => { write('src.js', 'b\n'); write('docs/notes/overview.md', '# Overview\n\nThe app records.\n\nA repeating plan stays on after it fires.\n'); write('docs/notes/other.md', '# Other\n\nText, edited.\n'); });
+  assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean), ['src.js', 'docs/notes/overview.md']);
+  assert.match(r.ctxFile('diff.patch'), /\+A repeating plan stays on after it fires\./);
+  assert.doesNotMatch(r.ctxFile('diff.patch'), /Text, edited/);
+  assert.equal(r.ctxFile('spec-files.txt'), 'docs/notes/overview.md\n');
+  assert.deepEqual(JSON.parse(r.ctxFile('requirements-status.json')).criteria.map((c) => [c.source, c.quote]), [['docs/notes/overview.md', 'A repeating plan stays on after it fires.']]);
+  const docsOnly = only((write) => write('docs/notes/overview.md', '# Overview\n\nThe app records.\n\nA repeating plan stays on after it fires.\n')); // no code change: the named doc alone keeps the review alive
+  assert.deepEqual(docsOnly.ctxFile('files.txt').split('\n').filter(Boolean), ['docs/notes/overview.md']);
+  const unnamed = only((write) => write('docs/notes/other.md', '# Other\n\nText, edited.\n')); // nothing names it: skipped as before
+  assert.equal(unnamed.ctxFile('files.txt'), '');
+  assert.equal(unnamed.ctxFile('diff.patch'), '');
 });

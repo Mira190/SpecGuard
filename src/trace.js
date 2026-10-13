@@ -17,6 +17,8 @@ const MAX_CRITERIA = 200, MAX_CHANGED_DOCS = 100, MAX_PATCH = 16 << 20, MAX_LINE
 const CONTROL = /[\x00-\x1F\x7F]/; // git allows these in paths; every list we write is newline-delimited
 const WIN = 40, STEP = 20;
 const MAX_BIG = 2 << 20; // a requirement doc over MAX_FILE is read (only when changed) up to this size
+const SIMILAR = 0.3; // token overlap (Jaccard) at which an edited block pairs with its old version
+const MAX_REJECTED = 20; // spec-rejected.txt lines
 const BUDGET_MS = 40000, MAX_DEEP = 25, MAX_DELTAS = 20, MAX_LITS = 200, MAX_VALUES = 40; // time budget; S items traced to code; per-item / per-run search breadth
 const MAX_HUNKS = 60, CAND_CAP = 60 * 1024, PER_HUNK = 5, FLOOR = 0.3, SURE = 3; // trace-candidates.json caps; a BM25 floor (share of the hunk best) applies after the first SURE candidates
 const NOT_CODE_DIR = /(^|\/)(testdata|fixtures?|__fixtures__|__snapshots__|vendor|third_party|generated)\//i; // hunks there rarely trace to a requirement
@@ -28,6 +30,7 @@ const RULE_GLOBS = [
   '.github/copilot-instructions.md', '.github/instructions/**', '**/AGENTS.md', '**/AGENT.md', '**/CLAUDE.md', '**/GEMINI.md',
   'REVIEW.md', 'CONTRIBUTING.md', 'CODING_STANDARDS.md', '.editorconfig', ...EXT5.flatMap((e) => [`docs/*standards*.${e}`, `docs/*conventions*.${e}`]),
   '.claude/rules/**', '.github/skills/**', '.claude/skills/**', '.agents/skills/**', '.cursorrules', '.cursor/rules/**', '.windsurfrules', '.clinerules/**',
+  '.cursor/BUGBOT.md', '**/BUGBOT.md', '.gemini/styleguide.md', '.greptile/rules.md',
   '.claude/**', '.mcp.json', '.claude.json', 'CLAUDE.local.md', '.gitmodules', '.ripgreprc', '.husky/**', '.github/hooks/**', '.github/copilot/**', '.github/mcp.json',
   'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'Cargo.lock', 'poetry.lock', 'go.sum', 'composer.lock', 'Gemfile.lock', '*.lock',
   '.specguard-ctx/', 'dist/', 'build/', 'vendor/', 'node_modules/', '*.min.*', '__snapshots__/', '*.snap',
@@ -138,8 +141,10 @@ function scanFences(lines, mode) {
   return { fenced, info };
 }
 
-// Item records: { path, ref, line, end, heading, text (<=600), raw, kind: id|ac|gherkin|normative, normative: true }.
-function parseItems(file, text) {
+// Item records: { path, ref, line, end, heading, text (<=600), raw, kind: id|ac|gherkin|normative|changed, normative: true }.
+// touch (optional, anything with .has(line)): the diff's changed lines of this side. Every paragraph, list item or table row that is not already
+// an ID/AC/Gherkin item and holds a touched line becomes one `changed` item (descriptive text counts, no normative word needed); it replaces that block's normative sentences.
+function parseItems(file, text, touch = null) {
   const lines = lf(clean(text)).split('\n'), n = lines.length;
   const feature = /\.feature$/i.test(file);
   const head = new Array(n).fill(null);
@@ -245,6 +250,15 @@ function parseItems(file, text) {
     const cell = row ? slug(lines[i].replace(/^\s*\|/, '').split('|')[0].replace(/[*_`]/g, '')) : '';
     const listItem = LIST_ITEM.test(lines[i]);
     const para = lines.slice(i, j + 1).map((l, k) => (k === 0 ? strip(l) : l.trim())).join('\n');
+    if (touch && !feature) {
+      let hit = false;
+      for (let l = i + 1; l <= j + 1 && !hit; l++) hit = touch.has(l);
+      if (hit && !(row && TABLE_RULE.test(lines[i + 1] || ''))) { // a table header row is not a block. ref = heading + first words: an inserted neighbour does not shift the pairing; an edited opening pairs by similarity in pairItems
+        const heading = head[i]?.text || '';
+        items.push({ path: file, ref: `${slug(heading) || 'doc'}#${slug(strip(lines[i])).slice(0, 40) || 'p'}`, line: i + 1, end: j + 1, heading, text: para.slice(0, 600), raw: para, kind: 'changed', normative: true });
+        i = j; continue;
+      }
+    }
     for (const s of para.matchAll(/\S[\s\S]*?(?:[.!?。！？](?=\s|$)|$)/g)) {
       const sentence = s[0].trim();
       if (!NORMATIVE.test(sentence.replace(/`[^`]*`/g, ' ')) || SECOND_PERSON.test(sentence) || (listItem && IMPERATIVE.test(sentence))) continue;
@@ -282,10 +296,15 @@ function pairItems(baseItems, headItems) {
     const b = byRef.get(h.ref)?.shift();
     if (b) { bl.delete(b); pairs.push({ base: b, head: h }); } else left.push(h);
   }
-  const byHeading = new Map();
-  for (const b of baseItems) if (bl.has(b)) { if (!byHeading.has(b.heading)) byHeading.set(b.heading, []); byHeading.get(b.heading).push(b); }
+  // A changed block pairs only with a changed block of the same heading, the most similar one (an edited paragraph keeps most of its words); the rest are additions and removals.
+  const byHeading = new Map(), hk = (x) => (x.kind === 'changed' ? `changed | ${x.heading}` : x.heading);
+  for (const b of baseItems) if (bl.has(b)) { if (!byHeading.has(hk(b))) byHeading.set(hk(b), []); byHeading.get(hk(b)).push(b); }
+  const sim = (a, b) => { const x = new Set(tokenize(a.raw)), y = new Set(tokenize(b.raw)); let n = 0; for (const t of x) if (y.has(t)) n++; return n / (x.size + y.size - n || 1); };
   for (const h of left) {
-    const b = byHeading.get(h.heading)?.shift();
+    const list = byHeading.get(hk(h)) || [];
+    let at = 0;
+    if (h.kind === 'changed') { const best = list.map((b) => sim(b, h)); at = best.length && Math.max(...best) >= SIMILAR ? best.indexOf(Math.max(...best)) : -1; }
+    const b = at >= 0 ? list.splice(at, 1)[0] : undefined;
     if (b) { bl.delete(b); pairs.push({ base: b, head: h }); } else pairs.push({ base: null, head: h });
   }
   for (const b of baseItems) if (bl.has(b)) pairs.push({ base: b, head: null });
@@ -387,17 +406,51 @@ function parseReqPaths(s) {
   for (const l of String(s || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) (l.startsWith('!') ? exc : inc).push(l.replace(/^!/, ''));
   return { inc, exc };
 }
-const rank = (p) => { const i = HINTS.findIndex((h) => h.test(p)); return i < 0 ? 99 : i; };
+// Tracked doc paths that PR or issue text names: path-like tokens ending in a doc extension (also inside markdown links and blob URLs), resolved by
+// exact path or, for a slash-free token, a unique basename. Not a README, changelog or pip requirements.txt: a mention of those is not a spec.
+const DOC_MENTION = /[\w@+.\/-]*[\w@+-]\.(?:md|mdx|rst|adoc|txt)(?![\w-])/gi, NAME_SKIP = /(^|\/)(readme[^/]*|(requirements|constraints)[^/]*\.txt)$/i;
+function namedDocs(texts, paths) {
+  const known = new Set(paths), byBase = new Map(), out = new Set();
+  for (const p of paths) if (docLike(p)) { const b = path.basename(p).toLowerCase(); byBase.set(b, byBase.has(b) ? null : p); }
+  for (const text of texts) {
+    const t = String(text).replace(/https?:\/\/\S+/g, (u) => ` ${(/\/blob\/[^/\s]+\/([^\s)#?]+)/.exec(u) || [])[1] || ''} `);
+    for (const [m] of t.matchAll(DOC_MENTION)) {
+      const tok = m.replace(/^\.?\/+/, '');
+      const hit = known.has(tok) ? tok : tok.includes('/') ? null : byBase.get(tok.toLowerCase());
+      if (hit && docLike(hit) && !NAME_SKIP.test(hit) && !SKIP_NAME.test(hit) && !NON_SPEC_DIR.test(hit)) out.add(hit);
+    }
+  }
+  return out;
+}
+const prTexts = (st) => ((st && st.documents) || []).filter((x) => x && !x.untrusted && typeof x.text === 'string').map((x) => x.text); // the PR body and linked issues, never history
+const namedSet = ({ cwd, base, head, texts, ruled, excluded }) => {
+  if (!texts.length) return new Set();
+  try {
+    const paths = new Set(lsTree(cwd, head).map((e) => e.path));
+    if (base) try { for (const e of lsTree(cwd, base)) paths.add(e.path); } catch { /* no base tree: head paths only */ }
+    return new Set([...namedDocs(texts, [...paths])].filter((p) => !ruled(p) && !excluded(p)));
+  } catch { return new Set(); }
+};
+const kb = (n) => (n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
+// Why a parsed doc with at least one item was not admitted (the isSpecDoc rules, in order).
+function rejectReason(items, file, size) {
+  const n = items.length;
+  if (!isRequirementDoc(items) && !(n === 1 && SPEC_DIR.test(file))) return `only ${n} normative item`;
+  const caps = items.some((i) => /\b(MUST|SHALL|REQUIRED)\b/.test(i.raw));
+  return `density 1 per ${kb(Math.round(size / n))} below 1 per ${caps ? '7 KB' : '300 B'}`;
+}
+const rank = (p) =>{ const i = HINTS.findIndex((h) => h.test(p)); return i < 0 ? 99 : i; };
 const byRank = (a, b) => rank(a.path) - rank(b.path) || (a.path < b.path ? -1 : 1);
 
 // Which tracked files are requirement docs at `head` (content-based; globs only rank, includes/excludes adjust).
-function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
+function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [] }) {
   const { inc, exc } = parseReqPaths(reqPaths), limitations = [];
   const extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
   const skipped = { n: 0 }, entries = lsTree(cwd, head, skipped);
   if (skipped.n) limitations.push(`${skipped.n} tracked path(s) containing a control character were ignored.`);
   const ruled = (p) => RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g));
-  const forced = (p) => inc.some((g) => matchGlob(p, g)), excluded = (p) => exc.some((g) => matchGlob(p, g));
+  const excluded = (p) => exc.some((g) => matchGlob(p, g)), named = namedSet({ cwd, base, head, texts, ruled, excluded });
+  const forced = (p) => inc.some((g) => matchGlob(p, g)) || named.has(p); // a doc the PR or a linked issue names is admitted like a requirements_paths entry
   for (const e of entries) if (UNREADABLE.test(e.path) && UNREADABLE_NAME.test(path.basename(e.path)) && !excluded(e.path)) limitations.push(`requirement-like file not readable: ${e.path}`);
   let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
     && ((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
@@ -406,8 +459,9 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
   const bigAll = entries.filter((e) => e.size > MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path)
     && ((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).slice(0, 60);
   const bigBufs = catBatch(cwd, bigAll.map((e) => (e.size <= MAX_BIG ? e.sha : '0'.repeat(40))));
-  const oversize = bigAll.filter((e, k) => forced(e.path) || UNREADABLE_NAME.test(path.basename(e.path))
-    || (bigBufs[k] && (bigBufs[k].toString('utf8').match(/\b(MUST|SHALL)\b/g) || []).length >= 5));
+  const must = bigAll.map((e, k) => (bigBufs[k] ? (bigBufs[k].toString('utf8').match(/\b(MUST|SHALL)\b/g) || []).length : 0));
+  const oversize = bigAll.filter((e, k) => forced(e.path) || UNREADABLE_NAME.test(path.basename(e.path)) || must[k] >= 5);
+  const rejected = oversize.map((e) => ({ path: e.path, n: must[bigAll.indexOf(e)], reason: `over size cap (${kb(e.size)} > ${kb(MAX_FILE)})` })); // run() drops those it parses because the PR changes them
   if (cands.length > MAX_CANDIDATES) { limitations.push(`${cands.length - MAX_CANDIDATES} candidate documents skipped by the ${MAX_CANDIDATES}-file limit.`); cands = cands.slice(0, MAX_CANDIDATES); }
   let budget = MAX_DOC_BYTES, over = false;
   const docs = new Map(), bufs = catBatch(cwd, cands.map((c) => c.sha));
@@ -417,25 +471,29 @@ function discover({ cwd, head, reqPaths, ignoreExtra = '' }) {
     if ((budget -= buf.length) < 0) { over = true; return; }
     const text = lf(buf.toString('utf8')), items = parseItems(c.path, text);
     if (isSpecDoc(items, c.path, text.length) || forced(c.path)) docs.set(c.path, { path: c.path, text, items, forced: forced(c.path) });
+    else if (items.length) rejected.push({ path: c.path, n: items.length, reason: rejectReason(items, c.path, text.length) });
   });
   if (over) limitations.push(`Document parsing stopped at the ${MAX_DOC_BYTES >> 20} MB byte budget; later candidate documents were skipped.`);
   let list = [...docs.values()].sort(byRank);
   if (list.length > MAX_DOCS) { limitations.push(`${list.length - MAX_DOCS} requirement documents skipped by the ${MAX_DOCS}-file limit.`); list = list.slice(0, MAX_DOCS); }
-  return { entries, docs: new Map(list.map((d) => [d.path, d])), limitations, ruled, forced, excluded, oversize };
+  return { entries, docs: new Map(list.map((d) => [d.path, d])), limitations, ruled, forced, excluded, oversize, rejected };
 }
 
 // `node trace.js classify <paths>`: the subset of (changed) paths that are requirement docs at head, or at base when deleted.
-function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '' }) {
+function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '', ctx = '' }) {
   const { inc, exc } = parseReqPaths(reqPaths), extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
-  const eligible = (p) => !exc.some((g) => matchGlob(p, g)) && (inc.some((g) => matchGlob(p, g))
-    || (specLike(p) && !SKIP_NAME.test(p) && !RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g))));
+  const ruled = (p) => RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g)), excluded = (p) => exc.some((g) => matchGlob(p, g));
+  let st = null;
+  try { st = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')); } catch { /* collect.sh classifies before the requirements step (nothing named yet) and again after it */ }
+  const named = namedSet({ cwd, base, head, texts: prTexts(st), ruled, excluded });
+  const eligible = (p) => !excluded(p) && (inc.some((g) => matchGlob(p, g)) || named.has(p) || (specLike(p) && !SKIP_NAME.test(p) && !ruled(p)));
   const todo = paths.filter((p) => !CONTROL.test(p) && eligible(p));
   const read = (rev) => catBatch(cwd, todo.map((p) => `${rev}:${p}`));
   const heads = todo.length ? read(head) : [], bases = todo.length && base ? read(base) : [];
   const ok = new Set(todo.filter((p, k) => {
     const buf = heads[k] || bases[k];
     if (!buf || buf.includes(0) || buf.length > MAX_BIG) return false;
-    return inc.some((g) => matchGlob(p, g)) || isSpecDoc(parseItems(p, buf.toString('utf8')), p, buf.length);
+    return inc.some((g) => matchGlob(p, g)) || named.has(p) || isSpecDoc(parseItems(p, buf.toString('utf8')), p, buf.length);
   }));
   return paths.filter((p) => ok.has(p));
 }
@@ -654,16 +712,19 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   let status = {};
   try { status = JSON.parse(fs.readFileSync(statusFile, 'utf8')); } catch { /* requirements.js did not run */ }
   const spec = { files: 0, items: 0, added: [], limitations: cand.limitations };
+  let rejected = []; // candidate docs that were not admitted, with the reason (spec-rejected.txt)
   const finish = (n, specFiles = [], index = '') => {
     write('spec-files.txt', specFiles.filter((f) => !CONTROL.test(f)).map((f) => f + '\n').join(''));
     write('requirements-index.md', index);
+    write('spec-rejected.txt', rejected.slice().sort((a, b) => b.n - a.n || (a.path < b.path ? -1 : 1)).slice(0, MAX_REJECTED).map((r) => `${r.path}\t${r.reason}\n`).join(''));
     write('trace-candidates.json', JSON.stringify(cand, null, 2) + '\n');
     write('requirements-status.json', JSON.stringify({ ...status, spec }, null, 2) + '\n');
     return n;
   };
   if (String(trace).toLowerCase() === 'off') return finish(0);
   const lim = (what, e) => cand.limitations.push(`${what} failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); continuing without it.`);
-  const d = discover({ cwd, head, reqPaths, ignoreExtra });
+  const d = discover({ cwd, base, head, reqPaths, ignoreExtra, texts: prTexts(status) });
+  rejected = d.rejected;
   cand.limitations.push(...d.limitations);
   const docs = [...d.docs.values()], allItems = docs.flatMap((x) => x.items);
   spec.files = docs.length; spec.items = allItems.length;
@@ -697,15 +758,17 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
     if (isSpecDoc(items, p, text.length) || d.forced(p)) big.set(p, { text, items });
   });
   const oversize = d.oversize.filter((e) => !big.has(e.path));
+  rejected = d.rejected.filter((r) => !big.has(r.path));
   oversize.slice(0, 10).forEach((e) => cand.limitations.push(`oversize doc skipped: ${e.path} (${Math.round(e.size / 1024)} KB)`));
   if (oversize.length > 10) cand.limitations.push(`${oversize.length - 10} more oversize document(s) skipped.`);
   const files = [];
   specCand.forEach((p, k) => {
-    const hd = d.docs.get(p) || big.get(p), b = baseBufs[k];
-    const baseItems = b && !b.includes(0) && b.length <= MAX_BIG ? parseItems(p, b.toString('utf8')) : [];
-    if (!hd && !isSpecDoc(baseItems, p, b ? b.length : 0)) return;
+    const hd = d.docs.get(p) || big.get(p), b = baseBufs[k], m = maps.get(p);
+    const baseText = b && !b.includes(0) && b.length <= MAX_BIG ? b.toString('utf8') : null;
+    if (!hd && !d.forced(p) && !isSpecDoc(baseText === null ? [] : parseItems(p, baseText), p, b ? b.length : 0)) return; // admission reads the plain items
     if (hd && !b) spec.added.push(p); // authored in this PR: no BASE version to compare with
-    files.push({ path: p, headItems: hd ? hd.items : [], baseItems, text: hd ? hd.text : null });
+    // an admitted doc: every changed block, not only the normative sentences, is an item to pair and trace
+    files.push({ path: p, headItems: hd ? parseItems(p, hd.text, m.changed.RIGHT) : [], baseItems: baseText === null ? [] : parseItems(p, baseText, m.changed.LEFT), text: hd ? hd.text : null });
   });
   let changed = changedItems(files, maps);
   if (changed.length > maxCriteria) { cand.limitations.push(`${changed.length - maxCriteria} changed requirement item(s) beyond the ${maxCriteria}-criteria limit were not traced; the criteria shown are only the first ${maxCriteria}.`); changed = changed.slice(0, maxCriteria); }
@@ -763,13 +826,14 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
 if (require.main === module) {
   const env = process.env, [cmd, ...args] = process.argv.slice(2);
   const off = String(env.TRACE || '').toLowerCase() === 'off';
+  const ignoreExtra = [env.IGNORE_EXTRA, ...parseReqPaths(env.STANDARDS_PATHS).inc].filter(Boolean).join('\n'); // STANDARDS_PATHS docs are rule files, not requirement docs
   if (cmd === 'classify') {
-    const out = off ? [] : classify({ base: env.DIFF_BASE_SHA || env.BASE_SHA, head: env.HEAD_SHA || 'HEAD', paths: args, reqPaths: env.REQ_PATHS, ignoreExtra: env.IGNORE_EXTRA });
+    const out = off ? [] : classify({ base: env.DIFF_BASE_SHA || env.BASE_SHA, head: env.HEAD_SHA || 'HEAD', paths: args, reqPaths: env.REQ_PATHS, ignoreExtra, ctx: env.CTX });
     process.stdout.write(out.map((p) => p + '\n').join(''));
   } else {
-    process.stdout.write(`${run({ base: env.DIFF_BASE_SHA || env.BASE_SHA, head: env.HEAD_SHA, ctx: env.CTX, reqPaths: env.REQ_PATHS, trace: env.TRACE, ignoreExtra: env.IGNORE_EXTRA, budgetMs: +env.TRACE_BUDGET_MS || undefined })}\n`);
+    process.stdout.write(`${run({ base: env.DIFF_BASE_SHA || env.BASE_SHA, head: env.HEAD_SHA, ctx: env.CTX, reqPaths: env.REQ_PATHS, trace: env.TRACE, ignoreExtra, budgetMs: +env.TRACE_BUDGET_MS || undefined })}\n`);
   }
 }
 
 module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, isTestPath, pathKind,
-  codeHunks, matchGlob, classify, run };
+  codeHunks, matchGlob, classify, namedDocs, run };

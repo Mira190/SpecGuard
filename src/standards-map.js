@@ -40,7 +40,8 @@ const AGENTS = /(?:^|\/)(?:AGENTS|AGENT|CLAUDE|GEMINI)\.md$/;
 const kindOf = (p) => (/^\.github\/instructions\/.*\.instructions\.md$/.test(p) ? 'copilot' : /^\.claude\/rules\/.*\.md$/.test(p) ? 'claude-rule' : AGENTS.test(p) ? 'agents' : 'repo');
 function scopeOf(p, text) {
   const k = kindOf(p);
-  const g = k === 'copilot' ? field(text, 'applyTo') : k === 'claude-rule' ? field(text, 'paths') : [];
+  // other rule files (BUGBOT.md, .gemini/styleguide.md, .greptile/rules.md, STANDARDS_PATHS docs) apply everywhere unless they carry their own applyTo
+  const g = k === 'copilot' || k === 'repo' ? field(text, 'applyTo') : k === 'claude-rule' ? field(text, 'paths') : [];
   if (g.length) return g;
   return k === 'agents' && p.includes('/') ? [`${p.slice(0, p.lastIndexOf('/'))}/**`] : ['**'];
 }

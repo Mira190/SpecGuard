@@ -111,6 +111,13 @@ function collectHistory({ history, repo, mainPr, seen, loadIssue }) {
   return { documents, limitations };
 }
 
+// Same-repo issue numbers in a head branch name: 123-fix-bug, feat/45_x, fix/issue-45-x. Not dates or versions (2024-01-x, 1-2-x), not Jira keys (PROJ-123-x).
+function branchIssues(ref) {
+  const out = new Set();
+  for (const m of String(ref || '').matchAll(/(?:^|\/|issue[-_]|gh[-_])([1-9]\d{0,5})(?=[-_])(?![-_]\d)/gi)) out.add(+m[1]);
+  return [...out];
+}
+
 function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
   const refs = new Map();
   const add = (r, n) => { if (!(r.toLowerCase() === repo.toLowerCase() && +n === pr.number)) refs.set(`${r.toLowerCase()}#${+n}`, { repo: r, number: +n }); };
@@ -123,7 +130,10 @@ function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
   const text = sanitize(`${pr.body || ''}\n${String(commits).split(/\r?\n/).filter((l) => !/^Merge (pull request #|branch)/.test(l)).join('\n')}`);
   for (const m of text.matchAll(url)) add(m[1], m[2]);
   const withoutUrls = text.replace(/https?:\/\/\S+/g, '');
-  for (const m of withoutUrls.matchAll(/(?:\b([\w.-]+\/[\w.-]+)#|(?<![&\w])#)(\d+)\b/g)) add(m[1] || repo, m[2]);
+  // a plain integer, no leading zero, at most 6 digits, not followed by a word character: not #000000, #fff, #L12, #007, #12ab
+  for (const m of withoutUrls.matchAll(/(?:\b([\w.-]+\/[\w.-]+)#|(?<![&\w])#)([1-9]\d{0,5})(?!\w)/g)) add(m[1] || repo, m[2]);
+  const fromBranch = new Set();
+  for (const n of branchIssues(pr.headRefName)) { const k = `${repo.toLowerCase()}#${n}`; if (!refs.has(k) && n !== pr.number) { add(repo, n); fromBranch.add(k); } }
   const limitations = [];
   const seen = new Set(refs.keys());
   const parts = [`# PR: ${sanitize(pr.title)}\n\n${sanitize(pr.body)}`];
@@ -135,9 +145,9 @@ function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
     try {
       const issue = loadIssue(r, number);
       parts.push(`# ${label}: ${sanitize(issue.title)}\n\n${sanitize(issue.body)}`);
-      sources.push(label);
+      sources.push(fromBranch.has(`${r.toLowerCase()}#${number}`) ? `${label} (branch name)` : label);
       documents.push({ source: label, text: sanitize(`${issue.title || ''}\n${issue.body || ''}`) });
-    } catch { limitations.push(`Could not read ${label}.`); }
+    } catch { if (!fromBranch.has(`${r.toLowerCase()}#${number}`)) limitations.push(`Could not read ${label}.`); } // a number guessed from the branch name may not be an issue
   }
   if (!String(pr.body || '').trim() && sources.length === 1) limitations.push('No requirement text available; only changed behaviour can be assessed.');
   const criteria = extractCriteria(documents);
@@ -156,7 +166,7 @@ if (require.main === module) {
   const gh = (args) => JSON.parse(execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 }));
   let result;
   try {
-    const pr = gh(['pr', 'view', env.PR_NUMBER, '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences']);
+    const pr = gh(['pr', 'view', env.PR_NUMBER, '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences,headRefName']);
     const commits = execFileSync('git', ['log', `${env.BASE_SHA}..${env.HEAD_SHA}`, '--format=%B'], { encoding: 'utf8' });
     let history;
     try {
@@ -177,4 +187,4 @@ if (require.main === module) {
   fs.writeFileSync(path.join(env.CTX, 'requirements-status.json'), JSON.stringify(status, null, 2) + '\n');
 }
 
-module.exports = { collectRequirements, extractCriteria, leftRanges, blameShas, blameAt };
+module.exports = { branchIssues, collectRequirements, extractCriteria, leftRanges, blameShas, blameAt };
