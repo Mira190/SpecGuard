@@ -115,6 +115,12 @@ function tidy(o) {
   for (const k of ['standards', 'layering']) if (o[k] && typeof o[k] === 'object') set(o[k], 'status', slug);
 }
 
+// Layer of an evidence citation that omits it: a higher-layer word in the path, else unit for a test file, else undefined (malformed).
+// ponytail: names only; the model states layer whenever it is not a plain unit test, and a stated layer is never overridden.
+const layerOf = (p) => { const s = String(p);
+  return /(^|[/._-])(e2e|end-to-end|cypress|playwright)([/._-]|$)/i.test(s) ? 'e2e' : /(^|[/._-])(integration|acceptance|functional)([/._-]|$)/i.test(s) ? 'integration'
+    : /(^|[/._-])components?([/._-]|$)/i.test(s) ? 'component' : require('./trace').isTestPath(s) ? 'unit' : undefined; };
+
 // Hand-rolled mirror of findings.schema.json. ponytail: swap for ajv if the schema grows.
 // Structural problems (not an object, core arrays missing, more than half of the coverage rows unusable) reject the output and
 // say which JSON path failed. Every other problem degrades only the affected part, is repaired in place, and is listed in o.validation_notes.
@@ -152,8 +158,12 @@ function validate(o) {
     if (!Array.isArray(c.evidence)) return shape('evidence must be an array');
     if (!STATUSES.includes(c.status)) return shape('invalid status');
     for (const [j, e] of c.evidence.entries()) {
-      if (e && e.kind === undefined) e.kind = 'assertion'; // the documented meaning of an evidence quote; the quote is still verified
-      if (!citation(e) || !['unit', 'component', 'integration', 'e2e'].includes(e.layer) || !text(e.proves)
+      if (e && typeof e === 'object') {
+        if (e.kind === undefined) e.kind = 'assertion'; // the documented meaning of an evidence quote; the quote is still verified
+        if (e.layer === undefined) e.layer = layerOf(e.path); // omitted = unit in a test file (the contract); a higher-layer name in the path wins
+        if (!text(e.proves)) delete e.proves; // optional: the row's reason says what the assertion checks
+      }
+      if (!citation(e) || !['unit', 'component', 'integration', 'e2e'].includes(e.layer)
         || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return shape(`evidence[${j}] malformed`);
       if (e.kind === 'removed' && e.side !== 'LEFT') return shape("removed evidence must cite the diff's LEFT side");
     }
@@ -203,12 +213,14 @@ function validate(o) {
 
   const reqIds = new Set(), reqs = [];
   for (const [i, r] of o.requirements.entries()) {
-    if (!r || typeof r !== 'object' || !text(r.id) || reqIds.has(r.id) || !text(r.source) || !text(r.quote)) { notes.push(`Dropped requirements[${i}]: malformed or duplicate.`); continue; }
+    // a collected criterion (R*, S*, H*) may give only id, obligation_ids and reason: verifyRequirements fills source and quote from requirements-status.json
+    const collected = r && typeof r === 'object' && /^[RSH]\d+$/.test(String(r.id));
+    if (!r || typeof r !== 'object' || !text(r.id) || reqIds.has(r.id) || (!collected && (!text(r.source) || !text(r.quote)))) { notes.push(`Dropped requirements[${i}]: malformed or duplicate.`); continue; }
     reqIds.add(r.id);
     const linked = Array.isArray(r.obligation_ids) ? r.obligation_ids.filter((id) => ids.has(id)) : [];
     const broken = !Array.isArray(r.obligation_ids) || linked.length !== r.obligation_ids.length;
     if (broken) notes.push(`Requirement ${r.id}: unknown or malformed obligation links removed.`);
-    reqs.push({ id: r.id, source: r.source, quote: r.quote, obligation_ids: linked,
+    reqs.push({ id: r.id, source: text(r.source) ? r.source : '', quote: text(r.quote) ? r.quote : '', obligation_ids: linked,
       ...(text(r.ref) && safeRef(r.ref) && { ref: safeRef(r.ref) }), ...(int(r.line) && { line: r.line }), ...((r.pr_quote === null || text(r.pr_quote)) && { pr_quote: r.pr_quote }),
       reason: broken && !linked.length ? 'Its obligation links were missing or invalid.' : text(r.reason) ? r.reason : 'No reason given.' });
   }
@@ -388,6 +400,25 @@ function plan(findings, maps, maxComments = 10) {
   return out;
 }
 
+// Reduced review: a fast-tier model or a struggling run gives weaker evidence, so it publishes less (never wrong beats complete).
+// ponytail: the triggers are the four cheap signals the engine step and validation already leave behind; add one here when a new failure mode shows up in telemetry.
+const REDUCED_INLINE = 3;
+function reducedReasons({ em, repair, engineNotes = [], data }) {
+  const out = [];
+  if (em?.tier === 'fast') out.push('fast-tier model');
+  if (repair === 'repaired' || repair === 'repair_failed') out.push(repair === 'repaired' ? 'the JSON needed a repair turn' : 'the JSON repair turn failed');
+  if (engineNotes.length >= 3) out.push(`${engineNotes.length} engine notes`);
+  const bad = new Set((data.validation_notes || []).map((n) => /^Obligation (.+?) marked unknown:/.exec(n)?.[1]).filter(Boolean));
+  if (bad.size * 4 > data.coverage.length) out.push(`${bad.size} of ${data.coverage.length} obligations degraded by validation`);
+  return out;
+}
+// Verified citations behind a finding: the located behaviour, plus its test evidence or a linked requirement (a standard: its own line and the rule line).
+function citationsOf(f, data) {
+  if (f.kind === 'standard') return f.rule_source ? 2 : 1;
+  return Math.max(0, ...data.coverage.filter((c) => f.obligation_ids.includes(c.id))
+    .map((c) => (c.behaviour ? 1 : 0) + (c.evidence.length || data.requirements.some((r) => r.obligation_ids.includes(c.id)) ? 1 : 0)));
+}
+
 // Fenced block longer than any backtick run inside. A "suggestion" block is only valid on an inline range.
 function fence(lang, text) {
   const f = '`'.repeat(Math.max(3, ...(text.match(/`+/g) || []).map((r) => r.length + 1)));
@@ -521,7 +552,7 @@ function mergeUsage(a, b) {
   return out;
 }
 // One small-print line: engine, model(s), tokens, cost, API time, then `notes` (effort, model fallback, JSON repair). `raw` is the engine's usage JSON (copilot --usage-output-file, or claude --output-format json) or null; only numbers and model names are read from it.
-function usageLine({ engine, model, raw, notes = [] }) {
+function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
   const tok = (i, cr, cw, o) => { i = (fin(i) ?? 0) + (fin(cr) ?? 0) + (fin(cw) ?? 0); return { i, c: fin(cr) ?? 0, o: fin(o) ?? 0 }; };
   const show = (t) => `${kM(t.i)} in${t.c ? ` (${kM(t.c)} cached)` : ''} · ${kM(t.o)} out`;
   // copilot's per-model inputTokens already include cache read and write (tokenDetails.input is the uncached part): tok adds them back once
@@ -540,11 +571,12 @@ function usageLine({ engine, model, raw, notes = [] }) {
     ms = fin(u.duration_api_ms); if (ms === undefined) { ms = fin(u.duration_ms); timeLabel = 'Time'; }
   }
   const nm = (s) => cell(s, 80);
-  const parts = [`Engine: ${nm(engine)}`];
-  if (models.length > 1) parts.push(`Models: ${models.map((m) => `${nm(m.n)}${m.t ? ` (${show(m.t)})` : ''}`).join(', ')}`);
+  const parts = [`Engine: ${nm(engine)}`], fast = tier === 'fast' ? ' (fast tier)' : ''; // used: the model(s) the engine step recorded (engine-model.json), more exact than the request
+  if (models.length > 1) parts.push(`Models: ${models.map((m) => `${nm(m.n)}${m.t ? ` (${show(m.t)})` : ''}`).join(', ')}${fast}`);
+  else if (used.length > 1) { parts.push(`Models: ${used.map(nm).join(', ')}${fast}`); const t = total || models[0]?.t; if (t) parts.push(`Tokens: ${show(t)}`); }
   else {
-    const n = models[0]?.n || model;
-    if (n) parts.push(`Model: ${nm(n)}${models[0]?.n && model && models[0].n !== model && !notes.some((x) => x.startsWith('model_fallback')) ? ` (requested ${nm(model)})` : ''}`);
+    const actual = used[0] || models[0]?.n, n = actual || model;
+    if (n) parts.push(`Model: ${nm(n)}${fast}${actual && model && actual !== model && !notes.some((x) => x.startsWith('model_fallback')) ? ` (requested ${nm(model)})` : ''}`);
     const t = total || models[0]?.t;
     if (t) parts.push(`Tokens: ${show(t)}`);
   }
@@ -596,11 +628,12 @@ function verdict(data, fs_) {
 // Sections in goal order, which is also the importance order: unit test gaps, requirements, standards, layers, completeness, then collapsed reference
 // material. Each section's items are added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [] }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier }) {
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)];
   if (data && !status) status = `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}${verdict(data, all)}`;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
   let head = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}<!-- specguard:status=${state || (incomplete.length ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n${neutralize(status)}\n\n`;
+  if (reduced) head += `> Reduced review: ${reduced.reasons.map((r) => cell(r)).join('; ')} (model: ${cell(reduced.model || 'unknown', 80)}). Only high-confidence findings were posted inline.\n\n`;
   if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
   if (partial || dropped.length) head += `${partial ? '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.' : ''}${dropped.length ? `${partial ? '\n' : ''}> ${notReviewed(dropped)}` : ''}\n\n`;
   if (rules.length) head += `> This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.\n\n`;
@@ -611,7 +644,7 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
   const sections = []; // { g: group heading, h, atoms, tail }
   let g = '';
   const add = (h, atoms = [], tail = '') => sections.push({ g, h, atoms, tail });
-  const of = (kinds) => [...posted.filter((x) => kinds.includes(x.f.kind)).map((x) => compact(x.f, x.url, blob)), ...items.filter((x) => kinds.includes(x.f.kind)).map((x) => `${item(x)}\n`)];
+  const of = (kinds) => [...posted.filter((x) => kinds.includes(x.f.kind)).map((x) => compact(x.f, x.url, blob)), ...items.filter((x) => kinds.includes(x.f.kind)).map((x) => (x.brief ? `- **${title1(x.f.title)}** (\`${cell(`${x.f.path}:${x.f.line}`)}\`, ${cell(x.f.kind)}, ${cell(x.why)}) — ${sentence(x.f.body)}\n` : `${item(x)}\n`))];
   const toolingAdd = () => tooling.status !== 'not_configured' && add( // nothing to report when no standards_checks are configured
 `**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`,
     (tooling.checks || []).map((c) => `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`), '\n');
@@ -647,13 +680,13 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
     toolingAdd();
     g = '';
   }
-  if (engine) add(`${usageLine({ engine, model, raw: usage, notes })}\n\n`);
+  if (engine) add(`${usageLine({ engine, model, raw: usage, notes, used, tier })}\n\n`);
   if (delivery && !/^0 inline, 0 file-level, 0 in summary$/.test(delivery)) add(`<sub>Comments: ${neutralize(delivery)}</sub>\n\n`);
   if (data) {
     const covById = new Map(data.coverage.map((c) => [c.id, c]));
     if (data.coverage.length) {
       reference(`<details><summary>Obligations (${data.coverage.length})${proven(data.coverage) ? ` · ${proven(data.coverage)}` : ''}</summary>\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n`,
-        data.coverage.map((c) => `| ${cell(`${c.id}: ${c.obligation}`, 500)} | ${cell(`${c.source}; ${c.behaviour ? `${c.behaviour.path}:${c.behaviour.line} — ${c.behaviour.quote}` : 'implementation not located'}`, 500)} | ${cell(c.evidence.map((e) => `${e.layer}: ${e.path}:${e.line} — ${e.quote} (${e.kind}; ${e.proves})`).join('; ') || 'none', 800)} | ${cell(`${c.status}: ${c.reason}`, 500)} |\n`), '\n</details>\n\n');
+        data.coverage.map((c) => `| ${cell(`${c.id}: ${c.obligation}`, 500)} | ${cell(`${c.source}; ${c.behaviour ? `${c.behaviour.path}:${c.behaviour.line} — ${c.behaviour.quote}` : 'implementation not located'}`, 500)} | ${cell(c.evidence.map((e) => `${e.layer}: ${e.path}:${e.line} — ${e.quote} (${e.kind}${e.proves ? `; ${e.proves}` : ''})`).join('; ') || 'none', 800)} | ${cell(`${c.status}: ${c.reason}`, 500)} |\n`), '\n</details>\n\n');
     }
     const t = traceTable(data, blob, specFiles, covById);
     if (t) reference(`<details><summary>Traceability (${t.atoms.length})</summary>\n\n${t.head}`, t.atoms, '\n</details>\n\n');
@@ -774,6 +807,7 @@ function verifyRequirements(data, context, read = readFile) {
   for (const d of context.documents || []) if (!docs.has(d.source)) docs.set(d.source, d);
   for (const expected of context.criteria || []) {
     const r = byId.get(expected.id);
+    if (r) { if (!r.source) r.source = expected.source; if (!r.quote) r.quote = expected.quote; } // omitted by the model: the collected text is the trusted copy
     if (!r) { if (!expected.optional) data.requirements.push({ id: expected.id, source: expected.source, quote: expected.quote, ...(expected.ref && { ref: expected.ref }), ...(expected.line && { line: expected.line }), obligation_ids: [], reason: 'Structured acceptance criterion was not assessed.' }); } // optional (history) criteria are never re-added
     else if (!(r.source === expected.source || r.source.startsWith(`${expected.source} AC `) && /^\d+$/.test(r.source.slice(expected.source.length + 4))) || norm(r.quote) !== norm(expected.quote)) {
       fail(r, 'its ID did not match the collected source text');
@@ -784,7 +818,13 @@ function verifyRequirements(data, context, read = readFile) {
     }
   }
   for (const r of data.requirements) {
-    const label = r.source.replace(/ AC \d+$/, ''); // "PR body AC 3" -> the collected document label
+    if (!r.source || !r.quote) { // an id with nothing to fill it from: not a collected criterion, so nothing to assess against
+      if (!context.unavailable) fail(r, 'its ID is not a collected criterion');
+      Object.assign(r, { source: r.source || '(not stated)', quote: r.quote || '(not stated)', obligation_ids: [], reason: 'Criterion ID is not a collected criterion.' });
+      unassessed.push(`Requirement ${r.id} is not assessed: ${r.reason}`);
+      continue;
+    }
+    const label = r.source.replace(/ AC \d+$/, '');// "PR body AC 3" -> the collected document label
     const collected = docs.get(label);
     // A source is exactly a collected document label, or a normalised repository path that the allow-list names (when there is one).
     const file = safeRel(label.replace(REMOVED, ''));
@@ -1067,8 +1107,12 @@ async function run({ github, context, core }) {
   if (engine === 'copilot') try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair turn */ }
   const repair = (readCtx('engine-repair') || '').trim();
   const notes = [...(readCtx('engine-notes') || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])]; // written by the engine step, never by the model
+  let em = null; try { em = JSON.parse(readCtx('engine-model.json')); } catch { /* absent or garbled: normal mode */ }
+  const strs = (xs) => [...new Set(xs.filter((x) => typeof x === 'string' && x))];
+  // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)
+  const used = Array.isArray(em?.used) && strs(em.used).length ? strs(em.used) : strs([usage?.currentModel, ...Object.keys(usage?.modelMetrics && typeof usage.modelMetrics === 'object' ? usage.modelMetrics : {})]), tier = em?.tier === 'fast' ? 'fast' : undefined;
   const dropped = (readCtx('diff-dropped.txt') || '').split('\n').map((x) => x.trim()).filter(Boolean);
-  const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial, dropped, state: 'failed' }), 'failed');
+  const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial, dropped, state: 'failed', used, tier }), 'failed');
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();
@@ -1234,7 +1278,15 @@ async function run({ github, context, core }) {
   // ponytail: a finding that validation/verification dropped (its citation or requirement link failed) cannot be fingerprinted like its comment was; hold all resolving instead of guessing.
   const degraded = proposed > data.findings.length;
 
-  const p = plan(kept, maps, maxComments);
+  // Reduced review: only a high-confidence finding with two verified citations goes inline (at most REDUCED_INLINE); the rest are one-liners in the summary.
+  const reasons = reducedReasons({ em, repair, engineNotes: (readCtx('engine-notes') || '').split('\n').filter((x) => x.trim()), data }), reduced = reasons.length > 0;
+  const p = plan(reduced ? kept.filter((f) => f.confidence === 'high' && citationsOf(f, data) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
+  if (reduced) {
+    const brief = (f, why) => ({ f, why, brief: true });
+    p.summary = [...p.summary.map((x) => brief(x.f, x.why === 'over max_comments' ? 'reduced review: inline limit' : x.why)), ...p.file.map((f) => brief(f, 'reduced review: not inline')),
+      ...kept.filter((f) => !p.inline.includes(f) && !p.file.includes(f) && !p.summary.some((x) => x.f === f)).map((f) => brief(f, 'reduced review: not high confidence with two citations'))];
+    p.file = [];
+  }
   const comments = p.inline.map((f) => ({
     path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp, true),
     ...(f.start_line !== undefined && { start_line: f.start_line, start_side: 'RIGHT' }),
@@ -1284,7 +1336,7 @@ async function run({ github, context, core }) {
   }
 
   // Fix-through telemetry. Only a complete run can say an earlier finding is no longer reported: otherwise counts only (complete:false, no outcomes).
-  const complete = !incomplete.length && !degraded;
+  const complete = !incomplete.length && !degraded && !reduced; // a reduced run cannot say an earlier finding is gone
   const me = await actor();
   const outcomes = complete && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads }) : [];
   const byKind = {};
@@ -1295,12 +1347,12 @@ async function run({ github, context, core }) {
   tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
   const resolveNote = !stop && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
-  const clean_ = noGaps(data) && !incomplete.length, state = incomplete.length ? 'incomplete' : 'complete';
+  const clean_ = noGaps(data) && !incomplete.length && !reduced, state = incomplete.length || reduced ? 'incomplete' : 'complete';
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ status: clean_ ? 'No test gaps found in the assessed obligations.' : undefined, delivery: counts(), traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: counts(), traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
@@ -1308,4 +1360,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

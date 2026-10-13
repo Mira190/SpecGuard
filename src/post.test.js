@@ -59,7 +59,7 @@ test('degrades only the part with a semantic problem and records a note', () => 
   assert.equal(d.coverage.length, 1); noted(d, /duplicate id/);
   d = run(report({ coverage: [row('missing_test', { evidence: [evidence] })] }));
   assert.deepEqual([d.coverage[0].status, d.findings.length], ['missing_test', 1]); // assertion evidence on a missing_test row is dropped, not the row
-  d = run(report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'q', obligation_ids: ['nope'], reason: 'r' }, { id: 'R2' }] }));
+  d = run(report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'q', obligation_ids: ['nope'], reason: 'r' }, { id: 'G2' }] }));
   assert.deepEqual([d.requirements.length, d.requirements[0].obligation_ids], [1, []]);
   d = run(report({ standards: { status: 'checked', sources: [], reason: 'ok' }, findings: [finding(), finding('standard')] }));
   assert.deepEqual([d.standards.status, d.findings.map((f) => f.kind)], ['not_reviewed', ['missing_test']]);
@@ -782,7 +782,7 @@ const noted = (d, re) => assert.ok(d.validation_notes.some((n) => re.test(n)), d
 test('schema requires coverage alignment, spec_mismatch, and optional requirement fields', () => {
   const schema = JSON.parse(fs.readFileSync(path.join(__dirname, 'findings.schema.json'), 'utf8')).properties;
   const cov = schema.coverage.items;
-  assert.ok(cov.required.includes('alignment'));
+  assert.ok(!cov.required.includes('alignment') && !cov.required.includes('change')); // both optional: derived when absent
   assert.deepEqual(cov.properties.alignment.properties.status.enum, ['consistent', 'mismatch', 'impacted', 'not_verifiable', 'not_applicable', 'unknown']);
   assert.deepEqual(cov.properties.alignment.properties.since.enum, ['introduced', 'pre_existing']);
   assert.deepEqual(cov.properties.alignment.then.required, ['since']);
@@ -2511,4 +2511,167 @@ test('noise lines: tooling only when configured, comment counts only when non-ze
   assert.match(sumOf(d, { delivery: '0 inline, 0 file-level, 1 in summary' }), /<sub>Comments: 0 inline, 0 file-level, 1 in summary<\/sub>/);
   assert.match(sumOf(d, { delivery: '0 inline, 0 file-level, 0 in summary, 2 already posted' }), /Comments: 0 inline, 0 file-level, 0 in summary, 2 already posted/);
   assert.doesNotMatch(post.buildSummary({ status: 'Could not complete: x', tooling: { status: 'not_configured', checks: [] } }), /Standards tooling/); // failed run, no data
+});
+
+// ---- contract shrink v2: optional fields are derived, old full outputs still validate ----
+const exampleJson = () => JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'skills', 'test-review', 'references', 'example.json'), 'utf8'));
+// the part of JSON Schema findings.schema.json uses: type, required, properties, enum, items, minLength, minimum, uniqueItems, anyOf, if/then
+function schemaErrors(v, s, at = '$') {
+  if (s.anyOf) return s.anyOf.some((x) => !schemaErrors(v, x, at).length) ? [] : [`${at}: no anyOf branch matches`];
+  if (s.enum && !s.enum.includes(v)) return [`${at}: ${JSON.stringify(v)} not in enum`];
+  const type = { array: Array.isArray(v), object: !!v && typeof v === 'object' && !Array.isArray(v), integer: Number.isInteger(v), string: typeof v === 'string', null: v === null };
+  if (s.type && !type[s.type]) return [`${at}: not ${s.type}`];
+  const e = [];
+  if (s.minLength && v.length < s.minLength) e.push(`${at}: too short`);
+  if (s.minimum !== undefined && v < s.minimum) e.push(`${at}: below minimum`);
+  if (s.uniqueItems && new Set(v).size !== v.length) e.push(`${at}: not unique`);
+  if (s.type === 'object') {
+    for (const k of s.required || []) if (v[k] === undefined) e.push(`${at}.${k}: required`);
+    for (const [k, p] of Object.entries(s.properties || {})) if (v[k] !== undefined) e.push(...schemaErrors(v[k], p, `${at}.${k}`));
+    if (s.if && !schemaErrors(v, s.if, at).length) e.push(...schemaErrors(v, s.then, at));
+  }
+  if (s.type === 'array' && s.items) v.forEach((x, i) => e.push(...schemaErrors(x, s.items, `${at}[${i}]`)));
+  return e;
+}
+const SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, 'findings.schema.json'), 'utf8'));
+const clone = (x) => JSON.parse(JSON.stringify(x));
+
+test('v2 contract: example.json is schema-valid, passes validate, and derives the omitted fields', () => {
+  const ex = exampleJson();
+  assert.deepEqual(schemaErrors(ex, SCHEMA), []);
+  assert.deepEqual([ex.coverage.length, ex.findings.length], [2, 1]);
+  const d = clone(ex);
+  assert.deepEqual(post.validate(d), { ok: true });
+  assert.deepEqual(d.validation_notes, []);
+  assert.deepEqual(d.coverage[1].change, d.coverage[1].behaviour);
+  assert.equal(d.coverage[1].alignment.status, 'not_applicable');
+  assert.deepEqual([d.coverage[0].evidence[0].layer, d.coverage[0].evidence[0].kind, d.coverage[0].evidence[0].proves], ['unit', 'assertion', undefined]);
+  assert.deepEqual(d.requirements.map((r) => [r.id, r.source, r.quote]), [['R1', '', '']]); // filled later from requirements-status.json
+  assert.equal(d.findings.length, 1);
+});
+
+test('v2 contract: the old full shape (change, alignment, layer, kind, proves, requirement copies) is schema-valid and validates unchanged', () => {
+  const old = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'q', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('weak_test')], findings: [finding('weak_test')] });
+  assert.deepEqual(schemaErrors(old, SCHEMA), []);
+  const d = clone(old);
+  assert.equal(post.validate(d).ok, true);
+  assert.deepEqual([d.coverage[0].evidence[0].layer, d.coverage[0].evidence[0].proves, d.coverage[0].alignment.status], ['unit', evidence.proves, 'unknown']); // a stated not_applicable on a linked row degrades, as before
+  assert.ok(schemaErrors({ ...old, coverage: [{ ...old.coverage[0], source: undefined }] }, SCHEMA).length, 'the schema still requires what cannot be derived');
+});
+
+test('v2 contract: layerOf derives from the path; a stated layer is never overridden; a non-test path stays malformed', () => {
+  assert.deepEqual(['test/a.test.js', 'tests/integration/a.test.js', 'e2e/a.spec.ts', 'src/components/Button.test.tsx', 'src/a.js'].map(post.layerOf), ['unit', 'integration', 'e2e', 'component', undefined]);
+  const d = report({ coverage: [row('higher_level_only', { evidence: [{ path: 'test.js', line: 2, quote: evidence.quote, layer: 'integration' }] }), { ...row('missing_test'), id: 'O2' }, { ...row('covered'), id: 'O3', evidence: [{ path: 'src.js', line: 3, quote: 'if (x) {' }] }], findings: [] });
+  assert.equal(post.validate(d).ok, true);
+  assert.equal(d.coverage[0].evidence[0].layer, 'integration');
+  assert.match(d.coverage[2].reason, /evidence\[0\] malformed/); assert.equal(d.coverage[2].status, 'unknown');
+});
+
+test('v2 contract: a collected criterion may omit source and quote; they are filled from the collected text, an unknown id is unassessed', () => {
+  const criteria = [{ id: 'R1', source: 'PR body', quote: 'Return 42.' }, { id: 'S1', source: 'docs/s.md', ref: 'AC-1', quote: 'Reject zero.' }];
+  const d = report({ coverage: [row('covered'), { ...row('covered'), id: 'O2' }], findings: [], requirements: [
+    { id: 'R1', obligation_ids: ['O1'], reason: 'Asserted.' }, { id: 'S1', obligation_ids: ['O2'], reason: 'Asserted.' }, { id: 'R9', obligation_ids: [], reason: 'x' }, { id: 'G1', obligation_ids: [], reason: 'no source' }] });
+  assert.equal(post.validate(d).ok, true);
+  assert.deepEqual(d.requirements.map((r) => r.id), ['R1', 'S1', 'R9']); // G1 has nothing to be filled from: dropped
+  post.verifyRequirements(d, { documents: [{ source: 'PR body', text: 'Return 42.' }, { source: 'docs/s.md', text: 'Reject zero.' }], criteria, specFiles: ['docs/s.md'] }, () => ['Reject zero.']);
+  assert.deepEqual(d.requirements.map((r) => [r.id, r.source, r.quote, r.obligation_ids]), [['R1', 'PR body', 'Return 42.', ['O1']], ['S1', 'docs/s.md', 'Reject zero.', ['O2']], ['R9', '(not stated)', '(not stated)', []]]);
+  assert.equal(d.requirements[1].ref, 'AC-1');
+  assert.match(d.not_reviewed, /Requirement R9 is not assessed: Criterion ID is not a collected criterion/);
+});
+
+test('v2 contract: without collected criteria an omitted-quote requirement is unassessed and its obligation keeps its own citations', () => {
+  const d = report({ coverage: [row('covered')], findings: [], requirements: [{ id: 'R1', obligation_ids: ['O1'], reason: 'Asserted.' }] });
+  post.validate(d);
+  post.verifyRequirements(d, { unavailable: true });
+  assert.deepEqual([d.requirements[0].obligation_ids, d.coverage[0].status], [[], 'covered']);
+});
+
+test('v2 contract: the obligations table omits an absent proves', () => {
+  const d = report({ coverage: [row('covered', { evidence: [{ ...evidence, proves: undefined }] })], findings: [] });
+  post.validate(d);
+  const s = post.buildSummary({ status: 'x', data: d });
+  assert.match(s, /unit: test\.js:2 — assert\.equal\(result, 42\); \(assertion\)/);
+  assert.doesNotMatch(s, /undefined|; \)/);
+});
+
+// ---- reduced review mode ----
+test('reduced: each of the four triggers, and none for a normal run', () => {
+  const data = (notes = [], n = 4) => ({ coverage: Array.from({ length: n }, (_, i) => ({ id: `O${i}` })), validation_notes: notes });
+  const r = (o) => post.reducedReasons({ engineNotes: [], data: data(), ...o });
+  assert.deepEqual(r({}), []);
+  assert.deepEqual(r({ em: { tier: 'normal', used: ['gpt-6-luna'] }, repair: '', engineNotes: ['a', 'b'] }), []);
+  assert.deepEqual(r({ em: { tier: 'fast' } }), ['fast-tier model']);
+  assert.deepEqual(r({ repair: 'repaired' }), ['the JSON needed a repair turn']);
+  assert.deepEqual(r({ repair: 'repair_failed' }), ['the JSON repair turn failed']);
+  assert.deepEqual(r({ engineNotes: ['a', 'b', 'c'] }), ['3 engine notes']);
+  assert.deepEqual(r({ data: data(['Obligation O0 marked unknown: x.', 'Obligation O1 marked unknown: y.']) }), ['2 of 4 obligations degraded by validation']);
+  assert.deepEqual(r({ data: data(['Obligation O0 marked unknown: x.', 'Obligation O0 marked unknown: again.', 'Obligation O1 alignment unknown: not stated.']) }), [], '25% exactly is not more than 25%; a derived alignment is not a degraded row');
+});
+
+const reducedData = () => {
+  const lines = [['l1', 1], ['l2', 2], ['if (x) {', 3], ['l4', 4]];
+  const at = ([q, l]) => ({ path: 'src.js', line: l, quote: q });
+  const changed = at(lines[1]); // the one changed line the rows cite; behaviour and findings sit on any line of the hunk
+  const rows = lines.map((x, i) => row('weak_test', { id: `O${i + 1}`, behaviour: at(x), change: changed }));
+  const fs_ = lines.map(([q, l], i) => finding('weak_test', { obligation_ids: [`O${i + 1}`], line: l, quote: q, title: `Weak assertion ${i + 1}` }));
+  rows.push(row('missing_test', { id: 'O5', behaviour: at(lines[3]), change: changed }));
+  fs_.push(finding('missing_test', { obligation_ids: ['O5'], line: 4, quote: 'l4', title: 'Untested branch' }));
+  return report({ coverage: rows, findings: fs_ });
+};
+const writeCtxR = (s, name, text) => fs.writeFileSync(path.join(s.dir, 'ctx', name), text);
+
+test('reduced: a normal run posts every finding inline and writes the head marker', async (t) => {
+  const s = setup(t, reducedData());
+  await post(s);
+  assert.equal(s.calls.review[0].comments.length, 5);
+  assert.match(s.calls.summary[0].body, /specguard:head=HEADSHA/);
+  assert.doesNotMatch(s.calls.summary[0].body, /Reduced review/);
+});
+
+test('reduced: fast tier posts at most 3 inline (high confidence, two citations), the rest as one-liners; no head marker, no resolve, no clean wording; banner and tier shown', async (t) => {
+  const s = withThreads(t, [[thread('gone', FP('a'))]], reducedData());
+  writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['mai-code-1.1-flash'], turns: [{ turn: 'main', chosen: 'mai-code-1.1-flash' }] }));
+  writeCtxR(s, 'usage.json', JSON.stringify({ currentModel: 'something-else', modelMetrics: {} }));
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.equal(s.calls.review[0].comments.length, 3);
+  assert.ok(s.calls.review[0].comments.every((c) => /kind: weak_test, confidence: high/.test(c.body)));
+  assert.match(body, /\n> Reduced review: fast-tier model \(model: mai-code-1\.1-flash\)\. Only high-confidence findings were posted inline\.\n/);
+  assert.ok(body.indexOf('> Reduced review') > body.indexOf('## SpecGuard') && body.indexOf('> Reduced review') < body.indexOf('### Unit test gaps'));
+  assert.match(body, /Model: mai-code-1\.1-flash \(fast tier\)/);
+  assert.doesNotMatch(body, /something-else/);
+  assert.match(body, /Untested branch.*src\.js:4.*missing_test.*reduced review: not high confidence with two citations/);
+  assert.match(body, /Weak assertion \d.*reduced review: inline limit/);
+  assert.doesNotMatch(body, /specguard:head=|No test gaps found/);
+  assert.match(body, /specguard:status=incomplete/);
+  assert.deepEqual(s.resolved, [], 'a reduced run never resolves threads');
+  assert.match(body, /"tier":"fast"/); assert.match(body, /"reduced":true/);
+  const control = withThreads(t, [[thread('gone', FP('a'))]], reducedData());
+  await post(control);
+  assert.deepEqual(control.resolved, ['gone'], 'the same run on a normal model resolves it');
+});
+
+test('reduced: no findings says "Reduced review: no high-confidence gaps", never the clean wording; the repair trigger names itself', async (t) => {
+  const s = setup(t, report({ coverage: [row('covered')], findings: [], standards: { status: 'no_rules', sources: [], reason: 'none' } }));
+  writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5.5'] }));
+  await post(s);
+  assert.match(s.calls.summary[0].body, /Reduced review: no high-confidence gaps\./);
+  assert.doesNotMatch(s.calls.summary[0].body, /No test gaps found/);
+  const r = setup(t, reducedData());
+  writeCtxR(r, 'engine-repair', 'repaired\n');
+  writeCtxR(r, 'usage.json', JSON.stringify({ currentModel: 'gpt-6-luna', modelMetrics: {} }));
+  await post(r);
+  assert.match(r.calls.summary[0].body, /> Reduced review: the JSON needed a repair turn \(model: gpt-6-luna\)/);
+  assert.equal(r.calls.review[0].comments.length, 3);
+});
+
+test('reduced: a garbled engine-model.json means a normal review; the used model replaces the request in the usage line', async (t) => {
+  const s = setup(t, reducedData());
+  writeCtxR(s, 'engine-model.json', '{garbage');
+  await post(s);
+  assert.equal(s.calls.review[0].comments.length, 5);
+  assert.doesNotMatch(s.calls.summary[0].body, /Reduced review/);
+  assert.match(post.usageLine({ engine: 'copilot', model: 'auto', raw: COPILOT_USAGE, used: ['gpt-6-luna'] }), /Model: gpt-6-luna \(requested auto\)/);
+  assert.match(post.usageLine({ engine: 'copilot', model: 'gpt-6', raw: null, used: ['a-mini', 'b'], tier: 'fast' }), /Models: a-mini, b \(fast tier\)/);
+  assert.equal(post.usageLine({ engine: 'copilot', model: 'a-flash', raw: null, used: ['a-flash'], tier: 'fast' }), '<sub>Engine: copilot · Model: a-flash (fast tier)</sub>');
 });

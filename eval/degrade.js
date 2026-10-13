@@ -112,6 +112,12 @@ const MUTATIONS = [
   { id: 'alignment gone (all rows)', expect: 'ok', text: obj((d) => { for (const c of d.coverage) delete c.alignment; return d; }) },
   { id: 'change gone (late rows)', expect: 'soft', // a row whose changed line differs from its behaviour cannot be re-derived: unknown, never guessed
  text: obj((d) => { lateRows(d, (c) => { delete c.change; }); return d; }) },
+  // the v2 contract: optional fields a lean model leaves out. A unit layer is omitted (a stated higher layer stays), change only when it equals behaviour.
+  { id: 'proves gone (all rows)', expect: 'ok', text: obj((d) => { for (const c of d.coverage) for (const e of c.evidence || []) delete e.proves; return d; }) },
+  { id: 'layer gone (unit evidence)', expect: 'ok', text: obj((d) => { for (const c of d.coverage) for (const e of c.evidence || []) if (e.layer === 'unit') delete e.layer; return d; }) },
+  { id: 'v2 minimal (no change/alignment/kind/proves/unit layer)', expect: 'ok', text: obj((d) => { for (const c of d.coverage) {
+    delete c.alignment; if (J(c.change) === J(c.behaviour)) delete c.change;
+    for (const e of c.evidence || []) { delete e.proves; if (e.kind === 'assertion') delete e.kind; if (e.layer === 'unit') delete e.layer; } } return d; }) },
   { id: 'enum case (Missing_Test)', expect: 'ok', text: obj(enumCase) },
   { id: 'enum space/hyphen', expect: 'ok', text: obj(enumSpace) },
   { id: 'numbers as strings', expect: 'ok', text: obj(strNums) },
