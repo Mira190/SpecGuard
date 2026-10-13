@@ -592,6 +592,12 @@ function mergeUsage(a, b) {
   out.modelMetrics = Object.fromEntries([...new Set([...Object.keys(ma), ...Object.keys(mb)])].map((n) => [n, { usage: sum(ma[n]?.usage, mb[n]?.usage, ['inputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'outputTokens']) }]));
   return out;
 }
+// The engine's notes (one per line, at most 4, no repeats) plus a label for the repair/finalize turn, unless an engine note already says it ("finalize turn failed: ...", "finalized: ...").
+function engineNotes(raw, repair) {
+  const notes = [...new Set((raw || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean))].slice(0, 4);
+  const label = { repaired: 'JSON repaired in one extra turn', repair_failed: 'JSON repair turn failed', finalized: 'finalized after the budget ran out', finalize_failed: 'finalize turn failed' }[repair];
+  return label && !notes.some((n) => n.toLowerCase().startsWith(label.slice(0, 8).toLowerCase())) ? [...notes, label] : notes;
+}
 // One small-print line: engine, model(s), tokens, cost, API time, then `notes` (effort, model fallback, JSON repair). `raw` is the Copilot usage JSON (--usage-output-file) or null; only numbers and model names are read from it.
 function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
   const tok = (i, cr, cw, o) => { i = (fin(i) ?? 0) + (fin(cr) ?? 0) + (fin(cw) ?? 0); return { i, c: fin(cr) ?? 0, o: fin(o) ?? 0 }; };
@@ -1221,7 +1227,7 @@ async function run({ github, context, core }) {
   try { usage = JSON.parse(readCtx('usage.json')); } catch { /* no usage data */ }
   try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair or finalize turn */ } // copilot repair turn, claude finalize turn
   const repair = (readCtx('engine-repair') || '').trim();
-  const notes = [...(readCtx('engine-notes') || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : repair === 'finalized' ? ['finalized after the budget ran out'] : repair === 'finalize_failed' ? ['finalize turn failed'] : [])]; // written by the engine step, never by the model
+  const notes = engineNotes(readCtx('engine-notes'), repair); // written by the engine step, never by the model
   let em = null; try { em = JSON.parse(readCtx('engine-model.json')); } catch { /* absent or garbled: normal mode */ }
   const strs = (xs) => [...new Set(xs.filter((x) => typeof x === 'string' && x))];
   // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)
@@ -1497,4 +1503,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
