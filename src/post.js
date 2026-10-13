@@ -439,6 +439,7 @@ function reducedReasons({ em, repair, engineNotes = [], data }) {
   const out = [];
   if (em?.tier === 'fast') out.push('fast-tier model');
   if (repair === 'repaired' || repair === 'repair_failed') out.push(repair === 'repaired' ? 'the JSON needed a repair turn' : 'the JSON repair turn failed');
+  if (repair === 'finalized') out.push('the engine ran out of budget and answered from what it had read so far');
   if (engineNotes.length >= 3) out.push(`${engineNotes.length} engine notes`);
   // its own citations failed; a row only reached through an unverified requirement link is not counted
   const bad = new Set((data.validation_notes || []).map((n) => /^Obligation (.+?) marked unknown: (?!The linked requirement)/.exec(n)?.[1]).filter(Boolean));
@@ -585,11 +586,17 @@ function mergeUsage(a, b) {
   const add = (x, y) => (fin(x) ?? 0) + (fin(y) ?? 0), both = (x, y) => fin(x) !== undefined || fin(y) !== undefined;
   const sum = (x, y, keys) => Object.fromEntries(keys.map((k) => [k, add(x?.[k], y?.[k])]));
   const out = { ...a };
-  for (const k of ['totalNanoAiu', 'totalApiDurationMs']) if (both(a[k], b[k])) out[k] = add(a[k], b[k]);
+  for (const k of ['totalNanoAiu', 'totalCostUsd', 'totalApiDurationMs']) if (both(a[k], b[k])) out[k] = add(a[k], b[k]);
   if (ok(a.tokenDetails) || ok(b.tokenDetails)) out.tokenDetails = Object.fromEntries(['input', 'cache_read', 'cache_write', 'output'].map((k) => [k, { tokenCount: add(a.tokenDetails?.[k]?.tokenCount, b.tokenDetails?.[k]?.tokenCount) }]));
   const ma = ok(a.modelMetrics) ? a.modelMetrics : {}, mb = ok(b.modelMetrics) ? b.modelMetrics : {};
   out.modelMetrics = Object.fromEntries([...new Set([...Object.keys(ma), ...Object.keys(mb)])].map((n) => [n, { usage: sum(ma[n]?.usage, mb[n]?.usage, ['inputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'outputTokens']) }]));
   return out;
+}
+// The engine's notes (one per line, at most 4, no repeats) plus a label for the repair/finalize turn, unless an engine note already says it ("finalize turn failed: ...", "finalized: ...").
+function engineNotes(raw, repair) {
+  const notes = [...new Set((raw || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean))].slice(0, 4);
+  const label = { repaired: 'JSON repaired in one extra turn', repair_failed: 'JSON repair turn failed', finalized: 'finalized after the budget ran out', finalize_failed: 'finalize turn failed' }[repair];
+  return label && !notes.some((n) => n.toLowerCase().startsWith(label.slice(0, 8).toLowerCase())) ? [...notes, label] : notes;
 }
 // One small-print line: engine, model(s), tokens, cost, API time, then `notes` (effort, model fallback, JSON repair). `raw` is the Copilot usage JSON (--usage-output-file) or null; only numbers and model names are read from it.
 function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
@@ -598,10 +605,11 @@ function usageLine({ engine, model, raw, notes = [], used = [], tier }) {
   // copilot's per-model inputTokens already include cache read and write (tokenDetails.input is the uncached part): tok adds them back once
   let models = [], total, usd, credits, ms;
   const u = raw && typeof raw === 'object' ? raw : {};
-  if (engine === 'copilot') {
+  { // the copilot shape; the claude adapter writes the same one (src/engines/claude-result.js) plus totalCostUsd
     for (const [n, m] of Object.entries(u.modelMetrics || {})) { const x = m?.usage; if (x) models.push({ n, t: tok(Math.max(0, (fin(x.inputTokens) ?? 0) - (fin(x.cacheReadTokens) ?? 0) - (fin(x.cacheWriteTokens) ?? 0)), x.cacheReadTokens, x.cacheWriteTokens, x.outputTokens) }); }
     const d = u.tokenDetails; if (d) total = tok(d.input?.tokenCount, d.cache_read?.tokenCount, d.cache_write?.tokenCount, d.output?.tokenCount);
     if (fin(u.totalNanoAiu) !== undefined) { credits = u.totalNanoAiu / 1e9; usd = credits * USD_PER_AI_CREDIT; }
+    else if (fin(u.totalCostUsd)) usd = u.totalCostUsd; // exact, reported by the engine
     ms = fin(u.totalApiDurationMs);
     if (!models.length && typeof u.currentModel === 'string') models = [{ n: u.currentModel }];
   }
@@ -1217,9 +1225,9 @@ async function run({ github, context, core }) {
   const readCtx = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return null; } };
   let usage = null; // engine usage JSON (tokens, cost); shown on every summary that ran the engine, including failed runs
   try { usage = JSON.parse(readCtx('usage.json')); } catch { /* no usage data */ }
-  if (engine === 'copilot') try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair turn */ }
+  try { usage = mergeUsage(usage, JSON.parse(readCtx('usage-repair.json'))); } catch { /* no repair or finalize turn */ } // copilot repair turn, claude finalize turn
   const repair = (readCtx('engine-repair') || '').trim();
-  const notes = [...(readCtx('engine-notes') || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])]; // written by the engine step, never by the model
+  const notes = engineNotes(readCtx('engine-notes'), repair); // written by the engine step, never by the model
   let em = null; try { em = JSON.parse(readCtx('engine-model.json')); } catch { /* absent or garbled: normal mode */ }
   const strs = (xs) => [...new Set(xs.filter((x) => typeof x === 'string' && x))];
   // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)
@@ -1495,4 +1503,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });
+Object.assign(module.exports, { engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel });

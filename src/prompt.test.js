@@ -343,9 +343,11 @@ test('focused prompt: only the chosen files in the numbered diff, a short not-in
   const p0 = build(plain);
   assert.ok(!/Large PR|focus\.txt|focus-skipped|Not in this review/.test(p0), 'normal mode: no focused text at all');
   assert.ok(p0.includes('NUMBERED-ALL') && p0.includes('"max_obligations":8'));
+  assert.match(p0, /^Tool budget: at most 25 file reads\/searches beyond the inlined context; when it is used up, stop and answer\.$/m); // intended prompt change: the exploration budget, every engine
   const d = ctx({ 'diff.patch': a + b, 'diff.numbered.txt': 'NUMBERED-A\n', 'focus.txt': 'src/a.js\t9.0\tlogic\n', 'focus-skipped.txt': 'docs/b.yml\t2\n' });
   const p = build(d);
-  assert.match(p, /Large PR, focused review: .*at most about 20 files beyond the diff; stop searching once the obligations are settled; do not open files outside the chosen set except their tests and direct imports/);
+  assert.match(p, /^Tool budget: at most 15 file reads\/searches beyond the inlined context; when it is used up, stop and answer\.$/m); // intended prompt change: the exploration budget, every engine
+  assert.match(p, /Large PR, focused review: .*Do not open files outside the chosen set except their tests and direct imports/);
   assert.match(p, /<untrusted-data name="focus\.txt"[^>]*>\nsrc\/a\.js\t9\.0\tlogic\n<\/untrusted-data>/);
   assert.match(p, /<untrusted-data name="focus-skipped\.txt" note="Not in this review \(large PR\)">\ndocs\/b\.yml\n<\/untrusted-data>/);
   assert.ok(p.includes('NUMBERED-A') && !p.includes('NUMBERED-ALL'));

@@ -39,7 +39,9 @@ jobs:
             !skills/**
             !.github/**
             !ccr/**
-          model: "${{ vars.SPECGUARD_EVAL_MODEL }}"
+          # TEMPORARY test credential and model (the Copilot quota is used up): remove `|| secrets.SPEC` and the model pin when done (model back to `${{ vars.SPECGUARD_EVAL_MODEL }}`)
+          llm_token: ${{ secrets.SPECGUARD_LLM_TOKEN || secrets.SPEC }}
+          model: haiku-5.5
           max_comments: "${{ vars.SPECGUARD_EVAL_MAX_COMMENTS || '10' }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
