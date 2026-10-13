@@ -70,7 +70,9 @@ const mentioned = (text) => { const out = new Set(); for (const m of String(text
 
 // Risk of one changed file as the sum of named components. Product code (entry points, widely referenced files, logic that touches branches)
 // outranks tooling, docs and fixtures; "no test found" only breaks ties.
-function score(f, { cands = new Map(), named = new Set(), fan = 0, entry = false, product = false } = {}) {
+// "named by a requirement" only discriminates while few files are named: when more than half of the changed source files are (a PR body that lists every
+// file, PR #111), the bonus shrinks to 3 x (1 - named/total), so it is 0 when all are named. share = { named, total } over the changed source files.
+function score(f, { cands = new Map(), named = new Set(), share = { named: 0, total: 0 }, fan = 0, entry = false, product = false } = {}) {
   const kind = trace().pathKind(f.path);
   if (GENERATED.test(f.path) || kind === 'snapshot') return { s: 0, why: ['generated'] };
   const parts = [], add = (label, value) => parts.push({ label, value });
@@ -84,7 +86,10 @@ function score(f, { cands = new Map(), named = new Set(), fan = 0, entry = false
   if (f.branch) add(`${f.branch} branch/error line(s) changed`, Math.min(2, 0.2 * f.branch));
   if (f.risky && !f.deleted) add(`${f.risky} of them removed`, Math.min(2, 0.5 * f.risky));
   if (LOGIC.test(f.path) && cands.has(f.path) && !cands.get(f.path).length) add('no test found', 0.5);
-  if (named.has(f.path)) add('named by a requirement', 3);
+  if (named.has(f.path)) {
+    const k = share.total && share.named * 2 > share.total ? Math.max(0, 1 - share.named / share.total) : 1;
+    add(k < 1 ? `named by a requirement (${share.named} of ${share.total} changed files are named: bonus x${k.toFixed(2)})` : 'named by a requirement', 3 * k);
+  }
   let s = parts.reduce((a, p) => a + p.value, 0);
   const why = parts.map((p) => `${p.label} +${p.value.toFixed(1)}`);
   if (f.deleted) { s *= 0.3; why.push('deleted file x0.3'); } // nothing new to test; its diff is large and cheap to skip
@@ -157,7 +162,8 @@ function plan(ctx, env = process.env) {
   const isProduct = (f) => /\.github\/workflows\//.test(f.path) && /\bworkflow_call\b/.test(body.get(f.path));
 
   const size = new Map(files.map((f) => [f.path, Buffer.byteLength(numberDiff(f.text))]));
-  const ranked = code.map((f) => { const r = score(f, { cands, named, fan: fanIn(f.path), entry: isEntry(f.path), product: isProduct(f) }); return { ...f, score: r.s, why: r.why }; })
+  const share = { named: code.filter((f) => named.has(f.path)).length, total: code.length };
+  const ranked = code.map((f) => { const r = score(f, { cands, named, share, fan: fanIn(f.path), entry: isEntry(f.path), product: isProduct(f) }); return { ...f, score: r.s, why: r.why }; })
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
   const chosen = ranked.slice(0, th.k);
   // changed tests of the chosen files are the evidence the PR adds: they ride along (not counted toward K) while every piece keeps MIN_ALLOW

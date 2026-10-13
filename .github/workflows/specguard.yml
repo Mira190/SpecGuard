@@ -1,5 +1,7 @@
 name: SpecGuard (reusable)
-# Reusable workflow (on: workflow_call): runs SpecGuard against the CALLER's repository with the caller's GITHUB_TOKEN. No PAT. The caller writes ~10 lines (README: "Enterprise setup").
+# Reusable workflow (on: workflow_call): runs SpecGuard against the CALLER's repository with the caller's GITHUB_TOKEN (repository access never needs a PAT). The caller writes ~10 lines (README: "Enterprise setup").
+# Copilot: pass the optional secret copilot_token (user-owned fine-grained PAT, Copilot Requests; billed to that user's seat) with `secrets: { copilot_token: ${{ secrets.SPECGUARD_COPILOT_TOKEN }} }`
+# or `secrets: inherit` (then a caller secret named SPECGUARD_COPILOT_TOKEN is read). Without it Copilot runs on the job token, which needs the org policy "Allow use of Copilot CLI billed to the organization".
 # github.* in here is always the caller's context (repository, event, token), so actions/checkout below checks out the caller's repository.
 # Permissions: none declared on purpose. A called workflow can only keep or reduce what the caller job grants, so the caller job grants them (PR review: contents read, pull-requests write, issues read,
 # copilot-requests write; scan: contents read, copilot-requests write, plus issues write with scan_issue).
@@ -16,6 +18,8 @@ on:
       scan_issue: { description: "Scan mode: also create or update the one scan issue (caller needs issues write).", required: false, type: boolean, default: false }
       model: { description: "Copilot model name. Empty = Copilot Auto.", required: false, type: string, default: "" }
       effort: { description: "Reasoning effort: low | medium | high | xhigh | max. Empty = Copilot default.", required: false, type: string, default: "" }
+    secrets:
+      copilot_token: { description: "Optional. Fine-grained PAT owned by a user, account permission Copilot Requests; Copilot is then billed to that user's seat. Empty = the job token (needs the org policy 'Allow use of Copilot CLI billed to the organization').", required: false }
 
 jobs:
   specguard:
@@ -30,6 +34,7 @@ jobs:
         with:
           mode: ${{ inputs.mode }}
           github_token: ${{ github.token }}
+          copilot_token: ${{ secrets.copilot_token || secrets.SPECGUARD_COPILOT_TOKEN }} # explicit "secrets: { copilot_token: ... }", or "secrets: inherit" with a secret of that name
           requirements_paths: ${{ inputs.requirements_paths }}
           standards_paths: ${{ inputs.standards_paths }}
           test_paths: ${{ inputs.test_paths }}

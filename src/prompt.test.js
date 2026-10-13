@@ -360,3 +360,29 @@ test('focused prompt: only the chosen files in the numbered diff, a short not-in
   assert.match(rq, /<untrusted-data name="focus-requirements\.txt" note="requirement changes \(criteria\)[^"]*">\ndocs\/spec\.md\n<\/untrusted-data>/);
   assert.match(rq, /may stop after its first hunks \(a marker line says how many changed lines are not shown\)/);
 });
+
+test('assemble: leads.txt is inlined with the verify-first note; without it the prompt is unchanged', () => {
+  const body = 'Changed symbols with no test reference:\n  src/a.js:3 orphanThing\n';
+  const p = dyn(build(ctx({ 'leads.txt': body })));
+  assert.ok(p.includes('<untrusted-data name="leads.txt" note="deterministic leads: verify each before using it; a symbol with no test reference is a missing_test candidate only if it is behaviour under review; a possible mirror assertion is a weak_test candidate only if the expected value really comes from the code under test">'));
+  assert.ok(p.includes('  src/a.js:3 orphanThing'));
+  assert.ok(!dyn(build(ctx())).includes('leads.txt'), 'absent leads: not inlined and not listed as empty');
+  assert.ok(!dyn(build(ctx({ 'leads.txt': '\n' }))).includes('leads.txt'), 'an empty leads.txt changes nothing');
+  const big = build(ctx({ 'leads.txt': 'x\n'.repeat(5000) }));
+  assert.match(big, /name="leads\.txt" note="truncated at 6144 of 10000 bytes/);
+});
+
+test('coverage.txt is inlined as execution evidence only when present; absent leaves the prompt unchanged', () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const { assemble } = require('./prompt.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-cov-'));
+  fs.writeFileSync(path.join(dir, 'diff.patch'), 'diff --git a/a.js b/a.js\n');
+  const opts = { skillDir: path.join(__dirname, '..', 'skills', 'test-review'), ctxDir: dir, schemaPath: path.join(__dirname, 'findings.schema.json') };
+  const without = assemble(opts);
+  assert.doesNotMatch(without, /coverage\.txt/);
+  fs.writeFileSync(path.join(dir, 'coverage.txt'), 'src/a.js 3/5; never executed: L12-L13\n');
+  const withCov = assemble(opts);
+  assert.match(withCov, /<untrusted-data name="coverage\.txt"/);
+  assert.match(withCov, /never executed: L12-L13/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

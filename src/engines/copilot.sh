@@ -76,7 +76,7 @@ if [ $rc != 0 ] && [ $rc != 124 ]; then
   has() { printf '%s' "$text" | grep -qiE "$1"; }
   if has 'exceeded your monthly quota|quota|budget limit|ai credits.*exceed|exceed.*ai credits'; then reason=quota; why="Copilot quota or budget exhausted for this token's account/org (raise the budget or wait for the reset)"
   elif has 'access denied by policy|policy settings|not enabled|disabled by your organization'; then reason=policy; why='Copilot is disabled by an organization or enterprise policy for this token'
-  elif has 'not authorized|\b401\b|authentication|no copilot access|requires a copilot'; then reason=auth; why='The token cannot use Copilot (check copilot-requests: write or copilot_token)'
+  elif has 'not authorized|\b401\b|authentication|no copilot access|requires a copilot'; then reason=auth; why='The token cannot use Copilot: set SPECGUARD_COPILOT_TOKEN (a user-owned fine-grained PAT with Copilot Requests) as copilot_token when the organization does not bill Copilot CLI, otherwise grant copilot-requests: write'
   elif has 'rate limit|\b429\b|too many requests'; then reason=rate; why='Copilot rate limit hit; the next push retries'
   fi
   if [ -n "$reason" ]; then

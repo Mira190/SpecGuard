@@ -6,8 +6,11 @@ name: SpecGuard manual run
 # used, which reads only this repository and public ones.
 # Scans keep their state (two-run confirmation) in an issue: scan_issue specguard (default) = one issue per scanned repository in THIS repository, written with the job token (issues: write on the review job);
 # the quoted code and requirement text then sit in this repository, so keep it private with access no wider than the targets'. target = the issue in the scanned repository (token needs Issues write there).
+# Copilot token: SPECGUARD_COPILOT_TOKEN (environment secret) = a fine-grained PAT OWNED BY A USER (resource owner = the user, account permission "Copilot Requests"; classic ghp_ and org-owned tokens are rejected).
+# It is a different token from SPECGUARD_PAT (org-owned, repository read): one fine-grained PAT has a single resource owner, so it cannot carry both. Usage is billed to that user's Copilot seat. Empty = the job token
+# with copilot-requests: write, which works only when the organization enables "Allow use of Copilot CLI billed to the organization".
 # Token order: GitHub App installation token (environment secrets SPECGUARD_APP_ID = the App's Client ID or App ID, and SPECGUARD_APP_PRIVATE_KEY; minted per job, scoped to the one target repository, read-only
-# unless post_to_pr or scan_issue: target), else SPECGUARD_PAT, else the job token. The App needs Contents, Pull requests and Issues read (Pull requests write for post_to_pr) and must be installed on the target repository.
+# unless post_to_pr or scan_issue: target), else SPECGUARD_PAT, else the job token (repository access only; Copilot has its own token above). The App needs Contents, Pull requests and Issues read (Pull requests write for post_to_pr) and must be installed on the target repository.
 on:
   workflow_dispatch:
     inputs:
@@ -138,6 +141,7 @@ jobs:
           base_sha: ${{ needs.resolve.outputs.base_sha }}
           head_sha: ${{ needs.resolve.outputs.head_sha || steps.head.outputs.sha }}
           github_token: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
+          copilot_token: ${{ secrets.SPECGUARD_COPILOT_TOKEN }} # empty = Copilot runs on the job token (copilot-requests, org billing)
           delivery: ${{ inputs.post_to_pr && needs.resolve.outputs.mode == 'pr' && 'pr' || 'summary' }}
           requirements_paths: ${{ needs.resolve.outputs.design }}
           standards_paths: ${{ needs.resolve.outputs.rules }}
