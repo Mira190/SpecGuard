@@ -64,6 +64,19 @@ function statusBlock(ctxDir) {
 // (output length and the tail rows most at risk), never the poster: extra rows are accepted.
 const maxObligations = (diff) => Math.min(40, 8 + Math.floor(diff.split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l)).length / 25));
 
+const mapLine = (e) => `${e.path} applies to: ${e.scope.join(', ')}${e.unknown ? ' (scope unknown: no globs, not alwaysApply)' : ''}`;
+// Rule files the prompt cut off: their path is past the byte limit of standards.txt or of the inlined map (the model is told to Read the rest). Rule text itself is never inlined.
+function standardsCut(ctxDir) {
+  const kept = (text) => new Set(cut(text, LIMITS.small).text.split('\n'));
+  const out = new Set(), list = kept(read(ctxDir, 'standards.txt'));
+  for (const p of read(ctxDir, 'standards.txt').split('\n').filter(Boolean)) if (!list.has(p)) out.add(p);
+  try {
+    const entries = JSON.parse(read(ctxDir, 'standards-map.json')), m = kept(entries.map(mapLine).join('\n'));
+    for (const e of entries) if (!m.has(mapLine(e))) out.add(e.path);
+  } catch { /* no map */ }
+  return out;
+}
+
 function dynamic(ctxDir) {
   const empty = [], parts = [];
   const patch = read(ctxDir, 'diff.patch');
@@ -76,10 +89,11 @@ function dynamic(ctxDir) {
   add('files.txt', read(ctxDir, 'files.txt'), LIMITS.small);
   add('standards.txt', read(ctxDir, 'standards.txt'), LIMITS.small);
   try { // where each rule file applies; absent or unreadable (older runs) adds nothing
-    const lines = JSON.parse(read(ctxDir, 'standards-map.json')).map((e) => `${e.path} applies to: ${e.scope.join(', ')}`).join('\n');
+    const lines = JSON.parse(read(ctxDir, 'standards-map.json')).map(mapLine).join('\n');
     if (nonEmpty(lines)) { const c = cut(lines, LIMITS.small); parts.push(block('standards-map.json', c.text, c.cut ? 'truncated; Read the file for the rest' : "cite a rule_source only if its scope covers the finding's path")); }
   } catch { /* no map */ }
   add('rule-changes.txt', read(ctxDir, 'rule-changes.txt'), LIMITS.small);
+  add('lint-configs.txt', read(ctxDir, 'lint-configs.txt'), LIMITS.small, 'linter and formatter configuration in the repo: formatting and style these tools enforce is not a `standard` finding');
   add('requirements.md', read(ctxDir, 'requirements.md'), LIMITS.requirements);
   const sb = statusBlock(ctxDir);
   if (sb) parts.push(sb); else empty.push('requirements-status.json');
@@ -184,4 +198,4 @@ function main(argv) {
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
-module.exports = { assemble, assembleAudit, strip, traceNeeded, cut, LIMITS, main, maxObligations };
+module.exports = { assemble, assembleAudit, strip, traceNeeded, cut, LIMITS, main, maxObligations, standardsCut };

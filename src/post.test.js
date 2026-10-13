@@ -771,6 +771,33 @@ test('s2: the summary names rule or agent-config files the PR modified and says 
   assert.match(s.calls.summary[0].body, /modifies review rule or agent-config files \(pkg\/REVIEW\.md, \.claude\/settings\.json\); they were not reviewed, and the base versions were applied/);
 });
 
+test('the summary banner adds changed lint/format config to the rule-change sentence, or stands alone', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/rule-changes.txt'), 'pkg/REVIEW.md\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/lint-changes.txt'), '.eslintrc.json\nruff.toml\n');
+  await post(s);
+  assert.match(s.calls.summary[0].body, /base versions were applied\. Lint\/format configuration changed in this PR \(\.eslintrc\.json, ruff\.toml\): a passing check may reflect the relaxed config\./);
+  const b = post.buildSummary({ status: 'x', lint: { count: 1, changed: ['biome.json'] } });
+  assert.match(b, /> Lint\/format configuration changed in this PR \(biome\.json\): a passing check may reflect the relaxed config\./);
+  assert.doesNotMatch(b, /review rule or agent-config/);
+  assert.doesNotMatch(post.buildSummary({ status: 'x', lint: { count: 2, changed: [] } }), /Lint\/format configuration changed/);
+});
+
+test('lint configs without standards_checks: one line in Coding standards, not when checks are configured or no lint config exists', () => {
+  const d = report({ requirements: [], coverage: [row()], findings: [] });
+  const line = /Lint\/format tools are configured \(3 files\) but no `standards_checks` are set, so their results are not confirmed\./;
+  assert.match(post.buildSummary({ data: d, tooling: { status: 'not_configured', checks: [] }, lint: { count: 3, changed: [] } }), line);
+  assert.match(post.buildSummary({ data: d, tooling: { status: 'not_configured', checks: [] }, lint: { count: 1, changed: [] } }), /configured \(1 file\) but/);
+  assert.doesNotMatch(post.buildSummary({ data: d, tooling: { status: 'passed', checks: [], reason: 'x' }, lint: { count: 3, changed: [] } }), /Lint\/format tools are configured/);
+  assert.doesNotMatch(post.buildSummary({ data: d, tooling: { status: 'not_configured', checks: [] }, lint: { count: 0, changed: [] } }), /Lint\/format tools are configured/);
+  assert.match(post.buildSummary({ status: 'Could not complete: x', tooling: { status: 'not_configured', checks: [] }, lint: { count: 3, changed: [] } }), /### Coding standards[\s\S]*Lint\/format tools are configured \(3 files\)/);
+});
+
+test('Sources read lists each standards file with bytes and lines, and marks one cut from the prompt', () => {
+  const m = { ...manifest, standards: [{ path: 'AGENTS.md', bytes: 1200, lines: 40, truncated: false }, { path: 'docs/zz-standards.md', bytes: 99, lines: 3, truncated: true }, 'old.md', { path: 'x.md', truncated: true }] };
+  assert.match(post.buildSummary({ status: 'x', manifest: m }), /Standards files: `AGENTS\.md` \(1200 bytes, 40 lines\), `docs\/zz-standards\.md` \(99 bytes, 3 lines; truncated in prompt\), `old\.md`, `x\.md` \(truncated in prompt\)/);
+});
+
 // ---- WP3: requirement <-> code traceability contract ----
 const SPEC_Q = 'Claims must be filed within 30 days.';
 const sreq = (extra = {}) => ({ id: 'G1', source: 'docs/spec.md', ref: 'AC-4', quote: SPEC_Q, obligation_ids: ['O1'], reason: 'Governs the filing window.', ...extra });

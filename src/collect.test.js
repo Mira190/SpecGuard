@@ -59,7 +59,9 @@ test('collects changed behaviour with trusted base rules and explicit unavailabl
   assert.deepEqual(listed.filter((l) => /fx\/|test-review/.test(l)), []);
   assert.ok(listed.includes('.github/instructions/team.instructions.md') && listed.includes('pkg/REVIEW.md'));
   const map = JSON.parse(fs.readFileSync(path.join(ctx, 'standards-map.json'), 'utf8'));
-  assert.deepEqual(map.find((e) => e.path === 'pkg/REVIEW.md'), { path: 'pkg/REVIEW.md', scope: ['**'], kind: 'repo' });
+  const { bytes, lines, ...review } = map.find((e) => e.path === 'pkg/REVIEW.md');
+  assert.deepEqual(review, { path: 'pkg/REVIEW.md', scope: ['**'], kind: 'repo' });
+  assert.ok(bytes > 0 && lines === 1); // size and line count of the restored file, for the Sources read details
   assert.deepEqual(map.find((e) => e.path === '.github/instructions/team.instructions.md').scope, ['**']); // no applyTo
   assert.deepEqual(map.map((e) => e.path), listed.filter(Boolean)); // one entry per trusted rule file
   assert.equal(JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')).status, 'unavailable');
@@ -147,6 +149,26 @@ test('s2: a PR that only changes rule files has nothing reviewable', (t) => {
   const r = scenario(t, { 'REVIEW.md': 'base\n' }, ({ write }) => write('REVIEW.md', 'weaker\n'));
   assert.equal(fs.readFileSync(path.join(r.ctx, 'files.txt'), 'utf8'), '');
   assert.equal(fs.readFileSync(path.join(r.ctx, 'rule-changes.txt'), 'utf8'), 'REVIEW.md\n');
+});
+
+test('lint-configs.txt lists well-known linter configs from the BASE tree; pyproject.toml only with a tool section; lint-changes.txt lists those the PR changes', (t) => {
+  const base = { 'src.js': 'a\n', '.eslintrc.json': '{}\n', 'web/prettier.config.js': 'x\n', 'pyproject.toml': '[tool.ruff.lint]\nselect = []\n', 'svc/pyproject.toml': '[project]\nname = "x"\n',
+    'ruff.toml': 'x\n', '.golangci.yml': 'x\n', 'config/checkstyle-main.xml': 'x\n', 'node_modules/p/.eslintrc': 'x\n', 'README.md': 'x\n' };
+  const r = scenario(t, base, ({ write }) => { write('src.js', 'b\n'); write('.eslintrc.json', '{"rules":{}}\n'); write('svc/pyproject.toml', '[project]\nname = "x"\n[tool.black]\n'); write('.stylelintrc', 'not a listed name\n'); write('.pylintrc', 'new at head\n'); });
+  // not svc/pyproject.toml (no tool section at base), not node_modules, not the head-only .pylintrc
+  assert.deepEqual(r.ctxFile('lint-configs.txt').split('\n').filter(Boolean).sort(), ['.eslintrc.json', '.golangci.yml', 'config/checkstyle-main.xml', 'pyproject.toml', 'ruff.toml', 'web/prettier.config.js']);
+  // changed in the PR; a pyproject counts once it carries a tool section at either side
+  assert.deepEqual(r.ctxFile('lint-changes.txt').split('\n').filter(Boolean).sort(), ['.eslintrc.json', '.pylintrc', 'svc/pyproject.toml']);
+  // lint config stays ordinary reviewed code: it is not restored from base
+  assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean).sort(), ['.eslintrc.json', '.pylintrc', '.stylelintrc', 'src.js', 'svc/pyproject.toml']);
+});
+
+test('no lint config: both lint files exist and are empty, also when the PR changes only a rule file', (t) => {
+  const r = scenario(t, { 'REVIEW.md': 'base\n', 'src.js': 'a\n' }, ({ write }) => write('REVIEW.md', 'weaker\n'));
+  assert.equal(r.ctxFile('lint-changes.txt'), '');
+  const q = scenario(t, { 'src.js': 'a\n' }, ({ write }) => write('src.js', 'b\n'));
+  assert.equal(q.ctxFile('lint-configs.txt'), '');
+  assert.equal(q.ctxFile('lint-changes.txt'), '');
 });
 
 // Fake trace.js: STUB_SPEC = regex of paths that classify as requirement docs, STUB_COUNT = changed normative items, STUB_CRASH = exit 1.

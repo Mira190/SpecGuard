@@ -51,6 +51,17 @@ match() {
 std() { match "$1" "${STANDARDS[@]}" && { [ ${#STD_EXC[@]} -eq 0 ] || ! match "$1" "${STD_EXC[@]}"; }; }
 rulefile() { std "$1" || match "$1" "${EXEC_CFG[@]}"; }
 
+# lintcfg FILE REF...: a well-known linter/formatter config (by name); pyproject.toml only with a ruff/black/flake8/pylint section at one of the REFs.
+# Not rule documents: they stay where the PR left them, and are only listed (lint-configs.txt) and reported when the PR changes them (lint-changes.txt).
+lintcfg() {
+  local f=$1 r; shift
+  case ${f##*/} in
+    .eslintrc*|eslint.config.*|.prettierrc*|prettier.config.*|biome.json*|ruff.toml|.flake8|.pylintrc|.golangci.*|checkstyle*.xml|.rubocop.yml|.editorconfig|stylelint.config.*|.swiftlint.yml|detekt.yml|.clang-format|.clang-tidy) return 0 ;;
+    pyproject.toml) for r in "$@"; do git show "$r:$f" 2>/dev/null | grep -Eq '^\[tool\.(ruff|black|flake8|pylint)[].]' && return 0; done ;;
+  esac
+  return 1
+}
+
 # 0. Two bases, not to be merged. BASE_SHA is the policy base: trusted rules and spec sources come from it. DIFF_BASE_SHA is the
 # merge-base of BASE_SHA and HEAD_SHA: the left side of every PR diff hunk (three-dot) lives there, so blame, requirement-change
 # comparison and diff-side references must use it. Exported for the node steps and written to $CTX/diff-base-sha.
@@ -63,11 +74,12 @@ echo "$DIFF_BASE_SHA" > "$CTX/diff-base-sha"
 # 1. diff (three-dot = merge-base, same as GitHub's PR diff; needs fetch-depth 0)
 # Rule and agent-config files are never reviewed (they are restored from base below); the modified ones are reported.
 HERE=$(dirname "$0")
-files=(); rules=(); docs=(); dropped=(); specs=(); nctl=0
+files=(); rules=(); docs=(); dropped=(); specs=(); lintchg=(); nctl=0
 # A path with a control character (git allows a newline) would split the newline-delimited lists below: drop it, say so.
 cntrl() { [[ $1 == *[[:cntrl:]]* ]]; }
 while IFS= read -r -d '' f; do
   if cntrl "$f"; then nctl=$((nctl + 1)); continue; fi
+  if lintcfg "$f" "$HEAD_SHA" "$BASE_SHA"; then lintchg+=("$f"); fi
   rulefile "$f" && rules+=("$f") && continue
   match "$f" "${IGNORES[@]}" && continue
   [[ $f =~ \.(md|mdx|markdown|rst|adoc|txt|feature)$ ]] && { docs+=("$f"); continue; }
@@ -94,6 +106,8 @@ ncode=$(( ${#files[@]} - nspecs ))
 
 : > "$CTX/rule-changes.txt"
 [ ${#rules[@]} -eq 0 ] || printf '%s\n' "${rules[@]}" > "$CTX/rule-changes.txt"
+: > "$CTX/lint-changes.txt"
+[ ${#lintchg[@]} -eq 0 ] || printf '%s\n' "${lintchg[@]}" > "$CTX/lint-changes.txt"
 # a dropped .md may still be named by the PR text (step 4a): keep going then, the skip check after trace.js decides
 ndrop=${#dropped[@]}; [ "${TRACE:-auto}" != off ] || ndrop=0
 if [ ${#files[@]} -eq 0 ] && [ "$ndrop" -eq 0 ]; then
@@ -147,6 +161,12 @@ for f in "${base_hit[@]}"; do
     printf '%s\n' "$f" >> "$CTX/standards.txt"
   fi
 done
+
+# 3a. linter/formatter configs in the BASE tree (what the repo enforces by tooling); the model is told not to raise what they enforce.
+: > "$CTX/lint-configs.txt"
+while IFS= read -r -d '' f; do
+  if ! cntrl "$f" && ! match "$f" "${IGNORES[@]}" && lintcfg "$f" "$BASE_SHA"; then printf '%s\n' "$f" >> "$CTX/lint-configs.txt"; fi
+done < <(git ls-tree -r -z --name-only "$BASE_SHA")
 
 # 3b. where each trusted rule file applies (applyTo / paths / directory); fail-soft, post.js skips the check without it
 timeout 30 node "$HERE/standards-map.js" || echo "::warning::standards applicability map failed; continuing without it"

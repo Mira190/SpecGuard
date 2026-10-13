@@ -23,6 +23,7 @@ const truncate = (s, n = BODY_MAX) => {
   return s.slice(0, end) + '\n...(truncated)';
 };
 const { matches } = require('./standards-map');
+const { standardsCut } = require('./prompt');
 const clean = (s) => truncate(redact(s));
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
@@ -600,7 +601,9 @@ function countsComment(c) {
 }
 // Collapsed list of what the review read. Paths are repo-relative and come from the collector, not the model.
 function sourcesRead({ reqDocs = [], standards = [], trace, head, base, rejected = [] }) {
-  const list = (a) => (a.length ? a.slice(0, 15).map((x) => `\`${cell(x)}\``).join(', ') + (a.length > 15 ? `, +${a.length - 15} more` : '') : 'none');
+  // an entry is a path, or { path, bytes, lines, truncated } for a standards file (size, line count, cut off in the prompt)
+  const one = (x) => (typeof x === 'string' ? `\`${cell(x)}\`` : `\`${cell(x.path)}\`${Number.isInteger(x.bytes) ? ` (${x.bytes} bytes, ${x.lines} lines${x.truncated ? '; truncated in prompt' : ''})` : x.truncated ? ' (truncated in prompt)' : ''}`);
+  const list = (a) => (a.length ? a.slice(0, 15).map(one).join(', ') + (a.length > 15 ? `, +${a.length - 15} more` : '') : 'none');
   // candidate documents the collector looked at and did not admit as requirements: [path, reason]
   const rej = rejected.slice(0, 10).map(([p, why]) => `- Considered, not admitted: \`${cell(p)}\` — ${cell(why)} (add to \`requirements_paths\` to include)\n`).join('') + (rejected.length > 10 ? `- +${rejected.length - 10} more considered, not admitted\n` : '');
   return `<details><summary>Sources read</summary>\n\n- Requirement documents: ${list(reqDocs)}\n- Standards files: ${list(standards)}\n- Trace: ${cell(trace)}\n${rej}- Commits: head \`${cell(String(head).slice(0, 7))}\`, base \`${cell(String(base).slice(0, 7))}\`\n\n</details>\n`;
@@ -628,7 +631,7 @@ function verdict(data, fs_) {
 // Sections in goal order, which is also the importance order: unit test gaps, requirements, standards, layers, completeness, then collapsed reference
 // material. Each section's items are added while they fit under the comment limit; what does not fit is counted, never cut mid-item, and the summary says so.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
-function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, partial, engine, model, usage, notes, rules = [], blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier }) {
+function buildSummary({ status, data, tooling = data?.tooling, items = [], posted = [], delivery, partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier }) {
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)];
   if (data && !status) status = `${incomplete.length ? 'Incomplete review (see below). ' : ''}${gapFree(data) && reqChanged(data) ? 'Requirement changed in this PR — review it. ' : ''}${verdict(data, all)}`;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
@@ -636,7 +639,8 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
   if (reduced) head += `> Reduced review: ${reduced.reasons.map((r) => cell(r)).join('; ')} (model: ${cell(reduced.model || 'unknown', 80)}). Only high-confidence findings were posted inline.\n\n`;
   if (incomplete.length) head += `> **Incomplete review.** Not everything was covered; verified findings are still listed, no threads were auto-resolved, and the next push or rerun reviews again.\n${incomplete.map((r) => `> - ${cell(r)}`).join('\n')}\n\n`;
   if (partial || dropped.length) head += `${partial ? '> Partially reviewed: the diff exceeded `max_diff_kb` and was truncated.' : ''}${dropped.length ? `${partial ? '\n' : ''}> ${notReviewed(dropped)}` : ''}\n\n`;
-  if (rules.length) head += `> This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.\n\n`;
+  const lintChanged = lint.changed || [];
+  if (rules.length || lintChanged.length) head += `> ${[rules.length && `This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`, lintChanged.length && `Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`].filter(Boolean).join(' ')}\n\n`;
   if (traceNote) head += `> Traceability unavailable for this PR (${cell(traceNote)}).\n\n`;
   const sn = counts && counts.complete && counts.since;
   if (sn && counts.since_total) head += `<sub>Since earlier reviews${counts.prior_total > counts.since_total ? `, of the ${counts.since_total} most recent` : ''}: ${sn.addressed} addressed · ${sn.open} still open · ${sn.dismissed} dismissed · ${sn.not_observed} not observed (not proof of a fix)</sub>\n\n`;
@@ -645,9 +649,10 @@ function buildSummary({ status, data, tooling = data?.tooling, items = [], poste
   let g = '';
   const add = (h, atoms = [], tail = '') => sections.push({ g, h, atoms, tail });
   const of = (kinds) => [...posted.filter((x) => kinds.includes(x.f.kind)).map((x) => compact(x.f, x.url, blob)), ...items.filter((x) => kinds.includes(x.f.kind)).map((x) => (x.brief ? `- **${title1(x.f.title)}** (\`${cell(`${x.f.path}:${x.f.line}`)}\`, ${cell(x.f.kind)}, ${cell(x.why)}) — ${sentence(x.f.body)}\n` : `${item(x)}\n`))];
-  const toolingAdd = () => tooling.status !== 'not_configured' && add( // nothing to report when no standards_checks are configured
+  const toolingAdd = () => tooling.status !== 'not_configured' ? add(
 `**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`,
-    (tooling.checks || []).map((c) => `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`), '\n');
+    (tooling.checks || []).map((c) => `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`), '\n')
+    : lint.count > 0 && add(`Lint/format tools are configured (${lint.count} file${lint.count === 1 ? '' : 's'}) but no \`standards_checks\` are set, so their results are not confirmed.\n\n`);
   const appendix = [];
   const reference = (h, atoms, tail) => appendix.push({ g: '', h, atoms, tail });
   g = '### Unit test gaps\n\n';
@@ -1096,7 +1101,9 @@ async function run({ github, context, core }) {
 
   let rules = [];
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
-  if (env.SKIP === 'true') return publish(buildSummary({ rules, headSha, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
+  const ctxLines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
+  const lint = { count: ctxLines('lint-configs.txt').length, changed: ctxLines('lint-changes.txt') }; // linter/formatter configs at base; those the PR changes
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -1112,7 +1119,7 @@ async function run({ github, context, core }) {
   // the model(s) the engine step recorded; else the ones the usage file names (the request alone says nothing when it was `auto`)
   const used = Array.isArray(em?.used) && strs(em.used).length ? strs(em.used) : strs([usage?.currentModel, ...Object.keys(usage?.modelMetrics && typeof usage.modelMetrics === 'object' ? usage.modelMetrics : {})]), tier = em?.tier === 'fast' ? 'fast' : undefined;
   const dropped = (readCtx('diff-dropped.txt') || '').split('\n').map((x) => x.trim()).filter(Boolean);
-  const failed = (why) => publish(buildSummary({ rules, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial, dropped, state: 'failed', used, tier }), 'failed');
+  const failed = (why) => publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes, partial, dropped, state: 'failed', used, tier }), 'failed');
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();
@@ -1161,8 +1168,9 @@ async function run({ github, context, core }) {
     traceNote = traceStatus === 'failed' ? 'requirement tracing failed or timed out' : 'requirement tracing is not available';
     incomplete.push(`Requirement tracing was not done: ${traceNote}.`);
   } else if (traceStatus === 'off') specFiles = [];
-  let smap = null; // path -> scope; absent for older collectors, which skips the applicability check
-  try { smap = new Map(JSON.parse(readCtx('standards-map.json')).map((e) => [e.path, e.scope])); } catch { /* no map */ }
+  let smap = null, sentries = []; // path -> scope; absent for older collectors, which skips the applicability check
+  try { sentries = JSON.parse(readCtx('standards-map.json')); smap = new Map(sentries.map((e) => [e.path, e.scope])); } catch { /* no map */ }
+  const cutInPrompt = standardsCut(ctx);
   for (const l of (readCtx('collect-limits.txt') || '').split('\n').filter(Boolean)) addNote(l);
   verifyEvidence(data, reviewable, standards, readLines, maps);
   let requirements = null;
@@ -1352,8 +1360,8 @@ async function run({ github, context, core }) {
 
   const clean_ = noGaps(data) && !incomplete.length && !reduced, state = incomplete.length || reduced ? 'incomplete' : 'complete';
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: counts(), traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
-    manifest: { reqDocs: specFiles || [], standards: smap ? [...smap.keys()] : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
+  await publish(buildSummary({ status: reduced ? (data.findings.length ? undefined : 'Reduced review: no high-confidence gaps.') : clean_ ? 'No test gaps found in the assessed obligations.' : undefined, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: counts(), traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+    manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
 
