@@ -321,6 +321,20 @@ test('context pack: files.txt order without focus.txt; the byte budget cuts a fi
   assert.match(r.h.file('engine-notes'), /^context pack: 2 files, \d KB; not included: c\.js, d\.js, e\.js, f\.js \(\+2 more\)$/);
 });
 
+test('context pack: pack-cut.txt lists every file that was cut or not included, one repo-relative path per line, no contents; absent when the pack is off; the note tells the model not to report on them', async (t) => {
+  const body = Array.from({ length: 10 }, () => 'x'.repeat(99)).join('\n') + '\n';
+  const r = repo(t, { 'a.js': body, 'b.js': body, 'c.js': body, 'd.js': body, 'e.js': body, 'f.js': body }, { 'files.txt': 'a.js\nb.js\nc.js\nd.js\ne.js\nf.js\n' }, { CONTEXT_PACK_BYTES: '2000' });
+  await r.go();
+  assert.equal(r.h.file('pack-cut.txt'), 'b.js\nc.js\nd.js\ne.js\nf.js', 'b.js cut, c.js-f.js not included, a.js whole');
+  assert.match(r.user(), /Do not report a missing or weak test when a candidate test file for that code was cut or not included/);
+  const whole = repo(t, { 'a.js': 'a();\n' }, { 'files.txt': 'a.js\n' });
+  await whole.go();
+  assert.equal(whole.h.file('pack-cut.txt'), '', 'the pack ran and cut nothing: an empty list');
+  const off = repo(t, { 'a.js': body }, { 'files.txt': 'a.js\n' }, { CONTEXT_PACK_BYTES: '0' });
+  await off.go();
+  assert.equal(off.h.file('pack-cut.txt'), null);
+});
+
 test('context pack: a file over the per-file cap (limit/6, here 41666 bytes) is cut at a line boundary and says so', async (t) => {
   const r = repo(t, { 'big.js': lineText(20000) }, { 'files.txt': 'big.js\n' });
   await r.go();
