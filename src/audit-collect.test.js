@@ -273,6 +273,19 @@ test('evidence: a long table row whose sizes sit in one config line gets that li
   assert.ok(barCode.some((c) => /^electron\/bar\.cjs:/.test(c)), `two-digit values count: ${barCode.join(' | ')}`);
 });
 
+test('evidence: with many UI files holding more of the row words, the window with two of the row numbers is still a candidate (literal windows are taken before the score order)', (t) => {
+  const ROW = ['# Windows', '', '| Main window | Regular window, 1000×740, minimum 820×600; 84 px navigation rail on the left (Record / Recordings / Toolbox / Settings) | Visible when idle and after stopping; hidden while recording, restored from the tray icon |', ''].join('\n');
+  const UI = ['// navigation rail on the left: Record, Recordings, Toolbox, Settings', "export const rail = ['Record', 'Recordings', 'Toolbox', 'Settings']",
+    '// main window visible when idle and after stopping; hidden while recording', 'export function onStop(win) { win.show() } // restored from the tray icon',
+    'export function onRecord(win) { win.hide() }', '// regular window with a navigation rail, recordings list and toolbox', ''].join('\n');
+  const files = { 'docs/design.md': ROW, 'electron/app.cjs': `${'// ipc plumbing\n'.repeat(60)}const w = mk('main', { width: 1000, height: 800, minWidth: 820, minHeight: 600 }, true)\n${'// ffmpeg flags\n'.repeat(60)}` };
+  for (let i = 0; i < 12; i++) files[`src/ui/View${i}.tsx`] = UI;
+  const { root, ctx } = repo(t, files);
+  collect({ cwd: root, ctx, reqPaths: 'docs/design.md' });
+  const code = evRows(ctx).filter((e) => e[1] === 'code').map((e) => e[2]);
+  assert.ok(code.some((c) => /^electron\/app\.cjs:/.test(c)), code.join(' | '));
+});
+
 test('evidence: the time budget ends the search; every block says none and the limitation names it', (t) => {
   const { root, ctx } = repo(t, SCHED);
   const r = collect({ cwd: root, ctx, evidenceBudgetMs: 0 });

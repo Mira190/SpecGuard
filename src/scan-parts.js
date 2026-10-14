@@ -16,7 +16,7 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, windowPack, as
   const evidence = lines(rd('audit-evidence.txt')), units = rd('audit-units.txt');
   let meta = {}; try { meta = JSON.parse(rd('audit-meta.json')); } catch { /* the prompt falls back to its defaults */ }
   const skillDir = path.join(__dirname, '..', 'skills', 'spec-audit'), out = [];
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-part-'));
+  let tmp;
   const render = (files, m) => {
     for (const f of fs.readdirSync(tmp)) fs.rmSync(path.join(tmp, f), { force: true });
     for (const [n, s] of Object.entries({ 'standards.txt': rd('standards.txt'), 'test-layout.txt': rd('test-layout.txt'), ...files })) if (s && s.trim()) fs.writeFileSync(path.join(tmp, n), s);
@@ -25,25 +25,30 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, windowPack, as
   };
   const pack = () => { try { return contextPack(tmp, root, limit); } catch { return { text: '', note: '', notWhole: [] }; } };
   let packCut = [];
+  const { units: _u, max_units, ...bm } = meta;
+  const block = (rows) => {
+    const cids = rows.map((l) => l.split('\t')[0]), set = new Set(cids), ev = evidence.filter((l) => set.has(l.split('\t')[0]));
+    const prompt = render({ 'audit-docs.txt': rd('audit-docs.txt'), 'audit-candidates.txt': rows.join('\n') + '\n', 'audit-evidence.txt': ev.join('\n') }, { ...bm, candidates: cids.length, candidates_listed: cids.length });
+    // the pack: windows around the lines the evidence rows cite (code first, then tests), not whole files (windowPack in claude-api.js)
+    const locs = new Map(), at = (l) => { const x = l.split('\t')[2] || '', k = x.lastIndexOf(':'); return k > 0 ? [x.slice(0, k), parseInt(x.slice(k + 1), 10) || 1] : null; };
+    for (const kind of ['code', 'test']) for (const l of ev) { const w = l.split('\t')[1] === kind && at(l); if (w) locs.set(w[0], [...(locs.get(w[0]) || []), w[1]]); }
+    const p = limit > 0 ? windowPack(root, locs, limit) : { text: '', note: '', notWhole: [] };
+    return { prompt, pack: p, cids };
+  };
+  const byCid = new Map(cands.map((l) => [l.split('\t')[0], l]));
+  const withTmp = (f) => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-part-')); try { return f(); } finally { fs.rmSync(tmp, { recursive: true, force: true }); } };
   try {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-part-'));
     if (units.trim()) {
       const { candidates, candidates_listed, ...m } = meta;
       const prompt = render({ 'audit-units.txt': units }, m), p = limit > 0 ? pack() : { text: '', note: '', notWhole: [] };
       packCut = p.notWhole;
       out.push({ prompt, pack: p });
     }
-    const { units: _u, max_units, ...bm } = meta;
-    for (let i = 0; i < cands.length; i += batch) {
-      const rows = cands.slice(i, i + batch), cids = rows.map((l) => l.split('\t')[0]), set = new Set(cids), ev = evidence.filter((l) => set.has(l.split('\t')[0]));
-      const prompt = render({ 'audit-docs.txt': rd('audit-docs.txt'), 'audit-candidates.txt': rows.join('\n') + '\n', 'audit-evidence.txt': ev.join('\n') }, { ...bm, candidates: cids.length, candidates_listed: cids.length });
-      // the pack: windows around the lines the evidence rows cite (code first, then tests), not whole files (windowPack in claude-api.js)
-      const locs = new Map(), at = (l) => { const x = l.split('\t')[2] || '', k = x.lastIndexOf(':'); return k > 0 ? [x.slice(0, k), parseInt(x.slice(k + 1), 10) || 1] : null; };
-      for (const kind of ['code', 'test']) for (const l of ev) { const w = l.split('\t')[1] === kind && at(l); if (w) locs.set(w[0], [...(locs.get(w[0]) || []), w[1]]); }
-      const p = limit > 0 ? windowPack(root, locs, limit) : { text: '', note: '', notWhole: [] };
-      out.push({ prompt, pack: p, cids });
-    }
+    for (let i = 0; i < cands.length; i += batch) out.push(block(cands.slice(i, i + batch)));
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
-  return { parts: out, packCut };
+  // sub(cids): the part for a subset of blocks (a part whose reply overflowed is split and re-rendered)
+  return { parts: out, packCut, sub: (cids) => withTmp(() => block(cids.map((c) => byCid.get(c)))) };
 }
 
 module.exports = { plan };
