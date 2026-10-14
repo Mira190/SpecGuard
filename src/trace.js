@@ -371,6 +371,33 @@ function blocksOf(p, text, ruled = null) {
   });
 }
 
+// Removed-literal anchor: a literal on a hunk's removed lines (not re-added) that an unchanged requirement block states as a whole value, with a term shared between block and hunk.
+// Returns [{ block, removed, hunks }]. Trivially common literals need two shared terms.
+const TRIVIAL_LIT = /^([01]|true|false|id|[a-z])$/i;
+function removedLiteralAnchors(hunks, blocks) {
+  const stop = (w) => w.length > 1 && !BLOCK_STOP.has(w) && !/^\d+$/.test(w);
+  const found = new Map();
+  for (const h of hunks) {
+    const gone = h.literals.removed.filter((l) => !h.literals.added.includes(l) && (/^\d+(?:\.\d+)?$/.test(l) || [...l].length >= 2));
+    if (!gone.length) continue;
+    const terms = new Set([...h.identifiers, ...tokenize(h.path.replace(/^.*\//, '').replace(/\.[^.]*$/, ''))].filter(stop));
+    for (const b of blocks) {
+      const bt = new Set(tokenize(b.text));
+      const shared = [...terms].filter((t) => bt.has(t)).length;
+      for (const l of gone) {
+        const num = /^\d+(?:\.\d+)?$/.test(l);
+        if (!(num ? new RegExp(String.raw`(?<!\d)(?<!\d[.,])${l.replace('.', String.raw`\.`)}(?![.,]?\d)`).test(b.text) : b.text.includes(l))) continue;
+        if (shared < (TRIVIAL_LIT.test(l) || l === '' ? 2 : CJK_ONLY.test(l) ? 0 : 1)) continue;
+        const k = `${b.path}:${b.ref}`, was = found.get(k) || { block: b, removed: l, hunks: [] };
+        was.hunks.push({ path: h.path, start: h.line, end: h.end ?? h.line });
+        found.set(k, was);
+        break;
+      }
+    }
+  }
+  return [...found.values()];
+}
+
 const isRequirementDoc = (items) => items.some((i) => i.kind !== 'normative') || items.length >= 2;
 // Stricter than isRequirementDoc, used to admit a document: prose alone needs 2+ items and either an RFC 2119 capital (MUST/SHALL/REQUIRED)
 // or a dense run of them (long documents need more); structured items (ID, acceptance criteria, Gherkin) always admit. Spec directories keep the loose rule.
@@ -904,9 +931,10 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
 
   const info = { cut: false };
   // A: code hunks -> requirement items
-  const blockItems = [];
+  const blockItems = [], allBlocks = [];
+  let codeH = [];
   try {
-    const hunks = codeHunks(patch).filter((h) => !h.is_test && !d.docs.has(h.path) && !d.ruled(h.path) && !docLike(h.path) && !NOT_CODE_DIR.test(h.path));
+    const hunks = codeH = codeHunks(patch).filter((h) => !h.is_test && !d.docs.has(h.path) && !d.ruled(h.path) && !docLike(h.path) && !NOT_CODE_DIR.test(h.path));
     if (allItems.length && hunks.length) {
       const c2r = {};
       cand.code_to_requirement = codeToRequirement(hunks, allItems, c2r);
@@ -919,6 +947,7 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
         if (dl.over()) { cand.limitations.push('The time budget was reached before every document was searched for descriptive requirement blocks.'); break; }
         for (const b of blocksOf(x.path, x.text)) if (!taken.has(`${b.path}:${b.line}`)) blockItems.push({ ...b, kind: 'block' });
       }
+      allBlocks.push(...blockItems);
       if (blockItems.length) {
         const bl = codeToRequirement(hunks, blockItems, {}, { per: BLOCK_PER_HUNK, total: BLOCK_TOTAL, min: BLOCK_MIN * Math.log(1 + (blockItems.length - 0.5) / 1.5), stop: BLOCK_STOP });
         const seen = new Set();
@@ -963,7 +992,18 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
       const hk = { path: h.path, start: h.line, end: h.end ?? h.line }, was = pick.get(k);
       if (!was || bs[0].score > was.score) pick.set(k, { score: bs[0].score, hunks: [...(was ? was.hunks : []), hk] }); else was.hunks.push(hk); // the hunks that picked it: post.js links the obligations inside them
     }
-    const gov = [...pick].sort((a, b) => b[1].score - a[1].score).slice(0, MAX_GOVERNING).map(([k, v], i) => { const b = byKey.get(k); return { id: `D${i + 1}`, source: b.path, ref: b.ref, line: b.line, quote: b.text, hunks: v.hunks }; });
+    // Removed-literal anchors come first and bypass the runner-up rule; the block joins the index if the BM25 pass did not keep it.
+    const anchors = removedLiteralAnchors(codeH, allBlocks).filter((a) => !have.has(`${a.block.path}:${a.block.ref}`));
+    const order = [];
+    for (const a of anchors) {
+      const k = `${a.block.path}:${a.block.ref}`;
+      if (!byKey.has(k)) { byKey.set(k, a.block); blockItems.push(a.block); }
+      const was = pick.get(k);
+      pick.set(k, { score: was?.score ?? 0, hunks: [...(was?.hunks || []), ...a.hunks], anchor: { removed: a.removed } });
+      order.push(k);
+    }
+    const rank = [...order, ...[...pick.keys()].filter((k) => !order.includes(k)).sort((a, b) => pick.get(b).score - pick.get(a).score)];
+    const gov = rank.slice(0, MAX_GOVERNING).map((k, i) => { const b = byKey.get(k), v = pick.get(k); return { id: `D${i + 1}`, source: b.path, ref: b.ref, line: b.line, quote: b.text, hunks: v.hunks, ...(v.anchor ? { anchor: v.anchor } : {}) }; });
     criteria.push(...gov);
     status.criteria = (status.criteria || []).concat(gov);
   } catch (e) { lim('governing-block criteria', e); }

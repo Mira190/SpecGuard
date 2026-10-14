@@ -1009,3 +1009,34 @@ test('D criterion: a block changed in this PR is an S criterion only, with no D 
   const ids = (status(r).criteria || []).map((c) => c.id[0]);
   assert.ok(ids.includes('S') && !ids.includes('D'));
 });
+
+// ---- D*: removed-literal anchor ----
+const ANCHOR_DOC = ['# Design', '', ...FILL.flatMap((f) => [f, '']), '## Reminders', '', 'Microphone silent for 10 seconds: a reminder card unfolds above the tray.', '',
+  'The ball is shown for 19 seconds after the card unfolds and the tray panel menu repeats.', '', 'The countdown before recording is 0-9 seconds.', '',
+  'Hotkey conflicts are reported: the key 「与『停止录制』冲突」 is shown in the tray menu panel.', '', 'A row MUST exist.', '', 'The tray MUST be hidden.', ''].join('\n');
+const anchorD = (t, path, base, head) => {
+  const r = repo(t, { 'docs/design.md': ANCHOR_DOC, [path]: base }, { 'docs/design.md': ANCHOR_DOC, [path]: head });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  return (status(r).criteria || []).filter((c) => c.id[0] === 'D');
+};
+const anLine = (s) => ANCHOR_DOC.split('\n').findIndex((l) => l.startsWith(s)) + 1;
+test('D anchor: a removed number the block states with a shared term (silence/seconds)', (t) => {
+  const d = anchorD(t, 'src/engine/silence.ts', 'export const w = (o) => (o.seconds ?? 10)\n', 'export const w = (o) => (o.seconds ?? 15)\n');
+  assert.deepEqual(d.map((c) => [c.id, c.line, c.anchor]), [['D1', anLine('Microphone silent'), { removed: '10' }]]);
+  assert.equal(d[0].hunks[0].path, 'src/engine/silence.ts');
+});
+test('D anchor: a removed single digit matches "0-9" but not "19"', (t) => {
+  const d = anchorD(t, 'src/engine/settings.ts', 'const c = int(o.countdown, 0, 9, 3)\n', 'const c = int(o.countdown, 0, 5, 3)\n');
+  assert.deepEqual(d.map((c) => [c.line, c.anchor]), [[anLine('The countdown'), { removed: '9' }]]);
+});
+test('D anchor: a removed CJK label matches the block that quotes it', (t) => {
+  const d = anchorD(t, 'src/engine/hotkeys.ts', "const rows = [{ label: '停止录制' }]\n", "const rows = [{ label: '结束录制' }]\n");
+  assert.deepEqual(d.map((c) => [c.line, c.anchor]), [[anLine('Hotkey conflicts'), { removed: '停止录制' }]]);
+});
+test('D anchor: a removed literal whose block shares no term with the hunk gives no D', (t) => {
+  assert.deepEqual(anchorD(t, 'src/zzz.ts', 'export const k = 10\n', 'export const k = 15\n'), []);
+});
+test('D anchor: a literal removed and re-added gives no anchor', (t) => {
+  const d = anchorD(t, 'src/engine/silence.ts', 'export const w = (o) => (o.seconds ?? 10)\n', 'export const w = (o) => (o.seconds ?? 10) + 10\n');
+  assert.ok(!d.some((c) => c.anchor));
+});
