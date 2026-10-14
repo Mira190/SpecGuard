@@ -654,6 +654,40 @@ test('scan parts: a block call with invalid JSON loses only its own blocks (list
   assert.ok(JSON.parse(s.h.file('usage.json')).totalCostUsd > 0, 'the failed reply is paid for and counted');
 });
 
+// the real answer of scanRepo cut to its first n requirements (and a usage of its own)
+const cut = async (ok, req, n, usage) => { const b = JSON.parse(await ok(req).text()), o = JSON.parse(b.content[0].text); o.requirements = o.requirements.slice(0, n); b.content[0].text = JSON.stringify(o); if (usage) b.usage = usage; return reply(200, b); };
+const unanswered = (s, n1, n3, usage) => { // 20 blocks in two parts of 10; block call 1 answers n1, call 2 everything, call 3 (the retry) n3
+  let n = 0;
+  s.answers((req, ok) => (/name="audit-units\.txt"/.test(req.body.messages[0].content) ? ok(req) : (++n === 1 ? cut(ok, req, n1, usage) : n === 3 ? cut(ok, req, n3) : ok(req))));
+};
+
+test('scan parts: a part that answers 1 of 10 blocks keeps the 1; the 9 go back once as a part of their own; the retry answers 5: 6 audited, 4 not audited with the reason', async (t) => {
+  const s = scanRepo(t, 20, { SCAN_BATCH_BLOCKS: '10', MAX_BUDGET_USD: '50' });
+  unanswered(s, 1, 5);
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  const f = JSON.parse(s.h.file('findings.json')), parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.equal(s.h.calls.length, 4, 'units, two block parts, one retry: never a second retry');
+  assert.deepEqual(blockCalls(s.h).map(listed), [10, 10, 9]);
+  assert.equal(f.requirements.length, 1 + 10 + 5);
+  assert.deepEqual(parts.retried, [s.cids.slice(1, 10)]);
+  assert.deepEqual(parts.failed.map((x) => [x.part, x.blocks]), [['blocks', s.cids.slice(6, 10)]]);
+  assert.match(parts.failed[0].reason, /4 of 9 blocks were not answered in two attempts/);
+  assert.match(s.h.file('engine-notes'), /9 unanswered blocks sent again once/);
+  assert.match(s.h.file('engine-notes'), /4 blocks not audited: 4 of 9 blocks were not answered in two attempts/);
+});
+
+test('scan parts: the retry of unanswered blocks is refused when it would exceed max_budget_usd; the answers kept, the unanswered listed', async (t) => {
+  const s = scanRepo(t, 20, { SCAN_BATCH_BLOCKS: '10', MAX_BUDGET_USD: '1' });
+  unanswered(s, 1, 5, { input_tokens: 1000, output_tokens: 5000000 }); // that reply cost more than the whole budget
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  const f = JSON.parse(s.h.file('findings.json')), parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.equal(s.h.calls.length, 3);
+  assert.equal(f.requirements.length, 1 + 10);
+  assert.equal(parts.retried, undefined);
+  assert.deepEqual(parts.failed.map((x) => x.blocks), [s.cids.slice(1, 10)]);
+  assert.match(parts.failed[0].reason, /9 of 10 blocks were not answered; not retried: the retry would exceed max_budget_usd/);
+});
+
 const overflow = () => good({ stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"requirements": [' }] });
 const listed = (req) => new Set([...req.body.messages[0].content.matchAll(/^([0-9a-f]{8})\tdocs\/d\.md:1/gm)].map((m) => m[1])).size;
 
