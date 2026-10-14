@@ -342,18 +342,26 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     // A scan with more document blocks than SCAN_BATCH_BLOCKS (default 20) is split into budgeted parts (src/scan-parts.js): one unit call and block calls, answers merged here. Fewer blocks: one call, below.
     const batch = Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), split = env.CHECK === 'audit' ? require('../scan-parts.js').plan({ ctx, root: root(), batch, limit: packBytes, schemaFile, contextPack, windowPack, assembleAudit: require('../prompt.js').assembleAudit }) : null;
     if (split) {
-      const plans = split.parts.map((p) => {
-        const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1000 * p.cids.length + 2000) : maxTokens; // a batch of n blocks needs about 1000 tokens each
+      const priced = (p) => {
+        const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1500 * p.cids.length + 2000) : maxTokens; // a batch of n blocks needs about 1500 tokens each (20 blocks overflowed 22000 live)
         return { ...p, system: s, user: x, tokens, usd: worstCase(model, Buffer.byteLength(s), Buffer.byteLength(x), tokens).usd };
-      });
+      };
+      const plans = split.parts.map(priced);
       const total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd, dropped = [];
       while (plans.length > 1 && total() > budget) dropped.unshift(...plans.pop().cids || []); // the budget is hard: trailing block batches go first (candidate order = rotation priority), the first part (units) last
       if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
-      let first = null;
-      for (const p of plans) {
+      let first = null, ok = 0, splits = 0;
+      const queue = [...plans], fail = (p, reason) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: p.cids }), reason });
+      while (queue.length) {
+        const p = queue.shift();
         const r = await call(p.system, p.user, p.tokens);
         rs.push(r);
+        if (!r.ok && r.reason === 'length' && p.cids && p.cids.length > 1) { // the reply overflowed: run the two halves as parts of their own, if the budget still covers them
+          const h = Math.ceil(p.cids.length / 2), halves = [p.cids.slice(0, h), p.cids.slice(h)].map((c) => priced({ ...split.sub(c) })), spent = rs.reduce((a, x) => a + (x.u ? cost(x.used, x.u) : 0), 0);
+          if (spent + queue.reduce((a, x) => a + x.usd, 0) + halves.reduce((a, x) => a + x.usd, 0) <= budget) { splits++; queue.unshift(...halves); continue; }
+          fail(p, `${r.why}; not split: the halves would exceed max_budget_usd`); first ||= r; continue;
+        }
         let obj = null, why = r.ok ? '' : r.why || r.status;
         if (r.ok) { try { obj = JSON.parse(r.found); } catch { /* extract-json gave text that is not an object */ } if (!obj || typeof obj !== 'object' || Array.isArray(obj)) { obj = null; why = 'the answer was not a JSON object'; } }
         const arr = (k) => (obj && Array.isArray(obj[k]) ? obj[k] : []);
@@ -361,20 +369,20 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
           const got = new Set([...arr('requirements').map((x) => /^[0-9a-f]{8}/.exec(String(x?.id))?.[0]), ...arr('not_requirements').map((x) => x?.cid)]), missing = p.cids.filter((c) => !got.has(c)).length;
           if (missing > p.cids.length * 0.2) { obj = null; why = `${missing} of ${p.cids.length} blocks were not answered`; }
         }
-        if (!obj) { failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: p.cids }), reason: why }); first ||= r.ok ? { status: 'failed', reason: '', why } : r; if (r.status === 'timeout') break; continue; }
+        if (!obj) { fail(p, why); first ||= r.ok ? { status: 'failed', reason: '', why } : r; if (r.status === 'timeout') break; continue; }
+        ok++;
         if (p.cids) merged.requirements.push(...arr('requirements')), merged.not_requirements.push(...arr('not_requirements'));
         else merged.unit_findings.push(...arr('unit_findings'));
         merged.docs_reviewed.push(...arr('docs_reviewed').filter((d) => !merged.docs_reviewed.includes(d)));
         merged.not_reviewed.push(...arr('not_reviewed'));
       }
       writeUsage(rs);
-      const unsent = plans.slice(rs.length); // a timeout stops the run: the parts not started are not audited either
-      for (const p of unsent) failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: p.cids }), reason: 'not started: the review timed out' });
-      if (failed.length === plans.length) return failEnd(first); // nothing usable at all: the run fails as one call would
+      for (const p of queue) fail(p, 'not started: the review timed out'); // a timeout stops the run: the parts not started are not audited either
+      if (!ok) return failEnd(first); // nothing usable at all: the run fails as one call would
       w('findings.json', JSON.stringify(merged));
-      w('scan-parts.json', JSON.stringify({ calls: rs.length, failed, dropped }));
+      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), failed, dropped }));
       if (!failed.some((f) => f.part === 'units')) w('pack-cut.txt', split.packCut.map((x) => `${x}\n`).join('')); // the unit part's pack (what the unit findings may rely on)
-      notes.push(`scan in ${rs.length} calls${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
+      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
       for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);
       return end('success');
     }

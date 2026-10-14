@@ -654,6 +654,40 @@ test('scan parts: a block call with invalid JSON loses only its own blocks (list
   assert.ok(JSON.parse(s.h.file('usage.json')).totalCostUsd > 0, 'the failed reply is paid for and counted');
 });
 
+const overflow = () => good({ stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"requirements": [' }] });
+const listed = (req) => new Set([...req.body.messages[0].content.matchAll(/^([0-9a-f]{8})\tdocs\/d\.md:1/gm)].map((m) => m[1])).size;
+
+test('scan parts: a block part whose reply hit max_output_tokens is split in halves (recursively) and every block is audited', async (t) => {
+  const s = scanRepo(t, 25);
+  s.answers((req, ok) => (!/name="audit-units\.txt"/.test(req.body.messages[0].content) && listed(req) > 6 ? overflow() : ok(req)));
+  await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: '50' });
+  const f = JSON.parse(s.h.file('findings.json')), parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.deepEqual(f.requirements.map((r) => r.id).sort(), s.cids.slice().sort());
+  assert.deepEqual(blockCalls(s.h).map(listed), [20, 10, 5, 5, 10, 5, 5, 5]); // 20 -> 10+10 -> (10 -> 5+5) ...; the 5-block part was not split
+  assert.deepEqual(parts, { calls: 9, splits: 3, failed: [], dropped: [] });
+  assert.match(s.h.file('engine-notes'), /scan in 9 calls \(3 parts split after max_output_tokens\)/);
+});
+
+test('scan parts: a one-block part that still overflows fails as before; the split stops when the next calls would exceed the budget', async (t) => {
+  const a = scanRepo(t, 21);
+  a.answers((req, ok) => (/text 00000001\b/.test(req.body.messages[0].content) ? overflow() : ok(req)));
+  await a.h.go({ GITHUB_WORKSPACE: a.root, MAX_BUDGET_USD: '50' });
+  const pa = JSON.parse(a.h.file('scan-parts.json'));
+  assert.deepEqual(pa.failed.map((x) => x.blocks), [[a.cids[0]]]);
+  assert.match(pa.failed[0].reason, /max_output_tokens/);
+  assert.equal(JSON.parse(a.h.file('findings.json')).requirements.length, 20);
+  const b = scanRepo(t, 25, { MODEL: 'claude-sonnet-5-5' });
+  const fat = (x) => ({ ...x, text: async () => { const j = JSON.parse(await x.text()); j.model = 'claude-sonnet-5-5'; j.usage.output_tokens = 32000; return JSON.stringify(j); } }); // every reply costs its worst case
+  b.answers((req, ok) => (!/name="audit-units\.txt"/.test(req.body.messages[0].content) && listed(req) > 6 ? fat(overflow()) : fat(ok(req))));
+  const ok = scanRepo(t, 25, { MODEL: 'claude-sonnet-5-5', MAX_BUDGET_USD: '50' });
+  ok.answers((req, o) => o(req));
+  await ok.h.go({ GITHUB_WORKSPACE: ok.root });
+  const sum = ok.h.calls.reduce((x, c) => x + api.worstCase('claude-sonnet-5-5', Buffer.byteLength(JSON.stringify(c.body.system || '')), Buffer.byteLength(c.body.messages[0].content), c.body.max_tokens).usd, 0); // the initial plan's worst case
+  await b.h.go({ GITHUB_WORKSPACE: b.root, MAX_BUDGET_USD: String(sum.toFixed(4)) });
+  const pb = JSON.parse(b.h.file('scan-parts.json'));
+  assert.ok(pb.failed.some((x) => /not split: the halves would exceed max_budget_usd/.test(x.reason)), JSON.stringify(pb));
+});
+
 test('scan parts: a failing unit call keeps the block answers; all calls failing fails the run like one call', async (t) => {
   const a = scanRepo(t, 45);
   a.answers((req, ok) => (/name="audit-units\.txt"/.test(req.body.messages[0].content) ? err(401, 'authentication_error', 'invalid x-api-key') : ok(req)));
