@@ -2554,6 +2554,26 @@ test('layout: gap, mismatch and not-assessed rows say what to do and link their 
   assert.doesNotMatch(s.slice(0, s.indexOf('<details>')), /### ❌ Spec mismatches/, 'a posted mismatch is a row, not a second list');
 });
 
+test('layout: criteria split from one bullet show one row (worst status, each finding linked once); evidenced lines collapse and skip a sentence that has a ❌/❔ row', () => {
+  const same = { quote: 'One bullet, many criteria.' };
+  const d = report({
+    requirements: [reqOf('X1', ['O1'], same), reqOf('X2', ['O2'], same), reqOf('X3', ['O3'], same), reqOf('X4', ['O4'], { quote: 'Evidenced twice.' }), reqOf('X5', ['O5'], { quote: 'Evidenced twice.' }), reqOf('X6', ['O6'], { quote: 'Both.' }), reqOf('X7', ['O7'], { quote: 'Both.' }), reqOf('X8', ['O8'], { quote: 'Alone.' })],
+    coverage: [row('unknown', { id: 'O1', reason: 'the helper is not in the diff' }), row('missing_test', { id: 'O2' }), row('missing_test', { id: 'O3' }), row('covered', { id: 'O4' }), row('covered', { id: 'O5' }), row('covered', { id: 'O6' }), row('unknown', { id: 'O7', reason: 'cannot see the test' }), row('covered', { id: 'O8' })],
+    findings: [finding('missing_test', { obligation_ids: ['O2'], title: 'T2', line: 2 }), finding('missing_test', { obligation_ids: ['O3'], title: 'T3', line: 3 })],
+  });
+  const posted = d.findings.map((f, i) => ({ f, url: `https://github.com/o/r/pull/1#discussion_r${i + 1}` }));
+  const s = post.buildSummary({ data: d, posted, blob: BLOB }), vis = visibleOf(s), details = s.slice(s.indexOf('<details>'));
+  assert.equal(vis.split('\n').filter((l) => l.includes('One bullet, many criteria.')).join('\n'), '| ❌ Gap | One bullet, many criteria. | Add the test ([finding](https://github.com/o/r/pull/1#discussion_r1), [finding](https://github.com/o/r/pull/1#discussion_r2)) |');
+  assert.equal((vis.match(/Both\./g) || []).length, 1);
+  assert.match(vis, /\| ❔ Unconfirmed \| Both\. \| Point to the unit test or add one: cannot see the test \|/);
+  assert.match(vis, /### ❌ Requirements to check \(2\)/, 'the heading counts merged rows');
+  assert.match(vis, /\| Requirements \(8\) \|/, 'the counts table counts criteria');
+  assert.equal((details.match(/^- ✅ Evidenced: /gm) || []).length, 2);
+  assert.equal((details.match(/Evidenced twice\./g) || []).length, 1);
+  assert.doesNotMatch(details, /Evidenced: \*\*X\d+\*\* Both\./);
+  assert.match(details, /\*\*Evidenced criteria \(2\)\*\*/);
+});
+
 test('layout: a finding that was not posted keeps its full text; the skeleton of the top three stays visible, a long text folds into a per-item details', () => {
   const body = (n) => `Sentence ${n}. ${'More explanation. '.repeat(30)}\n\n\`\`\`js\ntest('case ${n}', () => {\n  assert.equal(f(${n}), ${n});\n});\n\`\`\``;
   const items = Array.from({ length: 4 }, (_, i) => ({ f: finding('weak_test', { title: `ROUTED ${i}`, body: body(i), line: i + 1 }), why: 'not in a diff hunk' }));

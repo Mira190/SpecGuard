@@ -21,6 +21,7 @@ If the references are already included below this skill, do not read them again.
   - `test-candidates.txt`: per changed file, existing test files most likely to cover it (same name, mention the file, same directory). Start the evidence search there and keep searching other test directories when they do not settle an obligation.
   - `leads.txt` (when present), changed symbols with no test reference: a missing_test candidate only if the symbol is behaviour under review; verify with your own search, never report it unchecked.
   - `leads.txt`, possible mirror assertions: a weak_test candidate only if the expected value really comes from the code under test; read the constant and the requirement before deciding.
+  - `leads.txt`, weak? assertions (existence, truthiness or type only): a weak_test candidate on that line unless the test pins a value of the same result elsewhere; read the test before deciding.
 <!-- mode:local -->
 - **Local mode**: no context directory. Diff against the default branch, find rule files yourself, and take requirements from the PR body, issue references in commit messages and the PR body (not only "Closes #N"), and spec or ADR files under `docs/` or `specs/` that the change touches or names. Print the report from `references/output.md`.
 <!-- /mode -->

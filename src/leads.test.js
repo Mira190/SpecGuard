@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { run, declName, expectedArgs, mirrorCandidates } = require('./leads.js');
+const { run, declName, expectedArgs, mirrorCandidates, weakCandidates } = require('./leads.js');
 
 // Temp repo: base commit, then head commit; ctx gets diff.patch and files.txt like collect.sh writes them. Returns the leads as {section: [lines]}.
 function leads(t, baseFiles, headFiles, ctxFiles = {}, env = {}) {
@@ -91,6 +91,40 @@ test('no leads, no output; a focused review only gets leads for the chosen files
   assert.equal(leads(t, {}, { 'docs/a.md': 'x\n', 'cfg.json': '{}\n' }).out, '');
   const { sections } = leads(t, {}, { 'src/a.js': 'export function aaaThing() {\n  return 1;\n}\n', 'src/b.js': 'export function bbbThing() {\n  return 1;\n}\n' }, { 'focus.txt': 'src/b.js\t5\treason\n' });
   assert.deepEqual(sections[NO], ['src/b.js:1 bbbThing']);
+});
+
+const WEAK = 'Weak assertions (only existence, truthiness or type is checked)';
+const weak = (src) => weakCandidates(src).map((c) => `${c.line} ${c.x} ${c.what}`);
+
+test('weak assertions: every language form is a lead', () => {
+  assert.deepEqual(weak("test('a', () => {\n  const total = f();\n  assert.ok(total);\n  assert(total2);\n  assert.ok(total3, 'msg');\n  assert.notEqual(r, null);\n  assert.notStrictEqual(r2, undefined);\n  assert(typeof r3 === 'number');\n  assert.ok(!!r4);\n});\n"),
+    ['3 total truthy', '4 total2 truthy', '5 total3 truthy', '6 r exists', '7 r2 exists', '8 r3 type', '9 r4 truthy']);
+  assert.deepEqual(weak("it('a', () => {\n  expect(f(1)).toBeDefined();\n  expect(a).toBeTruthy();\n  expect(b).not.toBeNull();\n  expect(c).not.toBeUndefined();\n  expect(d).toBeInstanceOf(Foo);\n  expect(e).toBeTypeOf('number');\n});\n"),
+    ['2 f(1) exists', '3 a truthy', '4 b exists', '5 c exists', '6 d type', '7 e type']);
+  assert.deepEqual(weak("def test_a():\n    assert x\n    assert y is not None\n    assert z, 'msg'\n    self.assertIsNotNone(r)\n    self.assertTrue(q)\n    self.assertTrue(s is not None)\n"),
+    ['2 x truthy', '3 y exists', '4 z truthy', '5 r exists', '6 q truthy', '7 s exists']);
+  assert.deepEqual(weak('@Test\nvoid a() {\n  assertNotNull(r);\n  assertNotNull("msg", r2);\n  assertTrue(s != null);\n}\n'), ['3 r exists', '4 r2 exists', '5 s exists']);
+  assert.deepEqual(weak('func TestA(t *testing.T) {\n\tif got == nil {\n\t\tt.Fatal("x")\n\t}\n\tif err == nil {\n\t\tt.Fatal("y")\n\t}\n\tassert.NotNil(t, v)\n}\n'), ['2 got exists', '8 v exists']);
+  assert.deepEqual(weak('[Fact]\npublic void A() {\n  Assert.IsNotNull(r);\n  Assert.NotNull(r2);\n}\n'), ['3 r exists', '4 r2 exists']);
+});
+
+test('weak assertions: value assertions, toBeNull, predicates and comments are not leads; a value on the same result in the same test excludes it', () => {
+  assert.deepEqual(weak("test('a', () => {\n  assert.ok(total);\n  assert.equal(total, 40);\n});\ntest('b', () => {\n  assert.ok(total);\n});\n"), ['6 total truthy']);
+  assert.deepEqual(weak("it('a', () => {\n  expect(f(1)).toBeDefined();\n  expect(f(1)).toBe(5);\n});\nit('b', () => {\n  expect(g()).toBeDefined();\n  expect(h()).toBe(5);\n});\n"), ['6 g() exists']);
+  assert.deepEqual(weak('def test_a():\n    assert x is not None\n    assert x == 3\ndef test_b():\n    assert y\n    assert x == 3\n'), ['5 y truthy']);
+  assert.deepEqual(weak('@Test void a() { assertNotNull(r); assertEquals(1, r.size()); }\n'), []);
+  assert.deepEqual(weak("test('a', () => {\n  expect(a).toBeNull();\n  expect(b).toBeUndefined();\n  expect(c).toBe(1);\n  assert.ok(isValid(x));\n  assert.ok(x === 5);\n  assert.ok(true);\n  assert.equal(a, 1);\n  // assert.ok(z);\n  const re = /x/; re.test(y);\n});\n"), []);
+});
+
+test('weak assertions: lead lines in changed and candidate tests, capped', (t) => {
+  const { sections, out } = leads(t, {}, { 'src/discount.js': 'exports.f = (x) => x;\n', 'src/discount.test.js': "test('a', () => {\n  const total = f(1);\n  assert.ok(total);\n});\n" });
+  assert.deepEqual(sections[WEAK], ['weak? src/discount.test.js:3 — assert.ok(total); only checks that total is truthy; nothing pins its value']);
+  const many = Array.from({ length: 40 }, (_, i) => `test('t${i}', () => {\n  assert.ok(value${i});\n});\n`).join('');
+  const big = leads(t, {}, { 'src/a.test.js': many });
+  assert.equal(big.sections[WEAK].length, 16);
+  assert.match(big.sections[WEAK][15], /^\(25 more not listed\)$/);
+  assert.ok(Buffer.byteLength(big.out) <= 5.5 * 1024);
+  assert.ok(out.includes('Weak assertions'));
 });
 
 test('helpers: declaration forms, assertion argument extraction', () => {

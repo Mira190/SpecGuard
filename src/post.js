@@ -720,6 +720,14 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
   const markers = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}<!-- specguard:status=${state || (inc ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n`;
   const act = acts(all), rows = data && !failed ? criteriaOf(data, all) : [], todo = rows.filter((x) => x.kind !== 'evidenced');
+  // One displayed sentence = one row: the model often splits a PR-body bullet into several criteria that show the same sentence. Counts: the counts table and the verdict count
+  // criteria (as the model assessed them); the "Requirements to check (N)" heading counts the merged rows actually shown.
+  const sentOf = (x) => mdPlain(x.r.sentence || x.r.quote).replace(/\s+/g, ' ').trim() || `#${x.r.id}`;
+  const RANK = { mismatch: 0, gap: 1, unassessed: 2, check: 2 }, groups = new Map();
+  for (const x of todo) { const k = sentOf(x); groups.set(k, [...(groups.get(k) || []), x]); }
+  const merged = [...groups.values()].map((g) => ({ ...g.reduce((a, b) => (RANK[b.kind] < RANK[a.kind] ? b : a)), grp: g }));
+  const todoKeys = new Set(groups.keys()), seenEv = new Set();
+  const evidenced = rows.filter((x) => x.kind === 'evidenced' && !todoKeys.has(sentOf(x)) && !seenEv.has(sentOf(x)) && seenEv.add(sentOf(x))); // a sentence with a ❌/❔ row is not also "evidenced"
   const checks = todo.filter((x) => x.kind === 'unassessed' || x.kind === 'check').length, isClean = !!data && noGaps({ findings: [], ...data }) && !inc && !reduced;
   const changed = !!data && reqChanged(data);
 
@@ -783,8 +791,9 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     listOf('❌ Weak unit tests', ['weak_test'], 'More weak unit tests');
     // a posted mismatch is a row below and a comment; one that was not posted carries its full text here, since no comment holds it
     listOf('❌ Spec mismatches', ['spec_mismatch'], 'More spec mismatches', true);
-    if (todo.length) {
-      const link = (x) => { const u = x.f && (urls.get(x.f) || pin(x.f, blob)); return u ? ` ([finding](${/^https:\/\//.test(u) ? parens(u) : u}))` : ''; };
+    if (merged.length) {
+      const url = (x) => { const u = x.f && (urls.get(x.f) || pin(x.f, blob)); return u ? `[finding](${/^https:\/\//.test(u) ? parens(u) : u})` : ''; };
+      const link = (x) => (url(x) ? ` (${url(x)})` : '');
       const ask = 'Point to the unit test or add one';
       const why = (x) => { // a short human reason; the validator's own wording is never shown
         const t = String(x.higher ? 'only higher-level tests cover it.' : x.cs.find((c) => c?.status === 'unknown' && c.reason)?.reason || '').replace(/^(?:Not assessed|Unconfirmed):\s*/i, '').trim();
@@ -792,11 +801,16 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
       };
       // each fact once: a finding listed above is only pointed to; its title stays here only when no visible list holds it (overflow, or a posted mismatch)
       const act = (x, say) => (x.f && listed.has(x.f) ? `${say}${link(x) || '.'}` : x.f ? `${say}: ${cell(title1(x.f.title), 110)}${link(x)}` : `${say}.`);
-      const next = (x) => (x.kind === 'gap' ? act(x, x.f?.kind === 'weak_test' ? 'Strengthen the test' : 'Add the test') : x.kind === 'mismatch' ? act(x, 'Fix the code or the requirement') : cell(`${ask}${why(x)}`, 160));
-      const row = (ids) => (x) => `| ${x.kind === 'gap' ? '❌ Gap' : x.kind === 'mismatch' ? '❌ Mismatch' : '❔ Unconfirmed'} | ${ids ? `**${cell(x.r.id, 40)}** ` : ''}${cell(words(mdPlain(x.r.sentence || x.r.quote), 120))} | ${next(x)} |\n`;
+      const next = (x) => {
+        if (x.kind === 'unassessed' || x.kind === 'check') return cell(`${ask}${why(x.grp.find((y) => RANK[y.kind] === 2 && why(y) !== '.') || x)}`, 160); // the first human reason in the group
+        const say = x.kind === 'mismatch' ? 'Fix the code or the requirement' : x.f?.kind === 'weak_test' ? 'Strengthen the test' : 'Add the test';
+        const links = [...new Set(x.grp.filter((y) => y.kind === x.kind).map(url).filter(Boolean))]; // each finding once
+        return links.length > 1 ? `${say} (${links.join(', ')})` : act(x, say);
+      };
+      const row = (ids) => (x) => `| ${x.kind === 'gap' ? '❌ Gap' : x.kind === 'mismatch' ? '❌ Mismatch' : '❔ Unconfirmed'} | ${ids ? `**${x.grp.map((y) => cell(y.r.id, 40)).join(', ')}** ` : ''}${cell(words(sentOf(x), 120))} | ${next(x)} |\n`;
       const th = '| Status | Requirement | What to do |\n|---|---|---|\n';
-      add(vis, `### ${todo.some((x) => x.kind === 'gap' || x.kind === 'mismatch') ? '❌' : '❔'} Requirements to check (${todo.length})\n\n${th}`, todo.slice(0, ROW_CAP).map(row(false)), todo.length > ROW_CAP ? `\n+${todo.length - ROW_CAP} more in Details.\n\n` : '\n');
-      detail(`**More criteria to check (${todo.length - ROW_CAP})**\n\n${th}`, todo.slice(ROW_CAP, ROW_CAP + MORE_CAP).map(row(true)), todo.length > ROW_CAP + MORE_CAP ? `\n+${todo.length - ROW_CAP - MORE_CAP} more not shown.\n\n` : '\n');
+      add(vis, `### ${merged.some((x) => x.kind === 'gap' || x.kind === 'mismatch') ? '❌' : '❔'} Requirements to check (${merged.length})\n\n${th}`, merged.slice(0, ROW_CAP).map(row(false)), merged.length > ROW_CAP ? `\n+${merged.length - ROW_CAP} more in Details.\n\n` : '\n');
+      detail(`**More criteria to check (${merged.length - ROW_CAP})**\n\n${th}`, merged.slice(ROW_CAP, ROW_CAP + MORE_CAP).map(row(true)), merged.length > ROW_CAP + MORE_CAP ? `\n+${merged.length - ROW_CAP - MORE_CAP} more not shown.\n\n` : '\n');
     }
     listOf('❌ Coding standard violations', ['standard'], 'More standards violations');
     listOf('❌ Tests to move down', ['pushdown'], 'More tests to move down');
@@ -809,7 +823,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const addPre = () => { if (!preDone && !failed && pre.length) detail('**Pre-existing drift (not caused by this PR)**\n\n', pre.map((f, i) => `${findingBlock({ f }, blob, i, { icon: '', flat: true })}\n`)); preDone = true; };
   if (!failed && data) {
     const covById = new Map(data.coverage.map((c) => [c.id, c]));
-    detail(`**Evidenced criteria (${rows.length - todo.length})**\n\n`, rows.filter((x) => x.kind === 'evidenced').slice(0, 50).map((x) => `- ✅ Evidenced: **${cell(x.r.id, 40)}** ${cell(words(mdPlain(x.r.sentence || x.r.quote), 120))}\n`), rows.length - todo.length > 50 ? `- +${rows.length - todo.length - 50} more\n\n` : '\n');
+    detail(`**Evidenced criteria (${evidenced.length})**\n\n`, evidenced.slice(0, 50).map((x) => `- ✅ Evidenced: **${cell(x.r.id, 40)}** ${cell(words(sentOf(x), 120))}\n`), evidenced.length > 50 ? `- +${evidenced.length - 50} more\n\n` : '\n');
     const std = data.standards, lay = data.layering;
     detail('**Coding standards and test layers**\n\n', [`- Coding standards: ${STD_WORD[std.status] || cell(std.status)}. ${cell(std.reason)}${std.sources.length ? ` Sources: ${std.sources.map((s) => `\`${cell(s)}\``).join(', ')}.` : ''}\n`, `- Test layers: ${lay.status === 'checked' ? 'reviewed' : 'not reviewed'}. ${cell(lay.reason)}\n`]);
     if (tooling && tooling.status !== 'not_configured') add(det, `**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`, (tooling.checks || []).map((c) => `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`), '\n');
