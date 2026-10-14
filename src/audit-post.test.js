@@ -137,8 +137,10 @@ test('verify: a bad test quote removes the evidence and covered becomes unknown'
   assert.match(code.note, /covered needs a code citation/);
 });
 
+// outside the test body: SpecGuard's own skip detector reads the span from a test declaration to the cited line
+const SKIP_FILES = { ...FILES, 'tests/skip.test.js': ['test.skip("repeat stays on", () => {', '  assert.equal(fire({ repeat: true }).on, true);', '});', 'test("repeat stays on, empty body", () => {', '});'] };
 test('verify: a skipped, empty or declaration-only test cannot carry covered (same rule as PR mode); a real assertion still does', () => {
-  const files = { ...FILES, 'tests/skip.test.js': ['test.skip("repeat stays on", () => {', '  assert.equal(fire({ repeat: true }).on, true);', '});', 'test("repeat stays on, empty body", () => {', '});'] };
+  const files = SKIP_FILES;
   const rd = (p) => files[p] || null;
   const at = (line) => verify(result([req({ tests: [{ path: 'tests/skip.test.js', line, quote: files['tests/skip.test.js'][line - 1], layer: 'unit' }] })]), { read: rd }).requirements[0];
   for (const line of [1, 2, 4]) {
