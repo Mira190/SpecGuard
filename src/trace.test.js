@@ -1012,7 +1012,7 @@ test('D criterion: a block changed in this PR is an S criterion only, with no D 
 
 // ---- D*: removed-literal anchor ----
 const ANCHOR_DOC = ['# Design', '', ...FILL.flatMap((f) => [f, '']), '## Reminders', '', 'Microphone silent for 10 seconds: a reminder card unfolds above the tray.', '',
-  'The ball is shown for 19 seconds after the card unfolds and the tray panel menu repeats.', '', 'The countdown before recording is 0-9 seconds.', '',
+  'The ball is shown for 19 seconds after the card unfolds and the tray panel menu repeats.', '', 'The countdown before recording is 0-9 seconds.', '', 'The countdown overlay is drawn with Fluent UI v9 tokens.', '',
   'Hotkey conflicts are reported: the key 「与『停止录制』冲突」 is shown in the tray menu panel.', '', 'A row MUST exist.', '', 'The tray MUST be hidden.', ''].join('\n');
 const anchorD = (t, path, base, head) => {
   const r = repo(t, { 'docs/design.md': ANCHOR_DOC, [path]: base }, { 'docs/design.md': ANCHOR_DOC, [path]: head });
@@ -1025,7 +1025,7 @@ test('D anchor: a removed number the block states with a shared term (silence/se
   assert.deepEqual(d.map((c) => [c.id, c.line, c.anchor]), [['D1', anLine('Microphone silent'), { removed: '10' }]]);
   assert.equal(d[0].hunks[0].path, 'src/engine/silence.ts');
 });
-test('D anchor: a removed single digit matches "0-9" but not "19"', (t) => {
+test('D anchor: a removed single digit matches "0-9" but not "19" or "v9"', (t) => {
   const d = anchorD(t, 'src/engine/settings.ts', 'const c = int(o.countdown, 0, 9, 3)\n', 'const c = int(o.countdown, 0, 5, 3)\n');
   assert.deepEqual(d.map((c) => [c.line, c.anchor]), [[anLine('The countdown'), { removed: '9' }]]);
 });
