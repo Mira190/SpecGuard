@@ -150,3 +150,14 @@ test('enclosingName: the definition around a cited line, for the common shapes',
   assert.equal(at('func ServeFile(w int) {\n\ta()\n\tb()\n}', 3), 'ServeFile');
   assert.equal(at('a();\nb();', 2), null);
 });
+
+test('the guard follows a delegated helper: a guard line that calls a tested helper is a hit citing its test; builtins and untested names are not', (t) => {
+  const root = repo(t);
+  fs.writeFileSync(path.join(root, 'test/filename.test.ts'), "it('isDirectChild guards rename/delete against traversal', () => { assert.equal(E.isDirectChild('/a', '/a/../b'), false) })\n");
+  execFileSync('git', ['add', '.'], { cwd: root });
+  const covers = makeCoverGuard({ cwd: root });
+  const own = ["const ownFile = (p) => typeof p === 'string' && E.isDirectChild(dirOf(), p) && MEDIA_EXT.test(p)"];
+  assert.match(covers(own, 1), /^a delegated helper is tested: isDirectChild at test\/filename\.test\.ts:1$/);
+  assert.equal(covers(["const ok = (p) => p.includes('x') && list.map((a) => a.trim()).filter(Boolean).push(p)"], 1), null, 'builtins only');
+  assert.equal(covers(['const ownFile = (p) => E.untestedHelperName(p)'], 1), null, 'a helper no test mentions');
+});

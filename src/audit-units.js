@@ -15,6 +15,8 @@ const PER_UNIT_TESTS = 20, ROWS_KEPT = 100, LEADS = 3;
 const CODE = /\.(?:[cm]?[jt]sx?|py|go|java|kt|cs|rb|php|rs|swift|scala)$/i;
 // Not product code: examples, benchmarks, docs, generated or build output, config files, type declarations. ponytail: a name list; a repo that keeps product code in `examples/` narrows with scan_paths.
 const NOT_UNIT = /(^|\/)(?:examples?|samples?|demos?|benchmarks?|bench|docs?|dist|build|out|coverage|migrations?|node_modules|vendor|third_party|generated)\/|\.d\.[cm]?ts$|(^|\/)(?:[\w.-]*\.config|\.[\w-]*rc|gulpfile|Gruntfile|Rakefile|setup|conftest|__init__)\.[a-z]+$|\.(?:min|bundle)\./i;
+// Test infrastructure by name: a basename with a smoke/e2e/harness/runner/fixture/playwright/cypress token (runner-utils.js counts, testrunner.js does not), or a support/helpers dir under a test dir.
+const TEST_INFRA = /(^|\/)[^/]*(?<![a-z0-9])(?:smoke|e2e|harness|runners?|fixtures?|playwright|cypress)(?![a-z0-9])[^/]*$|(^|\/)(?:tests?|specs?|__tests__|e2e)\/(?:[^/]+\/)*(?:support|helpers)\//i;
 const sha8 = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 8);
 const comment = (l) => /^\s*(?:\/\/|#|\*|\/\*|--)/.test(l);
 const loc = (ls) => ls.filter((l) => l.trim() && !comment(l)).length;
@@ -72,7 +74,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const inScope = files.filter((e) => !skip(e.path) && (!scope || scope(e.path)));
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
   const testEntries = inScope.filter((e) => isTest(e.path)), tests = testEntries.map((e) => e.path).sort();
-  let cand = inScope.filter((e) => !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && e.size <= MAX_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
+  let cand = inScope.filter((e) => !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && !TEST_INFRA.test(e.path) && e.size <= MAX_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
   if (cand.length > MAX_UNITS_READ) { limits.push(`only the first ${MAX_UNITS_READ} of ${cand.length} source files were inventoried (narrow with scan_paths)`); cand = cand.slice(0, MAX_UNITS_READ); }
   const units = [];
   for (let i = 0; i < cand.length && !dl.over(); i += 300) {
