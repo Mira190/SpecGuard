@@ -32,6 +32,8 @@ Report `weak_test` on the assertion line when a test exercises the behaviour but
 
 Report each weak assertion line as its own finding (one line each), never merged into one finding on the last of them, so the developer can fix each.
 
+Weak means the assertion would still pass for a wrong value of the behaviour under test: truthiness, existence or type of the result itself, or an expected value computed by calling the implementation. A boolean helper that compares against explicit expected values (e.g. `assert.ok(has(args, '-c:v', 'mpeg4'))`, which checks an exact adjacent sequence), or an expected value written as constant arithmetic (`w: 20 * 2 + 20 * 0.6 * 2`), is a real check: at most an oracle-independence note, never `weak_test`.
+
 ## Mocks and seams
 
 Prefer mocks at system boundaries: external APIs, time, randomness, sometimes the DB or file system. An internal mock or a call-count assertion alone is not proof of a weak test: identify the missed behavioural regression and respect the repo's testing contract.
