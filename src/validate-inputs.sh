@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Config checks for the engine inputs (env: ENGINE (copilot or claude; auto is resolved before, by credential.js) MODEL EFFORT AUTO_TIER FAST_MODELS MAX_CREDITS MAX_BUDGET_USD CLAUDE_MODE MAX_OUTPUT_TOKENS TIMEOUT MAX_UNITS); fails the step with a clear error.
+# Config checks for the engine inputs (env: ENGINE (copilot or claude; auto is resolved before, by credential.js) MODEL EFFORT AUTO_TIER FAST_MODELS MAX_CREDITS MAX_BUDGET_USD CLAUDE_MODE MAX_OUTPUT_TOKENS TIMEOUT MAX_UNITS SCAN_BATCH_BLOCKS); fails the step with a clear error.
 die() { echo "::error::$1"; exit 1; }
 ENGINES=(copilot claude) # the engine allow-list: each name needs src/engines/NAME.sh (src/engines/README.md)
 if [[ -n ${ENGINE+x} ]]; then [[ " ${ENGINES[*]} " == *" $ENGINE "* ]] || die "engine must be one of: ${ENGINES[*]}"; fi
@@ -19,6 +19,8 @@ o="${MAX_OUTPUT_TOKENS:-32000}"
 [[ $o =~ ^[0-9]{4,6}$ ]] && ((10#$o >= 1000 && 10#$o <= 64000)) || die "max_output_tokens must be an integer from 1000 to 64000"
 u="${MAX_UNITS:-12}" # scan mode: units reviewed per run (audit-collect.js checks it too)
 [[ $u =~ ^[0-9]{1,3}$ ]] && ((10#$u >= 1 && 10#$u <= 100)) || die "max_units must be an integer from 1 to 100"
+sb="${SCAN_BATCH_BLOCKS:-20}" # scan mode, claude api: blocks per call
+[[ $sb =~ ^[0-9]{1,3}$ ]] && ((10#$sb >= 1 && 10#$sb <= 100)) || die "scan_batch_blocks must be an integer from 1 to 100"
 t="${TIMEOUT:-12}"
 [[ $t =~ ^[0-9]{1,4}$ ]] && ((10#$t > 0)) || die "review_timeout_minutes must be a positive integer"
 exit 0

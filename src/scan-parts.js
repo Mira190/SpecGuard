@@ -1,0 +1,53 @@
+// Scan parts for the claude api engine (src/engines/claude-api.js): one Messages call cannot answer a large design document and many units at once.
+// plan() splits the scan's context into a unit part (audit-units.txt: units + their matched tests) and block parts (at most `batch` candidate blocks each: their audit-candidates.txt and audit-evidence.txt rows
+// and a pack of the files those rows cite). Each part's prompt is rendered by prompt.js from a filtered copy of the ctx files (a temp dir), not by a second prompt builder.
+// -> null when the blocks fit one call (<= batch; or none), else { parts: [{ prompt, pack, cids? }], packCut }: the unit part first, then the block parts in candidate order (the rotation priority); cids = the part's blocks.
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const ROW = /^[0-9a-f]{8}\t/;
+const lines = (s) => s.replace(/\r\n/g, '\n').split('\n').filter(Boolean);
+
+function plan({ ctx, root, batch, limit, schemaFile, contextPack, assembleAudit }) {
+  const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return ''; } };
+  const cands = lines(rd('audit-candidates.txt')).filter((l) => ROW.test(l));
+  if (cands.length <= batch) return null; // ponytail: a document that fits one call keeps the single call; the unit pack and the blocks then share it
+  const evidence = lines(rd('audit-evidence.txt')), units = rd('audit-units.txt');
+  let meta = {}; try { meta = JSON.parse(rd('audit-meta.json')); } catch { /* the prompt falls back to its defaults */ }
+  const skillDir = path.join(__dirname, '..', 'skills', 'spec-audit'), out = [];
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-part-'));
+  const render = (files, m) => {
+    for (const f of fs.readdirSync(tmp)) fs.rmSync(path.join(tmp, f), { force: true });
+    for (const [n, s] of Object.entries({ 'standards.txt': rd('standards.txt'), 'test-layout.txt': rd('test-layout.txt'), ...files })) if (s && s.trim()) fs.writeFileSync(path.join(tmp, n), s);
+    fs.writeFileSync(path.join(tmp, 'audit-meta.json'), JSON.stringify(m));
+    return assembleAudit({ skillDir, ctxDir: tmp, schemaPath: schemaFile }).split(tmp.replace(/\\/g, '/')).join(ctx.replace(/\\/g, '/'));
+  };
+  const pack = () => { try { return contextPack(tmp, root, limit); } catch { return { text: '', note: '', notWhole: [] }; } };
+  let packCut = [];
+  try {
+    if (units.trim()) {
+      const { candidates, candidates_listed, ...m } = meta;
+      const prompt = render({ 'audit-units.txt': units }, m), p = limit > 0 ? pack() : { text: '', note: '', notWhole: [] };
+      packCut = p.notWhole;
+      out.push({ prompt, pack: p });
+    }
+    const { units: _u, max_units, ...bm } = meta;
+    for (let i = 0; i < cands.length; i += batch) {
+      const rows = cands.slice(i, i + batch), cids = rows.map((l) => l.split('\t')[0]), set = new Set(cids), ev = evidence.filter((l) => set.has(l.split('\t')[0]));
+      const prompt = render({ 'audit-docs.txt': rd('audit-docs.txt'), 'audit-candidates.txt': rows.join('\n') + '\n', 'audit-evidence.txt': ev.join('\n') }, { ...bm, candidates: cids.length, candidates_listed: cids.length });
+      // the pack: the files the evidence rows cite (code, each with the tests found for the same block) via the unit machinery of contextPack
+      const tests = new Map(), at = (l) => { const x = l.split('\t')[2] || ''; return x.slice(0, x.lastIndexOf(':') > 0 ? x.lastIndexOf(':') : x.length); };
+      for (const cid of cids) {
+        const mine = ev.filter((l) => l.startsWith(`${cid}\t`)), code = mine.filter((l) => l.split('\t')[1] === 'code').map(at), ts = mine.filter((l) => l.split('\t')[1] === 'test').map(at);
+        for (const c of code.length ? code : ts) { const s = tests.get(c) || new Set(); if (code.length) ts.forEach((t) => s.add(t)); tests.set(c, s); }
+      }
+      let p = { text: '', note: '', notWhole: [] };
+      if (limit > 0) { fs.writeFileSync(path.join(tmp, 'audit-units.txt'), [...tests].map(([f, s], k) => `b${k}\t${f}\t0\tcited\t${s.size ? [...s].join(', ') : 'none'}\t-`).join('\n') + '\n'); p = pack(); }
+      out.push({ prompt, pack: p, cids });
+    }
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  return { parts: out, packCut };
+}
+
+module.exports = { plan };
