@@ -46,6 +46,10 @@ test('k1 ownFile: a missing_test on a wrapper whose delegate (isDirectChild) is 
   assert.equal(r.pass, true, JSON.stringify(r));
   assert.deepEqual(posted.map((c) => c.line), [11]);
   assert.match(summary, /a delegated helper is tested: isDirectChild at eval-sandbox\/k1\/test\/filename\.test\.js:\d+/, 'the downgrade names its evidence');
+  // the real collect.sh keys the PR text it fetched (what the model reads) and post records that key, not the event payload
+  const c = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases', 'k1', 'case.json'), 'utf8')), key = require('../src/preflight').reqKey({ title: c.pr_title, body: c.pr_body });
+  assert.equal(fs.readFileSync(path.join(out, 'k1', 'ctx', 'pr-req-key.txt'), 'utf8'), key);
+  assert.ok(summary.includes(`<!-- specguard:req=${key} -->`), 'the summary records the collected requirements key');
 });
 
 const K2 = 'eval-sandbox/k2/toolbox.test.js', K2SRC = 'eval-sandbox/k2/toolbox.js';

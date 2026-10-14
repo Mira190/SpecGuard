@@ -325,6 +325,8 @@ if (require.main === module) {
         const view = (fields) => gh(['issue', 'view', String(n), '--repo', repo, '--json', fields]);
         try { return view('title,body,url,labels,comments'); } catch { return view('title,body,url'); } // labels and comments are extras: never the reason an issue is unreadable
       } });
+    // the PR text the model reads, keyed only once collection succeeded: post records this key, not the (possibly stale) event payload; a failed write only falls back
+    try { fs.writeFileSync(path.join(env.CTX, 'pr-req-key.txt'), require('./preflight').reqKey(pr)); } catch {}
   } catch {
     result = { text: 'none', status: 'unavailable', sources: [], limitations: [gap('PR requirements could not be loaded; review is limited to changed behaviour.')], documents: [], criteria: [] };
   }

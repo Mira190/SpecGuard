@@ -560,3 +560,45 @@ test('summary: a gap on a higher_level row asks for a component or integration t
   assert.match(md, /Riskiest units \(top 15 of/);
   assert.equal((md.match(/\| \[src\/js\/f\d+\.js\]/g) || []).length, 15);
 });
+
+// ---- scan mode with the real cover guard (the PR-mode twin is eval/kite-fp.test.js) ----
+const addFiles = (w, files) => { // extra tracked files in the temp repo: the guard greps git
+  for (const [f, ls] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(w.root, f)), { recursive: true }); fs.writeFileSync(path.join(w.root, f), ls.join('\n') + '\n'); }
+  execFileSync('git', ['add', '.'], { cwd: w.root }); execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-m', 'y'], { cwd: w.root, stdio: 'ignore' });
+};
+const scanFinding = (id, files, p, line, title) => ({ unit: id, kind: 'missing_test', path: p, line, quote: files[p][line - 1].trim(), title, body: 'No test checks it.', skeleton: "it('works', () => {\n  assert.equal(f(1), 2);\n});" });
+
+test('run: scan mode with the real guard downgrades a wrapper that delegates to a unit-tested helper, and keeps the untested one (recall control)', async (t) => {
+  const extra = {
+    'src/engine/filename.js': ['function isDirectChild(dir, p) {', '  return p.startsWith(dir);', '}', 'function labelOf(name) {', '  return name.trim();', '}'],
+    'test/filename.test.js': ["it('is a direct child', () => {", "  assert.ok(isDirectChild('a/', 'a/b'));", '});'],
+    'src/app.js': ["const ownFile = (p) => typeof p === 'string' && E.isDirectChild(dirOf(), p) && MEDIA_EXT.test(p);", '', '', '', '', "const titleOf = (clip) => 'Kite - ' + E.labelOf(clip.name);"],
+  };
+  const w = workspace(t); addFiles(w, extra);
+  const A = unitId('src/app.js');
+  w.put('audit-units.txt', [A, 'src/app.js', 30, 'no test', 'none', '-'].join('\t') + '\n');
+  w.put('audit-inventory.json', INV({ rows: [ROW(A, 'src/app.js', 30, 'no test', [])], selected: { units: 1, without_tests: 1, skipped_tests: 0, tests_without_assertion: 0, weak_assertions: 0 } }));
+  const r = await post(t, { w, files: { 'findings.json': result([scanFinding(A, extra, 'src/app.js', 1, 'ownFile is untested'), scanFinding(A, extra, 'src/app.js', 6, 'titleOf is untested')]), 'audit-units.txt': [A, 'src/app.js', 30, 'no test', 'none', '-'].join('\t') + '\n' } });
+  const rows = JSON.parse(fs.readFileSync(path.join(w.ctx, 'audit.json'), 'utf8')).unit_findings;
+  assert.equal(rows.length, 2);
+  const [own, title] = rows;
+  assert.equal(own.low, true);
+  assert.match(own.lowWhy, /a delegated helper is tested: isDirectChild at test\/filename\.test\.js:\d+/);
+  assert.equal(title.low, false, 'labelOf has no test: still a deterministic gap');
+  assert.match(r.calls.summary, /\*\*❌ 1 unit test gap in the /);
+});
+
+test('run: TEST_PATHS reaches the scan post step: a file under a non-test directory then counts as a test that already holds the literal', async (t) => {
+  const MSG = 'order total must be positive';
+  const extra = { 'src/pay.js': [`if (t <= 0) throw new Error('${MSG}');`, 'exports.ok = 1;'], 'qa/checks/orders.js': ['// expects', `check('${MSG}');`] };
+  const P = unitId('src/pay.js');
+  const run = async (env) => {
+    const w = workspace(t); addFiles(w, extra);
+    await post(t, { w, env, files: { 'findings.json': result([scanFinding(P, extra, 'src/pay.js', 1, 'pay rejects a bad total')]), 'audit-units.txt': [P, 'src/pay.js', 30, 'no test', 'none', '-'].join('\t') + '\n' } });
+    return JSON.parse(fs.readFileSync(path.join(w.ctx, 'audit.json'), 'utf8')).unit_findings[0];
+  };
+  const on = await run({ TEST_PATHS: 'qa/checks' });
+  assert.equal(on.low, true);
+  assert.match(on.lowWhy, /a test may already cover this: qa\/checks\/orders\.js:2/);
+  assert.equal((await run({})).low, false, 'without TEST_PATHS the directory is not a test location');
+});
