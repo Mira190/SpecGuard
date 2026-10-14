@@ -3502,3 +3502,32 @@ test('requirements table: a gap row exists only when no visible list holds its f
   assert.match(weak, /\n  Requirement: "Criterion R1 text\."\n/);
   assert.doesNotMatch(weak, /\| Gap \|/);
 });
+
+test('a finding quoting a removed line without side LEFT is kept as LEFT with a note; a quote on neither side is dropped (Kite R2: a removed pre-start check was lost)', async (t) => {
+  const run = async (extra) => { const s = setup(t, report({ findings: [finding('missing_test', extra)] })); await post(s); return s; };
+  const s = await run({ line: 2, quote: 'old' });
+  assert.equal(s.calls.review.length, 0);
+  assert.match(s.calls.summary[0].body, /removed test or assertion/);
+  assert.match(s.calls.summary[0].body, /matches a removed line; set to LEFT line 2/);
+  const n = await run({ line: 2, quote: 'nowhere at all' });
+  assert.doesNotMatch(n.calls.summary[0].body, /removed test or assertion/);
+  assert.match(n.calls.summary[0].body, /Finding citation did not match/);
+});
+
+const withLead = async (t, lead, findings = [], coverage = []) => {
+  const s = setup(t, report({ coverage, findings }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+  fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), `${lead}\n`);
+  await post(s);
+  return s.calls.summary[0].body;
+};
+test('a removed-assertion lead the model ignored becomes one LEFT finding; an addressed or weakened lead adds nothing', async (t) => {
+  const ignored = await withLead(t, 'assertion removed: assert.equal(gone, 1); (test.js:2)');
+  assert.equal([...ignored.matchAll(/Assertion removed with no replacement/g)].length, 1);
+  assert.match(ignored, /assert\.equal\(gone, 1\);/);
+  const addressed = await withLead(t, 'assertion removed: assert.equal(gone, 1); (test.js:2)', [finding('weak_test', { path: 'test.js', line: 2, quote: evidence.quote })], [row('weak_test')]);
+  assert.doesNotMatch(addressed, /Assertion removed with no replacement/);
+  const weakened = await withLead(t, 'assertion weakened: assert.equal(gone, 1); → assert.ok(1); (test.js:2)');
+  assert.doesNotMatch(weakened, /Assertion removed with no replacement/);
+});

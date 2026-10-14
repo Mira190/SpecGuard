@@ -1540,7 +1540,17 @@ async function run({ github, context, core }) {
   const cands = [];
   const unanchored = []; // items that failed to post or anchor; they go to the summary
   const gate = (r) => { if (r.note) (data.validation_notes ||= []).push(r.note); return r.f; }; // quality gates only demote or trim; each leaves a validation note
-  for (let f of data.findings) {
+  // A removed assertion with no replacement is a fact (leads.txt), not a judgement: report it when no missing_test/weak_test finding cites that test file near it (either side).
+  const auto = [];
+  for (const m of (readCtx('leads.txt') || '').matchAll(/^assertion removed: .* \((.+):(\d+)\)$/gm)) {
+    const path_ = m[1], line = +m[2], ch = maps.get(path_)?.changed.LEFT;
+    if (auto.length >= 5 || !ch || !reviewable.has(path_) || !ch.has(line)) continue;
+    if (data.findings.some((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - line) <= 5)) continue;
+    const quote = ch.get(line).trim();
+    auto.push({ kind: 'missing_test', confidence: 'high', path: path_, side: 'LEFT', line, quote, title: 'Assertion removed with no replacement', obligation_ids: [], // ponytail: no coverage row; the LEFT path below never reads obligations
+      body: `The assertion \`${quote}\` was removed and nothing in this change pins the same behaviour. Restore it or pin the behaviour in another test.` });
+  }
+  for (let f of [...data.findings, ...auto]) {
     if (f.kind === 'spec_mismatch') {
       const req = data.requirements.find((r) => r.obligation_ids.includes(f.obligation_ids[0]));
       if (req && specPath(req.source) && req.ref) f = { ...f, source: `${req.source.replace(REMOVED, '')} ${req.ref}` };
@@ -1583,7 +1593,11 @@ async function run({ github, context, core }) {
     }
     const rl = readLines(f.path), d = snap(f, rl);
     if (d === null) {
-      addNote(`Finding citation did not match: ${f.path}:${f.line}.`);
+      const ch = f.kind !== 'standard' && maps.get(f.path)?.changed.LEFT, l = ch ? findLine(f.quote, f.line, (x) => ch.get(x), ch.keys()) : 0;
+      if (l) { // the quote is a removed line (the model omitted side LEFT): same path as a cited LEFT finding
+        addNote(`Finding citation ${f.path}:${f.line} matches a removed line; set to LEFT line ${l}.`);
+        unanchored.push({ f: { ...f, side: 'LEFT', line: l, quote: ch.get(l).trim() }, why: 'removed test or assertion; location is on the LEFT side of the diff' });
+      } else addNote(`Finding citation did not match: ${f.path}:${f.line}.`);
       continue;
     }
     const exact = [f.kind, f.path, f.line + d, f.title, f.body].join('\0'); // only a verbatim repeat is dropped
