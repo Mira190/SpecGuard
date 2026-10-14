@@ -158,4 +158,5 @@ test('removed or weakened assertions: a move, a reformat or a stronger replaceme
   assert.deepEqual(delta("-  assert.equal(f(1), 2);\n+  assert.equal(g(), 3);\n+  assert.equal(f(1), 2);\n"), []);
   assert.deepEqual(delta("-  assert.ok(f(1));\n+  assert.deepEqual(f(1), { a: 1 });\n"), []);
   assert.deepEqual(delta("-  // assert.equal(f(1), 2);\n+  const x = 1;\n"), []);
+  assert.deepEqual(delta("-  assert.ok(f(1));\n+  assert.ok(f( 1 ));\n"), [], 'a reformatted weak assertion was already weak: not weakened');
 });
