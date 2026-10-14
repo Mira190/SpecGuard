@@ -253,6 +253,26 @@ test('evidence: a block gets code and test locations (path:line and the matching
   assert.ok(metaOf(ctx).limitations.some((x) => /capped at 3 code and 3 test locations per block/.test(x)), 'the cap is stated');
 });
 
+test('evidence: a long table row whose sizes sit in one config line gets that line through two of its numbers, though UI files hold more of the row words', (t) => {
+  const ROW = ['# Windows', '', '| Main window | Regular window, 1000×740, minimum 820×600; 84 px navigation rail on the left (Record / Recordings / Toolbox / Settings) | Visible when idle and after stopping; hidden while recording, restored from the tray icon |', '',
+    '| Toolbar | 48 px tall with 12 px padding; buttons for Record / Recordings / Toolbox / Settings on the navigation rail, hidden while recording |', ''].join('\n');
+  const UI = ['// navigation rail on the left: Record, Recordings, Toolbox, Settings', "export const rail = ['Record', 'Recordings', 'Toolbox', 'Settings']",
+    '// main window visible when idle and after stopping; hidden while recording', 'export function onStop(win) { win.show() } // restored from the tray icon',
+    'export function onRecord(win) { win.hide() }', '// regular window with a navigation rail, recordings list and toolbox', ''].join('\n');
+  const filler = (s) => `${s}\n`.repeat(60);
+  const { root, ctx } = repo(t, {
+    'docs/design.md': ROW,
+    'electron/app.cjs': `${filler('// ipc plumbing for the capture process')}const w = mk('main', { width: 1000, height: 800, minWidth: 820, minHeight: 600, title: 'rec' }, true)\n${filler('// ffmpeg argument assembly')}`,
+    'electron/bar.cjs': `${filler('// codec probing helpers')}const bar = { height: 48, padding: 12 }\n${filler('// muxer flags')}`,
+    'src/ui/MainWindow.tsx': UI, 'src/ui/Tray.tsx': UI, 'src/ui/Rail.tsx': UI, 'src/ui/Nav.tsx': UI,
+  });
+  collect({ cwd: root, ctx, reqPaths: 'docs/design.md' });
+  const code = evRows(ctx).filter((e) => e[1] === 'code').map((e) => e[2]);
+  assert.ok(code.some((c) => /^electron\/app\.cjs:/.test(c)), code.join(' | '));
+  const bar = cidOfText(ctx, /Toolbar/), barCode = evRows(ctx).filter((e) => e[0] === bar && e[1] === 'code').map((e) => e[2]);
+  assert.ok(barCode.some((c) => /^electron\/bar\.cjs:/.test(c)), `two-digit values count: ${barCode.join(' | ')}`);
+});
+
 test('evidence: the time budget ends the search; every block says none and the limitation names it', (t) => {
   const { root, ctx } = repo(t, SCHED);
   const r = collect({ cwd: root, ctx, evidenceBudgetMs: 0 });
