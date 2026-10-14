@@ -1449,7 +1449,7 @@ async function run({ github, context, core }) {
   { // a missing_test claim whose error message or literal already sits in a tracked test file may be covered there: low confidence, not counted (src/test-map.js)
     const covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
     for (const f of data.findings) {
-      const hit = f.kind === 'missing_test' && f.confidence !== 'low' && covers(readLines(f.path), f.line);
+      const hit = f.kind === 'missing_test' && f.confidence !== 'low' && covers(readLines(f.path), f.line, f.path);
       if (hit) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
     }
   }
