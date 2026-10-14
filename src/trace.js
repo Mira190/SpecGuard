@@ -23,6 +23,7 @@ const BUDGET_MS = 40000, MAX_DEEP = 25, MAX_DELTAS = 20, MAX_LITS = 200, MAX_VAL
 const MAX_HUNKS = 60, CAND_CAP = 60 * 1024, PER_HUNK = 5, FLOOR = 0.3, SURE = 3, TOP_CAND = 3; // trace-candidates.json caps; a BM25 floor (share of the hunk best) applies after the first SURE candidates
 const BLOCK_PER_HUNK = 3, BLOCK_TOTAL = 20, BLOCK_MIN = 2; // descriptive-block candidates: per hunk, overall, and the BM25 score a block must exceed, in units of the idf of a term seen in one block (about two rare terms' worth; idf grows with the corpus)
 // Words that match every doc and every program: dropped from the hunk query when ranking descriptive blocks. ponytail: English and JS-flavoured, extend when another language floods the candidates.
+const GOVERN_MIN = 8, GOVERN_GAP = 0.95, MAX_GOVERNING = 3; // D criteria: BM25 score from 8 (live: 15.5 for the governing sentence, other normative items <= 2.6; the 2-term floor of a 40-block corpus is ~6.6); no second block within 5% of the best
 const BLOCK_STOP = new Set('the is it an of to in and or as are be for from with that this on by at not no use src ts tsx js cjs return const let var function async await export import true false null undefined string number boolean type interface class void if else'.split(' '));
 // Sample and vendored trees are never requirement-document candidates (a requirements_paths entry or a PR-named document still admits one).
 const FIXTURE_PATH = /(^|\/)(fixtures|__fixtures__|testdata|test-data|vendor|node_modules|third_party)\/|^eval\/cases\/|(^|\/)(tests?|__tests__|spec)\/(?:.*\/)?examples\//i;
@@ -946,6 +947,21 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   for (const r of cand.requirement_to_code) { r.code = r.code.slice(0, TOP_CAND); r.tests = r.tests.slice(0, TOP_CAND); }
   const note = fitCandidates(cand);
   if (note) cand.limitations.push(note);
+
+  // D*: an unchanged block of an admitted document that the trace links strongly to changed code governs it (code and tests changed, requirement unchanged).
+  // One per hunk: its best block, unless a second block is within GOVERN_GAP of it. Added after step B, so it is not traced in depth like an S* change.
+  try {
+    const have = new Set(criteria.map((c) => `${c.source}:${c.ref}`)), byKey = new Map(blockItems.map((b) => [`${b.path}:${b.ref}`, b])), pick = new Map();
+    for (const h of cand.code_to_requirement) {
+      const bs = h.candidates.filter((c) => c.kind === 'block').sort((a, b) => b.score - a.score);
+      if (!bs.length || bs[0].score < GOVERN_MIN || (bs[1] && bs[1].score >= GOVERN_GAP * bs[0].score)) continue;
+      const k = `${bs[0].path}:${bs[0].ref}`;
+      if (!have.has(k) && byKey.has(k) && !(pick.get(k) >= bs[0].score)) pick.set(k, bs[0].score);
+    }
+    const gov = [...pick].sort((a, b) => b[1] - a[1]).slice(0, MAX_GOVERNING).map(([k], i) => { const b = byKey.get(k); return { id: `D${i + 1}`, source: b.path, ref: b.ref, line: b.line, quote: b.text }; });
+    criteria.push(...gov);
+    status.criteria = (status.criteria || []).concat(gov);
+  } catch (e) { lim('governing-block criteria', e); }
 
   // index: path:line [ref] text, hinted docs first, capped; over the cap only candidate and changed items remain
   const line = (i) => `${i.path}:${i.line} [${i.ref}] ${flat(i.text).slice(0, 160)}\n`;

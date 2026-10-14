@@ -521,6 +521,26 @@ test('restores omitted collected criteria to the report as unassessed', () => {
   assert.match(rs, /\*\*❔ No gaps found; 1 criterion needs a person to check\*\*/);
 });
 
+test('a D criterion the model omitted is shown as not assessed; one given without source and quote is kept and filled', () => {
+  const doc = { source: 'docs/design.md', text: '# 4.1\n\nOn confirm, width and height are rounded to even numbers.\n' };
+  const crit = { id: 'D1', source: 'docs/design.md', ref: '4-1', line: 3, quote: 'On confirm, width and height are rounded to even numbers.' };
+  const omitted = report({ requirements: [], coverage: [row()], findings: [] });
+  post.verifyRequirements(omitted, { documents: [doc], criteria: [crit], specFiles: ['docs/design.md'] });
+  assert.deepEqual(omitted.requirements.map((r) => [r.id, r.obligation_ids]), [['D1', []]]);
+  assert.match(post.buildSummary({ data: omitted }), /Unconfirmed \| On confirm, width and height are rounded to even numbers\./);
+  const given = report({ requirements: [{ id: 'D1', obligation_ids: ['O1'], reason: 'The code floors where the text says rounded.' }], coverage: [row()], findings: [] });
+  assert.equal(post.validate(given).ok, true);
+  assert.equal(given.requirements.length, 1, 'not dropped as malformed');
+  post.verifyRequirements(given, { documents: [doc], criteria: [crit], specFiles: ['docs/design.md'] });
+  assert.deepEqual([given.requirements[0].source, given.requirements[0].quote, given.requirements[0].obligation_ids], ['docs/design.md', crit.quote, ['O1']]);
+});
+
+test('the Requirements cell says none linked, not none found, when a requirement document was read', () => {
+  const d = report({ requirements: [], coverage: [row()], findings: [] });
+  assert.match(post.buildSummary({ data: d, specFiles: ['docs/design.md'] }), /\| none linked \|/);
+  assert.match(post.buildSummary({ data: d, specFiles: [] }), /\| none found \|/);
+});
+
 test('a compound criterion is covered only when all its obligations are', () => {
   const r = { id: 'R1', source: 'PR body', quote: 'Rejects empty names and trims whitespace.', obligation_ids: ['O1', 'O2'], reason: 'Split in two.' };
   const d = report({ requirements: [r], coverage: [row(), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { obligation_ids: ['O2'] })] });

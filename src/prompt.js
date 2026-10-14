@@ -39,7 +39,7 @@ function traceNeeded(ctxDir) {
   } catch {}
   try {
     const st = JSON.parse(read(ctxDir, 'requirements-status.json'));
-    if ((st.criteria || []).some((x) => /^[SGH]/.test(String(x.id)))) return true;
+    if ((st.criteria || []).some((x) => /^[SGHD]/.test(String(x.id)))) return true;
   } catch {}
   return false;
 }
