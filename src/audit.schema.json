@@ -5,7 +5,8 @@
     "docs_reviewed",
     "requirements",
     "not_requirements",
-    "not_reviewed"
+    "not_reviewed",
+    "unit_findings"
   ],
   "properties": {
     "docs_reviewed": {
@@ -177,6 +178,64 @@
       "items": {
         "type": "string",
         "minLength": 1
+      }
+    },
+    "unit_findings": {
+      "type": "array",
+      "description": "Code-first findings about the units listed in audit-units.txt (empty when the list is empty or every unit is soundly tested). One finding per behaviour or assertion.",
+      "items": {
+        "type": "object",
+        "required": [
+          "unit",
+          "kind",
+          "path",
+          "line",
+          "quote",
+          "title"
+        ],
+        "properties": {
+          "unit": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 8,
+            "description": "The unit id (8 hex characters) from audit-units.txt."
+          },
+          "kind": {
+            "enum": [
+              "missing_test",
+              "weak_test",
+              "pushdown"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "missing_test: the unit's code that has no unit test. weak_test: the test file with the assertion that cannot fail. pushdown: the higher-level test file whose logic a unit test could prove."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 200,
+            "description": "One verbatim line at path:line."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "description": "One or two sentences: what behaviour is not proven and why."
+          },
+          "skeleton": {
+            "type": "string",
+            "description": "A short unit test skeleton in the repository's framework (missing_test and weak_test); an expected value from an independent literal, never copied from the code."
+          }
+        }
       }
     }
   }

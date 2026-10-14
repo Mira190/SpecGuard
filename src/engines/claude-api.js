@@ -171,10 +171,13 @@ function contextPack(ctx, root, limit) {
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
   for (const p of list('standards.txt')) addFile(p, false);
-  const focus = list('focus.txt').map((l) => l.split('\t')[0]), review = focus.length ? focus : list('files.txt');
+  const focus = list('focus.txt').map((l) => l.split('\t')[0]);
+  // scan mode (audit-units.txt: id, path, risk, why, matched tests, leads): the selected units are the review set and their matched tests their candidate tests
+  const units = new Map(list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1]).map((u) => [u[1], u[4] && u[4] !== 'none' ? u[4].split(', ') : []])), review = units.size ? [...units.keys()] : focus.length ? focus : list('files.txt');
   const cands = parseCandidates(rd('test-candidates.txt'));
   const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch'), leads = rd('leads.txt');
-  for (const p of review) { addFile(p, true); const syms = diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of cands.get(p) || []) addFile(t, true, false, syms); } // each file, then its tests (a big test as slices around the changed symbols)
+  const unitSymbols = (p) => { const out = new Set(), add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n) && out.size < 40) out.add(n); }; for (const l of (packRead(root, p) || '').split('\n')) symbolsIn(l, add); return [...out]; }; // names the unit defines: a big test file is shown as the tests that mention them
+  for (const p of review) { addFile(p, true); const syms = units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of (units.size ? units.get(p) : cands.get(p)) || []) addFile(t, true, false, syms); } // each file, then its tests (a big test as slices around the changed symbols)
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
     const named = [], crit = criteriaText(rd('requirements-status.json'));

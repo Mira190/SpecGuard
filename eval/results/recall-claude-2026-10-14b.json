@@ -1,0 +1,1604 @@
+{
+  "runId": "recall-claude-2026-10-14b",
+  "repo": "Mira190/SpecGuard",
+  "target": "main",
+  "model": "unchanged",
+  "cost": "not measured (pass --billing)",
+  "results": [
+    {
+      "id": "js2",
+      "goal": "requirements",
+      "tp": 2,
+      "fp": 0,
+      "acceptable": 1,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 3,
+            "tolerance": 4,
+            "quote": "for (let attempt = 1; attempt <= retries; attempt++) {"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Network-error retry is not tested",
+            "body": "**Network-error retry is not tested**\n\nInput: fetch rejects once, then resolves; retries is 2. The code returns the second response, but no test asserts this, so a loop that stops after one attempt still passes.\n\n```js\ntest('retries a network error until a later attempt succeeds', async () => {\n  const fetchSpy = jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(new Error('down'))\n    .mockResolvedValueOnce({ ok: true });\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).resolves.toEqual({ ok: true });\n  expect(fetchSpy).toHaveBeenCalledTimes(2);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=cb27df6a0ad8fc261a4e0ee40b59b0c7fa47b67d -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "tolerance": 3,
+            "quote": "throw lastError"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Exhausted retries throwing the last error is not tested",
+            "body": "**Exhausted retries throwing the last error is not tested**\n\nInput: fetch rejects on every attempt, retries is 2, the errors are 'first' then 'last'. The code throws 'last', but no test asserts the error, so a version that throws the first error or a string still passes.\n\n```js\ntest('throws the last error after retries are exhausted', async () => {\n  jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(new Error('first'))\n    .mockRejectedValueOnce(new Error('last'));\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toThrow('last');\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=d08e8bbc56755169c852b6ffcc83c63cf28b4a8f -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/js2/fetchWithRetry.js",
+          "line": 1,
+          "title": "Default retry count of 3 is not tested",
+          "reason": "The default of three attempts (AC 2) is untested."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 43,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/144",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38489894046",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Network-error retry is not tested",
+            "body": "**Network-error retry is not tested**\n\nInput: fetch rejects once, then resolves; retries is 2. The code returns the second response, but no test asserts this, so a loop that stops after one attempt still passes.\n\n```js\ntest('retries a network error until a later attempt succeeds', async () => {\n  const fetchSpy = jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(new Error('down'))\n    .mockResolvedValueOnce({ ok: true });\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).resolves.toEqual({ ok: true });\n  expect(fetchSpy).toHaveBeenCalledTimes(2);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=cb27df6a0ad8fc261a4e0ee40b59b0c7fa47b67d -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 1,
+            "level": "inline",
+            "title": "Default retry count of 3 is not tested",
+            "body": "**Default retry count of 3 is not tested**\n\nInput: fetch always rejects, no options passed. The code calls fetch 3 times, but no test pins the default, so changing the default to 1 or 5 passes the suite.\n\n```js\ntest('defaults to three attempts on network errors', async () => {\n  const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('down'));\n  await expect(fetchWithRetry('https://api.test/items')).rejects.toThrow('down');\n  expect(fetchSpy).toHaveBeenCalledTimes(3);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=cb27df6a0ad8fc261a4e0ee40b59b0c7fa47b67d -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/js2/fetchWithRetry.js",
+            "line": 10,
+            "level": "inline",
+            "title": "Exhausted retries throwing the last error is not tested",
+            "body": "**Exhausted retries throwing the last error is not tested**\n\nInput: fetch rejects on every attempt, retries is 2, the errors are 'first' then 'last'. The code throws 'last', but no test asserts the error, so a version that throws the first error or a string still passes.\n\n```js\ntest('throws the last error after retries are exhausted', async () => {\n  jest.spyOn(globalThis, 'fetch')\n    .mockRejectedValueOnce(new Error('first'))\n    .mockRejectedValueOnce(new Error('last'));\n  await expect(fetchWithRetry('https://api.test/items', { retries: 2 })).rejects.toThrow('last');\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=d08e8bbc56755169c852b6ffcc83c63cf28b4a8f -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/4 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":23619,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":144,\"merged\":false,\"head\":\"c33b6b774a34b8bc3c1960729499b4a84b8e2790\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"missing_test\":{\"posted\":3,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":3,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 3 unit test gaps to fix**\n\n| Unit tests | Requirements (3) | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 3 missing | ✅ 1 · ❌ 2 | ✅ no violations | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (3)\n\n- [Network-error retry is not tested](https://github.com/Mira190/SpecGuard/pull/144#discussion_r4265486834) `eval-sandbox/js2/fetchWithRetry.js:3` — Input: fetch rejects once, then resolves; retries is 2.\n- [Default retry count of 3 is not tested](https://github.com/Mira190/SpecGuard/pull/144#discussion_r4265486834) `eval-sandbox/js2/fetchWithRetry.js:1` — Input: fetch always rejects, no options passed.\n- [Exhausted retries throwing the last error is not tested](https://github.com/Mira190/SpecGuard/pull/144#discussion_r4265486841) `eval-sandbox/js2/fetchWithRetry.js:10` — Input: fetch rejects on every attempt, retries is 2, the errors are 'first' then 'last'.\n\n### ❌ Requirements to check (2)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❌ Gap | A network error is retried until `retries` attempts have been made (default 3). | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/144#discussion_r4265486834)) |\n| ❌ Gap | After `retries` failed attempts it throws the last error. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/144#discussion_r4265486841)) |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (1)**\n\n- ✅ Evidenced: **R1** It returns the response when a fetch attempt succeeds.\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. specguard.instructions.md applies only to src/** and eval/*.js, which do not match the changed eval-sandbox/js2 paths; ste-mini governs prose and the diff contains no prose. No rule applies to the changed code, so no standard finding. Sources: `.claude/skills/ste-mini/SKILL.md`, `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. Only a same-directory unit spec mocks fetch at the global boundary; no component or integration tests exist for this module, so there is no higher-layer logic to push down.\n\n**Requirements source:** PR body\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (4) · Unit evidence: 1/4 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: fetchWithRetry returns the response when a fetch attempt succeeds | PR body AC 1; eval-sandbox/js2/fetchWithRetry.js:5 —       return await fetch(url); | unit: eval-sandbox/js2/fetchWithRetry.spec.js:11 —   await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response); (assertion) | Evidenced: The unit spec asserts that the first successful fetch result is returned, using the mocked response object as the expected value. |\n| O2: A network error is retried until retries attempts have been made | PR body AC 2; eval-sandbox/js2/fetchWithRetry.js:3 —   for (let attempt = 1; attempt <= retries; attempt++) { | none | Missing test: Searched eval-sandbox/js2/fetchWithRetry.spec.js and eval/cases/js2/head/fetchWithRetry.spec.js: the only test covers a first-attempt success, so no assertion reaches the catch branch or the retry loop. |\n| O3: retries defaults to 3 when not given | PR body AC 2; eval-sandbox/js2/fetchWithRetry.js:1 — export async function fetchWithRetry(url, { retries = 3 } = {}) { | none | Missing test: Searched both spec files for calls without options and for call counts of 3: none exists. |\n| O4: After retries failed attempts the last error is thrown | PR body AC 3; eval-sandbox/js2/fetchWithRetry.js:10 —   throw lastError; | none | Missing test: Searched both spec files for rejects, toThrow and failed-fetch mocks: no test asserts the thrown error after exhausted retries. |\n\n**Not reviewed (1 item)**\n\n- eval/cases/js2/head/fetchWithRetry.js and its spec are identical to the changed files; they were used as evidence only and not assessed as separate changes.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `c33b6b7`, base `050d523`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 6 files, 4 KB\n\n</details>\n\n<sub>Cost $0.0034 · claude-haiku-5-5 (fast tier) · 16.0k in (11.8k cached) · 5.7k out · 24s · Delivery: 3 inline comments</sub>\n",
+        "latency_s": 43,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"fetchWithRetry returns the response when a fetch attempt succeeds\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/js2/fetchWithRetry.js\",\"line\":5,\"quote\":\"      return await fetch(url);\"},\"evidence\":[{\"path\":\"eval-sandbox/js2/fetchWithRetry.spec.js\",\"line\":11,\"quote\":\"  await expect(fetchWithRetry('https://api.test/items')).resolves.toBe(response);\"}],\"status\":\"covered\",\"reason\":\"The unit spec asserts that the first successful fetch result is returned, using the mocked response object as the expected value.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: returns the response when a fetch attempt succeeds; C: return await fetch(url) returns the first successful response.\"}},{\"id\":\"O2\",\"obligation\":\"A network error is retried until retries attempts have been made\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/js2/fetchWithRetry.js\",\"line\":3,\"quote\":\"  for (let attempt = 1; attempt <= retries; attempt++) {\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/js2/fetchWithRetry.spec.js and eval/cases/js2/head/fetchWithRetry.spec.js: the only test covers a first-attempt success, so no assertion reaches the catch branch or the retry loop.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: retried until retries attempts; C: the loop runs up to retries attempts and catches each failed fetch.\"}},{\"id\":\"O3\",\"obligation\":\"retries defaults to 3 when not given\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/js2/fetchWithRetry.js\",\"line\":1,\"quote\":\"export async function fetchWithRetry(url, { retries = 3 } = {}) {\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched both spec files for calls without options and for call counts of 3: none exists.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: default 3; C: retries = 3 in the destructured default.\"}},{\"id\":\"O4\",\"obligation\":\"After retries failed attempts the last error is thrown\",\"source\":\"PR body AC 3\",\""
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "l1",
+      "goal": "layering",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 1,
+      "matched": [
+        {
+          "expected": {
+            "kind": "pushdown",
+            "path": [
+              "eval-sandbox/l1/pricing.py",
+              "eval-sandbox/l1/test_quote_api.py"
+            ],
+            "line": 6,
+            "tolerance": 30,
+            "quote": "rate = TIER_DISCOUNT"
+          },
+          "observed": {
+            "kind": "pushdown",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/l1/pricing.py",
+            "line": 4,
+            "level": "inline",
+            "title": "Unit-test the pricing rules in quote_total",
+            "body": "**Unit-test the pricing rules in quote_total**\n\nquote_total is pure: it takes items and a tier and returns a number, so unit tests need no mocks. Add tests that call it directly with independent literals:\n\n```python\nfrom pricing import quote_total\n\ndef test_gold_tier_discount():\n    assert quote_total([{\"price\": 100, \"qty\": 2}], \"gold\") == 170.0\n\ndef test_big_order_bonus_without_tier():\n    assert quote_total([{\"price\": 300, \"qty\": 2}], None) == 590.0\n```\n\nKeep test_quote_api.py for the /quote wiring (JSON in, total out).\n\n<!--\nkind: pushdown, confidence: high\n-->\n<!-- specguard:fp=4d3da74ccc05fcc94fa9e8f14aafe8d4b265f941 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": true,
+      "validation_notes": [
+        "low confidence: a candidate test file was only partly visible (src/collect.test.js); missing_test eval-sandbox/l1/pricing.py is not counted."
+      ],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 48,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/145",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38490051742",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "pushdown",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/l1/pricing.py",
+            "line": 4,
+            "level": "inline",
+            "title": "Unit-test the pricing rules in quote_total",
+            "body": "**Unit-test the pricing rules in quote_total**\n\nquote_total is pure: it takes items and a tier and returns a number, so unit tests need no mocks. Add tests that call it directly with independent literals:\n\n```python\nfrom pricing import quote_total\n\ndef test_gold_tier_discount():\n    assert quote_total([{\"price\": 100, \"qty\": 2}], \"gold\") == 170.0\n\ndef test_big_order_bonus_without_tier():\n    assert quote_total([{\"price\": 300, \"qty\": 2}], None) == 590.0\n```\n\nKeep test_quote_api.py for the /quote wiring (JSON in, total out).\n\n<!--\nkind: pushdown, confidence: high\n-->\n<!-- specguard:fp=4d3da74ccc05fcc94fa9e8f14aafe8d4b265f941 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 1; 1 inline, 0 file-level, 1 in summary.\nUnit evidence: 0/3 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":29120,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":145,\"merged\":false,\"head\":\"1460696428a69d556801b595c05ae351e87e10b7\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"pushdown\":{\"posted\":1,\"already\":0,\"summary\":0},\"missing_test\":{\"posted\":0,\"already\":0,\"summary\":1}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 test to move down to fix**\n\n| Unit tests | Requirements (2) | Coding standards | Test layers |\n|---|---|---|---|\n| no high-confidence gaps | ❔ 2 | not reviewed | ❌ 1 to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❔ Requirements to check (1)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❔ Unconfirmed | Add a /quote endpoint that applies tier discounts and a bonus for big orders. | Point to the unit test or add one: only higher-level tests cover it. |\n\n### ❌ Tests to move down (1)\n\n- [Unit-test the pricing rules in quote_total](https://github.com/Mira190/SpecGuard/pull/145#discussion_r4265496535) `eval-sandbox/l1/pricing.py:4` — quote_total is pure: it takes items and a tier and returns a number, so unit tests need no mocks.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Low-confidence findings (1)**\n\n- ❌ **Missing test:** Boundary at 500 is not pinned [`eval-sandbox/l1/pricing.py:8`](https://github.com/Mira190/SpecGuard/blob/1460696428a69d556801b595c05ae351e87e10b7/eval-sandbox/l1/pricing.py#L8) (reduced review: needs high confidence and two citations; low confidence) — No test covers subtotal == 500.\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. standards.txt lists ste-mini (prose style) and specguard.instructions.md (scope src/** and eval/*.js). Neither applies to eval-sandbox/l1 Python files, so no code rule was checked.\n- Test layers: reviewed. Inspected test_quote_api.py (Flask test client, component level) and pricing.py. quote_total is pure logic with no collaborators, so it is a pushdown candidate. app.py only wires the endpoint and keeps its coverage at the component level.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (3) · Unit evidence: 0/3 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Tier discount is applied to the order subtotal | PR body; eval-sandbox/l1/pricing.py:6 —     rate = TIER_DISCOUNT.get(tier, 0) | component: eval-sandbox/l1/test_quote_api.py:7 —     assert resp.json[\"total\"] == 170.0 (assertion) | Higher-level only: Searched all test files for quote_total and TIER_DISCOUNT. The only assertion is at the /quote endpoint through the Flask test client (test_quote_api.py:7, subtotal 200 gold gives 170.0). No unit test calls quote_total directly. |\n| O2: Orders above 500 get a bonus of 10 | PR body; eval-sandbox/l1/pricing.py:8 —     if subtotal > 500: | component: eval-sandbox/l1/test_quote_api.py:13 —     assert resp.json[\"total\"] == 590.0 (assertion) | Higher-level only: Searched all test files for quote_total and the 500 threshold. The only assertion is at the endpoint (test_quote_api.py:13, subtotal 600 gives 590.0). No unit test reaches the branch directly. |\n| O3: A subtotal of exactly 500 gets no bonus | from behaviour; eval-sandbox/l1/pricing.py:8 —     if subtotal > 500: | none | Missing test: Searched all test files for 500 and quote_total: no assertion exercises subtotal 500. Changing '>' to '>=' would survive the current suite. |\n\n**Not reviewed (3 items)**\n\n- Static review only; tests were not run.\n- The PR text has no threshold or error contract, so behaviour for missing keys and unknown tiers is not assessed.\n- Test files outside the changed set were not searched beyond the candidate list.\n\n**Validation notes (1)**\n\n- low confidence: a candidate test file was only partly visible (src/collect.test.js); missing_test eval-sandbox/l1/pricing.py is not counted.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `1460696`, base `e3227a5`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 9 files, 146 KB\n\n</details>\n\n<sub>Cost $0.01 · claude-haiku-5-5 (fast tier) · 86.9k in (11.8k cached) · 6.3k out · 29s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 48,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Tier discount is applied to the order subtotal\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/l1/pricing.py\",\"line\":6,\"quote\":\"    rate = TIER_DISCOUNT.get(tier, 0)\"},\"evidence\":[{\"path\":\"eval-sandbox/l1/test_quote_api.py\",\"line\":7,\"quote\":\"    assert resp.json[\\\"total\\\"] == 170.0\",\"layer\":\"component\"}],\"status\":\"higher_level_only\",\"reason\":\"Searched all test files for quote_total and TIER_DISCOUNT. The only assertion is at the /quote endpoint through the Flask test client (test_quote_api.py:7, subtotal 200 gold gives 170.0). No unit test calls quote_total directly.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: applies tier discounts; C: rate from TIER_DISCOUNT scales the subtotal.\"}},{\"id\":\"O2\",\"obligation\":\"Orders above 500 get a bonus of 10\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/l1/pricing.py\",\"line\":8,\"quote\":\"    if subtotal > 500:\"},\"evidence\":[{\"path\":\"eval-sandbox/l1/test_quote_api.py\",\"line\":13,\"quote\":\"    assert resp.json[\\\"total\\\"] == 590.0\",\"layer\":\"component\"}],\"status\":\"higher_level_only\",\"reason\":\"Searched all test files for quote_total and the 500 threshold. The only assertion is at the endpoint (test_quote_api.py:13, subtotal 600 gives 590.0). No unit test reaches the branch directly.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: a bonus for big orders; C: a flat 10 for subtotal above 500.\"}},{\"id\":\"O3\",\"obligation\":\"A subtotal of exactly 500 gets no bonus\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/l1/pricing.py\",\"line\":8,\"quote\":\"    if subtotal > 500:\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched all test files for 500 and quote_total: no assertion exercises subtotal 500. Changing '>' to '>=' would survive the current suite.\"}],\"findings\":[{\"kind\":\"pushdown\",\"obligation_ids\":[\"O1\",\"O2\"],\"path\":\"eval-sandbox/l1/pricing.py\",\"line\":4,\"quote\":\"def quote_total(items, tier):\",\"title\":\"Unit-test the pricing rules in quote_tota"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "p1",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/p1/cart.py",
+            "line": 5,
+            "tolerance": 1,
+            "quote": "return total - 5"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/p1/cart.py",
+            "line": 4,
+            "level": "inline",
+            "title": "FIVEOFF discount is not tested",
+            "body": "**FIVEOFF discount is not tested**\n\nNo test pins the FIVEOFF branch, so a change to `total + 5` or a wrong constant would pass the suite. Add:\n\n```python\ndef test_fiveoff_coupon_takes_5_off_total():\n    assert apply_coupon(80, \"FIVEOFF\") == 75\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=48bcfb37941b5f303624d136e2b5421c2470fc74 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 26,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/146",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38490212824",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/p1/cart.py",
+            "line": 4,
+            "level": "inline",
+            "title": "FIVEOFF discount is not tested",
+            "body": "**FIVEOFF discount is not tested**\n\nNo test pins the FIVEOFF branch, so a change to `total + 5` or a wrong constant would pass the suite. Add:\n\n```python\ndef test_fiveoff_coupon_takes_5_off_total():\n    assert apply_coupon(80, \"FIVEOFF\") == 75\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=48bcfb37941b5f303624d136e2b5421c2470fc74 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/3 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":12273,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":146,\"merged\":false,\"head\":\"235dc79b00e660fde1b4f5f14c4397742eeec614\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"missing_test\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 unit test gap to fix**\n\n| Unit tests | Requirements (3) | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 1 missing | ✅ 2 · ❌ 1 | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (1)\n\n- [FIVEOFF discount is not tested](https://github.com/Mira190/SpecGuard/pull/146#discussion_r4265503811) `eval-sandbox/p1/cart.py:4` — No test pins the FIVEOFF branch, so a change to `total + 5` or a wrong constant would pass the suite.\n\n### ❌ Requirements to check (1)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❌ Gap | The FIVEOFF code takes 5 off the total. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/146#discussion_r4265503811)) |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (2)**\n\n- ✅ Evidenced: **R1** The HALF code halves the total.\n- ✅ Evidenced: **R3** An unknown code raises ValueError.\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. specguard.instructions.md applies only to src/** and eval/*.js, which do not cover eval-sandbox/p1. ste-mini governs prose writing, not Python code, so no code rule applies to the changed files. Sources: `.claude/skills/ste-mini/SKILL.md`, `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. Only unit-level pytest tests exist for apply_coupon; no higher-layer logic is a pushdown candidate.\n\n**Requirements source:** PR body\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (3) · Unit evidence: 2/3 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: The HALF code halves the total | PR body; eval-sandbox/p1/cart.py:3 — return total / 2 | unit: eval-sandbox/p1/test_cart.py:7 — assert apply_coupon(80, \"HALF\") == 40 (assertion) | Evidenced: The unit test asserts apply_coupon(80, \"HALF\") against the literal 40, so a wrong divisor would fail. |\n| O2: The FIVEOFF code takes 5 off the total | PR body; eval-sandbox/p1/cart.py:4 — if code == \"FIVEOFF\": | none | Missing test: Searched eval-sandbox/p1/test_cart.py and eval/cases/p1/head/test_cart.py: no test calls apply_coupon with FIVEOFF, so the branch at line 5 is unasserted. |\n| O3: An unknown code raises ValueError | PR body; eval-sandbox/p1/cart.py:6 — raise ValueError(\"unknown coupon\") | unit: eval-sandbox/p1/test_cart.py:11 — with pytest.raises(ValueError, match=\"unknown coupon\"): (assertion) | Evidenced: The unit test asserts that apply_coupon(80, \"NOPE\") raises ValueError with the message \"unknown coupon\", matching the requirement. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `235dc79`, base `54a28b6`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 7 files, 4 KB\n\n</details>\n\n<sub>Cost $0.0020 · claude-haiku-5-5 (fast tier) · 15.7k in (11.8k cached) · 3.0k out · 12s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 26,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"The HALF code halves the total\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/p1/cart.py\",\"line\":3,\"quote\":\"return total / 2\"},\"evidence\":[{\"path\":\"eval-sandbox/p1/test_cart.py\",\"line\":7,\"quote\":\"assert apply_coupon(80, \\\"HALF\\\") == 40\",\"layer\":\"unit\"}],\"status\":\"covered\",\"reason\":\"The unit test asserts apply_coupon(80, \\\"HALF\\\") against the literal 40, so a wrong divisor would fail.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: HALF halves the total; C: total / 2 for code HALF.\"}},{\"id\":\"O2\",\"obligation\":\"The FIVEOFF code takes 5 off the total\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/p1/cart.py\",\"line\":4,\"quote\":\"if code == \\\"FIVEOFF\\\":\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/p1/test_cart.py and eval/cases/p1/head/test_cart.py: no test calls apply_coupon with FIVEOFF, so the branch at line 5 is unasserted.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: FIVEOFF takes 5 off the total; C: return total - 5 for code FIVEOFF.\"}},{\"id\":\"O3\",\"obligation\":\"An unknown code raises ValueError\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/p1/cart.py\",\"line\":6,\"quote\":\"raise ValueError(\\\"unknown coupon\\\")\"},\"evidence\":[{\"path\":\"eval-sandbox/p1/test_cart.py\",\"line\":11,\"quote\":\"with pytest.raises(ValueError, match=\\\"unknown coupon\\\"):\",\"layer\":\"unit\"}],\"status\":\"covered\",\"reason\":\"The unit test asserts that apply_coupon(80, \\\"NOPE\\\") raises ValueError with the message \\\"unknown coupon\\\", matching the requirement.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: unknown code raises ValueError; C: raise ValueError for any other code.\"}}],\"findings\":[{\"kind\":\"missing_test\",\"obligation_ids\":[\"O2\"],\"path\":\"eval-sandbox/p1/cart.py\",\"line\":4,\"quote\":\"if code == \\\"FIVEOFF\\\":\",\"title\":\"FIVEOFF discount is not tested\",\"body\":\"No test pins the FIVEOFF branch, so a change to `total + 5` or a wrong constant would pass the suite. Add:\\n\\n```python\\ndef test_five"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r1",
+      "goal": "requirements",
+      "tp": 3,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 1,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "quote": "throw new Error('empty order')"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Empty order throw is not tested",
+            "body": "**Empty order throw is not tested**\n\napplyDiscount({ items: [], coupon: 'SAVE10' }) throws Error('empty order'), but no test asserts it, so a change that returns a number still passes. Add:\n```js\ntest('rejects an order with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=e1a7fcd2b144e486732fc89e5963542bd776cb7a -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "quote": "total >= 100"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Threshold discount is not tested",
+            "body": "**Threshold discount is not tested**\n\napplyDiscount({ items: [{ price: 100, qty: 1 }] }) returns 95, but no test asserts it. Changing the threshold to > 100 still passes. Add:\n```js\ntest('takes 5 off a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=7e9ea60c544fa00ebdd2b592034339bf865804d5 -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "quote": "Math.max"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Store credit and zero floor are not tested",
+            "body": "**Store credit and zero floor are not tested**\n\napplyDiscount({ items: [{ price: 20, qty: 1 }], credit: 5 }) returns 15, and applyDiscount({ items: [{ price: 20, qty: 1 }], credit: 50 }) returns 0, but no test asserts either. Removing the Math.max floor still passes. Add:\n```js\ntest('subtracts store credit and never goes below zero', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 1 }], credit: 5 }), 15);\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 1 }], credit: 50 }), 0);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=e767c1ab545b681a4c5721f92a25224e4c471db9 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/r1/discount.test.js",
+          "line": 7,
+          "quote": "assert.ok(total)"
+        }
+      ],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 35,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/147",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38490370817",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Empty order throw is not tested",
+            "body": "**Empty order throw is not tested**\n\napplyDiscount({ items: [], coupon: 'SAVE10' }) throws Error('empty order'), but no test asserts it, so a change that returns a number still passes. Add:\n```js\ntest('rejects an order with no items', () => {\n  assert.throws(() => applyDiscount({ items: [] }), { message: 'empty order' });\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=e1a7fcd2b144e486732fc89e5963542bd776cb7a -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 11,
+            "level": "inline",
+            "title": "Threshold discount is not tested",
+            "body": "**Threshold discount is not tested**\n\napplyDiscount({ items: [{ price: 100, qty: 1 }] }) returns 95, but no test asserts it. Changing the threshold to > 100 still passes. Add:\n```js\ntest('takes 5 off a total of 100', () => {\n  assert.equal(applyDiscount({ items: [{ price: 100, qty: 1 }] }), 95);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=7e9ea60c544fa00ebdd2b592034339bf865804d5 -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r1/discount.js",
+            "line": 14,
+            "level": "inline",
+            "title": "Store credit and zero floor are not tested",
+            "body": "**Store credit and zero floor are not tested**\n\napplyDiscount({ items: [{ price: 20, qty: 1 }], credit: 5 }) returns 15, and applyDiscount({ items: [{ price: 20, qty: 1 }], credit: 50 }) returns 0, but no test asserts either. Removing the Math.max floor still passes. Add:\n```js\ntest('subtracts store credit and never goes below zero', () => {\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 1 }], credit: 5 }), 15);\n  assert.equal(applyDiscount({ items: [{ price: 20, qty: 1 }], credit: 50 }), 0);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=e767c1ab545b681a4c5721f92a25224e4c471db9 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 1 weak · Standards: 0 · Layering: 0; 3 inline, 0 file-level, 1 in summary.\nUnit evidence: 0/4 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":18349,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":147,\"merged\":false,\"head\":\"a00973f0670dfaf520c7895712731b741a2958b6\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"missing_test\":{\"posted\":3,\"already\":0,\"summary\":0},\"weak_test\":{\"posted\":0,\"already\":0,\"summary\":1}},\"pre_existing\":0,\"posted\":{\"inline\":3,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 4 unit test gaps to fix**\n\n| Unit tests | Requirements (4) | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 3 missing · 1 weak | ❌ 4 | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (3)\n\n- [Empty order throw is not tested](https://github.com/Mira190/SpecGuard/pull/147#discussion_r4265517007) `eval-sandbox/r1/discount.js:5` — applyDiscount({ items: [], coupon: 'SAVE10' }) throws Error('empty order'), but no test asserts it, so a change that returns a number still passes.\n- [Threshold discount is not tested](https://github.com/Mira190/SpecGuard/pull/147#discussion_r4265517019) `eval-sandbox/r1/discount.js:11` — applyDiscount({ items: [{ price: 100, qty: 1 }] }) returns 95, but no test asserts it.\n- [Store credit and zero floor are not tested](https://github.com/Mira190/SpecGuard/pull/147#discussion_r4265517023) `eval-sandbox/r1/discount.js:14` — applyDiscount({ items: [{ price: 20, qty: 1 }], credit: 5 }) returns 15, and applyDiscount({ items: [{ price: 20, qty: 1 }], credit: 50 }) returns 0, but no test asserts either.\n\n### ❌ Weak unit tests (1)\n\n- SAVE10 assertion only checks truthy [`eval-sandbox/r1/discount.test.js:7`](https://github.com/Mira190/SpecGuard/blob/a00973f0670dfaf520c7895712731b741a2958b6/eval-sandbox/r1/discount.test.js#L7) (inline limit reached) — applyDiscount({ items: [{ price: 20, qty: 2 }], coupon: 'SAVE10' }) returns 36.\n\n### ❌ Requirements to check (4)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❌ Gap | An order with no items throws \"empty order\". | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/147#discussion_r4265517007)) |\n| ❌ Gap | The SAVE10 coupon takes 10% off the subtotal. | Strengthen the test ([finding](https://github.com/Mira190/SpecGuard/blob/a00973f0670dfaf520c7895712731b741a2958b6/eval-sandbox/r1/discount.test.js#L7)) |\n| ❌ Gap | A total of 100 or more gets 5 off. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/147#discussion_r4265517019)) |\n| ❌ Gap | Store credit is subtracted from the total, which never goes below zero. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/147#discussion_r4265517023)) |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. The applyTo scope of .github/instructions/specguard.instructions.md (src/**, eval/*.js) does not cover eval-sandbox/r1/. .claude/skills/ste-mini/SKILL.md governs prose style, not code, so no rule applies to the changed files.\n- Test layers: reviewed. Only unit-level tests exist for this module; no component or integration layer applies and nothing needs pushing down.\n\n**Requirements source:** PR body\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (4) · Unit evidence: 0/4 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: An order with no items throws \"empty order\" | PR body AC 1; eval-sandbox/r1/discount.js:5 —     throw new Error('empty order'); | none | Missing test: Searched eval-sandbox/r1/discount.test.js, the only test file for this module: it has one test, which asserts only that the SAVE10 result is truthy. No assertion reaches the empty-order throw. |\n| O2: The SAVE10 coupon takes 10% off the subtotal | PR body AC 2; eval-sandbox/r1/discount.js:9 —     total *= 0.9; | unit: eval-sandbox/r1/discount.test.js:7 —   assert.ok(total); (assertion) | Weak test: The only SAVE10 assertion is assert.ok(total). Removing the 10% reduction, or any wrong factor, still leaves a truthy value, so the test does not pin the result. |\n| O3: A total of 100 or more gets 5 off | PR body AC 3; eval-sandbox/r1/discount.js:11 —   if (total >= 100) { | none | Missing test: Searched eval-sandbox/r1/discount.test.js: no test has a total at or near 100, and the only assertion is assert.ok(total). The boundary and the 5-off deduction are not exercised. |\n| O4: Store credit is subtracted from the total, which never goes below zero | PR body AC 4; eval-sandbox/r1/discount.js:14 —   return Math.max(total - (order.credit \\|\\| 0), 0); | none | Missing test: Searched eval-sandbox/r1/discount.test.js: no test sets a credit or a total that would go negative. The subtraction and the zero floor are not exercised. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `a00973f`, base `b748062`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 8 files, 6 KB\n\n</details>\n\n<sub>Cost $0.0030 · claude-haiku-5-5 (fast tier) · 17.6k in (11.8k cached) · 4.6k out · 18s · Delivery: 3 inline comments</sub>\n",
+        "latency_s": 35,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"An order with no items throws \\\"empty order\\\"\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/r1/discount.js\",\"line\":5,\"quote\":\"    throw new Error('empty order');\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/r1/discount.test.js, the only test file for this module: it has one test, which asserts only that the SAVE10 result is truthy. No assertion reaches the empty-order throw.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: an order with no items throws \\\"empty order\\\"; C: items.length === 0 throws Error('empty order')\"}},{\"id\":\"O2\",\"obligation\":\"The SAVE10 coupon takes 10% off the subtotal\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/r1/discount.js\",\"line\":9,\"quote\":\"    total *= 0.9;\"},\"evidence\":[{\"path\":\"eval-sandbox/r1/discount.test.js\",\"line\":7,\"quote\":\"  assert.ok(total);\"}],\"status\":\"weak_test\",\"reason\":\"The only SAVE10 assertion is assert.ok(total). Removing the 10% reduction, or any wrong factor, still leaves a truthy value, so the test does not pin the result.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: SAVE10 takes 10% off the subtotal; C: total *= 0.9 when coupon is SAVE10\"}},{\"id\":\"O3\",\"obligation\":\"A total of 100 or more gets 5 off\",\"source\":\"PR body AC 3\",\"behaviour\":{\"path\":\"eval-sandbox/r1/discount.js\",\"line\":11,\"quote\":\"  if (total >= 100) {\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/r1/discount.test.js: no test has a total at or near 100, and the only assertion is assert.ok(total). The boundary and the 5-off deduction are not exercised.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: a total of 100 or more gets 5 off; C: total >= 100 then total -= 5\"}},{\"id\":\"O4\",\"obligation\":\"Store credit is subtracted from the total, which never goes below zero\",\"source\":\"PR body AC 4\",\"behaviour\":{\"path\":\"eval-sandbox/r1/discount.js\",\"line\":14,\"quote\":\"  return Math.max(total - (order.credit || 0), 0);\"},"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r2",
+      "goal": "requirements",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 26,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/148",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38490530472",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":11225,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":148,\"merged\":false,\"head\":\"81dbfc50b5816791f3bb3651b79e6c351762361b\",\"engine\":\"claude\",\"complete\":false,\"findings\":{},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Reduced review: no high-confidence gaps**\n\n| Unit tests | Requirements (3) | Coding standards | Test layers |\n|---|---|---|---|\n| no high-confidence gaps | ✅ 3 | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (3)**\n\n- ✅ Evidenced: **R1** Titles are lowercased and words are joined with single hyphens.\n- ✅ Evidenced: **R2** Leading and trailing hyphens are stripped.\n- ✅ Evidenced: **R3** A non-string title throws a TypeError.\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. specguard.instructions.md applies only to src/** and eval/*.js, not eval-sandbox/r2/. ste-mini/SKILL.md governs prose style, not code, so no code rule applied to the changed files.\n- Test layers: reviewed. Searched eval-sandbox/r2/ and eval/cases/r2/head/ (identical copy). Both hold only node:test unit tests calling slugify directly; no higher-layer logic to push down.\n\n**Requirements source:** PR body\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (3) · Unit evidence: 3/3 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Titles are lowercased and words are joined with single hyphens | PR body AC 1; eval-sandbox/r2/slug.js:5 —   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+\\|-+$/g, ''); | unit: eval-sandbox/r2/slug.test.js:6 —   assert.equal(slugify('Hello   World'), 'hello-world'); (assertion) | Evidenced: The test pins the lowercased output 'hello-world' for input with mixed case and a run of spaces. Dropping the lowercase call or changing the separator collapse to a non-single hyphen fails this assertion. |\n| O2: Leading and trailing hyphens are stripped | PR body AC 2; eval-sandbox/r2/slug.js:5 —   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+\\|-+$/g, ''); | unit: eval-sandbox/r2/slug.test.js:10 —   assert.equal(slugify('  --Hi!--  '), 'hi'); (assertion) | Evidenced: The input has leading and trailing separators that become hyphens; the expected 'hi' pins the strip. Removing the second replace leaves '-hi-' and fails the assertion. |\n| O3: A non-string title throws a TypeError | PR body AC 3; eval-sandbox/r2/slug.js:3 —     throw new TypeError('title must be a string'); | unit: eval-sandbox/r2/slug.test.js:14 —   assert.throws(() => slugify(42), { name: 'TypeError', message: 'title must be a string' }); (assertion) | Evidenced: The test passes a number and asserts the thrown error's name and message. Removing the throw or changing its type fails the assertion. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `81dbfc5`, base `03782b4`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 6 files, 8 KB\n\n</details>\n\n<sub>Cost $0.0020 · claude-haiku-5-5 (fast tier) · 17.4k in (11.8k cached) · 2.6k out · 11s</sub>\n",
+        "latency_s": 26,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Titles are lowercased and words are joined with single hyphens\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/r2/slug.js\",\"line\":5,\"quote\":\"  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\"},\"evidence\":[{\"path\":\"eval-sandbox/r2/slug.test.js\",\"line\":6,\"quote\":\"  assert.equal(slugify('Hello   World'), 'hello-world');\"}],\"status\":\"covered\",\"reason\":\"The test pins the lowercased output 'hello-world' for input with mixed case and a run of spaces. Dropping the lowercase call or changing the separator collapse to a non-single hyphen fails this assertion.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R1: lowercased, single hyphens; C: toLowerCase() then replace(/[^a-z0-9]+/g, '-') collapses each run to one hyphen.\"}},{\"id\":\"O2\",\"obligation\":\"Leading and trailing hyphens are stripped\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/r2/slug.js\",\"line\":5,\"quote\":\"  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\"},\"evidence\":[{\"path\":\"eval-sandbox/r2/slug.test.js\",\"line\":10,\"quote\":\"  assert.equal(slugify('  --Hi!--  '), 'hi');\"}],\"status\":\"covered\",\"reason\":\"The input has leading and trailing separators that become hyphens; the expected 'hi' pins the strip. Removing the second replace leaves '-hi-' and fails the assertion.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R2: leading and trailing hyphens stripped; C: replace(/^-+|-+$/g, '') removes both ends.\"}},{\"id\":\"O3\",\"obligation\":\"A non-string title throws a TypeError\",\"source\":\"PR body AC 3\",\"behaviour\":{\"path\":\"eval-sandbox/r2/slug.js\",\"line\":3,\"quote\":\"    throw new TypeError('title must be a string');\"},\"evidence\":[{\"path\":\"eval-sandbox/r2/slug.test.js\",\"line\":14,\"quote\":\"  assert.throws(() => slugify(42), { name: 'TypeError', message: 'title must be a string' });\"}],\"status\":\"covered\",\"reason\":\"The test passes a number and asserts the thrown error's name and messag"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r3",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "tolerance": 1,
+            "quote": "return name.trim();"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Trimming of names is not tested",
+            "body": "**Trimming of names is not tested**\n\nnormalizeName('  Ada  ') returns 'Ada', but no test asserts a returned value. Replacing the return with `return name;` would leave the suite green. Add a test for the trimmed return:\n\n```js\ntest('trims surrounding whitespace from names', () => {\n  assert.strictEqual(normalizeName('  Ada  '), 'Ada');\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=578b88304d3b2ffdc3cf24eeae95c7bb04b3557a -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 32,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/149",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38490693166",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r3/name.js",
+            "line": 5,
+            "level": "inline",
+            "title": "Trimming of names is not tested",
+            "body": "**Trimming of names is not tested**\n\nnormalizeName('  Ada  ') returns 'Ada', but no test asserts a returned value. Replacing the return with `return name;` would leave the suite green. Add a test for the trimmed return:\n\n```js\ntest('trims surrounding whitespace from names', () => {\n  assert.strictEqual(normalizeName('  Ada  '), 'Ada');\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=578b88304d3b2ffdc3cf24eeae95c7bb04b3557a -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/2 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":14244,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":149,\"merged\":false,\"head\":\"36e7193cd61f6213f30ce555e2d9bc022a6287dc\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"missing_test\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 unit test gap to fix**\n\n| Unit tests | Requirements (1) | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 1 missing | ❌ 1 | ✅ no violations | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (1)\n\n- [Trimming of names is not tested](https://github.com/Mira190/SpecGuard/pull/149#discussion_r4265534983) `eval-sandbox/r3/name.js:5` — normalizeName(' Ada ') returns 'Ada', but no test asserts a returned value.\n\n### ❌ Requirements to check (1)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❌ Gap | normalizeName rejects empty names and trims whitespace. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/149#discussion_r4265534983)) |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Checked the ste-mini rule (applies to **); it governs prose, and the changed files contain no prose. The specguard.instructions.md scope (src/**, eval/*.js) does not cover eval-sandbox/r3, so it does not apply. Sources: `.claude/skills/ste-mini/SKILL.md`.\n- Test layers: reviewed. Only the unit test file in eval-sandbox/r3 covers normalizeName. No higher-layer logic is present to push down.\n\n**Requirements source:** PR body\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (2) · Unit evidence: 1/2 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: normalizeName rejects empty names | PR body AC 1; eval-sandbox/r3/name.js:2 —   if (name.trim() === '') { | unit: eval-sandbox/r3/name.test.js:6 —   assert.throws(() => normalizeName('   '), { message: 'name required' }); (assertion) | Evidenced: The unit test asserts that a whitespace-only name throws Error 'name required'. The empty string '' takes the same branch, since ''.trim() === ''. No other test file in the repo covers normalizeName. |\n| O2: normalizeName trims whitespace | PR body AC 1; eval-sandbox/r3/name.js:5 —   return name.trim(); | none | Missing test: Searched eval-sandbox/r3/name.test.js and eval/cases/r3/head/name.test.js for normalizeName. The only assertion is a throw on '   '; no assertion checks a returned value, so the trimmed return is unpinned. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `36e7193`, base `12e71d2`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 8 files, 37 KB\n\n</details>\n\n<sub>Cost $0.0037 · claude-haiku-5-5 (fast tier) · 32.1k in (11.8k cached) · 3.1k out · 14s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 32,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"normalizeName rejects empty names\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/r3/name.js\",\"line\":2,\"quote\":\"  if (name.trim() === '') {\"},\"evidence\":[{\"path\":\"eval-sandbox/r3/name.test.js\",\"line\":6,\"quote\":\"  assert.throws(() => normalizeName('   '), { message: 'name required' });\",\"layer\":\"unit\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The unit test asserts that a whitespace-only name throws Error 'name required'. The empty string '' takes the same branch, since ''.trim() === ''. No other test file in the repo covers normalizeName.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: rejects empty names; C: name.trim() === '' throws Error('name required')\"}},{\"id\":\"O2\",\"obligation\":\"normalizeName trims whitespace\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/r3/name.js\",\"line\":5,\"quote\":\"  return name.trim();\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/r3/name.test.js and eval/cases/r3/head/name.test.js for normalizeName. The only assertion is a throw on '   '; no assertion checks a returned value, so the trimmed return is unpinned.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: trims whitespace; C: return name.trim()\"}}],\"findings\":[{\"kind\":\"missing_test\",\"obligation_ids\":[\"O2\"],\"path\":\"eval-sandbox/r3/name.js\",\"line\":5,\"quote\":\"  return name.trim();\",\"source\":\"PR body AC 1\",\"title\":\"Trimming of names is not tested\",\"body\":\"normalizeName('  Ada  ') returns 'Ada', but no test asserts a returned value. Replacing the return with `return name;` would leave the suite green. Add a test for the trimmed return:\\n\\n```js\\ntest('trims surrounding whitespace from names', () => {\\n  assert.strictEqual(normalizeName('  Ada  '), 'Ada');\\n});\\n```\",\"confidence\":\"high\"}],\"not_reviewed\":\"\",\"standards\":{\"status\":\"checked\",\"sources\":[\".claude/skills/ste-mini/SKILL.md\"],\"reason\":\"Checked the ste-mini rule (applies to **); it governs prose, and the chang"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "r4",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": [
+              "missing_test",
+              "spec_mismatch"
+            ],
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "quote": "return null;",
+            "text": "fail|contradict"
+          },
+          "observed": {
+            "kind": "spec_mismatch",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Unknown id returns null instead of throwing",
+            "body": "**Unknown id returns null instead of throwing**\n\nExpected to fail against the current code: findUser(2) → returns null (line 6); the PR requires an Error with the message \"user not found\". Change the branch to `throw new Error('user not found');` and add `assert.throws(() => findUser(2), { message: 'user not found' });` to users.test.js.\n\n<!--\nkind: spec_mismatch, confidence: high\n-->\n<!-- specguard:fp=b0225df075aa461847f9dc407fd3bdbcddb27139 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 30,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/150",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38490850411",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "spec_mismatch",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/r4/users.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Unknown id returns null instead of throwing",
+            "body": "**Unknown id returns null instead of throwing**\n\nExpected to fail against the current code: findUser(2) → returns null (line 6); the PR requires an Error with the message \"user not found\". Change the branch to `throw new Error('user not found');` and add `assert.throws(() => findUser(2), { message: 'user not found' });` to users.test.js.\n\n<!--\nkind: spec_mismatch, confidence: high\n-->\n<!-- specguard:fp=b0225df075aa461847f9dc407fd3bdbcddb27139 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 0 · Layering: 0 · Spec: 1 mismatch; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 1/2 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":13723,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":150,\"merged\":false,\"head\":\"78816f3fde77fb5786c17b9318527c92fe48d041\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"spec_mismatch\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 spec mismatch to fix**\n\n| Unit tests | Requirements (2) | Coding standards | Test layers |\n|---|---|---|---|\n| no high-confidence gaps | ✅ 1 · ❌ 1 | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Requirements to check (1)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❌ Mismatch | Looking up an unknown id throws an Error with the message \"user not found\". | Fix the code or the requirement: Unknown id returns null instead of throwing ([finding](https://github.com/Mira190/SpecGuard/pull/150#discussion_r4265543723)) |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (1)**\n\n- ✅ Evidenced: **R1** Looking up a known id returns the user.\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. The coding standard applies to src/** and eval/*.js only, so it does not cover eval-sandbox/r4/users.js. ste-mini governs prose style, not this code. No applicable code rule was assessed.\n- Test layers: reviewed. Only node:test unit tests exist for findUser in the changed area; no component or integration layer applies to a pure lookup, so there is nothing to push down.\n\n**Requirements source:** PR body\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (2) · Unit evidence: 1/2 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Looking up a known id returns the user | PR body AC 1; eval-sandbox/r4/users.js:8 —   return user; | unit: eval-sandbox/r4/users.test.js:6 —   assert.deepEqual(findUser(1), { id: 1, name: 'Ada' }); (assertion) | Evidenced: The only test in eval-sandbox/r4/users.test.js asserts findUser(1) against the literal { id: 1, name: 'Ada' }, an independent expected value. The sibling copy at eval/cases/r4/head/users.test.js is identical. |\n| O2: Looking up an unknown id throws an Error with the message \"user not found\" | PR body AC 2; eval-sandbox/r4/users.js:6 —     return null; | none | Missing test: Searched eval-sandbox/r4/users.test.js and eval/cases/r4/head/users.test.js: neither calls findUser with an unknown id, and no other test references findUser. The code returns null and never throws. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `78816f3`, base `898f676`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 8 files, 68 KB\n\n</details>\n\n<sub>Cost $0.0051 · claude-haiku-5-5 (fast tier) · 46.5k in (11.8k cached) · 3.1k out · 14s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 30,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Looking up a known id returns the user\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/r4/users.js\",\"line\":8,\"quote\":\"  return user;\"},\"evidence\":[{\"path\":\"eval-sandbox/r4/users.test.js\",\"line\":6,\"quote\":\"  assert.deepEqual(findUser(1), { id: 1, name: 'Ada' });\"}],\"status\":\"covered\",\"reason\":\"The only test in eval-sandbox/r4/users.test.js asserts findUser(1) against the literal { id: 1, name: 'Ada' }, an independent expected value. The sibling copy at eval/cases/r4/head/users.test.js is identical.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: looking up a known id returns the user. C: a found user is returned (line 8).\"}},{\"id\":\"O2\",\"obligation\":\"Looking up an unknown id throws an Error with the message \\\"user not found\\\"\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/r4/users.js\",\"line\":6,\"quote\":\"    return null;\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/r4/users.test.js and eval/cases/r4/head/users.test.js: neither calls findUser with an unknown id, and no other test references findUser. The code returns null and never throws.\",\"alignment\":{\"status\":\"mismatch\",\"since\":\"introduced\",\"reason\":\"R: an unknown id throws an Error with the message \\\"user not found\\\". C: line 6 returns null for a missing user.\"}}],\"findings\":[{\"kind\":\"spec_mismatch\",\"obligation_ids\":[\"O2\"],\"path\":\"eval-sandbox/r4/users.js\",\"line\":6,\"quote\":\"    return null;\",\"source\":\"PR body AC 2\",\"title\":\"Unknown id returns null instead of throwing\",\"body\":\"Expected to fail against the current code: findUser(2) → returns null (line 6); the PR requires an Error with the message \\\"user not found\\\". Change the branch to `throw new Error('user not found');` and add `assert.throws(() => findUser(2), { message: 'user not found' });` to users.test.js.\",\"confidence\":\"high\"}],\"not_reviewed\":\"\",\"standards\":{\"status\":\"not_reviewed\",\"sources\":[],\"reason\":\"The coding standard applies to src/*"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "rx1",
+      "goal": "layering",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 48,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/151",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38490976122",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":21186,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":151,\"merged\":false,\"head\":\"954ffc162fdb85a3d4a2af6b246cac57f3379db8\",\"engine\":\"claude\",\"complete\":false,\"findings\":{},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Reduced review: no high-confidence gaps**\n\n| Unit tests | Requirements (1) | Coding standards | Test layers |\n|---|---|---|---|\n| no high-confidence gaps | ❔ 1 | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❔ Requirements to check (1)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❔ Unconfirmed | Add a PriceTag component that shows the original price struck through next to the discounted price. | Point to the unit test or add one: only higher-level tests cover it. |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. The applicable rule files are scoped to src/** and eval/*.js (specguard.instructions.md) and to prose writing (ste-mini SKILL.md). The changed files live under eval-sandbox/rx1, which neither scope covers, so no code rule was applied.\n- Test layers: reviewed. Only component-layer tests exist for this change. The rounding and formatting logic is not exported, so there is no public unit seam to push it down to. Pushdown is not recommended.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (4) · Unit evidence: 0/4 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: The original price is shown struck through next to the discounted price | PR body; eval-sandbox/rx1/PriceTag.tsx:12 —       &lt;s>{format.format(price)}&lt;/s> &lt;strong>{format.format(discounted)}&lt;/strong> | component: eval-sandbox/rx1/PriceTag.test.tsx:11 —   expect(screen.getByText('$100.00')).toBeTruthy(); (assertion) | Higher-level only: The only assertions are in a .tsx test that renders through @​testing-library/react, which is component-layer coverage. The test finds the original price text but never checks that it sits in an &lt;s> element, so the strikethrough is not pinned at this layer. No unit test exists in the visible files. |\n| O2: A discount of zero or less shows only the plain price | from behaviour; eval-sandbox/rx1/PriceTag.tsx:8 —     return &lt;span>{format.format(price)}&lt;/span>; | component: eval-sandbox/rx1/PriceTag.test.tsx:6 —   expect(screen.getByText('$100.00')).toBeTruthy(); (assertion) | Higher-level only: The plain-price branch is reached only in a component-layer test with no discount prop. No unit seam is visible, so this is not unit coverage. The test does not check the absence of a discounted price or the strikethrough element. |\n| O3: The discounted price is rounded to cents | from behaviour; eval-sandbox/rx1/PriceTag.tsx:4 —   const discounted = Math.round(price * (1 - discountPercent / 100) * 100) / 100; | component: eval-sandbox/rx1/PriceTag.test.tsx:17 —   expect(screen.getByText('$16.99')).toBeTruthy(); (assertion) | Higher-level only: The rounding case is checked only through the rendered text of a component-layer test with the literal $16.99. The rounding helper is not exported, so no unit seam exists for this logic in the visible files. |\n| O4: Prices are formatted in the requested currency | from behaviour; eval-sandbox/rx1/PriceTag.tsx:5 —   const format = new Intl.NumberFormat('en-US', { style: 'currency', currency }); | component: eval-sandbox/rx1/PriceTag.test.tsx:22 —   expect(screen.getByText('€45.00')).toBeTruthy(); (assertion) | Higher-level only: The EUR case is asserted only in a component-layer test with the literal €45.00. No unit seam exists for the formatter in the visible files. |\n\n**Not reviewed (3 items)**\n\n- Only the two changed files were assessed.\n- The duplicate test at eval/cases/rx1/head/PriceTag.test.tsx was not in files.txt and was not assessed as changed.\n- Obligations beyond the nine-item limit were not listed.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `954ffc1`, base `b964c80`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 6 files, 5 KB\n\n</details>\n\n<sub>Cost $0.0031 · claude-haiku-5-5 (fast tier) · 17.4k in (11.8k cached) · 4.8k out · 21s</sub>\n",
+        "latency_s": 48,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"The original price is shown struck through next to the discounted price\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/rx1/PriceTag.tsx\",\"line\":12,\"quote\":\"      <s>{format.format(price)}</s> <strong>{format.format(discounted)}</strong>\"},\"evidence\":[{\"path\":\"eval-sandbox/rx1/PriceTag.test.tsx\",\"line\":11,\"quote\":\"  expect(screen.getByText('$100.00')).toBeTruthy();\",\"layer\":\"component\"}],\"status\":\"higher_level_only\",\"reason\":\"The only assertions are in a .tsx test that renders through @testing-library/react, which is component-layer coverage. The test finds the original price text but never checks that it sits in an <s> element, so the strikethrough is not pinned at this layer. No unit test exists in the visible files.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: original price struck through next to discounted price; C: the original price is wrapped in <s> beside the discounted price in <strong>.\"}},{\"id\":\"O2\",\"obligation\":\"A discount of zero or less shows only the plain price\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/rx1/PriceTag.tsx\",\"line\":8,\"quote\":\"    return <span>{format.format(price)}</span>;\"},\"evidence\":[{\"path\":\"eval-sandbox/rx1/PriceTag.test.tsx\",\"line\":6,\"quote\":\"  expect(screen.getByText('$100.00')).toBeTruthy();\",\"layer\":\"component\"}],\"status\":\"higher_level_only\",\"reason\":\"The plain-price branch is reached only in a component-layer test with no discount prop. No unit seam is visible, so this is not unit coverage. The test does not check the absence of a discounted price or the strikethrough element.\"},{\"id\":\"O3\",\"obligation\":\"The discounted price is rounded to cents\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/rx1/PriceTag.tsx\",\"line\":4,\"quote\":\"  const discounted = Math.round(price * (1 - discountPercent / 100) * 100) / 100;\"},\"evidence\":[{\"path\":\"eval-sandbox/rx1/PriceTag.test.tsx\",\"line\":17,\"quote\":\"  expect(screen.getByText('$16.99')"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "rx2",
+      "goal": "requirements",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 4,
+            "tolerance": 2,
+            "quote": "itemCount === 0"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 5,
+            "level": "inline",
+            "title": "Empty-cart branch is untested",
+            "body": "**Empty-cart branch is untested**\n\nitemCount=0 → the button renders disabled with the label \"Cart is empty\", but no test renders an empty cart. A change that drops `disabled` or the label still passes the suite. Add a component test for the empty cart:\n\n```tsx\ntest('is disabled and labelled \"Cart is empty\" when the cart is empty', () => {\n  render(&lt;CheckoutButton itemCount={0} onCheckout={jest.fn()} />);\n  expect(screen.getByRole('button', { name: 'Cart is empty' })).toBeDisabled();\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=1e6e93253f121dfcfd206621c11c8231563be8d3 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 41,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/152",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38491133858",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx2/CheckoutButton.tsx",
+            "line": 5,
+            "level": "inline",
+            "title": "Empty-cart branch is untested",
+            "body": "**Empty-cart branch is untested**\n\nitemCount=0 → the button renders disabled with the label \"Cart is empty\", but no test renders an empty cart. A change that drops `disabled` or the label still passes the suite. Add a component test for the empty cart:\n\n```tsx\ntest('is disabled and labelled \"Cart is empty\" when the cart is empty', () => {\n  render(&lt;CheckoutButton itemCount={0} onCheckout={jest.fn()} />);\n  expect(screen.getByRole('button', { name: 'Cart is empty' })).toBeDisabled();\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=1e6e93253f121dfcfd206621c11c8231563be8d3 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/2 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":15976,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":152,\"merged\":false,\"head\":\"cd4db8628b42be8e339f04fe417bd932901ed530\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"missing_test\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 unit test gap to fix**\n\n| Unit tests | Requirements (2) | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 1 missing | ❌ 1 · ❔ 1 | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (1)\n\n- [Empty-cart branch is untested](https://github.com/Mira190/SpecGuard/pull/152#discussion_r4265561078) `eval-sandbox/rx2/CheckoutButton.tsx:5` — itemCount=0 → the button renders disabled with the label \"Cart is empty\", but no test renders an empty cart.\n\n### ❌ Requirements to check (2)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❔ Unconfirmed | The button is enabled when the cart has items. | Point to the unit test or add one: only higher-level tests cover it. |\n| ❌ Gap | The button is disabled and labelled \"Cart is empty\" when the cart is empty. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/152#discussion_r4265561078)) |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. standards.txt lists two rule files. specguard.instructions.md applies only to src/** and eval/*.js, not to eval-sandbox/rx2. ste-mini governs prose style, not code, so no rule applies to the changed files.\n- Test layers: reviewed. Layers inspected: the component and its component-level RTL tests in eval-sandbox/rx2 and eval/cases/rx2/head. The empty-cart branch has no separate pure function, so no pushdown candidate exists.\n\n**Requirements source:** PR body\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (2) · Unit evidence: 0/2 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: The button is enabled when the cart has items | PR body AC 1; eval-sandbox/rx2/CheckoutButton.tsx:7 —   return &lt;button onClick={onCheckout}>Checkout&lt;/button>; | component: eval-sandbox/rx2/CheckoutButton.test.tsx:9 —   expect(button).toBeEnabled(); (assertion) | Higher-level only: The only assertion is a React Testing Library render test of a .tsx component with itemCount=2, so it is component-layer evidence. It shows the enabled branch but does not run at unit level, and no pure seam exists beyond the component. Searched the eval/cases/rx2/head copy of the test, which is identical. |\n| O2: The button is disabled and labelled \"Cart is empty\" when the cart is empty | PR body AC 2; eval-sandbox/rx2/CheckoutButton.tsx:5 —     return &lt;button disabled>Cart is empty&lt;/button>; | none | Missing test: Searched eval-sandbox/rx2/CheckoutButton.test.tsx and eval/cases/rx2/head/CheckoutButton.test.tsx for itemCount={0}, 'Cart is empty', toBeDisabled and the disabled branch. Neither file renders an empty cart, so no assertion reaches this branch. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `cd4db86`, base `498a8a3`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 6 files, 4 KB\n\n</details>\n\n<sub>Cost $0.0023 · claude-haiku-5-5 (fast tier) · 15.8k in (11.8k cached) · 3.6k out · 16s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 41,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"The button is enabled when the cart has items\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/rx2/CheckoutButton.tsx\",\"line\":7,\"quote\":\"  return <button onClick={onCheckout}>Checkout</button>;\"},\"evidence\":[{\"path\":\"eval-sandbox/rx2/CheckoutButton.test.tsx\",\"line\":9,\"quote\":\"  expect(button).toBeEnabled();\",\"layer\":\"component\"}],\"status\":\"higher_level_only\",\"reason\":\"The only assertion is a React Testing Library render test of a .tsx component with itemCount=2, so it is component-layer evidence. It shows the enabled branch but does not run at unit level, and no pure seam exists beyond the component. Searched the eval/cases/rx2/head copy of the test, which is identical.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: enabled when the cart has items; C: itemCount !== 0 returns an enabled button with onClick.\"}},{\"id\":\"O2\",\"obligation\":\"The button is disabled and labelled \\\"Cart is empty\\\" when the cart is empty\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/rx2/CheckoutButton.tsx\",\"line\":5,\"quote\":\"    return <button disabled>Cart is empty</button>;\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/rx2/CheckoutButton.test.tsx and eval/cases/rx2/head/CheckoutButton.test.tsx for itemCount={0}, 'Cart is empty', toBeDisabled and the disabled branch. Neither file renders an empty cart, so no assertion reaches this branch.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: disabled and labelled \\\"Cart is empty\\\" when empty; C: itemCount === 0 returns a disabled button with that label.\"}}],\"findings\":[{\"kind\":\"missing_test\",\"obligation_ids\":[\"O2\"],\"path\":\"eval-sandbox/rx2/CheckoutButton.tsx\",\"line\":5,\"quote\":\"    return <button disabled>Cart is empty</button>;\",\"source\":\"PR body AC 2\",\"title\":\"Empty-cart branch is untested\",\"body\":\"itemCount=0 → the button renders disabled with the label \\\"Cart is empty\\\", but no test renders an empty cart. A change that drops `d"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "rx3",
+      "goal": "test_quality",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 1,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": "weak_test",
+          "path": [
+            "eval-sandbox/rx3/CartSummary.test.tsx",
+            "eval-sandbox/rx3/CartSummary.tsx"
+          ],
+          "line": 10,
+          "tolerance": 5,
+          "quote": "expect(useCart).toHaveBeenCalled()"
+        }
+      ],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [
+        {
+          "kind": "missing_test",
+          "path": "eval-sandbox/rx3/CartSummary.tsx",
+          "line": 5,
+          "title": "Rendered count and total are not asserted",
+          "reason": "The rendered item count and total text is never asserted."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": true,
+      "validation_notes": [
+        "Obligation O1 alignment unknown: needs a linked requirement."
+      ],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 31,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/153",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38491289769",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/rx3/CartSummary.tsx",
+            "line": 5,
+            "level": "inline",
+            "title": "Rendered count and total are not asserted",
+            "body": "**Rendered count and total are not asserted**\n\nWith items of length 1 and total 5, the output is \"1 items, total 5\". The existing test only checks that useCart was called, so rendering \"total 0\" or dropping the count still passes. Add a component test:\n\n```tsx\ntest('shows item count and total', () => {\n  (useCart as jest.Mock).mockReturnValue({ items: [{ id: 'a', name: 'a', price: 5 }], total: 5 });\n  const { container } = render(&lt;CartSummary />);\n  expect(container.textContent).toBe('1 items, total 5');\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=25d04c2ea99ad121f4384efc39703a18a922094c -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/1 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":15742,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":153,\"merged\":false,\"head\":\"b2e3350747848649f33d4f752c51f7a389afa471\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"missing_test\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 unit test gap to fix**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 1 missing | none found | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (1)\n\n- [Rendered count and total are not asserted](https://github.com/Mira190/SpecGuard/pull/153#discussion_r4265569293) `eval-sandbox/rx3/CartSummary.tsx:5` — With items of length 1 and total 5, the output is \"1 items, total 5\".\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. standards.txt lists a prose style skill (ste-mini) and specguard.instructions.md, which applies only to src/** and eval/*.js. Neither covers eval-sandbox/rx3 code, so no code rule applied.\n- Test layers: reviewed. The formatting logic is inline JSX with no public pure function to push down. The only existing test is a component-level test, so no unit seam was available to move.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (1) · Unit evidence: 0/1 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: The component shows the item count and the total from the cart | PR body; eval-sandbox/rx3/CartSummary.tsx:5 —   return &lt;p>{items.length} items, total {total}&lt;/p>; | component: eval-sandbox/rx3/CartSummary.test.tsx:10 —   expect(useCart).toHaveBeenCalled(); (no assertion) | Missing test: Searched eval-sandbox/rx3/CartSummary.test.tsx and eval/cases/rx3/head/CartSummary.test.tsx. The only assertion (line 10) checks that the hook was called. No assertion reads the rendered count or total, so a wrong count or total would still pass. |\n\n**Not reviewed (2 items)**\n\n- eval/cases/rx3/head/ copies were read as identical to eval-sandbox/rx3/ and not assessed separately.\n- No structured acceptance criteria were collected, so the PR body was the only requirement source.\n\n**Validation notes (1)**\n\n- Obligation O1 alignment unknown: needs a linked requirement.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `b2e3350`, base `25efd8e`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 7 files, 3 KB\n\n</details>\n\n<sub>Cost $0.0021 · claude-haiku-5-5 (fast tier) · 15.4k in (11.8k cached) · 3.3k out · 16s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 31,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"The component shows the item count and the total from the cart\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/rx3/CartSummary.tsx\",\"line\":5,\"quote\":\"  return <p>{items.length} items, total {total}</p>;\"},\"evidence\":[{\"path\":\"eval-sandbox/rx3/CartSummary.test.tsx\",\"line\":10,\"quote\":\"  expect(useCart).toHaveBeenCalled();\",\"kind\":\"no_assertion\",\"layer\":\"component\"}],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/rx3/CartSummary.test.tsx and eval/cases/rx3/head/CartSummary.test.tsx. The only assertion (line 10) checks that the hook was called. No assertion reads the rendered count or total, so a wrong count or total would still pass.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"PR body: shows the item count and total from the cart; code renders items.length and total.\"}}],\"findings\":[{\"kind\":\"missing_test\",\"obligation_ids\":[\"O1\"],\"path\":\"eval-sandbox/rx3/CartSummary.tsx\",\"line\":5,\"quote\":\"  return <p>{items.length} items, total {total}</p>;\",\"title\":\"Rendered count and total are not asserted\",\"body\":\"With items of length 1 and total 5, the output is \\\"1 items, total 5\\\". The existing test only checks that useCart was called, so rendering \\\"total 0\\\" or dropping the count still passes. Add a component test:\\n\\n```tsx\\ntest('shows item count and total', () => {\\n  (useCart as jest.Mock).mockReturnValue({ items: [{ id: 'a', name: 'a', price: 5 }], total: 5 });\\n  const { container } = render(<CartSummary />);\\n  expect(container.textContent).toBe('1 items, total 5');\\n});\\n```\",\"confidence\":\"high\"}],\"not_reviewed\":\"eval/cases/rx3/head/ copies were read as identical to eval-sandbox/rx3/ and not assessed separately. No structured acceptance criteria were collected, so the PR body was the only requirement source.\",\"standards\":{\"status\":\"not_reviewed\",\"sources\":[],\"reason\":\"standards.txt lists a prose style skill (ste-mini) and specguard.instructions.md, which applies only to src/** and eval"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "s1",
+      "goal": "standards",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/s1/pkg/config.js",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "pkg/REVIEW.md",
+            "quote": "throw 'PORT is required'"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s1/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s1/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object, not a string",
+            "body": "**Throw an Error object, not a string**\n\nREVIEW.md requires Error objects. The string throw means callers cannot read `.message` or a stack trace, and `instanceof Error` checks fail. Throw an Error instead.\n\n```suggestion\n    throw new Error('PORT is required');\n```\n\n<!--\nkind: standard, confidence: high, rule: eval-sandbox/s1/pkg/REVIEW.md:3\n-->\n<!-- specguard:fp=0c902900ffd4532f5045665313612361a86c76f4 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 27,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/154",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38491412419",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/s1/pkg/REVIEW.md:3",
+            "path": "eval-sandbox/s1/pkg/config.js",
+            "line": 3,
+            "level": "inline",
+            "title": "Throw an Error object, not a string",
+            "body": "**Throw an Error object, not a string**\n\nREVIEW.md requires Error objects. The string throw means callers cannot read `.message` or a stack trace, and `instanceof Error` checks fail. Throw an Error instead.\n\n```suggestion\n    throw new Error('PORT is required');\n```\n\n<!--\nkind: standard, confidence: high, rule: eval-sandbox/s1/pkg/REVIEW.md:3\n-->\n<!-- specguard:fp=0c902900ffd4532f5045665313612361a86c76f4 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/2 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":11812,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":154,\"merged\":false,\"head\":\"dc370754bc56dfe2521fefc208c459f67f29d571\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"standard\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 standards violation to fix**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| no high-confidence gaps | none found | ❌ 1 violation | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Coding standard violations (1)\n\n- [Throw an Error object, not a string](https://github.com/Mira190/SpecGuard/pull/154#discussion_r4265576093) `eval-sandbox/s1/pkg/config.js:3` — rule: `eval-sandbox/s1/pkg/REVIEW.md`\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. REVIEW.md applies to every path and was applied to config.js. The specguard instructions apply only to src/** and eval/*.js, so they do not cover this path. The ste-mini skill governs prose style, not code, so it does not apply to these changed files. Sources: `eval-sandbox/s1/pkg/REVIEW.md`.\n- Test layers: reviewed. Only one module and its unit test are changed; no component or integration tests reference getPort, so no pushdown candidate exists.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (2) · Unit evidence: 2/2 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: A missing PORT is rejected with a PORT is required error | from behaviour; eval-sandbox/s1/pkg/config.js:3 —     throw 'PORT is required'; | unit: eval-sandbox/s1/pkg/config.test.js:6 —   assert.throws(() => getPort({}), /PORT is required/); (assertion) | Evidenced: The unit test asserts that getPort({}) throws a message matching /PORT is required/. It pins the error message but not the error type, so the string-throw defect is reported as a standard violation, not a test weakness. |\n| O2: A present PORT is parsed and returned as a number | from behaviour; eval-sandbox/s1/pkg/config.js:5 —   return Number(env.PORT); | unit: eval-sandbox/s1/pkg/config.test.js:10 —   assert.equal(getPort({ PORT: '8080' }), 8080); (assertion) | Evidenced: The unit test asserts the literal 8080 for PORT '8080', so a change that returns the string or drops Number fails the assertion. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines), `eval-sandbox/s1/pkg/REVIEW.md` (54 bytes, 3 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `dc37075`, base `20bf622`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 9 files, 27 KB\n\n</details>\n\n<sub>Cost $0.0029 · claude-haiku-5-5 (fast tier) · 27.0k in (11.8k cached) · 2.5k out · 12s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 27,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"A missing PORT is rejected with a PORT is required error\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/s1/pkg/config.js\",\"line\":3,\"quote\":\"    throw 'PORT is required';\"},\"evidence\":[{\"path\":\"eval-sandbox/s1/pkg/config.test.js\",\"line\":6,\"quote\":\"  assert.throws(() => getPort({}), /PORT is required/);\"}],\"status\":\"covered\",\"reason\":\"The unit test asserts that getPort({}) throws a message matching /PORT is required/. It pins the error message but not the error type, so the string-throw defect is reported as a standard violation, not a test weakness.\"},{\"id\":\"O2\",\"obligation\":\"A present PORT is parsed and returned as a number\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/s1/pkg/config.js\",\"line\":5,\"quote\":\"  return Number(env.PORT);\"},\"evidence\":[{\"path\":\"eval-sandbox/s1/pkg/config.test.js\",\"line\":10,\"quote\":\"  assert.equal(getPort({ PORT: '8080' }), 8080);\"}],\"status\":\"covered\",\"reason\":\"The unit test asserts the literal 8080 for PORT '8080', so a change that returns the string or drops Number fails the assertion.\"}],\"findings\":[{\"kind\":\"standard\",\"obligation_ids\":[],\"path\":\"eval-sandbox/s1/pkg/config.js\",\"line\":3,\"quote\":\"    throw 'PORT is required';\",\"title\":\"Throw an Error object, not a string\",\"body\":\"REVIEW.md requires Error objects. The string throw means callers cannot read `.message` or a stack trace, and `instanceof Error` checks fail. Throw an Error instead.\",\"rule_source\":\"eval-sandbox/s1/pkg/REVIEW.md:1\",\"rule_quote\":\"- Throw Error objects, never strings.\",\"suggestion\":\"    throw new Error('PORT is required');\",\"confidence\":\"high\"}],\"not_reviewed\":\"\",\"standards\":{\"status\":\"checked\",\"sources\":[\"eval-sandbox/s1/pkg/REVIEW.md\"],\"reason\":\"REVIEW.md applies to every path and was applied to config.js. The specguard instructions apply only to src/** and eval/*.js, so they do not cover this path. The ste-mini skill governs prose style, not code, so it does not appl"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t1",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "quote": "Math.round(50 * 1.2 * 100)"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "20% tax expected value mirrors the implementation",
+            "body": "**20% tax expected value mirrors the implementation**\n\nThe expected value repeats the implementation's formula, so it proves nothing about the 20% rate. Replace it with the independent literal: `assert.equal(addTax(50), 60);`.\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: weak_test, confidence: high\n-->\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": true,
+      "validation_notes": [
+        "Dropped requirements[0]: malformed or duplicate.",
+        "Obligation O1 alignment unknown: needs a linked requirement.",
+        "Obligation O2 alignment unknown: needs a linked requirement.",
+        "Obligation O3 alignment unknown: needs a linked requirement."
+      ],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 46,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/155",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38491570396",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t1/tax.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "20% tax expected value mirrors the implementation",
+            "body": "**20% tax expected value mirrors the implementation**\n\nThe expected value repeats the implementation's formula, so it proves nothing about the 20% rate. Replace it with the independent literal: `assert.equal(addTax(50), 60);`.\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: weak_test, confidence: high\n-->\n<!-- specguard:fp=de001e761f21480bc5bf76659de4ed91c08a3b6d -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 2/3 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":19880,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":155,\"merged\":false,\"head\":\"d7bd0e1be6bafba06ab46b4df61afedf2881e55a\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"weak_test\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 unit test gap to fix**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 1 weak | none found | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Weak unit tests (1)\n\n- [20% tax expected value mirrors the implementation](https://github.com/Mira190/SpecGuard/pull/155#discussion_r4265587202) `eval-sandbox/t1/tax.test.js:6` — The expected value repeats the implementation's formula, so it proves nothing about the 20% rate.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. specguard.instructions.md applies to src/** and eval/*.js, which the changed eval-sandbox/t1 files do not match. ste-mini governs prose and no prose changed.\n- Test layers: reviewed. Only unit tests exist for addTax in the changed files; no higher-layer logic to push down.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (3) · Unit evidence: 2/3 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: addTax applies 20% tax | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:6 —   assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100); (assertion) | Weak test: The expected value repeats the implementation's formula and constant (Math.round(... * 1.2 * 100) / 100), so it is a tautology. It does not pin the 20% rate to an independent value such as 60. |\n| O2: addTax rounds the result to cents | PR body; eval-sandbox/t1/tax.js:7 —   return Math.round(amount * RATE * 100) / 100; | unit: eval-sandbox/t1/tax.test.js:10 —   assert.equal(addTax(0.07), 0.08); (assertion) | Evidenced: 0.07 * 1.2 = 0.084, which rounds to 0.08. The literal 0.08 fails if the rounding is removed or changed to another precision. |\n| O3: addTax rejects negative amounts | PR body; eval-sandbox/t1/tax.js:5 —     throw new RangeError('amount must not be negative'); | unit: eval-sandbox/t1/tax.test.js:14 —   assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' }); (assertion) | Evidenced: The unit test asserts the thrown RangeError type and message for -1, so removing the guard or changing the error fails it. |\n\n**Not reviewed (1 item)**\n\n- eval/cases/t1/head/tax.test.js is not in files.txt; its content matches the reviewed test and it was not assessed as a changed file.\n\n**Validation notes (4)**\n\n- Dropped requirements[0]: malformed or duplicate.\n- Obligation O1 alignment unknown: needs a linked requirement.\n- Obligation O2 alignment unknown: needs a linked requirement.\n- Obligation O3 alignment unknown: needs a linked requirement.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `d7bd0e1`, base `13cecac`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 5 files, 3 KB\n\n</details>\n\n<sub>Cost $0.0027 · claude-haiku-5-5 (fast tier) · 15.3k in (11.8k cached) · 4.5k out · 20s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 46,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"addTax applies 20% tax\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/t1/tax.js\",\"line\":7,\"quote\":\"  return Math.round(amount * RATE * 100) / 100;\"},\"evidence\":[{\"path\":\"eval-sandbox/t1/tax.test.js\",\"line\":6,\"quote\":\"  assert.equal(addTax(50), Math.round(50 * 1.2 * 100) / 100);\",\"layer\":\"unit\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The expected value repeats the implementation's formula and constant (Math.round(... * 1.2 * 100) / 100), so it is a tautology. It does not pin the 20% rate to an independent value such as 60.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"PR: applies 20% tax; code: RATE = 1.2 applied to amount.\"}},{\"id\":\"O2\",\"obligation\":\"addTax rounds the result to cents\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/t1/tax.js\",\"line\":7,\"quote\":\"  return Math.round(amount * RATE * 100) / 100;\"},\"evidence\":[{\"path\":\"eval-sandbox/t1/tax.test.js\",\"line\":10,\"quote\":\"  assert.equal(addTax(0.07), 0.08);\",\"layer\":\"unit\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"0.07 * 1.2 = 0.084, which rounds to 0.08. The literal 0.08 fails if the rounding is removed or changed to another precision.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"PR: rounded to cents; code: Math.round(x * 100) / 100.\"}},{\"id\":\"O3\",\"obligation\":\"addTax rejects negative amounts\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/t1/tax.js\",\"line\":5,\"quote\":\"    throw new RangeError('amount must not be negative');\"},\"evidence\":[{\"path\":\"eval-sandbox/t1/tax.test.js\",\"line\":14,\"quote\":\"  assert.throws(() => addTax(-1), { name: 'RangeError', message: 'amount must not be negative' });\",\"layer\":\"unit\",\"kind\":\"assertion\"}],\"status\":\"covered\",\"reason\":\"The unit test asserts the thrown RangeError type and message for -1, so removing the guard or changing the error fails it.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"PR: rejects negative amounts; code throws RangeError when amount < 0.\"}}],\"findings"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t2",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/t2/limits.test.js",
+            "line": 6,
+            "tolerance": 1,
+            "quote": "assert.ok(clamp(15, 0, 10))"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t2/limits.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Upper-bound clamp assertion only checks truthiness",
+            "body": "**Upper-bound clamp assertion only checks truthiness**\n\nInput 15 → clamp returns 15 if the Math.min bound is removed; the test still passes. Requirement: result is 10. Replace with:\n\n```js\n  assert.equal(clamp(15, 0, 10), 10);\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: weak_test, confidence: high\n-->\n<!-- specguard:fp=4d68a31907eb5bb57f66a632c82ca444750395b2 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 27,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/156",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38491725666",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t2/limits.test.js",
+            "line": 6,
+            "level": "inline",
+            "title": "Upper-bound clamp assertion only checks truthiness",
+            "body": "**Upper-bound clamp assertion only checks truthiness**\n\nInput 15 → clamp returns 15 if the Math.min bound is removed; the test still passes. Requirement: result is 10. Replace with:\n\n```js\n  assert.equal(clamp(15, 0, 10), 10);\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: weak_test, confidence: high\n-->\n<!-- specguard:fp=4d68a31907eb5bb57f66a632c82ca444750395b2 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 1 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/1 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":7879,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":156,\"merged\":false,\"head\":\"0843c0a7a33de0e53be2540a38534d28202626ab\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"weak_test\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 unit test gap to fix**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 1 weak | none found | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Weak unit tests (1)\n\n- [Upper-bound clamp assertion only checks truthiness](https://github.com/Mira190/SpecGuard/pull/156#discussion_r4265594994) `eval-sandbox/t2/limits.test.js:6` — Input 15 → clamp returns 15 if the Math.min bound is removed; the test still passes.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. No rule file's applyTo scope covers eval-sandbox/t2/limits.test.js: specguard.instructions.md covers src/** and eval/*.js only; ste-mini governs prose style, not test code.\n- Test layers: reviewed. Only unit tests (node:test) exist for clamp; no higher-layer tests or pushdown candidates.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (1) · Unit evidence: 0/1 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: clamp(15, 0, 10) returns the maximum 10 | from behaviour; eval-sandbox/t2/limits.test.js:6 —   assert.ok(clamp(15, 0, 10)); | unit: eval-sandbox/t2/limits.test.js:6 —   assert.ok(clamp(15, 0, 10)); (assertion) | Weak test: The only assertion for this input is a truthiness check. clamp returns 15 if the upper bound is dropped, and 15 is truthy, so the test still passes. The expected value 10 is not asserted. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `0843c0a`, base `bd2e810`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 4 files, 2 KB\n\n</details>\n\n<sub>Cost $0.0012 · claude-haiku-5-5 (fast tier) · 14.2k in (11.8k cached) · 1.6k out · 8s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 27,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"clamp(15, 0, 10) returns the maximum 10\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/t2/limits.test.js\",\"line\":6,\"quote\":\"  assert.ok(clamp(15, 0, 10));\"},\"change\":{\"path\":\"eval-sandbox/t2/limits.test.js\",\"line\":6,\"quote\":\"  assert.ok(clamp(15, 0, 10));\"},\"evidence\":[{\"path\":\"eval-sandbox/t2/limits.test.js\",\"line\":6,\"quote\":\"  assert.ok(clamp(15, 0, 10));\"}],\"status\":\"weak_test\",\"reason\":\"The only assertion for this input is a truthiness check. clamp returns 15 if the upper bound is dropped, and 15 is truthy, so the test still passes. The expected value 10 is not asserted.\"}],\"findings\":[{\"kind\":\"weak_test\",\"obligation_ids\":[\"O1\"],\"path\":\"eval-sandbox/t2/limits.test.js\",\"line\":6,\"quote\":\"  assert.ok(clamp(15, 0, 10));\",\"title\":\"Upper-bound clamp assertion only checks truthiness\",\"body\":\"Input 15 → clamp returns 15 if the Math.min bound is removed; the test still passes. Requirement: result is 10. Replace with:\\n\\n```js\\n  assert.equal(clamp(15, 0, 10), 10);\\n```\",\"confidence\":\"high\"}],\"not_reviewed\":\"\",\"standards\":{\"status\":\"not_reviewed\",\"sources\":[],\"reason\":\"No rule file's applyTo scope covers eval-sandbox/t2/limits.test.js: specguard.instructions.md covers src/** and eval/*.js only; ste-mini governs prose style, not test code.\"},\"layering\":{\"status\":\"checked\",\"reason\":\"Only unit tests (node:test) exist for clamp; no higher-layer tests or pushdown candidates.\"},\"requirements\":[]}"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t3",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": [
+              "weak_test",
+              "missing_test"
+            ],
+            "path": [
+              "eval-sandbox/t3/qty.test.js",
+              "eval-sandbox/t3/qty.js"
+            ],
+            "line": 9,
+            "tolerance": 6,
+            "quote": "test.skip('rejects negative quantities'"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t3/qty.test.js",
+            "line": 9,
+            "level": "inline",
+            "title": "Skipped test leaves the n < 1 branch unasserted",
+            "body": "**Skipped test leaves the n < 1 branch unasserted**\n\nThe skip is the intended change, but it removes the only check of the `n < 1` branch in qty.js. Input parseQty('-2') → if the `n < 1` condition were removed, the function returns -2 and the suite still passes. Add a live boundary test that runs:\n\n```js\ntest('rejects zero quantities', () => {\n  assert.throws(() => parseQty('0'), RangeError);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=b9ab7ae4f3a156eabe226d173898900cb59cf0d3 -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": true,
+      "validation_notes": [
+        "Dropped requirements[0]: malformed or duplicate.",
+        "Obligation O1 alignment unknown: needs a linked requirement."
+      ],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 31,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/157",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38491876849",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/t3/qty.test.js",
+            "line": 9,
+            "level": "inline",
+            "title": "Skipped test leaves the n < 1 branch unasserted",
+            "body": "**Skipped test leaves the n < 1 branch unasserted**\n\nThe skip is the intended change, but it removes the only check of the `n < 1` branch in qty.js. Input parseQty('-2') → if the `n < 1` condition were removed, the function returns -2 and the suite still passes. Add a live boundary test that runs:\n\n```js\ntest('rejects zero quantities', () => {\n  assert.throws(() => parseQty('0'), RangeError);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=b9ab7ae4f3a156eabe226d173898900cb59cf0d3 -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 0 weak · Standards: 0 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/1 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":12976,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":157,\"merged\":false,\"head\":\"ce4212f34c30c27d8b20cca1a4fbca86770cdefc\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"missing_test\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 unit test gap to fix**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 1 missing | none found | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (1)\n\n- [Skipped test leaves the n < 1 branch unasserted](https://github.com/Mira190/SpecGuard/pull/157#discussion_r4265604820) `eval-sandbox/t3/qty.test.js:9` — The skip is the intended change, but it removes the only check of the `n < 1` branch in qty.js.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. Both rule files were checked for scope. .github/instructions/specguard.instructions.md applies to src/** and eval/*.js, which do not include eval-sandbox/t3/. .claude/skills/ste-mini/SKILL.md covers prose writing, not test code. No rule applies to the changed file.\n- Test layers: reviewed. Only unit-level node:test files are present for parseQty. No higher-layer tests exist to push down.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (1) · Unit evidence: 0/1 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: A negative quantity is rejected with RangeError | PR body; eval-sandbox/t3/qty.js:3 —   if (!Number.isInteger(n) \\|\\| n < 1) { | unit: eval-sandbox/t3/qty.test.js:10 —   assert.throws(() => parseQty('-2'), RangeError); (disabled) | Missing test: Searched eval-sandbox/t3/qty.test.js for parseQty calls with negative or zero input. The only negative case (parseQty('-2')) sits in a test.skip block and does not run. The remaining test covers only the fraction branch ('1.5'), so the n < 1 branch has no live assertion. |\n\n**Validation notes (2)**\n\n- Dropped requirements[0]: malformed or duplicate.\n- Obligation O1 alignment unknown: needs a linked requirement.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `ce4212f`, base `061acaa`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 4 files, 2 KB\n\n</details>\n\n<sub>Cost $0.0018 · claude-haiku-5-5 (fast tier) · 14.3k in (11.8k cached) · 2.8k out · 13s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 31,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"A negative quantity is rejected with RangeError\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/t3/qty.js\",\"line\":3,\"quote\":\"  if (!Number.isInteger(n) || n < 1) {\"},\"change\":{\"path\":\"eval-sandbox/t3/qty.test.js\",\"line\":9,\"quote\":\"test.skip('rejects negative quantities', () => {\",\"side\":\"RIGHT\"},\"evidence\":[{\"path\":\"eval-sandbox/t3/qty.test.js\",\"line\":10,\"quote\":\"  assert.throws(() => parseQty('-2'), RangeError);\",\"kind\":\"disabled\"}],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/t3/qty.test.js for parseQty calls with negative or zero input. The only negative case (parseQty('-2')) sits in a test.skip block and does not run. The remaining test covers only the fraction branch ('1.5'), so the n < 1 branch has no live assertion.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"PR body: 'Skip the negative quantity test for now.' The diff applies test.skip to that test.\"}}],\"findings\":[{\"kind\":\"missing_test\",\"obligation_ids\":[\"O1\"],\"path\":\"eval-sandbox/t3/qty.test.js\",\"line\":9,\"quote\":\"test.skip('rejects negative quantities', () => {\",\"title\":\"Skipped test leaves the n < 1 branch unasserted\",\"body\":\"The skip is the intended change, but it removes the only check of the `n < 1` branch in qty.js. Input parseQty('-2') → if the `n < 1` condition were removed, the function returns -2 and the suite still passes. Add a live boundary test that runs:\\n\\n```js\\ntest('rejects zero quantities', () => {\\n  assert.throws(() => parseQty('0'), RangeError);\\n});\\n```\",\"source\":\"PR body\",\"confidence\":\"high\"}],\"not_reviewed\":\"\",\"standards\":{\"status\":\"not_reviewed\",\"sources\":[],\"reason\":\"Both rule files were checked for scope. .github/instructions/specguard.instructions.md applies to src/** and eval/*.js, which do not include eval-sandbox/t3/. .claude/skills/ste-mini/SKILL.md covers prose writing, not test code. No rule applies to the changed file.\"},\"layering\":{\"status\":\"checked\",\"reason\":\"Only unit-level node:"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "t4",
+      "goal": "test_quality",
+      "tp": 0,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 1,
+      "summary_only": 0,
+      "matched": [],
+      "missed": [
+        {
+          "kind": [
+            "missing_test",
+            "weak_test"
+          ],
+          "path": [
+            "eval-sandbox/t4/invoice.js",
+            "eval-sandbox/t4/invoice.test.js"
+          ],
+          "line": 2,
+          "tolerance": 50,
+          "allow_summary": true,
+          "quote": "lines.reduce"
+        }
+      ],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": false,
+      "latency_s": 35,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/158",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38492001231",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [],
+        "reviews": [],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":10545,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":158,\"merged\":false,\"head\":\"a0a9827a19455241ca88d97d4c10ca8d4e2e68cf\",\"engine\":\"claude\",\"complete\":false,\"findings\":{},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Reduced review: no high-confidence gaps**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| no high-confidence gaps | none found | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. The coding standard applies to src/** and eval/*.js only; eval-sandbox/t4/invoice.test.js is outside that scope. The ste-mini prose rule has no prose in this change.\n- Test layers: reviewed. The change touches only a unit test file and its unit under test; no higher-layer test is involved.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (2) · Unit evidence: 0/2 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: total() sums price times qty across invoice lines (removed test asserts 7 for two lines) | from behaviour; eval-sandbox/t4/invoice.js:2 —   return lines.reduce((sum, l) => sum + l.price * l.qty, 0); | unit: eval-sandbox/t4/invoice.test.js:6 —   assert.equal(total([{ price: 2, qty: 3 }, { price: 1, qty: 1 }]), 7); (removed) | Unconfirmed: The PR deletes the only visible unit assertion for this behaviour. The inlined files show no other test of total(); the test-candidates list was empty and no repository-wide search was possible, so absence is not established. |\n| O2: total([]) returns 0 | from behaviour; eval-sandbox/t4/invoice.js:2 —   return lines.reduce((sum, l) => sum + l.price * l.qty, 0); | unit: eval-sandbox/t4/invoice.test.js:10 —   assert.equal(total([]), 0); (removed) | Unconfirmed: The PR deletes the only visible assertion for the empty-invoice case. No other visible test covers it; a repository-wide search was not possible, so absence is not established. |\n\n**Not reviewed (2 items)**\n\n- Only the deleted test file and the inlined invoice.js and checkout.js were visible.\n- Other test files in the repository were not searched, so coverage of total() elsewhere is unknown.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `a0a9827`, base `f58939f`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 4 files, 2 KB\n\n</details>\n\n<sub>Cost $0.0014 · claude-haiku-5-5 (fast tier) · 14.1k in (11.8k cached) · 2.2k out · 11s</sub>\n",
+        "latency_s": 35,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"total() sums price times qty across invoice lines (removed test asserts 7 for two lines)\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/t4/invoice.js\",\"line\":2,\"quote\":\"  return lines.reduce((sum, l) => sum + l.price * l.qty, 0);\"},\"change\":{\"path\":\"eval-sandbox/t4/invoice.test.js\",\"line\":6,\"quote\":\"  assert.equal(total([{ price: 2, qty: 3 }, { price: 1, qty: 1 }]), 7);\",\"side\":\"LEFT\"},\"evidence\":[{\"path\":\"eval-sandbox/t4/invoice.test.js\",\"line\":6,\"quote\":\"  assert.equal(total([{ price: 2, qty: 3 }, { price: 1, qty: 1 }]), 7);\",\"kind\":\"removed\",\"side\":\"LEFT\"}],\"status\":\"unknown\",\"reason\":\"The PR deletes the only visible unit assertion for this behaviour. The inlined files show no other test of total(); the test-candidates list was empty and no repository-wide search was possible, so absence is not established.\"},{\"id\":\"O2\",\"obligation\":\"total([]) returns 0\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/t4/invoice.js\",\"line\":2,\"quote\":\"  return lines.reduce((sum, l) => sum + l.price * l.qty, 0);\"},\"change\":{\"path\":\"eval-sandbox/t4/invoice.test.js\",\"line\":10,\"quote\":\"  assert.equal(total([]), 0);\",\"side\":\"LEFT\"},\"evidence\":[{\"path\":\"eval-sandbox/t4/invoice.test.js\",\"line\":10,\"quote\":\"  assert.equal(total([]), 0);\",\"kind\":\"removed\",\"side\":\"LEFT\"}],\"status\":\"unknown\",\"reason\":\"The PR deletes the only visible assertion for the empty-invoice case. No other visible test covers it; a repository-wide search was not possible, so absence is not established.\"}],\"findings\":[],\"not_reviewed\":\"Only the deleted test file and the inlined invoice.js and checkout.js were visible. Other test files in the repository were not searched, so coverage of total() elsewhere is unknown.\",\"standards\":{\"status\":\"not_reviewed\",\"sources\":[],\"reason\":\"The coding standard applies to src/** and eval/*.js only; eval-sandbox/t4/invoice.test.js is outside that scope. The ste-mini prose rule has no prose in t"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "ts1",
+      "goal": "requirements",
+      "tp": 2,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 9,
+            "tolerance": 1,
+            "quote": "const minutes = Number"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 10,
+            "level": "inline",
+            "title": "Combined hours and minutes is untested; Minutes-only input is untested",
+            "body": "**Combined hours and minutes is untested; Minutes-only input is untested**\n\n**Combined hours and minutes is untested**\n\nparseDuration('1h30m') returns 5400 by this code, but no test asserts it, so a change that drops the minutes term still passes the suite. Add to eval-sandbox/ts1/duration.test.ts:\n\n```ts\nit('combines hours and minutes', () => {\n  expect(parseDuration('1h30m')).toBe(5400);\n});\n```\n\n---\n\n**Minutes-only input is untested**\n\nparseDuration('45m') returns 2700 by this code, but no test covers it, so a change that ignores the minutes group passes the suite. Add to eval-sandbox/ts1/duration.test.ts:\n\n```ts\nit('parses minutes alone', () => {\n  expect(parseDuration('45m')).toBe(2700);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=0925235fea4270f16b6e5c8711f47fea33b171eb -->",
+            "source": ""
+          }
+        },
+        {
+          "expected": {
+            "kind": "missing_test",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "tolerance": 1,
+            "quote": "throw new RangeError"
+          },
+          "observed": {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Invalid input rejection is untested",
+            "body": "**Invalid input rejection is untested**\n\nparseDuration('abc') throws RangeError by this code, but no test asserts it, so removing the guard passes the suite. Add to eval-sandbox/ts1/duration.test.ts:\n\n```ts\nit('rejects an invalid duration', () => {\n  expect(() => parseDuration('abc')).toThrow(RangeError);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=d668b368acf01f74724f564aa8e2c72024f3c76e -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 30,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/159",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38492122363",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 10,
+            "level": "inline",
+            "title": "Combined hours and minutes is untested; Minutes-only input is untested",
+            "body": "**Combined hours and minutes is untested; Minutes-only input is untested**\n\n**Combined hours and minutes is untested**\n\nparseDuration('1h30m') returns 5400 by this code, but no test asserts it, so a change that drops the minutes term still passes the suite. Add to eval-sandbox/ts1/duration.test.ts:\n\n```ts\nit('combines hours and minutes', () => {\n  expect(parseDuration('1h30m')).toBe(5400);\n});\n```\n\n---\n\n**Minutes-only input is untested**\n\nparseDuration('45m') returns 2700 by this code, but no test covers it, so a change that ignores the minutes group passes the suite. Add to eval-sandbox/ts1/duration.test.ts:\n\n```ts\nit('parses minutes alone', () => {\n  expect(parseDuration('45m')).toBe(2700);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=0925235fea4270f16b6e5c8711f47fea33b171eb -->",
+            "source": ""
+          },
+          {
+            "kind": "missing_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts1/duration.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Invalid input rejection is untested",
+            "body": "**Invalid input rejection is untested**\n\nparseDuration('abc') throws RangeError by this code, but no test asserts it, so removing the guard passes the suite. Add to eval-sandbox/ts1/duration.test.ts:\n\n```ts\nit('rejects an invalid duration', () => {\n  expect(() => parseDuration('abc')).toThrow(RangeError);\n});\n```\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=d668b368acf01f74724f564aa8e2c72024f3c76e -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 3 missing, 0 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 0 in summary.\nUnit evidence: 0/3 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":14720,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":159,\"merged\":false,\"head\":\"817bb4065b1d69023d159bdac5bbcde45abde7bd\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"missing_test\":{\"posted\":2,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":2,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 2 unit test gaps to fix**\n\n| Unit tests | Requirements (3) | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 2 missing | ❌ 3 | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (2)\n\n- [Combined hours and minutes is untested; Minutes-only input is untested](https://github.com/Mira190/SpecGuard/pull/159#discussion_r4265619193) `eval-sandbox/ts1/duration.ts:10` — **Combined hours and minutes is untested** parseDuration('1h30m') returns 5400 by this code, but no test asserts it, so a change that drops the minutes term still passes the suite.\n- [Invalid input rejection is untested](https://github.com/Mira190/SpecGuard/pull/159#discussion_r4265619204) `eval-sandbox/ts1/duration.ts:6` — parseDuration('abc') throws RangeError by this code, but no test asserts it, so removing the guard passes the suite.\n\n### ❌ Requirements to check (3)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| ❌ Gap | Hours and minutes combine, so \"1h30m\" is 5400 seconds. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/159#discussion_r4265619193)) |\n| ❌ Gap | Minutes alone work, so \"45m\" is 2700 seconds. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/159#discussion_r4265619193)) |\n| ❌ Gap | An invalid string throws a RangeError. | Add the test ([finding](https://github.com/Mira190/SpecGuard/pull/159#discussion_r4265619204)) |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. No rule applies to these paths: specguard.instructions.md is scoped to src/** and eval/*.js, and ste-mini governs prose, not code under eval-sandbox/.\n- Test layers: reviewed. Only unit tests exist for parseDuration in eval-sandbox/ts1 and its eval case copy; no component or integration layer to push down from.\n\n**Requirements source:** PR body\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (3) · Unit evidence: 0/3 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Hours and minutes combine, so \"1h30m\" is 5400 seconds. | PR body AC 1; eval-sandbox/ts1/duration.ts:10 —   return hours * 3600 + minutes * 60; | none | Missing test: Searched eval-sandbox/ts1/duration.test.ts and eval/cases/ts1/head/duration.test.ts (both fully visible). The only assertion is expect(parseDuration('1h')).toBe(3600); no test passes an input with both hours and minutes. |\n| O2: Minutes alone work, so \"45m\" is 2700 seconds. | PR body AC 2; eval-sandbox/ts1/duration.ts:10 —   return hours * 3600 + minutes * 60; | none | Missing test: Searched both candidate test files (fully visible). No test passes a minutes-only input such as '45m'. |\n| O3: An invalid string throws a RangeError. | PR body AC 3; eval-sandbox/ts1/duration.ts:6 —     throw new RangeError(`Invalid duration: \"${input}\"`); | none | Missing test: Searched both candidate test files (fully visible). No test asserts a throw or a RangeError. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `817bb40`, base `bf84fba`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 5 files, 3 KB\n\n</details>\n\n<sub>Cost $0.0023 · claude-haiku-5-5 (fast tier) · 15.3k in (11.8k cached) · 3.6k out · 15s · Delivery: 2 inline comments</sub>\n",
+        "latency_s": 30,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Hours and minutes combine, so \\\"1h30m\\\" is 5400 seconds.\",\"source\":\"PR body AC 1\",\"behaviour\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/ts1/duration.test.ts and eval/cases/ts1/head/duration.test.ts (both fully visible). The only assertion is expect(parseDuration('1h')).toBe(3600); no test passes an input with both hours and minutes.\",\"change\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"alignment\":{\"status\":\"consistent\",\"since\":\"introduced\",\"reason\":\"R1: \\\"1h30m\\\" is 5400; C: the regex captures both groups and the return sums 3600 + 1800.\"}},{\"id\":\"O2\",\"obligation\":\"Minutes alone work, so \\\"45m\\\" is 2700 seconds.\",\"source\":\"PR body AC 2\",\"behaviour\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched both candidate test files (fully visible). No test passes a minutes-only input such as '45m'.\",\"change\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":10,\"quote\":\"  return hours * 3600 + minutes * 60;\"},\"alignment\":{\"status\":\"consistent\",\"since\":\"introduced\",\"reason\":\"R2: \\\"45m\\\" is 2700; C: hours is 0 via ?? 0, so 0 + 45 * 60 = 2700.\"}},{\"id\":\"O3\",\"obligation\":\"An invalid string throws a RangeError.\",\"source\":\"PR body AC 3\",\"behaviour\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":6,\"quote\":\"    throw new RangeError(`Invalid duration: \\\"${input}\\\"`);\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched both candidate test files (fully visible). No test asserts a throw or a RangeError.\",\"change\":{\"path\":\"eval-sandbox/ts1/duration.ts\",\"line\":6,\"quote\":\"    throw new RangeError(`Invalid duration: \\\"${input}\\\"`);\"},\"alignment\":{\"status\":\"consistent\",\"since\":\"introduced\",\"reason\":\"R3: invalid input throws RangeError; C: th"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "ts2",
+      "goal": "test_quality",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 1,
+      "fn": 0,
+      "summary_only": 1,
+      "matched": [
+        {
+          "expected": {
+            "kind": "weak_test",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "tolerance": 1,
+            "quote": "toBeDefined()"
+          },
+          "observed": {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert the SAVE10 result value",
+            "body": "**Assert the SAVE10 result value**\n\napplyCoupon(100, 'SAVE10') → code returns 90, but toBeDefined() accepts 100, 0 or any other value. Surviving mutation: COUPON_RATES.SAVE10 changed or the rate ignored. Replace with: expect(applyCoupon(100, 'SAVE10')).toBe(90);\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: weak_test, confidence: high\n-->\n<!-- specguard:fp=6c8b76380ad79f90fa02a68187037a667137da8e -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [
+        {
+          "kind": "weak_test",
+          "path": "eval-sandbox/ts2/coupon.test.ts",
+          "line": 10,
+          "title": "Pin a value that needs rounding",
+          "reason": "The second assertion (toBeTypeOf number) is equally weak."
+        }
+      ],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 46,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/160",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38492306747",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 6,
+            "level": "inline",
+            "title": "Assert the SAVE10 result value",
+            "body": "**Assert the SAVE10 result value**\n\napplyCoupon(100, 'SAVE10') → code returns 90, but toBeDefined() accepts 100, 0 or any other value. Surviving mutation: COUPON_RATES.SAVE10 changed or the rate ignored. Replace with: expect(applyCoupon(100, 'SAVE10')).toBe(90);\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: weak_test, confidence: high\n-->\n<!-- specguard:fp=6c8b76380ad79f90fa02a68187037a667137da8e -->",
+            "source": ""
+          },
+          {
+            "kind": "weak_test",
+            "confidence": "high",
+            "rule": "",
+            "path": "eval-sandbox/ts2/coupon.test.ts",
+            "line": 10,
+            "level": "inline",
+            "title": "Pin a value that needs rounding",
+            "body": "**Pin a value that needs rounding**\n\nRemoving the rounding step on line 5 survives this test, because toBeTypeOf('number') accepts any number. Add a case whose unrounded result has a fractional cent, with the expected two-decimal value computed by hand, and assert it with toBe.\n\nTake the expected value from the requirement or an independent literal, not from the code under test.\n\n<!--\nkind: weak_test, confidence: high\n-->\n<!-- specguard:fp=3b25a9286d8f12b21944bc848bb21951d00063eb -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 1 missing, 2 weak · Standards: 0 · Layering: 0; 2 inline, 0 file-level, 1 in summary.\nUnit evidence: 0/3 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":21872,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":160,\"merged\":false,\"head\":\"7d57b9ea9d51f00c86f51702a8b9b6c40b9e0515\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"weak_test\":{\"posted\":2,\"already\":0,\"summary\":0},\"missing_test\":{\"posted\":0,\"already\":0,\"summary\":1}},\"pre_existing\":0,\"posted\":{\"inline\":2,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 3 unit test gaps to fix**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| ❌ 1 missing · 2 weak | none found | not reviewed | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Missing unit tests (1)\n\n- Unknown coupon code is not tested [`eval-sandbox/ts2/coupon.ts:4`](https://github.com/Mira190/SpecGuard/blob/7d57b9ea9d51f00c86f51702a8b9b6c40b9e0515/eval-sandbox/ts2/coupon.ts#L4) (reduced review: needs high confidence and two citations) — applyCoupon(100, 'NOPE') → code returns 100 through the ??\n\n### ❌ Weak unit tests (2)\n\n- [Assert the SAVE10 result value](https://github.com/Mira190/SpecGuard/pull/160#discussion_r4265632272) `eval-sandbox/ts2/coupon.test.ts:6` — applyCoupon(100, 'SAVE10') → code returns 90, but toBeDefined() accepts 100, 0 or any other value.\n- [Pin a value that needs rounding](https://github.com/Mira190/SpecGuard/pull/160#discussion_r4265632279) `eval-sandbox/ts2/coupon.test.ts:10` — Removing the rounding step on line 5 survives this test, because toBeTypeOf('number') accepts any number.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: not reviewed. The specguard coding standard applies to src/** and eval/*.js only, not eval-sandbox/ts2 TypeScript. The ste-mini skill governs prose style, not code. No citable code rule applies to the changed files.\n- Test layers: reviewed. Only unit-level vitest tests exist beside coupon.ts. No component or integration layer tests this function, so no pushdown candidate exists.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (3) · Unit evidence: 0/3 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: A SAVE10 coupon reduces the total by 10% | from behaviour; eval-sandbox/ts2/coupon.ts:4 —   const rate = COUPON_RATES[code] ?? 0; | unit: eval-sandbox/ts2/coupon.test.ts:6 —     expect(applyCoupon(100, 'SAVE10')).toBeDefined(); (assertion) | Weak test: The only test of SAVE10 asserts toBeDefined(). A change that returns the total unchanged, or a wrong rate, still passes. No assertion pins the value 90 for an input of 100. |\n| O2: An unknown coupon code leaves the total unchanged | from behaviour; eval-sandbox/ts2/coupon.ts:4 —   const rate = COUPON_RATES[code] ?? 0; | none | Missing test: Searched eval-sandbox/ts2/coupon.test.ts and the candidate copy eval/cases/ts2/head/coupon.test.ts: both call applyCoupon only with SAVE10. No assertion reaches the ?? 0 fallback. |\n| O3: The result is rounded to two decimal places | from behaviour; eval-sandbox/ts2/coupon.ts:5 —   return Math.round(total * (1 - rate) * 100) / 100; | unit: eval-sandbox/ts2/coupon.test.ts:10 —     expect(applyCoupon(100, 'SAVE10')).toBeTypeOf('number'); (assertion) | Weak test: The only assertion on the result checks its type. Removing the rounding step survives: the result for 100 with SAVE10 is an integer, so no fractional-cent case is pinned. |\n\n**Not reviewed (1 item)**\n\n- eval/cases copies of coupon.test.ts and the eval/cases/r1, x2 discount tests were not assessed: they sit outside the changed files. eval/cases/p1 cart test concerns a different apply_coupon.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `7d57b9e`, base `ddbc7b3`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 8 files, 4 KB\n\n</details>\n\n<sub>Cost $0.0030 · claude-haiku-5-5 (fast tier) · 16.4k in (11.8k cached) · 4.9k out · 22s · Delivery: 2 inline comments</sub>\n",
+        "latency_s": 46,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"A SAVE10 coupon reduces the total by 10%\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/ts2/coupon.ts\",\"line\":4,\"quote\":\"  const rate = COUPON_RATES[code] ?? 0;\"},\"evidence\":[{\"path\":\"eval-sandbox/ts2/coupon.test.ts\",\"line\":6,\"quote\":\"    expect(applyCoupon(100, 'SAVE10')).toBeDefined();\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The only test of SAVE10 asserts toBeDefined(). A change that returns the total unchanged, or a wrong rate, still passes. No assertion pins the value 90 for an input of 100.\"},{\"id\":\"O2\",\"obligation\":\"An unknown coupon code leaves the total unchanged\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/ts2/coupon.ts\",\"line\":4,\"quote\":\"  const rate = COUPON_RATES[code] ?? 0;\"},\"evidence\":[],\"status\":\"missing_test\",\"reason\":\"Searched eval-sandbox/ts2/coupon.test.ts and the candidate copy eval/cases/ts2/head/coupon.test.ts: both call applyCoupon only with SAVE10. No assertion reaches the ?? 0 fallback.\"},{\"id\":\"O3\",\"obligation\":\"The result is rounded to two decimal places\",\"source\":\"from behaviour\",\"behaviour\":{\"path\":\"eval-sandbox/ts2/coupon.ts\",\"line\":5,\"quote\":\"  return Math.round(total * (1 - rate) * 100) / 100;\"},\"evidence\":[{\"path\":\"eval-sandbox/ts2/coupon.test.ts\",\"line\":10,\"quote\":\"    expect(applyCoupon(100, 'SAVE10')).toBeTypeOf('number');\",\"kind\":\"assertion\"}],\"status\":\"weak_test\",\"reason\":\"The only assertion on the result checks its type. Removing the rounding step survives: the result for 100 with SAVE10 is an integer, so no fractional-cent case is pinned.\"}],\"findings\":[{\"kind\":\"weak_test\",\"obligation_ids\":[\"O1\"],\"path\":\"eval-sandbox/ts2/coupon.test.ts\",\"line\":6,\"quote\":\"    expect(applyCoupon(100, 'SAVE10')).toBeDefined();\",\"title\":\"Assert the SAVE10 result value\",\"body\":\"applyCoupon(100, 'SAVE10') → code returns 90, but toBeDefined() accepts 100, 0 or any other value. Surviving mutation: COUPON_RATES.SAVE10 changed or the rate i"
+      },
+      "model": "unchanged"
+    },
+    {
+      "id": "ts3",
+      "goal": "standards",
+      "tp": 1,
+      "fp": 0,
+      "acceptable": 0,
+      "fn": 0,
+      "summary_only": 0,
+      "matched": [
+        {
+          "expected": {
+            "kind": "standard",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "tolerance": 1,
+            "rule": "CONTRIBUTING.md",
+            "quote": "throw new RangeError"
+          },
+          "observed": {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/ts3/CONTRIBUTING.md:3",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "level": "inline",
+            "title": "Validation returns a Result instead of throwing",
+            "body": "**Validation returns a Result instead of throwing**\n\nvalidateAge throws for out-of-range and non-integer input. CONTRIBUTING requires validation functions to return `{ ok: false, error }` instead of throwing. Changing the return shape also changes the assertions at validate.test.ts:12-18, which pin the thrown error.\n\n<!--\nkind: standard, confidence: high, rule: eval-sandbox/ts3/CONTRIBUTING.md:3\n-->\n<!-- specguard:fp=d6b54eae90308a6e048cb4f784b0fc55cf7a092e -->",
+            "source": ""
+          }
+        }
+      ],
+      "missed": [],
+      "summary_misses": [],
+      "false_positives": [],
+      "acceptable_findings": [],
+      "must_not_violations": [],
+      "text_misses": [],
+      "json_valid": true,
+      "complete": true,
+      "degraded": false,
+      "validation_notes": [],
+      "skip_ok": true,
+      "clean_ok": true,
+      "pass": true,
+      "latency_s": 37,
+      "rep": 1,
+      "pr_url": "https://github.com/Mira190/SpecGuard/pull/161",
+      "run_url": "https://github.com/Mira190/SpecGuard/actions/runs/38492467182",
+      "conclusion": "success",
+      "job_conclusion": "success",
+      "observed": {
+        "comments": [
+          {
+            "kind": "standard",
+            "confidence": "high",
+            "rule": "eval-sandbox/ts3/CONTRIBUTING.md:3",
+            "path": "eval-sandbox/ts3/validate.ts",
+            "line": 3,
+            "level": "inline",
+            "title": "Validation returns a Result instead of throwing",
+            "body": "**Validation returns a Result instead of throwing**\n\nvalidateAge throws for out-of-range and non-integer input. CONTRIBUTING requires validation functions to return `{ ok: false, error }` instead of throwing. Changing the return shape also changes the assertions at validate.test.ts:12-18, which pin the thrown error.\n\n<!--\nkind: standard, confidence: high, rule: eval-sandbox/ts3/CONTRIBUTING.md:3\n-->\n<!-- specguard:fp=d6b54eae90308a6e048cb4f784b0fc55cf7a092e -->",
+            "source": ""
+          }
+        ],
+        "reviews": [
+          {
+            "state": "COMMENTED",
+            "body": "<!-- specguard:review -->\nSpecGuard found Tests: 0 missing, 0 weak · Standards: 1 · Layering: 0; 1 inline, 0 file-level, 0 in summary.\nUnit evidence: 5/5 obligations (static review; tests not executed).\nEngine: claude (claude-haiku-5-5)."
+          }
+        ],
+        "summary": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":22092,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":161,\"merged\":false,\"head\":\"35c0778e6f9945b1d78594baaeca27f449be55ad\",\"engine\":\"claude\",\"complete\":false,\"findings\":{\"standard\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 standards violation to fix**\n\n| Unit tests | Requirements (1) | Coding standards | Test layers |\n|---|---|---|---|\n| no high-confidence gaps | ✅ 1 | ❌ 1 violation | nothing to move down |\n\n> ⚠️ Reduced review (fast model): only high-confidence findings are shown, so no finding is not a pass.\n\n### ❌ Coding standard violations (1)\n\n- [Validation returns a Result instead of throwing](https://github.com/Mira190/SpecGuard/pull/161#discussion_r4265640654) `eval-sandbox/ts3/validate.ts:3` — rule: `eval-sandbox/ts3/CONTRIBUTING.md`\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (1)**\n\n- ✅ Evidenced: **X1** Add validateAge, which checks that an age is an integer from 0 to 150.\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Only CONTRIBUTING.md applies to eval-sandbox/ts3 files. The .claude ste-mini skill covers prose style, and the specguard instructions cover src/** and eval/*.js only, so neither applies to these changed files. Sources: `eval-sandbox/ts3/CONTRIBUTING.md`.\n- Test layers: reviewed. Only vitest unit tests exist for validate.ts in the visible files; no component or integration tests were found, so no pushdown candidate.\n\n**Requirements source:** PR body (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (5) · Unit evidence: 5/5 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Valid ages (0 to 150) are returned unchanged | PR body; eval-sandbox/ts3/validate.ts:5 —   return age; | unit: eval-sandbox/ts3/validate.test.ts:6 —     expect(validateAge(0)).toBe(0); (assertion); unit: eval-sandbox/ts3/validate.test.ts:8 —     expect(validateAge(150)).toBe(150); (assertion) | Evidenced: Both bounds and a middle value are asserted with literal expected values via toBe, which fails if the value is altered. |\n| O2: Ages below 0 and above 150 are rejected with RangeError | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:12 —     expect(() => validateAge(-1)).toThrow(RangeError); (assertion); unit: eval-sandbox/ts3/validate.test.ts:13 —     expect(() => validateAge(151)).toThrow(RangeError); (assertion) | Evidenced: The test pins -1 and 151, the first values outside each bound; changing either comparison or the bound value flips one of them. |\n| O3: Non-integer ages are rejected | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:17 —     expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5'); (assertion) | Evidenced: 1.5 is inside the range, so only the Number.isInteger check rejects it; removing that check fails this assertion. |\n| O4: NaN is rejected as a non-integer | PR body; eval-sandbox/ts3/validate.ts:2 —   if (!Number.isInteger(age) \\|\\| age < 0 \\|\\| age > 150) { | unit: eval-sandbox/ts3/validate.test.ts:18 —     expect(() => validateAge(Number.NaN)).toThrow('Invalid age: NaN'); (assertion) | Evidenced: NaN fails both the range comparisons only by being false, so it is rejected only by the integer guard; the assertion pins that path. |\n| O5: The thrown error message names the rejected value | from behaviour; eval-sandbox/ts3/validate.ts:3 —     throw new RangeError(`Invalid age: ${age}`); | unit: eval-sandbox/ts3/validate.test.ts:17 —     expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5'); (assertion); unit: eval-sandbox/ts3/validate.test.ts:18 —     expect(() => validateAge(Number.NaN)).toThrow('Invalid age: NaN'); (assertion) | Evidenced: Both message assertions pin the interpolated value; dropping the interpolation fails them. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines), `eval-sandbox/ts3/CONTRIBUTING.md` (131 bytes, 3 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `35c0778`, base `9abcfb9`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 9 files, 89 KB\n\n</details>\n\n<sub>Cost $0.0073 · claude-haiku-5-5 (fast tier) · 57.3k in (11.8k cached) · 5.3k out · 22s · Delivery: 1 inline comment</sub>\n",
+        "latency_s": 37,
+        "conclusion": "success",
+        "job_conclusion": "success",
+        "raw_findings_present": true,
+        "raw_findings_valid_json": true,
+        "raw_excerpt": "{\"requirements_source\":\"PR body\",\"coverage\":[{\"id\":\"O1\",\"obligation\":\"Valid ages (0 to 150) are returned unchanged\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/ts3/validate.ts\",\"line\":5,\"quote\":\"  return age;\"},\"evidence\":[{\"path\":\"eval-sandbox/ts3/validate.test.ts\",\"line\":6,\"quote\":\"    expect(validateAge(0)).toBe(0);\"},{\"path\":\"eval-sandbox/ts3/validate.test.ts\",\"line\":8,\"quote\":\"    expect(validateAge(150)).toBe(150);\"}],\"status\":\"covered\",\"reason\":\"Both bounds and a middle value are asserted with literal expected values via toBe, which fails if the value is altered.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: integer from 0 to 150; C: returns age unchanged when the range check passes\"}},{\"id\":\"O2\",\"obligation\":\"Ages below 0 and above 150 are rejected with RangeError\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/ts3/validate.ts\",\"line\":2,\"quote\":\"  if (!Number.isInteger(age) || age < 0 || age > 150) {\"},\"evidence\":[{\"path\":\"eval-sandbox/ts3/validate.test.ts\",\"line\":12,\"quote\":\"    expect(() => validateAge(-1)).toThrow(RangeError);\"},{\"path\":\"eval-sandbox/ts3/validate.test.ts\",\"line\":13,\"quote\":\"    expect(() => validateAge(151)).toThrow(RangeError);\"}],\"status\":\"covered\",\"reason\":\"The test pins -1 and 151, the first values outside each bound; changing either comparison or the bound value flips one of them.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: 0 to 150 inclusive; C: age < 0 and age > 150 throw\"}},{\"id\":\"O3\",\"obligation\":\"Non-integer ages are rejected\",\"source\":\"PR body\",\"behaviour\":{\"path\":\"eval-sandbox/ts3/validate.ts\",\"line\":2,\"quote\":\"  if (!Number.isInteger(age) || age < 0 || age > 150) {\"},\"evidence\":[{\"path\":\"eval-sandbox/ts3/validate.test.ts\",\"line\":17,\"quote\":\"    expect(() => validateAge(1.5)).toThrow('Invalid age: 1.5');\"}],\"status\":\"covered\",\"reason\":\"1.5 is inside the range, so only the Number.isInteger check rejects it; removing that check fails this assertion.\",\"alignment\":{\"status\":\"consistent\",\"reason\":\"R: an age i"
+      },
+      "model": "unchanged"
+    }
+  ],
+  "aggregate": {
+    "runs": 18,
+    "errors": 0,
+    "tp": 18,
+    "fp": 0,
+    "acceptable": 3,
+    "fn": 3,
+    "summary_only": 3,
+    "precision": 1,
+    "recall": 0.857,
+    "json_valid_rate": 1,
+    "degraded_rate": 0.222,
+    "pass_rate": 0.833,
+    "latency_median_s": 33.5,
+    "latency_max_s": 48,
+    "cost": "not measured",
+    "by_goal": {
+      "requirements": {
+        "runs": 8,
+        "errors": 0,
+        "tp": 11,
+        "fp": 0,
+        "acceptable": 1,
+        "fn": 1,
+        "summary_only": 1,
+        "precision": 1,
+        "recall": 0.917,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 0.875,
+        "latency_median_s": 31,
+        "latency_max_s": 43
+      },
+      "layering": {
+        "runs": 2,
+        "errors": 0,
+        "tp": 1,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 1,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0.5,
+        "pass_rate": 1,
+        "latency_median_s": 48,
+        "latency_max_s": 48
+      },
+      "test_quality": {
+        "runs": 6,
+        "errors": 0,
+        "tp": 4,
+        "fp": 0,
+        "acceptable": 2,
+        "fn": 2,
+        "summary_only": 1,
+        "precision": 1,
+        "recall": 0.667,
+        "json_valid_rate": 1,
+        "degraded_rate": 0.5,
+        "pass_rate": 0.667,
+        "latency_median_s": 33,
+        "latency_max_s": 46
+      },
+      "standards": {
+        "runs": 2,
+        "errors": 0,
+        "tp": 2,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 32,
+        "latency_max_s": 37
+      }
+    }
+  }
+}

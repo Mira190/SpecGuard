@@ -38,7 +38,7 @@ test('validate: accepts a good result and the enum lists match audit.schema.json
   assert.deepEqual(item.class.enum, audit.CLASS);
   assert.deepEqual(item.tests.items.properties.layer.enum, ['unit', 'component', 'integration', 'e2e']);
   assert.deepEqual(SCHEMA.properties.requirements.items.required.sort(), ['class', 'code', 'id', 'note', 'source', 'status', 'tests', 'text']);
-  assert.deepEqual(SCHEMA.required.slice().sort(), ['docs_reviewed', 'not_requirements', 'not_reviewed', 'requirements']);
+  assert.deepEqual(SCHEMA.required.slice().sort(), ['docs_reviewed', 'not_requirements', 'not_reviewed', 'requirements', 'unit_findings']);
   assert.deepEqual(SCHEMA.properties.not_requirements.items.required, ['cid', 'reason']);
   assert.equal(SCHEMA.properties.requirements_found, undefined);
 });

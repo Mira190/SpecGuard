@@ -1,0 +1,158 @@
+// Code-first inventory for the unit test gap scan (mode scan), no model, no repo code executed: which source files ("units") are most at risk and least protected by unit tests.
+// Used by audit-collect.js. Pure functions over the tracked tree at HEAD plus ONE `git log` pass for churn and fix commits.
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { execFileSync } = require('node:child_process');
+const { isTestPath, testScope, lsTree, catBatch, makeClock } = require('./trace');
+const { weakCandidates, TEST_START } = require('./leads');
+const { ASSERTION, SKIPPED } = require('./post');
+const { mapTests, indexTests, noExt, GENERIC } = require('./test-map');
+
+const DAYS = 180, FIX = /\b(fix|bug|hotfix|regression|revert)\b/i, MIN_LOC = 3;
+const MAX_FILE = 512 * 1024, MAX_UNITS_READ = 6000, MAX_TESTS_READ = 4000, TEST_FILE = 512 * 1024, TEST_TOTAL = 48 * 1024 * 1024, BUDGET_MS = 40000;
+const PER_UNIT_TESTS = 5, ROWS_KEPT = 100, LEADS = 3;
+const CODE = /\.(?:[cm]?[jt]sx?|py|go|java|kt|cs|rb|php|rs|swift|scala)$/i;
+// Not product code: examples, benchmarks, docs, generated or build output, config files, type declarations. ponytail: a name list; a repo that keeps product code in `examples/` narrows with scan_paths.
+const NOT_UNIT = /(^|\/)(?:examples?|samples?|demos?|benchmarks?|bench|docs?|dist|build|out|coverage|migrations?|node_modules|vendor|third_party|generated)\/|\.d\.[cm]?ts$|(^|\/)(?:[\w.-]*\.config|\.[\w-]*rc|gulpfile|Gruntfile|Rakefile|setup|conftest|__init__)\.[a-z]+$|\.(?:min|bundle)\./i;
+const sha8 = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 8);
+const comment = (l) => /^\s*(?:\/\/|#|\*|\/\*|--)/.test(l);
+const loc = (ls) => ls.filter((l) => l.trim() && !comment(l)).length;
+const START = new RegExp(`${TEST_START.source}|(?<![.\\w$])x(?:it|test)\\s*\\(`); // leads.js's test start, plus xit/xtest (a disabled test is still a test)
+
+// Public top-level definitions per language, one regex list per family: pub = what the language calls public, top = the fallback (top-level functions) when nothing is public.
+// ponytail: line regexes, no parser. A JS `module.exports = { a, b }` counts as one, a Ruby `private` section or a Python `__all__` is not seen; the count only weights the risk (log-free, so a very large file dominates: cap it with scan_paths).
+const FAMILY = {
+  js: { pub: [/^\s*export\s+(?!\*)/, /^\s*(?:module\.)?exports\.\w+\s*=/, /^\s*module\.exports\s*=/, /^\w+(?:\.\w+)+\s*=\s*(?:async\s+)?function\b/], top: [/^(?:async\s+)?function\b/, /^(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:function\b|\(.*\)\s*=>|\w+\s*=>)/] },
+  py: { pub: [/^(?:async\s+def|def|class)\s+(?!_)\w/], top: [/^(?:async\s+)?def\s/] },
+  go: { pub: [/^func\s+(?:\([^)]*\)\s*)?[A-Z]/, /^type\s+[A-Z]/], top: [/^func\s/] },
+  java: { pub: [/^\s*public\s/], top: [/^\s*(?:static\s+|private\s+|protected\s+|internal\s+)+[\w<>\[\],?]+\s+\w+\s*\(/] },
+  kt: { pub: [/^\s*(?!.*\b(?:private|internal|protected)\b)(?:(?:open|data|suspend|override|abstract|sealed|inline|enum)\s+)*(?:fun|class|object|interface)\s/], top: [/^\s*(?:private\s+|internal\s+)?fun\s/] },
+  scala: { pub: [/^\s*(?!.*\b(?:private|protected)\b)(?:(?:case|abstract|sealed|final|override|implicit)\s+)*(?:def|class|object|trait)\s/], top: [/^\s*def\s/] },
+  rs: { pub: [/^\s*pub(?:\([^)]*\))?\s+(?:async\s+|unsafe\s+|const\s+)*(?:fn|struct|enum|trait|type|mod)\b/], top: [/^\s*(?:async\s+)?fn\s/] },
+  rb: { pub: [/^\s*def\s+(?!_)\S/], top: [/^\s*def\s/] },
+  swift: { pub: [/^\s*(?:public|open)\s/], top: [/^\s*(?:private\s+|fileprivate\s+)?func\s/] },
+};
+const EXT = { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'js', tsx: 'js', mts: 'js', cts: 'js', py: 'py', go: 'go', java: 'java', cs: 'java', php: 'java', kt: 'kt', scala: 'scala', rs: 'rs', rb: 'rb', swift: 'swift' };
+function publicCount(file, ls) {
+  const fam = FAMILY[EXT[path.extname(file).slice(1).toLowerCase()]];
+  if (!fam) return 0;
+  const body = ls.filter((l) => !comment(l)), n = (res) => body.filter((l) => res.some((re) => re.test(l))).length;
+  return n(fam.pub) || n(fam.top);
+}
+
+// Signals of one test file: tests, tests without an assertion, skipped or disabled tests, assertion lines, weak assertion lines (leads.js).
+// ponytail: a test is a block from one test declaration to the next, an assertion is any line post.js's ASSERTION matches; an assertion inside a helper the test calls reads as no assertion.
+function testSignals(src) {
+  const ls = src.split('\n').slice(0, 6000).map((l) => l.replace(/\r$/, '')), starts = [];
+  ls.forEach((l, i) => { if (l.length <= 400 && START.test(l)) starts.push(i); });
+  const noAssert = starts.filter((s, k) => !ls.slice(s, starts[k + 1] ?? ls.length).some((l) => !comment(l) && ASSERTION.test(l))).length;
+  return { tests: starts.length, noAssert, skipped: ls.filter((l) => SKIPPED.test(l)).length, asserts: ls.filter((l) => !comment(l) && ASSERTION.test(l)).length, weak: weakCandidates(src).map((w) => ({ line: w.line, what: w.what })) };
+}
+
+// ONE git log pass: path -> { churn: commits touching it in the last DAYS days, fixes: of those, commits whose subject says fix/bug/hotfix/regression/revert }. A shallow clone has no history: null.
+function history(cwd, now = Date.now()) {
+  const git = (...a) => execFileSync('git', ['-c', 'core.quotepath=off', ...a], { cwd, encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] });
+  try { if (git('rev-parse', '--is-shallow-repository').trim() === 'true') return null; } catch { return null; }
+  const out = new Map();
+  let log = '';
+  try { log = git('log', '--no-merges', '--no-renames', `--since=${new Date(now - DAYS * 864e5).toISOString()}`, '--name-only', '--format=%x00%s'); } catch { return null; }
+  for (const c of log.split('\0').slice(1)) {
+    const nl = c.indexOf('\n'), fix = FIX.test(nl < 0 ? c : c.slice(0, nl));
+    for (const f of nl < 0 ? [] : c.slice(nl + 1).split('\n').filter(Boolean)) { const o = out.get(f) || { churn: 0, fixes: 0 }; o.churn++; if (fix) o.fixes++; out.set(f, o); }
+  }
+  return out;
+}
+
+// Risk = (1 + public) * log2(2 + loc / 50) * (1 + churn / 5 + fixes) * testFactor, rounded to 0.1. testFactor: 1.0 no matched test, 0.6 tests that cannot protect it (no assertion, all skipped,
+// or at least half of the assertions weak), 0.3 tested. Public definitions are what a unit test can reach, size and churn say how likely a change is to break it, every fix commit is a bug that escaped once.
+// ponytail: a heuristic ranking tuned by eye, not a defect predictor: it orders the work of one scan, it is never shown as a probability. Ceiling: no coupling, ownership or complexity; a generated file that escaped the name list ranks high.
+const risk = ({ pub, loc: n, churn, fixes, factor }) => Math.round((1 + pub) * Math.log2(2 + n / 50) * (1 + churn / 5 + fixes) * factor * 10) / 10;
+const factorOf = (tests, s) => (!tests.length ? 1 : s.asserts === 0 || (s.tests > 0 && s.skipped >= s.tests) || s.weak.length * 2 >= s.asserts ? 0.6 : 0.3);
+
+// Which units this run reviews (at most cap). rows: sorted by risk, highest first. prior = the scan issue's state { head, blocks: [{ cid, status, runs, at: { date } }] } (unit id = cid); null = the riskiest first.
+//   c confirming: a unit whose findings were seen in one run only; n never reviewed (riskiest first); o everything else, least recently reviewed first (ties: riskiest first).
+function pick(rows, cap, prior) {
+  const kind = new Map(), picked = [];
+  if (!prior) { for (const r of rows.slice(0, cap)) { kind.set(r.id, 'n'); picked.push(r); } return { picked, kind, tally: { c: 0, n: picked.length, o: 0 } }; }
+  const st = new Map(prior.blocks.map((b) => [b.cid, b])), when = (r) => (st.get(r.id).at || {}).date || '';
+  const take = (list, k) => { for (const r of list) if (picked.length < cap && !kind.has(r.id)) { kind.set(r.id, k); picked.push(r); } };
+  take(rows.filter((r) => st.has(r.id) && st.get(r.id).status === 'gap' && st.get(r.id).runs === 1), 'c');
+  take(rows.filter((r) => !st.has(r.id)), 'n');
+  take(rows.filter((r) => st.has(r.id)).sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0)), 'o'); // stable: ties keep the risk order
+  const tally = { c: 0, n: 0, o: 0 };
+  for (const k of kind.values()) tally[k]++;
+  return { picked, kind, tally };
+}
+
+// files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
+function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, prior = null, now = Date.now(), budgetMs = BUDGET_MS }) {
+  const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
+  const inScope = files.filter((e) => !skip(e.path) && (!scope || scope(e.path)));
+  const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
+  const testEntries = inScope.filter((e) => isTest(e.path)), tests = testEntries.map((e) => e.path).sort();
+  let cand = inScope.filter((e) => !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && e.size <= MAX_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
+  if (cand.length > MAX_UNITS_READ) { limits.push(`only the first ${MAX_UNITS_READ} of ${cand.length} source files were inventoried (narrow with scan_paths)`); cand = cand.slice(0, MAX_UNITS_READ); }
+  const units = [];
+  for (let i = 0; i < cand.length && !dl.over(); i += 300) {
+    const part = cand.slice(i, i + 300), bufs = catBatch(cwd, part.map((e) => e.sha));
+    part.forEach((e, k) => {
+      if (!bufs[k] || bufs[k].subarray(0, 8192).includes(0)) return;
+      const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
+      const n = loc(ls);
+      if (n >= MIN_LOC) units.push({ id: sha8(e.path), path: e.path, loc: n, pub: publicCount(e.path, ls) });
+    });
+  }
+  if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
+  // tests: text read once (capped), words that are a unit's file stem indexed for the "mentions" tier
+  const stems = new Set(units.map((u) => noExt(u.path)).filter((s) => s.length >= 3 && !GENERIC.has(s.toLowerCase()) && /^[\w$]+$/.test(s)));
+  const sig = new Map(), mention = new Map();
+  let bytes = 0, readN = 0;
+  const readable = testEntries.filter((e) => e.size <= TEST_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
+  for (let i = 0; i < readable.length && readN < MAX_TESTS_READ && bytes < TEST_TOTAL && !dl.over(); i += 300) {
+    const part = readable.slice(i, i + 300), bufs = catBatch(cwd, part.map((e) => e.sha));
+    part.forEach((e, k) => {
+      if (!bufs[k] || readN >= MAX_TESTS_READ || bufs[k].subarray(0, 8192).includes(0)) return;
+      readN++; bytes += bufs[k].length;
+      const src = bufs[k].toString('utf8');
+      sig.set(e.path, testSignals(src));
+      for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) if (stems.has(w)) { if (!mention.has(w)) mention.set(w, []); mention.get(w).push(e.path); }
+    });
+  }
+  const unread = tests.length - sig.size;
+  if (unread > 0) limits.push(`${unread} of ${tests.length} test files were not read (over the size, count or time limit): their assertions are unknown, and a unit they alone cover may be missed`);
+  const hist = history(cwd, now);
+  if (!hist) limits.push('no git history (shallow clone? use fetch-depth: 0): churn and fix commits are not used in the ranking');
+  const none = { tests: 0, noAssert: 0, skipped: 0, asserts: 0, weak: [] };
+  const index = indexTests(tests);
+  const rows = units.map((u) => {
+    const got = [...mapTests(u.path, { tests, index, mentions: (s) => mention.get(s) || [], per: PER_UNIT_TESTS }).keys()];
+    const ss = got.map((t) => sig.get(t) || none), sum = (f) => ss.reduce((a, s) => a + f(s), 0);
+    const s = { tests: sum((x) => x.tests), noAssert: sum((x) => x.noAssert), skipped: sum((x) => x.skipped), asserts: sum((x) => x.asserts), weak: got.flatMap((t) => (sig.get(t) || none).weak.map((w) => ({ ...w, path: t }))) };
+    const h = (hist && hist.get(u.path)) || { churn: 0, fixes: 0 }, factor = factorOf(got, got.some((t) => !sig.has(t)) ? { ...s, asserts: Math.max(s.asserts, 1) } : s); // a test file that was not read is assumed to assert
+    const why = [!got.length && 'no test', s.skipped && `${s.skipped} skipped test${s.skipped === 1 ? '' : 's'}`, s.noAssert && `${s.noAssert} test${s.noAssert === 1 ? '' : 's'} without an assertion`, s.weak.length && `${s.weak.length} weak assertion${s.weak.length === 1 ? '' : 's'}`,
+      h.fixes && `${h.fixes} fix commit${h.fixes === 1 ? '' : 's'} in ${DAYS} days`, !h.fixes && h.churn >= 3 && `${h.churn} commits in ${DAYS} days`].filter(Boolean).join(', ') || `${u.pub} public definition${u.pub === 1 ? '' : 's'}`;
+    return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, score: risk({ ...u, ...h, factor }) };
+  }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
+  const sel = pick(rows, maxUnits, prior), chosen = new Set(sel.picked.map((r) => r.id));
+  const distinct = (rs) => [...new Set(rs.flatMap((r) => r.tests))].map((t) => sig.get(t) || none);
+  const tot = (ss) => ({ skipped_tests: ss.reduce((a, s) => a + s.skipped, 0), tests_without_assertion: ss.reduce((a, s) => a + s.noAssert, 0), weak_assertions: ss.reduce((a, s) => a + s.weak.length, 0) });
+  const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), reviewed = new Set([...rows.filter((r) => known.has(r.id)).map((r) => r.id), ...chosen]);
+  const rotation = { rotate: !!prior, picked: sel.picked.length, confirming: sel.tally.c, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / maxUnits)), runs: Math.max(1, Math.ceil(rows.length / maxUnits)) };
+  const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
+  return { rows, picked: sel.picked, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
+    totals: { units: rows.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
+    review: (r) => (chosen.has(r.id) ? 'this run' : known.has(r.id) ? `reviewed ${date(r) || 'earlier'}` : 'not yet reviewed') };
+}
+
+// audit-units.txt (id, path, risk, why, matched tests, leads: tab separated), audit-units-carried.txt (id, path: units the state knows that this run does not review), audit-inventory.json.
+function write(ctx, head, maxUnits, inv) {
+  const w = (n, s) => fs.writeFileSync(path.join(ctx, n), s), flat = (s) => String(s).replace(/[\t\r\n]+/g, ' ');
+  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-'].map(flat).join('\t') + '\n').join(''));
+  w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
+  w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
+    rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r) })),
+    unreviewed: inv.rows.filter((r) => inv.review(r) === 'not yet reviewed').slice(0, 30).map((r) => ({ id: r.id, path: r.path, score: r.score })) }) + '\n');
+}
+
+module.exports = { inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };

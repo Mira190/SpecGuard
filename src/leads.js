@@ -260,4 +260,4 @@ if (require.main === module) {
   const f = path.join(ctx, 'leads.txt');
   if (out) fs.writeFileSync(f, out); else fs.rmSync(f, { force: true });
 }
-module.exports = { run, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args };
+module.exports = { run, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START };
