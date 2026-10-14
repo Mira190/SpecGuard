@@ -489,3 +489,27 @@ test('action.yml: max_units (default 12) reaches the scan collector and the inpu
   for (const MAX_UNITS of ['1', '12', '100', '007']) assert.equal(v({ MAX_UNITS }).status, 0, MAX_UNITS);
   for (const MAX_UNITS of ['0', '101', 'x', '-1', '2.5', '1000']) { const r = v({ MAX_UNITS }); assert.equal(r.status, 1, MAX_UNITS); assert.match(r.stdout, /::error::max_units must be an integer from 1 to 100/); }
 });
+
+test('verify: a cut matched test makes a missing_test low only when it mentions the definition enclosing the cited line; an unreadable cut test or no name stays low', () => {
+  const cutOf = (body, f = uf({ unit: U1, ...cite('src/js/orders.js', 2), title: 'cancel is untested' })) => checked([f], { packCut: new Set(['test/orders.test.js']), read: (p) => (p === 'test/orders.test.js' ? body : read(p)) }).unit_findings[0].low;
+  assert.equal(cutOf(["it('creates', () => {", '  assert.ok(create({}));', '});']), false, 'the cut test never mentions cancel');
+  assert.equal(cutOf(["it('cancels', () => {", '  assert.ok(cancel({}));', '});']), true, 'it mentions cancel');
+  assert.equal(cutOf(null), true, 'a cut test that cannot be read');
+});
+
+test('run: units whose file the model did not see whole (pack-cut.txt) are not reviewed this run: listed visibly, not counted, not tracked, still due; without pack-cut.txt nothing changes', async (t) => {
+  const env = { SCAN_ISSUE: 'true', ENGINE: 'claude' }, vis = (s) => s.slice(0, s.indexOf('<details>'));
+  const r = await post(t, { env, files: { 'findings.json': result([uf()]), 'pack-cut.txt': 'src/js/cart.js\n' } });
+  const v = vis(r.calls.summary);
+  assert.match(v, /\*\*❌ 1 unit test gap in the 2 units that fit the model's context\*\*/);
+  assert.match(v, /\| 2 of 140 \|/);
+  assert.match(v, /\*\*Not reviewed this run:\*\* 1 unit did not fit the model's context: `src\/js\/cart\.js`\. It stays due for the next run\./);
+  assert.deepEqual(readState(r.calls.created[0].body).blocks.map((b) => b.cid).sort(), [U1, U2].sort(), 'the unseen unit is not recorded as covered');
+  const all = await post(t, { env, files: { 'findings.json': result([]), 'pack-cut.txt': 'src/js/orders.js\nsrc/js/legacy.js\nsrc/js/cart.js\n' } });
+  assert.match(vis(all.calls.summary), /\*\*⚠️ The scan could not review any unit: none fit the model's context\*\*/);
+  assert.doesNotMatch(vis(all.calls.summary), /✅/);
+  const plain = await post(t, { env, files: { 'findings.json': result([uf()]) } });
+  assert.doesNotMatch(plain.calls.summary, /Not reviewed this run/);
+  assert.match(vis(plain.calls.summary), /in the 3 riskiest units/);
+  assert.deepEqual(readState(plain.calls.created[0].body).blocks.map((b) => b.cid).sort(), [U1, U2, U3].sort());
+});

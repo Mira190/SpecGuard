@@ -102,12 +102,17 @@ function needlesOf(lines, line) {
   }
   return [...out].filter((n) => n.length >= 10).sort((a, b) => b.length - a.length).slice(0, 24);
 }
+// the name of the definition enclosing the 1-based line (that line, then up to 60 lines up), or null; `defineGetter(req, 'fresh', function` names `fresh`
+function enclosingName(lines, line) {
+  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = (/\bdefine\w*\(\s*\w+\s*,\s*['"]([A-Za-z_$][\w$]*)['"]/.exec(lines[i]) || [])[1] || namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return n; }
+  return null;
+}
 // the thrown error class on the cited line (+-2) and the name of the enclosing definition (up to 60 lines up)
 function classAndMethod(lines, line) {
   const cls = lines.slice(Math.max(0, line - 3), line + 2).map((l) => THROWN.exec(l)).find(Boolean);
   if (!cls) return null;
-  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return { cls: cls[1], method: n }; }
-  return null;
+  const method = enclosingName(lines, line);
+  return method ? { cls: cls[1], method } : null;
 }
 // testPaths: test_paths text (or empty) -> (lines, line) => "path:line" of a tracked test file that may already cover the claim at that 1-based line of the file `lines`, or null.
 // A search that fails or times out finds nothing. trace.js is required lazily: it requires post.js, which uses this guard.
@@ -128,4 +133,4 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
   };
 }
 
-module.exports = { mapTests, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, makeCoverGuard };
+module.exports = { mapTests, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, makeCoverGuard };
