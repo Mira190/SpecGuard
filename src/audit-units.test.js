@@ -66,6 +66,13 @@ test('units: source files only; tests, docs, vendored, examples, config, declara
   assert.equal(inv.rows.find((r) => r.path === 'src/js/orders.js').id, sha8('src/js/orders.js'));
 });
 
+test('test infrastructure by name is not a unit: smoke, e2e, runner, harness, fixture tokens and support dirs; testrunner.js and smokestack.js are not such tokens', (t) => {
+  const body = ['exports.a = 1;', 'exports.b = 2;', 'exports.c = 3;'], f = {};
+  for (const n of ['electron/smoke.cjs', 'tools/e2e-runner.js', 'src/runner-utils.js', 'src/harness.js', 'lib/fixtures.js', 'spec/support/db.js', 'src/real.js', 'src/testrunner.js', 'src/smokestack.js']) f[n] = body;
+  const r = repo(t, f), got = inventory({ cwd: r.root, head: 'HEAD', now: NOW }).rows.map((x) => x.path).sort();
+  assert.deepEqual(got, ['src/real.js', 'src/smokestack.js', 'src/testrunner.js']);
+});
+
 test('public definitions per language; the fallback counts top-level functions when nothing is public', () => {
   const n = (f, ls) => publicCount(f, Array.isArray(ls) ? ls : ls.split('\n'));
   assert.equal(n('a.js', FILES['src/js/orders.js']), 4, 'exports.x assignments');

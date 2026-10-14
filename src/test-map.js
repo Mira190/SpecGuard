@@ -117,6 +117,20 @@ function classAndMethod(lines, line) {
   const method = enclosingName(lines, line);
   return method ? { cls: cls[1], method } : null;
 }
+// Functions called on the cited line and 2 lines each way (`name(`, `obj.name(`): the claim may be about a wrapper whose delegate is tested. Names of >= 6 characters or camelCase with 2 humps, minus the enclosing definition and builtins.
+// ponytail: a name list of common builtins, not a resolver; a project function named like one is missed (no hit), never invented.
+const BUILTIN = new Set('assert expect require import console error debug test describe match exec split slice splice concat includes indexof startswith endswith replace replaceall tostring tolowercase touppercase padstart padend unshift foreach findindex flatmap entries values assign freeze parse stringify isarray isinteger isfinite parseint parsefloat number string boolean object array promise resolve reject settimeout setinterval cleartimeout error typeerror rangeerror symbol format normalize relative basename dirname extname existssync readfilesync writefilesync readdirsync mkdirsync unlinksync statsync lstatsync realpathsync callback emit listen handle toisostring tofixed typeof sprintf printf println errorf strlen strcmp function return catch while switch'.split(' '));
+function calledNames(lines, line) {
+  const own = enclosingName(lines, line), out = new Set();
+  for (const l of lines.slice(Math.max(0, line - 3), line + 2)) {
+    if (comment(l)) continue;
+    for (const m of l.replace(STR, '""').matchAll(/(?<![\w$])(?:[\w$]+\??\.)*([A-Za-z_$][\w$]*)\s*\(/g)) {
+      const n = m[1];
+      if (n !== own && (n.length >= 6 || /^[a-z]+[A-Z][a-z0-9]*[A-Z]/.test(n)) && usableName(n) && !BUILTIN.has(n.toLowerCase())) out.add(n);
+    }
+  }
+  return [...out].slice(0, 12);
+}
 // testPaths: test_paths text (or empty) -> (lines, line) => "path:line" of a tracked test file that may already cover the claim at that 1-based line of the file `lines`, or null.
 // A search that fails or times out finds nothing. trace.js is required lazily: it requires post.js, which uses this guard.
 function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
@@ -132,7 +146,10 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
   return (lines, line) => {
     if (!Array.isArray(lines) || !Number.isInteger(line)) return null;
     const needles = needlesOf(lines, line), hit = needles.length ? grep(needles.flatMap((n) => ['-e', n])) : null, cm = hit ? null : classAndMethod(lines, line);
-    return hit || (cm ? grep(['-e', cm.method, '--and', '-e', cm.cls]) : null);
+    const lit = hit || (cm ? grep(['-e', cm.method, '--and', '-e', cm.cls]) : null);
+    if (lit) return lit;
+    for (const name of calledNames(lines, line)) { const h = grep(['-w', '-e', name]); if (h) return `a delegated helper is tested: ${name} at ${h}`; }
+    return null;
   };
 }
 
