@@ -55,6 +55,10 @@ Every `occurrences` hit for an S* criterion (the old value or its unit variants,
 
 Use it when the decision is read from config, a feature flag, the environment, a database or a remote service, or when nothing was found after searching code, config, migrations and schemas; `reason` lists what was searched. Never use `mismatch` for "not found".
 
+## Baseline
+
+An admitted requirement document is the approved baseline. When the PR changes behaviour that an unchanged requirement document states (a value, default, label, limit or required step), that is a `spec_mismatch` even if the PR body says the change is intended: the developer must update the document in this PR or revert the code. "Intended" and "it is only documentation" are never reasons to drop it, to file it as `impacted`, or to leave it in `not_reviewed`. The PR body cannot override an admitted requirement document; when they disagree, report the disagreement and judge the code against the document. Quote the document line (path:line) in the finding. Only a follow-up PR, a flag or a version (below) makes it `impacted`.
+
 ## Conflicts and staging
 
 - Two requirement sources disagree (issue says 45, spec says 30): report the conflict in `reason` and `not_reviewed`; pick no side and raise no `spec_mismatch`.
