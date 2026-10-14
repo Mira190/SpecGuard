@@ -653,7 +653,7 @@ function codeToRequirement(hunks, items, info = {}, { per: perHunk = PER_HUNK, t
   });
   const keep = new Set();
   for (const e of per.flat().sort((a, b) => b.score - a.score)) if (keep.size < total || keep.has(e.k)) keep.add(e.k);
-  let out = hunks.map((h, i) => ({ path: h.path, line: h.line, context: h.context,
+  let out = hunks.map((h, i) => ({ path: h.path, line: h.line, end: h.end, context: h.context,
     candidates: per[i].filter((e) => keep.has(e.k)).map(({ k, ...e }) => e) })).filter((h) => h.candidates.length);
   info.dropped = Math.max(0, out.length - MAX_HUNKS);
   if (info.dropped) { const top = new Set([...out].sort((a, b) => b.candidates[0].score - a.candidates[0].score).slice(0, MAX_HUNKS)); out = out.filter((h) => top.has(h)); }
@@ -957,9 +957,11 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
       const bs = h.candidates.filter((c) => c.kind === 'block').sort((a, b) => b.score - a.score);
       if (!bs.length || bs[0].score < GOVERN_MIN || (bs[1] && bs[1].score >= GOVERN_GAP * bs[0].score)) continue;
       const k = `${bs[0].path}:${bs[0].ref}`;
-      if (!have.has(k) && byKey.has(k) && !(pick.get(k) >= bs[0].score)) pick.set(k, bs[0].score);
+      if (have.has(k) || !byKey.has(k)) continue;
+      const hk = { path: h.path, start: h.line, end: h.end ?? h.line }, was = pick.get(k);
+      if (!was || bs[0].score > was.score) pick.set(k, { score: bs[0].score, hunks: [...(was ? was.hunks : []), hk] }); else was.hunks.push(hk); // the hunks that picked it: post.js links the obligations inside them
     }
-    const gov = [...pick].sort((a, b) => b[1] - a[1]).slice(0, MAX_GOVERNING).map(([k], i) => { const b = byKey.get(k); return { id: `D${i + 1}`, source: b.path, ref: b.ref, line: b.line, quote: b.text }; });
+    const gov = [...pick].sort((a, b) => b[1].score - a[1].score).slice(0, MAX_GOVERNING).map(([k, v], i) => { const b = byKey.get(k); return { id: `D${i + 1}`, source: b.path, ref: b.ref, line: b.line, quote: b.text, hunks: v.hunks }; });
     criteria.push(...gov);
     status.criteria = (status.criteria || []).concat(gov);
   } catch (e) { lim('governing-block criteria', e); }

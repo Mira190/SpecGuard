@@ -53,7 +53,7 @@ function statusBlock(ctxDir) {
   if (!nonEmpty(raw)) return null;
   let st;
   try { st = JSON.parse(raw); } catch { const c = cut(raw, LIMITS.status); return block('requirements-status.json', c.text, c.cut ? 'truncated' : ''); }
-  const { documents, criteria = [], ...rest } = st; // documents repeats requirements.md
+  const { documents, criteria: all = [], ...rest } = st, criteria = all.map(({ hunks, ...c }) => c); // hunks: for post.js only // documents repeats requirements.md
   let kept = criteria.length;
   const render = () => JSON.stringify({ ...rest, criteria: criteria.slice(0, kept) });
   while (kept > 0 && Buffer.byteLength(render()) > LIMITS.status) kept--;
