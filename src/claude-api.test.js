@@ -695,3 +695,17 @@ test('action.yml: scan_batch_blocks (default 20) reaches the validation and engi
   assert.equal(yml.split('SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}').length - 1, 2);
   for (const [v, code] of [['0', 1], ['101', 1], ['x', 1], ['20', 0], ['100', 0]]) assert.equal(spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh')], { env: { ...process.env, ENGINE: 'claude', SCAN_BATCH_BLOCKS: v }, encoding: 'utf8' }).status, code, v);
 });
+
+test('windowPack: a large file shows the lines around each cited line (line-numbered) and its header, not the whole file; a small file is shown whole; nothing is listed as cut', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wp-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'big.cjs'), Array.from({ length: 3000 }, (_, i) => `line ${i + 1}`).join('\n') + '\n');
+  fs.writeFileSync(path.join(root, 'small.js'), 'exports.a = 1;\n');
+  const r = api.windowPack(root, new Map([['big.cjs', [900]], ['small.js', [1]]]), 60000);
+  assert.match(r.text, /^ 900\| line 900$/m);
+  assert.match(r.text, /^ 860\| line 860$/m);
+  assert.match(r.text, /^   1\| line 1$/m, 'the header lines');
+  assert.doesNotMatch(r.text, /^2000\| /m, 'far from the cited line');
+  assert.match(r.text, /exports\.a = 1;/);
+  assert.deepEqual(r.notWhole, []);
+});
