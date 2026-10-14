@@ -27,7 +27,7 @@ const U1 = unitId('src/js/orders.js'), U2 = unitId('src/js/legacy.js'), U3 = uni
 const UNITS = () => readUnits([[U1, 'src/js/orders.js', 54.2, '1 weak assertion, 2 fix commits in 180 days', 'test/orders.test.js', 'weak? test/orders.test.js:2'], [U2, 'src/js/legacy.js', 21.5, 'no test', 'none', '-'], [U3, 'src/js/cart.js', 9, '3 public definitions', 'none', '-']].map((r) => r.join('\t')).join('\n') + '\n');
 const cite = (p, line) => ({ path: p, line, quote: FILES[p][line - 1].trim() });
 const uf = (over = {}) => ({ unit: U2, kind: 'missing_test', ...cite('src/js/legacy.js', 1), title: 'legacy doubles its argument', body: 'No test checks the doubled result.', skeleton: "it('doubles', () => {\n  assert.equal(legacy(2), 4);\n});", ...over });
-const WEAK = () => uf({ unit: U1, kind: 'weak_test', ...cite('test/orders.test.js', 2), title: 'create is only checked to be truthy', body: 'assert.ok(create({})) passes for any object.', skeleton: '' });
+const WEAK = () => uf({ unit: U1, kind: 'weak_test', ...cite('test/orders.test.js', 2), title: 'create is only checked to be truthy', body: 'assert.ok(create({})) passes for any object.', skeleton: "it('rejects an empty order', () => {\n  assert.throws(() => create({}));\n});" });
 const PUSH = () => uf({ unit: U1, kind: 'pushdown', ...cite('test/e2e/checkout.test.js', 3), title: 'the total is computed in an e2e test', body: 'A unit test of total() could prove it.', skeleton: '' });
 const result = (fs_ = [uf()], over = {}) => ({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], unit_findings: fs_, ...over });
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -105,7 +105,7 @@ test('verify: the quote must sit at path:line (a near line is corrected); the ki
 
 test('verify: a missing_test on a unit with no matched test file is deterministic; one on a unit whose tests were cut from the pack, or a weak_test on a cut file, is low confidence', () => {
   const a = checked([uf(), uf({ unit: U3, ...cite('src/js/cart.js', 2), title: 'count is untested' }), uf({ unit: U1, ...cite('src/js/orders.js', 1), title: 'create is untested' })]).unit_findings;
-  assert.deepEqual(a.map((f) => [f.det, f.low]), [[true, false], [true, false], [false, false]]);
+  assert.deepEqual(a.map((f) => [f.confirmed, f.low]), [[undefined, false], [undefined, false], [undefined, false]], 'no matched test file is no longer a confirmation: the verdict waits for a second run');
   const cut = checked([uf({ unit: U1, ...cite('src/js/orders.js', 1), title: 'create is untested' }), WEAK(), PUSH()], { packCut: new Set(['test/orders.test.js']) }).unit_findings;
   assert.deepEqual(cut.map((f) => [f.kind, f.low]), [['missing_test', true], ['weak_test', true], ['pushdown', false]]);
   const other = checked([WEAK()], { packCut: new Set(['some/other.js']) }).unit_findings;
@@ -116,17 +116,17 @@ test('verify: a missing_test whose cited line a tracked test already contains (c
   const seen = [];
   const covers = (lines, line) => { seen.push(line); return 'test/orders.test.js:7'; };
   const out = checked([uf(), uf({ unit: U1, ...cite('src/js/orders.js', 1), title: 'create is untested' }), WEAK()], { covers }).unit_findings;
-  assert.deepEqual(out.map((f) => [f.kind, f.low, f.det, f.lowWhy]), [['missing_test', true, false, 'a test may already cover this: test/orders.test.js:7'], ['missing_test', true, false, 'a test may already cover this: test/orders.test.js:7'], ['weak_test', false, false, undefined]]);
+  assert.deepEqual(out.map((f) => [f.kind, f.low, f.lowWhy]), [['missing_test', true, 'a test may already cover this: test/orders.test.js:7'], ['missing_test', true, 'a test may already cover this: test/orders.test.js:7'], ['weak_test', false, undefined]]);
   assert.equal(seen.length, 2);
   assert.equal(checked([uf()], { covers: () => null }).unit_findings[0].low, false);
 });
 
-test('confirmation: deterministic findings are confirmed at once, the others by the same (unit, kind, quote) in the previous run', () => {
+test('confirmation: a finding is confirmed by the same (unit, kind, quote) in the previous run, never at once', () => {
   const [det, weak] = checked([uf(), WEAK()]).unit_findings;
   const first = trackFindings([det, weak], null, 'abcdef1234');
-  assert.deepEqual(first.map((f) => f.confirmed), [true, false]);
+  assert.deepEqual(first.map((f) => f.confirmed), [false, false]);
   assert.deepEqual(first.map((f) => f.next), [[det.fid, U2, 'abcdef1', 1], [weak.fid, U1, 'abcdef1', 1]]);
-  const prior = { head: 'abcdef1', blocks: [], findings: [{ fid: weak.fid, unit: U1, since: 'abcdef1', runs: 1 }] };
+  const prior = { head: 'abcdef1', blocks: [], findings: [{ fid: weak.fid, unit: U1, since: 'abcdef1', runs: 1 }, { fid: det.fid, unit: U2, since: 'abcdef1', runs: 1 }] };
   const second = trackFindings([det, weak], prior, '1234567890');
   assert.deepEqual(second.map((f) => f.confirmed), [true, true]);
   assert.deepEqual(second[1].next, [weak.fid, U1, 'abcdef1', 2], 'since keeps the first commit');
@@ -175,9 +175,9 @@ test('render: no design documents, two findings: verdict, counts table, sections
   const vis = md.slice(0, md.indexOf('<details>'));
   assert.match(vis, /^## SpecGuard scan\n\n\*\*❌ 2 unit test gaps and 1 test to move down in the 3 riskiest units\*\* at `abc1234`\. Static review; tests were not run\.\n\n/);
   assert.match(vis, /\| Units reviewed \| No unit test \| Weak tests \| Skipped tests \| Design documents \|\n\|---\|---\|---\|---\|---\|\n\| 3 of 140 \| 1 \| 1 \| 5 \| none found \|\n/);
-  assert.match(vis, /### Untested behaviour \(1\)\n\n- \[legacy doubles its argument\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/js\/legacy\.js#L1\) `src\/js\/legacy\.js:1` — No test checks the doubled result\.\n/);
+  assert.match(vis, /### Untested behaviour \(1\)\n\n- \[legacy doubles its argument\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/js\/legacy\.js#L1\) `src\/js\/legacy\.js:1` \(first report\) — No test checks the doubled result\.\n/);
   assert.match(vis, /assert\.equal\(legacy\(2\), 4\);/, 'the skeleton of a top finding is visible');
-  assert.match(vis, /### Weak unit tests \(1\)\n\n- \[create is only checked to be truthy\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/test\/orders\.test\.js#L2\) `test\/orders\.test\.js:2` \(unconfirmed\) — /);
+  assert.match(vis, /### Weak unit tests \(1\)\n\n- \[create is only checked to be truthy\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/test\/orders\.test\.js#L2\) `test\/orders\.test\.js:2` \(first report\) — /);
   assert.match(vis, /### Tests to move down \(1\)\n\n- \[the total is computed in an e2e test\]/);
   assert.ok(vis.indexOf('Untested behaviour') < vis.indexOf('Weak unit tests') && vis.indexOf('Weak unit tests') < vis.indexOf('Tests to move down'));
   assert.doesNotMatch(vis, /missing_test|weak_test|pushdown|No design documents|nothing was scanned/);
@@ -188,8 +188,8 @@ test('render: no design documents, two findings: verdict, counts table, sections
   assert.match(det, /\| \[src\/js\/legacy\.js\]\([^)]*\) \| 21\.5 \| no test \| none \| this run \|/);
   assert.match(det, /\*\*Inventory\*\*\n\n140 source files \(units\), 100 with a matched test file and 40 without\. The matched tests hold 9 skipped tests, 3 tests without an assertion and 4 weak assertions\./);
   assert.match(det, /The 3 riskiest of 140 units were reviewed\. Schedule with scan_issue: true to rotate through all units\./);
-  assert.match(det, /\*\*Units not yet reviewed \(137\)\*\*\n\n- \[src\/js\/other\.js\]\([^)]*\) \(risk 3\)\n- \+107 more\n/);
-  assert.match(det, /\*\*How to read the unit part\*\*[\s\S]*risk is \(1 \+ public definitions\) times log2\(2 \+ lines \/ 50\)[\s\S]*not a prediction of defects[\s\S]*every other finding is unconfirmed/);
+  assert.match(det, /\*\*Units not yet reviewed \(137\)\*\*\n\n- \[src\/js\/other\.js\]\([^)]*\) \(risk 3\)\n- \+122 more\n/);
+  assert.match(det, /\*\*How to read the unit part\*\*[\s\S]*risk is \(1 \+ public definitions\) times log2\(2 \+ lines \/ 50\)[\s\S]*not a prediction of defects[\s\S]*every finding is a first report/);
   assert.doesNotMatch(md, /Sub-row|This scan\*\*|How to read this scan|requirements\*\* from/, 'no document statistics when there are no documents');
   assert.equal(md.trimEnd().split('\n').pop(), '<sub>Cost $0.12 · haiku-5.5 · 21k tokens · 40s</sub>');
   assert.ok(md.lastIndexOf('<sub>Cost') > md.lastIndexOf('</details>'));
@@ -222,26 +222,27 @@ test('render: a low-confidence finding is Details only and not counted; the rota
   assert.match(vis, /\*\*❌ 1 unit test gap in the 3 riskiest units\*\*/);
   assert.match(vis, /\| 3 of 140 \(rotation 2 of 12\) \| 1 \| none \| 5 \| none found \|/);
   assert.doesNotMatch(vis, /create is only checked/);
-  assert.doesNotMatch(vis, /\(unconfirmed\)/, 'a missing test on a unit without a test file is confirmed');
+  assert.match(vis, /\(first report\)/, 'a missing test on a unit without a test file is a first report like any other');
+  assert.match(vis, /Sketch, not run:/);
   const det = md.slice(md.indexOf('<details>'));
   assert.match(det, /\*\*Low-confidence unit findings \(1\)\*\*\n\nA test file the model could not see whole, or a test that may already cover it, is behind each; they are not counted\.\n\n- \[create is only checked to be truthy\]\([^)]*\) `test\/orders\.test\.js:2` \(low confidence\)/);
   assert.match(det, /Rotation: 24 of 140 units reviewed at least once; this run reviewed 3 \(confirming 1, never reviewed 2, least recently reviewed 0\)\. A full cycle takes 12 runs of 12 units\./);
-  assert.match(det, /the same finding was reported in the previous run\./, 'with a state the first-run sentence is not shown');
+  assert.match(det, /the same finding was reported in the previous run;/, 'with a state the first-run sentence is not shown');
 });
 
 test('render: a second run confirms the finding it saw before; the verdict counts the same either way', () => {
   const data = checked([WEAK()]);
   const first = render({ data, code: CODE(data.unit_findings), blob: BLOB });
-  assert.match(first, /\(unconfirmed\)/);
+  assert.match(first, /\(first report\)/);
   const prior = { head: 'abcdef1', blocks: [], findings: [{ fid: data.unit_findings[0].fid, unit: U1, since: 'abcdef1', runs: 1 }] };
   const second = render({ data, code: CODE(data.unit_findings, { rotation: { rotate: true, picked: 3, confirming: 0, new: 3, oldest: 0, reviewed: 3, total: 140, run: 1, runs: 12 } }), blob: BLOB, prior });
-  assert.doesNotMatch(second.slice(0, second.indexOf('<details>')), /unconfirmed/);
+  assert.doesNotMatch(second.slice(0, second.indexOf('<details>')), /first report/);
   assert.match(second, /\*\*❌ 1 unit test gap in the 3 riskiest units\*\*/);
 });
 
 test('render: more than 15 findings of a kind: the rest are one-line items in Details; the top three keep their skeleton visible and the rest fold it', () => {
   const rows = Array.from({ length: 18 }, (_, i) => uf({ title: `behaviour ${i}`, quote: `module.exports = function legacy(a) {   // ${i}`.slice(0, 41) }));
-  const data = { ...checked([]), unit_findings: rows.map((f, i) => ({ ...f, ...cite('src/js/legacy.js', 1), fid: sha8('x', String(i)), low: false, det: true })) };
+  const data = { ...checked([]), unit_findings: rows.map((f, i) => ({ ...f, ...cite('src/js/legacy.js', 1), fid: sha8('x', String(i)), low: false })) };
   const md = render({ data, code: CODE(data.unit_findings), blob: BLOB });
   const main = md.indexOf('<details><summary>Details'), vis = md.slice(0, main);
   assert.match(vis, /### Untested behaviour \(18\)/);
@@ -256,10 +257,10 @@ test('render: with design documents both parts show: the verdict names both, the
   const doc = { docs_reviewed: ['docs/design.md'], requirements: [{ id: '1111111a', source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'missing_test', code: [cite('src/js/orders.js', 1)], tests: [], note: '' }], not_requirements: [], not_reviewed: [], unit_findings: [uf()] };
   const data = verify(doc, { read, units: UNITS(), docs: new Set(['docs/design.md']), cands: new Map([['1111111a', { cid: '1111111a', path: 'docs/design.md', line: 3, heading: 'Plan design', text: 'A repeating plan stays on after it fires.' }]]) });
   const md = render({ data, code: CODE(data.unit_findings), blob: BLOB, docs: [['docs/design.md', 'discovered']], head: 'abc1234def' });
-  assert.match(md, /\*\*❌ 1 unit test gap in the 3 riskiest units; 1 new gap to confirm in the design documents\*\* at `abc1234`/);
+  assert.match(md, /\*\*❌ 1 unit test gap in the 3 riskiest units; 1 new gap \(first report\) in the design documents\*\* at `abc1234`/);
   assert.match(md, /\| 3 of 140 \| 1 \| none \| 5 \| 1 read \|/);
   const vis = md.slice(0, md.indexOf('<details>'));
-  assert.ok(vis.indexOf('### Untested behaviour') < vis.indexOf('### New gaps to confirm'));
+  assert.ok(vis.indexOf('### Untested behaviour') < vis.indexOf('### New gaps'));
   assert.match(md, /\*\*This scan\*\*\n\n\*\*1 requirement\*\* from 1 document/);
   assert.match(md, /Details: riskiest units, inventory, rotation, document blocks, sources/);
 });
@@ -525,6 +526,9 @@ test('run: blocks of a failed or dropped scan part are not rejected, not answere
   const r = await run({ calls: 2, failed: [{ part: 'blocks', blocks: [B], reason: 'the answer was not a JSON object' }], dropped: [C] });
   assert.doesNotMatch(r.calls.summary, /Could not complete/); // one of three answered: the 20% rule applies to the blocks sent in a part that succeeded
   assert.match(r.calls.summary, /\*\*Not audited this run:\*\* 2 document blocks \(1 in a call that failed, 1 left out by max_budget_usd\)/);
+  assert.deepEqual(r.calls.outputs, { status: 'incomplete', reason: '2 document blocks not audited' }, 'one part answered, the others did not: not complete');
+  assert.match(r.calls.summary, /^## SpecGuard scan\n\n\*\*⚠️ Incomplete scan: no gaps found so far; 2 document blocks not audited \(a call failed, left out by max_budget_usd\)\*\*/);
+  assert.doesNotMatch(r.calls.summary.split('\n')[2], /✅/);
   const out = JSON.parse(fs.readFileSync(path.join(w.ctx, 'audit.json'), 'utf8'));
   assert.deepEqual(out.requirements.map((x) => x.id), [A], 'no "unconfirmed" row for a block that was never sent or answered');
   const state = readState(r.calls.created[0].body);
@@ -536,5 +540,23 @@ test('run: blocks of a failed or dropped scan part are not rejected, not answere
   w.put('audit-candidates.txt', `${A}\tdocs/design.md:3\tPlan design\tA repeating plan stays on after it fires.\n`);
   const u = await run({ calls: 2, failed: [{ part: 'units', reason: 'HTTP 500' }], dropped: [] });
   assert.match(u.calls.summary, /unit call failed/);
+  assert.equal(u.calls.outputs.status, 'incomplete');
   assert.doesNotMatch(u.calls.summary, /did not fit the model's context/);
+});
+
+test('summary: a gap on a higher_level row asks for a component or integration test; a no-sketch finding is Details only and not counted; the riskiest list is capped at 15; the sketch is labelled', () => {
+  const row = (cls, status) => ({ id: '1111111a', source: cite('docs/design.md', 3), text: 'Keyboard shortcuts move focus.', class: cls, status, code: [cite('src/js/orders.js', 1)], tests: status === 'partial' ? [{ ...cite('test/orders.test.js', 2), layer: cls === 'unit' ? 'unit' : 'component' }] : [], note: '' });
+  const doc = (cls, status) => verify({ docs_reviewed: ['docs/design.md'], requirements: [row(cls, status)], not_requirements: [], not_reviewed: [], unit_findings: [] }, { read, units: UNITS(), docs: new Set(['docs/design.md']), cands: new Map([['1111111a', { cid: '1111111a', path: 'docs/design.md', line: 3, heading: 'H', text: 'Keyboard shortcuts move focus.' }]]) });
+  const next = (cls, status) => render({ data: doc(cls, status), blob: BLOB, head: 'abc1234def' }).match(/\| (Add|Strengthen)[^|]*\|/)[0];
+  assert.equal(next('higher_level', 'missing_test'), '| Add a component or integration test that checks it. |');
+  assert.equal(next('higher_level', 'partial'), '| Strengthen the component or integration test: it checks only part of it. |');
+  assert.equal(next('unit', 'missing_test'), '| Add a unit test that checks it. |');
+  const data = checked([uf(), uf({ unit: U3, ...cite('src/js/cart.js', 1), title: 'cursorBoxes covered by unit tests; no gap found', skeleton: '' })]);
+  assert.deepEqual(data.unit_findings.map((f) => [f.low, f.lowWhy]), [[false, undefined], [true, 'no test sketch: the finding may not be a gap']]);
+  const rows = Array.from({ length: 30 }, (_, i) => ROW(sha8('r', String(i)), `src/js/f${i}.js`, 30 - i, 'no test', []));
+  const md = render({ data, code: CODE(data.unit_findings, { rows }), blob: BLOB, head: 'abc1234def' });
+  assert.match(md, /\*\*❌ 1 unit test gap in the/);
+  assert.match(md, /Sketch, not run:\n/);
+  assert.match(md, /Riskiest units \(top 15 of/);
+  assert.equal((md.match(/\| \[src\/js\/f\d+\.js\]/g) || []).length, 15);
 });
