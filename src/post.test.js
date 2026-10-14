@@ -492,6 +492,16 @@ test('preserves removed assertions from deleted test files as LEFT-side summary 
   assert.match(s.calls.summary[0].body, /### Weak unit tests \(\d+\)\n\n- .*removed test or assertion/);
 });
 
+test('removed evidence cited without side LEFT is set to LEFT with a note, not demoted (Kite recall run: a dropped boundary case lost its finding)', () => {
+  const removed = { ...evidence, kind: 'removed' }; // no side
+  const d = report({ coverage: [row('weak_test', { change: { ...removed, side: 'LEFT' }, evidence: [removed] })], findings: [finding('weak_test', { ...removed, side: 'LEFT' })] });
+  assert.equal(post.validate(d).ok, true);
+  assert.equal(d.coverage[0].status, 'weak_test', 'not demoted to unknown');
+  assert.equal(d.coverage[0].evidence[0].side, 'LEFT');
+  assert.equal(d.findings.length, 1, 'the finding survives');
+  assert.ok(d.validation_notes.some((n) => /set to LEFT/.test(n)), d.validation_notes.join('|'));
+});
+
 test('a change citation on an unchanged line of a changed file drops the citation, keeps the obligation, one aggregated note; a quote absent from the file still fails', () => {
   const run = (cs) => { const d = report({ coverage: cs, findings: [finding('weak_test')] }); post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (p) => p === 'src.js' ? ['l1', 'l2', behaviour.quote] : ['test', evidence.quote], new Map([['src.js', post.parsePatch(patch)]])); return d; };
   const stray = { ...behaviour, line: 1, quote: 'l1' };

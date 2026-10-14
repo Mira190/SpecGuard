@@ -192,7 +192,8 @@ function validate(o) {
       }
       if (!citation(e) || !['unit', 'component', 'integration', 'e2e'].includes(e.layer)
         || !['assertion', 'no_assertion', 'disabled', 'removed'].includes(e.kind)) return shape(`evidence[${j}] malformed`);
-      if (e.kind === 'removed' && e.side !== 'LEFT') return shape("removed evidence must cite the diff's LEFT side");
+      // removed evidence lives on the diff's LEFT side by definition: set it, don't demote the row (the quote is still checked against the removed lines later)
+      if (e.kind === 'removed' && e.side !== 'LEFT') { e.side = 'LEFT'; notes.push(`${c.id}: removed evidence ${e.path}:${e.line} cited without side LEFT; set to LEFT.`); }
     }
     const unitProof = (e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT';
     if (c.status === 'covered' && (!c.behaviour || !c.evidence.some(unitProof))) return 'covered needs a current unit assertion';
