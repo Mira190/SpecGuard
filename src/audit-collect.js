@@ -118,14 +118,17 @@ function select(all, cap, prior, changedDocs = null) {
 // Per block: up to EV_PER code and EV_PER test locations (path:line + the best line) by the PR-mode requirement-to-code scorer, over the files in scope.
 // A location needs two matched terms and a fair share of the best score: a block that merely shares a word with the code gets nothing. cut: the time budget ended the search.
 // ponytail: BM25 over 40-line windows of the whole tree; per-package scoping (scan_paths) is what keeps it affordable on a monorepo.
+// the block's concrete values for the search: numbers of two or more digits (sizes, limits, timeouts). ponytail: numbers only; quoted names and units are left to the words
+const litsOf = (t) => [...new Set(String(t).match(/(?<![\w.])\d{2,}(?![\w.])/g) || [])].slice(0, 8);
 function evidence({ cwd, head, blocks, scope = null, docs = [], ignoreExtra = '', budgetMs = EV_BUDGET_MS }) {
   const info = { cut: false }, dl = makeClock(budgetMs);
   const entries = lsTree(cwd, head).filter((e) => !scope || scope(e.path)), docSet = new Set(docs);
   const rules = RULE_GLOBS.concat(lines(ignoreExtra));
   const skip = (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g));
-  const rows = blocks.length ? requirementToCode({ cwd, head, entries, skip, dl, info, stop: STOP, cover: true, crits: blocks.map((b) => ({ id: b.cid, quote: b.full, previous: '', lits: [] })) }) : [];
+  const rows = blocks.length ? requirementToCode({ cwd, head, entries, skip, dl, info, stop: STOP, cover: true, crits: blocks.map((b) => ({ id: b.cid, quote: b.full, previous: '', lits: litsOf(b.full) })) }) : [];
   // a window counts when it holds a good share of the block's weighted terms (cover) and three of them (two when it holds nearly all of a short block's)
-  const good = (l) => { const s = l.filter((w) => w.cover >= COVER_MIN && ((w.hits || []).length >= 3 || (w.hits.length === 2 && w.cover >= 0.8))); return s.filter((w) => w.score >= 0.3 * s[0].score); };
+  // a window qualifies by the block's words (cover), or by two of the block's concrete values (a long table row whose sizes sit in one config line: `width: 1000, height: 800`)
+  const good = (l) => { const s = l.filter((w) => (w.lits || 0) >= 2 || (w.cover >= COVER_MIN && ((w.hits || []).length >= 3 || (w.hits.length === 2 && w.cover >= 0.8)))); const byLit = (w) => (w.lits || 0) >= 2; return [...s.filter(byLit), ...s.filter((w) => !byLit(w) && w.score >= 0.3 * s[0].score)]; }; // two matching values first: stronger than shared words
   const picks = new Map(rows.map((r) => {
     const code = good(r.code).slice(0, EV_PER);
     return [r.criterion, { code, test: code.length ? [...good(r.tests.filter((w) => !w.via)), ...r.tests.filter((w) => w.via)].slice(0, EV_PER) : [] }]; // a transitive test hangs off a code window: no code, no test
