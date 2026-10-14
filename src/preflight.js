@@ -25,8 +25,12 @@ const recordedLogin = (comments = []) => {
 
 // Our own sticky summary (our comment that starts with the marker) that records this head SHA. The SHA marker is
 // absent from "could not complete" and incomplete summaries, so those runs are retried.
-const sticky = (c, sha, actor) => !!c && ours(c.user, actor) && typeof c.body === 'string'
-  && c.body.startsWith(SUMMARY) && c.body.includes(`<!-- specguard:head=${sha} -->`);
+// Requirements fingerprint (PR title + body, the requirement sources). A req marker that differs from `req` means they changed since the review: review again.
+// A summary with no req marker (older version) still counts, so an upgrade does not re-review every open PR.
+const reqKey = (pr) => require('node:crypto').createHash('sha1').update(`${pr?.title || ''}\n${pr?.body || ''}`.replace(/\r\n/g, '\n').trim()).digest('hex').slice(0, 12);
+const sticky = (c, sha, actor, req) => !!c && ours(c.user, actor) && typeof c.body === 'string'
+  && c.body.startsWith(SUMMARY) && c.body.includes(`<!-- specguard:head=${sha} -->`)
+  && !(req && /<!-- specguard:req=\w+ -->/.test(c.body) && !c.body.includes(`<!-- specguard:req=${req} -->`));
 
 // Returns the reason to skip, or '' to review.
 function decide({ pr, comments = [], headSha, includeBots = false, force = false, actor = null }) {
@@ -34,7 +38,7 @@ function decide({ pr, comments = [], headSha, includeBots = false, force = false
   const u = pr.user || {};
   if (!includeBots && (u.type === 'Bot' || /\[bot\]$/i.test(u.login || ''))) return `PR author ${u.login} is a bot (set include_bots: true to review bot PRs)`;
   const who = actor || recordedLogin(comments);
-  if (!force && comments.some((c) => sticky(c, headSha, who))) return `head ${String(headSha).slice(0, 7)} already has a SpecGuard summary (set force: true to rerun)`;
+  if (!force && comments.some((c) => sticky(c, headSha, who, reqKey(pr)))) return `head ${String(headSha).slice(0, 7)} already has a SpecGuard summary (set force: true to rerun)`;
   return '';
 }
 
@@ -53,4 +57,4 @@ if (require.main === module) {
   console.log(why ? `SpecGuard: skipping the run: ${why}` : 'SpecGuard: preflight passed');
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${why ? 'true' : 'false'}\n`);
 }
-module.exports = { decide, sticky, ours, recordedLogin };
+module.exports = { decide, sticky, reqKey, ours, recordedLogin };
