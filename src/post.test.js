@@ -1317,6 +1317,11 @@ test('differential: introduced is downgraded to pre_existing unless the PR chang
   // ... but an unrelated edit in the same hunk does not make old drift the PR's doing
   const unrelated = far(); unrelated.coverage[0].change = { path: 'code.js', line: 3, quote: 'console.log(1)' };
   assert.equal(since(unrelated, dmaps()), 'pre_existing');
+  // the PR deleted code in the behaviour's file (a removed check: Kite recall R2): the surviving behaviour line is unchanged, the drift is still introduced
+  const deleted = far(); deleted.coverage[0].change = { path: 'code.js', line: 2, quote: 'old', side: 'LEFT' };
+  assert.equal(since(deleted, dmaps()), 'introduced');
+  const deletedElsewhere = far(); deletedElsewhere.coverage[0].change = { path: 'other.js', line: 2, quote: 'old', side: 'LEFT' };
+  assert.equal(since(deletedElsewhere, dmaps()), 'pre_existing', 'a deletion in another file does not count');
   // the requirement item lines intersect the diff (RIGHT) or are a removed item
   assert.equal(since(far(), dmaps({ 'docs/spec.md': post.parsePatch(spec2) })), 'introduced');
   const left = far({ req: { line: 3, end: 3 } });
