@@ -167,6 +167,15 @@ test('removed assertions: a helper refactor re-pins the calls it wraps; only the
   assert.deepEqual(d.map((x) => [x.kind, x.line]), [['removed', 31]]);
   assert.match(d[0].old, /'BIG'.*已存在/);
 });
+test('removed assertions: a complete move into a parameter table is no lead; a row dropped in the move, or rows that only share the numbers across rows, stay leads (review F01/P3)', () => {
+  const table = (rows) => `-  assert.equal(next(1), 2);\n-  assert.equal(next(2), 3);\n+  for (const [input, expected] of ${rows}) {\n+    assert.equal(next(input), expected);\n+  }\n`;
+  assert.deepEqual(delta(table('[[1, 2], [2, 3]]')), []);
+  assert.deepEqual(delta(table('[{ input: 1, expected: 2 }, { input: 2, expected: 3 }]')), [], 'object rows');
+  assert.deepEqual(delta(table('[[1, 2]]')), ['removed 11 assert.equal(next(2), 3);'], 'the exact-now row was dropped in the move');
+  assert.deepEqual(delta(table('[[1, 2], [3, 4]]')), ['removed 11 assert.equal(next(2), 3);'], '2 and 3 sit in different rows');
+  assert.deepEqual(delta('-  assert.equal(next(2), 3);\n+  const cases = [[2, 3]];\n'), ['removed 10 assert.equal(next(2), 3);'], 'a table with no assertion on the same function re-pins nothing');
+});
+
 test('removed assertions: assert.match, notEqual and throws count as assertions', () => {
   const d = assertionDelta('diff --git a/t.test.js b/t.test.js\n--- a/t.test.js\n+++ b/t.test.js\n@@ -1,4 +1,1 @@\n-assert.match(f("zq1"), /x/)\n-assert.notEqual(g("zq2"), 1)\n-assert.throws(() => h("zq3"), /bad/)\n x\n', () => true);
   assert.equal(d.length, 3);
