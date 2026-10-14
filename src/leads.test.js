@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { run, declName, expectedArgs, mirrorCandidates, weakCandidates } = require('./leads.js');
+const { run, assertionDelta, declName, expectedArgs, mirrorCandidates, weakCandidates } = require('./leads.js');
 
 // Temp repo: base commit, then head commit; ctx gets diff.patch and files.txt like collect.sh writes them. Returns the leads as {section: [lines]}.
 function leads(t, baseFiles, headFiles, ctxFiles = {}, env = {}) {
@@ -144,4 +144,18 @@ test('helpers: declaration forms, assertion argument extraction', () => {
 test('weak leads: assert.ok of a helper call comparing explicit values is a real check, a bare result is a lead', () => {
   assert.deepEqual(weak("it('a', () => {\n  assert.ok(has(t('avi'), '-c:v', 'mpeg4'));\n});"), []);
   assert.deepEqual(weak("it('a', () => {\n  assert.ok(result);\n});"), ['2 result truthy']);
+});
+
+const mkdiff = (file, body) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -10,6 +10,6 @@\n${body}`;
+const delta = (body) => assertionDelta(mkdiff('test/x.test.ts', body), () => true).map((d) => `${d.kind} ${d.line} ${d.new ? d.old + ' => ' + d.new : d.old}`);
+
+test('removed or weakened assertions: a removed assertion and deepEqual turned into ok are leads', () => {
+  assert.deepEqual(delta(" a\n-  assert.equal(check('BIG'), true);\n+  assert.equal(check('big'), true);\n b\n"), ["removed 11 assert.equal(check('BIG'), true);"]);
+  assert.deepEqual(delta(" a\n-  assert.deepEqual(regionToCrop(r, f), { x: 1 });\n+  assert.ok(regionToCrop(r, f));\n"), ['weakened 11 assert.deepEqual(regionToCrop(r, f), { x: 1 }); => assert.ok(regionToCrop(r, f));']);
+});
+test('removed or weakened assertions: a move, a reformat or a stronger replacement is no lead', () => {
+  assert.deepEqual(delta("-  assert.equal(f(1), 2);\n+  assert.strictEqual(f( 1 ), 2);\n"), []);
+  assert.deepEqual(delta("-  assert.equal(f(1), 2);\n+  assert.equal(g(), 3);\n+  assert.equal(f(1), 2);\n"), []);
+  assert.deepEqual(delta("-  assert.ok(f(1));\n+  assert.deepEqual(f(1), { a: 1 });\n"), []);
+  assert.deepEqual(delta("-  // assert.equal(f(1), 2);\n+  const x = 1;\n"), []);
 });
