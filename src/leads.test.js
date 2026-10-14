@@ -140,3 +140,8 @@ test('helpers: declaration forms, assertion argument extraction', () => {
   assert.deepEqual(expectedArgs('assert f(1) == MAX'), ['MAX']);
   assert.deepEqual(mirrorCandidates('const E = 1;\nexpect(f()).toBe(E);\n'), []);
 });
+
+test('weak leads: assert.ok of a helper call comparing explicit values is a real check, a bare result is a lead', () => {
+  assert.deepEqual(weak("it('a', () => {\n  assert.ok(has(t('avi'), '-c:v', 'mpeg4'));\n});"), []);
+  assert.deepEqual(weak("it('a', () => {\n  assert.ok(result);\n});"), ['2 result truthy']);
+});
