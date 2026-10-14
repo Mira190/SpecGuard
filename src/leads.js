@@ -188,12 +188,15 @@ function weakCandidates(src) {
 }
 
 // ---- removed / weakened assertions (diff only) ----
+// value assertions VALUE does not list (kept out of VALUE: it also decides which weak assertions are "pinned")
+const EXTRA = /\bassert\.(?:match|doesNotMatch|notEqual|notStrictEqual|notDeepEqual|notDeepStrictEqual|throws|doesNotThrow|rejects|doesNotReject|ifError)\s*\(|\.(?:toMatch|toThrow|toThrowError|toHaveBeenCalledWith|toBeGreaterThan|toBeLessThan)\s*\(|\.rejects\./;
+const literalsOf = (text, min = 2) => new Set([...text.matchAll(/'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`|(?<![\w$.])(\d+(?:\.\d+)?)(?![\w$])/g)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]).filter((x) => x.length >= min));
 const subjectOf = (text) => { // the expression under test on one assertion line, whitespace and quote style normalised; null when it is no assertion
   let m, x = null;
   let w = weakOf(text, []);
   if (!w && (m = /(?<![.\w$])assert(?:\.ok)?\s*\(/.exec(text))) { const a = args(text, m.index + m[0].length - 1); if (a.length === 1 && /^[\w$.]+\(.*\)$/.test(a[0])) w = { x: a[0] }; } // assert.ok(f(x)): a bare call result
   if (w) x = w.x;
-  else if (VALUE.test(text)) {
+  else if (VALUE.test(text) || EXTRA.test(text)) {
     if ((m = /\bexpect\s*\(/.exec(text))) x = args(text, m.index + m[0].length - 1)[0];
     else if ((m = /^\s*assert\s+(.+?)\s*==/.exec(text))) x = m[1];
     else if ((m = /(?<![\w$])(?:[Aa]ssert|require)\.\w+\s*\(|(?<![\w$.])(?:assert\w*|assert_\w+|assert_eq!)\s*\(/.exec(text))) x = args(text, m.index + m[0].length - 1)[0];
@@ -223,6 +226,11 @@ function assertionDelta(diff, isTest) {
   for (const [f, { rm, add }] of per) for (const r of rm) {
     const same = add.filter((a) => a.x === r.x);
     if (same.some((a) => !a.weak) || (r.weak && same.length)) continue; // still pinned: moved, reformatted or strengthened
+    // re-pinned through a helper or alias: an added assertion holds every distinctive literal of the removed one (literals most assertion lines share, like '.mp4', say nothing)
+    const all = [...rm, ...add], has = (a, x) => literalsOf(a.text, 1).has(x);
+    const distinct = (min) => [...literalsOf(r.text, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive
+    const lits = distinct(2).length ? distinct(2) : distinct(1);
+    if (lits.length && add.some((a) => !a.weak && lits.every((x) => has(a, x)))) continue;
     out.push(same.length ? { file: f, kind: 'weakened', line: r.line, old: r.text, new: same[0].text } : { file: f, kind: 'removed', line: r.line, old: r.text });
   }
   return out;
