@@ -59,9 +59,11 @@ From `eval/results/recall-claude-2026-10-14{,b}.json` (18 seeded cases, 1 rep ea
 
 - k2-class false positives (weak_test semantics) depend on the model.
 - Real-repository recall is unmeasured; seeded fixtures are small and partly tuned.
-- Untested inputs (name-grep only): `ctx_retention_days`, `max_diff_kb` effect, `review_timeout_minutes`, CLI version pins; scan collector→post is not chained in one offline test.
+- Untested inputs (name-grep only): `ctx_retention_days`, `max_diff_kb` effect, `review_timeout_minutes`, CLI version pins.
 - A unit that never fits the model context keeps a scan `incomplete` on every run (honest, but a permanent warning).
 - The engine step shares the workspace with ctx files; a prompt-injected agent could write ctx files (existing exposure, not new).
 - CI runtime: bin tests add about 2 min of wall time; `kite-fp` adds about 15 s.
 
-Next: run `eval/run.js --cases k1,k2,t1,t2,t3,t4` on a real model; add the chained scan test; consider a deterministic weak_test check only with a recall run before and after.
+Follow-up (2026-10-15): chained scan test added (`src/audit-code.test.js` "chained:": real `collect` → real post step, no hand-written ctx files); main merged in; full suite 1052 pass, 0 fail, 1 skip, 1 todo, plus the known `auto-engine` timeout under load (passes alone).
+
+Next: run `eval/run.js --cases k1,k2,t1,t2,t3,t4` on a real model; consider a deterministic weak_test check only with a recall run before and after.
