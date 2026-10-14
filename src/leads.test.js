@@ -160,3 +160,14 @@ test('removed or weakened assertions: a move, a reformat or a stronger replaceme
   assert.deepEqual(delta("-  // assert.equal(f(1), 2);\n+  const x = 1;\n"), []);
   assert.deepEqual(delta("-  assert.ok(f(1));\n+  assert.ok(f( 1 ));\n"), [], 'a reformatted weak assertion was already weak: not weakened');
 });
+
+test('removed assertions: a helper refactor re-pins the calls it wraps; only the assertion deleted outright is a lead (Kite U1)', () => {
+  const diff = fs.readFileSync(path.join(__dirname, 'fixtures/kite-u1.diff'), 'utf8');
+  const d = assertionDelta(diff, () => true);
+  assert.deepEqual(d.map((x) => [x.kind, x.line]), [['removed', 31]]);
+  assert.match(d[0].old, /'BIG'.*已存在/);
+});
+test('removed assertions: assert.match, notEqual and throws count as assertions', () => {
+  const d = assertionDelta('diff --git a/t.test.js b/t.test.js\n--- a/t.test.js\n+++ b/t.test.js\n@@ -1,4 +1,1 @@\n-assert.match(f("zq1"), /x/)\n-assert.notEqual(g("zq2"), 1)\n-assert.throws(() => h("zq3"), /bad/)\n x\n', () => true);
+  assert.equal(d.length, 3);
+});
