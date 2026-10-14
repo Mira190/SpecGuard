@@ -190,11 +190,11 @@ function assembleAudit({ skillDir, ctxDir, schemaPath }) {
   parts.push(block('audit-meta.json', JSON.stringify(meta)));
   const units = read(ctxDir, 'audit-units.txt'); // absent = no code-first part (not listed as empty)
   if (nonEmpty(units)) { const c = cut(units, 24 * 1024); parts.push(block('audit-units.txt', c.text, c.cut ? `truncated; Read ${dir}/audit-units.txt for the rest` : UNITS_NOTE)); }
-  for (const [name, limit] of [['audit-docs.txt', 8 * 1024], ['audit-candidates.txt', 64 * 1024], ['audit-evidence.txt', 64 * 1024], ['standards.txt', LIMITS.small], ['test-layout.txt', LIMITS.small]]) {
+  for (const [name, limit] of [['audit-docs.txt', 8 * 1024], ['audit-candidates.txt', 64 * 1024], ['audit-blocks.txt', 192 * 1024], ['audit-evidence.txt', 64 * 1024], ['standards.txt', LIMITS.small], ['test-layout.txt', LIMITS.small]]) {
     const body = read(ctxDir, name);
-    if (!nonEmpty(body)) { empty.push(name); continue; }
+    if (!nonEmpty(body)) { if (name !== 'audit-blocks.txt') empty.push(name); continue; } // blocks file: absent in an older context, not listed as empty
     const c = cut(body, limit);
-    parts.push(block(name, c.text, c.cut ? `truncated; Read ${dir}/${name} for the rest` : name === 'audit-docs.txt' ? 'path, then why it was admitted' : name === 'audit-candidates.txt' ? 'the fixed list of blocks to assess: cid, path:line, heading, text' : name === 'audit-evidence.txt' ? 'per block (cid), found by a deterministic search before you started: code or test, path:line, the line; none = nothing found. Verify these first; search further only when none fits' : ''));
+    parts.push(block(name, c.text, c.cut ? `truncated; Read ${dir}/${name} for the rest` : name === 'audit-docs.txt' ? 'path, then why it was admitted' : name === 'audit-candidates.txt' ? 'the fixed list of blocks to assess: cid, path:line, heading, text' : name === 'audit-blocks.txt' ? 'the full text of each candidate block: cid, text with newlines written as \\n; [truncated] = cut at the limit, so not fully read' : name === 'audit-evidence.txt' ? 'per block (cid), found by a deterministic search before you started: code or test, path:line, the line; none = nothing found. Verify these first; search further only when none fits' : ''));
   }
   return `${out}
 

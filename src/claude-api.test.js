@@ -743,3 +743,15 @@ test('windowPack: a large file shows the lines around each cited line (line-numb
   assert.match(r.text, /exports\.a = 1;/);
   assert.deepEqual(r.notWhole, []);
 });
+
+test('scan parts: each block part carries the full text of its blocks (audit-blocks.txt rows), also past the 240-character candidate cut', async (t) => {
+  const s = scanRepo(t, 25), tail = 'DECISIVE_CLAUSE_AFTER_300';
+  s.answers((req, ok) => ok(req));
+  fs.writeFileSync(path.join(s.h.ctx, 'audit-blocks.txt'), s.cids.map((c, i) => `${c}\t${i === 22 ? 'x'.repeat(300) + tail : `body of ${c}`}\n`).join(''));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  const calls = blockCalls(s.h).map((c) => c.body.messages[0].content);
+  assert.equal(calls.length, 2);
+  assert.ok(!calls[0].includes(tail) && calls[1].includes(tail), 'the long block is whole in its own part only');
+  assert.match(calls[1], /name="audit-blocks\.txt"/);
+  assert.ok(calls[0].includes(`body of ${s.cids[0]}`) && !calls[0].includes(`body of ${s.cids[24]}`));
+});
