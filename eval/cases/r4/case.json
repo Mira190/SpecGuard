@@ -8,7 +8,7 @@
   "expected": {
     "findings": [
       {
-        "kind": "missing_test",
+        "kind": ["missing_test", "spec_mismatch"],
         "path": "eval-sandbox/r4/users.js",
         "line": 6,
         "quote": "return null;",
