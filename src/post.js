@@ -133,7 +133,8 @@ const clearlyUnit = (p) => layerOf(p) === 'unit' && !NOT_PLAIN_UNIT.test(String(
 // Does the cited line (or the quoted block) look like an assertion, and is its test disabled? Common frameworks only.
 // ponytail: regex over the cited text; a custom helper (checkTotal(x)) or an assertion wrapped in a local function reads as no_assertion, and
 // a skip marker is looked for only on the enclosing test declaration (up to 3 stacked lines above it), never on describe-level skips or runner config.
-const ASSERTION = /\b(?:[Aa]ssert\w*|[Ee]xpect\w*|[Ss]hould\w*|[Vv]erify\w*|[Ff]ail\w*\(|require\.\w+|t\.(?:Errorf|Fatalf|Error|Fatal|Fail\w*)|XCTAssert\w*|raises?|[Tt]hrows?|(?:Is|Has|Does|Contains)\.\w+)\b|\.(?:to[A-Z]\w*|not\.to\w+)\(|\bassert\s/;
+// Assertion styles: assert*/expect*/should*/verify* (node, chai, jest, sinon.assert, supertest .expect(, assertThat, testify assert./require.), t.* (tap, ava), XCTAssert, pytest.raises, self.assert*.
+const ASSERTION = /\b(?:[Aa]ssert\w*|[Ee]xpect\w*|[Ss]hould\w*|[Vv]erify\w*|[Ff]ail\w*\(|require\.\w+|t\.(?:Errorf|Fatalf|Error|Fatal|Fail\w*)|XCTAssert\w*|t\.(?:equals?|same|ok|notOk|not|is|throws|doesNotThrow|notThrows|rejects|resolves|match|deepEquals?|strictEqual|notEqual|true|false|truthy|falsy|pass|snapshot)\(|raises?|[Tt]hrows?|(?:Is|Has|Does|Contains)\.\w+)\b|\.(?:to[A-Z]\w*|not\.to\w+)\(|\bassert\s/;
 const SKIPPED = /\.skip\(|\bx(?:it|describe|test)\(|\.todo\(|@Disabled\b|@Ignore\b|\[Ignore\b|\bt\.Skip\w*\(|pytest\.mark\.(?:skip|xfail)|@unittest\.skip|\bskipIf\b/;
 const TEST_DECL = /\bx?(?:it|test|describe)(?:\.\w+)?\s*\(|^\s*(?:async\s+)?def\s+test_|^\s*func\s+Test|@Test\b|\[(?:Test|Fact|Theory|TestCase)\b|\bvoid\s+test/;
 function assertionKind(lines, line, quote) {
@@ -1424,6 +1425,13 @@ async function run({ github, context, core }) {
   if (!tracked) (data.validation_notes ||= []).push('Tracked files could not be listed; no workspace file was read as evidence.');
   // citations (evidence, behaviour, findings, requirement files) are read only from files tracked at the checked-out head
   const readLines = memoed((p) => { const rel = safeRel(p); return rel && tracked && tracked.has(rel) ? readFile(rel) : null; });
+  { // a missing_test claim whose error message or literal already sits in a tracked test file may be covered there: low confidence, not counted (src/test-map.js)
+    const covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
+    for (const f of data.findings) {
+      const hit = f.kind === 'missing_test' && f.confidence !== 'low' && covers(readLines(f.path), f.line);
+      if (hit) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
+    }
+  }
   const readRule = memoed(readFile); // the trusted rule inventory may include base-restored files that are not tracked at head
   data.tooling = tooling; // Always overwrite any model-supplied tooling claim.
 

@@ -1,7 +1,11 @@
 // Source file -> the existing test files most likely to cover it. One mapping for the PR review (collect.sh, test-candidates.txt) and the code-first scan (audit-units.js).
-// Up to `per` tests: same basename stem with test/spec affixes (any directory), tests that mention the stem as a whole word (imports, references), then tests in the same directory.
-// ponytail: names and a word search only, no per-language import parsing; a test that reaches the code through an index or a differently named module is missed (the unit then reads as untested).
+// Up to `per` tests, in tiers: same basename stem with test/spec affixes (any directory) > a test file name that contains one of the unit's public names as a token (test/res.status.js for
+// `res.status = function`) > tests that call two or more of those names > tests that mention the stem as a whole word (imports, references) > tests in the same directory (at most 5).
+// ponytail: names and word searches only, no per-language import parsing; a test that reaches the code through an index or a differently named module is missed (the unit then reads as untested).
+// Also here: the literal guard for missing_test claims (makeCoverGuard): a test file that already contains the claim's error message is a reason to doubt it.
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { declName, GENERIC: NAME_GENERIC } = require('./leads');
 
 const key = (s) => s.toLowerCase().replace(/[-_.]/g, '');
 const noExt = (p) => path.posix.basename(p).replace(/\.[^.]*$/, '');
@@ -10,22 +14,118 @@ const testStem = (p) => key(noExt(p).replace(/^tests?[_-]/i, '').replace(/[._-]?
 const near = (a, b) => { const x = path.posix.dirname(a).split('/'), y = path.posix.dirname(b).split('/'); let i = 0; while (i < x.length && x[i] === y[i]) i++; return i; };
 const GENERIC = new Set(['index', 'main', 'mod', 'init', '__init__', 'lib', 'app', 'utils', 'util', 'types']);
 const dirKey = (t) => path.posix.dirname(t).replace(/\/__tests__$/, '');
+const comment = (l) => /^\s*(?:\/\/|#|\*|\/\*|--)/.test(l);
+const usableName = (n) => n.length >= 4 && /^[A-Za-z_$][\w$]*$/.test(n) && !NAME_GENERIC.has(n.toLowerCase());
 
-// tests by stem and by folder: built once when many files are mapped (the scan maps thousands against thousands of tests)
-function indexTests(tests) {
-  const byStem = new Map(), byDir = new Map(), put = (m, k, t) => { if (!m.has(k)) m.set(k, []); m.get(k).push(t); };
-  for (const t of tests) { put(byStem, testStem(t), t); put(byDir, dirKey(t), t); }
-  return { byStem, byDir };
+// Public top-level definitions per language, one regex list per family: pub = what the language calls public, top = the fallback (top-level functions) when nothing is public.
+// ponytail: line regexes, no parser. A JS `module.exports = { a, b }` counts as one, a Ruby `private` section or a Python `__all__` is not seen; the count only weights the risk (log-free, so a very large file dominates: cap it with scan_paths).
+const FAMILY = {
+  js: { pub: [/^\s*export\s+(?!\*)/, /^\s*(?:module\.)?exports\.\w+\s*=/, /^\s*module\.exports\s*=/, /^\w+(?:\.\w+)+\s*=\s*(?:\w+(?:\.\w+)+\s*=\s*)*(?:async\s+)?function\b/], top: [/^(?:async\s+)?function\b/, /^(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:function\b|\(.*\)\s*=>|\w+\s*=>)/] },
+  py: { pub: [/^(?:async\s+def|def|class)\s+(?!_)\w/], top: [/^(?:async\s+)?def\s/] },
+  go: { pub: [/^func\s+(?:\([^)]*\)\s*)?[A-Z]/, /^type\s+[A-Z]/], top: [/^func\s/] },
+  java: { pub: [/^\s*public\s/], top: [/^\s*(?:static\s+|private\s+|protected\s+|internal\s+)+[\w<>\[\],?]+\s+\w+\s*\(/] },
+  kt: { pub: [/^\s*(?!.*\b(?:private|internal|protected)\b)(?:(?:open|data|suspend|override|abstract|sealed|inline|enum)\s+)*(?:fun|class|object|interface)\s/], top: [/^\s*(?:private\s+|internal\s+)?fun\s/] },
+  scala: { pub: [/^\s*(?!.*\b(?:private|protected)\b)(?:(?:case|abstract|sealed|final|override|implicit)\s+)*(?:def|class|object|trait)\s/], top: [/^\s*def\s/] },
+  rs: { pub: [/^\s*pub(?:\([^)]*\))?\s+(?:async\s+|unsafe\s+|const\s+)*(?:fn|struct|enum|trait|type|mod)\b/], top: [/^\s*(?:async\s+)?fn\s/] },
+  rb: { pub: [/^\s*def\s+(?!_)\S/], top: [/^\s*def\s/] },
+  swift: { pub: [/^\s*(?:public|open)\s/], top: [/^\s*(?:private\s+|fileprivate\s+)?func\s/] },
+};
+const EXT = { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'js', tsx: 'js', mts: 'js', cts: 'js', py: 'py', go: 'go', java: 'java', cs: 'java', php: 'java', kt: 'kt', scala: 'scala', rs: 'rs', rb: 'rb', swift: 'swift' };
+// `res.status = function`, `req.get = req.header = function`: every name assigned; `exports.x =`; else the declared name of the line
+const ASSIGN = /^((?:\w+(?:\.\w+)+\s*=\s*)+)(?:async\s+)?(?:function\b|\(.*\)\s*=>|\w+\s*=>)/;
+const namesOf = (l) => {
+  const m = ASSIGN.exec(l), e = /^\s*(?:module\.)?exports\.(\w+)\s*=/.exec(l), d = !m && !e && declName(l);
+  return m ? [...m[1].matchAll(/(\w+)\s*=/g)].map((x) => x[1]) : e ? [e[1]] : d ? [d] : [];
+};
+// ls: the file's lines -> { count: public definitions (or top-level functions when none is public), names: their names }
+function publicDefs(file, ls) {
+  const fam = FAMILY[EXT[path.extname(file).slice(1).toLowerCase()]];
+  if (!fam) return { count: 0, names: [] };
+  const body = ls.filter((l) => !comment(l)), hit = (res) => body.filter((l) => res.some((re) => re.test(l)));
+  const pub = hit(fam.pub), use = pub.length ? pub : hit(fam.top);
+  return { count: use.length, names: [...new Set(use.flatMap(namesOf))] };
 }
 
-// tests: every test path; mentions(stem) -> test paths that name the stem as a whole word (the caller's search: git grep, or an index); -> Map(test path -> why), at most `per`.
-function mapTests(f, { tests, mentions, per = 5, index = indexTests(tests) }) {
+// tests by stem, by folder and by file-name token: built once when many files are mapped (the scan maps thousands against thousands of tests)
+function indexTests(tests) {
+  const byStem = new Map(), byDir = new Map(), byToken = new Map(), put = (m, k, t) => { if (!m.has(k)) m.set(k, []); m.get(k).push(t); };
+  for (const t of tests) {
+    put(byStem, testStem(t), t); put(byDir, dirKey(t), t);
+    for (const tok of new Set(noExt(t).toLowerCase().split(/[._-]+/))) if (tok) put(byToken, tok, t);
+  }
+  return { byStem, byDir, byToken };
+}
+
+// tests: every test path; mentions(stem) -> test paths that name the stem as a whole word (the caller's search: git grep, or an index); names: the unit's public names (publicDefs);
+// calls(name) -> test paths that call that name (optional) -> Map(test path -> why), at most `per`.
+function mapTests(f, { tests, mentions, names = [], calls = null, per = 5, index = indexTests(tests) }) {
   const stem = noExt(f), want = key(stem), dir = path.posix.dirname(f), got = new Map();
-  const add = (list, why) => { for (const t of list.slice().sort((a, b) => near(f, b) - near(f, a) || (a < b ? -1 : 1))) if (got.size < per && !got.has(t)) got.set(t, why); };
+  const add = (list, why, limit = per) => { for (const t of list.slice().sort((a, b) => near(f, b) - near(f, a) || (a < b ? -1 : 1))) if (got.size < limit && !got.has(t)) got.set(t, typeof why === 'function' ? why(t) : why); };
+  // more names first, then a file name that also starts like the unit (res.status.js for response.js), then a shallower path
+  const kin = (t) => noExt(t).toLowerCase().split(/[._-]+/).filter((k) => k.length >= 2 && stem.toLowerCase().startsWith(k)).length;
+  const ranked = (hits) => [...hits.keys()].sort((a, b) => hits.get(b).size - hits.get(a).size || kin(b) - kin(a) || a.split('/').length - b.split('/').length || near(f, b) - near(f, a) || (a < b ? -1 : 1));
+  const pub = [...new Set(names.filter(usableName))];
   add(index.byStem.get(want) || [], 'same name');
+  const inName = new Map(), called = new Map(); // test -> the public names in its file name / that it calls
+  for (const n of pub) for (const t of index.byToken.get(n.toLowerCase()) || []) { if (!inName.has(t)) inName.set(t, new Set()); inName.get(t).add(n); }
+  const label = (verb, hits) => (t) => `${verb} ${[...hits.get(t)].slice(0, 3).join(', ')}`;
+  for (const t of ranked(inName)) add([t], label('file name has', inName));
+  if (calls) {
+    for (const n of pub) for (const t of calls(n)) { if (!called.has(t)) called.set(t, new Set()); called.get(t).add(n); }
+    for (const t of ranked(called)) if (called.get(t).size >= 2) add([t], label('calls', called));
+  }
   if (got.size < per && stem.length >= 3 && !GENERIC.has(stem.toLowerCase())) add(mentions(stem), `mentions ${stem}`);
-  add(index.byDir.get(dir) || [], 'same directory');
+  add(index.byDir.get(dir) || [], 'same directory', Math.min(per, 5));
   return got;
 }
 
-module.exports = { mapTests, indexTests, testStem, near, key, noExt, GENERIC };
+// ---- literal guard for missing_test claims ----
+// Strings of >= 10 characters with letters on the cited line and 2 lines each way: template holes (${x}, {}, %s) split them into static runs; each run and each 3-word window of it (>= 14 characters)
+// is a needle. A tracked test file that contains one (fixed string, case-insensitive) may already cover the claim, so does a test line with the thrown error class and the enclosing method name.
+// ponytail: a text search, not a proof: a message that is also a common phrase can downgrade a real gap to low confidence (never the reverse); the finding stays in Details with the test it found.
+const STR = /'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g;
+const HOLE = /\$\{[^}]*\}|#\{[^}]*\}|\{\{[^}]*\}\}|\{[\w.]*\}|%\([^)]*\)[a-z]|%[-+ 0#]*\d*(?:\.\d+)?[a-zA-Z]/g;
+const THROWN = /\b(?:throw\s+new|raise|throw)\s+([A-Z]\w*)/;
+const trimEnds = (s) => s.replace(/^[^\w]+|[^\w]+$/g, '');
+function needlesOf(lines, line) {
+  const out = new Set();
+  for (const l of lines.slice(Math.max(0, line - 3), line + 2)) {
+    if (comment(l)) continue;
+    for (const m of l.matchAll(STR)) {
+      for (const run of (m[1] ?? m[2] ?? m[3]).split(HOLE).map((r) => r.replace(/\\(.)/g, '$1').trim())) {
+        if (run.length < 10 || !/[A-Za-z]{3}/.test(run)) continue;
+        const words = run.split(/\s+/);
+        if (words.length <= 3) out.add(trimEnds(run));
+        for (let i = 0; i + 3 <= words.length; i++) { const w = trimEnds(words.slice(i, i + 3).join(' ')); if (w.length >= 14 && /[A-Za-z]{3}/.test(w)) out.add(w); }
+      }
+    }
+  }
+  return [...out].filter((n) => n.length >= 10).sort((a, b) => b.length - a.length).slice(0, 24);
+}
+// the thrown error class on the cited line (+-2) and the name of the enclosing definition (up to 60 lines up)
+function classAndMethod(lines, line) {
+  const cls = lines.slice(Math.max(0, line - 3), line + 2).map((l) => THROWN.exec(l)).find(Boolean);
+  if (!cls) return null;
+  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return { cls: cls[1], method: n }; }
+  return null;
+}
+// testPaths: test_paths text (or empty) -> (lines, line) => "path:line" of a tracked test file that may already cover the claim at that 1-based line of the file `lines`, or null.
+// A search that fails or times out finds nothing. trace.js is required lazily: it requires post.js, which uses this guard.
+function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
+  const { isTestPath, testScope } = require('./trace'), scope = testScope(testPaths), DOC = /\.(md|mdx|markdown|rst|adoc|txt)$/i;
+  const isTest = (p) => !DOC.test(p) && (isTestPath(p) || (scope && scope(p)));
+  const grep = (args) => {
+    try {
+      const out = execFileSync('git', ['grep', '-n', '-I', '-i', '-F', ...args], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } });
+      for (const l of out.split('\n')) { const m = /^(.*?):(\d+):/.exec(l); if (m && isTest(m[1])) return `${m[1]}:${m[2]}`; }
+    } catch {}
+    return null;
+  };
+  return (lines, line) => {
+    if (!Array.isArray(lines) || !Number.isInteger(line)) return null;
+    const needles = needlesOf(lines, line), hit = needles.length ? grep(needles.flatMap((n) => ['-e', n])) : null, cm = hit ? null : classAndMethod(lines, line);
+    return hit || (cm ? grep(['-e', cm.method, '--and', '-e', cm.cls]) : null);
+  };
+}
+
+module.exports = { mapTests, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, makeCoverGuard };
