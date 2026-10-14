@@ -272,3 +272,30 @@ test('a repository with nothing to inventory has no units', (t) => {
   assert.equal(inv.rows.length, 0);
   assert.equal(inv.picked.length, 0);
 });
+
+test('staticFindings: no test = evidence not found; no assertion, skipped, weak majority or no assertions = weak signal; unread test file and healthy tests = none', () => {
+  const { staticFindings } = require('./audit-units');
+  const S = (o = {}) => ({ tests: 2, noAssert: 0, skipped: 0, asserts: 4, weak: 0, unread: 0, ...o }), row = (id, o = {}) => ({ id, path: `src/${id}.js`, tests: ['test/x.test.js'], signals: S(), ...o });
+  const f = staticFindings([row('a', { tests: [], signals: S({ tests: 0, asserts: 0 }) }), row('b', { signals: S({ noAssert: 2, skipped: 1 }) }), row('c', { signals: S({ asserts: 4, weak: [1, 2] }) }), row('d', { signals: S({ asserts: 0 }) }),
+    row('e', { signals: S({ asserts: 0, unread: 1 }) }), row('f'), row('g', { signals: S({ asserts: 4, weak: 1 }) }), row('h', { signals: undefined, tests: [] }), row('i', { signals: S({ skipped: 1 }) })]);
+  assert.deepEqual(f.map((x) => [x.unit, x.kind]), [['a', 'test_evidence_not_found'], ['b', 'weak_test_signal'], ['c', 'weak_test_signal'], ['d', 'weak_test_signal'], ['i', 'weak_test_signal']]);
+  assert.match(f[0].why, /not a confirmed missing test/);
+  assert.equal(f[1].why, '2 tests without an assertion, 1 skipped');
+  assert.equal(f[2].why, '2 weak assertions');
+  assert.equal(f[3].why, 'no assertions');
+  assert.deepEqual(Object.keys(f[1]), ['unit', 'path', 'kind', 'why']);
+  assert.deepEqual(staticFindings(undefined), []);
+});
+
+test('write: audit-inventory.json rows carry the signal counts additively', (t) => {
+  const { inv, root } = run(t, { maxUnits: 3 });
+  const ctx = path.join(root, '.ctx');
+  fs.mkdirSync(ctx);
+  write(ctx, 'abc123', 3, inv);
+  const json = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-inventory.json'), 'utf8')), r = json.rows.find((x) => x.path === 'src/js/orders.js');
+  assert.deepEqual(Object.keys(r.signals), ['tests', 'noAssert', 'skipped', 'asserts', 'weak', 'unread']);
+  assert.ok(Number.isInteger(r.signals.weak));
+  assert.ok(r.id && r.why && Array.isArray(r.tests) && 'churn' in r);
+  const { staticFindings } = require('./audit-units');
+  assert.ok(Array.isArray(staticFindings(json.rows)));
+});

@@ -297,14 +297,14 @@ function workspace(t, files = FILES) {
   fs.mkdirSync(ctx);
   return { root, ctx, put: (n, v) => fs.writeFileSync(path.join(ctx, n), typeof v === 'string' ? v : JSON.stringify(v)) };
 }
-function mocks({ issues = [], login = null, failList = false } = {}) {
-  const calls = { created: [], updated: [], summary: '', warnings: [], outputs: {} };
+function mocks({ issues = [], login = null, failList = false, failWrite = false, failSummary = false } = {}) {
+  const calls = { created: [], updated: [], summary: '', warnings: [], outputs: {}, statuses: [] };
   const github = {
     paginate: async (fn) => { if (failList) throw new Error('403'); return fn(); },
     rest: { users: { getAuthenticated: async () => { if (!login) throw new Error('no /user for GITHUB_TOKEN'); return { data: { login } }; } },
-      issues: { listForRepo: () => issues, create: async (a) => { calls.created.push(a); }, update: async (a) => { calls.updated.push(a); } } },
+      issues: { listForRepo: () => issues, create: async (a) => { if (failWrite) throw new Error('403 write'); calls.created.push(a); }, update: async (a) => { if (failWrite) throw new Error('403 write'); calls.updated.push(a); } } },
   };
-  const core = { warning: (m) => calls.warnings.push(m), setOutput: (k, v) => { calls.outputs[k] = v; }, summary: { addRaw(s) { calls.summary = s; return this; }, async write() {} } };
+  const core = { warning: (m) => calls.warnings.push(m), setOutput: (k, v) => { calls.outputs[k] = v; if (k === 'status') calls.statuses.push(v); }, summary: { addRaw(s) { calls.summary = s; return this; }, async write() { if (failSummary) throw new Error('disk full'); } } };
   return { github, core, calls, context: { repo: { owner: 'o', repo: 'r' }, sha: 'abc123' } };
 }
 const BOT = { type: 'Bot', login: 'github-actions[bot]' };
@@ -915,4 +915,92 @@ test('state: a carried block keeps its real status and class; a contradicted hig
   assert.deepEqual(audit.readState('<!-- specguard:audit-state {"v":4,"head":"h","audits":[["h","2026-10-13"]],"blocks":[["1111111a","gap","h",1,0]]} -->').blocks[0], { cid: C1, status: 'gap', since: 'h', runs: 1, at: { head: 'h', date: '2026-10-13' } });
   const big = audit.stateOf('h1', { ...result([]) }, null, { date: DATE, carried: Array.from({ length: 700 }, (_, i) => ({ cid: cid(0x5000 + i), status: 'gap', since: 'abcdef1', runs: 2, at: { head: 'abcdef1', date: '2026-10-13' }, top: 'contradicted', hl: 1 })) });
   assert.ok(Buffer.byteLength(big.raw) < 64000 / 1.5, `${Buffer.byteLength(big.raw)} bytes`);
+});
+
+// ---- incomplete review, posting failures, static test signals ----
+const UID = '5555555e';
+const SIG = (over = {}) => ({ tests: 2, noAssert: 0, skipped: 0, asserts: 4, weak: 0, unread: 0, ...over });
+const invOf = (rows) => ({ units: rows.length, with_tests: 0, without_tests: 0, skipped_tests: 0, tests_without_assertion: 0, weak_assertions: 0, max_units: 12, selected: { units: rows.length, skipped_tests: 0 }, unreviewed: [], limitations: [],
+  rotation: { rotate: false, picked: rows.length, confirming: 0, new: rows.length, oldest: 0, reviewed: rows.length, total: rows.length, run: 1, runs: 1 }, rows });
+const urow = (id, over = {}) => ({ id, path: `src/${id}.js`, score: 5, why: 'x', tests: ['test/a.test.js'], review: 'this run', signals: SIG(), ...over });
+const codeOf = (rows) => ({ list: new Map(rows.map((r) => [r.id, { id: r.id, path: r.path, score: r.score }])), inv: invOf(rows), findings: [], unseen: [] });
+const clean = () => verify(result([req()]), { read });
+const A1 = '00000a01', A2 = '00000a02';
+
+test('render: static test signals are listed visibly with the caveat, the verdict is the unconfirmed form, nothing enters the state', () => {
+  const rows = [urow(A1, { tests: [], signals: SIG({ tests: 0, asserts: 0 }) }), urow(A2, { signals: SIG({ noAssert: 2, skipped: 1 }) }), urow('00000a03')];
+  const md = render({ data: clean(), code: codeOf(rows), head: 'abc1234def' });
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.match(vis, /\*\*❔ No model-verified unit test gaps in the 3 riskiest units; 2 units have static test signals to check\*\*/);
+  assert.doesNotMatch(vis, /✅/);
+  assert.match(vis, /### Static test signals \(no model\) \(2\)/);
+  assert.match(vis, /Found by rule from the test files at this commit, not by the model; a missing or weak signal is a lead, not a confirmed gap\./);
+  assert.match(vis, /\| src\/00000a01\.js \| test evidence not found \|/);
+  assert.match(vis, /\| src\/00000a02\.js \| weak test signal \| 2 tests without an assertion, 1 skipped \|/);
+  assert.doesNotMatch(vis, /00000a03/);
+  assert.doesNotMatch(audit.stateComment('h', clean(), null, { date: DATE, code: { picked: [A1], findings: [], carried: [] } }), /static|test_evidence/);
+});
+
+test('render: more than 10 static signals overflow into Details; none: the clean verdict stays; an inventory without signals still renders', () => {
+  const many = Array.from({ length: 12 }, (_, i) => urow(`0000b0${i.toString(16).padStart(2, '0')}`, { tests: [], signals: SIG() }));
+  const md = render({ data: clean(), code: codeOf(many) });
+  assert.match(md.slice(0, md.indexOf('<details>')), /### Static test signals \(no model\) \(12\)[\s\S]*\+2 more in Details\./);
+  assert.match(md.slice(md.indexOf('<details>')), /\*\*More static test signals \(2 more\)\*\*/);
+  const none = render({ data: clean(), code: codeOf([urow(A1)]) });
+  assert.match(none, /\*\*✅ No unit test gaps in the riskiest unit\*\*/);
+  assert.doesNotMatch(none, /Static test signals/);
+  const o = render({ data: clean(), code: codeOf([urow(A1, { signals: undefined, tests: [] })]) });
+  assert.match(o, /✅ No unit test gaps/);
+  assert.doesNotMatch(o, /Static test signals/);
+});
+
+test('render: unseen units or unanswered blocks never leave the clean verdict; the unanswered line is visible', () => {
+  const c = codeOf([urow(A1), urow(A2)]);
+  const unseen = render({ data: clean(), code: { ...c, unseen: [A2] } });
+  assert.match(unseen, /\*\*⚠️ Incomplete scan: no gaps found so far\*\*/);
+  assert.doesNotMatch(unseen, /✅/);
+  const un = render({ data: clean(), code: c, unanswered: 2 });
+  assert.match(un, /\*\*⚠️ Incomplete scan: no gaps found so far\*\*/);
+  assert.match(un, /\*\*Not answered by the model:\*\* 2 document blocks/);
+  assert.match(render({ data: clean(), code: c, unanswered: 0 }), /✅/);
+});
+
+const UFILES = { 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\tnone\t-\n`, 'audit-inventory.json': invOf([urow(UID, { path: 'src/plan.js', tests: [] })]) };
+test('run: units the model context did not hold make the status incomplete with the count; a clean run stays complete', async (t) => {
+  const cut = await runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result(), 'pack-cut.txt': 'src/plan.js\n' } });
+  assert.equal(cut.calls.outputs.status, 'incomplete');
+  assert.match(cut.calls.outputs.reason, /1 unit did not fit the model's context/);
+  assert.doesNotMatch(cut.calls.summary, /✅/);
+  const ok = await runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result(), 'pack-cut.txt': '' } });
+  assert.equal(ok.calls.outputs.status, 'complete');
+  assert.equal(ok.calls.outputs.reason, undefined);
+});
+
+test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
+  const five = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), ...[1, 2, 3, 4].map((i) => cand(cid(i), 4, `Block ${i}.`)));
+  const skip = (i) => ({ cid: cid(i), reason: 'rationale' });
+  const miss = await runPost(t, { ctxFiles: { 'audit-candidates.txt': candTxt(five), 'findings.json': result([req()], { not_requirements: [1, 2, 3].map(skip) }) } });
+  assert.equal(miss.calls.outputs.status, 'incomplete');
+  assert.match(miss.calls.outputs.reason, /1 document block was not answered by the model/);
+  assert.match(miss.calls.summary, /\*\*Not answered by the model:\*\* 1 document block/);
+  const all = await runPost(t, { ctxFiles: { 'audit-candidates.txt': candTxt(five), 'findings.json': result([req()], { not_requirements: [1, 2, 3, 4].map(skip) }) } });
+  assert.equal(all.calls.outputs.status, 'complete');
+});
+
+test('run: a failed issue write or lookup, or a failed job summary, fails the status (last output wins) and warns', async (t) => {
+  const env = { AUDIT_ISSUE: 'true' };
+  const w = await runPost(t, { env, mock: { failWrite: true }, ctxFiles: { 'findings.json': result() } });
+  assert.equal(w.calls.statuses.at(-1), 'failed');
+  assert.match(w.calls.outputs.reason, /could not write the scan issue: 403 write/);
+  assert.ok(w.calls.warnings.some((x) => /could not write the scan issue/.test(x)));
+  const l = await runPost(t, { env, mock: { failList: true }, ctxFiles: { 'findings.json': result() } });
+  assert.equal(l.calls.statuses.at(-1), 'failed');
+  assert.match(l.calls.outputs.reason, /could not write the scan issue: 403/);
+  const s = await runPost(t, { mock: { failSummary: true }, ctxFiles: { 'findings.json': result() } });
+  assert.equal(s.calls.statuses.at(-1), 'failed');
+  assert.equal(s.calls.outputs.reason, 'could not write the job summary');
+  assert.ok(s.calls.warnings.some((x) => /could not write the job summary/.test(x)));
+  const ok = await runPost(t, { env, ctxFiles: { 'findings.json': result() } });
+  assert.equal(ok.calls.statuses.at(-1), 'complete');
+  assert.equal(ok.calls.created.length, 1);
 });
