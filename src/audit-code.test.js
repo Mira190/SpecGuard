@@ -602,3 +602,20 @@ test('run: TEST_PATHS reaches the scan post step: a file under a non-test direct
   assert.match(on.lowWhy, /a test may already cover this: qa\/checks\/orders\.js:2/);
   assert.equal((await run({})).low, false, 'without TEST_PATHS the directory is not a test location');
 });
+
+test('chained: the real collector writes the ctx files and the post step reads them; a finding on the untested unit counts, one on an unselected unit is dropped', async (t) => {
+  const { root, ctx } = repoOf(t, CODE_ONLY);
+  collect({ cwd: root, ctx, maxUnits: 1 }); // only the riskiest unit (legacy, no test) is selected
+  const picked = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').trim().split('\t');
+  assert.deepEqual([picked[0], picked[1]], [U2, 'src/js/legacy.js']);
+  fs.writeFileSync(path.join(ctx, 'findings.json'), JSON.stringify(result([uf(), uf({ unit: U1, ...cite('src/js/orders.js', 1), title: 'create is untested' })])));
+  const m = mocks();
+  const saved = { ...process.env };
+  Object.assign(process.env, { CTX: ctx, GITHUB_WORKSPACE: root, ENGINE: '', MODEL: '', SKIP: '', SCAN_ISSUE: '', AUDIT_ISSUE: '' });
+  try { await audit({ github: m.github, context: m.context, core: m.core, date: DATE }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
+  assert.match(m.calls.summary, /\*\*❌ 1 unit test gap in the /);
+  assert.ok(m.calls.summary.includes(`unit_findings[1] dropped: unknown unit ${U1}`));
+  const rows = JSON.parse(fs.readFileSync(path.join(ctx, 'audit.json'), 'utf8')).unit_findings;
+  assert.deepEqual(rows.map((r) => [r.unit, r.low]), [[U2, false]]);
+  assert.equal(m.calls.outputs.status, 'complete');
+});
