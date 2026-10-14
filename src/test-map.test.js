@@ -138,3 +138,14 @@ test('the guard also finds a thrown class on a test line with the method name, a
   assert.equal(makeCoverGuard({ cwd: path.join(root, 'nope') })(RESPONSE, 5), null, 'no repository: no hit');
   assert.equal(covers(null, 5), null);
 });
+
+test('enclosingName: the definition around a cited line, for the common shapes', () => {
+  const { enclosingName } = require('./test-map');
+  const at = (src, line) => enclosingName(src.split('\n'), line);
+  assert.equal(at("defineGetter(req, 'fresh', function(){\n  var x = 1;\n  return x;\n});", 3), 'fresh');
+  assert.equal(at('res.status = function status(code) {\n  a();\n  b();\n};', 3), 'status');
+  assert.equal(at('function parseRange(size) {\n  a();\n  b();\n}', 3), 'parseRange');
+  assert.equal(at('  def render_page(self):\n    a()\n    b()', 3), 'render_page');
+  assert.equal(at('func ServeFile(w int) {\n\ta()\n\tb()\n}', 3), 'ServeFile');
+  assert.equal(at('a();\nb();', 2), null);
+});

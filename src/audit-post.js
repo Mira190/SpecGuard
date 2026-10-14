@@ -6,6 +6,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const post = require('./post');
 const { ours } = require('./preflight');
+const { enclosingName } = require('./test-map');
 // trace.js's test-path rule; the fallback is a local copy of it in case the export moves (ponytail: keep in sync).
 const { isTestPath = (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/.test(p) } = require('./trace');
 
@@ -236,7 +237,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.requirements.sort((a, b) => pos(a.id) - pos(b.id)); // stable: a block's .1, .2 rows keep the model's order
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line)), notes: out.not_reviewed });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line)), notes: out.not_reviewed, file });
   return out;
 }
 
@@ -245,7 +246,14 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
 // det: a missing_test on a unit with NO matched test file is confirmed at once (no test file is a fact the collector found). low: the claude engine's context pack cut a test file the claim depends on
 // (the unit's matched tests for missing_test, the cited file for weak_test); same rule as PR mode: shown in Details, never counted. Also low: covers(c) found a test file that already contains the cited
 // line's error message or literal (src/test-map.js, shared with PR mode): lowWhy names it.
-function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes }) {
+function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes, file = () => null }) {
+  // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
+  const cutTest = (u, c) => {
+    const cutTests = u.tests.filter((t) => packCut.has(t));
+    if (!cutTests.length) return false;
+    const name = enclosingName(file(c.path) || [], c.line), re = name && new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`);
+    return !re || cutTests.some((t) => { const body = file(t); return !body || re.test(body.join('\n')); });
+  };
   const out = [], seen = new Set(), key = (q) => String(q).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   for (const f of list) {
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
@@ -256,7 +264,7 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes
     seen.add(fid);
     const skeleton = f.skeleton && placeholder(f.skeleton) ? '' : f.skeleton;
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
-    const cut = !!u && (f.kind === 'missing_test' ? u.tests.some((t) => packCut.has(t)) : f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c) : null;
+    const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c) : null;
     out.push({ ...f, ...c, skeleton, fid, low: cut || !!hit, ...(hit && { lowWhy: `a test may already cover this: ${hit}` }), det: f.kind === 'missing_test' && !!u && !u.tests.length && !hit });
   }
   return out;
@@ -373,7 +381,8 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   // code-first part (code = { list: Map of the reviewed units, inv: audit-inventory.json, findings: verified unit findings }): confirmed findings first, then by the unit's risk; low-confidence ones are Details only
   const uall = code ? trackFindings(code.findings, prior, sha).sort((a, b) => (b.confirmed - a.confirmed) || (((code.list.get(b.unit) || {}).score || 0) - ((code.list.get(a.unit) || {}).score || 0))) : [];
   const uf = uall.filter((f) => !f.low), ulow = uall.filter((f) => f.low), inv = code ? code.inv : null;
-  const riskiest = inv ? (inv.rotation.picked === 1 ? 'riskiest unit' : `${inv.rotation.picked} riskiest units`) : '';
+  const unseen = (code && code.unseen) || [], seenN = inv ? inv.rotation.picked - unseen.length : 0; // unseen: picked units the model's context did not hold whole (pack-cut.txt): not reviewed this run
+  const riskiest = inv && unseen.length ? `${seenN} unit${seenN === 1 ? '' : 's'} that fit the model's context` : inv ? (inv.rotation.picked === 1 ? 'riskiest unit' : `${inv.rotation.picked} riskiest units`) : '';
   const docless = !!code && !docs.length && !rows.length; // a repository without design documents: the document statistics would only say zero
   // carried blocks: the previous status, no sub-rows; a pending recheck stays pending; blocks that were not requirements are only counted
   const old = carried.filter((p) => p.status !== 'not_req').map((p) => ({ cid: p.cid, path: p.path, line: p.line, text: p.text, rows: [], carried: true, at: p.at, next: [p.cid, p.status, p.since, p.runs],
@@ -425,6 +434,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     const both = [unitPart, docPart].filter(Boolean).join('; ');
     if (partial) verdict = `**⚠️ Incomplete scan: ${both ? `${both} found so far` : 'no unit test gaps found so far'}**`;
     else if (both) verdict = `**❌ ${both}**${at7}. Static review; tests were not run.`;
+    else if (unseen.length && !seenN) verdict = `**⚠️ The scan could not review any unit: none fit the model's context**${at7}.`;
     else if (unsure.length) verdict = `**❔ No unit test gaps in the ${riskiest}; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${at7}. Static review; tests were not run.`;
     else verdict = `**✅ No unit test gaps in the ${riskiest}**${at7}. Static review; tests were not run.`;
   }
@@ -436,8 +446,9 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   let top = `## ${HEADING}\n\n${verdict}\n\n`;
   if (code && data && !failure && !partial) { // the shape of the unit result in one glance (not for an incomplete run)
     const n = (k) => uf.filter((f) => f.kind === k).length, cellOf = (k) => (n(k) ? `${n(k)}` : 'none'), r = inv.rotation;
-    top += `| Units reviewed | No unit test | Weak tests | Skipped tests | Design documents |\n|---|---|---|---|---|\n| ${r.picked} of ${r.total}${r.rotate ? ` (rotation ${r.run} of ${r.runs})` : ''} | ${cellOf('missing_test')} | ${cellOf('weak_test')} | ${(inv.selected && inv.selected.skipped_tests) || 'none'} | ${docs.length ? `${docs.length} read` : 'none found'} |\n\n`;
+    top += `| Units reviewed | No unit test | Weak tests | Skipped tests | Design documents |\n|---|---|---|---|---|\n| ${seenN} of ${r.total}${r.rotate ? ` (rotation ${r.run} of ${r.runs})` : ''} | ${cellOf('missing_test')} | ${cellOf('weak_test')} | ${(inv.selected && inv.selected.skipped_tests) || 'none'} | ${docs.length ? `${docs.length} read` : 'none found'} |\n\n`;
   }
+  if (code && data && !failure && unseen.length) top += `**Not reviewed this run:** ${plural(unseen.length, 'unit')} did not fit the model's context: ${unseen.slice(0, 5).map((u) => `\`${cell((code.list.get(u) || {}).path || u, 100)}\``).join(', ')}${unseen.length > 5 ? `, +${unseen.length - 5} more` : ''}. ${unseen.length === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
   if (partial && !failure) top += `> **Incomplete scan.** The rows below passed verification but the list may be incomplete${partial ? ` (${cell(partial, 200)})` : ''}. The scan issue, if enabled, was not updated.\n\n`;
   const items = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
   // an incomplete or failed scan keeps its reasons visible; a complete one lists them in Details
@@ -508,7 +519,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     const r = inv.rotation, URISK = '| Unit | Risk | Why | Matched tests | Review |\n|---|---|---|---|---|\n';
     const urow = (u) => `| ${link(u.path, 1, u.path)} | ${u.score} | ${cell(u.why, 160)} | ${u.tests.length ? cell(`${u.tests.slice(0, 3).join(', ')}${u.tests.length > 3 ? `, +${u.tests.length - 3} more` : ''}`, 200) : 'none'} | ${cell(u.review, 40)} |\n`;
     const text = `**Inventory**\n\n${inv.units} source files (units), ${inv.with_tests} with a matched test file and ${inv.without_tests} without. The matched tests hold ${plural(inv.skipped_tests, 'skipped test')}, ${plural(inv.tests_without_assertion, 'test')} without an assertion and ${plural(inv.weak_assertions, 'weak assertion')}.\n\n`
-      + `${r.rotate ? `Rotation: ${r.reviewed} of ${r.total} units reviewed at least once; this run reviewed ${r.picked} (confirming ${r.confirming}, never reviewed ${r.new}, least recently reviewed ${r.oldest}). A full cycle takes ${r.runs} runs of ${inv.max_units} units.` : `The ${r.picked} riskiest of ${r.total} units were reviewed. Schedule with scan_issue: true to rotate through all units.`}\n\n`
+      + `${r.rotate ? `Rotation: ${r.reviewed} of ${r.total} units reviewed at least once; this run reviewed ${seenN} (confirming ${r.confirming}, never reviewed ${r.new}, least recently reviewed ${r.oldest}). A full cycle takes ${r.runs} runs of ${inv.max_units} units.` : `The ${seenN} riskiest of ${r.total} units were reviewed${unseen.length ? ` (${unseen.length} more did not fit the model's context)` : ''}. Schedule with scan_issue: true to rotate through all units.`}\n\n`
       + `**How to read the unit part**\n\nA unit is a tracked source file. Its risk is (1 + public definitions) times log2(2 + lines / 50) times (1 + commits / 5 + fix commits) times a test factor (1.0 no matched test, 0.6 tests with no assertion, all skipped or mostly weak, 0.3 tested); commits are those of the last 180 days. A test file is matched to a unit by name, by mention or by folder. The ranking orders the work of one scan; it is not a prediction of defects. A finding is confirmed when it is a missing test for a unit with no matched test file, or when the same finding was reported in the previous run${prior ? '' : ' (there is no earlier run, so every other finding is unconfirmed)'}. Static review; not coverage; not for scoring people.\n\n`;
     const left = Math.max(0, inv.units - r.reviewed);
     cdet = take(`**Riskiest units (top ${Math.min(30, inv.rows.length)} of ${inv.units})**\n\n${URISK}`, inv.rows.slice(0, 30).map(urow), '') + fit(text)
@@ -607,7 +618,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
     return;
   }
   const data = json('findings.json');
-  const units = readUnits(readCtx('audit-units.txt')), inv = json('audit-inventory.json'), packCut = new Set(lines(readCtx('pack-cut.txt')));
+  const units = readUnits(readCtx('audit-units.txt')), inv = json('audit-inventory.json'), pcText = readCtx('pack-cut.txt'), packCutOn = pcText != null, packCut = new Set(lines(pcText)); // pack-cut.txt exists only when the claude engine ran with the pack
   const hasCode = units.size > 0 && !!inv && !!inv.rotation && Array.isArray(inv.rows) && Array.isArray(inv.unreviewed); // the collector's code-first part (absent in a run that predates it)
   const v = validate(data, cands, units);
   const why = v.ok ? '' : data ? `the result failed validation: ${v.error}` : 'the engine returned no usable JSON';
@@ -622,8 +633,9 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || process.env.TEST_PATHS || '' });
+  const unseen = hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path)).map((u) => u.id) : [];
   const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands, units, packCut, covers });
-  const code = hasCode ? { list: units, inv, findings: checked.unit_findings } : null;
+  const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen } : null;
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
   // the blocks this run did not audit: the state's blocks that are still in the documents (audit-carried.txt), with the text and place from the collector
@@ -633,7 +645,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   await finish(render({ ...shared, data: checked, partial, prior, carried, code }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
   const cu = readUnits(readCtx('audit-units-carried.txt')); // units the state knows that this run did not review, still in the repository
-  const codeState = code && { picked: [...units.keys()], findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid)) : [] };
+  const codeState = code && { picked: [...units.keys()].filter((u) => !unseen.includes(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || unseen.includes(b.cid)) : [] }; // an unseen unit is not tracked: its prior state is carried, it stays due
   const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState });
   await publish(render({ ...shared, data: checked, prior, carried, code, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
 }
