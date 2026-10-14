@@ -2760,9 +2760,9 @@ test('layout: line 2 ends with the push-to-push delta only when an earlier revie
   const posted = [{ f: finding('missing_test', { title: 'M1' }), url: 'https://github.com/o/r/pull/1#discussion_r1' }, { f: finding('weak_test', { title: 'W1', line: 5 }), url: 'https://github.com/o/r/pull/1#discussion_r2' }];
   const counts = (since, since_total = 3) => ({ v: 1, complete: true, since: { addressed: 0, open: 0, dismissed: 0, not_observed: 0, ...since }, since_total, prior_total: since_total });
   const line2 = (c, extra = {}) => visibleOf(post.buildSummary({ data: layoutData(), posted, blob: BLOB, counts: c, ...extra })).split('\n').slice(2, 9).join('\n'); // the table and the line right under it
-  assert.match(line2(counts({ addressed: 2, open: 1 })), /\| nothing to move down \|\n\nSince last push: 2 fixed · 1 new$/);
-  assert.match(line2(counts({ addressed: 1, open: 2 })), /\nSince last push: 1 fixed$/, 'zero parts are omitted');
-  assert.doesNotMatch(line2(counts({ open: 2 })), /Since last push/, 'nothing fixed, nothing new: no delta');
+  assert.match(line2(counts({ addressed: 2, open: 1 })), /\| nothing to move down \|\n\nSince last push: 2 with later changes \(fix not verified\) · 1 new$/);
+  assert.match(line2(counts({ addressed: 1, open: 2 })), /\nSince last push: 1 with later changes \(fix not verified\)$/, 'zero parts are omitted');
+  assert.doesNotMatch(line2(counts({ open: 2 })), /Since last push/, 'nothing addressed, nothing new: no delta');
   assert.doesNotMatch(line2(counts({}, 0)), /Since last push/, 'first review: no delta');
   assert.doesNotMatch(line2(undefined), /Since last push/);
   const low = [{ f: finding('weak_test', { title: 'LOW', confidence: 'low' }), why: 'low confidence' }];

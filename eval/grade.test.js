@@ -46,6 +46,17 @@ test('low-confidence and summary-only items are never TP or FP', () => {
   assert.deepEqual([r.tp, r.fp, r.fn, r.summary_only], [0, 0, 1, 1]);
 });
 
+test('a visible summary-only finding that matches nothing is a FP and breaks expect_clean; one that served a TP, an acceptable one or one in Details is not', () => {
+  const visible = '<!-- specguard:summary -->\n## SpecGuard\n\n### Missing unit tests (1)\n\n- Extra `b.js:4` — body\n';
+  const r = grade(spec([], { expect_clean: true }), obs([], { summary: visible }));
+  assert.deepEqual([r.fp, r.false_positives[0].level, r.clean_ok, r.pass], [1, 'summary', false, false]);
+  const tp = grade(spec([exp({ path: 'b.js', line: 4, allow_summary: true })]), obs([], { summary: visible }));
+  assert.deepEqual([tp.tp, tp.fp], [1, 0], 'the item that matched the expected finding is not also a FP');
+  assert.deepEqual([grade(spec([], { acceptable: [{ kind: 'missing_test', path: 'b.js', line: 4, reason: 'truly untested' }] }), obs([], { summary: visible })).fp], [0]);
+  const hidden = `${visible.replace(/### [^\n]+\n\n- [^\n]+\n/, '')}\n<details><summary>Details: more</summary>\n\n**Not reviewed**\n\n- Extra \`b.js:4\` — body\n</details>\n`;
+  assert.equal(grade(spec([], { expect_clean: true }), obs([], { summary: hidden })).clean_ok, true);
+});
+
 test('allow_summary counts a summary item or coverage row matching kind and path', () => {
   const e = exp({ allow_summary: true, path: ['p.js', 'p.spec.js'], kind: ['weak_test', 'missing_test'] });
   const item = grade(spec([e]), obs([], { summary: summaryWith('- ❌ **Weak test:** Gone `p.spec.js:3` (removed test or assertion) — x\n') }));

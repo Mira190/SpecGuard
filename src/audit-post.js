@@ -98,7 +98,7 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
   }
   o.not_requirements = skips;
   let unusable = 0, first = '';
-  const kept = [];
+  const kept = [], conflicts = new Set();
   for (const [i, r] of o.requirements.entries()) {
     const w = `requirements[${i}]`;
     const drop = (why) => { unusable++; first ||= `${w}: ${why}`; notes.push(`${w} dropped: ${why}.`); };
@@ -108,7 +108,7 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     if (!text(r.id) || !text(r.text)) { drop('id and text are required'); continue; }
     if (ids.has(r.id)) { drop(`duplicate id ${String(r.id).slice(0, 40)}`); continue; }
     if (cands && (!cid || !cands.has(cid))) { drop(`id ${String(r.id).slice(0, 40)} is not a listed block id (the block cid, or cid.1, cid.2)`); continue; }
-    if (cands && skipped.has(cid)) { drop(`block ${cid} is answered both as not_a_requirement and as a requirement`); continue; }
+    const conflict = cands && skipped.has(cid); // a conflict needs a person: the row stays, unknown, so the obligation never leaves the denominator
     if (!cite(tidy(r.source))) { drop('source needs path, line and quote'); continue; }
     ids.add(r.id);
     const problems = [];
@@ -125,6 +125,12 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     if (noClass) r.note = `${typeof r.note === 'string' ? r.note : ''} Class not stated; status unknown.`.trim();
     else if (r.note === undefined || r.note === null) r.note = '';
     else if (typeof r.note !== 'string') { r.note = ''; notes.push(`${w}: note was not a string; ignored.`); }
+    if (conflict) {
+      r.status = 'unknown';
+      r.note = `${r.note} Also answered as not a requirement (${oneLine(skips.find((n) => n.cid === cid).reason, 120)}); status unknown until a person decides.`.trim();
+      notes.push(`${w}: block ${cid} was answered both as a requirement and as not a requirement; kept as unknown.`);
+      conflicts.add(cid);
+    }
     for (const c of [r.source, ...r.code, ...r.tests]) c.quote = c.quote.slice(0, 200); // a prefix of a verbatim quote still verifies
     if (problems.length) { unusable++; first ||= `${w}: ${problems[0]}`; notes.push(`${w} marked unknown: ${problems.join('; ')}.`); }
     if (cid) answered.add(cid);
@@ -132,6 +138,8 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
   }
   if (unusable * 2 > o.requirements.length) return bad(`${first} (${unusable} of ${o.requirements.length} requirement rows are unusable)`);
   o.requirements = kept;
+  for (const c of conflicts) skipped.delete(c);
+  o.not_requirements = skips.filter((n) => !conflicts.has(n.cid));
   if (cands) {
     const missing = [...cands.keys()].filter((k) => !answered.has(k) && !skipped.has(k));
     if (missing.length > cands.size * MISSING_MAX) return bad(`${missing.length} of ${cands.size} listed blocks were not answered (e.g. ${missing.slice(0, 5).join(', ')}); answer every block exactly once`);
@@ -217,12 +225,16 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     if (docs && !docs.has(safeRel(source.path))) { drop(r, 'its source is not an admitted requirement document'); continue; }
     if (!locate(source)) { drop(r, solid(source.quote) ? 'the requirement quote was not found at the cited line' : `the requirement quote is under ${MIN_QUOTE} characters`); continue; }
     const code = r.code.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && !testFile(c.path));
-    const tests = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
-    const lost = r.code.length - code.length + r.tests.length - tests.length;
+    const located = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
+    // same rule as PR mode (post.verifyEvidence): a declaration, an empty or a skipped test carries no coverage
+    const kinds = located.map((c) => post.assertionKind(file(c.path) || [], c.line, c.quote)), tests = located.filter((_, i) => kinds[i] === 'assertion');
+    const inert = located.length - tests.length;
+    const lost = r.code.length - code.length + r.tests.length - located.length;
     const cand = cands && cands.get(cidOf(r.id)), heading = cand ? cand.heading : headingAt(file(source.path), source.line);
     kept.add(cidOf(r.id));
     const row = { ...r, heading, source, code, tests, note: r.note };
     if (lost) row.note = `${row.note} ${lost} citation(s) could not be verified and were removed.`.trim();
+    if (inert) row.note = `${row.note} ${inert} test citation(s) removed: not an assertion or in a skipped test.`.trim();
     const why = gap(row);
     if (why && row.status !== 'unknown') { row.note = `${row.note} Downgraded to unknown: ${why}.`.trim(); row.status = 'unknown'; }
     out.requirements.push(row);
