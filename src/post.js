@@ -242,8 +242,8 @@ function validate(o) {
 
   const reqIds = new Set(), reqs = [];
   for (const [i, r] of o.requirements.entries()) {
-    // a collected criterion (R*, S*, H*) may give only id, obligation_ids and reason: verifyRequirements fills source and quote from requirements-status.json
-    const collected = r && typeof r === 'object' && /^[RSH]\d+$/.test(String(r.id));
+    // a collected criterion (R*, S*, H*, D*) may give only id, obligation_ids and reason: verifyRequirements fills source and quote from requirements-status.json
+    const collected = r && typeof r === 'object' && /^[RSHD]\d+$/.test(String(r.id));
     if (!r || typeof r !== 'object' || !text(r.id) || reqIds.has(r.id) || (!collected && (!text(r.source) || !text(r.quote)))) { notes.push(`Dropped requirements[${i}]: malformed or duplicate.`); continue; }
     reqIds.add(r.id);
     const linked = Array.isArray(r.obligation_ids) ? r.obligation_ids.filter((id) => ids.has(id)) : [];
@@ -740,7 +740,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   let line2 = '';
   if (data && !failed && !inc) {
     const n = (k) => rows.filter((x) => x.kind === k).length, nk = (k) => all.filter((f) => f.kind === k).length;
-    const req = rows.length ? `${rows.length}: ${[`${n('evidenced')} evidenced`, plural(n('gap'), 'gap'), plural(n('mismatch'), 'mismatch', 'mismatches'), `${n('unassessed') + n('check')} unconfirmed`].filter((x) => !x.startsWith('0 ')).join(', ')}` : 'none found';
+    const req = rows.length ? `${rows.length}: ${[`${n('evidenced')} evidenced`, plural(n('gap'), 'gap'), plural(n('mismatch'), 'mismatch', 'mismatches'), `${n('unassessed') + n('check')} unconfirmed`].filter((x) => !x.startsWith('0 ')).join(', ')}` : specFiles?.length ? 'none linked' : 'none found'; // a requirement document was read, but no criterion links to the change
     const tool = tooling && !['passed', 'not_configured'].includes(tooling.status) ? `; tool checks ${cell(tooling.status)}` : '';
     const std = data.standards.status === 'checked' ? (nk('standard') ? plural(nk('standard'), 'violation') : 'no violations') : data.standards.status === 'no_rules' ? 'none found' : 'not reviewed';
     const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';

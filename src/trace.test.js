@@ -975,3 +975,31 @@ test('run never takes sample or vendored trees as requirement documents; require
   T.run({ cwd: forced.dir, base: forced.base, head: forced.head, ctx: forced.ctx, reqPaths: 'eval/cases/**' });
   assert.ok(out(forced, 'spec-files.txt').split('\n').includes('eval/cases/tr17/base/docs/development.md'));
 });
+
+// ---- D*: an unchanged governing block becomes a criterion ----
+const FILL = Array.from({ length: 30 }, (_, i) => `The ${['alpha', 'bravo', 'delta', 'gamma', 'omega'][i % 5]}${i} panel shows the tray widget and its menu.`);
+const KITE_DOC = ['# Design', '', ...FILL.flatMap((f) => [f, '']), '## 4.1 Before recording', '', 'Choose the mode. "Region" enters the overlay and "Window" lists the windows.', '',
+  'On confirm, width and height are rounded to even numbers (an H.264 4:2:0 requirement).', '', '## 8 Toolbox', '', 'The queue has three lanes: conversion, stream capture and live video.', '',
+  'The ball is a round floating button that opens the recording list.', '', 'A row MUST exist.', '', 'The tray MUST be hidden.', ''].join('\n');
+const GEO = (v) => `export const evenFloor = (n: number) => n - (n % 2)
+${v}`;
+const EVEN_REGION = `export const evenRegion = (r: Region) => ({ width: evenFloor(r.width), height: evenFloor(r.height) }) // width and height rounded to even numbers
+`;
+test('D criterion: an unchanged block that strongly matches changed code is collected with path, ref, line and quote', (t) => {
+  const r = repo(t, { 'docs/design.md': KITE_DOC, 'src/engine/geometry.ts': GEO('') }, { 'docs/design.md': KITE_DOC, 'src/engine/geometry.ts': GEO(EVEN_REGION) });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const d = (status(r).criteria || []).filter((c) => c.id[0] === 'D');
+  assert.deepEqual(d.map((c) => [c.id, c.source, c.line, c.quote]), [['D1', 'docs/design.md', KITE_DOC.split(/\n/).findIndex((l) => l.startsWith('On confirm')) + 1, 'On confirm, width and height are rounded to even numbers (an H.264 4:2:0 requirement).']]);
+  assert.ok(d[0].ref.startsWith('4-1-before-recording'));
+});
+test('D criterion: a weak match collects nothing', (t) => {
+  const r = repo(t, { 'docs/design.md': KITE_DOC, 'src/other.ts': 'export const a = 1\n' }, { 'docs/design.md': KITE_DOC, 'src/other.ts': 'export const a = 2\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  assert.deepEqual((status(r).criteria || []).filter((c) => c.id[0] === 'D'), []);
+});
+test('D criterion: a block changed in this PR is an S criterion only, with no D duplicate', (t) => {
+  const r = repo(t, { 'docs/design.md': KITE_DOC.replace('rounded', 'floored'), 'src/engine/geometry.ts': GEO('') }, { 'docs/design.md': KITE_DOC, 'src/engine/geometry.ts': GEO(EVEN_REGION) });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const ids = (status(r).criteria || []).map((c) => c.id[0]);
+  assert.ok(ids.includes('S') && !ids.includes('D'));
+});
