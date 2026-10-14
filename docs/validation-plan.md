@@ -96,3 +96,37 @@ Stop or reposition (summary-only, pre-push only) if any falsifier fires:
 - `weekly-report` output holds counts only. `labels.csv` holds finding text, which quotes your code, and `replay` copies private source into its `--out` folder and sends `prompt.md` (diff, requirement text) to a model. Keep both inside the company, use an approved model, delete the folders when done.
 - The report reads PR comments, review threads and compare diffs through `gh` with your own login; it writes nothing to GitHub.
 - The workflow sends the diff to Copilot (SpecGuard and native review) as your org's Copilot plan allows; the `COPILOT_REVIEW_TOKEN` PAT should belong to a service user with the least access (Pull requests: write on this repo).
+
+## Results: seeded recall on Kite, PR mode (2026-10-14)
+
+A blind check of the PR path on a real repository, before any team pilot. It measures recall on known gaps; it is not the fix-through or precision study above.
+
+**Setup.** Repository `Mira190/Kite` (Electron, React, TypeScript, `node --test`; requirements in `docs/design.md`). Engine: Claude Haiku 5.5, API mode, about $0.01 per PR. Ten PRs (#10–#19), each a believable small change with exactly one seeded gap, written by an agent playing the developer. The answer key stayed outside every repository; PR titles and bodies do not hint at the gap.
+
+- Unit-test side: U1 a test refactor deletes one assertion; U2 a value assertion weakened to `assert.ok`; U3 an exact-boundary test case dropped; U4 a new branch with no test; U5 a boundary constant changed with no test change.
+- Requirement side, each against an unchanged sentence of `docs/design.md`: R1 a stated duration changed (10 s → 15 s); R2 a required pre-start check removed; R3 a default changed (camera shortcut bound by default); R4 a stated label changed; R5 a stated range narrowed (0–9 → 0–5).
+
+A case counts as found when the gap is visible on the first screen of the summary (an inline comment, a counted gap, or a requirement row that names the difference). A requirement row that only asks a person to check, without the difference, counts as half.
+
+| Case | Round 1 (main at #179) | Round 2 (after #180–#182) | Round 4 (final main, after #183–#184) |
+|---|---|---|---|
+| U1 deleted assertion | missed | found | missed |
+| U2 weakened assertion | missed | found | found |
+| U3 dropped boundary case | found | missed (finding dropped by validation) | missed |
+| U4 untested new branch | found | missed (downgraded by the delegate check) | found |
+| U5 boundary moved, untested | found | found | found |
+| R1 duration 10 → 15 s | missed | found (mismatch, inline) | found |
+| R2 required check removed | half | half | half (the finding cited the removed line and failed the citation check) |
+| R3 default changed | found (asked a person, difference named) | found (mismatch, inline) | found |
+| R4 label changed | missed | found (mismatch, inline) | found |
+| R5 range narrowed | missed | found (mismatch, inline) | found |
+| **Total** | **4.5 / 10** | **7.5 / 10** | **7.5 / 10** |
+
+Round 3 re-ran only U3, U4 and R2 after #183 and #184: U3 and U4 were found, R2 stayed half. Across all runs, no counted finding was wrong; the noise was two or three "check this requirement" rows for loosely related design lines.
+
+**What changed between rounds.**
+- Round 1 → 2, requirement side 1.5 → 4.5. The model had seen R1 and R4 ("design.md still says 10 seconds", "still quotes the old label") and filed them as impacted, because the PR skill said a stated intent downgrades a requirement mismatch. #182 makes an unchanged admitted requirement document the baseline: an intended change against it is still a spec_mismatch. #180 links a requirement block to the hunk that removes a value the block states (10, 停止录制, 9), so R1, R4 and R5 get a requirement row at all.
+- Round 1 → 2, U1 and U2 found: #182 adds deterministic leads for removed and weakened assertions in test-only PRs.
+- Round 2 regressions fixed: U4 was downgraded because #179's delegate check counted `filter` and `deepEqual` as tested helpers (#183: only functions the repository defines in non-test files count). U3 was found by the model but dropped, because removed evidence without side LEFT demoted its coverage row (#184: the side is set instead).
+
+**Reading.** The requirement-side gain is stable across rounds (4.5 / 5, as inline mismatches on the changed line). The unit-test side varies between runs: every unit case was found in at least one run after the fixes, but a single run finds 3 or 4 of 5. Two deterministic improvements are open: a finding that cites a removed line should be set to the LEFT side like #184 does for evidence (R2), and a removed assertion with no replacement is a fact that could be reported without depending on the model (U1). Sample size is ten cases on one repository; treat the numbers as a regression check, not a rate.
