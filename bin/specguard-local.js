@@ -76,7 +76,7 @@ cp.execFileSync = function (file, args) {
 // The gate for --fail-on-gaps: what post.js delivered after validation (citations verified, anchored to the diff, capped), never the raw findings.json.
 // A gap = a high-confidence missing_test / weak_test comment, or a summary item of those kinds that post.js did not mark "low confidence" (comment cap, outside the diff, ...).
 const GAP = ['missing_test', 'weak_test'];
-function validatedGaps(posted) { // a summary item is "- title `path:line` (why) — sentence" under "### ❌ Missing unit tests" / "### ❌ Weak unit tests", or the older "- ❌ **Missing test:** …" (post.js buildSummary; eval/grade.js parseSummary reads it)
+function validatedGaps(posted) { // a summary item is "- title `path:line` (why) — sentence" under "### Missing unit tests" / "### Weak unit tests" (older runs: with a leading icon), or the older "- ❌ **Missing test:** …" (post.js buildSummary; eval/grade.js parseSummary reads it)
   const inline = (posted.comments || []).map(parseComment).filter(Boolean).some((c) => GAP.includes(c.kind) && c.confidence === 'high');
   return inline || parseSummary(posted.summary).items.some((i) => GAP.includes(i.kind) && !/low confidence/i.test(i.why));
 }

@@ -71,9 +71,6 @@ test('records integration-only evidence without claiming unit coverage or forcin
   assert.equal(post.validate(report({ coverage: [c], findings: [] })).ok, true);
   assert.equal(post.validate(report({ coverage: [c], findings: [finding('pushdown')] })).ok, true);
   assert.equal(post.noGaps(report({ coverage: [c], findings: [] })), false);
-  assert.match(post.proven([c]), /Unit evidence: 0\/1/);
-  assert.equal(post.proven([]), '');
-  assert.equal(post.proven([row('needs_human')]), '');
 });
 
 test('never labels empty, partial, unknown or incomplete checks as a clean review', () => {
@@ -113,7 +110,6 @@ test('renders suggestions only for standards and redacts secrets', () => {
   assert.doesNotMatch(post.commentBody(finding('missing_test', { suggestion: 'fixed();' }), 'abc'), /fixed\(\);/);
   assert.equal(post.redact('ghp_' + 'a'.repeat(36)), '[REDACTED]');
   assert.ok(post.truncate('x'.repeat(70000)).length <= 65000);
-  assert.equal(post.axes([finding(), finding('pushdown')]), 'Tests: 1 missing, 0 weak · Standards: 0 · Layering: 1');
 });
 
 const track = (s, ...files) => execFileSync('git', ['add', ...files], { cwd: s.dir }); // workspace files a test adds must be tracked to be read
@@ -134,15 +130,19 @@ function setup(t, data = report(), options = {}) {
   fs.writeFileSync(path.join(dir, 'RULES.md'), 'rule one\nrule two\n');
   for (const a of [['init', '-q'], ['add', 'src.js', 'test.js', 'RULES.md']]) execFileSync('git', a, { cwd: dir }); // citations are only read from tracked files
   for (const [name, value] of Object.entries({ 'files.txt': 'src.js\n', 'diff.patch': fileDiff('src.js', patch),'standards.txt': 'RULES.md\n', 'findings.json': JSON.stringify(data), 'requirements-status.json': JSON.stringify({ status: 'available', sources: ['PR body', 'issue #1'], limitations: [] }) })) fs.writeFileSync(path.join(dir, 'ctx', name), value);
-  const calls = { review: [], file: [], summary: [], list: 0 };
+  const calls = { review: [], file: [], summary: [], list: 0, wrapper: 0 }; // review: the inline comments, grouped as one entry { commit_id, comments } for the assertions (there is no review wrapper); reply: what createReviewComment returns
   let count = 0;
   const github = { paginate: async (fn, args) => (await fn(args)).data, graphql: async () => ({ repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false }, nodes: [] } } } }), rest: {
     pulls: {
       get: async () => ({ data: { head: { sha: options.head || 'HEADSHA' }, ...options.pr } }),
       listFiles: async () => { calls.list++; if (options.listError) throw Object.assign(new Error('Server Error: diff temporarily unavailable'), { status: 500 }); return { data: options.listed || [{ filename: 'src.js', patch }] }; },
       listReviewComments: async () => ({ data: options.existing || [] }),
-      createReview: async (args) => { calls.review.push(args); if (options.retry422 && count++ === 0) throw Object.assign(new Error('bad anchor'), { status: 422 }); },
-      createReviewComment: async (args) => { calls.file.push(args); },
+      createReview: async () => { calls.wrapper++; throw new Error('no review wrapper: createReview must never be called'); },
+      createReviewComment: async (args) => {
+        if (options.retry422 && args.subject_type !== 'file' && count++ === 0) throw Object.assign(new Error('bad anchor'), { status: 422 });
+        if (args.subject_type === 'file') calls.file.push(args); else (calls.review[0] ||= { commit_id: args.commit_id, comments: [] }).comments.push(args);
+        return { data: calls.reply || {} };
+      },
     },
     issues: {
       listComments: async () => ({ data: options.issueComments || [] }),
@@ -163,7 +163,6 @@ test('posts requirement-aware findings and reports standards and layers independ
   await post(s);
   assert.equal(s.calls.review.length, 1);
   assert.equal(s.calls.review[0].commit_id, 'HEADSHA');
-  assert.equal(s.calls.review[0].event, 'COMMENT');
   assert.equal(s.calls.review[0].comments[0].line, 3);
   assert.match(s.calls.summary[0].body, /Coding standards: reviewed/);
   assert.match(s.calls.summary[0].body, /Test layers: reviewed/);
@@ -214,7 +213,7 @@ test('pack-cut.txt: a missing_test whose candidate test the model saw only partl
 test('does not publish results for a superseded commit', async (t) => {
   const s = setup(t, report(), { head: 'NEWHEAD' });
   await post(s);
-  assert.deepEqual(s.calls, { review: [], file: [], summary: [], list: 0 });
+  assert.deepEqual(s.calls, { review: [], file: [], summary: [], list: 0, wrapper: 0 });
   assert.match(s.warnings[0], /superseded HEAD/);
 });
 
@@ -233,10 +232,10 @@ test('delivery=summary: no write call, full findings and a plain delivery note i
   const writes = spyWrites(s);
   await post(s);
   assert.deepEqual(writes, []);
-  assert.deepEqual(s.calls, { review: [], file: [], summary: [], list: 0 });
+  assert.deepEqual(s.calls, { review: [], file: [], summary: [], list: 0, wrapper: 0 });
   const out = s.jobSummary.join('');
-  assert.match(out, /### ❌ Missing unit tests[\s\S]*Verify the boundary total[\s\S]*The boundary has no assertion\.\s+Add assert\.equal\(total\(1\), 42\)\./);
-  assert.match(out, /Delivery: summary only; nothing was posted to the PR/);
+  assert.match(out, /### Missing unit tests[\s\S]*Verify the boundary total[\s\S]*The boundary has no assertion\.\s+Add assert\.equal\(total\(1\), 42\)\./);
+  assert.match(out, /summary only, nothing posted/);
   assert.doesNotMatch(out, /Delivery degraded|Incomplete review|already posted|Comments:|specguard:status=incomplete/);
   assert.match(out, /specguard:status=complete/);
 });
@@ -252,7 +251,7 @@ test('delivery=summary: a closed PR is reviewed and says so; normal mode still s
   delete process.env.DELIVERY; // before setup: it snapshots the env it restores
   const n = setup(t, report(), { pr: { state: 'closed' } });
   await post(n);
-  assert.deepEqual(n.calls, { review: [], file: [], summary: [], list: 0 });
+  assert.deepEqual(n.calls, { review: [], file: [], summary: [], list: 0, wrapper: 0 });
   assert.match(n.warnings[0], /no longer open/);
 });
 
@@ -265,12 +264,24 @@ test('without delivery=summary the review and the sticky comment are posted as b
   assert.doesNotMatch(s.jobSummary.join(''), /summary only/);
 });
 
-test('retries rejected inline anchors as a body-only review', async (t) => {
-  const s = setup(t, report(), { retry422: true });
+test('a rejected inline anchor sends only that finding to the summary; the other comments are still posted', async (t) => {
+  const s = setup(t, report({ coverage: [row('missing_test'), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { title: 'FIRST' }), finding('missing_test', { obligation_ids: ['O2'], title: 'SECOND', line: 4, quote: 'l4' })] }), { retry422: true });
   await post(s);
-  assert.equal(s.calls.review.length, 2);
-  assert.equal(s.calls.review[1].comments, undefined);
-  assert.match(s.calls.review[1].body, /unanchored/);
+  assert.equal(s.calls.review[0].comments.length, 1, 'the second comment was posted');
+  assert.match(s.calls.review[0].comments[0].body, /^\*\*SECOND\*\*/);
+  assert.match(s.calls.summary[0].body, /FIRST[^\n]*could not be posted inline/);
+  assert.equal(s.calls.wrapper, 0);
+});
+
+test('no review wrapper: findings are standalone review comments with the head commit; createReview is never called', async (t) => {
+  const s = setup(t);
+  await post(s);
+  assert.equal(s.calls.wrapper, 0, 'createReview is never called, so no review body is posted');
+  assert.equal(s.calls.review[0].commit_id, 'HEADSHA');
+  assert.equal(s.calls.review[0].comments[0].commit_id, 'HEADSHA');
+  assert.equal(s.calls.review[0].comments[0].pull_number, 7);
+  assert.equal(s.calls.review[0].comments[0].side, 'RIGHT');
+  assert.equal(s.calls.summary.length, 1, 'the summary comment is the only aggregate');
 });
 
 test('reports missing model output as incomplete', async (t) => {
@@ -428,7 +439,7 @@ test('summary preserves the integration assertion and proposed pushdown as a dis
   await post(s);
   assert.match(s.calls.summary[0].body, /integration: test.js:2/);
   assert.match(s.calls.summary[0].body, /Unit evidence: 0\/1/);
-  assert.match(s.calls.summary[0].body, /### ❌ Tests to move down \(1\)\n\n- (?!❌)/);
+  assert.match(s.calls.summary[0].body, /### Tests to move down \(1\)\n\n- (?!❌)/);
   assert.match(s.calls.review[0].comments[0].body, /keep the integration persistence check/);
 });
 
@@ -461,7 +472,7 @@ test('preserves removed assertions from deleted test files as LEFT-side summary 
   await post(s);
   assert.equal(s.calls.review.length, 0);
   assert.match(s.calls.summary[0].body, /removed test or assertion/);
-  assert.match(s.calls.summary[0].body, /### ❌ Weak unit tests \(\d+\)\n\n- .*removed test or assertion/);
+  assert.match(s.calls.summary[0].body, /### Weak unit tests \(\d+\)\n\n- .*removed test or assertion/);
 });
 
 test('a change citation on an unchanged line of a changed file drops the citation, keeps the obligation, one aggregated note; a quote absent from the file still fails', () => {
@@ -489,7 +500,7 @@ test('restores omitted collected criteria to the report as unassessed', () => {
   assert.deepEqual(d.requirements[1].obligation_ids, []);
   assert.equal(post.noGaps(d), false);
   const rs = post.buildSummary({ data: d });
-  assert.match(rs, /\| ❔ Unconfirmed \| Reject zero\. \| Point to the unit test or add one\. \|/);
+  assert.match(rs, /\| Unconfirmed \| Reject zero\. \| Point to the unit test or add one\. \|/);
   assert.match(rs, /\*\*❔ No gaps found; 1 criterion needs a person to check\*\*/);
 });
 
@@ -497,9 +508,11 @@ test('a compound criterion is covered only when all its obligations are', () => 
   const r = { id: 'R1', source: 'PR body', quote: 'Rejects empty names and trims whitespace.', obligation_ids: ['O1', 'O2'], reason: 'Split in two.' };
   const d = report({ requirements: [r], coverage: [row(), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { obligation_ids: ['O2'] })] });
   assert.equal(post.validate(d).ok, true);
-  assert.match(post.buildSummary({ data: d, items: d.findings.map((f) => ({ f, why: '' })) }), /\| ❌ Gap \| Rejects empty names and trims whitespace\. \| Add the test\. \|/);
+  const gap = post.buildSummary({ data: d, items: d.findings.map((f) => ({ f, why: '' })) });
+  assert.match(gap, /\n  Requirement: "Rejects empty names and trims whitespace\."\n/, 'the listed finding carries its requirement');
+  assert.doesNotMatch(gap, /### Requirements to check|\| Gap \|/, 'and is not repeated as a row');
   const all = report({ requirements: [r], coverage: [row(), row('covered', { id: 'O2' })], findings: [] });
-  assert.match(post.buildSummary({ data: all }), /- ✅ Evidenced: \*\*R1\*\* Rejects empty names and trims whitespace\./);
+  assert.match(post.buildSummary({ data: all }), /- Evidenced: \*\*R1\*\* Rejects empty names and trims whitespace\./);
 });
 
 test('invalid requirement wording leaves its criterion unassessed and its obligations on their own citations', () => {
@@ -612,7 +625,7 @@ test('live failure: checked standards without sources do not discard valid test 
   const body = s.calls.summary[0].body;
   assert.match(body, /\*\*❌ 2 unit test gaps to fix\*\*/);
   assert.equal(s.calls.review[0].comments.length, 1);
-  assert.match(body, /\| ❌ 1 missing · 1 weak \| none found \| not reviewed \| nothing to move down \|/);
+  assert.match(body, /\| 1 missing · 1 weak \| none found \| not reviewed \| nothing to move down \|/);
   assert.doesNotMatch(body, /not_reviewed/);
   assert.match(body, /checked standards need sources/);
   assert.match(body, /Validation notes \(1\)/);
@@ -874,7 +887,7 @@ test('c5: missing requirements status still verifies; an invented quote is never
   withStatus(s, null);
   await post(s);
   assert.equal(s.calls.review[0].comments.length, 1);
-  assert.match(s.calls.summary[0].body, /\| ❔ Unconfirmed \| Invented wording\. \| Point to the unit test or add one\. \|/);
+  assert.match(s.calls.summary[0].body, /\| Unconfirmed \| Invented wording\. \| Point to the unit test or add one\. \|/);
   assert.match(s.calls.summary[0].body, /Requirement collection status unavailable/);
   const ok = setup(t, report({ requirements: [{ ...reqs[0], source: 'RULES.md', quote: 'rule one' }] }));
   fs.writeFileSync(path.join(ok.dir, 'ctx', 'requirements-status.json'), '{bad');
@@ -891,7 +904,7 @@ test('c6: summary items outside the diff show the snapped line', async (t) => {
 test('c7: the summary status counts reflect failed posts', async (t) => {
   const s = setup(t, report(), { retry422: true });
   await post(s);
-  assert.match(s.calls.review[0].body, /1 inline, 0 file-level/);
+  assert.equal(s.calls.review.length, 0, 'the rejected comment is not in a review');
   assert.match(s.calls.summary[0].body, /could not be posted inline/);
   assert.doesNotMatch(s.calls.summary[0].body, /Delivery:/, 'nothing was delivered');
 });
@@ -1170,7 +1183,7 @@ test('omitted spec (S) criteria are re-added as NOT ASSESSED; optional history (
 ${SPEC_Q}` }, { source: 'history PR #3', text: 'Old intent.' }], criteria, specFiles: ['docs/spec.md'] });
   assert.deepEqual(d.requirements.map((r) => r.id), ['S1']);
   assert.deepEqual([d.requirements[0].ref, d.requirements[0].line, d.requirements[0].obligation_ids], ['AC-4', 3, []]);
-  assert.match(post.buildSummary({ data: d }), /\| ❔ Unconfirmed \| /);
+  assert.match(post.buildSummary({ data: d }), /\| Unconfirmed \| /);
   // a model-supplied H criterion still verifies against its collected document
   const h = report({ requirements: [{ id: 'H1', source: 'history PR #3', quote: 'Old intent.', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('unknown', { alignment: OK })], findings: [] });
   post.validate(h);
@@ -1285,7 +1298,6 @@ test('fingerprint keys spec sources on "path ref", never on the quote or line', 
   assert.equal(f('a', 'docs/spec.md AC-4'), f('b', 'docs/spec.md AC-4'));
   assert.notEqual(f('a', 'docs/spec.md AC-4'), f('a', 'docs/spec.md AC-5'));
   assert.notEqual(f('a', 'PR body'), f('b', 'PR body'));
-  assert.equal(post.axes([specFinding(), finding()]).endsWith('Spec: 1 mismatch'), true);
 });
 
 test('summary renders a Traceability table with HEAD permalinks and the no-documents line', () => {
@@ -1786,7 +1798,7 @@ test('files the collector dropped from an over-size diff are named under the inc
   await post(s);
   const b = s.calls.summary[0].body;
   assert.match(b, /Incomplete review/);
-  assert.match(b, /### ⚠️ Not reviewed \(\d+\)\n\n- Diff over `max_diff_kb`, files not reviewed: `big\/f0\.js`, `big\/f1\.js`.*`big\/f9\.js`, … \(\+2 more\)\n/);
+  assert.match(b, /### Not reviewed \(\d+\)\n\n- Diff over `max_diff_kb`, files not reviewed: `big\/f0\.js`, `big\/f1\.js`.*`big\/f9\.js`, … \(\+2 more\)\n/);
   assert.doesNotMatch(b, /f10\.js/);
   const f = setup(t, report(), {}); // a failed run names them next to the partial note
   writeCtx(f, 'diff-dropped.txt', 'big/a.js\nbig/b.js\n');
@@ -2378,29 +2390,21 @@ test('G1 counts JSON is capped at 8 KB, drops the oldest outcomes first, keeps t
   assert.equal(c.since.not_observed, 300);
 });
 
-test('a test-gap comment ends with one fixed sentence, then hidden kind and confidence, then the fp marker; no reactions, footer, details or agent prompt', async (t) => {
+test('a test-gap comment ends with the hidden kind and confidence, then the fp marker; no boilerplate sentence, reactions, footer, details or agent prompt', async (t) => {
   const s = setup(t, report({ coverage: [row('missing_test'), row('missing_test', { id: 'O2' })], findings: [finding(), finding('missing_test', { obligation_ids: ['O2'], line: 8, quote: 'l8' })] }));
   s.github.rest.reactions = new Proxy({}, { get: (_, k) => { throw new Error(`no reaction call expected: ${String(k)}`); } });
-  s.github.rest.pulls.createReview = async (a) => { s.calls.review.push(a); return { data: { id: 55 } }; };
-  s.github.rest.pulls.listCommentsForReview = async () => ({ data: [{ id: 101 }] });
-  s.github.rest.pulls.createReviewComment = async (a) => { s.calls.file.push(a); return { data: { id: 202 } }; };
   await post(s);
-  const hint = 'Take the expected value from the requirement or an independent literal, not from the code under test.';
   const end = /\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=[0-9a-f]{40} -->$/;
   for (const c of [s.calls.review[0].comments[0].body, s.calls.file[0].body]) {
-    assert.ok(c.includes(`\n\n${hint}`), c);
     assert.match(c, end);
-    assert.equal(c.indexOf(hint) < c.indexOf('<!--'), true);
-    assert.doesNotMatch(c, /Useful\?|Why this was flagged|<details|Prompt for a coding agent|👍|👎/);
-    assert.equal(c.split(hint).length, 2);
+    assert.doesNotMatch(c, /Take the expected value|not from the code under test|Useful\?|Why this was flagged|<details|Prompt for a coding agent|👍|👎/);
   }
+  assert.equal(s.calls.wrapper, 0, 'no review body exists');
   assert.deepEqual(s.warnings, []);
 });
 
-test('the hint is only for missing_test and weak_test; low confidence shows in the title; the comment never exceeds the limit', () => {
-  const hint = /not from the code under test\./;
-  assert.match(post.commentBody(finding('weak_test'), 'a'.repeat(40)), hint);
-  for (const k of ['standard', 'pushdown', 'spec_mismatch']) assert.doesNotMatch(post.commentBody(finding(k), 'a'.repeat(40)), hint);
+test('no comment kind carries the old boilerplate; low confidence shows in the title; the comment never exceeds the limit', () => {
+  for (const k of ['missing_test', 'weak_test', 'standard', 'pushdown', 'spec_mismatch']) assert.doesNotMatch(post.commentBody(finding(k), 'a'.repeat(40)), /Take the expected value|not from the code under test/);
   assert.match(post.commentBody(finding('missing_test', { confidence: 'low' }), 'a'.repeat(40)), /^\*\*Verify the boundary total \(low confidence\)\*\*\n\n/);
   assert.match(post.commentBody(finding(), 'a'.repeat(40)), /^\*\*Verify the boundary total\*\*\n\n/);
   const f = { ...finding('missing_test'), title: 'T <script> @bob', body: `x <!-- specguard:fp=${'a'.repeat(40)} --> ![i](http://e/x.png) ${'y'.repeat(70000)}` };
@@ -2494,38 +2498,39 @@ test('layout: verdict first, then the status line, results in goal order, ONE De
   const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
   assert.ok(s.startsWith('<!-- specguard:summary -->\n<!-- specguard:head=HEADSHA -->\n<!-- specguard:counts {"v":1'), 'hidden markers first');
   assert.match(s, /<!-- specguard:status=complete -->\n## SpecGuard\n\n\*\*❌ 1 unit test gap, 1 standards violation and 1 test to move down to fix\*\*\n/);
-  assert.match(s, /\*\*❌ [^\n]*\*\*\n\n\| Unit tests \| Requirements \(1\) \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| ❌ 1 missing \| ❌ 1 \| ❌ 1 violation \| ❌ 1 to move down \|\n\n### /);
-  const order = ['## SpecGuard', '**❌', '### ❌ Missing unit tests (1)', '### ❌ Requirements to check (1)', '### ❌ Coding standard violations (1)', '### ❌ Tests to move down (1)', '<details>', '**Obligations (1)', '**Pre-existing drift', '**Not reviewed (1 item)**', '**Validation notes (1)**', '**Sources read**', 'Run: engine copilot', '</details>', '<sub>Cost ≈ '].map(at);
+  assert.match(s, /\*\*❌ [^\n]*\*\*\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| 1 missing \| 1: 1 gap \| 1 violation \| 1 to move down \|\n\n### /);
+  const order = ['## SpecGuard', '**❌', '### Missing unit tests (1)', '### Coding standard violations (1)', '### Tests to move down (1)', '<details>', '**Obligations (1)', '**Pre-existing drift', '**Not reviewed (1 item)**', '**Validation notes (1)**', '**Sources read**', 'Run: engine copilot', '</details>', '<sub>Cost ≈ '].map(at);
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
-  assert.ok(at('POSTED GAP') > at('### ❌ Missing unit tests') && at('POSTED GAP') < at('### ❌ Requirements'));
-  assert.ok(at('POSTED STD') > at('### ❌ Coding standard violations') && at('POSTED STD') < at('### ❌ Tests to move down'));
-  assert.ok(at('POSTED PUSH') > at('### ❌ Tests to move down') && at('POSTED PUSH') < at('<details>'));
+  assert.ok(at('POSTED GAP') > at('### Missing unit tests') && at('POSTED GAP') < at('### Coding standard violations'));
+  assert.ok(s.includes('  Requirement: "Totals are exact."\n') && !s.includes('### Requirements to check'), 'the requirement is a second line of the finding, not a row');
+  assert.ok(at('POSTED STD') > at('### Coding standard violations') && at('POSTED STD') < at('### Tests to move down'));
+  assert.ok(at('POSTED PUSH') > at('### Tests to move down') && at('POSTED PUSH') < at('<details>'));
   assert.ok(s.includes('- [POSTED GAP](https://github.com/o/r/pull/1#discussion_r5) `src.js:3` — The boundary has no assertion.\n'), 'title linked to the inline comment, location, one sentence; the heading names the kind');
   assert.ok(s.includes('- [POSTED STD](https://github.com/o/r/blob/HEADSHA/src.js#L3) `src.js:3` — rule: `RULES.md`\n'), 'no comment link: the blob line; a standard names its rule');
   assert.ok(s.includes('- [POSTED PUSH]'));
   assert.equal((s.match(/<details>/g) || []).length, 1, 'one disclosure layer');
-  assert.equal((s.match(/Delivery:/g) || []).length, 1);
-  assert.ok(s.trimEnd().endsWith(' · Delivery: 3 inline comments</sub>') && s.indexOf('Delivery:') > s.indexOf('</details>'));
+  assert.doesNotMatch(s, /Delivery/);
+  assert.ok(s.trimEnd().endsWith(' · 3 inline comments</sub>') && s.lastIndexOf('<sub>') > s.indexOf('</details>'));
   assert.equal((s.match(/Run: engine copilot/g) || []).length, 1, 'run information once, inside Details');
   assert.equal(s.slice(s.lastIndexOf('<sub>')).trimEnd().includes('\n'), false, 'cost and delivery are one line, merged');
   assert.doesNotMatch(visibleOf(s), TOKENS);
 });
 
-test('layout: only ❌ and ❔ criteria are rows (at most 15, then "+N more in Details"); ✅ criteria are one-liners in Details', () => {
+test('layout: only unconfirmed criteria are rows here (at most 15, then "+N more in Details"); evidenced criteria are one-liners in Details', () => {
   const ok = Array.from({ length: 5 }, (_, i) => ({ ...row('covered'), id: `E${i}` }));
   const reqs = [...ok.map((c, i) => reqOf(`R${i + 1}`, [c.id])), ...Array.from({ length: 17 }, (_, i) => reqOf(`R${i + 6}`, []))];
   const d = report({ requirements: reqs, coverage: ok, findings: [] });
   const s = post.buildSummary({ data: d, specFiles: ['docs/s.md'] });
   const vis = visibleOf(s);
-  assert.match(vis, /\*\*❔ No gaps found; 17 criteria need a person to check\*\*\n\n\| Unit tests \| Requirements \(22\) \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| ✅ no gaps \| ✅ 5 · ❔ 17 \| ✅ no violations \|/);
-  assert.match(vis, /### ❔ Requirements to check \(17\)/);
-  assert.equal((vis.match(/^\| ❔ Unconfirmed \| Criterion R\d+ text\. \|/gm) || []).length, 15);
-  assert.doesNotMatch(vis, /✅ Evidenced|\*\*R\d+\*\*|\| Criterion R[1-5] text/);
+  assert.match(vis, /\*\*❔ No gaps found; 17 criteria need a person to check\*\*\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| no gaps \| 22: 5 evidenced, 17 unconfirmed \| no violations \|/);
+  assert.match(vis, /### Requirements to check \(17\)/);
+  assert.equal((vis.match(/^\| Unconfirmed \| Criterion R\d+ text\. \|/gm) || []).length, 15);
+  assert.doesNotMatch(vis, /Evidenced|\*\*R\d+\*\*|\| Criterion R[1-5] text/);
   assert.match(vis, /\n\+2 more in Details\.\n/);
   const details = s.slice(s.indexOf('<details>'));
-  assert.equal((details.match(/^- ✅ Evidenced: \*\*R\d+\*\* /gm) || []).length, 5);
+  assert.equal((details.match(/^- Evidenced: \*\*R\d+\*\* /gm) || []).length, 5);
   assert.match(details, /\*\*Evidenced criteria \(5\)\*\*/);
-  assert.match(details, /\*\*More criteria to check \(2\)\*\*[\s\S]*\| ❔ Unconfirmed \| \*\*R21\*\* [\s\S]*\*\*R22\*\*/);
+  assert.match(details, /\*\*More criteria to check \(2\)\*\*[\s\S]*\| Unconfirmed \| \*\*R21\*\* [\s\S]*\*\*R22\*\*/);
 });
 
 test('layout: gap, mismatch and not-assessed rows say what to do and link their finding; cells are capped', () => {
@@ -2539,22 +2544,23 @@ test('layout: gap, mismatch and not-assessed rows say what to do and link their 
   const posted = d.findings.map((f, i) => ({ f, url: `https://github.com/o/r/pull/1#discussion_r${i + 1}` }));
   const s = post.buildSummary({ data: d, posted, blob: BLOB });
   const row_ = (txt) => s.split('\n').find((l) => l.startsWith('|') && l.includes(txt));
-  assert.equal(row_('qqq'), `| ❌ Gap | ${'q'.repeat(119)}… | Add the test ([finding](https://github.com/o/r/pull/1#discussion_r1)) |`); // GAP TITLE is listed above: said once
-  assert.equal(row_('R2 text'), '| ❌ Mismatch | Criterion R2 text. | Fix the code or the requirement: MISMATCH TITLE ([finding](https://github.com/o/r/pull/1#discussion_r2)) |'); // a posted mismatch is not listed above: full text
-  assert.equal(row_('R3 text'), '| ❔ Unconfirmed | Criterion R3 text. | Point to the unit test or add one. |');
-  assert.equal(row_('R4 text'), '| ❔ Unconfirmed | Criterion R4 text. | Point to the unit test or add one: only higher-level tests cover it. |');
-  assert.equal(row_('R5 text'), '| ❔ Unconfirmed | Criterion R5 text. | Point to the unit test or add one. |');
-  const u = (reason) => post.buildSummary({ data: report({ requirements: [reqOf('R1', ['O1'])], coverage: [row('unknown', { reason })], findings: [] }) }).split('\n').find((l) => l.startsWith('| ❔'));
-  assert.equal(u('Not assessed: subMonths/index.ts and subMonths/test.ts are neither in the diff nor inlined.'), '| ❔ Unconfirmed | Criterion R1 text. | Point to the unit test or add one: subMonths/index.ts and subMonths/test.ts are neither in the diff nor inlined. |');
+  assert.equal(row_('qqq'), undefined, 'GAP TITLE is listed above: it carries the requirement, so there is no row'); // said once
+  assert.ok(s.includes(`\n  Requirement: "${'q'.repeat(199)}…"\n`));
+  assert.equal(row_('R2 text'), '| Mismatch | Criterion R2 text. | Fix the code or the requirement: MISMATCH TITLE ([finding](https://github.com/o/r/pull/1#discussion_r2)) |'); // a posted mismatch is not listed above: full text
+  assert.equal(row_('R3 text'), '| Unconfirmed | Criterion R3 text. | Point to the unit test or add one. |');
+  assert.equal(row_('R4 text'), '| Unconfirmed | Criterion R4 text. | Point to the unit test or add one: only higher-level tests cover it. |');
+  assert.equal(row_('R5 text'), '| Unconfirmed | Criterion R5 text. | Point to the unit test or add one. |');
+  const u = (reason) => post.buildSummary({ data: report({ requirements: [reqOf('R1', ['O1'])], coverage: [row('unknown', { reason })], findings: [] }) }).split('\n').find((l) => l.startsWith('| Unconfirmed'));
+  assert.equal(u('Not assessed: subMonths/index.ts and subMonths/test.ts are neither in the diff nor inlined.'), '| Unconfirmed | Criterion R1 text. | Point to the unit test or add one: subMonths/index.ts and subMonths/test.ts are neither in the diff nor inlined. |');
   assert.match(u(`Could not verify ${'word '.repeat(60)}`), /\| Point to the unit test or add one: could not verify (?:word )+word… \|$/);
   assert.ok(u(`Could not verify ${'word '.repeat(60)}`).split(' | ')[2].length <= 160 + 2);
   assert.match(u(''), /\| Point to the unit test or add one\. \|$/);
   for (const internal of ['Malformed coverage row: layer not stated (the test path is not clearly a unit test).', 'The linked requirement citation could not be verified (x).', 'Alignment unknown.', 'The obligation has no located behaviour.']) assert.match(u(internal), /\| Point to the unit test or add one\. \|$/, internal);
-  assert.match(s, /^\*\*❌ 1 unit test gap and 1 spec mismatch to fix\*\*\n\n\| Unit tests \| Requirements \(5\) \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| ❌ 1 missing \| ❌ 2 · ❔ 3 \|/m);
-  assert.doesNotMatch(s.slice(0, s.indexOf('<details>')), /### ❌ Spec mismatches/, 'a posted mismatch is a row, not a second list');
+  assert.match(s, /^\*\*❌ 1 unit test gap and 1 spec mismatch to fix\*\*\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| 1 missing \| 5: 1 gap, 1 mismatch, 3 unconfirmed \|/m);
+  assert.doesNotMatch(s.slice(0, s.indexOf('<details>')), /### Spec mismatches/, 'a posted mismatch is a row, not a second list');
 });
 
-test('layout: criteria split from one bullet show one row (worst status, each finding linked once); evidenced lines collapse and skip a sentence that has a ❌/❔ row', () => {
+test('layout: criteria split from one bullet show one row (worst status, each finding linked once); evidenced lines collapse and skip a sentence that has a gap or unconfirmed row', () => {
   const same = { quote: 'One bullet, many criteria.' };
   const d = report({
     requirements: [reqOf('X1', ['O1'], same), reqOf('X2', ['O2'], same), reqOf('X3', ['O3'], same), reqOf('X4', ['O4'], { quote: 'Evidenced twice.' }), reqOf('X5', ['O5'], { quote: 'Evidenced twice.' }), reqOf('X6', ['O6'], { quote: 'Both.' }), reqOf('X7', ['O7'], { quote: 'Both.' }), reqOf('X8', ['O8'], { quote: 'Alone.' })],
@@ -2563,12 +2569,13 @@ test('layout: criteria split from one bullet show one row (worst status, each fi
   });
   const posted = d.findings.map((f, i) => ({ f, url: `https://github.com/o/r/pull/1#discussion_r${i + 1}` }));
   const s = post.buildSummary({ data: d, posted, blob: BLOB }), vis = visibleOf(s), details = s.slice(s.indexOf('<details>'));
-  assert.equal(vis.split('\n').filter((l) => l.includes('One bullet, many criteria.')).join('\n'), '| ❌ Gap | One bullet, many criteria. | Add the test ([finding](https://github.com/o/r/pull/1#discussion_r1), [finding](https://github.com/o/r/pull/1#discussion_r2)) |');
+  assert.equal(vis.split('\n').filter((l) => l.startsWith('|') && l.includes('One bullet, many criteria.')).join('\n'), '| Unconfirmed | One bullet, many criteria. | Point to the unit test or add one: the helper is not in the diff |', 'the two listed gaps are not repeated; the unconfirmed criterion stays');
+  assert.equal((vis.match(/\n  Requirement: "One bullet, many criteria\."\n/g) || []).length, 2, 'each listed finding carries the sentence');
   assert.equal((vis.match(/Both\./g) || []).length, 1);
-  assert.match(vis, /\| ❔ Unconfirmed \| Both\. \| Point to the unit test or add one: cannot see the test \|/);
-  assert.match(vis, /### ❌ Requirements to check \(2\)/, 'the heading counts merged rows');
-  assert.match(vis, /\| Requirements \(8\) \|/, 'the counts table counts criteria');
-  assert.equal((details.match(/^- ✅ Evidenced: /gm) || []).length, 2);
+  assert.match(vis, /\| Unconfirmed \| Both\. \| Point to the unit test or add one: cannot see the test \|/);
+  assert.match(vis, /### Requirements to check \(2\)/, 'the heading counts merged rows');
+  assert.match(vis, /\| 8: 4 evidenced, 2 gaps, 2 unconfirmed \|/, 'the counts table counts criteria');
+  assert.equal((details.match(/^- Evidenced: /gm) || []).length, 2);
   assert.equal((details.match(/Evidenced twice\./g) || []).length, 1);
   assert.doesNotMatch(details, /Evidenced: \*\*X\d+\*\* Both\./);
   assert.match(details, /\*\*Evidenced criteria \(2\)\*\*/);
@@ -2578,7 +2585,7 @@ test('layout: a finding that was not posted keeps its full text; the skeleton of
   const body = (n) => `Sentence ${n}. ${'More explanation. '.repeat(30)}\n\n\`\`\`js\ntest('case ${n}', () => {\n  assert.equal(f(${n}), ${n});\n});\n\`\`\``;
   const items = Array.from({ length: 4 }, (_, i) => ({ f: finding('weak_test', { title: `ROUTED ${i}`, body: body(i), line: i + 1 }), why: 'not in a diff hunk' }));
   const s = post.buildSummary({ data: layoutData(), items, blob: BLOB });
-  const gaps = s.slice(s.indexOf('### ❌ Weak unit tests'), s.indexOf('### ❌ Requirements'));
+  const gaps = s.slice(s.indexOf('### Weak unit tests'), s.indexOf('<details><summary>Details'));
   assert.match(gaps, /- ROUTED 0 \[`src\.js:1`\]\(https:\/\/github\.com\/o\/r\/blob\/HEADSHA\/src\.js#L1\) \(outside the diff\) — Sentence 0\.\n/);
   const part = (i) => gaps.slice(gaps.indexOf(`ROUTED ${i}`), i < 3 ? gaps.indexOf(`ROUTED ${i + 1}`) : undefined);
   for (let i = 0; i < 3; i++) assert.ok(part(i).indexOf(`test('case ${i}'`) > 0 && part(i).indexOf(`test('case ${i}'`) < part(i).indexOf('<details>'), `skeleton ${i} stays visible`);
@@ -2588,14 +2595,14 @@ test('layout: a finding that was not posted keeps its full text; the skeleton of
   assert.doesNotMatch(s, /more item\(s\)/);
   // a short text is shown inline, no per-item disclosure
   const short = post.buildSummary({ data: layoutData(), items: [{ f: finding('weak_test', { title: 'SHORT', body: 'First sentence. Second sentence with the whole explanation.' }), why: '' }] });
-  assert.match(short, /- SHORT .*— First sentence\.\n {2}Second sentence with the whole explanation\.\n/);
+  assert.match(short, /- SHORT .*— First sentence\.\n {2}Requirement: "Totals are exact\."\n {2}Second sentence with the whole explanation\.\n/);
   assert.doesNotMatch(short, /Full text/);
 });
 
 test('layout: a clean complete run is a verdict and one status line; a person-check run lists only those rows', () => {
   const clean = report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] });
   const s = post.buildSummary({ data: clean, specFiles: ['docs/spec.md'], delivery: '' });
-  assert.match(s, /## SpecGuard\n\n\*\*✅ No unit test gaps found\*\* in the 1 assessed criterion\. Static review; tests were not run\.\n\n\| Unit tests \| Requirements \(1\) \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| ✅ no gaps \| ✅ 1 \| ✅ no violations \| nothing to move down \|\n\n<details>/);
+  assert.match(s, /## SpecGuard\n\n\*\*✅ No unit test gaps found\*\* in the 1 assessed criterion\. Static review; tests were not run\.\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| no gaps \| 1: 1 evidenced \| no violations \| nothing to move down \|\n\n<details>/);
   assert.equal(visibleOf(s).split('\n').filter(Boolean).length, 5, 'a clean run shows a verdict and a two-row table');
   assert.doesNotMatch(s, /Delivery:/, 'nothing was posted: no delivery line');
   assert.doesNotMatch(visibleOf(s), /### /);
@@ -2607,13 +2614,13 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   const f = finding('missing_test', { title: 'FOUND' });
   const common = { data: layoutData(), posted: [{ f, url: 'https://github.com/o/r/pull/1#discussion_r1' }], blob: BLOB };
   const inc = post.buildSummary({ ...common, incomplete: ['The review engine failed; the findings may be partial.', 'Diff over `max_diff_kb`, files not reviewed: `a.js`, `b.js`'], banner: ['Large PR: diffs of 2 large files were shortened.'], rules: ['pkg/REVIEW.md'], lint: { count: 1, changed: ['biome.json'] } });
-  assert.match(inc, /## SpecGuard\n\n\*\*⚠️ Incomplete review: 1 unit test gap found so far\*\*\n\n> \*\*⚠️ Incomplete review\.\*\* Not everything was covered[^\n]*\n> - Large PR: [^\n]*\n> - This PR modifies review rule[^\n]*\n> - Lint\/format configuration changed[^\n]*\n\n### ❌ Missing unit tests/);
-  assert.match(inc, /### ❌ Requirements to check \(1\)[^]*\n### ⚠️ Not reviewed \(3\)\n\n- The review engine failed; the findings may be partial\.\n- Diff over `max_diff_kb`, files not reviewed: `a\.js`, `b\.js`\n- Generated files\.\n\n<details>/, 'Not reviewed comes after the findings, right before Details');
+  assert.match(inc, /## SpecGuard\n\n\*\*⚠️ Incomplete review: 1 unit test gap found so far\*\*\n\n### Missing unit tests/);
+  assert.match(inc, /\n### Not reviewed \(3\)\n\n- The review engine failed; the findings may be partial\.\n- Diff over `max_diff_kb`, files not reviewed: `a\.js`, `b\.js`\n- Generated files\.\n\n> \*\*Incomplete review\.\*\* Not everything was covered[^\n]*\n> - Large PR: [^\n]*\n> - This PR modifies review rule[^\n]*\n> - Lint\/format configuration changed[^\n]*\n\n<details>/, 'Not reviewed comes after the findings, then the one blockquote, right before Details');
   assert.equal((inc.match(/^> /gm) || []).length, 4, 'one blockquote, one line each');
   assert.doesNotMatch(inc, /Criteria:|✅|\[!WARNING\]/);
   assert.match(inc, /specguard:status=incomplete/);
   const red = post.buildSummary({ ...common, reduced: { reasons: ['fast-tier model', '3 engine notes'], model: 'mini' } });
-  assert.match(red, /## SpecGuard\n\n\*\*❌ 1 unit test gap to fix\*\*\n\n\| Unit tests \| Requirements \(1\) \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| ❌ 1 missing \| ❌ 1 \| ✅ no violations \| nothing to move down \|\n\n> ⚠️ Reduced review \(fast model\): only high-confidence findings are shown, so no finding is not a pass\.\n\n### /);
+  assert.match(red, /## SpecGuard\n\n\*\*❌ 1 unit test gap to fix\*\*\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| 1 missing \| 1: 1 gap \| no violations \| nothing to move down \|\n\n### Missing unit tests \(1\)[^]*\n> Reduced review \(fast model\): only high-confidence findings are shown\.\n\n<details>/);
   assert.doesNotMatch(red, /No unit test gaps found|✅ No/);
   assert.match(red, /\*\*Reduced review\*\*\n\nReasons: fast-tier model; 3 engine notes \(model: mini\)\. Only high-confidence findings were posted inline\./);
   const fail = post.buildSummary({ status: 'Could not complete: the review timed out after 12 minutes', state: 'failed', engine: 'copilot', usage: COPILOT_USAGE, rules: ['x.md'], lint: { count: 2, changed: ['biome.json'] }, tooling: { status: 'failed', checks: [], ref: 'a' } });
@@ -2624,30 +2631,38 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   assert.doesNotMatch(skip, /✅|❌|⚠️|<details>/);
 });
 
-test('layout: only the four icons appear, each beside a text label', () => {
+test('layout: one icon per summary, on the verdict line only; status words are plain', () => {
+  const icons = (x) => (x.match(/\p{Extended_Pictographic}/gu) || []).length;
   const posted = [{ f: finding('missing_test'), url: 'https://github.com/o/r/pull/1#discussion_r1' }];
-  const d = report({ requirements: [reqOf('R1', ['O1']), reqOf('R2', [])], coverage: [row('missing_test')], findings: [finding()] });
-  const s = post.buildSummary({ data: d, posted, incomplete: ['x'], blob: BLOB });
-  const icons = s.match(/\p{Extended_Pictographic}️?/gu) || [];
-  assert.deepEqual([...new Set(icons)].sort(), ['⚠️', '❌', '❔'].sort());
-  for (const m of s.matchAll(/(❌|✅|❔|⚠️) ?(\S+)/gu)) assert.match(m[2], /^[A-Za-z*]|^\*\*/, `${m[1]} is followed by a text label`);
+  const d = report({ requirements: [reqOf('R1', ['O1']), reqOf('R2', []), reqOf('R3', ['O3'])], coverage: [row('missing_test'), row('covered', { id: 'O3' })], findings: [finding()] });
+  const base = { data: d, posted, blob: BLOB, engine: 'copilot', usage: COPILOT_USAGE, delivery: '1 inline comment' };
+  for (const [name, x] of Object.entries({ gap: base, incomplete: { ...base, incomplete: ['x'] }, reduced: { ...base, reduced: { reasons: ['fast-tier model'], model: 'mini' } }, clean: { data: report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] }) }, person: { data: report({ requirements: [reqOf('R1', [])], coverage: [row()], findings: [] }) }, failed: { status: 'Could not complete: x', state: 'failed' } })) {
+    const s = post.buildSummary(x);
+    assert.equal(icons(s), 1, `${name}: one icon in the whole summary`);
+    assert.equal(icons(visibleOf(s).split('\n').slice(1).filter((l) => !l.startsWith('**')).join('\n')), 0, `${name}: none below the verdict line`);
+  }
+  const s = post.buildSummary(base);
+  assert.match(s, /\n\| Unconfirmed \| Criterion R2 text\. \|/);
   assert.doesNotMatch(s, /:[a-z_]+:|🎯|⏱|⭐|🔴|🟡|🟢|mermaid|\[!(?:WARNING|NOTE)\]/i);
+  assert.equal(icons(post.buildSummary({ status: 'Nothing to review: x', state: 'complete' })), 0);
 });
 
-test('layout: every section heading is icon first and count last; missing and weak unit tests are separate sections; line 2 leads with the unit test counts', () => {
+test('layout: every section heading is plain and ends with its count; missing and weak unit tests are separate sections; line 2 leads with the unit test counts', () => {
   const posted = [{ f: finding('missing_test', { title: 'M1' }), url: 'https://github.com/o/r/pull/1#discussion_r1' }, { f: finding('weak_test', { title: 'W1', line: 5 }), url: 'https://github.com/o/r/pull/1#discussion_r2' }];
   const items = [{ f: finding('missing_test', { title: 'M2', line: 7 }), why: '' }];
   const s = post.buildSummary({ data: layoutData(), posted, items, blob: BLOB });
   const vis = visibleOf(s);
   const heads = vis.split('\n').filter((l) => l.startsWith('### '));
-  assert.ok(heads[0] === '### ❌ Missing unit tests (2)' && heads[1] === '### ❌ Weak unit tests (1)', heads.join('|'));
-  for (const h of heads) assert.match(h, /^### (?:❌|❔|⚠️) [A-Z][^(]* \(\d+\)$/, h);
-  assert.match(vis, /\n\| ❌ 2 missing · 1 weak \| ❌ 1 \| /);
-  assert.match(vis, /### ❌ Missing unit tests \(2\)\n\n- \[M1\]\(https:\/\/github\.com\/o\/r\/pull\/1#discussion_r1\) `src\.js:3`/, 'no repeated kind label under a kind heading');
+  assert.ok(heads[0] === '### Missing unit tests (2)' && heads[1] === '### Weak unit tests (1)', heads.join('|'));
+  for (const h of heads) assert.match(h, /^### [A-Z][^(]* \(\d+\)$/, h);
+  assert.match(vis, /\n\| 2 missing · 1 weak \| 1: 1 gap \| /);
+  assert.match(vis, /### Missing unit tests \(2\)\n\n- \[M1\]\([^\n]*\n  Requirement: "Totals are exact\."\n/, 'a gap listed as a missing test shows its requirement');
+  assert.doesNotMatch(vis, /Requirements to check|\| Gap \|/, 'and is not repeated as a requirement row');
+  assert.match(vis, /### Missing unit tests \(2\)\n\n- \[M1\]\(https:\/\/github\.com\/o\/r\/pull\/1#discussion_r1\) `src\.js:3`/, 'no repeated kind label under a kind heading');
   assert.doesNotMatch(vis, /\*\*(?:Missing test|Weak test|Violation|Move down):\*\*/);
   const weakOnly = post.buildSummary({ data: layoutData(), posted: [posted[1]], blob: BLOB });
-  assert.doesNotMatch(weakOnly, /### ❌ Missing unit tests/, 'a section with 0 is omitted');
-  assert.match(weakOnly, /\n\| ❌ 1 weak \| ❌ 1 \| /);
+  assert.doesNotMatch(weakOnly, /### Missing unit tests/, 'a section with 0 is omitted');
+  assert.match(weakOnly, /\n\| 1 weak \| 1: 1 gap \| /);
 });
 
 test('layout: line 2 ends with the push-to-push delta only when an earlier review exists; low-confidence findings never count in a heading', () => {
@@ -2662,9 +2677,9 @@ test('layout: line 2 ends with the push-to-push delta only when an earlier revie
   const low = [{ f: finding('weak_test', { title: 'LOW', confidence: 'low' }), why: 'low confidence' }];
   const s = post.buildSummary({ data: layoutData(), posted, items: low, blob: BLOB });
   assert.match(s, /\*\*❌ 2 unit test gaps to fix\*\*/);
-  assert.match(visibleOf(s), /### ❌ Weak unit tests \(1\)/);
+  assert.match(visibleOf(s), /### Weak unit tests \(1\)/);
   assert.doesNotMatch(visibleOf(s), /LOW/);
-  assert.match(s, /\*\*Low-confidence findings \(1\)\*\*\n\n- ❌ \*\*Weak test:\*\* LOW .*\(low confidence\)/);
+  assert.match(s, /\*\*Low-confidence findings \(1\)\*\*\n\n- \*\*Weak test:\*\* LOW .*\(low confidence\)/);
 });
 
 test('layout: findings lists stop at 10 and the rest move to Details; length caps hold', () => {
@@ -2672,10 +2687,10 @@ test('layout: findings lists stop at 10 and the rest move to Details; length cap
   const s = post.buildSummary({ data: layoutData(), posted, blob: BLOB });
   const vis = visibleOf(s);
   assert.equal((vis.match(/^- \[GAP /gm) || []).length, 10);
-  assert.match(vis, /### ❌ Missing unit tests \(12\)/);
+  assert.match(vis, /### Missing unit tests \(12\)/);
   assert.match(vis, /\n- \+2 more in Details\n/);
-  assert.match(s, /\*\*More missing unit tests \(2\)\*\*\n\n- ❌ \*\*Missing test:\*\* \[GAP 10\]/);
-  for (const l of vis.split('\n').filter((x) => x.startsWith('- ❌'))) assert.ok(l.endsWith('…') || l.length < 400, l); // the sentence is capped at 200 characters
+  assert.match(s, /\*\*More missing unit tests \(2\)\*\*\n\n- \*\*Missing test:\*\* \[GAP 10\]/);
+  for (const l of vis.split('\n').filter((x) => x.startsWith('- '))) assert.ok(l.endsWith('…') || l.length < 400, l); // the sentence is capped at 200 characters
   assert.ok(vis.split('\n').filter((x) => x.startsWith('- [GAP ')).every((l) => l.split(' — ')[1].length <= 200));
 });
 
@@ -2704,12 +2719,12 @@ test('layout: size-limit overflow drops Details items before anything visible', 
   const s = post.buildSummary({ data: d, posted, pre: layoutPre, manifest: MF, delivery: '40 inline comments', blob: BLOB });
   assert.ok(s.length <= 65536, `${s.length}`);
   for (let i = 0; i < 10; i++) assert.ok(s.includes(`GAP ${i}]`), `GAP ${i}`);
-  for (const h of ['### ❌ Requirements to check', '### ❌ Coding standard violations', '### ❌ Tests to move down']) assert.ok(s.includes(h), h);
+  for (const h of ['### Coding standard violations', '### Tests to move down']) assert.ok(s.includes(h), h);
   assert.match(s, /_\+\d+ more not shown\._/);
   assert.match(s, /\(truncated/);
-  assert.ok(!s.includes('**Sources read**'), 'late Details items go first');
+  assert.ok(!s.includes('**Sources read**') || s.indexOf('**Sources read**') > s.indexOf('**Obligations'), 'late Details items go first');
   assert.equal((s.match(/<details>/g) || []).length, (s.match(/<\/details>/g) || []).length);
-  assert.ok(s.trimEnd().endsWith('<sub>Delivery: 40 inline comments</sub>'));
+  assert.ok(s.trimEnd().endsWith('<sub>40 inline comments</sub>'));
 });
 
 // ---- sanitiser, usage line, identity and re-reporting ----
@@ -2754,7 +2769,7 @@ const sumBody = (by) => `<!-- specguard:summary -->\n${by ? `<!-- specguard:by=$
 test('A3 an App token: the login is learned from the review we post and recorded in the summary; a later run recognises its own comments', async (t) => {
   const first = setup(t);
   first.github.rest.users = { getAuthenticated: async () => deny() };
-  first.github.rest.pulls.createReview = async (a) => { first.calls.review.push(a); return { data: { id: 1, user: APP } }; };
+  first.calls.reply = { id: 1, user: APP };
   await post(first);
   assert.equal(first.calls.summary.length, 1);
   assert.match(first.calls.summary[0].body, /^<!-- specguard:summary -->\n<!-- specguard:by=my-app\[bot\] -->\n<!-- specguard:head=HEADSHA -->/);
@@ -2807,7 +2822,7 @@ test('A3 GITHUB_TOKEN: github-actions[bot] is ours with no /user and no marker; 
   assert.equal(s.calls.review.length, 0);
   assert.doesNotMatch(s.calls.summary[0].body, /specguard:by=/, 'nothing learned, nothing recorded');
   const n = setup(t);
-  n.github.rest.pulls.createReview = async (a) => { n.calls.review.push(a); return { data: { id: 1, user: { type: 'Bot', login: 'github-actions[bot]' } } }; };
+  n.calls.reply = { id: 1, user: { type: 'Bot', login: 'github-actions[bot]' } };
   await post(n);
   assert.match(n.calls.summary[0].body, /specguard:by=github-actions\[bot\]/);
 });
@@ -2845,7 +2860,7 @@ const mixed = () => report({
 test('verdict: one consistent criteria line, grouped per criterion; unit evidence moves into the Obligations summary in Details', () => {
   const d = mixed();
   const s = sumOf(d, { items: [{ f: d.findings[0], why: 'x' }] });
-  assert.match(s, /## SpecGuard\n\n\*\*❌ 1 unit test gap to fix\*\*\n\n\| Unit tests \| Requirements \(4\) \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| ❌ 1 missing \| ✅ 1 · ❌ 1 · ❔ 2 \| ✅ no violations \| nothing to move down \|\n/);
+  assert.match(s, /## SpecGuard\n\n\*\*❌ 1 unit test gap to fix\*\*\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| 1 missing \| 4: 1 evidenced, 1 gap, 2 unconfirmed \| no violations \| nothing to move down \|\n/);
   assert.doesNotMatch(s.split('### ')[0], /Unit evidence/);
   assert.match(s, /\*\*Obligations \(6\) · Unit evidence: 2\/4 obligations\*\*/);
   assert.doesNotMatch(s, /static review; tests not executed/);
@@ -2853,9 +2868,9 @@ test('verdict: one consistent criteria line, grouped per criterion; unit evidenc
 
 test('verdict: criteria only a human or higher layer can judge are not failures; a fully evidenced run is clean', () => {
   const d = report({ requirements: [reqOf('R1', ['O1'])], coverage: [row('needs_human', { evidence: [] })], findings: [] });
-  assert.match(sumOf(d), /\*\*❔ No gaps found; 1 criterion needs a person to check\*\*\n\n\| Unit tests \| Requirements \(1\) \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| ✅ no gaps \| ❔ 1 \| ✅ no violations/);
+  assert.match(sumOf(d), /\*\*❔ No gaps found; 1 criterion needs a person to check\*\*\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| no gaps \| 1: 1 unconfirmed \| no violations/);
   const covered = report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] });
-  assert.match(sumOf(covered), /## SpecGuard\n\n\*\*✅ No unit test gaps found\*\* in the 1 assessed criterion\. Static review; tests were not run\.\n\n\| Unit tests \| Requirements \(1\) \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| ✅ no gaps \| ✅ 1 \| ✅ no violations/);
+  assert.match(sumOf(covered), /## SpecGuard\n\n\*\*✅ No unit test gaps found\*\* in the 1 assessed criterion\. Static review; tests were not run\.\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| no gaps \| 1: 1 evidenced \| no violations/);
   assert.doesNotMatch(sumOf(covered), /need human/);
   assert.equal(post.noGaps(covered), true);
   const none = report({ requirements: [], coverage: [], findings: [] });
@@ -2866,13 +2881,14 @@ test('verdict: criteria only a human or higher layer can judge are not failures;
 test('requirements table: a criterion is a gap only with a finding behind it; a gap row that has none is left to a person', () => {
   const d = mixed();
   const s = sumOf(d, { items: [{ f: d.findings[0], why: 'x' }], blob: BLOB });
-  assert.match(s, /\| ❌ Gap \| Criterion R2 text\. \| Add the test \(\[finding\]\(https:\/\/github\.com\/o\/r\/blob\/HEADSHA\/src\.js#L3\)\) \|/);
-  assert.match(s, /\| ❔ Unconfirmed \| Criterion R1 text\. \| Point to the unit test or add one: only higher-level tests cover it\. \|/);
-  assert.match(s, /\| ❔ Unconfirmed \| Criterion R3 text\. \| Point to the unit test or add one\. \|/);
+  assert.match(s, /\n  Requirement: "Criterion R2 text\."\n/, 'the gap is a listed finding: it carries the requirement');
+  assert.doesNotMatch(s, /\| Gap \|/, 'and is not a row');
+  assert.match(s, /\| Unconfirmed \| Criterion R1 text\. \| Point to the unit test or add one: only higher-level tests cover it\. \|/);
+  assert.match(s, /\| Unconfirmed \| Criterion R3 text\. \| Point to the unit test or add one\. \|/);
   assert.doesNotMatch(s.split('<details>')[0], /Criterion R4 text/, 'an evidenced criterion is not a row');
   // the row says missing_test but no finding survived (for example its citation failed): nothing is claimed, a person checks
   const orphan = sumOf(d);
-  assert.match(orphan, /\| ❔ Unconfirmed \| Criterion R2 text\. \| Point to the unit test or add one\. \|/);
+  assert.match(orphan, /\| Unconfirmed \| Criterion R2 text\. \| Point to the unit test or add one\. \|/);
   assert.match(orphan, /^\*\*❔ No gaps found; 3 criteria need a person to check\*\*/m);
 });
 
@@ -2882,7 +2898,7 @@ test('requirement rows show the whole source sentence, not the model\'s fragment
   const d = report({ requirements: [reqOf('X5', [], { quote: 'also inlines files the requirements name' }), reqOf('X8', [], { quote: 'Reusable workflow renamed to' })], coverage: [row()], findings: [] });
   post.verifyRequirements(d, { documents: [{ source: 'PR body', text: `## Changes\n${long}\n${short}\n` }], criteria: [] });
   assert.equal(d.requirements[1].sentence, 'Reusable workflow renamed to `SpecGuard reusable` (the explanation moved to a comment).');
-  const rows = post.buildSummary({ data: d }).split('\n').filter((l) => l.startsWith('| ❔ Unconfirmed'));
+  const rows = post.buildSummary({ data: d }).split('\n').filter((l) => l.startsWith('| Unconfirmed'));
   assert.equal(rows.length, 2);
   const text = (l) => l.split(' | ')[1];
   assert.match(text(rows[0]), /^Context pack also inlines files the requirements name \(e\.g\. `subMonths` → its index and test\) so the model can search…$/);
@@ -2901,28 +2917,28 @@ test('process-only criteria stay in Not reviewed and out of the Requirements tab
   const s = sumOf(d);
   const table = s.split('<details>')[0];
   assert.doesNotMatch(table, /Deploys cleanly|npm test passes|AC-7/);
-  assert.match(table, /\| ❔ Unconfirmed \| Handles the empty list\. \|/); // an unassessed criterion the model did not file as process stays visible
-  assert.match(s, /Requirements \(2\) \|[\s\S]*\| ✅ 1 · ❔ 1 \|/);
+  assert.match(table, /\| Unconfirmed \| Handles the empty list\. \|/); // an unassessed criterion the model did not file as process stays visible
+  assert.match(s, /\| 2: 1 evidenced, 1 unconfirmed \|/);
   assert.equal(s.match(/npm test passes/g).length, 1); // once, in Not reviewed
   assert.match(s, /\*\*Not reviewed \(\d+ items?\)\*\*[\s\S]*npm test passes/);
   assert.doesNotMatch(s, /Requirement R9 is not assessed/, 'a criterion with its own row is not repeated as a note');
   // wording alone never hides: without the model naming it in not_reviewed, the row stays
   const lone = report({ requirements: [real, ci], coverage: [row()], findings: [], not_reviewed: auto(ci) });
-  assert.match(sumOf(lone), /\| ❔ Unconfirmed \| npm test passes/);
+  assert.match(sumOf(lone), /\| Unconfirmed \| npm test passes/);
   // only process rows: no table and no criteria count
   const only = sumOf(report({ requirements: [ci], coverage: [row()], findings: [], not_reviewed: 'CI: npm test passes.' }));
-  assert.doesNotMatch(only, /### [^\n]*Requirements to check|✅ \d|❔ \d/);
+  assert.doesNotMatch(only, /### [^\n]*Requirements to check|\| \d+: /);
 });
 
 test('noise lines: tooling only when configured, a delivery line only when something was delivered', () => {
   const d = report({ requirements: [], coverage: [row()], findings: [] });
   const off = sumOf(d, { tooling: { status: 'not_configured', checks: [], ref: 'abc', reason: 'No standards_checks configured.' }, delivery: '' });
-  assert.doesNotMatch(off, /Standards tooling|Delivery:/);
+  assert.doesNotMatch(off, /Standards tooling|Delivery/);
   for (const status of ['passed', 'failed', 'pending', 'ambiguous', 'unavailable']) assert.match(sumOf(d, { tooling: { status, checks: [], reason: 'x' } }), new RegExp(`Standards tooling: ${status}\\.`));
-  assert.match(sumOf(d, { tooling: { status: 'failed', checks: [], reason: 'x' } }), /\| ✅ no violations; tool checks failed \| nothing to move down \|/);
-  assert.match(sumOf(d, { delivery: '1 inline comment' }), /\n<sub>Delivery: 1 inline comment<\/sub>\n$/);
-  assert.match(sumOf(d, { delivery: '2 already posted' }), /Delivery: 2 already posted/);
-  assert.match(sumOf(d, { delivery: 'summary only; nothing was posted to the PR' }), /Delivery: summary only; nothing was posted to the PR/);
+  assert.match(sumOf(d, { tooling: { status: 'failed', checks: [], reason: 'x' } }), /\| no violations; tool checks failed \| nothing to move down \|/);
+  assert.match(sumOf(d, { delivery: '1 inline comment' }), /\n<sub>1 inline comment<\/sub>\n$/);
+  assert.match(sumOf(d, { delivery: '2 already posted' }), /<sub>2 already posted<\/sub>/);
+  assert.match(sumOf(d, { delivery: 'summary only, nothing posted' }), /<sub>summary only, nothing posted<\/sub>/);
   assert.doesNotMatch(post.buildSummary({ status: 'Could not complete: x', state: 'failed', tooling: { status: 'not_configured', checks: [] } }), /Standards tooling/); // failed run, no data
 });
 
@@ -3065,13 +3081,14 @@ test('reduced: fast tier posts at most 3 inline (high confidence, two citations)
   const body = s.calls.summary[0].body;
   assert.equal(s.calls.review[0].comments.length, 3);
   assert.ok(s.calls.review[0].comments.every((c) => /kind: weak_test, confidence: high/.test(c.body)));
-  assert.match(body, /## SpecGuard\n\n\*\*❌ [^\n]*\*\*\n\n\|[\s\S]*\n\n> ⚠️ Reduced review \(fast model\): only high-confidence findings are shown, so no finding is not a pass\.\n\n### /);
+  assert.match(body, /## SpecGuard\n\n\*\*❌ [^\n]*\*\*\n\n\|[\s\S]*\n> Reduced review \(fast model\): only high-confidence findings are shown\.\n\n<details>/);
   assert.match(body, /\*\*Reduced review\*\*\n\nReasons: fast-tier model \(model: mai-code-1\.1-flash\)\. Only high-confidence findings were posted inline\.\n/);
-  assert.ok(body.indexOf('Reduced review (fast model)') > body.indexOf('| Unit tests |') && body.indexOf('Reduced review (fast model)') < body.indexOf('### '), 'verdict, table, then the blockquote');
-  assert.match(body, /\nRun: engine copilot · mai-code-1\.1-flash \(fast tier\)\n/, 'no usage recorded: the model is in the run line');
+  assert.ok(body.indexOf('> Reduced review (fast model)') > body.lastIndexOf('### ') && body.indexOf('> Reduced review (fast model)') < body.indexOf('<details>'), 'after the last section, right before Details');
+  assert.equal((body.match(/^> /gm) || []).length, 1, 'one blockquote line');
+  assert.match(body, /\nRun: engine copilot · mai-code-1\.1-flash\n/, 'no usage recorded: the model is in the run line');
   assert.doesNotMatch(body, /something-else/);
-  assert.match(body, /### ❌ Missing unit tests \(\d+\)\n\n- Untested branch.*src\.js:4.*\(reduced review: needs high confidence and two citations\)/);
-  assert.match(body, /### ❌ Weak unit tests \(\d+\)[\s\S]*\n- Weak assertion \d.*\(inline limit reached\)/);
+  assert.match(body, /### Missing unit tests \(\d+\)\n\n- Untested branch.*src\.js:4.*\(reduced review: needs high confidence and two citations\)/);
+  assert.match(body, /### Weak unit tests \(\d+\)[\s\S]*\n- Weak assertion \d.*\(inline limit reached\)/);
   assert.doesNotMatch(body, /specguard:head=|No unit test gaps found/);
   assert.match(body, /specguard:status=incomplete/);
   assert.deepEqual(s.resolved, [], 'a reduced run never resolves threads');
@@ -3085,8 +3102,8 @@ test('reduced: no findings says "Reduced review: no high-confidence gaps", never
   const s = setup(t, report({ coverage: [row('covered')], findings: [], standards: { status: 'no_rules', sources: [], reason: 'none' } }));
   writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5.5'] }));
   await post(s);
-  assert.match(s.calls.summary[0].body, /## SpecGuard\n\n\*\*⚠️ Reduced review: no high-confidence gaps\*\*\n\n\| Unit tests \| [^\n]*\n\|---\|---\|---\|---\|\n\| no high-confidence gaps \|[^\n]*\n\n> ⚠️ Reduced review \(fast model\): only high-confidence findings are shown, so no finding is not a pass\./);
-  assert.doesNotMatch(s.calls.summary[0].body, /No unit test gaps found|✅ no gaps/);
+  assert.match(s.calls.summary[0].body, /## SpecGuard\n\n\*\*⚠️ Reduced review: no high-confidence gaps\*\*\n\n\| Unit tests \| [^\n]*\n\|---\|---\|---\|---\|\n\| no high-confidence gaps \|[^\n]*\n\n<details>/);
+  assert.doesNotMatch(s.calls.summary[0].body, /No unit test gaps found|✅ no gaps|^> /m, 'the verdict already says it: no blockquote');
   const r = setup(t, reducedData());
   writeCtxR(r, 'engine-repair', 'repaired\n');
   writeCtxR(r, 'usage.json', JSON.stringify({ currentModel: 'gpt-6-luna', modelMetrics: {} }));
@@ -3102,8 +3119,8 @@ test('reduced: a garbled engine-model.json means a normal review; the used model
   assert.equal(s.calls.review[0].comments.length, 5);
   assert.doesNotMatch(s.calls.summary[0].body, /Reduced review/);
   assert.match(post.usageLine({ engine: 'copilot', model: 'auto', raw: COPILOT_USAGE, used: ['gpt-6-luna'] }), /gpt-6-luna \(requested auto\)/);
-  assert.match(post.runLine({ engine: 'copilot', model: 'gpt-6', raw: null, used: ['a-mini', 'b'], tier: 'fast' }), /Models: a-mini, b \(fast tier\)/);
-  assert.equal(post.runLine({ engine: 'copilot', model: 'a-flash', raw: null, used: ['a-flash'], tier: 'fast' }), 'Run: engine copilot · a-flash (fast tier)');
+  assert.match(post.runLine({ engine: 'copilot', model: 'gpt-6', raw: null, used: ['a-mini', 'b'], tier: 'fast' }), /Models: a-mini, b$/);
+  assert.equal(post.runLine({ engine: 'copilot', model: 'a-flash', raw: null, used: ['a-flash'], tier: 'fast' }), 'Run: engine copilot · a-flash');
 });
 
 // ---- round 3: V3 layer and assertion evidence, V8 counts for measurement, the reviewer's own checkout ----
@@ -3161,7 +3178,7 @@ test('V8: the counts carry runs, ms, nanoAiu, credits, model, mode, delivery and
   fs.writeFileSync(path.join(m.dir, 'ctx/engine-model.json'), JSON.stringify({ used: ['gpt-6-luna'], ms: 5000 }));
   process.env.DELIVERY = 'summary'; delete process.env.GITHUB_RUN_ATTEMPT; process.env.GITHUB_EVENT_NAME = 'workflow_dispatch';
   await post(m);
-  assert.deepEqual(m.calls, { review: [], file: [], summary: [], list: 0 });
+  assert.deepEqual(m.calls, { review: [], file: [], summary: [], list: 0, wrapper: 0 });
   const mc = JSON.parse(fs.readFileSync(path.join(m.dir, 'ctx/counts.json'), 'utf8'));
   assert.deepEqual([mc.delivery, mc.event, mc.model, mc.ms, mc.runs, mc.nanoAiu], ['summary', 'workflow_dispatch', 'gpt-6-luna', 5000, undefined, undefined]);
 });
@@ -3188,7 +3205,7 @@ test('focused (large PR) review: incomplete note naming the riskiest skipped fil
   await post(s);
   const b = s.calls.summary[0].body;
   assert.match(b, /Incomplete review/);
-  assert.match(b, /### ⚠️ Not reviewed \(\d+\)\n\n- Large PR: focused review of 2 of 14 files \(highest risk first\); not reviewed: `rest\/f0\.js`, `rest\/f1\.js`.*`rest\/f9\.js`, … \(\+2 more\)\n/);
+  assert.match(b, /### Not reviewed \(\d+\)\n\n- Large PR: focused review of 2 of 14 files \(highest risk first\); not reviewed: `rest\/f0\.js`, `rest\/f1\.js`.*`rest\/f9\.js`, … \(\+2 more\)\n/);
   assert.doesNotMatch(b, /f10\.js|Reduced review|specguard:head=/);
   assert.match(b, /<!-- specguard:status=incomplete -->/);
   assert.deepEqual(countsOf(b).focused, { files: 2, of: 14, shortened: 0 });
@@ -3329,8 +3346,8 @@ test('Not reviewed: visible when the run is incomplete, a list in Details when i
   const opts = { data: layoutData(), manifest: { reqDocs: [], standards: [], trace: 'off', head: 'HEADSHA', base: 'BASESHA' } };
   const done = post.buildSummary(opts), part = post.buildSummary({ ...opts, incomplete: ['The review engine timed out.'] });
   assert.match(done, /<details>[\s\S]*\*\*Not reviewed \(1 item\)\*\*\n\n- Generated files\.\n/);
-  assert.doesNotMatch(done, /### ⚠️ Not reviewed/);
-  assert.match(part, /### ⚠️ Not reviewed \(2\)\n\n- The review engine timed out\.\n- Generated files\.\n/);
+  assert.doesNotMatch(done, /### Not reviewed/);
+  assert.match(part, /### Not reviewed \(2\)\n\n- The review engine timed out\.\n- Generated files\.\n/);
   assert.doesNotMatch(part, /\*\*Not reviewed \(/);
   const many = post.buildSummary({ ...opts, incomplete: ['The review engine timed out.'], data: { ...layoutData(), not_reviewed: Array.from({ length: 12 }, (_, i) => `Item ${i} was skipped.`).join(' ') } });
   assert.equal((many.match(/^- /gm) || []).length >= 8, true);
@@ -3354,7 +3371,7 @@ test('issue #8 end to end: criteria cited although none were collected leave no 
   await post(t2);
   const b2 = t2.calls.summary[0].body;
   assert.doesNotMatch(b2, /no structured acceptance criteria found|were not collected/);
-  assert.match(b2, /\| ❔ Unconfirmed \| two \| Point to the unit test or add one\. \|/);
+  assert.match(b2, /\| Unconfirmed \| two \| Point to the unit test or add one\. \|/);
 });
 
 test('layout: the full visible order, with the cost as the last small line outside Details', () => {
@@ -3368,18 +3385,18 @@ test('layout: the full visible order, with the cost as the last small line outsi
   });
   const s = post.buildSummary({ data: d, items: d.findings.map((f) => ({ f, why: '' })), engine: 'claude', model: 'claude-haiku-5-5', tier: 'fast', blob: BLOB, headSha: 'HEADSHA',
     usage: { totalCostUsd: 0.0069, totalApiDurationMs: 43200, tokenDetails: { input: { tokenCount: 17300 }, cache_read: { tokenCount: 11700 }, cache_write: { tokenCount: 0 }, output: { tokenCount: 10200 } } }, notes: ['context pack: 14 files, 30 KB'],
-    delivery: 'summary only; nothing was posted to the PR', reduced: { reasons: ['fast-tier model'], model: 'claude-haiku-5-5' }, counts: { v: 1, complete: true, since_total: 1, since: { addressed: 1, open: 0, dismissed: 0, not_observed: 0 } } });
+    delivery: 'summary only, nothing posted', reduced: { reasons: ['fast-tier model'], model: 'claude-haiku-5-5' }, counts: { v: 1, complete: true, since_total: 1, since: { addressed: 1, open: 0, dismissed: 0, not_observed: 0 } } });
   const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
-  const order = ['**❌', '| Unit tests |', 'Since last push:', '> ⚠️ Reduced review', '### ❌ Missing unit tests', '### ❌ Weak unit tests', '### ❌ Spec mismatches', '### ❌ Requirements to check', '### ❌ Coding standard violations', '### ❌ Tests to move down', '<details>', 'Run: engine claude · context pack: 14 files, 30 KB', '</details>', '<sub>Cost $0.0069'].map(at);
+  const order = ['**❌', '| Unit tests |', 'Since last push:', '### Missing unit tests', '### Weak unit tests', '### Spec mismatches', '### Coding standard violations', '### Tests to move down', '> Reduced review', '<details>', 'Run: engine claude · context pack: 14 files, 30 KB', '</details>', '<sub>Cost $0.0069'].map(at);
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   const last = s.trimEnd().split('\n').pop();
-  assert.equal(last, '<sub>Cost $0.0069 · claude-haiku-5-5 (fast tier) · 29.0k in (11.7k cached) · 10.2k out · 43s · Delivery: summary only; nothing was posted to the PR</sub>');
+  assert.equal(last, '<sub>Cost $0.0069 · claude-haiku-5-5 · 29.0k in (11.7k cached) · 10.2k out · 43s · summary only, nothing posted</sub>');
   assert.ok(s.indexOf(last) > s.indexOf('</details>'), 'the cost line is outside Details');
-  assert.doesNotMatch(s.slice(s.indexOf('<details>'), s.indexOf('</details>')), /Cost|Tokens|API time|Delivery/, 'Details holds no cost');
+  assert.doesNotMatch(s.slice(s.indexOf('<details>'), s.indexOf('</details>')), /Cost|Tokens|API time|nothing posted/, 'Details holds no cost');
   assert.doesNotMatch(s.slice(0, s.indexOf('<details>')), /context pack/, 'engine notes stay in Details');
 });
 
-test('requirements table: a ❌ row says what to do and points to its finding; the title returns only when no visible list holds the finding', () => {
+test('requirements table: a gap row exists only when no visible list holds its finding, and then names it; a listed finding carries its requirement instead', () => {
   const ids = Array.from({ length: 11 }, (_, i) => i + 1);
   const d = report({
     requirements: ids.map((i) => reqOf(`R${i}`, [`O${i}`])),
@@ -3387,14 +3404,15 @@ test('requirements table: a ❌ row says what to do and points to its finding; t
     findings: ids.map((i) => finding('missing_test', { obligation_ids: [`O${i}`], title: `GAP ${i}`, line: i })),
   });
   const s = post.buildSummary({ data: d, items: d.findings.map((f) => ({ f, why: '' })), blob: BLOB });
-  const cell = (n) => s.split('\n').find((l) => l.startsWith('| ❌ Gap') && l.includes(`Criterion R${n} text`));
-  assert.match(cell(1), /| Add the test ([finding]([^)]*#L1)) |$/);
-  assert.doesNotMatch(cell(1), /GAP 1/, 'GAP 1 is listed above; said once');
-  assert.match(visibleOf(s), /### ❌ Missing unit tests \(11\)[^]*GAP 1\b/);
+  const cell = (n) => s.split('\n').find((l) => l.startsWith('| Gap') && l.includes(`Criterion R${n} text`));
+  assert.equal(cell(1), undefined, 'GAP 1 is listed above: no row, said once');
+  assert.ok(s.includes('  Requirement: "Criterion R1 text."\n') && s.includes('  Requirement: "Criterion R10 text."\n'));
+  assert.match(s, /### Requirements to check \(1\)/);
+  assert.match(visibleOf(s), /### Missing unit tests \(11\)[^]*GAP 1\b/);
   assert.match(cell(11), /\| Add the test: GAP 11 \(\[finding\]\([^)]*#L11\)\) \|$/, 'GAP 11 is over the list cap and only in Details: full text here');
-  assert.doesNotMatch(visibleOf(s).split('### ❌ Requirements')[0], /GAP 11/);
+  assert.doesNotMatch(visibleOf(s).split('### Requirements')[0], /GAP 11/);
   assert.match(s.split('<details>')[1], /GAP 11/);
   const weak = post.buildSummary({ data: report({ requirements: [reqOf('R1', ['O1'])], coverage: [row('weak_test')], findings: [finding('weak_test', { title: 'WEAK ONE' })] }), items: [{ f: finding('weak_test', { title: 'WEAK ONE' }), why: '' }] });
-  assert.doesNotMatch(weak, /Strengthen the test: WEAK ONE/);
-  assert.match(weak, /\| Strengthen the test\. \|/);
+  assert.match(weak, /\n  Requirement: "Criterion R1 text\."\n/);
+  assert.doesNotMatch(weak, /\| Gap \|/);
 });

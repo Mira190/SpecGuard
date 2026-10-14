@@ -468,22 +468,14 @@ const fix = (f, inline) => (f.kind === 'standard' && typeof f.suggestion === 'st
   ? `\n\n${inline && oneClick(f) ? fence('suggestion', f.suggestion) : `Suggested fix (not applied automatically):\n\n${fence('', neutralize(f.suggestion))}`}` : '');
 const title1 = (t) => oneLine(neutralize(t).replace(/\s+/g, ' ').trim(), 200);
 
-// The one fixed hint on a test-gap comment: the mirror-test trap.
-const ADVICE = 'Take the expected value from the requirement or an independent literal, not from the code under test.';
-
 // kind and confidence stay machine-readable in a hidden comment (the eval graders and the fix-through telemetry read them); only the fp marker comes after it.
 function commentBody(f, fp, inline = true) {
   const rule = f.rule_source ? `, rule: ${neutralize(f.rule_source).replace(/[<>\r\n]|--/g, ' ')}` : '';
-  // the trailer (suggestion, hint, hidden markers) is never cut: only the model's own text is truncated
-  const trailer = `${fix(f, inline)}${['missing_test', 'weak_test'].includes(f.kind) ? `\n\n${ADVICE}` : ''}\n\n<!--\nkind: ${f.kind}, confidence: ${f.confidence}${rule}\n-->\n<!-- specguard:fp=${fp} -->`;
+  // the trailer (suggestion, hidden markers) is never cut: only the model's own text is truncated
+  const trailer = `${fix(f, inline)}\n\n<!--\nkind: ${f.kind}, confidence: ${f.confidence}${rule}\n-->\n<!-- specguard:fp=${fp} -->`;
   return truncate(`**${title1(f.title)}${f.confidence === 'low' ? ' (low confidence)' : ''}**\n\n${neutralize(f.body)}`, BODY_MAX - trailer.length) + trailer;
 }
 
-const axes = (fs) => { const n = (k) => fs.filter((f) => f.kind === k).length; return `Tests: ${n('missing_test')} missing, ${n('weak_test')} weak · Standards: ${n('standard')} · Layering: ${n('pushdown')}${n('spec_mismatch') ? ` · Spec: ${n('spec_mismatch')} mismatch` : ''}`; };
-const proven = (cov) => {
-  const rows = cov.filter((c) => c.status !== 'needs_human');
-  return rows.length ? `Unit evidence: ${rows.filter((c) => c.status === 'covered').length}/${rows.length} obligations (static review; tests not executed)` : '';
-};
 const gapFree = (data) => !data.findings.length && !(data.validation_notes || []).length && data.coverage.length > 0 && !data.not_reviewed
   && data.standards.status !== 'not_reviewed' && data.layering.status === 'checked'
   && data.requirements.every((r) => r.obligation_ids.length > 0)
@@ -510,7 +502,6 @@ const reqRows = (data) => {
   return data.requirements.filter((r) => r.obligation_ids.length || !said(r));
 };
 const cell = (s, n = Infinity) => oneLine(neutralize(s), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
-const item = ({ f, why }) => `- **${title1(f.title)}** (\`${cell(`${f.path}:${f.line}`)}\`, ${cell(f.kind)}${why ? `, ${cell(why)}` : ''})\n\n  ${(neutralize(f.body) + fix(f, false)).replace(/\n/g, '\n  ')}\n`;
 
 // A requirement source is either exactly a collected document label or a repository path; nothing in between.
 const LABEL = /^(?:PR body|issue (?:[\w.-]+\/[\w.-]+)?#\d+|history (?:PR|issue) (?:[\w.-]+\/[\w.-]+)?#\d+)$/;
@@ -596,15 +587,15 @@ function usageParts({ engine, model, raw, notes = [], used = [], tier }) {
     ms = fin(u.totalApiDurationMs);
     if (!models.length && typeof u.currentModel === 'string') models = [{ n: u.currentModel }];
   }
-  const nm = (s) => cell(s, 80), parts = [], tokens = [], fast = tier === 'fast' ? ' (fast tier)' : ''; // used: the model(s) the engine step recorded (engine-model.json), more exact than the request
+  const nm = (s) => cell(s, 80), parts = [], tokens = []; // used: the model(s) the engine step recorded (engine-model.json), more exact than the request
   const recorded = !!(usd || ms || (total && (total.i || total.o)) || models.some((m) => m.t && (m.t.i || m.t.o)));
   if (usd) parts.push(`Cost ${engine === 'copilot' ? '≈ ' : ''}$${usd.toFixed(usd < 0.01 ? 4 : 2)}${credits !== undefined ? ` (${credits.toFixed(credits < 10 ? 2 : 1)} AI credits)` : ''}`); // cost first; with no price there is no Cost part, never a guess
   let model1 = ''; // the model(s), also for the run line when no usage was recorded
-  if (models.length > 1) model1 = `Models: ${models.map((m) => `${nm(m.n)}${m.t ? ` (${show(m.t)})` : ''}`).join(', ')}${fast}`;
-  else if (used.length > 1) { model1 = `Models: ${used.map(nm).join(', ')}${fast}`; const t = total || models[0]?.t; if (t) tokens.push(show(t)); }
+  if (models.length > 1) model1 = `Models: ${models.map((m) => `${nm(m.n)}${m.t ? ` (${show(m.t)})` : ''}`).join(', ')}`;
+  else if (used.length > 1) { model1 = `Models: ${used.map(nm).join(', ')}`; const t = total || models[0]?.t; if (t) tokens.push(show(t)); }
   else {
     const actual = used[0] || models[0]?.n, n = actual || model;
-    if (n) model1 = `${nm(n)}${fast}${actual && model && actual !== model && !notes.some((x) => x.startsWith('model_fallback')) ? ` (requested ${nm(model)})` : ''}`;
+    if (n) model1 = `${nm(n)}${actual && model && actual !== model && !notes.some((x) => x.startsWith('model_fallback')) ? ` (requested ${nm(model)})` : ''}`;
     const t = total || models[0]?.t;
     if (t && (t.i || t.o)) tokens.push(show(t)); // a run that failed before the model answered records zeros: no noise
   }
@@ -645,7 +636,7 @@ function sourcesRead({ reqDocs = [], standards = [], trace, head, base, rejected
 
 // ---- the sticky summary ---------------------------------------------------------------------------------------------------------------------
 // Visible = what the developer acts on (plus "Not reviewed" when the run is incomplete); everything else sits in ONE collapsed Details block.
-// Icons, always beside a text label: ❌ needs action, ✅ met by static review (labelled "Evidenced"), ❔ not assessed or a person must check, ⚠️ incomplete or reduced review.
+// One icon per summary, on the verdict line only: ❌ needs action, ✅ met by static review, ❔ a person must check, ⚠️ incomplete or reduced review. Everything else is plain words.
 // Every string SpecGuard writes is English; repository text appears only inside quotes.
 const KIND_LABEL = { missing_test: 'Missing test', weak_test: 'Weak test', spec_mismatch: 'Mismatch', standard: 'Violation', pushdown: 'Move down' };
 const STATUS_LABEL = { covered: 'Evidenced', weak_test: 'Weak test', missing_test: 'Missing test', higher_level_only: 'Higher-level only', needs_human: 'Needs a person', unknown: 'Unconfirmed' };
@@ -671,12 +662,13 @@ const parens = (u) => u.replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)
 const pin = (f, blob) => (blob ? parens(`${blob}/${String(f.path).split('/').map(encodeURIComponent).join('/')}#L${f.line}`) : '');
 const LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 8, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
 
-// One list item: icon and label (bare: none, the section heading names the kind), title (linked to its inline comment when posted, else the location is linked to the blob line), location, and the first sentence (a standard: its rule).
-function findingHead(f, { url, why, icon = '❌', posted: isPosted, bare } = {}, blob = '') {
+// One list item: label (bare: none, the section heading names the kind), title (linked to its inline comment when posted, else the location is linked to the blob line), location, and the first sentence (a standard: its rule);
+// req: the requirement the finding belongs to, on a second line.
+function findingHead(f, { url, why, posted: isPosted, bare, req } = {}, blob = '') {
   const blobUrl = pin(f, blob), link = /^https:\/\//.test(url || '') ? parens(url) : isPosted ? blobUrl : '', title = title1(f.title).replace(/[\[\]]/g, ''), r = route(why);
   const loc = `\`${cell(`${f.path}:${f.line}`)}\``, notes = [r, f.confidence === 'low' && !/low confidence/.test(r) ? 'low confidence' : ''].filter(Boolean);
   const tail = f.kind === 'standard' && f.rule_source ? `rule: \`${cell(String(f.rule_source).replace(/:\d+$/, ''))}\`` : sentence(f.body);
-  return `- ${bare ? '' : `${icon ? `${icon} ` : ''}**${KIND_LABEL[f.kind]}:** `}${link ? `[${title}](${link})` : title} ${!link && blobUrl ? `[${loc}](${blobUrl})` : loc}${notes.length ? ` (${notes.join('; ')})` : ''}${tail ? ` — ${tail}` : ''}\n`;
+  return `- ${bare ? '' : `**${KIND_LABEL[f.kind]}:** `}${link ? `[${title}](${link})` : title} ${!link && blobUrl ? `[${loc}](${blobUrl})` : loc}${notes.length ? ` (${notes.join('; ')})` : ''}${tail ? ` — ${tail}` : ''}\n${req ? `  Requirement: "${neutralize(req)}"\n` : ''}`;
 }
 const acts = (fs_) => { const n = (...ks) => fs_.filter((f) => ks.includes(f.kind)).length; return [[n('missing_test', 'weak_test'), 'unit test gap'], [n('spec_mismatch'), 'spec mismatch', 'spec mismatches'], [n('standard'), 'standards violation'], [n('pushdown'), 'test to move down', 'tests to move down']].filter(([k]) => k).map(([k, one, many]) => plural(k, one, many)); };
 const FENCED = /^(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\1[`~]*[ \t]*$/gm;
@@ -727,7 +719,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   for (const x of todo) { const k = sentOf(x); groups.set(k, [...(groups.get(k) || []), x]); }
   const merged = [...groups.values()].map((g) => ({ ...g.reduce((a, b) => (RANK[b.kind] < RANK[a.kind] ? b : a)), grp: g }));
   const todoKeys = new Set(groups.keys()), seenEv = new Set();
-  const evidenced = rows.filter((x) => x.kind === 'evidenced' && !todoKeys.has(sentOf(x)) && !seenEv.has(sentOf(x)) && seenEv.add(sentOf(x))); // a sentence with a ❌/❔ row is not also "evidenced"
+  const evidenced = rows.filter((x) => x.kind === 'evidenced' && !todoKeys.has(sentOf(x)) && !seenEv.has(sentOf(x)) && seenEv.add(sentOf(x))); // a sentence with a gap or unconfirmed row is not also "evidenced"
   const checks = todo.filter((x) => x.kind === 'unassessed' || x.kind === 'check').length, isClean = !!data && noGaps({ findings: [], ...data }) && !inc && !reduced;
   const changed = !!data && reqChanged(data);
 
@@ -747,21 +739,21 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   let line2 = '';
   if (data && !failed && !inc) {
     const n = (k) => rows.filter((x) => x.kind === k).length, nk = (k) => all.filter((f) => f.kind === k).length;
-    const req = [n('evidenced') && `✅ ${n('evidenced')}`, (n('gap') + n('mismatch')) && `❌ ${n('gap') + n('mismatch')}`, (n('unassessed') + n('check')) && `❔ ${n('unassessed') + n('check')}`].filter(Boolean).join(' · ');
+    const req = rows.length ? `${rows.length}: ${[`${n('evidenced')} evidenced`, plural(n('gap'), 'gap'), plural(n('mismatch'), 'mismatch', 'mismatches'), `${n('unassessed') + n('check')} unconfirmed`].filter((x) => !x.startsWith('0 ')).join(', ')}` : 'none found';
     const tool = tooling && !['passed', 'not_configured'].includes(tooling.status) ? `; tool checks ${cell(tooling.status)}` : '';
-    const std = data.standards.status === 'checked' ? (nk('standard') ? `❌ ${plural(nk('standard'), 'violation')}` : '✅ no violations') : data.standards.status === 'no_rules' ? 'none found' : 'not reviewed';
-    const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `❌ ${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
-    const unit = nk('missing_test') || nk('weak_test') ? `❌ ${[nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ')}` : reduced ? 'no high-confidence gaps' : '✅ no gaps';
+    const std = data.standards.status === 'checked' ? (nk('standard') ? plural(nk('standard'), 'violation') : 'no violations') : data.standards.status === 'no_rules' ? 'none found' : 'not reviewed';
+    const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
+    const unit = nk('missing_test') || nk('weak_test') ? [nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ') : reduced ? 'no high-confidence gaps' : 'no gaps';
     const snc = counts && counts.complete && counts.since_total && counts.since, delta = snc ? [snc.addressed && `${snc.addressed} fixed`, Math.max(0, all.length - snc.open) && `${Math.max(0, all.length - snc.open)} new`].filter(Boolean) : []; // push-to-push: addressed earlier findings, and findings not reported before
-    line2 = `| Unit tests | Requirements${rows.length ? ` (${rows.length})` : ''} | Coding standards | Test layers |\n|---|---|---|---|\n| ${unit} | ${req || 'none found'} | ${std}${tool} | ${lay} |\n${delta.length ? `\nSince last push: ${delta.join(' · ')}\n` : ''}`;
+    line2 = `| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| ${unit} | ${req || 'none found'} | ${std}${tool} | ${lay} |\n${delta.length ? `\nSince last push: ${delta.join(' · ')}\n` : ''}`;
   }
 
-  // notices: one blockquote, one bullet each. The incomplete sentence leads; rule and lint notices stay visible only because they change how to read the result.
+  // notices: one blockquote after the last visible section, just before Details. The incomplete sentence leads; rule and lint notices stay visible only because they change how to read the result.
   const lintChanged = lint.changed || [];
   const bullets = [...banner.map((r) => cell(r)), ...(changed ? ['Requirement text was changed by this PR: consistency with the changed text does not prove the change itself is approved.'] : []),
     ...(rules.length ? [`This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`] : []),
     ...(lintChanged.length ? [`Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`] : [])];
-  const notice = failed ? '' : [inc ? '> **⚠️ Incomplete review.** Not everything was covered; the findings below were verified, and the next push or rerun reviews again.' : '', reduced ? `> ⚠️ Reduced review${reduced.reasons?.includes('fast-tier model') ? ' (fast model)' : ''}: only high-confidence findings are shown, so no finding is not a pass.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
+  const notice = failed ? '' : [inc ? '> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.' : '', reduced && act.length ? `> Reduced review${reduced.reasons?.includes('fast-tier model') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
   // the model's not_reviewed text as sentences; the automatic "Requirement X is not assessed" note is dropped when X has its own row in the table
   const shownIds = new Set(rows.map((x) => String(x.r.id)));
   const nrParts = (t) => String(t || '').split(/(?<=[.!?])\s+(?=[A-Z0-9`"'(])/).filter((x) => x.trim() && !shownIds.has((/^Requirement (\S+) is not assessed: /.exec(x) || [])[1]));
@@ -778,20 +770,23 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   if (!failed && data) {
     const entry = (kinds) => [...posted.filter((x) => kinds.includes(x.f.kind)).map((x) => ({ f: x.f, url: x.url, posted: true })), ...items.filter((x) => kinds.includes(x.f.kind))];
     let rank = 0; // the top three findings overall keep their skeleton visible
-    const listed = new Set(); // findings whose title is in a visible list: a requirement row then only points to them
+    const listed = new Set(); // findings whose title is in a visible list: they carry their requirement on a second line, so it is not also a row
+    const reqOf = (f) => { const x = ['missing_test', 'weak_test', 'spec_mismatch'].includes(f.kind) && rows.find((y) => y.kind !== 'evidenced' && y.r.obligation_ids.some((id) => (f.obligation_ids || []).includes(id))); return x ? words(sentOf(x), 200) : ''; };
     const listOf = (title, kinds, more, onlyItems) => {
       const es = entry(kinds).filter((e) => !(onlyItems && e.posted));
       if (!es.length) return;
       es.slice(0, LIST_CAP).forEach((e) => listed.add(e.f));
-      const atoms = es.map((e) => { const r = rank++; return e.posted ? findingHead(e.f, { url: e.url, posted: true, bare: true }, blob) : findingBlock(e, blob, r, { bare: true }); });
+      const atoms = es.map((e) => { const r = rank++; const req = reqOf(e.f); return e.posted ? findingHead(e.f, { url: e.url, posted: true, bare: true, req }, blob) : findingBlock(e, blob, r, { bare: true, req }); });
       add(vis, `### ${title} (${es.length})\n\n`, atoms.slice(0, LIST_CAP), es.length > LIST_CAP ? `- +${es.length - LIST_CAP} more in Details\n\n` : '\n');
       detail(`**${more} (${es.length - LIST_CAP})**\n\n`, es.slice(LIST_CAP).map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: e.posted }, blob)));
     };
-    listOf('❌ Missing unit tests', ['missing_test'], 'More missing unit tests');
-    listOf('❌ Weak unit tests', ['weak_test'], 'More weak unit tests');
+    listOf('Missing unit tests', ['missing_test'], 'More missing unit tests');
+    listOf('Weak unit tests', ['weak_test'], 'More weak unit tests');
     // a posted mismatch is a row below and a comment; one that was not posted carries its full text here, since no comment holds it
-    listOf('❌ Spec mismatches', ['spec_mismatch'], 'More spec mismatches', true);
-    if (merged.length) {
+    listOf('Spec mismatches', ['spec_mismatch'], 'More spec mismatches', true);
+    const folded = (y) => (y.kind === 'gap' || y.kind === 'mismatch') && y.f && listed.has(y.f); // a finding listed above already says it, with its requirement
+    const shown = merged.flatMap((m) => { const g = m.grp.filter((y) => !folded(y)); return g.length ? [{ ...g.reduce((a, b) => (RANK[b.kind] < RANK[a.kind] ? b : a)), grp: g }] : []; });
+    if (shown.length) {
       const url = (x) => { const u = x.f && (urls.get(x.f) || pin(x.f, blob)); return u ? `[finding](${/^https:\/\//.test(u) ? parens(u) : u})` : ''; };
       const link = (x) => (url(x) ? ` (${url(x)})` : '');
       const ask = 'Point to the unit test or add one';
@@ -807,23 +802,23 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
         const links = [...new Set(x.grp.filter((y) => y.kind === x.kind).map(url).filter(Boolean))]; // each finding once
         return links.length > 1 ? `${say} (${links.join(', ')})` : act(x, say);
       };
-      const row = (ids) => (x) => `| ${x.kind === 'gap' ? '❌ Gap' : x.kind === 'mismatch' ? '❌ Mismatch' : '❔ Unconfirmed'} | ${ids ? `**${x.grp.map((y) => cell(y.r.id, 40)).join(', ')}** ` : ''}${cell(words(sentOf(x), 120))} | ${next(x)} |\n`;
+      const row = (ids) => (x) => `| ${x.kind === 'gap' ? 'Gap' : x.kind === 'mismatch' ? 'Mismatch' : 'Unconfirmed'} | ${ids ? `**${x.grp.map((y) => cell(y.r.id, 40)).join(', ')}** ` : ''}${cell(words(sentOf(x), 120))} | ${next(x)} |\n`;
       const th = '| Status | Requirement | What to do |\n|---|---|---|\n';
-      add(vis, `### ${merged.some((x) => x.kind === 'gap' || x.kind === 'mismatch') ? '❌' : '❔'} Requirements to check (${merged.length})\n\n${th}`, merged.slice(0, ROW_CAP).map(row(false)), merged.length > ROW_CAP ? `\n+${merged.length - ROW_CAP} more in Details.\n\n` : '\n');
-      detail(`**More criteria to check (${merged.length - ROW_CAP})**\n\n${th}`, merged.slice(ROW_CAP, ROW_CAP + MORE_CAP).map(row(true)), merged.length > ROW_CAP + MORE_CAP ? `\n+${merged.length - ROW_CAP - MORE_CAP} more not shown.\n\n` : '\n');
+      add(vis, `### Requirements to check (${shown.length})\n\n${th}`, shown.slice(0, ROW_CAP).map(row(false)), shown.length > ROW_CAP ? `\n+${shown.length - ROW_CAP} more in Details.\n\n` : '\n');
+      detail(`**More criteria to check (${shown.length - ROW_CAP})**\n\n${th}`, shown.slice(ROW_CAP, ROW_CAP + MORE_CAP).map(row(true)), shown.length > ROW_CAP + MORE_CAP ? `\n+${shown.length - ROW_CAP - MORE_CAP} more not shown.\n\n` : '\n');
     }
-    listOf('❌ Coding standard violations', ['standard'], 'More standards violations');
-    listOf('❌ Tests to move down', ['pushdown'], 'More tests to move down');
+    listOf('Coding standard violations', ['standard'], 'More standards violations');
+    listOf('Tests to move down', ['pushdown'], 'More tests to move down');
     detail(`**Low-confidence findings (${lows.length})**\n\n`, lows.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)));
   }
-  if (nrAll.length) add(vis, `### ⚠️ Not reviewed (${nrAll.length})\n\n`, nrAll.slice(0, NR_CAP).map((x) => `- ${x}\n`), nrAll.length > NR_CAP ? `- +${nrAll.length - NR_CAP} more in Details\n\n` : '\n');
+  if (nrAll.length) add(vis, `### Not reviewed (${nrAll.length})\n\n`, nrAll.slice(0, NR_CAP).map((x) => `- ${x}\n`), nrAll.length > NR_CAP ? `- +${nrAll.length - NR_CAP} more in Details\n\n` : '\n');
 
   // ---- Details: the rest of the result, then run information
   let preDone = false; // pre-existing drift sits after Traceability whether or not there is findings data
-  const addPre = () => { if (!preDone && !failed && pre.length) detail('**Pre-existing drift (not caused by this PR)**\n\n', pre.map((f, i) => `${findingBlock({ f }, blob, i, { icon: '', flat: true })}\n`)); preDone = true; };
+  const addPre = () => { if (!preDone && !failed && pre.length) detail('**Pre-existing drift (not caused by this PR)**\n\n', pre.map((f, i) => `${findingBlock({ f }, blob, i, { flat: true })}\n`)); preDone = true; };
   if (!failed && data) {
     const covById = new Map(data.coverage.map((c) => [c.id, c]));
-    detail(`**Evidenced criteria (${evidenced.length})**\n\n`, evidenced.slice(0, 50).map((x) => `- ✅ Evidenced: **${cell(x.r.id, 40)}** ${cell(words(sentOf(x), 120))}\n`), evidenced.length > 50 ? `- +${evidenced.length - 50} more\n\n` : '\n');
+    detail(`**Evidenced criteria (${evidenced.length})**\n\n`, evidenced.slice(0, 50).map((x) => `- Evidenced: **${cell(x.r.id, 40)}** ${cell(words(sentOf(x), 120))}\n`), evidenced.length > 50 ? `- +${evidenced.length - 50} more\n\n` : '\n');
     const std = data.standards, lay = data.layering;
     detail('**Coding standards and test layers**\n\n', [`- Coding standards: ${STD_WORD[std.status] || cell(std.status)}. ${cell(std.reason)}${std.sources.length ? ` Sources: ${std.sources.map((s) => `\`${cell(s)}\``).join(', ')}.` : ''}\n`, `- Test layers: ${lay.status === 'checked' ? 'reviewed' : 'not reviewed'}. ${cell(lay.reason)}\n`]);
     if (tooling && tooling.status !== 'not_configured') add(det, `**Standards tooling: ${cell(tooling.status)}.** Commit: ${cell(tooling.ref || 'not selected')}. ${cell(tooling.reason || '')}\n\n`, (tooling.checks || []).map((c) => `- ${cell(c.name)}: ${cell(c.state)}; producer: ${cell(c.producer || 'unknown')}${/^https:\/\//.test(c.url) ? ` — [run](${c.url.replace(/[()]/g, (s) => encodeURIComponent(s))})` : ''}\n`), '\n');
@@ -859,13 +854,14 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   }
   // the cost stays visible (money was spent, a failed run too): the last line, in small text, merged with the delivery
   const runAtom = engine ? `${runLine({ engine, model, raw: usage, notes, used, tier })}\n` : '';
-  const tailParts = [...(engine ? usageParts({ engine, model, raw: usage, notes, used, tier }) : []), ...(delivery ? [`Delivery: ${neutralize(delivery)}`] : [])];
+  const tailParts = [...(engine ? usageParts({ engine, model, raw: usage, notes, used, tier }) : []), ...(delivery ? [neutralize(delivery)] : [])];
   const delivered = tailParts.length ? `\n<sub>${tailParts.join(' · ')}</sub>\n` : '';
 
   // ---- assemble under BODY_MAX: visible first, then Details with what is left
   const RESERVE = 200; // for the closing "(truncated)" line
-  let out = `${markers}${verdict}\n${line2 ? `\n${line2}` : ''}\n${notice ? `${notice}\n\n` : ''}`, cut = false;
-  const room = () => BODY_MAX - RESERVE - out.length - delivered.length;
+  const last = notice ? `${notice}\n\n` : ''; // after the last visible section, before Details
+  let out = `${markers}${verdict}\n${line2 ? `\n${line2}` : ''}\n`, cut = false, pend = last.length;
+  const room = () => BODY_MAX - RESERVE - out.length - delivered.length - pend;
   for (const { h, atoms, tail } of vis) {
     if (!atoms.length && !h) continue;
     let body = '', n = 0;
@@ -873,6 +869,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     if (n < atoms.length) { cut = true; if (!n) continue; body += `_+${atoms.length - n} more not shown._\n`; }
     out += h + body + tail;
   }
+  out += last; pend = 0;
   const open = `<details><summary>${failed ? 'Details: run information' : 'Details: evidenced criteria, obligations, sources, run information'}</summary>\n\n`, close = '</details>\n';
   let inner = '', dropped_ = 0;
   const left = () => room() - open.length - close.length - runAtom.length - 2;
@@ -1511,7 +1508,6 @@ async function run({ github, context, core }) {
   let already = 0;
   const seen = new Set();
   const cands = [];
-  const assessed = [];
   const unanchored = []; // items that failed to post or anchor; they go to the summary
   const gate = (r) => { if (r.note) (data.validation_notes ||= []).push(r.note); return r.f; }; // quality gates only demote or trim; each leaves a validation note
   for (let f of data.findings) {
@@ -1530,7 +1526,6 @@ async function run({ github, context, core }) {
       const ch = maps.get(f.path)?.changed.LEFT, l = f.kind !== 'standard' && reviewable.has(f.path) && ch ? findLine(f.quote, f.line, (x) => ch.get(x), ch.keys()) : 0;
       if (l) {
         const g = norm(ch.get(l)) === norm(f.quote) ? { ...f, line: l } : { ...f, line: l, quote: ch.get(l).trim() };
-        assessed.push(g);
         unanchored.push({ f: g, why: 'removed test or assertion; location is on the LEFT side of the diff' });
       } else addNote(`Removed-line citation could not be verified: ${f.path}:${f.line}.`);
       continue;
@@ -1538,7 +1533,6 @@ async function run({ github, context, core }) {
     if (!maps.has(f.path) || !reviewable.has(f.path)) {
       const rl = readLines(f.path), d = f.kind !== 'standard' ? snap(f, rl) : null;
       if (d !== null) {
-        assessed.push(f);
         unanchored.push({ f: { ...verified(f, rl, f.line + d), line: f.line + d }, why: 'assertion outside the reviewed diff' });
       } else addNote(`Finding location could not be verified: ${f.path}:${f.line}.`);
       continue;
@@ -1565,7 +1559,6 @@ async function run({ github, context, core }) {
     const exact = [f.kind, f.path, f.line + d, f.title, f.body].join('\0'); // only a verbatim repeat is dropped
     if (seen.has(exact)) continue;
     seen.add(exact);
-    assessed.push(f);
     cands.push({ ...verified(f.kind === 'missing_test' && neverRan(cov, f.path, f.line + d) ? { ...f, title: `${f.title} (coverage: never executed)` } : f, rl, f.line + d), line: f.line + d, ...(f.start_line !== undefined && { start_line: f.start_line + d }) });
 
   }
@@ -1587,41 +1580,32 @@ async function run({ github, context, core }) {
     path: f.path, line: f.line, side: 'RIGHT', body: commentBody(f, f.fp, true),
     ...(f.start_line !== undefined && { start_line: f.start_line, start_side: 'RIGHT' }),
   }));
-  const prov = proven(data.coverage);
   let inline = comments.length, filed = p.file.length;
-  const counts = () => `${inline} inline, ${filed} file-level, ${p.summary.length + unanchored.length} in summary${already ? `, ${already} already posted` : ''}`;
-  const head = `<!-- specguard:review -->\nSpecGuard found ${axes(assessed)}; ${counts()}.${prov ? `\n${prov}.` : ''}\nEngine: ${engine || 'n/a'}${model ? ` (${model})` : ''}.`;
 
   const stop = summaryOnly ? '' : withheld ? 'inline comments withheld: could not deduplicate' : await current(); // never post what cannot be deduplicated or what may be stale
   if (summaryOnly) {
     for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: 'summary only' });
     inline = filed = 0;
   } else if (stop) {
-    if (!withheld) { core.warning(`SpecGuard: ${stop}; no review published`); incomplete.push(`Delivery degraded: ${stop}; the review comments and PR summary were not updated (this text is the job summary).`); }
+    if (!withheld) { core.warning(`SpecGuard: ${stop}; no comments published`); incomplete.push(`Delivery degraded: ${stop}; the review comments and PR summary were not updated (this text is the job summary).`); }
     for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: withheld ? 'withheld: could not deduplicate' : `not posted: ${stop}` });
     inline = filed = 0;
   }
   const urls = new Map(); // fp -> link to our comment, for the result lines in the summary
   for (const [fp, c] of priors) if (c.html_url) urls.set(fp, c.html_url);
-  if (!stop && !summaryOnly && comments.length) {
-    const post = (body, cs) => github.rest.pulls.createReview({ owner, repo, pull_number: pr.number, commit_id: headSha, event: 'COMMENT', body: clean(body), ...(cs && { comments: cs }) });
+  // No review wrapper: every finding is its own review comment (the summary comment is the only aggregate). One that GitHub rejects (a line outside the diff) goes to the summary; the rest continue.
+  let annotated = 0;
+  if (!stop && !summaryOnly) for (const [i, c] of comments.entries()) {
+    const f = p.inline[i];
     try {
-      const posted = await post(head, comments), reviewId = posted?.data?.id;
-      learn(posted);
-      try { for (const c of await github.paginate(github.rest.pulls.listCommentsForReview, { owner, repo, pull_number: pr.number, review_id: reviewId, per_page: 100 })) { const m = /<!-- specguard:fp=([0-9a-f]{40}) -->\s*$/.exec(c.body || ''); if (m && c.html_url) urls.set(m[1], c.html_url); } } catch { /* the blob line is the fallback link */ }
-    }
-    catch (e) {
-      if (e.status === 422) {
-        try { await post(`${head}\n\nInline anchors were rejected; unanchored findings:\n\n${p.inline.map((f) => item({ f })).join('\n')}`); }
-        catch (e2) { core.warning(`SpecGuard: review retry failed: ${e2.message}`); }
-        p.inline.forEach((f) => unanchored.push({ f, why: 'anchor rejected' }));
-        inline = 0;
-      } else {
-        core.warning(`SpecGuard: could not post review (${e.status}): ${e.message}`);
-        if (e.status === 403 || e.status === 404) p.inline.slice(0, 10).forEach((f) => core.warning(f.title, { file: f.path, startLine: f.start_line || f.line, title: `SpecGuard ${f.kind}` }));
-        p.inline.forEach((f) => unanchored.push({ f, why: 'could not post' }));
-        inline = 0;
-      }
+      const r = await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, ...c });
+      learn(r);
+      if (r?.data?.html_url) urls.set(f.fp, r.data.html_url); // else the blob line is the fallback link
+    } catch (e) {
+      core.warning(`SpecGuard: could not post a comment on ${c.path}:${c.line} (${e.status}): ${e.message}`);
+      if ((e.status === 403 || e.status === 404) && annotated++ < 10) core.warning(f.title, { file: f.path, startLine: f.start_line || f.line, title: `SpecGuard ${f.kind}` });
+      unanchored.push({ f, why: e.status === 422 ? 'anchor rejected' : 'could not post' });
+      inline--;
     }
   }
   for (const f of stop || summaryOnly ? [] : p.file) {
@@ -1652,7 +1636,7 @@ async function run({ github, context, core }) {
 
   const state = incomplete.length || reduced ? 'incomplete' : 'complete';
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
-  const delivered = summaryOnly ? 'summary only; nothing was posted to the PR' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
+  const delivered = summaryOnly ? 'summary only, nothing posted' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
   await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
@@ -1662,4 +1646,4 @@ async function run({ github, context, core }) {
 module.exports = async (a) => {
   try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
 };
-Object.assign(module.exports, { engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, axes, proven, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });

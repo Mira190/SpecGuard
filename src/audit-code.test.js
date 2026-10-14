@@ -165,11 +165,11 @@ test('render: no design documents, two findings: verdict, counts table, sections
   const md = render({ data, code: CODE(data.unit_findings), blob: BLOB, head: 'abc1234def', usage: '<sub>Cost $0.12 · haiku-5.5 · 21k tokens · 40s</sub>', run: 'Run: engine claude' });
   const vis = md.slice(0, md.indexOf('<details>'));
   assert.match(vis, /^## SpecGuard scan\n\n\*\*❌ 2 unit test gaps and 1 test to move down in the 3 riskiest units\*\* at `abc1234`\. Static review; tests were not run\.\n\n/);
-  assert.match(vis, /\| Units reviewed \| No unit test \| Weak tests \| Skipped tests \| Design documents \|\n\|---\|---\|---\|---\|---\|\n\| 3 of 140 \| ❌ 1 \| ❌ 1 \| 5 \| none found \|\n/);
-  assert.match(vis, /### ❌ Untested behaviour \(1\)\n\n- \[legacy doubles its argument\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/js\/legacy\.js#L1\) `src\/js\/legacy\.js:1` — No test checks the doubled result\.\n/);
+  assert.match(vis, /\| Units reviewed \| No unit test \| Weak tests \| Skipped tests \| Design documents \|\n\|---\|---\|---\|---\|---\|\n\| 3 of 140 \| 1 \| 1 \| 5 \| none found \|\n/);
+  assert.match(vis, /### Untested behaviour \(1\)\n\n- \[legacy doubles its argument\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/js\/legacy\.js#L1\) `src\/js\/legacy\.js:1` — No test checks the doubled result\.\n/);
   assert.match(vis, /assert\.equal\(legacy\(2\), 4\);/, 'the skeleton of a top finding is visible');
-  assert.match(vis, /### ❌ Weak unit tests \(1\)\n\n- \[create is only checked to be truthy\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/test\/orders\.test\.js#L2\) `test\/orders\.test\.js:2` \(unconfirmed\) — /);
-  assert.match(vis, /### ❌ Tests to move down \(1\)\n\n- \[the total is computed in an e2e test\]/);
+  assert.match(vis, /### Weak unit tests \(1\)\n\n- \[create is only checked to be truthy\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/test\/orders\.test\.js#L2\) `test\/orders\.test\.js:2` \(unconfirmed\) — /);
+  assert.match(vis, /### Tests to move down \(1\)\n\n- \[the total is computed in an e2e test\]/);
   assert.ok(vis.indexOf('Untested behaviour') < vis.indexOf('Weak unit tests') && vis.indexOf('Weak unit tests') < vis.indexOf('Tests to move down'));
   assert.doesNotMatch(vis, /missing_test|weak_test|pushdown|No design documents|nothing was scanned/);
   assert.equal((md.match(/<details><summary>Details/g) || []).length, 1);
@@ -190,7 +190,7 @@ test('render: no design documents, two findings: verdict, counts table, sections
 test('render: clean and person-check verdicts never claim the repository is tested; one unit reads singular; an incomplete scan has no counts table', () => {
   const none = checked([]);
   const clean = render({ data: none, code: CODE([]), head: 'abc1234def' });
-  assert.match(clean, /^## SpecGuard scan\n\n\*\*✅ No unit test gaps in the 3 riskiest units\*\* at `abc1234`\. Static review; tests were not run\.\n\n\| Units reviewed \| No unit test \| Weak tests \| Skipped tests \| Design documents \|\n\|---\|---\|---\|---\|---\|\n\| 3 of 140 \| ✅ none \| ✅ none \| 5 \| none found \|\n\n<details>/);
+  assert.match(clean, /^## SpecGuard scan\n\n\*\*✅ No unit test gaps in the 3 riskiest units\*\* at `abc1234`\. Static review; tests were not run\.\n\n\| Units reviewed \| No unit test \| Weak tests \| Skipped tests \| Design documents \|\n\|---\|---\|---\|---\|---\|\n\| 3 of 140 \| none \| none \| 5 \| none found \|\n\n<details>/);
   assert.doesNotMatch(clean, /fully tested|well tested|sufficient/);
   assert.equal(clean.slice(0, clean.indexOf('<details>')).includes('###'), false);
   const one = render({ data: none, code: CODE([], { rotation: { rotate: false, picked: 1, confirming: 0, new: 1, oldest: 0, reviewed: 1, total: 1, run: 1, runs: 1 } }) });
@@ -198,7 +198,7 @@ test('render: clean and person-check verdicts never claim the repository is test
   const part = render({ data: checked([uf()]), code: CODE(checked([uf()]).unit_findings), partial: 'engine timeout' });
   assert.match(part, /\*\*⚠️ Incomplete scan: 1 unit test gap in the 3 riskiest units found so far\*\*/);
   assert.doesNotMatch(part, /\| Units reviewed \|/);
-  assert.match(part, /> \*\*⚠️ Incomplete scan\.\*\*/);
+  assert.match(part, /> \*\*Incomplete scan\.\*\*/);
   const empty = render({ data: checked([]), code: CODE([]), partial: 'engine timeout' });
   assert.match(empty, /\*\*⚠️ Incomplete scan: no unit test gaps found so far\*\*/);
   const failed = render({ failure: 'the engine timed out', code: CODE([]) });
@@ -211,7 +211,7 @@ test('render: a low-confidence finding is Details only and not counted; the rota
   const md = render({ data, code: CODE(data.unit_findings, { rotation: { rotate: true, picked: 3, confirming: 1, new: 2, oldest: 0, reviewed: 24, total: 140, run: 2, runs: 12 } }), blob: BLOB, prior: { head: 'abcdef1', blocks: [], findings: [] } });
   const vis = md.slice(0, md.indexOf('<details>'));
   assert.match(vis, /\*\*❌ 1 unit test gap in the 3 riskiest units\*\*/);
-  assert.match(vis, /\| 3 of 140 \(rotation 2 of 12\) \| ❌ 1 \| ✅ none \| 5 \| none found \|/);
+  assert.match(vis, /\| 3 of 140 \(rotation 2 of 12\) \| 1 \| none \| 5 \| none found \|/);
   assert.doesNotMatch(vis, /create is only checked/);
   assert.doesNotMatch(vis, /\(unconfirmed\)/, 'a missing test on a unit without a test file is confirmed');
   const det = md.slice(md.indexOf('<details>'));
@@ -235,7 +235,7 @@ test('render: more than 15 findings of a kind: the rest are one-line items in De
   const data = { ...checked([]), unit_findings: rows.map((f, i) => ({ ...f, ...cite('src/js/legacy.js', 1), fid: sha8('x', String(i)), low: false, det: true })) };
   const md = render({ data, code: CODE(data.unit_findings), blob: BLOB });
   const main = md.indexOf('<details><summary>Details'), vis = md.slice(0, main);
-  assert.match(vis, /### ❌ Untested behaviour \(18\)/);
+  assert.match(vis, /### Untested behaviour \(18\)/);
   assert.match(vis, /\+8 more in Details\./);
   assert.equal((vis.match(/- \[behaviour \d+\]/g) || []).length, 10, 'ten are listed');
   assert.equal((vis.slice(0, vis.indexOf('<summary>Full text')).match(/assert\.equal\(legacy\(2\), 4\);/g) || []).length, 3, 'the top three skeletons are open');
@@ -248,9 +248,9 @@ test('render: with design documents both parts show: the verdict names both, the
   const data = verify(doc, { read, units: UNITS(), docs: new Set(['docs/design.md']), cands: new Map([['1111111a', { cid: '1111111a', path: 'docs/design.md', line: 3, heading: 'Plan design', text: 'A repeating plan stays on after it fires.' }]]) });
   const md = render({ data, code: CODE(data.unit_findings), blob: BLOB, docs: [['docs/design.md', 'discovered']], head: 'abc1234def' });
   assert.match(md, /\*\*❌ 1 unit test gap in the 3 riskiest units; 1 new gap to confirm in the design documents\*\* at `abc1234`/);
-  assert.match(md, /\| 3 of 140 \| ❌ 1 \| ✅ none \| 5 \| 1 read \|/);
+  assert.match(md, /\| 3 of 140 \| 1 \| none \| 5 \| 1 read \|/);
   const vis = md.slice(0, md.indexOf('<details>'));
-  assert.ok(vis.indexOf('### ❌ Untested behaviour') < vis.indexOf('### ❔ New gaps to confirm'));
+  assert.ok(vis.indexOf('### Untested behaviour') < vis.indexOf('### New gaps to confirm'));
   assert.match(md, /\*\*This scan\*\*\n\n\*\*1 requirement\*\* from 1 document/);
   assert.match(md, /Details: riskiest units, inventory, rotation, document blocks, sources/);
 });
@@ -270,7 +270,7 @@ test('render: the report stays under the size limit by dropping whole Details ro
   const data = checked([uf(), WEAK()]);
   const small = render({ data, code: CODE(data.unit_findings, { rows, units: 400 }), blob: BLOB, max: 3600 });
   assert.ok(Buffer.byteLength(small) <= 3600, String(Buffer.byteLength(small)));
-  assert.match(small.slice(0, small.indexOf('<details>')), /### ❌ Untested behaviour/);
+  assert.match(small.slice(0, small.indexOf('<details>')), /### Untested behaviour/);
   assert.match(small, /_\d+ rows? omitted: the report exceeded the size limit/);
   for (const l of small.split('\n').filter((x) => /^\| \[src\/long/.test(x))) assert.match(l, /\|$/);
 });
@@ -414,7 +414,7 @@ test('run: a scan with documents and units runs the document audit too; units wi
   const doc = { id: '1111111a', source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered', code: [cite('src/js/orders.js', 1)], tests: [{ ...cite('test/orders.test.js', 2), layer: 'unit' }], note: '' };
   const r = await post(t, { w, files: { 'findings.json': { docs_reviewed: ['docs/design.md'], requirements: [doc], not_requirements: [], not_reviewed: [], unit_findings: [] }, 'audit-meta.json': { head: 'abc123', max_requirements: 80, max_units: 12, docs: 1, candidates: 1, limitations: [], units: { total: 140, picked: 3 } } } });
   assert.match(r.calls.summary, /\*\*✅ No unit test gaps in the 3 riskiest units\*\*/);
-  assert.match(r.calls.summary, /\| 3 of 140 \| ✅ none \| ✅ none \| 5 \| 1 read \|/);
+  assert.match(r.calls.summary, /\| 3 of 140 \| none \| none \| 5 \| 1 read \|/);
   assert.match(r.calls.summary, /\*\*This scan\*\*\n\n\*\*1 requirement\*\* from 1 document/);
 });
 
