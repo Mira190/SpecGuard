@@ -252,6 +252,7 @@ test('parseSummary takes an item kind from its section heading (bare items) and 
   assert.deepEqual(parseSummary(md).items.map((i) => [i.kind, i.path, i.line, i.why]), [['missing_test', 'b.js', 7, 'inline limit reached'], ['weak_test', 'c.js', 9, ''], ['standard', 'd.js', 1, ''], ['weak_test', 'e.js', 2, 'low confidence']]);
   assert.deepEqual(parseSummary('### Unit test gaps (1)\n\n- ❌ **Missing test:** Old `a.js:3` — x\n').items.map((i) => i.kind), ['missing_test']);
   assert.deepEqual(parseSummary('### ❌ Requirements to check (1)\n\n- stray `a.js:3` — x\n').items, []);
+  assert.deepEqual(parseSummary('### Missing unit tests (1)\n\n- Plain `a.js:3` — x\n\n### Weak unit tests (1)\n\n- Plain two `b.js:4` — y\n\n### Requirements to check (1)\n\n- stray `c.js:1` — z\n').items.map((i) => i.kind), ['missing_test', 'weak_test'], 'headings without an icon');
 });
 
 test('parseSummary reads the redesigned summary: linked (posted) titles are not summary items, the obligations table uses status words, Details sections are bold headings', () => {

@@ -79,18 +79,19 @@ test('prepareOne: trace off skips spec classification', () => {
   assert.strictEqual(m.trace, 'off');
 });
 
-test('fakeGithub: records the review, file comment and summary', async () => {
+test('fakeGithub: records the review comments and the summary; there is no review wrapper', async () => {
   const { github, core, posted } = fakeGithub({ headSha: 'abc' });
   assert.strictEqual((await github.rest.pulls.get({})).data.head.sha, 'abc');
   assert.deepStrictEqual(await github.paginate(github.rest.pulls.listFiles, {}), []);
-  await github.rest.pulls.createReview({ body: 'b', comments: [{ path: 'p', line: 1, side: 'RIGHT', body: 'x' }] });
+  assert.strictEqual(github.rest.pulls.createReview, undefined);
+  await github.rest.pulls.createReviewComment({ path: 'p', line: 1, side: 'RIGHT', body: 'x' });
   await github.rest.pulls.createReviewComment({ path: 'q', subject_type: 'file', body: 'y' });
   await github.rest.issues.createComment({ body: 'sum' });
   core.warning('w');
   await core.summary.addRaw('t').write();
   assert.strictEqual(posted.comments.length, 2);
   assert.strictEqual(posted.comments[0].user.type, 'Bot');
-  assert.deepStrictEqual(posted.reviews, [{ state: 'COMMENTED', body: 'b' }]);
+  assert.deepStrictEqual(posted.reviews, []);
   assert.strictEqual(posted.summary, 'sum');
   assert.deepStrictEqual(posted.warnings, ['w']);
 });
