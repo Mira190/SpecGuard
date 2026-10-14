@@ -5,7 +5,7 @@ name: SpecGuard manual run
 # the environment "specguard" (deployment branches: main only), never in the repository secrets: both jobs run in that environment and nothing else in this file reads the secret. Without it the job token is
 # used, which reads only this repository and public ones.
 # Scans keep their state (two-run confirmation) in an issue: scan_issue specguard (default) = one issue per scanned repository in THIS repository, written with the job token (issues: write on the review job);
-# the quoted code and requirement text then sit in this repository, so keep it private with access no wider than the targets'. target = the issue in the scanned repository (token needs Issues write there).
+# the quoted code and requirement text then sit in this repository, so keep it private with access no wider than the targets' (enforced: the resolve job fails a non-public target when this repository is public). target = the issue in the scanned repository (token needs Issues write there).
 # Copilot token: SPECGUARD_COPILOT_TOKEN (environment secret) = a fine-grained PAT OWNED BY A USER (resource owner = the user, account permission "Copilot Requests"; classic ghp_ and org-owned tokens are rejected).
 # It is a different token from SPECGUARD_PAT (org-owned, repository read): one fine-grained PAT has a single resource owner, so it cannot carry both. Usage is billed to that user's Copilot seat. Empty = the job token
 # with copilot-requests: write, which works only when the organization enables "Allow use of Copilot CLI billed to the organization".
@@ -78,6 +78,14 @@ jobs:
         run: |
           [ "$HAVE_PAT" = true ] || [ "$HAVE_APP" = true ] || echo "::notice::neither the App secrets nor SPECGUARD_PAT is set in the specguard environment: using the job token, which reads only this repository and public repositories"
           node src/resolve-inputs.js # reads the PR (open only) and, with the token, the branch name and folders of the links
+      - name: Refuse a non-public target when this repository is public # results (scan issue, summary, artifact) are written here
+        shell: bash
+        env:
+          CONTROL_REPO: ${{ github.repository }}
+          TARGET_REPO: ${{ steps.in.outputs.repo }}
+          CONTROL_TOKEN: ${{ github.token }}
+          TARGET_TOKEN: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
+        run: node src/visibility-guard.js # fails closed when a visibility cannot be read
 
   review:
     needs: resolve
