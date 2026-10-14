@@ -153,11 +153,17 @@ test('enclosingName: the definition around a cited line, for the common shapes',
 
 test('the guard follows a delegated helper: a guard line that calls a tested helper is a hit citing its test; builtins and untested names are not', (t) => {
   const root = repo(t);
-  fs.writeFileSync(path.join(root, 'test/filename.test.ts'), "it('isDirectChild guards rename/delete against traversal', () => { assert.equal(E.isDirectChild('/a', '/a/../b'), false) })\n");
+  fs.writeFileSync(path.join(root, 'test/filename.test.ts'), "it('isDirectChild guards rename/delete against traversal', () => { assert.equal(E.isDirectChild('/a', '/a/../b'), false) })\nit('labels', () => { assert.deepEqual(rows.filter(Boolean), []) })\n");
+  fs.mkdirSync(path.join(root, 'src/engine'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src/engine/filename.ts'), 'export function isDirectChild(dir: string, file: string): boolean {\n  return true\n}\n');
   execFileSync('git', ['add', '.'], { cwd: root });
   const covers = makeCoverGuard({ cwd: root });
   const own = ["const ownFile = (p) => typeof p === 'string' && E.isDirectChild(dirOf(), p) && MEDIA_EXT.test(p)"];
-  assert.match(covers(own, 1), /^a delegated helper is tested: isDirectChild at test\/filename\.test\.ts:1$/);
+  assert.match(covers(own, 1, 'electron/app.cjs'), /^a delegated helper is tested: isDirectChild at test\/filename\.test\.ts:1$/);
   assert.equal(covers(["const ok = (p) => p.includes('x') && list.map((a) => a.trim()).filter(Boolean).push(p)"], 1), null, 'builtins only');
   assert.equal(covers(['const ownFile = (p) => E.untestedHelperName(p)'], 1), null, 'a helper no test mentions');
+  // Kite recall run 2: library and array methods a test also calls are not delegates; a claim on a test file follows no delegate
+  assert.equal(covers(['const labels = keys.filter((k) => k > 3).map(mouseLabel)'], 1, 'src/engine/keys.ts'), null, 'filter is not defined here');
+  assert.equal(covers(['  for (const c of cases) assert.deepEqual(nextTrigger(c.now), c.want)'], 1, 'test/schedule.test.ts'), null, 'a test file');
+  assert.equal(covers(['  assert.deepEqual(isDirectChild(a, b), true)'], 1, 'test/other.test.ts'), null, 'a test file, even with a tested helper');
 });
