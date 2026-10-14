@@ -210,6 +210,23 @@ test('pack-cut.txt: a missing_test whose candidate test the model saw only partl
   assert.match(weak.calls.summary[0].body, /Low-confidence findings \(1\)/);
 });
 
+test('literal guard: a missing_test whose error message a tracked test already contains goes to Details as low confidence, citing that test; a message no test contains is still posted', async (t) => {
+  const run = async (testText) => {
+    const s = setup(t);
+    fs.writeFileSync(path.join(s.dir, 'src.js'), "l1\nl2\nif (x) {\n  throw new Error('total must be a positive integer');\nl5\n");
+    fs.writeFileSync(path.join(s.dir, 'total.test.js'), testText);
+    track(s, 'src.js', 'total.test.js');
+    await post(s);
+    return s;
+  };
+  const hit = await run("it('rejects', () => assert.throws(() => total(-1), /Total must be a positive integer/));\n");
+  assert.equal(hit.calls.review.length, 0, 'no inline comment');
+  assert.match(hit.calls.summary[0].body, /Low-confidence findings \(1\)/);
+  assert.match(JSON.stringify(hit.calls.summary[0].body), /a test may already cover this: total\.test\.js:1/);
+  const miss = await run("it('adds', () => assert.equal(total(1), 1));\n");
+  assert.equal(miss.calls.review.length, 1, 'still posted inline');
+});
+
 test('does not publish results for a superseded commit', async (t) => {
   const s = setup(t, report(), { head: 'NEWHEAD' });
   await post(s);

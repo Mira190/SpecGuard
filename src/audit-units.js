@@ -7,11 +7,11 @@ const { execFileSync } = require('node:child_process');
 const { isTestPath, testScope, lsTree, catBatch, makeClock } = require('./trace');
 const { weakCandidates, TEST_START } = require('./leads');
 const { ASSERTION, SKIPPED } = require('./post');
-const { mapTests, indexTests, noExt, GENERIC } = require('./test-map');
+const { mapTests, indexTests, noExt, publicDefs, GENERIC } = require('./test-map');
 
 const DAYS = 180, FIX = /\b(fix|bug|hotfix|regression|revert)\b/i, MIN_LOC = 3;
 const MAX_FILE = 512 * 1024, MAX_UNITS_READ = 6000, MAX_TESTS_READ = 4000, TEST_FILE = 512 * 1024, TEST_TOTAL = 48 * 1024 * 1024, BUDGET_MS = 40000;
-const PER_UNIT_TESTS = 5, ROWS_KEPT = 100, LEADS = 3;
+const PER_UNIT_TESTS = 20, ROWS_KEPT = 100, LEADS = 3;
 const CODE = /\.(?:[cm]?[jt]sx?|py|go|java|kt|cs|rb|php|rs|swift|scala)$/i;
 // Not product code: examples, benchmarks, docs, generated or build output, config files, type declarations. ponytail: a name list; a repo that keeps product code in `examples/` narrows with scan_paths.
 const NOT_UNIT = /(^|\/)(?:examples?|samples?|demos?|benchmarks?|bench|docs?|dist|build|out|coverage|migrations?|node_modules|vendor|third_party|generated)\/|\.d\.[cm]?ts$|(^|\/)(?:[\w.-]*\.config|\.[\w-]*rc|gulpfile|Gruntfile|Rakefile|setup|conftest|__init__)\.[a-z]+$|\.(?:min|bundle)\./i;
@@ -20,26 +20,7 @@ const comment = (l) => /^\s*(?:\/\/|#|\*|\/\*|--)/.test(l);
 const loc = (ls) => ls.filter((l) => l.trim() && !comment(l)).length;
 const START = new RegExp(`${TEST_START.source}|(?<![.\\w$])x(?:it|test)\\s*\\(`); // leads.js's test start, plus xit/xtest (a disabled test is still a test)
 
-// Public top-level definitions per language, one regex list per family: pub = what the language calls public, top = the fallback (top-level functions) when nothing is public.
-// ponytail: line regexes, no parser. A JS `module.exports = { a, b }` counts as one, a Ruby `private` section or a Python `__all__` is not seen; the count only weights the risk (log-free, so a very large file dominates: cap it with scan_paths).
-const FAMILY = {
-  js: { pub: [/^\s*export\s+(?!\*)/, /^\s*(?:module\.)?exports\.\w+\s*=/, /^\s*module\.exports\s*=/, /^\w+(?:\.\w+)+\s*=\s*(?:async\s+)?function\b/], top: [/^(?:async\s+)?function\b/, /^(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:function\b|\(.*\)\s*=>|\w+\s*=>)/] },
-  py: { pub: [/^(?:async\s+def|def|class)\s+(?!_)\w/], top: [/^(?:async\s+)?def\s/] },
-  go: { pub: [/^func\s+(?:\([^)]*\)\s*)?[A-Z]/, /^type\s+[A-Z]/], top: [/^func\s/] },
-  java: { pub: [/^\s*public\s/], top: [/^\s*(?:static\s+|private\s+|protected\s+|internal\s+)+[\w<>\[\],?]+\s+\w+\s*\(/] },
-  kt: { pub: [/^\s*(?!.*\b(?:private|internal|protected)\b)(?:(?:open|data|suspend|override|abstract|sealed|inline|enum)\s+)*(?:fun|class|object|interface)\s/], top: [/^\s*(?:private\s+|internal\s+)?fun\s/] },
-  scala: { pub: [/^\s*(?!.*\b(?:private|protected)\b)(?:(?:case|abstract|sealed|final|override|implicit)\s+)*(?:def|class|object|trait)\s/], top: [/^\s*def\s/] },
-  rs: { pub: [/^\s*pub(?:\([^)]*\))?\s+(?:async\s+|unsafe\s+|const\s+)*(?:fn|struct|enum|trait|type|mod)\b/], top: [/^\s*(?:async\s+)?fn\s/] },
-  rb: { pub: [/^\s*def\s+(?!_)\S/], top: [/^\s*def\s/] },
-  swift: { pub: [/^\s*(?:public|open)\s/], top: [/^\s*(?:private\s+|fileprivate\s+)?func\s/] },
-};
-const EXT = { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'js', tsx: 'js', mts: 'js', cts: 'js', py: 'py', go: 'go', java: 'java', cs: 'java', php: 'java', kt: 'kt', scala: 'scala', rs: 'rs', rb: 'rb', swift: 'swift' };
-function publicCount(file, ls) {
-  const fam = FAMILY[EXT[path.extname(file).slice(1).toLowerCase()]];
-  if (!fam) return 0;
-  const body = ls.filter((l) => !comment(l)), n = (res) => body.filter((l) => res.some((re) => re.test(l))).length;
-  return n(fam.pub) || n(fam.top);
-}
+const publicCount = (file, ls) => publicDefs(file, ls).count;
 
 // Signals of one test file: tests, tests without an assertion, skipped or disabled tests, assertion lines, weak assertion lines (leads.js).
 // ponytail: a test is a block from one test declaration to the next, an assertion is any line post.js's ASSERTION matches; an assertion inside a helper the test calls reads as no assertion.
@@ -100,13 +81,13 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (!bufs[k] || bufs[k].subarray(0, 8192).includes(0)) return;
       const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
       const n = loc(ls);
-      if (n >= MIN_LOC) units.push({ id: sha8(e.path), path: e.path, loc: n, pub: publicCount(e.path, ls) });
+      if (n >= MIN_LOC) { const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names }); }
     });
   }
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
-  // tests: text read once (capped), words that are a unit's file stem indexed for the "mentions" tier
+  // tests: text read once (capped); words that are a unit's file stem indexed for the "mentions" tier, calls of a unit's public names for the "calls" tier
   const stems = new Set(units.map((u) => noExt(u.path)).filter((s) => s.length >= 3 && !GENERIC.has(s.toLowerCase()) && /^[\w$]+$/.test(s)));
-  const sig = new Map(), mention = new Map();
+  const names = new Set(units.flatMap((u) => u.names)), sig = new Map(), mention = new Map(), called = new Map();
   let bytes = 0, readN = 0;
   const readable = testEntries.filter((e) => e.size <= TEST_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
   for (let i = 0; i < readable.length && readN < MAX_TESTS_READ && bytes < TEST_TOTAL && !dl.over(); i += 300) {
@@ -117,6 +98,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       const src = bufs[k].toString('utf8');
       sig.set(e.path, testSignals(src));
       for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) if (stems.has(w)) { if (!mention.has(w)) mention.set(w, []); mention.get(w).push(e.path); }
+      for (const w of new Set(src.match(/[A-Za-z_$][\w$]*(?=\s*\()/g) || [])) if (names.has(w)) { if (!called.has(w)) called.set(w, []); called.get(w).push(e.path); }
     });
   }
   const unread = tests.length - sig.size;
@@ -126,7 +108,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const none = { tests: 0, noAssert: 0, skipped: 0, asserts: 0, weak: [] };
   const index = indexTests(tests);
   const rows = units.map((u) => {
-    const got = [...mapTests(u.path, { tests, index, mentions: (s) => mention.get(s) || [], per: PER_UNIT_TESTS }).keys()];
+    const got = [...mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: PER_UNIT_TESTS }).keys()];
     const ss = got.map((t) => sig.get(t) || none), sum = (f) => ss.reduce((a, s) => a + f(s), 0);
     const s = { tests: sum((x) => x.tests), noAssert: sum((x) => x.noAssert), skipped: sum((x) => x.skipped), asserts: sum((x) => x.asserts), weak: got.flatMap((t) => (sig.get(t) || none).weak.map((w) => ({ ...w, path: t }))) };
     const h = (hist && hist.get(u.path)) || { churn: 0, fixes: 0 }, factor = factorOf(got, got.some((t) => !sig.has(t)) ? { ...s, asserts: Math.max(s.asserts, 1) } : s); // a test file that was not read is assumed to assert
