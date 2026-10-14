@@ -697,13 +697,15 @@ function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {}, sto
     for (const [i, hs] of litHits) if (mine.some((x) => hs.has(x))) s[i] += 2;
     const order = [...s.keys()].filter((i) => s[i] > 0).sort((a, b) => s[b] - s[a]);
     const terms = [...new Set(queries[qi])], weigh = (ts) => ts.reduce((a, t) => a + index.idf(t), 0), known = cover ? weigh(terms.filter((t) => index.df(t) > 0)) : 0;
+    const nlits = (i) => { const lh = litHits.get(i); return lh ? mine.filter((x) => x >= 0 && lh.has(x)).length : 0; };
+    const ranked = cover ? [...order.filter((i) => nlits(i) >= 2), ...order.filter((i) => nlits(i) < 2)] : order; // cover: windows holding >= 2 distinct literals of the criterion come before the score order (many windows share the row's words)
     const pick = (isTest, n) => {
       const out = [];
-      for (const i of order) {
+      for (const i of ranked) {
         const [p, a, z] = meta[i];
         if (isTestPath(p) !== isTest || out.some((o) => o.path === p && Math.abs(o.line - a) < WIN)) continue;
         const hits = [...new Set(queries[qi])].filter((t) => index.has(t, i)).sort((x, y) => index.idf(y) - index.idf(x)).slice(0, 5);
-        const lh = litHits.get(i), nl = lh ? mine.filter((x) => x >= 0 && lh.has(x)).length : 0; // distinct literals of this criterion in the window
+        const nl = nlits(i); // distinct literals of this criterion in the window
         out.push({ path: p, line: a, end: z, score: round(s[i]), hits, ...(cover && nl && { lits: nl }), ...(cover && { cover: known ? round(weigh(terms.filter((t) => index.has(t, i))) / known) : 0 }) }); // cover: the share of the query's weight (idf of the terms the corpus knows) that this window holds
         if (out.length === n) break;
       }
