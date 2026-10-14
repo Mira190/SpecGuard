@@ -386,7 +386,7 @@ function removedLiteralAnchors(hunks, blocks) {
       const shared = [...terms].filter((t) => bt.has(t)).length;
       for (const l of gone) {
         const num = /^\d+(?:\.\d+)?$/.test(l);
-        if (!(num ? new RegExp(String.raw`(?<!\d)(?<!\d[.,])${l.replace('.', String.raw`\.`)}(?![.,]?\d)`).test(b.text) : b.text.includes(l))) continue;
+        if (!(num ? new RegExp(String.raw`(?<![\p{L}\d])(?<!\d[.,])${l.replace('.', String.raw`\.`)}(?![.,]?\d)`, 'u').test(b.text) : b.text.includes(l))) continue;
         if (shared < (TRIVIAL_LIT.test(l) || l === '' ? 2 : CJK_ONLY.test(l) ? 0 : 1)) continue;
         const k = `${b.path}:${b.ref}`, was = found.get(k) || { block: b, removed: l, hunks: [] };
         was.hunks.push({ path: h.path, start: h.line, end: h.end ?? h.line });
