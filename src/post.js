@@ -694,8 +694,9 @@ function criteriaOf(data, all) {
   return reqRows(data).map((r) => {
     const cs = r.obligation_ids.map((id) => covById.get(id)), mine = (kinds) => all.filter((f) => kinds.includes(f.kind) && f.obligation_ids.some((id) => r.obligation_ids.includes(id)));
     const mismatch = cs.some((c) => c?.alignment?.status === 'mismatch') && mine(['spec_mismatch']).length > 0, gap = hasGap(r, covById, gaps) && mine(['missing_test', 'weak_test']).length > 0; // a pre-existing drift, or a gap with no verified finding, is not an action here
-    const kind = !cs.length ? 'unassessed' : mismatch ? 'mismatch' : gap ? 'gap' : cs.every((c) => c?.status === 'covered') ? 'evidenced' : 'check';
-    return { r, kind, cs, f: (mismatch ? mine(['spec_mismatch']) : mine(['missing_test', 'weak_test']))[0], higher: cs.some((c) => c?.status === 'higher_level_only') };
+    const done = cs.length && cs.every((c) => c?.status === 'covered'), align = !!r.trace_linked && done && !mismatch && cs.some((c) => c.alignment?.status === 'unknown'); // linked by the trace, evidenced, but nobody judged whether the code does what the sentence says
+    const kind = !cs.length ? 'unassessed' : mismatch ? 'mismatch' : gap ? 'gap' : align ? 'check' : done ? 'evidenced' : 'check';
+    return { r, kind, align, cs, f: (mismatch ? mine(['spec_mismatch']) : mine(['missing_test', 'weak_test']))[0], higher: cs.some((c) => c?.status === 'higher_level_only') };
   });
 }
 const STD_WORD = { checked: 'reviewed', no_rules: 'no rule files found', not_reviewed: 'not reviewed' };
@@ -798,6 +799,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
       // each fact once: a finding listed above is only pointed to; its title stays here only when no visible list holds it (overflow, or a posted mismatch)
       const act = (x, say) => (x.f && listed.has(x.f) ? `${say}${link(x) || '.'}` : x.f ? `${say}: ${cell(title1(x.f.title), 110)}${link(x)}` : `${say}.`);
       const next = (x) => {
+        if (x.align) return 'Check that the change does what this requirement says';
         if (x.kind === 'unassessed' || x.kind === 'check') return cell(`${ask}${why(x.grp.find((y) => RANK[y.kind] === 2 && why(y) !== '.') || x)}`, 160); // the first human reason in the group
         const say = x.kind === 'mismatch' ? 'Fix the code or the requirement' : x.f?.kind === 'weak_test' ? 'Strengthen the test' : 'Add the test';
         const links = [...new Set(x.grp.filter((y) => y.kind === x.kind).map(url).filter(Boolean))]; // each finding once
@@ -1021,6 +1023,18 @@ function verifyRequirements(data, context, read = readFile) {
       r.quote = expected.quote;
       if (expected.ref) r.ref = safeRef(expected.ref); else delete r.ref;
     }
+  }
+  // A D criterion the model gave no obligations for: the trace knows the hunks that picked it, so it links every obligation whose behaviour or change line falls inside them.
+  for (const expected of context.criteria || []) {
+    const r = byId.get(expected.id) || data.requirements.find((x) => x.id === expected.id);
+    if (!r || !Array.isArray(expected.hunks) || r.obligation_ids.length) continue;
+    const inside = (v) => v && expected.hunks.some((h) => h && v.path === h.path && v.line >= h.start && v.line <= h.end);
+    const hit = data.coverage.filter((c) => inside(c.behaviour) || inside(c.change));
+    if (!hit.length) continue;
+    r.obligation_ids = hit.map((c) => c.id);
+    r.reason = `Linked by the trace to ${r.obligation_ids.join(", ")}.`;
+    r.trace_linked = true;
+    for (const c of hit) if (c.alignment?.status === 'not_applicable') c.alignment = unknownAlign('not stated');
   }
   // an R/S/H id with nothing to fill it from is not a collected criterion: there is nothing to assess against, so it gets no row. The obligations it named stay "from behaviour".
   const phantom = data.requirements.filter((r) => !r.source || !r.quote).map((r) => String(r.id));

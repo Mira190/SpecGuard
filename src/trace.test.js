@@ -992,6 +992,12 @@ test('D criterion: an unchanged block that strongly matches changed code is coll
   assert.deepEqual(d.map((c) => [c.id, c.source, c.line, c.quote]), [['D1', 'docs/design.md', KITE_DOC.split(/\n/).findIndex((l) => l.startsWith('On confirm')) + 1, 'On confirm, width and height are rounded to even numbers (an H.264 4:2:0 requirement).']]);
   assert.ok(d[0].ref.startsWith('4-1-before-recording'));
 });
+test('D criterion: records the hunks that picked it', (t) => {
+  const r = repo(t, { 'docs/design.md': KITE_DOC, 'src/engine/geometry.ts': GEO('') }, { 'docs/design.md': KITE_DOC, 'src/engine/geometry.ts': GEO(EVEN_REGION) });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const [d] = (status(r).criteria || []).filter((c) => c.id[0] === 'D');
+  assert.deepEqual(d.hunks, [{ path: 'src/engine/geometry.ts', start: 2, end: 2 }]);
+});
 test('D criterion: a weak match collects nothing', (t) => {
   const r = repo(t, { 'docs/design.md': KITE_DOC, 'src/other.ts': 'export const a = 1\n' }, { 'docs/design.md': KITE_DOC, 'src/other.ts': 'export const a = 2\n' });
   T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
