@@ -143,12 +143,21 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
     } catch {}
     return null;
   };
-  return (lines, line) => {
+  // only a function this repository defines in a non-test file is a delegate (isDirectChild in src/engine/filename.ts); library and builtin methods (deepEqual, filter) are not
+  const definedHere = (name) => {
+    try {
+      const out = execFileSync('git', ['grep', '-n', '-I', '-E', '-e', `(function|def|func|fn)[[:space:]]+${name}\\b`, '-e', `\\b${name}[[:space:]]*[:=][[:space:]]*(async[[:space:]]+)?(function\\b|\\()`,
+        '-e', `export[[:space:]]+(async[[:space:]]+)?(function|const|let|class)[[:space:]]+${name}\\b`], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'] });
+      return out.split('\n').some((l) => { const m = /^(.*?):\d+:/.exec(l); return m && !isTest(m[1]) && !DOC.test(m[1]); });
+    } catch { return false; }
+  };
+  return (lines, line, p = '') => {
     if (!Array.isArray(lines) || !Number.isInteger(line)) return null;
     const needles = needlesOf(lines, line), hit = needles.length ? grep(needles.flatMap((n) => ['-e', n])) : null, cm = hit ? null : classAndMethod(lines, line);
     const lit = hit || (cm ? grep(['-e', cm.method, '--and', '-e', cm.cls]) : null);
     if (lit) return lit;
-    for (const name of calledNames(lines, line)) { const h = grep(['-w', '-e', name]); if (h) return `a delegated helper is tested: ${name} at ${h}`; }
+    if (p && isTest(p)) return null; // a claim about a test file has no delegate to follow
+    for (const name of calledNames(lines, line)) { if (!definedHere(name)) continue; const h = grep(['-w', '-e', name]); if (h) return `a delegated helper is tested: ${name} at ${h}`; }
     return null;
   };
 }
