@@ -14,7 +14,7 @@ const { inventory, write: writeUnits } = require('./audit-units');
 const { run, matchGlob, isTestPath, blocksOf, testScope, tokenize, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP } = require('./trace');
 
 const MAX_AUDIT_DOCS = 60; // the model reads every admitted document in full
-const CAND_CAP = 60 * 1024, CAND_TEXT = 240; // audit-candidates.txt bytes (the cap is lowered, never a row cut); characters of block text per line
+const CAND_CAP = 60 * 1024, CAND_TEXT = 240, BLOCK_CAP = 4000; // audit-candidates.txt bytes (the cap is lowered, never a row cut); characters of block text per line
 const EV_BUDGET_MS = 40000, EV_CAP = 64 * 1024, EV_PER = 3, EV_SNIP = 90, EV_TEXT = 600, COVER_MIN = 0.4; // ponytail: a heuristic floor, tuned by eye on this repo's design.md; table rows of results still match prose-heavy code // evidence search time budget (as in PR mode); audit-evidence.txt bytes; locations per kind and block; snippet characters; block text used as the query
 // Words that say nothing about code: BLOCK_STOP (PR mode's list) plus common English function words. ponytail: English only, extend when another language floods the candidates.
 const STOP = new Set([...BLOCK_STOP, ...'when then will must should shall can may each all any has have had was were been being which what who how its their there these those into over under than also but only one two more most such per via using used does did'.split(' ')]);
@@ -77,6 +77,9 @@ function scopeFn(spec) {
   return (f) => (!inc.length || hit(inc, f)) && !hit(exc, f);
 }
 
+// The whole block text for audit-blocks.txt: one row per block (backslash and newline escaped), cut at BLOCK_CAP characters with a visible marker.
+const blockBody = (raw) => { const t = String(raw).replace(/\r\n?/g, '\n').trim().replace(/\\/g, '\\\\').replace(/\t/g, ' ').replace(/\n/g, '\\n'); return t.length > BLOCK_CAP ? `${t.slice(0, BLOCK_CAP)} [truncated]` : t; };
+
 // Every block of the admitted documents, in document order. cid = sha1(path, heading, normalised block text)[0..8]: stable while the block is unchanged, wherever it moves. A repeated block gets its own cid.
 function allBlocks(cwd, head, docs, ruled = null) { // ruled (optional array) receives the blocks trace.js's prefilter dropped, with a `reason`: never audited, never counted against the cap
   const all = [], seen = new Set(), flat = (s) => s.replace(/\s+/g, ' ').trim();
@@ -90,7 +93,7 @@ function allBlocks(cwd, head, docs, ruled = null) { // ruled (optional array) re
       for (let k = 2; seen.has(cid); k++) cid = sha8(p, h, t, `#${k}`);
       seen.add(cid);
       if (i.reason) { if (ruled) ruled.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), reason: i.reason }); continue; }
-      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT) });
+      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT), body: blockBody(i.raw) });
     }
   }
   return all;
@@ -246,6 +249,9 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   if (et.left) notes.push(`audit-evidence.txt would pass ${EV_CAP / 1024} KB: ${et.left} block(s) have no candidate locations`);
   if (cand.fit.length) notes.push(`evidence candidates are capped at ${EV_PER} code and ${EV_PER} test locations per block`);
   w('audit-candidates.txt', cand.text);
+  w('audit-blocks.txt', cand.fit.map((c) => `${c.cid}\t${c.body}\n`).join('')); // the full block text (audit-candidates.txt rows are cut at CAND_TEXT)
+  const cutBlocks = cand.fit.filter((c) => c.body.endsWith(' [truncated]'));
+  if (cutBlocks.length) notes.push(`${cutBlocks.length} block(s) are longer than ${BLOCK_CAP} characters and were shown to the model cut (marked [truncated]), so not fully read: ${cutBlocks.slice(0, 5).map((c) => `${c.path}:${c.line}`).join(', ')}${cutBlocks.length > 5 ? ', ...' : ''}`);
   w('audit-evidence.txt', et.text);
   w('audit-ruled.txt', ruled.map((c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\t${c.reason}\n`).join('')); // skipped by rule: listed in the report, not sent to the model
   w('audit-carried.txt', cand.carried.map((c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`).join(''));
