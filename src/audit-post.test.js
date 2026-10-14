@@ -137,6 +137,20 @@ test('verify: a bad test quote removes the evidence and covered becomes unknown'
   assert.match(code.note, /covered needs a code citation/);
 });
 
+// outside the test body: SpecGuard's own skip detector reads the span from a test declaration to the cited line
+const SKIP_FILES = { ...FILES, 'tests/skip.test.js': ['test.skip("repeat stays on", () => {', '  assert.equal(fire({ repeat: true }).on, true);', '});', 'test("repeat stays on, empty body", () => {', '});'] };
+test('verify: a skipped, empty or declaration-only test cannot carry covered (same rule as PR mode); a real assertion still does', () => {
+  const files = SKIP_FILES;
+  const rd = (p) => files[p] || null;
+  const at = (line) => verify(result([req({ tests: [{ path: 'tests/skip.test.js', line, quote: files['tests/skip.test.js'][line - 1], layer: 'unit' }] })]), { read: rd }).requirements[0];
+  for (const line of [1, 2, 4]) {
+    const r = at(line);
+    assert.equal(r.status, 'unknown', `line ${line}`);
+    assert.match(r.note, /1 test citation\(s\) removed: not an assertion or in a skipped test\. Downgraded to unknown/);
+  }
+  assert.equal(verify(result(), { read: rd }).requirements[0].status, 'covered', 'control: a running assertion covers');
+});
+
 test('verify: evidence that cannot carry the status downgrades; a sound row is left alone', () => {
   const ok = (over) => verify(result([req(over)]), { read }).requirements[0];
   assert.equal(ok({ class: 'human' }).status, 'unknown');
@@ -157,7 +171,14 @@ test('validate: every result names a listed block (an unusable majority is rejec
   rej(result([req({ id: 'R1' })], { not_requirements: [nr(C2)] }), /id R1 is not a listed block id/);
   rej(result([req({ id: 'ffffffff' })], { not_requirements: [nr(C2)] }), /not a listed block id/);
   rej(result([req({ id: `${C1}.0` })], { not_requirements: [nr(C2)] }), /not a listed block id/);
-  rej(result([req()], { not_requirements: [nr(C1)] }), /answered both as not_a_requirement and as a requirement/);
+  // a block answered both ways is a conflict for a person, never a deletion: the row stays as unknown and leaves not_requirements
+  const both = result([req()], { not_requirements: [nr(C1, 'volume range is rationale')] });
+  assert.deepEqual(validate(both, ONE()), { ok: true });
+  assert.deepEqual([both.requirements.length, both.requirements[0].status, both.not_requirements.length], [1, 'unknown', 0]);
+  assert.match(both.requirements[0].note, /Also answered as not a requirement \(volume range is rationale\); status unknown until a person decides/);
+  assert.match(both.not_reviewed.join('\n'), /block 1111111a was answered both as a requirement and as not a requirement; kept as unknown/);
+  const v = verify(both, { read, cands: ONE() });
+  assert.deepEqual([v.requirements.map((r) => [r.id, r.status]), v.not_requirements.length], [[[C1, 'unknown']], 0]);
   assert.deepEqual(validate(result([req()], { not_requirements: [nr(C2)] }), TWO()), { ok: true });
   assert.deepEqual(validate(result([req({ id: `${C1}.1` }), req({ id: `${C1}.2` })], { not_requirements: [nr(C2)] }), TWO()), { ok: true }, 'a bundled block yields cid.1, cid.2');
 });

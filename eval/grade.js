@@ -45,7 +45,9 @@ function parseComment(c) {
 function parseSummary(text) {
   const s = String(text || '');
   const heads = [...s.matchAll(HEAD)], details = s.indexOf('<details><summary>Details:'); // a bare item takes its kind from the nearest heading above it, in the visible part only
-  const items = [...s.matchAll(ITEM)].map((m) => ({ title: m[2], path: m[3], line: +m[4], kind: m[1] ? ITEM_KIND[m[1]] : (details < 0 || m.index < details) && HEAD_KIND[(heads.filter((h) => h.index < m.index).pop() || [])[1]], why: m[5] || '' })).filter((i) => i.kind);
+  const items = [...s.matchAll(ITEM)].map((m) => ({ title: m[2], path: m[3], line: +m[4], kind: m[1] ? ITEM_KIND[m[1]] : (details < 0 || m.index < details) && HEAD_KIND[(heads.filter((h) => h.index < m.index).pop() || [])[1]], why: m[5] || '', at: m.index })).filter((i) => i.kind);
+  const actionable = new Set(items.filter((i) => (details < 0 || i.at < details) && !/low confidence/i.test(i.why))); // visible and not hedged: what a developer is asked to act on
+  for (const i of items) delete i.at;
   const rows = [], trace = [], lines = s.split('\n'), traceLines = new Set();
   // Traceability table: the header row, then table rows until the first other line.
   const th = lines.findIndex((l) => TRACE_HEAD.test(l));
@@ -67,7 +69,7 @@ function parseSummary(text) {
   const preExisting = pe ? s.slice(pe.index + pe[0].length).split(/\n#{1,6} |\n\*\*[^\n]+\*\*\n|<\/details>/)[0].replace(/^\*\*/, '').trim() : null;
   const notes = /Validation notes \(\d+\)(?:<\/summary>|\*\*)\n\n([\s\S]*?)(?=\n\n\*\*|\n<\/details>|\n*$)/.exec(s);
   return {
-    items, rows, trace, preExisting, noRequirementDocs: /No requirement documents found/.test(s), notes: notes ? notes[1].split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)) : [],
+    items, actionable, rows, trace, preExisting, noRequirementDocs: /No requirement documents found/.test(s), notes: notes ? notes[1].split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)) : [],
     skipped: /Nothing to review/.test(s),
     incomplete: /Could not complete/i.test(s) || /Partially reviewed|The diff exceeded `max_diff_kb`/.test(s) || /Standards tooling: incomplete/.test(s),
   };
@@ -87,7 +89,7 @@ function grade(spec, obs) {
   const comments = obs.comments || [], reviews = obs.reviews || [];
   const posted = comments.filter((c) => c.confidence === 'high');
   const sum = parseSummary(obs.summary);
-  const used = new Set(), matched = [], missed = [], textMisses = [];
+  const used = new Set(), usedItems = new Set(), matched = [], missed = [], textMisses = [];
   const summaryHits = [...sum.items, ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
     .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path }))];
   let tp = 0;
@@ -106,14 +108,18 @@ function grade(spec, obs) {
       if (e.text && !new RegExp(e.text, 'i').test(`${posted[best].title}\n${posted[best].body}`)) textMisses.push(e);
     } else if (e.allow_summary && summaryHits.some((h) => arr(e.kind).includes(h.kind) && arr(e.path).includes(h.path))) {
       tp++; matched.push({ expected: e, observed: null, via_summary: true });
+      const k = sum.items.findIndex((h, j) => !usedItems.has(j) && arr(e.kind).includes(h.kind) && arr(e.path).includes(h.path));
+      if (k >= 0) usedItems.add(k);
     } else missed.push(e);
   }
   // Reasonable findings the fixture truly leaves untested but did not seed: neither TP nor FP.
   const spare = [...(exp.acceptable || [])], acceptable = [], falsePositives = [];
-  for (const { kind, path, line, title } of posted.filter((_, j) => !used.has(j))) {
+  // A summary item the developer reads counts like a posted comment: moving a finding into the summary must not hide a false positive.
+  const unmatched = [...posted.filter((_, j) => !used.has(j)), ...sum.items.filter((h, j) => sum.actionable.has(h) && !usedItems.has(j)).map((h) => ({ ...h, level: 'summary' }))];
+  for (const { kind, path, line, title, level } of unmatched) {
     const k = spare.findIndex((a) => arr(a.kind).includes(kind) && arr(a.path).includes(path) && line != null && Math.abs(line - a.line) <= (a.tolerance ?? 2));
     if (k >= 0) acceptable.push({ kind, path, line, title, reason: spare.splice(k, 1)[0].reason });
-    else falsePositives.push({ kind, path, line, title });
+    else falsePositives.push({ kind, path, line, title, ...(level ? { level } : {}) });
   }
 
   const violates = (m) => {
@@ -143,7 +149,7 @@ function grade(spec, obs) {
   // With the raw artifact, JSON validity is about the model output alone; a skipped run has none. Without it, fall back to the summary.
   const jsonValid = obs.raw_findings_present === undefined || sum.skipped ? complete : !!(obs.raw_findings_present && obs.raw_findings_valid_json);
   const skipOk = exp.expect_skip ? sum.skipped && comments.length === 0 : true;
-  const cleanOk = exp.expect_clean ? posted.length === 0 : true;
+  const cleanOk = exp.expect_clean ? posted.length === 0 && sum.actionable.size === 0 : true;
   return {
     id: spec.id, goal: spec.goal, tp, fp: falsePositives.length, acceptable: acceptable.length, fn: missed.length, summary_only: sum.items.length,
     matched, missed, summary_misses: sm, false_positives: falsePositives, acceptable_findings: acceptable, must_not_violations: mustNot, text_misses: textMisses,

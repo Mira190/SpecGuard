@@ -212,18 +212,20 @@ function assertionDelta(diff, isTest) {
     if (!body) {
       if (l.startsWith('+++ ')) file = l === '+++ /dev/null' ? null : l.slice(4).replace(/^b\//, '').replace(/^"|"$/g, '');
       const m = /^@@ -(\d+)/.exec(l);
-      if (m) { body = true; o = +m[1]; if (file && isTest(file) && !per.has(file)) per.set(file, { rm: [], add: [] }); }
+      if (m) { body = true; o = +m[1]; if (file && isTest(file) && !per.has(file)) per.set(file, { rm: [], add: [], lines: [] }); }
       continue;
     }
     const m = /^@@ -(\d+)/.exec(l);
     if (m) { o = +m[1]; continue; }
     const e = file && per.get(file), t = l.slice(1).replace(/\r$/, '');
     if (l[0] === '-') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.rm.push({ line: o, text: t.trim(), ...s }); } o++; }
-    else if (l[0] === '+') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.add.push({ text: t.trim(), ...s }); } }
+    else if (l[0] === '+') { if (e && t.length <= 400 && !quiet(t)) { e.lines.push(t); const s = subjectOf(t); if (s) e.add.push({ text: t.trim(), ...s }); } }
     else if (l[0] === ' ') o++;
   }
   const out = [];
-  for (const [f, { rm, add }] of per) for (const r of rm) {
+  const callee = (x) => (/^([\w$.]+)\(/.exec(x) || [])[1];
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const [f, { rm, add, lines }] of per) for (const r of rm) {
     const same = add.filter((a) => a.x === r.x);
     if (same.some((a) => !a.weak) || (r.weak && same.length)) continue; // still pinned: moved, reformatted or strengthened
     // re-pinned through a helper or alias: an added assertion holds every distinctive literal of the removed one (literals most assertion lines share, like '.mp4', say nothing)
@@ -231,6 +233,13 @@ function assertionDelta(diff, isTest) {
     const distinct = (min) => [...literalsOf(r.text, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive
     const lits = distinct(2).length ? distinct(2) : distinct(1);
     if (lits.length && add.some((a) => !a.weak && lits.every((x) => has(a, x)))) continue;
+    // table-driven: an added assertion calls the same function with other arguments and one added line holds the removed literals in order,
+    // separated only by commas, quotes or object keys ([1, 2] or { input: 1, expected: 2 }; never across rows), so a dropped row stays a lead
+    const seq = [...literalsOf(r.text, 1)], fn = callee(r.x);
+    if (seq.length && fn && add.some((a) => !a.weak && callee(a.x) === fn)) {
+      const row = new RegExp(`(?<![\\w$.])${seq.map(esc).join(`(?:[\\s,'"\`]|[\\w$]+\\s*:)*`)}(?![\\w$])`);
+      if (lines.some((l) => row.test(l))) continue;
+    }
     out.push(same.length ? { file: f, kind: 'weakened', line: r.line, old: r.text, new: same[0].text } : { file: f, kind: 'removed', line: r.line, old: r.text });
   }
   return out;
