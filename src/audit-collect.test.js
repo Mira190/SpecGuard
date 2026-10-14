@@ -437,3 +437,16 @@ test('collect: blocks the prefilter rules out are listed in audit-ruled.txt with
   assert.equal(meta.ruled, 3);
   assert.equal(r.candidates, 3);
 });
+
+test('collect: audit-blocks.txt holds each candidate block whole (past the 240-character row cut); a block over 4000 characters is marked [truncated] and noted as not fully read', (t) => {
+  const decisive = 'The writer MUST use the atomic rename DECISIVE_CLAUSE.', long = `The importer MUST validate ${'every field of the record and '.repeat(150)}end.`;
+  const { root, ctx } = repo(t, { 'docs/design.md': `# Design\n\n${'The plan MUST keep state and also '.repeat(10)}${decisive}\n\n${long}\n` });
+  collect({ cwd: root, ctx, maxRequirements: 12 });
+  const cand = rows(ctx, 'audit-candidates.txt'), blocks = new Map(rows(ctx, 'audit-blocks.txt').map(([c, b]) => [c, b]));
+  const [a, b] = cand.map((r) => r[0]);
+  assert.ok(!cand[0][3].includes('DECISIVE_CLAUSE') && cand[0][3].length <= 240, 'the row stays cut');
+  assert.ok(blocks.get(a).includes('DECISIVE_CLAUSE') && !blocks.get(a).includes('[truncated]'));
+  assert.ok(blocks.get(b).endsWith(' [truncated]') && blocks.get(b).length < 4020);
+  const meta = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
+  assert.ok(meta.limitations.some((l) => /longer than 4000 characters.*not fully read/.test(l)), JSON.stringify(meta.limitations));
+});

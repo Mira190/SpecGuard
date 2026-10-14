@@ -2,10 +2,10 @@ name: SpecGuard manual run
 # Run SpecGuard on demand against ANOTHER repository (README: "Manual run (SpecGuard repo)"). This workflow lives in the SpecGuard repo only; it is not shipped to target repos.
 # One required input: a PR link reviews that PR; a repo link, owner/name or a branch link runs the unit test gap scan of that branch (default branch when none). Model and effort are Copilot Auto (auto_tier intelligence).
 # The secret SPECGUARD_PAT (a fine-grained PAT with Contents, Issues and Pull requests read on the target repositories; Pull requests write only for post_to_pr) belongs in the ENVIRONMENT secret store of
-# the environment "specguard" (deployment branches: main only), never in the repository secrets: both jobs run in that environment and nothing else in this file reads the secret. Without it the job token is
+# the environment "specguard" (REQUIREMENT: restrict its deployment branches to main, so only code from main sees the secrets; not enforced by this file), never in the repository secrets: both jobs run in that environment and nothing else in this file reads the secret. Without it the job token is
 # used, which reads only this repository and public ones.
 # Scans keep their state (two-run confirmation) in an issue: scan_issue specguard (default) = one issue per scanned repository in THIS repository, written with the job token (issues: write on the review job);
-# the quoted code and requirement text then sit in this repository, so keep it private with access no wider than the targets'. target = the issue in the scanned repository (token needs Issues write there).
+# the quoted code and requirement text then sit in this repository, so keep it private with access no wider than the targets' (enforced: the resolve job fails a non-public target when this repository is public). target = the issue in the scanned repository (token needs Issues write there).
 # Copilot token: SPECGUARD_COPILOT_TOKEN (environment secret) = a fine-grained PAT OWNED BY A USER (resource owner = the user, account permission "Copilot Requests"; classic ghp_ and org-owned tokens are rejected).
 # It is a different token from SPECGUARD_PAT (org-owned, repository read): one fine-grained PAT has a single resource owner, so it cannot carry both. Usage is billed to that user's Copilot seat. Empty = the job token
 # with copilot-requests: write, which works only when the organization enables "Allow use of Copilot CLI billed to the organization".
@@ -27,7 +27,7 @@ jobs:
   # Inputs -> repository paths and PR commits. A separate job: the review job checks the target out at the workspace root, which would wipe this checkout.
   resolve:
     runs-on: ubuntu-latest
-    environment: specguard # the PAT lives here only; main-only deployment branches mean only code from main ever sees it
+    environment: specguard # the PAT lives here only; keep this environment restricted to protected branches (main) so only code from main sees the PAT/App secrets (a setting, not enforced here)
     timeout-minutes: 5
     permissions: { contents: read, pull-requests: read }
     env: # job env, not a step if:, because step conditions cannot read secrets
@@ -78,6 +78,14 @@ jobs:
         run: |
           [ "$HAVE_PAT" = true ] || [ "$HAVE_APP" = true ] || echo "::notice::neither the App secrets nor SPECGUARD_PAT is set in the specguard environment: using the job token, which reads only this repository and public repositories"
           node src/resolve-inputs.js # reads the PR (open only) and, with the token, the branch name and folders of the links
+      - name: Refuse a non-public target when this repository is public # results (scan issue, summary, artifact) are written here
+        shell: bash
+        env:
+          CONTROL_REPO: ${{ github.repository }}
+          TARGET_REPO: ${{ steps.in.outputs.repo }}
+          CONTROL_TOKEN: ${{ github.token }}
+          TARGET_TOKEN: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
+        run: node src/visibility-guard.js # fails closed when a visibility cannot be read
 
   review:
     needs: resolve
@@ -124,7 +132,7 @@ jobs:
         run: |
           if [ -e .specguard-src ] || [ -L .specguard-src ]; then echo "::error::the reviewed repository has a path named .specguard-src, which SpecGuard needs for itself"; exit 1; fi
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with: { path: .specguard-src, persist-credentials: false } # the dispatching commit (main only, see the environment)
+        with: { path: .specguard-src, persist-credentials: false } # the dispatching commit (main only when the environment is restricted to main, see the requirement at the top)
       - id: head # scan mode: the reviewed commit, for source links in the summary
         shell: bash
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
