@@ -187,6 +187,47 @@ function weakCandidates(src) {
   return out;
 }
 
+// ---- removed / weakened assertions (diff only) ----
+const subjectOf = (text) => { // the expression under test on one assertion line, whitespace and quote style normalised; null when it is no assertion
+  let m, x = null;
+  let w = weakOf(text, []);
+  if (!w && (m = /(?<![.\w$])assert(?:\.ok)?\s*\(/.exec(text))) { const a = args(text, m.index + m[0].length - 1); if (a.length === 1 && /^[\w$.]+\(.*\)$/.test(a[0])) w = { x: a[0] }; } // assert.ok(f(x)): a bare call result
+  if (w) x = w.x;
+  else if (VALUE.test(text)) {
+    if ((m = /\bexpect\s*\(/.exec(text))) x = args(text, m.index + m[0].length - 1)[0];
+    else if ((m = /^\s*assert\s+(.+?)\s*==/.exec(text))) x = m[1];
+    else if ((m = /(?<![\w$])(?:[Aa]ssert|require)\.\w+\s*\(|(?<![\w$.])(?:assert\w*|assert_\w+|assert_eq!)\s*\(/.exec(text))) x = args(text, m.index + m[0].length - 1)[0];
+  }
+  return x ? { x: x.replace(/\s+/g, '').replace(/["'`]/g, "'"), weak: !!w } : null;
+};
+// -> [{file, kind: 'removed'|'weakened', line (old side), old, new}] per changed test file
+// ponytail: same-file, single-line assertions, subject = first argument / expect() operand. Ceiling: multi-line assertions, renamed subjects.
+function assertionDelta(diff, isTest) {
+  const per = new Map(); let file = null, body = false, o = 0;
+  for (const l of diff.split('\n')) {
+    if (l.startsWith('diff --git ')) { body = false; file = null; continue; }
+    if (!body) {
+      if (l.startsWith('+++ ')) file = l === '+++ /dev/null' ? null : l.slice(4).replace(/^b\//, '').replace(/^"|"$/g, '');
+      const m = /^@@ -(\d+)/.exec(l);
+      if (m) { body = true; o = +m[1]; if (file && isTest(file) && !per.has(file)) per.set(file, { rm: [], add: [] }); }
+      continue;
+    }
+    const m = /^@@ -(\d+)/.exec(l);
+    if (m) { o = +m[1]; continue; }
+    const e = file && per.get(file), t = l.slice(1).replace(/\r$/, '');
+    if (l[0] === '-') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.rm.push({ line: o, text: t.trim(), ...s }); } o++; }
+    else if (l[0] === '+') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.add.push({ text: t.trim(), ...s }); } }
+    else if (l[0] === ' ') o++;
+  }
+  const out = [];
+  for (const [f, { rm, add }] of per) for (const r of rm) {
+    const same = add.filter((a) => a.x === r.x);
+    if (same.some((a) => !a.weak) || (r.weak && same.length)) continue; // still pinned: moved, reformatted or strengthened
+    out.push(same.length ? { file: f, kind: 'weakened', line: r.line, old: r.text, new: same[0].text } : { file: f, kind: 'removed', line: r.line, old: r.text });
+  }
+  return out;
+}
+
 function run(ctx, { cwd = process.cwd(), env = process.env, now = Date.now } = {}) {
   const t0 = now(), left = () => Math.max(1000, BUDGET_MS - (now() - t0));
   const lines = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8').split('\n').map((l) => l.replace(/\r$/, '')).filter(Boolean); } catch { return []; } };
@@ -241,6 +282,11 @@ function run(ctx, { cwd = process.cwd(), env = process.env, now = Date.now } = {
   sections.push(['Weak assertions (only existence, truthiness or type is checked)',
     weak.slice(0, 15).map((c) => `weak? ${c.file}:${c.line} — ${short(c.text, 80)} only checks that ${short(c.x, 40)} ${WHAT[c.what]}; nothing pins its value`), Math.max(0, weak.length - 15)]);
 
+  // 4. removed or weakened assertions, from the diff
+  const delta = assertionDelta(diff, isTest);
+  sections.push(['Removed or weakened assertions (answer each: a weak_test or missing_test finding citing the test file, or where the behaviour is still pinned)',
+    delta.slice(0, 15).map((d) => (d.kind === 'removed' ? `assertion removed: ${short(d.old, 100)} (${d.file}:${d.line})` : `assertion weakened: ${short(d.old, 80)} → ${short(d.new, 80)} (${d.file}:${d.line})`)), Math.max(0, delta.length - 15)]);
+
   // render within the cap, dropping whole lines
   let out = '';
   for (const [title, items, more] of sections) {
@@ -260,4 +306,4 @@ if (require.main === module) {
   const f = path.join(ctx, 'leads.txt');
   if (out) fs.writeFileSync(f, out); else fs.rmSync(f, { force: true });
 }
-module.exports = { run, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START, GENERIC };
+module.exports = { run, assertionDelta, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START, GENERIC };
