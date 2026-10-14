@@ -3552,3 +3552,111 @@ test('a removed-assertion lead the model ignored becomes one LEFT finding; an ad
   const weakened = await withLead(t, 'assertion weakened: assert.equal(gone, 1); → assert.ok(1); (test.js:2)');
   assert.doesNotMatch(weakened, /Assertion removed with no replacement/);
 });
+
+test('posting failures propagate: a failed summary comment, a failed job summary and a crash are status failed; a non-422 inline failure is incomplete (no head marker); a 422 is normal', async (t) => {
+  const go = async (prep) => {
+    const s = setup(t);
+    s.outputs = {}; s.core.setOutput = (k, v) => { s.outputs[k] = v; };
+    prep?.(s);
+    await post(s);
+    return s;
+  };
+  const ok = await go();
+  assert.deepEqual([ok.outputs.status, ok.outputs.reason], ['complete', undefined]);
+  const noSummary = await go((s) => { s.github.rest.issues.createComment = async () => { throw new Error('boom'); }; });
+  assert.equal(noSummary.outputs.status, 'failed');
+  assert.equal(noSummary.outputs.reason, 'could not post the summary comment: boom');
+  assert.ok(noSummary.warnings.some((w) => /could not post summary comment: boom/.test(w)));
+  const noJob = await go((s) => { s.core.summary.write = async () => { throw new Error('disk'); }; });
+  assert.equal(noJob.outputs.status, 'failed');
+  assert.equal(noJob.outputs.reason, 'could not write the job summary');
+  assert.equal(noJob.calls.summary.length, 1, 'the PR comment is still attempted');
+  const down = await go((s) => { s.github.rest.pulls.createReviewComment = async () => { throw Object.assign(new Error('Server Error'), { status: 500 }); }; });
+  assert.equal(down.outputs.status, 'incomplete');
+  assert.match(down.calls.summary[0].body, /Delivery degraded: 1 comment\(s\) could not be posted \(500\)/);
+  assert.doesNotMatch(down.calls.summary[0].body, /specguard:head/, 'preflight retries');
+  const rejected = await go((s) => { s.github.rest.pulls.createReviewComment = async () => { throw Object.assign(new Error('bad anchor'), { status: 422 }); }; });
+  assert.equal(rejected.outputs.status, 'complete');
+  const manual = await go((s) => { process.env.DELIVERY = 'summary'; s.github.rest.pulls.createReviewComment = async () => { throw new Error('never called'); }; });
+  delete process.env.DELIVERY;
+  assert.equal(manual.outputs.status, 'complete');
+  const crash = setup(t); // the top-level catch: status failed even when core is partial (no setOutput)
+  crash.context = { get repo() { throw new Error('no repo'); }, payload: {} };
+  await post(crash);
+  assert.ok(crash.warnings.some((w) => /SpecGuard post failed: no repo/.test(w)));
+  const crash2 = setup(t); crash2.outputs = {}; crash2.core.setOutput = (k, v) => { crash2.outputs[k] = v; };
+  crash2.context = { get repo() { throw new Error('no repo'); }, payload: {} };
+  await post(crash2);
+  assert.deepEqual(crash2.outputs, { status: 'failed', reason: 'SpecGuard post failed: no repo' });
+});
+
+test('PARTIAL=true (diff truncated) makes the run incomplete: status output, marker and no head marker', async (t) => {
+  const s = setup(t);
+  s.outputs = {}; s.core.setOutput = (k, v) => { s.outputs[k] = v; };
+  process.env.PARTIAL = 'true';
+  await post(s);
+  assert.equal(s.outputs.status, 'incomplete');
+  assert.match(s.calls.summary[0].body, /specguard:status=incomplete/);
+  assert.doesNotMatch(s.calls.summary[0].body, /specguard:head/);
+});
+
+test('the sticky summary carries a requirements fingerprint next to the head marker, never without it', async (t) => {
+  const { reqKey } = require('./preflight');
+  assert.match(post.buildSummary({ status: 'R', headSha: 'abc', req: 'k1' }), /^<!-- specguard:summary -->\n<!-- specguard:head=abc -->\n<!-- specguard:req=k1 -->\n<!-- specguard:status=/);
+  assert.doesNotMatch(post.buildSummary({ status: 'R', req: 'k1' }), /specguard:req/);
+  assert.doesNotMatch(post.buildSummary({ status: 'R', headSha: 'abc' }), /specguard:req/);
+  const s = setup(t, report(), { pr: { title: 'T', body: 'B\r\nC' } });
+  await post(s);
+  const body = s.calls.summary[0].body, mark = `<!-- specguard:req=${reqKey({ title: 'T', body: 'B\nC' })} -->\n`;
+  assert.ok(body.includes('<!-- specguard:head=HEADSHA -->\n<!-- specguard:counts '), 'the head/counts layout is unchanged');
+  assert.ok(body.indexOf(mark) > body.indexOf('specguard:head=') && body.indexOf(mark) < body.indexOf('<!-- specguard:status='), 'req sits after head and before status');
+});
+
+test('without a collected key the requirements fingerprint falls back to the event payload, not a later re-fetch', async (t) => {
+  const { reqKey } = require('./preflight');
+  const s = setup(t, report(), { pr: { title: 'T', body: 'EDITED AFTER THE REVIEW STARTED' } }); // pulls.get = the live PR at post time
+  s.context.payload.pull_request = { number: 7, head: { sha: 'HEADSHA' }, title: 'T', body: 'what the model read' };
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.ok(body.includes(`<!-- specguard:req=${reqKey({ title: 'T', body: 'what the model read' })} -->`));
+  assert.ok(!body.includes(reqKey({ title: 'T', body: 'EDITED AFTER THE REVIEW STARTED' })), 'the later edit is not recorded as reviewed');
+});
+
+test('the requirements fingerprint is the key collected from the PR text the model read, so a re-run with a stale payload does not loop', async (t) => {
+  const { reqKey, decide } = require('./preflight');
+  const OLD = { title: 'T', body: 'old' }, NEW = { title: 'T', body: 'new' };
+  const s = setup(t, report(), { pr: NEW });
+  s.context.payload.pull_request = { number: 7, head: { sha: 'HEADSHA' }, ...OLD };
+  fs.writeFileSync(path.join(process.env.CTX, 'pr-req-key.txt'), reqKey(NEW));
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.ok(body.includes(`<!-- specguard:req=${reqKey(NEW)} -->`) && !body.includes(reqKey(OLD)));
+  const c = { user: { login: 'github-actions[bot]', type: 'Bot' }, body };
+  assert.ok(decide({ pr: NEW, comments: [c], headSha: 'HEADSHA' }), 'unchanged text: skip');
+  assert.equal(decide({ pr: { title: 'T', body: 'newer' }, comments: [c], headSha: 'HEADSHA' }), '', 'edited again: review');
+});
+
+test('a malformed collected key is ignored (falls back to the payload key)', async (t) => {
+  const { reqKey } = require('./preflight');
+  const s = setup(t, report(), { pr: { title: 'T', body: 'live' } });
+  s.context.payload.pull_request = { number: 7, head: { sha: 'HEADSHA' }, title: 'T', body: 'payload' };
+  fs.writeFileSync(path.join(process.env.CTX, 'pr-req-key.txt'), 'not-a-key');
+  await post(s);
+  assert.ok(s.calls.summary[0].body.includes(`<!-- specguard:req=${reqKey({ title: 'T', body: 'payload' })} -->`));
+});
+
+test('a non-422 failure on a FILE-level comment is incomplete too (no head marker, finding kept in the summary); a 422 there is normal', async (t) => {
+  const run = async (status) => {
+    const s = setup(t, report({ findings: [finding('missing_test', { line: 8, quote: 'l8' })] })); // line 8 is outside the hunk: a file-level comment
+    s.outputs = {}; s.core.setOutput = (k, v) => { s.outputs[k] = v; };
+    s.github.rest.pulls.createReviewComment = async () => { throw Object.assign(new Error('nope'), { status }); };
+    await post(s);
+    return s;
+  };
+  const down = await run(502);
+  assert.equal(down.outputs.status, 'incomplete');
+  assert.match(down.calls.summary[0].body, /Delivery degraded: 1 comment\(s\) could not be posted \(502\)/);
+  assert.doesNotMatch(down.calls.summary[0].body, /specguard:head/, 'the preflight retries this head');
+  assert.match(down.calls.summary[0].body, /src\.js:8/, 'the finding is not lost');
+  assert.equal((await run(422)).outputs.status, 'complete');
+});

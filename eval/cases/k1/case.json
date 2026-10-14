@@ -1,0 +1,38 @@
+{
+  "id": "k1",
+  "goal": "test_quality",
+  "description": "Kite run #12 false positive (manual review of the scan findings): ownFile is a wrapper whose path-traversal core, isDirectChild, has a direct unit test. Control: titleOf wraps labelOf, which no test mentions.",
+  "pr_title": "Guard media renames and show the clip label in the title",
+  "pr_body": "Only a media file directly inside the media folder may be renamed or deleted (no path traversal). The window title shows the clip label.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/k1/electron/app.cjs",
+        "line": 11,
+        "quote": "E.labelOf(clip.name)"
+      }
+    ],
+    "must_not": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/k1/electron/app.cjs",
+        "line": 6,
+        "tolerance": 1
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/k1/engine/filename.js",
+        "line": 9,
+        "tolerance": 1,
+        "reason": "labelOf itself is untested too; a finding on the helper instead of its wrapper is the same seeded gap."
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "The cover guard (src/test-map.js makeCoverGuard) must follow ownFile -> isDirectChild -> test/filename.test.js and keep a missing_test on ownFile out of the posted comments; titleOf -> labelOf has no test, so its gap must still post."
+  }
+}
