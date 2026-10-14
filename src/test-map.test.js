@@ -76,6 +76,7 @@ test('public names: assignments (also chained), exports, declarations', () => {
   assert.deepEqual(publicDefs('lib/response.js', RESPONSE).names, ['status', 'cookie', 'vary', 'varyHeader']);
   assert.equal(publicDefs('lib/response.js', RESPONSE).count, 4);
   assert.deepEqual(publicDefs('a.js', ['exports.create = (o) => o;', 'export function remove() {}']).names, ['create', 'remove']);
+  assert.deepEqual(publicDefs('lib/request.js', ["defineGetter(req, 'fresh', function(){", "Object.defineProperty(exports, 'protocol', {"]).names, ['fresh', 'protocol'], 'properties defined by name');
 });
 
 test('assertion styles: supertest, chai, should, sinon, tap/ava, testify, XCTest, pytest, unittest count; a bare call does not', () => {

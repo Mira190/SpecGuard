@@ -16,11 +16,13 @@ const GENERIC = new Set(['index', 'main', 'mod', 'init', '__init__', 'lib', 'app
 const dirKey = (t) => path.posix.dirname(t).replace(/\/__tests__$/, '');
 const comment = (l) => /^\s*(?:\/\/|#|\*|\/\*|--)/.test(l);
 const usableName = (n) => n.length >= 4 && /^[A-Za-z_$][\w$]*$/.test(n) && !NAME_GENERIC.has(n.toLowerCase());
+// a property defined by name: `defineGetter(req, 'fresh', function`, `Object.defineProperty(exports, 'name', {`
+const DEFINE = /^\s*(?:Object\.)?define\w*\(\s*[\w$.]+\s*,\s*['"]([A-Za-z_$][\w$]*)['"]/;
 
 // Public top-level definitions per language, one regex list per family: pub = what the language calls public, top = the fallback (top-level functions) when nothing is public.
 // ponytail: line regexes, no parser. A JS `module.exports = { a, b }` counts as one, a Ruby `private` section or a Python `__all__` is not seen; the count only weights the risk (log-free, so a very large file dominates: cap it with scan_paths).
 const FAMILY = {
-  js: { pub: [/^\s*export\s+(?!\*)/, /^\s*(?:module\.)?exports\.\w+\s*=/, /^\s*module\.exports\s*=/, /^\w+(?:\.\w+)+\s*=\s*(?:\w+(?:\.\w+)+\s*=\s*)*(?:async\s+)?function\b/], top: [/^(?:async\s+)?function\b/, /^(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:function\b|\(.*\)\s*=>|\w+\s*=>)/] },
+  js: { pub: [DEFINE, /^\s*export\s+(?!\*)/, /^\s*(?:module\.)?exports\.\w+\s*=/, /^\s*module\.exports\s*=/, /^\w+(?:\.\w+)+\s*=\s*(?:\w+(?:\.\w+)+\s*=\s*)*(?:async\s+)?function\b/], top: [/^(?:async\s+)?function\b/, /^(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:function\b|\(.*\)\s*=>|\w+\s*=>)/] },
   py: { pub: [/^(?:async\s+def|def|class)\s+(?!_)\w/], top: [/^(?:async\s+)?def\s/] },
   go: { pub: [/^func\s+(?:\([^)]*\)\s*)?[A-Z]/, /^type\s+[A-Z]/], top: [/^func\s/] },
   java: { pub: [/^\s*public\s/], top: [/^\s*(?:static\s+|private\s+|protected\s+|internal\s+)+[\w<>\[\],?]+\s+\w+\s*\(/] },
@@ -34,7 +36,8 @@ const EXT = { js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'js', tsx: 'js', mt
 // `res.status = function`, `req.get = req.header = function`: every name assigned; `exports.x =`; else the declared name of the line
 const ASSIGN = /^((?:\w+(?:\.\w+)+\s*=\s*)+)(?:async\s+)?(?:function\b|\(.*\)\s*=>|\w+\s*=>)/;
 const namesOf = (l) => {
-  const m = ASSIGN.exec(l), e = /^\s*(?:module\.)?exports\.(\w+)\s*=/.exec(l), d = !m && !e && declName(l);
+  const g = DEFINE.exec(l); if (g) return [g[1]];
+  const m = ASSIGN.exec(l), e =/^\s*(?:module\.)?exports\.(\w+)\s*=/.exec(l), d = !m && !e && declName(l);
   return m ? [...m[1].matchAll(/(\w+)\s*=/g)].map((x) => x[1]) : e ? [e[1]] : d ? [d] : [];
 };
 // ls: the file's lines -> { count: public definitions (or top-level functions when none is public), names: their names }
@@ -104,7 +107,7 @@ function needlesOf(lines, line) {
 }
 // the name of the definition enclosing the 1-based line (that line, then up to 60 lines up), or null; `defineGetter(req, 'fresh', function` names `fresh`
 function enclosingName(lines, line) {
-  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = (/\bdefine\w*\(\s*\w+\s*,\s*['"]([A-Za-z_$][\w$]*)['"]/.exec(lines[i]) || [])[1] || namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return n; }
+  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return n; }
   return null;
 }
 // the thrown error class on the cited line (+-2) and the name of the enclosing definition (up to 60 lines up)
