@@ -52,6 +52,37 @@ test('M7: ours matches REST and GraphQL author shapes and rejects humans, other 
   assert.equal(ours({ type: 'Bot', login: 'review-app[bot]' }, 'review-app[bot]'), true);
 });
 
+const { reqKey } = require('./preflight');
+
+test('re-review when the requirements change: same head + same title/body skips, edited body reviews, legacy marker skips, force wins', () => {
+  const p = (o) => pr({ title: 'T', body: 'B', ...o });
+  const withReq = (r) => ({ ...mine(), body: mine().body.replace('## SpecGuard', `<!-- specguard:req=${r} -->\n## SpecGuard`) });
+  assert.match(reqKey(p()), /^[0-9a-f]{12}$/);
+  assert.equal(reqKey({ title: 'T', body: 'x\r\ny ' }), reqKey({ title: 'T', body: 'x\ny' }));
+  assert.notEqual(reqKey(p()), reqKey(p({ body: 'B2' })));
+  assert.equal(reqKey({}), reqKey({ title: '', body: null }));
+  const c = [withReq(reqKey(p()))];
+  assert.match(decide({ pr: p(), comments: c, headSha: SHA }), /already/);
+  assert.equal(decide({ pr: p({ body: 'edited' }), comments: c, headSha: SHA }), '');
+  assert.equal(decide({ pr: p({ title: 'T2' }), comments: c, headSha: SHA }), '');
+  assert.match(decide({ pr: p({ body: 'edited' }), comments: [mine()], headSha: SHA }), /already/, 'legacy summary without a req marker still skips');
+  assert.equal(decide({ pr: p(), comments: c, headSha: SHA, force: true }), '');
+  assert.equal(decide({ pr: p({ body: 'edited' }), comments: c, headSha: SHA, force: true }), '');
+  assert.equal(reqKey(undefined), reqKey({}), 'no PR object is the empty text, not a crash');
+});
+
+test('writer/reader contract: the summary post.js writes makes decide() skip the same text and re-review an edited one', () => {
+  const { buildSummary } = require('./post');
+  const p = (o) => pr({ title: 'T', body: 'B', ...o });
+  const summary = (text) => ({ user: { type: 'Bot', login: 'github-actions[bot]' }, body: buildSummary({ status: 'R', state: 'complete', headSha: SHA, req: reqKey(text) }) });
+  const c = [summary(p())];
+  assert.match(decide({ pr: p(), comments: c, headSha: SHA }), /already/);
+  assert.equal(decide({ pr: p({ body: 'B edited' }), comments: c, headSha: SHA }), '', 'edited requirements: review again');
+  assert.equal(decide({ pr: p(), comments: c, headSha: 'b'.repeat(40) }), '', 'a new head: review again');
+  const incomplete = [{ ...c[0], body: buildSummary({ status: 'R', state: 'incomplete', req: reqKey(p()) }) }]; // no head marker: never recorded as reviewed
+  assert.equal(decide({ pr: p(), comments: incomplete, headSha: SHA }), '');
+});
+
 const { recordedLogin } = require('./preflight');
 const APP = { type: 'Bot', login: 'my-app[bot]' }, PAT = { type: 'User', login: 'dev-pat' };
 

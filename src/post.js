@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { inspectChecks } = require('./checks');
-const { ours, recordedLogin } = require('./preflight');
+const { ours, recordedLogin, reqKey } = require('./preflight');
 const { isFactLimitation } = require('./limitations');
 
 const KINDS = ['spec_mismatch', 'missing_test', 'weak_test', 'standard', 'pushdown'];
@@ -710,14 +710,14 @@ const STD_WORD = { checked: 'reviewed', no_rules: 'no rule files found', not_rev
 // anything visible, and what does not fit is counted, never cut mid-item.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
 // status: the whole verdict for a run without findings data (a skipped run); delivery: how the findings reached the PR ("7 inline comments"); runNotes: Details-only facts about the run.
-function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [] }) {
+function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, req, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [] }) {
   const isLow = (x) => x.f.confidence === 'low' || x.why === 'low confidence', lows = [...posted, ...items].filter(isLow); // low-confidence findings are never an action: Details only
   posted = posted.filter((x) => !isLow(x)); items = items.filter((x) => !isLow(x));
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)], failed = state === 'failed';
   const urls = new Map(posted.map((x) => [x.f, x.url]));
   const inc = incomplete.length > 0;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
-  const markers = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}<!-- specguard:status=${state || (inc ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n`;
+  const markers = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}${/^\w+$/.test(headSha || '') && /^\w+$/.test(req || '') ? `<!-- specguard:req=${req} -->\n` : ''}<!-- specguard:status=${state || (inc ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n`;
   const act = acts(all), rows = data && !failed ? criteriaOf(data, all) : [], todo = rows.filter((x) => x.kind !== 'evidenced');
   // One displayed sentence = one row: the model often splits a PR-body bullet into several criteria that show the same sentence. Counts: the counts table and the verdict count
   // criteria (as the model assessed them); the "Requirements to check (N)" heading counts the merged rows actually shown.
@@ -1349,6 +1349,9 @@ async function run({ github, context, core }) {
   };
   const early = await current();
   if (early && rechecked) return core.warning(`SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary
+  // The PR text the review ran on, for the requirements fingerprint: the event payload (taken before the model ran) when it carries the text, else the live PR.
+  // The later re-fetch could already hold an edit the model never saw, and recording it would mark a stale review as current.
+  const snapPr = pr?.title !== undefined ? pr : livePR || pr;
   // Our login: the authenticated user (a PAT), else the login our earlier summary recorded (an App token cannot call /user), else null
   // (GITHUB_TOKEN: github-actions[bot]). A null is replaced once, by the author of the first thing we post.
   let who;
@@ -1366,7 +1369,8 @@ async function run({ github, context, core }) {
 
   const publish = async (text, state) => {
     core.setOutput?.('status', state);
-    await core.summary.addRaw(text).write();
+    try { await core.summary.addRaw(text).write(); }
+    catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); core.setOutput?.('status', 'failed'); core.setOutput?.('reason', 'could not write the job summary'); }
     if (summaryOnly) return;
     try {
       const stop = await current();
@@ -1381,14 +1385,17 @@ async function run({ github, context, core }) {
         const id = mine?.id ?? r?.data?.id;
         if (who && id) await github.rest.issues.updateComment({ owner, repo, comment_id: id, body: stamp(text) });
       }
-    } catch (e) { core.warning(`SpecGuard: could not post summary comment: ${e.message}`); }
+    } catch (e) { // the PR comment is the deliverable: a run that could not write it is failed (fail_on_error), not complete
+      core.warning(`SpecGuard: could not post summary comment: ${e.message}`);
+      core.setOutput?.('status', 'failed'); core.setOutput?.('reason', `could not post the summary comment: ${e.message}`);
+    }
   };
 
   let rules = [];
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
   const ctxLines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
   const lint = { count: ctxLines('lint-configs.txt').length, changed: ctxLines('lint-changes.txt') }; // linter/formatter configs at base; those the PR changes
-  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, req: reqKey(snapPr), state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -1641,6 +1648,7 @@ async function run({ github, context, core }) {
   for (const [fp, c] of priors) if (c.html_url) urls.set(fp, c.html_url);
   // No review wrapper: every finding is its own review comment (the summary comment is the only aggregate). One that GitHub rejects (a line outside the diff) goes to the summary; the rest continue.
   let annotated = 0;
+  const lost = []; // non-422 post failures (a 422 anchor rejection is normal): the delivery is degraded, so the run is incomplete and retried
   if (!stop && !summaryOnly) for (const [i, c] of comments.entries()) {
     const f = p.inline[i];
     try {
@@ -1651,6 +1659,7 @@ async function run({ github, context, core }) {
       core.warning(`SpecGuard: could not post a comment on ${c.path}:${c.line} (${e.status}): ${e.message}`);
       if ((e.status === 403 || e.status === 404) && annotated++ < 10) core.warning(f.title, { file: f.path, startLine: f.start_line || f.line, title: `SpecGuard ${f.kind}` });
       unanchored.push({ f, why: e.status === 422 ? 'anchor rejected' : 'could not post' });
+      if (e.status !== 422) lost.push(e.status || 'error');
       inline--;
     }
   }
@@ -1661,8 +1670,9 @@ async function run({ github, context, core }) {
       const r = await github.rest.pulls.createReviewComment({ owner, repo, pull_number: pr.number, commit_id: headSha, path: f.path, subject_type: 'file', body: commentBody({ ...f, body: `${f.body}\n\n[${f.path}:${f.line}](${link})` }, f.fp, false) });
       learn(r);
       if (r?.data?.html_url) urls.set(f.fp, r.data.html_url);
-    } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); filed--; }
+    } catch (e) { core.warning(`SpecGuard: file-level comment failed: ${e.message}`); unanchored.push({ f, why: 'could not post' }); filed--; if (e.status !== 422) lost.push(e.status || 'error'); }
   }
+  if (lost.length) incomplete.push(`Delivery degraded: ${lost.length} comment(s) could not be posted (${[...new Set(lost)].join(', ')}); the findings are in this summary.`);
 
   // Fix-through telemetry. Only a complete run can say an earlier finding is no longer reported: otherwise counts only (complete:false, no outcomes).
   const complete = !incomplete.length && !degraded && !reduced; // a reduced run cannot say an earlier finding is gone
@@ -1684,12 +1694,15 @@ async function run({ github, context, core }) {
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
   const delivered = summaryOnly ? 'summary only, nothing posted' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, req: reqKey(snapPr), // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
 
 module.exports = async (a) => {
-  try { await run(a); } catch (e) { a.core.warning(`SpecGuard post failed: ${e.message}`); }
+  try { await run(a); } catch (e) {
+    a.core.warning(`SpecGuard post failed: ${e.message}`);
+    try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
+  }
 };
 Object.assign(module.exports, { engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });

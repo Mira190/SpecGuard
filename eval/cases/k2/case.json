@@ -1,0 +1,38 @@
+{
+  "id": "k2",
+  "goal": "test_quality",
+  "description": "Kite run #12 false positive (manual review of the scan findings): has() checks a contiguous argument sequence, a valid contract assertion for ffmpeg args. Control: 'writes the output path last' only asserts a non-empty array.",
+  "pr_title": "Add ffmpeg export arguments",
+  "pr_body": "exportArgs builds the ffmpeg arguments: libx264 at the given crf (default 23), yuv420p, and the output path last.\n",
+  "delete": [],
+  "expected": {
+    "findings": [
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/k2/toolbox.test.js",
+        "line": 16,
+        "quote": "assert.ok(a.length)"
+      }
+    ],
+    "must_not": [
+      {
+        "kind": "weak_test",
+        "path": "eval-sandbox/k2/toolbox.test.js",
+        "line": 10,
+        "tolerance": 1
+      }
+    ],
+    "acceptable": [
+      {
+        "kind": "missing_test",
+        "path": "eval-sandbox/k2/toolbox.js",
+        "line": 2,
+        "tolerance": 1,
+        "reason": "The default crf (23) and -pix_fmt yuv420p are never asserted."
+      }
+    ],
+    "expect_skip": false,
+    "expect_clean": false,
+    "notes": "No deterministic guard judges weak_test semantics; this case measures the model. The local regression (eval/kite-fp.test.js) records that a model weak_test claim on line 10 is posted unchanged."
+  }
+}

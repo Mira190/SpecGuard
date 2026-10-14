@@ -112,7 +112,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const rows = units.map((u) => {
     const got = [...mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: PER_UNIT_TESTS }).keys()];
     const ss = got.map((t) => sig.get(t) || none), sum = (f) => ss.reduce((a, s) => a + f(s), 0);
-    const s = { tests: sum((x) => x.tests), noAssert: sum((x) => x.noAssert), skipped: sum((x) => x.skipped), asserts: sum((x) => x.asserts), weak: got.flatMap((t) => (sig.get(t) || none).weak.map((w) => ({ ...w, path: t }))) };
+    const s = { tests: sum((x) => x.tests), noAssert: sum((x) => x.noAssert), skipped: sum((x) => x.skipped), asserts: sum((x) => x.asserts), weak: got.flatMap((t) => (sig.get(t) || none).weak.map((w) => ({ ...w, path: t }))), unread: got.filter((t) => !sig.has(t)).length };
     const h = (hist && hist.get(u.path)) || { churn: 0, fixes: 0 }, factor = factorOf(got, got.some((t) => !sig.has(t)) ? { ...s, asserts: Math.max(s.asserts, 1) } : s); // a test file that was not read is assumed to assert
     const why = [!got.length && 'no test', s.skipped && `${s.skipped} skipped test${s.skipped === 1 ? '' : 's'}`, s.noAssert && `${s.noAssert} test${s.noAssert === 1 ? '' : 's'} without an assertion`, s.weak.length && `${s.weak.length} weak assertion${s.weak.length === 1 ? '' : 's'}`,
       h.fixes && `${h.fixes} fix commit${h.fixes === 1 ? '' : 's'} in ${DAYS} days`, !h.fixes && h.churn >= 3 && `${h.churn} commits in ${DAYS} days`].filter(Boolean).join(', ') || `${u.pub} public definition${u.pub === 1 ? '' : 's'}`;
@@ -135,8 +135,23 @@ function write(ctx, head, maxUnits, inv) {
   w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-'].map(flat).join('\t') + '\n').join(''));
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
   w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
-    rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r) })),
+    rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r), signals: { tests: r.signals.tests, noAssert: r.signals.noAssert, skipped: r.signals.skipped, asserts: r.signals.asserts, weak: r.signals.weak.length, unread: r.signals.unread } })),
     unreviewed: inv.rows.filter((r) => inv.review(r) === 'not yet reviewed').slice(0, 30).map((r) => ({ id: r.id, path: r.path, score: r.score })) }) + '\n');
 }
 
-module.exports = { inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };
+// Rule-based leads from the per-unit signals (rows of inventory() or of audit-inventory.json; a row without `signals` is skipped): at most one per row, never a model claim.
+// test_evidence_not_found = the test SEARCH found nothing (not a confirmed missing test); weak_test_signal = matched tests that cannot protect much. A test file that was not read is assumed to assert (as inventory() does for the factor).
+function staticFindings(rows) {
+  const out = [], n = (k, one, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+  for (const r of rows || []) {
+    const s = r && r.signals;
+    if (!s) continue;
+    const base = { unit: r.id, path: r.path };
+    if (!(r.tests || []).length) { out.push({ ...base, kind: 'test_evidence_not_found', why: 'the test search found no matching test file (not a confirmed missing test)' }); continue; }
+    const weak = Array.isArray(s.weak) ? s.weak.length : s.weak || 0, asserts = s.unread ? Math.max(s.asserts, 1) : s.asserts;
+    if (s.noAssert > 0 || s.skipped > 0 || weak * 2 >= asserts) out.push({ ...base, kind: 'weak_test_signal', why: [s.noAssert && `${n(s.noAssert, 'test')} without an assertion`, s.skipped && `${s.skipped} skipped`, weak && n(weak, 'weak assertion'), asserts === 0 && 'no assertions'].filter(Boolean).join(', ') });
+  }
+  return out;
+}
+
+module.exports = { staticFindings, inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };
