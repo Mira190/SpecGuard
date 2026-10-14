@@ -3527,6 +3527,22 @@ const withLead = async (t, lead, findings = [], coverage = []) => {
   await post(s);
   return s.calls.summary[0].body;
 };
+test('Kite U1 (exact artifact): of three removed-assertion leads only the deleted BIG assertion becomes a finding; the two re-pinned through the check helper do not', async (t) => {
+  const s = setup(t, report({ coverage: [], findings: [] }));
+  const ctx = (n, v) => fs.writeFileSync(path.join(s.dir, 'ctx', n), v);
+  ctx('files.txt', 'test/filename.test.ts\n');
+  ctx('diff.patch', fs.readFileSync(path.join(__dirname, 'fixtures/kite-u1.diff'), 'utf8'));
+  ctx('leads.txt', [
+    'Removed or weakened assertions (answer each: a weak_test or missing_test finding citing the test file, or where the behaviour is still pinned):',
+    "  assertion removed: assert.equal(validateBaseName('new name', '.mp4', others), '') (test/filename.test.ts:26)",
+    "  assertion removed: assert.match(validateBaseName('BIG', '.mp4', others), /已存在/) // case-insensitive FS (test/filename.test.ts:31)",
+    "  assertion removed: assert.equal(validateBaseName('a', '.mp3', others), '') // different extension is a different file (test/filename.test.ts:32)", ''].join('\n'));
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.equal([...body.matchAll(/Assertion removed with no replacement/g)].length, 1);
+  assert.match(body, /BIG/);
+  assert.doesNotMatch(body, /new name|\.mp3/);
+});
 test('a removed-assertion lead the model ignored becomes one LEFT finding; an addressed or weakened lead adds nothing', async (t) => {
   const ignored = await withLead(t, 'assertion removed: assert.equal(gone, 1); (test.js:2)');
   assert.equal([...ignored.matchAll(/Assertion removed with no replacement/g)].length, 1);
