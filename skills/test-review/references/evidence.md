@@ -30,6 +30,8 @@ Report `weak_test` on the assertion line when a test exercises the behaviour but
   - would break on a refactor that does not change behaviour;
 - asserts only that something is truthy, non-null or did not throw, when a value is available to compare.
 
+Report each weak assertion line as its own finding (one line each), never merged into one finding on the last of them, so the developer can fix each.
+
 ## Mocks and seams
 
 Prefer mocks at system boundaries: external APIs, time, randomness, sometimes the DB or file system. An internal mock or a call-count assertion alone is not proof of a weak test: identify the missed behavioural regression and respect the repo's testing contract.

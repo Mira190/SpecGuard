@@ -87,7 +87,7 @@ function focusSet(ctxDir) {
 }
 const FOCUS_NOTE = `Large PR, focused review: the diff below holds only the highest-risk changed files (focus.txt), not the whole PR. A chosen file's diff may stop after its first hunks (a marker line says how many changed lines are not shown): read the file for the rest. Do not open files outside the chosen set except their tests and direct imports. The files under "Not in this review" are out of scope: assess and cite none of them.`;
 
-const LEADS_NOTE = "deterministic leads: verify each before using it; a symbol with no test reference is a missing_test candidate only if it is behaviour under review; a possible mirror assertion is a weak_test candidate only if the expected value really comes from the code under test";
+const LEADS_NOTE = "deterministic leads: verify each before using it; a symbol with no test reference is a missing_test candidate only if it is behaviour under review; a possible mirror assertion is a weak_test candidate only if the expected value really comes from the code under test; a weak? assertion line is a weak_test candidate only if no value of the same result is pinned in that test";
 
 function dynamic(ctxDir) {
   const empty = [], parts = [];

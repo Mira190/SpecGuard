@@ -2,8 +2,8 @@
 const arr = (v) => (v === undefined ? [] : [].concat(v));
 const lc = (s) => String(s || '').toLowerCase();
 // The obligations table shows a status as a word ("Weak test: reason", src/post.js STATUS_LABEL); the old tokens still parse.
-const STATUS_WORD = { Evidenced: 'covered', 'Weak test': 'weak_test', 'Missing test': 'missing_test', 'Higher-level only': 'higher_level_only', 'Needs a person': 'needs_human', 'Not assessed': 'unknown' };
-const STATUS = /^(covered|weak_test|missing_test|higher_level_only|needs_human|unknown|Evidenced|Weak test|Missing test|Higher-level only|Needs a person|Not assessed): /;
+const STATUS_WORD = { Evidenced: 'covered', 'Weak test': 'weak_test', 'Missing test': 'missing_test', 'Higher-level only': 'higher_level_only', 'Needs a person': 'needs_human', Unconfirmed: 'unknown', 'Not assessed': 'unknown' }; // 'Not assessed' is the old label
+const STATUS = /^(covered|weak_test|missing_test|higher_level_only|needs_human|unknown|Evidenced|Weak test|Missing test|Higher-level only|Needs a person|Unconfirmed|Not assessed): /;
 // A summary list item that carries its own text: "- Title `path:line` (why) — sentence" under a kind heading ("### ❌ Missing unit tests (2)"), or the older labelled form "- ❌ **Missing test:** Title ...". A posted finding links its title to the comment (`[Title](url)`) and is not counted here.
 const ITEM_KIND = { 'Missing test': 'missing_test', 'Weak test': 'weak_test', Mismatch: 'spec_mismatch', Violation: 'standard', 'Move down': 'pushdown' };
 const HEAD_KIND = { 'Missing unit tests': 'missing_test', 'Weak unit tests': 'weak_test', 'Spec mismatches': 'spec_mismatch', 'Coding standard violations': 'standard', 'Tests to move down': 'pushdown' };

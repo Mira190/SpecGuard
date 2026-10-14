@@ -187,16 +187,16 @@ test('verify: the id is the block cid, the heading comes from the candidate, and
   assert.deepEqual(v.not_requirements, [{ ...three.get(C3), reason: 'rationale only' }]);
 });
 
-test('verify: a block the model skipped, or whose rows all failed verification, becomes an unknown "not assessed" row', () => {
+test('verify: a block the model skipped, or whose rows all failed verification, becomes an unknown "unconfirmed" row', () => {
   const missed = verify(result([req()]), { read, cands: TWO() });
   assert.deepEqual(missed.requirements.map((x) => [x.id, x.status]), [[C1, 'covered'], [C2, 'unknown']]);
-  assert.equal(missed.requirements[1].note, 'Not assessed by the model.');
+  assert.equal(missed.requirements[1].note, 'Unconfirmed: the model did not assess this block.');
   assert.deepEqual(missed.requirements[1].source, { path: 'docs/design.md', line: 4, quote: 'A plan must start in the future.' });
   assert.equal(missed.requirements[1].text, 'A plan must start in the future.');
   const bad = req({ id: C2, source: { path: 'docs/design.md', line: 4, quote: 'A plan never turns off at all.' } });
   const failed = verify(result([req(), bad]), { read, cands: TWO() });
   assert.deepEqual(failed.requirements.map((x) => [x.id, x.status]), [[C1, 'covered'], [C2, 'unknown']]);
-  assert.match(failed.requirements[1].note, /Not assessed: the model's citation for this block did not verify\./);
+  assert.match(failed.requirements[1].note, /Unconfirmed: the model's citation for this block did not verify\./);
   assert.match(failed.not_reviewed.join('\n'), new RegExp(`${C2} \\(docs/design\\.md:4\\): the requirement quote was not found`));
   const skipped = verify(result([req()], { not_requirements: [{ cid: C2, reason: 'rationale only' }] }), { read, cands: TWO() });
   assert.equal(skipped.requirements.length, 1, 'a not_a_requirement block gets no row');
@@ -233,8 +233,9 @@ test('render: the verdict counts gaps, the visible tables are what to act on, ev
   assert.match(part, /### ⚠️ Not reviewed \(1\)\n\n- docs\/old\.md: unreadable\n/, 'an incomplete run keeps the reasons visible');
   assert.doesNotMatch(part, /\*\*Not reviewed \(/);
   assert.doesNotMatch(md, /not requirements\*\*/, 'no block when every block was a requirement');
-  assert.ok(md.trimEnd().endsWith('<sub>Engine: copilot</sub>\n</details>'.trimEnd()) || md.trimEnd().endsWith('</details>'));
-  assert.ok(md.indexOf('<sub>Engine: copilot</sub>') > md.indexOf('**Sources**'), 'usage is the last item of Details');
+  assert.equal(md.trimEnd().split('\n').pop(), '<sub>Engine: copilot</sub>', 'the cost line is the last line');
+  assert.ok(md.lastIndexOf('<sub>Engine: copilot</sub>') > md.lastIndexOf('</details>'), 'outside Details, not folded');
+  assert.equal((md.match(/Engine: copilot/g) || []).length, 1);
 });
 
 test('render: rejected candidate documents say how to include them; unread admitted documents are listed; markup in model text is neutralised', () => {
@@ -252,10 +253,10 @@ test('render: rejected candidate documents say how to include them; unread admit
 
 test('render: no documents and failures say so', () => {
   assert.match(render({ data: null, rejected: [['README.md', 'x']] }), /\*\*No design documents were found, so nothing was scanned\.\*\*[\s\S]*\*\*Sources\*\*[\s\S]*1 candidate document was not admitted/);
-  const failed = render({ failure: 'the engine timed out', usage: '<sub>Engine: copilot</sub>' });
+  const failed = render({ failure: 'the engine timed out', usage: '<sub>Cost $0.01 · m</sub>', run: 'Run: engine copilot' });
   assert.match(failed, /^## SpecGuard scan\n\n\*\*⚠️ Could not complete: the engine timed out\*\*\n/);
   assert.doesNotMatch(failed.slice(0, failed.indexOf('<details>')), /###/);
-  assert.match(failed, /<details><summary>Details: run information<\/summary>[\s\S]*Engine: copilot/);
+  assert.match(failed, /<details><summary>Details: run information<\/summary>[\s\S]*Run: engine copilot[\s\S]*<\/details>\n\n<sub>Cost \$0\.01 · m<\/sub>\n$/);
 });
 
 test('render: blocks that were not requirements are counted in the header and listed in a collapsed block, not in the tables', () => {
@@ -325,8 +326,9 @@ test('run: validates citations at HEAD, renders the summary, writes audit.json, 
   const r = await runPost(t, { ctxFiles: { 'findings.json': result([req(), bad]), 'audit-candidates.txt': candTxt(TWO()), 'usage.json': { totalNanoAiu: 2e9 } }, env: { ENGINE: 'copilot', MODEL: 'auto' } });
   assert.match(r.calls.summary, /\*\*2 requirements\*\* from 1 document/);
   assert.match(r.calls.summary, /2222222b \(docs\/design\.md:4\): the requirement quote was not found/);
-  assert.match(r.calls.summary, /Not assessed: the model's citation for this block did not verify/);
-  assert.match(r.calls.summary, /<sub>Engine: copilot · Model: auto · Cost ≈ \$0\.02/);
+  assert.match(r.calls.summary, /Unconfirmed: the model's citation for this block did not verify/);
+  assert.match(r.calls.summary, /\n<sub>Cost ≈ \$0\.02 \(2\.00 AI credits\) · auto<\/sub>\n$/);
+  assert.match(r.calls.summary, /\nRun: engine copilot\n\n<\/details>/);
   assert.match(r.calls.summary, /\]\(https:\/\/github\.com\/o\/r\/blob\/abc123\/src\/plan\.js#L2\)/);
   const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
   assert.equal(saved.head, 'abc123');

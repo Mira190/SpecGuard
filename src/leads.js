@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-// Deterministic leads for the two most valuable unit-test findings, so a weak model starts from facts instead of free exploration.
+// Deterministic leads for the most valuable unit-test findings, so a weak model starts from facts instead of free exploration.
 // Writes $CTX/leads.txt (nothing when there is nothing to say). Leads are hints the reviewer must verify; they are never findings.
 //   1. Changed symbols (enclosing symbol of each hunk + symbols defined on added lines) with / without a word-bounded test reference.
 //   2. Possible mirror assertions: an assertion whose EXPECTED argument is a constant taken from production code.
+//   3. Weak assertions: an assertion that only checks existence, truthiness or type of a result (assert.ok(x), toBeDefined(), assertNotNull(x)...),
+//      unless the same test block also pins a value of the same expression.
 // ponytail: regexes per common language form, no parser. Ceiling: multi-line assertions, dynamic or aliased references, symbols whose
 // definition spans lines are missed or mislabelled; a hit is "worth a look", not proof. Upgrade path: tree-sitter queries per language.
 // Usage: node src/leads.js <ctx dir>   (cwd = repository at the PR head; env TEST_PATHS as for collect.sh)
@@ -136,6 +138,55 @@ function mirrorCandidates(src) {
   return out;
 }
 
+// ---- weak assertions ----
+const TEST_START = /(?<![.\w$])(?:it|test|specify)(?:\.\w+)*\s*\(|^\s*(?:async\s+)?def\s+test|^\s*func\s+Test|@Test\b|\[(?:Test|Fact|Theory|TestMethod)\b|#\[test\]|^\s*(?:public\s+)?(?:void|fun)\s+test/;
+const VALUE = /\bassert\.(?:equal|strictEqual|deepEqual|deepStrictEqual|equals|eq)\s*\(|\b(?:assertEquals?|assert_equal|assertSame|assertArrayEquals|assert_eq!)\s*\(|[Aa]ssert\.(?:Equal\w*|AreEqual|Same|Exactly)\s*\(|\brequire\.Equal\w*\s*\(|\.(?:toBe|toEqual|toStrictEqual|toBeCloseTo|toMatchObject|toHaveLength|toContain|isEqualTo)\s*\(|^\s*assert\s.*==/;
+const WHAT = { truthy: 'is truthy', exists: 'is not null/undefined', type: 'has the expected type' };
+const truthyArg = (x) => { // the argument of assert/assertTrue: a bare reference, a not-null check or a typeof check
+  let m; const bare = x.replace(/^!!/, '');
+  if (REF.test(bare) && !/^(?:true|false|null|undefined|None|True|False|NaN)$/.test(bare)) return { x: bare, what: 'truthy' };
+  if ((m = /^(.+?)\s*(?:!==?|is\s+not)\s*(?:null|undefined|None)$/.exec(x))) return { x: m[1], what: 'exists' };
+  if ((m = /^typeof\s+(.+?)\s*===?\s*['"]\w+['"]$/.exec(x))) return { x: m[1], what: 'type' };
+  return null;
+};
+const lastArg = (a) => (a.length > 1 && /^['"`]/.test(a[0]) ? a[1] : a[0]) || ''; // JUnit4 puts the message first
+function weakOf(text, next) { // -> {x, what} | null
+  let m, a;
+  const at = (re) => { m = re.exec(text); return m && args(text, m.index + m[0].length - 1); };
+  if ((a = at(/(?<![.\w$])assert(?:\.ok)?\s*\(/)) && (a.length === 1 || (a.length === 2 && /^['"`]/.test(a[1])))) return truthyArg(a[0]);
+  if ((a = at(/\bassert\.not(?:Strict)?Equal\s*\(/)) && a.length === 2 && /^(?:null|undefined)$/.test(a[1])) return { x: a[0], what: 'exists' };
+  if ((m = /\bexpect\s*\((.+)\)\s*\.(not\.)?(toBeDefined|toBeTruthy|toBeNull|toBeUndefined|toBeInstanceOf|toBeTypeOf)\s*\(/.exec(text))) {
+    const nil = /Null$|Undefined$/.test(m[3]); // toBeNull() alone is a value check; only its negation is weak
+    return nil !== !!m[2] ? null : { x: m[1], what: m[3] === 'toBeTruthy' ? 'truthy' : nil || m[3] === 'toBeDefined' ? 'exists' : 'type' };
+  }
+  if ((a = at(/\b(?:self\.)?assertTrue\s*\(|\bAssert\.IsTrue\s*\(/))) return truthyArg(lastArg(a));
+  if ((a = at(/\b(?:self\.)?(?:assertIsNotNone|assertNotNull|assertIsNotNull)\s*\(|\bAssert\.(?:IsNotNull|NotNull)\s*\(|\b(?:assert|require)\.NotNil\s*\(/))) {
+    if (/NotNil/.test(m[0]) && /^(?:t|b|tb)$/.test(a[0])) a = a.slice(1);
+    const x = lastArg(a);
+    return x ? { x, what: 'exists' } : null;
+  }
+  if ((m = /^\s*assert\s+(?!\()(.+?)(?:\s*,\s*['"].*)?$/.exec(text))) return truthyArg(m[1]);
+  // ponytail: `if err == nil { t.Fatal }` is skipped (an expected-error check); other nil checks followed by t.Fatal/t.Error are leads
+  if ((m = /^\s*if\s+([A-Za-z_][\w.]*)\s*==\s*nil\s*\{/.exec(text)) && !/^err/i.test(m[1]) && next.some((l) => /\bt\.(?:Fatal|Error)/.test(l))) return { x: m[1], what: 'exists' };
+  return null;
+}
+// -> [{line, text, x, what}] weak assertions in one test file, minus those whose test block also pins a value of the same expression.
+function weakCandidates(src) {
+  const ls = src.split('\n').slice(0, 4000).map((l) => l.replace(/\r$/, '')), starts = [];
+  ls.forEach((t, i) => { if (t.length <= 400 && TEST_START.test(t)) starts.push(i); });
+  const out = [];
+  ls.forEach((text, i) => {
+    if (text.length > 400 || quiet(text)) return;
+    const w = weakOf(text, ls.slice(i + 1, i + 3));
+    if (!w || !w.x) return;
+    const lo = starts.filter((s) => s <= i).pop() ?? 0, hi = starts.find((s) => s > i) ?? ls.length;
+    const same = REF.test(w.x) ? new RegExp(`(?<![\\w$])${w.x.replace(/[$.]/g, '\\$&')}(?![\\w$])`) : { test: (l) => l.includes(w.x) };
+    if (ls.slice(lo, hi).some((l) => VALUE.test(l) && same.test(l))) return;
+    out.push({ line: i + 1, text: text.trim(), ...w });
+  });
+  return out;
+}
+
 function run(ctx, { cwd = process.cwd(), env = process.env, now = Date.now } = {}) {
   const t0 = now(), left = () => Math.max(1000, BUDGET_MS - (now() - t0));
   const lines = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8').split('\n').map((l) => l.replace(/\r$/, '')).filter(Boolean); } catch { return []; } };
@@ -173,16 +224,22 @@ function run(ctx, { cwd = process.cwd(), env = process.env, now = Date.now } = {
   // 2. mirror assertions, in changed tests and candidate tests
   const files = [...new Set([...lines('files.txt').filter(isTest), ...lines('test-candidates.txt').filter((l) => /^ /.test(l)).map((l) => l.trim().split(/\s{2}/)[0])])]
     .filter((f) => testSet.has(f)).slice(0, MAX_TEST_FILES);
-  const found = [];
+  const found = [], weak = [];
   for (const f of files) {
     let src; try { if (fs.statSync(path.join(cwd, f)).size > MAX_BYTES) continue; src = fs.readFileSync(path.join(cwd, f), 'utf8'); } catch { continue; }
     for (const c of mirrorCandidates(src)) found.push({ ...c, file: f });
+    for (const c of weakCandidates(src)) weak.push({ ...c, file: f });
   }
   const fromCode = grep([...new Set(found.map((c) => c.tail))].slice(0, 60));
   if (fromCode) {
     const real = found.filter((c) => fromCode.has(c.tail) && [...fromCode.get(c.tail)].some((p) => !testSet.has(p) && !isTestPath(p)));
     sections.push(['Possible mirror assertions (expected value taken from production code)', real.slice(0, 15).map((c) => `${c.file}:${c.line} ${c.name}`), Math.max(0, real.length - 15)]);
   }
+
+  // 3. weak assertions, same files
+  const short = (t, n) => (t.length > n ? t.slice(0, n - 3) + '...' : t);
+  sections.push(['Weak assertions (only existence, truthiness or type is checked)',
+    weak.slice(0, 15).map((c) => `weak? ${c.file}:${c.line} — ${short(c.text, 80)} only checks that ${short(c.x, 40)} ${WHAT[c.what]}; nothing pins its value`), Math.max(0, weak.length - 15)]);
 
   // render within the cap, dropping whole lines
   let out = '';
@@ -203,4 +260,4 @@ if (require.main === module) {
   const f = path.join(ctx, 'leads.txt');
   if (out) fs.writeFileSync(f, out); else fs.rmSync(f, { force: true });
 }
-module.exports = { run, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, args };
+module.exports = { run, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args };

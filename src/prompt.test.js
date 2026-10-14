@@ -366,7 +366,7 @@ test('focused prompt: only the chosen files in the numbered diff, a short not-in
 test('assemble: leads.txt is inlined with the verify-first note; without it the prompt is unchanged', () => {
   const body = 'Changed symbols with no test reference:\n  src/a.js:3 orphanThing\n';
   const p = dyn(build(ctx({ 'leads.txt': body })));
-  assert.ok(p.includes('<untrusted-data name="leads.txt" note="deterministic leads: verify each before using it; a symbol with no test reference is a missing_test candidate only if it is behaviour under review; a possible mirror assertion is a weak_test candidate only if the expected value really comes from the code under test">'));
+  assert.ok(p.includes('<untrusted-data name="leads.txt" note="deterministic leads: verify each before using it; a symbol with no test reference is a missing_test candidate only if it is behaviour under review; a possible mirror assertion is a weak_test candidate only if the expected value really comes from the code under test; a weak? assertion line is a weak_test candidate only if no value of the same result is pinned in that test">'));
   assert.ok(p.includes('  src/a.js:3 orphanThing'));
   assert.ok(!dyn(build(ctx())).includes('leads.txt'), 'absent leads: not inlined and not listed as empty');
   assert.ok(!dyn(build(ctx({ 'leads.txt': '\n' }))).includes('leads.txt'), 'an empty leads.txt changes nothing');
