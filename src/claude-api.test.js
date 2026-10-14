@@ -616,6 +616,22 @@ test('scan parts: 45 blocks + 3 units = one unit call and three block calls of a
   assert.ok(!blockCalls(s.h)[0].body.messages[0].content.includes('name="audit-units.txt"'));
 });
 
+test('scan parts: a block part packs a line-numbered window around a cited line deep in a large file, not the whole file, and writes no pack-cut.txt', async (t) => {
+  const s = scanRepo(t, 25);
+  s.answers((req, ok) => ok(req));
+  fs.mkdirSync(path.join(s.root, 'electron'));
+  fs.writeFileSync(path.join(s.root, 'electron', 'big.cjs'), Array.from({ length: 3000 }, (_, i) => (i === 899 ? "mk('main', { width: 1000, height: 800, minWidth: 820 })" : `// filler ${i + 1}`)).join('\n') + '\n');
+  fs.appendFileSync(path.join(s.h.ctx, 'audit-evidence.txt'), `${s.cids[0]}\tcode\telectron/big.cjs:900\tmk('main'\n`);
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  const u = blockCalls(s.h)[0].body.messages[0].content;
+  assert.match(u, /name="electron\/big\.cjs" note="relevant windows around the cited lines \(900\) of 3000/);
+  assert.match(u, /^ 900\| mk\('main', \{ width: 1000, height: 800, minWidth: 820 \}\)$/m);
+  assert.match(u, /^ 860\| \/\/ filler 860$/m);
+  assert.ok(!/^ 100\| /m.test(u) && !/^2000\| /m.test(u), 'lines far from the cited one are not shown');
+  assert.match(u, /^ {3}1\| \/\/ filler 1$/m, 'the file head is kept');
+  assert.equal(s.h.file('pack-cut.txt'), '', 'only the unit part writes pack-cut.txt');
+});
+
 test('scan parts: at most SCAN_BATCH_BLOCKS blocks keep the single call', async (t) => {
   const s = scanRepo(t, 20);
   s.answers((req, ok) => ok(req));
