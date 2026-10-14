@@ -1182,7 +1182,9 @@ function differential(data, maps) {
     // ponytail: (c) and (d) need `change` to DEFINE a name that `behaviour` uses (the constant defined away from its use). Misses an indirect change (a callee body); upgrade = the call graph.
     const mc = ch && ch.side !== 'LEFT' && maps.get(ch.path), ch_h = mc && mc.changed.RIGHT.has(ch.line) ? mc.RIGHT.get(ch.line) : undefined;
     const modified = linked && ch_h !== undefined && !data.requirements.some((r) => r.source === ch.path) && [...mc.LEFT.values()].includes(ch_h);
-    const touched = specTouched || behaviourChanged || sameHunk || modified;
+    // (e) the PR removed code at `change` in the behaviour's file (a deleted check or branch): the surviving behaviour line is unchanged, but this PR made the drift
+    const removedHere = !!ch && !!b && ch.side === 'LEFT' && ch.path === b.path && !!mb && mb.changed.LEFT.has(ch.line);
+    const touched = specTouched || behaviourChanged || sameHunk || modified || removedHere;
     if (a.since === 'introduced' && !touched) c.alignment = { ...a, since: 'pre_existing', reason: `${a.reason} (Downgraded to pre_existing: this PR changed neither the requirement nor the behaviour.)` };
     else if (a.since === 'pre_existing' && touched) { // symmetric: a model-emitted pre_existing cannot hide drift this PR touched
       c.alignment = { ...a, since: 'introduced', reason: `${a.reason} (Upgraded to introduced: this PR changed the requirement or the behaviour.)` };
