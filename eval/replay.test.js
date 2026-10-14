@@ -55,7 +55,7 @@ test('countFindings reads the summary src/post.js really builds: summary-only it
     pre: [{ ...f('spec_mismatch', 'DRIFT1') }, { ...f('spec_mismatch', 'DRIFT2') }],
   });
   assert.match(summary, /\*\*Pre-existing drift \(not caused by this PR\)\*\*/); // the layout this parser depends on
-  assert.match(summary, /^- ❌ \*\*Weak test:\*\* SUM1 .*`src\/a\.js:3`.* \(low confidence\) — /m);
+  assert.match(summary, /^- \*\*Weak test:\*\* SUM1 .*`src\/a\.js:3`.* \(low confidence\) — /m);
   const r = countFindings([], summary);
   assert.strictEqual(r.summary_only, 4, summary);
   assert.strictEqual(r.pre_existing, 2, summary);

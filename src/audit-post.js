@@ -434,13 +434,13 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   else verdict = `**✅ No unit test gaps found**${where}. Static review; tests were not run.`;
   let top = `## ${HEADING}\n\n${verdict}\n\n`;
   if (code && data && !failure && !partial) { // the shape of the unit result in one glance (not for an incomplete run)
-    const n = (k) => uf.filter((f) => f.kind === k).length, cellOf = (k) => (n(k) ? `❌ ${n(k)}` : '✅ none'), r = inv.rotation;
+    const n = (k) => uf.filter((f) => f.kind === k).length, cellOf = (k) => (n(k) ? `${n(k)}` : 'none'), r = inv.rotation;
     top += `| Units reviewed | No unit test | Weak tests | Skipped tests | Design documents |\n|---|---|---|---|---|\n| ${r.picked} of ${r.total}${r.rotate ? ` (rotation ${r.run} of ${r.runs})` : ''} | ${cellOf('missing_test')} | ${cellOf('weak_test')} | ${(inv.selected && inv.selected.skipped_tests) || 'none'} | ${docs.length ? `${docs.length} read` : 'none found'} |\n\n`;
   }
-  if (partial && !failure) top += `> **⚠️ Incomplete scan.** The rows below passed verification but the list may be incomplete${partial ? ` (${cell(partial, 200)})` : ''}. The scan issue, if enabled, was not updated.\n\n`;
+  if (partial && !failure) top += `> **Incomplete scan.** The rows below passed verification but the list may be incomplete${partial ? ` (${cell(partial, 200)})` : ''}. The scan issue, if enabled, was not updated.\n\n`;
   const items = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
   // an incomplete or failed scan keeps its reasons visible; a complete one lists them in Details
-  const visibleNr = partial && !failure && nrAll.length ? `### ⚠️ Not reviewed (${nrAll.length})\n\n${items(nrAll, 40, (s) => `- ${cell(s, 400)}\n`)}\n` : '';
+  const visibleNr = partial && !failure && nrAll.length ? `### Not reviewed (${nrAll.length})\n\n${items(nrAll, 40, (s) => `- ${cell(s, 400)}\n`)}\n` : '';
 
   // Details: what the scan looked at and the rest of its result. Fixed text first (counted against the size limit), then tables whole rows at a time.
   let dhead = '', dfoot = '';
@@ -488,14 +488,14 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   let body = '';
   // code-first sections first: untested behaviour, weak unit tests, tests to move down (the top three findings keep their skeleton visible)
   let rank = 0;
-  const ulists = [['❌ Untested behaviour', 'missing_test', 'More untested behaviour'], ['❌ Weak unit tests', 'weak_test', 'More weak unit tests'], ['❌ Tests to move down', 'pushdown', 'More tests to move down']].map(([title, kind, more]) => ({ title, more, fs: uf.filter((f) => f.kind === kind) }));
+  const ulists = [['Untested behaviour', 'missing_test', 'More untested behaviour'], ['Weak unit tests', 'weak_test', 'More weak unit tests'], ['Tests to move down', 'pushdown', 'More tests to move down']].map(([title, kind, more]) => ({ title, more, fs: uf.filter((f) => f.kind === kind) }));
   const fence = (t) => `\n\n\`\`\`\n${t.replace(/`{3,}/g, "'''")}\n\`\`\``;
   const uitem = (f) => findingBlock({ f: { kind: f.kind, title: f.title, path: f.path, line: f.line, body: `${neutralize(f.body)}${f.skeleton ? fence(f.skeleton) : ''}` }, why: f.confirmed ? '' : 'unconfirmed' }, blob, rank++, { bare: true, posted: true });
   const uhead = (f) => findingHead({ kind: f.kind, title: f.title, path: f.path, line: f.line, body: f.body }, { why: f.low ? 'low confidence' : f.confirmed ? '' : 'unconfirmed', posted: true, bare: true }, blob);
   for (const l of ulists) body += vis(l.title, l.fs.map(uitem), '', UCAP);
-  body += vis('❌ Confirmed gaps', confirmed.map(grow), GTOP);
-  body += vis(prior ? '❔ New since the last scan' : '❔ New gaps to confirm', fresh.map(grow), GTOP);
-  body += clashes.length ? take(`### ❌ Documents and code disagree (${clashes.length})\n\nA model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Document says | Code says |\n|---|---|\n`, clashes.slice(0, CAP), clashes.length > CAP ? `\n+${clashes.length - CAP} more in Details.\n` : '') : '';
+  body += vis('Confirmed gaps', confirmed.map(grow), GTOP);
+  body += vis(prior ? 'New since the last scan' : 'New gaps to confirm', fresh.map(grow), GTOP);
+  body += clashes.length ? take(`### Documents and code disagree (${clashes.length})\n\nA model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Document says | Code says |\n|---|---|\n`, clashes.slice(0, CAP), clashes.length > CAP ? `\n+${clashes.length - CAP} more in Details.\n` : '') : '';
   // Details: the run line is reserved, then the fixed text while it fits, then the tables with what is left
   room -= bytes(drun);
   const fit = (t) => { if (!t || bytes(t) > room) return ''; room -= bytes(t); return t; };
