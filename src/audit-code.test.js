@@ -112,6 +112,15 @@ test('verify: a missing_test on a unit with no matched test file is deterministi
   assert.equal(other[0].low, false);
 });
 
+test('verify: a missing_test whose cited line a tracked test already contains (covers) is low confidence with the reason, not deterministic; other kinds are not searched', () => {
+  const seen = [];
+  const covers = (lines, line) => { seen.push(line); return 'test/orders.test.js:7'; };
+  const out = checked([uf(), uf({ unit: U1, ...cite('src/js/orders.js', 1), title: 'create is untested' }), WEAK()], { covers }).unit_findings;
+  assert.deepEqual(out.map((f) => [f.kind, f.low, f.det, f.lowWhy]), [['missing_test', true, false, 'a test may already cover this: test/orders.test.js:7'], ['missing_test', true, false, 'a test may already cover this: test/orders.test.js:7'], ['weak_test', false, false, undefined]]);
+  assert.equal(seen.length, 2);
+  assert.equal(checked([uf()], { covers: () => null }).unit_findings[0].low, false);
+});
+
 test('confirmation: deterministic findings are confirmed at once, the others by the same (unit, kind, quote) in the previous run', () => {
   const [det, weak] = checked([uf(), WEAK()]).unit_findings;
   const first = trackFindings([det, weak], null, 'abcdef1234');
@@ -215,7 +224,7 @@ test('render: a low-confidence finding is Details only and not counted; the rota
   assert.doesNotMatch(vis, /create is only checked/);
   assert.doesNotMatch(vis, /\(unconfirmed\)/, 'a missing test on a unit without a test file is confirmed');
   const det = md.slice(md.indexOf('<details>'));
-  assert.match(det, /\*\*Low-confidence unit findings \(1\)\*\*\n\nA test file the model could not see whole is behind each; they are not counted\.\n\n- \[create is only checked to be truthy\]\([^)]*\) `test\/orders\.test\.js:2` \(low confidence\)/);
+  assert.match(det, /\*\*Low-confidence unit findings \(1\)\*\*\n\nA test file the model could not see whole, or a test that may already cover it, is behind each; they are not counted\.\n\n- \[create is only checked to be truthy\]\([^)]*\) `test\/orders\.test\.js:2` \(low confidence\)/);
   assert.match(det, /Rotation: 24 of 140 units reviewed at least once; this run reviewed 3 \(confirming 1, never reviewed 2, least recently reviewed 0\)\. A full cycle takes 12 runs of 12 units\./);
   assert.match(det, /the same finding was reported in the previous run\./, 'with a state the first-run sentence is not shown');
 });

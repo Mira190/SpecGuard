@@ -274,6 +274,7 @@ runs:
         SKIP: ${{ steps.audit_collect.outputs.skip }}
         SCAN_ISSUE: ${{ inputs.scan_issue }}
         SCAN_PATHS: ${{ inputs.scan_paths }}
+        TEST_PATHS: ${{ inputs.test_paths }}
         AUDIT_ISSUE: ${{ inputs.audit_issue }} # deprecated alias; the new name wins
         TARGET_REPO: ${{ inputs.repository }}
         TARGET_SHA: ${{ inputs.head_sha }}
