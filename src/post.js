@@ -696,9 +696,9 @@ function criteriaOf(data, all) {
     const cs = r.obligation_ids.map((id) => covById.get(id)), mine = (kinds) => all.filter((f) => kinds.includes(f.kind) && f.obligation_ids.some((id) => r.obligation_ids.includes(id)));
     const mismatch = cs.some((c) => c?.alignment?.status === 'mismatch') && mine(['spec_mismatch']).length > 0, gap = hasGap(r, covById, gaps) && mine(['missing_test', 'weak_test']).length > 0; // a pre-existing drift, or a gap with no verified finding, is not an action here
     const done = cs.length && cs.every((c) => c?.status === 'covered');
-    // a governing requirement (D*, or linked by the trace) whose code is unit-tested where it can be (the rest needs a person, e.g. UI glue) but whose alignment nobody settled: ask for the alignment, not for a test
-    const tested = cs.length && cs.some((c) => c?.status === 'covered') && cs.every((c) => ['covered', 'needs_human'].includes(c?.status));
-    const align = (!!r.trace_linked || /^D\d+$/.test(r.id)) && tested && !mismatch && !gap && cs.some((c) => c?.alignment?.status === 'unknown');
+    // a governing requirement (D*, or linked by the trace) with no verified gap or mismatch whose alignment nobody settled: the open question is whether the code does what the text says, so ask for that, not for a test
+    // (a missing test on it has its own finding and takes the gap branch; the model may also have filed the sentence itself as an "unknown" obligation)
+    const align = (!!r.trace_linked || /^D\d+$/.test(r.id)) && cs.length > 0 && !mismatch && !gap && cs.some((c) => c?.alignment?.status === 'unknown');
     const kind = !cs.length ? 'unassessed' : mismatch ? 'mismatch' : gap ? 'gap' : align ? 'check' : done ? 'evidenced' : 'check';
     return { r, kind, align, cs, f: (mismatch ? mine(['spec_mismatch']) : mine(['missing_test', 'weak_test']))[0], higher: cs.some((c) => c?.status === 'higher_level_only') };
   });
