@@ -239,11 +239,11 @@ fi
 # 6. Deterministic scaffolding for weak models (fail-soft, no AI): the PR diff with explicit line numbers, and per changed file the
 # existing test files most likely to cover it. diff.patch stays on disk untouched. Written last so they match the truncated diff.patch.
 node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null || { rm -f "$CTX/diff.numbered.txt"; echo "::warning::numbered diff failed; the raw diff is used"; }
-# Up to 5 per changed non-test file: same basename stem with test/spec affixes (any directory), tests that mention the stem as a whole word
+# Up to 5 per changed non-test file: same basename stem with test/spec affixes (any directory), test files named after a public name of the file (res.status.js), tests that mention the stem as a whole word
 # (imports, references), then tests in the same directory. ponytail: names and a word grep only, no per-language import parsing.
 timeout 60 node - "$HERE/trace.js" "$CTX" <<'JS' || { echo "::warning::test candidates failed; continuing without them"; rm -f "$CTX/test-candidates.txt"; }
 const fs = require('node:fs'), path = require('node:path'), { execFileSync } = require('node:child_process');
-const { isTestPath, testScope } = require(path.resolve(process.argv[2])), { mapTests } = require(path.join(path.dirname(path.resolve(process.argv[2])), 'test-map.js'));
+const { isTestPath, testScope } = require(path.resolve(process.argv[2])), { mapTests, publicDefs } = require(path.join(path.dirname(path.resolve(process.argv[2])), 'test-map.js'));
 const ctx = process.argv[3], CAP = 16 * 1024, PER = 5, MAX_FILES = 60;
 const lines = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
 const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter((p) => p && !/[\x00-\x1F]/.test(p));
@@ -257,7 +257,8 @@ const changed = lines('files.txt').filter((f) => !isTest(f) && !isTestPath(f) &&
 const out = []; let size = 0, omitted = 0;
 for (const [k, f] of changed.entries()) {
   if (k >= MAX_FILES) { omitted = changed.length - k; break; }
-  const got = mapTests(f, { tests, per: PER, mentions: (stem) => { // tests that name the stem as a whole word (a timeout or no match: none)
+  let names = []; try { names = publicDefs(f, fs.readFileSync(f, 'utf8').split(/\r?\n/)).names; } catch {} // public names: a test file named after one (res.status.js) is a candidate
+  const got = mapTests(f, { tests, names, per: PER, mentions: (stem) => { // tests that name the stem as a whole word (a timeout or no match: none)
     try { return execFileSync('git', ['grep', '-l', '-w', '-F', '-I', '-e', stem], { encoding: 'utf8', timeout: 15000, maxBuffer: 1 << 26, env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } }).split('\n').filter((t) => testSet.has(t)); } catch { return []; }
   } });
   const block = f + '\n' + (got.size ? [...got].map(([t, why]) => `  ${t}  (${why})\n`).join('') : '  (no candidate test file found)\n');

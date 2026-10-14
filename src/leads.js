@@ -139,7 +139,7 @@ function mirrorCandidates(src) {
 }
 
 // ---- weak assertions ----
-const TEST_START = /(?<![.\w$])(?:it|test|specify)(?:\.\w+)*\s*\(|^\s*(?:async\s+)?def\s+test|^\s*func\s+Test|@Test\b|\[(?:Test|Fact|Theory|TestMethod)\b|#\[test\]|^\s*(?:public\s+)?(?:void|fun)\s+test/;
+const TEST_START = /(?<![.\w$])(?:it|test|specify)(?:\s*\(\s*['"`]|(?:\.(?:only|skip|todo|each|concurrent|failing|serial|fails|cb|sequential|fixme))+\s*\()|^\s*(?:async\s+)?def\s+test|^\s*func\s+Test|@Test\b|\[(?:Test|Fact|Theory|TestMethod)\b|#\[test\]|^\s*(?:public\s+)?(?:void|fun)\s+test/;
 const VALUE = /\bassert\.(?:equal|strictEqual|deepEqual|deepStrictEqual|equals|eq)\s*\(|\b(?:assertEquals?|assert_equal|assertSame|assertArrayEquals|assert_eq!)\s*\(|[Aa]ssert\.(?:Equal\w*|AreEqual|Same|Exactly)\s*\(|\brequire\.Equal\w*\s*\(|\.(?:toBe|toEqual|toStrictEqual|toBeCloseTo|toMatchObject|toHaveLength|toContain|isEqualTo)\s*\(|^\s*assert\s.*==/;
 const WHAT = { truthy: 'is truthy', exists: 'is not null/undefined', type: 'has the expected type' };
 const truthyArg = (x) => { // the argument of assert/assertTrue: a bare reference, a not-null check or a typeof check
@@ -260,4 +260,4 @@ if (require.main === module) {
   const f = path.join(ctx, 'leads.txt');
   if (out) fs.writeFileSync(f, out); else fs.rmSync(f, { force: true });
 }
-module.exports = { run, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START };
+module.exports = { run, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START, GENERIC };

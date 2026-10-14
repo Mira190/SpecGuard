@@ -185,7 +185,7 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 // The row id is the block cid (cid.N for a bundled block), the heading comes from the candidate, and rows keep document order. A block the model
 // skipped, or whose rows all failed verification, becomes an `unknown` row ("unconfirmed"); not_requirements gains the block's location and text.
 // docs: the admitted documents (null = any); cands: the candidate blocks (Map from readCandidates; null = unknown).
-function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set() } = {}) {
+function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), covers = null } = {}) {
   const cache = new Map();
   const file = (p) => { if (!cache.has(p)) cache.set(p, read(p)); return cache.get(p); };
   const locate = (c) => {
@@ -236,15 +236,16 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.requirements.sort((a, b) => pos(a.id) - pos(b.id)); // stable: a block's .1, .2 rows keep the model's order
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, notes: out.not_reviewed });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line)), notes: out.not_reviewed });
   return out;
 }
 
 // Unit findings (code-first), same quote-first check as a requirement citation: the quote must sit at path:line at the scanned commit (locate: verify's, which corrects a near-miss line).
 // missing_test cites the unit's code, weak_test and pushdown a test file; a document is never evidence. fid = (unit id, kind, normalised quote): the stable key a second run confirms by.
 // det: a missing_test on a unit with NO matched test file is confirmed at once (no test file is a fact the collector found). low: the claude engine's context pack cut a test file the claim depends on
-// (the unit's matched tests for missing_test, the cited file for weak_test); same rule as PR mode: shown in Details, never counted.
-function verifyUnits(list, { locate, isDoc, units, packCut, notes }) {
+// (the unit's matched tests for missing_test, the cited file for weak_test); same rule as PR mode: shown in Details, never counted. Also low: covers(c) found a test file that already contains the cited
+// line's error message or literal (src/test-map.js, shared with PR mode): lowWhy names it.
+function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes }) {
   const out = [], seen = new Set(), key = (q) => String(q).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   for (const f of list) {
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
@@ -255,8 +256,8 @@ function verifyUnits(list, { locate, isDoc, units, packCut, notes }) {
     seen.add(fid);
     const skeleton = f.skeleton && placeholder(f.skeleton) ? '' : f.skeleton;
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
-    const low = !!u && (f.kind === 'missing_test' ? u.tests.some((t) => packCut.has(t)) : f.kind === 'weak_test' && packCut.has(c.path));
-    out.push({ ...f, ...c, skeleton, fid, low, det: f.kind === 'missing_test' && !!u && !u.tests.length });
+    const cut = !!u && (f.kind === 'missing_test' ? u.tests.some((t) => packCut.has(t)) : f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c) : null;
+    out.push({ ...f, ...c, skeleton, fid, low: cut || !!hit, ...(hit && { lowWhy: `a test may already cover this: ${hit}` }), det: f.kind === 'missing_test' && !!u && !u.tests.length && !hit });
   }
   return out;
 }
@@ -491,7 +492,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const ulists = [['Untested behaviour', 'missing_test', 'More untested behaviour'], ['Weak unit tests', 'weak_test', 'More weak unit tests'], ['Tests to move down', 'pushdown', 'More tests to move down']].map(([title, kind, more]) => ({ title, more, fs: uf.filter((f) => f.kind === kind) }));
   const fence = (t) => `\n\n\`\`\`\n${t.replace(/`{3,}/g, "'''")}\n\`\`\``;
   const uitem = (f) => findingBlock({ f: { kind: f.kind, title: f.title, path: f.path, line: f.line, body: `${neutralize(f.body)}${f.skeleton ? fence(f.skeleton) : ''}` }, why: f.confirmed ? '' : 'unconfirmed' }, blob, rank++, { bare: true, posted: true });
-  const uhead = (f) => findingHead({ kind: f.kind, title: f.title, path: f.path, line: f.line, body: f.body }, { why: f.low ? 'low confidence' : f.confirmed ? '' : 'unconfirmed', posted: true, bare: true }, blob);
+  const uhead = (f) => findingHead({ kind: f.kind, title: f.title, path: f.path, line: f.line, body: f.body }, { why: f.low ? f.lowWhy || 'low confidence' : f.confirmed ? '' : 'unconfirmed', posted: true, bare: true }, blob);
   for (const l of ulists) body += vis(l.title, l.fs.map(uitem), '', UCAP);
   body += vis('Confirmed gaps', confirmed.map(grow), GTOP);
   body += vis(prior ? 'New since the last scan' : 'New gaps to confirm', fresh.map(grow), GTOP);
@@ -513,7 +514,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     cdet = take(`**Riskiest units (top ${Math.min(30, inv.rows.length)} of ${inv.units})**\n\n${URISK}`, inv.rows.slice(0, 30).map(urow), '') + fit(text)
       + (left ? take(`**Units not yet reviewed (${left})**\n\n`, [...inv.unreviewed.slice(0, 30).map((u) => `- ${link(u.path, 1, u.path)} (risk ${u.score})\n`), ...(left > 30 ? [`- +${left - 30} more\n`] : [])], '') : '')
       + ulists.map((l) => more(l.more, l.fs.map(uhead), '', UCAP)).join('')
-      + (ulow.length ? take(`**Low-confidence unit findings (${ulow.length})**\n\nA test file the model could not see whole is behind each; they are not counted.\n\n`, ulow.map(uhead), '') : '');
+      + (ulow.length ? take(`**Low-confidence unit findings (${ulow.length})**\n\nA test file the model could not see whole, or a test that may already cover it, is behind each; they are not counted.\n\n`, ulow.map(uhead), '') : '');
   }
   let det = [more('More confirmed gaps', confirmed.map(grow), GTOP), more('More new gaps', fresh.map(grow), GTOP), more('More disagreements', clashes, '| Document says | Code says |\n|---|---|\n')].join('');
   const fold = (s, bs) => take(`**${s} (${bs.length})**\n\n${BTOP}`, bs.map(bline), '');
@@ -620,7 +621,8 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   // valid JSON can still come from a run that timed out or failed (or whose repair turn failed): show what verifies, change nothing else
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
-  const checked = verify(data, { tracked: trackedFiles(process.env.GITHUB_WORKSPACE || process.cwd()), docs: new Set(docs.map(([p]) => p)), cands, units, packCut });
+  const root = process.env.GITHUB_WORKSPACE || process.cwd(), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || process.env.TEST_PATHS || '' });
+  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands, units, packCut, covers });
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings } : null;
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
