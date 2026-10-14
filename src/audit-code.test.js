@@ -513,3 +513,28 @@ test('run: units whose file the model did not see whole (pack-cut.txt) are not r
   assert.match(vis(plain.calls.summary), /in the 3 riskiest units/);
   assert.deepEqual(readState(plain.calls.created[0].body).blocks.map((b) => b.cid).sort(), [U1, U2, U3].sort());
 });
+
+test('run: blocks of a failed or dropped scan part are not rejected, not answered "unknown", not recorded as audited and listed as not audited; a failed unit call leaves the units unreviewed', async (t) => {
+  const A = '1111111a', B = '2222222b', C = '3333333c';
+  const doc = { id: A, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered', code: [cite('src/js/orders.js', 1)], tests: [{ ...cite('test/orders.test.js', 2), layer: 'unit' }], note: '' };
+  const meta = { head: 'abc123', max_requirements: 80, max_units: 12, docs: 1, candidates: 3, limitations: [], units: { total: 140, picked: 3 } };
+  const w = workspace(t);
+  w.put('audit-docs.txt', 'docs/design.md\tdiscovered\n');
+  w.put('audit-candidates.txt', `${A}\tdocs/design.md:3\tPlan design\tA repeating plan stays on after it fires.\n${B}\tdocs/design.md:4\tPlan design\tSecond.\n${C}\tdocs/design.md:5\tPlan design\tThird.\n`);
+  const run = (parts) => post(t, { w, env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: { 'findings.json': { docs_reviewed: ['docs/design.md'], requirements: [doc], not_requirements: [], not_reviewed: [], unit_findings: [] }, 'audit-meta.json': meta, 'scan-parts.json': parts } });
+  const r = await run({ calls: 2, failed: [{ part: 'blocks', blocks: [B], reason: 'the answer was not a JSON object' }], dropped: [C] });
+  assert.doesNotMatch(r.calls.summary, /Could not complete/); // one of three answered: the 20% rule applies to the blocks sent in a part that succeeded
+  assert.match(r.calls.summary, /\*\*Not audited this run:\*\* 2 document blocks \(1 in a call that failed, 1 left out by max_budget_usd\)/);
+  const out = JSON.parse(fs.readFileSync(path.join(w.ctx, 'audit.json'), 'utf8'));
+  assert.deepEqual(out.requirements.map((x) => x.id), [A], 'no "unconfirmed" row for a block that was never sent or answered');
+  const state = readState(r.calls.created[0].body);
+  assert.deepEqual(state.blocks.map((b) => b.cid).filter((c) => [A, B, C].includes(c)), [A], 'only the answered block is recorded as audited');
+  // the same blocks answered nothing without scan-parts.json: rejected as before
+  const bad = await post(t, { w: workspace(t), files: { 'audit-docs.txt': 'docs/design.md\tdiscovered\n', 'audit-candidates.txt': `${A}\tdocs/design.md:3\tP\tx\n${B}\tdocs/design.md:4\tP\ty\n`, 'findings.json': { docs_reviewed: [], requirements: [doc], not_requirements: [], not_reviewed: [], unit_findings: [] }, 'audit-meta.json': meta } });
+  assert.match(bad.calls.summary, /1 of 2 listed blocks were not answered/);
+  // the unit call failed: no unit is reviewed (not counted), the wording says why
+  w.put('audit-candidates.txt', `${A}\tdocs/design.md:3\tPlan design\tA repeating plan stays on after it fires.\n`);
+  const u = await run({ calls: 2, failed: [{ part: 'units', reason: 'HTTP 500' }], dropped: [] });
+  assert.match(u.calls.summary, /unit call failed/);
+  assert.doesNotMatch(u.calls.summary, /did not fit the model's context/);
+});

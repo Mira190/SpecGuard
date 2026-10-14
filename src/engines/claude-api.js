@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The claude adapter's default mode (claude_mode: api): ONE Anthropic Messages API call, no agent loop and no CLI. SpecGuard already inlines the diff, test candidates, leads, requirements and rule files
 // into the prompt (src/prompt.js), so the model needs no tools: the agent loop re-sends the whole context every turn and its cost cannot be bounded up front (two live runs: $3.58 and $3.44 against a $1 budget).
-// Env: CTX PROMPT_FILE (or PROMPT) ANTHROPIC_API_KEY (environment only) MODEL (empty = claude-haiku-5-5) MAX_BUDGET_USD (default 1.00; a HARD bound: checked before the call) MAX_OUTPUT_TOKENS (default 32000) CONTEXT_PACK_BYTES (repository files appended to the prompt, an upper bound, default 150000, 0 = off; shrunk to keep the prompt under 90% of a model's long-context price step; read from GITHUB_WORKSPACE or the cwd) EFFORT (ignored, noted) TIMEOUT (minutes) CHECK (audit = scan schema) FAST_MODELS.
+// Env: CTX PROMPT_FILE (or PROMPT) ANTHROPIC_API_KEY (environment only) MODEL (empty = claude-haiku-5-5) MAX_BUDGET_USD (default 1.00; a HARD bound: checked before the call) MAX_OUTPUT_TOKENS (default 32000) CONTEXT_PACK_BYTES (repository files appended to the prompt, an upper bound, default 150000, 0 = off; shrunk to keep the prompt under 90% of a model's long-context price step; read from GITHUB_WORKSPACE or the cwd) EFFORT (ignored, noted) TIMEOUT (minutes) CHECK (audit = scan schema) FAST_MODELS SCAN_BATCH_BLOCKS (scan: document blocks per call, default 20; more blocks split the scan into parts, src/scan-parts.js).
 // Files in CTX as in src/engines/README.md: findings.json usage.json engine-status engine-notes engine-error engine-model.json. Never throws, never prints the key.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -203,6 +203,7 @@ function contextPack(ctx, root, limit) {
 }
 
 const tokenRe = /github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|sk-ant-[A-Za-z0-9_-]+|Bearer [^\s]+/g;
+const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
 const fmt = (x) => x.toFixed(x < 0.1 ? 4 : 2);
 
 // ponytail: substring table over the API's error type and message; first match wins. Same reasons as claude.sh (budget, quota, auth, rate, model).
@@ -235,66 +236,132 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const prompt = env.PROMPT_FILE ? fs.readFileSync(env.PROMPT_FILE, 'utf8') : env.PROMPT || '';
     const model = env.MODEL || 'claude-haiku-5-5';
     const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
-    const schema = strict(JSON.parse(fs.readFileSync(path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json'), 'utf8')));
+    const schemaFile = path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json');
+    const schema = strict(JSON.parse(fs.readFileSync(schemaFile, 'utf8')));
     const packBytes = env.CONTEXT_PACK_BYTES === undefined || env.CONTEXT_PACK_BYTES === '' ? 250000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) || 0);
+    const root = () => fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd());
+    const deadline = Date.now() + (parseInt(env.TIMEOUT, 10) || 12) * 60000, t0 = Date.now();
+    // One API call with its retries: { timeout } or { res }. Each call asks for plain JSON at most once and retries a transient failure once.
+    const send = async (body) => {
+      let res, retried = false, plain = false;
+      for (;;) {
+        const left = deadline - Date.now();
+        if (left < 1000) return { timeout: true };
+        try {
+          const r = await fetchFn(ENDPOINT, { method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': API_VERSION, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(left) });
+          const text = await r.text();
+          let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
+          res = { status: r.status, ok: r.ok, json, text, retryAfter: parseFloat(r.headers?.get?.('retry-after')) };
+        } catch (e) {
+          if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return { timeout: true };
+          res = { status: 0, ok: false, json: null, text: `network error: ${e?.cause?.code || e?.message || e}` };
+        }
+        if (res.ok) return { res };
+        const m = String(res.json?.error?.message || '');
+        if (res.status === 400 && !plain && /schema|output_config|output_format|too complex/i.test(m) && !/credit balance/i.test(m)) { // the structured-output grammar was refused: ask for plain JSON once (post.js validates it)
+          plain = true; delete body.output_config; console.error('claude-api: structured output unavailable for this schema; plain JSON requested'); continue;
+        }
+        const wait = Number.isFinite(res.retryAfter) ? res.retryAfter : 2;
+        if (!retried && (res.status === 0 || res.status === 429 || res.status >= 500) && wait <= 30 && deadline - Date.now() > wait * 1000 + 1000) { retried = true; await sleep(wait * 1000); continue; }
+        return { res };
+      }
+    };
+    // One call -> { ok: true, found, u, used } or { ok: false, status, reason, why, raw, u? }; u = the API usage object once a reply arrived (paid for even when the answer is unusable).
+    const call = async (system, user, maxTok) => {
+      const s = await send({
+        model, max_tokens: maxTok,
+        ...(system && { system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] }),
+        messages: [{ role: 'user', content: user }],
+        output_config: { format: { type: 'json_schema', schema } },
+      });
+      if (s.timeout) return { ok: false, status: 'timeout' };
+      const res = s.res;
+      if (!res.ok) {
+        const e = res.json?.error || {}, raw = `HTTP ${res.status || 'none'}${e.type ? ` ${e.type}` : ''}: ${e.message || res.text}`.replace(/\s+/g, ' ');
+        const [reason, why] = classify(res.status, e.type, e.message);
+        return { ok: false, status: 'failed', reason, why: reason === 'model' ? `The model '${model}' is not available to this API key (check the model input)` : why || `Anthropic API request failed`, raw };
+      }
+      const j = res.json || {}, r = { u: j.usage || {}, used: typeof j.model === 'string' && j.model ? j.model : model };
+      if (j.stop_reason === 'refusal') return { ...r, ok: false, status: 'failed', reason: 'policy', why: 'The model declined to answer (safety refusal)' };
+      if (j.stop_reason === 'max_tokens') return { ...r, ok: false, status: 'failed', reason: 'length', why: `The reply hit max_output_tokens (${maxTok}) before the JSON was complete (raise max_output_tokens)` };
+      const answer = (Array.isArray(j.content) ? j.content : []).filter((b) => b?.type === 'text').map((b) => b.text).join('');
+      let found; try { found = JSON.stringify(JSON.parse(answer)); } catch { found = require('../extract-json.js').extract(answer); }
+      return found ? { ...r, ok: true, found } : { ...r, ok: false, status: 'failed', reason: '', why: 'no JSON found in the engine output' };
+    };
+    // usage.json: cost and tokens of every reply received, summed (each priced on its own card)
+    const writeUsage = (rs) => {
+      const got = rs.filter((x) => x.u);
+      if (!got.length) return;
+      const sum = { i: 0, cr: 0, cw: 0, o: 0 }, by = {};
+      let usd = 0;
+      for (const r of got) {
+        const i = r.u.input_tokens || 0, cr = r.u.cache_read_input_tokens || 0, cw = r.u.cache_creation_input_tokens || 0, o = r.u.output_tokens || 0, m = (by[r.used] ||= { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 });
+        usd += cost(r.used, r.u); sum.i += i; sum.cr += cr; sum.cw += cw; sum.o += o;
+        m.inputTokens += i + cr + cw; m.cacheReadTokens += cr; m.cacheWriteTokens += cw; m.outputTokens += o; // the copilot shape: inputTokens include the cache tokens
+      }
+      w('usage.json', JSON.stringify({
+        currentModel: got[0].used, totalCostUsd: usd, totalApiDurationMs: Date.now() - t0,
+        tokenDetails: { input: { tokenCount: sum.i }, cache_read: { tokenCount: sum.cr }, cache_write: { tokenCount: sum.cw }, output: { tokenCount: sum.o } },
+        modelMetrics: Object.fromEntries(Object.entries(by).map(([m, usage]) => [m, { usage }])),
+      }));
+      try { require('../engine-model.js').run({ ctx, requested: model, turn: 'main', usage: path.join(ctx, 'usage.json'), fast: env.FAST_MODELS || '' }); } catch { /* never fails the step */ }
+    };
+    const failEnd = (r) => (r.status === 'timeout' ? end('timeout') : end('failed', r.reason, r.why, r.raw));
+    if (!PRICES[model]) notes.push(`cost estimated at default rates: ${model} is not in the price table`);
+
+    // A scan with more document blocks than SCAN_BATCH_BLOCKS (default 20) is split into budgeted parts (src/scan-parts.js): one unit call and block calls, answers merged here. Fewer blocks: one call, below.
+    const batch = Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), split = env.CHECK === 'audit' ? require('../scan-parts.js').plan({ ctx, root: root(), batch, limit: packBytes, schemaFile, contextPack, assembleAudit: require('../prompt.js').assembleAudit }) : null;
+    if (split) {
+      const plans = split.parts.map((p) => {
+        const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1000 * p.cids.length + 2000) : maxTokens; // a batch of n blocks needs about 1000 tokens each
+        return { ...p, system: s, user: x, tokens, usd: worstCase(model, Buffer.byteLength(s), Buffer.byteLength(x), tokens).usd };
+      });
+      const total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd, dropped = [];
+      while (plans.length > 1 && total() > budget) dropped.unshift(...plans.pop().cids || []); // the budget is hard: trailing block batches go first (candidate order = rotation priority), the first part (units) last
+      if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
+      const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
+      let first = null;
+      for (const p of plans) {
+        const r = await call(p.system, p.user, p.tokens);
+        rs.push(r);
+        let obj = null, why = r.ok ? '' : r.why || r.status;
+        if (r.ok) { try { obj = JSON.parse(r.found); } catch { /* extract-json gave text that is not an object */ } if (!obj || typeof obj !== 'object' || Array.isArray(obj)) { obj = null; why = 'the answer was not a JSON object'; } }
+        const arr = (k) => (obj && Array.isArray(obj[k]) ? obj[k] : []);
+        if (obj && p.cids) { // a block call that left more than 20% of its blocks unanswered is not trusted (audit-post rejects such a whole result)
+          const got = new Set([...arr('requirements').map((x) => /^[0-9a-f]{8}/.exec(String(x?.id))?.[0]), ...arr('not_requirements').map((x) => x?.cid)]), missing = p.cids.filter((c) => !got.has(c)).length;
+          if (missing > p.cids.length * 0.2) { obj = null; why = `${missing} of ${p.cids.length} blocks were not answered`; }
+        }
+        if (!obj) { failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: p.cids }), reason: why }); first ||= r.ok ? { status: 'failed', reason: '', why } : r; if (r.status === 'timeout') break; continue; }
+        if (p.cids) merged.requirements.push(...arr('requirements')), merged.not_requirements.push(...arr('not_requirements'));
+        else merged.unit_findings.push(...arr('unit_findings'));
+        merged.docs_reviewed.push(...arr('docs_reviewed').filter((d) => !merged.docs_reviewed.includes(d)));
+        merged.not_reviewed.push(...arr('not_reviewed'));
+      }
+      writeUsage(rs);
+      const unsent = plans.slice(rs.length); // a timeout stops the run: the parts not started are not audited either
+      for (const p of unsent) failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: p.cids }), reason: 'not started: the review timed out' });
+      if (failed.length === plans.length) return failEnd(first); // nothing usable at all: the run fails as one call would
+      w('findings.json', JSON.stringify(merged));
+      w('scan-parts.json', JSON.stringify({ calls: rs.length, failed, dropped }));
+      if (!failed.some((f) => f.part === 'units')) w('pack-cut.txt', split.packCut.map((x) => `${x}\n`).join('')); // the unit part's pack (what the unit findings may rely on)
+      notes.push(`scan in ${rs.length} calls${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
+      for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);
+      return end('success');
+    }
+
     let pack = { text: '', note: '' };
-    if (packBytes > 0) try { pack = contextPack(ctx, fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd()), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
+    if (packBytes > 0) try { pack = contextPack(ctx, root(), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
     const { system, user } = messages(prompt, pack.text); // the pre-flight below sees the pack
     const est = worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user), maxTokens);
     if (est.usd > budget) { // the budget is hard here: nothing is sent
       const why = `estimated worst-case cost $${fmt(est.usd)} exceeds max_budget_usd $${fmt(budget)} (about ${Math.round(est.tokens / 1000)}k input tokens and up to ${maxTokens} output tokens on ${model}; raise max_budget_usd, lower max_output_tokens or use a cheaper model)`;
       return end('failed', 'budget', why);
     }
-    if (!PRICES[model]) notes.push(`cost estimated at default rates: ${model} is not in the price table`);
     if (pack.note) notes.push(pack.note);
-    const body = {
-      model, max_tokens: maxTokens,
-      ...(system && { system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] }),
-      messages: [{ role: 'user', content: user }],
-      output_config: { format: { type: 'json_schema', schema } },
-    };
-    const deadline = Date.now() + (parseInt(env.TIMEOUT, 10) || 12) * 60000, t0 = Date.now();
-    let res, retried = false, plain = false;
-    for (;;) {
-      const left = deadline - Date.now();
-      if (left < 1000) return end('timeout');
-      try {
-        const r = await fetchFn(ENDPOINT, { method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': API_VERSION, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(left) });
-        const text = await r.text();
-        let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
-        res = { status: r.status, ok: r.ok, json, text, retryAfter: parseFloat(r.headers?.get?.('retry-after')) };
-      } catch (e) {
-        if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return end('timeout');
-        res = { status: 0, ok: false, json: null, text: `network error: ${e?.cause?.code || e?.message || e}` };
-      }
-      if (res.ok) break;
-      const m = String(res.json?.error?.message || '');
-      if (res.status === 400 && !plain && /schema|output_config|output_format|too complex/i.test(m) && !/credit balance/i.test(m)) { // the structured-output grammar was refused: ask for plain JSON once (post.js validates it)
-        plain = true; delete body.output_config; console.error('claude-api: structured output unavailable for this schema; plain JSON requested'); continue;
-      }
-      const wait = Number.isFinite(res.retryAfter) ? res.retryAfter : 2;
-      if (!retried && (res.status === 0 || res.status === 429 || res.status >= 500) && wait <= 30 && deadline - Date.now() > wait * 1000 + 1000) { retried = true; await sleep(wait * 1000); continue; }
-      break;
-    }
-    if (!res.ok) {
-      const e = res.json?.error || {}, raw = `HTTP ${res.status || 'none'}${e.type ? ` ${e.type}` : ''}: ${e.message || res.text}`.replace(/\s+/g, ' ');
-      const [reason, why] = classify(res.status, e.type, e.message);
-      return end('failed', reason, reason === 'model' ? `The model '${model}' is not available to this API key (check the model input)` : why || `Anthropic API request failed`, raw);
-    }
-    const j = res.json || {}, u = j.usage || {}, used = typeof j.model === 'string' && j.model ? j.model : model;
-    const i = u.input_tokens || 0, cr = u.cache_read_input_tokens || 0, cw = u.cache_creation_input_tokens || 0, o = u.output_tokens || 0;
-    w('usage.json', JSON.stringify({
-      currentModel: used, totalCostUsd: cost(used, u), totalApiDurationMs: Date.now() - t0,
-      tokenDetails: { input: { tokenCount: i }, cache_read: { tokenCount: cr }, cache_write: { tokenCount: cw }, output: { tokenCount: o } },
-      modelMetrics: { [used]: { usage: { inputTokens: i + cr + cw, cacheReadTokens: cr, cacheWriteTokens: cw, outputTokens: o } } }, // the copilot shape: inputTokens include the cache tokens
-    }));
-    try { require('../engine-model.js').run({ ctx, requested: model, turn: 'main', usage: path.join(ctx, 'usage.json'), fast: env.FAST_MODELS || '' }); } catch { /* never fails the step */ }
-    if (j.stop_reason === 'refusal') return end('failed', 'policy', 'The model declined to answer (safety refusal)');
-    if (j.stop_reason === 'max_tokens') return end('failed', 'length', `The reply hit max_output_tokens (${maxTokens}) before the JSON was complete (raise max_output_tokens)`);
-    const answer = (Array.isArray(j.content) ? j.content : []).filter((b) => b?.type === 'text').map((b) => b.text).join('');
-    let found; try { found = JSON.stringify(JSON.parse(answer)); } catch { found = require('../extract-json.js').extract(answer); }
-    if (!found) return end('failed', '', 'no JSON found in the engine output');
-    w('findings.json', found);
+    const r = await call(system, user, maxTokens);
+    writeUsage([r]);
+    if (!r.ok) return failEnd(r);
+    w('findings.json', r.found);
     end('success');
   } catch (e) {
     end('failed', '', 'Claude API adapter error', e?.message || String(e));
@@ -302,4 +369,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { run, strict, messages, classify, cost, worstCase, PRICES };
+module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack };
