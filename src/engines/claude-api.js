@@ -52,7 +52,7 @@ function strict(s) {
 // The prompt is "static prefix (skill, references, schema) + --- + per-PR context" (src/prompt.js): the prefix becomes the cached system block, the rest the user message.
 const SPLIT = '\n\n---\n\nContext directory (absolute path):';
 const NO_TOOLS = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Use only the context inlined below; where the answer would need a file you cannot see, mark it unknown and say so. Output only the JSON object.\n\n';
-const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Do not report a missing or weak test when a candidate test file for that code was cut or not included: mark the obligation unknown and say which file was not fully visible. Output only the JSON object.\n\n';
+const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. A block noted "relevant slices" shows every test of that file that references the changed symbols (real line numbers; "…| (lines a-b omitted)" marks the gaps): tests not shown do not mention them. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Do not report a missing or weak test when a candidate test file for that code was cut or not included: mark the obligation unknown and say which file was not fully visible. Output only the JSON object.\n\n';
 function messages(prompt, pack = '') {
   const at = prompt.indexOf(SPLIT);
   const system = at > 0 ? prompt.slice(0, at) : '', user = at > 0 ? prompt.slice(at + 2) : prompt; // keep "---" at the head of the user part
@@ -86,13 +86,69 @@ function mentioned(text) { // identifiers and path-like tokens (length >= 5, ext
   return [...out];
 }
 const criteriaText = (raw) => { try { return (JSON.parse(raw).criteria || []).map((c) => `${c?.quote ?? ''} ${c?.text ?? ''}`).join('\n'); } catch { return ''; } };
+// Relevant slices of a test file that is larger than its cap: the head (imports, helpers) plus every test block that mentions a symbol the diff introduced or touched, with real line numbers,
+// instead of the first N lines (the tests of the changed code sit anywhere in a 3000-line file). ponytail: regex per common language form, no parser; a symbol is found by word, not by use.
+const SYM_KW = new Set('this else while switch catch function return constructor await describe test each async static default export import require super throw'.split(' '));
+const SYM_DECLS = [
+  /\b(?:function\*?|def|func|fn|class|interface|enum)\s+(?:\([^)]*\)\s*)?([A-Za-z_$][\w$]*)/,
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=/,
+  /\bexports\.([A-Za-z_$][\w$]*)\s*=/,
+  /^\s*(?:(?:export|default|public|private|protected|static|async)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{]+)?\{\s*$/, // method
+];
+function symbolsIn(line, add) {
+  if (line.length > 300) return;
+  for (const re of SYM_DECLS) { const m = re.exec(line); if (m) return void add(m[1]); }
+  const ex = /\b(?:module\.exports\s*=|export)\s*\{([^}]*)\}/.exec(line); // module.exports = { a, b } / export { a, b }
+  if (ex) for (const n of ex[1].match(/[A-Za-z_$][\w$]*/g) || []) add(n);
+}
+function diffSymbols(diff, file, leads) { // names on added lines of file (and in the git hunk headers), then the leads.txt symbols of file; length >= 4, at most 40
+  const out = new Set(), add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n) && out.size < 40) out.add(n); };
+  let cur = null, inHunk = false;
+  for (const raw of diff.split('\n')) {
+    if (raw.startsWith('diff --git ')) { cur = null; inHunk = false; continue; }
+    const l = raw.replace(/^\s*\d+ \| /, ''); // diff.numbered.txt: "  41 | +code"
+    if (!inHunk && l.startsWith('+++ ')) { cur = l === '+++ /dev/null' ? null : l.slice(4).replace(/^"|"$/g, '').replace(/^b\//, ''); continue; }
+    const h = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@ ?(.*)$/.exec(l);
+    if (h) { inHunk = true; if (cur === file) symbolsIn(h[1], add); } else if (inHunk && cur === file && l[0] === '+') symbolsIn(l.slice(1), add);
+  }
+  for (const l of leads.split('\n')) { const m = /^\s+(\S+):\d+ (\S+)$/.exec(l); if (m && m[1] === file) add(m[2]); } // "path:line name" rows of leads.txt
+  return [...out];
+}
+const TEST_START = /^\s*(?:(?:test|it|describe)\b|def test_|func Test|@Test\b)/, indentOf = (l) => /^\s*/.exec(l)[0].length;
+// -> { text, note, complete } or null (no symbol appears in the file, or no matching block fits). complete: every block that mentions a symbol is shown.
+function slices(src, syms, room) {
+  const n = src.length, re = new RegExp(`(?<![\w$])(?:${syms.map((x) => x.replace(/\$/g, '\$')).join('|')})(?![\w$])`, 'g'), found = new Set(), wins = [];
+  src.forEach((l, i) => {
+    const m = [...l.matchAll(re)].map((x) => x[0]);
+    if (!m.length) return;
+    m.forEach((x) => found.add(x));
+    let s = i; while (s > 0 && i - s < 30 && !TEST_START.test(src[s])) s--; // up to the enclosing test start, or 30 lines
+    let e = i; while (e + 1 < n && e + 1 - s < 80 && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))) e++; // down to the next test at the same or lower indentation, 80 lines at most
+    wins.push({ s, e, m: true });
+  });
+  if (!wins.length) return null;
+  wins.push({ s: 0, e: Math.min(30, n) - 1, m: false }); // imports and helpers
+  wins.sort((a, b) => a.s - b.s || b.e - a.e);
+  const merged = [];
+  for (const w of wins) { const p = merged[merged.length - 1]; if (p && w.s <= p.e + 1) { p.e = Math.max(p.e, w.e); p.m = p.m || w.m; } else merged.push({ ...w }); }
+  const body = (w) => Array.from({ length: w.e - w.s + 1 }, (_, k) => `${String(w.s + k + 1).padStart(4)}| ${src[w.s + k]}`).join('\n'), MARK = 40; // MARK: room for an omission marker
+  let used = 0, dropped = false;
+  const kept = merged.filter((w) => { const c = Buffer.byteLength(body(w)) + 1 + MARK; if (used + c <= room) { used += c; return true; } if (w.m) dropped = true; return false; });
+  if (!kept.some((w) => w.m)) return null;
+  const out = [], gap = (a, b) => out.push(`   …| (lines ${a + 1}-${b} omitted)`);
+  let at = 0;
+  for (const w of kept) { if (w.s > at) gap(at, w.s); out.push(body(w)); at = w.e + 1; }
+  if (at < n) gap(at, n);
+  const shown = [...found], names = shown.slice(0, 8).join(', ') + (shown.length > 8 ? ', …' : ''), ranges = kept.map((w) => `${w.s + 1}-${w.e + 1}`).join(', ');
+  return { text: out.join('\n') + '\n', complete: !dropped, note: `relevant slices: lines ${ranges} of ${n} (tests referencing ${names})${dropped ? '; some matching tests did not fit' : ''}, line-numbered` };
+}
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
   const parts = [], seen = new Set(), omitted = [], partial = []; // partial: cut at the budget
   let used = 0, files = 0;
   const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit
-  const addFile = (p, num, quiet) => { // num: line-numbered; quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
+  const addFile = (p, num, quiet, syms) => { // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
     const rel = path.posix.normalize(p.replace(/\\/g, '/'));
     if (seen.has(rel)) return;
     seen.add(rel);
@@ -100,7 +156,15 @@ function contextPack(ctx, root, limit) {
     if (!text || !text.trim()) return;
     const room = Math.min(num ? cap : PER_FILE, (quiet ? limit * 0.6 : limit) - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
     if (room < 200) return void (quiet || omitted.push(rel));
-    const c = cut(num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text, room);
+    const full = num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text;
+    const sl = syms && syms.length && Buffer.byteLength(full) > room ? slices(src, syms, room) : null;
+    if (sl) { // pack-cut.txt: not listed when every test that mentions the changed symbols is shown (its relevant tests were visible); listed when some matching block did not fit
+      if (!sl.complete && !quiet) partial.push(rel);
+      const b = block(rel, sl.text, sl.note);
+      parts.push(b); used += Buffer.byteLength(b); files++;
+      return;
+    }
+    const c = cut(full, room);
     if (c.cut && c.lines < 1) return void (quiet || omitted.push(rel));
     if (c.cut && !quiet) partial.push(rel);
     const b = block(rel, c.text, `${c.cut ? `first ${c.lines} of ${src.length} lines` : 'full file'}${num ? ', line-numbered' : ''}`);
@@ -109,7 +173,8 @@ function contextPack(ctx, root, limit) {
   for (const p of list('standards.txt')) addFile(p, false);
   const focus = list('focus.txt').map((l) => l.split('\t')[0]), review = focus.length ? focus : list('files.txt');
   const cands = parseCandidates(rd('test-candidates.txt'));
-  for (const p of review) { addFile(p, true); for (const t of cands.get(p) || []) addFile(t, true); } // each file, then its tests
+  const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch'), leads = rd('leads.txt');
+  for (const p of review) { addFile(p, true); const syms = diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of cands.get(p) || []) addFile(t, true, false, syms); } // each file, then its tests (a big test as slices around the changed symbols)
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
     const named = [], crit = criteriaText(rd('requirements-status.json'));
@@ -123,7 +188,6 @@ function contextPack(ctx, root, limit) {
       for (const [p] of sib.slice(0, PER_DIR)) addFile(p, true, true);
     }
   }
-  const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch');
   const head = cut(diff, LIMITS.diff);
   if (head.cut && limit - used - OVERHEAD >= 200) { // the part of the diff prompt.js cut ("Read ... for the rest")
     const dl = diff.replace(/\n$/, '').split('\n'), c = cut(dl.slice(head.lines).join('\n'), limit - used - OVERHEAD), all = dl.length;

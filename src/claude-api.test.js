@@ -73,7 +73,7 @@ test('the usage file feeds the summary usage line (cost without the copilot appr
   const h = harness(t, [good()]);
   await h.go();
   const line = require('./post.js').usageLine({ engine: 'claude', model: 'claude-haiku-5-5', raw: JSON.parse(h.file('usage.json')), used: ['claude-haiku-5-5'] });
-  assert.match(line, /Model: claude-haiku-5-5/);
+  assert.match(line, /^<sub>Cost [^\n]*· claude-haiku-5-5 · /);
   assert.match(line, /21\.0k in \(0 cached\)|21\.0k in/);
   assert.match(line, /Cost \$0\.0(?!.*≈)/);
 });
@@ -526,4 +526,43 @@ test('action.yml: claude_mode defaults to api, max_output_tokens to 32000, and b
     assert.equal(step.env.CLAUDE_MODE, '${{ inputs.claude_mode }}', name);
     assert.equal(step.env.MAX_OUTPUT_TOKENS, '${{ inputs.max_output_tokens }}', name);
   }
+});
+
+// --- big candidate tests: relevant slices around the changed symbols instead of the head ---
+const bigTest = (hit) => Array.from({ length: 600 }, (_, i) => `test('case ${i}', () => {\n  assert.equal(helper(${i}), ${i});\n  ${hit(i) ? 'computeTotal(1);' : 'ok();'}\n});\n`).join('\n'); // 3000 lines, 5 per case: case i starts at line 5i+1, its call is on 5i+3
+const sliceRepo = (t, hit, ctxExtra = {}) => repo(t, { 'src/svc.js': 'const x = 1;\nfunction computeTotal(a) {\n  return a;\n}\n', 'test/svc.test.js': bigTest(hit) }, {
+  'files.txt': 'src/svc.js\n', 'test-candidates.txt': 'src/svc.js\n  test/svc.test.js  (same stem)\n',
+  'diff.numbered.txt': 'diff --git a/src/svc.js b/src/svc.js\n--- a/src/svc.js\n+++ b/src/svc.js\n@@ -1,1 +1,4 @@\n   1 |  const x = 1;\n   2 | +function computeTotal(a) {\n   3 | +  return a;\n   4 | +}\n', ...ctxExtra });
+
+test('context pack: a test file over its cap is shown as the relevant slices (head plus the tests that mention a changed symbol), with real line numbers, not as its head', async (t) => {
+  const r = sliceRepo(t, (i) => i === 400);
+  await r.go();
+  const u = r.user();
+  assert.match(u, /name="test\/svc\.test\.js" note="relevant slices: lines 1-30, 2001-2005 of 2999 \(tests referencing computeTotal\), line-numbered">\n {3}1\| test\('case 0'/);
+
+ {2}30|  assert.match(u, /\n {2}30\| .*\n {3}…\| \(lines 31-2000 omitted\)\n2001\| test\('case 400'[\s\S]*\n2003\|   computeTotal\(1\);\n2004\| \}\);\n2005\| \n {3}…\| \(lines 2006-2999 omitted\)\n<\/untrusted-data>/);
+  assert.ok(!u.includes('\n 100| '), 'the head is not used past the first 30 lines');
+  assert.match(u, /"relevant slices" shows every test of that file that references the changed symbols[^]*tests not shown do not mention them/);
+  assert.equal(r.h.file('pack-cut.txt'), '', 'every test that mentions the symbol is visible: not listed as cut');
+});
+
+test('context pack: no symbol of the diff in the test file -> the head, as before, and the file is listed as cut; leads.txt symbols and a raw diff.patch are used too', async (t) => {
+  const none = sliceRepo(t, (i) => i === 400, { 'diff.numbered.txt': '+++ b/src/svc.js\n@@ -1,1 +1,2 @@\n   2 | +function zzzNothing() {}\n' });
+  await none.go();
+  assert.match(none.user(), /name="test\/svc\.test\.js" note="first \d+ of 2999 lines, line-numbered"/);
+  assert.equal(none.h.file('pack-cut.txt'), 'test/svc.test.js');
+  const leads = sliceRepo(t, (i) => i === 400, { 'diff.numbered.txt': '', 'diff.patch': 'diff --git a/src/svc.js b/src/svc.js\n+++ b/src/svc.js\n@@ -1 +1,2 @@\n+function other() {}\n', 'leads.txt': 'Changed symbols with no test reference:\n  src/svc.js:2 computeTotal\n  src/other.js:9 helper\n' });
+  await leads.go();
+  assert.match(leads.user(), /note="relevant slices: lines 1-30, 2001-2005 of 2999 \(tests referencing computeTotal\)/);
+  const raw = sliceRepo(t, (i) => i === 400, { 'diff.numbered.txt': '', 'diff.patch': 'diff --git a/src/svc.js b/src/svc.js\n+++ b/src/svc.js\n@@ -1 +1,2 @@ function computeTotal(a) {\n+  return a + 1;\n' });
+  await raw.go();
+  assert.match(raw.user(), /relevant slices: lines 1-30, 2001-2005 of 2999 \(tests referencing computeTotal\)/, 'the git hunk header names the enclosing function');
+});
+
+test('context pack: slices that leave out some matching test blocks list the file in pack-cut.txt and say so in the note', async (t) => {
+  const r = sliceRepo(t, (i) => i < 3 || (i >= 100 && i < 500) || i === 550); // a 2000-line block of matches that cannot fit, small ones that can
+  await r.go();
+  const u = r.user();
+  assert.match(u, /note="relevant slices: lines 1-30, 2751-2755 of 2999 \(tests referencing computeTotal\); some matching tests did not fit, line-numbered"/);
+  assert.equal(r.h.file('pack-cut.txt'), 'test/svc.test.js');
 });
