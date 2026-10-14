@@ -29,7 +29,7 @@ Never link on name similarity: a requirement governs a line only when its quoted
 
 ## Per D* criterion (requirement unchanged)
 
-Link the obligations it governs and set `alignment`: `consistent` when the code implements the text, `mismatch` when it differs (rounding versus flooring, a different bound or unit). Judge it like an S* row against the current text; there is no `previous`. If the block does not constrain the changed code, say so in `reason` and link no obligation.
+State `alignment` explicitly for every D* criterion; when the code differs from the wording in any detail (rounding direction, limits, defaults), it is `mismatch` with the difference named in `reason`. Link the obligations it governs and set `alignment`: `consistent` when the code implements the text, `mismatch` when it differs (rounding versus flooring, a different bound or unit). Judge it like an S* row against the current text; there is no `previous`. If the block does not constrain the changed code, say so in `reason` and link no obligation.
 
 ## Per behaviour-changing hunk (code changed)
 
