@@ -304,6 +304,8 @@ function track(blocks, prior, head = '') {
     else if (b.status === 'covered' && p && p.status === 'gap' && p.runs >= 2) { b.mark = 'recheck'; st = 'recheck'; runs = 1; since = h; }
     b.was = p ? (p.status === 'recheck' ? 'covered' : p.status) : null;
     b.next = [b.cid, st, since, runs];
+    const top = st === 'gap' || st === 'unsure' ? RISK.find((x) => x !== 'covered' && b.rows && b.rows.some((r) => r.status === x)) : null; // the real row status and class survive in the state: a carried row must not turn a contradiction into a missing test
+    if (top) b.next.push(top, b.rows.filter((r) => r.status === top).every((r) => r.class === 'higher_level') ? 1 : 0);
   }
   return blocks;
 }
@@ -317,11 +319,12 @@ const FID = (x) => Array.isArray(x) && /^[0-9a-f]{8}$/.test(x[0]) && /^[0-9a-f]{
 const findingsOf = (o) => (Array.isArray(o.f) && o.f.length <= FINDINGS_MAX && o.f.every(FID) ? o.f.map(([fid, unit, since, runs]) => ({ fid, unit, since, runs })) : []); // an invalid `f` is dropped, not the state
 const stateRaw = (head, entries, findings = []) => { // entries: [cid, status, since, runs, at: { head, date } | null]; findings: [[fid, unit, since, runs]]
   const audits = [], idx = new Map();
-  const blocks = entries.map(([cid, status, since, runs, at]) => {
-    if (!at) return [cid, status, since, runs, -1];
+  const blocks = entries.map(([cid, status, since, runs, at, top, hl]) => {
+    const x = top ? [top, hl ? 1 : 0] : [];
+    if (!at) return [cid, status, since, runs, -1, ...x];
     const k = `${at.head}@${at.date}`;
     if (!idx.has(k)) { idx.set(k, audits.length); audits.push([at.head, at.date]); }
-    return [cid, status, since, runs, idx.get(k)];
+    return [cid, status, since, runs, idx.get(k), ...x];
   });
   return `<!-- specguard:audit-state ${JSON.stringify({ v: 4, head: String(head || '').slice(0, 40), audits, blocks, ...(findings.length ? { f: findings } : {}) }).replace(/[<>]/g, (c) => (c === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d')} -->`;
 };
@@ -330,13 +333,13 @@ const today = () => new Date().toISOString().slice(0, 10);
 // code (code-first run): { picked: [unit ids audited now], findings: tracked verified findings (trackFindings), carried: prior block entries of units not audited now that are still in the repository }.
 function stateOf(head, data, prior = null, { carried = [], date = today(), code = null } = {}) {
   const at = { head: String(head || '').slice(0, 7), date };
-  const now = track(blocksOf(data), prior, head).filter((b) => /^[0-9a-f]{8}$/.test(b.cid)).map((b) => [...b.next, at]);
+  const now = track(blocksOf(data), prior, head).filter((b) => /^[0-9a-f]{8}$/.test(b.cid)).map((b) => [b.next[0], b.next[1], b.next[2], b.next[3], at, b.next[4], b.next[5]]);
   if (code) { const hit = new Set(code.findings.map((f) => f.unit)); now.push(...track(code.picked.map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : 'covered' })), prior, head).map((b) => [...b.next, at])); }
   const all = carried.concat(code ? code.carried : []);
   const rank = (b) => (b.status === 'covered' || b.status === 'not_req' ? 1 : 0), when = (b) => (b.at && b.at.date) || '';
   const old = all.slice().sort((a, b) => rank(a) - rank(b) || (when(a) < when(b) ? 1 : when(a) > when(b) ? -1 : 0)).slice(0, Math.max(0, STATE_MAX - now.length));
   const fs_ = code ? [...code.findings.map((f) => f.next), ...((prior && prior.findings) || []).filter((x) => !code.picked.includes(x.unit) && code.carried.some((b) => b.cid === x.unit)).map((x) => [x.fid, x.unit, x.since, x.runs])].slice(0, FINDINGS_MAX) : [];
-  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at])], fs_), dropped: all.length - old.length };
+  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl])], fs_), dropped: all.length - old.length };
 }
 // Verified unit findings against the previous state: confirmed = the collector's own fact (a missing_test on a unit with no test file) or the same finding (unit, kind, quote) in the previous run.
 // -> copies with .confirmed and .next, the state entry [fid, unit, first-seen sha7, consecutive runs].
@@ -345,7 +348,7 @@ function trackFindings(list, prior, head = '') {
   return list.map((f) => { const p = was.get(f.fid); return { ...f, confirmed: !!p, next: [f.fid, f.unit, p ? p.since : h, Math.min((p ? p.runs : 0) + 1, MAXRUN)] }; });
 }
 const stateComment = (head, data, prior = null, opts) => stateOf(head, data, prior, opts).raw;
-const priorState = (p) => stateRaw(p.head, p.blocks.map((b) => [b.cid, b.status, b.since, b.runs, b.at]), (p.findings || []).map((x) => [x.fid, x.unit, x.since, x.runs]));
+const priorState = (p) => stateRaw(p.head, p.blocks.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl]), (p.findings || []).map((x) => [x.fid, x.unit, x.since, x.runs]));
 function readState(body) {
   const m = STATE_RE.exec(String(body || ''));
   if (!m) return null;
@@ -354,8 +357,8 @@ function readState(body) {
     const v = o && (o.v === 3 || o.v === 4) && Array.isArray(o.blocks), audits = o && o.v === 4 && Array.isArray(o.audits) ? o.audits : [];
     if (v && (o.v === 3 || (Array.isArray(o.audits) && audits.every((a) => Array.isArray(a) && /^[\w.-]{0,40}$/.test(a[0]) && ISO_DATE.test(a[1]))))
       && o.blocks.every((x) => Array.isArray(x) && /^[0-9a-f]{8}$/.test(x[0]) && BSTATE.includes(x[1]) && /^[\w.-]{0,40}$/.test(x[2]) && Number.isInteger(x[3]) && x[3] >= 1 && x[3] <= MAXRUN
-        && (o.v === 3 || (Number.isInteger(x[4]) && x[4] >= -1 && x[4] < audits.length))))
-      return { head, blocks: o.blocks.map(([cid, status, since, runs, a]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null })), ...(findingsOf(o).length ? { findings: findingsOf(o) } : {}) };
+        && (o.v === 3 || (Number.isInteger(x[4]) && x[4] >= -1 && x[4] < audits.length)) && (x[5] === undefined || (STATUS.includes(x[5]) && (x[6] === 0 || x[6] === 1)))))
+      return { head, blocks: o.blocks.map(([cid, status, since, runs, a, top, hl]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null, ...(top ? { top, hl } : {}) })), ...(findingsOf(o).length ? { findings: findingsOf(o) } : {}) };
     if (o && o.v === 2 && Array.isArray(o.rows) && o.rows.every((x) => Array.isArray(x) && CID.test(x[0]) && STATUS.includes(x[1]))) {
       const by = new Map();
       for (const [id, s] of o.rows) by.set(cidOf(id), [...(by.get(cidOf(id)) || []), s]);
@@ -386,7 +389,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const riskiest = inv && unseen.length ? `${seenN} unit${seenN === 1 ? '' : 's'} that fit the model's context` : inv ? (inv.rotation.picked === 1 ? 'riskiest unit' : `${inv.rotation.picked} riskiest units`) : '';
   const docless = !!code && !docs.length && !rows.length; // a repository without design documents: the document statistics would only say zero
   // carried blocks: the previous status, no sub-rows; a pending recheck stays pending; blocks that were not requirements are only counted
-  const old = carried.filter((p) => p.status !== 'not_req').map((p) => ({ cid: p.cid, path: p.path, line: p.line, text: p.text, rows: [], carried: true, at: p.at, next: [p.cid, p.status, p.since, p.runs],
+  const old = carried.filter((p) => p.status !== 'not_req').map((p) => ({ cid: p.cid, path: p.path, line: p.line, text: p.text, rows: [], carried: true, at: p.at, top: p.top, hl: p.hl, next: [p.cid, p.status, p.since, p.runs],
     status: p.status === 'recheck' ? 'covered' : p.status, mark: p.status === 'recheck' ? 'recheck' : p.status === 'gap' ? (p.runs >= 2 ? 'confirmed' : 'new') : '' }));
   const name = (r) => `${link(r.source.path, r.source.line, r.id)}`;
   const evidence = (r) => [r.code.length ? `code: ${r.code.map(at).join('; ')}` : '', r.tests.length ? `tests: ${r.tests.map((t) => `${t.layer} ${at(t)}`).join('; ')}` : ''].filter(Boolean).join('<br>');
@@ -408,26 +411,35 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const by = (pairs) => pairs.map(([v, n]) => `${v} ${n}`).join(' · ') || 'none';
   const docCount = new Set(rows.map((r) => r.source.path)).size;
   // how much of the repository this run covers, and how its blocks were chosen
+  const lg = (() => { // unique block ids: selected = picked; audited now = selected minus the blocks of a failed or dropped part; audited ever = the state's blocks still in the documents plus those audited now
+    const k = rotation ? rotation.picked : 0, skipN = new Set(notAudited.blocks.map((b) => b.cid)).size, notes = [];
+    const now = Math.max(0, k - skipN);
+    let ever = new Set(carried.map((b) => b.cid)).size + now;
+    if (skipN > k) notes.push('coverage counts were inconsistent (more blocks not audited than selected) and were clamped');
+    if (candidates && ever > candidates) { notes.push(`coverage counts were inconsistent (${ever} audited at least once of ${candidates} blocks) and were clamped`); ever = candidates; }
+    return { k, now, ever, notes };
+  })();
   const coverage = () => {
     const where = scope.length ? `Scope (scan_paths): ${scope.map((l) => `\`${cell(l, 100)}\``).join(', ')}.\n\n` : '';
     if (!rotation || !candidates) return where;
-    const k = rotation.picked;
+    const k = lg.k;
     const found = search && search.blocks ? `Evidence candidates found before the model ran: ${search.with_code} of ${search.blocks} blocks have a code location, ${search.with_tests} a test location.\n\n` : '';
     if (!rotation.rotate) return `${where}${k < candidates ? `Scanned in document order: the first ${k} of ${candidates} blocks (cap ${cap}). Schedule with scan_issue: true to rotate through all blocks.\n\n` : ''}${found}`;
-    return `${where}Coverage: ${k + carried.length} of ${candidates} blocks audited at least once; this run audited ${k} (changed ${rotation.changed}, confirming ${rotation.confirming}, new ${rotation.new}, oldest ${rotation.oldest}).\n\n${found}`;
+    return `${where}Coverage: ${lg.ever} of ${candidates} blocks audited at least once; this run audited ${lg.now} (changed ${rotation.changed}, confirming ${rotation.confirming}, new ${rotation.new}, oldest ${rotation.oldest}).\n\n${found}`;
   };
   // Visible = what to act on: confirmed gaps, new gaps to confirm, documents and code that disagree, and "Not reviewed" when the scan is incomplete. Everything else sits in ONE Details block.
   const skipped = data ? data.not_requirements || [] : [], gapN = confirmed.length + fresh.length;
   const NEXT = { contradicted: 'The code contradicts it: see Documents and code disagree.', not_implemented: 'Not implemented: add the behaviour and a unit test.', missing_test: 'Add a unit test that checks it.', partial: 'Strengthen the unit test: it checks only part of it.' };
   const HIGH = { missing_test: 'Add a component or integration test that checks it.', partial: 'Strengthen the component or integration test: it checks only part of it.' };
   const nextStep = (b) => { // a requirement only a higher layer can prove asks for a test at that layer
+    if (b.carried && b.top) return b.top === 'contradicted' ? 'The code contradicted it when last audited: fix the code or the requirement.' : (b.hl && HIGH[b.top]) || NEXT[b.top] || NEXT.missing_test; // a carried row has no sub-rows: its status comes from the state
     const v = RISK.find((x) => GAP.includes(x) && b.rows.some((r) => r.status === x)) || 'missing_test', rs = b.rows.filter((r) => r.status === v);
     return (rs.length && rs.every((r) => r.class === 'higher_level') && HIGH[v]) || NEXT[v];
   };
   const grow = (b) => `| ${link(b.path, b.line, `${b.path}:${b.line}`)} ${cell(b.text, 120)}${b.carried ? `<br><sub>from ${b.at ? cell(b.at.date, 12) : 'an earlier run'}</sub>` : ''} | ${nextStep(b)} |\n`;
   const GTOP = '| Document says | Next step |\n|---|---|\n';
   const clashes = rows.filter((r) => r.status === 'contradicted').map((r) => `| "${cell(r.source.quote, 200)}"<br>${at(r.source)} | "${cell(r.code[0].quote, 200)}"<br>${r.code.map(at).join('; ')} |\n`);
-  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...(stateDropped ? [`the scan issue state keeps at most ${STATE_MAX} blocks: ${stateDropped} older block(s) are dropped and will count as never audited`] : [])];
+  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...lg.notes, ...(stateDropped ? [`the scan issue state keeps at most ${STATE_MAX} blocks: ${stateDropped} older block(s) are dropped and will count as never audited`] : [])];
   const unread = data ? docs.filter(([p]) => !data.docs_reviewed.includes(p)).map(([p]) => `\`${p}\` was admitted but is not in docs_reviewed.`) : [];
   const nrAll = [...nr, ...unread];
   const where = sha ? ` in the design documents at \`${cell(sha.slice(0, 7), 12)}\`` : ' in the design documents';

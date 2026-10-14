@@ -488,7 +488,7 @@ test('confirmation: gap twice is confirmed, a new gap is unconfirmed, a confirme
   assert.deepEqual(r.map((x) => x.marks[B]), [undefined, 'new', 'confirmed', 'recheck', 'resolved']);
   assert.deepEqual(r.map((x) => x.marks[U]), ['', 'new', '', '', ''], 'an unsure block becoming a gap is unconfirmed');
   // counters: [cid, status, firstSeenHead, consecutive runs]; the first-seen head survives while the status holds
-  assert.deepEqual(r[1].blocks.find((b) => b.cid === A).next, [A, 'gap', 'h1', 2]);
+  assert.deepEqual(r[1].blocks.find((b) => b.cid === A).next, [A, 'gap', 'h1', 2, 'partial', 0]);
   assert.deepEqual(r[2].blocks.find((b) => b.cid === A).next, [A, 'recheck', 'h3', 1]);
   assert.deepEqual(r[3].blocks.find((b) => b.cid === A).next, [A, 'covered', 'h3', 2]);
   assert.deepEqual(r[4].blocks.find((b) => b.cid === A).next, [A, 'covered', 'h3', 3]);
@@ -532,9 +532,9 @@ test('changed since last audit: only 2-run-stable changes are listed; status chu
 test('state: v4 round trip and tamper check; v3 and a v2 (per-row) state still read as one prior run; v1 and foreign comments are no state', () => {
   const rows = verify(result([req(), req({ id: C2, source: cite('docs/design.md', 4), status: 'missing_test', tests: [], text: 'A plan must start in the future.' })]), { read, cands: TWO() });
   const state = audit.stateComment('abc123def', rows, null, { date: DATE });
-  assert.match(state, /^<!-- specguard:audit-state \{"v":4,"head":"abc123def","audits":\[\["abc123d","2026-10-13"\]\],"blocks":\[\["1111111a","covered","abc123d",1,0\],\["2222222b","gap","abc123d",1,0\]\]\} -->$/);
+  assert.match(state, /^<!-- specguard:audit-state \{"v":4,"head":"abc123def","audits":\[\["abc123d","2026-10-13"\]\],"blocks":\[\["1111111a","covered","abc123d",1,0\],\["2222222b","gap","abc123d",1,0,"missing_test",0]]\} -->$/);
   const at = { head: 'abc123d', date: '2026-10-13' };
-  assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1, at }, { cid: C2, status: 'gap', since: 'abc123d', runs: 1, at }] });
+  assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1, at }, { cid: C2, status: 'gap', since: 'abc123d', runs: 1, at, top: 'missing_test', hl: 0 }] });
   // v3 (no audit dates) is the previous format: it reads with an unknown audit date
   const v3 = audit.readState('<!-- specguard:audit-state {"v":3,"head":"abc123def","blocks":[["1111111a","covered","abc123d",1],["2222222b","gap","abc123d",2]]} -->');
   assert.deepEqual(v3, { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1, at: null }, { cid: C2, status: 'gap', since: 'abc123d', runs: 2, at: null }] });
@@ -561,7 +561,7 @@ test('state: v4 round trip and tamper check; v3 and a v2 (per-row) state still r
   assert.match(md, /### Reported in two runs \(1\)[\s\S]*`1111111a`/, 'gap in the v2 run and now: confirmed');
   assert.match(md, /### New since the last scan \(1\)/);
   assert.match(md, /Unstable: 1 block changed status/);
-  assert.match(audit.stateComment('h2', now, v2, { date: DATE }), /"blocks":\[\["1111111a","gap","abcdef1",2,0\],\["2222222b","gap","h2",1,0\],\["3333333c","unsure","abcdef1",2,0\]\]/);
+  assert.match(audit.stateComment('h2', now, v2, { date: DATE }), /"blocks":\[\["1111111a","gap","abcdef1",2,0,"missing_test",0\],\["2222222b","gap","h2",1,0,"missing_test",0\],\["3333333c","unsure","abcdef1",2,0,"unknown",0\]\]/);
 });
 
 test('run: a previous issue state drives confirmation in summary and issue; the issue ends with the new v4 state', async (t) => {
@@ -579,13 +579,13 @@ test('run: a previous issue state drives confirmation in summary and issue; the 
     assert.match(md, /### New since the last scan \(2\)/);
     assert.doesNotMatch(md, /### Reported in two runs/);
   }
-  assert.match(second, /"blocks":\[\["1111111a","gap","abc123",1,0\],\["2222222b","gap","abc123",1,0\]\]/);
+  assert.match(second, /"blocks":\[\["1111111a","gap","abc123",1,0,"missing_test",0],\["2222222b","gap","abc123",1,0,"missing_test",0]\]/);
   const third = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(TWO()) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: second, user: BOT }] } });
   for (const md of [third.calls.summary, third.calls.updated[0].body]) {
     assert.match(md, /### Reported in two runs \(2\)/);
     assert.match(md, /Reported in two runs, newly \(2\):/);
   }
-  assert.match(third.calls.updated[0].body, /"blocks":\[\["1111111a","gap","abc123",2,0\],\["2222222b","gap","abc123",2,0\]\]/);
+  assert.match(third.calls.updated[0].body, /"blocks":\[\["1111111a","gap","abc123",2,0,"missing_test",0],\["2222222b","gap","abc123",2,0,"missing_test",0]\]/);
 });
 
 // Real audits of one commit (same model, 80 fixed blocks): set SPECGUARD_REPLAY to the directory holding r1/ and r2/ (each with audit.json, or specguard-audit-1/audit.json).
@@ -885,4 +885,34 @@ test('scan layout: every SpecGuard-authored string is English; repository text o
   const md = render({ data: d, head: 'abc1234def', rejected: [['docs/说明.md', 'no items']], docs: [['docs/说明.md', 'discovered']] });
   assert.ok(cjk.test(md));
   assert.doesNotMatch(md.split(ZH).join('').split('说明').join(''), cjk);
+});
+
+test('coverage ledger: counts come from unique block ids; a failed part is neither audited now nor double counted (Kite: 131 blocks, 80 selected, 10 failed, 61 in the state)', () => {
+  const data = sample(), cs = Array.from({ length: 61 }, (_, i) => ({ cid: cid(0x2000 + i), path: 'docs/a.md', line: i + 1, text: `t${i}`, status: 'covered', since: 'h', runs: 1, at: null }));
+  const failed = Array.from({ length: 10 }, (_, i) => ({ cid: cid(0x3000 + i), path: 'docs/a.md', line: i + 1, text: `f${i}` }));
+  const rot = { rotate: true, state: true, picked: 80, changed: 0, confirming: 20, new: 0, oldest: 60, carried: 51 };
+  const md = render({ data, candidates: 131, cap: 80, rotation: rot, carried: cs, notAudited: { blocks: failed, failed: 10, dropped: 0 } });
+  assert.match(md, /Coverage: 131 of 131 blocks audited at least once; this run audited 70 \(changed 0, confirming 20, new 0, oldest 60\)\./);
+  assert.doesNotMatch(md, /clamped/);
+  const over = render({ data, candidates: 131, cap: 80, rotation: { ...rot, picked: 80 }, carried: cs.concat(Array.from({ length: 70 }, (_, i) => ({ ...cs[0], cid: cid(0x4000 + i) }))), notAudited: { blocks: [], failed: 0, dropped: 0 } });
+  assert.match(over, /Coverage: 131 of 131 blocks audited at least once; this run audited 80/);
+  assert.match(over, /coverage counts were inconsistent \(211 audited at least once of 131 blocks\) and were clamped/);
+});
+
+test('state: a carried block keeps its real status and class; a contradicted higher_level block is not turned into "Add a unit test"', () => {
+  const rowOf = (status) => req({ status, class: 'higher_level', tests: [] });
+  const run = (status) => {
+    const state = audit.stateComment('h1', { ...result([rowOf(status)]) }, null, { date: DATE }), prior = audit.readState(`${MARK}\n${state}`);
+    assert.deepEqual([prior.blocks[0].top, prior.blocks[0].hl], [status, 1]);
+    const carried = [{ ...cand(C1, 3, 'A repeating plan stays on after it fires.'), ...prior.blocks[0] }];
+    return render({ data: sample(), prior, carried, candidates: 9, cap: 5, rotation: { ...ROT, picked: 1 } });
+  };
+  const c = run('contradicted'), p = run('partial'), m = run('missing_test');
+  assert.match(c, /A repeating plan stays on after it fires\.<br><sub>from 2026-10-13<\/sub> \| The code contradicted it when last audited: fix the code or the requirement\. \|/);
+  assert.match(p, /\| Strengthen the component or integration test: it checks only part of it\. \|/);
+  assert.match(m, /\| Add a component or integration test that checks it\. \|/);
+  // old 4/5-field entries still parse, and the extra fields fit the budget
+  assert.deepEqual(audit.readState('<!-- specguard:audit-state {"v":4,"head":"h","audits":[["h","2026-10-13"]],"blocks":[["1111111a","gap","h",1,0]]} -->').blocks[0], { cid: C1, status: 'gap', since: 'h', runs: 1, at: { head: 'h', date: '2026-10-13' } });
+  const big = audit.stateOf('h1', { ...result([]) }, null, { date: DATE, carried: Array.from({ length: 700 }, (_, i) => ({ cid: cid(0x5000 + i), status: 'gap', since: 'abcdef1', runs: 2, at: { head: 'abcdef1', date: '2026-10-13' }, top: 'contradicted', hl: 1 })) });
+  assert.ok(Buffer.byteLength(big.raw) < 64000 / 1.5, `${Buffer.byteLength(big.raw)} bytes`);
 });
