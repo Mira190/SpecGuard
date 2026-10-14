@@ -142,6 +142,36 @@ function slices(src, syms, room) {
   const shown = [...found], names = shown.slice(0, 8).join(', ') + (shown.length > 8 ? ', …' : ''), ranges = kept.map((w) => `${w.s + 1}-${w.e + 1}`).join(', ');
   return { text: out.join('\n') + '\n', complete: !dropped, note: `relevant slices: lines ${ranges} of ${n} (tests referencing ${names})${dropped ? '; some matching tests did not fit' : ''}, line-numbered` };
 }
+// A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
+// a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Nothing is listed as cut (a block part never writes pack-cut.txt). ponytail: no per-file fairness, first files first.
+const WIN = 40, HEAD = 15;
+function windowPack(root, locs, limit) {
+  const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)), parts = [];
+  let used = 0;
+  for (const [rel, at] of locs) {
+    const text = packRead(root, rel), room = Math.min(cap, limit - used - OVERHEAD);
+    if (!text || !text.trim() || room < 200) continue;
+    const src = text.replace(/\n$/, '').split('\n'), n = src.length, row = (i) => `${String(i + 1).padStart(4)}| ${src[i]}`;
+    const whole = src.map((_, i) => row(i)).join('\n') + '\n';
+    let body, note;
+    if (Buffer.byteLength(whole) <= room) { body = whole; note = 'full file, line-numbered'; } else {
+      const wins = [[0, Math.min(HEAD, n) - 1], ...at.map((l) => [Math.max(0, l - 1 - WIN), Math.min(n - 1, l - 1 + WIN)])].sort((a, b) => a[0] - b[0]), merged = [];
+      for (const w of wins) { const p = merged[merged.length - 1]; if (p && w[0] <= p[1] + 1) p[1] = Math.max(p[1], w[1]); else merged.push([...w]); }
+      const out = []; let next = 0, size = 0;
+      for (const [a, z] of merged) {
+        const c = Array.from({ length: z - a + 1 }, (_, k) => row(a + k)).join('\n'), cost = Buffer.byteLength(c) + 50;
+        if (size + cost > room) break;
+        size += cost; if (a > next) out.push(`   …| (lines ${next + 1}-${a} omitted)`); out.push(c); next = z + 1;
+      }
+      if (!out.length) continue;
+      if (next < n) out.push(`   …| (lines ${next + 1}-${n} omitted)`);
+      body = out.join('\n') + '\n'; note = `relevant windows around the cited lines (${at.join(', ')}) of ${n}, line-numbered; "…| (lines a-b omitted)" marks the gaps`;
+    }
+    const b = block(rel, body, note); parts.push(b); used += Buffer.byteLength(b);
+  }
+  return { text: parts.length ? `Repository files (the code and tests cited by the candidate blocks' evidence rows; a file noted "relevant windows" shows the lines around each cited line):\n\n${parts.join('\n\n')}` : '', note: '', notWhole: [] };
+}
+
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
@@ -310,7 +340,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     if (!PRICES[model]) notes.push(`cost estimated at default rates: ${model} is not in the price table`);
 
     // A scan with more document blocks than SCAN_BATCH_BLOCKS (default 20) is split into budgeted parts (src/scan-parts.js): one unit call and block calls, answers merged here. Fewer blocks: one call, below.
-    const batch = Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), split = env.CHECK === 'audit' ? require('../scan-parts.js').plan({ ctx, root: root(), batch, limit: packBytes, schemaFile, contextPack, assembleAudit: require('../prompt.js').assembleAudit }) : null;
+    const batch = Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), split = env.CHECK === 'audit' ? require('../scan-parts.js').plan({ ctx, root: root(), batch, limit: packBytes, schemaFile, contextPack, windowPack, assembleAudit: require('../prompt.js').assembleAudit }) : null;
     if (split) {
       const plans = split.parts.map((p) => {
         const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1000 * p.cids.length + 2000) : maxTokens; // a batch of n blocks needs about 1000 tokens each
@@ -369,4 +399,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack };
+module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack };

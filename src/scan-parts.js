@@ -9,7 +9,7 @@ const path = require('node:path');
 const ROW = /^[0-9a-f]{8}\t/;
 const lines = (s) => s.replace(/\r\n/g, '\n').split('\n').filter(Boolean);
 
-function plan({ ctx, root, batch, limit, schemaFile, contextPack, assembleAudit }) {
+function plan({ ctx, root, batch, limit, schemaFile, contextPack, windowPack, assembleAudit }) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return ''; } };
   const cands = lines(rd('audit-candidates.txt')).filter((l) => ROW.test(l));
   if (cands.length <= batch) return null; // ponytail: a document that fits one call keeps the single call; the unit pack and the blocks then share it
@@ -36,14 +36,10 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, assembleAudit 
     for (let i = 0; i < cands.length; i += batch) {
       const rows = cands.slice(i, i + batch), cids = rows.map((l) => l.split('\t')[0]), set = new Set(cids), ev = evidence.filter((l) => set.has(l.split('\t')[0]));
       const prompt = render({ 'audit-docs.txt': rd('audit-docs.txt'), 'audit-candidates.txt': rows.join('\n') + '\n', 'audit-evidence.txt': ev.join('\n') }, { ...bm, candidates: cids.length, candidates_listed: cids.length });
-      // the pack: the files the evidence rows cite (code, each with the tests found for the same block) via the unit machinery of contextPack
-      const tests = new Map(), at = (l) => { const x = l.split('\t')[2] || ''; return x.slice(0, x.lastIndexOf(':') > 0 ? x.lastIndexOf(':') : x.length); };
-      for (const cid of cids) {
-        const mine = ev.filter((l) => l.startsWith(`${cid}\t`)), code = mine.filter((l) => l.split('\t')[1] === 'code').map(at), ts = mine.filter((l) => l.split('\t')[1] === 'test').map(at);
-        for (const c of code.length ? code : ts) { const s = tests.get(c) || new Set(); if (code.length) ts.forEach((t) => s.add(t)); tests.set(c, s); }
-      }
-      let p = { text: '', note: '', notWhole: [] };
-      if (limit > 0) { fs.writeFileSync(path.join(tmp, 'audit-units.txt'), [...tests].map(([f, s], k) => `b${k}\t${f}\t0\tcited\t${s.size ? [...s].join(', ') : 'none'}\t-`).join('\n') + '\n'); p = pack(); }
+      // the pack: windows around the lines the evidence rows cite (code first, then tests), not whole files (windowPack in claude-api.js)
+      const locs = new Map(), at = (l) => { const x = l.split('\t')[2] || '', k = x.lastIndexOf(':'); return k > 0 ? [x.slice(0, k), parseInt(x.slice(k + 1), 10) || 1] : null; };
+      for (const kind of ['code', 'test']) for (const l of ev) { const w = l.split('\t')[1] === kind && at(l); if (w) locs.set(w[0], [...(locs.get(w[0]) || []), w[1]]); }
+      const p = limit > 0 ? windowPack(root, locs, limit) : { text: '', note: '', notWhole: [] };
       out.push({ prompt, pack: p, cids });
     }
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
