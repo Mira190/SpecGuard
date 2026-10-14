@@ -3596,7 +3596,7 @@ test('the sticky summary carries a requirements fingerprint next to the head mar
   assert.ok(body.indexOf(mark) > body.indexOf('specguard:head=') && body.indexOf(mark) < body.indexOf('<!-- specguard:status='), 'req sits after head and before status');
 });
 
-test('the requirements fingerprint is the PR text the review ran on (event payload), not a later re-fetch that may hold an edit the model never saw', async (t) => {
+test('without a collected key the requirements fingerprint falls back to the event payload, not a later re-fetch', async (t) => {
   const { reqKey } = require('./preflight');
   const s = setup(t, report(), { pr: { title: 'T', body: 'EDITED AFTER THE REVIEW STARTED' } }); // pulls.get = the live PR at post time
   s.context.payload.pull_request = { number: 7, head: { sha: 'HEADSHA' }, title: 'T', body: 'what the model read' };
@@ -3604,6 +3604,29 @@ test('the requirements fingerprint is the PR text the review ran on (event paylo
   const body = s.calls.summary[0].body;
   assert.ok(body.includes(`<!-- specguard:req=${reqKey({ title: 'T', body: 'what the model read' })} -->`));
   assert.ok(!body.includes(reqKey({ title: 'T', body: 'EDITED AFTER THE REVIEW STARTED' })), 'the later edit is not recorded as reviewed');
+});
+
+test('the requirements fingerprint is the key collected from the PR text the model read, so a re-run with a stale payload does not loop', async (t) => {
+  const { reqKey, decide } = require('./preflight');
+  const OLD = { title: 'T', body: 'old' }, NEW = { title: 'T', body: 'new' };
+  const s = setup(t, report(), { pr: NEW });
+  s.context.payload.pull_request = { number: 7, head: { sha: 'HEADSHA' }, ...OLD };
+  fs.writeFileSync(path.join(process.env.CTX, 'pr-req-key.txt'), reqKey(NEW));
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.ok(body.includes(`<!-- specguard:req=${reqKey(NEW)} -->`) && !body.includes(reqKey(OLD)));
+  const c = { user: { login: 'github-actions[bot]', type: 'Bot' }, body };
+  assert.ok(decide({ pr: NEW, comments: [c], headSha: 'HEADSHA' }), 'unchanged text: skip');
+  assert.equal(decide({ pr: { title: 'T', body: 'newer' }, comments: [c], headSha: 'HEADSHA' }), '', 'edited again: review');
+});
+
+test('a malformed collected key is ignored (falls back to the payload key)', async (t) => {
+  const { reqKey } = require('./preflight');
+  const s = setup(t, report(), { pr: { title: 'T', body: 'live' } });
+  s.context.payload.pull_request = { number: 7, head: { sha: 'HEADSHA' }, title: 'T', body: 'payload' };
+  fs.writeFileSync(path.join(process.env.CTX, 'pr-req-key.txt'), 'not-a-key');
+  await post(s);
+  assert.ok(s.calls.summary[0].body.includes(`<!-- specguard:req=${reqKey({ title: 'T', body: 'payload' })} -->`));
 });
 
 test('a non-422 failure on a FILE-level comment is incomplete too (no head marker, finding kept in the summary); a 422 there is normal', async (t) => {

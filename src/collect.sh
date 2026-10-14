@@ -175,6 +175,7 @@ timeout 30 node "$HERE/standards-map.js" || echo "::warning::standards applicabi
 if ! timeout 60 node "$(dirname "$0")/requirements.js"; then
   echo "::warning::requirement collection failed; continuing without requirements"
   echo none > "$CTX/requirements.md"
+  rm -f "$CTX/pr-req-key.txt" # the model gets no PR text: post must not record it as reviewed
   printf '{\n  "status": "unavailable",\n  "sources": [],\n  "limitations": ["Requirement collection failed; review is limited to changed behaviour."],\n  "documents": [],\n  "criteria": []\n}\n' > "$CTX/requirements-status.json"
 fi
 

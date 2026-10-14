@@ -1349,9 +1349,10 @@ async function run({ github, context, core }) {
   };
   const early = await current();
   if (early && rechecked) return core.warning(`SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary
-  // The PR text the review ran on, for the requirements fingerprint: the event payload (taken before the model ran) when it carries the text, else the live PR.
-  // The later re-fetch could already hold an edit the model never saw, and recording it would mark a stale review as current.
+  // Requirements fingerprint: the key requirements.js took from the PR text the model reads (collect time); else the payload (a re-run reuses a stale one) or the live PR.
   const snapPr = pr?.title !== undefined ? pr : livePR || pr;
+  let collected = ''; try { collected = fs.readFileSync(path.join(ctx, 'pr-req-key.txt'), 'utf8').trim(); } catch {}
+  const reqFp = /^[0-9a-f]{12}$/.test(collected) ? collected : reqKey(snapPr);
   // Our login: the authenticated user (a PAT), else the login our earlier summary recorded (an App token cannot call /user), else null
   // (GITHUB_TOKEN: github-actions[bot]). A null is replaced once, by the author of the first thing we post.
   let who;
@@ -1395,7 +1396,7 @@ async function run({ github, context, core }) {
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
   const ctxLines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
   const lint = { count: ctxLines('lint-configs.txt').length, changed: ctxLines('lint-changes.txt') }; // linter/formatter configs at base; those the PR changes
-  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, req: reqKey(snapPr), state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, req: reqFp, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -1694,7 +1695,7 @@ async function run({ github, context, core }) {
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
   const delivered = summaryOnly ? 'summary only, nothing posted' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, req: reqKey(snapPr), // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, req: reqFp, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
