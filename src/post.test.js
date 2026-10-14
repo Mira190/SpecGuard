@@ -535,6 +535,22 @@ test('a D criterion the model omitted is shown as not assessed; one given withou
   assert.deepEqual([given.requirements[0].source, given.requirements[0].quote, given.requirements[0].obligation_ids], ['docs/design.md', crit.quote, ['O1']]);
 });
 
+test('a D criterion the model omitted is linked by the trace to the obligations inside its hunks, and asks for an alignment check, not a test', () => {
+  const doc = { source: 'docs/design.md', text: '# 4.1\n\nOn confirm, width and height are rounded to even numbers.\n' };
+  const crit = { id: 'D1', source: 'docs/design.md', ref: '4-1', line: 3, quote: 'On confirm, width and height are rounded to even numbers.', hunks: [{ path: 'src.js', start: 2, end: 4 }] };
+  const d = report({ requirements: [], coverage: [row(), row('covered', { id: 'O2', behaviour: { ...behaviour, path: 'other.js' }, change: { ...behaviour, path: 'other.js' } })], findings: [] });
+  post.verifyRequirements(d, { documents: [doc], criteria: [crit], specFiles: ['docs/design.md'] });
+  assert.deepEqual(d.requirements.map((x) => [x.id, x.obligation_ids, x.reason]), [['D1', ['O1'], 'Linked by the trace to O1.']]);
+  assert.equal(d.coverage[0].alignment.status, 'unknown');
+  const s = post.buildSummary({ data: d });
+  assert.match(s, /| Unconfirmed | On confirm, width and height are rounded to even numbers. | Check that the change does what this requirement says |/);
+  assert.doesNotMatch(s, /Point to the unit test/);
+  const none = report({ requirements: [], coverage: [row('covered', { behaviour: { ...behaviour, line: 99 }, change: { ...behaviour, line: 99 } })], findings: [] });
+  post.verifyRequirements(none, { documents: [doc], criteria: [crit], specFiles: ['docs/design.md'] });
+  assert.deepEqual(none.requirements.map((x) => [x.id, x.obligation_ids]), [['D1', []]]);
+  assert.match(post.buildSummary({ data: none }), /Point to the unit test or add one/);
+});
+
 test('the Requirements cell says none linked, not none found, when a requirement document was read', () => {
   const d = report({ requirements: [], coverage: [row()], findings: [] });
   assert.match(post.buildSummary({ data: d, specFiles: ['docs/design.md'] }), /\| none linked \|/);
