@@ -26,14 +26,14 @@ function harness(t, answers, env = {}) {
   const ctx = path.join(dir, 'ctx'), pf = path.join(dir, 'prompt.txt');
   fs.writeFileSync(pf, PROMPT);
   const calls = [], slept = [], logged = [];
-  const fetchFn = async (url, init) => { calls.push({ url, init, body: JSON.parse(init.body) }); const a = answers[Math.min(calls.length - 1, answers.length - 1)]; return typeof a === 'function' ? a() : a; };
+  const fetchFn = async (url, init) => { calls.push({ url, init, body: JSON.parse(init.body) }); const a = answers[Math.min(calls.length - 1, answers.length - 1)]; return typeof a === 'function' ? a(calls[calls.length - 1]) : a; };
   const go = async (extra = {}) => {
     const log = console.log; console.log = (...a) => logged.push(a.join(' '));
     try { await api.run({ CTX: ctx, PROMPT_FILE: pf, ANTHROPIC_API_KEY: KEY, MODEL: 'claude-haiku-5-5', TIMEOUT: '5', ...env, ...extra }, { fetchFn, sleep: async (ms) => { slept.push(ms); } }); } finally { console.log = log; }
   };
   const file = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').trim(); } catch { return null; } };
   const everything = () => [logged.join('\n'), ...(fs.existsSync(ctx) ? fs.readdirSync(ctx).map(file) : []), JSON.stringify(calls.map((c) => c.body))].join('\n');
-  return { go, file, calls, slept, logged, everything, pf, ctx, dir };
+  return { go, file, calls, slept, logged, everything, pf, ctx, dir, answers };
 }
 
 test('success: one POST with key and version headers, cached static system block, user context, strict schema; findings.json, usage with an exact cost, engine-model', async (t) => {
@@ -575,4 +575,107 @@ test('context pack: slices that leave out some matching test blocks list the fil
   const u = r.user();
   assert.match(u, /note="relevant slices: lines 1-30, 2751-2755 of 2999 \(tests referencing computeTotal\); some matching tests did not fit, line-numbered"/);
   assert.equal(r.h.file('pack-cut.txt'), 'test/svc.test.js');
+});
+
+// --- a scan with many document blocks is split into budgeted parts (src/scan-parts.js) and merged ---
+const cidOf = (i) => i.toString(16).padStart(8, '0');
+// n candidate blocks, 3 units; `answer(req, ok)` may override the reply of a call (ok = the valid answer for what the call listed)
+function scanRepo(t, n, env = {}) {
+  const ok = (req) => {
+    const u = req.body.messages[0].content, rows = [...u.matchAll(/^([0-9a-f]{8})\tdocs\/d\.md:1/gm)].map((m) => m[1]), unit = /name="audit-units\.txt"/.test(u);
+    return good({ content: [{ type: 'text', text: JSON.stringify({ docs_reviewed: ['docs/d.md'], requirements: unit ? [] : rows.map((c) => ({ id: c, text: 'x', source: { path: 'docs/d.md', line: 1, quote: 'quote of the block' }, class: 'unit', status: 'unknown', code: [], tests: [], note: '' })),
+      not_requirements: [], unit_findings: unit ? [{ unit: 'aaaaaaaa', kind: 'missing_test', path: 'lib/a.js', line: 1, quote: 'function alpha() {}', title: 't' }] : [], not_reviewed: [] }) }] });
+  };
+  const cids = Array.from({ length: n }, (_, i) => cidOf(i + 1));
+  const r = repo(t, { 'lib/a.js': 'function alpha() {}\n', 'test/a.test.js': 'test(1);\n' }, {
+    'audit-candidates.txt': cids.map((c) => `${c}\tdocs/d.md:1\tH\ttext ${c}\n`).join(''),
+    'audit-evidence.txt': cids.map((c) => `${c}\tcode\tlib/a.js:1\tfunction alpha() {}\n${c}\ttest\ttest/a.test.js:1\ttest(1);\n`).join(''),
+    'audit-docs.txt': 'docs/d.md\tadmitted\n', 'audit-meta.json': JSON.stringify({ max_requirements: 80, candidates: n, candidates_listed: n, units: { total: 3, picked: 3 }, max_units: 12 }),
+    'audit-units.txt': 'aaaaaaaa\tlib/a.js\t1\tw\ttest/a.test.js\t\nbbbbbbbb\tlib/b.js\t1\tw\tnone\t\ncccccccc\tlib/c.js\t1\tw\tnone\t\n' }, { CHECK: 'audit', ...env });
+  return { ...r, cids, answers: (f) => { r.h.answers[0] = (req) => f(req, ok); } };
+}
+const blockCalls = (h) => h.calls.filter((c) => !/name="audit-units\.txt"/.test(c.body.messages[0].content));
+
+test('scan parts: 45 blocks + 3 units = one unit call and three block calls of at most 20; the answers are merged, usage is summed, the notes say how many calls', async (t) => {
+  const s = scanRepo(t, 45);
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.equal(s.h.calls.length, 4);
+  assert.equal(s.h.calls.filter((c) => /name="audit-units\.txt"/.test(c.body.messages[0].content)).length, 1);
+  const sizes = blockCalls(s.h).map((c) => new Set([...c.body.messages[0].content.matchAll(/^([0-9a-f]{8})\tdocs\/d\.md:1/gm)].map((m) => m[1])).size);
+  assert.deepEqual(sizes, [20, 20, 5]);
+  const f = JSON.parse(s.h.file('findings.json'));
+  assert.equal(f.requirements.length, 45);
+  assert.deepEqual(f.requirements.map((r) => r.id), s.cids);
+  assert.equal(f.unit_findings.length, 1);
+  assert.deepEqual(f.docs_reviewed, ['docs/d.md']);
+  assert.equal(JSON.parse(s.h.file('usage.json')).totalCostUsd, 4 * api.cost('claude-haiku-5-5', { input_tokens: 1000, cache_creation_input_tokens: 20000, output_tokens: 4000 }));
+  assert.match(s.h.file('engine-notes'), /scan in 4 calls/);
+  assert.deepEqual(JSON.parse(s.h.file('scan-parts.json')), { calls: 4, failed: [], dropped: [] });
+  assert.ok(blockCalls(s.h)[0].body.messages[0].content.includes('name="lib/a.js"'), 'the block call carries the files its evidence cites');
+  assert.ok(!blockCalls(s.h)[0].body.messages[0].content.includes('name="audit-units.txt"'));
+});
+
+test('scan parts: at most SCAN_BATCH_BLOCKS blocks keep the single call', async (t) => {
+  const s = scanRepo(t, 20);
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.equal(s.h.calls.length, 1);
+  assert.equal(s.h.file('scan-parts.json'), null);
+});
+
+test('scan parts: a block call with invalid JSON loses only its own blocks (listed in scan-parts.json); the other answers are kept and the run succeeds', async (t) => {
+  const s = scanRepo(t, 45);
+  s.answers((req, ok) => (/text 00000021\b/.test(req.body.messages[0].content) ? good({ content: [{ type: 'text', text: 'not json at all' }] }) : ok(req))); // the second batch (blocks 21-40)
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.equal(s.h.calls.length, 4);
+  assert.ok([null, 'success'].includes(s.h.file('engine-status')));
+  const f = JSON.parse(s.h.file('findings.json')), parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.equal(f.requirements.length, 25);
+  assert.deepEqual(parts.failed.map((x) => [x.part, x.blocks.length]), [['blocks', 20]]);
+  assert.deepEqual(parts.failed[0].blocks, s.cids.slice(20, 40));
+  assert.match(s.h.file('engine-notes'), /20 blocks not audited/);
+  assert.ok(JSON.parse(s.h.file('usage.json')).totalCostUsd > 0, 'the failed reply is paid for and counted');
+});
+
+test('scan parts: a failing unit call keeps the block answers; all calls failing fails the run like one call', async (t) => {
+  const a = scanRepo(t, 45);
+  a.answers((req, ok) => (/name="audit-units\.txt"/.test(req.body.messages[0].content) ? err(401, 'authentication_error', 'invalid x-api-key') : ok(req)));
+  await a.h.go({ GITHUB_WORKSPACE: a.root });
+  assert.equal(JSON.parse(a.h.file('findings.json')).requirements.length, 45);
+  assert.equal(JSON.parse(a.h.file('scan-parts.json')).failed[0].part, 'units');
+  const b = scanRepo(t, 45);
+  b.answers(() => err(401, 'authentication_error', 'invalid x-api-key'));
+  await b.h.go({ GITHUB_WORKSPACE: b.root });
+  assert.equal(b.h.file('engine-status'), 'failed');
+  assert.equal(b.h.file('engine-error').split('\n')[0], 'auth');
+  assert.equal(b.h.file('findings.json'), null);
+});
+
+test('scan parts: a budget too small for every part drops the trailing batches (listed as dropped), the estimate of what was sent stays under the budget', async (t) => {
+  const s = scanRepo(t, 45, { MODEL: 'claude-sonnet-5-5', MAX_OUTPUT_TOKENS: '4000' }); // sonnet: a 20-block batch may emit up to 4000 tokens here
+  s.answers((req, ok) => ok(req));
+  const all = scanRepo(t, 45, { MODEL: 'claude-sonnet-5-5', MAX_OUTPUT_TOKENS: '4000', MAX_BUDGET_USD: '5' });
+  all.answers((req, ok) => ok(req));
+  await all.h.go({ GITHUB_WORKSPACE: all.root });
+  assert.equal(all.h.calls.length, 4);
+  const per = api.worstCase('claude-sonnet-5-5', 0, Math.max(...all.h.calls.map((c) => Buffer.byteLength(c.body.messages[0].content) + Buffer.byteLength(JSON.stringify(c.body.system || '')))), 4000).usd; // the largest part
+  await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String((per * 2.5).toFixed(4)) });
+  assert.ok(s.h.calls.length >= 2 && s.h.calls.length < 4, `calls: ${s.h.calls.length}`);
+  const parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.deepEqual(parts.dropped, s.cids.slice(s.cids.length - parts.dropped.length)); // the tail, in candidate order
+  assert.ok(parts.dropped.length >= 5);
+  assert.equal(JSON.parse(s.h.file('findings.json')).requirements.length + parts.dropped.length, 45);
+  assert.match(s.h.file('engine-notes'), /blocks? left for the next run/);
+  const none = scanRepo(t, 45, { MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.01' });
+  await none.h.go({ GITHUB_WORKSPACE: none.root });
+  assert.equal(none.h.calls.length, 0);
+  assert.equal(none.h.file('engine-error').split('\n')[0], 'budget');
+});
+
+test('action.yml: scan_batch_blocks (default 20) reaches the validation and engine steps; validate-inputs.sh accepts 1 to 100 only', () => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8');
+  assert.match(/^ {2}scan_batch_blocks: \{[^}]*\}/m.exec(yml)[0], /default: "20" \}$/);
+  assert.equal(yml.split('SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}').length - 1, 2);
+  for (const [v, code] of [['0', 1], ['101', 1], ['x', 1], ['20', 0], ['100', 0]]) assert.equal(spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh')], { env: { ...process.env, ENGINE: 'claude', SCAN_BATCH_BLOCKS: v }, encoding: 'utf8' }).status, code, v);
 });
