@@ -543,12 +543,26 @@ test('a D criterion the model omitted is linked by the trace to the obligations 
   assert.deepEqual(d.requirements.map((x) => [x.id, x.obligation_ids, x.reason]), [['D1', ['O1'], 'Linked by the trace to O1.']]);
   assert.equal(d.coverage[0].alignment.status, 'unknown');
   const s = post.buildSummary({ data: d });
-  assert.match(s, /| Unconfirmed | On confirm, width and height are rounded to even numbers. | Check that the change does what this requirement says |/);
+  assert.match(s, /\| Unconfirmed \| On confirm, width and height are rounded to even numbers\. \| Check that the change does what this requirement says \|/);
   assert.doesNotMatch(s, /Point to the unit test/);
   const none = report({ requirements: [], coverage: [row('covered', { behaviour: { ...behaviour, line: 99 }, change: { ...behaviour, line: 99 } })], findings: [] });
   post.verifyRequirements(none, { documents: [doc], criteria: [crit], specFiles: ['docs/design.md'] });
   assert.deepEqual(none.requirements.map((x) => [x.id, x.obligation_ids]), [['D1', []]]);
   assert.match(post.buildSummary({ data: none }), /Point to the unit test or add one/);
+});
+
+test('a D criterion the model linked itself, unit-tested where it can be and the rest left to a person, with alignment unsettled, asks for the alignment and shows the open question', () => {
+  const q = 'The text says rounded; the code floors. Whether a floor satisfies rounded is ambiguous.';
+  const d = report({
+    requirements: [{ id: 'D1', source: 'docs/design.md', quote: 'On confirm, width and height are rounded to even numbers.', obligation_ids: ['O1', 'O3'], reason: 'Floors odd sizes; the wiring needs a person.' }],
+    coverage: [row('covered', { alignment: { status: 'unknown', reason: q } }), row('needs_human', { id: 'O3', evidence: [], alignment: { status: 'unknown', reason: q } })],
+    findings: [],
+  });
+  const s = post.buildSummary({ data: d });
+  assert.match(s, /\| Unconfirmed \| On confirm, width and height are rounded to even numbers\. \| Check that the change does what this requirement says: the text says rounded; the code floors/);
+  assert.doesNotMatch(s, /Point to the unit test/);
+  const r = report({ requirements: [{ ...d.requirements[0], id: 'R1', source: 'PR body' }], coverage: d.coverage, findings: [] });
+  assert.match(post.buildSummary({ data: r }), /Point to the unit test or add one/, 'a PR-body criterion keeps the old next step');
 });
 
 test('the Requirements cell says none linked, not none found, when a requirement document was read', () => {

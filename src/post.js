@@ -694,7 +694,10 @@ function criteriaOf(data, all) {
   return reqRows(data).map((r) => {
     const cs = r.obligation_ids.map((id) => covById.get(id)), mine = (kinds) => all.filter((f) => kinds.includes(f.kind) && f.obligation_ids.some((id) => r.obligation_ids.includes(id)));
     const mismatch = cs.some((c) => c?.alignment?.status === 'mismatch') && mine(['spec_mismatch']).length > 0, gap = hasGap(r, covById, gaps) && mine(['missing_test', 'weak_test']).length > 0; // a pre-existing drift, or a gap with no verified finding, is not an action here
-    const done = cs.length && cs.every((c) => c?.status === 'covered'), align = !!r.trace_linked && done && !mismatch && cs.some((c) => c.alignment?.status === 'unknown'); // linked by the trace, evidenced, but nobody judged whether the code does what the sentence says
+    const done = cs.length && cs.every((c) => c?.status === 'covered');
+    // a governing requirement (D*, or linked by the trace) whose code is unit-tested where it can be (the rest needs a person, e.g. UI glue) but whose alignment nobody settled: ask for the alignment, not for a test
+    const tested = cs.length && cs.some((c) => c?.status === 'covered') && cs.every((c) => ['covered', 'needs_human'].includes(c?.status));
+    const align = (!!r.trace_linked || /^D\d+$/.test(r.id)) && tested && !mismatch && !gap && cs.some((c) => c?.alignment?.status === 'unknown');
     const kind = !cs.length ? 'unassessed' : mismatch ? 'mismatch' : gap ? 'gap' : align ? 'check' : done ? 'evidenced' : 'check';
     return { r, kind, align, cs, f: (mismatch ? mine(['spec_mismatch']) : mine(['missing_test', 'weak_test']))[0], higher: cs.some((c) => c?.status === 'higher_level_only') };
   });
@@ -799,7 +802,10 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
       // each fact once: a finding listed above is only pointed to; its title stays here only when no visible list holds it (overflow, or a posted mismatch)
       const act = (x, say) => (x.f && listed.has(x.f) ? `${say}${link(x) || '.'}` : x.f ? `${say}: ${cell(title1(x.f.title), 110)}${link(x)}` : `${say}.`);
       const next = (x) => {
-        if (x.align) return 'Check that the change does what this requirement says';
+        if (x.align) { // the reviewer's open question (e.g. "rounded" in the text, a floor in the code) is what the person has to settle
+          const q = String(x.cs.find((c) => c?.alignment?.status === 'unknown' && c.alignment.reason)?.alignment.reason || '').trim(), say = 'Check that the change does what this requirement says';
+          return q && !INTERNAL.test(q) && !/^not stated\.?$/i.test(q) ? cell(`${say}: ${words(q.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase()), 160 - say.length - 2)}`, 160) : say;
+        }
         if (x.kind === 'unassessed' || x.kind === 'check') return cell(`${ask}${why(x.grp.find((y) => RANK[y.kind] === 2 && why(y) !== '.') || x)}`, 160); // the first human reason in the group
         const say = x.kind === 'mismatch' ? 'Fix the code or the requirement' : x.f?.kind === 'weak_test' ? 'Strengthen the test' : 'Add the test';
         const links = [...new Set(x.grp.filter((y) => y.kind === x.kind).map(url).filter(Boolean))]; // each finding once
