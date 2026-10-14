@@ -388,3 +388,10 @@ test('coverage.txt is inlined as execution evidence only when present; absent le
   assert.match(withCov, /never executed: L12-L13/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('assembleAudit (single call): audit-blocks.txt is inlined with its note, so a block past the 240-character row cut is whole', () => {
+  const tail = 'DECISIVE_CLAUSE_AFTER_300';
+  const p = abuild(actx({ 'audit-candidates.txt': 'aaaaaaaa\tdocs/design.md:3\t§1\tcut row\n', 'audit-blocks.txt': `aaaaaaaa\t${'x'.repeat(300)}${tail}\n` }));
+  assert.match(p, /<untrusted-data name="audit-blocks\.txt" note="the full text of each candidate block/);
+  assert.ok(p.includes(tail));
+});

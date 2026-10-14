@@ -13,7 +13,7 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, windowPack, as
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8'); } catch { return ''; } };
   const cands = lines(rd('audit-candidates.txt')).filter((l) => ROW.test(l));
   if (cands.length <= batch) return null; // ponytail: a document that fits one call keeps the single call; the unit pack and the blocks then share it
-  const evidence = lines(rd('audit-evidence.txt')), units = rd('audit-units.txt');
+  const evidence = lines(rd('audit-evidence.txt')), bodies = lines(rd('audit-blocks.txt')), units = rd('audit-units.txt');
   let meta = {}; try { meta = JSON.parse(rd('audit-meta.json')); } catch { /* the prompt falls back to its defaults */ }
   const skillDir = path.join(__dirname, '..', 'skills', 'spec-audit'), out = [];
   let tmp;
@@ -28,7 +28,7 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, windowPack, as
   const { units: _u, max_units, ...bm } = meta;
   const block = (rows) => {
     const cids = rows.map((l) => l.split('\t')[0]), set = new Set(cids), ev = evidence.filter((l) => set.has(l.split('\t')[0]));
-    const prompt = render({ 'audit-docs.txt': rd('audit-docs.txt'), 'audit-candidates.txt': rows.join('\n') + '\n', 'audit-evidence.txt': ev.join('\n') }, { ...bm, candidates: cids.length, candidates_listed: cids.length });
+    const prompt = render({ 'audit-docs.txt': rd('audit-docs.txt'), 'audit-candidates.txt': rows.join('\n') + '\n', 'audit-blocks.txt': bodies.filter((l) => set.has(l.split('\t')[0])).join('\n'),'audit-evidence.txt': ev.join('\n') }, { ...bm, candidates: cids.length, candidates_listed: cids.length });
     // the pack: windows around the lines the evidence rows cite (code first, then tests), not whole files (windowPack in claude-api.js)
     const locs = new Map(), at = (l) => { const x = l.split('\t')[2] || '', k = x.lastIndexOf(':'); return k > 0 ? [x.slice(0, k), parseInt(x.slice(k + 1), 10) || 1] : null; };
     for (const kind of ['code', 'test']) for (const l of ev) { const w = l.split('\t')[1] === kind && at(l); if (w) locs.set(w[0], [...(locs.get(w[0]) || []), w[1]]); }
