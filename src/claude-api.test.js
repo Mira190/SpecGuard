@@ -336,6 +336,16 @@ test('context pack: pack-cut.txt lists every file that was cut or not included, 
   assert.equal(off.h.file('pack-cut.txt'), null);
 });
 
+test('context pack: scan units share the budget; a first unit with many big tests cannot starve the later unit files', async (t) => {
+  const big = Array.from({ length: 120 }, () => 'x'.repeat(99)).join('\n') + '\n', tests = Array.from({ length: 10 }, (_, i) => `test/t${i}.js`);
+  const r = repo(t, { 'lib/a.js': 'function alpha() {}\n', 'lib/b.js': 'function beta() {}\n', 'lib/c.js': 'function gamma() {}\n', ...Object.fromEntries(tests.map((n) => [n, big])) },
+    { 'audit-units.txt': `u1\tlib/a.js\t1\tw\t${tests.join(', ')}\t\nu2\tlib/b.js\t1\tw\tnone\t\nu3\tlib/c.js\t1\tw\tnone\t\n` }, { CONTEXT_PACK_BYTES: '100000' });
+  await r.go();
+  const u = r.user(), cut = r.h.file('pack-cut.txt').split('\n');
+  for (const n of ['lib/a.js', 'lib/b.js', 'lib/c.js']) assert.ok(u.includes(`name="${n}" note="full file`) && !cut.includes(n), n);
+  assert.ok(cut.includes('test/t9.js'), 'excess tests of unit 1 are listed as not whole');
+});
+
 const track = (root) => { for (const a of [['init', '-q'], ['add', '-A']]) spawnSync('git', a, { cwd: root }); }; // the extra tiers read `git ls-files`
 
 test('context pack: a file the requirements name (by file name or folder name) is inlined with its sibling test; generic tokens and tokens that match nothing are skipped; at most 8 files', async (t) => {
