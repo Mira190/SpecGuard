@@ -108,10 +108,6 @@ function fakeGithub({ headSha }) {
       pulls: {
         get: async () => ({ data: { head: { sha: headSha }, mergeable: false } }),
         listFiles: fns.listFiles, listReviewComments: fns.listReviewComments,
-        createReview: async ({ body, comments }) => {
-          posted.reviews.push({ state: 'COMMENTED', body: body || '' });
-          for (const c of comments || []) posted.comments.push({ ...c, user: { type: 'Bot' } });
-        },
         createReviewComment: async (c) => { posted.comments.push({ ...c, user: { type: 'Bot' } }); },
       },
       issues: {
