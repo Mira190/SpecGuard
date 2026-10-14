@@ -676,9 +676,10 @@ const FENCED = /^(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\1[`~]*[ \t]*$/gm;
 // A finding that carries its full text here (it was not posted as a comment): the head line, then the rest of the prose and the skeleton under it. A long text folds into a per-item
 // <details>; the code skeleton of the top three stays visible.
 function findingBlock(it, blob, rank, opts = {}) {
-  const { f } = it, { flat, ...o } = opts, head = findingHead(f, { why: it.why, ...o }, blob);
+  const { f } = it, { flat, sketch, ...o } = opts, head = findingHead(f, { why: it.why, ...o }, blob);
   if (it.brief) return head;
-  const body = neutralize(f.body), blocks = [...(body.match(FENCED) || []), fix(f, false).trim().replace(/:\n\n/, ':\n')].filter(Boolean); // the skeleton or suggested fix keeps its label
+  const body = neutralize(f.body), blocks = [...(body.match(FENCED) || []).map((b) => (sketch ? `Sketch, not run:
+${b}` : b)), fix(f, false).trim().replace(/:\n\n/, ':\n')].filter(Boolean); // the skeleton or suggested fix keeps its label
   const prose = body.replace(FENCED, '').replace(/\n{3,}/g, '\n\n').trim();
   const first = /^[\s\S]*?[.!?](?=\s|$)/.exec(prose), rest = f.kind === 'standard' && f.rule_source ? prose : first && first[0].length <= 200 ? prose.slice(first[0].length).trim() : prose;
   const long = !flat && rest.length > 300, open = flat || rank < 3, code = blocks.join('\n');

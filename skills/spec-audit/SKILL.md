@@ -41,7 +41,7 @@ Each row has `title` (a short name of the behaviour), `body` (one or two sentenc
 | Tests exist but only at a higher layer than a unit test could prove, or a unit test checks part of it, or its assertion is weak | `partial` |
 | The code implements it and no test assertion was found anywhere (a claim; the publisher cannot verify an absence) | `missing_test` |
 | A search finds no code that implements it (a claim; the publisher cannot verify an absence, so list the searches you ran in `note`) | `not_implemented` |
-| The cited code does the opposite or a different value (say which in `note`). Cite the requirement line and the contradicting code line; both quotes are verified or the row becomes `unknown` | `contradicted` |
+| The cited code violates what the text states: a different value (800 vs 740), a missing required behaviour, or behaviour the text explicitly restricts ("only", "at most", "never"). Extra behaviour the text does not exclude is consistent, not `contradicted` ("sortable by name, duration and date" is not contradicted because size also sorts) (say which in `note`). Cite the requirement line and the contradicting code line; both quotes are verified or the row becomes `unknown` | `contradicted` |
 | The search was incomplete or the evidence is ambiguous | `unknown` |
 | Only a person can judge it | `needs_human` |
 
