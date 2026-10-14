@@ -563,6 +563,15 @@ test('a D criterion the model linked itself, unit-tested where it can be and the
   assert.doesNotMatch(s, /Point to the unit test/);
   const r = report({ requirements: [{ ...d.requirements[0], id: 'R1', source: 'PR body' }], coverage: d.coverage, findings: [] });
   assert.match(post.buildSummary({ data: r }), /Point to the unit test or add one/, 'a PR-body criterion keeps the old next step');
+  // the model filed the sentence itself as an "unknown" obligation (Kite PR #6, run 3): still an alignment question
+  const own = report({
+    requirements: [{ id: 'D1', source: 'docs/design.md', quote: 'On confirm, width and height are rounded to even numbers.', obligation_ids: ['O4'], reason: 'Rounding direction is not settled by the text.' }],
+    coverage: [row('unknown', { id: 'O4', evidence: [], reason: 'Not assessed: rounding direction.', alignment: { status: 'unknown', reason: q } })],
+    findings: [],
+  });
+  const so = post.buildSummary({ data: own });
+  assert.match(so, /Check that the change does what this requirement says: the text says rounded/);
+  assert.doesNotMatch(so, /Point to the unit test/);
 });
 
 test('the Requirements cell says none linked, not none found, when a requirement document was read', () => {
