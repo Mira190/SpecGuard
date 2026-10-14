@@ -352,22 +352,24 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
       let first = null, ok = 0, splits = 0;
-      const queue = [...plans], fail = (p, reason) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: p.cids }), reason });
+      const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: cids }), reason });
       while (queue.length) {
         const p = queue.shift();
         const r = await call(p.system, p.user, p.tokens);
         rs.push(r);
         if (!r.ok && r.reason === 'length' && p.cids && p.cids.length > 1) { // the reply overflowed: run the two halves as parts of their own, if the budget still covers them
-          const h = Math.ceil(p.cids.length / 2), halves = [p.cids.slice(0, h), p.cids.slice(h)].map((c) => priced({ ...split.sub(c) })), spent = rs.reduce((a, x) => a + (x.u ? cost(x.used, x.u) : 0), 0);
+          const h = Math.ceil(p.cids.length / 2), halves = [p.cids.slice(0, h), p.cids.slice(h)].map((c) => priced({ ...split.sub(c), retry: p.retry })), spent = rs.reduce((a, x) => a + (x.u ? cost(x.used, x.u) : 0), 0);
           if (spent + queue.reduce((a, x) => a + x.usd, 0) + halves.reduce((a, x) => a + x.usd, 0) <= budget) { splits++; queue.unshift(...halves); continue; }
           fail(p, `${r.why}; not split: the halves would exceed max_budget_usd`); first ||= r; continue;
         }
         let obj = null, why = r.ok ? '' : r.why || r.status;
         if (r.ok) { try { obj = JSON.parse(r.found); } catch { /* extract-json gave text that is not an object */ } if (!obj || typeof obj !== 'object' || Array.isArray(obj)) { obj = null; why = 'the answer was not a JSON object'; } }
         const arr = (k) => (obj && Array.isArray(obj[k]) ? obj[k] : []);
-        if (obj && p.cids) { // a block call that left more than 20% of its blocks unanswered is not trusted (audit-post rejects such a whole result)
-          const got = new Set([...arr('requirements').map((x) => /^[0-9a-f]{8}/.exec(String(x?.id))?.[0]), ...arr('not_requirements').map((x) => x?.cid)]), missing = p.cids.filter((c) => !got.has(c)).length;
-          if (missing > p.cids.length * 0.2) { obj = null; why = `${missing} of ${p.cids.length} blocks were not answered`; }
+        let unanswered = [];
+        if (obj && p.cids) { // a block call that left more than 20% of its blocks unanswered (any, in a retry part): its answers are kept, the unanswered ones go back on the queue once as a part of their own
+          const got = new Set([...arr('requirements').map((x) => /^[0-9a-f]{8}/.exec(String(x?.id))?.[0]), ...arr('not_requirements').map((x) => x?.cid)]);
+          unanswered = p.cids.filter((c) => !got.has(c));
+          if (unanswered.length <= (p.retry ? 0 : p.cids.length * 0.2)) unanswered = [];
         }
         if (!obj) { fail(p, why); first ||= r.ok ? { status: 'failed', reason: '', why } : r; if (r.status === 'timeout') break; continue; }
         ok++;
@@ -375,14 +377,21 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
         else merged.unit_findings.push(...arr('unit_findings'));
         merged.docs_reviewed.push(...arr('docs_reviewed').filter((d) => !merged.docs_reviewed.includes(d)));
         merged.not_reviewed.push(...arr('not_reviewed'));
+        if (unanswered.length) {
+          const why = `${unanswered.length} of ${p.cids.length} blocks were not answered`;
+          if (p.retry) { fail(p, `${why} in two attempts`, unanswered); continue; }
+          const again = priced({ ...split.sub(unanswered), retry: true }), spent = rs.reduce((a, x) => a + (x.u ? cost(x.used, x.u) : 0), 0);
+          if (spent + queue.reduce((a, x) => a + x.usd, 0) + again.usd > budget) { fail(p, `${why}; not retried: the retry would exceed max_budget_usd`, unanswered); continue; }
+          retried.push(unanswered); queue.push(again);
+        }
       }
       writeUsage(rs);
       for (const p of queue) fail(p, 'not started: the review timed out'); // a timeout stops the run: the parts not started are not audited either
       if (!ok) return failEnd(first); // nothing usable at all: the run fails as one call would
       w('findings.json', JSON.stringify(merged));
-      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), failed, dropped }));
+      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped }));
       if (!failed.some((f) => f.part === 'units')) w('pack-cut.txt', split.packCut.map((x) => `${x}\n`).join('')); // the unit part's pack (what the unit findings may rely on)
-      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
+      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
       for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);
       return end('success');
     }

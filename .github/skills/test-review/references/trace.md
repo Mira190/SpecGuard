@@ -8,7 +8,7 @@ CI inputs: `requirements-status.json` criteria `S*` (a requirement item changed 
 
 `alignment: {status, since?, reason}`; omit it on a row that links no requirement.
 - `consistent`: the code implements the current requirement text.
-- `mismatch`: the code implements the old text (`previous`), or contradicts the quoted current text.
+- `mismatch`: the code implements the old text (`previous`), or clearly contradicts the quoted current text (text that can be read two ways, with the code matching one reading, is `unknown` with both readings in `reason`).
 - `impacted`: the change alters behaviour a requirement governs, but the requirement neither requires nor forbids the new behaviour.
 - `not_verifiable`: the decision is not visible in the repo (see below). Needs a linked requirement and a `reason`.
 - `not_applicable`: no requirement is linked to the row (the default when `alignment` is omitted).
@@ -29,7 +29,7 @@ Never link on name similarity: a requirement governs a line only when its quoted
 
 ## Per D* criterion (requirement unchanged)
 
-State `alignment` explicitly for every D* criterion; when the code differs from the wording in any detail (rounding direction, limits, defaults), it is `mismatch` with the difference named in `reason`. Link the obligations it governs and set `alignment`: `consistent` when the code implements the text, `mismatch` when it differs (rounding versus flooring, a different bound or unit). Judge it like an S* row against the current text; there is no `previous`. If the block does not constrain the changed code, say so in `reason` and link no obligation.
+State `alignment` explicitly for every D* criterion; when the code differs from the wording in any detail (rounding direction, limits, defaults), it is `mismatch` with the difference named in `reason`. When the wording can reasonably be read two ways and the code matches one reading, it is `unknown` with both readings in `reason`, not `mismatch`; `mismatch` needs a reading the code clearly violates and no plausible reading it satisfies. Link the obligations it governs and set `alignment`: `consistent` when the code implements the text, `mismatch` when it differs (rounding versus flooring, a different bound or unit). Judge it like an S* row against the current text; there is no `previous`. If the block does not constrain the changed code, say so in `reason` and link no obligation.
 
 ## Per behaviour-changing hunk (code changed)
 
