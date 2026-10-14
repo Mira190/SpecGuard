@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // Unit test gap scan (mode scan; audit is an alias), step 1: deterministic context for the checked-out HEAD (no diff, no AI, no repo code executed).
-// Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
+// Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) MAX_UNITS (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
 // Also SCAN_PATHS (scope globs), SCAN_ISSUE (rotate through the blocks), GH_TOKEN + GH_REPO (to read the scan issue's state when SCAN_ISSUE is true).
 // Writes audit-docs.txt, audit-candidates.txt (cid, path:line, heading, text: the blocks the model must assess this run), audit-evidence.txt (per block: up to 3 code and 3 test
 // locations found deterministically), audit-carried.txt (the blocks not audited this run), audit-ruled.txt (blocks the trace.js prefilter dropped: cid, path:line, heading, text, reason), audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
+// Code-first (always, with or without design documents): audit-units.txt, audit-units-carried.txt and audit-inventory.json for the max_units riskiest source files (src/audit-units.js).
 const fs = require('node:fs');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { inventory, write: writeUnits } = require('./audit-units');
 const { run, matchGlob, isTestPath, blocksOf, testScope, tokenize, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP } = require('./trace');
 
 const MAX_AUDIT_DOCS = 60; // the model reads every admitted document in full
@@ -195,7 +197,7 @@ function branchGuard({ refName = '', eventPath = '' } = {}) {
 }
 
 // scanPaths: the scope (docs and evidence); rotate: scan_issue is on, so the run is one of a rotation; prior: that issue's state (null on the first run or without an issue).
-function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS }) {
+function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now() }) {
   const head = git(cwd, ['rev-parse', 'HEAD']).trim();
   fs.rmSync(ctx, { recursive: true, force: true });
   fs.mkdirSync(ctx, { recursive: true });
@@ -239,7 +241,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   const et = evidenceText(cand.fit, ev.by);
   if (ev.cut) notes.push(`the ${Math.round(evidenceBudgetMs / 1000)} s time budget ended the evidence search: blocks marked none may still have code and tests`);
   if (et.left) notes.push(`audit-evidence.txt would pass ${EV_CAP / 1024} KB: ${et.left} block(s) have no candidate locations`);
-  notes.push(`evidence candidates are capped at ${EV_PER} code and ${EV_PER} test locations per block`);
+  if (cand.fit.length) notes.push(`evidence candidates are capped at ${EV_PER} code and ${EV_PER} test locations per block`);
   w('audit-candidates.txt', cand.text);
   w('audit-evidence.txt', et.text);
   w('audit-ruled.txt', ruled.map((c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\t${c.reason}\n`).join('')); // skipped by rule: listed in the report, not sent to the model
@@ -247,11 +249,19 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   w('audit-rejected.txt', rejected.map(([p, why]) => `${p}\t${why}\n`).join(''));
   w('standards.txt', standards.map((f) => `${f}\n`).join(''));
   w('test-layout.txt', testLayout(inScope, testPaths));
+  // code-first: the riskiest source files, with or without design documents (a repository with none is the common case)
+  let units = null;
+  try {
+    const rules = RULE_GLOBS.concat(lines(ignoreExtra)), docSet = new Set(found);
+    units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, prior, now });
+    if (units.rows.length) writeUnits(ctx, head, maxUnits, units);
+    notes.push(...units.limitations);
+  } catch (e) { notes.push(`the unit inventory failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the scan covers the design documents only`); units = null; }
   const rotation = { rotate, state: !!prior, picked: cand.fit.length, changed: cand.tally.d, confirming: cand.tally.c, new: cand.tally.n, oldest: cand.tally.o, carried: cand.carried.length };
   const evid = { blocks: cand.fit.length, with_code: et.withCode, with_tests: et.withTests, cut: ev.cut, files: ev.files };
-  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes],
+  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, max_units: maxUnits, units: units && units.rows.length ? { total: units.rows.length, picked: units.picked.length } : null, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes],
     scope: lines(scanPaths).map((l) => l.trim()).filter(Boolean), rotation, evidence: evid }) + '\n');
-  return { docs, rejected, standards, head, candidates: cand.total, picked: cand.fit.map((c) => c.cid), rotation, evidence: evid };
+  return { docs, rejected, standards, head, candidates: cand.total, picked: cand.fit.map((c) => c.cid), rotation, evidence: evid, units: units && { total: units.rows.length, picked: units.picked.map((r) => r.id), rotation: units.rotation, totals: units.totals } };
 }
 
 // The scan issue's state for this scope ({ head, blocks } or null: no issue, no state, no access). Read over the REST API with GH_TOKEN/GH_REPO, as this step runs before any github-script step.
@@ -282,15 +292,17 @@ async function main(env) {
   const raw = env.SCAN_MAX_BLOCKS || env.MAX_REQUIREMENTS || '80', input = env.SCAN_MAX_BLOCKS ? 'scan_max_blocks' : 'audit_max_requirements';
   const max = /^\d{1,3}$/.test(raw) ? +raw : 0;
   if (max < 1 || max > 500) { console.log(`::error::${input} must be an integer from 1 to 500`); process.exit(1); }
+  const mu = env.MAX_UNITS || '12', maxUnits = /^\d{1,3}$/.test(mu) ? +mu : 0;
+  if (maxUnits < 1 || maxUnits > 100) { console.log('::error::max_units must be an integer from 1 to 100'); process.exit(1); }
   if (!env.CTX) { console.error('CTX is required'); process.exit(2); }
   const g = env.AUDIT_BRANCH_GUARD === 'off' ? {} : branchGuard({ refName: env.GITHUB_REF_NAME, eventPath: env.GITHUB_EVENT_PATH }); // off: manual run on another repository
   if (g.error) { console.log(`::error::${g.error}`); process.exit(1); }
   if (g.warn) console.log(`::warning::${g.warn}`);
   const rotate = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
   const prior = rotate ? await loadPrior(env) : null;
-  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, scanPaths: env.SCAN_PATHS, rotate, prior });
-  console.log(`SpecGuard unit test gap scan: ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
-  if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length ? 'false' : 'true'}\n`);
+  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior });
+  console.log(`SpecGuard unit test gap scan: ${r.units ? `${r.units.picked.length} of ${r.units.total} units` : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
+  if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);
 }
 
 if (require.main === module) main(process.env);
