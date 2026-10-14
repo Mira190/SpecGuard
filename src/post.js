@@ -1544,8 +1544,11 @@ async function run({ github, context, core }) {
   const gate = (r) => { if (r.note) (data.validation_notes ||= []).push(r.note); return r.f; }; // quality gates only demote or trim; each leaves a validation note
   // A removed assertion with no replacement is a fact (leads.txt), not a judgement: report it when no missing_test/weak_test finding cites that test file near it (either side).
   const auto = [];
-  for (const m of (readCtx('leads.txt') || '').matchAll(/^assertion removed: .* \((.+):(\d+)\)$/gm)) {
+  // leads.txt indents each lead; and a lead is trusted only as far as the diff agrees: recomputing it drops removals re-pinned through a helper.
+  const standing = new Set(require('./leads').assertionDelta(local, () => true).filter((d) => d.kind === 'removed').map((d) => `${d.file}:${d.line}`));
+  for (const m of (readCtx('leads.txt') || '').matchAll(/^\s*assertion removed: .* \((.+):(\d+)\)\s*$/gm)) {
     const path_ = m[1], line = +m[2], ch = maps.get(path_)?.changed.LEFT;
+    if (!standing.has(`${path_}:${line}`)) continue;
     if (auto.length >= 5 || !ch || !reviewable.has(path_) || !ch.has(line)) continue;
     if (data.findings.some((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - line) <= 5)) continue;
     const quote = ch.get(line).trim();
