@@ -1368,6 +1368,20 @@ test('differential: a modified line far from the unchanged behaviour keeps intro
   assert.equal(run('@@ -1,3 +1,3 @@\n-throw new Error("old")\n+throw new Error("new")\n a\n b\n', 1, 'throw new Error("new")'), 'pre_existing');
 });
 
+test('differential: a check removed in the hunk that holds the cited behaviour line makes the drift introduced, even without a change citation (Kite #16); a removal in another hunk does not', () => {
+  const run = (patch, from) => {
+    const d = align(from);
+    Object.assign(d.coverage[0], { behaviour: { path: 'precheck.ts', line: 30, quote: "if (disk && !f.dirExists) return done('folder missing')" }, change: null });
+    post.differential(d, new Map([['precheck.ts', post.parsePatch(patch)]]));
+    return d.coverage[0].alignment.since;
+  };
+  const same = "@@ -28,4 +28,3 @@\n a\n b\n if (disk && !f.dirExists) return done('folder missing')\n-if (disk && !f.dirWritable) return done('no write permission')\n";
+  assert.equal(run(same, 'pre_existing'), 'introduced', 'a model pre_existing is overridden');
+  assert.equal(run(same, 'introduced'), 'introduced');
+  const far = "@@ -2,3 +2,2 @@\n a\n-old()\n b\n@@ -29,2 +28,2 @@\n b\n if (disk && !f.dirExists) return done('folder missing')\n";
+  assert.equal(run(far, 'introduced'), 'pre_existing', 'control: the removal is in another hunk');
+});
+
 test('renameMaps reads renames with git diff -M so a moved file is not wholly "changed"', () => {
   const calls = [];
   const git = (...a) => {
