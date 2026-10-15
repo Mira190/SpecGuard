@@ -182,7 +182,7 @@ function contextPack(ctx, root, limit) {
   const parts = [], seen = new Set(), omitted = [], partial = []; // partial: cut at the budget
   let used = 0, files = 0;
   const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit
-  const addFile = (p, num, quiet, syms, top = limit) => { // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
+  const addFile = (p, num, quiet, syms, top = limit, part = null) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
     const rel = path.posix.normalize(p.replace(/\\/g, '/'));
     if (seen.has(rel)) return;
     seen.add(rel);
@@ -191,6 +191,14 @@ function contextPack(ctx, root, limit) {
     if (!text.trim()) return;
     const room = Math.min(num ? cap : PER_FILE, (quiet ? limit * 0.6 : top) - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
     if (room < 200) return void (quiet || omitted.push(rel));
+    if (part) { // this run's window of a unit too large for one call (review F07); its other parts are reviewed in other runs, so it is not listed as cut
+      const c = cut(src.slice(part.a - 1, part.b).map((l, i) => `${String(part.a + i).padStart(4)}| ${l}`).join('\n') + '\n', room);
+      if (c.cut && c.lines < 1) return void (quiet || omitted.push(rel));
+      if (c.cut && !quiet) partial.push(rel);
+      const b = block(rel, c.text, `part ${part.k + 1} of ${part.n}: lines ${part.a}-${c.cut ? part.a + c.lines - 1 : part.b} of ${src.length}, line-numbered; the other parts are reviewed in other runs`);
+      parts.push(b); used += Buffer.byteLength(b); files++;
+      return;
+    }
     const full = num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text;
     const sl = syms && syms.length && Buffer.byteLength(full) > room ? slices(src, syms, room) : null;
     if (sl) { // pack-cut.txt: not listed when every test that mentions the changed symbols is shown (its relevant tests were visible); listed when some matching block did not fit
@@ -212,7 +220,8 @@ function contextPack(ctx, root, limit) {
   const cands = parseCandidates(rd('test-candidates.txt'));
   const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch'), leads = rd('leads.txt');
   const unitSymbols = (p) => { const out = new Set(), add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n) && out.size < 40) out.add(n); }; for (const l of (packRead(root, p) || '').split('\n')) symbolsIn(l, add); return [...out]; }; // names the unit defines: a big test file is shown as the tests that mention them
-  review.forEach((p, i) => { addFile(p, true); const top = Math.min(limit, used + (limit - used) / (review.length - i)); const syms = units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of (units.size ? units.get(p) : cands.get(p)) || []) addFile(t, true, false, syms, top); }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+  const unitPart = new Map(list('audit-units.txt').map((l) => l.split('\t')).map((u) => [u[1], /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(u[7] || '')]).filter((x) => x[1]).map(([p, w]) => [p, { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] }]));
+  review.forEach((p, i) => { addFile(p, true, false, null, limit, unitPart.get(p)); const top = Math.min(limit, used + (limit - used) / (review.length - i)); const syms = units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of (units.size ? units.get(p) : cands.get(p)) || []) addFile(t, true, false, syms, top); }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
     const named = [], crit = criteriaText(rd('requirements-status.json'));
