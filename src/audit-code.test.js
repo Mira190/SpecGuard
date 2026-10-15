@@ -163,6 +163,13 @@ test('state: a unit gap seen once is picked again; a finding of a unit not revie
   const st = readState(second.raw);
   assert.deepEqual(st.blocks.map((b) => [b.cid, b.status, b.runs, b.at.date]), [[U1, 'gap', 2, '2026-10-08'], [U2, 'covered', 1, '2026-10-08'], [U3, 'gap', 1, '2026-10-01']]);
   assert.deepEqual(st.findings.map((f) => [f.unit, f.runs]).sort(), [[U1, 2], [U3, 1]].sort());
+  // review F06: versions are recorded for the units reviewed now and kept for carried ones; a carried unit that changed since (stale) loses its old findings
+  const withVer = readState(stateOf('aaaaaaa1', result([]), null, { date: '2026-10-01', code: { picked: [U1, U2, U3], findings: trackFindings(checked([uf({ unit: U3, ...cite('src/js/cart.js', 2), title: 'count' })]).unit_findings, null, 'aaaaaaa1'), carried: [], versions: new Map([[U1, '11111111'], [U3, '33333333']]) } }).raw);
+  assert.deepEqual(withVer.versions.uv, { [U1]: '11111111', [U3]: '33333333' });
+  const carry = (stale) => readState(stateOf('bbbbbbb2', result([]), withVer, { date: '2026-10-08', stale, code: { picked: [U1], findings: [], carried: withVer.blocks.filter((b) => b.cid === U3), versions: new Map([[U1, '1111111f']]) } }).raw);
+  assert.deepEqual([carry(new Set()).findings.length, carry(new Set()).versions.uv], [1, { [U1]: '1111111f', [U3]: '33333333' }]);
+  assert.equal(carry(new Set([U3])).findings, undefined, 'stale: the old finding may no longer apply');
+  assert.equal(carry(new Set([U3])).versions.uv[U3], '33333333', 'the old version stays, so the unit stays stale until it is reviewed');
   const third = stateOf('ccccccc3', result([]), st, { date: '2026-10-15', code: { picked: [U3], findings: [], carried: [] } });
   assert.deepEqual(readState(third.raw).blocks.map((b) => b.cid), [U3], 'U1 and U2 are not carried (gone from the repository), so they leave the state');
   assert.equal(readState(third.raw).findings, undefined);

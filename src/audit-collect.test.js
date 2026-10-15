@@ -379,6 +379,26 @@ test('collect with the issue state: the edited block first, then the gap to conf
   assert.deepEqual(metaOf(ctx).rotation, r.rotation);
 });
 
+test('collect with versions (review F06): a covered block whose cited file changed since its audit is stale and audited first; an unchanged citation is not; an unknown audit commit counts as changed', (t) => {
+  const files = { ...AB, 'src/cache.js': 'exports.evict = (c) => c.slice(1);\n', 'test/cache.test.js': 'test("evicts", () => assert.equal(evict([1, 2]).length, 1));\n' };
+  const { root, ctx, git } = repo(t, files);
+  collect({ cwd: root, ctx });
+  const ids = cands(ctx).map((c) => c[0]), h = git('rev-parse', 'HEAD').slice(0, 7), hash = (p) => require('node:crypto').createHash('sha1').update(p).digest('hex').slice(0, 8);
+  const covered = (cid, date) => ({ cid, status: 'covered', since: h, runs: 1, at: { head: h, date } });
+  // the block with the most recent audit date would rest; its cited test file changes in the next commit
+  const state = { head: h, blocks: ids.map((c, i) => covered(c, `2026-09-0${i + 1}`)), versions: { uv: {}, ev: { [ids[5]]: [hash('test/cache.test.js')], [ids[4]]: [hash('src/other.js')] } } };
+  fs.writeFileSync(path.join(root, 'test/cache.test.js'), 'test("evicts", () => {});\n');
+  git('add', '.'); git('commit', '-m', 'weaken the test');
+  const r = collect({ cwd: root, ctx, maxRequirements: 1, rotate: true, prior: state });
+  assert.deepEqual(cands(ctx).map((c) => c[0]), [ids[5]], 'the stale block before the least recently audited one');
+  assert.equal(r.rotation.changed, 1);
+  assert.deepEqual(rows(ctx, 'audit-stale.txt').map((c) => c[0]), [ids[5]], 'its neighbour cites an unchanged file');
+  const lost = { ...state, blocks: state.blocks.map((b) => (b.cid === ids[4] ? { ...b, at: { head: 'fffffff', date: b.at.date } } : b)) };
+  collect({ cwd: root, ctx, maxRequirements: 1, rotate: true, prior: lost });
+  assert.deepEqual(rows(ctx, 'audit-stale.txt').map((c) => c[0]).sort(), [ids[4], ids[5]].sort(), 'an audit commit missing from the clone: rechecked');
+  assert.ok(metaOf(ctx).limitations.some((l) => /could not diff against an earlier audit commit/.test(l)));
+});
+
 test('collect with a state head this clone does not have: the run goes on without the changed-document priority and says so', (t) => {
   const { root, ctx } = repo(t, AB);
   collect({ cwd: root, ctx });
