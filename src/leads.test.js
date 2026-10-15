@@ -189,6 +189,10 @@ test('removed assertions: the Kite #12 fold into a typed TypeScript table with n
   assert.deepEqual(delta('-  assert.deepEqual(f(at(1, 2), 3), 4);\n+  const cases: [Date, number, number][] = [[at(1, 2), 3, 9], [at(0, 0), 4, 4]];\n+  for (const [d, x, y] of cases) assert.deepEqual(f(d, x), y);\n'), ['removed 10 assert.deepEqual(f(at(1, 2), 3), 4);']);
 });
 
+test('removed assertions: a replacement line over 400 characters still re-pins its subject (found by SpecGuard on PR 195)', () => {
+  assert.deepEqual(delta(`-  assert.match(p, /short note/);\n+  assert.match(p, /${'longer note '.repeat(40)}/);\n`), []);
+});
+
 test('removed assertions: assert.match, notEqual and throws count as assertions', () => {
   const d = assertionDelta('diff --git a/t.test.js b/t.test.js\n--- a/t.test.js\n+++ b/t.test.js\n@@ -1,4 +1,1 @@\n-assert.match(f("zq1"), /x/)\n-assert.notEqual(g("zq2"), 1)\n-assert.throws(() => h("zq3"), /bad/)\n x\n', () => true);
   assert.equal(d.length, 3);
