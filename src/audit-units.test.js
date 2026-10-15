@@ -273,8 +273,8 @@ test('a unit too large for one call is reviewed in parts (review F07): fixed lin
 
 test('claude api scan: 8 split units (short and long lines), a rule file and big matched tests: every part of every unit lands whole in the pack; another engine keeps 40 KB parts', (t) => {
   const N = 8, LIMIT = 250000, files = { 'docs/rules.md': `# Rules\n${'- keep functions small and tested\n'.repeat(300)}` };
-  for (let u = 0; u < N; u++) { // 4 units of short lines (the 6-byte line prefix is a big share), 4 of long lines; each over a 1/8 share of the pack
-    files[`src/js/u${u}.js`] = Array.from({ length: u < 4 ? 3500 : 330 }, (_, i) => `exports.f${i} = ${u < 4 ? i : `(x) => x + ${i}; // ${'pad '.repeat(40)}`};`);
+  for (let u = 0; u < N; u++) { // 4 units of short lines (the line prefix is most of what the pack shows), 4 of long lines; each over a 1/8 share of the pack
+    files[`src/js/u${u}.js`] = Array.from({ length: u < 4 ? 24000 : 330 }, (_, i) => (u < 4 ? (i % 2 ? '' : 'x;') : `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(40)};`));
     files[`test/u${u}.test.js`] = [`const u = require('../src/js/u${u}');`, "it('works', () => { assert.equal(u.f1, 1); });", ...Array.from({ length: 700 }, (_, i) => `// ${'filler '.repeat(4)}${i}`)];
   }
   const r = repo(t, files), ids = Array.from({ length: N }, (_, u) => sha8(`src/js/u${u}.js`));
