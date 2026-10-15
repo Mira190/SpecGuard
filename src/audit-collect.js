@@ -11,7 +11,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { inventory, write: writeUnits } = require('./audit-units');
-const { fileCap } = require('./pack-cap');
+const { PER_FILE } = require('./pack-cap');
 const { run, matchGlob, isTestPath, blocksOf, testScope, tokenize, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP } = require('./trace');
 
 const MAX_AUDIT_DOCS = 60; // the model reads every admitted document in full
@@ -278,7 +278,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   try {
     const rules = RULE_GLOBS.concat(lines(ignoreExtra)), docSet = new Set(found);
     // the pack carries the rule files first (each cut at the per-file cap, plus a header): units share what is left
-    const left = packBytes && Math.max(1, packBytes - standards.reduce((n, f) => { try { return n + Math.min(fs.statSync(path.join(cwd, f)).size, fileCap(packBytes)) + 300; } catch { return n; } }, 0));
+    const left = packBytes && Math.max(1, packBytes - standards.reduce((n, f) => { try { return n + Math.min(fs.statSync(path.join(cwd, f)).size, PER_FILE) + 300; } catch { return n; } }, 0));
     units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, prior, now, packBytes: left });
     if (units.rows.length) writeUnits(ctx, head, maxUnits, units);
     notes.push(...units.limitations);
