@@ -875,7 +875,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     detail('**Run notes**\n\n', more);
   }
   // the cost stays visible (money was spent, a failed run too): the last line, in small text, merged with the delivery
-  const runAtom = engine ? `${runLine({ engine, model, raw: usage, notes, used, tier })}\n` : '';
+  const runAtom = engine ? `${runLine({ engine, model, raw: usage, notes, used, tier })}\n${require('./version').versionLine()}\n` : ''; // which SpecGuard produced this (review F12)
   const tailParts = [...(engine ? usageParts({ engine, model, raw: usage, notes, used, tier }) : []), ...(delivery ? [neutralize(delivery)] : [])];
   const delivered = tailParts.length ? `\n<sub>${tailParts.join(' · ')}</sub>\n` : '';
 
@@ -1718,7 +1718,7 @@ async function run({ github, context, core }) {
   tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, execution_complete: execComplete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', specguard: require('./version').version(), complete, execution_complete: execComplete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
   if (ctx) try { fs.writeFileSync(path.join(ctx, 'counts.json'), JSON.stringify(tele) + '\n'); } catch { /* ctx not writable: the sticky comment still carries the counts */ } // summary-only and manual runs have no sticky comment: the artifact carries it
   const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 

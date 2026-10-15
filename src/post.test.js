@@ -373,7 +373,7 @@ test('engine notes, the repair note and the second usage file reach the summary,
   fs.writeFileSync(path.join(s.dir, 'ctx/engine-repair'), 'repaired\n');
   await post(s);
   assert.match(s.calls.summary[0].body, /<sub>Cost ≈ \$0\.20 \(20\.0 AI credits\) · gpt-5\.4 · [^\n]*· 3m20s<\/sub>\n$/);
-  assert.match(s.calls.summary[0].body, /\nRun: engine copilot · effort ignored: model auto · model_fallback: gpt-9 → auto · JSON repaired in one extra turn\n\n<\/details>/);
+  assert.match(s.calls.summary[0].body, /\nRun: engine copilot · effort ignored: model auto · model_fallback: gpt-9 → auto · JSON repaired in one extra turn\nSpecGuard build [0-9a-f]{12}\n\n<\/details>/);
   const f = setup(t);
   fs.writeFileSync(path.join(f.dir, 'ctx/usage.json'), JSON.stringify(COPILOT_USAGE));
   fs.writeFileSync(path.join(f.dir, 'ctx/engine-repair'), 'repair_failed\n');
@@ -2463,6 +2463,7 @@ test('G1 end to end: per prior finding the outcome, thread, reactions (all are p
   assert.deepEqual(c.since, { addressed: 1, open: 1, dismissed: 2, not_observed: 2 });
   assert.match(body, /\nSince earlier reviews: 1 addressed · 1 still open · 2 dismissed · 2 not observed \(not proof of a fix\)\n/);
   assert.match(body, /^<!-- specguard:summary -->\n<!-- specguard:head=[0-9a-f]+ -->\n<!-- specguard:counts /);
+  assert.match(c.specguard.build, /^[0-9a-f]{12}$/, 'which SpecGuard produced the counts (review F12)');
   assert.deepEqual([c.v, c.head, c.engine, c.complete, c.already, c.posted], [1, s.B, 'copilot', true, 1, { inline: 0, file: 0 }]);
   assert.deepEqual(c.findings, { missing_test: { posted: 0, already: 1, summary: 0 } });
   assert.equal(s.queries, 1, 'one thread read serves the telemetry and the stale resolver');
@@ -2773,7 +2774,7 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   assert.doesNotMatch(red, /No unit test gaps found|✅ No/);
   assert.match(red, /\*\*Reduced review\*\*\n\nReasons: fast-tier model; 3 engine notes \(model: mini\)\. Only high-confidence findings were posted inline\./);
   const fail = post.buildSummary({ status: 'Could not complete: the review timed out after 12 minutes', state: 'failed', engine: 'copilot', usage: COPILOT_USAGE, rules: ['x.md'], lint: { count: 2, changed: ['biome.json'] }, tooling: { status: 'failed', checks: [], ref: 'a' } });
-  assert.match(fail, /<!-- specguard:status=failed -->\n## SpecGuard\n\n\*\*⚠️ Could not complete: the review timed out after 12 minutes\*\*\n\n<details><summary>Details: run information<\/summary>\n\nRun: engine copilot\n\n<\/details>\n\n<sub>Cost ≈ [^\n]*<\/sub>\n$/);
+  assert.match(fail, /<!-- specguard:status=failed -->\n## SpecGuard\n\n\*\*⚠️ Could not complete: the review timed out after 12 minutes\*\*\n\n<details><summary>Details: run information<\/summary>\n\nRun: engine copilot\nSpecGuard build [0-9a-f]{12}\n\n<\/details>\n\n<sub>Cost ≈ [^\n]*<\/sub>\n$/);
   assert.doesNotMatch(fail, /###|> |Standards tooling|Lint/);
   const skip = post.buildSummary({ status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).', state: 'complete' });
   assert.match(skip, /## SpecGuard\n\n\*\*Nothing to review: every changed file is ignored \(lockfiles, docs, generated files\)\.\*\*\n/);
