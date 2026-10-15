@@ -3647,6 +3647,16 @@ test('a removed-assertion lead next to a low-confidence finding raises that find
   assert.doesNotMatch(high, /Assertion removed with no replacement|Removal confirmed/);
 });
 
+test('a low weak_test without a usable counterexample next to a removal lead is not raised and no lead is added', async (t) => {
+  const s = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence: 'low', title: 'NEARBY ONE', counterexample: undefined })] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+  fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), 'assertion removed: assert.equal(gone, 1); (test.js:2)\n');
+  await post(s);
+  const all = JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]);
+  assert.doesNotMatch(all, /Removal confirmed|Assertion removed with no replacement|confidence: high/);
+});
+
 test('demoted nearby finding is not raised: a pack-cut-demoted weak_test stays low next to a removal lead, with no confirmation note', async (t) => {
   const s = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence: 'high', title: 'NEARBY ONE' })] }));
   fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
