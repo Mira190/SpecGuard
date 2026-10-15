@@ -65,9 +65,9 @@ const PART_BYTES = 40 * 1024;
 // (claude-api.js contextPack adds every unit file before any test); 5/6 leaves slack for the block markup and rule files.
 // shortcut: the collector assumes the default 250000-byte pack (the action has no input for CONTEXT_PACK_BYTES); wire it through if one is added.
 // shortcut: parts are equal line counts, so a part of unusually long lines can exceed the average; the pack then lists it as cut.
-const partBytes = (packBytes, units) => (packBytes ? { max: Math.min(PART_BYTES, Math.max(4096, Math.floor(Math.min(fileCap(packBytes), packBytes / units) * 5 / 6))), pre: 6 } : { max: PART_BYTES, pre: 0 }); // pre: bytes of line prefix per line
+const partBytes = (packBytes, units) => (packBytes ? { max: Math.min(PART_BYTES, Math.max(4096, Math.floor(Math.min(fileCap(packBytes), packBytes / units) * 5 / 6))), pre: 4 } : { max: PART_BYTES, pre: 0 }); // pre: minimum width of the line number in the pack's prefix (0 = no prefix)
 const partOf = (r, prior, bytes = partBytes(0)) => {
-  const shown = r.size + bytes.pre * r.lines;
+  const shown = r.size + (bytes.pre && Math.max(bytes.pre, String(r.lines).length) + 2) * r.lines; // prefix: the number, padded, plus 2
   if (!(shown > bytes.max)) return null;
   const n = Math.ceil(shown / bytes.max), per = Math.ceil(r.lines / n), at = prior && prior.versions && prior.versions.uc ? prior.versions.uc[r.id] : 0, k = Number.isInteger(at) && at > 0 && at < n ? at : 0;
   return { k, n, a: k * per + 1, b: Math.min(r.lines, (k + 1) * per) };
