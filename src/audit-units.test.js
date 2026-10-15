@@ -351,3 +351,9 @@ test('write: audit-inventory.json rows carry the signal counts additively', (t) 
   const { staticFindings } = require('./audit-units');
   assert.ok(Array.isArray(staticFindings(json.rows)));
 });
+
+test('a unit over 9999 lines is sized with a 7-byte prefix (5-digit number plus 2), not a fixed 6', (t) => {
+  const r = repo(t, { 'src/js/long.js': Array.from({ length: 11000 }, () => 'x;') }); // 33 KB: 3 parts at a 6-byte prefix, 4 at 7
+  const u = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 250000 }).picked.find((x) => x.path === 'src/js/long.js');
+  assert.equal(u.part.n, 4);
+});
