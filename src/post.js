@@ -1695,10 +1695,12 @@ async function run({ github, context, core }) {
   }
   if (lost.length) incomplete.push(`Delivery degraded: ${lost.length} comment(s) could not be posted (${[...new Set(lost)].join(', ')}); the findings are in this summary.`);
 
-  // Fix-through telemetry. Only a complete run can say an earlier finding is no longer reported: otherwise counts only (complete:false, no outcomes).
-  const complete = !incomplete.length && !degraded && !reduced; // a reduced run cannot say an earlier finding is gone
+  // Fix-through telemetry. execution_complete: the run itself finished (nothing cut, failed or degraded); complete: also a full-strength model.
+  // A reduced (fast-tier) run records outcomes too (still reported, dismissed by a person), but its silence is not evidence: a finding it no longer reports
+  // is never 'addressed', only not_observed (judged: false). A/B rates use complete runs only (eval/aggregate-counts.js). Review F09.
+  const execComplete = !incomplete.length && !degraded, complete = execComplete && !reduced;
   const me = await actor();
-  const outcomes = complete && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads }) : [];
+  const outcomes = execComplete && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads }).map((o) => (reduced && o.outcome === 'addressed' ? { ...o, outcome: 'not_observed', judged: false } : o)) : [];
   const byKind = {};
   const tally = (list, k) => list.forEach((f) => { (byKind[f.kind] ||= { posted: 0, already: 0, summary: 0 })[k]++; });
   const unplaced = new Set(unanchored.map((x) => x.f));
@@ -1707,7 +1709,7 @@ async function run({ github, context, core }) {
   tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, execution_complete: execComplete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
   if (ctx) try { fs.writeFileSync(path.join(ctx, 'counts.json'), JSON.stringify(tele) + '\n'); } catch { /* ctx not writable: the sticky comment still carries the counts */ } // summary-only and manual runs have no sticky comment: the artifact carries it
   const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 

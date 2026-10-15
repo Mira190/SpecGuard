@@ -2478,6 +2478,19 @@ test('G1 the since line and per-finding outcomes exist only with earlier finding
   assert.deepEqual(c.findings, { missing_test: { posted: 1, already: 0, summary: 0 } });
 });
 
+test('G1 a reduced (fast-tier) run that finished records outcomes, but a finding it no longer reports is never addressed (review F09)', async (t) => {
+  const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
+  writeCtx(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5-5'] }));
+  await post(s);
+  const c = countsOf(s.calls.summary[0].body);
+  assert.deepEqual([c.complete, c.execution_complete, c.reduced], [false, true, true]);
+  assert.deepEqual(c.outcomes.map((o) => [o.outcome, o.judged, o.anchor_touched]), [['not_observed', false, true]], 'line 7 changed and the finding is gone: addressed on a full model, not here');
+  assert.deepEqual(s.resolved, [], 'nothing is resolved on a reduced run');
+  const full = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
+  await post(full);
+  assert.deepEqual(countsOf(full.calls.summary[0].body).outcomes.map((o) => o.outcome), ['addressed'], 'control: the same run on a full model');
+});
+
 test('G1 an incomplete run still emits counts, marked complete:false, with no outcomes, no since line and nothing resolved', async (t) => {
   const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
   writeCtx(s, 'engine-status', 'timeout\n');
@@ -2763,6 +2776,9 @@ test('grade reads the completeness this summary declares: an incomplete or faile
   assert.equal(g({ status: 'Could not complete: x', state: 'failed' }).complete, false);
   const red = g({ reduced: { reasons: ['fast-tier model'], model: 'mini' }, counts: { v: 1, reduced: true } });
   assert.deepEqual([red.complete, red.reduced], [true, true]);
+  // the shape a real reduced run writes (status=incomplete, review F09): finished means complete for grading; a reduced run that did not finish is not
+  const real = (done) => g({ reduced: { reasons: ['fast-tier model'], model: 'mini' }, state: 'incomplete', counts: { v: 1, reduced: true, complete: false, execution_complete: done } });
+  assert.deepEqual([real(true).complete, real(true).reduced, real(false).complete], [true, true, false]);
 });
 
 test('layout: one icon per summary, on the verdict line only; status words are plain', () => {
