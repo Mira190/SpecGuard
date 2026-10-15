@@ -193,6 +193,13 @@ function headingAt(ls, line) {
   for (let i = Math.min(line, ls.length) - 1; i >= 0; i--) { const m = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(ls[i]); if (m) return m[1]; }
   return '';
 }
+// Last 1-based line of the document block that starts at `line`: it ends at a blank line, at a list item, table row or heading, or where the next candidate of the same file starts (`next`).
+// shortcut: the candidate list has no end line, so this is a heuristic; a multi-paragraph block loses its later paragraphs (they verify as unknown), a block not sent this run cannot be told apart. Upgrade: write the end line in audit-candidates.txt.
+function blockEnd(ls, line, next = Infinity) {
+  let e = line;
+  while (e < ls.length && e + 1 < next && ls[e].trim() && !/^\s*(?:[-*+]\s|\d+[.)]\s|\||#{1,6}\s)/.test(ls[e])) e++;
+  return e;
+}
 const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).digest('hex').slice(0, 8);
 
 // Checks every citation against the file at HEAD (tracked files only) and corrects the line when the quote sits within NEAR lines of it.
@@ -225,11 +232,14 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
   const isDoc = (p) => DOCFILE.test(p) || (docs && docs.has(p));
   const out = { ...data, requirements: [], not_requirements: [], not_reviewed: [...data.not_reviewed] }, unseen = new Set(data.unit_unseen || []);
   const kept = new Set(), failed = new Set(), skipped = new Map((data.not_requirements || []).map((n) => [n.cid, n.reason]));
-  const drop = (r, why) => { failed.add(cidOf(r.id)); out.not_reviewed.push(`${r.id} (${r.source.path}:${r.source.line}): ${why}`); };
+  const foreign = new Set(), drop = (r, why) => { failed.add(cidOf(r.id)); out.not_reviewed.push(`${r.id} (${r.source.path}:${r.source.line}): ${why}`); };
   for (const r of data.requirements) {
     const source = { ...r.source };
     if (docs && !docs.has(safeRel(source.path))) { drop(r, 'its source is not an admitted requirement document'); continue; }
     if (!locate(source)) { drop(r, solid(source.quote) ? 'the requirement quote was not found at the cited line' : `the requirement quote is under ${MIN_QUOTE} characters`); continue; }
+    // the candidate's path and block are the trust boundary: a valid id may not carry another block's text (.1/.2 splits share the block, so they stay inside it)
+    const own = cands && cands.get(cidOf(r.id));
+    if (own && (source.path !== safeRel(own.path) || source.line < own.line || source.line > blockEnd(file(source.path) || [], own.line, Math.min(...[...cands.values()].filter((c) => c.path === own.path && c.line > own.line).map((c) => c.line))))) { drop(r, `its source is not inside block ${own.cid} (${own.path}:${own.line})`); foreign.add(own.cid); continue; }
     const code = r.code.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && !testFile(c.path));
     const located = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
     // same rule as PR mode (post.verifyEvidence): a declaration, an empty or a skipped test carries no coverage
@@ -250,6 +260,8 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     if (why && row.status !== 'unknown') { row.note = `${row.note} Downgraded to unknown: ${why}.`.trim(); row.status = 'unknown'; }
     out.requirements.push(row);
   }
+  out.requirements = out.requirements.filter((r) => !foreign.has(cidOf(r.id))); // one hijacked row leaves the whole block unconfirmed
+  for (const c of foreign) kept.delete(c);
   if (cands) {
     for (const c of cands.values()) {
       if (kept.has(c.cid) || skipped.has(c.cid)) continue;

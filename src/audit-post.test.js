@@ -1063,3 +1063,25 @@ test('verify: incomplete block evidence cannot prove absence, but positive cited
   const other = verify(result([req({ status: 'missing_test', tests: [] })]), { read, blockCuts: { [C2]: ['test/other.test.js'] } });
   assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
 });
+
+test('F21: a candidate id may only carry text from its own block: swapped ids, swapped citations, a duplicated citation stay unknown; a same-block split and a line-fixed citation pass', () => {
+  const F = { ...FILES, 'A.md': ['Negative amounts must be rejected.'], 'B.md': ['Positive amounts must be accepted.', '', '- First criterion holds.', '  continued here.', '- Second criterion holds.'], 'src/amount.js': ['exports.validAmount = (a) => a > 0;'], 'tests/amount.test.js': ['assert.equal(validAmount(10), true);'] };
+  const cit = (p, line) => ({ path: p, line, quote: F[p][line - 1] });
+  const row = (id, src, over = {}) => ({ id, text: 't', source: src, class: 'unit', status: 'covered', code: [cit('src/amount.js', 1)], tests: [{ ...cit('tests/amount.test.js', 1), layer: 'unit' }], note: '', ...over });
+  const go = (rs, cands) => verify(result(rs), { read: (p) => F[p] || null, cands, docs: new Set(['docs/design.md', 'A.md', 'B.md']), tracked: new Set(Object.keys(F)) }).requirements.map((r) => [r.id, r.status]);
+  const AB = candsOf({ cid: C1, path: 'A.md', line: 1, heading: '', text: 'Negative' }, { cid: C2, path: 'B.md', line: 1, heading: '', text: 'Positive' });
+  assert.deepEqual(go([row(C1, cit('A.md', 1)), row(C2, cit('B.md', 1))], AB), [[C1, 'covered'], [C2, 'covered']], 'control: own blocks');
+  assert.deepEqual(go([row(C1, cit('B.md', 1)), row(C2, cit('B.md', 1))], AB), [[C1, 'unknown'], [C2, 'covered']], 'P4: both rows cite B.md');
+  assert.deepEqual(go([row(C1, cit('B.md', 1)), row(C2, cit('A.md', 1))], AB), [[C1, 'unknown'], [C2, 'unknown']], 'ids swapped across documents');
+  const adjacent = candsOf(cand(C1, 3, 'x'), cand(C2, 4, 'y'));
+  assert.deepEqual(go([req({ source: cite('docs/design.md', 4) }), req({ id: C2, source: cite('docs/design.md', 3) })], adjacent), [[C1, 'unknown'], [C2, 'unknown']], 'swapped citations across blocks of one document');
+  assert.deepEqual(go([req({ source: cite('docs/design.md', 4) }), req({ id: C2, source: cite('docs/design.md', 4) })], adjacent), [[C1, 'unknown'], [C2, 'covered']], 'duplicate citation of another block');
+  assert.deepEqual(go([req(), req({ id: C2, source: cite('docs/design.md', 4) })], adjacent), [[C1, 'covered'], [C2, 'covered']], 'control: adjacent blocks, own lines');
+  // a bundled block: its .1/.2 rows may cite any line of that block, not another block
+  const bundle = candsOf({ cid: C1, path: 'B.md', line: 3, heading: '', text: 'First' }, { cid: C2, path: 'B.md', line: 5, heading: '', text: 'Second' });
+  assert.deepEqual(go([row(`${C1}.1`, cit('B.md', 3)), row(`${C1}.2`, cit('B.md', 4)), row(C2, cit('B.md', 5))], bundle), [[`${C1}.1`, 'covered'], [`${C1}.2`, 'covered'], [C2, 'covered']], 'legit split inside one block');
+  assert.deepEqual(go([row(`${C1}.1`, cit('B.md', 3)), row(`${C1}.2`, cit('B.md', 5))], bundle).map(([id, s]) => [id, s]).filter(([id]) => id.startsWith(C1)), [[C1, 'unknown']], 'a .2 row cannot take the next block\'s text: the whole block is restored from its candidate as unknown');
+  // the allowed line fix: a citation a few lines off is corrected by the quote, then checked against the block
+  assert.deepEqual(go([row(C1, { ...cit('B.md', 3), line: 1 }), row(C2, cit('B.md', 5))], bundle), [[C1, 'covered'], [C2, 'covered']], 'near-miss line is corrected, then checked');
+});
+
