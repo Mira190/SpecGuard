@@ -1584,7 +1584,13 @@ async function run({ github, context, core }) {
     const path_ = m[1], line = +m[2], ch = maps.get(path_)?.changed.LEFT;
     if (!standing.has(`${path_}:${line}`)) continue;
     if (auto.length >= 5 || !ch || !reviewable.has(path_) || !ch.has(line)) continue;
-    if (data.findings.some((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - line) <= 5)) continue;
+    const near = data.findings.findIndex((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - line) <= 5);
+    if (near >= 0) {
+      // a low-confidence nearby finding is raised, not duplicated. A cross-file re-pin is no new risk: the lead is already posted when no finding is nearby.
+      const n = data.findings[near];
+      if (n.confidence !== 'high') data.findings[near] = { ...n, confidence: 'high', body: `${n.body}\n\nRemoval confirmed by the diff.` };
+      continue;
+    }
     const quote = ch.get(line).trim();
     auto.push({ kind: 'missing_test', confidence: 'high', path: path_, side: 'LEFT', line, quote, title: 'Assertion removed with no replacement', obligation_ids: [], // ponytail: no coverage row; the LEFT path below never reads obligations
       body: `The assertion \`${quote}\` was removed and nothing in this change pins the same behaviour. Restore it or pin the behaviour in another test.` });
