@@ -254,6 +254,22 @@ test('inventory with a state: rotation counts, review labels and the carried uni
   assert.equal(second.review(second.rows.find((u) => !second.picked.includes(u) && !first.picked.some((v) => v.id === u.id))), 'not yet reviewed');
 });
 
+test('a unit too large for one call is reviewed in parts (review F07): fixed line windows, the cursor from the state, and an unfinished unit is picked first', (t) => {
+  const big = Array.from({ length: 2000 }, (_, i) => `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(6)}`); // about 90 KB: three parts
+  const r = repo(t, { ...FILES, 'src/js/big.js': big });
+  const id = sha8('src/js/big.js');
+  const first = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 20 }), row = first.rows.find((u) => u.id === id);
+  assert.deepEqual(first.picked.find((u) => u.id === id).part, { k: 0, n: 3, a: 1, b: 667 });
+  assert.equal(first.picked.find((u) => u.path === 'src/js/orders.js').part, undefined, 'a small unit is reviewed whole');
+  const prior = { head: 'a', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: {}, ev: {}, uc: { [id]: 2 } } };
+  const next = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, prior });
+  assert.deepEqual([next.picked[0].id, next.picked[0].part], [id, { k: 2, n: 3, a: 1335, b: 2000 }], 'the unfinished unit first, at its cursor');
+  const ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
+  write(ctx, 'HEAD', 1, next);
+  assert.equal(fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\t')[7].trim(), 'part 3/3 lines 1335-2000');
+  assert.ok(row.size > 80 * 1024);
+});
+
 test('write: audit-units.txt, audit-units-carried.txt and audit-inventory.json carry the selected units, the totals and a capped risk table', (t) => {
   const { inv, root } = run(t, { maxUnits: 3 });
   const ctx = path.join(root, '.ctx');
@@ -262,8 +278,9 @@ test('write: audit-units.txt, audit-units-carried.txt and audit-inventory.json c
   const rows = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n').filter(Boolean).map((l) => l.split('\t'));
   assert.equal(rows.length, 3);
   assert.deepEqual(rows[0].slice(0, 2), [sha8('src/js/orders.js'), 'src/js/orders.js']);
-  assert.equal(rows[0].length, 7, 'id, path, risk, why, tests, leads, version');
+  assert.equal(rows[0].length, 8, 'id, path, risk, why, tests, leads, version, part');
   assert.match(rows[0][6], /^[0-9a-f]{8}$/);
+  assert.equal(rows[0][7], '-', 'a unit that fits is reviewed whole');
   assert.match(rows[0][3], /fix commits in 180 days/);
   assert.equal(rows[0][4], 'test/misc.js');
   const price = rows.find((x) => x[1] === 'src/js/price.js');

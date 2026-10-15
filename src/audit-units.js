@@ -57,12 +57,21 @@ const factorOf = (tests, s) => (!tests.length ? 1 : s.asserts === 0 || (s.tests 
 //   c confirming: a unit whose findings were seen in one run only; s stale: the unit or its matched tests changed since it was reviewed (the state's version differs);
 //   n never reviewed (riskiest first); o everything else, least recently reviewed first (ties: riskiest first).
 const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.versions.uv[r.id]; return !!v && v !== r.ver; };
+// A unit too large for one model call is reviewed in parts (review F07): fixed line windows of about PART_BYTES, one per run, the cursor in the state (uc).
+// -> { k, n, a, b } (part k of n, 0-based, lines a-b) or null when the file fits whole. A unit in progress is picked again until its last part.
+const PART_BYTES = 40 * 1024;
+const partOf = (r, prior) => {
+  if (!(r.size > PART_BYTES)) return null;
+  const n = Math.ceil(r.size / PART_BYTES), per = Math.ceil(r.lines / n), at = prior && prior.versions && prior.versions.uc ? prior.versions.uc[r.id] : 0, k = Number.isInteger(at) && at > 0 && at < n ? at : 0;
+  return { k, n, a: k * per + 1, b: Math.min(r.lines, (k + 1) * per) };
+};
+const inProgress = (r, prior) => { const p = partOf(r, prior); return !!p && p.k > 0; };
 function pick(rows, cap, prior) {
   const kind = new Map(), picked = [];
   if (!prior) { for (const r of rows.slice(0, cap)) { kind.set(r.id, 'n'); picked.push(r); } return { picked, kind, tally: { c: 0, s: 0, n: picked.length, o: 0 } }; }
   const st = new Map(prior.blocks.map((b) => [b.cid, b])), when = (r) => (st.get(r.id).at || {}).date || '';
   const take = (list, k) => { for (const r of list) if (picked.length < cap && !kind.has(r.id)) { kind.set(r.id, k); picked.push(r); } };
-  take(rows.filter((r) => st.has(r.id) && st.get(r.id).status === 'gap' && st.get(r.id).runs === 1), 'c');
+  take(rows.filter((r) => st.has(r.id) && ((st.get(r.id).status === 'gap' && st.get(r.id).runs === 1) || inProgress(r, prior))), 'c'); // confirming, or continuing a unit reviewed in parts
   take(rows.filter((r) => st.has(r.id) && staleUnit(r, prior)), 's');
   take(rows.filter((r) => !st.has(r.id)), 'n');
   take(rows.filter((r) => st.has(r.id)).sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0)), 'o'); // stable: ties keep the risk order
@@ -86,7 +95,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (!bufs[k] || bufs[k].subarray(0, 8192).includes(0)) return;
       const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
       const n = loc(ls);
-      if (n >= MIN_LOC) { const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names }); }
+      if (n >= MIN_LOC) { const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0) }); }
     });
   }
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
@@ -128,6 +137,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), reviewed = new Set([...rows.filter((r) => known.has(r.id)).map((r) => r.id), ...chosen]);
   const rotation = { rotate: !!prior, picked: sel.picked.length, confirming: sel.tally.c, changed: sel.tally.s, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / maxUnits)), runs: Math.max(1, Math.ceil(rows.length / maxUnits)) };
   const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
+  for (const r of sel.picked) { const p = partOf(r, prior); if (p) r.part = p; }
   return { rows, picked: sel.picked, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
     totals: { units: rows.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
     stale: rows.filter((r) => known.has(r.id) && !chosen.has(r.id) && staleUnit(r, prior)).map((r) => r.id),
@@ -137,7 +147,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
 // audit-units.txt (id, path, risk, why, matched tests, leads: tab separated), audit-units-carried.txt (id, path: units the state knows that this run does not review), audit-inventory.json.
 function write(ctx, head, maxUnits, inv) {
   const w = (n, s) => fs.writeFileSync(path.join(ctx, n), s), flat = (s) => String(s).replace(/[\t\r\n]+/g, ' ');
-  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver].map(flat).join('\t') + '\n').join(''));
+  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-'].map(flat).join('\t') + '\n').join(''));
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
   w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
     rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r), signals: { tests: r.signals.tests, noAssert: r.signals.noAssert, skipped: r.signals.skipped, asserts: r.signals.asserts, weak: r.signals.weak.length, unread: r.signals.unread } })),
