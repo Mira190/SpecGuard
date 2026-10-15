@@ -41,6 +41,7 @@ function sandbox(t) {
   for (const d of [bin, ctx]) fs.mkdirSync(d);
   fs.writeFileSync(path.join(dir, 'prompt.txt'), 'REVIEW PROMPT');
   const unavailable = path.join(dir, 'unavailable');
+  fs.writeFileSync(path.join(bin, 'npm'), '#!/usr/bin/env bash\necho "Unexpected npm call in offline engine test" >&2\nexit 1\n', { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'copilot'), `#!/usr/bin/env bash
 [ "$1" = --version ] && { echo "GitHub Copilot CLI 1.0.92."; exit 0; }
 { echo copilot; printf '%s\\n' "$@"; echo '---'; } >> "${fwd(log)}"
@@ -72,7 +73,7 @@ function runAction(t, a, inputs, { unavailable = false } = {}) {
   const s = sandbox(t);
   if (unavailable) fs.writeFileSync(s.unavailable, '1');
   const defaults = Object.fromEntries(Object.entries(a.inputs).map(([k, v]) => [k, v.default ?? '']));
-  const ctx = { inputs: { ...defaults, claude_mode: 'agent', ...inputs }, steps: { mode: { mode: 'pr' } } }; // the CLI path here; the default api path has its own tests (claude-api.test.js)
+  const ctx = { inputs: { ...defaults, copilot_version: '', claude_version: '', claude_mode: 'agent', ...inputs }, steps: { mode: { mode: 'pr' } } }; // the CLI path here; the default api path has its own tests (claude-api.test.js)
   const output = path.join(s.dir, 'github_output');
   const base = { ...process.env, PATH: s.bin + path.delimiter + process.env.PATH, GITHUB_ACTION_PATH: fwd(root), GITHUB_OUTPUT: fwd(output), COPILOT_GITHUB_TOKEN: '', ANTHROPIC_API_KEY: '' };
   const outputs = () => Object.fromEntries(fs.readFileSync(output, 'utf8').split('\n').filter(Boolean).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
