@@ -3679,6 +3679,13 @@ test('the requirements fingerprint is the key collected from the PR text the mod
   assert.equal(decide({ pr: { title: 'T', body: 'newer' }, comments: [c], headSha: 'HEADSHA' }), '', 'edited again: review');
 });
 
+test('the summary records the linked issues the model read with their versions; a malformed line is ignored (review F10)', async (t) => {
+  const s = setup(t, report(), { pr: { title: 'T', body: 'b' } });
+  fs.writeFileSync(path.join(process.env.CTX, 'pr-issues.txt'), 'o/r#12 2026-10-15T08:00:00Z\nnot a line\no/r#3 2026-01-02T03:04:05Z\n');
+  await post(s);
+  assert.ok(s.calls.summary[0].body.includes('<!-- specguard:issues=o/r#12@2026-10-15T08:00:00Z,o/r#3@2026-01-02T03:04:05Z -->'), s.calls.summary[0].body.slice(0, 400));
+});
+
 test('a malformed collected key is ignored (falls back to the payload key)', async (t) => {
   const { reqKey } = require('./preflight');
   const s = setup(t, report(), { pr: { title: 'T', body: 'live' } });

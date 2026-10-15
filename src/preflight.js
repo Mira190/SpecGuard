@@ -28,17 +28,29 @@ const recordedLogin = (comments = []) => {
 // Requirements fingerprint (PR title + body, the requirement sources). A req marker that differs from `req` means they changed since the review: review again.
 // A summary with no req marker (older version) still counts, so an upgrade does not re-review every open PR.
 const reqKey = (pr) => require('node:crypto').createHash('sha1').update(`${pr?.title || ''}\n${pr?.body || ''}`.replace(/\r\n/g, '\n').trim()).digest('hex').slice(0, 12);
-const sticky = (c, sha, actor, req) => !!c && ours(c.user, actor) && typeof c.body === 'string'
+// The summary also lists the linked issues the model read with their versions (<!-- specguard:issues=owner/repo#N@updatedAt,... -->): issueAt(repo, n) -> the current
+// updatedAt; one that moved, or cannot be read, means the requirements may have changed: review again (fails open, like the rest of preflight). No issueAt: not checked.
+const issuesFresh = (body, issueAt) => {
+  const m = /<!-- specguard:issues=([^ ]+) -->/.exec(body);
+  if (!m || !issueAt) return true;
+  return m[1].split(',').slice(0, 10).every((e) => {
+    const x = /^([\w.-]+\/[\w.-]+)#(\d+)@(\S+)$/.exec(e);
+    if (!x) return false;
+    try { return issueAt(x[1], +x[2]) === x[3]; } catch { return false; }
+  });
+};
+const sticky = (c, sha, actor, req, issueAt = null) => !!c && ours(c.user, actor) && typeof c.body === 'string'
   && c.body.startsWith(SUMMARY) && c.body.includes(`<!-- specguard:head=${sha} -->`)
-  && !(req && /<!-- specguard:req=\w+ -->/.test(c.body) && !c.body.includes(`<!-- specguard:req=${req} -->`));
+  && !(req && /<!-- specguard:req=\w+ -->/.test(c.body) && !c.body.includes(`<!-- specguard:req=${req} -->`))
+  && issuesFresh(c.body, issueAt);
 
 // Returns the reason to skip, or '' to review.
-function decide({ pr, comments = [], headSha, includeBots = false, force = false, actor = null }) {
+function decide({ pr, comments = [], headSha, includeBots = false, force = false, actor = null, issueAt = null }) {
   if (pr.state === 'closed') return 'PR is closed';
   const u = pr.user || {};
   if (!includeBots && (u.type === 'Bot' || /\[bot\]$/i.test(u.login || ''))) return `PR author ${u.login} is a bot (set include_bots: true to review bot PRs)`;
   const who = actor || recordedLogin(comments);
-  if (!force && comments.some((c) => sticky(c, headSha, who, reqKey(pr)))) return `head ${String(headSha).slice(0, 7)} already has a SpecGuard summary (set force: true to rerun)`;
+  if (!force && comments.some((c) => sticky(c, headSha, who, reqKey(pr), issueAt))) return `head ${String(headSha).slice(0, 7)} already has a SpecGuard summary (set force: true to rerun)`;
   return '';
 }
 
@@ -52,7 +64,8 @@ if (require.main === module) {
     const comments = gh(['api', '--paginate', '--slurp', `repos/${env.GH_REPO}/issues/${env.PR_NUMBER}/comments?per_page=100`]).flat();
     let actor = null;
     try { actor = gh(['api', 'user']).login; } catch { /* GITHUB_TOKEN cannot read /user: github-actions[bot] */ }
-    why = decide({ pr, comments, headSha: env.HEAD_SHA, includeBots: on(env.INCLUDE_BOTS), force: on(env.FORCE), actor });
+    const issueAt = (repo, n) => execFileSync('gh', ['api', `repos/${repo}/issues/${n}`, '--jq', '.updated_at'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 }).trim();
+    why = decide({ pr, comments, headSha: env.HEAD_SHA, includeBots: on(env.INCLUDE_BOTS), force: on(env.FORCE), actor, issueAt });
   } catch (e) { console.log(`::warning::preflight could not read the PR (${String(e.message).split('\n')[0]}); reviewing`); }
   console.log(why ? `SpecGuard: skipping the run: ${why}` : 'SpecGuard: preflight passed');
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${why ? 'true' : 'false'}\n`);
