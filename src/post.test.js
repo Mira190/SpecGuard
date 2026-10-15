@@ -210,6 +210,30 @@ test('pack-cut.txt: a missing_test whose candidate test the model saw only partl
   assert.match(weak.calls.summary[0].body, /Low-confidence findings \(1\)/);
 });
 
+test('F19: a cut pack makes a clean run incomplete: no clean verdict, no head marker (preflight does not skip), citations kept; a full pack stays clean', async (t) => {
+  const { decide } = require('./preflight');
+  const run = async (cut, env) => {
+    const s = setup(t, report({ coverage: [row()], findings: [] }));
+    if (cut !== undefined) fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut);
+    if (env) fs.writeFileSync(path.join(s.dir, 'ctx/engine-notes'), env);
+    await post(s);
+    return s.calls.summary[0].body;
+  };
+  const full = await run('');
+  assert.match(full, /No unit test gaps found/);
+  assert.match(full, /specguard:head=HEADSHA/);
+  const bot = (body) => ({ user: { type: 'Bot', login: 'github-actions[bot]' }, body });
+  assert.ok(decide({ pr: { state: 'open', user: { login: 'a', type: 'User' } }, comments: [bot(full)], headSha: 'HEADSHA' }), 'control: a complete run is skipped');
+  for (const [name, cut, env] of [['source only', 'src.js\n'], ['tests only', 'test.js\n'], ['both', 'src.js\ntest.js\n'], ['with reduced review', 'src.js\n', 'effort ignored: model auto\nmodel_fallback: gpt-9 \u2192 auto\n']]) {
+    const body = await run(cut, env);
+    assert.doesNotMatch(body, /No unit test gaps found/, name);
+    assert.doesNotMatch(body, /specguard:head=/, name);
+    assert.match(body, /Incomplete review|Reduced review/, name);
+    assert.match(body, /test\.js:2/, `${name}: the verified citation is kept`);
+    assert.equal(decide({ pr: { state: 'open', user: { login: 'a', type: 'User' } }, comments: [bot(body)], headSha: 'HEADSHA' }), '', `${name}: not skippable`);
+  }
+});
+
 test('literal guard: a missing_test whose error message a tracked test already contains goes to Details as low confidence, citing that test; a message no test contains is still posted', async (t) => {
   const run = async (testText) => {
     const s = setup(t);
