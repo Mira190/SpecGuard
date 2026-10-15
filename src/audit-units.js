@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
+const { fileCap } = require('./pack-cap');
 const { isTestPath, testScope, lsTree, catBatch, makeClock } = require('./trace');
 const { weakCandidates, TEST_START } = require('./leads');
 const { ASSERTION, SKIPPED } = require('./post');
@@ -60,13 +61,15 @@ const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.ver
 // A unit too large for one model call is reviewed in parts (review F07): fixed line windows of about PART_BYTES, one per run, the cursor in the state (uc).
 // -> { k, n, a, b } (part k of n, 0-based, lines a-b) or null when the file fits whole. A unit in progress is picked again until its last part.
 const PART_BYTES = 40 * 1024;
-// A part must fit what the pack gives one unit: the per-file cap, and a 1/N share when N units share the budget (claude-api.js contextPack); 5/6 leaves room for the line numbers (40 KB at the 48 KB cap).
+// Claude api engine only (the one engine with a context pack; the others read files themselves): a part, as shown line-numbered (6 bytes a line), must fit the per-file cap and a 1/N share of the pack
+// (claude-api.js contextPack adds every unit file before any test); 5/6 leaves slack for the block markup and rule files.
 // shortcut: the collector assumes the default 250000-byte pack (the action has no input for CONTEXT_PACK_BYTES); wire it through if one is added.
-// shortcut: tests matched to a unit also draw on the budget, so a part is not guaranteed whole beside a very large test file; upgrade if pack-cut.txt shows it.
-const partBytes = (packBytes, units) => Math.min(PART_BYTES, Math.max(4096, Math.floor(Math.min(require('./engines/claude-api').fileCap(packBytes), packBytes / units) * 5 / 6)));
-const partOf = (r, prior, bytes = PART_BYTES) => {
-  if (!(r.size > bytes)) return null;
-  const n = Math.ceil(r.size / bytes), per = Math.ceil(r.lines / n), at = prior && prior.versions && prior.versions.uc ? prior.versions.uc[r.id] : 0, k = Number.isInteger(at) && at > 0 && at < n ? at : 0;
+// shortcut: parts are equal line counts, so a part of unusually long lines can exceed the average; the pack then lists it as cut.
+const partBytes = (packBytes, units) => (packBytes ? { max: Math.min(PART_BYTES, Math.max(4096, Math.floor(Math.min(fileCap(packBytes), packBytes / units) * 5 / 6))), pre: 6 } : { max: PART_BYTES, pre: 0 }); // pre: bytes of line prefix per line
+const partOf = (r, prior, bytes = partBytes(0)) => {
+  const shown = r.size + bytes.pre * r.lines;
+  if (!(shown > bytes.max)) return null;
+  const n = Math.ceil(shown / bytes.max), per = Math.ceil(r.lines / n), at = prior && prior.versions && prior.versions.uc ? prior.versions.uc[r.id] : 0, k = Number.isInteger(at) && at > 0 && at < n ? at : 0;
   return { k, n, a: k * per + 1, b: Math.min(r.lines, (k + 1) * per) };
 };
 const inProgress = (r, prior, bytes) => { const p = partOf(r, prior, bytes); return !!p && p.k > 0; };
@@ -85,7 +88,7 @@ function pick(rows, cap, prior, bytes) {
 }
 
 // files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
-function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 250000 }) {
+function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 0 }) {
   const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
   const inScope = files.filter((e) => !skip(e.path) && (!scope || scope(e.path)));
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
