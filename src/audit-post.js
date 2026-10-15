@@ -7,6 +7,7 @@ const { execFileSync } = require('child_process');
 const post = require('./post');
 const { ours } = require('./preflight');
 const { enclosingName } = require('./test-map');
+const { version, versionLine } = require('./version');
 const { staticFindings } = require('./audit-units');
 // trace.js's test-path rule; the fallback is a local copy of it in case the export moves (ponytail: keep in sync).
 const { isTestPath = (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/.test(p) } = require('./trace');
@@ -644,7 +645,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   usage = mergeUsage(usage, json('usage-repair.json')); // copilot repair turn, claude finalize turn
   const repair = (readCtx('engine-repair') || '').trim();
   const notes = [...lines(readCtx('engine-notes')).map((x) => x.trim()).slice(0, 4), ...(repair === 'repaired' ? ['JSON repaired in one extra turn'] : repair === 'repair_failed' ? ['JSON repair turn failed'] : [])];
-  const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '', runHtml = engine ? runLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '';
+  const usageHtml = engine ? usageLine({ engine, model: env.MODEL || '', raw: usage, notes }) : '', runHtml = engine ? `${runLine({ engine, model: env.MODEL || '', raw: usage, notes })}\n${versionLine()}` : ''; // which SpecGuard produced this (review F12)
   const cap = meta && meta.max_requirements;
   const cands = readCandidates(readCtx('audit-candidates.txt'));
   let wantIssue = wantsIssue(env);
@@ -723,7 +724,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers });
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed } : null;
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
-  try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
+  try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
   // the blocks this run did not audit: the state's blocks that are still in the documents (audit-carried.txt), with the text and place from the collector
   const stale = new Set(lines(readCtx('audit-stale.txt')).map((l) => l.trim()).filter((l) => /^[0-9a-f]{8}$/.test(l))); // changed since their review (collector, review F06)

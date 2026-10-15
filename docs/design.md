@@ -2,6 +2,8 @@
 
 ## Status (2026-10-07)
 
+> **2026-10-15:** engineering milestones (S1-S3, S5, S7) are done; the quality goals are not proven. Open: S4 (organisation billing), S6 (three-repository pilot with people), the acceptance matrix on all pilots, precision >= 80% before any blocking use, measured QA benefit. The Kite pilot (seeded PRs, one repository, Claude Haiku) is regression evidence, not a pilot result. See `critical-shift-left-followup-2026-10-15.md` and section 3's current-state note.
+
 The refactor below supersedes the v1 report contract. The remaining v1 sections record the original implementation decisions. The original goal is unchanged.
 
 ### Evidence contract refactor
@@ -123,6 +125,8 @@ The review contract ships as an **Agent Skill** (`skills/test-review/SKILL.md`, 
 ---
 
 ## 3. AI engine and billing
+
+> **Current state (2026-10-15).** This section records the 2026-10-13 decision; the implementation has since changed and the text below it is history. Engines today (`action.yml` `engine`): `auto` (default: picks by the kind of `llm_token`, else Copilot on the job token), `copilot` (Copilot CLI) and `claude` (Anthropic API key; `claude_mode: api` is the default, one Messages API call with a cost bound up front, or `agent` for the Claude Code CLI). The Kite pilot runs `claude` on Haiku with an API key in a repository secret, so it is **not** evidence for the 0-secret Copilot route. Verified: Copilot on `GITHUB_TOKEN` on a personal repository, and Claude API on Kite (PR and scan). Not verified: Copilot billed to an organisation (S4) and the three-repository pilot (S6). Every report records which SpecGuard produced it (`SpecGuard build <id> (ref <ref>)` in Details, `specguard` in the counts and `audit.json`); pin a commit SHA in the workflow to compare reports across runs.
 
 | Engine | Auth | Who pays | Notes |
 |---|---|---|---|

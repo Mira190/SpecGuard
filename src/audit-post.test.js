@@ -363,7 +363,7 @@ test('run: validates citations at HEAD, renders the summary, writes audit.json, 
   assert.match(r.calls.summary, /2222222b \(docs\/design\.md:4\): the requirement quote was not found/);
   assert.match(r.calls.summary, /Unconfirmed: the model's citation for this block did not verify/);
   assert.match(r.calls.summary, /\n<sub>Cost ≈ \$0\.02 \(2\.00 AI credits\) · auto<\/sub>\n$/);
-  assert.match(r.calls.summary, /\nRun: engine copilot\n\n<\/details>/);
+  assert.match(r.calls.summary, /\nRun: engine copilot\nSpecGuard build [0-9a-f]{12}\n\n<\/details>/);
   assert.match(r.calls.summary, /\]\(https:\/\/github\.com\/o\/r\/blob\/abc123\/src\/plan\.js#L2\)/);
   const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
   assert.equal(saved.head, 'abc123');
