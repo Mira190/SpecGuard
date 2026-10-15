@@ -99,7 +99,7 @@ test('collect: audit-candidates.txt lists every requirement-bearing block in doc
   const r = collect({ cwd: root, ctx });
   const c = cands(ctx);
   assert.deepEqual(textOf(c).map((x) => x.slice(0, 20)), ['| Main window | Regu', '| Ball | 76x76 colla', 'The main window is h', 'The first row of the', 'Renaming starts only', 'A plan MUST be rejec', 'A plan SHALL NOT fir', 'The completion card ']);
-  assert.deepEqual(c.map((x) => x[1]), ['docs/design.md:9', 'docs/design.md:10', 'docs/design.md:12', 'docs/design.md:14', 'docs/design.md:15', 'docs/design.md:25', 'docs/design.md:27', 'docs/design.md:39']);
+  assert.deepEqual(c.map((x) => x[1]), ['docs/design.md:9-9', 'docs/design.md:10-10', 'docs/design.md:12-12', 'docs/design.md:14-14', 'docs/design.md:15-15', 'docs/design.md:25-25', 'docs/design.md:27-27', 'docs/design.md:39-39']);
   assert.deepEqual(c.map((x) => x[2]), ['2. Window structure', '2. Window structure', '2. Window structure', '2. Window structure', '2. Window structure', '3. Rules', '3. Rules', '4. After']);
   for (const x of c) assert.match(x[0], /^[0-9a-f]{8}$/);
   assert.equal(new Set(c.map((x) => x[0])).size, c.length);
@@ -135,7 +135,7 @@ test('collect: a cid ignores line moves but not the block text or heading; a rep
 test('collect: the cap takes the first blocks in document order across documents; the rest are counted by document and heading', (t) => {
   const { root, ctx } = repo(t, { 'docs/design.md': DOC.join('\n'), 'docs/spec.md': '# Other\n\n## Limits\n\nThe name MUST be at most 40 characters long.\n\nThe list MUST show 50 rows per page at most.\n' });
   const r = collect({ cwd: root, ctx, maxRequirements: 4 });
-  assert.deepEqual(cands(ctx).map((x) => x[1]), ['docs/design.md:9', 'docs/design.md:10', 'docs/design.md:12', 'docs/design.md:14']);
+  assert.deepEqual(cands(ctx).map((x) => x[1]), ['docs/design.md:9-9', 'docs/design.md:10-10', 'docs/design.md:12-12', 'docs/design.md:14-14']);
   const meta = metaOf(ctx);
   assert.deepEqual([meta.candidates, meta.candidates_listed, r.candidates], [10, 4, 10]);
   assert.deepEqual(meta.cap_left, ['docs/design.md § 2. Window structure: 1 block not scanned (cap)', 'docs/design.md § 3. Rules: 2 blocks not scanned (cap)', 'docs/design.md § 4. After: 1 block not scanned (cap)', 'docs/spec.md § Limits: 2 blocks not scanned (cap)']);

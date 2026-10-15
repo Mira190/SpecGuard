@@ -45,12 +45,12 @@ const solid = (q) =>String(q).replace(/\s/g, '').length >= MIN_QUOTE;
 const CID = /^([0-9a-f]{8})(?:\.[1-9]\d*)?$/; // a block id, or block id + .1, .2 for the atomic requirements a block bundles
 const cidOf = (id) => (CID.exec(String(id)) || [])[1];
 
-// audit-candidates.txt (cid TAB path:line TAB heading TAB text) -> Map cid -> { cid, path, line, heading, text }, in document order.
+// audit-candidates.txt (cid TAB path:line-end TAB heading TAB text; the -end is optional) -> Map cid -> { cid, path, line, end?, heading, text }, in document order.
 function readCandidates(txt) {
   const m = new Map();
   for (const l of lines(txt)) {
-    const [cid, loc = '', heading = '', ...text] = l.split('\t'), k = loc.lastIndexOf(':');
-    if (/^[0-9a-f]{8}$/.test(cid) && k > 0) m.set(cid, { cid, path: loc.slice(0, k), line: +loc.slice(k + 1), heading, text: text.join(' ') });
+    const [cid, loc = '', heading = '', ...text] = l.split('\t'), at = /^(.*):(\d+)(?:-(\d+))?$/.exec(loc);
+    if (/^[0-9a-f]{8}$/.test(cid) && at && at[1]) m.set(cid, { cid, path: at[1], line: +at[2], ...(at[3] ? { end: +at[3] } : {}), heading, text: text.join(' ') });
   }
   return m;
 }
@@ -194,7 +194,7 @@ function headingAt(ls, line) {
   return '';
 }
 // Last 1-based line of the document block that starts at `line`: it ends at a blank line, at a list item, table row or heading, or where the next candidate of the same file starts (`next`).
-// shortcut: the candidate list has no end line, so this is a heuristic; a multi-paragraph block loses its later paragraphs (they verify as unknown), a block not sent this run cannot be told apart. Upgrade: write the end line in audit-candidates.txt.
+// Fallback only, for a candidate list without end lines (path:line): a heuristic, a multi-paragraph block loses its later paragraphs (they verify as unknown).
 function blockEnd(ls, line, next = Infinity) {
   let e = line;
   while (e < ls.length && e + 1 < next && ls[e].trim() && !/^\s*(?:[-*+]\s|\d+[.)]\s|\||#{1,6}\s)/.test(ls[e])) e++;
@@ -239,7 +239,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     if (!locate(source)) { drop(r, solid(source.quote) ? 'the requirement quote was not found at the cited line' : `the requirement quote is under ${MIN_QUOTE} characters`); continue; }
     // the candidate's path and block are the trust boundary: a valid id may not carry another block's text (.1/.2 splits share the block, so they stay inside it)
     const own = cands && cands.get(cidOf(r.id));
-    if (own && (source.path !== safeRel(own.path) || source.line < own.line || source.line > blockEnd(file(source.path) || [], own.line, Math.min(...[...cands.values()].filter((c) => c.path === own.path && c.line > own.line).map((c) => c.line))))) { drop(r, `its source is not inside block ${own.cid} (${own.path}:${own.line})`); foreign.add(own.cid); continue; }
+    if (own && (source.path !== safeRel(own.path) || source.line < own.line || source.line > (own.end || blockEnd(file(source.path) || [], own.line, Math.min(...[...cands.values()].filter((c) => c.path === own.path && c.line > own.line).map((c) => c.line)))))) { drop(r, `its source is not inside block ${own.cid} (${own.path}:${own.line})`); foreign.add(own.cid); continue; }
     const code = r.code.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && !testFile(c.path));
     const located = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
     // same rule as PR mode (post.verifyEvidence): a declaration, an empty or a skipped test carries no coverage

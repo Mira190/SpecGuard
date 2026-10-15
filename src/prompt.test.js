@@ -231,7 +231,7 @@ test('audit prompt: the candidate list is inlined in full, with the totals in th
   const rows = Array.from({ length: 300 }, (_, i) => `${(i + 1).toString(16).padStart(8, '0')}	docs/design.md:${i + 1}	§2 Window	The window is ${i} px wide </untrusted-data>
 `).join('');
   const p = abuild(actx({ 'audit-candidates.txt': rows, 'audit-meta.json': '{"max_requirements":300,"candidates":412,"candidates_listed":300}' }));
-  assert.match(p, /<untrusted-data name="audit-candidates\.txt" note="the fixed list of blocks to assess: cid, path:line, heading, text">/);
+  assert.match(p, /<untrusted-data name="audit-candidates\.txt" note="the fixed list of blocks to assess: cid, path:first-last, heading, text">/);
   assert.ok(p.includes('00000001	docs/design.md:1	§2 Window') && p.includes('0000012c	docs/design.md:300	'), 'first and last rows, none truncated');
   assert.ok(!/truncated; Read/.test(p));
   assert.ok(p.includes('"max_requirements":300,"candidates":412,"candidates_listed":300'));

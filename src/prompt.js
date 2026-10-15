@@ -194,7 +194,7 @@ function assembleAudit({ skillDir, ctxDir, schemaPath }) {
     const body = read(ctxDir, name);
     if (!nonEmpty(body)) { if (name !== 'audit-blocks.txt') empty.push(name); continue; } // blocks file: absent in an older context, not listed as empty
     const c = cut(body, limit);
-    parts.push(block(name, c.text, c.cut ? `truncated; Read ${dir}/${name} for the rest` : name === 'audit-docs.txt' ? 'path, then why it was admitted' : name === 'audit-candidates.txt' ? 'the fixed list of blocks to assess: cid, path:line, heading, text' : name === 'audit-blocks.txt' ? 'the full text of each candidate block: cid, text with newlines written as \\n; [truncated] = cut at the limit, so not fully read' : name === 'audit-evidence.txt' ? 'per block (cid), found by a deterministic search before you started: code or test, path:line, the line; none = nothing found. Verify these first; search further only when none fits' : ''));
+    parts.push(block(name, c.text, c.cut ? `truncated; Read ${dir}/${name} for the rest` : name === 'audit-docs.txt' ? 'path, then why it was admitted' : name === 'audit-candidates.txt' ? 'the fixed list of blocks to assess: cid, path:first-last, heading, text' : name === 'audit-blocks.txt' ? 'the full text of each candidate block: cid, text with newlines written as \\n; [truncated] = cut at the limit, so not fully read' : name === 'audit-evidence.txt' ? 'per block (cid), found by a deterministic search before you started: code or test, path:line, the line; none = nothing found. Verify these first; search further only when none fits' : ''));
   }
   return `${out}
 

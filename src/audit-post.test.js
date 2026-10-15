@@ -20,7 +20,7 @@ const cand = (cid, line, text) => ({ cid, path: 'docs/design.md', line, heading:
 const candsOf = (...cs) => new Map(cs.map((c) => [c.cid, c]));
 const ONE = () => candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'));
 const TWO = () => candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), cand(C2, 4, 'A plan must start in the future.'));
-const candTxt = (m) => [...m.values()].map((c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`).join('');
+const candTxt = (m) => [...m.values()].map((c) => `${c.cid}\t${c.path}:${c.line}${c.end ? `-${c.end}` : ''}\t${c.heading}\t${c.text}\n`).join('');
 const cid = (i) => i.toString(16).padStart(8, '0');
 const cite = (path, line) => ({ path, line, quote: FILES[path][line - 1] });
 const req = (over = {}) => ({
@@ -1085,3 +1085,30 @@ test('F21: a candidate id may only carry text from its own block: swapped ids, s
   assert.deepEqual(go([row(C1, { ...cit('B.md', 3), line: 1 }), row(C2, cit('B.md', 5))], bundle), [[C1, 'covered'], [C2, 'covered']], 'near-miss line is corrected, then checked');
 });
 
+test('F21: the real block end travels in audit-candidates.txt (path:line-end): a multi-paragraph block and Scenario Outline Examples rows after a blank line are inside; the next block and swaps are not', (t) => {
+  const { collect } = require('./audit-collect');
+  const md = '## REQ-001: Title\n\nThe API MUST reject empty names.\n\nA second paragraph of the same block.\n\n## REQ-002: Other\n\nThe API SHALL log every rejection.\n';
+  const feat = 'Feature: Pay\n\n  Scenario Outline: amounts\n    Given an amount <a>\n    Then it is <r>\n\n    Examples:\n      | a | r |\n      | 1 | ok |\n\n      | -1 | rejected |\n\n  Scenario: other\n    Given a thing\n    Then it works\n';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-f21-')); t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const git = (...a) => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  git('init'); git('config', 'user.name', 't'); git('config', 'user.email', 't@example.invalid');
+  fs.writeFileSync(path.join(root, 'REQ.md'), md); fs.writeFileSync(path.join(root, 'pay.feature'), feat);
+  git('add', '.'); git('commit', '-m', 'x');
+  const ctx = path.join(root, 'ctx');
+  collect({ cwd: root, ctx, reqPaths: 'REQ.md\npay.feature' });
+  const cands = audit.readCandidates(fs.readFileSync(path.join(ctx, 'audit-candidates.txt'), 'utf8')), all = [...cands.values()];
+  const doc = all.filter((c) => c.path === 'REQ.md'), fe = all.filter((c) => c.path === 'pay.feature');
+  assert.ok(doc.length >= 1 && fe.length >= 1 && all.every((c) => c.end >= c.line), JSON.stringify(all));
+  const F = { 'REQ.md': md.split('\n'), 'pay.feature': feat.split('\n'), 'src/a.js': ['exports.a = () => 1;'], 'tests/a.test.js': ['assert.equal(a(), 1);'] };
+  const ref = (p, line) => ({ path: p, line, quote: F[p][line - 1] });
+  const go = (c, p, line) => verify(result([{ id: c.cid, text: 't', source: ref(p, line), class: 'unit', status: 'covered', code: [ref('src/a.js', 1)], tests: [{ ...ref('tests/a.test.js', 1), layer: 'unit' }], note: '' }], { docs_reviewed: [p] }),
+    { read: (x) => F[x] || null, cands, docs: new Set(['REQ.md', 'pay.feature']), tracked: new Set(Object.keys(F)) }).requirements.find((r) => r.id === c.cid).status;
+  const first = doc[0];
+  assert.equal(go(first, 'REQ.md', 3), 'covered', 'the MUST line two lines below the title heading text, after a blank line, is in the block');
+  assert.equal(go(first, 'REQ.md', 5), 'covered', 'a later paragraph of the same block');
+  assert.equal(go(first, 'REQ.md', 9), 'unknown', 'the next block is not');
+  const outline = fe[0];
+  assert.equal(go(outline, 'pay.feature', 4), 'covered', 'a step line');
+  assert.equal(go(outline, 'pay.feature', 11), 'covered', 'an Examples row after a blank line');
+  assert.equal(go(outline, 'pay.feature', 14), 'unknown', 'the next scenario is not');
+});
