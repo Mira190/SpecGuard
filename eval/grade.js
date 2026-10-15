@@ -72,7 +72,8 @@ function parseSummary(text) {
     items, actionable, rows, trace, preExisting, noRequirementDocs: /No requirement documents found/.test(s), notes: notes ? notes[1].split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)) : [],
     skipped: /Nothing to review/.test(s),
     // the producer's own machine marker first (src/post.js buildSummary); the phrases cover summaries written before it
-    incomplete: (/<!-- specguard:status=(\w+) -->/.exec(s) || [, 'complete'])[1] !== 'complete' || /Could not complete/i.test(s) || /Partially reviewed|The diff exceeded `max_diff_kb`/.test(s) || /Standards tooling: incomplete/.test(s),
+    // execution_complete (counts, review F09) separates a run that finished from a full-strength one: a reduced run that finished is complete here and reported as reduced
+    incomplete: /<!-- specguard:counts \{[^\n]*"execution_complete":(true|false)/.test(s) ? /<!-- specguard:counts \{[^\n]*"execution_complete":false/.test(s) || /Could not complete/i.test(s) : (/<!-- specguard:status=(\w+) -->/.exec(s) || [, 'complete'])[1] !== 'complete' || /Could not complete/i.test(s) || /Partially reviewed|The diff exceeded `max_diff_kb`/.test(s) || /Standards tooling: incomplete/.test(s),
     reduced: /<!-- specguard:counts \{[^\n]*"reduced":true/.test(s), // a reduced (fast-tier) run: reported, not a failure
   };
 }

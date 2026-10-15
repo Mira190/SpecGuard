@@ -320,11 +320,15 @@ if (require.main === module) {
       history = { shas, partial: stats.failed || stats.skipped ? `Historical intent is partial: git blame failed for ${stats.failed} and was skipped for ${stats.skipped} hunk(s).` : '', pulls: (sha) => gh(['api', `repos/${env.GH_REPO}/commits/${sha}/pulls`]),
         pr: (n) => gh(['pr', 'view', String(n), '--repo', env.GH_REPO, '--json', 'number,title,body,closingIssuesReferences']) };
     } catch { history = { error: true }; }
+    const read = []; // every issue the model will read, with its version: preflight re-reviews when one of them changes (an edit or a new comment moves updatedAt)
     result = collectRequirements({ pr, repo: env.GH_REPO, commits, history,
       loadIssue: (repo, n) => {
         const view = (fields) => gh(['issue', 'view', String(n), '--repo', repo, '--json', fields]);
-        try { return view('title,body,url,labels,comments'); } catch { return view('title,body,url'); } // labels and comments are extras: never the reason an issue is unreadable
+        let i; try { i = view('title,body,url,labels,comments,updatedAt'); } catch { i = view('title,body,url,updatedAt'); } // labels and comments are extras: never the reason an issue is unreadable
+        if (i && i.updatedAt) read.push(`${repo}#${n} ${i.updatedAt}`);
+        return i;
       } });
+    try { fs.writeFileSync(path.join(env.CTX, 'pr-issues.txt'), [...new Set(read)].map((l) => `${l}\n`).join('')); } catch {}
     // the PR text the model reads, keyed only once collection succeeded: post records this key, not the (possibly stale) event payload; a failed write only falls back
     try { fs.writeFileSync(path.join(env.CTX, 'pr-req-key.txt'), require('./preflight').reqKey(pr)); } catch {}
   } catch {

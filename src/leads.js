@@ -220,7 +220,7 @@ function assertionDelta(diff, isTest) {
     if (m) { o = +m[1]; continue; }
     const e = file && per.get(file), t = l.slice(1).replace(/\r$/, '');
     if (l[0] === '-') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.rm.push({ line: o, text: t.trim(), ...s }); } o++; }
-    else if (l[0] === '+') { if (e && t.length <= 400 && !quiet(t)) { e.lines.push(t); const s = subjectOf(t); if (s) e.add.push({ text: t.trim(), at: e.lines.length - 1, ...s }); } }
+    else if (l[0] === '+') { if (e && !quiet(t)) { const u = t.slice(0, 400); e.lines.push(u); const s = subjectOf(u); if (s) e.add.push({ text: u.trim(), at: e.lines.length - 1, ...s }); } } // a long added line still re-pins: its subject comes first
     else if (l[0] === ' ') o++;
   }
   const out = [];

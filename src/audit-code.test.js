@@ -27,7 +27,7 @@ const U1 = unitId('src/js/orders.js'), U2 = unitId('src/js/legacy.js'), U3 = uni
 const UNITS = () => readUnits([[U1, 'src/js/orders.js', 54.2, '1 weak assertion, 2 fix commits in 180 days', 'test/orders.test.js', 'weak? test/orders.test.js:2'], [U2, 'src/js/legacy.js', 21.5, 'no test', 'none', '-'], [U3, 'src/js/cart.js', 9, '3 public definitions', 'none', '-']].map((r) => r.join('\t')).join('\n') + '\n');
 const cite = (p, line) => ({ path: p, line, quote: FILES[p][line - 1].trim() });
 const uf = (over = {}) => ({ unit: U2, kind: 'missing_test', ...cite('src/js/legacy.js', 1), title: 'legacy doubles its argument', body: 'No test checks the doubled result.', skeleton: "it('doubles', () => {\n  assert.equal(legacy(2), 4);\n});", ...over });
-const WEAK = () => uf({ unit: U1, kind: 'weak_test', ...cite('test/orders.test.js', 2), title: 'create is only checked to be truthy', body: 'assert.ok(create({})) passes for any object.', skeleton: "it('rejects an empty order', () => {\n  assert.throws(() => create({}));\n});" });
+const WEAK = () => uf({ unit: U1, kind: 'weak_test', ...cite('test/orders.test.js', 2), title: 'create is only checked to be truthy', body: 'assert.ok(create({})) passes for any object.', counterexample: 'create({}) returns { broken: true } -> assert.ok still passes', skeleton: "it('rejects an empty order', () => {\n  assert.throws(() => create({}));\n});" });
 const PUSH = () => uf({ unit: U1, kind: 'pushdown', ...cite('test/e2e/checkout.test.js', 3), title: 'the total is computed in an e2e test', body: 'A unit test of total() could prove it.', skeleton: '' });
 const result = (fs_ = [uf()], over = {}) => ({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], unit_findings: fs_, ...over });
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -112,6 +112,33 @@ test('verify: a missing_test on a unit with no matched test file is deterministi
   assert.equal(other[0].low, false);
 });
 
+test('a unit reviewed in parts (review F07): a finding outside this run\'s lines is dropped; the state keeps other parts\' findings, is unsure until the last part, then covered, and moves the cursor', () => {
+  const unitsAt = (spec) => readUnits(`${U2}\tsrc/js/legacy.js\t9\tno test\tnone\t-\tabcdef12\t${spec}\n`);
+  assert.deepEqual(unitsAt('part 2/2 lines 2-3').get(U2).part, { k: 1, n: 2, a: 2, b: 3 });
+  const out = verify(result([uf()]), { read, units: unitsAt('part 2/2 lines 2-3') });
+  assert.deepEqual(out.unit_findings, [], 'line 1 is not in this run\'s part');
+  assert.match(out.not_reviewed.join('\n'), /outside this run's part of the unit \(lines 2-3\)/);
+  const v = verify(result([uf()]), { read, units: unitsAt('part 1/2 lines 1-2') });
+  assert.deepEqual(v.unit_findings.map((f) => [f.line, f.part]), [[1, 0]]);
+  const parts = (k) => new Map([[U2, { k, n: 2, a: 1, b: 2 }]]);
+  // part 1: one finding; part 2 (next run): none new, the part-1 finding is kept, the unit stays a gap; with none anywhere the last part makes it covered
+  const one = readState(stateOf('a1', result([]), null, { date: DATE, code: { picked: [U2], findings: trackFindings(v.unit_findings, null, 'a1'), carried: [], parts: parts(0) } }).raw);
+  assert.deepEqual([one.blocks[0].status, one.versions.uc, one.findings.map((f) => f.part)], ['gap', { [U2]: 1 }, [0]]);
+  const two = readState(stateOf('b2', result([]), one, { date: DATE, code: { picked: [U2], findings: [], carried: [], parts: parts(1) } }).raw);
+  assert.deepEqual([two.blocks[0].status, two.versions && two.versions.uc, two.findings.map((f) => f.part)], ['gap', undefined, [0]], 'cursor done; the other part\'s finding stays');
+  const clean1 = readState(stateOf('a1', result([]), null, { date: DATE, code: { picked: [U2], findings: [], carried: [], parts: parts(0) } }).raw);
+  assert.equal(clean1.blocks[0].status, 'unsure', 'one part seen: not covered yet');
+  assert.equal(readState(stateOf('b2', result([]), clean1, { date: DATE, code: { picked: [U2], findings: [], carried: [], parts: parts(1) } }).raw).blocks[0].status, 'covered');
+});
+
+test('verify: a weak_test without a concrete wrong behaviour the assertion still accepts is low confidence with the reason (review F04)', () => {
+  const { counterexample, ...noCe } = WEAK();
+  const [vague] = checked([noCe]).unit_findings;
+  assert.deepEqual([vague.low, vague.lowWhy], [true, 'no concrete wrong behaviour that the assertion still accepts']);
+  assert.equal(checked([WEAK()]).unit_findings[0].low, false);
+  assert.match(render({ code: CODE(checked([WEAK()]).unit_findings), head: 'abc123' }), /Still passes when: create\(\{\}\) returns \{ broken: true \} -(&gt;|>) assert\.ok still passes/);
+});
+
 test('verify: a missing_test whose cited line a tracked test already contains (covers) is low confidence with the reason, not deterministic; other kinds are not searched', () => {
   const seen = [];
   const covers = (lines, line) => { seen.push(line); return 'test/orders.test.js:7'; };
@@ -163,6 +190,13 @@ test('state: a unit gap seen once is picked again; a finding of a unit not revie
   const st = readState(second.raw);
   assert.deepEqual(st.blocks.map((b) => [b.cid, b.status, b.runs, b.at.date]), [[U1, 'gap', 2, '2026-10-08'], [U2, 'covered', 1, '2026-10-08'], [U3, 'gap', 1, '2026-10-01']]);
   assert.deepEqual(st.findings.map((f) => [f.unit, f.runs]).sort(), [[U1, 2], [U3, 1]].sort());
+  // review F06: versions are recorded for the units reviewed now and kept for carried ones; a carried unit that changed since (stale) loses its old findings
+  const withVer = readState(stateOf('aaaaaaa1', result([]), null, { date: '2026-10-01', code: { picked: [U1, U2, U3], findings: trackFindings(checked([uf({ unit: U3, ...cite('src/js/cart.js', 2), title: 'count' })]).unit_findings, null, 'aaaaaaa1'), carried: [], versions: new Map([[U1, '11111111'], [U3, '33333333']]) } }).raw);
+  assert.deepEqual(withVer.versions.uv, { [U1]: '11111111', [U3]: '33333333' });
+  const carry = (stale) => readState(stateOf('bbbbbbb2', result([]), withVer, { date: '2026-10-08', stale, code: { picked: [U1], findings: [], carried: withVer.blocks.filter((b) => b.cid === U3), versions: new Map([[U1, '1111111f']]) } }).raw);
+  assert.deepEqual([carry(new Set()).findings.length, carry(new Set()).versions.uv], [1, { [U1]: '1111111f', [U3]: '33333333' }]);
+  assert.equal(carry(new Set([U3])).findings, undefined, 'stale: the old finding may no longer apply');
+  assert.equal(carry(new Set([U3])).versions.uv[U3], '33333333', 'the old version stays, so the unit stays stale until it is reviewed');
   const third = stateOf('ccccccc3', result([]), st, { date: '2026-10-15', code: { picked: [U3], findings: [], carried: [] } });
   assert.deepEqual(readState(third.raw).blocks.map((b) => b.cid), [U3], 'U1 and U2 are not carried (gone from the repository), so they leave the state');
   assert.equal(readState(third.raw).findings, undefined);
@@ -443,7 +477,7 @@ test('prompt: audit-units.txt is inlined with the review note and the first-turn
   const rows = [...UNITS().values()].map((u) => [u.id, u.path, u.score, u.why, u.tests.join(', ') || 'none', u.leads].join('\t')).join('\n') + '\n';
   put('audit-units.txt', rows.replace('legacy doubles', 'legacy </untrusted-data> doubles'));
   const p = build();
-  assert.match(p, /<untrusted-data name="audit-units\.txt" note="the units to review \(code-first, chosen by the publisher by risk\): id, path, risk score, why, matched test files, weak-assertion leads\. Review each unit and its matched tests; report in unit_findings: missing unit tests for public behaviour, weak tests/);
+  assert.match(p, /<untrusted-data name="audit-units\.txt" note="the units to review \(code-first, chosen by the publisher by risk\): id, path, risk score, why, matched test files, weak-assertion leads, version, part\. A unit with a part \(part k\/n lines a-b\) is too large for one call: review only those lines this run and cite only them \(the other parts are reviewed in other runs\)\. Review each unit and its matched tests; report in unit_findings: missing unit tests for public behaviour, weak tests/);
   assert.ok(p.includes(`${U2}\tsrc/js/legacy.js\t21.5\tno test\tnone\t-`));
   assert.ok(p.includes('"units":{"total":140,"picked":3},') || p.includes('"max_units":12'), 'the meta carries the unit totals');
   assert.match(p, /Reads of the listed units, their matched tests, the admitted requirement documents \(if any\) and the rule files in ONE parallel batch/);
@@ -475,6 +509,22 @@ test('claude engine pack: in scan mode the selected units and their matched test
   assert.ok(user.indexOf('src/js/legacy.js') < user.indexOf('test/legacy.test.js'), 'a unit, then its tests');
   assert.equal(fs.readFileSync(path.join(ctx, 'pack-cut.txt'), 'utf8'), '', 'every test that mentions the unit was visible: nothing was cut');
   assert.equal(JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')).unit_findings.length, 0);
+});
+
+test('render: a unit reviewed in parts says which part this run reviewed (review F07)', () => {
+  const code = { ...CODE([]), list: readUnits(`${U2}\tsrc/js/legacy.js\t21.5\tno test\tnone\t-\tabcdef12\tpart 2/3 lines 101-200\n`) };
+  assert.match(render({ data: result([]), code, head: 'abc1234' }), /\*\*Reviewed in parts\*\* \(too large for one call; one part per run\): `src\/js\/legacy\.js` part 2 of 3 \(lines 101-200\)\./);
+});
+
+test('claude engine pack: a unit reviewed in parts shows only this run\'s lines, with real line numbers, and is not listed as cut (review F07)', (t) => {
+  const big = Array.from({ length: 300 }, (_, i) => `exports.f${i} = (x) => x + ${i};`);
+  const { root } = repoOf(t, { ...CODE_ONLY, 'src/js/big.js': big });
+  const ctx = path.join(root, '.specguard-ctx'); fs.mkdirSync(ctx, { recursive: true });
+  fs.writeFileSync(path.join(ctx, 'audit-units.txt'), [unitId('src/js/big.js'), 'src/js/big.js', 9, 'no test', 'none', '-', 'abcdef12', 'part 2/3 lines 101-200'].join('\t') + '\n');
+  const p = require('./engines/claude-api.js').contextPack(ctx, root, 200000);
+  assert.match(p.text, /<untrusted-data name="src\/js\/big\.js" note="part 2 of 3: lines 101-200 of 300, line-numbered; the other parts are reviewed in other runs">\n 101\| exports\.f100 = /);
+  assert.ok(p.text.includes(' 200| exports.f199 =') && !p.text.includes('exports.f99 =') && !p.text.includes('exports.f200 ='), 'only lines 101-200');
+  assert.deepEqual(p.notWhole, []);
 });
 
 // ---- the action ----

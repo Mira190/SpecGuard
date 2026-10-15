@@ -233,6 +233,7 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
+        SPECGUARD_REF: ${{ github.action_ref }} # recorded in every report with the build id (src/version.js)
         CTX: ${{ github.workspace }}/.specguard-ctx
         MAX_COMMENTS: ${{ inputs.max_comments }}
         RESOLVE_STALE: ${{ inputs.resolve_stale }}
@@ -271,6 +272,7 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_PATH: ${{ github.action_path }}
+        SPECGUARD_REF: ${{ github.action_ref }}
         CTX: ${{ github.workspace }}/.specguard-ctx
         ENGINE: ${{ steps.engine.outputs.engine }}
         MODEL: ${{ steps.credential.outputs.model }}
