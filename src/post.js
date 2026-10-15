@@ -286,7 +286,7 @@ function validate(o) {
       const r = rows.find((c) => c.id === id);
       if (r && r.status === 'covered') { r.status = want; r.reason = `The model raised a ${f.kind} finding on this obligation although it marked it covered.`; fixed = true; }
     }
-    if (fixed) { f.confidence = 'low'; notes.push(`Obligation row contradicted finding ${f.kind} ${f.path}: kept the finding at low confidence and marked the row ${want}.`); }
+    if (fixed) { f.confidence = 'low'; f.gated = true; notes.push(`Obligation row contradicted finding ${f.kind} ${f.path}: kept the finding at low confidence and marked the row ${want}.`); }
   };
   let kept = [];
   for (const [i, f] of o.findings.entries()) {
@@ -297,7 +297,7 @@ function validate(o) {
   }
   // a high weak_test must name a wrong behaviour the assertion still accepts (review F04); the claim is the model's, but without one it is only a lead
   for (const f of kept) if (f.kind === 'weak_test' && f.confidence === 'high' && !counterexampleOk(f.counterexample)) {
-    f.confidence = 'low';
+    f.confidence = 'low'; f.gated = true;
     notes.push(`low confidence: weak_test ${f.path}:${f.line} names no concrete wrong behaviour that the assertion still accepts.`);
   }
   const d = { coverage: rows, requirements: reqs, findings: kept };
@@ -1471,7 +1471,7 @@ async function run({ github, context, core }) {
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
     for (const f of data.findings) {
       const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
-      if (seen) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
+      if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
@@ -1487,7 +1487,7 @@ async function run({ github, context, core }) {
     const covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
     for (const f of data.findings) {
       const hit = f.kind === 'missing_test' && f.confidence !== 'low' && covers(readLines(f.path), f.line, f.path);
-      if (hit) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
+      if (hit) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
     }
   }
   const readRule = memoed(readFile); // the trusted rule inventory may include base-restored files that are not tracked at head
@@ -1588,7 +1588,7 @@ async function run({ github, context, core }) {
     if (near >= 0) {
       // a low-confidence nearby finding is raised, not duplicated. A cross-file re-pin is no new risk: the lead is already posted when no finding is nearby.
       const n = data.findings[near];
-      if (n.confidence !== 'high') data.findings[near] = { ...n, confidence: 'high', body: `${n.body}\n\nRemoval confirmed by the diff.` };
+      if (n.confidence !== 'high' && !n.gated) data.findings[near] = { ...n, confidence: 'high', body: `${n.body}\n\nRemoval confirmed by the diff.` };
       continue;
     }
     const quote = ch.get(line).trim();
