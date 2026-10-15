@@ -1486,8 +1486,9 @@ async function run({ github, context, core }) {
   { // a missing_test claim whose error message or literal already sits in a tracked test file may be covered there: low confidence, not counted (src/test-map.js)
     const covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
     for (const f of data.findings) {
-      const hit = f.kind === 'missing_test' && f.confidence !== 'low' && covers(readLines(f.path), f.line, f.path);
-      if (hit) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
+      const hit = f.kind === 'missing_test' && covers(readLines(f.path), f.line, f.path);
+      if (hit && f.confidence === 'low') f.gated = true; // already low: just keep it from being raised later
+      else if (hit) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
     }
   }
   const readRule = memoed(readFile); // the trusted rule inventory may include base-restored files that are not tracked at head
@@ -1588,7 +1589,7 @@ async function run({ github, context, core }) {
     if (near >= 0) {
       // a low-confidence nearby finding is raised, not duplicated. A cross-file re-pin is no new risk: the lead is already posted when no finding is nearby.
       const n = data.findings[near];
-      if (n.confidence !== 'high' && !n.gated) data.findings[near] = { ...n, confidence: 'high', body: `${n.body}\n\nRemoval confirmed by the diff.` };
+      if (n.confidence !== 'high' && !n.gated && (n.kind !== 'weak_test' || counterexampleOk(n.counterexample))) data.findings[near] = { ...n, confidence: 'high', body: `${n.body}\n\nRemoval confirmed by the diff.` };
       continue;
     }
     const quote = ch.get(line).trim();
