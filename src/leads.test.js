@@ -182,6 +182,13 @@ test('removed assertions: a complete move into a parameter table is no lead; a r
   assert.deepEqual(named('+  const cases = [\n+    [1, 2],\n+    [2, 3],\n+  ];\n'), [], 'a multi-line named table');
 });
 
+test('removed assertions: the Kite #12 fold into a typed TypeScript table with nested calls in each row: only the dropped exact-now case is a lead', () => {
+  const diff = fs.readFileSync(path.join(__dirname, 'fixtures/kite-r12.diff'), 'utf8');
+  assert.deepEqual(assertionDelta(diff, () => true).map((x) => [x.kind, x.line]), [['removed', 11]]);
+  // a row is one element of the table, not a run of literals across rows
+  assert.deepEqual(delta('-  assert.deepEqual(f(at(1, 2), 3), 4);\n+  const cases: [Date, number, number][] = [[at(1, 2), 3, 9], [at(0, 0), 4, 4]];\n+  for (const [d, x, y] of cases) assert.deepEqual(f(d, x), y);\n'), ['removed 10 assert.deepEqual(f(at(1, 2), 3), 4);']);
+});
+
 test('removed assertions: assert.match, notEqual and throws count as assertions', () => {
   const d = assertionDelta('diff --git a/t.test.js b/t.test.js\n--- a/t.test.js\n+++ b/t.test.js\n@@ -1,4 +1,1 @@\n-assert.match(f("zq1"), /x/)\n-assert.notEqual(g("zq2"), 1)\n-assert.throws(() => h("zq3"), /bad/)\n x\n', () => true);
   assert.equal(d.length, 3);
