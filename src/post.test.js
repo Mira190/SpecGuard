@@ -492,6 +492,23 @@ test('preserves removed assertions from deleted test files as LEFT-side summary 
   assert.match(s.calls.summary[0].body, /### Weak unit tests \(\d+\)\n\n- .*removed test or assertion/);
 });
 
+test('a behaviour or changed line that is a removed line, cited without side LEFT, is set to LEFT; a removed assertion as evidence still cannot cover (Kite #16 re-run)', () => {
+  const removedCheck = "  if (disk && !f.dirWritable) return done('no write permission')";
+  const head = ['export function precheck(f) {', "  if (disk && !f.dirExists) return done('folder missing')", '  return ok', '}'];
+  const maps = post.parseDiff(`diff --git a/src/precheck.js b/src/precheck.js\n--- a/src/precheck.js\n+++ b/src/precheck.js\n@@ -1,4 +1,4 @@\n export function precheck(f) {\n   if (disk && !f.dirExists) return done('folder missing')\n-${removedCheck}\n   return ok\n }\n`);
+  const read = (p) => (p === 'src/precheck.js' ? head : ['test("x", () => {', "  assert.equal(blocker({ dirWritable: false }), '')", '})']);
+  const cite = { path: 'src/precheck.js', line: 3, quote: removedCheck.trim() }; // no side
+  const d = report({ coverage: [row('missing_test', { behaviour: { ...cite }, change: { ...cite }, evidence: [] })], findings: [] });
+  post.verifyEvidence(d, new Set(['src/precheck.js']), new Set(), read, maps);
+  const c = d.coverage[0];
+  assert.deepEqual([c.status, c.behaviour.side, c.change.side], ['missing_test', 'LEFT', 'LEFT'], d.validation_notes.join('|'));
+  assert.ok(d.validation_notes.some((n) => /src\/precheck\.js:3 is a removed line cited without side LEFT; set to LEFT/.test(n)));
+  // control: a removed assertion cited as a covered row's assertion evidence stays unverified
+  const asEvidence = report({ coverage: [row('covered', { behaviour: { path: 'src/precheck.js', line: 2, quote: "if (disk && !f.dirExists) return done('folder missing')" }, change: null, evidence: [{ ...cite, kind: 'assertion', layer: 'unit' }] })], findings: [] });
+  post.verifyEvidence(asEvidence, new Set(['src/precheck.js']), new Set(), read, maps);
+  assert.equal(asEvidence.coverage[0].status, 'unknown');
+});
+
 test('removed evidence cited without side LEFT is set to LEFT with a note, not demoted (Kite recall run: a dropped boundary case lost its finding)', () => {
   const removed = { ...evidence, kind: 'removed' }; // no side
   const d = report({ coverage: [row('weak_test', { change: { ...removed, side: 'LEFT' }, evidence: [removed] })], findings: [finding('weak_test', { ...removed, side: 'LEFT' })] });

@@ -525,7 +525,7 @@ function traceTable(data, blob, specFiles = [], covById = new Map(data.coverage.
     const t = String(label).replace(/[\[\]]/g, '');
     return blob && line ? `[${t}](${blob}/${p.split('/').map(encodeURIComponent).join('/')}#L${line})` : t;
   };
-  const at = (c) => (c ? link(c.path, c.line, `${c.path}:${c.line}`) : '');
+  const at = (c) => (c ? (c.side === 'LEFT' ? `${c.path}:${c.line} (removed line)` : link(c.path, c.line, `${c.path}:${c.line}`)) : ''); // a removed line has no place at head
   const rows = [];
   for (const r of data.requirements) {
     if (!specPath(r.source) || !r.obligation_ids.length) continue;
@@ -942,17 +942,27 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
     const lines = c.side === 'LEFT' ? null : read(c.path);
     return c.side === 'LEFT' ? locate(c, changed(c), keys(c)) : locate(c, (l) => lines?.[l - 1], lines ? lines.map((_, i) => i + 1) : []);
   };
+  // a behaviour or changed-line quote that is a removed line, cited without side LEFT: set to LEFT with a note (same repair as findings and removed evidence).
+  // Never for assertion evidence: a removed assertion cannot carry coverage.
+  const toLeft = (c, id) => {
+    if (c.side === 'LEFT' || !maps.get(c.path)) return false;
+    const l = { ...c, side: 'LEFT' };
+    if (!locate(l, changed(l), keys(l))) return false;
+    Object.assign(c, l);
+    (data.validation_notes ||= []).push(`${id}: ${c.path}:${c.line} is a removed line cited without side LEFT; set to LEFT.`);
+    return true;
+  };
   const stray = []; // obligations whose change citation is an unchanged line of a changed file
   for (const c of data.coverage) {
     const { change } = c, fails = []; // every citation is checked (locate corrects lines in place); the failures are named
     const check = (label, x, pass) => { if (!pass) fails.push(`${label} ${x.path}:${x.line}`); };
     if (change) {
-      const rev = reviewable.has(change.path), onChange = rev && locate(change, changed(change), keys(change));
+      const rev = reviewable.has(change.path), onChange = rev && (locate(change, changed(change), keys(change)) || toLeft(change, c.id));
       const unchanged = rev && !onChange && change.side !== 'LEFT' && exact(change); // a real line of the file at head that the PR did not change: the citation is dropped, not the obligation
       if (unchanged) c.change = null;
       else check('changed line', change, onChange);
     }
-    if (c.behaviour) check('behaviour', c.behaviour, exact(c.behaviour));
+    if (c.behaviour) check('behaviour', c.behaviour, exact(c.behaviour) || toLeft(c.behaviour, c.id));
     c.evidence.forEach((e, i) => check(`evidence ${i + 1}`, e, exact(e)));
     if (!fails.length && c.status === 'covered') { // a quote that exists must also be an assertion in a test that runs
       const bad = [];
