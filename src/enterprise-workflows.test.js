@@ -134,7 +134,7 @@ test('audit-post: with ISSUE_REPO the scan issue lives in that repository under 
   const ctx = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-issue-'));
   fs.writeFileSync(path.join(ctx, 'audit-meta.json'), JSON.stringify({ head: 'abc123', max_requirements: 80, docs: 0, limitations: [] }));
   const BOT = { type: 'Bot', login: 'github-actions[bot]' }, calls = [];
-  const client = (name, issues) => ({ rest: { users: { getAuthenticated: async () => { throw new Error('no /user'); } },
+  const client = (name, issues) => ({ rest: { users: { getAuthenticated: async () => { throw new Error('no /user'); } }, repos: { get: async () => ({ data: { visibility: 'private' } }) },
     issues: { listForRepo: (a) => { calls.push([name, 'list', a.owner, a.repo]); return issues; }, update: async (a) => { calls.push([name, 'update', a.owner, a.repo, a.issue_number, a.title]); }, create: async (a) => { calls.push([name, 'create']); } } },
     paginate: async (fn, a) => fn(a) });
   const body = '<!-- specguard:audit -->\n## old';
@@ -150,6 +150,32 @@ test('audit-post: with ISSUE_REPO the scan issue lives in that repository under 
   assert.deepEqual(calls, [['issue', 'list', 'corp', 'specguard'], ['issue', 'update', 'corp', 'specguard', 5, 'SpecGuard: unit test gap scan: acme/shop']], 'only the issue of the scanned repository is updated');
 });
 
+test('audit-post: a scan issue in another repository is written only when that audience is no wider than the scanned one; unknown visibility writes nothing (review F18)', async () => {
+  const audit = require('./audit-post.js'), os = require('node:os');
+  const run = async (src, dest) => {
+    const ctx = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-issue-'));
+    fs.writeFileSync(path.join(ctx, 'audit-meta.json'), JSON.stringify({ head: 'abc123', max_requirements: 80, docs: 0, limitations: [] }));
+    const calls = [], outputs = {};
+    const client = (name, v) => ({ rest: { users: { getAuthenticated: async () => { throw new Error('no /user'); } }, repos: { get: async () => { if (v === null) throw new Error('404'); return { data: { visibility: v } }; } },
+      issues: { listForRepo: () => { calls.push([name, 'list']); return []; }, update: async () => calls.push([name, 'update']), create: async () => calls.push([name, 'create']) } }, paginate: async (fn, a) => fn(a) });
+    const env = { CTX: ctx, SKIP: 'true', SCAN_ISSUE: 'true', ISSUE_REPO: 'corp/reports', ENGINE: '', MODEL: '' }, saved = { ...process.env };
+    const core = { warning: (m) => calls.push(['warn', m]), setOutput: (k, v) => { outputs[k] = v; }, summary: { addRaw() { return this; }, async write() {} } };
+    try { Object.assign(process.env, env); await audit({ github: client('read', src), issueGithub: client('issue', dest), context: { repo: { owner: 'org', repo: 'private-source' }, sha: 'abc123' }, core }); }
+    finally { for (const k of Object.keys(env)) if (k in saved) process.env[k] = saved[k]; else delete process.env[k]; fs.rmSync(ctx, { recursive: true, force: true }); }
+    return { wrote: calls.some((c) => c[0] === 'issue'), calls, outputs };
+  };
+  const leak = await run('private', 'public');
+  assert.equal(leak.wrote, false, 'private -> public: no issue call at all');
+  assert.equal(leak.outputs.status, 'failed');
+  assert.match(leak.calls.find((c) => c[0] === 'warn')[1], /scan issue not written to corp\/reports: the target repository is not public but this control repository is public/);
+  assert.equal((await run('private', null)).wrote, false, 'destination visibility unreadable: fail closed');
+  assert.equal((await run(null, 'private')).wrote, false, 'source visibility unreadable: fail closed');
+  for (const [src, dest] of [['private', 'private'], ['internal', 'private'], ['public', 'public']]) {
+    const ok = await run(src, dest);
+    assert.deepEqual([ok.wrote, ok.outputs.status], [true, 'complete'], `${src} -> ${dest}`);
+  }
+});
+
 test('audit-post: scan_issue_repo together with scan_paths titles "...: owner/name (scope)" and keeps the scope marker; unscoped keeps the original marker', async () => {
   const audit = require('./audit-post.js'), os = require('node:os');
   assert.equal(audit.scopeOf('', 'acme/shop').title, 'SpecGuard: unit test gap scan: acme/shop');
@@ -160,7 +186,7 @@ test('audit-post: scan_issue_repo together with scan_paths titles "...: owner/na
   const ctx = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-issue-'));
   fs.writeFileSync(path.join(ctx, 'audit-meta.json'), JSON.stringify({ head: 'abc123', max_requirements: 80, docs: 0, limitations: [] }));
   const BOT = { type: 'Bot', login: 'github-actions[bot]' }, calls = [];
-  const client = { rest: { users: { getAuthenticated: async () => { throw new Error('no /user'); } },
+  const client = { rest: { users: { getAuthenticated: async () => { throw new Error('no /user'); } }, repos: { get: async () => ({ data: { visibility: 'private' } }) },
     issues: { listForRepo: (a) => a, update: async (a) => { calls.push(['update', a.owner, a.repo, a.issue_number, a.title]); }, create: async (a) => { calls.push(['create', a.owner, a.repo, a.title]); } } },
     paginate: async (fn, a) => fn(a) };
   const body = `${sc.mark}\n## old`;

@@ -151,6 +151,14 @@ test('verify: a skipped, empty or declaration-only test cannot carry covered (sa
   assert.equal(verify(result(), { read: rd }).requirements[0].status, 'covered', 'control: a running assertion covers');
 });
 
+test('verify: a variable, a commented-out assertion or an import line cannot carry covered (review F13)', () => {
+  for (const line of ['const expectedTotal = 42;', '// assert.equal(total, 42);', "const assert = require('node:assert/strict');"]) {
+    const rd = (p) => (p === 'tests/only.test.js' ? [line] : FILES[p] || null);
+    const r = verify(result([req({ tests: [{ path: 'tests/only.test.js', line: 1, quote: line, layer: 'unit' }] })]), { read: rd }).requirements[0];
+    assert.equal(r.status, 'unknown', line);
+  }
+});
+
 test('verify: evidence that cannot carry the status downgrades; a sound row is left alone', () => {
   const ok = (over) => verify(result([req(over)]), { read }).requirements[0];
   assert.equal(ok({ class: 'human' }).status, 'unknown');
@@ -177,6 +185,12 @@ test('validate: every result names a listed block (an unusable majority is rejec
   assert.deepEqual([both.requirements.length, both.requirements[0].status, both.not_requirements.length], [1, 'unknown', 0]);
   assert.match(both.requirements[0].note, /Also answered as not a requirement \(volume range is rationale\); status unknown until a person decides/);
   assert.match(both.not_reviewed.join('\n'), /block 1111111a was answered both as a requirement and as not a requirement; kept as unknown/);
+  // review F17: the conflicting requirement row is malformed (no source) and dropped; the block still never becomes a non-requirement
+  const bad = result([req({ source: null }), req({ id: C2, source: cite('docs/design.md', 4), text: 'A plan must start in the future.' })], { not_requirements: [nr(C1)] });
+  assert.deepEqual(validate(bad, TWO()), { ok: true });
+  assert.equal(bad.not_requirements.length, 0);
+  const vb = verify(bad, { read, cands: TWO() });
+  assert.deepEqual([vb.requirements.map((r) => [r.id, r.status]), vb.not_requirements.length], [[[C1, 'unknown'], [C2, 'covered']], 0]);
   const v = verify(both, { read, cands: ONE() });
   assert.deepEqual([v.requirements.map((r) => [r.id, r.status]), v.not_requirements.length], [[[C1, 'unknown']], 0]);
   assert.deepEqual(validate(result([req()], { not_requirements: [nr(C2)] }), TWO()), { ok: true });

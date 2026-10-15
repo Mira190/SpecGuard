@@ -556,6 +556,15 @@ test('context pack: a test file over its cap is shown as the relevant slices (he
   assert.equal(r.h.file('pack-cut.txt'), '', 'every test that mentions the symbol is visible: not listed as cut');
 });
 
+test('context pack: a symbol counts only as a whole word: recomputeTotal is no reference to computeTotal (the head is shown and the file listed as cut)', async (t) => {
+  const r = repo(t, { 'src/svc.js': 'const x = 1;\nfunction computeTotal(a) {\n  return a;\n}\n', 'test/svc.test.js': bigTest((i) => i === 400).replace('computeTotal(1);', 'recomputeTotal(1);') }, {
+    'files.txt': 'src/svc.js\n', 'test-candidates.txt': 'src/svc.js\n  test/svc.test.js  (same stem)\n',
+    'diff.numbered.txt': 'diff --git a/src/svc.js b/src/svc.js\n--- a/src/svc.js\n+++ b/src/svc.js\n@@ -1,1 +1,4 @@\n   1 |  const x = 1;\n   2 | +function computeTotal(a) {\n   3 | +  return a;\n   4 | +}\n' });
+  await r.go();
+  assert.match(r.user(), /name="test\/svc\.test\.js" note="first \d+ of 2999 lines, line-numbered"/);
+  assert.equal(r.h.file('pack-cut.txt'), 'test/svc.test.js');
+});
+
 test('context pack: no symbol of the diff in the test file -> the head, as before, and the file is listed as cut; leads.txt symbols and a raw diff.patch are used too', async (t) => {
   const none = sliceRepo(t, (i) => i === 400, { 'diff.numbered.txt': '+++ b/src/svc.js\n@@ -1,1 +1,2 @@\n   2 | +function zzzNothing() {}\n' });
   await none.go();

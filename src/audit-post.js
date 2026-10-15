@@ -104,11 +104,12 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     const drop = (why) => { unusable++; first ||= `${w}: ${why}`; notes.push(`${w} dropped: ${why}.`); };
     if (!r || typeof r !== 'object' || Array.isArray(r)) { drop('not an object'); continue; }
     const cid = cidOf(r.id), cand = cands && cid && cands.get(cid);
+    if (cand && skipped.has(cid)) conflicts.add(cid); // before any drop: a conflicting block never stays excluded, even when its requirement row is malformed
     if (!text(r.text) && cand) r.text = cand.text; // the block's own text, from the trusted candidate list
     if (!text(r.id) || !text(r.text)) { drop('id and text are required'); continue; }
     if (ids.has(r.id)) { drop(`duplicate id ${String(r.id).slice(0, 40)}`); continue; }
     if (cands && (!cid || !cands.has(cid))) { drop(`id ${String(r.id).slice(0, 40)} is not a listed block id (the block cid, or cid.1, cid.2)`); continue; }
-    const conflict = cands && skipped.has(cid); // a conflict needs a person: the row stays, unknown, so the obligation never leaves the denominator
+    const conflict = conflicts.has(cid); // a conflict needs a person: the row stays, unknown, so the obligation never leaves the denominator
     if (!cite(tidy(r.source))) { drop('source needs path, line and quote'); continue; }
     ids.add(r.id);
     const problems = [];
@@ -129,7 +130,6 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
       r.status = 'unknown';
       r.note = `${r.note} Also answered as not a requirement (${oneLine(skips.find((n) => n.cid === cid).reason, 120)}); status unknown until a person decides.`.trim();
       notes.push(`${w}: block ${cid} was answered both as a requirement and as not a requirement; kept as unknown.`);
-      conflicts.add(cid);
     }
     for (const c of [r.source, ...r.code, ...r.tests]) c.quote = c.quote.slice(0, 200); // a prefix of a verbatim quote still verifies
     if (problems.length) { unusable++; first ||= `${w}: ${problems[0]}`; notes.push(`${w} marked unknown: ${problems.join('; ')}.`); }
@@ -138,10 +138,10 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
   }
   if (unusable * 2 > o.requirements.length) return bad(`${first} (${unusable} of ${o.requirements.length} requirement rows are unusable)`);
   o.requirements = kept;
-  for (const c of conflicts) skipped.delete(c);
+  for (const c of conflicts) { skipped.delete(c); if (!answered.has(c)) notes.push(`block ${c} was answered as not a requirement and by a requirement row that was dropped; it stays unknown.`); }
   o.not_requirements = skips.filter((n) => !conflicts.has(n.cid));
   if (cands) {
-    const missing = [...cands.keys()].filter((k) => !answered.has(k) && !skipped.has(k));
+    const missing = [...cands.keys()].filter((k) => !answered.has(k) && !skipped.has(k) && !conflicts.has(k));
     if (missing.length > cands.size * MISSING_MAX) return bad(`${missing.length} of ${cands.size} listed blocks were not answered (e.g. ${missing.slice(0, 5).join(', ')}); answer every block exactly once`);
   }
   // unit_findings (code-first): a malformed row is dropped with a note, never a reason to reject the result. A finding must name a listed unit (units: Map from readUnits; null = unknown).
@@ -635,8 +635,14 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   // issue lookup: our open or closed issue (of this scope) and the state it holds; a failure warns and fails the status (issueErr is re-applied once the run's own status is known)
   let mine = null, prior = null, issueErr = '';
   const issueFail = (e) => { issueErr = `could not write the scan issue: ${e.message}`; core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); outcome('failed', issueErr); };
+  // a scan issue in another repository may not reach a wider audience than the scanned one (the manual workflow's guard, at the action's own boundary; fails closed)
+  const vis = async (g, r) => { try { const d = (await g.rest.repos.get(r)).data; return d.visibility || (d.private === false ? 'public' : d.private ? 'private' : ''); } catch { return ''; } };
   const lookup = async () => {
     if (!wantIssue) return;
+    if (away) {
+      const g = require('./visibility-guard').decide(await vis(igh, issueRepo), await vis(github, { owner, repo }));
+      if (!g.ok) { issueErr = `scan issue not written to ${issueRepo.owner}/${issueRepo.repo}: ${g.reason}`; core.warning(`SpecGuard: ${issueErr}`); outcome('failed', issueErr); return false; }
+    }
     try {
       mine = await findIssue({ github: igh, ...issueRepo, me: await whoami(igh), mark: scope.mark, title: away ? scope.title : '' });
       prior = mine && readState(mine.body);
