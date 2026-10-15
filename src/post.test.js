@@ -2722,6 +2722,18 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   assert.doesNotMatch(skip, /✅|❌|⚠️|<details>/);
 });
 
+test('grade reads the completeness this summary declares: an incomplete or failed run is never graded complete; a reduced run is reported, not failed (review F16)', () => {
+  const { grade } = require('../eval/grade');
+  const d = report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] });
+  const g = (x) => grade({ id: 'c', goal: 'g', expected: { findings: [], must_not: [], expect_clean: true } }, { comments: [], reviews: [], summary: post.buildSummary({ data: d, blob: BLOB, ...x }) });
+  assert.deepEqual([g({}).complete, g({}).reduced], [true, false]);
+  assert.equal(g({ incomplete: ['Requirement tracing was not done: x.'] }).complete, false);
+  assert.equal(g({ incomplete: ['Requirement tracing was not done: x.'] }).pass, false);
+  assert.equal(g({ status: 'Could not complete: x', state: 'failed' }).complete, false);
+  const red = g({ reduced: { reasons: ['fast-tier model'], model: 'mini' }, counts: { v: 1, reduced: true } });
+  assert.deepEqual([red.complete, red.reduced], [true, true]);
+});
+
 test('layout: one icon per summary, on the verdict line only; status words are plain', () => {
   const icons = (x) => (x.match(/\p{Extended_Pictographic}/gu) || []).length;
   const posted = [{ f: finding('missing_test'), url: 'https://github.com/o/r/pull/1#discussion_r1' }];
