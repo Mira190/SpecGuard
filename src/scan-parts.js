@@ -33,7 +33,12 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, windowPack, as
     const locs = new Map(), at = (l) => { const x = l.split('\t')[2] || '', k = x.lastIndexOf(':'); return k > 0 ? [x.slice(0, k), parseInt(x.slice(k + 1), 10) || 1] : null; };
     for (const kind of ['code', 'test']) for (const l of ev) { const w = l.split('\t')[1] === kind && at(l); if (w) locs.set(w[0], [...(locs.get(w[0]) || []), w[1]]); }
     const p = limit > 0 ? windowPack(root, locs, limit) : { text: '', note: '', notWhole: [] };
-    return { prompt, pack: p, cids };
+    const cut = new Set(p.notWhole), blockCuts = {};
+    for (const cid of cids) {
+      const missing = [...new Set(ev.filter((l) => l.split('\t')[0] === cid).map(at).filter(Boolean).map(([file]) => file).filter((file) => cut.has(file)))];
+      if (missing.length) blockCuts[cid] = missing;
+    }
+    return { prompt, pack: p, cids, blockCuts };
   };
   const byCid = new Map(cands.map((l) => [l.split('\t')[0], l]));
   const withTmp = (f) => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-part-')); try { return f(); } finally { fs.rmSync(tmp, { recursive: true, force: true }); } };
