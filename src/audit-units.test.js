@@ -213,10 +213,10 @@ test('selection and rotation: the riskiest first; with a state the confirming, n
   ] };
   const a = pick(rows, 4, prior);
   assert.deepEqual(a.picked.map((r) => r.id), ['00000001', '00000004', '00000005', '00000006'], 'confirming, then never reviewed by risk');
-  assert.deepEqual(a.tally, { c: 1, n: 3, o: 0 });
+  assert.deepEqual(a.tally, { c: 1, s: 0, n: 3, o: 0 });
   const b = pick(rows, 6, prior);
   assert.deepEqual(b.picked.map((r) => r.id), ['00000001', '00000004', '00000005', '00000006', '00000007', '00000002'], 'then the least recently reviewed');
-  assert.deepEqual(b.tally, { c: 1, n: 4, o: 1 });
+  assert.deepEqual(b.tally, { c: 1, s: 0, n: 4, o: 1 });
   // a full cycle: every unit is reviewed once before one is reviewed again
   const seen = new Set();
   let state = { head: 'x', blocks: [] };
@@ -237,11 +237,20 @@ test('inventory with a state: rotation counts, review labels and the carried uni
   assert.equal(second.rotation.rotate, true);
   assert.equal(second.rotation.reviewed, 8);
   assert.equal(second.rotation.run, 2);
-  assert.deepEqual(second.rotation, { rotate: true, picked: 4, confirming: 0, new: 4, oldest: 0, reviewed: 8, total: 11, run: 2, runs: 3 });
+  assert.deepEqual(second.rotation, { rotate: true, picked: 4, confirming: 0, changed: 0, new: 4, oldest: 0, reviewed: 8, total: 11, run: 2, runs: 3 });
   assert.ok(second.picked.every((u) => !first.picked.some((v) => v.id === u.id)), 'the units reviewed last time rest');
   assert.deepEqual(second.carried.map((u) => u.id).sort(), first.picked.map((u) => u.id).sort());
   assert.equal(second.review(first.picked[0]), 'reviewed 2026-10-01');
   assert.equal(second.review(second.picked[0]), 'this run');
+  // review F06: a unit whose file or matched tests changed since its review (the state's version differs) is due again, before never-reviewed units
+  const changed = first.picked[3], versions = { uv: Object.fromEntries(first.picked.map((u) => [u.id, u === changed ? 'deadbeef' : u.ver])), ev: {} };
+  const third = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 4, prior: { ...prior, versions } });
+  assert.equal(third.picked[0].id, changed.id);
+  assert.equal(third.rotation.changed, 1);
+  const one = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 0, prior: { ...prior, versions } });
+  assert.deepEqual(one.stale, [changed.id], 'not picked: still reported stale');
+  assert.match(one.review(changed), /reviewed 2026-10-01; changed since, due again/);
+  assert.equal(inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 4, prior: { ...prior, versions: { uv: Object.fromEntries(first.picked.map((u) => [u.id, u.ver])), ev: {} } } }).rotation.changed, 0, 'same versions: nothing stale');
   assert.equal(second.review(second.rows.find((u) => !second.picked.includes(u) && !first.picked.some((v) => v.id === u.id))), 'not yet reviewed');
 });
 
@@ -253,7 +262,8 @@ test('write: audit-units.txt, audit-units-carried.txt and audit-inventory.json c
   const rows = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n').filter(Boolean).map((l) => l.split('\t'));
   assert.equal(rows.length, 3);
   assert.deepEqual(rows[0].slice(0, 2), [sha8('src/js/orders.js'), 'src/js/orders.js']);
-  assert.equal(rows[0].length, 6, 'id, path, risk, why, tests, leads');
+  assert.equal(rows[0].length, 7, 'id, path, risk, why, tests, leads, version');
+  assert.match(rows[0][6], /^[0-9a-f]{8}$/);
   assert.match(rows[0][3], /fix commits in 180 days/);
   assert.equal(rows[0][4], 'test/misc.js');
   const price = rows.find((x) => x[1] === 'src/js/price.js');

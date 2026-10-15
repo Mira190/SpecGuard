@@ -54,16 +54,19 @@ const risk = ({ pub, loc: n, churn, fixes, factor }) => Math.round((1 + pub) * M
 const factorOf = (tests, s) => (!tests.length ? 1 : s.asserts === 0 || (s.tests > 0 && s.skipped >= s.tests) || s.weak.length * 2 >= s.asserts ? 0.6 : 0.3);
 
 // Which units this run reviews (at most cap). rows: sorted by risk, highest first. prior = the scan issue's state { head, blocks: [{ cid, status, runs, at: { date } }] } (unit id = cid); null = the riskiest first.
-//   c confirming: a unit whose findings were seen in one run only; n never reviewed (riskiest first); o everything else, least recently reviewed first (ties: riskiest first).
+//   c confirming: a unit whose findings were seen in one run only; s stale: the unit or its matched tests changed since it was reviewed (the state's version differs);
+//   n never reviewed (riskiest first); o everything else, least recently reviewed first (ties: riskiest first).
+const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.versions.uv[r.id]; return !!v && v !== r.ver; };
 function pick(rows, cap, prior) {
   const kind = new Map(), picked = [];
-  if (!prior) { for (const r of rows.slice(0, cap)) { kind.set(r.id, 'n'); picked.push(r); } return { picked, kind, tally: { c: 0, n: picked.length, o: 0 } }; }
+  if (!prior) { for (const r of rows.slice(0, cap)) { kind.set(r.id, 'n'); picked.push(r); } return { picked, kind, tally: { c: 0, s: 0, n: picked.length, o: 0 } }; }
   const st = new Map(prior.blocks.map((b) => [b.cid, b])), when = (r) => (st.get(r.id).at || {}).date || '';
   const take = (list, k) => { for (const r of list) if (picked.length < cap && !kind.has(r.id)) { kind.set(r.id, k); picked.push(r); } };
   take(rows.filter((r) => st.has(r.id) && st.get(r.id).status === 'gap' && st.get(r.id).runs === 1), 'c');
+  take(rows.filter((r) => st.has(r.id) && staleUnit(r, prior)), 's');
   take(rows.filter((r) => !st.has(r.id)), 'n');
   take(rows.filter((r) => st.has(r.id)).sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0)), 'o'); // stable: ties keep the risk order
-  const tally = { c: 0, n: 0, o: 0 };
+  const tally = { c: 0, s: 0, n: 0, o: 0 };
   for (const k of kind.values()) tally[k]++;
   return { picked, kind, tally };
 }
@@ -107,7 +110,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   if (unread > 0) limits.push(`${unread} of ${tests.length} test files were not read (over the size, count or time limit): their assertions are unknown, and a unit they alone cover may be missed`);
   const hist = history(cwd, now);
   if (!hist) limits.push('no git history (shallow clone? use fetch-depth: 0): churn and fix commits are not used in the ranking');
-  const none = { tests: 0, noAssert: 0, skipped: 0, asserts: 0, weak: [] };
+  const none = { tests: 0, noAssert: 0, skipped: 0, asserts: 0, weak: [] }, shaOf = new Map(files.map((e) => [e.path, e.sha]));
   const index = indexTests(tests);
   const rows = units.map((u) => {
     const got = [...mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: PER_UNIT_TESTS }).keys()];
@@ -116,23 +119,25 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     const h = (hist && hist.get(u.path)) || { churn: 0, fixes: 0 }, factor = factorOf(got, got.some((t) => !sig.has(t)) ? { ...s, asserts: Math.max(s.asserts, 1) } : s); // a test file that was not read is assumed to assert
     const why = [!got.length && 'no test', s.skipped && `${s.skipped} skipped test${s.skipped === 1 ? '' : 's'}`, s.noAssert && `${s.noAssert} test${s.noAssert === 1 ? '' : 's'} without an assertion`, s.weak.length && `${s.weak.length} weak assertion${s.weak.length === 1 ? '' : 's'}`,
       h.fixes && `${h.fixes} fix commit${h.fixes === 1 ? '' : 's'} in ${DAYS} days`, !h.fixes && h.churn >= 3 && `${h.churn} commits in ${DAYS} days`].filter(Boolean).join(', ') || `${u.pub} public definition${u.pub === 1 ? '' : 's'}`;
-    return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, score: risk({ ...u, ...h, factor }) };
+    const ver = sha8([u.path, ...got].map((p) => `${p}:${shaOf.get(p) || ''}`).join('\n')); // what a review of this unit saw: its blob and its matched tests' blobs
+    return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
   const sel = pick(rows, maxUnits, prior), chosen = new Set(sel.picked.map((r) => r.id));
   const distinct = (rs) => [...new Set(rs.flatMap((r) => r.tests))].map((t) => sig.get(t) || none);
   const tot = (ss) => ({ skipped_tests: ss.reduce((a, s) => a + s.skipped, 0), tests_without_assertion: ss.reduce((a, s) => a + s.noAssert, 0), weak_assertions: ss.reduce((a, s) => a + s.weak.length, 0) });
   const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), reviewed = new Set([...rows.filter((r) => known.has(r.id)).map((r) => r.id), ...chosen]);
-  const rotation = { rotate: !!prior, picked: sel.picked.length, confirming: sel.tally.c, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / maxUnits)), runs: Math.max(1, Math.ceil(rows.length / maxUnits)) };
+  const rotation = { rotate: !!prior, picked: sel.picked.length, confirming: sel.tally.c, changed: sel.tally.s, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / maxUnits)), runs: Math.max(1, Math.ceil(rows.length / maxUnits)) };
   const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
   return { rows, picked: sel.picked, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
     totals: { units: rows.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
-    review: (r) => (chosen.has(r.id) ? 'this run' : known.has(r.id) ? `reviewed ${date(r) || 'earlier'}` : 'not yet reviewed') };
+    stale: rows.filter((r) => known.has(r.id) && !chosen.has(r.id) && staleUnit(r, prior)).map((r) => r.id),
+    review: (r) => (chosen.has(r.id) ? 'this run' : known.has(r.id) ? `reviewed ${date(r) || 'earlier'}${staleUnit(r, prior) ? '; changed since, due again' : ''}` : 'not yet reviewed') };
 }
 
 // audit-units.txt (id, path, risk, why, matched tests, leads: tab separated), audit-units-carried.txt (id, path: units the state knows that this run does not review), audit-inventory.json.
 function write(ctx, head, maxUnits, inv) {
   const w = (n, s) => fs.writeFileSync(path.join(ctx, n), s), flat = (s) => String(s).replace(/[\t\r\n]+/g, ' ');
-  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-'].map(flat).join('\t') + '\n').join(''));
+  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver].map(flat).join('\t') + '\n').join(''));
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
   w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
     rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r), signals: { tests: r.signals.tests, noAssert: r.signals.noAssert, skipped: r.signals.skipped, asserts: r.signals.asserts, weak: r.signals.weak.length, unread: r.signals.unread } })),

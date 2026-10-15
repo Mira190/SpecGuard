@@ -567,9 +567,10 @@ test('changed since last audit: only 2-run-stable changes are listed; status chu
 test('state: v4 round trip and tamper check; v3 and a v2 (per-row) state still read as one prior run; v1 and foreign comments are no state', () => {
   const rows = verify(result([req(), req({ id: C2, source: cite('docs/design.md', 4), status: 'missing_test', tests: [], text: 'A plan must start in the future.' })]), { read, cands: TWO() });
   const state = audit.stateComment('abc123def', rows, null, { date: DATE });
-  assert.match(state, /^<!-- specguard:audit-state \{"v":4,"head":"abc123def","audits":\[\["abc123d","2026-10-13"\]\],"blocks":\[\["1111111a","covered","abc123d",1,0\],\["2222222b","gap","abc123d",1,0,"missing_test",0]]\} -->$/);
+  assert.match(state, /^<!-- specguard:audit-state \{"v":4,"head":"abc123def","audits":\[\["abc123d","2026-10-13"\]\],"blocks":\[\["1111111a","covered","abc123d",1,0\],\["2222222b","gap","abc123d",1,0,"missing_test",0]],"ev":\[\["1111111a","f76d5660","487bebfb"\]\]\} -->$/); // ev: sha8 of the files the covered verdict cited (F06)
   const at = { head: 'abc123d', date: '2026-10-13' };
-  assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1, at }, { cid: C2, status: 'gap', since: 'abc123d', runs: 1, at, top: 'missing_test', hl: 0 }] });
+  assert.deepEqual(audit.readState(`${MARK}\nbody\n${state}`), { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1, at }, { cid: C2, status: 'gap', since: 'abc123d', runs: 1, at, top: 'missing_test', hl: 0 }],
+    versions: { uv: {}, ev: { [C1]: ['f76d5660', '487bebfb'] } } }); // sha8('src/plan.js'), sha8('tests/plan.test.js')
   // v3 (no audit dates) is the previous format: it reads with an unknown audit date
   const v3 = audit.readState('<!-- specguard:audit-state {"v":3,"head":"abc123def","blocks":[["1111111a","covered","abc123d",1],["2222222b","gap","abc123d",2]]} -->');
   assert.deepEqual(v3, { head: 'abc123def', blocks: [{ cid: C1, status: 'covered', since: 'abc123d', runs: 1, at: null }, { cid: C2, status: 'gap', since: 'abc123d', runs: 2, at: null }] });
@@ -604,7 +605,7 @@ test('run: a previous issue state drives confirmation in summary and issue; the 
   const old = first.calls.created[0].body;
   assert.doesNotMatch(old, /Changed since the last scan/);
   assert.match(old, /first scan run/);
-  assert.match(old, /<!-- specguard:audit-state \{"v":4,"head":"abc123","audits":\[\["abc123","2026-10-13"\]\],"blocks":\[\["1111111a","covered","abc123",1,0\]\]\} -->$/);
+  assert.match(old, /<!-- specguard:audit-state \{"v":4,"head":"abc123","audits":\[\["abc123","2026-10-13"\]\],"blocks":\[\["1111111a","covered","abc123",1,0\]\],"ev":\[\["1111111a","f76d5660","487bebfb"\]\]\} -->$/);
   const rs = [req({ status: 'missing_test', tests: [] }), req({ id: C2, source: cite('docs/design.md', 4), text: 'A plan must start in the future.', status: 'missing_test', tests: [] })];
   const r = await runPost(t, { ctxFiles: { 'findings.json': result(rs), 'audit-candidates.txt': candTxt(TWO()) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT }] } });
   const second = r.calls.updated[0].body;
@@ -820,6 +821,17 @@ test('run: per-scope issues do not collide; the unscoped scan still finds the is
 });
 
 const ROT = { rotate: true, state: true, picked: 1, changed: 0, confirming: 1, new: 0, oldest: 0, carried: 3 };
+
+test('run: a carried covered block whose cited code or tests changed since (audit-stale.txt, review F06) is not shown as covered; the state keeps its old entry so it stays due', async (t) => {
+  const old = stateBody(MARK, 'oldhead', [['aaaa111', '2026-09-01'], ['bbbb222', '2026-08-01']], [[C1, 'gap', 'aaaa111', 1, 0], [C2, 'covered', 'bbbb222', 1, 1]]);
+  const r = await runPost(t, { ctxFiles: { 'findings.json': result(), 'audit-carried.txt': `${C2}\tdocs/design.md:4\tPlan design\tA plan must start in the future.\n`, 'audit-stale.txt': `${C2}\n`,
+    'audit-meta.json': { head: 'abc123', max_requirements: 1, docs: 1, candidates: 2, limitations: [], rotation: ROT, evidence: { blocks: 1, with_code: 1, with_tests: 0, cut: false } } },
+    env: { SCAN_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT, state: 'open', title: TITLE }] } });
+  const md = r.calls.updated[0].body;
+  assert.match(md, /`2222222b`[^\n]*covered when last audited; its code or tests changed since \(recheck due\)/);
+  assert.doesNotMatch(md, /\*\*Covered \(\d+\)\*\*[^#]*`2222222b`/, 'not listed under Covered');
+  assert.deepEqual(audit.readState(md).blocks.find((b) => b.cid === C2), { cid: C2, status: 'covered', since: 'bbbb222', runs: 1, at: { head: 'bbbb222', date: '2026-08-01' } }, 'the old entry: the next run still sees it stale');
+});
 
 test('run: runs that rotate keep the blocks they did not audit, marked from their date, in the report and in the next state; blocks gone from the documents are dropped', async (t) => {
   const old = stateBody(MARK, 'oldhead', [['aaaa111', '2026-09-01'], ['bbbb222', '2026-08-01'], ['cccc333', '2026-09-15']],

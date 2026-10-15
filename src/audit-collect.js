@@ -100,16 +100,18 @@ function allBlocks(cwd, head, docs, ruled = null) { // ruled (optional array) re
 }
 
 // Which blocks this run audits (at most cap), in priority order. prior = the scan issue's state { head, blocks: [{ cid, status, runs, at: { date } }] } (null: document order).
-//   d changed: blocks that are new or edited since the last scanned head (changedDocs: path -> cids the document had then; the cid is not in the state either);
+//   d changed: blocks that are new or edited since the last scanned head (changedDocs: path -> cids the document had then; the cid is not in the state either),
+//     and covered blocks whose cited code or test files changed since their audit (stale, review F06);
 //   c confirming: a gap seen once, or a resolved gap awaiting its second covered run;
 //   n new: blocks never audited, in document order; o oldest: everything else, least recently audited first.
-function select(all, cap, prior, changedDocs = null) {
+function select(all, cap, prior, changedDocs = null, stale = new Set()) {
   if (!prior) { const picked = all.slice(0, cap); return { picked, tally: { d: 0, c: 0, n: picked.length, o: 0 }, kind: new Map() }; }
   const st = new Map(prior.blocks.map((b) => [b.cid, b])), kind = new Map(), picked = [];
   const when = (b) => (st.get(b.cid).at || {}).date || ''; // unknown (a v3 state) sorts first
   const take = (list, k) => { for (const b of list) if (picked.length < cap && !kind.has(b.cid)) { kind.set(b.cid, k); picked.push(b); } };
   const asc = (a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0); // Array.sort is stable: ties keep document order
   take(all.filter((b) => !st.has(b.cid) && changedDocs && changedDocs.has(b.path) && !changedDocs.get(b.path).has(b.cid)), 'd');
+  take(all.filter((b) => stale.has(b.cid)).sort(asc), 'd');
   take(all.filter((b) => st.has(b.cid) && ((st.get(b.cid).status === 'gap' && st.get(b.cid).runs === 1) || st.get(b.cid).status === 'recheck')).sort(asc), 'c');
   take(all.filter((b) => !st.has(b.cid)), 'n');
   take(all.filter((b) => st.has(b.cid)).sort(asc), 'o');
@@ -167,8 +169,8 @@ function evidenceText(blocks, by) {
 }
 
 // The blocks to audit, in document order, after the priority pick and the CAND_CAP byte cap (never a cut row). carried: the others the state already knows.
-function candidates(all, cap, prior, changedDocs) {
-  const sel = select(all, cap, prior, changedDocs), at = new Map(all.map((c, i) => [c.cid, i])), row = (c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`;
+function candidates(all, cap, prior, changedDocs, stale) {
+  const sel = select(all, cap, prior, changedDocs, stale), at = new Map(all.map((c, i) => [c.cid, i])), row = (c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`;
   let used = 0;
   const fit = [];
   for (const c of sel.picked) {
@@ -240,7 +242,19 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
     }
     catch { notes.push(`could not diff against the last scanned commit ${prior.head.slice(0, 7)} (shallow clone? use fetch-depth: 0): changed documents are not prioritised`); }
   }
-  const cand = candidates(all, maxRequirements, prior, changedDocs);
+  // covered blocks whose cited files changed since their audit (the state's ev: path hashes per block); an audit commit missing from this clone counts as changed
+  const stale = new Set(), diffs = new Map(), hashOf = (p) => crypto.createHash('sha1').update(p).digest('hex').slice(0, 8);
+  if (prior && prior.versions) {
+    const auditedAt = new Map(prior.blocks.map((b) => [b.cid, b.at && b.at.head]));
+    for (const [cid, hs] of Object.entries(prior.versions.ev)) {
+      const h = auditedAt.get(cid);
+      if (h && !diffs.has(h)) { try { diffs.set(h, new Set(git(cwd, ['diff', '--name-only', '--no-renames', '-z', h, head]).split('\0').filter(Boolean).map(hashOf))); } catch { diffs.set(h, null); } }
+      const d = h ? diffs.get(h) : null;
+      if (!d || hs.some((x) => d.has(x))) stale.add(cid);
+    }
+    if ([...diffs.values()].includes(null)) notes.push('could not diff against an earlier audit commit (shallow clone? use fetch-depth: 0): its covered blocks are treated as changed and rechecked first');
+  }
+  const cand = candidates(all, maxRequirements, prior, changedDocs, stale);
   let ev = { by: new Map(), cut: false, files: 0 };
   try { ev = evidence({ cwd, head, blocks: cand.fit, scope, docs: found, ignoreExtra, budgetMs: evidenceBudgetMs }); }
   catch (e) { notes.push(`evidence search failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the model searches by itself`); }
@@ -266,6 +280,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
     if (units.rows.length) writeUnits(ctx, head, maxUnits, units);
     notes.push(...units.limitations);
   } catch (e) { notes.push(`the unit inventory failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the scan covers the design documents only`); units = null; }
+  w('audit-stale.txt', [...[...stale].filter((c) => all.some((b) => b.cid === c)), ...((units && units.stale) || [])].map((c) => `${c}\n`).join('')); // block cids and unit ids changed since their review
   const rotation = { rotate, state: !!prior, picked: cand.fit.length, changed: cand.tally.d, confirming: cand.tally.c, new: cand.tally.n, oldest: cand.tally.o, carried: cand.carried.length };
   const evid = { blocks: cand.fit.length, with_code: et.withCode, with_tests: et.withTests, cut: ev.cut, files: ev.files };
   w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, max_units: maxUnits, units: units && units.rows.length ? { total: units.rows.length, picked: units.picked.length } : null, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes],
