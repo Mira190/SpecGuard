@@ -60,18 +60,22 @@ const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.ver
 // A unit too large for one model call is reviewed in parts (review F07): fixed line windows of about PART_BYTES, one per run, the cursor in the state (uc).
 // -> { k, n, a, b } (part k of n, 0-based, lines a-b) or null when the file fits whole. A unit in progress is picked again until its last part.
 const PART_BYTES = 40 * 1024;
-const partOf = (r, prior) => {
-  if (!(r.size > PART_BYTES)) return null;
-  const n = Math.ceil(r.size / PART_BYTES), per = Math.ceil(r.lines / n), at = prior && prior.versions && prior.versions.uc ? prior.versions.uc[r.id] : 0, k = Number.isInteger(at) && at > 0 && at < n ? at : 0;
+// A part must fit what the pack gives one unit: the per-file cap, and a 1/N share when N units share the budget (claude-api.js contextPack); 5/6 leaves room for the line numbers (40 KB at the 48 KB cap).
+// shortcut: the collector assumes the default 250000-byte pack (the action has no input for CONTEXT_PACK_BYTES); wire it through if one is added.
+// shortcut: tests matched to a unit also draw on the budget, so a part is not guaranteed whole beside a very large test file; upgrade if pack-cut.txt shows it.
+const partBytes = (packBytes, units) => Math.min(PART_BYTES, Math.max(4096, Math.floor(Math.min(require('./engines/claude-api').fileCap(packBytes), packBytes / units) * 5 / 6)));
+const partOf = (r, prior, bytes = PART_BYTES) => {
+  if (!(r.size > bytes)) return null;
+  const n = Math.ceil(r.size / bytes), per = Math.ceil(r.lines / n), at = prior && prior.versions && prior.versions.uc ? prior.versions.uc[r.id] : 0, k = Number.isInteger(at) && at > 0 && at < n ? at : 0;
   return { k, n, a: k * per + 1, b: Math.min(r.lines, (k + 1) * per) };
 };
-const inProgress = (r, prior) => { const p = partOf(r, prior); return !!p && p.k > 0; };
-function pick(rows, cap, prior) {
+const inProgress = (r, prior, bytes) => { const p = partOf(r, prior, bytes); return !!p && p.k > 0; };
+function pick(rows, cap, prior, bytes) {
   const kind = new Map(), picked = [];
   if (!prior) { for (const r of rows.slice(0, cap)) { kind.set(r.id, 'n'); picked.push(r); } return { picked, kind, tally: { c: 0, s: 0, n: picked.length, o: 0 } }; }
   const st = new Map(prior.blocks.map((b) => [b.cid, b])), when = (r) => (st.get(r.id).at || {}).date || '';
   const take = (list, k) => { for (const r of list) if (picked.length < cap && !kind.has(r.id)) { kind.set(r.id, k); picked.push(r); } };
-  take(rows.filter((r) => st.has(r.id) && ((st.get(r.id).status === 'gap' && st.get(r.id).runs === 1) || inProgress(r, prior))), 'c'); // confirming, or continuing a unit reviewed in parts
+  take(rows.filter((r) => st.has(r.id) && ((st.get(r.id).status === 'gap' && st.get(r.id).runs === 1) || inProgress(r, prior, bytes))), 'c'); // confirming, or continuing a unit reviewed in parts
   take(rows.filter((r) => st.has(r.id) && staleUnit(r, prior)), 's');
   take(rows.filter((r) => !st.has(r.id)), 'n');
   take(rows.filter((r) => st.has(r.id)).sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0)), 'o'); // stable: ties keep the risk order
@@ -81,7 +85,7 @@ function pick(rows, cap, prior) {
 }
 
 // files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
-function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, prior = null, now = Date.now(), budgetMs = BUDGET_MS }) {
+function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 250000 }) {
   const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
   const inScope = files.filter((e) => !skip(e.path) && (!scope || scope(e.path)));
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
@@ -131,13 +135,13 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     const ver = sha8([u.path, ...got].map((p) => `${p}:${shaOf.get(p) || ''}`).join('\n')); // what a review of this unit saw: its blob and its matched tests' blobs
     return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
-  const sel = pick(rows, maxUnits, prior), chosen = new Set(sel.picked.map((r) => r.id));
+  const size = partBytes(packBytes, maxUnits), sel = pick(rows, maxUnits, prior, size), chosen = new Set(sel.picked.map((r) => r.id));
   const distinct = (rs) => [...new Set(rs.flatMap((r) => r.tests))].map((t) => sig.get(t) || none);
   const tot = (ss) => ({ skipped_tests: ss.reduce((a, s) => a + s.skipped, 0), tests_without_assertion: ss.reduce((a, s) => a + s.noAssert, 0), weak_assertions: ss.reduce((a, s) => a + s.weak.length, 0) });
   const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), reviewed = new Set([...rows.filter((r) => known.has(r.id)).map((r) => r.id), ...chosen]);
   const rotation = { rotate: !!prior, picked: sel.picked.length, confirming: sel.tally.c, changed: sel.tally.s, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / maxUnits)), runs: Math.max(1, Math.ceil(rows.length / maxUnits)) };
   const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
-  for (const r of sel.picked) { const p = partOf(r, prior); if (p) r.part = p; }
+  for (const r of sel.picked) { const p = partOf(r, prior, size); if (p) r.part = p; }
   return { rows, picked: sel.picked, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
     totals: { units: rows.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
     stale: rows.filter((r) => known.has(r.id) && !chosen.has(r.id) && staleUnit(r, prior)).map((r) => r.id),

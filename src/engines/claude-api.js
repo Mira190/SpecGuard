@@ -147,8 +147,9 @@ function slices(src, syms, room) {
 // A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
 // a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Partial or omitted files are returned in notWhole for per-block verification (separate from the unit pack-cut.txt). ponytail: no per-file fairness, first files first.
 const WIN = 40, HEAD = 15;
+const fileCap = (limit) => Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit (audit-units.js sizes scan parts from it)
 function windowPack(root, locs, limit) {
-  const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)), parts = [], notWhole = [];
+  const cap = fileCap(limit), parts = [], notWhole = [];
   let used = 0;
   for (const [rel, at] of locs) {
     const text = packRead(root, rel), room = Math.min(cap, limit - used - OVERHEAD);
@@ -181,7 +182,7 @@ function contextPack(ctx, root, limit) {
   const list = (n) => rd(n).split('\n').filter(Boolean);
   const parts = [], seen = new Set(), omitted = [], partial = []; // partial: cut at the budget
   let used = 0, files = 0;
-  const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit
+  const cap = fileCap(limit);
   const addFile = (p, num, quiet, syms, top = limit, part = null) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
     const rel = path.posix.normalize(p.replace(/\\/g, '/'));
     if (seen.has(rel)) return;
@@ -432,4 +433,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack };
+module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, fileCap };

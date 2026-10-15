@@ -258,16 +258,36 @@ test('a unit too large for one call is reviewed in parts (review F07): fixed lin
   const big = Array.from({ length: 2000 }, (_, i) => `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(6)}`); // about 90 KB: three parts
   const r = repo(t, { ...FILES, 'src/js/big.js': big });
   const id = sha8('src/js/big.js');
-  const first = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 20 }), row = first.rows.find((u) => u.id === id);
+  const first = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 20, packBytes: 6e6 }), row = first.rows.find((u) => u.id === id);
   assert.deepEqual(first.picked.find((u) => u.id === id).part, { k: 0, n: 3, a: 1, b: 667 });
   assert.equal(first.picked.find((u) => u.path === 'src/js/orders.js').part, undefined, 'a small unit is reviewed whole');
   const prior = { head: 'a', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: {}, ev: {}, uc: { [id]: 2 } } };
-  const next = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, prior });
+  const next = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, prior, packBytes: 6e6 });
   assert.deepEqual([next.picked[0].id, next.picked[0].part], [id, { k: 2, n: 3, a: 1335, b: 2000 }], 'the unfinished unit first, at its cursor');
   const ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
   write(ctx, 'HEAD', 1, next);
   assert.equal(fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\t')[7].trim(), 'part 3/3 lines 1335-2000');
   assert.ok(row.size > 80 * 1024);
+});
+
+test('a unit under 40 KB is split when the pack gives each file less: every part fits the per-file cap and the unit\'s 1/N share (handoff item 2)', (t) => {
+  const mid = Array.from({ length: 650 }, (_, i) => `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(6)}`); // about 38 KB
+  const r = repo(t, { ...FILES, 'src/js/mid.js': mid });
+  const id = sha8('src/js/mid.js'), limit = 120000, units = 4, share = Math.min(Math.min(48 * 1024, limit / 6), limit / units);
+  const inv = (o) => inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: units, ...o });
+  const row = inv({ packBytes: 6e6 }).rows.find((u) => u.id === id);
+  assert.ok(row.size < 40 * 1024 && row.size > 30 * 1024);
+  assert.equal(inv({ packBytes: 6e6 }).picked.find((u) => u.id === id)?.part, undefined, 'a roomy pack: whole');
+  const lines = fs.readFileSync(path.join(r.root, 'src/js/mid.js'), 'utf8').split('\n');
+  let uc = 0, n = 0;
+  do {
+    const prior = { head: 'a', blocks: inv({}).rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: {}, ev: {}, uc: { [id]: uc } } };
+    const p = inv({ packBytes: limit, prior }).picked.find((u) => u.id === id).part;
+    n = p.n;
+    const shown = lines.slice(p.a - 1, p.b).reduce((a, l, i) => a + Buffer.byteLength(`${String(p.a + i).padStart(4)}| ${l}\n`), 0);
+    assert.ok(shown <= share - 300, `part ${p.k + 1}/${p.n} shows ${shown} bytes, share ${share}`);
+  } while (++uc < n);
+  assert.ok(n > 1);
 });
 
 test('write: audit-units.txt, audit-units-carried.txt and audit-inventory.json carry the selected units, the totals and a capped risk table', (t) => {
