@@ -3627,6 +3627,25 @@ test('a removed-assertion lead the model ignored becomes one LEFT finding; an ad
   assert.doesNotMatch(weakened, /Assertion removed with no replacement/);
 });
 
+test('a removed-assertion lead next to a low-confidence finding raises that finding to high with a note and adds none; a high one is untouched', async (t) => {
+  const lead = 'assertion removed: assert.equal(gone, 1); (test.js:2)';
+  const near = (confidence) => [finding('weak_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence, title: 'NEARBY ONE' })];
+  const run = async (confidence) => { // the posted comment text is the full finding; the summary only shows its first sentence
+    const s = setup(t, report({ coverage: [row('weak_test')], findings: near(confidence) }));
+    fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+    fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), `${lead}\n`);
+    await post(s);
+    return JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]);
+  };
+  const low = await run('low');
+  assert.doesNotMatch(low, /Assertion removed with no replacement/);
+  assert.equal([...low.matchAll(/NEARBY ONE/g)].length, 2, 'one inline comment and one summary line');
+  assert.match(low, /Removal confirmed by the diff\./);
+  const high = await run('high');
+  assert.doesNotMatch(high, /Assertion removed with no replacement|Removal confirmed/);
+});
+
 test('posting failures propagate: a failed summary comment, a failed job summary and a crash are status failed; a non-422 inline failure is incomplete (no head marker); a 422 is normal', async (t) => {
   const go = async (prep) => {
     const s = setup(t);
