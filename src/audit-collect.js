@@ -205,7 +205,7 @@ function branchGuard({ refName = '', eventPath = '' } = {}) {
 }
 
 // scanPaths: the scope (docs and evidence); rotate: scan_issue is on, so the run is one of a rotation; prior: that issue's state (null on the first run or without an issue).
-function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now() }) {
+function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0 }) { // packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
   const head = git(cwd, ['rev-parse', 'HEAD']).trim();
   fs.rmSync(ctx, { recursive: true, force: true });
   fs.mkdirSync(ctx, { recursive: true });
@@ -276,7 +276,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   let units = null;
   try {
     const rules = RULE_GLOBS.concat(lines(ignoreExtra)), docSet = new Set(found);
-    units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, prior, now });
+    units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, prior, now, packBytes });
     if (units.rows.length) writeUnits(ctx, head, maxUnits, units);
     notes.push(...units.limitations);
   } catch (e) { notes.push(`the unit inventory failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the scan covers the design documents only`); units = null; }
@@ -324,7 +324,7 @@ async function main(env) {
   if (g.warn) console.log(`::warning::${g.warn}`);
   const rotate = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
   const prior = rotate ? await loadPrior(env) : null;
-  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior });
+  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, packBytes: env.PACK_SPLIT === 'true' ? 250000 : 0 });
   console.log(`SpecGuard unit test gap scan: ${r.units ? `${r.units.picked.length} of ${r.units.total} units` : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);
 }

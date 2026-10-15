@@ -61,7 +61,8 @@ function messages(prompt, pack = '') {
 
 // The context pack: repository files appended to the user message, in priority order, until CONTEXT_PACK_BYTES is spent. The prompt was written for an agent that Reads files; here nobody can.
 // Trust boundary: every path comes from the (PR-influenced) context files, so it is resolved against the repo root after realpath and anything outside, secret-like or binary is skipped. Nothing read here is ever logged.
-const PER_FILE = 48 * 1024, MAX_FILE = 2 * 1024 * 1024, OVERHEAD = 300; // OVERHEAD: the block markup around a body
+const { PER_FILE, fileCap } = require('../pack-cap');
+const MAX_FILE = 2 * 1024 * 1024, OVERHEAD = 300; // OVERHEAD: the block markup around a body
 const DENY = /(^|\/)(\.git|\.specguard-(ctx|src))(\/|$)|(^|\/)(\.env(\.[^/]*)?|[^/]*\.env|[^/]*\.pem|[^/]*\.key|id_rsa[^/]*)$/i;
 function packRead(root, rel) { // text of a regular, small, non-binary file inside the repo, else null
   if (!rel || /["<>\x00-\x1f]/.test(rel) || path.isAbsolute(rel)) return null; // quotes and angle brackets would break the block label
@@ -147,7 +148,6 @@ function slices(src, syms, room) {
 // A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
 // a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Partial or omitted files are returned in notWhole for per-block verification (separate from the unit pack-cut.txt). ponytail: no per-file fairness, first files first.
 const WIN = 40, HEAD = 15;
-const fileCap = (limit) => Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit (audit-units.js sizes scan parts from it)
 function windowPack(root, locs, limit) {
   const cap = fileCap(limit), parts = [], notWhole = [];
   let used = 0;
@@ -222,6 +222,7 @@ function contextPack(ctx, root, limit) {
   const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch'), leads = rd('leads.txt');
   const unitSymbols = (p) => { const out = new Set(), add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n) && out.size < 40) out.add(n); }; for (const l of (packRead(root, p) || '').split('\n')) symbolsIn(l, add); return [...out]; }; // names the unit defines: a big test file is shown as the tests that mention them
   const unitPart = new Map(list('audit-units.txt').map((l) => l.split('\t')).map((u) => [u[1], /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(u[7] || '')]).filter((x) => x[1]).map(([p, w]) => [p, { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] }]));
+  if (units.size) for (const p of review) addFile(p, true, false, null, limit, unitPart.get(p)); // scan: every unit file first, so no test starves a later unit (addFile skips a file already added)
   review.forEach((p, i) => { addFile(p, true, false, null, limit, unitPart.get(p)); const top = Math.min(limit, used + (limit - used) / (review.length - i)); const syms = units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of (units.size ? units.get(p) : cands.get(p)) || []) addFile(t, true, false, syms, top); }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
@@ -433,4 +434,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, fileCap };
+module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack };
