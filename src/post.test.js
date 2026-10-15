@@ -12,7 +12,7 @@ const NA = { status: 'not_applicable', reason: 'No requirement governs this obli
 const aligned = (d) => { for (const c of d.coverage) c.alignment ??= { status: 'unknown', reason: 'Fixture recorded before the alignment contract.' }; return d; };
 const OK = { status: 'consistent', reason: 'Requirement says X; code does X.' };
 const row = (status = 'covered', extra = {}) => ({ id: 'O1', obligation: 'Returns the required total', source: 'issue #1 AC 1', behaviour: { ...behaviour }, change: { ...behaviour }, evidence: status === 'missing_test' ? [] : [{ ...evidence }], status, reason: 'Searched unit and integration suites for the public total function.', alignment: { ...NA }, ...extra });
-const finding = (kind = 'missing_test', extra = {}) => ({ kind, obligation_ids: kind === 'standard' ? [] : ['O1'], ...behaviour, title: 'Verify the boundary total', body: 'The boundary has no assertion. Add assert.equal(total(1), 42).', confidence: 'high', ...extra, kind });
+const finding = (kind = 'missing_test', extra = {}) => ({ kind, obligation_ids: kind === 'standard' ? [] : ['O1'], ...behaviour, title: 'Verify the boundary total', body: 'The boundary has no assertion. Add assert.equal(total(1), 42).', confidence: 'high', ...(kind === 'weak_test' && { counterexample: 'total(1) returns 41 -> assert.ok(total(1)) still passes' }), ...extra, kind });
 const report = (extra = {}) => ({ requirements: [], requirements_source: 'issue #1', not_reviewed: '', coverage: [row('missing_test')], findings: [finding()], standards: { status: 'checked', sources: ['RULES.md'], reason: 'Checked the changed code against the error handling rule.' }, layering: { status: 'checked', reason: 'Searched unit and integration suites; no suitable additional pushdown.' }, ...extra });
 
 const patch = '@@ -1,3 +1,4 @@\n l1\n-old\n+l2\n+if (x) {\n l4\n';
@@ -373,7 +373,7 @@ test('engine notes, the repair note and the second usage file reach the summary,
   fs.writeFileSync(path.join(s.dir, 'ctx/engine-repair'), 'repaired\n');
   await post(s);
   assert.match(s.calls.summary[0].body, /<sub>Cost ≈ \$0\.20 \(20\.0 AI credits\) · gpt-5\.4 · [^\n]*· 3m20s<\/sub>\n$/);
-  assert.match(s.calls.summary[0].body, /\nRun: engine copilot · effort ignored: model auto · model_fallback: gpt-9 → auto · JSON repaired in one extra turn\n\n<\/details>/);
+  assert.match(s.calls.summary[0].body, /\nRun: engine copilot · effort ignored: model auto · model_fallback: gpt-9 → auto · JSON repaired in one extra turn\nSpecGuard build [0-9a-f]{12}\n\n<\/details>/);
   const f = setup(t);
   fs.writeFileSync(path.join(f.dir, 'ctx/usage.json'), JSON.stringify(COPILOT_USAGE));
   fs.writeFileSync(path.join(f.dir, 'ctx/engine-repair'), 'repair_failed\n');
@@ -2463,6 +2463,7 @@ test('G1 end to end: per prior finding the outcome, thread, reactions (all are p
   assert.deepEqual(c.since, { addressed: 1, open: 1, dismissed: 2, not_observed: 2 });
   assert.match(body, /\nSince earlier reviews: 1 addressed · 1 still open · 2 dismissed · 2 not observed \(not proof of a fix\)\n/);
   assert.match(body, /^<!-- specguard:summary -->\n<!-- specguard:head=[0-9a-f]+ -->\n<!-- specguard:counts /);
+  assert.match(c.specguard.build, /^[0-9a-f]{12}$/, 'which SpecGuard produced the counts (review F12)');
   assert.deepEqual([c.v, c.head, c.engine, c.complete, c.already, c.posted], [1, s.B, 'copilot', true, 1, { inline: 0, file: 0 }]);
   assert.deepEqual(c.findings, { missing_test: { posted: 0, already: 1, summary: 0 } });
   assert.equal(s.queries, 1, 'one thread read serves the telemetry and the stale resolver');
@@ -2476,6 +2477,33 @@ test('G1 the since line and per-finding outcomes exist only with earlier finding
   assert.doesNotMatch(body, /Since earlier reviews/);
   assert.deepEqual([c.complete, c.outcomes, c.since_total, c.posted, c.already], [true, [], 0, { inline: 1, file: 0 }, 0]);
   assert.deepEqual(c.findings, { missing_test: { posted: 1, already: 0, summary: 0 } });
+});
+
+test('a high weak_test must name a concrete wrong behaviour the assertion still accepts, else it is low; the posted body shows it (review F04)', () => {
+  const run = (counterexample) => { const d = report({ coverage: [row('weak_test')], findings: [finding('weak_test', { counterexample })] }); assert.equal(post.validate(d).ok, true); return d; };
+  for (const ce of [undefined, '', 'it could be wrong', 'the assertion is weak and may pass for wrong results']) {
+    const d = run(ce);
+    assert.equal(d.findings[0].confidence, 'low', String(ce));
+    assert.ok(d.validation_notes.some((n) => /weak_test src\.js:\d+ names no concrete wrong behaviour/.test(n)));
+  }
+  const ok = run('total(1) returns 41 -> assert.ok(total(1)) still passes');
+  assert.equal(ok.findings[0].confidence, 'high');
+  assert.match(post.commentBody(ok.findings[0], 'fp'), /\n\nStill passes when: total\(1\) returns 41 -> assert\.ok\(total\(1\)\) still passes\n/);
+  assert.equal(run(42).findings.length, 0, 'not a string: the finding is malformed');
+  assert.equal(post.validate(report({ findings: [finding('missing_test')] })).ok, true, 'other kinds need none');
+});
+
+test('G1 a reduced (fast-tier) run that finished records outcomes, but a finding it no longer reports is never addressed (review F09)', async (t) => {
+  const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
+  writeCtx(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5-5'] }));
+  await post(s);
+  const c = countsOf(s.calls.summary[0].body);
+  assert.deepEqual([c.complete, c.execution_complete, c.reduced], [false, true, true]);
+  assert.deepEqual(c.outcomes.map((o) => [o.outcome, o.judged, o.anchor_touched]), [['not_observed', false, true]], 'line 7 changed and the finding is gone: addressed on a full model, not here');
+  assert.deepEqual(s.resolved, [], 'nothing is resolved on a reduced run');
+  const full = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
+  await post(full);
+  assert.deepEqual(countsOf(full.calls.summary[0].body).outcomes.map((o) => o.outcome), ['addressed'], 'control: the same run on a full model');
 });
 
 test('G1 an incomplete run still emits counts, marked complete:false, with no outcomes, no since line and nothing resolved', async (t) => {
@@ -2746,7 +2774,7 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   assert.doesNotMatch(red, /No unit test gaps found|✅ No/);
   assert.match(red, /\*\*Reduced review\*\*\n\nReasons: fast-tier model; 3 engine notes \(model: mini\)\. Only high-confidence findings were posted inline\./);
   const fail = post.buildSummary({ status: 'Could not complete: the review timed out after 12 minutes', state: 'failed', engine: 'copilot', usage: COPILOT_USAGE, rules: ['x.md'], lint: { count: 2, changed: ['biome.json'] }, tooling: { status: 'failed', checks: [], ref: 'a' } });
-  assert.match(fail, /<!-- specguard:status=failed -->\n## SpecGuard\n\n\*\*⚠️ Could not complete: the review timed out after 12 minutes\*\*\n\n<details><summary>Details: run information<\/summary>\n\nRun: engine copilot\n\n<\/details>\n\n<sub>Cost ≈ [^\n]*<\/sub>\n$/);
+  assert.match(fail, /<!-- specguard:status=failed -->\n## SpecGuard\n\n\*\*⚠️ Could not complete: the review timed out after 12 minutes\*\*\n\n<details><summary>Details: run information<\/summary>\n\nRun: engine copilot\nSpecGuard build [0-9a-f]{12}\n\n<\/details>\n\n<sub>Cost ≈ [^\n]*<\/sub>\n$/);
   assert.doesNotMatch(fail, /###|> |Standards tooling|Lint/);
   const skip = post.buildSummary({ status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).', state: 'complete' });
   assert.match(skip, /## SpecGuard\n\n\*\*Nothing to review: every changed file is ignored \(lockfiles, docs, generated files\)\.\*\*\n/);
@@ -2763,6 +2791,9 @@ test('grade reads the completeness this summary declares: an incomplete or faile
   assert.equal(g({ status: 'Could not complete: x', state: 'failed' }).complete, false);
   const red = g({ reduced: { reasons: ['fast-tier model'], model: 'mini' }, counts: { v: 1, reduced: true } });
   assert.deepEqual([red.complete, red.reduced], [true, true]);
+  // the shape a real reduced run writes (status=incomplete, review F09): finished means complete for grading; a reduced run that did not finish is not
+  const real = (done) => g({ reduced: { reasons: ['fast-tier model'], model: 'mini' }, state: 'incomplete', counts: { v: 1, reduced: true, complete: false, execution_complete: done } });
+  assert.deepEqual([real(true).complete, real(true).reduced, real(false).complete], [true, true, false]);
 });
 
 test('layout: one icon per summary, on the verdict line only; status words are plain', () => {
@@ -3677,6 +3708,13 @@ test('the requirements fingerprint is the key collected from the PR text the mod
   const c = { user: { login: 'github-actions[bot]', type: 'Bot' }, body };
   assert.ok(decide({ pr: NEW, comments: [c], headSha: 'HEADSHA' }), 'unchanged text: skip');
   assert.equal(decide({ pr: { title: 'T', body: 'newer' }, comments: [c], headSha: 'HEADSHA' }), '', 'edited again: review');
+});
+
+test('the summary records the linked issues the model read with their versions; a malformed line is ignored (review F10)', async (t) => {
+  const s = setup(t, report(), { pr: { title: 'T', body: 'b' } });
+  fs.writeFileSync(path.join(process.env.CTX, 'pr-issues.txt'), 'o/r#12 2026-10-15T08:00:00Z\nnot a line\no/r#3 2026-01-02T03:04:05Z\n');
+  await post(s);
+  assert.ok(s.calls.summary[0].body.includes('<!-- specguard:issues=o/r#12@2026-10-15T08:00:00Z,o/r#3@2026-01-02T03:04:05Z -->'), s.calls.summary[0].body.slice(0, 400));
 });
 
 test('a malformed collected key is ignored (falls back to the payload key)', async (t) => {

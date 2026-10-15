@@ -83,6 +83,18 @@ test('writer/reader contract: the summary post.js writes makes decide() skip the
   assert.equal(decide({ pr: p(), comments: incomplete, headSha: SHA }), '');
 });
 
+test('re-review when a linked issue the model read changed (review F10): same head and PR text skip only while every recorded issue is unchanged; unreadable reviews', () => {
+  const { buildSummary } = require('./post');
+  const p = pr({ title: 'T', body: 'Fixes #12' });
+  const c = [{ user: { type: 'Bot', login: 'github-actions[bot]' }, body: buildSummary({ status: 'R', state: 'complete', headSha: SHA, req: reqKey(p), issues: ['o/r#12@2026-10-15T08:00:00Z'] }) }];
+  const at = (v) => (repo, n) => { assert.deepEqual([repo, n], ['o/r', 12]); if (v instanceof Error) throw v; return v; };
+  assert.match(decide({ pr: p, comments: c, headSha: SHA, issueAt: at('2026-10-15T08:00:00Z') }), /already/);
+  assert.equal(decide({ pr: p, comments: c, headSha: SHA, issueAt: at('2026-10-15T09:30:00Z') }), '', 'the issue was edited or commented on');
+  assert.equal(decide({ pr: p, comments: c, headSha: SHA, issueAt: at(new Error('404')) }), '', 'unreadable: fail open, review');
+  const none = [{ ...c[0], body: buildSummary({ status: 'R', state: 'complete', headSha: SHA, req: reqKey(p) }) }];
+  assert.match(decide({ pr: p, comments: none, headSha: SHA, issueAt: () => { throw new Error('never called'); } }), /already/, 'no issue read: nothing to check');
+});
+
 const { recordedLogin } = require('./preflight');
 const APP = { type: 'Bot', login: 'my-app[bot]' }, PAT = { type: 'User', login: 'dev-pat' };
 

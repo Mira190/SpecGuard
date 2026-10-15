@@ -15,7 +15,8 @@ const cite = (p, line, quote) => ({ path: p, line, quote, side: 'RIGHT' });
 // One gap row + its finding. kind: missing_test | weak_test; at: the finding's citation; code: the behaviour; ev: the unit test location (weak_test).
 const gap = (id, kind, at, code, ev) => ({
   row: { id, obligation: `${kind} ${id}`, source: 'PR body', behaviour: code, change: code, evidence: ev ? [{ ...ev, layer: 'unit', kind: 'assertion' }] : [], status: kind, reason: 'seeded' },
-  finding: { kind, ...at, title: `${kind} ${id}`, body: `Seeded claim ${id}.`, confidence: 'high', obligation_ids: [id] },
+  finding: { kind, ...at, title: `${kind} ${id}`, body: `Seeded claim ${id}.`, confidence: 'high', obligation_ids: [id],
+    ...(kind === 'weak_test' && { counterexample: `args() returns ['-y', '-i', 'in.mp4'] without the output path -> the cited assertion still passes` }) }, // as a model following the skill writes it: the F04 gate checks its shape, not its truth
 });
 const answer = (gaps) => ({
   requirements_source: 'PR body', not_reviewed: '',

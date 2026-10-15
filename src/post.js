@@ -264,7 +264,7 @@ function validate(o) {
     if (!int(f.line)) return 'line must be an integer >= 1';
     if (f.start_line !== undefined && !int(f.start_line)) return 'invalid start_line';
     if (f.side !== undefined && !['LEFT', 'RIGHT'].includes(f.side)) return 'invalid side';
-    for (const k of ['suggestion', 'rule_source', 'rule_quote', 'source']) if (f[k] !== undefined && !str(f[k])) return `invalid ${k}`;
+    for (const k of ['suggestion', 'rule_source', 'rule_quote', 'source', 'counterexample']) if (f[k] !== undefined && !str(f[k])) return `invalid ${k}`;
     if (!['high', 'low'].includes(f.confidence)) { notes.push(`findings: ${f.kind} ${f.path} had no valid confidence; kept at low.`); f.confidence = 'low'; } // a failure only degrades
     if (!Array.isArray(f.obligation_ids)) return 'obligation_ids must be an array';
     f.obligation_ids = [...new Set(f.obligation_ids.filter((id) => ids.has(id)))];
@@ -294,6 +294,11 @@ function validate(o) {
     const why = findingError(f);
     if (why) notes.push(`Dropped ${[`findings[${i}]`, ...(f && typeof f === 'object' ? [f.kind, f.path, f.title].filter(text) : [])].join(' ')}: ${why}.`);
     else kept.push(f);
+  }
+  // a high weak_test must name a wrong behaviour the assertion still accepts (review F04); the claim is the model's, but without one it is only a lead
+  for (const f of kept) if (f.kind === 'weak_test' && f.confidence === 'high' && !counterexampleOk(f.counterexample)) {
+    f.confidence = 'low';
+    notes.push(`low confidence: weak_test ${f.path}:${f.line} names no concrete wrong behaviour that the assertion still accepts.`);
   }
   const d = { coverage: rows, requirements: reqs, findings: kept };
   settle(d, notes);
@@ -472,12 +477,16 @@ const fix = (f, inline) => (f.kind === 'standard' && typeof f.suggestion === 'st
   ? `\n\n${inline && oneClick(f) ? fence('suggestion', f.suggestion) : `Suggested fix (not applied automatically):\n\n${fence('', neutralize(f.suggestion))}`}` : '');
 const title1 = (t) => oneLine(neutralize(t).replace(/\s+/g, ' ').trim(), 200);
 
+// A usable counterexample: 20+ characters with something concrete in it (a number, a quoted value or an arrow input -> result). ponytail: shape only; whether the
+// wrong behaviour really passes the assertion is the model's claim, not checked here.
+const counterexampleOk = (s) => typeof s === 'string' && s.replace(/\s/g, '').length >= 20 && /\d|['"`]|->|\u2192/.test(s);
 // kind and confidence stay machine-readable in a hidden comment (the eval graders and the fix-through telemetry read them); only the fp marker comes after it.
 function commentBody(f, fp, inline = true) {
   const rule = f.rule_source ? `, rule: ${neutralize(f.rule_source).replace(/[<>\r\n]|--/g, ' ')}` : '';
   // the trailer (suggestion, hidden markers) is never cut: only the model's own text is truncated
   const trailer = `${fix(f, inline)}\n\n<!--\nkind: ${f.kind}, confidence: ${f.confidence}${rule}\n-->\n<!-- specguard:fp=${fp} -->`;
-  return truncate(`**${title1(f.title)}${f.confidence === 'low' ? ' (low confidence)' : ''}**\n\n${neutralize(f.body)}`, BODY_MAX - trailer.length) + trailer;
+  const still = f.kind === 'weak_test' && counterexampleOk(f.counterexample) ? `\n\nStill passes when: ${neutralize(f.counterexample.trim())}` : '';
+  return truncate(`**${title1(f.title)}${f.confidence === 'low' ? ' (low confidence)' : ''}**\n\n${neutralize(f.body)}${still}`, BODY_MAX - trailer.length) + trailer;
 }
 
 const gapFree = (data) => !data.findings.length && !(data.validation_notes || []).length && data.coverage.length > 0 && !data.not_reviewed
@@ -712,14 +721,14 @@ const STD_WORD = { checked: 'reviewed', no_rules: 'no rule files found', not_rev
 // anything visible, and what does not fit is counted, never cut mid-item.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
 // status: the whole verdict for a run without findings data (a skipped run); delivery: how the findings reached the PR ("7 inline comments"); runNotes: Details-only facts about the run.
-function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, req, manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [] }) {
+function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, req, issues = [], manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [] }) {
   const isLow = (x) => x.f.confidence === 'low' || x.why === 'low confidence', lows = [...posted, ...items].filter(isLow); // low-confidence findings are never an action: Details only
   posted = posted.filter((x) => !isLow(x)); items = items.filter((x) => !isLow(x));
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)], failed = state === 'failed';
   const urls = new Map(posted.map((x) => [x.f, x.url]));
   const inc = incomplete.length > 0;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
-  const markers = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}${/^\w+$/.test(headSha || '') && /^\w+$/.test(req || '') ? `<!-- specguard:req=${req} -->\n` : ''}<!-- specguard:status=${state || (inc ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n`;
+  const markers = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}${/^\w+$/.test(headSha || '') && /^\w+$/.test(req || '') ? `<!-- specguard:req=${req} -->\n` : ''}${/^\w+$/.test(headSha || '') && issues.length ? `<!-- specguard:issues=${issues.join(',')} -->\n` : ''}<!-- specguard:status=${state || (inc ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n`;
   const act = acts(all), rows = data && !failed ? criteriaOf(data, all) : [], todo = rows.filter((x) => x.kind !== 'evidenced');
   // One displayed sentence = one row: the model often splits a PR-body bullet into several criteria that show the same sentence. Counts: the counts table and the verdict count
   // criteria (as the model assessed them); the "Requirements to check (N)" heading counts the merged rows actually shown.
@@ -749,7 +758,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   if (data && !failed && !inc) {
     const n = (k) => rows.filter((x) => x.kind === k).length, nk = (k) => all.filter((f) => f.kind === k).length;
     const req = rows.length ? `${rows.length}: ${[`${n('evidenced')} evidenced`, plural(n('gap'), 'gap'), plural(n('mismatch'), 'mismatch', 'mismatches'), `${n('unassessed') + n('check')} unconfirmed`].filter((x) => !x.startsWith('0 ')).join(', ')}` : specFiles?.length ? 'none linked' : 'none found'; // a requirement document was read, but no criterion links to the change
-    const tool = tooling && !['passed', 'not_configured'].includes(tooling.status) ? `; tool checks ${cell(tooling.status)}` : '';
+    const tool = tooling && tooling.status !== 'not_configured' ? `; tool checks ${cell(tooling.status)}` : ''; // a configured check always says its state, a pass too (review F11)
     const std = data.standards.status === 'checked' ? (nk('standard') ? plural(nk('standard'), 'violation') : 'no violations') : data.standards.status === 'no_rules' ? 'none found' : 'not reviewed';
     const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
     const unit = nk('missing_test') || nk('weak_test') ? [nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ') : reduced ? 'no high-confidence gaps' : 'no gaps';
@@ -866,7 +875,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     detail('**Run notes**\n\n', more);
   }
   // the cost stays visible (money was spent, a failed run too): the last line, in small text, merged with the delivery
-  const runAtom = engine ? `${runLine({ engine, model, raw: usage, notes, used, tier })}\n` : '';
+  const runAtom = engine ? `${runLine({ engine, model, raw: usage, notes, used, tier })}\n${require('./version').versionLine()}\n` : ''; // which SpecGuard produced this (review F12)
   const tailParts = [...(engine ? usageParts({ engine, model, raw: usage, notes, used, tier }) : []), ...(delivery ? [neutralize(delivery)] : [])];
   const delivered = tailParts.length ? `\n<sub>${tailParts.join(' · ')}</sub>\n` : '';
 
@@ -1368,6 +1377,8 @@ async function run({ github, context, core }) {
   const snapPr = pr?.title !== undefined ? pr : livePR || pr;
   let collected = ''; try { collected = fs.readFileSync(path.join(ctx, 'pr-req-key.txt'), 'utf8').trim(); } catch {}
   const reqFp = /^[0-9a-f]{12}$/.test(collected) ? collected : reqKey(snapPr);
+  // the linked issues the model read and their versions (requirements.js): the summary records them so preflight re-reviews when one changes
+  let issueVers = []; try { issueVers = fs.readFileSync(path.join(ctx, 'pr-issues.txt'), 'utf8').split('\n').map((l) => /^([\w.-]+\/[\w.-]+#\d+) (\d{4}-\d\d-\d\dT[\d:.]+Z)$/.exec(l.trim())).filter(Boolean).map((m) => `${m[1]}@${m[2]}`).slice(0, 10); } catch {}
   // Our login: the authenticated user (a PAT), else the login our earlier summary recorded (an App token cannot call /user), else null
   // (GITHUB_TOKEN: github-actions[bot]). A null is replaced once, by the author of the first thing we post.
   let who;
@@ -1411,7 +1422,7 @@ async function run({ github, context, core }) {
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
   const ctxLines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
   const lint = { count: ctxLines('lint-configs.txt').length, changed: ctxLines('lint-changes.txt') }; // linter/formatter configs at base; those the PR changes
-  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, req: reqFp, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, req: reqFp, issues: issueVers, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -1693,10 +1704,12 @@ async function run({ github, context, core }) {
   }
   if (lost.length) incomplete.push(`Delivery degraded: ${lost.length} comment(s) could not be posted (${[...new Set(lost)].join(', ')}); the findings are in this summary.`);
 
-  // Fix-through telemetry. Only a complete run can say an earlier finding is no longer reported: otherwise counts only (complete:false, no outcomes).
-  const complete = !incomplete.length && !degraded && !reduced; // a reduced run cannot say an earlier finding is gone
+  // Fix-through telemetry. execution_complete: the run itself finished (nothing cut, failed or degraded); complete: also a full-strength model.
+  // A reduced (fast-tier) run records outcomes too (still reported, dismissed by a person), but its silence is not evidence: a finding it no longer reports
+  // is never 'addressed', only not_observed (judged: false). A/B rates use complete runs only (eval/aggregate-counts.js). Review F09.
+  const execComplete = !incomplete.length && !degraded, complete = execComplete && !reduced;
   const me = await actor();
-  const outcomes = complete && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads }) : [];
+  const outcomes = execComplete && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads }).map((o) => (reduced && o.outcome === 'addressed' ? { ...o, outcome: 'not_observed', judged: false } : o)) : [];
   const byKind = {};
   const tally = (list, k) => list.forEach((f) => { (byKind[f.kind] ||= { posted: 0, already: 0, summary: 0 })[k]++; });
   const unplaced = new Set(unanchored.map((x) => x.f));
@@ -1705,7 +1718,7 @@ async function run({ github, context, core }) {
   tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', complete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', specguard: require('./version').version(), complete, execution_complete: execComplete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
   if (ctx) try { fs.writeFileSync(path.join(ctx, 'counts.json'), JSON.stringify(tele) + '\n'); } catch { /* ctx not writable: the sticky comment still carries the counts */ } // summary-only and manual runs have no sticky comment: the artifact carries it
   const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
@@ -1713,7 +1726,7 @@ async function run({ github, context, core }) {
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
   const delivered = summaryOnly ? 'summary only, nothing posted' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, req: reqFp, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, req: reqFp, issues: issueVers, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
@@ -1724,4 +1737,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { assertionKind, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { assertionKind, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });

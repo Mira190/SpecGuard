@@ -263,6 +263,10 @@
           "body": {
             "type": "string"
           },
+          "counterexample": {
+            "type": "string",
+            "description": "weak_test only, required for confidence high: one concrete wrong behaviour of the code under test that the cited assertion still accepts (input -> the wrong result a broken implementation would give -> why the assertion still passes). Without one the finding is low confidence."
+          },
           "rule_source": {
             "type": "string"
           },
