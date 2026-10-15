@@ -176,7 +176,7 @@ Reminder: output only the JSON object matching the schema.\n`;
   return out;
 }
 
-const UNITS_NOTE = 'the units to review (code-first, chosen by the publisher by risk): id, path, risk score, why, matched test files, weak-assertion leads. Review each unit and its matched tests; report in unit_findings: missing unit tests for public behaviour, weak tests (an assertion that cannot fail for the behaviour, a mirror of the code, a skipped test), and higher-level tests whose logic a unit test could prove. Quote first; cite path:line; add a test skeleton for missing and weak tests. A unit with no gap needs no row';
+const UNITS_NOTE = 'the units to review (code-first, chosen by the publisher by risk): id, path, risk score, why, matched test files, weak-assertion leads. Review each unit and its matched tests; report in unit_findings: missing unit tests for public behaviour, weak tests (an assertion that cannot fail for the behaviour, a mirror of the code, a skipped test), and higher-level tests whose logic a unit test could prove. Quote first; cite path:line; add a test skeleton for missing and weak tests; a weak test also needs a counterexample (one concrete wrong result the assertion still accepts: input -> wrong result -> why it passes), else it is low confidence. A unit with no gap needs no row';
 
 // Unit test gap scan, mode scan or its alias audit (no diff): the same untrusted-data framing around the units, the admitted documents, rule files and test layout the collector wrote.
 function assembleAudit({ skillDir, ctxDir, schemaPath }) {

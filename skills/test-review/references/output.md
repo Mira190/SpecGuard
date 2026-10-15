@@ -32,6 +32,7 @@ Finding fields:
 - `rule_quote`: the rule's line copied verbatim; required with `rule_source` (the poster corrects the line number from it and drops the finding if not found).
 - `suggestion`: see `references/standards.md`.
 - `confidence`: `high` or `low`, by the evidence rule in SKILL.md. A `high` body states the failure scenario: input X → code does Y, requirement/sibling does Z.
+- `counterexample` (`weak_test`): one concrete wrong behaviour of the code under test that the cited assertion still accepts: input → the wrong result a broken implementation would return → why the assertion still passes, e.g. `total([2, 3]) returns 6 -> assert.ok(total([2, 3])) still passes`. Required for `high`; when you cannot name one, the assertion may be strong enough: use `low` or no finding. The poster sets a `weak_test` without one to `low`.
 
 ```json
 {"kind":"standard","obligation_ids":[],"path":"billing/invoice.py","line":42,"quote":"        log.info(\"total=%s\" % total)","title":"Log with structured fields","body":"`CONTRIBUTING.md:31` asks for structured log fields so totals can be queried.","rule_source":"CONTRIBUTING.md:31","rule_quote":"Use structured log fields so totals can be queried.","suggestion":"        log.info(\"invoice total\", extra={\"total\": total})","confidence":"high"}

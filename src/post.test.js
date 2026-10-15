@@ -12,7 +12,7 @@ const NA = { status: 'not_applicable', reason: 'No requirement governs this obli
 const aligned = (d) => { for (const c of d.coverage) c.alignment ??= { status: 'unknown', reason: 'Fixture recorded before the alignment contract.' }; return d; };
 const OK = { status: 'consistent', reason: 'Requirement says X; code does X.' };
 const row = (status = 'covered', extra = {}) => ({ id: 'O1', obligation: 'Returns the required total', source: 'issue #1 AC 1', behaviour: { ...behaviour }, change: { ...behaviour }, evidence: status === 'missing_test' ? [] : [{ ...evidence }], status, reason: 'Searched unit and integration suites for the public total function.', alignment: { ...NA }, ...extra });
-const finding = (kind = 'missing_test', extra = {}) => ({ kind, obligation_ids: kind === 'standard' ? [] : ['O1'], ...behaviour, title: 'Verify the boundary total', body: 'The boundary has no assertion. Add assert.equal(total(1), 42).', confidence: 'high', ...extra, kind });
+const finding = (kind = 'missing_test', extra = {}) => ({ kind, obligation_ids: kind === 'standard' ? [] : ['O1'], ...behaviour, title: 'Verify the boundary total', body: 'The boundary has no assertion. Add assert.equal(total(1), 42).', confidence: 'high', ...(kind === 'weak_test' && { counterexample: 'total(1) returns 41 -> assert.ok(total(1)) still passes' }), ...extra, kind });
 const report = (extra = {}) => ({ requirements: [], requirements_source: 'issue #1', not_reviewed: '', coverage: [row('missing_test')], findings: [finding()], standards: { status: 'checked', sources: ['RULES.md'], reason: 'Checked the changed code against the error handling rule.' }, layering: { status: 'checked', reason: 'Searched unit and integration suites; no suitable additional pushdown.' }, ...extra });
 
 const patch = '@@ -1,3 +1,4 @@\n l1\n-old\n+l2\n+if (x) {\n l4\n';
@@ -2476,6 +2476,20 @@ test('G1 the since line and per-finding outcomes exist only with earlier finding
   assert.doesNotMatch(body, /Since earlier reviews/);
   assert.deepEqual([c.complete, c.outcomes, c.since_total, c.posted, c.already], [true, [], 0, { inline: 1, file: 0 }, 0]);
   assert.deepEqual(c.findings, { missing_test: { posted: 1, already: 0, summary: 0 } });
+});
+
+test('a high weak_test must name a concrete wrong behaviour the assertion still accepts, else it is low; the posted body shows it (review F04)', () => {
+  const run = (counterexample) => { const d = report({ coverage: [row('weak_test')], findings: [finding('weak_test', { counterexample })] }); assert.equal(post.validate(d).ok, true); return d; };
+  for (const ce of [undefined, '', 'it could be wrong', 'the assertion is weak and may pass for wrong results']) {
+    const d = run(ce);
+    assert.equal(d.findings[0].confidence, 'low', String(ce));
+    assert.ok(d.validation_notes.some((n) => /weak_test src\.js:\d+ names no concrete wrong behaviour/.test(n)));
+  }
+  const ok = run('total(1) returns 41 -> assert.ok(total(1)) still passes');
+  assert.equal(ok.findings[0].confidence, 'high');
+  assert.match(post.commentBody(ok.findings[0], 'fp'), /\n\nStill passes when: total\(1\) returns 41 -> assert\.ok\(total\(1\)\) still passes\n/);
+  assert.equal(run(42).findings.length, 0, 'not a string: the finding is malformed');
+  assert.equal(post.validate(report({ findings: [finding('missing_test')] })).ok, true, 'other kinds need none');
 });
 
 test('G1 a reduced (fast-tier) run that finished records outcomes, but a finding it no longer reports is never addressed (review F09)', async (t) => {
