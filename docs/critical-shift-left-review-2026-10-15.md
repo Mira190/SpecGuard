@@ -1,5 +1,7 @@
 # SpecGuard 批判性审查：shift left、目标兑现与尚未被观测的问题
 
+> 后续状态见[继续审查：修复后的反例与跨路径不变量](critical-shift-left-followup-2026-10-15.md)，基线为 PR #190 合并后的 d3234e3。本文保留原审查快照，不能将其中已修复的具体反例当作当前缺陷。
+
 审查日期：2026-10-15（Australia/Sydney）。GitHub 取证截止：2026-10-14 21:09 UTC / 2026-10-15 08:09 AEDT。
 
 最终代码基线：[`6ec3b8e8945424b93091bc61934b6d3924f1dd51`](https://github.com/Mira190/SpecGuard/commit/6ec3b8e8945424b93091bc61934b6d3924f1dd51)，来自 `fix/shift-left-improvements`。初始审查基线为 `edcee1c`；收尾时工作区合入 `origin/main`，已复核相关 leads/post 差异及表格化反例。下文“当前”均指这个冻结快照。本文只新增审查文档，不修改产品实现，也不把其他未提交文件纳入结论或提交。

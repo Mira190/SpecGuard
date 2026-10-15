@@ -71,7 +71,9 @@ function parseSummary(text) {
   return {
     items, actionable, rows, trace, preExisting, noRequirementDocs: /No requirement documents found/.test(s), notes: notes ? notes[1].split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2)) : [],
     skipped: /Nothing to review/.test(s),
-    incomplete: /Could not complete/i.test(s) || /Partially reviewed|The diff exceeded `max_diff_kb`/.test(s) || /Standards tooling: incomplete/.test(s),
+    // the producer's own machine marker first (src/post.js buildSummary); the phrases cover summaries written before it
+    incomplete: (/<!-- specguard:status=(\w+) -->/.exec(s) || [, 'complete'])[1] !== 'complete' || /Could not complete/i.test(s) || /Partially reviewed|The diff exceeded `max_diff_kb`/.test(s) || /Standards tooling: incomplete/.test(s),
+    reduced: /<!-- specguard:counts \{[^\n]*"reduced":true/.test(s), // a reduced (fast-tier) run: reported, not a failure
   };
 }
 
@@ -90,8 +92,17 @@ function grade(spec, obs) {
   const posted = comments.filter((c) => c.confidence === 'high');
   const sum = parseSummary(obs.summary);
   const used = new Set(), usedItems = new Set(), matched = [], missed = [], textMisses = [];
-  const summaryHits = [...sum.items, ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
-    .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path }))];
+  // summary candidates, each consumable once (an item or a coverage row cannot stand for two expected findings)
+  const summaryHits = [...sum.items.map((h, j) => ({ kind: h.kind, path: h.path, line: h.line, text: `${h.title}\n${h.why}`, item: j })), ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
+    .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path, line: r.line, text: r.text }))], usedHits = new Set();
+  const pickSummary = (e) => { // the unused candidate of the expected kind and path nearest the expected line; -1 when none
+    let k = -1;
+    summaryHits.forEach((h, j) => {
+      if (usedHits.has(j) || !arr(e.kind).includes(h.kind) || !arr(e.path).includes(h.path)) return;
+      if (k < 0 || Math.abs(h.line - e.line) < Math.abs(summaryHits[k].line - e.line)) k = j;
+    });
+    return k;
+  };
   let tp = 0;
   for (const e of exp.findings || []) {
     const tol = e.tolerance ?? 2;
@@ -106,10 +117,11 @@ function grade(spec, obs) {
     if (best >= 0) {
       used.add(best); tp++; matched.push({ expected: e, observed: posted[best] });
       if (e.text && !new RegExp(e.text, 'i').test(`${posted[best].title}\n${posted[best].body}`)) textMisses.push(e);
-    } else if (e.allow_summary && summaryHits.some((h) => arr(e.kind).includes(h.kind) && arr(e.path).includes(h.path))) {
+    } else if (e.allow_summary && (best = pickSummary(e)) >= 0) {
+      const h = summaryHits[best];
+      usedHits.add(best); if (h.item !== undefined) usedItems.add(h.item);
       tp++; matched.push({ expected: e, observed: null, via_summary: true });
-      const k = sum.items.findIndex((h, j) => !usedItems.has(j) && arr(e.kind).includes(h.kind) && arr(e.path).includes(h.path));
-      if (k >= 0) usedItems.add(k);
+      if (e.text && !new RegExp(e.text, 'i').test(h.text)) textMisses.push(e);
     } else missed.push(e);
   }
   // Reasonable findings the fixture truly leaves untested but did not seed: neither TP nor FP.
@@ -153,7 +165,7 @@ function grade(spec, obs) {
   return {
     id: spec.id, goal: spec.goal, tp, fp: falsePositives.length, acceptable: acceptable.length, fn: missed.length, summary_only: sum.items.length,
     matched, missed, summary_misses: sm, false_positives: falsePositives, acceptable_findings: acceptable, must_not_violations: mustNot, text_misses: textMisses,
-    json_valid: jsonValid, complete, degraded: sum.notes.length > 0, validation_notes: sum.notes, skip_ok: skipOk, clean_ok: cleanOk,
+    json_valid: jsonValid, complete, reduced: sum.reduced, degraded: sum.notes.length > 0, validation_notes: sum.notes, skip_ok: skipOk, clean_ok: cleanOk,
     pass: !missed.length && !mustNot.length && !sm.length && !textMisses.length && jsonValid && complete && skipOk && cleanOk,
     latency_s: obs.latency_s ?? null,
   };

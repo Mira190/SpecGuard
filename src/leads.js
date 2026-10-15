@@ -219,11 +219,25 @@ function assertionDelta(diff, isTest) {
     if (m) { o = +m[1]; continue; }
     const e = file && per.get(file), t = l.slice(1).replace(/\r$/, '');
     if (l[0] === '-') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.rm.push({ line: o, text: t.trim(), ...s }); } o++; }
-    else if (l[0] === '+') { if (e && t.length <= 400 && !quiet(t)) { e.lines.push(t); const s = subjectOf(t); if (s) e.add.push({ text: t.trim(), ...s }); } }
+    else if (l[0] === '+') { if (e && t.length <= 400 && !quiet(t)) { e.lines.push(t); const s = subjectOf(t); if (s) e.add.push({ text: t.trim(), at: e.lines.length - 1, ...s }); } }
     else if (l[0] === ' ') o++;
   }
   const out = [];
   const callee = (x) => (/^([\w$.]+)\(/.exec(x) || [])[1];
+  // the rows a loop feeds into the assertion at index ia of the added lines: for (... of TABLE), TABLE.forEach(, .each(TABLE; '' when no such loop sits in the 5 lines above
+  const tableOf = (ls, ia) => {
+    for (let h = ia; h >= Math.max(0, ia - 5); h--) {
+      const m = /\bfor\s*\(.*?\bof\s+([\w$.]+|\[)|\b([\w$.]+)\s*\.\s*forEach\s*\(|\.each\s*\(\s*([\w$.]+|\[)/.exec(ls[h]);
+      if (!m) continue;
+      const it = m[1] || m[2] || m[3];
+      if (it === '[') return ls.slice(h, ia + 1).join('\n');
+      const d = ls.findIndex((l) => new RegExp(`\\b(?:const|let|var)\\s+${esc(it)}\\s*=`).test(l));
+      if (d < 0) return '';
+      let e = d; while (e < ls.length - 1 && e - d < 50 && !/\]\s*;?\s*$/.test(ls[e])) e++;
+      return ls.slice(d, e + 1).join('\n');
+    }
+    return '';
+  };
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const [f, { rm, add, lines }] of per) for (const r of rm) {
     const same = add.filter((a) => a.x === r.x);
@@ -233,12 +247,12 @@ function assertionDelta(diff, isTest) {
     const distinct = (min) => [...literalsOf(r.text, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive
     const lits = distinct(2).length ? distinct(2) : distinct(1);
     if (lits.length && add.some((a) => !a.weak && lits.every((x) => has(a, x)))) continue;
-    // table-driven: an added assertion calls the same function with other arguments and one added line holds the removed literals in order,
-    // separated only by commas, quotes or object keys ([1, 2] or { input: 1, expected: 2 }; never across rows), so a dropped row stays a lead
+    // table-driven: a parameterised added assertion on the same function (no literal in its subject) inside a loop whose table (inline, or a `const` added in this diff)
+    // holds the removed literals in order as one row ([1, 2] or { input: 1, expected: 2 }; never across rows). An unrelated array or a literal assertion keeps the lead.
     const seq = [...literalsOf(r.text, 1)], fn = callee(r.x);
-    if (seq.length && fn && add.some((a) => !a.weak && callee(a.x) === fn)) {
+    if (seq.length && fn) {
       const row = new RegExp(`(?<![\\w$.])${seq.map(esc).join(`(?:[\\s,'"\`]|[\\w$]+\\s*:)*`)}(?![\\w$])`);
-      if (lines.some((l) => row.test(l))) continue;
+      if (add.some((a) => !a.weak && callee(a.x) === fn && !literalsOf(a.x, 1).size && row.test(tableOf(lines, a.at)))) continue;
     }
     out.push(same.length ? { file: f, kind: 'weakened', line: r.line, old: r.text, new: same[0].text } : { file: f, kind: 'removed', line: r.line, old: r.text });
   }
