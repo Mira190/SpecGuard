@@ -294,6 +294,7 @@ async function loadPrior(env, fetchFn = globalThis.fetch) {
     const { findIssue, readState, stateAddress } = require('./audit-post');
     const api = env.GITHUB_API_URL || 'https://api.github.com', [owner, repo] = String(env.GH_REPO || env.GITHUB_REPOSITORY || '').split('/');
     const addr = stateAddress(env, owner, repo), token = env.ISSUE_TOKEN || env.GH_TOKEN;
+    if (env.ISSUE_REPO && !addr.ir) { console.log('::warning::SpecGuard: scan_issue_repo is not owner/name; no scan state is read'); return null; }
     const get = async (u) => {
       const r = await fetchFn(`${api}${u}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' } });
       if (!r.ok) throw new Error(`${r.status} ${u}`);

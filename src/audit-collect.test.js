@@ -461,7 +461,15 @@ test('loadPrior: reads back the state at the publisher\'s address: same reposito
   assert.equal(await loadPrior({ ...cross, GH_REPO: 'org/third' }, shared.fetchFn), null, 'a target with no issue of its own reads nothing, never a neighbour\'s');
   // an issue only in the source repository is not this target\'s state once the state lives elsewhere
   assert.equal(await loadPrior(cross, world({ 'org/source': [written(cross, 'org', 'source', 'ddddddd1')] }).fetchFn), null);
-});
+  // a repository that scans itself while serving as a reports repository: another target's issue (same marker) is not its state
+  const nosc = { GH_REPO: 'org/source', GH_TOKEN: 'src', ISSUE_REPO: 'org/reports' }; // same (unscoped) marker as self
+  const self = { GH_REPO: 'org/reports', GH_TOKEN: 'src', ISSUE_REPO: 'org/reports' };
+  assert.equal(await loadPrior(self, world({ 'org/reports': [written(nosc, 'org', 'source', 'eeeeeee1')] }).fetchFn), null);
+  assert.deepEqual(first(await loadPrior(self, world({ 'org/reports': [written(nosc, 'org', 'source', 'eeeeeee1'), written(self, 'org', 'reports', 'fffffff1')] }).fetchFn)), ['fffffff1']);
+  // an invalid ISSUE_REPO reads nothing (never the source repository) and warns like the publisher
+  const seen = [], log = console.log; console.log = (m) => seen.push(m);
+  try { assert.equal(await loadPrior({ ...same, ISSUE_REPO: 'not-a-repo' }, world({ 'org/source': [written(same, 'org', 'source', 'aaaaaaa1')] }).fetchFn), null); } finally { console.log = log; }
+  assert.ok(seen.some((m) => /scan_issue_repo is not owner\/name/.test(m)));});
 
 test('collect: blocks the prefilter rules out are listed in audit-ruled.txt with the reason, never reach the candidates, and do not count against the cap', (t) => {
   const design = [

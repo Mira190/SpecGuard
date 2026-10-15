@@ -643,9 +643,11 @@ function changedSince(prior, blocks) {
 
 // Our scan issue among open and closed issues (marker plus identity); an open one wins.
 async function findIssue({ github, owner, repo, me, mark = MARK, title = '' }) {
+  // same-repository lookup (no title): an issue titled for another target (`TITLE: owner/repo`) is that target's, never ours; a legacy title without a target stays ours
+  const foreign = (t) => { const m = /^SpecGuard: unit test gap scan: ([\w.-]+\/[\w.-]+)(?: \(|$)/.exec(t); return !!m && m[1] !== `${owner}/${repo}`; };
   // ponytail: lists every issue; narrow with a label or `creator` if a repo has thousands
   const all = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
-  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (!title || i.title === title) && typeof i.body === 'string' && i.body.startsWith(mark));
+  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (title ? i.title === title : !foreign(i.title)) && typeof i.body === 'string' && i.body.startsWith(mark));
   return mine.find((i) => i.state !== 'closed') || mine[0] || null;
 }
 

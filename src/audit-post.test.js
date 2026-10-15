@@ -1082,7 +1082,22 @@ test('scan state address (review F24, probe P3): the collector reads where the p
   try { Object.assign(process.env, { CTX: ctx, SKIP: 'true', SCAN_ISSUE: 'true', ISSUE_REPO: 'org/reports', ENGINE: '', MODEL: '' }); await audit({ github: client, issueGithub: client, context: { repo: { owner: 'org', repo: 'source' }, sha: 'abc1234' }, core }); }
   finally { for (const k of ['CTX', 'SKIP', 'SCAN_ISSUE', 'ISSUE_REPO', 'ENGINE', 'MODEL']) if (k in saved) process.env[k] = saved[k]; else delete process.env[k]; fs.rmSync(ctx, { recursive: true, force: true }); }
   assert.deepEqual(calls, []);
-  const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8'), step = /- id: audit_collect[\s\S]*?run: node/.exec(y)[0];
+  // org/reports scanning itself while also the reports repository: org/source's issue (same marker) is never found, retitled or overwritten
+  const foreign = { number: 5, state: 'open', user: bot, title: 'SpecGuard: unit test gap scan: org/source', body: `${MARK}\nsource's` }, own = { number: 9, state: 'open', user: bot, title: 'SpecGuard: unit test gap scan', body: `${MARK}\nold` };
+  const lookup = (issues) => audit.findIssue({ github: { paginate: async () => issues, rest: { issues: { listForRepo: null } } }, owner: 'org', repo: 'reports', me: null, mark: MARK });
+  assert.equal(await lookup([foreign]), null);
+  assert.equal((await lookup([foreign, own])).number, 9);
+  assert.equal((await lookup([{ ...own, title: 'SpecGuard: unit test gap scan: org/reports' }])).number, 9, 'a title naming this repository is ours');
+  assert.equal((await lookup([foreign, { ...own, title: 'SpecGuard: unit test gap scan (src/**)' }])).number, 9, 'a legacy scoped title with no target is still ours');
+  for (const issues of [[foreign], [foreign, own]]) {
+    const writes = [], c2 = { rest: { users: { getAuthenticated: async () => { throw new Error('x'); } }, repos: { get: async () => ({ data: { visibility: 'private' } }) },
+      issues: { listForRepo: () => issues, update: async (o) => writes.push(['update', o.issue_number]), create: async () => writes.push(['create']) } }, paginate: async (fn, o) => fn(o) };
+    const ctx2 = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-self-')), saved2 = { ...process.env };
+    fs.writeFileSync(path.join(ctx2, 'audit-meta.json'), JSON.stringify({ head: 'abc1234', max_requirements: 80, docs: 0, limitations: [] }));
+    try { Object.assign(process.env, { CTX: ctx2, SKIP: 'true', SCAN_ISSUE: 'true', ISSUE_REPO: 'org/reports', ENGINE: '', MODEL: '' }); await audit({ github: c2, issueGithub: c2, context: { repo: { owner: 'org', repo: 'reports' }, sha: 'abc1234' }, core }); }
+    finally { for (const k of ['CTX', 'SKIP', 'SCAN_ISSUE', 'ISSUE_REPO', 'ENGINE', 'MODEL']) if (k in saved2) process.env[k] = saved2[k]; else delete process.env[k]; fs.rmSync(ctx2, { recursive: true, force: true }); }
+    assert.deepEqual(writes, issues.length > 1 ? [['update', 9]] : [], 'SKIP only refreshes an existing issue of its own');
+  }  const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8'), step = /- id: audit_collect[\s\S]*?run: node/.exec(y)[0];
   assert.match(step, /ISSUE_REPO: \$\{\{ inputs\.scan_issue_repo \}\}/);
   assert.match(step, /ISSUE_TOKEN: \$\{\{ inputs\.scan_issue_token \}\}/);
   assert.match(step, /GH_TOKEN: \$\{\{ inputs\.github_token \}\}/, 'source reads keep the source token');
