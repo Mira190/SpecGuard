@@ -27,7 +27,7 @@ const req = (over = {}) => ({
   id: C1, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered',
   code: [cite('src/plan.js', 2)], tests: [{ ...cite('tests/plan.test.js', 2), layer: 'unit' }], note: '', ...over,
 });
-const result = (rs = [req()], over = {}) => ({ docs_reviewed: ['docs/design.md'], requirements: rs, not_requirements: [], not_reviewed: [], ...over });
+const result = (rs = [req()], over = {}) => ({ docs_reviewed: ['docs/design.md'], requirements: rs, not_requirements: [], not_reviewed: [], unit_findings: [], ...over }); // an explicit empty answer: a missing field means no unit was judged (F20)
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 test('validate: accepts a good result and the enum lists match audit.schema.json', () => {

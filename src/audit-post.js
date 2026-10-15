@@ -148,22 +148,24 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     if (missing.length > cands.size * MISSING_MAX) return bad(`${missing.length} of ${cands.size} listed blocks were not answered (e.g. ${missing.slice(0, 5).join(', ')}); answer every block exactly once`);
   }
   // unit_findings (code-first): a malformed row is dropped with a note, never a reason to reject the result. A finding must name a listed unit (units: Map from readUnits; null = unknown).
-  if (o.unit_findings === undefined || o.unit_findings === null) o.unit_findings = [];
-  if (!Array.isArray(o.unit_findings)) { notes.push('unit_findings was not an array; ignored.'); o.unit_findings = []; }
+  // A dropped row is no verdict: its unit (or, when the row names no listed unit or the field is unusable, every unit of the call) lands in unit_unseen, so it stays unknown and due (review F20).
+  let all = !Array.isArray(o.unit_findings); const unseen = new Set();
+  if (all) { if (o.unit_findings != null) notes.push('unit_findings was not an array; no unit was judged.'); else if (units && units.size) notes.push('unit_findings is missing; no unit was judged.'); o.unit_findings = []; }
   const keep = [];
   for (const [i, f] of o.unit_findings.entries()) {
-    const w = `unit_findings[${i}]`, drop = (why) => notes.push(`${w} dropped: ${why}.`);
+    const w = `unit_findings[${i}]`, drop = (why, unit) => { notes.push(`${w} dropped: ${why}.`); if (unit) unseen.add(unit); else all = true; };
     if (!f || typeof f !== 'object' || Array.isArray(f)) { drop('not an object'); continue; }
     f.kind = slug(f.kind); f.line = whole(f.line); f.unit = typeof f.unit === 'string' ? f.unit.trim().toLowerCase() : f.unit;
     if (!/^[0-9a-f]{8}$/.test(f.unit)) drop('unit must be a unit id (8 hex characters)');
     else if (units && !units.has(f.unit)) drop(`unknown unit ${f.unit}; only the listed units may be reviewed`);
-    else if (!UNIT_KINDS.includes(f.kind)) drop(`kind must be one of ${UNIT_KINDS.join(', ')}`);
-    else if (!text(f.path) || !Number.isInteger(f.line) || f.line < 1 || !text(f.quote) || !text(f.title)) drop('path, line, quote and title are required');
+    else if (!UNIT_KINDS.includes(f.kind)) drop(`kind must be one of ${UNIT_KINDS.join(', ')}`, f.unit);
+    else if (!text(f.path) || !Number.isInteger(f.line) || f.line < 1 || !text(f.quote) || !text(f.title)) drop('path, line, quote and title are required', f.unit);
     else if (keep.length >= UNIT_MAX) drop(`more than ${UNIT_MAX} findings; the rest are ignored`);
     else keep.push({ unit: f.unit, kind: f.kind, path: f.path, line: f.line, quote: f.quote.slice(0, 200), title: f.title.trim().slice(0, 120), body: text(f.body) ? f.body.trim() : '', skeleton: text(f.skeleton) ? f.skeleton.replace(/\s+$/, '') : '',
       ...(text(f.counterexample) ? { counterexample: f.counterexample.trim().slice(0, 300) } : {}) });
   }
   o.unit_findings = keep;
+  o.unit_unseen = all ? [...(units ? units.keys() : [])] : [...unseen];
   o.not_reviewed.push(...notes);
   return { ok: true };
 }
@@ -221,7 +223,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     return true;
   };
   const isDoc = (p) => DOCFILE.test(p) || (docs && docs.has(p));
-  const out = { ...data, requirements: [], not_requirements: [], not_reviewed: [...data.not_reviewed] };
+  const out = { ...data, requirements: [], not_requirements: [], not_reviewed: [...data.not_reviewed] }, unseen = new Set(data.unit_unseen || []);
   const kept = new Set(), failed = new Set(), skipped = new Map((data.not_requirements || []).map((n) => [n.cid, n.reason]));
   const drop = (r, why) => { failed.add(cidOf(r.id)); out.not_reviewed.push(`${r.id} (${r.source.path}:${r.source.line}): ${why}`); };
   for (const r of data.requirements) {
@@ -259,7 +261,8 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.requirements.sort((a, b) => pos(a.id) - pos(b.id)); // stable: a block's .1, .2 rows keep the model's order
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line, c.path)), notes: out.not_reviewed, file });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line, c.path)), notes: out.not_reviewed, file, unseen });
+  out.unit_unseen = [...unseen];
   return out;
 }
 
@@ -268,7 +271,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
 // low: the claude engine's context pack cut a test file the claim depends on
 // (the unit's matched tests for missing_test, the cited file for weak_test); same rule as PR mode: shown in Details, never counted. Also low: covers(c) found a test file that already contains the cited
 // line's error message or literal (src/test-map.js, shared with PR mode): lowWhy names it.
-function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes, file = () => null }) {
+function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes, file = () => null, unseen }) { // unseen: Set, gains the units whose finding failed verification
   // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
   const cutTest = (u, c) => {
     const cutTests = u.tests.filter((t) => packCut.has(t));
@@ -279,8 +282,8 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes
   const out = [], seen = new Set(), key = (q) => String(q).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   for (const f of list) {
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
-    if (!locate(c)) { notes.push(`${at}: ${solid(f.quote) ? 'the quote was not found at the cited line' : `the quote is under ${MIN_QUOTE} characters`}`); continue; }
-    if (isDoc(c.path) || (f.kind === 'missing_test') === testFile(c.path)) { notes.push(`${at}: ${f.kind === 'missing_test' ? 'a missing_test cites the unit\'s code, not a test or a document' : `a ${f.kind} cites a test file`}`); continue; }
+    if (!locate(c)) { unseen.add(f.unit); notes.push(`${at}: ${solid(f.quote) ? 'the quote was not found at the cited line' : `the quote is under ${MIN_QUOTE} characters`}`); continue; }
+    if (isDoc(c.path) || (f.kind === 'missing_test') === testFile(c.path)) { unseen.add(f.unit); notes.push(`${at}: ${f.kind === 'missing_test' ? 'a missing_test cites the unit\'s code, not a test or a document' : `a ${f.kind} cites a test file`}`); continue; }
     if (u && u.part && c.path === u.path && (c.line < u.part.a || c.line > u.part.b)) { notes.push(`${at}: outside this run's part of the unit (lines ${u.part.a}-${u.part.b}); that part is reviewed in another run`); continue; }
     const fid = sha8(f.unit, f.kind, key(c.quote));
     if (seen.has(fid)) continue;
@@ -736,8 +739,8 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || process.env.TEST_PATHS || '' });
-  const unseen = hasCode && unitsFailed ? [...units.keys()] : hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path) || u.tests.some((t) => packCut.has(t))).map((u) => u.id) : [];
   const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers });
+  const unseen = hasCode && unitsFailed ? [...units.keys()] : hasCode ? [...units.values()].filter((u) => (packCutOn && (packCut.has(u.path) || u.tests.some((t) => packCut.has(t)))) || checked.unit_unseen.includes(u.id)).map((u) => u.id) : []; // cut by the pack, or the model's answer for it was unusable
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed } : null;
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
