@@ -300,7 +300,7 @@ test('context pack: rule files, changed files (focus order) each followed by its
   assert.equal(u.split('name="src/b.js"').length, 2, 'de-duplicated');
   assert.ok(!u.includes('gone.js"'));
   assert.match(u, /no file tools[\s\S]*Repository files[\s\S]*full current text/);
-  assert.match(r.h.file('engine-notes'), /^context pack: 5 files, \d+ KB$/);
+  assert.match(r.h.file('engine-notes'), /^context pack: 5 files, \d+ KB; not included: src\/gone\.js$/);
 });
 
 test('context pack: a source file is followed at once by its tests, before the next source file', async (t) => {
@@ -552,7 +552,7 @@ test('context pack: a test file over its cap is shown as the relevant slices (he
 
  {2}30|  assert.match(u, /\n {2}30\| .*\n {3}…\| \(lines 31-2000 omitted\)\n2001\| test\('case 400'[\s\S]*\n2003\|   computeTotal\(1\);\n2004\| \}\);\n2005\| \n {3}…\| \(lines 2006-2999 omitted\)\n<\/untrusted-data>/);
   assert.ok(!u.includes('\n 100| '), 'the head is not used past the first 30 lines');
-  assert.match(u, /"relevant slices" shows every test of that file that references the changed symbols[^]*tests not shown do not mention them/);
+  assert.match(u, /"relevant slices" shows bounded windows[^]*omitted code may contain assertions or indirect coverage/);
   assert.equal(r.h.file('pack-cut.txt'), '', 'every test that mentions the symbol is visible: not listed as cut');
 });
 
@@ -587,7 +587,7 @@ function scanRepo(t, n, env = {}) {
       not_requirements: [], unit_findings: unit ? [{ unit: 'aaaaaaaa', kind: 'missing_test', path: 'lib/a.js', line: 1, quote: 'function alpha() {}', title: 't' }] : [], not_reviewed: [] }) }] });
   };
   const cids = Array.from({ length: n }, (_, i) => cidOf(i + 1));
-  const r = repo(t, { 'lib/a.js': 'function alpha() {}\n', 'test/a.test.js': 'test(1);\n' }, {
+  const r = repo(t, { 'lib/a.js': 'function alpha() {}\n', 'lib/b.js': 'function beta() {}\n', 'lib/c.js': 'function gamma() {}\n', 'test/a.test.js': 'test(1);\n' }, {
     'audit-candidates.txt': cids.map((c) => `${c}\tdocs/d.md:1\tH\ttext ${c}\n`).join(''),
     'audit-evidence.txt': cids.map((c) => `${c}\tcode\tlib/a.js:1\tfunction alpha() {}\n${c}\ttest\ttest/a.test.js:1\ttest(1);\n`).join(''),
     'audit-docs.txt': 'docs/d.md\tadmitted\n', 'audit-meta.json': JSON.stringify({ max_requirements: 80, candidates: n, candidates_listed: n, units: { total: 3, picked: 3 }, max_units: 12 }),
@@ -630,6 +630,7 @@ test('scan parts: a block part packs a line-numbered window around a cited line 
   assert.ok(!/^ 100\| /m.test(u) && !/^2000\| /m.test(u), 'lines far from the cited one are not shown');
   assert.match(u, /^ {3}1\| \/\/ filler 1$/m, 'the file head is kept');
   assert.equal(s.h.file('pack-cut.txt'), '', 'only the unit part writes pack-cut.txt');
+  assert.deepEqual(JSON.parse(s.h.file('scan-parts.json')).blockCuts, { [s.cids[0]]: ['electron/big.cjs'] });
 });
 
 test('scan parts: at most SCAN_BATCH_BLOCKS blocks keep the single call', async (t) => {
@@ -764,7 +765,7 @@ test('action.yml: scan_batch_blocks (default 20) reaches the validation and engi
   for (const [v, code] of [['0', 1], ['101', 1], ['x', 1], ['20', 0], ['100', 0]]) assert.equal(spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh')], { env: { ...process.env, ENGINE: 'claude', SCAN_BATCH_BLOCKS: v }, encoding: 'utf8' }).status, code, v);
 });
 
-test('windowPack: a large file shows the lines around each cited line (line-numbered) and its header, not the whole file; a small file is shown whole; nothing is listed as cut', (t) => {
+test('windowPack: a large file shows the lines around each cited line (line-numbered) and its header, not the whole file; a small file is shown whole; windowed files are listed as partial', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wp-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'big.cjs'), Array.from({ length: 3000 }, (_, i) => `line ${i + 1}`).join('\n') + '\n');
@@ -775,7 +776,7 @@ test('windowPack: a large file shows the lines around each cited line (line-numb
   assert.match(r.text, /^   1\| line 1$/m, 'the header lines');
   assert.doesNotMatch(r.text, /^2000\| /m, 'far from the cited line');
   assert.match(r.text, /exports\.a = 1;/);
-  assert.deepEqual(r.notWhole, []);
+  assert.deepEqual(r.notWhole, ['big.cjs']);
 });
 
 test('scan parts: each block part carries the full text of its blocks (audit-blocks.txt rows), also past the 240-character candidate cut', async (t) => {
@@ -788,4 +789,31 @@ test('scan parts: each block part carries the full text of its blocks (audit-blo
   assert.ok(!calls[0].includes(tail) && calls[1].includes(tail), 'the long block is whole in its own part only');
   assert.match(calls[1], /name="audit-blocks\.txt"/);
   assert.ok(calls[0].includes(`body of ${s.cids[0]}`) && !calls[0].includes(`body of ${s.cids[24]}`));
+});
+
+test('context pack: a long matching test with its assertion outside the slice remains incomplete', async (t) => {
+  const r = sliceRepo(t, () => false);
+  const body = `test('long computation', () => {\n  const actual = computeTotal(1);\n${'  prepare();\n'.repeat(100)}  assert.equal(actual, 1);\n});\n`;
+  fs.writeFileSync(path.join(r.root, 'test/svc.test.js'), bigTest(() => false) + body);
+  await r.go();
+  assert.match(r.user(), /const actual = computeTotal\(1\)/);
+  assert.doesNotMatch(r.user(), /assert.equal\(actual, 1\)/);
+  assert.equal(r.h.file('pack-cut.txt'), 'test/svc.test.js');
+  assert.match(r.user(), /matching tests were truncated/);
+});
+
+test('context pack: unreadable candidate tests are listed as incomplete', async (t) => {
+  const r = repo(t, { 'src/a.js': 'function alpha() {}\n' }, {
+    'files.txt': 'src/a.js\n', 'test-candidates.txt': 'src/a.js\n  test/missing.test.js  (same stem)\n',
+  });
+  await r.go();
+  assert.equal(r.h.file('pack-cut.txt'), 'test/missing.test.js');
+});
+
+test('windowPack: omitted and partial evidence files are reported instead of claiming a complete pack', (t) => {
+  const r = repo(t, { 'big.js': lineText(3000), 'small.js': 'exports.a = 1;\n' });
+  const packed = api.windowPack(r.root, new Map([['big.js', [900]], ['missing.test.js', [1]], ['small.js', [1]]]), 60000);
+  assert.deepEqual(packed.notWhole, ['big.js', 'missing.test.js']);
+  const tight = api.windowPack(r.root, new Map([['big.js', [900]], ['small.js', [1]]]), 100);
+  assert.deepEqual(tight.notWhole, ['big.js', 'small.js']);
 });
