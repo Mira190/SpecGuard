@@ -57,6 +57,17 @@ test('a visible summary-only finding that matches nothing is a FP and breaks exp
   assert.equal(grade(spec([], { expect_clean: true }), obs([], { summary: hidden })).clean_ok, true);
 });
 
+test('one summary item or row matches at most one expected finding; its text is checked like a posted one (review F15)', () => {
+  const two = [exp({ line: 10, allow_summary: true }), exp({ line: 30, allow_summary: true })];
+  const one = obs([], { summary: summaryWith('- \u274c **Missing test:** Unrelated `a.js:900` \u2014 body\n') });
+  const r = grade(spec(two), one);
+  assert.deepEqual([r.tp, r.fn, r.pass], [1, 1, false]);
+  const both = obs([], { summary: summaryWith('- \u274c **Missing test:** Boundary A `a.js:10` \u2014 x\n- \u274c **Missing test:** Boundary B `a.js:30` \u2014 y\n') });
+  assert.deepEqual([grade(spec(two), both).tp, grade(spec(two), both).fp], [2, 0], 'two items, two hits');
+  const t = grade(spec([exp({ allow_summary: true, text: 'exact-now' })]), one);
+  assert.deepEqual([t.tp, t.text_misses.length, t.pass], [1, 1, false], 'the expected behaviour text applies to a summary hit too');
+});
+
 test('allow_summary counts a summary item or coverage row matching kind and path', () => {
   const e = exp({ allow_summary: true, path: ['p.js', 'p.spec.js'], kind: ['weak_test', 'missing_test'] });
   const item = grade(spec([e]), obs([], { summary: summaryWith('- ❌ **Weak test:** Gone `p.spec.js:3` (removed test or assertion) — x\n') }));

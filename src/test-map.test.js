@@ -84,6 +84,10 @@ test('assertion styles: supertest, chai, should, sinon, tap/ava, testify, XCTest
     "  t.equal(a, b)", "  t.same(a, b)", "  t.ok(a)", "  t.throws(() => f())", "  assertThat(x, is(1))", "  require.Equal(t, 1, x)", "  assert.Equal(t, 1, x)", "  XCTAssertEqual(a, b)",
     "  with pytest.raises(ValueError):", "  self.assertEqual(a, b)", "  await expect(p).rejects.toThrow()"]) assert.ok(ASSERTION.test(l), l);
   for (const l of ["  request(app).get('/')", "  test(app1);", "  t.plan(1)"]) assert.ok(!ASSERTION.test(l), l);
+  // a keyword inside a name, an import or a test title is no assertion (review F13); a python assert statement still is
+  for (const l of ['const expectedTotal = 42;', "const assert = require('node:assert/strict');", "import assert from 'node:assert';", "it('should work and throws nothing', () => {", "  throw new Error('bad');", 'const n = expected.length;']) assert.ok(!ASSERTION.test(l), l);
+  assert.ok(ASSERTION.test('    assert total == 42'));
+  assert.ok(ASSERTION.test('  assert_eq!(a, b);'));
   // a helper named test(app) is not a test declaration, so its tests are not counted as tests without an assertion
   const s = testSignals(["describe('x', function () {", '  function check(app) {', '    test(app);', '  }', "  it('a', function (done) {", '    request(app).get("/").expect(200, done)', '  })', '})'].join('\n'));
   assert.deepEqual([s.tests, s.noAssert, s.asserts], [1, 0, 1]);

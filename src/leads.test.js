@@ -174,6 +174,12 @@ test('removed assertions: a complete move into a parameter table is no lead; a r
   assert.deepEqual(delta(table('[[1, 2]]')), ['removed 11 assert.equal(next(2), 3);'], 'the exact-now row was dropped in the move');
   assert.deepEqual(delta(table('[[1, 2], [3, 4]]')), ['removed 11 assert.equal(next(2), 3);'], '2 and 3 sit in different rows');
   assert.deepEqual(delta('-  assert.equal(next(2), 3);\n+  const cases = [[2, 3]];\n'), ['removed 10 assert.equal(next(2), 3);'], 'a table with no assertion on the same function re-pins nothing');
+  // review F14: the table must feed the assertion; unrelated data or a literal assertion keeps the lead
+  assert.deepEqual(delta('-  assert.equal(next(2), 3);\n+  const otherCases = [[2, 3]];\n+  assert.equal(next(10), 11);\n'), ['removed 10 assert.equal(next(2), 3);'], 'unused array, literal assertion');
+  const named = (decls) => delta(`-  assert.equal(next(1), 2);\n-  assert.equal(next(2), 3);\n${decls}+  for (const [i, e] of cases) {\n+    assert.equal(next(i), e);\n+  }\n`);
+  assert.deepEqual(named('+  const cases = [[1, 2], [2, 3]];\n'), [], 'a named table the loop iterates');
+  assert.deepEqual(named('+  const otherCases = [[2, 3]];\n+  const cases = [[1, 2]];\n'), ['removed 11 assert.equal(next(2), 3);'], 'the row sits in an array the loop does not read');
+  assert.deepEqual(named('+  const cases = [\n+    [1, 2],\n+    [2, 3],\n+  ];\n'), [], 'a multi-line named table');
 });
 
 test('removed assertions: assert.match, notEqual and throws count as assertions', () => {

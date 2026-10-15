@@ -117,7 +117,7 @@ function diffSymbols(diff, file, leads) { // names on added lines of file (and i
 const TEST_START = /^\s*(?:(?:test|it|describe)\b|def test_|func Test|@Test\b)/, indentOf = (l) => /^\s*/.exec(l)[0].length;
 // -> { text, note, complete } or null (no symbol appears in the file, or no matching block fits). complete: every block that mentions a symbol is shown.
 function slices(src, syms, room) {
-  const n = src.length, re = new RegExp(`(?<![\w$])(?:${syms.map((x) => x.replace(/\$/g, '\$')).join('|')})(?![\w$])`, 'g'), found = new Set(), wins = [];
+  const n = src.length, re = new RegExp(`(?<![\\w$])(?:${syms.map((x) => x.replace(/\$/g, '\\$')).join('|')})(?![\\w$])`, 'g'), found = new Set(), wins = [];
   let truncated = false;
   src.forEach((l, i) => {
     const m = [...l.matchAll(re)].map((x) => x[0]);

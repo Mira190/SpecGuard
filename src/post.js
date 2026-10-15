@@ -134,7 +134,9 @@ const clearlyUnit = (p) => layerOf(p) === 'unit' && !NOT_PLAIN_UNIT.test(String(
 // ponytail: regex over the cited text; a custom helper (checkTotal(x)) or an assertion wrapped in a local function reads as no_assertion, and
 // a skip marker is looked for only on the enclosing test declaration (up to 3 stacked lines above it), never on describe-level skips or runner config.
 // Assertion styles: assert*/expect*/should*/verify* (node, chai, jest, sinon.assert, supertest .expect(, assertThat, testify assert./require.), t.* (tap, ava), XCTAssert, pytest.raises, self.assert*.
-const ASSERTION = /\b(?:[Aa]ssert\w*|[Ee]xpect\w*|[Ss]hould\w*|[Vv]erify\w*|[Ff]ail\w*\(|require\.\w+|t\.(?:Errorf|Fatalf|Error|Fatal|Fail\w*)|XCTAssert\w*|t\.(?:equals?|same|ok|notOk|not|is|throws|doesNotThrow|notThrows|rejects|resolves|match|deepEquals?|strictEqual|notEqual|true|false|truthy|falsy|pass|snapshot)\(|raises?|[Tt]hrows?|(?:Is|Has|Does|Contains)\.\w+)\b|\.(?:to[A-Z]\w*|not\.to\w+)\(|\bassert\s/;
+// A keyword counts only as a call or member access (assert.equal(, expect(, x.should.), so a variable (expectedTotal), an import (const assert = require(...)) or a test name ('should work') is no assertion.
+const ASSERTION = /\b(?:[Aa]ssert\w*!?|[Ee]xpect(?!ed|ation)\w*|[Ss]hould\w*|[Vv]erify\w*|[Ff]ail\w*|require\.\w+|XCTAssert\w*|raises?|[Tt]hrows?)\s*[(.]|\bt\.(?:Errorf|Fatalf|Error|Fatal|Fail\w*)\b|\bt\.(?:equals?|same|ok|notOk|not|is|throws|doesNotThrow|notThrows|rejects|resolves|match|deepEquals?|strictEqual|notEqual|true|false|truthy|falsy|pass|snapshot)\(|\b(?:Is|Has|Does|Contains)\.\w+|\.(?:to[A-Z]\w*|not\.to\w+)\(|^\s*assert\s+(?![=:])/m;
+const COMMENT_LINE = /^\s*(?:\/\/|#|\/?\*|--)/;
 const SKIPPED = /\.skip\(|\bx(?:it|describe|test)\(|\.todo\(|@Disabled\b|@Ignore\b|\[Ignore\b|\bt\.Skip\w*\(|pytest\.mark\.(?:skip|xfail)|@unittest\.skip|\bskipIf\b/;
 const TEST_DECL = /\bx?(?:it|test|describe)(?:\.\w+)?\s*\(|^\s*(?:async\s+)?def\s+test_|^\s*func\s+Test|@Test\b|\[(?:Test|Fact|Theory|TestCase)\b|\bvoid\s+test/;
 function assertionKind(lines, line, quote) {
@@ -144,7 +146,7 @@ function assertionKind(lines, line, quote) {
   let from = d;
   if (TEST_DECL.test(at(d))) while (from > 1 && d - from < 3 && at(from - 1).trim() && !/[;}]\s*$/.test(at(from - 1))) from--; // annotations and decorators stack directly above the declaration
   const span = TEST_DECL.test(at(d)) ? Array.from({ length: line - from + 1 }, (_, i) => at(from + i)).join('\n') : at(line);
-  return SKIPPED.test(span) ? 'disabled' : ASSERTION.test(quote) ? 'assertion' : 'no_assertion';
+  return SKIPPED.test(span) ? 'disabled' : String(quote).split('\n').some((l) => !COMMENT_LINE.test(l) && ASSERTION.test(l)) ? 'assertion' : 'no_assertion';
 }
 
 // Hand-rolled mirror of findings.schema.json. ponytail: swap for ajv if the schema grows.
