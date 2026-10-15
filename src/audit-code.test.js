@@ -413,7 +413,7 @@ test('run: a unit finding about an unlisted unit, or a result with neither requi
 test('run: the claude engine pack cut a test file: a missing_test claim about its unit stays out of the counts', async (t) => {
   const f = uf({ unit: U1, ...cite('src/js/orders.js', 1), title: 'create is untested' });
   const r = await post(t, { files: { 'findings.json': result([f]), 'pack-cut.txt': 'test/orders.test.js\n' } });
-  assert.match(r.calls.summary, /\*\*✅ No unit test gaps in the 3 riskiest units\*\*/);
+  assert.match(r.calls.summary, /\*\*⚠️ Incomplete scan: no gaps found so far\*\*/);
   assert.match(r.calls.summary, /\*\*Low-confidence unit findings \(1\)\*\*[\s\S]*create is untested/);
 });
 
@@ -618,4 +618,28 @@ test('chained: the real collector writes the ctx files and the post step reads t
   const rows = JSON.parse(fs.readFileSync(path.join(ctx, 'audit.json'), 'utf8')).unit_findings;
   assert.deepEqual(rows.map((r) => [r.unit, r.low]), [[U2, false]]);
   assert.equal(m.calls.outputs.status, 'complete');
+});
+
+test('run: a unit with an incomplete candidate test stays due instead of being saved as covered', async (t) => {
+  const r = await post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: {
+    'findings.json': result([]), 'pack-cut.txt': 'test/orders.test.js\n',
+  } });
+  assert.equal(r.calls.outputs.status, 'incomplete');
+  assert.ok(!readState(r.calls.created[0].body).blocks.some((b) => b.cid === U1));
+  assert.match(r.calls.summary, /Not reviewed this run/);
+});
+
+test('run: per-block context omissions reach the validated audit artifact', async (t) => {
+  const w = workspace(t), id = '1111111a';
+  w.put('audit-docs.txt', 'docs/design.md\tdiscovered\n');
+  w.put('audit-candidates.txt', `${id}\tdocs/design.md:3\tPlan design\tA repeating plan stays on after it fires.\n`);
+  const doc = { id, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'missing_test', code: [cite('src/js/orders.js', 1)], tests: [], note: 'No test was visible.' };
+  const r = await post(t, { w, files: {
+    'findings.json': result([], { docs_reviewed: ['docs/design.md'], requirements: [doc] }),
+    'scan-parts.json': { calls: 2, failed: [], dropped: [], blockCuts: { [id]: ['test/orders.test.js'] } },
+    'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, candidates: 1, limitations: [] },
+  } });
+  const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
+  assert.equal(saved.requirements[0].status, 'unknown');
+  assert.match(saved.requirements[0].note, /test\/orders.test.js/);
 });
