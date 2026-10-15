@@ -190,7 +190,8 @@ function weakCandidates(src) {
 // ---- removed / weakened assertions (diff only) ----
 // value assertions VALUE does not list (kept out of VALUE: it also decides which weak assertions are "pinned")
 const EXTRA = /\bassert\.(?:match|doesNotMatch|notEqual|notStrictEqual|notDeepEqual|notDeepStrictEqual|throws|doesNotThrow|rejects|doesNotReject|ifError)\s*\(|\.(?:toMatch|toThrow|toThrowError|toHaveBeenCalledWith|toBeGreaterThan|toBeLessThan)\s*\(|\.rejects\./;
-const literalsOf = (text, min = 2) => new Set([...text.matchAll(/'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`|(?<![\w$.])(\d+(?:\.\d+)?)(?![\w$])/g)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]).filter((x) => x.length >= min));
+const LIT = /'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`|(?<![\w$.])(\d+(?:\.\d+)?)(?![\w$])/g; // quoted strings and numbers
+const literalsOf = (text, min = 2) => new Set([...text.matchAll(LIT)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]).filter((x) => x.length >= min));
 const subjectOf = (text) => { // the expression under test on one assertion line, whitespace and quote style normalised; null when it is no assertion
   let m, x = null;
   let w = weakOf(text, []);
@@ -224,20 +225,40 @@ function assertionDelta(diff, isTest) {
   }
   const out = [];
   const callee = (x) => (/^([\w$.]+)\(/.exec(x) || [])[1];
-  // the rows a loop feeds into the assertion at index ia of the added lines: for (... of TABLE), TABLE.forEach(, .each(TABLE; '' when no such loop sits in the 5 lines above
+  // top-level elements of the array literal that opens at text[at], as text (nested calls and arrays stay inside their element); strings kept whole, // comments skipped
+  const rowsOf = (text, at) => {
+    if (text[at] !== '[') return [];
+    const rows = [];
+    let depth = 0, cur = '';
+    for (let i = at; i < text.length; i++) {
+      const c = text[i];
+      if (c === '/' && text[i + 1] === '/') { while (i + 1 < text.length && text[i + 1] !== '\n') i++; continue; }
+      if (c === '"' || c === "'" || c === '`') { let j = i + 1; while (j < text.length && text[j] !== c) j += text[j] === '\\' ? 2 : 1; cur += text.slice(i, j + 1); i = j; continue; }
+      if ('([{'.includes(c) && ++depth === 1) continue;
+      if (')]}'.includes(c) && --depth === 0) { if (cur.trim()) rows.push(cur); return rows; }
+      if (c === ',' && depth === 1) { if (cur.trim()) rows.push(cur); cur = ''; continue; }
+      cur += c;
+    }
+    return rows; // unclosed within the lines read: what was seen
+  };
+  // the rows of the table a loop feeds into the assertion at index ia of the added lines: for (... of TABLE), TABLE.forEach(, .each(TABLE; inline, or a variable
+  // declared in the added lines (a TypeScript type annotation is fine); [] when no such loop sits in the 5 lines above
   const tableOf = (ls, ia) => {
     for (let h = ia; h >= Math.max(0, ia - 5); h--) {
       const m = /\bfor\s*\(.*?\bof\s+([\w$.]+|\[)|\b([\w$.]+)\s*\.\s*forEach\s*\(|\.each\s*\(\s*([\w$.]+|\[)/.exec(ls[h]);
       if (!m) continue;
       const it = m[1] || m[2] || m[3];
-      if (it === '[') return ls.slice(h, ia + 1).join('\n');
-      const d = ls.findIndex((l) => new RegExp(`\\b(?:const|let|var)\\s+${esc(it)}\\s*=`).test(l));
-      if (d < 0) return '';
-      let e = d; while (e < ls.length - 1 && e - d < 50 && !/\]\s*;?\s*$/.test(ls[e])) e++;
-      return ls.slice(d, e + 1).join('\n');
+      if (it === '[') return rowsOf(ls.slice(h, ia + 1).join('\n'), m.index + m[0].length - 1);
+      const d = ls.findIndex((l) => new RegExp(`\\b(?:const|let|var)\\s+${esc(it)}(?![\\w$])`).test(l));
+      if (d < 0) return [];
+      const text = ls.slice(d, d + 50).join('\n'), name = new RegExp(`\\b(?:const|let|var)\\s+${esc(it)}(?![\\w$])`).exec(text);
+      const eq = /=(?![=>])/g; eq.lastIndex = name.index + name[0].length; // past a type annotation, which may hold brackets
+      const e = eq.exec(text);
+      return e ? rowsOf(text, text.indexOf('[', e.index)) : [];
     }
-    return '';
+    return [];
   };
+  const litList = (t) => [...String(t).replace(/\s\/\/[^'"`\n]*$/gm, '').matchAll(LIT)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]); // every literal in order, duplicates kept; a trailing comment is not part of it
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const [f, { rm, add, lines }] of per) for (const r of rm) {
     const same = add.filter((a) => a.x === r.x);
@@ -247,13 +268,11 @@ function assertionDelta(diff, isTest) {
     const distinct = (min) => [...literalsOf(r.text, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive
     const lits = distinct(2).length ? distinct(2) : distinct(1);
     if (lits.length && add.some((a) => !a.weak && lits.every((x) => has(a, x)))) continue;
-    // table-driven: a parameterised added assertion on the same function (no literal in its subject) inside a loop whose table (inline, or a `const` added in this diff)
-    // holds the removed literals in order as one row ([1, 2] or { input: 1, expected: 2 }; never across rows). An unrelated array or a literal assertion keeps the lead.
-    const seq = [...literalsOf(r.text, 1)], fn = callee(r.x);
-    if (seq.length && fn) {
-      const row = new RegExp(`(?<![\\w$.])${seq.map(esc).join(`(?:[\\s,'"\`]|[\\w$]+\\s*:)*`)}(?![\\w$])`);
-      if (add.some((a) => !a.weak && callee(a.x) === fn && !literalsOf(a.x, 1).size && row.test(tableOf(lines, a.at)))) continue;
-    }
+    // table-driven: a parameterised added assertion on the same function (no literal in its subject) inside a loop over a table with one row whose literals are
+    // exactly the removed assertion's, in order ([1, 2], { input: 1, expected: 2 }, [at(10, 0, 0), [10, 30, 15], at(10, 30, 15)]). A row dropped in the move, an
+    // array the loop does not read or a literal assertion keeps the lead.
+    const want = litList(r.text).join('\u0000'), fn = callee(r.x);
+    if (want && fn && add.some((a) => !a.weak && callee(a.x) === fn && !literalsOf(a.x, 1).size && tableOf(lines, a.at).some((row) => litList(row).join('\u0000') === want))) continue;
     out.push(same.length ? { file: f, kind: 'weakened', line: r.line, old: r.text, new: same[0].text } : { file: f, kind: 'removed', line: r.line, old: r.text });
   }
   return out;
