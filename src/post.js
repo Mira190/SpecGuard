@@ -1195,7 +1195,10 @@ function differential(data, maps) {
     const mc = ch && ch.side !== 'LEFT' && maps.get(ch.path), ch_h = mc && mc.changed.RIGHT.has(ch.line) ? mc.RIGHT.get(ch.line) : undefined;
     const modified = linked && ch_h !== undefined && !data.requirements.some((r) => r.source === ch.path) && [...mc.LEFT.values()].includes(ch_h);
     // (e) the PR removed code at `change` in the behaviour's file (a deleted check or branch): the surviving behaviour line is unchanged, but this PR made the drift
-    const removedHere = !!ch && !!b && ch.side === 'LEFT' && ch.path === b.path && !!mb && mb.changed.LEFT.has(ch.line);
+    // also when the model cited the surviving neighbour instead: the hunk that holds the behaviour line deletes code (more lines removed than added; a rewrite does not count)
+    // (Kite #16: the writable check deleted next to the folder check)
+    const hb = mb && b.side !== 'LEFT' ? mb.RIGHT.get(b.line) : undefined, count = (side) => [...mb.changed[side].keys()].filter((l) => mb[side].get(l) === hb).length;
+    const removedHere = (!!ch && !!b && ch.side === 'LEFT' && ch.path === b.path && !!mb && mb.changed.LEFT.has(ch.line)) || (hb !== undefined && count('LEFT') > count('RIGHT'));
     const touched = specTouched || behaviourChanged || sameHunk || modified || removedHere;
     if (a.since === 'introduced' && !touched) c.alignment = { ...a, since: 'pre_existing', reason: `${a.reason} (Downgraded to pre_existing: this PR changed neither the requirement nor the behaviour.)` };
     else if (a.since === 'pre_existing' && touched) { // symmetric: a model-emitted pre_existing cannot hide drift this PR touched
