@@ -27,7 +27,7 @@ const U1 = unitId('src/js/orders.js'), U2 = unitId('src/js/legacy.js'), U3 = uni
 const UNITS = () => readUnits([[U1, 'src/js/orders.js', 54.2, '1 weak assertion, 2 fix commits in 180 days', 'test/orders.test.js', 'weak? test/orders.test.js:2'], [U2, 'src/js/legacy.js', 21.5, 'no test', 'none', '-'], [U3, 'src/js/cart.js', 9, '3 public definitions', 'none', '-']].map((r) => r.join('\t')).join('\n') + '\n');
 const cite = (p, line) => ({ path: p, line, quote: FILES[p][line - 1].trim() });
 const uf = (over = {}) => ({ unit: U2, kind: 'missing_test', ...cite('src/js/legacy.js', 1), title: 'legacy doubles its argument', body: 'No test checks the doubled result.', skeleton: "it('doubles', () => {\n  assert.equal(legacy(2), 4);\n});", ...over });
-const WEAK = () => uf({ unit: U1, kind: 'weak_test', ...cite('test/orders.test.js', 2), title: 'create is only checked to be truthy', body: 'assert.ok(create({})) passes for any object.', skeleton: "it('rejects an empty order', () => {\n  assert.throws(() => create({}));\n});" });
+const WEAK = () => uf({ unit: U1, kind: 'weak_test', ...cite('test/orders.test.js', 2), title: 'create is only checked to be truthy', body: 'assert.ok(create({})) passes for any object.', counterexample: 'create({}) returns { broken: true } -> assert.ok still passes', skeleton: "it('rejects an empty order', () => {\n  assert.throws(() => create({}));\n});" });
 const PUSH = () => uf({ unit: U1, kind: 'pushdown', ...cite('test/e2e/checkout.test.js', 3), title: 'the total is computed in an e2e test', body: 'A unit test of total() could prove it.', skeleton: '' });
 const result = (fs_ = [uf()], over = {}) => ({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], unit_findings: fs_, ...over });
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -110,6 +110,14 @@ test('verify: a missing_test on a unit with no matched test file is deterministi
   assert.deepEqual(cut.map((f) => [f.kind, f.low]), [['missing_test', true], ['weak_test', true], ['pushdown', false]]);
   const other = checked([WEAK()], { packCut: new Set(['some/other.js']) }).unit_findings;
   assert.equal(other[0].low, false);
+});
+
+test('verify: a weak_test without a concrete wrong behaviour the assertion still accepts is low confidence with the reason (review F04)', () => {
+  const { counterexample, ...noCe } = WEAK();
+  const [vague] = checked([noCe]).unit_findings;
+  assert.deepEqual([vague.low, vague.lowWhy], [true, 'no concrete wrong behaviour that the assertion still accepts']);
+  assert.equal(checked([WEAK()]).unit_findings[0].low, false);
+  assert.match(render({ code: CODE(checked([WEAK()]).unit_findings), head: 'abc123' }), /Still passes when: create\(\{\}\) returns \{ broken: true \} -(&gt;|>) assert\.ok still passes/);
 });
 
 test('verify: a missing_test whose cited line a tracked test already contains (covers) is low confidence with the reason, not deterministic; other kinds are not searched', () => {

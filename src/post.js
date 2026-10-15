@@ -264,7 +264,7 @@ function validate(o) {
     if (!int(f.line)) return 'line must be an integer >= 1';
     if (f.start_line !== undefined && !int(f.start_line)) return 'invalid start_line';
     if (f.side !== undefined && !['LEFT', 'RIGHT'].includes(f.side)) return 'invalid side';
-    for (const k of ['suggestion', 'rule_source', 'rule_quote', 'source']) if (f[k] !== undefined && !str(f[k])) return `invalid ${k}`;
+    for (const k of ['suggestion', 'rule_source', 'rule_quote', 'source', 'counterexample']) if (f[k] !== undefined && !str(f[k])) return `invalid ${k}`;
     if (!['high', 'low'].includes(f.confidence)) { notes.push(`findings: ${f.kind} ${f.path} had no valid confidence; kept at low.`); f.confidence = 'low'; } // a failure only degrades
     if (!Array.isArray(f.obligation_ids)) return 'obligation_ids must be an array';
     f.obligation_ids = [...new Set(f.obligation_ids.filter((id) => ids.has(id)))];
@@ -294,6 +294,11 @@ function validate(o) {
     const why = findingError(f);
     if (why) notes.push(`Dropped ${[`findings[${i}]`, ...(f && typeof f === 'object' ? [f.kind, f.path, f.title].filter(text) : [])].join(' ')}: ${why}.`);
     else kept.push(f);
+  }
+  // a high weak_test must name a wrong behaviour the assertion still accepts (review F04); the claim is the model's, but without one it is only a lead
+  for (const f of kept) if (f.kind === 'weak_test' && f.confidence === 'high' && !counterexampleOk(f.counterexample)) {
+    f.confidence = 'low';
+    notes.push(`low confidence: weak_test ${f.path}:${f.line} names no concrete wrong behaviour that the assertion still accepts.`);
   }
   const d = { coverage: rows, requirements: reqs, findings: kept };
   settle(d, notes);
@@ -472,12 +477,16 @@ const fix = (f, inline) => (f.kind === 'standard' && typeof f.suggestion === 'st
   ? `\n\n${inline && oneClick(f) ? fence('suggestion', f.suggestion) : `Suggested fix (not applied automatically):\n\n${fence('', neutralize(f.suggestion))}`}` : '');
 const title1 = (t) => oneLine(neutralize(t).replace(/\s+/g, ' ').trim(), 200);
 
+// A usable counterexample: 20+ characters with something concrete in it (a number, a quoted value or an arrow input -> result). ponytail: shape only; whether the
+// wrong behaviour really passes the assertion is the model's claim, not checked here.
+const counterexampleOk = (s) => typeof s === 'string' && s.replace(/\s/g, '').length >= 20 && /\d|['"`]|->|\u2192/.test(s);
 // kind and confidence stay machine-readable in a hidden comment (the eval graders and the fix-through telemetry read them); only the fp marker comes after it.
 function commentBody(f, fp, inline = true) {
   const rule = f.rule_source ? `, rule: ${neutralize(f.rule_source).replace(/[<>\r\n]|--/g, ' ')}` : '';
   // the trailer (suggestion, hidden markers) is never cut: only the model's own text is truncated
   const trailer = `${fix(f, inline)}\n\n<!--\nkind: ${f.kind}, confidence: ${f.confidence}${rule}\n-->\n<!-- specguard:fp=${fp} -->`;
-  return truncate(`**${title1(f.title)}${f.confidence === 'low' ? ' (low confidence)' : ''}**\n\n${neutralize(f.body)}`, BODY_MAX - trailer.length) + trailer;
+  const still = f.kind === 'weak_test' && counterexampleOk(f.counterexample) ? `\n\nStill passes when: ${neutralize(f.counterexample.trim())}` : '';
+  return truncate(`**${title1(f.title)}${f.confidence === 'low' ? ' (low confidence)' : ''}**\n\n${neutralize(f.body)}${still}`, BODY_MAX - trailer.length) + trailer;
 }
 
 const gapFree = (data) => !data.findings.length && !(data.validation_notes || []).length && data.coverage.length > 0 && !data.not_reviewed
@@ -1728,4 +1737,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { assertionKind, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { assertionKind, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });

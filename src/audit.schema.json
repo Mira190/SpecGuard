@@ -231,6 +231,10 @@
             "type": "string",
             "description": "One or two sentences: what behaviour is not proven and why."
           },
+          "counterexample": {
+            "type": "string",
+            "description": "weak_test only, required for confidence high: one concrete wrong behaviour of the code under test that the cited assertion still accepts (input -> the wrong result a broken implementation would give -> why the assertion still passes). Without one the finding is low confidence."
+          },
           "skeleton": {
             "type": "string",
             "description": "A short unit test skeleton in the repository's framework (missing_test and weak_test); an expected value from an independent literal, never copied from the code."

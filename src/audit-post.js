@@ -157,7 +157,8 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     else if (!UNIT_KINDS.includes(f.kind)) drop(`kind must be one of ${UNIT_KINDS.join(', ')}`);
     else if (!text(f.path) || !Number.isInteger(f.line) || f.line < 1 || !text(f.quote) || !text(f.title)) drop('path, line, quote and title are required');
     else if (keep.length >= UNIT_MAX) drop(`more than ${UNIT_MAX} findings; the rest are ignored`);
-    else keep.push({ unit: f.unit, kind: f.kind, path: f.path, line: f.line, quote: f.quote.slice(0, 200), title: f.title.trim().slice(0, 120), body: text(f.body) ? f.body.trim() : '', skeleton: text(f.skeleton) ? f.skeleton.replace(/\s+$/, '') : '' });
+    else keep.push({ unit: f.unit, kind: f.kind, path: f.path, line: f.line, quote: f.quote.slice(0, 200), title: f.title.trim().slice(0, 120), body: text(f.body) ? f.body.trim() : '', skeleton: text(f.skeleton) ? f.skeleton.replace(/\s+$/, '') : '',
+      ...(text(f.counterexample) ? { counterexample: f.counterexample.trim().slice(0, 300) } : {}) });
   }
   o.unit_findings = keep;
   o.not_reviewed.push(...notes);
@@ -284,7 +285,8 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
     const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c) : null;
     const noSketch = f.kind !== 'pushdown' && !skeleton; // no test sketch: "no gap found" findings arrive this way
-    out.push({ ...f, ...c, skeleton, fid, low: cut || !!hit || noSketch, ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : noSketch && !cut && { lowWhy: 'no test sketch: the finding may not be a gap' }) });
+    const vague = f.kind === 'weak_test' && !post.counterexampleOk(f.counterexample); // review F04: a weak test needs a wrong behaviour the assertion still accepts
+    out.push({ ...f, ...c, skeleton, fid, low: cut || !!hit || noSketch || vague, ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
   }
   return out;
 }
@@ -568,7 +570,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   let rank = 0;
   const ulists = [['Untested behaviour', 'missing_test', 'More untested behaviour'], ['Weak unit tests', 'weak_test', 'More weak unit tests'], ['Tests to move down', 'pushdown', 'More tests to move down']].map(([title, kind, more]) => ({ title, more, fs: uf.filter((f) => f.kind === kind) }));
   const fence = (t) => `\n\n\`\`\`\n${t.replace(/`{3,}/g, "'''")}\n\`\`\``;
-  const uitem = (f) => findingBlock({ f: { kind: f.kind, title: f.title, path: f.path, line: f.line, body: `${neutralize(f.body)}${f.skeleton ? fence(f.skeleton) : ''}` }, why: f.confirmed ? '' : 'first report' }, blob, rank++, { bare: true, posted: true, sketch: true });
+  const uitem = (f) => findingBlock({ f: { kind: f.kind, title: f.title, path: f.path, line: f.line, body: `${neutralize(f.body)}${f.counterexample ? ` Still passes when: ${neutralize(f.counterexample)}` : ''}${f.skeleton ? fence(f.skeleton) : ''}` }, why: f.confirmed ? '' : 'first report' }, blob, rank++, { bare: true, posted: true, sketch: true });
   const uhead = (f) => findingHead({ kind: f.kind, title: f.title, path: f.path, line: f.line, body: f.body }, { why: f.low ? f.lowWhy || 'low confidence' : f.confirmed ? '' : 'first report', posted: true, bare: true }, blob);
   for (const l of ulists) body += vis(l.title, l.fs.map(uitem), '', UCAP);
   const SIGH = 'Found by rule from the test files at this commit, not by the model; a missing or weak signal is a lead, not a confirmed gap.\n\n| Unit | Signal | Why |\n|---|---|---|\n', SIGN = { test_evidence_not_found: 'test evidence not found', weak_test_signal: 'weak test signal' };
