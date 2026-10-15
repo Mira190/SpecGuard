@@ -195,7 +195,7 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 // The row id is the block cid (cid.N for a bundled block), the heading comes from the candidate, and rows keep document order. A block the model
 // skipped, or whose rows all failed verification, becomes an `unknown` row ("unconfirmed"); not_requirements gains the block's location and text.
 // docs: the admitted documents (null = any); cands: the candidate blocks (Map from readCandidates; null = unknown).
-function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), covers = null } = {}) {
+function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null } = {}) {
   const cache = new Map();
   const file = (p) => { if (!cache.has(p)) cache.set(p, read(p)); return cache.get(p); };
   const locate = (c) => {
@@ -235,6 +235,11 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     const row = { ...r, heading, source, code, tests, note: r.note };
     if (lost) row.note = `${row.note} ${lost} citation(s) could not be verified and were removed.`.trim();
     if (inert) row.note = `${row.note} ${inert} test citation(s) removed: not an assertion or in a skipped test.`.trim();
+    const cut = blockCuts[cidOf(r.id)];
+    if (Array.isArray(cut) && cut.length && ['missing_test', 'partial', 'not_implemented'].includes(row.status)) {
+      row.status = 'unknown';
+      row.note = `${row.note} Downgraded to unknown: evidence files were not fully visible: ${cut.join(', ')}.`.trim();
+    }
     const why = gap(row);
     if (why && row.status !== 'unknown') { row.note = `${row.note} Downgraded to unknown: ${why}.`.trim(); row.status = 'unknown'; }
     out.requirements.push(row);
@@ -682,8 +687,8 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || process.env.TEST_PATHS || '' });
-  const unseen = hasCode && unitsFailed ? [...units.keys()] : hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path)).map((u) => u.id) : [];
-  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, covers });
+  const unseen = hasCode && unitsFailed ? [...units.keys()] : hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path) || u.tests.some((t) => packCut.has(t))).map((u) => u.id) : [];
+  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers });
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed } : null;
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }

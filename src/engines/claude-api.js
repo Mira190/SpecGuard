@@ -52,7 +52,7 @@ function strict(s) {
 // The prompt is "static prefix (skill, references, schema) + --- + per-PR context" (src/prompt.js): the prefix becomes the cached system block, the rest the user message.
 const SPLIT = '\n\n---\n\nContext directory (absolute path):';
 const NO_TOOLS = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Use only the context inlined below; where the answer would need a file you cannot see, mark it unknown and say so. Output only the JSON object.\n\n';
-const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. A block noted "relevant slices" shows every test of that file that references the changed symbols (real line numbers; "…| (lines a-b omitted)" marks the gaps): tests not shown do not mention them. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Do not report a missing or weak test when a candidate test file for that code was cut or not included: mark the obligation unknown and say which file was not fully visible. Output only the JSON object.\n\n';
+const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. A block noted "relevant slices" shows bounded windows around textual references to the changed symbols (real line numbers; "…| (lines a-b omitted)" marks the gaps). Its note says when matching tests were truncated or did not fit; omitted code may contain assertions or indirect coverage. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Do not report a missing or weak test when a candidate test file for that code was cut or not included: mark the obligation unknown and say which file was not fully visible. Output only the JSON object.\n\n';
 function messages(prompt, pack = '') {
   const at = prompt.indexOf(SPLIT);
   const system = at > 0 ? prompt.slice(0, at) : '', user = at > 0 ? prompt.slice(at + 2) : prompt; // keep "---" at the head of the user part
@@ -118,12 +118,14 @@ const TEST_START = /^\s*(?:(?:test|it|describe)\b|def test_|func Test|@Test\b)/,
 // -> { text, note, complete } or null (no symbol appears in the file, or no matching block fits). complete: every block that mentions a symbol is shown.
 function slices(src, syms, room) {
   const n = src.length, re = new RegExp(`(?<![\w$])(?:${syms.map((x) => x.replace(/\$/g, '\$')).join('|')})(?![\w$])`, 'g'), found = new Set(), wins = [];
+  let truncated = false;
   src.forEach((l, i) => {
     const m = [...l.matchAll(re)].map((x) => x[0]);
     if (!m.length) return;
     m.forEach((x) => found.add(x));
     let s = i; while (s > 0 && i - s < 30 && !TEST_START.test(src[s])) s--; // up to the enclosing test start, or 30 lines
     let e = i; while (e + 1 < n && e + 1 - s < 80 && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))) e++; // down to the next test at the same or lower indentation, 80 lines at most
+    if (!TEST_START.test(src[s]) || (e + 1 < n && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s])))) truncated = true;
     wins.push({ s, e, m: true });
   });
   if (!wins.length) return null;
@@ -140,21 +142,23 @@ function slices(src, syms, room) {
   for (const w of kept) { if (w.s > at) gap(at, w.s); out.push(body(w)); at = w.e + 1; }
   if (at < n) gap(at, n);
   const shown = [...found], names = shown.slice(0, 8).join(', ') + (shown.length > 8 ? ', …' : ''), ranges = kept.map((w) => `${w.s + 1}-${w.e + 1}`).join(', ');
-  return { text: out.join('\n') + '\n', complete: !dropped, note: `relevant slices: lines ${ranges} of ${n} (tests referencing ${names})${dropped ? '; some matching tests did not fit' : ''}, line-numbered` };
+  return { text: out.join('\n') + '\n', complete: !dropped && !truncated, note: `relevant slices: lines ${ranges} of ${n} (tests referencing ${names})${dropped ? '; some matching tests did not fit' : ''}${truncated ? '; matching tests were truncated at the search window' : ''}, line-numbered` };
 }
 // A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
-// a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Nothing is listed as cut (a block part never writes pack-cut.txt). ponytail: no per-file fairness, first files first.
+// a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Partial or omitted files are returned in notWhole for per-block verification (separate from the unit pack-cut.txt). ponytail: no per-file fairness, first files first.
 const WIN = 40, HEAD = 15;
 function windowPack(root, locs, limit) {
-  const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)), parts = [];
+  const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)), parts = [], notWhole = [];
   let used = 0;
   for (const [rel, at] of locs) {
     const text = packRead(root, rel), room = Math.min(cap, limit - used - OVERHEAD);
-    if (!text || !text.trim() || room < 200) continue;
+    if (text === null || room < 200) { notWhole.push(rel); continue; }
+    if (!text.trim()) continue;
     const src = text.replace(/\n$/, '').split('\n'), n = src.length, row = (i) => `${String(i + 1).padStart(4)}| ${src[i]}`;
     const whole = src.map((_, i) => row(i)).join('\n') + '\n';
     let body, note;
     if (Buffer.byteLength(whole) <= room) { body = whole; note = 'full file, line-numbered'; } else {
+      notWhole.push(rel);
       const wins = [[0, Math.min(HEAD, n) - 1], ...at.map((l) => [Math.max(0, l - 1 - WIN), Math.min(n - 1, l - 1 + WIN)])].sort((a, b) => a[0] - b[0]), merged = [];
       for (const w of wins) { const p = merged[merged.length - 1]; if (p && w[0] <= p[1] + 1) p[1] = Math.max(p[1], w[1]); else merged.push([...w]); }
       const out = []; let next = 0, size = 0;
@@ -169,7 +173,7 @@ function windowPack(root, locs, limit) {
     }
     const b = block(rel, body, note); parts.push(b); used += Buffer.byteLength(b);
   }
-  return { text: parts.length ? `Repository files (the code and tests cited by the candidate blocks' evidence rows; a file noted "relevant windows" shows the lines around each cited line):\n\n${parts.join('\n\n')}` : '', note: '', notWhole: [] };
+  return { text: parts.length ? `Repository files (the code and tests cited by the candidate blocks' evidence rows; a file noted "relevant windows" shows the lines around each cited line):\n\n${parts.join('\n\n')}` : '', note: '', notWhole };
 }
 
 function contextPack(ctx, root, limit) {
@@ -183,7 +187,8 @@ function contextPack(ctx, root, limit) {
     if (seen.has(rel)) return;
     seen.add(rel);
     const text = packRead(root, rel);
-    if (!text || !text.trim()) return;
+    if (text === null) return void (quiet || omitted.push(rel));
+    if (!text.trim()) return;
     const room = Math.min(num ? cap : PER_FILE, (quiet ? limit * 0.6 : top) - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
     if (room < 200) return void (quiet || omitted.push(rel));
     const full = num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text;
@@ -352,6 +357,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
       let first = null, ok = 0, splits = 0;
+      const blockCuts = {};
       const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: cids }), reason });
       while (queue.length) {
         const p = queue.shift();
@@ -373,6 +379,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
         }
         if (!obj) { fail(p, why); first ||= r.ok ? { status: 'failed', reason: '', why } : r; if (r.status === 'timeout') break; continue; }
         ok++;
+        if (p.cids) Object.assign(blockCuts, p.blockCuts);
         if (p.cids) merged.requirements.push(...arr('requirements')), merged.not_requirements.push(...arr('not_requirements'));
         else merged.unit_findings.push(...arr('unit_findings'));
         merged.docs_reviewed.push(...arr('docs_reviewed').filter((d) => !merged.docs_reviewed.includes(d)));
@@ -389,7 +396,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       for (const p of queue) fail(p, 'not started: the review timed out'); // a timeout stops the run: the parts not started are not audited either
       if (!ok) return failEnd(first); // nothing usable at all: the run fails as one call would
       w('findings.json', JSON.stringify(merged));
-      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped }));
+      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
       if (!failed.some((f) => f.part === 'units')) w('pack-cut.txt', split.packCut.map((x) => `${x}\n`).join('')); // the unit part's pack (what the unit findings may rely on)
       notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
       for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);

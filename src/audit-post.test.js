@@ -1025,3 +1025,15 @@ test('run: a failed issue write or lookup, or a failed job summary, fails the st
   assert.equal(ok.calls.statuses.at(-1), 'complete');
   assert.equal(ok.calls.created.length, 1);
 });
+
+test('verify: incomplete block evidence cannot prove absence, but positive cited evidence survives', () => {
+  for (const status of ['missing_test', 'partial', 'not_implemented']) {
+    const v = verify(result([req({ status, tests: [] })]), { read, blockCuts: { [C1]: ['test/plan.test.js'] } });
+    assert.equal(v.requirements[0].status, 'unknown', status);
+    assert.match(v.requirements[0].note, /evidence files were not fully visible/);
+  }
+  const v = verify(result([req()]), { read, blockCuts: { [C1]: ['test/plan.test.js'] } });
+  assert.equal(v.requirements[0].status, 'covered');
+  const other = verify(result([req({ status: 'missing_test', tests: [] })]), { read, blockCuts: { [C2]: ['test/other.test.js'] } });
+  assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
+});
