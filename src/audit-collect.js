@@ -288,13 +288,14 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   return { docs, rejected, standards, head, candidates: cand.total, picked: cand.fit.map((c) => c.cid), rotation, evidence: evid, units: units && { total: units.rows.length, picked: units.picked.map((r) => r.id), rotation: units.rotation, totals: units.totals } };
 }
 
-// The scan issue's state for this scope ({ head, blocks } or null: no issue, no state, no access). Read over the REST API with GH_TOKEN/GH_REPO, as this step runs before any github-script step.
+// The scan issue's state for this scope ({ head, blocks } or null: no issue, no state, no access). Read over the REST API, as this step runs before any github-script step, from the publisher's state address: ISSUE_REPO (default GH_REPO) with ISSUE_TOKEN (default GH_TOKEN).
 async function loadPrior(env, fetchFn = globalThis.fetch) {
   try {
-    const { findIssue, readState, scopeOf } = require('./audit-post');
+    const { findIssue, readState, stateAddress } = require('./audit-post');
     const api = env.GITHUB_API_URL || 'https://api.github.com', [owner, repo] = String(env.GH_REPO || env.GITHUB_REPOSITORY || '').split('/');
+    const addr = stateAddress(env, owner, repo), token = env.ISSUE_TOKEN || env.GH_TOKEN;
     const get = async (u) => {
-      const r = await fetchFn(`${api}${u}`, { headers: { authorization: `Bearer ${env.GH_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' } });
+      const r = await fetchFn(`${api}${u}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' } });
       if (!r.ok) throw new Error(`${r.status} ${u}`);
       return r.json();
     };
@@ -304,7 +305,7 @@ async function loadPrior(env, fetchFn = globalThis.fetch) {
       rest: { issues: { listForRepo: null } },
     };
     const me = await get('/user').then((u) => u.login, () => null); // an app or job token cannot: the issue is then ours when a github-actions bot opened it
-    const issue = await findIssue({ github, owner, repo, me, mark: scopeOf(env.SCAN_PATHS).mark });
+    const issue = await findIssue({ github, ...addr.issueRepo, me, mark: addr.scope.mark, title: addr.title });
     return (issue && readState(issue.body)) || null;
   } catch (e) {
     console.log(`::warning::SpecGuard: could not read the previous scan state (this run starts from the first block): ${e.message}`);

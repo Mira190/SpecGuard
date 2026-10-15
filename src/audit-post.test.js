@@ -1063,3 +1063,27 @@ test('verify: incomplete block evidence cannot prove absence, but positive cited
   const other = verify(result([req({ status: 'missing_test', tests: [] })]), { read, blockCuts: { [C2]: ['test/other.test.js'] } });
   assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
 });
+
+test('scan state address (review F24, probe P3): the collector reads where the publisher writes; unreadable visibility still blocks every issue call (F18); action.yml passes the issue repo and token', async () => {
+  const { loadPrior } = require('./audit-collect');
+  const env = { GH_REPO: 'org/source', GH_TOKEN: 'src', ISSUE_REPO: 'org/reports', ISSUE_TOKEN: 'iss' };
+  const a = audit.stateAddress(env, 'org', 'source'), bot = { type: 'Bot', login: 'github-actions[bot]' };
+  assert.deepEqual([a.issueRepo, a.title], [{ owner: 'org', repo: 'reports' }, 'SpecGuard: unit test gap scan: org/source']);
+  assert.deepEqual(audit.stateAddress({}, 'org', 'source').issueRepo, { owner: 'org', repo: 'source' });
+  const prior = { number: 7, state: 'open', user: bot, title: a.title, body: `${MARK}\n${audit.stateOf('abc1234', { ...result([]) }, null, { date: DATE }).raw}` };
+  const fetchFn = async (url) => ({ ok: !url.endsWith('/user'), status: 200, json: async () => (url.includes('/repos/org/reports/issues?') ? [prior] : []) });
+  assert.ok(await loadPrior(env, fetchFn), 'the state in org/reports is read back');
+  // the publisher, visibility metadata unreadable: no issue read or write at all
+  const ctx = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-state-')), calls = [], saved = { ...process.env };
+  fs.writeFileSync(path.join(ctx, 'audit-meta.json'), JSON.stringify({ head: 'abc1234', max_requirements: 80, docs: 0, limitations: [] }));
+  const client = { rest: { users: { getAuthenticated: async () => { throw new Error('no /user'); } }, repos: { get: async () => { throw new Error('404'); } },
+    issues: { listForRepo: () => { calls.push('list'); return [prior]; }, update: async () => calls.push('update'), create: async () => calls.push('create') } }, paginate: async (fn, o) => fn(o) };
+  const core = { warning() {}, setOutput() {}, summary: { addRaw() { return this; }, async write() {} } };
+  try { Object.assign(process.env, { CTX: ctx, SKIP: 'true', SCAN_ISSUE: 'true', ISSUE_REPO: 'org/reports', ENGINE: '', MODEL: '' }); await audit({ github: client, issueGithub: client, context: { repo: { owner: 'org', repo: 'source' }, sha: 'abc1234' }, core }); }
+  finally { for (const k of ['CTX', 'SKIP', 'SCAN_ISSUE', 'ISSUE_REPO', 'ENGINE', 'MODEL']) if (k in saved) process.env[k] = saved[k]; else delete process.env[k]; fs.rmSync(ctx, { recursive: true, force: true }); }
+  assert.deepEqual(calls, []);
+  const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8'), step = /- id: audit_collect[\s\S]*?run: node/.exec(y)[0];
+  assert.match(step, /ISSUE_REPO: \$\{\{ inputs\.scan_issue_repo \}\}/);
+  assert.match(step, /ISSUE_TOKEN: \$\{\{ inputs\.scan_issue_token \}\}/);
+  assert.match(step, /GH_TOKEN: \$\{\{ inputs\.github_token \}\}/, 'source reads keep the source token');
+});

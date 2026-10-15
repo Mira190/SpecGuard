@@ -27,6 +27,12 @@ function scopeOf(spec, target = '') {
   const shown = (ls.filter((l) => !l.startsWith('!')).join(', ') || ls.join(', ')).replace(/[\x00-\x1F\x7F<>]/g, ' ');
   return { lines: ls, mark: `<!-- specguard:audit scope=${sha8(...ls)} -->`, title: `${base} (${oneLine(shown, 60)})` };
 }
+// The one state address (publisher and collector): the repository holding the scan issue, its scope marker and (away from the scanned repository) its full title.
+function stateAddress(env, owner, repo) {
+  const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(ir[1] === owner && ir[2] === repo);
+  const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
+  return { ir, away, issueRepo: away ? { owner: ir[1], repo: ir[2] } : { owner, repo }, scope, title: away ? scope.title : '' };
+}
 const SUMMARY_MAX = 1000000, ISSUE_MAX = 64000; // bytes: job summary 1 MiB; issue body 65536
 const NEAR = 5; // a quote may sit this many lines from the cited one
 const MIN_QUOTE = 12; // non-space characters a quote needs to count as evidence
@@ -666,10 +672,9 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const cands = readCandidates(readCtx('audit-candidates.txt'));
   let wantIssue = wantsIssue(env);
   // ISSUE_REPO (scan_issue_repo): the issue lives in another repository under its own client (issueGithub); one issue per scanned repository, told apart by the title
-  const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(ir[1] === owner && ir[2] === repo);
+  const { ir, away, issueRepo, scope, title } = stateAddress(env, owner, repo);
   if (env.ISSUE_REPO && !ir && wantIssue) { wantIssue = false; core.warning('SpecGuard: scan_issue_repo is not owner/name; no scan issue is written'); }
-  const igh = issueGithub || github, issueRepo = away ? { owner: ir[1], repo: ir[2] } : { owner, repo };
-  const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
+  const igh = issueGithub || github;
   const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, run: runHtml, cap, candidates: (meta && meta.candidates) || 0,
     ruled, rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   let last = '';
@@ -687,7 +692,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
       if (!g.ok) { issueErr = `scan issue not written to ${issueRepo.owner}/${issueRepo.repo}: ${g.reason}`; core.warning(`SpecGuard: ${issueErr}`); outcome('failed', issueErr); return false; }
     }
     try {
-      mine = await findIssue({ github: igh, ...issueRepo, me: await whoami(igh), mark: scope.mark, title: away ? scope.title : '' });
+      mine = await findIssue({ github: igh, ...issueRepo, me: await whoami(igh), mark: scope.mark, title });
       prior = mine && readState(mine.body);
     } catch (e) { issueFail(e); mine = null; return false; }
     return true;
@@ -766,4 +771,4 @@ async function main({ github, issueGithub, context, core, date = today() }) {
 module.exports = async (args) => {
   try { await main(args); } catch (e) { try { args.core.setOutput?.('status', 'failed'); args.core.setOutput?.('reason', `the scan report failed: ${e.message}`); args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, STATUS, CLASS, MARK, TITLE, HEADING });
+Object.assign(module.exports, { readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, stateAddress, findIssue, STATUS, CLASS, MARK, TITLE, HEADING });

@@ -439,6 +439,30 @@ test('loadPrior: reads the state of this scope\'s issue over REST (an unscoped s
   assert.match(logs.join('\n'), /::warning::SpecGuard: could not read the previous scan state/);
 });
 
+test('loadPrior: reads back the state at the publisher\'s address: same repository, another repository, and two targets sharing one reports repository do not cross (review F24)', async () => {
+  const bot = { type: 'Bot', login: 'github-actions[bot]' };
+  // an issue as the publisher writes it: marker, then the state; title and marker come from the shared stateAddress
+  const written = (env, owner, repo, cid) => { const a = audit.stateAddress(env, owner, repo); return { number: 1, state: 'open', user: bot, title: a.scope.title, body: `${a.scope.mark}\n## x\n<!-- specguard:audit-state {"v":4,"head":"abc","audits":[["abc","2026-10-01"]],"blocks":[["${cid}","gap","abc",1,0]]} -->` }; };
+  const world = (byRepo) => { const seen = []; return { seen, fetchFn: async (url, init) => { seen.push([url, init.headers.authorization]); if (url.endsWith('/user')) return { ok: false, status: 403, json: async () => ({}) }; const m = /\/repos\/([^/]+\/[^/]+)\/issues/.exec(url); return { ok: true, json: async () => (byRepo[m[1]] || []) }; } }; };
+  const first = (p) => p && p.blocks.map((b) => b.cid);
+  // same repository
+  const same = { GH_REPO: 'org/source', GH_TOKEN: 'src', ISSUE_REPO: 'org/source' };
+  assert.deepEqual(first(await loadPrior(same, world({ 'org/source': [written(same, 'org', 'source', 'aaaaaaa1')] }).fetchFn)), ['aaaaaaa1']);
+  // another repository, under the issue token; the source repository is not read
+  const cross = { GH_REPO: 'org/source', GH_TOKEN: 'src', ISSUE_TOKEN: 'iss', ISSUE_REPO: 'org/reports', SCAN_PATHS: 'packages/a/**' };
+  const w = world({ 'org/reports': [written(cross, 'org', 'source', 'bbbbbbb1')] });
+  assert.deepEqual(first(await loadPrior(cross, w.fetchFn)), ['bbbbbbb1']);
+  assert.ok(w.seen.every(([u, a]) => u.includes('/repos/org/reports/') || u.endsWith('/user')) && w.seen.every(([, a]) => a === 'Bearer iss'));
+  // two targets, one reports repository, same scope: each reads only its own title
+  const other = { ...cross, GH_REPO: 'org/other' };
+  const shared = world({ 'org/reports': [written(other, 'org', 'other', 'ccccccc1'), written(cross, 'org', 'source', 'bbbbbbb1')] });
+  assert.deepEqual(first(await loadPrior(cross, shared.fetchFn)), ['bbbbbbb1']);
+  assert.deepEqual(first(await loadPrior(other, shared.fetchFn)), ['ccccccc1']);
+  assert.equal(await loadPrior({ ...cross, GH_REPO: 'org/third' }, shared.fetchFn), null, 'a target with no issue of its own reads nothing, never a neighbour\'s');
+  // an issue only in the source repository is not this target\'s state once the state lives elsewhere
+  assert.equal(await loadPrior(cross, world({ 'org/source': [written(cross, 'org', 'source', 'ddddddd1')] }).fetchFn), null);
+});
+
 test('collect: blocks the prefilter rules out are listed in audit-ruled.txt with the reason, never reach the candidates, and do not count against the cap', (t) => {
   const design = [
     '# Plan design', '', '## Behaviour', '',
