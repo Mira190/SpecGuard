@@ -3783,3 +3783,19 @@ test('a non-422 failure on a FILE-level comment is incomplete too (no head marke
   assert.match(down.calls.summary[0].body, /src\.js:8/, 'the finding is not lost');
   assert.equal((await run(422)).outputs.status, 'complete');
 });
+
+test('a model-low missing_test that the test-map guard reports as covered is not raised next to a removal lead; without the guard hit it is', async (t) => {
+  const tm = require('./test-map'), real = tm.makeCoverGuard;
+  t.after(() => { tm.makeCoverGuard = real; });
+  const run = async (hit) => {
+    tm.makeCoverGuard = () => () => hit;
+    const s = setup(t, report({ coverage: [row('missing_test')], findings: [finding('missing_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence: 'low', title: 'NEARBY ONE' })] }));
+    fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+    fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), 'assertion removed: assert.equal(gone, 1); (test.js:2)\n');
+    await post(s);
+    return JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]);
+  };
+  assert.match(await run(''), /Removal confirmed by the diff\./, 'control: no guard hit, raised');
+  assert.doesNotMatch(await run('other.test.js has the message'), /Removal confirmed|Assertion removed with no replacement|confidence: high/);
+});
