@@ -146,7 +146,8 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const room = packBytes ? { total: Math.floor(packBytes * 0.9), cost: (r) => { const p = partOf(r, prior, size); return Math.ceil(shownOf(r, size) / (p ? p.n : 1)) + 300 + r.tests.reduce((n, t) => n + Math.ceil(Math.min(tsize.get(t) || 0, fileCap(packBytes)) * 1.15) + 300, 0); } } : null;
   if (room) room.left = room.total;
   let sel = pick(rows, maxUnits, prior, size, room);
-  if (room && !sel.picked.length && rows.length) { sel = pick(rows, 1, prior, size); limits.push('no unit fits the context pack with its matched tests; the scan reviews the first one and its tests may be cut'); }
+  let forced = [];
+  if (room && !sel.picked.length && rows.length) { sel = pick(rows, 1, prior, size); forced = sel.picked.map((r) => r.id); limits.push('no unit fits the context pack with its matched tests; the scan reviews the first one and its tests may be cut; it is recorded as reviewed in part (unsure), so the next run moves on'); }
   if (sel.over.length) limits.push(`${sel.over.length} unit${sel.over.length === 1 ? '' : 's'} (${sel.over.slice(0, 3).map((r) => r.path).join(', ')}${sel.over.length > 3 ? ', ...' : ''}) cannot fit the context pack with their matched tests and ${sel.over.length === 1 ? 'is' : 'are'} not reviewed`);
   const chosen = new Set(sel.picked.map((r) => r.id));
   const distinct = (rs) => [...new Set(rs.flatMap((r) => r.tests))].map((t) => sig.get(t) || none);
@@ -155,7 +156,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const rotation = { rotate: !!prior, picked: sel.picked.length, confirming: sel.tally.c, changed: sel.tally.s, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / maxUnits)), runs: Math.max(1, Math.ceil(rows.length / maxUnits)) };
   const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
   for (const r of sel.picked) { const p = partOf(r, prior, size); if (p) r.part = p; }
-  return { rows, picked: sel.picked, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
+  return { rows, picked: sel.picked, forced, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
     totals: { units: rows.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
     stale: rows.filter((r) => known.has(r.id) && !chosen.has(r.id) && staleUnit(r, prior)).map((r) => r.id),
     review: (r) => (chosen.has(r.id) ? 'this run' : known.has(r.id) ? `reviewed ${date(r) || 'earlier'}${staleUnit(r, prior) ? '; changed since, due again' : ''}` : 'not yet reviewed') };
@@ -168,6 +169,7 @@ function write(ctx, head, maxUnits, inv) {
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
   w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
     rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r), signals: { tests: r.signals.tests, noAssert: r.signals.noAssert, skipped: r.signals.skipped, asserts: r.signals.asserts, weak: r.signals.weak.length, unread: r.signals.unread } })),
+    forced: inv.forced, // picked although it cannot fit the pack: the publisher records it as unsure even when its tests were cut, so the rotation moves on
     unreviewed: inv.rows.filter((r) => inv.review(r) === 'not yet reviewed').slice(0, 30).map((r) => ({ id: r.id, path: r.path, score: r.score })) }) + '\n');
 }
 

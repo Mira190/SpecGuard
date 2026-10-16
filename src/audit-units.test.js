@@ -415,3 +415,19 @@ test('F23 control: small units are still packed many per run; a unit that can ne
   assert.equal(b.picked.length, 1, 'the unit is still chosen');
   assert.ok(b.limitations.some((l) => /cannot fit|no unit fits/.test(l)), 'and the limit is named');
 });
+
+test('F23 (review): when no unit fits, the unit chosen anyway is recorded as unsure, so the next run chooses another', (t) => {
+  const files = {};
+  for (const u of ['a', 'b']) {
+    files[`src/js/${u}.js`] = Array.from({ length: 200 }, (_, i) => `exports.f${i} = (x) => x + ${i};`);
+    files[`test/${u}.test.js`] = Array.from({ length: 4000 }, (_, i) => `// ${'filler '.repeat(6)}${i}`).concat(`it('${u}', () => { assert.equal(${u}.f1(1), 2); });`);
+  }
+  const r = repo(t, files), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 6000 };
+  const first = inventory(o);
+  assert.deepEqual(first.forced, [first.picked[0].id], 'the unit chosen although it cannot fit is named');
+  const post = require('./audit-post'), pick1 = first.picked[0];
+  const state = post.readState(post.stateOf('h1', { requirements: [], not_requirements: [], not_reviewed: [], docs_reviewed: [], unit_findings: [] }, null, { date: '2026-10-01', code: { picked: [pick1.id], cut: new Set([pick1.id]), findings: [], carried: [], versions: new Map([[pick1.id, pick1.ver]]), parts: new Map() } }).raw);
+  assert.equal(state.blocks[0].status, 'unsure', 'reviewed with its tests cut: not covered');
+  const second = inventory({ ...o, prior: state });
+  assert.notEqual(second.picked[0].id, pick1.id, 'the rotation moves on');
+});
