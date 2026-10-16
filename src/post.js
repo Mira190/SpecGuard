@@ -137,6 +137,20 @@ const clearlyUnit = (p) => layerOf(p) === 'unit' && !NOT_PLAIN_UNIT.test(String(
 // A keyword counts only as a call or member access (assert.equal(, expect(, x.should.), so a variable (expectedTotal), an import (const assert = require(...)) or a test name ('should work') is no assertion.
 const ASSERTION = /\b(?:[Aa]ssert\w*!?|[Ee]xpect(?!ed|ation)\w*|[Ss]hould\w*|[Vv]erify\w*|[Ff]ail\w*|require\.\w+|XCTAssert\w*|raises?|[Tt]hrows?)\s*[(.]|\bt\.(?:Errorf|Fatalf|Error|Fatal|Fail\w*)\b|\bt\.(?:equals?|same|ok|notOk|not|is|throws|doesNotThrow|notThrows|rejects|resolves|match|deepEquals?|strictEqual|notEqual|true|false|truthy|falsy|pass|snapshot)\(|\b(?:Is|Has|Does|Contains)\.\w+|\.(?:to[A-Z]\w*|not\.to\w+)\(|^\s*assert\s+(?![=:])/m;
 const COMMENT_LINE = /^\s*(?:\/\/|#|\/?\*|--)/;
+// Tier of a cited assertion: weak = truthiness or interaction-only (pins no expected value); anything else, and any syntax not recognised, is a value assertion (fail open).
+const WEAK = /\b(?:t|assert)\.ok\((?![^)]*[=<>])|\.(?:toBeTruthy|toBeFalsy|toBeDefined|toHaveBeenCalledTimes)\(|\.not\.(?:toBeNull|toBeUndefined)\(|\.toHaveBeenCalled\(\s*\)|\.toThrow(?:Error)?\(\s*\)/;
+const weakAssertion = (quote) => { const ls = String(quote).split('\n').filter((l) => !COMMENT_LINE.test(l) && ASSERTION.test(l)); return ls.length > 0 && ls.every((l) => WEAK.test(l)); };
+// A weak_test counterexample refuted by the cited assertion itself: assert.equal(EXPR, LIT) / expect(EXPR).toBe(LIT) with a primitive literal, and the counterexample says the SAME EXPR gives a different literal.
+// Narrow on purpose: a different input, several claims, or anything unparsed is not refuted.
+const LIT = String.raw`-?\d+(?:\.\d+)?|'[^']*'|"[^"]*"|true|false|null`, unq = (x) => x.replace(/^(['"])(.*)\1$/, '$2');
+const EXACT = [new RegExp(String.raw`^\s*(?:await\s+)?assert(?:\.strict)?\.(?:equal|strictEqual|deepEqual|deepStrictEqual)\(\s*(.+?)\s*,\s*(${LIT})\s*(?:,\s*(?:'[^']*'|"[^"]*"))?\)\s*;?\s*$`), new RegExp(String.raw`^\s*(?:await\s+)?expect\(\s*(.+)\s*\)\.(?:toBe|toEqual|toStrictEqual)\(\s*(${LIT})\s*\)\s*;?\s*$`)];
+function refutedBy(quote, counterexample) {
+  const m = EXACT.map((r) => r.exec(String(quote).trim().replace(/\s+/g, ' '))).find(Boolean);
+  if (!m || typeof counterexample !== 'string') return false;
+  const expr = m[1].replace(/\s+/g, ' ').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const claims = [...counterexample.trim().replace(/\s+/g, ' ').matchAll(new RegExp(String.raw`(?<![\w$.])${expr}\s+(?:returns?|yields?|gives?|evaluates to|is|=>|=)\s+(${LIT})(?![\w])(?!\.\d)`, 'g'))];
+  return claims.length > 0 && claims.every((c) => unq(c[1]) !== unq(m[2]));
+}
 const SKIPPED = /\.skip\(|\bx(?:it|describe|test)\(|\.todo\(|@Disabled\b|@Ignore\b|\[Ignore\b|\bt\.Skip\w*\(|pytest\.mark\.(?:skip|xfail)|@unittest\.skip|\bskipIf\b/;
 const TEST_DECL = /\bx?(?:it|test|describe)(?:\.\w+)?\s*\(|^\s*(?:async\s+)?def\s+test_|^\s*func\s+Test|@Test\b|\[(?:Test|Fact|Theory|TestCase)\b|\bvoid\s+test/;
 function assertionKind(lines, line, quote) {
@@ -296,9 +310,11 @@ function validate(o) {
     else kept.push(f);
   }
   // a high weak_test must name a wrong behaviour the assertion still accepts (review F04); the claim is the model's, but without one it is only a lead
-  for (const f of kept) if (f.kind === 'weak_test' && f.confidence === 'high' && !counterexampleOk(f.counterexample)) {
+  for (const f of kept) if (f.kind === 'weak_test' && f.confidence === 'high') {
+    const ok = counterexampleOk(f.counterexample), refuted = ok && refutedBy(f.quote, f.counterexample);
+    if (ok && !refuted) continue;
     f.confidence = 'low'; f.gated = true;
-    notes.push(`low confidence: weak_test ${f.path}:${f.line} names no concrete wrong behaviour that the assertion still accepts.`);
+    notes.push(refuted ? `low confidence: weak_test ${f.path}:${f.line} counterexample is refuted by the cited assertion itself.` : `low confidence: weak_test ${f.path}:${f.line} names no concrete wrong behaviour that the assertion still accepts.`);
   }
   const d = { coverage: rows, requirements: reqs, findings: kept };
   settle(d, notes);
@@ -980,6 +996,14 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
         c.status = 'unknown';
         c.reason = `Not covered: the cited evidence is not a running assertion (${bad.join('; ')}).`;
         (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${bad.join('; ')}.`);
+      }
+    }
+    if (!fails.length && c.status === 'covered') { // evidence that only checks truthiness or that a call happened pins no expected value
+      const as = c.evidence.filter((e) => e.kind === 'assertion' && e.side !== 'LEFT');
+      if (as.length && as.every((e) => weakAssertion(e.quote))) {
+        c.status = 'unknown';
+        c.reason = 'Not covered: only truthiness/interaction assertions are cited; no assertion pins the expected value.';
+        (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: only truthiness/interaction assertions are cited.`);
       }
     }
     if (change && !c.change && !fails.length) stray.push(c.id);
@@ -1758,4 +1782,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { assertionKind, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { assertionKind, weakAssertion, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
