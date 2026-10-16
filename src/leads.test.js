@@ -218,3 +218,8 @@ test('removed assertions: an assertion cut from one hunk and pasted unchanged in
   const d = mkdiff('t/x.test.js', " test('a', () => {\n-  expect(result).toEqual({a:1,b:2});\n });\n@@ -40,3 +40,4 @@\n test('c', () => {\n+  expect(result).toEqual({ a: 1, b: 2 });\n });\n");
   assert.deepEqual(assertionDelta(d, () => true), []);
 });
+
+test('symbols: with test_paths set, a test-named file outside it is no test reference (same rule as the cover guard)', (t) => {
+  const { sections } = leads(t, {}, { 'src/lib.js': 'export function fooBar() {\n  return 1;\n}\n', 'test/x.test.js': 'fooBar();\n', 'check/y.js': 'fooBar();\n' }, {}, { TEST_PATHS: 'check/' });
+  assert.deepEqual(sections[YES], ['fooBar -> check/y.js']);
+});

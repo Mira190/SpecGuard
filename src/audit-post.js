@@ -33,7 +33,9 @@ const MIN_QUOTE = 12; // non-space characters a quote needs to count as evidence
 const STATE_RE = /<!-- specguard:audit-state (\{[\s\S]*?\}) -->/, SHOW = 25; // hidden previous state in the issue body; rows listed per change kind
 // Not code evidence: a requirement document (admitted, or any document-like file) and anything in a test path.
 const DOCFILE = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
-const testFile = (p) => isTestPath(p) || /Tests?\.(java|kt|cs|swift|scala)$/.test(p);
+const heuristicTest = (p) => isTestPath(p) || /Tests?\.(java|kt|cs|swift|scala)$/.test(p);
+// test_paths (the collector's trace.testScope) is authoritative when set; without it the name heuristic decides
+const testFileOf = (testPaths) => { const scope = require('./trace').testScope(testPaths); return scope || heuristicTest; };
 
 const lines = (s) => String(s || '').split('\n').filter(Boolean);
 const bytes = (s) => Buffer.byteLength(s);
@@ -49,8 +51,8 @@ const cidOf = (id) => (CID.exec(String(id)) || [])[1];
 function readCandidates(txt) {
   const m = new Map();
   for (const l of lines(txt)) {
-    const [cid, loc = '', heading = '', ...text] = l.split('\t'), k = loc.lastIndexOf(':');
-    if (/^[0-9a-f]{8}$/.test(cid) && k > 0) m.set(cid, { cid, path: loc.slice(0, k), line: +loc.slice(k + 1), heading, text: text.join(' ') });
+    const [cid, loc = '', heading = '', ...text] = l.split('\t'), at = /^(.+):(\d+)(?:-(\d+))?$/.exec(loc); // path:line or path:line-end (the block's last line)
+    if (/^[0-9a-f]{8}$/.test(cid) && at) m.set(cid, { cid, path: at[1], line: +at[2], ...(at[3] ? { end: +at[3] } : {}), heading, text: text.join(' ') });
   }
   return m;
 }
@@ -199,7 +201,8 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 // The row id is the block cid (cid.N for a bundled block), the heading comes from the candidate, and rows keep document order. A block the model
 // skipped, or whose rows all failed verification, becomes an `unknown` row ("unconfirmed"); not_requirements gains the block's location and text.
 // docs: the admitted documents (null = any); cands: the candidate blocks (Map from readCandidates; null = unknown).
-function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null } = {}) {
+function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null, testPaths = '' } = {}) {
+  const testFile = testFileOf(testPaths);
   const cache = new Map();
   const file = (p) => { if (!cache.has(p)) cache.set(p, read(p)); return cache.get(p); };
   const locate = (c) => {
@@ -228,6 +231,9 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     const source = { ...r.source };
     if (docs && !docs.has(safeRel(source.path))) { drop(r, 'its source is not an admitted requirement document'); continue; }
     if (!locate(source)) { drop(r, solid(source.quote) ? 'the requirement quote was not found at the cited line' : `the requirement quote is under ${MIN_QUOTE} characters`); continue; }
+    // the row's source is its own candidate's block (same document, a line inside it; a .N sub-row uses its parent's): it never borrows another requirement's quote
+    const own = cands && cands.get(cidOf(r.id));
+    if (own && (source.path !== own.path || source.line < own.line || source.line > (own.end ?? Infinity))) { drop(r, `its source is not the block ${own.path}:${own.line}${own.end > own.line ? `-${own.end}` : ''} that this id names`); continue; }
     const code = r.code.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && !testFile(c.path));
     const located = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
     // same rule as PR mode (post.verifyEvidence): a declaration, an empty or a skipped test carries no coverage
@@ -259,7 +265,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.requirements.sort((a, b) => pos(a.id) - pos(b.id)); // stable: a block's .1, .2 rows keep the model's order
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line, c.path)), notes: out.not_reviewed, file });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line, c.path)), notes: out.not_reviewed, file, testFile });
   return out;
 }
 
@@ -268,7 +274,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
 // low: the claude engine's context pack cut a test file the claim depends on
 // (the unit's matched tests for missing_test, the cited file for weak_test); same rule as PR mode: shown in Details, never counted. Also low: covers(c) found a test file that already contains the cited
 // line's error message or literal (src/test-map.js, shared with PR mode): lowWhy names it.
-function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes, file = () => null }) {
+function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes, file = () => null, testFile = heuristicTest }) {
   // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
   const cutTest = (u, c) => {
     const cutTests = u.tests.filter((t) => packCut.has(t));
@@ -349,13 +355,15 @@ const versionsOf = (o) => {
   const uv = o.uv && typeof o.uv === 'object' && !Array.isArray(o.uv) ? Object.fromEntries(Object.entries(o.uv).filter(([k, v]) => HEX8.test(k) && HEX8.test(v))) : {};
   const ev = {};
   if (Array.isArray(o.ev)) for (const x of o.ev) if (Array.isArray(x) && x.length - 1 <= EV_PER_BLOCK && x.every((h) => HEX8.test(h))) ev[x[0]] = x.slice(1);
-  // uc { unit id: next part }: the cursor of a unit reviewed in parts (audit-units.js partOf)
-  const uc = o.uc && typeof o.uc === 'object' && !Array.isArray(o.uc) ? Object.fromEntries(Object.entries(o.uc).filter(([k, v]) => HEX8.test(k) && Number.isInteger(v) && v >= 1 && v <= 100)) : {};
-  return { uv, ev, ...(Object.keys(uc).length ? { uc } : {}) };
+  // uc { unit id: [next part, part count] }: the cursor of a unit reviewed in parts (audit-units.js partOf)
+  const uc = o.uc && typeof o.uc === 'object' && !Array.isArray(o.uc) ? Object.fromEntries(Object.entries(o.uc).filter(([k, v]) => HEX8.test(k) && Array.isArray(v) && v.length === 2 && v.every(Number.isInteger) && v[0] >= 1 && v[0] <= 100 && v[1] > v[0] && v[1] <= 1000)) : {};
+  // tv { cid: text version }: sha8 of the block's text with symbols and case kept (the cid drops them), so an edited requirement under the same cid is noticed
+  const tv = o.tv && typeof o.tv === 'object' && !Array.isArray(o.tv) ? Object.fromEntries(Object.entries(o.tv).filter(([k, v]) => HEX8.test(k) && HEX8.test(v))) : {};
+  return { uv, ev, ...(Object.keys(uc).length ? { uc } : {}), ...(Object.keys(tv).length ? { tv } : {}) };
 };
-const versionsRaw = ({ uv = {}, ev = {}, uc = {} } = {}) => {
+const versionsRaw = ({ uv = {}, ev = {}, uc = {}, tv = {} } = {}) => {
   const rows = Object.entries(ev).map(([cid, hs]) => [cid, ...[...new Set(hs)].slice(0, EV_PER_BLOCK)]).filter((x) => x.length > 1);
-  return { ...(Object.keys(uv).length ? { uv } : {}), ...(rows.length ? { ev: rows } : {}), ...(Object.keys(uc).length ? { uc } : {}) };
+  return { ...(Object.keys(uv).length ? { uv } : {}), ...(rows.length ? { ev: rows } : {}), ...(Object.keys(uc).length ? { uc } : {}), ...(Object.keys(tv).length ? { tv } : {}) };
 };
 const stateRaw = (head, entries, findings = [], versions = {}) => { // entries: [cid, status, since, runs, at: { head, date } | null]; findings: [[fid, unit, since, runs]]
   const audits = [], idx = new Map();
@@ -372,15 +380,16 @@ const today = () => new Date().toISOString().slice(0, 10);
 // This run's blocks (tracked against prior, audited now) plus the carried ones (prior blocks this run did not audit, still in the documents). dropped: carried blocks over STATE_MAX.
 // code (code-first run): { picked: [unit ids audited now], findings: tracked verified findings (trackFindings), carried: prior block entries of units not audited now that are still in the repository }.
 // stale: unit ids and block cids the collector found changed since their last review (audit-stale.txt): a stale carried unit's findings are not carried.
-function stateOf(head, data, prior = null, { carried = [], date = today(), code = null, stale = new Set() } = {}) {
+function stateOf(head, data, prior = null, { carried = [], date = today(), code = null, stale = new Set(), tv: tvNow = new Map() } = {}) {
   const at = { head: String(head || '').slice(0, 7), date };
   const now = track(blocksOf(data), prior, head).filter((b) => /^[0-9a-f]{8}$/.test(b.cid)).map((b) => [b.next[0], b.next[1], b.next[2], b.next[3], at, b.next[4], b.next[5]]);
   // a unit reviewed in parts (code.parts: id -> { k, n }, review F07) keeps the findings of its other parts and is covered only after its last part with none
   const parts = (code && code.parts) || new Map(), pf = (prior && prior.findings) || [];
-  const otherParts = code ? pf.filter((x) => parts.has(x.unit) && code.picked.includes(x.unit) && !stale.has(x.unit) && Number.isInteger(x.part) && x.part !== parts.get(x.unit).k) : [];
+  const pvs = (prior && prior.versions) || {}, cont = (id) => { const c = pvs.uc && pvs.uc[id]; return !!c && c[1] === parts.get(id).n && c[0] === parts.get(id).k && (!code.versions || !code.versions.get(id) || (pvs.uv || {})[id] === code.versions.get(id)); }; // the cursor continued: a restart (new version or layout) drops the findings of the old parts
+  const otherParts = code ? pf.filter((x) => parts.has(x.unit) && code.picked.includes(x.unit) && !stale.has(x.unit) && Number.isInteger(x.part) && x.part !== parts.get(x.unit).k && cont(x.unit)) : [];
   if (code) {
     const hit = new Set([...code.findings, ...otherParts].map((f) => f.unit));
-    now.push(...track(code.picked.map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
+    now.push(...track(code.picked.map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : code.cut && code.cut.has(cid) ? 'unsure' : parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
   }
   const all = carried.concat(code ? code.carried : []);
   const rank = (b) => (b.status === 'covered' || b.status === 'not_req' ? 1 : 0), when = (b) => (b.at && b.at.date) || '';
@@ -388,14 +397,16 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
   const entry = (x) => [x.fid, x.unit, x.since, x.runs, ...(Number.isInteger(x.part) ? [x.part] : [])];
   const fs_ = code ? [...code.findings.map((f) => f.next), ...otherParts.map(entry), ...pf.filter((x) => !code.picked.includes(x.unit) && !stale.has(x.unit) && code.carried.some((b) => b.cid === x.unit)).map(entry)].slice(0, FINDINGS_MAX) : [];
   // versions: what each verdict was made against; a carried entry keeps its old version, so it stays stale until it is reviewed again
-  const pv = (prior && prior.versions) || { uv: {}, ev: {} }, kept = new Set(old.map((b) => b.cid)), uv = {}, ev = {}, uc = {};
+  const pv = (prior && prior.versions) || { uv: {}, ev: {} }, kept = new Set(old.map((b) => b.cid)), uv = {}, ev = {}, uc = {}, tv = {};
+  for (const [k, v] of Object.entries(pv.tv || {})) if (kept.has(k)) tv[k] = v; // a carried block keeps the text version it was reviewed at
   for (const [k, v] of Object.entries(pv.uv)) if (kept.has(k)) uv[k] = v;
-  for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k)) uc[k] = v;
-  for (const [id, p] of parts) if (code.picked.includes(id) && p.k + 1 < p.n) uc[id] = p.k + 1; // the next part; after the last one the cursor is gone
+  for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k) && !(code && code.picked.includes(k))) uc[k] = v; // a unit reviewed now gets its cursor from this run
+  for (const [id, p] of parts) if (code.picked.includes(id) && p.k + 1 < p.n) uc[id] = [p.k + 1, p.n]; // the next part; after the last one the cursor is gone
   for (const [k, v] of Object.entries(pv.ev)) if (kept.has(k)) ev[k] = v;
   if (code && code.versions) for (const id of code.picked) if (code.versions.get(id)) uv[id] = code.versions.get(id);
+  for (const b of blocksOf(data)) if (tvNow.get(b.cid)) tv[b.cid] = tvNow.get(b.cid); // this run's text version (audit-textver.txt)
   for (const b of blocksOf(data)) if (b.status === 'covered') ev[b.cid] = b.rows.flatMap((r) => [...r.code, ...r.tests].map((c) => sha8(c.path)));
-  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl])], fs_, { uv, ev, uc }), dropped: all.length - old.length };
+  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl])], fs_, { uv, ev, uc, tv }), dropped: all.length - old.length };
 }
 // Verified unit findings against the previous state: confirmed = the same finding (unit, kind, quote) was reported in the previous run (`!!p`).
 // -> copies with .confirmed and .next, the state entry [fid, unit, first-seen sha7, consecutive runs].
@@ -414,7 +425,7 @@ function readState(body) {
     if (v && (o.v === 3 || (Array.isArray(o.audits) && audits.every((a) => Array.isArray(a) && /^[\w.-]{0,40}$/.test(a[0]) && ISO_DATE.test(a[1]))))
       && o.blocks.every((x) => Array.isArray(x) && /^[0-9a-f]{8}$/.test(x[0]) && BSTATE.includes(x[1]) && /^[\w.-]{0,40}$/.test(x[2]) && Number.isInteger(x[3]) && x[3] >= 1 && x[3] <= MAXRUN
         && (o.v === 3 || (Number.isInteger(x[4]) && x[4] >= -1 && x[4] < audits.length)) && (x[5] === undefined || (STATUS.includes(x[5]) && (x[6] === 0 || x[6] === 1)))))
-      return { head, blocks: o.blocks.map(([cid, status, since, runs, a, top, hl]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null, ...(top ? { top, hl } : {}) })), ...(findingsOf(o).length ? { findings: findingsOf(o) } : {}), ...((vs) => (Object.keys(vs.uv).length || Object.keys(vs.ev).length || vs.uc ? { versions: vs } : {}))(versionsOf(o)) };
+      return { head, blocks: o.blocks.map(([cid, status, since, runs, a, top, hl]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null, ...(top ? { top, hl } : {}) })), ...(findingsOf(o).length ? { findings: findingsOf(o) } : {}), ...((vs) => (Object.keys(vs.uv).length || Object.keys(vs.ev).length || vs.uc || vs.tv ? { versions: vs } : {}))(versionsOf(o)) };
     if (o && o.v === 2 && Array.isArray(o.rows) && o.rows.every((x) => Array.isArray(x) && CID.test(x[0]) && STATUS.includes(x[1]))) {
       const by = new Map();
       for (const [id, s] of o.rows) by.set(cidOf(id), [...(by.get(cidOf(id)) || []), s]);
@@ -455,7 +466,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const evidence = (r) => [r.code.length ? `code: ${r.code.map(at).join('; ')}` : '', r.tests.length ? `tests: ${r.tests.map((t) => `${t.layer} ${at(t)}`).join('; ')}` : ''].filter(Boolean).join('<br>');
   const first = (r) => `${name(r)} ${cell(r.text, 300)}${r.note ? `<br><sub>${cell(r.note, 300)}</sub>` : ''}`;
   const label = (b) => (b.status === 'gap' ? (b.mark === 'confirmed' ? `gap (reported in two runs${b.next[2] ? ` since ${cell(b.next[2], 12)}` : ''})` : 'gap (first report)')
-    : b.mark === 'resolved' ? 'covered (resolved)' : b.mark === 'recheck' ? 'covered (resolved? recheck next run)' : b.mark === 'stale' ? 'covered when last audited; its code or tests changed since (recheck due)' : b.status);
+    : b.mark === 'resolved' ? 'covered (resolved)' : b.mark === 'recheck' ? 'covered (resolved? recheck next run)' : b.mark === 'stale' ? 'covered when last audited; its code, tests or requirement text changed since (recheck due)' : b.status);
   const subs = (b) => count(b.rows, 'status', RISK).map(([v, n]) => `${v.replace(/_/g, ' ')} ×${n}`).join(', ');
   const bline = (b) => `| \`${b.cid}\` | ${link(b.path, b.line, `${b.path}:${b.line}`)} | ${cell(b.text, 120)} | ${label(b)}${b.carried ? `<br><sub>from ${b.at ? cell(b.at.date, 12) : 'an earlier run'}</sub>` : ''} | ${subs(b)} |\n`;
   const BTOP = '| Block | Line | Requirement | Status | Sub-rows |\n|---|---|---|---|---|\n';
@@ -492,7 +503,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const NEXT = { contradicted: 'The code contradicts it: see Documents and code disagree.', not_implemented: 'Not implemented: add the behaviour and a unit test.', missing_test: 'Add a unit test that checks it.', partial: 'Strengthen the unit test: it checks only part of it.' };
   const HIGH = { missing_test: 'Add a component or integration test that checks it.', partial: 'Strengthen the component or integration test: it checks only part of it.' };
   const nextStep = (b) => { // a requirement only a higher layer can prove asks for a test at that layer
-    if (b.mark === 'stale') return 'Covered when last audited; its code or tests changed since. It is rechecked first in the next run.';
+    if (b.mark === 'stale') return 'Covered when last audited; its code, tests or requirement text changed since. It is rechecked first in the next run.';
     if (b.carried && b.top) return b.top === 'contradicted' ? 'The code contradicted it when last audited: fix the code or the requirement.' : (b.hl && HIGH[b.top]) || NEXT[b.top] || NEXT.missing_test; // a carried row has no sub-rows: its status comes from the state
     const v = RISK.find((x) => GAP.includes(x) && b.rows.some((r) => r.status === x)) || 'missing_test', rs = b.rows.filter((r) => r.status === v);
     return (rs.length && rs.every((r) => r.class === 'higher_level') && HIGH[v]) || NEXT[v];
@@ -643,6 +654,21 @@ async function findIssue({ github, owner, repo, me, mark = MARK, title = '' }) {
   return mine.find((i) => i.state !== 'closed') || mine[0] || null;
 }
 
+// The scan issue's target, shared by the publisher (main) and the collector's loadPrior so what is written is what is read back: scan_issue_repo (owner/name) or the scanned repository,
+// and the scope (marker, title; the title names the scanned repository when the issue lives elsewhere). -> { error } | { away, target: { owner, repo }, scope }
+function resolveIssueTarget(env, owner, repo) {
+  const m = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!m && !(m[1] === owner && m[2] === repo);
+  if (env.ISSUE_REPO && !m) return { error: `scan_issue_repo "${oneLine(env.ISSUE_REPO, 60)}" is not owner/name` };
+  return { away, target: away ? { owner: m[1], repo: m[2] } : { owner, repo }, scope: scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '') };
+}
+// The visibility a repository response reports ('' = unknown, which the guard refuses).
+const visibilityOf = (d) => d.visibility || (d.private === false ? 'public' : d.private ? 'private' : '');
+// A scan issue in another repository may not reach a wider audience than the scanned one (fails closed). visTarget() / visSource() -> visibility string.
+async function guardIssueTarget(t, visTarget, visSource) {
+  if (!t.away) return { ok: true, reason: '' };
+  return require('./visibility-guard').decide(await visTarget(), await visSource());
+}
+
 const whoami = async (github) => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } };
 const wantsIssue = (env) => String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
 
@@ -666,10 +692,9 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const cands = readCandidates(readCtx('audit-candidates.txt'));
   let wantIssue = wantsIssue(env);
   // ISSUE_REPO (scan_issue_repo): the issue lives in another repository under its own client (issueGithub); one issue per scanned repository, told apart by the title
-  const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(ir[1] === owner && ir[2] === repo);
-  if (env.ISSUE_REPO && !ir && wantIssue) { wantIssue = false; core.warning('SpecGuard: scan_issue_repo is not owner/name; no scan issue is written'); }
-  const igh = issueGithub || github, issueRepo = away ? { owner: ir[1], repo: ir[2] } : { owner, repo };
-  const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
+  const rt = resolveIssueTarget(env, owner, repo);
+  if (rt.error && wantIssue) { wantIssue = false; core.warning(`SpecGuard: ${rt.error}; no scan issue is written`); }
+  const { away = false, target: issueRepo = { owner, repo }, scope = scopeOf(env.SCAN_PATHS) } = rt, igh = issueGithub || github;
   const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, run: runHtml, cap, candidates: (meta && meta.candidates) || 0,
     ruled, rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   let last = '';
@@ -679,11 +704,11 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   let mine = null, prior = null, issueErr = '';
   const issueFail = (e) => { issueErr = `could not write the scan issue: ${e.message}`; core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); outcome('failed', issueErr); };
   // a scan issue in another repository may not reach a wider audience than the scanned one (the manual workflow's guard, at the action's own boundary; fails closed)
-  const vis = async (g, r) => { try { const d = (await g.rest.repos.get(r)).data; return d.visibility || (d.private === false ? 'public' : d.private ? 'private' : ''); } catch { return ''; } };
+  const vis = async (g, r) => { try { return visibilityOf((await g.rest.repos.get(r)).data); } catch { return ''; } };
   const lookup = async () => {
     if (!wantIssue) return;
     if (away) {
-      const g = require('./visibility-guard').decide(await vis(igh, issueRepo), await vis(github, { owner, repo }));
+      const g = await guardIssueTarget(rt, () => vis(igh, issueRepo), () => vis(github, { owner, repo }));
       if (!g.ok) { issueErr = `scan issue not written to ${issueRepo.owner}/${issueRepo.repo}: ${g.reason}`; core.warning(`SpecGuard: ${issueErr}`); outcome('failed', issueErr); return false; }
     }
     try {
@@ -735,14 +760,16 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   // valid JSON can still come from a run that timed out or failed (or whose repair turn failed): show what verifies, change nothing else
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
-  const root = process.env.GITHUB_WORKSPACE || process.cwd(), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || process.env.TEST_PATHS || '' });
+  // TEST_PATHS first: the exact input the collector scoped by; test-paths.txt (PR-mode collect.sh writes it from the same input) is only the fallback, so the two cannot disagree
+  const root = process.env.GITHUB_WORKSPACE || process.cwd(), testPaths = process.env.TEST_PATHS || readCtx('test-paths.txt') || '', covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths });
   const unseen = hasCode && unitsFailed ? [...units.keys()] : hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path) || u.tests.some((t) => packCut.has(t))).map((u) => u.id) : [];
-  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers });
+  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths });
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed } : null;
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
   // the blocks this run did not audit: the state's blocks that are still in the documents (audit-carried.txt), with the text and place from the collector
+  const tv = new Map(lines(readCtx('audit-textver.txt')).map((l) => l.split(String.fromCharCode(9))).filter((x) => HEX8.test(x[0]) && HEX8.test(x[1])));
   const stale = new Set(lines(readCtx('audit-stale.txt')).map((l) => l.trim()).filter((l) => /^[0-9a-f]{8}$/.test(l))); // changed since their review (collector, review F06)
   const left = readCandidates(readCtx('audit-carried.txt')), carried = prior && shared.rotation && shared.rotation.rotate
     ? prior.blocks.filter((b) => left.has(b.cid) && !cands.has(b.cid)).map((b) => ({ ...left.get(b.cid), ...b, ...(stale.has(b.cid) ? { stale: true } : {}) })) : [];
@@ -756,9 +783,10 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   await finish(render({ ...shared, data: checked, partial, prior, carried, code, notAudited, unanswered }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
   const cu = readUnits(readCtx('audit-units-carried.txt')); // units the state knows that this run did not review, still in the repository
-  const codeState = code && { picked: [...units.keys()].filter((u) => !unseen.includes(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || unseen.includes(b.cid)) : [],
+  const forced = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), cut = new Set(unseen.filter((u) => forced.has(u) && !unitsFailed));
+  const codeState = code && { cut, picked: [...units.keys()].filter((u) => !unseen.includes(u) || cut.has(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || (unseen.includes(b.cid) && !cut.has(b.cid))) : [],
     versions: new Map([...units.values()].filter((u) => u.ver).map((u) => [u.id, u.ver])), parts: new Map([...units.values()].filter((u) => u.part && !unseen.includes(u.id)).map((u) => [u.id, u.part])) }; // an unseen unit is not tracked: its prior state is carried, it stays due
-  const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale });
+  const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale, tv });
   await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
 }
 
@@ -766,4 +794,4 @@ async function main({ github, issueGithub, context, core, date = today() }) {
 module.exports = async (args) => {
   try { await main(args); } catch (e) { try { args.core.setOutput?.('status', 'failed'); args.core.setOutput?.('reason', `the scan report failed: ${e.message}`); args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, STATUS, CLASS, MARK, TITLE, HEADING });
+Object.assign(module.exports, { readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, resolveIssueTarget, guardIssueTarget, visibilityOf, STATUS, CLASS, MARK, TITLE, HEADING });
