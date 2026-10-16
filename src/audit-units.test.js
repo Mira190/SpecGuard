@@ -454,6 +454,8 @@ test('source files over 512 KiB are named in a limitation and counted as not inv
   assert.deepEqual(inv.rows.map((x) => x.path), ['src/small.js']);
   assert.ok(inv.limitations.includes('4 source file(s) over 512 KiB were not inventoried: src/big1.js, src/big2.js, src/big3.js, ...'), inv.limitations.join('|'));
   assert.equal(inv.totals.not_inventoried, 4);
+  assert.equal(inv.totals.eligible, inv.totals.units + inv.totals.not_inventoried, 'eligible = inventoried + not inventoried; vendor/ and .min.js are skipped, not eligible');
+  assert.equal(inv.totals.eligible, 5);
   const ok = inventory({ cwd: repo(t, { 'src/small.js': small }).root, head: 'HEAD', now: NOW });
   assert.ok(!ok.limitations.some((l) => /512 KiB/.test(l)));
   assert.equal(ok.totals.not_inventoried, 0);
