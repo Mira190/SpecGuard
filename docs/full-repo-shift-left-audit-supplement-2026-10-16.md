@@ -1,4 +1,4 @@
-# 全仓 shift-left audit 补充：覆盖记录与 26 项已复现发现
+# 全仓 shift-left audit 补充：覆盖记录与 27 项已复现缺陷（另 1 项按设计）
 
 What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库规则联系起来，提示缺失或薄弱的单元测试，也提供全仓轮转扫描。本文补充 [主报告](full-repo-shift-left-audit-2026-10-16.md)，不重复其 F19–F29。
 
@@ -6,7 +6,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 
 日期：2026-10-16。基线：`origin/main` `ee1c15812bae4315f39ce7d5bf1bf7511ac58553`。性质：只提交报告，不修改产品代码。
 
-**目的：** 补齐主报告 §2 未覆盖或未深读的文件，使全仓审计完整。§2 是逐文件的覆盖记录，§3 是补读得到的 26 项发现（探针编号 S1–S14、U1–U13）。
+**目的：** 补齐主报告 §2 未覆盖或未深读的文件，使全仓审计完整。§2 是逐文件的覆盖记录，§3 是补读得到的 27 项缺陷加 1 项按设计（探针编号 S1–S14、U1–U13、V1–V2；U13 是单行验证）。
 
 **证据标准：** 每一项都由探针复现，探针断言的是 **当前行为**。没有调用真实模型，没有访问真实 GitHub（GitHub 与 `gh` 用本地 mock；`collect.sh` 在临时 git 仓库里真实执行）。探针通过只证明错误行为存在，**不是**产品测试通过，也**不是**修复通过。所有数字取自附录 A、B 的 JSON 结果（S 系列在附录 A，U 系列在附录 B）。U13 是事实核查时补的 `node -e` 单行验证，不在探针脚本里，输出见 §3.1。
 
@@ -14,9 +14,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 
 ## 2. 覆盖记录
 
-范围：`origin/main` 中全部非测试、非 fixture 的源码、workflow 和 skill 文件（`git ls-tree -r --name-only origin/main`，共 543 个路径）。`*.test.js`、`test/`、`tests/`、`fixtures/` 不在范围；`eval/cases/**`、`eval/results/**`、`eval/replay/*.json` 是数据，也不在范围。
-
-标记：**主报告已审** = 主报告 §2 表中列为已读的关键链路；**本补充全读** = 本次通读全文；**本补充部分读** = 只读与探针相关的段落；**未读** = 本次和主报告均未读。
+范围：`origin/main` 中全部非测试、非 fixture 的源码、workflow 和 skill 文件（`git ls-tree -r --name-only origin/main`）。标记：**主报告已审** = 主报告 §2 表中列为已读的关键链路；**本补充全读** = 本次通读全文；**本补充部分读** = 只读与探针相关的段落；**未读** = 本次和主报告均未读。
 
 | 文件 | 状态 |
 |---|---|
@@ -25,20 +23,42 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 | `action.yml`、`package.json`、`README.md`、`.github/workflows/ci.yml`、`.github/workflows/specguard-run.yml` | 主报告已审 |
 | `eval/grade.js`、`eval/weekly-report.js` | 主报告已审 |
 | `src/collect.sh`、`src/coverage.js`、`src/leads.js`、`bin/specguard-local.js`、`eval/label-export.js` | 主报告已审；本补充全读 |
-| `src/engines/claude.sh`、`src/engines/copilot.sh`、`src/engines/claude-result.js`、`src/engines/_redact.sh` | 本补充全读 |
+| `src/engines/claude.sh`、`src/engines/copilot.sh`、`src/engines/claude-result.js`、`src/engines/_redact.sh`、`src/engines/README.md` | 本补充全读 |
 | `src/focus.js`、`src/resolve-inputs.js`、`src/extract-json.js`、`src/credential.js`、`src/engine-model.js`、`src/standards-map.js`、`src/checks.js`、`src/superseded.js`、`src/target.js`、`src/fail-on-error.js`、`src/limitations.js`、`src/numdiff.js`、`src/version.js`、`src/visibility-guard.js`、`src/tee-summary.js`、`src/validate-inputs.sh` | 本补充全读 |
-| `eval/run.js`、`eval/local.js`、`eval/field.js`、`eval/ab.js`、`eval/degrade.js`、`eval/mutate.js`、`eval/bundle.js`、`eval/szz.js`、`eval/prove.js`、`eval/mirror-workflow.yml` | 本补充全读 |
+| `eval/run.js`、`eval/local.js`、`eval/field.js`、`eval/ab.js`、`eval/degrade.js`、`eval/mutate.js`、`eval/bundle.js`、`eval/szz.js`、`eval/prove.js`、`eval/replay.js`、`eval/mirror-workflow.yml` | 本补充全读 |
 | `bin/pin-reusable.js`、`.github/workflows/specguard.yml` | 本补充全读 |
-| `skills/test-review/SKILL.md`、`skills/test-review/references/*`（`ccr.md`、`evidence.md`、`example.json`、`output.md`、`standards.md`、`test-skeletons.md`、`trace.md`）、`skills/spec-audit/SKILL.md` | 本补充全读 |
+| `.github/instructions/specguard.instructions.md` | 本补充全读 |
+| `skills/test-review/SKILL.md`、`skills/test-review/references/*`、`skills/spec-audit/SKILL.md` | 本补充全读 |
+| `.github/skills/test-review/**`、`.github/instructions/test-review.instructions.md`、`ccr/test-review.instructions.md` | 本补充全读（与 `skills/test-review/**` 同内容的拷贝，见下） |
 | `eval/aggregate-counts.js`、`eval/signal.js`、`eval/assign.js` | 本补充部分读 |
-| `src/engines/README.md` | 只 grep，未通读（按未读计） |
-| `eval/replay.js`、`eval/token/anatomy.js`、`.claude/skills/ste-mini/SKILL.md`、`.github/instructions/specguard.instructions.md`、`research/*`、`NOTICE`、`.gitattributes`、`.gitignore`、`eval/**/README.md`、`docs/*` | 未读 |
+| `eval/token/anatomy.js`、`.claude/skills/ste-mini/SKILL.md` | 未读 |
+
+三个原本"未读"的文件已读完，按同一标准（探针或静态引文能证明才列）检查：
+
+- `.github/instructions/specguard.instructions.md`（仓库自己的编码标准，`applyTo: "src/**,eval/*.js"`）：其第 8 行要求"每个导出函数都需要断言返回值或抛错的单元测试"，仓库自身不满足，见 V1。其余规则（Node 22、无依赖、`node:test`、测试命名、不抛字符串）：`throw '...'` 只出现在 `eval/cases/s1`、`s2` 的故意用例里，源码无此情况。
+- `eval/replay.js`：回放只数 summary items 和 inline 评论（`countFindings`），不做 TP/FP 评分，所以不受 S10/F29 的重复计数影响。发现一项：`findings_present=false` 的 PR 打印成全 0 行，见 V2。
+- `src/engines/README.md`：逐条对照代码，`MODEL` 空 → `claude-haiku-5-5`（`claude-api.js:281`）、`CONTEXT_PACK_BYTES` 默认 250000（`:285`）、单文件 48 KiB 与 2 MiB（`:64`）、别名映射（`credential.js:10`）均一致；"`engine-status` 缺省即 success"（README:37）与 "An engine note says how many files went in and which did not fit"（README:61）为 S7 提供旁证：打包失败时没有这类 note（S7 的 `engine.notes` 只有价格估算一条）。已读，无新发现。
+
+**覆盖核对（脚本）：** `coverage-check.cjs`（附录 C）取 `git ls-tree -r --name-only origin/main`，减去下列不在范围的模式，再与本表中出现的路径和通配符做差集：
+
+| 不在范围的模式 | 原因 |
+|---|---|
+| `**/*.test.js`、`test/**`、`tests/**`、`**/fixtures/**` | 任务明确排除测试与 fixture |
+| `eval/cases/**`、`eval/replay/*.json` | 评估输入数据，不是被执行的代码 |
+| `eval/results/**` | 历史运行产物 |
+| `docs/**` | 历史研究与评审文档，不被产品加载 |
+| `research/**` | 外部调研材料，不被产品加载 |
+| `eval/**/README.md` | 评估说明文档，无运行行为 |
+| `NOTICE` | 许可声明，无运行行为 |
+| `.gitattributes`、`.gitignore` | 仓库元数据（换行、忽略规则），不影响被审查行为 |
+
+计数：`git ls-tree` 共 543 个路径；不在范围 459；范围内 84；表中已列 84；差集 0（空）。表中通配符 71 个，未匹配到任何路径的 0 个，匹配到范围外路径的 0 个。
 
 重复拷贝：`.github/skills/test-review/` 与 `skills/test-review/` 整目录逐字节相同（`diff -rq` 无输出），所以 skill 的发现只计一次。`ccr/test-review.instructions.md` 与 `.github/instructions/test-review.instructions.md` 忽略换行符后内容一致（工作区检出的换行符不同，哈希因此不同）。
 
 ## 3. 发现
 
-26 项：P1 PR 模式 10 项、P1 scan 模式 4 项、P2 5 项、P3 eval 指标 6 项、by design 1 项。行号均指 `ee1c158`。"影响模式"：PR（shift-left 主路径）、scan（全仓轮转）、local（`specguard-local`）、eval（评估工具）。
+27 项缺陷 + 1 项按设计：P1 PR 模式 10 项、P1 scan 模式 4 项、P2 5 项、P3 8 项（eval 指标 7 项、仓库自身标准 1 项）；另有 S11 按设计，不计为缺陷。行号均指 `ee1c158`。"影响模式"：PR（shift-left 主路径）、scan（全仓轮转）、local（`specguard-local`）、eval（评估工具）。
 
 ### 3.1 P1：PR 模式
 
@@ -50,6 +70,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** diff 命令失败时 collect 非零退出或产出 incomplete；不要把"取不到 diff"当作"没有变更"。
 - **If we skip it:** 没有 `fetch-depth: 0` 的采用者得到"无需审查"的放心信号，真正的 PR 完全没被看。
 - **证据 U1：** `baseInClone=false`、`collectExit=0`、`collectOutputs=["skip=false","partial=false","skip=true"]`、`diffPatchBytes=0`、`postStatus="complete"`、`summaryHasNothingToReview=true`、`summaryHasHeadMarker=true`。警告只在 stdout：`::warning::no merge-base of BASE_SHA and HEAD_SHA (shallow clone? ...)`。
+- **回归测试应断言：** `BASE_SHA` 不在 clone 里时，collect 不输出 `skip=true`，post 不发布 "Nothing to review"、不写 head marker（预期非零退出或 `incomplete`）。
 
 #### S2 [P1] 读不到的 closing issue：状态仍是 complete 并被缓存
 
@@ -59,6 +80,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 让"没读到声明过的 closing issue"进入 gap（或至少不写 head marker），与超上限的处理一致；权限或临时 API 错误应让下一次 push 重试。
 - **If we skip it:** 一次 403 或 API 抖动，就把该 head 的需求侧审查永久缓存为完成。
 - **证据 S2：** `unreadableClosing.status="partial"`、`limitations[0]={l:"Could not read issue #7.",fact:true}`、`run.status="complete"`、`complete=true`、`execution_complete=true`、`headline="❔ No gaps found; part of the review could not be assessed"`、`headMarker=true`、`nextPushSkipped=true`；对照 `cappedClosing.run.status="incomplete"`、`headMarker=false`。
+- **回归测试应断言：** 读不到 closing issue 时 `status` 为 `incomplete`、无 head marker，`nextPushSkipped` 为 `false`。
 
 #### U5 [P1] 同 subject 的别处断言隐藏已删除或被弱化的断言
 
@@ -68,6 +90,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** "已重新钉住"限制在同一 hunk 或同一 test 块内；同 subject 的更弱断言仍报 `weakened`。
 - **If we skip it:** 这条 lead 的目的就是提示测试被削弱，抑制发生在最该提示的时候。
 - **证据 U5：** `removedOnly=[{kind:"removed",line:12,old:"expect(result).toEqual({a:1,b:2});"}]`；加入无关 hunk C 后 `withC=[]`；`weakA` 有一条 `weakened`，`weakAC=[]`；`toBe5ToGreaterThan=[]`、`toBe5Suppressed=true`；对照不同 subject：`controlOtherSubject` 仍报 `removed`。注：PR #197（断言删除后提升低置信度）作用在 lead 之后，不改变 lead 是否产生。
+- **回归测试应断言：** 加入无关 hunk C 后 `assertionDelta` 仍返回 `removed`（`withC.length===1`、`weakAC.length===1`）；`toBe(5)` → `toBeGreaterThan(0)` 返回 `weakened`。
 
 #### U6 [P1] 删除整个测试文件不产生 lead
 
@@ -77,6 +100,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 对 `deleted file` 的旧侧断言同样产出 `removed` lead。
 - **If we skip it:** 弱化测试最省事的方式（删文件）被排除在检查之外。
 - **证据 U6：** `deletedFile=[]`，`sameAssertionRemovedFromLiveFile=["removed"]`。
+- **回归测试应断言：** 删除整个测试文件时 `assertionDelta` 至少返回一条 `removed`（`deletedFile.length>=1`）。
 
 #### U3 [P1] 测试候选 60 文件上限与 focus 选择不一致
 
@@ -86,6 +110,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 候选表优先列 focus 选中的文件（或在 focus 之后生成候选）；至少把"被选中但没有候选"记入 `pack-cut.txt`。
 - **If we skip it:** 大 PR 里最该有测试证据的文件，恰好得到"没有测试"的输入。
 - **证据 U3：** `candidatesListZzz=false`、`candidatesTail="(2 more changed file(s) not listed)"`、`focusPicksZzz=true`、`packHasZzzSource=true`、`packHasZzzTest=false`、`packNotWhole=[]`、`packCutTxt=null`；对照 `control.packHasZzzTest=true`。
+- **回归测试应断言：** focus 选中的 `src/zzz.js` 的测试要么在 pack 中（`packHasZzzTest===true`），要么在 `pack-cut.txt`/`notWhole` 中被点名。
 
 #### S3 [P1] 共享的大测试文件只按第一个文件的符号切片，`notWhole` 为空
 
@@ -95,6 +120,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 按所有命中它的源码文件的符号并集切片；或第二次命中发现窗口不含其符号时记入 `notWhole`。
 - **If we skip it:** 第二个文件被报缺测试，而 `pack-cut.txt` 为空，post 保持高置信度。
 - **证据 S3：** `testFileBytes=66992`、`perFileCap=41666`、`aAssertionInPack=true`、`bAssertionInPack=false`、`notWhole=[]`、`testBlockCount=1`。
+- **回归测试应断言：** 两个源码文件的断言都在 pack 中（`bAssertionInPack===true`），或共享测试文件出现在 `notWhole`。
 
 #### S7 [P1] 被吞掉的 pack 错误被当作"全部可见"
 
@@ -104,6 +130,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 打包失败写入 `pack-cut.txt`（或失败状态），把所有文件视为未看全。
 - **If we skip it:** 打包故障把"模型什么也没看到"变成"没有裁剪"。
 - **证据 S7：** `engine.status="success (no engine-status file)"`、`packCutFile=false`、`findingsWritten=true`；`postNoPackCut.postedHighConfidence=1`、`lowConfidenceNote=false`；`postPackCutNamesTest.postedHighConfidence=0`、`lowConfidenceNote=true`；`scanParts.parts=3`、`unitPackText=""`、`packCut=[]`。故障是人为注入的（附录 A 的 `injected` 字段），证明的是错误处理缺口，不代表该故障常见。
+- **回归测试应断言：** `contextPack` 抛错时 `pack-cut.txt` 非空（或 `engine-status` 不是 success），且 `postedHighConfidence===0`；scan 路径的 `packCut` 非空。
 
 #### S8 [P1] `findLine` 的 20 字符前缀接受不同的期望值，并改写引用
 
@@ -113,6 +140,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 前缀匹配后仍比较整条引用的规范化文本；不一致就算引用未验证，或改写时降级并记 note。
 - **If we skip it:** 模型编造的期望值被悄悄纠正，覆盖结论看起来被证据证实了。
 - **证据 S8：** `longerQuote.findLine=2`、`verifyEvidence.status="covered"`、`evidenceQuoteAfter="assert.equal(compute(1), 3);"`、`noteOrDowngrade=[]`。边界：恰好 20 个非空白字符的引用不受影响（`briefQuoteLiteral.matchesLine=0`）。
+- **回归测试应断言：** 引用 `assert.equal(compute(1), 2)` 对实际行 `assert.equal(compute(1), 3);` 不得成为 `covered` 证据（`findLine===0`，或证据被降级并有 note）。
 
 #### S13 [P1] preflight 跳过键忽略规则文件、配置、模型和 SpecGuard 版本
 
@@ -122,6 +150,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 把规则文件内容哈希、关键配置、模型与版本写入摘要 marker，由 `decide` 比对。现有逃生口是 `force: true`，需要用户先知道。
 - **If we skip it:** 采用者改了规则，期待下次 push 生效，却看到 "already has a SpecGuard summary"。
 - **证据 S13：** 同 head/title/body：`"head 07fe197 already has a SpecGuard summary (set force: true to rerun)"`；改标题则 `"review (no skip)"`；`markersInRealSummary=["summary","head","counts","req","status"]`、`markerForRulesConfigOrModel=false`。
+- **回归测试应断言：** 规则文件、配置、模型或版本变化后，同 head 的 `decide` 不返回跳过。
 
 #### U13（新增，对调研文档做事实核查时发现）[P1] `AC-1:` 不被识别为结构化验收条件
 
@@ -141,6 +170,9 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 
 **交叉引用（不另立编号）：** 调研文档 F32（Gherkin `Background` 被丢弃）也影响 PR 模式：`src/trace.js:254`（`if (/^(Feature|Rule|Background)$/.test(s.kind)) return;`）在分块循环里直接跳过 `Background`，其前置条件不进入任何 scenario 的身份。细节见 [调研文档](research-repo-audit-requirements-chunking-2026-10-16.md) 的 F32，本文不重复。
 
+- **回归测试应断言（U13）：** `extractCriteria([{source:"PR body",text:"AC-1: Reject negative amounts"}])` 返回 1 项 R。
+- **回归测试应断言（F32）：** 修改 `Background` 的前置条件后，受它影响的 scenario 的身份与版本（含 #203 的 `tv`）改变，旧的 `covered` 状态过期。
+
 ### 3.2 P1：scan 模式
 
 #### S5 [P1] 只有低置信度 finding 的 unit 被记为 covered
@@ -151,6 +183,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 有 low finding 的 unit 写 `unsure`，不推进 covered。该问题正在 PR #201 下审查（见 §4），此处因有独立探针而列出。
 - **If we skip it:** 模型可能真实的发现因缺一个格式字段而被洗成已审。
 - **证据 S5：** `lowFinding.low=true`、`status="complete"`、`unitStateInIssue="covered"`；对照 `control.low=false`、`unitStateInIssue="gap"`。
+- **回归测试应断言：** 只有低置信度 finding 的 unit 状态为 `unsure`，不是 `covered`（`unitStateInIssue!=="covered"`）。
 
 #### S4 [P1] `EV_PER_BLOCK=8` 截断：第 9 个被引用文件的变更不使 block 过期
 
@@ -160,6 +193,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 保存全部引用文件哈希的聚合哈希；或超限时标记为不可验证。
 - **If we skip it:** 证据多的 block 依赖面最大、最容易被改，却最不容易被重审。
 - **证据 S4：** `citedFiles=9`、`storedHashes=8`、`ninthFileEdited_blockStale=false`；对照 `firstFileEdited_blockStale=true`。
+- **回归测试应断言：** 只改第 9 个被引用文件时 block 为 stale（`ninthFileEdited_blockStale===true`）。
 
 #### S6 [P1] 未被回答的 block 被记上今天的审查日期，在轮转中沉底
 
@@ -169,6 +203,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 未回答的 block 不更新审查日期（或标为未审），使其在轮转里保持靠前。
 - **If we skip it:** 模型最没能处理的 block 被推到队尾。
 - **证据 S6：** `stored.C_unanswered=["unsure","2026-10-15"]`、`stored.D_not_sent=["covered","2026-10-01"]`；`nextRunCap1=["D"]`、`nextRunCap3=["A","B","D"]`（C 被挤出）。此探针经 `verify/stateOf/readState/collect`，**未**经 `audit-post` 入口。
+- **回归测试应断言：** 未回答的 block 不带本次日期（`C_unanswered` 的日期不是 `2026-10-15`），且 `nextRunCap3` 含 C。
 
 #### S14 = 调研 F34 [P1] 大于 512 KiB 的源码被静默排除
 
@@ -177,6 +212,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 把被跳过的文件及原因写入 `limitations`，并在 issue 摘要里体现。
 - **If we skip it:** 最大的文件往往最复杂，却永远不被扫描，用户也看不到。
 - **证据 S14：** `bigFileBytes=633787`、`inventoryRows=["src/small.js"]`、`limitationsFromInventory=[]`、`metaLimitations=[]`、`bigFileMentionedAnywhereInCtx=false`。与调研 F34 是同一问题，不重复计数。
+- **回归测试应断言：** 超过 512 KiB 的源文件出现在 `limitations` 中并点名该文件（`limitationsFromInventory` 非空）。
 
 ### 3.3 P2
 
@@ -187,6 +223,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 被默认 ignore 丢弃的文件写入 `diff-dropped.txt` 并在摘要里显示；或默认 ignore 只匹配仓库根的 `build/`。
 - **If we skip it:** 目录恰好叫 `build` 的源码包永远得不到审查，也看不到原因。
 - **证据 U2：** `outputs=["skip=false","partial=false","skip=true"]`、`stdout="nothing reviewable in diff"`、`collectLimitsBytes=0`、`diffDroppedBytes=0`；对照 `controlOutputs=["skip=false","partial=false"]`、`controlFiles="internal/other/y.go\n"`。
+- **回归测试应断言：** `internal/build/x.go` 的变更要么被审查（`skip=false`），要么出现在 `diff-dropped.txt`（`diffDroppedBytes>0`）。
 
 #### U4 [P2] `--fail-on-gaps` 对失败的运行返回 0
 
@@ -195,6 +232,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** `--fail-on-gaps` 在 `status` 非 `complete` 时也非零退出（或另加 `--fail-on-incomplete`）。
 - **If we skip it:** 把它当 pre-push 闸的人，在审查失败时被放行。
 - **证据 U4：** `failedRun={exit:0,status:"failed",gaps:false}`；`partialRun={exit:0,status:"complete",gaps:false}`（报告含 `unknown` 行，status 仍是 `complete`）。
+- **回归测试应断言：** `status==="failed"` 时 `--fail-on-gaps` 的退出码非 0。
 
 #### S1 / U12 [P2] 仅含排除项的 `test_paths` 被忽略（S1 与 U12 是同一问题）
 
@@ -203,6 +241,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** `testScope` 对只有排除项的配置返回"默认判断并排除"的函数；或在输入校验阶段拒绝并提示。
 - **If we skip it:** 用户配置了排除，旧测试仍被当作证据。
 - **证据 S1：** `testScopeForExclusionOnly=null`、`layoutHeaderShowsConfig=false`、`layoutLists="test directories: tests/legacy (1), tests/new (1)"`、`unitTestsColumn="tests/new/amount.test.js, tests/legacy/old.test.js"`；对照 `scan_paths`：`"tests/new/amount.test.js"`。**U12：** `scopeIsNull=true`、`legacyTestStillATest=true`。
+- **回归测试应断言：** `testScope("!legacy/**")` 不为 `null`，`legacy/a.test.js` 不被当作测试；`unitTestsColumn` 不含 `tests/legacy/old.test.js`。
 
 #### S12 [P2] 可复用 workflow 只转发 action 47 个输入中的 12 个
 
@@ -211,6 +250,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 转发全部输入，或在 README 声明哪些只能直接使用 action。
 - **If we skip it:** 采用者以为能调的开关，其实没有传进去。
 - **证据 S12：** `actionInputs=47`、`forwarded=12`、`workflowCallInputsNotForwarded=[]`、`forwardedButNotDeclaredInAction=[]`、`actionInputsNotForwarded` 共 35 项（附录 A）；`pinnedActionRef={pin:"caa99fbbef",inputsAtPin:45}`，即 workflow 固定的 action 提交比 main 少 2 个输入。
+- **回归测试应断言：** 转发的输入集合等于 `action.yml` 的输入集合（`actionInputsNotForwarded` 为空），或 README 列出的白名单与实际一致。
 
 #### U9 [P2] skill 示例与边界规则矛盾
 
@@ -221,17 +261,20 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **Fix:** 示例改成两侧都有断言，或把该示例改为 `weak_test`；示例会被模型当作先例，应与规则一致。
 - **If we skip it:** 模型更可能模仿示例：只有 `n` 一侧的断言就报 covered（影响程度未测，没有调用模型）。
 - **证据 U9：** `evidenceAssertions=["assert.equal(discount(100)"]`，示例证据中只有这 1 条断言。
+- **回归测试应断言：** `example.json` 的 `covered` 证据同时含边界两侧的断言，或该示例的状态为 `weak_test`。
 
-### 3.4 P3：eval 指标
+### 3.4 P3：eval 指标与仓库自身标准
 
-这些只影响离线评估的数字，不影响 PR 或 scan 的运行结果。
+除 V1 外，这些只影响离线评估的数字，不影响 PR 或 scan 的运行结果。V1 是仓库自己的编码标准未被满足。
 
-- **S9：** `eval/weekly-report.js:62–68` 与 `post.anchorTouched/testsChanged`（`src/post.js:1295`、`:1317`）规则不同。把 base 合并进 PR 分支后，weekly 判 `anchor_touched=true, tests_changed=true, outcome="addressed"`，post 规则判 `false/false/"open"`；评论所在文件被删除时，weekly 判 `addressed`，post 规则为 `anchor_touched=null`、`"not_observed"`。效果：base 合并会抬高 reviewer 的 "addressed" 率。
-- **S10：** `eval/grade.js:96–104`、`:151`。同一个 missing_test 作为 summary item 出现时 `fp=1, clean_ok=false, pass=false`；只作为 coverage 行出现时 `fp=0, clean_ok=true, pass=true`。clean 用例的 FP 取决于该发现显示在哪里。与主报告 F29 相关（F29 是 TP 重复计数，S10 是 FP 漏计）。
-- **U7：** `eval/bundle.js:37–60`。真实 `buildSummary` 的摘要含 `### Missing unit tests (2)`，但没有 "N more item(s)" details，`bundle.parseSummary` 返回 0 项（`bundleSummaryCount=0`）；`parseDropped` 返回 1 项（`bundleDroppedCount=1`），而摘要里有 2 行 `Dropped findings`。bundle 的计数与真实摘要不一致。
-- **U8：** `eval/prove.js:443`。`results-prove.json` 写在共享的 `out` 目录，而不是各 case 目录；跑两个 case 后 `out` 下只有一份 `results-prove.json`，`perCaseResults=[false,false]`，多 case 互相覆盖。
-- **U10：** `eval/label-export.js:16`。`findingId` 不含 `kind`；同 path/line 的 `missing_test` 与 `weak_test` 得到相同 id `F502e6ddc0`，`exportRowIds=["F502e6ddc0","F502e6ddc0"]`，标注时互相覆盖。
-- **U11：** `eval/szz.js:91`。`.sql` 文件里被删除的 `-- header comment` 行以 `--- ` 开头，被当作 diff 文件头，旧侧行号丢失：含该注释时 `lines=[]`、`addOnly=true`；对照 `lines=[1,4]`、`addOnly=false`。SZZ 归因因此漏掉修复行。
+- **S9：** `eval/weekly-report.js:62–68` 与 `post.anchorTouched/testsChanged`（`src/post.js:1295`、`:1317`）规则不同。把 base 合并进 PR 分支后，weekly 判 `anchor_touched=true, tests_changed=true, outcome="addressed"`，post 规则判 `false/false/"open"`；评论所在文件被删除时，weekly 判 `addressed`，post 规则为 `anchor_touched=null`、`"not_observed"`。效果：base 合并会抬高 reviewer 的 "addressed" 率。 回归测试应断言：weekly 与 post 对同一输入给出相同的 `anchor_touched`/`tests_changed`（base 合并场景同为 `false/false`，删除文件同为 `null`）。
+- **S10：** `eval/grade.js:96–104`、`:151`。同一个 missing_test 作为 summary item 出现时 `fp=1, clean_ok=false, pass=false`；只作为 coverage 行出现时 `fp=0, clean_ok=true, pass=true`。clean 用例的 FP 取决于该发现显示在哪里。与主报告 F29 相关（F29 是 TP 重复计数，S10 是 FP 漏计）。 回归测试应断言：clean 用例中，同一 missing_test 作为 summary item 或仅作为 coverage 行，`fp` 相同（`coverageRowOnly.fp===sameGapAsSummaryItem.fp`）。
+- **U7：** `eval/bundle.js:37–60`。真实 `buildSummary` 的摘要含 `### Missing unit tests (2)`，但没有 "N more item(s)" details，`bundle.parseSummary` 返回 0 项（`bundleSummaryCount=0`）；`parseDropped` 返回 1 项（`bundleDroppedCount=1`），而摘要里有 2 行 `Dropped findings`。bundle 的计数与真实摘要不一致。 回归测试应断言：`bundle.parseSummary(summary).length` 等于摘要列出的 item 数（本例为 2）。
+- **U8：** `eval/prove.js:443`。`results-prove.json` 写在共享的 `out` 目录，而不是各 case 目录；跑两个 case 后 `out` 下只有一份 `results-prove.json`，`perCaseResults=[false,false]`，多 case 互相覆盖。 回归测试应断言：每个 case 的 `results-prove.json` 在各自 case 目录里（`perCaseResults` 全为 `true`），`out` 根目录下没有该文件。
+- **U10：** `eval/label-export.js:16`。`findingId` 不含 `kind`；同 path/line 的 `missing_test` 与 `weak_test` 得到相同 id `F502e6ddc0`，`exportRowIds=["F502e6ddc0","F502e6ddc0"]`，标注时互相覆盖。 回归测试应断言：`findingId(a)!==findingId(b)`（`kind` 不同），`exportRowIds` 无重复。
+- **U11：** `eval/szz.js:91`。`.sql` 文件里被删除的 `-- header comment` 行以 `--- ` 开头，被当作 diff 文件头，旧侧行号丢失：含该注释时 `lines=[]`、`addOnly=true`；对照 `lines=[1,4]`、`addOnly=false`。SZZ 归因因此漏掉修复行。 回归测试应断言：含 `-- header comment` 的 `.sql` 的 `fixLines` 与对照一致（`lines` 含 4，`addOnly===false`）。
+- **V2（新增，读 `eval/replay.js` 时发现）：** `eval/replay.js:85` 的行带 `findings_present`，`:90` 的表头没有这一列。模型没有写 `findings.json` 的 PR，在打印出来的表里是全 0 的一行，与"审查过、没有发现"无法区分。探针 V2：`row.findings_present=false`，`printedTable="pr          trace  inline  high  low  summary  pre-existing\nnofindings  auto   0       0     0    0        0"`，`tableMentionsFindingsPresent=false`。只影响回放的人工判读；修复是在表里加一列或标 `NO FINDINGS`。 回归测试应断言：`finish` 打印的表对 `findings_present===false` 的行有可见标记，且不与全 0 的正常行相同。
+- **V1（新增，读 `.github/instructions/specguard.instructions.md` 时发现）：** 该文件第 8 行要求"每个导出函数都需要断言返回值或抛错的单元测试"。探针 V1 在 `src/*.js` 与 `eval/*.js` 的 43 个非测试文件中，找到 15 个文件共 34 个导出函数，没有任何 `*.test.js` 按名字提到（例：`src/post.js` 的 `assertionKind`、`counterexampleOk`、`citationsOf`、`loadCoverage`、`applyCoverage`、`coverageAtoms`、`findingBlock`、`findingHead`；`src/trace.js` 的 `testScope`、`catBatch`；`src/test-map.js` 的 `indexTests`、`noExt`、`classAndMethod`）；`src/limitations.js` 和 `src/scan-parts.js` 没有同名的 `.test.js`（标准要求测试"live next to the code"）。边界：按名字匹配，间接覆盖（例如经由 `post.js` 入口的测试）不会被识别，所以这是"没有直接单元测试"的上界，不是"完全未被测试"。SpecGuard 用同一标准审别人的仓库，自己不满足它。 回归测试应断言：每个导出函数至少被一个 `*.test.js` 按名引用并断言返回值（`filesWithUnreferencedExports` 为空，`exportingFilesWithoutSiblingTest` 为空）。
 
 ### 3.5 By design
 
@@ -240,7 +283,8 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **位置：** `src/post.js:1442`、`src/focus.js:1–8`（文件头注释）。
 - **事实：** 3001 个变更行的单文件 PR 中，`changedLinesNotShownToModel=2495`，`runStatus="complete"`、`headMarker=true`；摘要显示 `Large PR: diffs of 1 large file was shortened in the prompt`，`cleanVerdict=false`（不显示 "No unit test gaps found"）。
 - **为什么不记缺陷：** post.js:1442 的注释写明 `not reduced mode, not a failure: incomplete only when a changed file was left out, so the next push reviews again`；focus.js 头部写明 `a chosen file is never dropped for size`。这是明示的取舍，且用户可见。
-- **可选改进（不计入 26 项）：** 若团队认为被截断的行里可能有未覆盖的义务，可以把 `shortened > 0` 提升为 incomplete。
+- **可选改进（不计入缺陷）：** 若团队认为被截断的行里可能有未覆盖的义务，可以把 `shortened > 0` 提升为 incomplete。
+- **回归测试应断言：** （保持现状）`shortened>0` 时摘要含 `Large PR` 横幅且 `cleanVerdict===false`。
 
 ## 4. 修复状态
 
@@ -255,9 +299,23 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 | F27、F28 | #205 | 叠在 #198 之上 |
 | F29 | #204 | |
 
-另：#197 是"断言被删除后提升低置信度"的 raise fix，作用在 lead 之后，与 U5、U6 不重叠。S5 与 F20 相邻，已在 #201 的审查中。
+另：#197 是"断言被删除后提升低置信度"的 raise fix，作用在 lead 之后，与 U5、U6 不重叠。
 
-**本补充的 26 项发现均尚未修复。** 建议顺序：先修"错误放心"（U1、S2、S7、S13），再修证据可见性（U3、S3、S8），然后是 lead 覆盖面（U5、U6）和 scan 状态（S4、S5、S6、S14），其余按 P2、P3。每项修复都保留对应探针，把断言反过来作为回归测试。
+本补充各项的状态：
+
+- **S5：** 正在 #201 第三轮修复（只有低置信度 finding 或 finding 被丢弃的 unit 记为 `unsure`，并推进日期以免轮转停滞），不是"未修复"。
+- **S1 / U12：** 已在 #200 的 PR 描述里作为已知问题记录，修复未开始。
+- **其余各项**（含 V1、V2）尚未修复，也没有已知的在审 PR。
+
+建议顺序：
+
+1. **第一组（PR 主路径，改动都小）：** U13（`AC-1:` 解析）和调研 F32（Gherkin `Background`）。修 F32 时，继承的 `Background` 必须同时进入 #203 引入的 `tv` 文本版本，否则修改前置条件后 scenario 不会过期。
+2. **错误放心：** U1、S2、S7、S13。
+3. **证据可见性：** U3、S3、S8。
+4. **lead 覆盖面与 scan 状态：** U5、U6；S4、S6、S14（S5 在 #201）。
+5. 其余按 P2、P3。
+
+每项修复保留对应探针，把断言反过来作为回归测试；每项的"回归测试应断言"见 §3。
 
 ## 5. 附录
 
@@ -1493,6 +1551,246 @@ console.log(JSON.stringify(results, null, 2));
     "legacyTestStillATest": true
   }
 ]
+```
+
+</details>
+
+### 附录 C：探针 V1–V2（audit-supplement-3.cjs）
+
+<details>
+<summary>展开脚本或结果</summary>
+
+```javascript
+// Supplement-3 probes (V1, V2). Run from the checkout root of ee1c158: node audit-supplement-3.cjs
+// V1: exported functions of src/*.js and eval/*.js that no test file mentions by name (the repo's own coding standard, .github/instructions/specguard.instructions.md:8).
+// V2: eval/replay.js finishRealOne/table when the model never wrote findings.json (the row says findings_present:false; the printed table has no such column).
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), cp = require('node:child_process');
+const root = process.env.SG_ROOT || process.cwd();
+const R = (p) => require(path.join(root, p));
+const out = {};
+const tracked = cp.execFileSync('git', ['ls-tree', '-r', '--name-only', process.env.SG_REF || 'origin/main'], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean);
+// ---- V1
+const tests = tracked.filter((f) => /\.test\.js$/.test(f)).map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const prod = tracked.filter((f) => /^(src|eval)\/[^/]+\.js$/.test(f) && !/\.test\.js$/.test(f));
+const unref = [], noSibling = [];
+for (const f of prod) {
+  let m; try { m = require(path.join(root, f)); } catch { continue; }
+  const names = Object.keys(m).filter((k) => typeof m[k] === 'function');
+  const miss = names.filter((n) => !new RegExp('\\b' + n.replace(/\$/g, '\\$') + '\\b').test(tests));
+  if (miss.length) unref.push({ file: f, unreferenced: miss });
+  if (names.length && !tracked.includes(f.replace(/\.js$/, '.test.js'))) noSibling.push(f);
+}
+out.V1 = { prodFilesChecked: prod.length, filesWithUnreferencedExports: unref, exportingFilesWithoutSiblingTest: noSibling };
+// ---- V2
+(async () => {
+  const replay = R('eval/replay.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-supp3-'));
+  try {
+    const id = 'nofindings', d = path.join(dir, id); fs.mkdirSync(path.join(d, 'ctx'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'meta.json'), JSON.stringify({ id, base: 'b'.repeat(40), head: 'a'.repeat(40), trace: 'auto', skip: false, partial: false, repo: dir }));
+    let row, err = null;
+    try { row = await replay.finishRealOne(id, dir); } catch (e) { err = String(e.message).split('\n')[0]; }
+    out.V2 = row ? { row, printedTable: replay.table([row]), tableMentionsFindingsPresent: /findings_present|present/.test(replay.table([row])) } : { error: err };
+  } finally { const p = fs.realpathSync(dir); if (p.startsWith(fs.realpathSync(os.tmpdir())) && path.basename(p).startsWith('sg-supp3-')) fs.rmSync(p, { recursive: true, force: true }); }
+  console.log(JSON.stringify(out, null, 2));
+})();
+```
+
+</details>
+
+### 附录 C 实际结果（main ee1c158）
+
+<details>
+<summary>展开脚本或结果</summary>
+
+```json
+﻿{
+  "V1": {
+    "prodFilesChecked": 43,
+    "filesWithUnreferencedExports": [
+      {
+        "file": "eval/ab.js",
+        "unreferenced": [
+          "convertFree"
+        ]
+      },
+      {
+        "file": "eval/bundle.js",
+        "unreferenced": [
+          "rng",
+          "shuffle"
+        ]
+      },
+      {
+        "file": "eval/degrade.js",
+        "unreferenced": [
+          "auditBuiltin",
+          "auditFixture",
+          "evaluateAudit",
+          "fromCase"
+        ]
+      },
+      {
+        "file": "eval/field.js",
+        "unreferenced": [
+          "isDoc",
+          "isCode",
+          "measureCommit",
+          "measureRepo",
+          "bigCommit"
+        ]
+      },
+      {
+        "file": "eval/label-export.js",
+        "unreferenced": [
+          "shuffle"
+        ]
+      },
+      {
+        "file": "eval/prove.js",
+        "unreferenced": [
+          "subExprVariants",
+          "checkPlan"
+        ]
+      },
+      {
+        "file": "eval/run.js",
+        "unreferenced": [
+          "rawOutput"
+        ]
+      },
+      {
+        "file": "eval/signal.js",
+        "unreferenced": [
+          "enclosingFn"
+        ]
+      },
+      {
+        "file": "src/audit-collect.js",
+        "unreferenced": [
+          "allBlocks"
+        ]
+      },
+      {
+        "file": "src/audit-post.js",
+        "unreferenced": [
+          "findIssue"
+        ]
+      },
+      {
+        "file": "src/coverage.js",
+        "unreferenced": [
+          "gocover"
+        ]
+      },
+      {
+        "file": "src/leads.js",
+        "unreferenced": [
+          "symbolsOf"
+        ]
+      },
+      {
+        "file": "src/post.js",
+        "unreferenced": [
+          "assertionKind",
+          "counterexampleOk",
+          "citationsOf",
+          "loadCoverage",
+          "applyCoverage",
+          "coverageAtoms",
+          "findingBlock",
+          "findingHead"
+        ]
+      },
+      {
+        "file": "src/test-map.js",
+        "unreferenced": [
+          "indexTests",
+          "noExt",
+          "classAndMethod"
+        ]
+      },
+      {
+        "file": "src/trace.js",
+        "unreferenced": [
+          "testScope",
+          "catBatch"
+        ]
+      }
+    ],
+    "exportingFilesWithoutSiblingTest": [
+      "src/limitations.js",
+      "src/scan-parts.js"
+    ]
+  },
+  "V2": {
+    "row": {
+      "id": "nofindings",
+      "trace": "auto",
+      "findings_present": false,
+      "inline": {
+        "total": 0,
+        "byKind": {},
+        "byConfidence": {
+          "high": 0,
+          "low": 0
+        }
+      },
+      "summary_only": 0,
+      "pre_existing": 0
+    },
+    "printedTable": "pr          trace  inline  high  low  summary  pre-existing\nnofindings  auto   0       0     0    0        0",
+    "tableMentionsFindingsPresent": false
+  }
+}
+```
+
+</details>
+
+### 附录 C：覆盖核对脚本（coverage-check.cjs）
+
+<details>
+<summary>展开脚本或结果</summary>
+
+```javascript
+// Coverage check for the supplement's section 2: git ls-tree minus the declared out-of-scope patterns, diffed against the paths/globs in the table.
+// Run from a checkout: node coverage-check.cjs <doc.md> [ref]
+const fs = require('node:fs'), cp = require('node:child_process');
+const doc = fs.readFileSync(process.argv[2], 'utf8').replace(/\r/g, ''), ref = process.argv[3] || 'origin/main';
+const tracked = cp.execFileSync('git', ['ls-tree', '-r', '--name-only', ref], { encoding: 'utf8' }).split('\n').filter(Boolean);
+const rx = (g) => new RegExp('^' + g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*\//g, '\u0001').replace(/\*\*/g, '\u0002').replace(/\*/g, '[^/]*').replace(/\u0001/g, '(.*/)?').replace(/\u0002/g, '.*') + '$');
+const OUT = ['**/*.test.js', 'test/**', 'tests/**', '**/fixtures/**', 'eval/cases/**', 'eval/results/**', 'eval/replay/*.json', 'docs/**', 'research/**', 'NOTICE', '.gitattributes', '.gitignore', 'eval/**/README.md'].map(rx);
+const inScope = tracked.filter((f) => !OUT.some((r) => r.test(f)));
+const sec = doc.slice(doc.indexOf('\n## 2.'), doc.indexOf('\n## 3.'));
+const secLines = sec.split('\n'), start = secLines.findIndex((l) => l.startsWith('| 文件 | 状态 |'));
+let end = start + 1; while (end < secLines.length && secLines[end].startsWith('|')) end++;
+const rows = secLines.slice(start + 2, end); // the first table only (the out-of-scope table below it is not a coverage claim)
+const globs = rows.flatMap((l) => [...l.split('|')[1].matchAll(/`([^`]+)`/g)].map((m) => m[1]));
+const listed = new Set(), unmatchedGlobs = [];
+for (const g of globs) { const r = rx(g); const hit = tracked.filter((f) => r.test(f)); if (!hit.length) unmatchedGlobs.push(g); hit.forEach((f) => listed.add(f)); }
+const missing = inScope.filter((f) => !listed.has(f)), extra = [...listed].filter((f) => !inScope.includes(f));
+console.log(JSON.stringify({ ref, tracked: tracked.length, outOfScope: tracked.length - inScope.length, inScope: inScope.length, listedInScope: inScope.length - missing.length, tableGlobs: globs.length, missing, listedButOutOfScope: extra, globsMatchingNothing: unmatchedGlobs }, null, 2));
+```
+
+</details>
+
+### 附录 C：覆盖核对输出
+
+<details>
+<summary>展开脚本或结果</summary>
+
+```json
+{
+  "ref": "origin/main",
+  "tracked": 543,
+  "outOfScope": 459,
+  "inScope": 84,
+  "listedInScope": 84,
+  "tableGlobs": 71,
+  "missing": [],
+  "listedButOutOfScope": [],
+  "globsMatchingNothing": []
+}
 ```
 
 </details>
