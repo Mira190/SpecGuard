@@ -722,6 +722,29 @@ test('verifyUnits: test_paths decides which cited files are tests (F26): weak_te
   assert.equal(verify(result([PUSH()]), { read: rd, units: UNITS() }).unit_findings.length, 1, 'control: heuristic');
 });
 
+test('funnel through the real collect -> pack -> audit-post path: 8 eligible = 7 inventoried + 1 over 512 KiB; 6 selected = 5 reviewed whole + 1 did not fit', async (t) => {
+  const fn = (n, k) => Array.from({ length: k }, (_, i) => `exports.${n}${i} = (v) => (v > ${i} ? v - ${i} : ${i});`).join('\n') + '\n';
+  const files = {};
+  for (let i = 0; i < 6; i++) files[`src/u${i}.js`] = fn(`u${i}_`, 10 + i);
+  files['tests/u0.test.js'] = 'const assert = require("node:assert/strict");\ntest("u0", () => { assert.equal(u0_0(5), 5); });\n';
+  files['tests/u1.test.js'] = 'const assert = require("node:assert/strict");\ntest("u1", () => { assert.equal(u1_0(5), 5); });\n';
+  files['src/over.js'] = fn('over_', 20); // its matched tests are too big for the pack together
+  for (let k = 0; k < 4; k++) files[`tests/over${k}.test.js`] = Array.from({ length: 300 }, (_, i) => `test("t${i}", () => { assert.equal(over_${i % 20}(${i}), ${i}); }); // ${'pad '.repeat(10)}`).join('\n') + '\n';
+  files['src/huge.js'] = Array.from({ length: 5000 }, (_, i) => `exports.h${i} = (v) => v + ${i}; // ${'padding '.repeat(12)}`).join('\n') + '\n'; // over 512 KiB
+  const { root, ctx } = repoOf(t, files), head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  require('./audit-collect').collect({ cwd: root, ctx, maxUnits: 6, rotate: true, packBytes: 60000 });
+  const pack = require('./engines/claude-api').contextPack(ctx, root, 60000), put = (n, v) => fs.writeFileSync(path.join(ctx, n), typeof v === 'string' ? v : JSON.stringify(v));
+  put('engine-status', 'success'); put('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join(''));
+  put('findings.json', { requirements: [], not_requirements: [], not_reviewed: [], docs_reviewed: [], unit_findings: [] });
+  const m = mocks(), saved = { ...process.env };
+  Object.assign(process.env, { CTX: ctx, GITHUB_WORKSPACE: root, SCAN_ISSUE: 'true', ISSUE_REPO: '', SKIP: 'false', ENGINE: 'claude' });
+  try { await audit({ github: m.github, context: { ...m.context, sha: head }, core: m.core, date: DATE }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
+  const l = /^Units: .*$/m.exec(m.calls.summary)[0];
+  assert.match(l, /^Units: 8 eligible = 7 inventoried \+ 1 not inventoried \(over 512 KiB\); 6 selected this run = 5 reviewed whole \+ 1 did not fit/);
+  assert.match(m.calls.summary, /\| \[src\/over\.js\][^\n]*selected, did not fit \(not reviewed\) \|/);
+  assert.match(m.calls.summary, /5 of the 6 selected units were reviewed whole/);
+});
+
 test('render: the funnel line reconciles eligible, selected, reviewed, did not fit and forced; the Details row says what happened', () => {
   const data = checked([uf()]), vis = (code) => { const md = render({ data, code, blob: BLOB, head: 'abc1234def', usage: '', run: '' }); return { md, top: md.slice(0, md.indexOf('<details>')) }; };
   const line = (t) => /^Units: .*$/m.exec(t)[0], num = (l, re) => Number((re.exec(l) || [0, 0])[1]);
@@ -734,6 +757,7 @@ test('render: the funnel line reconciles eligible, selected, reviewed, did not f
   assert.match(a.md, /\| \[src\/js\/orders\.js\]\([^)]*\) \| 54\.2 \| [^|]* \| [^|]* \| selected, did not fit \(not reviewed\) \|/);
   assert.match(a.md, /\| \[src\/js\/legacy\.js\]\([^)]*\) \| 21\.5 \| no test \| none \| this run \|/);
   assert.doesNotMatch(a.md, /riskiest of \d+ units were reviewed/);
+  assert.match(line(vis(CODE(data.unit_findings, { eligible: 145, not_reached: 5 })).top), /^Units: 145 eligible = 140 inventoried \+ 5 not reached \(inventory cap \/ time budget\); /);
   const f = vis({ ...CODE(data.unit_findings, { eligible: 140, forced: [U1] }), unseen: [U1] }); // forced: nothing fits, tests cut
   assert.match(line(f.top), /3 selected this run = 2 reviewed whole \+ 1 forced \(recorded unsure\)/);
   assert.match(f.md, /forced: tests cut \(unsure\)/);
