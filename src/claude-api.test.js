@@ -143,7 +143,7 @@ test('a typical PR review on haiku 5.5 costs well under a cent and a half; the w
 
 test('pre-flight: a worst case above max_budget_usd makes NO call, status failed, reason budget, a message with both numbers; a larger budget passes', async (t) => {
   const h = harness(t, [good()]);
-  await h.go({ MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.02' }); // 32000 x $20/M alone is $0.64
+  await h.go({ MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.05' }); // 32000 x $20/M alone is $0.64
   assert.equal(h.calls.length, 0, 'nothing was sent');
   assert.equal(h.file('engine-status'), 'failed');
   const [reason, why] = h.file('engine-error').split('\n');
@@ -465,7 +465,7 @@ test('context pack on a model with a price step (haiku 5.5): not shrunk for the 
   assert.equal(r.h.calls.length, 1, r.h.file('engine-error'));
   const b = r.h.calls[0].body, total = Buffer.byteLength(b.system[0].text) + Buffer.byteLength(b.messages[0].content);
   assert.ok(total / 2 > api.PRICES['claude-haiku-5-5'].longFrom && /^context pack: [1-9]\d* files/.test(r.h.file('engine-notes')), 'the pack went in past the step: ' + total);
-  const low = repo(t, files, ctxFiles, { MAX_BUDGET_USD: '0.02' }); // over 100k tokens is the long card
+  const low = repo(t, files, ctxFiles, { MAX_BUDGET_USD: '0.05' }); // over 100k tokens is the long card
   fs.writeFileSync(low.h.pf, PROMPT + 'z'.repeat(190000));
   await low.go();
   assert.equal(low.h.calls.length, 0);
@@ -509,7 +509,7 @@ test('claude.sh: api mode (also when CLAUDE_MODE is empty) makes the API call an
 });
 
 test('claude.sh: api mode with a budget below the worst case sends nothing and exits 0 with the budget reason; a bad claude_mode or max_output_tokens fails the step', (t) => {
-  const s = shell(t, { mode: 'api', validate: { MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.02' } });
+  const s = shell(t, { mode: 'api', validate: { MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.05' } });
   assert.equal(s.r.status, 0);
   assert.equal(s.fetches.length, 0);
   assert.equal(s.file('engine-status'), 'failed');
@@ -762,7 +762,7 @@ test('scan parts: a budget too small for every part drops the trailing batches (
   assert.ok(parts.dropped.length >= 5);
   assert.equal(JSON.parse(s.h.file('findings.json')).requirements.length + parts.dropped.length, 45);
   assert.match(s.h.file('engine-notes'), /blocks? left for the next run/);
-  const none = scanRepo(t, 45, { MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.02' });
+  const none = scanRepo(t, 45, { MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '0.01' });
   await none.h.go({ GITHUB_WORKSPACE: none.root });
   assert.equal(none.h.calls.length, 0);
   assert.equal(none.h.file('engine-error').split('\n')[0], 'budget');
