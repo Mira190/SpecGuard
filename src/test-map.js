@@ -135,7 +135,7 @@ function calledNames(lines, line) {
 // A search that fails or times out finds nothing. trace.js is required lazily: it requires post.js, which uses this guard.
 function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
   const { isTestPath, testScope } = require('./trace'), scope = testScope(testPaths), DOC = /\.(md|mdx|markdown|rst|adoc|txt)$/i;
-  const isTest = (p) => !DOC.test(p) && (isTestPath(p) || (scope && scope(p)));
+  const isTest = (p) => !DOC.test(p) && (scope ? scope(p) : isTestPath(p));
   const grep = (args) => {
     try {
       const out = execFileSync('git', ['grep', '-n', '-I', '-i', '-F', ...args], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } });

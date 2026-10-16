@@ -244,3 +244,7 @@ test('the manual-run workflow turns fail_on_error on; the PR workflow examples l
   assert.doesNotMatch(read('.github', 'workflows', 'specguard.yml'), /fail_on_error/);
   assert.doesNotMatch(read('README.md'), /fail_on_error: ?["']?true/);
 });
+
+test('action.yml: test_paths reaches the collector and the scan post step as TEST_PATHS, so collect and verify use one test scope (F26)', () => {
+  for (const s of [find(/id: audit_collect/), find(/audit-post\.js/)]) assert.match(s, /TEST_PATHS: \$\{\{ inputs\.test_paths \}\}/);
+});
