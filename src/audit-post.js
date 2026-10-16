@@ -558,7 +558,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   }
   if (code && !failure && inv.eligible != null) { // one line that reconciles the funnel: eligible = inventoried + over 512 KiB; selected = reviewed whole + did not fit + forced
     const fz = new Set(code.unitsFailed ? [] : inv.forced || []), F = unseen.filter((u) => fz.has(u)).length, C = unseen.length - F, S = inv.rotation.picked, R = S - unseen.length, D = Math.max(0, inv.units - inv.rotation.reviewed) + C;
-    top += `Units: ${[`${inv.eligible} eligible = ${[`${inv.units} inventoried`, inv.not_inventoried && `${inv.not_inventoried} not inventoried (over 512 KiB)`, inv.not_reached && `${inv.not_reached} not reached (inventory cap / time budget)`].filter(Boolean).join(' + ')}`, `${S} selected this run = ${[R && `${R} reviewed whole`, C && `${C} did not fit`, F && `${F} forced (recorded unsure)`].filter(Boolean).join(' + ')}`, D && `${D} not yet reviewed`].filter(Boolean).join('; ')}.
+    top += `Units: ${[`${inv.eligible} eligible = ${[`${inv.units} inventoried`, inv.not_inventoried && `${inv.not_inventoried} not inventoried (over 512 KiB)`, inv.not_reached_cap && `${inv.not_reached_cap} past the inventory cap`, inv.not_reached_time && `${inv.not_reached_time} unread when the time budget ran out`].filter(Boolean).join(' + ')}`, `${S} selected this run = ${[R && `${R} reviewed whole`, C && `${C} did not fit`, F && `${F} forced (recorded unsure)`].filter(Boolean).join(' + ')}`, D && `${D} not yet reviewed`].filter(Boolean).join('; ')}.
 
 `;
   }
@@ -670,16 +670,18 @@ function changedSince(prior, blocks) {
 
 // Our scan issue among open and closed issues (marker plus identity); an open one wins.
 async function findIssue({ github, owner, repo, me, mark = MARK, title = '' }) {
+  // no title given: an issue titled for another target (`TITLE: owner/repo`) is that target's, never ours; a legacy title without a target stays ours
+  const foreign = (t) => { const m = new RegExp(`^${TITLE}: ([\\w.-]+/[\\w.-]+)(?: \\(|$)`).exec(t); return !!m && m[1].toLowerCase() !== `${owner}/${repo}`.toLowerCase(); };
   // ponytail: lists every issue; narrow with a label or `creator` if a repo has thousands
   const all = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
-  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (!title || i.title === title) && typeof i.body === 'string' && i.body.startsWith(mark));
+  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (title ? String(i.title).toLowerCase() === title.toLowerCase() : !foreign(i.title)) && typeof i.body === 'string' && i.body.startsWith(mark));
   return mine.find((i) => i.state !== 'closed') || mine[0] || null;
 }
 
 // The scan issue's target, shared by the publisher (main) and the collector's loadPrior so what is written is what is read back: scan_issue_repo (owner/name) or the scanned repository,
 // and the scope (marker, title; the title names the scanned repository when the issue lives elsewhere). -> { error } | { away, target: { owner, repo }, scope }
 function resolveIssueTarget(env, owner, repo) {
-  const m = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!m && !(m[1] === owner && m[2] === repo);
+  const m = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!m && `${m[1]}/${m[2]}`.toLowerCase() !== `${owner}/${repo}`.toLowerCase(); // GitHub names are case-insensitive
   if (env.ISSUE_REPO && !m) return { error: `scan_issue_repo "${oneLine(env.ISSUE_REPO, 60)}" is not owner/name` };
   return { away, target: away ? { owner: m[1], repo: m[2] } : { owner, repo }, scope: scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '') };
 }
