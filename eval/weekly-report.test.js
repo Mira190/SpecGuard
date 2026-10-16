@@ -148,3 +148,97 @@ test('CLI on a fixture: markdown and --json; labels flow through --labels and la
   assert.ok(JSON.parse(imp.stdout).specguard.precision > 0.7);
   assert.equal(spawnSync(process.execPath, [path.join(__dirname, 'weekly-report.js')], { encoding: 'utf8' }).status, 2);
 });
+
+// S9: weekly's anchor_touched / tests_changed must follow src/post.js (own first-parent non-merge commits; deleted file = unknown), not the raw compare.
+test('load: a merged base and a deleted anchor file give the same anchor/tests answer as post.js', () => {
+  const cpm = require('node:child_process');
+  const post = require('../src/post');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-weekly-'));
+  const git = (...a) => cpm.execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@e.invalid', ...a], { cwd: dir, encoding: 'utf8' }).trim();
+  const put = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
+  const commit = (m) => { git('add', '-A'); git('commit', '-q', '-m', m); return git('rev-parse', 'HEAD'); };
+  git('init', '-q', '-b', 'main');
+  put('src/a.js', Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n') + '\n'); put('src/gone.js', 'a\nb\nc\nd\ne\nf\n'); commit('base');
+  git('checkout', '-q', '-b', 'pr'); put('README.md', 'pr\n'); const orig = commit('pr work');
+  git('checkout', '-q', 'main'); put('src/a.js', fs.readFileSync(path.join(dir, 'src/a.js'), 'utf8').replace('line 5', 'line 5 MAIN')); put('tests/base.test.js', 'x\n'); commit('main edits anchor and adds a test');
+  git('checkout', '-q', 'pr'); git('merge', '-q', '--no-edit', 'main'); const merged = git('rev-parse', 'HEAD');
+  git('rm', '-q', 'src/gone.js'); const deleted = commit('pr deletes gone.js');
+  const commitInfo = (sha) => {
+    const files = git('diff-tree', '--no-commit-id', '--name-status', '-r', '--no-renames', '-m', '--first-parent', sha).split('\n').filter(Boolean).map((l) => {
+      const [s, name] = l.split('\t'); const d = git('diff', '--no-renames', '-U3', `${sha}^1`, sha, '--', name); const i = d.indexOf('\n@@');
+      return { filename: name, status: s === 'D' ? 'removed' : s === 'A' ? 'added' : 'modified', patch: i < 0 ? undefined : d.slice(i + 1) };
+    });
+    return { sha, parents: git('rev-list', '--parents', '-n', '1', sha).split(' ').slice(1).map((p) => ({ sha: p })), files };
+  };
+  const compare = (a, b) => {
+    const commits = git('rev-list', '--reverse', `${a}..${b}`).split('\n').filter(Boolean).map(commitInfo);
+    const names = git('diff', '--name-status', '--no-renames', a, b).split('\n').filter(Boolean).map((l) => { const [s, name] = l.split('\t'); const d = git('diff', '--no-renames', a, b, '--', name); const i = d.indexOf('\n@@'); return { filename: name, status: s === 'D' ? 'removed' : s === 'A' ? 'added' : 'modified', patch: i < 0 ? undefined : d.slice(i + 1) }; });
+    return { status: 'ahead', total_commits: commits.length, commits, files: names };
+  };
+  const mk = (id, p, line, sha) => ({ id, user: { login: 'copilot-pull-request-reviewer[bot]', type: 'Bot' }, pull_request_url: 'https://api.github.com/repos/o/r/pulls/1', path: p, line, original_line: line, original_commit_id: sha, body: 'x' });
+  const run = (cmts, headSha) => {
+    const gh = (a) => {
+      const s = a.join(' '); let m;
+      if (s.includes('search/issues')) return JSON.stringify([{ number: 1, created_at: '2026-10-10T00:00:00Z', closed_at: null, pull_request: { merged_at: null }, user: { login: 'dev', type: 'User' }, labels: [] }]);
+      if (s.includes('issues/comments')) return '[]';
+      if (s.includes('pulls/comments')) return JSON.stringify(cmts);
+      if (s.includes('graphql')) return JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: { nodes: [] } } } } });
+      if ((m = /compare\/(\w+)\.\.\.(\w+)/.exec(s))) return JSON.stringify(compare(m[1], m[2]));
+      if ((m = /commits\/(\w+)$/.exec(s))) return JSON.stringify(commitInfo(m[1]));
+      if (/pulls\/1$/.test(s)) return JSON.stringify({ head: { sha: headSha } });
+      throw new Error('unexpected gh call: ' + s);
+    };
+    const real = cpm.execFileSync;
+    cpm.execFileSync = (cmd, args, o) => (cmd === 'gh' ? gh(args) : real(cmd, args, o));
+    try { delete require.cache[require.resolve('./weekly-report')]; return require('./weekly-report').load({ repo: 'o/r', since: '2026-10-01', until: '2026-10-16' }).review_comments[0]; }
+    finally { cpm.execFileSync = real; delete require.cache[require.resolve('./weekly-report')]; }
+  };
+  const a = run([mk(11, 'src/a.js', 5, orig)], merged);
+  assert.deepEqual([a.anchor_touched, a.tests_changed], [post.anchorTouched(orig, merged, 'src/a.js', 5, 5, dir), post.testsChanged(orig, merged, dir)]);
+  assert.deepEqual([a.anchor_touched, a.tests_changed], [false, false]);
+  const b = run([mk(12, 'src/gone.js', 3, merged)], deleted);
+  assert.equal(b.anchor_touched, post.anchorTouched(merged, deleted, 'src/gone.js', 3, 3, dir));
+  assert.equal(b.anchor_touched, null);
+});
+
+// S9 review: unified0 re-derives -U0 hunks from a -U3 patch; each shape must match real `git diff -U0` (header numbers).
+test('unified0: matches git diff -U0 for add, delete, modify, two runs in a hunk, and no-newline', () => {
+  const cpm = require('node:child_process');
+  const { unified0, apiGit } = require('./weekly-report');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-u0-'));
+  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', HOME: dir, USERPROFILE: dir };
+  const git = (...a) => cpm.execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@e.invalid', ...a], { cwd: dir, encoding: 'utf8', env });
+  const lines = (n) => Array.from({ length: n }, (_, i) => `l${i + 1}`);
+  const cases = {
+    add: [lines(10), (l) => { l.splice(4, 0, 'new'); return l; }],
+    del: [lines(10), (l) => { l.splice(4, 2); return l; }],
+    modify: [lines(10), (l) => { l.splice(4, 3, 'x', 'y'); return l; }],
+    two: [lines(12), (l) => { l[3] = 'A'; l.splice(7, 1); return l; }],
+    nonl: [lines(6), (l) => l.slice(0, 5).concat('last')],
+  };
+  git('init', '-q', '-b', 'main');
+  for (const [name, [before, edit]] of Object.entries(cases)) {
+    const f = `${name}.txt`, nl = name === 'nonl' ? '' : '\n';
+    fs.writeFileSync(path.join(dir, f), before.join('\n') + nl); git('add', '-A'); git('commit', '-q', '-m', `a ${name}`);
+    fs.writeFileSync(path.join(dir, f), edit([...before]).join('\n') + (name === 'nonl' ? '' : '\n')); git('add', '-A'); git('commit', '-q', '-m', `b ${name}`);
+    const hdr = (d) => d.split('\n').filter((l) => l.startsWith('@@')).map((l) => /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(l)).map((m) => [+m[1], m[2] === undefined ? 1 : +m[2], m[4] === undefined ? 1 : +m[4]]);
+    const real = hdr(git('diff', '-U0', 'HEAD~1', 'HEAD', '--', f));
+    const d3 = git('diff', '-U3', 'HEAD~1', 'HEAD', '--', f), patch = d3.slice(d3.indexOf('@@'));
+    assert.deepEqual(hdr(unified0(patch)), real, name);
+  }
+  // a throwing git (unusable compare / commit unavailable) must end as unknown (null) in post.anchorTouched/testsChanged, never false
+  const post = require('../src/post');
+  const sha = 'a'.repeat(40);
+  assert.throws(() => apiGit(null, sha, () => [])('merge-base'));
+  assert.equal(post.anchorTouched(sha, sha, 'f.js', 1, 1, null, apiGit(null, sha, () => [])), null);
+  assert.equal(post.testsChanged(sha, sha, null, apiGit({ status: 'diverged', commits: [] }, sha, () => [])), null);
+  const cmp = { status: 'ahead', total_commits: 1, commits: [{ sha, parents: [{ sha: 'b'.repeat(40) }] }] };
+  assert.equal(post.anchorTouched('b'.repeat(40), sha, 'f.js', 1, 1, null, apiGit(cmp, sha, () => null)), null);
+  assert.equal(post.testsChanged('b'.repeat(40), sha, null, apiGit(cmp, sha, () => null)), null);
+});
+
+test('apiGit: a truncated compare (more commits than returned) is unusable, so unknown', () => {
+  const post = require('../src/post'), { apiGit } = require('./weekly-report');
+  const sha = 'a'.repeat(40), cmp = { status: 'ahead', total_commits: 300, commits: [{ sha, parents: [{ sha: 'b'.repeat(40) }] }] };
+  assert.equal(post.testsChanged('b'.repeat(40), sha, null, apiGit(cmp, sha, () => [{ filename: 'x.test.js' }])), null);
+});
