@@ -455,7 +455,7 @@ test('run: a scan with documents and units runs the document audit too; units wi
   const w = workspace(t);
   w.put('audit-docs.txt', 'docs/design.md\tdiscovered\n');
   w.put('audit-candidates.txt', '1111111a\tdocs/design.md:3\tPlan design\tA repeating plan stays on after it fires.\n');
-  const doc = { id: '1111111a', source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered', code: [cite('src/js/orders.js', 1)], tests: [{ ...cite('test/orders.test.js', 2), layer: 'unit' }], note: '' };
+  const doc = { id: '1111111a', source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered', code: [cite('src/js/orders.js', 1)], tests: [{ ...cite('test/e2e/checkout.test.js', 3), layer: 'unit' }], note: '' };
   const r = await post(t, { w, files: { 'findings.json': { docs_reviewed: ['docs/design.md'], requirements: [doc], not_requirements: [], not_reviewed: [], unit_findings: [] }, 'audit-meta.json': { head: 'abc123', max_requirements: 80, max_units: 12, docs: 1, candidates: 1, limitations: [], units: { total: 140, picked: 3 } } } });
   assert.match(r.calls.summary, /\*\*✅ No unit test gaps in the 3 riskiest units\*\*/);
   assert.match(r.calls.summary, /\| 3 of 140 \| none \| none \| 5 \| 1 read \|/);
@@ -567,7 +567,7 @@ test('run: units whose file the model did not see whole (pack-cut.txt) are not r
 
 test('run: blocks of a failed or dropped scan part are not rejected, not answered "unknown", not recorded as audited and listed as not audited; a failed unit call leaves the units unreviewed', async (t) => {
   const A = '1111111a', B = '2222222b', C = '3333333c';
-  const doc = { id: A, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered', code: [cite('src/js/orders.js', 1)], tests: [{ ...cite('test/orders.test.js', 2), layer: 'unit' }], note: '' };
+  const doc = { id: A, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered', code: [cite('src/js/orders.js', 1)], tests: [{ ...cite('test/e2e/checkout.test.js', 3), layer: 'unit' }], note: '' };
   const meta = { head: 'abc123', max_requirements: 80, max_units: 12, docs: 1, candidates: 3, limitations: [], units: { total: 140, picked: 3 } };
   const w = workspace(t);
   w.put('audit-docs.txt', 'docs/design.md\tdiscovered\n');
