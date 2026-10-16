@@ -150,7 +150,7 @@ test('pre-flight: a worst case above max_budget_usd makes NO call, status failed
   assert.equal(reason, 'budget');
   assert.match(why, /^estimated worst-case cost \$0\.\d+ exceeds max_budget_usd \$0\.05/);
   assert.match(h.file('engine-notes'), /^estimated worst-case cost/);
-  assert.match(h.logged.join('\n'), /::warning::Claude review failed: estimated worst-case cost/);
+  assert.match(h.logged.join('\n'), /::warning::Claude review failed \(budget\): estimated worst-case cost/);
   assert.equal(h.file('findings.json'), null);
   const ok = harness(t, [good()]);
   await ok.go({ MODEL: 'claude-opus-5-5', MAX_BUDGET_USD: '1.00' });
@@ -168,7 +168,7 @@ test('401: auth, status failed, no retry, the key is not in any file or log even
   assert.equal(h.file('engine-error').split('\n')[0], 'auth');
   assert.match(h.file('engine-notes'), /Anthropic API key was rejected/);
   assert.match(h.file('engine-notes'), /\*\*\*/);
-  assert.match(h.logged.join('\n'), /::warning::Claude review failed: The Anthropic API key was rejected/);
+  assert.match(h.logged.join('\n'), /::warning::Claude review failed \(auth, HTTP 401\): The Anthropic API key was rejected/);
   const all = h.everything().replace(KEY, '');
   assert.ok(!all.includes(KEY) && !all.includes('TESTONLY'.concat('_0123')), 'no part of the key in any output');
   assert.ok(![h.file('engine-notes'), h.file('engine-error'), h.logged.join('\n')].join('\n').includes('TESTONLY'));
@@ -978,4 +978,26 @@ test('pack error (S7): scan-parts returns the unit files and their tests as cut,
   const log = console.log; console.log = () => {};
   let plan; try { plan = require('./scan-parts.js').plan({ ctx: r.ctx, root: r.root, batch: 20, limit: 250000, schemaFile: path.join(__dirname, 'audit.schema.json'), contextPack: () => { throw new Error('injected'); }, evidencePack: api.evidencePack, assembleAudit: require('./prompt.js').assembleAudit }); } finally { console.log = log; }
   assert.deepEqual(plan.packCut, ['src/a.js', 'tests/a.test.js', 'tests/b.test.js']);
+});
+
+test('auth reasons tell the owner what to fix: no key, 401 rejected, 403 lacks permission; the log names class and HTTP status', async (t) => {
+  const none = harness(t, [good()]);
+  await none.go({ ANTHROPIC_API_KEY: '' });
+  assert.match(none.file('engine-error'), /^auth\nNo API key was provided \(set llm_token\)/);
+  assert.match(none.logged.join('\n'), /::warning::Claude review failed \(auth\): No API key was provided/);
+  const f = harness(t, [err(403, 'permission_error', 'not allowed')]);
+  await f.go();
+  assert.equal(f.calls.length, 1);
+  assert.match(f.file('engine-error'), /^auth\nThe Anthropic API key lacks permission for this model or workspace/);
+  assert.match(f.logged.join('\n'), /\(auth, HTTP 403\)/);
+  assert.equal(api.classify(401, 'authentication_error', 'x')[1], 'The Anthropic API key was rejected (check the llm_token secret)');
+});
+
+test('classify: credit/billing is quota and unknown model is model (config); 429 and 529 are rate (transient)', () => {
+  assert.equal(api.classify(400, 'invalid_request_error', 'Your credit balance is too low')[0], 'quota');
+  assert.equal(api.classify(402, '', '')[0], 'quota');
+  assert.equal(api.classify(404, 'not_found_error', 'model: x')[0], 'model');
+  assert.equal(api.classify(429, 'rate_limit_error', 'slow down')[0], 'rate');
+  assert.equal(api.classify(529, 'overloaded_error', 'busy')[0], 'rate');
+  assert.equal(api.classify(500, 'api_error', 'oops')[0], '');
 });
