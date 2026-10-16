@@ -197,3 +197,20 @@ test('removed assertions: assert.match, notEqual and throws count as assertions'
   const d = assertionDelta('diff --git a/t.test.js b/t.test.js\n--- a/t.test.js\n+++ b/t.test.js\n@@ -1,4 +1,1 @@\n-assert.match(f("zq1"), /x/)\n-assert.notEqual(g("zq2"), 1)\n-assert.throws(() => h("zq3"), /bad/)\n x\n', () => true);
   assert.equal(d.length, 3);
 });
+
+test('removed assertions: only an added assertion in the same hunk re-pins; one in another test does not (audit U5)', () => {
+  const a = " test('a', () => {\n   const result = run();\n-  expect(result).toEqual({a:1,b:2});\n   done();\n });\n";
+  const c = "@@ -40,3 +40,4 @@\n test('c', () => {\n   const result = other();\n+  expect(result).toBe(true);\n });\n";
+  const two = (add) => assertionDelta(mkdiff('t/x.test.js', a + add), () => true).map((d) => d.kind);
+  assert.deepEqual(two(c), ['removed'], 'an unrelated assertion on the same name elsewhere hides nothing');
+  assert.deepEqual(two("+  expect(result).toEqual({a:1,b:2});\n"), [], 'control: a same-hunk re-pin is suppressed');
+  assert.deepEqual(delta("-  expect(f(1)).toBe(2);\n+  expect(g(1)).toBe(3);\n"), ['removed 10 expect(f(1)).toBe(2);'], 'control: a different subject stays removed');
+});
+test('weakened assertions: an exact value replaced by a range matcher on the same subject is weakened (audit U5)', () => {
+  assert.deepEqual(delta("-  expect(total(2)).toBe(5);\n+  expect(total(2)).toBeGreaterThan(0);\n"), ['weakened 10 expect(total(2)).toBe(5); => expect(total(2)).toBeGreaterThan(0);']);
+  assert.deepEqual(delta("-  expect(total(2)).toBe(5);\n+  expect(total(2)).toBe(6);\n"), [], 'control: another exact value is still a pin');
+});
+test('removed assertions: a deleted test file gives removed leads under its old path (audit U6)', () => {
+  const del = 'diff --git a/t/x.test.js b/t/x.test.js\ndeleted file mode 100644\n--- a/t/x.test.js\n+++ /dev/null\n@@ -1,3 +0,0 @@\n-test("f", () => {\n-  expect(f(1)).toBe(2);\n-});\n';
+  assert.deepEqual(assertionDelta(del, () => true).map((d) => [d.file, d.kind, d.line]), [['t/x.test.js', 'removed', 2]]);
+});
