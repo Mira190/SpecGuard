@@ -841,11 +841,11 @@ const unitsRepo = (t, n, part, pad = 200) => tmpRepo(t, {
 }, { 'audit-units.txt': `aaaaaaaa\tsrc/units.js\t5\twhy\ttests/units.test.js\t-\tv1\t${part}\n` });
 
 test('context pack (N3): the test slices follow the unit part\'s lines, not the first symbols of the file', (t) => {
-  const r = unitsRepo(t, 200, 'part 2/2 lines 101-200', 100);
+  const r = unitsRepo(t, 200, 'part 2/2 lines 101-200', 80);
   const p = api.contextPack(r.ctx, r.root, 250000);
   assert.ok(p.text.includes('function unit170'));
   assert.ok(p.text.includes('assert.equal(unit170('), 'the current part\'s assertion is visible');
-  assert.ok(!p.text.includes('assert.equal(unit000('), 'the early tests of the other part are not');
+  assert.ok(!p.text.includes('assert.equal(unit050('), 'the tests of the other part are not (beyond the head of the file)');
   assert.deepEqual(p.notWhole, []);
   const big = unitsRepo(t, 200, 'part 2/2 lines 101-200'); // the audit's fixture: the part's 100 matching tests do not fit the per-file cap
   assert.ok(api.contextPack(big.ctx, big.root, 250000).notWhole.includes('tests/units.test.js'), 'what does not fit is listed as cut');
