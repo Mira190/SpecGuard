@@ -614,9 +614,10 @@ test('review S4: a covered block citing more than 8 files is stale when only the
     const prior = f.ap.readState(f.ap.stateOf(f.head, { ...f.base, requirements: [f.covered(f.blocks[0], cited)] }, null, { date: '2026-10-01' }).raw);
     assert.ok(prior.versions.ev[cid].length <= 8, 'the state stays small');
     const edit = (p) => { fs.appendFileSync(path.join(f.root, p), '// edited\n'); f.git('add', '.'); f.git('commit', '-m', `edit ${p}`); };
-    if (n === 9) { edit(cited[8]); assert.deepEqual(pickedBy(f, prior).stale, [cid], 'only the 9th cited file changed'); }
+    if (n === 9) { edit(cited[8]); assert.deepEqual(pickedBy(f, prior).stale, [cid], 'only the 9th cited file changed'); assert.ok(JSON.parse(fs.readFileSync(path.join(f.ctx, 'audit-meta.json'), 'utf8')).limitations.includes('1 block(s) cite more than 8 files; their freshness cannot be tracked, so they are rechecked each run')); }
     else {
       edit(untouched); assert.deepEqual(pickedBy(f, prior).stale, [], 'an uncited file changed: not stale (8-file control)');
+      assert.ok(!JSON.parse(fs.readFileSync(path.join(f.ctx, 'audit-meta.json'), 'utf8')).limitations.some((l) => /cite more than 8 files/.test(l)));
       edit(cited[7]); assert.deepEqual(pickedBy(f, prior).stale, [cid], 'the 8th cited file changed');
     }
   }

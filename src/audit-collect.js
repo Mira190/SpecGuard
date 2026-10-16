@@ -250,16 +250,19 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   // covered blocks whose cited files changed since their audit (the state's ev: path hashes per block); an audit commit missing from this clone counts as changed
   const stale = new Set(), diffs = new Map(), hashOf = (p) => crypto.createHash('sha1').update(p).digest('hex').slice(0, 8);
   if (prior && prior.versions) {
+    let unbounded = 0;
     const auditedAt = new Map(prior.blocks.map((b) => [b.cid, b.at && b.at.head]));
     for (const [cid, hs] of Object.entries(prior.versions.ev)) {
       const h = auditedAt.get(cid);
       if (h && !diffs.has(h)) { try { diffs.set(h, new Set(git(cwd, ['diff', '--name-only', '--no-renames', '-z', h, head]).split('\0').filter(Boolean).map(hashOf))); } catch { diffs.set(h, null); } }
       const d = h ? diffs.get(h) : null;
       if (!d || (hs.includes(UNBOUNDED) ? d.size > 0 : hs.some((x) => d.has(x)))) stale.add(cid); // UNBOUNDED: it cited more files than the state keeps, so any change counts (review S4)
+      if (d && d.size > 0 && hs.includes(UNBOUNDED)) unbounded++;
     }
     // requirement text changed under an unchanged cid; a block with no recorded version (an older state) is left alone, not reset
     const tvNow = new Map(all.map((b) => [b.cid, b.tv]));
     for (const [cid, v] of Object.entries(prior.versions.tv || {})) if (tvNow.has(cid) && tvNow.get(cid) !== v) stale.add(cid);
+    if (unbounded) notes.push(`${unbounded} block(s) cite more than 8 files; their freshness cannot be tracked, so they are rechecked each run`);
     if ([...diffs.values()].includes(null)) notes.push('could not diff against an earlier audit commit (shallow clone? use fetch-depth: 0): its covered blocks are treated as changed and rechecked first');
   }
   const cand = candidates(all, maxRequirements, prior, changedDocs, stale);
