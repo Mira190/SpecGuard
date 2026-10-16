@@ -1084,6 +1084,21 @@ test('run: a deterministic low-confidence unit is tracked as unsure every run (n
   assert.equal(outside.calls.outputs.status, 'complete');
 });
 
+test('run: an inconclusive run (low-only finding) keeps a confirmed gap: still a gap with its original finding and run count, only the date advances (F20)', async (t) => {
+  const solid = { unit: UID, kind: 'missing_test', path: 'src/plan.js', line: 1, quote: FILES['src/plan.js'][0], title: 'No test', skeleton: 'it("fires", () => {});' };
+  const run = (unit_findings, issues = []) => runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result([req()], { unit_findings }) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues } });
+  const body = (r) => (r.calls.created[0] || r.calls.updated[0]).body, st = (r) => audit.readState(body(r));
+  const one = await run([solid]), two = await run([solid], [{ number: 7, body: body(one), user: BOT }]);
+  const gap2 = st(two).blocks.find((b) => b.cid === UID);
+  assert.deepEqual([gap2.status, gap2.runs], ['gap', 2]);
+  const earlier = body(two).split(DATE).join('2026-01-01'); // the confirmed gap was last audited long ago
+  const three = await run([{ ...solid, skeleton: '' }], [{ number: 7, body: earlier, user: BOT }]);
+  const gap3 = st(three).blocks.find((b) => b.cid === UID);
+  assert.deepEqual([gap3.status, gap3.runs, gap3.at.date], ['gap', 2, DATE], 'still a gap, runs unchanged, date advanced');
+  assert.deepEqual(st(three).findings, st(two).findings, 'the original finding is carried');
+  assert.equal(three.calls.outputs.status, 'complete');
+});
+
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
   const five = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), ...[1, 2, 3, 4].map((i) => cand(cid(i), 4, `Block ${i}.`)));
   const skip = (i) => ({ cid: cid(i), reason: 'rationale' });

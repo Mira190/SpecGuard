@@ -381,15 +381,17 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
   // a unit reviewed in parts (code.parts: id -> { k, n }, review F07) keeps the findings of its other parts and is covered only after its last part with none
   const parts = (code && code.parts) || new Map(), pf = (prior && prior.findings) || [];
   const otherParts = code ? pf.filter((x) => parts.has(x.unit) && code.picked.includes(x.unit) && !stale.has(x.unit) && Number.isInteger(x.part) && x.part !== parts.get(x.unit).k) : [];
+  const held = code ? ((prior && prior.blocks) || []).filter((b) => b.status === 'gap' && (code.unsure || []).includes(b.cid) && code.picked.includes(b.cid) && !stale.has(b.cid)) : [];
   if (code) {
     const hit = new Set([...code.findings, ...otherParts].map((f) => f.unit));
-    now.push(...track(code.picked.map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : (code.unsure || []).includes(cid) || parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
+    // an inconclusive run (code.unsure) neither proves nor disproves: a prior gap stays a gap with its findings and run count, only the date advances
+    now.push(...held.map((b) => [b.cid, 'gap', b.since, b.runs, at]), ...track(code.picked.filter((cid) => !held.some((b) => b.cid === cid)).map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : (code.unsure || []).includes(cid) || parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
   }
   const all = carried.concat(code ? code.carried : []);
   const rank = (b) => (b.status === 'covered' || b.status === 'not_req' ? 1 : 0), when = (b) => (b.at && b.at.date) || '';
   const old = all.slice().sort((a, b) => rank(a) - rank(b) || (when(a) < when(b) ? 1 : when(a) > when(b) ? -1 : 0)).slice(0, Math.max(0, STATE_MAX - now.length));
   const entry = (x) => [x.fid, x.unit, x.since, x.runs, ...(Number.isInteger(x.part) ? [x.part] : [])];
-  const fs_ = code ? [...code.findings.map((f) => f.next), ...otherParts.map(entry), ...pf.filter((x) => !code.picked.includes(x.unit) && !stale.has(x.unit) && code.carried.some((b) => b.cid === x.unit)).map(entry)].slice(0, FINDINGS_MAX) : [];
+  const fs_ = code ? [...code.findings.map((f) => f.next), ...otherParts.map(entry), ...pf.filter((x) => held.some((b) => b.cid === x.unit)).map(entry), ...pf.filter((x) => !code.picked.includes(x.unit) && !stale.has(x.unit) && code.carried.some((b) => b.cid === x.unit)).map(entry)].slice(0, FINDINGS_MAX) : [];
   // versions: what each verdict was made against; a carried entry keeps its old version, so it stays stale until it is reviewed again
   const pv = (prior && prior.versions) || { uv: {}, ev: {} }, kept = new Set(old.map((b) => b.cid)), uv = {}, ev = {}, uc = {};
   for (const [k, v] of Object.entries(pv.uv)) if (kept.has(k)) uv[k] = v;
