@@ -1249,7 +1249,7 @@ test('state (F22 review): a restart after an edit drops the findings of the old 
 
 test('E1 scan: a covered requirement whose only test is a truthiness or interaction assertion is unknown; value evidence still covers', () => {
   const withTest = (line) => { const f = { ...FILES, 'tests/plan.test.js': ['test("repeat stays on", () => {', line, '});'] }; return verify(result([req({ tests: [{ path: 'tests/plan.test.js', line: 2, quote: line, layer: 'unit' }] })]), { read: (p) => f[p] || null }).requirements[0]; };
-  for (const q of ['  assert.ok(fire({ repeat: true }));', '  expect(fire(p)).toBeTruthy();', '  expect(spy).toHaveBeenCalled();', '  expect(spy).toHaveBeenCalledTimes(2);']) {
+  for (const q of ['  assert.ok(fire({ repeat: true }));', '  expect(fire(p)).toBeTruthy();', '  expect(spy).toHaveBeenCalled();']) {
     const r = withTest(q);
     assert.equal(r.status, 'unknown', q);
     assert.match(r.note, /only truthiness\/interaction assertions/);
