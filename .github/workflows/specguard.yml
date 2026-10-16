@@ -10,19 +10,55 @@ name: SpecGuard reusable
 # The action is used by a literal full-SHA pin (the `# specguard-pin` line below) (uses: cannot take an expression, and a GITHUB_TOKEN of the caller cannot be assumed to read this repository to check it
 # out). The runner downloads it with its own scoped token, which is what the Access setting of an internal/private SpecGuard repository allows. After a change to action.yml or src/, run
 # `node bin/pin-reusable.js` (pins the current commit) and commit; callers then pin the commit of this file. A test checks that the pin is a commit of this repository's history.
+# Every input of action.yml is forwarded (a test, src/audit-action.test.js, fails when one is not). Deliberately NOT forwarded:
+#   github_token  the workflow passes github.token itself; llm_token, copilot_token, scan_issue_token arrive through secrets: above, never as plain inputs
+#   repository, pr_number, base_sha, head_sha  manual targeting of another PR; this workflow reviews the caller's own pull_request event (specguard-run.yml does manual runs)
 on:
   workflow_call:
     inputs:
-      mode: { description: "pr (review the pull request) | scan (unit test gap scan; call it from workflow_dispatch or schedule on the default branch).", required: false, type: string, default: pr }
-      requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes.", required: false, type: string, default: "" }
-      standards_paths: { description: "Globs (one per line) that add coding-standard documents.", required: false, type: string, default: "" }
-      test_paths: { description: "Globs or folders (one per line) that are the unit-test locations.", required: false, type: string, default: "" }
-      scan_issue: { description: "Scan mode: also create or update the one scan issue (caller needs issues write).", required: false, type: boolean, default: false }
-      model: { description: "Copilot model name. Empty = Copilot Auto.", required: false, type: string, default: "" }
-      effort: { description: "Reasoning effort: low | medium | high | xhigh | max. Empty = Copilot default.", required: false, type: string, default: "" }
+      engine: { description: "Review engine adapter: auto (default: by the credential kind when llm_token is set, else copilot on the job token) | copilot (Copilot CLI) | claude (Claude Code CLI on an Anthropic API key). Each engine is one script in src/engines/ (see src/engines/README.md).", required: false, type: string, default: auto }
+      model: { description: "Model name passed to the engine. Empty = Copilot Auto (copilot) or the CLI default (claude). Short alias: haiku-5.5. Any full id passes through. What is available depends on the token owner's plan; with Copilot an unavailable model falls back to auto.", required: false, type: string, default: "" }
+      effort: { description: "Reasoning effort: empty (Copilot default) | low | medium | high | xhigh | max. Only passed with an explicit model other than auto.", required: false, type: string, default: "" }
+      auto_tier: { description: "Copilot Auto routing profile when model is empty or auto: intelligence | balance | efficiency | empty (Copilot default). Ignored, with a note, if the CLI or an org policy rejects it.", required: false, type: string, default: intelligence }
+      fast_models: { description: "Copilot: extra model names (exact, or /regex/; one per line or comma separated) to treat as fast-tier on top of the built-in name patterns (flash, mini, haiku, nano, lite, small).", required: false, type: string, default: "" }
+      copilot_max_ai_credits: { description: "Copilot soft cap on AI credits per turn (integer 30-2000). A Copilot run is one turn plus at most one repair turn on the same session, so the worst case per push is about twice this. Empty = 400 in scan mode, 60 in pr mode.", required: false, type: string, default: "" }
+      max_budget_usd: { description: "claude engine: the budget in USD per run (positive decimal, at most 20). In api mode (default) it is a HARD bound: the worst-case cost (prompt size plus max_output_tokens at the model's price) is computed before the call and the call is not made when it exceeds this. In agent mode it is the Claude Code CLI's soft cap (checked between turns; a run can cost several times this) plus a finalize turn of 20% of it. Ignored by the copilot engine.", required: false, type: string, default: "1.00" }
+      claude_mode: { description: "claude engine: api (default; ONE Anthropic Messages API call with the context SpecGuard already built, schema-enforced JSON, cost bounded up front by max_budget_usd, no CLI install) | agent (Claude Code CLI with read-only tools; the tool loop re-sends the whole context every turn, so cost is not bounded up front). Ignored by the copilot engine.", required: false, type: string, default: api }
+      max_output_tokens: { description: "claude engine, api mode: most output tokens the model may produce (integer 1000-64000). Part of the worst-case cost checked against max_budget_usd.", required: false, type: string, default: "32000" }
+      max_comments: { description: "Max inline comments (hard cap 30).", required: false, type: string, default: "10" }
+      max_diff_kb: { description: "Diff size above which the review is partial.", required: false, type: string, default: "300" }
+      focus_threshold: { description: "Advanced. Large-PR gate as 'lines,files' (default '600,25'; 'off' disables). Above it only the highest-risk changed files are reviewed and the summary says so.", required: false, type: string, default: "600,25" }
+      focus_files: { description: "Advanced. Most files a focused (large-PR) review covers, riskiest first (default 12).", required: false, type: string, default: "12" }
+      ignore: { description: "Extra ignore globs, one per line, appended to the defaults.", required: false, type: string, default: "" }
+      standards_checks: { description: "Exact check:NAME or status:CONTEXT entries, one per line. Requires checks/statuses read permission. Empty means not configured.", required: false, type: string, default: "" }
+      standards_ref: { description: "head or merge: commit on which your lint/format jobs run. Defaults to head.", required: false, type: string, default: head }
+      requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes. Empty = content-based discovery only.", required: false, type: string, default: "" }
+      test_paths: { description: "Globs or folders (one per line; a !glob line excludes) that are the authoritative unit-test locations. Empty = discover test files by name and layout.", required: false, type: string, default: "" }
+      standards_paths: { description: "Globs (one per line) that add coding-standard or review-guideline documents, read from the base commit; a !glob line excludes.", required: false, type: string, default: "" }
+      coverage_files: { description: "Optional. Coverage report globs, one per line, relative to the workspace (LCOV, Cobertura XML, JaCoCo XML, Go cover profile, Istanbul coverage-final.json). SpecGuard never runs tests: your workflow must run them with coverage BEFORE this step, in the same job. With a report, changed lines that no test executed are reported as facts and a 'covered' judgement for such a line is downgraded. Empty = off.", required: false, type: string, default: "" }
+      trace: { description: "auto | off. auto traces requirement docs and code when any requirement doc is found.", required: false, type: string, default: auto }
+      claude_version: { description: "Pinned @anthropic-ai/claude-code version (claude engine).", required: false, type: string, default: "2.1.284" }
+      copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", required: false, type: string, default: "1.0.92" }
+      review_timeout_minutes: { description: "Engine time limit in minutes. Keep the job timeout-minutes at least 3 above it. Empty = 25 in scan mode, 12 in pr mode.", required: false, type: string, default: "" }
+      include_bots: { description: "true to review PRs opened by bots (skipped by default).", required: false, type: boolean, default: false }
+      resolve_stale: { description: "true to resolve SpecGuard's own unreplied review threads whose finding is no longer reported. Needs a token that can resolve review threads (the job token cannot).", required: false, type: boolean, default: false }
+      force: { description: "true to review again although this head SHA already has a SpecGuard summary.", required: false, type: boolean, default: false }
+      ctx_retention_days: { description: "Days to keep the specguard-ctx debug artifact (diff, prompt context, raw engine output; repo readers can download it). 0 disables the upload.", required: false, type: string, default: "1" }
+      mode: { description: "pr (review a pull request) | scan (unit test gap scan of the checked-out repository: the riskiest source files that lack real unit tests, plus, when design documents exist, documented behaviour that lacks unit-test evidence; run it on the default branch, on demand or on a schedule). audit is accepted as an alias of scan.", required: false, type: string, default: pr }
+      max_units: { description: "Scan mode: most source files (units) reviewed per run, riskiest first (integer 1-100). With scan_issue: true the runs rotate through all units, like the document blocks.", required: false, type: string, default: "12" }
+      scan_batch_blocks: { description: "Scan mode, claude engine (api mode): most document blocks per API call (integer 1-100). A scan with more blocks is split into one call for the units and one per batch of blocks; the answers are merged, a failed call loses only its own blocks (listed as not audited, due again) and max_budget_usd bounds the whole run (trailing batches are dropped first).", required: false, type: string, default: "20" }
+      scan_max_blocks: { description: "Scan mode: most document blocks audited per run (integer 1-500; empty = 80). With scan_issue: true the runs rotate through all blocks (changed documents, gaps to confirm, never-audited blocks, then the least recently audited); without it the first blocks in document order.", required: false, type: string, default: "" }
+      scan_paths: { description: "Scan mode: newline-separated globs (! excludes) that restrict both the requirement documents and the code and tests searched for evidence to a subtree, for a monorepo package (empty = the whole repository). The scan issue is per scope.", required: false, type: string, default: "" }
+      scan_issue: { description: "Scan mode: true to also create or update one issue titled 'SpecGuard: unit test gap scan' (with scan_paths: '... (<scope>)'; with scan_issue_repo: '...: owner/name', before the scope; needs issues write; empty = false). It holds the state that lets runs confirm gaps and rotate through all blocks.", required: false, type: boolean, default: false }
+      scan_issue_repo: { description: "Scan mode with scan_issue: owner/name of the repository that holds the scan issue (title ends with the scanned repository). Empty = the scanned repository. For a manual run that scans another repository and keeps its state in this one. Written only when both visibilities can be read and a non-public scanned repository does not report into a public one; otherwise no issue is written and the status is failed.", required: false, type: string, default: "" }
+      audit_max_requirements: { description: "Deprecated alias of scan_max_blocks (scan_max_blocks wins when both are set).", required: false, type: string, default: "" }
+      audit_issue: { description: "Deprecated alias of scan_issue (scan_issue wins when both are set).", required: false, type: string, default: "" }
+      delivery: { description: "pr (post the review and the summary comment to the PR) | summary (job summary only; nothing is written to the PR). For runs that review another repository (.github/workflows/specguard-run.yml).", required: false, type: string, default: pr }
+      fail_on_error: { description: "true to fail the job when SpecGuard could not complete (status failed: engine error, quota, timeout, unusable output); an incomplete result only warns. Default false: SpecGuard is advisory and never fails a PR check. Manual runs set it.", required: false, type: boolean, default: false }
     secrets:
       llm_token: { description: "Optional. A GitHub fine-grained PAT (Copilot Requests) or an Anthropic API key (sk-ant-...), detected by prefix; wins over copilot_token.", required: false }
       copilot_token: { description: "Optional. Fine-grained PAT owned by a user, account permission Copilot Requests; Copilot is then billed to that user's seat. Empty = the job token (needs the org policy 'Allow use of Copilot CLI billed to the organization').", required: false }
+      scan_issue_token: { description: "Optional. Token for the scan issue (issues write on scan_issue_repo). Empty = the job token.", required: false }
 
 jobs:
   specguard:
@@ -36,14 +72,45 @@ jobs:
       - uses: Mira190/SpecGuard@caa99fbbef69ef03f3082f2227f85a8c83977332 # specguard-pin
         with:
           mode: ${{ inputs.mode }}
+          scan_issue_token: ${{ secrets.scan_issue_token }}
           github_token: ${{ github.token }}
           llm_token: ${{ secrets.llm_token || secrets.SPECGUARD_LLM_TOKEN }} # explicit "secrets: { llm_token: ... }", or "secrets: inherit" with a secret of that name
           copilot_token: ${{ secrets.copilot_token || secrets.SPECGUARD_COPILOT_TOKEN }} # explicit "secrets: { copilot_token: ... }", or "secrets: inherit" with a secret of that name
-          requirements_paths: ${{ inputs.requirements_paths }}
-          standards_paths: ${{ inputs.standards_paths }}
-          test_paths: ${{ inputs.test_paths }}
-          scan_issue: ${{ inputs.scan_issue }}
+          engine: ${{ inputs.engine }}
           model: ${{ inputs.model }}
           effort: ${{ inputs.effort }}
-          review_timeout_minutes: ${{ inputs.mode == 'scan' && '25' || '12' }}
-          copilot_max_ai_credits: ${{ inputs.mode == 'scan' && '400' || '60' }}
+          auto_tier: ${{ inputs.auto_tier }}
+          fast_models: ${{ inputs.fast_models }}
+          copilot_max_ai_credits: ${{ inputs.copilot_max_ai_credits || (inputs.mode == 'scan' && '400' || '60') }}
+          max_budget_usd: ${{ inputs.max_budget_usd }}
+          claude_mode: ${{ inputs.claude_mode }}
+          max_output_tokens: ${{ inputs.max_output_tokens }}
+          max_comments: ${{ inputs.max_comments }}
+          max_diff_kb: ${{ inputs.max_diff_kb }}
+          focus_threshold: ${{ inputs.focus_threshold }}
+          focus_files: ${{ inputs.focus_files }}
+          ignore: ${{ inputs.ignore }}
+          standards_checks: ${{ inputs.standards_checks }}
+          standards_ref: ${{ inputs.standards_ref }}
+          requirements_paths: ${{ inputs.requirements_paths }}
+          test_paths: ${{ inputs.test_paths }}
+          standards_paths: ${{ inputs.standards_paths }}
+          coverage_files: ${{ inputs.coverage_files }}
+          trace: ${{ inputs.trace }}
+          claude_version: ${{ inputs.claude_version }}
+          copilot_version: ${{ inputs.copilot_version }}
+          review_timeout_minutes: ${{ inputs.review_timeout_minutes || (inputs.mode == 'scan' && '25' || '12') }}
+          include_bots: ${{ inputs.include_bots }}
+          resolve_stale: ${{ inputs.resolve_stale }}
+          force: ${{ inputs.force }}
+          ctx_retention_days: ${{ inputs.ctx_retention_days }}
+          max_units: ${{ inputs.max_units }}
+          scan_batch_blocks: ${{ inputs.scan_batch_blocks }}
+          scan_max_blocks: ${{ inputs.scan_max_blocks }}
+          scan_paths: ${{ inputs.scan_paths }}
+          scan_issue: ${{ inputs.scan_issue }}
+          scan_issue_repo: ${{ inputs.scan_issue_repo }}
+          audit_max_requirements: ${{ inputs.audit_max_requirements }}
+          audit_issue: ${{ inputs.audit_issue }}
+          delivery: ${{ inputs.delivery }}
+          fail_on_error: ${{ inputs.fail_on_error }}
