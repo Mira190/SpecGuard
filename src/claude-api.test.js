@@ -826,3 +826,65 @@ test('windowPack: omitted and partial evidence files are reported instead of cla
   const tight = api.windowPack(r.root, new Map([['big.js', [900]], ['small.js', [1]]]), 100);
   assert.deepEqual(tight.notWhole, ['big.js', 'small.js']);
 });
+
+// --- unit part test slices and block evidence in the single-call pack (audit F27, F28) ---
+const tmpRepo = (t, files, ctxFiles) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ev-')), ctx = path.join(root, '.ctx');
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const [base, fs0] of [[root, files], [ctx, ctxFiles]]) for (const [n, c] of Object.entries(fs0)) { fs.mkdirSync(path.dirname(path.join(base, n)), { recursive: true }); fs.writeFileSync(path.join(base, n), c); }
+  return { root, ctx };
+};
+const unitName = (i) => `unit${String(i).padStart(3, '0')}`;
+const unitsRepo = (t, n, part, pad = 200) => tmpRepo(t, {
+  'src/units.js': Array.from({ length: n }, (_, i) => `function ${unitName(i)}(value) { return value + ${i}; } // ${'x'.repeat(pad)}`).join('\n') + '\n',
+  'tests/units.test.js': Array.from({ length: n }, (_, i) => `test('unit ${i}', () => { assert.equal(${unitName(i)}(1), ${i + 1}); }); // ${'x'.repeat(pad * 3)}`).join('\n') + '\n',
+}, { 'audit-units.txt': `aaaaaaaa\tsrc/units.js\t5\twhy\ttests/units.test.js\t-\tv1\t${part}\n` });
+
+test('context pack (N3): the test slices follow the unit part\'s lines, not the first symbols of the file', (t) => {
+  const r = unitsRepo(t, 200, 'part 2/2 lines 101-200', 100);
+  const p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(p.text.includes('function unit170'));
+  assert.ok(p.text.includes('assert.equal(unit170('), 'the current part\'s assertion is visible');
+  assert.ok(!p.text.includes('assert.equal(unit000('), 'the early tests of the other part are not');
+  assert.deepEqual(p.notWhole, []);
+  const big = unitsRepo(t, 200, 'part 2/2 lines 101-200'); // the audit's fixture: the part's 100 matching tests do not fit the per-file cap
+  assert.ok(api.contextPack(big.ctx, big.root, 250000).notWhole.includes('tests/units.test.js'), 'what does not fit is listed as cut');
+});
+
+test('context pack (N3): more symbols in the unit part than the cap -> the test file is listed as cut, never a silent complete', (t) => {
+  const r = unitsRepo(t, 400, 'part 1/1 lines 1-400', 20);
+  const p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(p.notWhole.includes('tests/units.test.js'), JSON.stringify(p.notWhole));
+});
+
+test('context pack (N3 control): a small whole file is shown whole and nothing is listed as cut', (t) => {
+  const r = unitsRepo(t, 5, '-', 5);
+  const p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(p.text.includes('assert.equal(unit000(') && p.text.includes('assert.equal(unit004('));
+  assert.deepEqual(p.notWhole, []);
+});
+
+// N4: evidence rows of the candidate blocks reach the model at batch-1, batch and batch+1 blocks
+const evRepo = (t, n) => {
+  const cid = (i) => i.toString(16).padStart(8, '0');
+  return tmpRepo(t, { 'config/policy.yaml': 'amount_minimum: 10\n', 'tests/policy.test.js': 'test("minimum", () => { assert.equal(policy.amount_minimum, 10); });\n' }, {
+    'audit-candidates.txt': Array.from({ length: n }, (_, i) => `${cid(i)}\tdocs/design.md:${i + 1}\tPolicy\tMinimum must be 10.`).join('\n') + '\n',
+    'audit-evidence.txt': Array.from({ length: n }, (_, i) => `${cid(i)}\tcode\tconfig/policy.yaml:1\tamount_minimum: 10\n${cid(i)}\ttest\ttests/policy.test.js:1\tassert.equal(policy.amount_minimum, 10)`).join('\n') + '\n',
+  });
+};
+const packFor = (r, limit) => { // the pack of the first call the scan would make: a block part when split, else the single call's pack
+  const split = require('./scan-parts.js').plan({ ctx: r.ctx, root: r.root, batch: 20, limit, schemaFile: path.join(__dirname, 'audit.schema.json'), contextPack: api.contextPack, evidencePack: api.evidencePack, assembleAudit: require('./prompt.js').assembleAudit });
+  return { split, pack: split ? split.parts[split.parts.length - 1].pack : api.contextPack(r.ctx, r.root, limit) };
+};
+for (const n of [19, 20, 21]) {
+  test(`evidence (N4): ${n} candidate blocks with batch 20 -> the cited config file is in the pack`, (t) => {
+    const { split, pack } = packFor(evRepo(t, n), 250000);
+    assert.equal(split === null, n <= 20);
+    assert.ok(pack.text.includes('amount_minimum: 10'));
+    assert.ok(pack.text.includes('assert.equal(policy.amount_minimum, 10)'));
+    assert.deepEqual(pack.notWhole, []);
+  });
+}
+test('evidence (N4): a budget too small for the cited files lists them as cut, at every block count', (t) => {
+  for (const n of [19, 21]) assert.deepEqual([...packFor(evRepo(t, n), 100).pack.notWhole].sort(), ['config/policy.yaml', 'tests/policy.test.js'], `n=${n}`);
+});
