@@ -296,6 +296,7 @@ test('fail-on-error.js: a configuration failure (auth, quota, model) fails the j
       if (c) assert.match(r.stdout, new RegExp(`\\(${c}\\)`), 'the warning names the class');
       assert.equal(run('failed', c, 'true').status, 1, `${c || 'unclassified'} with fail_on_error true`);
     }
-    for (const s of ['complete', 'incomplete', 'skip', '']) assert.equal(run(s, 'auth').status, 0, `${s || 'empty'} is not a failure`);
+    for (const s of ['complete', 'skip', '']) assert.equal(run(s, 'auth').status, 0, `${s || 'empty'} is not a failure`);
+    assert.equal(run('incomplete', 'auth').status, 1, 'incomplete with a configuration class (a part of a split scan hit it) fails too');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
