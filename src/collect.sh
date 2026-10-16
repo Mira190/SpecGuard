@@ -40,7 +40,7 @@ while IFS= read -r l; do l=${l%$'\r'}; [ -n "$l" ] && IGNORES+=("$l"); done <<< 
 match() {
   local f=$1 p; shift
   for p in "$@"; do
-    p=${p#\*\*/}
+    MP=$p; p=${p#\*\*/} # MP: the pattern that matched (the caller may report it)
     if [[ $p == */ ]]; then [[ $f == $p* || $f == */$p* ]] && return 0
     else [[ $f == $p || $f == */$p ]] && return 0; fi
   done
@@ -74,17 +74,20 @@ echo "$DIFF_BASE_SHA" > "$CTX/diff-base-sha"
 # 1. diff (three-dot = merge-base, same as GitHub's PR diff; needs fetch-depth 0)
 # Rule and agent-config files are never reviewed (they are restored from base below); the modified ones are reported.
 HERE=$(dirname "$0")
-files=(); rules=(); docs=(); dropped=(); specs=(); lintchg=(); nctl=0
+files=(); rules=(); ignored=(); docs=(); dropped=(); specs=(); lintchg=(); nctl=0
 # A path with a control character (git allows a newline) would split the newline-delimited lists below: drop it, say so.
 cntrl() { [[ $1 == *[[:cntrl:]]* ]]; }
+# The name list is read to a file first: a failed diff inside `< <(...)` is invisible and would end as "nothing to review".
+git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA" > "$CTX/diff-names.tmp"   || { echo "::error::git diff $BASE_SHA...$HEAD_SHA failed (base commit missing or no merge-base: shallow clone? use actions/checkout with fetch-depth: 0); the PR was not reviewed"; exit 1; }
 while IFS= read -r -d '' f; do
   if cntrl "$f"; then nctl=$((nctl + 1)); continue; fi
   if lintcfg "$f" "$HEAD_SHA" "$BASE_SHA"; then lintchg+=("$f"); fi
   rulefile "$f" && rules+=("$f") && continue
-  match "$f" "${IGNORES[@]}" && continue
+  if match "$f" "${IGNORES[@]}"; then ignored+=("$f ($MP)"); continue; fi
   [[ $f =~ \.(md|mdx|markdown|rst|adoc|txt|feature)$ ]] && { docs+=("$f"); continue; }
   files+=("$f")
-done < <(git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA")
+done < "$CTX/diff-names.tmp"
+rm -f "$CTX/diff-names.tmp"
 
 # Changed docs are reviewable only when trace.js names them requirement docs (classify runs before diff.patch is written).
 # Unclassified .md is dropped as before; other doc types stay as ordinary files. A trace.js failure degrades to that old behaviour.
@@ -98,6 +101,13 @@ if [ ${#docs[@]} -gt 0 ]; then
     elif [[ $f != *.md ]]; then files+=("$f")
     else dropped+=("$f"); fi
   done
+fi
+# Files a default or extra ignore pattern removed are never reviewed: say which, with the pattern (a pattern like build/ matches at any depth).
+if [ ${#ignored[@]} -gt 0 ]; then
+  printf 'Not reviewed, matched an ignore pattern (%d): %s%s
+' "${#ignored[@]}" "$(printf '`%s`, ' "${ignored[@]:0:10}" | sed 's/, $//')" "$([ ${#ignored[@]} -gt 10 ] && echo ", … (+$(( ${#ignored[@]} - 10 )) more)")" | tr -d '
+' >> "$CTX/collect-limits.txt"
+  echo >> "$CTX/collect-limits.txt"
 fi
 [ "$nctl" -eq 0 ] || echo "$nctl changed path(s) containing control characters were not reviewed." >> "$CTX/collect-limits.txt"
 nspecs=${#specs[@]}
@@ -242,7 +252,9 @@ fi
 node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null || { rm -f "$CTX/diff.numbered.txt"; echo "::warning::numbered diff failed; the raw diff is used"; }
 # Up to 5 per changed non-test file: same basename stem with test/spec affixes (any directory), test files named after a public name of the file (res.status.js), tests that mention the stem as a whole word
 # (imports, references), then tests in the same directory. ponytail: names and a word grep only, no per-language import parsing.
-timeout 60 node - "$HERE/trace.js" "$CTX" <<'JS' || { echo "::warning::test candidates failed; continuing without them"; rm -f "$CTX/test-candidates.txt"; }
+# CAND_ONLY=file (paths in the first column): add blocks for those files only, to the existing list (step 7a: the files focus chose).
+# candidates-cut.txt: changed files left without a block (file or byte cap); post.js distrusts missing_test claims about them.
+candidates() { timeout 60 node - "$HERE/trace.js" "$CTX" <<'JS'
 const fs = require('node:fs'), path = require('node:path'), { execFileSync } = require('node:child_process');
 const { isTestPath, testScope } = require(path.resolve(process.argv[2])), { mapTests, publicDefs } = require(path.join(path.dirname(path.resolve(process.argv[2])), 'test-map.js'));
 const ctx = process.argv[3], CAP = 16 * 1024, PER = 5, MAX_FILES = 60;
@@ -255,24 +267,37 @@ const tests = tracked.filter(isTest), testSet = new Set(tests);
 if (scope) fs.writeFileSync(path.join(ctx, 'test-paths.txt'), String(process.env.TEST_PATHS).split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join('\n') + '\n');
 const specs = new Set(lines('spec-files.txt'));
 const changed = lines('files.txt').filter((f) => !isTest(f) && !isTestPath(f) && !specs.has(f) && !/\.(md|mdx|markdown|rst|adoc|txt|feature|json|ya?ml|toml|lock)$/i.test(f));
-const out = []; let size = 0, omitted = 0;
-for (const [k, f] of changed.entries()) {
-  if (k >= MAX_FILES) { omitted = changed.length - k; break; }
+const only = process.env.CAND_ONLY ? new Set(lines(path.relative(ctx, process.env.CAND_ONLY)).map((l) => l.split('\t')[0])) : null;
+const prev = only ? lines('test-candidates.txt').filter((l) => !/^\(\d+ more changed file/.test(l)).join('\n') : '';
+const listed = new Set(prev.split('\n').filter((l) => l && !/^[ (]/.test(l)));
+const todo = changed.filter((f) => !listed.has(f) && (!only || only.has(f)));
+const out = []; let size = prev.length;
+for (const [k, f] of todo.entries()) {
+  if (k >= MAX_FILES) break;
   let names = []; try { names = publicDefs(f, fs.readFileSync(f, 'utf8').split(/\r?\n/)).names; } catch {} // public names: a test file named after one (res.status.js) is a candidate
   const got = mapTests(f, { tests, names, per: PER, mentions: (stem) => { // tests that name the stem as a whole word (a timeout or no match: none)
     try { return execFileSync('git', ['grep', '-l', '-w', '-F', '-I', '-e', stem], { encoding: 'utf8', timeout: 15000, maxBuffer: 1 << 26, env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } }).split('\n').filter((t) => testSet.has(t)); } catch { return []; }
   } });
   const block = f + '\n' + (got.size ? [...got].map(([t, why]) => `  ${t}  (${why})\n`).join('') : '  (no candidate test file found)\n');
-  if (size + block.length > CAP) { omitted = changed.length - k; break; }
-  out.push(block); size += block.length;
+  if (size + block.length > CAP) break;
+  out.push(block); size += block.length; listed.add(f);
 }
-if (omitted) out.push(`(${omitted} more changed file(s) not listed)\n`);
-fs.writeFileSync(path.join(ctx, 'test-candidates.txt'), out.join(''));
+const unlisted = changed.filter((f) => !listed.has(f));
+if (unlisted.length) out.push(`(${unlisted.length} more changed file(s) not listed)\n`);
+fs.writeFileSync(path.join(ctx, 'test-candidates.txt'), (prev ? prev + '\n' : '') + out.join(''));
+fs.writeFileSync(path.join(ctx, 'candidates-cut.txt'), unlisted.map((f) => f + '\n').join(''));
 JS
+}
+candidates || { echo "::warning::test candidates failed; continuing without them"; rm -f "$CTX/test-candidates.txt" "$CTX/candidates-cut.txt"; }
 
 # 7. Large PR (over FOCUS_THRESHOLD lines,files): rank the changed files by risk and give the model only the top FOCUS_FILES (src/focus.js).
 # Writes focus.txt, focus-skipped.txt and focus-requirements.txt and narrows diff.numbered.txt; diff.patch stays whole. Fail-soft: the full numbered diff comes back.
 timeout 60 node "$HERE/focus.js" "$CTX" || { echo "::warning::focused review failed; the whole diff is used"; rm -f "$CTX/focus.txt" "$CTX/focus-skipped.txt" "$CTX/focus-requirements.txt"; node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null || rm -f "$CTX/diff.numbered.txt"; }
+
+# 7a. Step 6 caps by files.txt order, not by risk: give the files focus chose their candidate tests too.
+if [ -s "$CTX/focus.txt" ] && [ -f "$CTX/test-candidates.txt" ]; then
+  CAND_ONLY="$CTX/focus.txt" candidates || echo "::warning::test candidates for the focused files failed; continuing without them"
+fi
 
 # 8. Deterministic leads (src/leads.js): changed symbols with/without a test reference, suspected mirror assertions. Hints for the reviewer, never findings.
 # Runs after focus.js so a focused review only sees leads for the chosen files. Fail-soft: no leads.txt is the normal prompt.
