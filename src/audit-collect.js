@@ -96,7 +96,7 @@ function allBlocks(cwd, head, docs, ruled = null) { // ruled (optional array) re
       for (let k = 2; seen.has(cid); k++) cid = sha8(p, h, t, `#${k}`);
       seen.add(cid);
       if (i.reason) { if (ruled) ruled.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), reason: i.reason }); continue; }
-      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT), end: i.end, tv: textVer(full), body: blockBody(full) });
+      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT), end: i.end, tv: textVer(full), tvLegacy: textVer(i.raw), body: blockBody(full) });
     }
   }
   return all;
@@ -256,8 +256,8 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
       if (!d || hs.some((x) => d.has(x))) stale.add(cid);
     }
     // requirement text changed under an unchanged cid; a block with no recorded version (an older state) is left alone, not reset
-    const tvNow = new Map(all.map((b) => [b.cid, b.tv]));
-    for (const [cid, v] of Object.entries(prior.versions.tv || {})) if (tvNow.has(cid) && tvNow.get(cid) !== v) stale.add(cid);
+    const tvNow = new Map(all.map((b) => [b.cid, b.tv])), tvOld = new Map(all.map((b) => [b.cid, b.tvLegacy])); // a state written before Background context holds the legacy tv: not a change (the new tv replaces it when the block is next audited)
+    for (const [cid, v] of Object.entries(prior.versions.tv || {})) if (tvNow.has(cid) && tvNow.get(cid) !== v && tvOld.get(cid) !== v) stale.add(cid);
     if ([...diffs.values()].includes(null)) notes.push('could not diff against an earlier audit commit (shallow clone? use fetch-depth: 0): its covered blocks are treated as changed and rechecked first');
   }
   const cand = candidates(all, maxRequirements, prior, changedDocs, stale);

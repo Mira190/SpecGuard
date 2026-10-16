@@ -1077,3 +1077,11 @@ test('testScope: exclusions only means default test discovery minus the exclusio
   assert.equal(s('src/app.js'), false);
   assert.equal(T.testScope(''), null);
 });
+
+test('PR mode: the assembled prompt carries the inherited Background of a Background-only change', (t) => {
+  const r = repo(t, { 'features/t.feature': BG('SUSPENDED_TENANT') }, { 'features/t.feature': BG('ACTIVE_TENANT') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  fs.writeFileSync(path.join(r.ctx, 'diff.patch'), 'diff --git a/x b/x\n+x\n'); fs.writeFileSync(path.join(r.ctx, 'files.txt'), 'x.js\n');
+  const p = require('./prompt').assemble({ skillDir: path.join(__dirname, '..', 'skills', 'test-review'), ctxDir: r.ctx, schemaPath: path.join(__dirname, 'findings.schema.json') });
+  assert.match(p, /ACTIVE_TENANT/);
+});
