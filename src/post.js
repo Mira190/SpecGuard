@@ -1446,8 +1446,10 @@ async function run({ github, context, core }) {
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
   const ctxLines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
   const lint = { count: ctxLines('lint-configs.txt').length, changed: ctxLines('lint-changes.txt') }; // linter/formatter configs at base; those the PR changes
+  const denied = ctxLines('denied.txt').map((x) => x.trim()).filter(Boolean); // secret-like files collect.sh kept out of the model input: stated, not an incomplete run (deliberate, like ignored files)
+  const deniedNote = denied.length ? `Not reviewed: ${denied.length} secret-like file(s) (${denied.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${denied.length > 10 ? `, … (+${denied.length - 10} more)` : ''}): their diff was not sent to the model` : '';
   const collectError = (() => { try { return fs.readFileSync(path.join(ctx, 'collect-error.txt'), 'utf8'); } catch { return ''; } })().trim(); // collect.sh could not compute the diff: a failed run, never "nothing to review"
-  if (env.SKIP === 'true' && !collectError) return publish(buildSummary({ rules, lint, headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
+  if (env.SKIP === 'true' && !collectError) return publish(buildSummary({ rules, lint, headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, state: 'complete', status: `Nothing to review: every changed file is ignored (lockfiles, docs, generated files) or secret-like.${deniedNote ? ` ${deniedNote}.` : ''}` }), 'complete');
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -1556,6 +1558,7 @@ async function run({ github, context, core }) {
   let smap = null, sentries = []; // path -> scope; absent for older collectors, which skips the applicability check
   try { sentries = JSON.parse(readCtx('standards-map.json')); smap = new Map(sentries.map((e) => [e.path, e.scope])); } catch { /* no map */ }
   const cutInPrompt = standardsCut(ctx);
+  if (deniedNote) addNote(deniedNote);
   for (const l of (readCtx('collect-limits.txt') || '').split('\n').filter(Boolean)) addNote(l);
   verifyEvidence(data, reviewable, standards, readLines, maps);
   let requirements = null;
