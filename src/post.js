@@ -1474,6 +1474,8 @@ async function run({ github, context, core }) {
       if (seen) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }
+  const noCands = new Set((readCtx('candidates-cut.txt') || '').split('\n').filter(Boolean)); // collect.sh: changed files whose candidate tests were never looked up (list cap)
+  for (const f of data.findings) if (f.kind === 'missing_test' && f.confidence !== 'low' && noCands.has(f.path)) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: candidate tests were not looked up for ${f.path} (too many changed files); missing_test ${f.path} is not counted.`); }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
   if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);
   const addNote = (m) => { data.not_reviewed = [data.not_reviewed, m].filter(Boolean).join(' '); };

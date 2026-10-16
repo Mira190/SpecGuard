@@ -3741,3 +3741,17 @@ test('a non-422 failure on a FILE-level comment is incomplete too (no head marke
   assert.match(down.calls.summary[0].body, /src\.js:8/, 'the finding is not lost');
   assert.equal((await run(422)).outputs.status, 'complete');
 });
+
+test('candidates-cut.txt: a missing_test about a file whose candidate tests were never looked up is low confidence and not counted; other files are unaffected', async (t) => {
+  const run = async (cut) => {
+    const s = setup(t);
+    if (cut !== undefined) fs.writeFileSync(path.join(s.dir, 'ctx', 'candidates-cut.txt'), cut);
+    await post(s);
+    return s;
+  };
+  const cut = await run('src.js\n');
+  assert.equal(cut.calls.review.length, 0, 'no inline comment');
+  assert.match(cut.calls.summary[0].body, /Low-confidence findings \(1\)/);
+  assert.match(JSON.stringify(cut.calls.summary[0].body), /candidate tests were not looked up for src\.js/);
+  for (const s of [await run('other.js\n'), await run(undefined)]) assert.equal(s.calls.review.length, 1, 'still posted inline');
+});
