@@ -284,7 +284,7 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
     if (!locate(c)) { notes.push(`${at}: ${solid(f.quote) ? 'the quote was not found at the cited line' : `the quote is under ${MIN_QUOTE} characters`}`); dropped.add(f.unit); continue; }
     if (isDoc(c.path) || (f.kind === 'missing_test') === testFile(c.path)) { notes.push(`${at}: ${f.kind === 'missing_test' ? 'a missing_test cites the unit\'s code, not a test or a document' : `a ${f.kind} cites a test file`}`); dropped.add(f.unit); continue; }
-    if (u && u.part && c.path === u.path && (c.line < u.part.a || c.line > u.part.b)) { notes.push(`${at}: outside this run's part of the unit (lines ${u.part.a}-${u.part.b}); that part is reviewed in another run`); dropped.add(f.unit); continue; }
+    if (u && u.part && c.path === u.path && (c.line < u.part.a || c.line > u.part.b)) { notes.push(`${at}: outside this run's part of the unit (lines ${u.part.a}-${u.part.b}); that part is reviewed in another run`); continue; }
     const fid = sha8(f.unit, f.kind, key(c.quote));
     if (seen.has(fid)) continue;
     seen.add(fid);
@@ -383,7 +383,7 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
   const otherParts = code ? pf.filter((x) => parts.has(x.unit) && code.picked.includes(x.unit) && !stale.has(x.unit) && Number.isInteger(x.part) && x.part !== parts.get(x.unit).k) : [];
   if (code) {
     const hit = new Set([...code.findings, ...otherParts].map((f) => f.unit));
-    now.push(...track(code.picked.map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
+    now.push(...track(code.picked.map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : (code.unsure || []).includes(cid) || parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
   }
   const all = carried.concat(code ? code.carried : []);
   const rank = (b) => (b.status === 'covered' || b.status === 'not_req' ? 1 : 0), when = (b) => (b.at && b.at.date) || '';
@@ -444,7 +444,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   // code-first part (code = { list: Map of the reviewed units, inv: audit-inventory.json, findings: verified unit findings }): confirmed findings first, then by the unit's risk; low-confidence ones are Details only
   const uall = code ? trackFindings(code.findings, prior, sha).sort((a, b) => (b.confirmed - a.confirmed) || (((code.list.get(b.unit) || {}).score || 0) - ((code.list.get(a.unit) || {}).score || 0))) : [];
   const uf = uall.filter((f) => !f.low), ulow = uall.filter((f) => f.low), inv = code ? code.inv : null;
-  const unseen = (code && code.unseen) || [], unfit = code && code.unitsFailed ? 'were not reviewed: the unit call failed' : code && code.invalid && code.invalid.length ? "did not fit the model's context, or had a finding that was dropped or only low-confidence" : "did not fit the model's context", seenN = inv ? inv.rotation.picked - unseen.length : 0; // unseen: picked units the model's context did not hold whole (pack-cut.txt): not reviewed this run
+  const unseen = (code && code.unseen) || [], unfit = code && code.unitsFailed ? 'were not reviewed: the unit call failed' : "did not fit the model's context", seenN = inv ? inv.rotation.picked - unseen.length : 0; // unseen: picked units the model's context did not hold whole (pack-cut.txt): not reviewed this run
   const riskiest = inv && unseen.length ? `${seenN} unit${seenN === 1 ? '' : 's'} that fit the model's context` : inv ? (inv.rotation.picked === 1 ? 'riskiest unit' : `${inv.rotation.picked} riskiest units`) : '';
   // static test signals (no model): rule-based leads for the reviewed units, from the inventory's counts; an older inventory without `signals` has none. Never counted as gaps, never in the state.
   const sig = code && inv && Array.isArray(inv.rows) ? staticFindings(inv.rows.filter((r) => code.list.has(r.id))) : [];
@@ -741,12 +741,12 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || process.env.TEST_PATHS || '' });
   const cutUnits = hasCode && unitsFailed ? [...units.keys()] : hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path) || u.tests.some((t) => packCut.has(t))).map((u) => u.id) : [];
   const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers });
-  // A unit is "covered" only when no finding of it was dropped or lowered at any stage (validate, verify, low confidence): otherwise it is as unreviewed as a cut one and its prior state is carried.
+  // A unit is "covered" only when no finding of it was dropped or lowered at any stage (validate, verify, low confidence): otherwise it was seen but inconclusive, tracked as unsure.
   const solid = new Set(checked.unit_findings.filter((f) => !f.low).map((f) => f.unit)), notCut = (u) => !cutUnits.includes(u) && !solid.has(u);
   const dropU = hasCode ? [...new Set([...data.invalid_units, ...checked.unit_dropped])].filter(notCut) : [];
   const lowU = hasCode ? [...new Set(checked.unit_findings.map((f) => f.unit))].filter((u) => notCut(u) && !dropU.includes(u)) : [];
-  const invalid = [...dropU, ...lowU], unseen = [...cutUnits, ...invalid];
-  const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, invalid, unitsFailed } : null;
+  const unsure = [...dropU, ...lowU], unseen = cutUnits; // seen but inconclusive: tracked this run as unsure (rotation moves on, never covered); unseen: not tracked, still due
+  const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed } : null;
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
@@ -758,13 +758,13 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   // blocks sent to the model that it neither answered nor ruled out (validate tolerates up to MISSING_MAX of them: they become 'Unconfirmed' rows)
   const answeredC = new Set([...data.requirements.map((r) => cidOf(r.id)), ...data.not_requirements.map((n) => n.cid)]), unanswered = [...sent.keys()].filter((c) => !answeredC.has(c)).length;
   const incomplete = [partial, notAudited.blocks.length && `${plural(notAudited.blocks.length, 'document block')} not audited`, hasCode && unitsFailed && 'the unit call failed',
-    !unitsFailed && cutUnits.length && `${plural(cutUnits.length, 'unit')} did not fit the model's context`, dropU.length && `${plural(dropU.length, 'unit')} had a finding that failed validation or verification`, lowU.length && `${plural(lowU.length, 'unit')} had only low-confidence findings`, unanswered && `${plural(unanswered, 'document block')} ${unanswered === 1 ? 'was' : 'were'} not answered by the model`].filter(Boolean).join('; ');
+    !unitsFailed && cutUnits.length && `${plural(cutUnits.length, 'unit')} did not fit the model's context`, dropU.length && `${plural(dropU.length, 'unit')} had a finding that failed validation or verification`, unanswered && `${plural(unanswered, 'document block')} ${unanswered === 1 ? 'was' : 'were'} not answered by the model`].filter(Boolean).join('; ');
   outcome(incomplete ? 'incomplete' : 'complete', incomplete);
   if (issueErr) outcome('failed', issueErr); // the lookup ran before the status was known
   await finish(render({ ...shared, data: checked, partial, prior, carried, code, notAudited, unanswered }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
   const cu = readUnits(readCtx('audit-units-carried.txt')); // units the state knows that this run did not review, still in the repository
-  const codeState = code && { picked: [...units.keys()].filter((u) => !unseen.includes(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || unseen.includes(b.cid)) : [],
+  const codeState = code && { unsure, picked: [...units.keys()].filter((u) => !unseen.includes(u)),findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || unseen.includes(b.cid)) : [],
     versions: new Map([...units.values()].filter((u) => u.ver).map((u) => [u.id, u.ver])), parts: new Map([...units.values()].filter((u) => u.part && !unseen.includes(u.id)).map((u) => [u.id, u.part])) }; // an unseen unit is not tracked: its prior state is carried, it stays due
   const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale });
   await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
