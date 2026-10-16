@@ -431,3 +431,17 @@ test('F23 (review): when no unit fits, the unit chosen anyway is recorded as uns
   const second = inventory({ ...o, prior: state });
   assert.notEqual(second.picked[0].id, pick1.id, 'the rotation moves on');
 });
+
+test('F23 (review): when no unit fits, a unit unfinished in parts does not take the single place again', (t) => {
+  const files = {};
+  for (const u of ['a', 'b']) {
+    files[`src/js/${u}.js`] = Array.from({ length: 600 }, (_, i) => `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(6)}`);
+    files[`test/${u}.test.js`] = Array.from({ length: 4000 }, (_, i) => `// ${'filler '.repeat(6)}${i}`).concat(`it('${u}', () => { assert.equal(${u}.f1(1), 2); });`);
+  }
+  const r = repo(t, files), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 6000 };
+  const first = inventory(o).picked[0];
+  assert.ok(first.part && first.part.n > 1, 'the fixture splits the unit');
+  const prior = { head: 'a', blocks: [{ cid: first.id, status: 'unsure', runs: 1, at: { date: '2026-10-01' } }], versions: { uv: { [first.id]: first.ver }, ev: {}, uc: { [first.id]: [1, first.part.n] } } };
+  const second = inventory({ ...o, prior }).picked[0];
+  assert.notEqual(second.id, first.id, 'the unit in progress is not chosen again while nothing fits');
+});

@@ -1023,6 +1023,15 @@ test('run: units the model context did not hold make the status incomplete with 
   assert.equal(ok.calls.outputs.reason, undefined);
 });
 
+test('run (F23 review): a forced unit whose test was cut is written to the state as unsure with today\'s date, and the status names the cut', async (t) => {
+  const inv = { ...invOf([urow(UID, { path: 'src/plan.js', tests: ['test/a.test.js'] })]), forced: [UID] };
+  const r = await runPost(t, { ctxFiles: { 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\ttest/a.test.js\t-\tabcdef12\t-\n`, 'audit-inventory.json': inv, 'findings.json': result(), 'pack-cut.txt': 'test/a.test.js\n' }, env: { AUDIT_ISSUE: 'true' } });
+  assert.equal(r.calls.outputs.status, 'incomplete');
+  assert.match(r.calls.outputs.reason, /1 unit did not fit the model's context/);
+  const b = audit.readState(r.calls.created[0].body).blocks.find((x) => x.cid === UID);
+  assert.deepEqual([b.status, b.at.date], ['unsure', DATE]);
+});
+
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
   const five = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), ...[1, 2, 3, 4].map((i) => cand(cid(i), 4, `Block ${i}.`)));
   const skip = (i) => ({ cid: cid(i), reason: 'rationale' });
