@@ -458,6 +458,13 @@ test('collect: blocks the prefilter rules out are listed in audit-ruled.txt with
   assert.equal(r.candidates, 3);
 });
 
+test('collect: with a pack size, rule files shrink the room for unit parts (a unit that fits alone is split once a big AGENTS.md rides in the pack)', (t) => {
+  const src = { 'src/js/a.js': ('x'.repeat(149) + '\n').repeat(100) };
+  const part = (files) => { const { root, ctx } = repo(t, { ...src, ...files }); collect({ cwd: root, ctx, packBytes: 250000 }); return rows(ctx, 'audit-units.txt')[0][7]; };
+  assert.equal(part({}), '-');
+  assert.match(part({ 'AGENTS.md': 'rule\n'.repeat(10000) }), /^part 1\/\d+/);
+});
+
 test('collect: audit-blocks.txt holds each candidate block whole (past the 240-character row cut); a block over 4000 characters is marked [truncated] and noted as not fully read', (t) => {
   const decisive = 'The writer MUST use the atomic rename DECISIVE_CLAUSE.', long = `The importer MUST validate ${'every field of the record and '.repeat(150)}end.`;
   const { root, ctx } = repo(t, { 'docs/design.md': `# Design\n\n${'The plan MUST keep state and also '.repeat(10)}${decisive}\n\n${long}\n` });

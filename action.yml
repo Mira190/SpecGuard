@@ -144,6 +144,7 @@ runs:
         ISSUE_REPO: ${{ inputs.scan_issue_repo }} # the scan issue's repository and token, as the post step reads them
         ISSUE_TOKEN: ${{ inputs.scan_issue_token }}
         MAX_REQUIREMENTS: ${{ inputs.audit_max_requirements }} # deprecated alias; the new name wins
+        PACK_SPLIT: ${{ inputs.claude_mode != 'agent' && (inputs.engine == 'claude' || (inputs.engine == 'auto' && startsWith(inputs.llm_token || inputs.copilot_token, 'sk-ant-'))) }} # the claude api engine has a context pack: scan parts are sized to it
         AUDIT_BRANCH_GUARD: ${{ inputs.repository && inputs.repository != github.repository && 'off' || 'on' }} # the guard compares this workflow's ref; another repository is not on it
       run: node "$GITHUB_ACTION_PATH/src/audit-collect.js"
 
