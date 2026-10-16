@@ -192,6 +192,15 @@ function evidencePack(root, rows, limit, skip = new Set()) {
   return { ...p, blockCuts };
 }
 
+// What a pack that threw would have carried: the review files and their candidate tests (scan: the unit files and their matched tests). Written as pack-cut.txt so post.js treats them as unseen, not as fully seen.
+function packFiles(ctx) {
+  const list = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n').split('\n').filter(Boolean); } catch { return []; } };
+  const units = list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1]);
+  if (units.length) return [...new Set(units.flatMap((u) => [u[1], ...(u[4] && u[4] !== 'none' ? u[4].split(', ') : [])]))];
+  const cands = parseCandidates(list('test-candidates.txt').join('\n')), focus = list('focus.txt').map((l) => l.split('\t')[0]), review = focus.length ? focus : list('files.txt');
+  return [...new Set(review.flatMap((p) => [p, ...(cands.get(p) || [])]))];
+}
+
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
@@ -239,7 +248,9 @@ function contextPack(ctx, root, limit) {
   const unitSymbols = (p) => { const out = new Set(), part = unitPart.get(p); let capped = false; const add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n)) { if (out.size < UNIT_SYMS) out.add(n); else if (!out.has(n)) capped = true; } }; for (const l of (packRead(root, p) || '').split('\n').slice(part ? part.a - 1 : 0, part ? part.b : undefined)) symbolsIn(l, add); const syms = [...out]; syms.capped = capped; return syms; }; // names the unit defines in this run's part (all of the file when it is not in parts): a big test file is shown as the tests that mention them; capped: more names than UNIT_SYMS, so the file is listed as cut
   const unitPart = new Map(list('audit-units.txt').map((l) => l.split('\t')).map((u) => [u[1], /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(u[7] || '')]).filter((x) => x[1]).map(([p, w]) => [p, { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] }]));
   if (units.size) for (const p of review) addFile(p, true, false, null, limit, unitPart.get(p)); // scan: every unit file first, so no test starves a later unit (addFile skips a file already added)
-  review.forEach((p, i) => { addFile(p, true, false, null, limit, unitPart.get(p)); const top = Math.min(limit, used + (limit - used) / (review.length - i)); const syms = units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of (units.size ? units.get(p) : cands.get(p)) || []) addFile(t, true, false, syms, top, null, syms.capped); }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+  const symsOf = new Map(review.map((p) => [p, units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads)])), testsOf = (p) => (units.size ? units.get(p) : cands.get(p)) || [], shared = new Map(); // shared: a test -> the union of the symbols of every review file that lists it (it is added once, for the first of them, so it must be sliced for all)
+  for (const p of review) for (const t of testsOf(p)) { const u = shared.get(t) || Object.assign(new Set(), { capped: false }); symsOf.get(p).forEach((n) => u.add(n)); u.capped ||= !!symsOf.get(p).capped; shared.set(t, u); }
+  review.forEach((p, i) => { addFile(p, true, false, null, limit, unitPart.get(p)); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t); addFile(t, true, false, [...u], top, null, u.capped); } }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
     const named = [], crit = criteriaText(rd('requirements-status.json'));
@@ -436,7 +447,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     let pack = { text: '', note: '' };
     if (packBytes > 0) try { pack = contextPack(ctx, root(), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}
 `).join('')); w('pack-shown.txt', [...pack.shown].map(([x, n]) => `${x}	${n}
-`).join('')); if (Object.keys(pack.blockCuts || {}).length) w('scan-parts.json', JSON.stringify({ blockCuts: pack.blockCuts })); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
+`).join('')); if (Object.keys(pack.blockCuts || {}).length) w('scan-parts.json', JSON.stringify({ blockCuts: pack.blockCuts })); } catch (e) { console.log(`::warning::Context pack failed (${scrub(String(e?.message ?? e).split('\n')[0])}); the files it would have carried are listed as cut`); try { w('pack-cut.txt', packFiles(ctx).map((x) => `${x}\n`).join('')); } catch { /* ctx unwritable */ } } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
     const { system, user } = messages(prompt, pack.text); // the pre-flight below sees the pack
     const est = worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user), maxTokens);
     if (est.usd > budget) { // the budget is hard here: nothing is sent
@@ -455,4 +466,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, evidencePack };
+module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, evidencePack, packFiles };

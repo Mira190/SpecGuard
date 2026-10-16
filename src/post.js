@@ -357,9 +357,9 @@ function findLine(quote, hint, at, all = [], ok = () => true) {
     let n = 0, i = 0;
     for (; i < q.length && n < PREFIX; i++) if (q[i] !== ' ') n++;
     if (n < PREFIX) continue;
-    const p = q.slice(0, i);
-    if (hint >= 1 && ok(hint) && text(hint).startsWith(p)) return hint;
-    const l = one(L.filter((x) => text(x).startsWith(p)));
+    const p = q.slice(0, i), span = (x) => norm([0, 1, 2, 3].map((k) => at(x + k)).filter((s) => s != null).join(' ')), has = (x) => text(x).startsWith(p) && span(x).includes(q); // the whole (trimmed) quote must be on the line or the next 3 (a call split over lines): the same first 20 characters with a different tail is another line
+    if (hint >= 1 && ok(hint) && has(hint)) return hint;
+    const l = one(L.filter(has));
     if (l) return l;
   }
   return 0;

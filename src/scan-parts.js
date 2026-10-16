@@ -23,7 +23,8 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, evidencePack, 
     fs.writeFileSync(path.join(tmp, 'audit-meta.json'), JSON.stringify(m));
     return assembleAudit({ skillDir, ctxDir: tmp, schemaPath: schemaFile }).split(tmp.replace(/\\/g, '/')).join(ctx.replace(/\\/g, '/'));
   };
-  const pack = () => { try { return contextPack(tmp, root, limit); } catch { return { text: '', note: '', notWhole: [] }; } };
+  // a pack that throws shows nothing: every unit file and its matched tests count as cut (pack-cut.txt), not as fully seen
+  const pack = () => { try { return contextPack(tmp, root, limit); } catch (e) { console.log(`::warning::Context pack failed (${String(e?.message ?? e).split('\n')[0]}); the unit files and their tests are listed as cut`); return { text: '', note: '', notWhole: [...new Set(lines(units).map((l) => l.split('\t')).filter((u) => u[1]).flatMap((u) => [u[1], ...(u[4] && u[4] !== 'none' ? u[4].split(', ') : [])]))] }; } };
   let packCut = [];
   const { units: _u, max_units, ...bm } = meta;
   const block = (rows) => {
