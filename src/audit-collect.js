@@ -11,6 +11,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { inventory, write: writeUnits } = require('./audit-units');
+const UNBOUNDED = 'ffffffff'; // audit-post.js: the state's ev marker for a block that cited more files than it keeps
 const { PER_FILE } = require('./pack-cap');
 const { run, matchGlob, isTestPath, blocksOf, testScope, tokenize, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP } = require('./trace');
 
@@ -115,7 +116,8 @@ function select(all, cap, prior, changedDocs = null, stale = new Set()) {
   const asc = (a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0); // Array.sort is stable: ties keep document order
   take(all.filter((b) => !st.has(b.cid) && changedDocs && changedDocs.has(b.path) && !changedDocs.get(b.path).has(b.cid)), 'd');
   take(all.filter((b) => stale.has(b.cid)).sort(asc), 'd');
-  take(all.filter((b) => st.has(b.cid) && ((st.get(b.cid).status === 'gap' && st.get(b.cid).runs === 1) || st.get(b.cid).status === 'recheck')).sort(asc), 'c');
+  const retry = new Set((prior.versions && prior.versions.un) || []); // not answered by the model last run: one more try, first (review S6)
+  take(all.filter((b) => st.has(b.cid) && ((st.get(b.cid).status === 'gap' && st.get(b.cid).runs === 1) || st.get(b.cid).status === 'recheck' || retry.has(b.cid))).sort(asc), 'c');
   take(all.filter((b) => !st.has(b.cid)), 'n');
   take(all.filter((b) => st.has(b.cid)).sort(asc), 'o');
   const tally = { d: 0, c: 0, n: 0, o: 0 };
@@ -248,16 +250,19 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   // covered blocks whose cited files changed since their audit (the state's ev: path hashes per block); an audit commit missing from this clone counts as changed
   const stale = new Set(), diffs = new Map(), hashOf = (p) => crypto.createHash('sha1').update(p).digest('hex').slice(0, 8);
   if (prior && prior.versions) {
+    let unbounded = 0;
     const auditedAt = new Map(prior.blocks.map((b) => [b.cid, b.at && b.at.head]));
     for (const [cid, hs] of Object.entries(prior.versions.ev)) {
       const h = auditedAt.get(cid);
       if (h && !diffs.has(h)) { try { diffs.set(h, new Set(git(cwd, ['diff', '--name-only', '--no-renames', '-z', h, head]).split('\0').filter(Boolean).map(hashOf))); } catch { diffs.set(h, null); } }
       const d = h ? diffs.get(h) : null;
-      if (!d || hs.some((x) => d.has(x))) stale.add(cid);
+      if (!d || (hs.includes(UNBOUNDED) ? d.size > 0 : hs.some((x) => d.has(x)))) stale.add(cid); // UNBOUNDED: it cited more files than the state keeps, so any change counts (review S4)
+      if (d && d.size > 0 && hs.includes(UNBOUNDED)) unbounded++;
     }
     // requirement text changed under an unchanged cid; a block with no recorded version (an older state) is left alone, not reset
     const tvNow = new Map(all.map((b) => [b.cid, b.tv])), tvOld = new Map(all.map((b) => [b.cid, b.tvLegacy])); // ponytail: temporary migration. A state written before Background context holds the legacy tv: not a change (the new tv replaces it when the block is next audited). Drop tvLegacy after one full rotation has re-audited every block.
     for (const [cid, v] of Object.entries(prior.versions.tv || {})) if (tvNow.has(cid) && tvNow.get(cid) !== v && tvOld.get(cid) !== v) stale.add(cid);
+    if (unbounded) notes.push(`${unbounded} block(s) cite more than 8 files; their freshness cannot be tracked, so they are rechecked each run`);
     if ([...diffs.values()].includes(null)) notes.push('could not diff against an earlier audit commit (shallow clone? use fetch-depth: 0): its covered blocks are treated as changed and rechecked first');
   }
   const cand = candidates(all, maxRequirements, prior, changedDocs, stale);
