@@ -4026,3 +4026,55 @@ test('the real cover guard in PR mode: a literal in an unrelated test does not d
   assert.equal(own.calls.review.length, 0, 'control: demoted');
   assert.match(own.calls.summary[0].body, /low confidence: a test may already cover this: tests\/amount\.test\.js/);
 });
+
+// ---- protocol noise: a source label or a missing test layer must not turn into "add a test" ----
+const proto = (reqs, cov, docs = [{ source: 'PR body', text: 'Return 42. (U1)\nReject zero.' }]) => {
+  const d = report({ requirements: reqs, coverage: cov, findings: [] });
+  assert.equal(post.validate(d).ok, true);
+  post.verifyRequirements(d, { documents: docs, criteria: [], specFiles: [] });
+  return d;
+};
+const xreq = (source, extra = {}) => ({ id: 'X1', source, quote: 'Return 42.', obligation_ids: ['O1'], reason: 'r', ...extra });
+
+test('a canonical source followed by an item label resolves to the source; the label is the ref only when the source text has it', () => {
+  for (const src of ['PR body U1', 'PR body — U1', 'PR body: U1', 'PR body (U1)']) {
+    const d = proto([xreq(src)], [row('covered', { alignment: OK })]);
+    assert.deepEqual([src, d.requirements[0].source, d.requirements[0].ref, d.coverage[0].status], [src, 'PR body', 'U1', 'covered']);
+    assert.doesNotMatch(post.buildSummary({ data: d }), /Point to the unit test|not verified/, src);
+  }
+  const miss = proto([xreq('PR body U9')], [row('covered', { alignment: OK })]);
+  assert.deepEqual([miss.requirements[0].source, miss.requirements[0].ref, miss.coverage[0].status], ['PR body', undefined, 'covered'], 'a label the text does not have is dropped');
+  const path = proto([xreq('docs/x.md AC-3')], [row('covered', { alignment: OK })], [{ source: 'docs/x.md', text: 'Return 42.\nAC-3 holds.' }]);
+  assert.deepEqual([path.requirements[0].source, path.requirements[0].ref, path.coverage[0].status], ['docs/x.md', 'AC-3', 'covered']);
+  assert.equal(proto([xreq('PR bodyU1')], [row('covered')]).coverage[0].status, 'unknown', 'no separator: not a label');
+});
+
+test('control: a source naming an uncollected document is still rejected and unknown, and says the link is not verified', () => {
+  const d = proto([xreq('docs/other.md U1')], [row('covered', { alignment: OK })]);
+  assert.equal(d.coverage[0].status, 'unknown');
+  assert.match(d.coverage[0].reason, /could not be verified/);
+  assert.deepEqual(d.requirements[0].obligation_ids, []);
+  const s = post.buildSummary({ data: d });
+  assert.match(s, /Requirement link not verified/);
+  assert.doesNotMatch(s, /Point to the unit test/);
+  assert.doesNotMatch(s, /need a person to check/, 'not an actionable count');
+});
+
+test('a covered row citing a test file with no layer keeps its evidence and is not asked for a unit test', () => {
+  const d = proto([xreq('PR body')], [row('covered', { alignment: OK, evidence: [{ path: 'src/engines/claude-api.test.js', line: 2, quote: evidence.quote, proves: 'p' }] })]);
+  assert.equal(d.coverage[0].status, 'unknown');
+  assert.equal(d.coverage[0].evidence.length, 1);
+  assert.match(d.coverage[0].reason, /^Test layer not stated/);
+  const s = post.buildSummary({ data: d });
+  assert.match(s, /Test layer not stated/);
+  assert.doesNotMatch(s, /Point to the unit test|Malformed/);
+});
+
+test('control: no evidence at all, or a non-test path with no layer, still asks for the unit test', () => {
+  const none = proto([xreq('PR body')], [row('unknown', { evidence: [], reason: 'Nothing found.' })]);
+  assert.match(post.buildSummary({ data: none }), /Point to the unit test or add one/);
+  const code = proto([xreq('PR body')], [row('covered', { alignment: OK, evidence: [{ path: 'src/foo.js', line: 2, quote: evidence.quote, proves: 'p' }] }), row('covered', { id: 'O2' })]); // a second valid row keeps the report from being rejected as a whole
+  assert.equal(code.coverage[0].status, 'unknown');
+  assert.deepEqual(code.coverage[0].evidence, [], 'a non-test path is not counted as a test');
+  assert.match(post.buildSummary({ data: code }), /Point to the unit test or add one/);
+});
