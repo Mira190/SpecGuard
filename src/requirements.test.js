@@ -22,9 +22,28 @@ test('records inaccessible issues and fetch limits instead of claiming complete 
   assert.equal(result.status, 'partial');
   assert.equal(result.limitations.length, 6);
   assert.match(result.limitations[0], /1 linked issue/);
-  assert.match(result.limitations[1], /Could not read issue #1/);
+  assert.match(result.limitations[1], /Could not read closing issue #1/);
   assert.equal(isFactLimitation(result.limitations[0]), false, 'a closing issue cut by the cap is a gap');
-  assert.ok(result.limitations.slice(1).every(isFactLimitation), 'an unreadable reference is a note');
+  assert.ok(result.limitations.slice(1).every((l) => !isFactLimitation(l)), 'an unreadable closing issue lost requirement text: a gap, so the run is incomplete');
+});
+
+test('an unreadable mention stays a note; an unreadable closing issue is a gap', () => {
+  const load = () => { throw new Error('403'); };
+  const mention = collectRequirements({ repo: 'org/app', pr: { number: 10, body: 'See #7' }, loadIssue: load });
+  assert.ok(mention.limitations.some((l) => /Could not read issue #7/.test(l)));
+  assert.ok(mention.limitations.filter((l) => /Could not read/.test(l)).every(isFactLimitation));
+  const closing = collectRequirements({ repo: 'org/app', pr: { number: 10, body: 'Closes #7' }, loadIssue: load });
+  assert.deepEqual(closing.limitations.filter((l) => !isFactLimitation(l)), ['Could not read closing issue #7; its acceptance criteria were not reviewed. Grant the token issues:read, or paste the acceptance criteria into the PR body.']);
+  const e403 = collectRequirements({ repo: 'org/app', pr: { number: 10, body: 'Closes #7' }, loadIssue: () => { throw new Error('Command failed: gh issue view\nHTTP 403: Resource not accessible by integration'); } });
+  assert.match(e403.limitations[0], /Could not read closing issue #7 \(HTTP 403\); .*issues:read/);
+});
+
+test('AC labels accept a separator between AC and the number, and not ACME-1', () => {
+  for (const l of ['AC-1:', 'AC.1:', 'AC_1:', 'AC 1:', 'AC1:']) {
+    assert.deepEqual(extractCriteria([{ source: 'PR body', text: `${l} Reject zero.` }]).map((r) => [r.id, r.quote]), [['R1', 'Reject zero.']], l);
+    assert.match(fitBody(`${l} keep me\n${'x\n'.repeat(9000)}`).text, /keep me/, `${l} survives the body cut`);
+  }
+  assert.deepEqual(extractCriteria([{ source: 'PR body', text: 'ACME-1: not a criterion' }]), []);
 });
 
 test('sanitizes hidden text and labels absent requirements', () => {
