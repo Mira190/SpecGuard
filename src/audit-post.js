@@ -33,7 +33,9 @@ const MIN_QUOTE = 12; // non-space characters a quote needs to count as evidence
 const STATE_RE = /<!-- specguard:audit-state (\{[\s\S]*?\}) -->/, SHOW = 25; // hidden previous state in the issue body; rows listed per change kind
 // Not code evidence: a requirement document (admitted, or any document-like file) and anything in a test path.
 const DOCFILE = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
-const testFile = (p) => isTestPath(p) || /Tests?\.(java|kt|cs|swift|scala)$/.test(p);
+const heuristicTest = (p) => isTestPath(p) || /Tests?\.(java|kt|cs|swift|scala)$/.test(p);
+// test_paths (the collector's trace.testScope) is authoritative when set; without it the name heuristic decides
+const testFileOf = (testPaths) => { const scope = require('./trace').testScope(testPaths); return scope || heuristicTest; };
 
 const lines = (s) => String(s || '').split('\n').filter(Boolean);
 const bytes = (s) => Buffer.byteLength(s);
@@ -199,7 +201,8 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 // The row id is the block cid (cid.N for a bundled block), the heading comes from the candidate, and rows keep document order. A block the model
 // skipped, or whose rows all failed verification, becomes an `unknown` row ("unconfirmed"); not_requirements gains the block's location and text.
 // docs: the admitted documents (null = any); cands: the candidate blocks (Map from readCandidates; null = unknown).
-function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null } = {}) {
+function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null, testPaths = '' } = {}) {
+  const testFile = testFileOf(testPaths);
   const cache = new Map();
   const file = (p) => { if (!cache.has(p)) cache.set(p, read(p)); return cache.get(p); };
   const locate = (c) => {
@@ -259,7 +262,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.requirements.sort((a, b) => pos(a.id) - pos(b.id)); // stable: a block's .1, .2 rows keep the model's order
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line, c.path)), notes: out.not_reviewed, file });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line, c.path)), notes: out.not_reviewed, file, testFile });
   return out;
 }
 
@@ -268,7 +271,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
 // low: the claude engine's context pack cut a test file the claim depends on
 // (the unit's matched tests for missing_test, the cited file for weak_test); same rule as PR mode: shown in Details, never counted. Also low: covers(c) found a test file that already contains the cited
 // line's error message or literal (src/test-map.js, shared with PR mode): lowWhy names it.
-function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes, file = () => null }) {
+function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes, file = () => null, testFile = heuristicTest }) {
   // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
   const cutTest = (u, c) => {
     const cutTests = u.tests.filter((t) => packCut.has(t));
@@ -644,6 +647,21 @@ async function findIssue({ github, owner, repo, me, mark = MARK, title = '' }) {
   return mine.find((i) => i.state !== 'closed') || mine[0] || null;
 }
 
+// The scan issue's target, shared by the publisher (main) and the collector's loadPrior so what is written is what is read back: scan_issue_repo (owner/name) or the scanned repository,
+// and the scope (marker, title; the title names the scanned repository when the issue lives elsewhere). -> { error } | { away, target: { owner, repo }, scope }
+function resolveIssueTarget(env, owner, repo) {
+  const m = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!m && !(m[1] === owner && m[2] === repo);
+  if (env.ISSUE_REPO && !m) return { error: `scan_issue_repo "${oneLine(env.ISSUE_REPO, 60)}" is not owner/name` };
+  return { away, target: away ? { owner: m[1], repo: m[2] } : { owner, repo }, scope: scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '') };
+}
+// The visibility a repository response reports ('' = unknown, which the guard refuses).
+const visibilityOf = (d) => d.visibility || (d.private === false ? 'public' : d.private ? 'private' : '');
+// A scan issue in another repository may not reach a wider audience than the scanned one (fails closed). visTarget() / visSource() -> visibility string.
+async function guardIssueTarget(t, visTarget, visSource) {
+  if (!t.away) return { ok: true, reason: '' };
+  return require('./visibility-guard').decide(await visTarget(), await visSource());
+}
+
 const whoami = async (github) => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } };
 const wantsIssue = (env) => String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
 
@@ -667,10 +685,9 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const cands = readCandidates(readCtx('audit-candidates.txt'));
   let wantIssue = wantsIssue(env);
   // ISSUE_REPO (scan_issue_repo): the issue lives in another repository under its own client (issueGithub); one issue per scanned repository, told apart by the title
-  const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(ir[1] === owner && ir[2] === repo);
-  if (env.ISSUE_REPO && !ir && wantIssue) { wantIssue = false; core.warning('SpecGuard: scan_issue_repo is not owner/name; no scan issue is written'); }
-  const igh = issueGithub || github, issueRepo = away ? { owner: ir[1], repo: ir[2] } : { owner, repo };
-  const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
+  const rt = resolveIssueTarget(env, owner, repo);
+  if (rt.error && wantIssue) { wantIssue = false; core.warning(`SpecGuard: ${rt.error}; no scan issue is written`); }
+  const { away = false, target: issueRepo = { owner, repo }, scope = scopeOf(env.SCAN_PATHS) } = rt, igh = issueGithub || github;
   const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, run: runHtml, cap, candidates: (meta && meta.candidates) || 0,
     ruled, rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   let last = '';
@@ -680,11 +697,11 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   let mine = null, prior = null, issueErr = '';
   const issueFail = (e) => { issueErr = `could not write the scan issue: ${e.message}`; core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); outcome('failed', issueErr); };
   // a scan issue in another repository may not reach a wider audience than the scanned one (the manual workflow's guard, at the action's own boundary; fails closed)
-  const vis = async (g, r) => { try { const d = (await g.rest.repos.get(r)).data; return d.visibility || (d.private === false ? 'public' : d.private ? 'private' : ''); } catch { return ''; } };
+  const vis = async (g, r) => { try { return visibilityOf((await g.rest.repos.get(r)).data); } catch { return ''; } };
   const lookup = async () => {
     if (!wantIssue) return;
     if (away) {
-      const g = require('./visibility-guard').decide(await vis(igh, issueRepo), await vis(github, { owner, repo }));
+      const g = await guardIssueTarget(rt, () => vis(igh, issueRepo), () => vis(github, { owner, repo }));
       if (!g.ok) { issueErr = `scan issue not written to ${issueRepo.owner}/${issueRepo.repo}: ${g.reason}`; core.warning(`SpecGuard: ${issueErr}`); outcome('failed', issueErr); return false; }
     }
     try {
@@ -736,9 +753,10 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   // valid JSON can still come from a run that timed out or failed (or whose repair turn failed): show what verifies, change nothing else
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
-  const root = process.env.GITHUB_WORKSPACE || process.cwd(), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || process.env.TEST_PATHS || '' });
+  // TEST_PATHS first: the exact input the collector scoped by; test-paths.txt (PR-mode collect.sh writes it from the same input) is only the fallback, so the two cannot disagree
+  const root = process.env.GITHUB_WORKSPACE || process.cwd(), testPaths = process.env.TEST_PATHS || readCtx('test-paths.txt') || '', covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths });
   const unseen = hasCode && unitsFailed ? [...units.keys()] : hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path) || u.tests.some((t) => packCut.has(t))).map((u) => u.id) : [];
-  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers });
+  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths });
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed } : null;
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
@@ -768,4 +786,4 @@ async function main({ github, issueGithub, context, core, date = today() }) {
 module.exports = async (args) => {
   try { await main(args); } catch (e) { try { args.core.setOutput?.('status', 'failed'); args.core.setOutput?.('reason', `the scan report failed: ${e.message}`); args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, STATUS, CLASS, MARK, TITLE, HEADING });
+Object.assign(module.exports, { readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, resolveIssueTarget, guardIssueTarget, visibilityOf, STATUS, CLASS, MARK, TITLE, HEADING });

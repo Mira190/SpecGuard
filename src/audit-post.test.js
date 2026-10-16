@@ -1073,6 +1073,19 @@ test('verify: incomplete block evidence cannot prove absence, but positive cited
   assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
 });
 
+test('verify: test_paths is authoritative for what a test file is (F26); without it the name heuristic applies', () => {
+  const files = { ...FILES, 'qa/checks/amount.js': ['check("amount", () => {', '  assert.equal(total([1, 2]), 3);', '});'] };
+  const rd = (p) => files[p] || null;
+  const r = () => result([req({ tests: [{ path: 'qa/checks/amount.js', line: 2, quote: files['qa/checks/amount.js'][1], layer: 'unit' }] })]);
+  const scoped = verify(r(), { read: rd, testPaths: 'qa/checks/**' });
+  assert.equal(scoped.requirements[0].status, 'covered');
+  assert.equal(scoped.requirements[0].tests.length, 1);
+  const heuristic = verify(r(), { read: rd });
+  assert.equal(heuristic.requirements[0].status, 'unknown', 'no scope: qa/checks/amount.js is not recognised as a test by name');
+  const out = verify(result([req()]), { read: rd, testPaths: 'qa/checks/**' }); // authoritative: tests/plan.test.js is outside the scope
+  assert.equal(out.requirements[0].tests.length, 0);
+});
+
 test('state (F22): the part cursor is written as [next part, part count], dropped after the last part, and rejected when malformed', () => {
   const ID = 'a0000001', V = 'b0000001', data = dataOf({});
   const at = (prior, k) => audit.stateOf('h1', data, prior, { date: DATE, code: { picked: [ID], findings: [], carried: [], versions: new Map([[ID, V]]), parts: new Map([[ID, { k, n: 3 }]]) } });
