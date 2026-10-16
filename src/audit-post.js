@@ -349,8 +349,8 @@ const versionsOf = (o) => {
   const uv = o.uv && typeof o.uv === 'object' && !Array.isArray(o.uv) ? Object.fromEntries(Object.entries(o.uv).filter(([k, v]) => HEX8.test(k) && HEX8.test(v))) : {};
   const ev = {};
   if (Array.isArray(o.ev)) for (const x of o.ev) if (Array.isArray(x) && x.length - 1 <= EV_PER_BLOCK && x.every((h) => HEX8.test(h))) ev[x[0]] = x.slice(1);
-  // uc { unit id: next part }: the cursor of a unit reviewed in parts (audit-units.js partOf)
-  const uc = o.uc && typeof o.uc === 'object' && !Array.isArray(o.uc) ? Object.fromEntries(Object.entries(o.uc).filter(([k, v]) => HEX8.test(k) && Number.isInteger(v) && v >= 1 && v <= 100)) : {};
+  // uc { unit id: [next part, part count] }: the cursor of a unit reviewed in parts (audit-units.js partOf)
+  const uc = o.uc && typeof o.uc === 'object' && !Array.isArray(o.uc) ? Object.fromEntries(Object.entries(o.uc).filter(([k, v]) => HEX8.test(k) && Array.isArray(v) && v.length === 2 && v.every(Number.isInteger) && v[0] >= 1 && v[0] <= 100 && v[1] > v[0] && v[1] <= 1000)) : {};
   return { uv, ev, ...(Object.keys(uc).length ? { uc } : {}) };
 };
 const versionsRaw = ({ uv = {}, ev = {}, uc = {} } = {}) => {
@@ -377,10 +377,11 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
   const now = track(blocksOf(data), prior, head).filter((b) => /^[0-9a-f]{8}$/.test(b.cid)).map((b) => [b.next[0], b.next[1], b.next[2], b.next[3], at, b.next[4], b.next[5]]);
   // a unit reviewed in parts (code.parts: id -> { k, n }, review F07) keeps the findings of its other parts and is covered only after its last part with none
   const parts = (code && code.parts) || new Map(), pf = (prior && prior.findings) || [];
-  const otherParts = code ? pf.filter((x) => parts.has(x.unit) && code.picked.includes(x.unit) && !stale.has(x.unit) && Number.isInteger(x.part) && x.part !== parts.get(x.unit).k) : [];
+  const pvs = (prior && prior.versions) || {}, cont = (id) => { const c = pvs.uc && pvs.uc[id]; return !!c && c[1] === parts.get(id).n && c[0] === parts.get(id).k && (!code.versions || !code.versions.get(id) || (pvs.uv || {})[id] === code.versions.get(id)); }; // the cursor continued: a restart (new version or layout) drops the findings of the old parts
+  const otherParts = code ? pf.filter((x) => parts.has(x.unit) && code.picked.includes(x.unit) && !stale.has(x.unit) && Number.isInteger(x.part) && x.part !== parts.get(x.unit).k && cont(x.unit)) : [];
   if (code) {
     const hit = new Set([...code.findings, ...otherParts].map((f) => f.unit));
-    now.push(...track(code.picked.map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
+    now.push(...track(code.picked.map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : code.cut && code.cut.has(cid) ? 'unsure' : parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
   }
   const all = carried.concat(code ? code.carried : []);
   const rank = (b) => (b.status === 'covered' || b.status === 'not_req' ? 1 : 0), when = (b) => (b.at && b.at.date) || '';
@@ -390,8 +391,8 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
   // versions: what each verdict was made against; a carried entry keeps its old version, so it stays stale until it is reviewed again
   const pv = (prior && prior.versions) || { uv: {}, ev: {} }, kept = new Set(old.map((b) => b.cid)), uv = {}, ev = {}, uc = {};
   for (const [k, v] of Object.entries(pv.uv)) if (kept.has(k)) uv[k] = v;
-  for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k)) uc[k] = v;
-  for (const [id, p] of parts) if (code.picked.includes(id) && p.k + 1 < p.n) uc[id] = p.k + 1; // the next part; after the last one the cursor is gone
+  for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k) && !(code && code.picked.includes(k))) uc[k] = v; // a unit reviewed now gets its cursor from this run
+  for (const [id, p] of parts) if (code.picked.includes(id) && p.k + 1 < p.n) uc[id] = [p.k + 1, p.n]; // the next part; after the last one the cursor is gone
   for (const [k, v] of Object.entries(pv.ev)) if (kept.has(k)) ev[k] = v;
   if (code && code.versions) for (const id of code.picked) if (code.versions.get(id)) uv[id] = code.versions.get(id);
   for (const b of blocksOf(data)) if (b.status === 'covered') ev[b.cid] = b.rows.flatMap((r) => [...r.code, ...r.tests].map((c) => sha8(c.path)));
@@ -756,7 +757,8 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   await finish(render({ ...shared, data: checked, partial, prior, carried, code, notAudited, unanswered }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
   const cu = readUnits(readCtx('audit-units-carried.txt')); // units the state knows that this run did not review, still in the repository
-  const codeState = code && { picked: [...units.keys()].filter((u) => !unseen.includes(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || unseen.includes(b.cid)) : [],
+  const forced = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), cut = new Set(unseen.filter((u) => forced.has(u) && !unitsFailed));
+  const codeState = code && { cut, picked: [...units.keys()].filter((u) => !unseen.includes(u) || cut.has(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || (unseen.includes(b.cid) && !cut.has(b.cid))) : [],
     versions: new Map([...units.values()].filter((u) => u.ver).map((u) => [u.id, u.ver])), parts: new Map([...units.values()].filter((u) => u.part && !unseen.includes(u.id)).map((u) => [u.id, u.part])) }; // an unseen unit is not tracked: its prior state is carried, it stays due
   const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale });
   await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
