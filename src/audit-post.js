@@ -271,7 +271,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
   const dropped = new Set();
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line, c.path)), notes: out.not_reviewed, file, testFile, dropped });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), notes: out.not_reviewed, file, testFile, dropped });
   out.unit_dropped = [...dropped]; // units whose finding verification dropped: not "no gap" (see main)
   return out;
 }
@@ -300,7 +300,7 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes
     seen.add(fid);
     const skeleton = f.skeleton && placeholder(f.skeleton) ? '' : f.skeleton;
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
-    const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c) : null;
+    const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c, u) : null;
     const noSketch = f.kind !== 'pushdown' && !skeleton; // no test sketch: "no gap found" findings arrive this way
     const vague = f.kind === 'weak_test' && (!post.counterexampleOk(f.counterexample) || post.refutedBy(c.quote, f.counterexample)); // review F04: a weak test needs a wrong behaviour the assertion still accepts
     out.push({ ...f, ...c, skeleton, fid, ...(u && u.part ? { part: u.part.k } : {}), low: cut || !!hit || noSketch || vague, ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
@@ -556,6 +556,12 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     const n = (k) => uf.filter((f) => f.kind === k).length, cellOf = (k) => (n(k) ? `${n(k)}` : 'none'), r = inv.rotation;
     top += `| Units reviewed | No unit test | Weak tests | Skipped tests | Design documents |\n|---|---|---|---|---|\n| ${seenN} of ${r.total}${r.rotate ? ` (rotation ${r.run} of ${r.runs})` : ''} | ${cellOf('missing_test')} | ${cellOf('weak_test')} | ${(inv.selected && inv.selected.skipped_tests) || 'none'} | ${docs.length ? `${docs.length} read` : 'none found'} |\n\n`;
   }
+  if (code && !failure && inv.eligible != null) { // one line that reconciles the funnel: eligible = inventoried + over 512 KiB; selected = reviewed whole + did not fit + forced
+    const fz = new Set(code.unitsFailed ? [] : inv.forced || []), F = unseen.filter((u) => fz.has(u)).length, C = unseen.length - F, S = inv.rotation.picked, R = S - unseen.length, D = Math.max(0, inv.units - inv.rotation.reviewed) + C;
+    top += `Units: ${[`${inv.eligible} eligible = ${[`${inv.units} inventoried`, inv.not_inventoried && `${inv.not_inventoried} not inventoried (over 512 KiB)`, inv.not_reached && `${inv.not_reached} not reached (inventory cap / time budget)`].filter(Boolean).join(' + ')}`, `${S} selected this run = ${[R && `${R} reviewed whole`, C && `${C} did not fit`, F && `${F} forced (recorded unsure)`].filter(Boolean).join(' + ')}`, D && `${D} not yet reviewed`].filter(Boolean).join('; ')}.
+
+`;
+  }
   const inParts = code ? [...code.list.values()].filter((u) => u.part && !unseen.includes(u.id)) : []; // too large for one call: one part per run (review F07)
   if (code && data && !failure && inParts.length) top += `**Reviewed in parts** (too large for one call; one part per run): ${inParts.slice(0, 5).map((u) => `\`${cell(u.path, 100)}\` part ${u.part.k + 1} of ${u.part.n} (lines ${u.part.a}-${u.part.b})`).join(', ')}${inParts.length > 5 ? `, +${inParts.length - 5} more` : ''}.\n\n`;
   if (code && data && !failure && unseen.length) top += `**Not reviewed this run:** ${plural(unseen.length, 'unit')} ${unfit}: ${unseen.slice(0, 5).map((u) => `\`${cell((code.list.get(u) || {}).path || u, 100)}\``).join(', ')}${unseen.length > 5 ? `, +${unseen.length - 5} more` : ''}. ${unseen.length === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
@@ -634,9 +640,9 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   let cdet = '';
   if (code) {
     const r = inv.rotation, URISK = '| Unit | Risk | Why | Matched tests | Review |\n|---|---|---|---|---|\n';
-    const urow = (u) => `| ${link(u.path, 1, u.path)} | ${u.score} | ${cell(u.why, 160)} | ${u.tests.length ? cell(`${u.tests.slice(0, 3).join(', ')}${u.tests.length > 3 ? `, +${u.tests.length - 3} more` : ''}`, 200) : 'none'} | ${cell(u.review, 40)} |\n`;
+    const urow = (u) => `| ${link(u.path, 1, u.path)} | ${u.score} | ${cell(u.why, 160)} | ${u.tests.length ? cell(`${u.tests.slice(0, 3).join(', ')}${u.tests.length > 3 ? `, +${u.tests.length - 3} more` : ''}`, 200) : 'none'} | ${cell(unseen.includes(u.id) ? ((inv.forced || []).includes(u.id) && !code.unitsFailed ? 'forced: tests cut (unsure)' : 'selected, did not fit (not reviewed)') : u.review, 40)} |\n`;
     const text = `**Inventory**\n\n${inv.units} source files (units), ${inv.with_tests} with a matched test file and ${inv.without_tests} without. The matched tests hold ${plural(inv.skipped_tests, 'skipped test')}, ${plural(inv.tests_without_assertion, 'test')} without an assertion and ${plural(inv.weak_assertions, 'weak assertion')}.\n\n`
-      + `${r.rotate ? `Rotation: ${r.reviewed} of ${r.total} units reviewed at least once; this run reviewed ${seenN} (confirming ${r.confirming}, never reviewed ${r.new}, least recently reviewed ${r.oldest}). A full cycle takes ${r.runs} runs of ${inv.max_units} units.` : `The ${seenN} riskiest of ${r.total} units were reviewed${unseen.length ? ` (${unseen.length} more ${unfit})` : ''}. Schedule with scan_issue: true to rotate through all units.`}\n\n`
+      + `${r.rotate ? `Rotation: ${r.reviewed} of ${r.total} units reviewed at least once; this run reviewed ${seenN} (confirming ${r.confirming}, never reviewed ${r.new}, least recently reviewed ${r.oldest}). A full cycle takes ${r.runs} runs of ${inv.max_units} units.` : `${seenN} of the ${r.picked} selected units were reviewed whole${unseen.length ? ` (${unseen.length} more ${unfit})` : ''}. Schedule with scan_issue: true to rotate through all units.`}\n\n`
       + `**How to read the unit part**\n\nA unit is a tracked source file. Its risk is (1 + public definitions) times log2(2 + lines / 50) times (1 + commits / 5 + fix commits) times a test factor (1.0 no matched test, 0.6 tests with no assertion, all skipped or mostly weak, 0.3 tested); commits are those of the last 180 days. A test file is matched to a unit by name, by mention or by folder. The ranking orders the work of one scan; it is not a prediction of defects. A finding is reported in two runs when the same finding was reported in the previous run${prior ? '' : ' (there is no earlier run, so every finding is a first report)'}; a unit with no matched test file is not a confirmed gap, only evidence the test search found nothing. Static review; not coverage; not for scoring people.\n\n`;
     const left = Math.max(0, inv.units - r.reviewed);
     cdet = take(`**Riskiest units (top ${Math.min(15, inv.rows.length)} of ${inv.units})**\n\n${URISK}`, inv.rows.slice(0, 15).map(urow), '') + fit(text)

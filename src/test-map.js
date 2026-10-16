@@ -131,15 +131,15 @@ function calledNames(lines, line) {
   }
   return [...out].slice(0, 12);
 }
-// testPaths: test_paths text (or empty) -> (lines, line) => "path:line" of a tracked test file that may already cover the claim at that 1-based line of the file `lines`, or null.
+// testPaths: test_paths text (or empty) -> (lines, line, path, eligible) => "path:line" of a tracked test file that may already cover the claim at that 1-based line of the file `lines`, or null.
 // A search that fails or times out finds nothing. trace.js is required lazily: it requires post.js, which uses this guard.
 function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
   const { isTestPath, testScope } = require('./trace'), scope = testScope(testPaths), DOC = /\.(md|mdx|markdown|rst|adoc|txt)$/i;
   const isTest = (p) => !DOC.test(p) && (scope ? scope(p) : isTestPath(p));
-  const grep = (args) => {
+  const grep = (args, only = null) => {
     try {
       const out = execFileSync('git', ['grep', '-n', '-I', '-i', '-F', ...args], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } });
-      for (const l of out.split('\n')) { const m = /^(.*?):(\d+):/.exec(l); if (m && isTest(m[1])) return `${m[1]}:${m[2]}`; }
+      for (const l of out.split('\n')) { const m = /^(.*?):(\d+):/.exec(l); if (m && isTest(m[1]) && (!only || only.has(m[1]))) return `${m[1]}:${m[2]}`; }
     } catch {}
     return null;
   };
@@ -151,10 +151,12 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
       return out.split('\n').some((l) => { const m = /^(.*?):\d+:/.exec(l); return m && !isTest(m[1]) && !DOC.test(m[1]); });
     } catch { return false; }
   };
-  return (lines, line, p = '') => {
+  // eligible (optional): the test files that can cover this source file (its candidate tests); a hit elsewhere is an unrelated test. Empty: no candidate test, so no literal demotion (that gap is more likely real). Not passed: any tracked test counts. A delegated helper's test lives with the helper, so it is not limited by the set.
+  return (lines, line, p = '', eligible = null) => {
     if (!Array.isArray(lines) || !Number.isInteger(line)) return null;
-    const needles = needlesOf(lines, line), hit = needles.length ? grep(needles.flatMap((n) => ['-e', n])) : null, cm = hit ? null : classAndMethod(lines, line);
-    const lit = hit || (cm ? grep(['-e', cm.method, '--and', '-e', cm.cls]) : null);
+    const only = eligible ? new Set(eligible) : null;
+    const needles = needlesOf(lines, line), hit = needles.length && !(only && !only.size) ? grep(needles.flatMap((n) => ['-e', n]), only) : null, cm = hit || (only && !only.size) ? null : classAndMethod(lines, line);
+    const lit = hit || (cm ? grep(['-e', cm.method, '--and', '-e', cm.cls], only) : null);
     if (lit) return lit;
     if (p && isTest(p)) return null; // a claim about a test file has no delegate to follow
     for (const name of calledNames(lines, line)) { if (!definedHere(name)) continue; const h = grep(['-w', '-e', name]); if (h) return `a delegated helper is tested: ${name} at ${h}`; }
