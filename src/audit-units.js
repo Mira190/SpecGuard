@@ -105,7 +105,7 @@ function pick(rows, cap, prior, bytes, room = null) {
 }
 
 // files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
-function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 0 }) {
+function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 0, maxRead = MAX_UNITS_READ }) {
   const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
   const inScope = files.filter((e) => !skip(e.path) && (!scope || scope(e.path)));
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
@@ -114,8 +114,8 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const big = cand.filter((e) => e.size > MAX_FILE); // the largest files are often the most complex: say so, never drop them silently
   if (big.length) limits.push(`${big.length} source file(s) over 512 KiB were not inventoried: ${big.slice(0, 3).map((e) => e.path).join(', ')}${big.length > 3 ? ', ...' : ''}`);
   cand = cand.filter((e) => e.size <= MAX_FILE);
-  const capped = Math.max(0, cand.length - MAX_UNITS_READ); // files past the read cap, never reached
-  if (cand.length > MAX_UNITS_READ) { limits.push(`only the first ${MAX_UNITS_READ} of ${cand.length} source files were inventoried (narrow with scan_paths)`); cand = cand.slice(0, MAX_UNITS_READ); }
+  const capped = Math.max(0, cand.length - maxRead); // files past the read cap, never reached
+  if (cand.length > maxRead) { limits.push(`only the first ${maxRead} of ${cand.length} source files were inventoried (narrow with scan_paths)`); cand = cand.slice(0, maxRead); }
   const units = [], srcImports = new Map(); // path -> the relative imports of its text (units and read tests)
   const shaOf = new Map(files.map((e) => [e.path, e.sha]));
   let reached = 0; // reached: files whose chunk was read before the time budget ended
@@ -150,7 +150,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   if (unread > 0) limits.push(`${unread} of ${tests.length} test files were not read (over the size, count or time limit): their assertions are unknown, and a unit they alone cover may be missed`);
   const hist = history(cwd, now);
   if (!hist) limits.push('no git history (shallow clone? use fetch-depth: 0): churn and fix commits are not used in the ranking');
-  const notReached = capped + cand.length - reached;
+  const notReachedTime = cand.length - reached;
   const none = { tests: 0, noAssert: 0, skipped: 0, asserts: 0, weak: [] };
   const index = indexTests(tests);
   const rows = units.map((u) => {
@@ -180,7 +180,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
   for (const r of sel.picked) { const p = partOf(r, prior, size); if (p) r.part = p; }
   return { rows, picked: sel.picked, forced, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
-    totals: { eligible: rows.length + big.length + notReached, not_reached: notReached, units: rows.length, not_inventoried: big.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
+    totals: { eligible: rows.length + big.length + capped + notReachedTime, not_reached: capped + notReachedTime, not_reached_cap: capped, not_reached_time: notReachedTime, units: rows.length, not_inventoried: big.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
     stale: rows.filter((r) => known.has(r.id) && !chosen.has(r.id) && staleUnit(r, prior)).map((r) => r.id),
     review: (r) => (chosen.has(r.id) ? 'this run' : known.has(r.id) ? `reviewed ${date(r) || 'earlier'}${staleUnit(r, prior) ? '; changed since, due again' : ''}` : 'not yet reviewed') };
 }

@@ -455,6 +455,17 @@ test('eligible counts the source files the time budget never reached: eligible =
   assert.ok(cut.totals.not_reached > 0, JSON.stringify(cut.totals));
   assert.equal(cut.totals.eligible, 3, 'the files the budget cut are still eligible');
   assert.equal(cut.totals.eligible, cut.totals.units + cut.totals.not_inventoried + cut.totals.not_reached);
+  assert.equal(cut.totals.not_reached, cut.totals.not_reached_cap + cut.totals.not_reached_time);
+});
+
+test('not reached splits into the deterministic inventory cap and the time budget: eligible = inventoried + over 512 KiB + past the cap + unread on time', (t) => {
+  const body = ['function a(v) {', '  return v + 1;', '}', 'function b(v) {', '  return v + 2;', '}', 'module.exports = { a, b };'];
+  const r = repo(t, { 'src/one.js': body, 'src/two.js': body, 'src/three.js': body });
+  const eq = (x) => x.eligible === x.units + x.not_inventoried + x.not_reached_cap + x.not_reached_time;
+  const capd = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxRead: 2 }).totals, cut = inventory({ cwd: r.root, head: 'HEAD', now: NOW, budgetMs: 0 }).totals;
+  assert.deepEqual([capd.not_reached_cap, capd.not_reached_time, capd.units, capd.eligible], [1, 0, 2, 3]);
+  assert.ok(cut.not_reached_time > 0 && cut.not_reached_cap === 0, JSON.stringify(cut));
+  assert.ok(eq(capd) && eq(cut));
 });
 
 test('source files over 512 KiB are named in a limitation and counted as not inventoried; no big file, no limitation; skipped paths are not counted', (t) => {
