@@ -446,6 +446,17 @@ test('F23 (review): when no unit fits, a unit unfinished in parts does not take 
   assert.notEqual(second.id, first.id, 'the unit in progress is not chosen again while nothing fits');
 });
 
+test('eligible counts the source files the time budget never reached: eligible = inventoried + over 512 KiB + not reached', (t) => {
+  const body = ['function a(v) {', '  return v + 1;', '}', 'function b(v) {', '  return v + 2;', '}', 'module.exports = { a, b };'];
+  const r = repo(t, { 'src/one.js': body, 'src/two.js': body, 'src/three.js': body });
+  const full = inventory({ cwd: r.root, head: 'HEAD', now: NOW }), cut = inventory({ cwd: r.root, head: 'HEAD', now: NOW, budgetMs: 0 });
+  assert.equal(full.totals.not_reached, 0);
+  assert.equal(full.totals.eligible, 3);
+  assert.ok(cut.totals.not_reached > 0, JSON.stringify(cut.totals));
+  assert.equal(cut.totals.eligible, 3, 'the files the budget cut are still eligible');
+  assert.equal(cut.totals.eligible, cut.totals.units + cut.totals.not_inventoried + cut.totals.not_reached);
+});
+
 test('source files over 512 KiB are named in a limitation and counted as not inventoried; no big file, no limitation; skipped paths are not counted', (t) => {
   const big = '// big\n' + Array.from({ length: 16000 }, (_, i) => `function f${i}(v) { return v + ${i}; }`).join('\n');
   const small = ['function a(v) {', '  return v + 1;', '}', 'function b(v) {', '  return v + 2;', '}', 'module.exports = { a, b };'];
@@ -454,6 +465,8 @@ test('source files over 512 KiB are named in a limitation and counted as not inv
   assert.deepEqual(inv.rows.map((x) => x.path), ['src/small.js']);
   assert.ok(inv.limitations.includes('4 source file(s) over 512 KiB were not inventoried: src/big1.js, src/big2.js, src/big3.js, ...'), inv.limitations.join('|'));
   assert.equal(inv.totals.not_inventoried, 4);
+  assert.equal(inv.totals.eligible, inv.totals.units + inv.totals.not_inventoried, 'eligible = inventoried + not inventoried; vendor/ and .min.js are skipped, not eligible');
+  assert.equal(inv.totals.eligible, 5);
   const ok = inventory({ cwd: repo(t, { 'src/small.js': small }).root, head: 'HEAD', now: NOW });
   assert.ok(!ok.limitations.some((l) => /512 KiB/.test(l)));
   assert.equal(ok.totals.not_inventoried, 0);
@@ -464,4 +477,32 @@ test('test_paths with exclusions only: the excluded test no longer maps to the u
   const r = repo(t, f), tests = (o) => byPath(inventory({ cwd: r.root, head: 'HEAD', now: NOW, ...o }))['src/js/cart.js'].tests;
   assert.deepEqual(tests({}), ['tests/legacy/cart.test.js', 'tests/new/cart.test.js']);
   assert.deepEqual(tests({ testPaths: '!tests/legacy/**' }), ['tests/new/cart.test.js']);
+});
+
+// wave 4 E3: ver also folds in the blobs of first-level relative imports (the unit's own, and its matched tests' helpers)
+test('ver: a weakened test helper or a changed imported file makes the covered unit stale; an unrelated file does not; a legacy ver is not a change', (t) => {
+  const f = {
+    'src/b.js': ['function base(v) {', '  return v * 2;', '}', 'module.exports = { base };'],
+    'src/a.js': ["const { base } = require('./b');", 'function a(v) {', '  return base(v) + 1;', '}', 'module.exports = { a };'],
+    'src/unrelated.js': ['function u(v) {', '  return v;', '}', 'module.exports = { u };'],
+    'tests/a.test.js': ["const { a } = require('../src/a');", "const { verifyExact } = require('./helpers/check');", "test('a', () => { verifyExact(a(2), 5); });"],
+    'tests/helpers/check.js': ["const assert = require('node:assert/strict');", 'exports.verifyExact = (actual, expected) => {', '  assert.equal(actual, expected);', '};'],
+  };
+  const r = repo(t, f), first = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 5 }), A = byPath(first)['src/a.js'];
+  const mk = (uv) => ({ head: 'x', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 2, at: { date: '2026-10-01' } })), versions: { uv, ev: {} } });
+  const uvNow = Object.fromEntries(first.rows.map((u) => [u.id, u.ver])), inv = () => inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 0, prior: mk(uvNow) });
+  const change = (file, lines, msg) => { r.put(file, lines); r.git(OLD, 'add', '.'); r.git(OLD, 'commit', '-m', msg); };
+  assert.deepEqual(A.tests, ['tests/a.test.js']);
+  assert.deepEqual(inv().stale, [], 'control: nothing changed');
+  change('src/unrelated.js', ['function u(v) {', '  return v + 1;', '}', 'module.exports = { u };'], 'unrelated');
+  assert.deepEqual(inv().stale, [byPath(first)['src/unrelated.js'].id], 'control: only the changed unit is stale, a.js is not');
+  change('tests/helpers/check.js', ["const assert = require('node:assert/strict');", 'exports.verifyExact = (actual, expected) => {', '  assert.ok(actual);', '};'], 'weaken helper');
+  assert.ok(inv().stale.includes(A.id), 'a weakened helper of a matched test makes the unit stale');
+  change('src/b.js', ['function base(v) {', '  return v * 3;', '}', 'module.exports = { base };'], 'change b');
+  const next = inv(), row = byPath(next)['src/a.js'];
+  assert.ok(next.stale.includes(A.id) && next.stale.includes(byPath(first)['src/b.js'].id), 'a changed imported file makes the importer stale');
+  // migration: a stored ver from before imports were folded in is not a change
+  assert.notEqual(row.ver, row.verLegacy);
+  assert.ok(!inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 0, prior: mk({ ...uvNow, [A.id]: row.verLegacy }) }).stale.includes(A.id), 'a legacy ver is not a change');
+  assert.equal(byPath(next)['src/unrelated.js'].ver, byPath(next)['src/unrelated.js'].verLegacy, 'no imports: ver is unchanged from before');
 });
