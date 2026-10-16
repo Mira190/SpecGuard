@@ -1474,6 +1474,11 @@ async function run({ github, context, core }) {
       if (seen) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }
+  if (packCut.size) { // a cut changed file, or a cut candidate test of one, means the model never saw what the obligations depend on: no clean verdict, no head marker
+    const cands = parseCandidates(readCtx('test-candidates.txt') || '');
+    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [f, ...(cands.get(f) || [])]).filter((x) => packCut.has(x)))];
+    if (lost.length) incomplete.push(`Review context was cut: the model saw only part of ${lost.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${lost.length > 10 ? `, … (+${lost.length - 10} more)` : ''}; obligations that depend on them are unknown.`);
+  }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
   if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);
   const addNote = (m) => { data.not_reviewed = [data.not_reviewed, m].filter(Boolean).join(' '); };
