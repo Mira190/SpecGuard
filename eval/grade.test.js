@@ -325,6 +325,13 @@ test('F29 control: two distinct findings, each as item plus row, are two true po
   assert.deepEqual([g.tp, g.fn, g.fp, g.pass], [2, 0, 0, true]);
 });
 
+test('F29: an item and its row citing different lines for the same obligation count once', () => {
+  const summary = '### Missing unit tests (1)\n\n- Boundary A `a.js:10` — x\n\n| O1: Boundary A | PR body; a.js:30 — code | none | Missing test: no test |\n';
+  const one = { kind: 'missing_test', path: 'a.js', line: 10, allow_summary: true };
+  const g = grade(spec([one, { ...one, line: 30 }]), obs([], { summary }));
+  assert.deepEqual([g.tp, g.fn, g.pass], [1, 1, false]);
+});
+
 test('F29: an inline comment and its summary copy are not counted twice', () => {
   const one = { kind: 'missing_test', path: 'a.js', line: 10, tolerance: 50, allow_summary: true };
   const g = grade(spec([one, { ...one, line: 30 }]), obs([com({ line: 10 })], { summary: mirrored() }));

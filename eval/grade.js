@@ -62,7 +62,7 @@ function parseSummary(text) {
     const c = ln.split(/(?<!\\)\|/).map((x) => x.trim());
     const st = STATUS.exec(c[4] || '');
     const at = /; (\S+?):(\d+) — /.exec(c[2] || '');
-    if (st && at) rows.push({ status: STATUS_WORD[st[1]] || st[1], path: at[1], line: +at[2], title: c[1].replace(/^S+?: /, ''), text: ln });
+    if (st && at) rows.push({ status: STATUS_WORD[st[1]] || st[1], path: at[1], line: +at[2], title: c[1].replace(/^\S+?: /, ''), text: ln });
   });
   // "Pre-existing drift (not caused by this PR)" section: up to the next heading or the end of its <details>. Null when absent.
   const pe = /Pre-existing drift \(not caused by this PR\)/.exec(s);
@@ -94,8 +94,7 @@ function grade(spec, obs) {
   const sum = parseSummary(obs.summary);
   const used = new Set(), usedItems = new Set(), matched = [], missed = [], textMisses = [];
   // summary candidates: an item and a coverage row for the same finding (same kind, path and line, or the row's obligation text is the item's title) share a group, and a group satisfies at most one expected finding
-  const summaryHits = [...sum.items.map((h, j) => ({ kind: h.kind, path: h.path, line: h.line, text: `${h.title}
-${h.why}`, title: h.title, item: j })), ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
+  const summaryHits = [...sum.items.map((h, j) => ({ kind: h.kind, path: h.path, line: h.line, text: `${h.title}\n${h.why}`, title: h.title, item: j })), ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
     .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path, line: r.line, text: r.text, title: r.title }))], usedGroups = new Set();
   summaryHits.forEach((h, j) => { h.group = summaryHits.slice(0, j).find((g) => g.kind === h.kind && g.path === h.path && (g.line === h.line || (h.title && lc(g.title) === lc(h.title))))?.group ?? j; });
   const useGroup = (g) => { usedGroups.add(g); summaryHits.forEach((h) => { if (h.group === g && h.item !== undefined) usedItems.add(h.item); }); };
