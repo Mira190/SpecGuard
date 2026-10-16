@@ -91,12 +91,12 @@ function allBlocks(cwd, head, docs, ruled = null) { // ruled (optional array) re
     const dropped = [];
     try { items = blocksOf(p, git(cwd, ['show', `${head}:${p}`]), dropped); } catch { /* unreadable: the model still reads the document */ }
     for (const i of [...items, ...dropped].sort((a, b) => a.line - b.line)) {
-      const h = i.heading || '', t = normText(i.raw);
+      const h = i.heading || '', t = normText(i.raw), full = i.ctx ? `${i.ctx}\n${i.raw}` : i.raw; // cid: the block's own text; tv and body also carry the inherited Gherkin Background
       let cid = sha8(p, h, t);
       for (let k = 2; seen.has(cid); k++) cid = sha8(p, h, t, `#${k}`);
       seen.add(cid);
       if (i.reason) { if (ruled) ruled.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), reason: i.reason }); continue; }
-      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT), end: i.end, tv: textVer(i.raw), body: blockBody(i.raw) });
+      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT), end: i.end, tv: textVer(full), body: blockBody(full) });
     }
   }
   return all;
