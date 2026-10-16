@@ -1113,3 +1113,9 @@ test('scan state address is case-insensitive: ISSUE_REPO=Org/Reports scanning or
   issues[0].title = audit.TITLE + ': org/source';
   assert.equal(await audit.findIssue({ github, owner: 'org', repo: 'reports', me: null, mark: MARK }), null);
 });
+
+test('findIssue: an away title match is case-insensitive (case-only rename of the scanned repo)', async () => {
+  const issues = [{ number: 4, state: 'open', user: { type: 'Bot', login: 'github-actions[bot]' }, title: audit.TITLE + ': Org/Source', body: MARK }];
+  const github = { paginate: async () => issues, rest: { issues: { listForRepo: null } } };
+  assert.equal((await audit.findIssue({ github, owner: 'org', repo: 'reports', me: null, mark: MARK, title: audit.TITLE + ': org/source' }))?.number, 4);
+});

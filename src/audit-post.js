@@ -648,7 +648,7 @@ async function findIssue({ github, owner, repo, me, mark = MARK, title = '' }) {
   const foreign = (t) => { const m = own.exec(t); return !!m && m[1].toLowerCase() !== `${owner}/${repo}`.toLowerCase(); };
   // ponytail: lists every issue; narrow with a label or `creator` if a repo has thousands
   const all = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
-  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (title ? i.title === title : !foreign(i.title)) && typeof i.body === 'string' && i.body.startsWith(mark));
+  const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (title ? String(i.title).toLowerCase() === title.toLowerCase() : !foreign(i.title)) && typeof i.body === 'string' && i.body.startsWith(mark));
   return mine.find((i) => i.state !== 'closed') || mine[0] || null;
 }
 
