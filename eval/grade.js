@@ -133,6 +133,8 @@ function grade(spec, obs) {
   const spare = [...(exp.acceptable || [])], acceptable = [], falsePositives = [];
   // A summary item the developer reads counts like a posted comment: moving a finding into the summary must not hide a false positive.
   // A coverage row saying weak/missing test asks the same thing: one per F29 group that no summary item or posted comment already stands for, so a row and its bullet are one candidate.
+  // Contract: a coverage row counts as a request for action only when its gap's finding is actionable. If the same gap's finding is low-confidence or hidden
+  // in Details the product has discounted it, so the row is not an FP; a row with no finding at all still counts (S10). Pinned in grade.test.js.
   const rowFps = summaryHits.filter((h, j) => h.item === undefined && h.group === j && !usedGroups.has(j) && ['weak_test', 'missing_test'].includes(h.kind) && !posted.some((c) => c.line != null && c.kind === h.kind && c.path === h.path && Math.abs(h.line - c.line) <= 2)).map((h) => ({ ...h, level: 'coverage' }));
   const unmatched = [...posted.filter((_, j) => !used.has(j)), ...sum.items.filter((h, j) => sum.actionable.has(h) && !usedItems.has(j)).map((h) => ({ ...h, level: 'summary' })), ...rowFps];
   for (const { kind, path, line, title, level } of unmatched) {
