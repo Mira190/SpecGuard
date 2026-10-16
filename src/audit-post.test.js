@@ -1097,6 +1097,11 @@ test('run: an inconclusive run (low-only finding) keeps a confirmed gap: still a
   assert.deepEqual([gap3.status, gap3.runs, gap3.at.date], ['gap', 2, DATE], 'still a gap, runs unchanged, date advanced');
   assert.deepEqual(st(three).findings, st(two).findings, 'the original finding is carried');
   assert.equal(three.calls.outputs.status, 'complete');
+  const dropped = await run([{ ...solid, quote: 'a line that is not in the file' }], [{ number: 7, body: earlier, user: BOT }]); // verify drops it: dropped, not just low
+  const gap4 = st(dropped).blocks.find((b) => b.cid === UID);
+  assert.deepEqual([gap4.status, gap4.runs, gap4.at.date], ['gap', 2, DATE], 'verify-dropped: same outcome');
+  assert.deepEqual(st(dropped).findings, st(two).findings);
+  assert.equal(dropped.calls.outputs.status, 'incomplete');
 });
 
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
