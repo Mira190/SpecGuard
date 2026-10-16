@@ -554,7 +554,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   }
   if (code && !failure && inv.eligible != null) { // one line that reconciles the funnel: eligible = inventoried + over 512 KiB; selected = reviewed whole + did not fit + forced
     const fz = new Set(code.unitsFailed ? [] : inv.forced || []), F = unseen.filter((u) => fz.has(u)).length, C = unseen.length - F, S = inv.rotation.picked, R = S - unseen.length, D = Math.max(0, inv.units - inv.rotation.reviewed) + C;
-    top += `Units: ${[`${inv.eligible} eligible = ${[`${inv.units} inventoried`, inv.not_inventoried && `${inv.not_inventoried} not inventoried (over 512 KiB)`].filter(Boolean).join(' + ')}`, `${S} selected this run = ${[R && `${R} reviewed whole`, C && `${C} did not fit`, F && `${F} forced (recorded unsure)`].filter(Boolean).join(' + ')}`, D && `${D} not yet reviewed`].filter(Boolean).join('; ')}.
+    top += `Units: ${[`${inv.eligible} eligible = ${[`${inv.units} inventoried`, inv.not_inventoried && `${inv.not_inventoried} not inventoried (over 512 KiB)`, inv.not_reached && `${inv.not_reached} not reached (inventory cap / time budget)`].filter(Boolean).join(' + ')}`, `${S} selected this run = ${[R && `${R} reviewed whole`, C && `${C} did not fit`, F && `${F} forced (recorded unsure)`].filter(Boolean).join(' + ')}`, D && `${D} not yet reviewed`].filter(Boolean).join('; ')}.
 
 `;
   }
