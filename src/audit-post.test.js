@@ -1262,3 +1262,35 @@ test('E2 scan: a unit weak_test finding refuted by its own assertion is low; a d
   assert.equal(run('fire({ repeat: true }).on returns false -> still passes').low, true);
   assert.equal(run('fire({ repeat: false }).on returns false -> still passes').low, false);
 });
+
+// findIssue / resolveIssueTarget: a scan never adopts another target's issue; repo names compare case-insensitively
+const gh = (issues) => ({ paginate: async (fn) => fn(), rest: { issues: { listForRepo: () => issues } } });
+const iss = (number, title, state = 'open') => ({ number, title, state, user: BOT, body: `${audit.MARK}\nx` });
+const find = (issues, extra = {}) => audit.findIssue({ github: gh(issues), owner: 'o', repo: 'r', me: null, ...extra });
+const FOREIGN = `${audit.TITLE}: org/other`;
+
+test('scan issue: with a foreign target issue listed first, the own issue is picked', async () => {
+  assert.equal((await find([iss(1, FOREIGN), iss(2, audit.TITLE)])).number, 2);
+});
+test('scan issue: a foreign target issue alone is never adopted', async () => {
+  assert.equal(await find([iss(1, FOREIGN), iss(3, `${FOREIGN} (src)`)]), null);
+});
+test('scan issue: an explicit title still selects that issue, case-insensitively', async () => {
+  assert.equal((await find([iss(1, FOREIGN), iss(2, audit.TITLE)], { title: FOREIGN })).number, 1);
+  assert.equal((await find([iss(1, FOREIGN)], { title: FOREIGN.toUpperCase() })).number, 1);
+});
+test('scan issue control: a single own issue (plain, scoped, or titled for this very repository) is found', async () => {
+  assert.equal((await find([iss(1, audit.TITLE)])).number, 1);
+  assert.equal((await find([iss(1, `${audit.TITLE} (src)`)])).number, 1);
+  assert.equal((await find([iss(1, `${audit.TITLE}: O/R`)])).number, 1);
+});
+test('scan issue: ISSUE_REPO differing only in case is the scanned repository (away=false)', () => {
+  const t = audit.resolveIssueTarget({ ISSUE_REPO: 'mira190/specguard' }, 'Mira190', 'SpecGuard');
+  assert.equal(t.away, false);
+  assert.equal(t.scope.title, audit.TITLE);
+});
+test('scan issue control: a real foreign ISSUE_REPO is away', () => {
+  const t = audit.resolveIssueTarget({ ISSUE_REPO: 'org/other' }, 'Mira190', 'SpecGuard');
+  assert.equal(t.away, true);
+  assert.deepEqual(t.target, { owner: 'org', repo: 'other' });
+});
