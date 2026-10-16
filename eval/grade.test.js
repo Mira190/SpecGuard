@@ -58,18 +58,18 @@ test('a visible summary-only finding that matches nothing is a FP and breaks exp
 });
 
 test('one summary item or row matches at most one expected finding; its text is checked like a posted one (review F15)', () => {
-  const two = [exp({ line: 10, allow_summary: true }), exp({ line: 30, allow_summary: true })];
-  const one = obs([], { summary: summaryWith('- \u274c **Missing test:** Unrelated `a.js:900` \u2014 body\n') });
+  const two = [exp({ line: 10, allow_summary: true }), exp({ line: 12, allow_summary: true })];
+  const one = obs([], { summary: summaryWith('- \u274c **Missing test:** Unrelated `a.js:11` \u2014 body\n') });
   const r = grade(spec(two), one);
   assert.deepEqual([r.tp, r.fn, r.pass], [1, 1, false]);
-  const both = obs([], { summary: summaryWith('- \u274c **Missing test:** Boundary A `a.js:10` \u2014 x\n- \u274c **Missing test:** Boundary B `a.js:30` \u2014 y\n') });
+  const both = obs([], { summary: summaryWith('- \u274c **Missing test:** Boundary A `a.js:10` \u2014 x\n- \u274c **Missing test:** Boundary B `a.js:12` \u2014 y\n') });
   assert.deepEqual([grade(spec(two), both).tp, grade(spec(two), both).fp], [2, 0], 'two items, two hits');
   const t = grade(spec([exp({ allow_summary: true, text: 'exact-now' })]), one);
   assert.deepEqual([t.tp, t.text_misses.length, t.pass], [1, 1, false], 'the expected behaviour text applies to a summary hit too');
 });
 
 test('allow_summary counts a summary item or coverage row matching kind and path', () => {
-  const e = exp({ allow_summary: true, path: ['p.js', 'p.spec.js'], kind: ['weak_test', 'missing_test'] });
+  const e = exp({ allow_summary: true, path: ['p.js', 'p.spec.js'], kind: ['weak_test', 'missing_test'], tolerance: 10 }); // the line tolerance is the identity; path and kind alone are not
   const item = grade(spec([e]), obs([], { summary: summaryWith('- ❌ **Weak test:** Gone `p.spec.js:3` (removed test or assertion) — x\n') }));
   assert.deepEqual([item.tp, item.fn, item.matched[0].via_summary], [1, 0, true]);
   const row = '| O1: sums | PR body; p.js:2 — return x | none | missing_test: no test |';
@@ -295,4 +295,38 @@ test('parseSummary reads the redesigned summary: linked (posted) titles are not 
   assert.deepEqual(s.notes, ['One note.']);
   assert.equal(parseSummary('**⚠️ Could not complete: x**').incomplete, true);
   assert.equal(parseSummary('> - The diff exceeded `max_diff_kb` and was truncated.').incomplete, true);
+});
+
+// F29: one logical finding rendered as a summary item and a coverage row is one match identity.
+const { buildSummary } = require('../src/post.js');
+const mirrored = () => {
+  const f = { kind: 'missing_test', path: 'a.js', line: 10, title: 'Boundary A', body: 'Missing assertion', confidence: 'high', obligation_id: 'O1' };
+  const b = { path: 'a.js', line: 10, quote: 'return boundary(value);' };
+  const data = { requirements: [], requirements_source: 'none', not_reviewed: '', coverage: [{ id: 'O1', obligation: 'Boundary A', source: 'from behaviour', behaviour: b, change: b, evidence: [], status: 'missing_test', reason: 'No test', alignment: { status: 'not_applicable', reason: 'No explicit requirement' } }], findings: [f], standards: { status: 'no_rules', sources: [], reason: 'None' }, layering: { status: 'checked', reason: 'No higher layer tests' } };
+  return buildSummary({ cov: { reports: 0 }, data, items: [{ f, why: 'not on diff' }], notes: [], blob: 'https://github.com/example/repo/blob/abc/' });
+};
+
+test('F29: a summary item and its mirrored coverage row are one finding, not two true positives', () => {
+  const summary = mirrored(), one = { kind: 'missing_test', path: 'a.js', line: 10, allow_summary: true };
+  const parsed = parseSummary(summary);
+  assert.deepEqual([parsed.items.length, parsed.rows.length], [1, 1]);
+  const s = spec([one, { ...one, line: 30 }]);
+  const g = grade(s, obs([], { summary }));
+  assert.deepEqual([g.tp, g.fn, g.pass], [1, 1, false]);
+  const noRow = grade(s, obs([], { summary: summary.split('\n').filter((l) => !l.startsWith('| O1:')).join('\n') }));
+  assert.deepEqual([noRow.tp, noRow.fn], [1, 1], 'same result without the mirror');
+});
+
+test('F29 control: two distinct findings, each as item plus row, are two true positives', () => {
+  const item = (t, n) => `- ${t} \`a.js:${n}\` — x\n`, row = (id, t, n) => `| ${id}: ${t} | PR body; a.js:${n} — code | none | Missing test: no test |\n`;
+  const summary = `### Missing unit tests (2)\n\n${item('Boundary A', 10)}${item('Boundary B', 30)}\n${row('O1', 'Boundary A', 10)}${row('O2', 'Boundary B', 30)}`;
+  const one = { kind: 'missing_test', path: 'a.js', line: 10, allow_summary: true };
+  const g = grade(spec([one, { ...one, line: 30 }]), obs([], { summary }));
+  assert.deepEqual([g.tp, g.fn, g.fp, g.pass], [2, 0, 0, true]);
+});
+
+test('F29: an inline comment and its summary copy are not counted twice', () => {
+  const one = { kind: 'missing_test', path: 'a.js', line: 10, tolerance: 50, allow_summary: true };
+  const g = grade(spec([one, { ...one, line: 30 }]), obs([com({ line: 10 })], { summary: mirrored() }));
+  assert.deepEqual([g.tp, g.fn, g.fp], [1, 1, 0]);
 });
