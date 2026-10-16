@@ -103,11 +103,11 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 ### 7. [P1] F28（新增）：20 条需求时丢掉证据正文，21 条反而能读到
 
 - **What this is:** `src/scan-parts.js:15` 在候选不超过 batch 时返回 null；`claude-api.js:179–249` 的常规 contextPack 不按 `audit-evidence.txt` 装载需求证据文件。多批路径则显式用 windowPack 装载。
-- **Problem:** 没有对应入选 code unit、证据来自 `config/policy.yaml` 的样本，20 条候选时正文未进入 pack，`notWhole=[]`；21 条时相同证据被 block-part 正确装入。证据候选中的短摘要不能代替上下文，API 模型又没有文件工具补读。
+- **Problem:** 手工构造 `audit-evidence.txt`、引用 `config/policy.yaml` 且没有对应入选 code unit 的样本，20 条候选时正文未进入 pack，`notWhole=[]`；21 条时相同证据被 block-part 正确装入。这个样本隔离验证消费者的打包差异，不证明自动 collector 会检出该 YAML。证据候选中的短摘要不能代替上下文，API 模型又没有文件工具补读。
 - **Fix:** 单批与多批共用 block evidence 的装载/缺失记录；只有一批时也执行同样的上下文规则。测试 batch−1、batch、batch+1，要求同一 obligation 所需证据的可见性不受这一阈值影响。
 - **If we skip it:** 小文档反而更容易缺少验证材料。若模型遵守提示会降低可检出率；若模型直接判定，后处理也缺少 blockCuts 来强制收敛为 unknown。
 
-证据：附录 A `N4-evidence-at-batch-boundary`。main、#198 均复现；场景并不要求 unit inventory 将 YAML 当成源码，因为 evidence search 已明确找到了它。
+证据：附录 A `N4-evidence-at-batch-boundary`。main、#198 均复现上述手工输入的打包差异。**2026-10-16 更正：** 原文称“evidence search 已明确找到了它”不准确；collector 的 `NOT_EVIDENCE` 会排除 YAML/JSON。后续[调研报告第 6 节及 Q8](research-repo-audit-requirements-chunking-2026-10-16.md#6-对上一报告-f28-的证据更正与补强) 使用真实 collector 产出的 JavaScript 证据，在 main 复现默认单批 pack 缺正文且 `notWhole=[]`，补强 F28 的核心问题；没有把这个新实验说成重新验证了 #198。
 
 ### 8. [P1] F23：#198 的源码装包保证没有保证扫描进度
 
