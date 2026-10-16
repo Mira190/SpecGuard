@@ -757,7 +757,10 @@ test('render: the funnel line reconciles eligible, selected, reviewed, did not f
   assert.match(a.md, /\| \[src\/js\/orders\.js\]\([^)]*\) \| 54\.2 \| [^|]* \| [^|]* \| selected, did not fit \(not reviewed\) \|/);
   assert.match(a.md, /\| \[src\/js\/legacy\.js\]\([^)]*\) \| 21\.5 \| no test \| none \| this run \|/);
   assert.doesNotMatch(a.md, /riskiest of \d+ units were reviewed/);
-  assert.match(line(vis(CODE(data.unit_findings, { eligible: 145, not_reached: 5 })).top), /^Units: 145 eligible = 140 inventoried \+ 5 not reached \(inventory cap \/ time budget\); /);
+  assert.match(line(vis(CODE(data.unit_findings, { eligible: 145, not_reached_cap: 5 })).top), /^Units: 145 eligible = 140 inventoried \+ 5 past the inventory cap; /);
+  const two = line(vis(CODE(data.unit_findings, { eligible: 150, not_inventoried: 2, not_reached_cap: 5, not_reached_time: 3 })).top); // both causes: E = I + N + J + T
+  assert.match(two, /^Units: 150 eligible = 140 inventoried \+ 2 not inventoried \(over 512 KiB\) \+ 5 past the inventory cap \+ 3 unread when the time budget ran out; /);
+  assert.equal(num(two, /^Units: (\d+) eligible/), num(two, /= (\d+) inventoried/) + num(two, /\+ (\d+) not inventoried/) + num(two, /\+ (\d+) past the/) + num(two, /\+ (\d+) unread/));
   const f = vis({ ...CODE(data.unit_findings, { eligible: 140, forced: [U1] }), unseen: [U1] }); // forced: nothing fits, tests cut
   assert.match(line(f.top), /3 selected this run = 2 reviewed whole \+ 1 forced \(recorded unsure\)/);
   assert.match(f.md, /forced: tests cut \(unsure\)/);

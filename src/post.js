@@ -175,7 +175,7 @@ function validate(o) {
   if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('$ is not an object');
   for (const k of ['coverage', 'findings', 'requirements']) if (!Array.isArray(o[k])) return bad(`${k} must be an array`);
   tidy(o);
-  const notes = [];
+  const notes = [], degraded = []; // degraded: ids of rows marked unknown on their own content; reducedReasons counts these, never note wording
   if (!str(o.requirements_source)) { o.requirements_source = ''; notes.push('requirements_source was not a string; ignored.'); }
   if (!str(o.not_reviewed)) { o.not_reviewed = ''; notes.push('not_reviewed was not a string; ignored.'); }
   const demote = (key, why) => {
@@ -250,7 +250,7 @@ function validate(o) {
       } else rows.push({ ...c, alignment: al });
       continue;
     }
-    notes.push(`Obligation ${c.id} marked unknown: ${why}.`);
+    notes.push(`Obligation ${c.id} marked unknown: ${why}.`); degraded.push(c.id);
     rows.push({ id: c.id, obligation: text(c.obligation) ? c.obligation : '(not stated)', source: text(c.source) ? c.source : '(not stated)',
       behaviour: citation(c.behaviour) ? c.behaviour : null, change: citation(c.change) ? c.change : null, evidence: [], status: 'unknown', reason: `Malformed coverage row: ${why}.`, alignment: unknownAlign('Malformed coverage row.') });
   }
@@ -323,12 +323,13 @@ function validate(o) {
   for (const c of rows) {
     if (c.alignment.status !== 'mismatch' && ['missing_test', 'weak_test'].includes(c.status) && kept.filter((f) => f.kind === c.status && f.obligation_ids.includes(c.id)).length !== 1) {
       notes.push(`Obligation ${c.id} marked unknown: needs exactly one ${c.status} finding.`);
+      degraded.push(c.id);
       demoted.add(c.id);
       Object.assign(c, { status: 'unknown', reason: 'Inconsistent findings for this gap.' });
     }
   }
   kept = kept.map((f) => ({ ...f, obligation_ids: f.obligation_ids.filter((id) => !demoted.has(id)) })).filter((f) => f.kind === 'standard' || f.obligation_ids.length);
-  Object.assign(o, { coverage: rows, requirements: reqs, findings: kept, validation_notes: notes });
+  Object.assign(o, { coverage: rows, requirements: reqs, findings: kept, validation_notes: notes, degraded }); // always overwritten: a model-supplied degraded list is never trusted
   return { ok: true };
 }
 
@@ -461,6 +462,8 @@ function plan(findings, maps, maxComments = 10) {
 // Reduced review: a fast-tier model or a struggling run gives weaker evidence, so it publishes less (never wrong beats complete).
 // ponytail: the triggers are the four cheap signals the engine step and validation already leave behind; add one here when a new failure mode shows up in telemetry.
 const REDUCED_INLINE = 3;
+// a validation note that counts toward a reduced review: its obligation id goes in data.degraded, so completeness never depends on the note's wording
+const degrade = (data, id, text) => { (data.validation_notes ||= []).push(text); (data.degraded ||= []).push(id); };
 function reducedReasons({ em, repair, engineNotes = [], data }) {
   const out = [];
   if (em?.tier === 'fast') out.push('fast-tier model');
@@ -468,7 +471,7 @@ function reducedReasons({ em, repair, engineNotes = [], data }) {
   if (repair === 'finalized') out.push('the engine ran out of budget and answered from what it had read so far');
   if (engineNotes.length >= 3) out.push(`${engineNotes.length} engine notes`);
   // its own citations failed; a row only reached through an unverified requirement link is not counted
-  const bad = new Set((data.validation_notes || []).map((n) => /^Obligation (.+?) marked unknown: (?!The linked requirement)/.exec(n)?.[1]).filter(Boolean));
+  const bad = new Set(data.degraded || []); // explicit kind (degrade()), never the wording of a note
   if (bad.size * 4 > data.coverage.length) out.push(`${bad.size} of ${data.coverage.length} obligations degraded by validation`);
   return out;
 }
@@ -995,7 +998,7 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
       if (bad.length && !c.evidence.some((e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT')) {
         c.status = 'unknown';
         c.reason = `Not covered: the cited evidence is not a running assertion (${bad.join('; ')}).`;
-        (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${bad.join('; ')}.`);
+        degrade(data, c.id, `Obligation ${c.id} marked unknown: ${bad.join('; ')}.`);
       }
     }
     if (!fails.length && c.status === 'covered') { // evidence that only checks truthiness or that a call happened pins no expected value
@@ -1012,7 +1015,7 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
       c.status = 'unknown';
       c.reason = `Could not verify the citation: ${fails.join('; ')}.`;
       c.alignment = unknownAlign(`A citation could not be verified (${fails.join('; ')}).`);
-      (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: ${why}.`);
+      degrade(data, c.id, `Obligation ${c.id} marked unknown: ${why}.`);
     }
   }
   if (stray.length) (data.validation_notes ||= []).push(`${stray.length} ${stray.length === 1 ? 'obligation cites an unchanged line' : 'obligations cite unchanged lines'} of changed files (${stray.join(', ')}); their tests were still checked.`);
@@ -1184,7 +1187,7 @@ function applyCoverage(data, cov) {
     const b = c.behaviour;
     if (c.status === 'covered' && b && b.side !== 'LEFT' && neverRan(cov, b.path, b.line)) {
       Object.assign(c, { status: 'unknown', reason: `The coverage report shows this line never ran (${b.path}:${b.line}).` });
-      (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: the coverage report shows ${b.path}:${b.line} never ran.`);
+      degrade(data, c.id, `Obligation ${c.id} marked unknown: the coverage report shows ${b.path}:${b.line} never ran.`);
       down.add(c.id);
     }
   }
@@ -1526,6 +1529,7 @@ async function run({ github, context, core }) {
   { // a missing_test claim whose error message or literal already sits in a tracked test file may be covered there: low confidence, not counted (src/test-map.js)
     const cands = parseCandidates(readCtx('test-candidates.txt') || ''), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
     for (const f of data.findings) {
+      // a file absent from test-candidates.txt gets an unscoped search (cands.get is undefined); safe only because such files are in candidates-cut.txt, which already makes the run incomplete
       const hit = f.kind === 'missing_test' && covers(readLines(f.path), f.line, f.path, cands.get(f.path));
       if (hit && f.confidence === 'low') f.gated = true; // already low: just keep it from being raised later
       else if (hit) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
