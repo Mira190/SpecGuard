@@ -214,3 +214,7 @@ test('removed assertions: a deleted test file gives removed leads under its old 
   const del = 'diff --git a/t/x.test.js b/t/x.test.js\ndeleted file mode 100644\n--- a/t/x.test.js\n+++ /dev/null\n@@ -1,3 +0,0 @@\n-test("f", () => {\n-  expect(f(1)).toBe(2);\n-});\n';
   assert.deepEqual(assertionDelta(del, () => true).map((d) => [d.file, d.kind, d.line]), [['t/x.test.js', 'removed', 2]]);
 });
+test('removed assertions: an assertion cut from one hunk and pasted unchanged into another is no lead', () => {
+  const d = mkdiff('t/x.test.js', " test('a', () => {\n-  expect(result).toEqual({a:1,b:2});\n });\n@@ -40,3 +40,4 @@\n test('c', () => {\n+  expect(result).toEqual({ a: 1, b: 2 });\n });\n");
+  assert.deepEqual(assertionDelta(d, () => true), []);
+});
