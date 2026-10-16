@@ -42,14 +42,14 @@ function neutralize(s) {
 
 // line -> hunk index per side. RIGHT: '+' and ' ' lines, LEFT: '-' lines.
 function parsePatch(patch) {
-  const m = { RIGHT: new Map(), LEFT: new Map(), changed: { RIGHT: new Map(), LEFT: new Map() } };
+  const m = { RIGHT: new Map(), LEFT: new Map(), changed: { RIGHT: new Map(), LEFT: new Map() }, rightAt: new Map() }; // rightAt: removed LEFT line -> the RIGHT line it sits before
   let h = -1, l = 0, r = 0;
   for (const ln of String(patch || '').split(/\r?\n/)) { // CRLF files: content lines end in CR
     const hd = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(ln);
     if (hd) { h++; l = +hd[1]; r = +hd[2]; continue; }
     if (h < 0 || ln === '' || ln[0] === '\\') continue;
     if (ln[0] === '+') { m.changed.RIGHT.set(r, ln.slice(1)); m.RIGHT.set(r++, h); }
-    else if (ln[0] === '-') { m.changed.LEFT.set(l, ln.slice(1)); m.LEFT.set(l++, h); }
+    else if (ln[0] === '-') { m.changed.LEFT.set(l, ln.slice(1)); m.rightAt.set(l, r); m.LEFT.set(l++, h); }
     else { m.RIGHT.set(r++, h); l++; }
   }
   return m;
@@ -1582,10 +1582,10 @@ async function run({ github, context, core }) {
   // leads.txt indents each lead; and a lead is trusted only as far as the diff agrees: recomputing it drops removals re-pinned through a helper.
   const standing = new Set(require('./leads').assertionDelta(local, () => true).filter((d) => d.kind === 'removed').map((d) => `${d.file}:${d.line}`));
   for (const m of (readCtx('leads.txt') || '').matchAll(/^\s*assertion removed: .* \((.+):(\d+)\)\s*$/gm)) {
-    const path_ = m[1], line = +m[2], ch = maps.get(path_)?.changed.LEFT;
+    const path_ = m[1], line = +m[2], ch = maps.get(path_)?.changed.LEFT, rightAt = maps.get(path_)?.rightAt.get(line);
     if (!standing.has(`${path_}:${line}`)) continue;
     if (auto.length >= 5 || !ch || !reviewable.has(path_) || !ch.has(line)) continue;
-    const near = data.findings.findIndex((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - line) <= 5);
+    const near = data.findings.findIndex((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - (f.side === 'LEFT' ? line : rightAt)) <= 5); // one coordinate system: a RIGHT finding is compared at the removal's RIGHT position
     if (near >= 0) {
       // a low-confidence nearby finding is raised, not duplicated. A cross-file re-pin is no new risk: the lead is already posted when no finding is nearby.
       const n = data.findings[near];

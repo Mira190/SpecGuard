@@ -3669,6 +3669,23 @@ test('demoted nearby finding is not raised: a pack-cut-demoted weak_test stays l
   assert.doesNotMatch(all, /Removal confirmed|Assertion removed with no replacement|confidence: high/);
 });
 
+test('removal lead nearness is measured in one coordinate system: 6 lines added above the removal move its RIGHT position, so a RIGHT finding at the same number is not near, one at the mapped position is', async (t) => {
+  const run = async (line) => {
+    const s = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', { path: 'test.js', line, quote: evidence.quote, confidence: 'low', title: 'NEARBY ONE' })] }));
+    fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,8 @@\n+a1\n+a2\n+a3\n+a4\n+a5\n+a6\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+    fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), 'assertion removed: assert.equal(gone, 1); (test.js:2)\n');
+    await post(s);
+    return { all: JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]) };
+  };
+  const far = await run(2); // numerically equal to the LEFT line, 6 away from the mapped RIGHT line 8
+  assert.doesNotMatch(far.all, /Removal confirmed|confidence: high/);
+  assert.match(far.all, /Assertion removed with no replacement/, 'the lead is still added');
+  const near = await run(8);
+  assert.match(near.all, /Removal confirmed by the diff\./);
+  assert.doesNotMatch(near.all, /Assertion removed with no replacement/);
+});
+
 test('posting failures propagate: a failed summary comment, a failed job summary and a crash are status failed; a non-422 inline failure is incomplete (no head marker); a 422 is normal', async (t) => {
   const go = async (prep) => {
     const s = setup(t);
