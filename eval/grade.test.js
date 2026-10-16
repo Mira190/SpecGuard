@@ -337,3 +337,25 @@ test('F29: an inline comment and its summary copy are not counted twice', () => 
   const g = grade(spec([one, { ...one, line: 30 }]), obs([com({ line: 10 })], { summary: mirrored() }));
   assert.deepEqual([g.tp, g.fn, g.fp], [1, 1, 0]);
 });
+
+// S10: an unexpected "Missing test" coverage row is a false positive like the same gap as a summary item, counted once.
+test('S10: a wrong coverage row counts as a false positive, the same as the gap listed as a summary item', () => {
+  const b = { path: 'a.js', line: 10, quote: 'return boundary(value);' };
+  const f = { kind: 'missing_test', path: 'a.js', line: 10, title: 'Boundary A', body: 'Missing assertion', confidence: 'high', obligation_ids: ['O1'] };
+  const mk = (findings, items) => buildSummary({ cov: { reports: 0 }, data: { requirements: [], requirements_source: 'none', not_reviewed: '', coverage: [{ id: 'O1', obligation: 'Boundary A', source: 'from behaviour', behaviour: b, change: b, evidence: [], status: 'missing_test', reason: 'No test', alignment: { status: 'not_applicable', reason: 'No explicit requirement' } }], findings, standards: { status: 'no_rules', sources: [], reason: 'None' }, layering: { status: 'checked', reason: 'No higher layer tests' } }, items, notes: [], blob: 'https://github.com/example/repo/blob/abc/' });
+  const clean = { id: 'clean', goal: 'requirements', expected: { findings: [], expect_clean: true } };
+  const coverageRowOnly = grade(clean, obs([], { summary: mk([], []) }));
+  const sameGapAsSummaryItem = grade(clean, obs([], { summary: mk([f], [{ f, why: 'not on diff' }]) }));
+  assert.equal(coverageRowOnly.fp, sameGapAsSummaryItem.fp);
+  assert.equal(coverageRowOnly.fp, 1);
+  assert.equal(coverageRowOnly.clean_ok, false);
+});
+
+// S10 review: a row whose gap is also a posted comment is one candidate, not two (the item case is covered above; F29 tests cover the matched case).
+test('S10: a coverage row for a gap that is also a posted comment counts once', () => {
+  const b = { path: 'a.js', line: 10, quote: 'return boundary(value);' };
+  const f = { kind: 'missing_test', path: 'a.js', line: 10, title: 'Boundary A', body: 'Missing assertion', confidence: 'high', obligation_ids: ['O1'] };
+  const summary = buildSummary({ cov: { reports: 0 }, data: { requirements: [], requirements_source: 'none', not_reviewed: '', coverage: [{ id: 'O1', obligation: 'Boundary A', source: 'from behaviour', behaviour: b, change: b, evidence: [], status: 'missing_test', reason: 'No test', alignment: { status: 'not_applicable', reason: 'No explicit requirement' } }], findings: [f], standards: { status: 'no_rules', sources: [], reason: 'None' }, layering: { status: 'checked', reason: 'No higher layer tests' } }, items: [], notes: [], blob: 'https://github.com/example/repo/blob/abc/' });
+  const g = grade({ id: 'clean', goal: 'requirements', expected: { findings: [], expect_clean: true } }, obs([com({ line: 10 })], { summary }));
+  assert.equal(g.fp, 1);
+});
