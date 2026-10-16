@@ -250,12 +250,25 @@ function parseItems(file, text, touch = null) {
     let t = i; while (t > 0 && /^\s*@\S/.test(lines[t - 1])) t--;
     starts.push({ i, t, kind: g[1], name: g[2].trim() });
   }
+  // Background steps are preconditions of every scenario below them (Feature-level, plus the Rule-level one inside a Rule): carried on the item as ctx
+  // (text) and ctxAt (line ranges), outside raw so the block's cid, which hashes its own text, does not change.
+  let featBg = null, ruleBg = null, inRule = false;
   starts.forEach((s, k) => {
-    if (/^(Feature|Rule|Background)$/.test(s.kind)) return;
+    if (s.kind === 'Feature') { featBg = ruleBg = null; inRule = false; return; }
+    if (s.kind === 'Rule') { ruleBg = null; inRule = true; return; }
     let z = (starts[k + 1] ? starts[k + 1].t : n) - 1;
     if (!feature) for (let q = s.i + 1; q <= z; q++) if (/^ {0,3}(```|~~~)\s*$/.test(lines[q]) || (!fenced[q] && /^#{1,6}\s/.test(lines[q]))) { z = q - 1; break; } // a prose scenario ends at its fence or next heading
+    if (s.kind === 'Background') {
+      while (z > s.i && !lines[z].trim()) z--;
+      const bg = { text: lines.slice(s.i, z + 1).map((l, q) => (q === 0 ? strip(l) : l.trim())).join('\n'), at: [s.i + 1, z + 1] };
+      if (inRule) ruleBg = bg; else featBg = bg;
+      return;
+    }
     const tags = lines.slice(s.t, s.i).join(' ').split(/\s+/).filter((x) => x.startsWith('@'));
+    const before = items.length;
     push('gherkin', tags.find((x) => /\d/.test(x)) || `Scenario: ${s.name}`, s.t, z, '');
+    const bgs = [featBg, ruleBg].filter(Boolean);
+    if (bgs.length && items.length > before) Object.assign(items[before], { ctx: bgs.map((x) => x.text).join('\n'), ctxAt: bgs.map((x) => x.at) });
   });
   // 4. normative fallback on uncovered prose
   const ord = new Map();
@@ -535,7 +548,7 @@ function parseReqPaths(s) {
 function testScope(spec) {
   const { inc, exc } = parseReqPaths(spec);
   const hit = (list, f) => list.some((g) => matchGlob(f, g) || (!/[*?[]/.test(g) && matchGlob(f, g.replace(/\/*$/, '/'))));
-  return inc.length ? (f) => hit(inc, f) && !hit(exc, f) : null;
+  return inc.length ? (f) => hit(inc, f) && !hit(exc, f) : exc.length ? (f) => isTestPath(f) && !hit(exc, f) : null; // exclusions only: the default discovery minus them
 }
 // Tracked doc paths that PR or issue text names: path-like tokens ending in a doc extension (also inside markdown links and blob URLs), resolved by
 // exact path or, for a slash-free token, a unique basename. Not a README, changelog or pip requirements.txt: a mention of those is not a spec.
@@ -642,7 +655,8 @@ function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '
 }
 
 // ---- the full run -------------------------------------------------------------------------------------------
-const hitsLine = (item, map) => { for (let l = item.line; l <= item.end; l++) if (map.has(l)) return true; return false; };
+const hitsLine = (item, map) => { for (let l = item.line; l <= item.end; l++) if (map.has(l)) return true; return (item.ctxAt || []).some(([a, z]) => { for (let l = a; l <= z; l++) if (map.has(l)) return true; return false; }); }; // an inherited Background line counts as the scenario's own
+const withCtx = (i) => (i.ctx ? `${i.ctx}\n${i.raw}` : i.raw); // the scenario as the model must read it: inherited Background first
 const flat = (s) => s.replace(/\s+/g, ' ').trim();
 const norm = (s) => s.replace(/\s+/g, ' ').trim();
 const body = (raw) => raw.replace(ID_LINE, '').replace(/^@\S.*$/gm, ''); // ids and tags are labels, not values
@@ -656,13 +670,13 @@ function changedItems(files, maps) { // files: [{path, headItems, baseItems}] ->
     if (!m) continue;
     for (const { base, head } of pairItems(baseItems, headItems)) {
       if (head && base) {
-        if (!(hitsLine(head, m.changed.RIGHT) || hitsLine(base, m.changed.LEFT)) || norm(head.raw) === norm(base.raw)) continue;
-        out.push({ path: p, ref: head.ref, line: head.line, quote: head.text, previous: base.text, change: 'modified', deltas: valueDeltas(body(base.raw), body(head.raw)) });
+        if (!(hitsLine(head, m.changed.RIGHT) || hitsLine(base, m.changed.LEFT)) || norm(withCtx(head)) === norm(withCtx(base))) continue;
+        out.push({ path: p, ref: head.ref, line: head.line, quote: head.text, ...(head.ctx ? { context: head.ctx } : {}), previous: base.text, ...(base.ctx && base.ctx !== head.ctx ? { previous_context: base.ctx } : {}), change: 'modified', deltas: valueDeltas(body(withCtx(base)), body(withCtx(head))) });
       } else if (head) {
         if (!hitsLine(head, m.changed.RIGHT)) continue;
-        out.push({ path: p, ref: head.ref, line: head.line, quote: head.text, change: 'added', deltas: valueDeltas('', body(head.raw)) });
+        out.push({ path: p, ref: head.ref, line: head.line, quote: head.text, ...(head.ctx ? { context: head.ctx } : {}), change: 'added', deltas: valueDeltas('', body(withCtx(head))) });
       } else if (hitsLine(base, m.changed.LEFT)) {
-        out.push({ path: p, ref: base.ref, line: base.line, quote: base.text, previous: base.text, change: 'removed', deltas: valueDeltas(body(base.raw), ''), removedRaw: base.raw });
+        out.push({ path: p, ref: base.ref, line: base.line, quote: base.text, previous: base.text, change: 'removed', deltas: valueDeltas(body(withCtx(base)), ''), removedRaw: withCtx(base) });
       }
     }
   }

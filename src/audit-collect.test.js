@@ -593,3 +593,17 @@ test('the publisher and loadPrior pick the same scan issue: same repository, ano
     assert.deepEqual(prior && prior.blocks.map((b) => b.cid), [`0000000${number}`], `${name}: the loader reads the same issue`);
   }
 });
+
+test('collect: a Gherkin Background is in every scenario body and tv, but the cid is unchanged by it', (t) => {
+  const feat = (who) => `Feature: Tenants\n\n  Background:\n    Given a tenant in state ${who}\n\n  Scenario: Login is refused\n    When the user logs in\n    Then access is denied\n\n  Scenario: Export is refused\n    When the user exports data\n    Then access is denied\n`;
+  const { allBlocks } = require('./audit-collect');
+  const a = repo(t, { 'f/t.feature': feat('SUSPENDED_TENANT') }), b = repo(t, { 'f/t.feature': feat('ACTIVE_TENANT') });
+  const x = allBlocks(a.root, 'HEAD', ['f/t.feature']), y = allBlocks(b.root, 'HEAD', ['f/t.feature']);
+  assert.equal(x.length, 2);
+  assert.equal(x[1].cid, y[1].cid);
+  assert.notEqual(x[1].tv, y[1].tv);
+  assert.match(x[1].body, /SUSPENDED_TENANT/);
+  assert.match(y[1].body, /ACTIVE_TENANT/);
+  const plain = allBlocks(repo(t, { 'f/p.feature': 'Feature: P\n\n  Scenario: Only one\n    When the user logs in\n    Then access is denied\n' }).root, 'HEAD', ['f/p.feature'])[0];
+  assert.doesNotMatch(plain.body, /Background/);
+});
