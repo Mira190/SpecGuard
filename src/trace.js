@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { parseDiff } = require('./post');
+const { DENY } = require('./deny.js');
 
 const DOC_EXT = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
 const docLike = (p) => DOC_EXT.test(p) && (!/\.txt$/i.test(p) || UNREADABLE_NAME.test(path.basename(p))); // a .txt is a document only when named like one (not CMakeLists.txt, licences, test data)
@@ -515,6 +516,7 @@ function lsTree(cwd, rev, skipped = { n: 0 }) {
   for (const r of git(cwd, ['ls-tree', '-r', '-z', '-l', rev], { encoding: 'utf8' }).split('\0')) {
     const m = /^(\d{6}) (\w+) ([0-9a-f]+) +(\d+|-)\t([\s\S]*)$/.exec(r);
     if (!m || m[2] !== 'blob' || m[1] === '120000') continue;
+    if (DENY.test(m[5])) { (skipped.denied = skipped.denied || []).push(m[5]); continue; } // secret-like: no doc, code or test text from it reaches the model
     if (CONTROL.test(m[5])) skipped.n++; else out.push({ path: m[5], sha: m[3], size: +m[4] });
   }
   return out;
@@ -601,12 +603,13 @@ const byRank = (a, b) => rank(a.path) - rank(b.path) || (a.path < b.path ? -1 : 
 function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [], branch = '', scope = null }) {
   const { inc, exc } = parseReqPaths(reqPaths), limitations = [];
   const extra = String(ignoreExtra).split(/\r?\n/).filter(Boolean);
-  const skipped = { n: 0 }, entries = lsTree(cwd, head, skipped).filter((e) => !scope || scope(e.path));
+  const skipped = { n: 0, denied: [] }, entries = lsTree(cwd, head, skipped).filter((e) => !scope || scope(e.path));
   if (skipped.n) limitations.push(`${skipped.n} tracked path(s) containing a control character were ignored.`);
   const ruled = (p) => RULE_GLOBS.concat(extra).some((g) => matchGlob(p, g));
   const excluded = (p) => exc.some((g) => matchGlob(p, g)), named = namedSet({ cwd, base, head, texts, ruled, excluded, branch });
   const forced = (p) => inc.some((g) => matchGlob(p, g)) || named.has(p); // a doc the PR or a linked issue names is admitted like a requirements_paths entry
   for (const e of entries) if (UNREADABLE.test(e.path) && UNREADABLE_NAME.test(path.basename(e.path)) && !excluded(e.path)) limitations.push(`requirement-like file not readable: ${e.path}`);
+  const denied = skipped.denied.filter((p) => !CONTROL.test(p) && (forced(p) || (specLike(p) && !SKIP_NAME.test(p) && !ruled(p)))); // secret-like docs, named so the summary can say they were not read
   const sample = (p) => FIXTURE_PATH.test(p) && !forced(p);
   let cands = entries.filter((e) => e.size <= MAX_FILE && !excluded(e.path) && !UNREADABLE.test(e.path) && !sample(e.path)
     &&((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).sort(byRank);
@@ -632,7 +635,7 @@ function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [], bra
   if (over) limitations.push(`Document parsing stopped at the ${MAX_DOC_BYTES >> 20} MB byte budget; later candidate documents were skipped.`);
   let list = [...docs.values()].sort(byRank);
   if (list.length > MAX_DOCS) { limitations.push(`${list.length - MAX_DOCS} requirement documents skipped by the ${MAX_DOCS}-file limit.`); list = list.slice(0, MAX_DOCS); }
-  return { entries, docs: new Map(list.map((d) => [d.path, d])), limitations, ruled, forced, excluded, oversize, rejected };
+  return { entries, docs: new Map(list.map((d) => [d.path, d])), limitations, ruled, forced, excluded, oversize, rejected, denied };
 }
 
 // `node trace.js classify <paths>`: the subset of (changed) paths that are requirement docs at head, or at base when deleted.
@@ -643,7 +646,7 @@ function classify({ cwd = '.', base, head, paths, reqPaths = '', ignoreExtra = '
   try { st = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')); } catch { /* collect.sh classifies before the requirements step (nothing named yet) and again after it */ }
   const named = namedSet({ cwd, base, head, texts: prTexts(st), ruled, excluded, branch: st && st.branch });
   const eligible = (p) => !excluded(p) && (inc.some((g) => matchGlob(p, g)) || named.has(p) || (specLike(p) && !SKIP_NAME.test(p) && !ruled(p)));
-  const todo = paths.filter((p) => !CONTROL.test(p) && eligible(p));
+  const todo = paths.filter((p) => !CONTROL.test(p) && !DENY.test(p) && eligible(p));
   const read = (rev) => catBatch(cwd, todo.map((p) => `${rev}:${p}`));
   const heads = todo.length ? read(head) : [], bases = todo.length && base ? read(base) : [];
   const ok = new Set(todo.filter((p, k) => {
@@ -887,6 +890,11 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   const d = discover({ cwd, base, head, reqPaths, ignoreExtra, texts: prTexts(status), branch: status.branch, scope });
   rejected = d.rejected;
   cand.limitations.push(...d.limitations);
+  if (d.denied.length) { // secret-like requirement docs: not read, listed with collect.sh's denied paths (post.js: "Not reviewed: secret-like") and in the limitations
+    cand.limitations.push(`${d.denied.length} secret-like requirement document(s) were not read: ${d.denied.slice(0, 5).join(', ')}`);
+    const f = path.join(ctx, 'denied.txt'), have = (() => { try { return fs.readFileSync(f, 'utf8').split('\n').filter(Boolean); } catch { return []; } })();
+    fs.writeFileSync(f, [...new Set([...have, ...d.denied])].map((x) => x + '\n').join(''));
+  }
   const docs = [...d.docs.values()], allItems = docs.flatMap((x) => x.items);
   spec.files = docs.length; spec.items = allItems.length;
 
@@ -903,6 +911,7 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
     const t = git(cwd, ['diff', '--name-status', '-z', '-M', '--no-color', '--no-ext-diff', range], { encoding: 'utf8', maxBuffer: maxPatch }).split('\0');
     for (let k = 0; k < t.length && t[k];) { const st = t[k++]; if (st[0] === 'R') { const from = t[k++]; renames.set(t[k++], from); } else k++; }
   } catch { /* no rename map: every move reads as remove + add, as before */ }
+  patch = patch.split(/^(?=diff --git )/m).filter((c) => { const m = /^diff --git a\/(.*?) b\/(.*)$/m.exec(c); return !(m && (DENY.test(m[1]) || DENY.test(m[2]))); }).join(''); // a secret-like file's hunks are not trace input either
   const maps = parseDiff(patch);
   // changed requirement items (head docs, plus docs that were requirement docs at base: deleted or emptied)
   let specCand = [...maps.keys()].filter((p) => !CONTROL.test(p) && !d.excluded(p) && (d.docs.has(p) || (!d.ruled(p) && specLike(p) && !SKIP_NAME.test(p)) || d.forced(p)));
