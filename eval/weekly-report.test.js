@@ -236,3 +236,9 @@ test('unified0: matches git diff -U0 for add, delete, modify, two runs in a hunk
   assert.equal(post.anchorTouched('b'.repeat(40), sha, 'f.js', 1, 1, null, apiGit(cmp, sha, () => null)), null);
   assert.equal(post.testsChanged('b'.repeat(40), sha, null, apiGit(cmp, sha, () => null)), null);
 });
+
+test('apiGit: a truncated compare (more commits than returned) is unusable, so unknown', () => {
+  const post = require('../src/post'), { apiGit } = require('./weekly-report');
+  const sha = 'a'.repeat(40), cmp = { status: 'ahead', total_commits: 300, commits: [{ sha, parents: [{ sha: 'b'.repeat(40) }] }] };
+  assert.equal(post.testsChanged('b'.repeat(40), sha, null, apiGit(cmp, sha, () => [{ filename: 'x.test.js' }])), null);
+});
