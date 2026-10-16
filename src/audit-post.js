@@ -755,7 +755,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || process.env.TEST_PATHS || '' });
   const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers });
   const isCut = (u) => packCutOn && (packCut.has(u.path) || u.tests.some((t) => packCut.has(t))), isBad = (u) => checked.unit_unseen.includes(u.id), live = hasCode && !unitsFailed ? [...units.values()] : [];
-  const cut = live.filter(isCut).map((u) => u.id), bad = live.filter((u) => !isCut(u) && isBad(u)).map((u) => u.id); // cut by the pack / the model's answer for it was unusable
+  const cut = live.filter(isCut).map((u) => u.id), bad = live.filter((u) => !isCut(u) && isBad(u)).map((u) => u.id); // cut by the pack / the model gave no usable model answer for it
   const unseen = hasCode && unitsFailed ? [...units.keys()] : live.filter((u) => isCut(u) || isBad(u)).map((u) => u.id);
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, cut, bad, unitsFailed } : null;
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };

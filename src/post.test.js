@@ -1938,6 +1938,15 @@ test('the run status is a marker in the sticky summary and the status output: co
   assert.deepEqual(await run(() => { process.env.SKIP = 'true'; }), ['complete', 'complete']);
 });
 
+test('deny-listed secret-like files named in denied.txt show one Not reviewed line in Details and do not make the run incomplete', async (t) => {
+  const s = setup(t);
+  writeCtx(s, 'denied.txt', '.env.example\nk.pem\n');
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, /Not reviewed: 2 secret-like file\(s\) \(deny-listed\): `\.env\.example`, `k\.pem`/);
+  assert.doesNotMatch(b, /Incomplete review/);
+  assert.match(b, /<!-- specguard:status=complete -->/);
+});
 test('files the collector dropped from an over-size diff are named under the incomplete note, ten at most', async (t) => {
   const s = setup(t);
   writeCtx(s, 'diff-dropped.txt', `${Array.from({ length: 12 }, (_, i) => `big/f${i}.js`).join('\n')}\n`);

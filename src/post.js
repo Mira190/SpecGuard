@@ -1519,6 +1519,8 @@ async function run({ github, context, core }) {
   try { sentries = JSON.parse(readCtx('standards-map.json')); smap = new Map(sentries.map((e) => [e.path, e.scope])); } catch { /* no map */ }
   const cutInPrompt = standardsCut(ctx);
   for (const l of (readCtx('collect-limits.txt') || '').split('\n').filter(Boolean)) addNote(l);
+  const denied = (readCtx('denied.txt') || '').split('\n').map((x) => x.trim()).filter(Boolean); // deny-listed secret-like files collect.sh kept out: stated, not an incomplete run
+  if (denied.length) addNote(`Not reviewed: ${denied.length} secret-like file(s) (deny-listed): ${denied.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${denied.length > 10 ? `, … (+${denied.length - 10} more)` : ''}`);
   verifyEvidence(data, reviewable, standards, readLines, maps);
   let requirements = null;
   try { requirements = JSON.parse(fs.readFileSync(path.join(ctx, 'requirements-status.json'), 'utf8')); verifyRequirements(data, { ...requirements, specFiles }, readLines); } catch { requirements = null; }

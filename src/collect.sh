@@ -10,7 +10,7 @@ rm -rf "$CTX"
 mkdir -p "$CTX"
 # Present from the start so that an absent list never means "no restriction": a trace.js failure leaves trace-status=failed
 # and an empty list (post.js then fails closed for path-sourced requirements). trace-status: ok | failed | off.
-: > "$CTX/collect-limits.txt"; : > "$CTX/spec-files.txt"; : > "$CTX/spec-rejected.txt"; : > "$CTX/diff-dropped.txt"
+: > "$CTX/collect-limits.txt"; : > "$CTX/spec-files.txt"; : > "$CTX/spec-rejected.txt"; : > "$CTX/diff-dropped.txt"; : > "$CTX/denied.txt"
 if [ "${TRACE:-auto}" = off ]; then echo off > "$CTX/trace-status"; else echo failed > "$CTX/trace-status"; fi
 out() { [ -n "${GITHUB_OUTPUT:-}" ] && echo "$1=$2" >> "$GITHUB_OUTPUT"; return 0; }
 out skip false; out partial false
@@ -99,6 +99,19 @@ if [ ${#docs[@]} -gt 0 ]; then
     else dropped+=("$f"); fi
   done
 fi
+# Secret-like paths (the DENY list of claude-api.js, via deny-filter.js) never reach files.txt or diff.patch, hence never the model. Listed in denied.txt.
+# If the filter itself fails, fail closed: nothing is reviewed rather than letting a .env hunk through.
+if [ $(( ${#files[@]} + ${#specs[@]} )) -gt 0 ]; then
+  if ! printf '%s\n' ${files[@]+"${files[@]}"} ${specs[@]+"${specs[@]}"} | node "$HERE/deny-filter.js" > "$CTX/denied.txt"; then
+    filterfail=1; echo "::warning::secret-path filter failed; changed files are not reviewed"
+    echo "The secret-path filter failed, so no changed file was reviewed." >> "$CTX/collect-limits.txt"
+    : > "$CTX/denied.txt"; files=(); specs=()
+  fi
+  if [ -s "$CTX/denied.txt" ]; then
+    keep=(); for f in ${files[@]+"${files[@]}"}; do grep -qxF -- "$f" "$CTX/denied.txt" || keep+=("$f"); done; files=(${keep[@]+"${keep[@]}"})
+    keep=(); for f in ${specs[@]+"${specs[@]}"}; do grep -qxF -- "$f" "$CTX/denied.txt" || keep+=("$f"); done; specs=(${keep[@]+"${keep[@]}"})
+  fi
+fi
 [ "$nctl" -eq 0 ] || echo "$nctl changed path(s) containing control characters were not reviewed." >> "$CTX/collect-limits.txt"
 nspecs=${#specs[@]}
 [ "$nspecs" -eq 0 ] || files+=("${specs[@]}")
@@ -110,6 +123,7 @@ ncode=$(( ${#files[@]} - nspecs ))
 [ ${#lintchg[@]} -eq 0 ] || printf '%s\n' "${lintchg[@]}" > "$CTX/lint-changes.txt"
 # a dropped .md may still be named by the PR text (step 4a): keep going then, the skip check after trace.js decides
 ndrop=${#dropped[@]}; [ "${TRACE:-auto}" != off ] || ndrop=0
+[ -z "${filterfail:-}" ] || ndrop=1 # keep going so the later steps and the skip check run as usual
 if [ ${#files[@]} -eq 0 ] && [ "$ndrop" -eq 0 ]; then
   : > "$CTX/diff.patch"; : > "$CTX/files.txt"
   echo "nothing reviewable in diff"; out skip true; exit 0

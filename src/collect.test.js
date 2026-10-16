@@ -86,7 +86,8 @@ function scenario(t, baseFiles, change, extraEnv = {}, stub = null, reqStub = nu
   if (stub !== null || reqStub !== null) { // run a copy of the collector with a fake trace.js (or, with reqStub, a fake requirements.js and the real trace.js) beside it; the real ones are never touched
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-stub-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-    for (const f of reqStub === null ? ['collect.sh', 'requirements.js'] : fs.readdirSync(__dirname).filter((n) => /.(js|sh)$/.test(n) && !/.test.js$/.test(n))) fs.copyFileSync(path.join(__dirname, f), path.join(dir, f));
+    for (const f of reqStub === null ? ['collect.sh', 'requirements.js', 'deny-filter.js', 'prompt.js', 'focus.js', 'numdiff.js'] : fs.readdirSync(__dirname).filter((n) => /.(js|sh)$/.test(n) && !/.test.js$/.test(n))) fs.copyFileSync(path.join(__dirname, f), path.join(dir, f));
+    fs.cpSync(path.join(__dirname, 'engines'), path.join(dir, 'engines'), { recursive: true }); // deny-filter.js requires the DENY list from there
     if (stub !== null) fs.writeFileSync(path.join(dir, 'trace.js'), stub);
     if (reqStub !== null) fs.writeFileSync(path.join(dir, 'requirements.js'), reqStub);
   }
@@ -129,6 +130,7 @@ test('a failing requirements step records unavailable instead of aborting collec
   // NODE_OPTIONS pointing at a missing module makes every node process exit 1
   const r = scenario(t, { 'src.js': 'x\n' }, ({ write }) => write('src.js', 'y\n'), { NODE_OPTIONS: '--require=./no-such-module.js' });
   assert.equal(fs.readFileSync(path.join(r.ctx, 'requirements.md'), 'utf8').trim(), 'none');
+  assert.equal(fs.readFileSync(path.join(r.ctx, 'diff.patch'), 'utf8'), ''); // the secret-path filter could not run: fail closed, nothing reaches the model
   const s = JSON.parse(fs.readFileSync(path.join(r.ctx, 'requirements-status.json'), 'utf8'));
   assert.equal(s.status, 'unavailable');
   assert.match(s.limitations.join(' '), /collection failed/);
@@ -527,4 +529,20 @@ test('leads.txt: changed symbols without a test reference and mirror assertions 
   assert.ok(Buffer.byteLength(s) <= 6 * 1024);
   const none = scenario(t, { 'src.js': 'return 1;\n' }, ({ write }) => write('src.js', 'return 2;\n'));
   assert.equal(none.ctxFile('leads.txt'), null);
+});
+
+test('secret-like files (DENY list of claude-api.js) are kept out of files.txt and diff.patch and listed in denied.txt; the run is still reviewable', (t) => {
+  const r = scenario(t, { 'a.js': 'x\n', '.env.example': 'A=1\n', 'k.pem': 'k\n' }, ({ write }) => {
+    write('a.js', 'y\n'); write('.env.example', 'A=1\nSECRET=hunter2\n'); write('k.pem', 'PRIVATE-KEY-LINE\n'); write('sub/id_rsa.pub', 'ssh-rsa AAA\n');
+  });
+  assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean), ['a.js']);
+  const patch = r.ctxFile('diff.patch');
+  assert.match(patch, /\+y/);
+  assert.doesNotMatch(patch, /hunter2|PRIVATE-KEY|env\.example|k\.pem|id_rsa|ssh-rsa/);
+  const prompt = require('./prompt.js').assemble({ skillDir: path.resolve(__dirname, '../skills/test-review'), ctxDir: r.ctx, schemaPath: path.resolve(__dirname, 'findings.schema.json') });
+  assert.ok(prompt.includes('+y') && !/hunter2|PRIVATE-KEY|k\.pem/.test(prompt), 'the model prompt carries no secret line');
+  assert.deepEqual(r.ctxFile('denied.txt').split('\n').filter(Boolean).sort(), ['.env.example', 'k.pem', 'sub/id_rsa.pub']);
+  const only = scenario(t, { 'a.js': 'x\n' }, ({ write }) => write('.env', 'S=1\n'));
+  assert.equal(only.ctxFile('files.txt'), ''); assert.equal(only.ctxFile('diff.patch'), '');
+  assert.equal(only.ctxFile('denied.txt'), '.env\n');
 });
