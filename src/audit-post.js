@@ -49,8 +49,8 @@ const cidOf = (id) => (CID.exec(String(id)) || [])[1];
 function readCandidates(txt) {
   const m = new Map();
   for (const l of lines(txt)) {
-    const [cid, loc = '', heading = '', ...text] = l.split('\t'), k = loc.lastIndexOf(':');
-    if (/^[0-9a-f]{8}$/.test(cid) && k > 0) m.set(cid, { cid, path: loc.slice(0, k), line: +loc.slice(k + 1), heading, text: text.join(' ') });
+    const [cid, loc = '', heading = '', ...text] = l.split('\t'), at = /^(.+):(\d+)(?:-(\d+))?$/.exec(loc); // path:line or path:line-end (the block's last line)
+    if (/^[0-9a-f]{8}$/.test(cid) && at) m.set(cid, { cid, path: at[1], line: +at[2], ...(at[3] ? { end: +at[3] } : {}), heading, text: text.join(' ') });
   }
   return m;
 }
@@ -228,6 +228,9 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     const source = { ...r.source };
     if (docs && !docs.has(safeRel(source.path))) { drop(r, 'its source is not an admitted requirement document'); continue; }
     if (!locate(source)) { drop(r, solid(source.quote) ? 'the requirement quote was not found at the cited line' : `the requirement quote is under ${MIN_QUOTE} characters`); continue; }
+    // the row's source is its own candidate's block (same document, a line inside it; a .N sub-row uses its parent's): it never borrows another requirement's quote
+    const own = cands && cands.get(cidOf(r.id));
+    if (own && (source.path !== own.path || source.line < own.line || source.line > (own.end ?? Infinity))) { drop(r, `its source is not the block ${own.path}:${own.line}${own.end > own.line ? `-${own.end}` : ''} that this id names`); continue; }
     const code = r.code.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && !testFile(c.path));
     const located = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
     // same rule as PR mode (post.verifyEvidence): a declaration, an empty or a skipped test carries no coverage
@@ -351,11 +354,13 @@ const versionsOf = (o) => {
   if (Array.isArray(o.ev)) for (const x of o.ev) if (Array.isArray(x) && x.length - 1 <= EV_PER_BLOCK && x.every((h) => HEX8.test(h))) ev[x[0]] = x.slice(1);
   // uc { unit id: next part }: the cursor of a unit reviewed in parts (audit-units.js partOf)
   const uc = o.uc && typeof o.uc === 'object' && !Array.isArray(o.uc) ? Object.fromEntries(Object.entries(o.uc).filter(([k, v]) => HEX8.test(k) && Number.isInteger(v) && v >= 1 && v <= 100)) : {};
-  return { uv, ev, ...(Object.keys(uc).length ? { uc } : {}) };
+  // tv { cid: text version }: sha8 of the block's text with symbols and case kept (the cid drops them), so an edited requirement under the same cid is noticed
+  const tv = o.tv && typeof o.tv === 'object' && !Array.isArray(o.tv) ? Object.fromEntries(Object.entries(o.tv).filter(([k, v]) => HEX8.test(k) && HEX8.test(v))) : {};
+  return { uv, ev, ...(Object.keys(uc).length ? { uc } : {}), ...(Object.keys(tv).length ? { tv } : {}) };
 };
-const versionsRaw = ({ uv = {}, ev = {}, uc = {} } = {}) => {
+const versionsRaw = ({ uv = {}, ev = {}, uc = {}, tv = {} } = {}) => {
   const rows = Object.entries(ev).map(([cid, hs]) => [cid, ...[...new Set(hs)].slice(0, EV_PER_BLOCK)]).filter((x) => x.length > 1);
-  return { ...(Object.keys(uv).length ? { uv } : {}), ...(rows.length ? { ev: rows } : {}), ...(Object.keys(uc).length ? { uc } : {}) };
+  return { ...(Object.keys(uv).length ? { uv } : {}), ...(rows.length ? { ev: rows } : {}), ...(Object.keys(uc).length ? { uc } : {}), ...(Object.keys(tv).length ? { tv } : {}) };
 };
 const stateRaw = (head, entries, findings = [], versions = {}) => { // entries: [cid, status, since, runs, at: { head, date } | null]; findings: [[fid, unit, since, runs]]
   const audits = [], idx = new Map();
@@ -372,7 +377,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 // This run's blocks (tracked against prior, audited now) plus the carried ones (prior blocks this run did not audit, still in the documents). dropped: carried blocks over STATE_MAX.
 // code (code-first run): { picked: [unit ids audited now], findings: tracked verified findings (trackFindings), carried: prior block entries of units not audited now that are still in the repository }.
 // stale: unit ids and block cids the collector found changed since their last review (audit-stale.txt): a stale carried unit's findings are not carried.
-function stateOf(head, data, prior = null, { carried = [], date = today(), code = null, stale = new Set() } = {}) {
+function stateOf(head, data, prior = null, { carried = [], date = today(), code = null, stale = new Set(), tv: tvNow = new Map() } = {}) {
   const at = { head: String(head || '').slice(0, 7), date };
   const now = track(blocksOf(data), prior, head).filter((b) => /^[0-9a-f]{8}$/.test(b.cid)).map((b) => [b.next[0], b.next[1], b.next[2], b.next[3], at, b.next[4], b.next[5]]);
   // a unit reviewed in parts (code.parts: id -> { k, n }, review F07) keeps the findings of its other parts and is covered only after its last part with none
@@ -388,14 +393,16 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
   const entry = (x) => [x.fid, x.unit, x.since, x.runs, ...(Number.isInteger(x.part) ? [x.part] : [])];
   const fs_ = code ? [...code.findings.map((f) => f.next), ...otherParts.map(entry), ...pf.filter((x) => !code.picked.includes(x.unit) && !stale.has(x.unit) && code.carried.some((b) => b.cid === x.unit)).map(entry)].slice(0, FINDINGS_MAX) : [];
   // versions: what each verdict was made against; a carried entry keeps its old version, so it stays stale until it is reviewed again
-  const pv = (prior && prior.versions) || { uv: {}, ev: {} }, kept = new Set(old.map((b) => b.cid)), uv = {}, ev = {}, uc = {};
+  const pv = (prior && prior.versions) || { uv: {}, ev: {} }, kept = new Set(old.map((b) => b.cid)), uv = {}, ev = {}, uc = {}, tv = {};
+  for (const [k, v] of Object.entries(pv.tv || {})) if (kept.has(k)) tv[k] = v; // a carried block keeps the text version it was reviewed at
   for (const [k, v] of Object.entries(pv.uv)) if (kept.has(k)) uv[k] = v;
   for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k)) uc[k] = v;
   for (const [id, p] of parts) if (code.picked.includes(id) && p.k + 1 < p.n) uc[id] = p.k + 1; // the next part; after the last one the cursor is gone
   for (const [k, v] of Object.entries(pv.ev)) if (kept.has(k)) ev[k] = v;
   if (code && code.versions) for (const id of code.picked) if (code.versions.get(id)) uv[id] = code.versions.get(id);
+  for (const b of blocksOf(data)) if (tvNow.get(b.cid)) tv[b.cid] = tvNow.get(b.cid); // this run's text version (audit-textver.txt)
   for (const b of blocksOf(data)) if (b.status === 'covered') ev[b.cid] = b.rows.flatMap((r) => [...r.code, ...r.tests].map((c) => sha8(c.path)));
-  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl])], fs_, { uv, ev, uc }), dropped: all.length - old.length };
+  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl])], fs_, { uv, ev, uc, tv }), dropped: all.length - old.length };
 }
 // Verified unit findings against the previous state: confirmed = the same finding (unit, kind, quote) was reported in the previous run (`!!p`).
 // -> copies with .confirmed and .next, the state entry [fid, unit, first-seen sha7, consecutive runs].
@@ -414,7 +421,7 @@ function readState(body) {
     if (v && (o.v === 3 || (Array.isArray(o.audits) && audits.every((a) => Array.isArray(a) && /^[\w.-]{0,40}$/.test(a[0]) && ISO_DATE.test(a[1]))))
       && o.blocks.every((x) => Array.isArray(x) && /^[0-9a-f]{8}$/.test(x[0]) && BSTATE.includes(x[1]) && /^[\w.-]{0,40}$/.test(x[2]) && Number.isInteger(x[3]) && x[3] >= 1 && x[3] <= MAXRUN
         && (o.v === 3 || (Number.isInteger(x[4]) && x[4] >= -1 && x[4] < audits.length)) && (x[5] === undefined || (STATUS.includes(x[5]) && (x[6] === 0 || x[6] === 1)))))
-      return { head, blocks: o.blocks.map(([cid, status, since, runs, a, top, hl]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null, ...(top ? { top, hl } : {}) })), ...(findingsOf(o).length ? { findings: findingsOf(o) } : {}), ...((vs) => (Object.keys(vs.uv).length || Object.keys(vs.ev).length || vs.uc ? { versions: vs } : {}))(versionsOf(o)) };
+      return { head, blocks: o.blocks.map(([cid, status, since, runs, a, top, hl]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null, ...(top ? { top, hl } : {}) })), ...(findingsOf(o).length ? { findings: findingsOf(o) } : {}), ...((vs) => (Object.keys(vs.uv).length || Object.keys(vs.ev).length || vs.uc || vs.tv ? { versions: vs } : {}))(versionsOf(o)) };
     if (o && o.v === 2 && Array.isArray(o.rows) && o.rows.every((x) => Array.isArray(x) && CID.test(x[0]) && STATUS.includes(x[1]))) {
       const by = new Map();
       for (const [id, s] of o.rows) by.set(cidOf(id), [...(by.get(cidOf(id)) || []), s]);
@@ -743,6 +750,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
   // the blocks this run did not audit: the state's blocks that are still in the documents (audit-carried.txt), with the text and place from the collector
+  const tv = new Map(lines(readCtx('audit-textver.txt')).map((l) => l.split(String.fromCharCode(9))).filter((x) => HEX8.test(x[0]) && HEX8.test(x[1])));
   const stale = new Set(lines(readCtx('audit-stale.txt')).map((l) => l.trim()).filter((l) => /^[0-9a-f]{8}$/.test(l))); // changed since their review (collector, review F06)
   const left = readCandidates(readCtx('audit-carried.txt')), carried = prior && shared.rotation && shared.rotation.rotate
     ? prior.blocks.filter((b) => left.has(b.cid) && !cands.has(b.cid)).map((b) => ({ ...left.get(b.cid), ...b, ...(stale.has(b.cid) ? { stale: true } : {}) })) : [];
@@ -758,7 +766,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const cu = readUnits(readCtx('audit-units-carried.txt')); // units the state knows that this run did not review, still in the repository
   const codeState = code && { picked: [...units.keys()].filter((u) => !unseen.includes(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || unseen.includes(b.cid)) : [],
     versions: new Map([...units.values()].filter((u) => u.ver).map((u) => [u.id, u.ver])), parts: new Map([...units.values()].filter((u) => u.part && !unseen.includes(u.id)).map((u) => [u.id, u.part])) }; // an unseen unit is not tracked: its prior state is carried, it stays due
-  const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale });
+  const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale, tv });
   await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
 }
 

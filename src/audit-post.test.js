@@ -1063,3 +1063,40 @@ test('verify: incomplete block evidence cannot prove absence, but positive cited
   const other = verify(result([req({ status: 'missing_test', tests: [] })]), { read, blockCuts: { [C2]: ['test/other.test.js'] } });
   assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
 });
+
+// F21 (audit 3.3, P4): a row's source must be its own candidate's block (same document, line inside the block), whatever else it cites
+test('verify: a row citing another candidate\'s requirement (other document, or outside its own block) is unknown and never borrows that evidence; the control still covers', () => {
+  const F = { ...FILES, 'docs/A.md': ['# A', '', 'The service must reject negative amounts.', '', 'Other filler text for the second block here.'], 'docs/B.md': ['# B', '', 'The service must accept positive amounts.'] };
+  const cite = (p, l) => ({ path: p, line: l, quote: F[p][l - 1] }), rd = (p) => F[p] || null;
+  const own = { cid: 'aaaaaaaa', path: 'docs/A.md', line: 3, end: 3, heading: 'A', text: 'The service must reject negative amounts.' };
+  const other = { cid: 'bbbbbbbb', path: 'docs/B.md', line: 3, end: 3, heading: 'B', text: 'The service must accept positive amounts.' };
+  const cs = candsOf(own, other);
+  const row = (id, source) => req({ id, source, text: 'x' });
+  const o = result([row('aaaaaaaa', cite('docs/B.md', 3)), row('bbbbbbbb', cite('docs/B.md', 3))]);
+  const v = verify(o, { read: rd, cands: cs });
+  const by = Object.fromEntries(v.requirements.map((r) => [r.id, r]));
+  assert.equal(by.aaaaaaaa.status, 'unknown');
+  assert.deepEqual([by.aaaaaaaa.code, by.aaaaaaaa.tests], [[], []]);
+  assert.ok(v.not_reviewed.some((n) => /^aaaaaaaa /.test(n) && /not the block/.test(n)), JSON.stringify(v.not_reviewed));
+  assert.equal(by.bbbbbbbb.status, 'covered', 'control: a row citing its own block verifies');
+  // same document, line outside the block's range (and a .N sub-row uses its parent's range)
+  const o2 = result([row('aaaaaaaa.1', cite('docs/A.md', 5)), row('aaaaaaaa.2', cite('docs/A.md', 3))]);
+  const v2 = verify(o2, { read: rd, cands: cs });
+  assert.ok(!v2.requirements.some((r) => r.id === 'aaaaaaaa.1' && r.status === 'covered'), 'line 5 is outside the block 3-3');
+  assert.ok(v2.requirements.some((r) => r.id === 'aaaaaaaa.2' && r.status === 'covered'));
+});
+
+test('readCandidates: path:line-end carries the block range; path:line stays valid', () => {
+  const m = audit.readCandidates('aaaaaaaa\tdocs/A.md:3-6\th\ttext\nbbbbbbbb\tdocs/B.md:9\th\ttext\n');
+  assert.deepEqual([m.get('aaaaaaaa').line, m.get('aaaaaaaa').end, m.get('bbbbbbbb').line, m.get('bbbbbbbb').end], [3, 6, 9, undefined]);
+});
+
+// F25 (audit 3.5, N1): the text version of a block is part of the persisted state
+test('state: the requirement-text version (tv) round-trips through the scan state', () => {
+  const data = result([req()]);
+  const s = audit.readState(audit.stateComment('h1', data, null, { date: DATE, tv: new Map([[C1, 'deadbeef']]) }));
+  assert.deepEqual(s.versions.tv, { [C1]: 'deadbeef' });
+  const carried = [{ cid: C1, status: 'covered', since: 'h1', runs: 1, at: { head: 'h1', date: DATE } }];
+  const kept = audit.readState(audit.stateComment('h2', result([]), s, { date: DATE, carried }));
+  assert.deepEqual(kept.versions.tv, { [C1]: 'deadbeef' }, 'a carried block keeps its recorded version');
+});

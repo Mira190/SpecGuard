@@ -470,3 +470,35 @@ test('collect: audit-blocks.txt holds each candidate block whole (past the 240-c
   const meta = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
   assert.ok(meta.limitations.some((l) => /longer than 4000 characters.*not fully read/.test(l)), JSON.stringify(meta.limitations));
 });
+
+// F25 (audit 3.5, N1): the cid ignores symbols and case, so the persisted text version (versions.tv) is what notices a changed requirement
+test('collect with versions (F25): a semantic text change that keeps the cid (operator, sign, literal case) is stale and audited first; whitespace and markdown formatting are not', (t) => {
+  const doc = (last) => `# Limits\n\nThe service must log every request it serves.\n\nThe service must cache every response it serves.\n\n${last}\n`;
+  const BASE = 'The service must reject amounts >= 10 and offsets of -1 and the literal \'ABC\' always.';
+  const { root, ctx, git } = repo(t, { 'docs/design.md': doc(BASE) });
+  collect({ cwd: root, ctx });
+  const ids = cands(ctx).map((c) => c[0]), h = git('rev-parse', 'HEAD').slice(0, 7);
+  const tv = Object.fromEntries(rows(ctx, 'audit-textver.txt'));
+  assert.deepEqual(Object.keys(tv).sort(), ids.slice().sort());
+  const state = { head: h, blocks: ids.map((c, i) => ({ cid: c, status: 'covered', since: h, runs: 1, at: { head: h, date: `2026-09-0${i + 1}` } })), versions: { uv: {}, ev: {}, tv } };
+  const staleAfter = (last) => {
+    fs.writeFileSync(path.join(root, 'docs/design.md'), doc(last)); git('add', '.'); git('commit', '-m', 'edit');
+    collect({ cwd: root, ctx, maxRequirements: 1, rotate: true, prior: state });
+    return { picked: cands(ctx).map((c) => c[0]), stale: rows(ctx, 'audit-stale.txt').map((c) => c[0]) };
+  };
+  const last = ids[2];
+  for (const edit of [BASE.replace('>= 10', '> 10'), BASE.replace('-1', '1'), BASE.replace("'ABC'", "'abc'")]) {
+    const r = staleAfter(edit);
+    assert.deepEqual([r.picked, r.stale], [[last], [last]], edit);
+    assert.equal(cands(ctx)[0][0], last, 'the cid did not change: only the text version noticed');
+  }
+  for (const edit of [BASE.replace('amounts >= 10', 'amounts   >=  10'), BASE.replace('reject', '**reject**').replace("'ABC'", "`'ABC'`")]) {
+    const r = staleAfter(edit);
+    assert.deepEqual(r.stale, [], edit);
+    assert.deepEqual(r.picked, [ids[0]], 'the least recently audited block, as before');
+  }
+  // old state without tv: unknown version, nothing is reset
+  const old = { ...state, versions: { uv: {}, ev: {} } };
+  collect({ cwd: root, ctx, maxRequirements: 1, rotate: true, prior: old });
+  assert.deepEqual(rows(ctx, 'audit-stale.txt'), []);
+});
