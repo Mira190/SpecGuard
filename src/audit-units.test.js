@@ -445,3 +445,16 @@ test('F23 (review): when no unit fits, a unit unfinished in parts does not take 
   const second = inventory({ ...o, prior }).picked[0];
   assert.notEqual(second.id, first.id, 'the unit in progress is not chosen again while nothing fits');
 });
+
+test('source files over 512 KiB are named in a limitation and counted as not inventoried; no big file, no limitation; skipped paths are not counted', (t) => {
+  const big = '// big\n' + Array.from({ length: 16000 }, (_, i) => `function f${i}(v) { return v + ${i}; }`).join('\n');
+  const small = ['function a(v) {', '  return v + 1;', '}', 'function b(v) {', '  return v + 2;', '}', 'module.exports = { a, b };'];
+  const files = { 'src/small.js': small, 'src/big1.js': big, 'src/big2.js': big, 'src/big3.js': big, 'src/big4.js': big, 'vendor/huge.js': big, 'src/big.min.js': big };
+  const r = repo(t, files), inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW });
+  assert.deepEqual(inv.rows.map((x) => x.path), ['src/small.js']);
+  assert.ok(inv.limitations.includes('4 source file(s) over 512 KiB were not inventoried: src/big1.js, src/big2.js, src/big3.js, ...'), inv.limitations.join('|'));
+  assert.equal(inv.totals.not_inventoried, 4);
+  const ok = inventory({ cwd: repo(t, { 'src/small.js': small }).root, head: 'HEAD', now: NOW });
+  assert.ok(!ok.limitations.some((l) => /512 KiB/.test(l)));
+  assert.equal(ok.totals.not_inventoried, 0);
+});
