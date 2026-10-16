@@ -2287,6 +2287,18 @@ test('V7: an unreadable or other-repository reference is a note in the summary, 
   assert.match(lost.calls.summary[0].body, /Incomplete review/);
 });
 
+test('S2: an unreadable closing issue makes the run incomplete: no head marker, and the preflight does not skip the next push', async (t) => {
+  const { decide } = require('./preflight');
+  const s = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
+  writeCtx(s, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: ['Could not read closing issue #7 (HTTP 403); its acceptance criteria were not reviewed. Grant the token issues:read, or paste the acceptance criteria into the PR body.'] });
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.match(body, /Incomplete review/);
+  assert.match(body, /"complete":false/);
+  assert.doesNotMatch(body, /specguard:head=/);
+  assert.equal(decide({ pr: { title: 'T', body: 'x' }, comments: [{ user: { login: 'github-actions[bot]', type: 'Bot' }, body }], headSha: 'HEADSHA' }), '');
+});
+
 test('M4: an engine timeout or failure beside valid findings.json posts the verified findings but marks the run incomplete', async (t) => {
   for (const [st, re] of [['timeout', /timed out after 7 minutes/], ['failed', /review engine failed/]]) {
     const s = withThreads(t, [GONE()]);
@@ -3836,6 +3848,42 @@ test('a non-422 failure on a FILE-level comment is incomplete too (no head marke
   assert.doesNotMatch(down.calls.summary[0].body, /specguard:head/, 'the preflight retries this head');
   assert.match(down.calls.summary[0].body, /src\.js:8/, 'the finding is not lost');
   assert.equal((await run(422)).outputs.status, 'complete');
+});
+
+test('candidates-cut.txt: a missing_test about a file whose candidate tests were never looked up is low confidence and not counted; other files are unaffected', async (t) => {
+  const run = async (cut) => {
+    const s = setup(t);
+    if (cut !== undefined) fs.writeFileSync(path.join(s.dir, 'ctx', 'candidates-cut.txt'), cut);
+    await post(s);
+    return s;
+  };
+  const cut = await run('src.js\n');
+  assert.equal(cut.calls.review.length, 0, 'no inline comment');
+  assert.match(cut.calls.summary[0].body, /Low-confidence findings \(1\)/);
+  assert.match(JSON.stringify(cut.calls.summary[0].body), /candidate tests were not looked up for src\.js/);
+  for (const s of [await run('other.js\n'), await run(undefined)]) assert.equal(s.calls.review.length, 1, 'still posted inline');
+});
+
+test('collect-error.txt: a diff collect.sh could not compute publishes a failed summary naming the cause (fetch-depth: 0), never "Nothing to review", with no head marker', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx', 'collect-error.txt'), 'the PR diff could not be computed: base commit abc is missing from the clone; check out with fetch-depth: 0\n');
+  process.env.SKIP = 'true'; // what collect.sh leaves
+  const out = {}; s.core.setOutput = (k, v) => { out[k] = v; };
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.match(body, /Could not complete: the PR diff could not be computed.*fetch-depth: 0/);
+  assert.doesNotMatch(body, /Nothing to review|specguard:head/);
+  assert.equal(out.status, 'failed'); assert.match(out.reason, /fetch-depth: 0/);
+});
+
+test('candidates-cut.txt: a clean report is still incomplete (no head marker) when candidate tests were not looked up for a changed file', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx', 'candidates-cut.txt'), 'other.js\n');
+  const out = {}; s.core.setOutput = (k, v) => { out[k] = v; };
+  await post(s);
+  assert.equal(out.status, 'incomplete');
+  assert.match(s.calls.summary[0].body, /Candidate tests were not looked up for 1 changed file/);
+  assert.doesNotMatch(s.calls.summary[0].body, /specguard:head/);
 });
 
 test('a model-low missing_test that the test-map guard reports as covered is not raised next to a removal lead; without the guard hit it is', async (t) => {
