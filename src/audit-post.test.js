@@ -1031,11 +1031,11 @@ test('run: a unit finding that fails validation leaves its unit unreviewed (not 
   const fresh = await run([bad]);
   assert.equal(fresh.calls.outputs.status, 'incomplete');
   assert.match(fresh.calls.outputs.reason, /1 unit had a finding that failed validation/);
-  assert.equal(blockOf(fresh), undefined, 'a never-reviewed unit is not recorded as covered');
+  assert.deepEqual([blockOf(fresh).status, blockOf(fresh).at.date], ['unsure', DATE], 'seen but inconclusive: unsure with the run date, never covered');
   assert.doesNotMatch(fresh.calls.summary, /✅/);
   const again = await run([bad], [prior]);
   assert.equal(again.calls.outputs.status, 'incomplete');
-  assert.deepEqual([blockOf(again).status, blockOf(again).runs], ['covered', 1], 'the prior state is carried, runs do not advance');
+  assert.deepEqual([blockOf(again).status, blockOf(again).runs], ['unsure', 1], 'a prior covered is not confirmed');
   const good = await run([]);
   assert.equal(good.calls.outputs.status, 'complete');
   assert.equal(blockOf(good).status, 'covered');
@@ -1057,17 +1057,31 @@ test('run: a unit whose finding is dropped past the cap, dropped by verification
   };
   for (const [stage, list] of Object.entries(stages)) {
     const fresh = await run(list);
-    assert.equal(fresh.calls.outputs.status, 'incomplete', stage);
-    assert.equal(block(fresh, U2), undefined, `${stage}: never reviewed, not covered`);
+    assert.equal(fresh.calls.outputs.status, stage === 'low' ? 'complete' : 'incomplete', stage);
+    assert.deepEqual([block(fresh, U2).status, block(fresh, U2).at.date], ['unsure', DATE], `${stage}: tracked as unsure this run`);
     assert.equal(block(fresh, UID).status, 'gap', `${stage}: the unit with a solid finding is a gap`);
     const carried = await run(list, [prior]);
-    assert.deepEqual([block(carried, U2).status, block(carried, U2).runs], ['covered', 1], `${stage}: prior state carried, runs do not advance`);
+    assert.deepEqual([block(carried, U2).status, block(carried, U2).runs], ['unsure', 1], `${stage}: a prior covered is not confirmed`);
   }
-  assert.match((await run(stages.low)).calls.outputs.reason, /1 unit had only low-confidence findings/);
+  assert.equal((await run(stages.low)).calls.outputs.status, 'complete', 'low-only findings are a valid result, not an incomplete run');
   assert.match((await run(stages.verify)).calls.outputs.reason, /1 unit had a finding that failed validation or verification/);
   assert.match((await run(stages.low)).calls.summary, /low-confidence|Low-confidence/, 'the low finding stays visible');
   const none = await run([f(UID)]);
   assert.equal(none.calls.outputs.status, 'complete'); assert.equal(block(none, U2).status, 'covered');
+});
+
+test('run: a deterministic low-confidence unit is tracked as unsure every run (never covered, never a stall); a finding outside the unit\'s part still advances its part cursor (F20)', async (t) => {
+  const low = [{ unit: UID, kind: 'missing_test', path: 'src/plan.js', line: 1, quote: FILES['src/plan.js'][0], title: 'No test' }]; // no skeleton: low every run
+  const stateOf = (r) => (r.calls.created[0] || r.calls.updated[0]).body;
+  const run = (unit_findings, issues = [], files = UFILES) => runPost(t, { ctxFiles: { ...files, 'findings.json': result([req()], { unit_findings }) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues } });
+  const one = await run(low), two = await run(low, [{ number: 7, body: stateOf(one), user: BOT }]);
+  for (const r of [one, two]) { assert.equal(r.calls.outputs.status, 'complete'); assert.equal(audit.readState(stateOf(r)).blocks.find((b) => b.cid === UID).status, 'unsure'); }
+  assert.equal(audit.readState(stateOf(two)).blocks.find((b) => b.cid === UID).runs, 2);
+  const part = { ...UFILES, 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\tnone\t-\tabcdef12\tpart 1/2 lines 1-2\n` };
+  const outside = await run([{ ...low[0], line: 3, quote: FILES['src/plan.js'][2], title: 'No test', skeleton: 'it("x", () => {});' }], [], part);
+  assert.match(outside.calls.summary, /outside this run's part/);
+  assert.equal(audit.readState(stateOf(outside)).versions.uc[UID], 1, 'the cursor moves to part 2');
+  assert.equal(outside.calls.outputs.status, 'complete');
 });
 
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
