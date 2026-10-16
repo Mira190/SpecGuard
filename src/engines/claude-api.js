@@ -470,4 +470,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, evidencePack, packFiles };

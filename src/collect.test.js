@@ -87,6 +87,7 @@ function scenario(t, baseFiles, change, extraEnv = {}, stub = null, reqStub = nu
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-stub-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     for (const f of reqStub === null ? ['collect.sh', 'requirements.js'] : fs.readdirSync(__dirname).filter((n) => /.(js|sh)$/.test(n) && !/.test.js$/.test(n))) fs.copyFileSync(path.join(__dirname, f), path.join(dir, f));
+    fs.writeFileSync(path.join(dir, 'deny-filter.js'), `require(${JSON.stringify(path.join(__dirname, 'deny-filter.js'))});`); // the real filter; a stubbed trace.js beside it must not break its requires
     if (stub !== null) fs.writeFileSync(path.join(dir, 'trace.js'), stub);
     if (reqStub !== null) fs.writeFileSync(path.join(dir, 'requirements.js'), reqStub);
   }
@@ -127,7 +128,7 @@ test('standards globs only match documentation files, so source files are neithe
 
 test('a failing requirements step records unavailable instead of aborting collection', (t) => {
   // NODE_OPTIONS pointing at a missing module makes every node process exit 1
-  const r = scenario(t, { 'src.js': 'x\n' }, ({ write }) => write('src.js', 'y\n'), { NODE_OPTIONS: '--require=./no-such-module.js' });
+  const r = scenario(t, { 'src.js': 'x\n' }, ({ write }) => write('src.js', 'y\n'), {}, null, 'process.exit(1);\n'); // a requirements.js that exits 1
   assert.equal(fs.readFileSync(path.join(r.ctx, 'requirements.md'), 'utf8').trim(), 'none');
   const s = JSON.parse(fs.readFileSync(path.join(r.ctx, 'requirements-status.json'), 'utf8'));
   assert.equal(s.status, 'unavailable');
@@ -564,4 +565,45 @@ test('U3: a file past the 60-file candidate cap that focus chooses gets its cand
   assert.match(r.ctxFile('test-candidates.txt'), new RegExp(`\\(${cut.length} more changed file\\(s\\) not listed\\)`));
   const small = scenario(t, { 'src/a.js': 'a\n' }, ({ write }) => write('src/a.js', 'b\n'));
   assert.equal(small.ctxFile('candidates-cut.txt'), ''); // control: nothing cut
+});
+
+
+const SECRET = 'SYNTHETIC_NOT_A_REAL_SECRET';
+test('secret-like files changed in a PR never reach diff.patch, the numbered diff or the prompt; the ordinary hunk stays (denied.txt lists them)', (t) => {
+  const secrets = ['.env', 'config/.env.production', 'secrets.pem', 'id_rsa'];
+  const r = scenario(t, { 'app.js': 'x\n' }, ({ write }) => { write('app.js', 'y\n'); for (const f of secrets) write(f, `K=${SECRET}\n`); });
+  const prompt = require('./prompt.js').assemble({ skillDir: path.resolve(__dirname, '../skills/test-review'), ctxDir: r.ctx, schemaPath: path.resolve(__dirname, 'findings.schema.json') });
+  for (const [name, text] of [['diff.patch', r.ctxFile('diff.patch')], ['diff.numbered.txt', r.ctxFile('diff.numbered.txt')], ['prompt', prompt]]) {
+    assert.ok(/\+y|\| ?y/.test(text), `${name} keeps the app.js hunk`);
+    assert.ok(!text.includes(SECRET), `${name} carries a secret-file line`);
+    for (const f of secrets) assert.ok(!text.includes(`b/${f}`), `${name} names ${f}`);
+  }
+  assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean), ['app.js']);
+  assert.deepEqual(r.ctxFile('denied.txt').split('\n').filter(Boolean).sort(), [...secrets].sort());
+});
+
+test('a PR that changes only secret-like files is an honest skip: skip=true, empty diff, denied.txt kept', (t) => {
+  const output = path.join(os.tmpdir(), `specguard-out-${process.pid}-deny`);
+  t.after(() => fs.rmSync(output, { force: true }));
+  const r = scenario(t, { 'a.js': 'x\n' }, ({ write }) => write('.env', `K=${SECRET}\n`), { GITHUB_OUTPUT: output });
+  assert.match(fs.readFileSync(output, 'utf8'), /skip=true/);
+  assert.equal(r.ctxFile('diff.patch'), ''); assert.equal(r.ctxFile('files.txt'), '');
+  assert.equal(r.ctxFile('denied.txt'), '.env\n');
+});
+
+test('control: look-alike names (env.js, src/environment.ts, keys.test.js) are not dropped', (t) => {
+  const names = ['env.js', 'src/environment.ts', 'keys.test.js', 'monkey.js'];
+  const r = scenario(t, { 'a.js': 'x\n' }, ({ write }) => { for (const f of names) write(f, 'y\n'); });
+  assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean).sort(), [...names].sort());
+  assert.ok(!r.ctxFile('denied.txt'), 'nothing is denied');
+  assert.match(r.ctxFile('diff.patch'), /environment\.ts/);
+});
+
+test('fail closed: when the secret-path filter cannot run, collect stops with collect-error.txt and sends no diff', (t) => {
+  const output = path.join(os.tmpdir(), `specguard-out-${process.pid}-deny2`);
+  t.after(() => fs.rmSync(output, { force: true }));
+  const r = scenario(t, { 'a.js': 'x\n' }, ({ write }) => write('a.js', 'y\n'), { GITHUB_OUTPUT: output, NODE_OPTIONS: '--require=./no-such-module.js' });
+  assert.match(r.ctxFile('collect-error.txt'), /secret-path filter failed/);
+  assert.match(fs.readFileSync(output, 'utf8'), /skip=true/);
+  assert.equal(r.ctxFile('diff.patch'), '');
 });

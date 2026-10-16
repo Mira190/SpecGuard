@@ -10,7 +10,7 @@ rm -rf "$CTX"
 mkdir -p "$CTX"
 # Present from the start so that an absent list never means "no restriction": a trace.js failure leaves trace-status=failed
 # and an empty list (post.js then fails closed for path-sourced requirements). trace-status: ok | failed | off.
-: > "$CTX/collect-limits.txt"; : > "$CTX/spec-files.txt"; : > "$CTX/spec-rejected.txt"; : > "$CTX/diff-dropped.txt"
+: > "$CTX/collect-limits.txt"; : > "$CTX/spec-files.txt"; : > "$CTX/spec-rejected.txt"; : > "$CTX/diff-dropped.txt"; : > "$CTX/denied.txt"
 if [ "${TRACE:-auto}" = off ]; then echo off > "$CTX/trace-status"; else echo failed > "$CTX/trace-status"; fi
 out() { [ -n "${GITHUB_OUTPUT:-}" ] && echo "$1=$2" >> "$GITHUB_OUTPUT"; return 0; }
 out skip false; out partial false
@@ -104,6 +104,19 @@ if [ ${#docs[@]} -gt 0 ]; then
     elif [[ $f != *.md ]]; then files+=("$f")
     else dropped+=("$f"); fi
   done
+fi
+# Secret-like paths (the DENY list of claude-api.js, via deny-filter.js) leave the file list before any diff, numbered diff, focus or spec text is made, so no engine sees them. Listed in denied.txt.
+# Fail closed: if the filter cannot run, nothing is sent (collect-error.txt, published as a failed run).
+if [ $(( ${#files[@]} + ${#specs[@]} + ${#dropped[@]} )) -gt 0 ]; then
+  if ! printf '%s\n' ${files[@]+"${files[@]}"} ${specs[@]+"${specs[@]}"} ${dropped[@]+"${dropped[@]}"} | node "$HERE/deny-filter.js" > "$CTX/denied.txt"; then
+    echo "the secret-path filter failed, so no changed file was sent to the model" > "$CTX/collect-error.txt"
+    echo "::error::$(cat "$CTX/collect-error.txt")"; : > "$CTX/denied.txt"; : > "$CTX/files.txt"; : > "$CTX/diff.patch"; out skip true; exit 0
+  fi
+  if [ -s "$CTX/denied.txt" ]; then
+    keep=(); for f in ${files[@]+"${files[@]}"}; do grep -qxF -- "$f" "$CTX/denied.txt" || keep+=("$f"); done; files=(${keep[@]+"${keep[@]}"})
+    keep=(); for f in ${dropped[@]+"${dropped[@]}"}; do grep -qxF -- "$f" "$CTX/denied.txt" || keep+=("$f"); done; dropped=(${keep[@]+"${keep[@]}"})
+    keep=(); for f in ${specs[@]+"${specs[@]}"}; do grep -qxF -- "$f" "$CTX/denied.txt" || keep+=("$f"); done; specs=(${keep[@]+"${keep[@]}"})
+  fi
 fi
 # Files a default or extra ignore pattern removed are never reviewed: say which, with the pattern (a pattern like build/ matches at any depth).
 if [ ${#ignored[@]} -gt 0 ]; then
