@@ -138,7 +138,7 @@ const clearlyUnit = (p) => layerOf(p) === 'unit' && !NOT_PLAIN_UNIT.test(String(
 const ASSERTION = /\b(?:[Aa]ssert\w*!?|[Ee]xpect(?!ed|ation)\w*|[Ss]hould\w*|[Vv]erify\w*|[Ff]ail\w*|require\.\w+|XCTAssert\w*|raises?|[Tt]hrows?)\s*[(.]|\bt\.(?:Errorf|Fatalf|Error|Fatal|Fail\w*)\b|\bt\.(?:equals?|same|ok|notOk|not|is|throws|doesNotThrow|notThrows|rejects|resolves|match|deepEquals?|strictEqual|notEqual|true|false|truthy|falsy|pass|snapshot)\(|\b(?:Is|Has|Does|Contains)\.\w+|\.(?:to[A-Z]\w*|not\.to\w+)\(|^\s*assert\s+(?![=:])/m;
 const COMMENT_LINE = /^\s*(?:\/\/|#|\/?\*|--)/;
 // Tier of a cited assertion: weak = truthiness or interaction-only (pins no expected value); anything else, and any syntax not recognised, is a value assertion (fail open).
-const WEAK = /\b(?:t|assert)\.ok\((?![^)]*[=<>])|\.(?:toBeTruthy|toBeFalsy|toBeDefined|toHaveBeenCalledTimes)\(|\.not\.(?:toBeNull|toBeUndefined)\(|\.toHaveBeenCalled\(\s*\)|\.toThrow(?:Error)?\(\s*\)/;
+const WEAK = /\b(?:t|assert)\.ok\((?![^)]*[=<>])|\.(?:toBeTruthy|toBeFalsy|toBeDefined)\(|\.not\.(?:toBeNull|toBeUndefined)\(|\.toHaveBeenCalled\(\s*\)|\.toThrow(?:Error)?\(\s*\)/;
 const weakAssertion = (quote) => { const ls = String(quote).split('\n').filter((l) => !COMMENT_LINE.test(l) && ASSERTION.test(l)); return ls.length > 0 && ls.every((l) => WEAK.test(l)); };
 // A weak_test counterexample refuted by the cited assertion itself: assert.equal(EXPR, LIT) / expect(EXPR).toBe(LIT) with a primitive literal, and the counterexample says the SAME EXPR gives a different literal.
 // Narrow on purpose: a different input, several claims, or anything unparsed is not refuted.
@@ -1003,7 +1003,7 @@ function verifyEvidence(data, reviewable, standards, read = readFile, maps = new
       if (as.length && as.every((e) => weakAssertion(e.quote))) {
         c.status = 'unknown';
         c.reason = 'Not covered: only truthiness/interaction assertions are cited; no assertion pins the expected value.';
-        (data.validation_notes ||= []).push(`Obligation ${c.id} marked unknown: only truthiness/interaction assertions are cited.`);
+        (data.validation_notes ||= []).push(`Obligation ${c.id} not covered: only truthiness/interaction assertions are cited.`);
       }
     }
     if (change && !c.change && !fails.length) stray.push(c.id);
