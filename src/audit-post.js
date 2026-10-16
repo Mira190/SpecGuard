@@ -349,8 +349,8 @@ const versionsOf = (o) => {
   const uv = o.uv && typeof o.uv === 'object' && !Array.isArray(o.uv) ? Object.fromEntries(Object.entries(o.uv).filter(([k, v]) => HEX8.test(k) && HEX8.test(v))) : {};
   const ev = {};
   if (Array.isArray(o.ev)) for (const x of o.ev) if (Array.isArray(x) && x.length - 1 <= EV_PER_BLOCK && x.every((h) => HEX8.test(h))) ev[x[0]] = x.slice(1);
-  // uc { unit id: next part }: the cursor of a unit reviewed in parts (audit-units.js partOf)
-  const uc = o.uc && typeof o.uc === 'object' && !Array.isArray(o.uc) ? Object.fromEntries(Object.entries(o.uc).filter(([k, v]) => HEX8.test(k) && Number.isInteger(v) && v >= 1 && v <= 100)) : {};
+  // uc { unit id: [next part, part count] }: the cursor of a unit reviewed in parts (audit-units.js partOf)
+  const uc = o.uc && typeof o.uc === 'object' && !Array.isArray(o.uc) ? Object.fromEntries(Object.entries(o.uc).filter(([k, v]) => HEX8.test(k) && Array.isArray(v) && v.length === 2 && v.every(Number.isInteger) && v[0] >= 1 && v[0] <= 100 && v[1] > v[0] && v[1] <= 1000)) : {};
   return { uv, ev, ...(Object.keys(uc).length ? { uc } : {}) };
 };
 const versionsRaw = ({ uv = {}, ev = {}, uc = {} } = {}) => {
@@ -390,8 +390,8 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
   // versions: what each verdict was made against; a carried entry keeps its old version, so it stays stale until it is reviewed again
   const pv = (prior && prior.versions) || { uv: {}, ev: {} }, kept = new Set(old.map((b) => b.cid)), uv = {}, ev = {}, uc = {};
   for (const [k, v] of Object.entries(pv.uv)) if (kept.has(k)) uv[k] = v;
-  for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k)) uc[k] = v;
-  for (const [id, p] of parts) if (code.picked.includes(id) && p.k + 1 < p.n) uc[id] = p.k + 1; // the next part; after the last one the cursor is gone
+  for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k) && !(code && code.picked.includes(k))) uc[k] = v; // a unit reviewed now gets its cursor from this run
+  for (const [id, p] of parts) if (code.picked.includes(id) && p.k + 1 < p.n) uc[id] = [p.k + 1, p.n]; // the next part; after the last one the cursor is gone
   for (const [k, v] of Object.entries(pv.ev)) if (kept.has(k)) ev[k] = v;
   if (code && code.versions) for (const id of code.picked) if (code.versions.get(id)) uv[id] = code.versions.get(id);
   for (const b of blocksOf(data)) if (b.status === 'covered') ev[b.cid] = b.rows.flatMap((r) => [...r.code, ...r.tests].map((c) => sha8(c.path)));

@@ -1063,3 +1063,16 @@ test('verify: incomplete block evidence cannot prove absence, but positive cited
   const other = verify(result([req({ status: 'missing_test', tests: [] })]), { read, blockCuts: { [C2]: ['test/other.test.js'] } });
   assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
 });
+
+test('state (F22): the part cursor is written as [next part, part count], dropped after the last part, and rejected when malformed', () => {
+  const ID = 'a0000001', V = 'b0000001', data = dataOf({});
+  const at = (prior, k) => audit.stateOf('h1', data, prior, { date: DATE, code: { picked: [ID], findings: [], carried: [], versions: new Map([[ID, V]]), parts: new Map([[ID, { k, n: 3 }]]) } });
+  const s1 = audit.readState(at(null, 0).raw);
+  assert.deepEqual(s1.versions.uc, { [ID]: [1, 3] });
+  const s2 = audit.readState(at(s1, 1).raw);
+  assert.deepEqual(s2.versions.uc, { [ID]: [2, 3] });
+  assert.equal(audit.readState(at(s2, 2).raw).versions.uc, undefined, 'after the last part the cursor is gone, not left at the last part');
+  const bad = at(null, 0).raw.replace(`"uc":{"${ID}":[1,3]}`, `"uc":{"${ID}":2}`);
+  assert.notEqual(bad, at(null, 0).raw);
+  assert.equal(audit.readState(bad).versions.uc, undefined, 'a bare integer (old format) is ignored: the unit restarts at part 0');
+});
