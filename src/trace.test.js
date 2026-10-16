@@ -1040,3 +1040,48 @@ test('D anchor: a literal removed and re-added gives no anchor', (t) => {
   const d = anchorD(t, 'src/engine/silence.ts', 'export const w = (o) => (o.seconds ?? 10)\n', 'export const w = (o) => (o.seconds ?? 10) + 10\n');
   assert.ok(!d.some((c) => c.anchor));
 });
+
+// ---- F32: a scenario inherits its Feature (and Rule) Background ----
+const BG = (who) => `Feature: Tenants\n\n  Background:\n    Given a tenant in state ${who}\n\n  Scenario: Login is refused\n    When the user logs in\n    Then access is denied\n\n  Scenario: Export is refused\n    When the user exports data\n    Then access is denied\n`;
+test('parseItems: each scenario carries its Feature and Rule Background as ctx; its own text (cid input) is unchanged', () => {
+  const text = 'Feature: F\n\n  Background:\n    Given feature precondition\n\n  Scenario: Top\n    When a\n    Then b\n\n  Rule: R\n\n    Background:\n      Given rule precondition\n\n    Scenario: Inner\n      When c\n      Then d\n';
+  const [top, inner] = T.parseItems('f.feature', text);
+  assert.equal(top.ctx, 'Background:\nGiven feature precondition');
+  assert.equal(inner.ctx, 'Background:\nGiven feature precondition\nBackground:\nGiven rule precondition');
+  assert.ok(!top.raw.includes('precondition') && !inner.raw.includes('precondition'));
+  const none = T.parseItems('g.feature', 'Feature: G\n\n  Scenario: S\n    When a\n    Then b\n')[0];
+  assert.equal(none.ctx, undefined, 'a Feature without Background behaves as before');
+});
+test('PR mode: a Background-only change makes every scenario under it a changed item, with its context', (t) => {
+  const r = repo(t, { 'features/t.feature': BG('SUSPENDED_TENANT') }, { 'features/t.feature': BG('ACTIVE_TENANT') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const c = status(r).criteria.filter((x) => x.source === 'features/t.feature');
+  assert.deepEqual(c.map((x) => x.ref), ['Scenario: Login is refused', 'Scenario: Export is refused']);
+  assert.ok(c.every((x) => x.change === 'modified' && x.context.includes('ACTIVE_TENANT') && x.previous_context.includes('SUSPENDED_TENANT')));
+});
+test('PR mode control: no Background, an untouched scenario stays out', (t) => {
+  const f = (x) => `Feature: T\n\n  Scenario: A\n    When the user logs in\n    Then access is ${x}\n\n  Scenario: B\n    When the user exports data\n    Then access is denied\n`;
+  const r = repo(t, { 'features/t.feature': f('denied') }, { 'features/t.feature': f('refused') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const c = status(r).criteria.filter((x) => x.source === 'features/t.feature');
+  assert.deepEqual(c.map((x) => x.ref), ['Scenario: A']);
+  assert.equal(c[0].context, undefined);
+});
+
+// ---- S1/U12: test_paths with exclusions only ----
+test('testScope: exclusions only means default test discovery minus the exclusions', () => {
+  const s = T.testScope('!tests/legacy/**');
+  assert.equal(typeof s, 'function');
+  assert.equal(s('tests/legacy/old.test.js'), false);
+  assert.equal(s('tests/new/a.test.js'), true);
+  assert.equal(s('src/app.js'), false);
+  assert.equal(T.testScope(''), null);
+});
+
+test('PR mode: the assembled prompt carries the inherited Background of a Background-only change', (t) => {
+  const r = repo(t, { 'features/t.feature': BG('SUSPENDED_TENANT') }, { 'features/t.feature': BG('ACTIVE_TENANT') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  fs.writeFileSync(path.join(r.ctx, 'diff.patch'), 'diff --git a/x b/x\n+x\n'); fs.writeFileSync(path.join(r.ctx, 'files.txt'), 'x.js\n');
+  const p = require('./prompt').assemble({ skillDir: path.join(__dirname, '..', 'skills', 'test-review'), ctxDir: r.ctx, schemaPath: path.join(__dirname, 'findings.schema.json') });
+  assert.match(p, /ACTIVE_TENANT/);
+});
