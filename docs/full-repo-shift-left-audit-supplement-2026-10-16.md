@@ -200,10 +200,10 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **位置：** `src/audit-post.js:383–386`（状态按本次日期写入，`when(b)` 取 `b.at.date`）；`src/audit-collect.js` 的最旧优先层读取该日期。**影响模式：** scan。
 - **What this is:** 轮转按存储的审查日期最旧优先。
 - **Problem:** 模型没有回答的 block（`verify` 产出 `unknown`，note 为 "did not assess"）以 `unsure` 写入，日期是本次。下一轮最旧优先把它排在 A、B（已回答、covered）之后。
-- **Fix:** 未回答的 block 不更新审查日期（或标为未审），使其在轮转里保持靠前。
+- **Fix:** 不要让未回答的 block 无限靠前（那会造成新的停滞）。下一轮把它放进优先层，重试一次；若连续两轮都未回答，则记为 `unsure`、推进日期，并在 limitations 中点名为"连续未回答"，让轮转继续前进。
 - **If we skip it:** 模型最没能处理的 block 被推到队尾。
 - **证据 S6：** `stored.C_unanswered=["unsure","2026-10-15"]`、`stored.D_not_sent=["covered","2026-10-01"]`；`nextRunCap1=["D"]`、`nextRunCap3=["A","B","D"]`（C 被挤出）。此探针经 `verify/stateOf/readState/collect`，**未**经 `audit-post` 入口。
-- **回归测试应断言：** 未回答的 block 不带本次日期（`C_unanswered` 的日期不是 `2026-10-15`），且 `nextRunCap3` 含 C。
+- **回归测试应断言：** 第 2 轮 C 未回答后，第 3 轮的选择含 C（`nextRunCap3` 含 C）；若 C 在第 3 轮仍未回答，则其日期推进，且 limitations 中出现"连续未回答"并点名 C。
 
 #### S14 = 调研 F34 [P1] 大于 512 KiB 的源码被静默排除
 
@@ -274,7 +274,7 @@ What this repo does: SpecGuard 在 PR 阶段把需求、代码、测试和仓库
 - **U10：** `eval/label-export.js:16`。`findingId` 不含 `kind`；同 path/line 的 `missing_test` 与 `weak_test` 得到相同 id `F502e6ddc0`，`exportRowIds=["F502e6ddc0","F502e6ddc0"]`，标注时互相覆盖。 回归测试应断言：`findingId(a)!==findingId(b)`（`kind` 不同），`exportRowIds` 无重复。
 - **U11：** `eval/szz.js:91`。`.sql` 文件里被删除的 `-- header comment` 行以 `--- ` 开头，被当作 diff 文件头，旧侧行号丢失：含该注释时 `lines=[]`、`addOnly=true`；对照 `lines=[1,4]`、`addOnly=false`。SZZ 归因因此漏掉修复行。 回归测试应断言：含 `-- header comment` 的 `.sql` 的 `fixLines` 与对照一致（`lines` 含 4，`addOnly===false`）。
 - **V2（新增，读 `eval/replay.js` 时发现）：** `eval/replay.js:85` 的行带 `findings_present`，`:90` 的表头没有这一列。模型没有写 `findings.json` 的 PR，在打印出来的表里是全 0 的一行，与"审查过、没有发现"无法区分。探针 V2：`row.findings_present=false`，`printedTable="pr          trace  inline  high  low  summary  pre-existing\nnofindings  auto   0       0     0    0        0"`，`tableMentionsFindingsPresent=false`。只影响回放的人工判读；修复是在表里加一列或标 `NO FINDINGS`。 回归测试应断言：`finish` 打印的表对 `findings_present===false` 的行有可见标记，且不与全 0 的正常行相同。
-- **V1（新增，读 `.github/instructions/specguard.instructions.md` 时发现）：** 该文件第 8 行要求"每个导出函数都需要断言返回值或抛错的单元测试"。探针 V1 在 `src/*.js` 与 `eval/*.js` 的 43 个非测试文件中，找到 15 个文件共 34 个导出函数，没有任何 `*.test.js` 按名字提到（例：`src/post.js` 的 `assertionKind`、`counterexampleOk`、`citationsOf`、`loadCoverage`、`applyCoverage`、`coverageAtoms`、`findingBlock`、`findingHead`；`src/trace.js` 的 `testScope`、`catBatch`；`src/test-map.js` 的 `indexTests`、`noExt`、`classAndMethod`）；`src/limitations.js` 和 `src/scan-parts.js` 没有同名的 `.test.js`（标准要求测试"live next to the code"）。边界：按名字匹配，间接覆盖（例如经由 `post.js` 入口的测试）不会被识别，所以这是"没有直接单元测试"的上界，不是"完全未被测试"。SpecGuard 用同一标准审别人的仓库，自己不满足它。 回归测试应断言：每个导出函数至少被一个 `*.test.js` 按名引用并断言返回值（`filesWithUnreferencedExports` 为空，`exportingFilesWithoutSiblingTest` 为空）。
+- **V1（新增，读 `.github/instructions/specguard.instructions.md` 时发现）：** 该文件第 8 行要求"每个导出函数都需要断言返回值或抛错的单元测试"。探针 V1 在 `src/*.js` 与 `eval/*.js` 的 43 个非测试文件中，找到 15 个文件共 34 个导出函数，没有任何 `*.test.js` 按名字提到（例：`src/post.js` 的 `assertionKind`、`counterexampleOk`、`citationsOf`、`loadCoverage`、`applyCoverage`、`coverageAtoms`、`findingBlock`、`findingHead`；`src/trace.js` 的 `testScope`、`catBatch`；`src/test-map.js` 的 `indexTests`、`noExt`、`classAndMethod`）；`src/limitations.js` 和 `src/scan-parts.js` 没有同名的 `.test.js`（标准要求测试"live next to the code"）。边界：按名字匹配，间接覆盖（例如经由 `post.js` 入口的测试）不会被识别，所以这是"没有直接单元测试"的**上界**，不是"完全未被测试"。已知误报：`src/scan-parts.js` 的 `plan()` 在 `src/claude-api.test.js` 中被直接测试，只是没有同名的 `scan-parts.test.js`。修复时应优先处理真正未测试的决策路径导出（例如 `post.js` 的 `counterexampleOk`、`applyCoverage`、`findingBlock`），而不是机械地补齐全部 34 个。SpecGuard 用同一标准审别人的仓库，自己不满足它。 回归测试应断言：每个导出函数至少被一个 `*.test.js` 按名引用并断言返回值（`filesWithUnreferencedExports` 为空，`exportingFilesWithoutSiblingTest` 为空）。
 
 ### 3.5 By design
 
