@@ -99,7 +99,7 @@ test('collect: audit-candidates.txt lists every requirement-bearing block in doc
   const r = collect({ cwd: root, ctx });
   const c = cands(ctx);
   assert.deepEqual(textOf(c).map((x) => x.slice(0, 20)), ['| Main window | Regu', '| Ball | 76x76 colla', 'The main window is h', 'The first row of the', 'Renaming starts only', 'A plan MUST be rejec', 'A plan SHALL NOT fir', 'The completion card ']);
-  assert.deepEqual(c.map((x) => x[1]), ['docs/design.md:9', 'docs/design.md:10', 'docs/design.md:12', 'docs/design.md:14', 'docs/design.md:15', 'docs/design.md:25', 'docs/design.md:27', 'docs/design.md:39']);
+  assert.deepEqual(c.map((x) => x[1]), ['docs/design.md:9-9', 'docs/design.md:10-10', 'docs/design.md:12-12', 'docs/design.md:14-14', 'docs/design.md:15-15', 'docs/design.md:25-25', 'docs/design.md:27-27', 'docs/design.md:39-39']);
   assert.deepEqual(c.map((x) => x[2]), ['2. Window structure', '2. Window structure', '2. Window structure', '2. Window structure', '2. Window structure', '3. Rules', '3. Rules', '4. After']);
   for (const x of c) assert.match(x[0], /^[0-9a-f]{8}$/);
   assert.equal(new Set(c.map((x) => x[0])).size, c.length);
@@ -135,7 +135,7 @@ test('collect: a cid ignores line moves but not the block text or heading; a rep
 test('collect: the cap takes the first blocks in document order across documents; the rest are counted by document and heading', (t) => {
   const { root, ctx } = repo(t, { 'docs/design.md': DOC.join('\n'), 'docs/spec.md': '# Other\n\n## Limits\n\nThe name MUST be at most 40 characters long.\n\nThe list MUST show 50 rows per page at most.\n' });
   const r = collect({ cwd: root, ctx, maxRequirements: 4 });
-  assert.deepEqual(cands(ctx).map((x) => x[1]), ['docs/design.md:9', 'docs/design.md:10', 'docs/design.md:12', 'docs/design.md:14']);
+  assert.deepEqual(cands(ctx).map((x) => x[1]), ['docs/design.md:9-9', 'docs/design.md:10-10', 'docs/design.md:12-12', 'docs/design.md:14-14']);
   const meta = metaOf(ctx);
   assert.deepEqual([meta.candidates, meta.candidates_listed, r.candidates], [10, 4, 10]);
   assert.deepEqual(meta.cap_left, ['docs/design.md § 2. Window structure: 1 block not scanned (cap)', 'docs/design.md § 3. Rules: 2 blocks not scanned (cap)', 'docs/design.md § 4. After: 1 block not scanned (cap)', 'docs/spec.md § Limits: 2 blocks not scanned (cap)']);
@@ -476,6 +476,55 @@ test('collect: audit-blocks.txt holds each candidate block whole (past the 240-c
   assert.ok(blocks.get(b).endsWith(' [truncated]') && blocks.get(b).length < 4020);
   const meta = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
   assert.ok(meta.limitations.some((l) => /longer than 4000 characters.*not fully read/.test(l)), JSON.stringify(meta.limitations));
+});
+
+// F25 (audit 3.5, N1): the cid ignores symbols and case, so the persisted text version (versions.tv) is what notices a changed requirement
+test('collect with versions (F25): a semantic text change that keeps the cid (operator, sign, literal case) is stale and audited first; whitespace and markdown formatting are not', (t) => {
+  const doc = (last) => `# Limits\n\nThe service must log every request it serves.\n\nThe service must cache every response it serves.\n\n${last}\n`;
+  const BASE = 'The service must reject amounts >= 10 and offsets of -1 and the literal \'ABC\' always.';
+  const { root, ctx, git } = repo(t, { 'docs/design.md': doc(BASE) });
+  collect({ cwd: root, ctx });
+  const ids = cands(ctx).map((c) => c[0]), h = git('rev-parse', 'HEAD').slice(0, 7);
+  const tv = Object.fromEntries(rows(ctx, 'audit-textver.txt'));
+  assert.deepEqual(Object.keys(tv).sort(), ids.slice().sort());
+  const state = { head: h, blocks: ids.map((c, i) => ({ cid: c, status: 'covered', since: h, runs: 1, at: { head: h, date: `2026-09-0${i + 1}` } })), versions: { uv: {}, ev: {}, tv } };
+  const staleAfter = (last) => {
+    fs.writeFileSync(path.join(root, 'docs/design.md'), doc(last)); git('add', '.'); git('commit', '-m', 'edit');
+    collect({ cwd: root, ctx, maxRequirements: 1, rotate: true, prior: state });
+    return { picked: cands(ctx).map((c) => c[0]), stale: rows(ctx, 'audit-stale.txt').map((c) => c[0]) };
+  };
+  const last = ids[2];
+  for (const edit of [BASE.replace('>= 10', '> 10'), BASE.replace('-1', '1'), BASE.replace("'ABC'", "'abc'")]) {
+    const r = staleAfter(edit);
+    assert.deepEqual([r.picked, r.stale], [[last], [last]], edit);
+    assert.equal(cands(ctx)[0][0], last, 'the cid did not change: only the text version noticed');
+  }
+  for (const edit of [BASE.replace('amounts >= 10', 'amounts   >=  10'), BASE.replace('reject', '**reject**').replace("'ABC'", "`'ABC'`")]) {
+    const r = staleAfter(edit);
+    assert.deepEqual(r.stale, [], edit);
+    assert.deepEqual(r.picked, [ids[0]], 'the least recently audited block, as before');
+  }
+  // old state without tv: unknown version, nothing is reset
+  const old = { ...state, versions: { uv: {}, ev: {} } };
+  collect({ cwd: root, ctx, maxRequirements: 1, rotate: true, prior: old });
+  assert.deepEqual(rows(ctx, 'audit-stale.txt'), []);
+});
+
+test('F21 through the real chain: collect writes path:line-end for a single-line block, and verify rejects a row citing a later line of the same document', (t) => {
+  const { root, ctx } = repo(t, { 'docs/design.md': '# Plan\n\nThe service must reject negative amounts.\n\nFiller paragraph that is not a requirement here.\n\nThe service must accept positive amounts.\n' });
+  collect({ cwd: root, ctx });
+  const { readCandidates, verify } = require('./audit-post');
+  const cs = readCandidates(fs.readFileSync(path.join(ctx, 'audit-candidates.txt'), 'utf8'));
+  const [a, b] = [...cs.values()];
+  assert.deepEqual([a.line, a.end], [3, 3]);
+  const lines = fs.readFileSync(path.join(root, 'docs/design.md'), 'utf8').split('\n');
+  const cite = (l) => ({ path: 'docs/design.md', line: l, quote: lines[l - 1] });
+  const row = (id, l) => ({ id, source: cite(l), text: 'x', class: 'human', status: 'needs_human', code: [], tests: [], note: '' });
+  const run = (l) => verify({ docs_reviewed: ['docs/design.md'], requirements: [row(a.cid, l)], not_requirements: [], not_reviewed: [] }, { read: () => lines, cands: cs });
+  const v = run(b.line);
+  assert.ok(v.not_reviewed.some((n) => n.startsWith(a.cid)), JSON.stringify(v.not_reviewed));
+  assert.equal(v.requirements.find((r) => r.id === a.cid).note.startsWith('Unconfirmed'), true);
+  assert.deepEqual(run(a.line).not_reviewed, [], 'control: its own line verifies');
 });
 
 test('loadPrior: with scan_issue_repo the state is read from that repository under its token, titled by the scanned repository (F24)', async () => {
