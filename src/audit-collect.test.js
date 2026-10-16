@@ -593,3 +593,33 @@ test('the publisher and loadPrior pick the same scan issue: same repository, ano
     assert.deepEqual(prior && prior.blocks.map((b) => b.cid), [`0000000${number}`], `${name}: the loader reads the same issue`);
   }
 });
+
+test('collect: a Gherkin Background is in every scenario body and tv, but the cid is unchanged by it', (t) => {
+  const feat = (who) => `Feature: Tenants\n\n  Background:\n    Given a tenant in state ${who}\n\n  Scenario: Login is refused\n    When the user logs in\n    Then access is denied\n\n  Scenario: Export is refused\n    When the user exports data\n    Then access is denied\n`;
+  const { allBlocks } = require('./audit-collect');
+  const a = repo(t, { 'f/t.feature': feat('SUSPENDED_TENANT') }), b = repo(t, { 'f/t.feature': feat('ACTIVE_TENANT') });
+  const x = allBlocks(a.root, 'HEAD', ['f/t.feature']), y = allBlocks(b.root, 'HEAD', ['f/t.feature']);
+  assert.equal(x.length, 2);
+  assert.equal(x[1].cid, y[1].cid);
+  assert.notEqual(x[1].tv, y[1].tv);
+  assert.match(x[1].body, /SUSPENDED_TENANT/);
+  assert.match(y[1].body, /ACTIVE_TENANT/);
+  const plain = allBlocks(repo(t, { 'f/p.feature': 'Feature: P\n\n  Scenario: Only one\n    When the user logs in\n    Then access is denied\n' }).root, 'HEAD', ['f/p.feature'])[0];
+  assert.doesNotMatch(plain.body, /Background/);
+});
+
+test('collect with versions (F32): a legacy tv (written without the Background) is not stale; a real Background edit is', (t) => {
+  const feat = (who) => `Feature: Tenants\n\n  Background:\n    Given a tenant in state ${who}\n\n  Scenario: Login is refused\n    When the user logs in\n    Then access is denied\n`;
+  const { allBlocks } = require('./audit-collect');
+  const { root, ctx, git } = repo(t, { 'f/t.feature': feat('SUSPENDED_TENANT') });
+  collect({ cwd: root, ctx, reqPaths: 'f/t.feature' });
+  const [cid] = cands(ctx).map((c) => c[0]), h = git('rev-parse', 'HEAD').slice(0, 7);
+  const blk = allBlocks(root, 'HEAD', ['f/t.feature'])[0];
+  const stateWith = (tv) => ({ head: h, blocks: [{ cid, status: 'covered', since: h, runs: 1, at: { head: h, date: '2026-09-01' } }], versions: { uv: {}, ev: {}, tv: { [cid]: tv } } });
+  const staleFor = (tv) => { collect({ cwd: root, ctx, reqPaths: 'f/t.feature', rotate: true, prior: stateWith(tv) }); return rows(ctx, 'audit-stale.txt').map((r) => r[0]); };
+  assert.notEqual(blk.tv, blk.tvLegacy);
+  assert.deepEqual(staleFor(blk.tvLegacy), [], 'a state from before Background context is not reset');
+  assert.deepEqual(staleFor(blk.tv), []);
+  fs.writeFileSync(path.join(root, 'f/t.feature'), feat('ACTIVE_TENANT')); git('add', '.'); git('commit', '-m', 'edit');
+  assert.deepEqual(staleFor(blk.tv), [cid], 'a Background edit makes the scenario stale');
+});
