@@ -210,6 +210,31 @@ test('pack-cut.txt: a missing_test whose candidate test the model saw only partl
   assert.match(weak.calls.summary[0].body, /Low-confidence findings \(1\)/);
 });
 
+test('pack-cut.txt listing a changed file or its candidate test: the run is incomplete (no clean verdict, no head marker, execution_complete false); unrelated or empty pack-cut stays complete (F19)', async (t) => {
+  const run = async (cut) => {
+    const s = setup(t, report({ coverage: [row()], findings: [] }));
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), 'src.js\n  test.js  (same stem)\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut);
+    await post(s);
+    const counts = JSON.parse(fs.readFileSync(path.join(s.dir, 'ctx/counts.json'), 'utf8'));
+    return { body: s.calls.summary[0].body, counts };
+  };
+  for (const cut of ['src.js\n', 'test.js\n']) {
+    const { body, counts } = await run(cut);
+    assert.equal(counts.complete, false); assert.equal(counts.execution_complete, false);
+    assert.doesNotMatch(body, /No unit test gaps found(?! so far)/);
+    assert.match(body, /Incomplete review/);
+    assert.match(body, new RegExp(`Review context was cut: the model saw only part of \`${cut.trim().replace('.', '\\.')}\``));
+    assert.doesNotMatch(body, /<!-- specguard:head=/); assert.match(body, /<!-- specguard:status=incomplete -->/);
+    assert.equal(require('./preflight.js').decide({ pr: { state: 'open', user: { type: 'User', login: 'dev' } }, headSha: 'HEADSHA', comments: [{ user: { type: 'Bot', login: 'github-actions[bot]' }, body }] }), '');
+  }
+  for (const cut of ['', 'other.js\nbig.js\n']) {
+    const { body, counts } = await run(cut);
+    assert.equal(counts.complete, true); assert.equal(counts.execution_complete, true);
+    assert.match(body, /No unit test gaps found/); assert.match(body, /<!-- specguard:head=HEADSHA -->/);
+  }
+});
+
 test('literal guard: a missing_test whose error message a tracked test already contains goes to Details as low confidence, citing that test; a message no test contains is still posted', async (t) => {
   const run = async (testText) => {
     const s = setup(t);
