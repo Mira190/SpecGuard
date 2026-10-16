@@ -888,3 +888,44 @@ for (const n of [19, 20, 21]) {
 test('evidence (N4): a budget too small for the cited files lists them as cut, at every block count', (t) => {
   for (const n of [19, 21]) assert.deepEqual([...packFor(evRepo(t, n), 100).pack.notWhole].sort(), ['config/policy.yaml', 'tests/policy.test.js'], `n=${n}`);
 });
+
+test('evidence (N4): a cut evidence file is recorded per block (blockCuts) in the single call, which writes scan-parts.json for audit-post', async (t) => {
+  const e = evRepo(t, 3), ctxFiles = Object.fromEntries(['audit-candidates.txt', 'audit-evidence.txt'].map((n) => [n, fs.readFileSync(path.join(e.ctx, n), 'utf8')]));
+  const r = repo(t, { 'config/policy.yaml': 'amount_minimum: 10\n', 'tests/policy.test.js': 'test("minimum", () => { assert.equal(policy.amount_minimum, 10); });\n' }, ctxFiles, { CHECK: 'audit', CONTEXT_PACK_BYTES: '100' });
+  await r.go();
+  const cuts = JSON.parse(r.h.file('scan-parts.json')).blockCuts;
+  assert.deepEqual(Object.keys(cuts).sort(), ['00000000', '00000001', '00000002']);
+  assert.deepEqual([...cuts['00000000']].sort(), ['config/policy.yaml', 'tests/policy.test.js']);
+});
+
+test('evidence (N4): a file shown only as slices is windowed again for the lines the evidence cites', (t) => {
+  const r = unitsRepo(t, 200, 'part 2/2 lines 101-200', 80);
+  fs.writeFileSync(path.join(r.ctx, 'audit-evidence.txt'), '1111111a\ttest\ttests/units.test.js:50\tassert.equal(unit049(1), 50)\n');
+  const p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(p.text.includes('assert.equal(unit049('), 'the cited line 50 is visible');
+  assert.deepEqual(p.notWhole, ['tests/units.test.js'], 'the file is still not whole');
+  assert.deepEqual(p.blockCuts, { '1111111a': ['tests/units.test.js'] });
+});
+
+test('evidence (Q8): from the real collector, the validator the requirement names is in the single-call pack, or listed as cut', (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'q8-')), ctx = path.join(root, '.ctx');
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const files = {
+    'specs/contract.md': '# Contract\n\nAC-1: The validator rejects negative invoice amounts before charging.\n',
+    'app/selection.js': Array.from({ length: 30 }, (_, i) => `exports.select${i} = value => value ? ${i} : 0;`).join('\n') + '\n',
+    'billing/validator.js': 'function validateInvoice(amount) {\n  if (amount < 0) throw new Error("validator rejects negative invoice amounts before charging");\n  return amount;\n}\nmodule.exports = { validateInvoice };\n',
+    'billing/validator.test.js': 'const test = require("node:test"), assert = require("node:assert/strict");\nconst { validateInvoice } = require("./validator");\ntest("validator rejects negative invoice amounts before charging", () => {\n  assert.throws(() => validateInvoice(-1));\n});\n',
+  };
+  for (const [f, s] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); fs.writeFileSync(path.join(root, f), s); }
+  const git = (...a) => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: root, stdio: 'ignore' });
+  git('init'); git('config', 'user.name', 't'); git('config', 'user.email', 't@example.invalid'); git('add', '.'); git('commit', '-m', 'init');
+  require('./audit-collect').collect({ cwd: root, ctx, reqPaths: 'specs/**', maxUnits: 1 });
+  assert.ok(fs.readFileSync(path.join(ctx, 'audit-evidence.txt'), 'utf8').includes('billing/validator.js'));
+  assert.ok(fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').includes('app/selection.js'));
+  const p = api.contextPack(ctx, root, 250000);
+  assert.ok(p.text.includes('validator rejects negative invoice amounts') || p.notWhole.includes('billing/validator.js'));
+  assert.ok(p.text.includes('validator rejects negative invoice amounts'), 'with a normal budget it is visible');
+  const tight = api.contextPack(ctx, root, 100);
+  assert.ok(Object.values(tight.blockCuts).some((f) => f.includes('billing/validator.js')), 'with no room it is cut for its block');
+});

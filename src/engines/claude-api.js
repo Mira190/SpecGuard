@@ -177,20 +177,25 @@ function windowPack(root, locs, limit) {
   return { text: parts.length ? `Repository files (the code and tests cited by the candidate blocks' evidence rows; a file noted "relevant windows" shows the lines around each cited line):\n\n${parts.join('\n\n')}` : '', note: '', notWhole };
 }
 
-// The evidence of candidate blocks (audit-evidence.txt rows: cid, kind, path:line, text) as windows around the cited lines, code first, then tests. One path for the single call (contextPack) and the block parts (src/scan-parts.js). skip: files already in the pack.
+// The evidence of candidate blocks (audit-evidence.txt rows: cid, kind, path:line, text) as windows around the cited lines, code first, then tests. One path for the single call (contextPack) and the block parts (src/scan-parts.js). skip: files already shown whole. blockCuts: cid -> its cited files that are not shown whole (post-processing turns a missing/absent claim of that block into unknown).
 function evidencePack(root, rows, limit, skip = new Set()) {
-  const locs = new Map();
+  const locs = new Map(), cited = new Map();
   for (const kind of ['code', 'test']) for (const l of rows) {
     const c = l.split('\t'), x = c[2] || '', k = x.lastIndexOf(':'), file = x.slice(0, k);
-    if (c[1] === kind && k > 0 && !skip.has(file)) locs.set(file, [...(locs.get(file) || []), parseInt(x.slice(k + 1), 10) || 1]);
+    if (k <= 0) continue;
+    if (c[1] === kind && !skip.has(file)) locs.set(file, [...(locs.get(file) || []), parseInt(x.slice(k + 1), 10) || 1]);
+    if (kind === 'code') cited.set(c[0], new Set([...(cited.get(c[0]) || []), file]));
   }
-  return limit > 0 ? windowPack(root, locs, limit) : { text: '', note: '', notWhole: [] };
+  if (limit <= 0) return { text: '', note: '', notWhole: [], blockCuts: {} };
+  const p = windowPack(root, locs, limit), cut = new Set(p.notWhole), blockCuts = {};
+  for (const [cid, files] of cited) { const missing = [...files].filter((f) => cut.has(f)); if (missing.length) blockCuts[cid] = missing; }
+  return { ...p, blockCuts };
 }
 
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
-  const parts = [], seen = new Set(), omitted = [], partial = []; // partial: cut at the budget
+  const parts = [], seen = new Set(), whole = new Set(), omitted = [], partial = []; // partial: cut at the budget
   let used = 0, files = 0;
   const cap = fileCap(limit);
   const addFile = (p, num, quiet, syms, top = limit, part = null, incomplete = false) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
@@ -221,6 +226,7 @@ function contextPack(ctx, root, limit) {
     const c = cut(full, room);
     if (c.cut && c.lines < 1) return void (quiet || omitted.push(rel));
     if (c.cut && !quiet) partial.push(rel);
+    if (!c.cut && num) whole.add(rel);
     const b = block(rel, c.text, `${c.cut ? `first ${c.lines} of ${src.length} lines` : 'full file'}${num ? ', line-numbered' : ''}`);
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
@@ -252,13 +258,13 @@ function contextPack(ctx, root, limit) {
     const dl = diff.replace(/\n$/, '').split('\n'), c = cut(dl.slice(head.lines).join('\n'), limit - used - OVERHEAD), all = dl.length;
     if (c.lines > 0) { const b = block(`${dname} (rest)`, c.text, `lines ${head.lines + 1} to ${head.lines + c.lines} of ${all}; continues the diff block above${c.cut ? '; cut at the context budget' : ''}`); parts.push(b); used += Buffer.byteLength(b); }
   }
-  const ev = evidencePack(root, list('audit-evidence.txt'), limit - used, seen); // single-call scan: the evidence files of the candidate blocks, as the block parts load them
+  const ev = evidencePack(root, list('audit-evidence.txt'), Math.max(limit - used, 1), whole); // single-call scan: the evidence files of the candidate blocks, as the block parts load them (a file shown only as slices or a head is windowed again)
   if (ev.text) { parts.push(ev.text); used += Buffer.byteLength(ev.text); files++; }
   for (const p of ev.notWhole) if (!partial.includes(p)) partial.push(p);
   for (const p of list('spec-files.txt')) addFile(p, false);
   const text = parts.length ? `Repository files (read from the checked-out repository; rule files, each file under review followed by its candidate tests, files the requirements name and small neighbours of reviewed files, the rest of a cut diff, requirement documents):\n\n${parts.join('\n\n')}` : '';
   const note = files || omitted.length ? `context pack: ${files} files, ${Math.round(used / 1024)} KB${omitted.length ? `; not included: ${omitted.slice(0, 4).join(', ')}${omitted.length > 4 ? ` (+${omitted.length - 4} more)` : ''}` : ''}` : '';
-  return { text, note, notWhole: [...partial, ...omitted] };
+  return { text, note, notWhole: [...partial, ...omitted], blockCuts: ev.blockCuts };
 }
 
 const tokenRe = /github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|sk-ant-[A-Za-z0-9_-]+|Bearer [^\s]+/g;
@@ -428,7 +434,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     }
 
     let pack = { text: '', note: '' };
-    if (packBytes > 0) try { pack = contextPack(ctx, root(), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
+    if (packBytes > 0) try { pack = contextPack(ctx, root(), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); if (Object.keys(pack.blockCuts || {}).length) w('scan-parts.json', JSON.stringify({ blockCuts: pack.blockCuts })); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
     const { system, user } = messages(prompt, pack.text); // the pre-flight below sees the pack
     const est = worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user), maxTokens);
     if (est.usd > budget) { // the budget is hard here: nothing is sent
