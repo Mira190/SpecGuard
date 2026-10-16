@@ -9,7 +9,7 @@ const { execFileSync } = require('node:child_process');
 const { parseComments, lastPerPr, summarize, wilson, bootstrap } = require('./aggregate-counts');
 const { armOf } = require('./assign');
 const { findingId, parseCsv, readLabels, labelPrecision } = require('./label-export');
-const { isTestPath } = require('../src/trace');
+const post = require('../src/post');
 
 // Sample-size targets (docs/validation-plan.md step 5): below them a rule reports "insufficient data" instead of a verdict.
 const TARGET = { fixPrs: 40, fixFindings: 100, labels: 30, ttm: 30, validUnique: 15 };
@@ -39,6 +39,38 @@ function patchTouches(patch, start, end) {
   return false;
 }
 
+// The same rule as post.js (its own anchorTouched/testsChanged, not a copy), fed from the GitHub API instead of a clone: a stand-in for the two
+// git calls they make, answering from the first-parent, non-merge commits of the compare (a base merged into the PR is not the author's change).
+function apiGit(cmp, head, filesOf) {
+  const by = new Map((cmp?.commits || []).map((x) => [x.sha, x])), chain = [];
+  for (let x = by.get(head); x; x = by.get(x.parents?.[0]?.sha)) if (x.parents.length === 1) chain.unshift(x.sha);
+  return (...a) => {
+    if (!cmp || !['ahead', 'identical'].includes(cmp.status) || (cmp.total_commits || 0) > by.size) throw new Error('compare not usable');
+    if (a[0] === 'merge-base') return '';
+    const per = chain.map((sha) => filesOf(sha) || (() => { throw new Error('commit unavailable'); })());
+    if (!a.includes('-p')) return per.flat().map((f) => f.filename).join('\n');
+    const file = a[a.length - 1];
+    return per.map((fs) => {
+      const f = fs.find((x) => x.filename === file), gone = f?.status === 'removed' || fs.some((x) => x.status === 'renamed' && x.previous_filename === file);
+      return gone ? 'deleted file mode 100644\n' : f ? unified0(f.patch) : '';
+    }).join('\0');
+  };
+}
+// A -U3 patch as the -U0 hunks post.anchorTouched reads: only the changed runs, with their old-side position.
+function unified0(patch) {
+  const out = []; let old = 0, run = null;
+  const end = () => { if (run) out.push(`@@ -${run.d ? run.a : run.a - 1},${run.d} +0,${run.k} @@`); run = null; };
+  for (const l of String(patch || '').split('\n')) {
+    const h = /^@@ -(\d+)/.exec(l);
+    if (h) { end(); old = +h[1]; } else if (!old || l[0] === '\\') continue;
+    else if (l[0] === '-') { run ||= { a: old, d: 0, k: 0 }; run.d++; old++; }
+    else if (l[0] === '+') { run ||= { a: old, d: 0, k: 0 }; run.k++; }
+    else { end(); old++; }
+  }
+  end();
+  return out.join('\n');
+}
+
 const search = (repo, q) => parseComments(gh('api', '--paginate', '-X', 'GET', 'search/issues', '-f', `q=repo:${repo} is:pr created:${q}`, '-f', 'per_page=100', '--jq', '.items'));
 const normPr = (i) => ({ number: i.number, created_at: i.created_at, merged_at: i.pull_request?.merged_at || i.merged_at || null, closed_at: i.closed_at, user: i.user, labels: i.labels || [] });
 
@@ -51,7 +83,7 @@ function loadLive({ repo, since, until, 'baseline-since': bs, 'baseline-until': 
   const prOf = (url) => +/\/(?:pulls|issues)\/(\d+)$/.exec(url || '')?.[1];
   const issue_comments = parseComments(gh('api', '--paginate', `repos/${repo}/issues/comments?since=${since}T00:00:00Z&per_page=100`)).filter((c) => inWindow.has(prOf(c.issue_url)));
   const review_comments = parseComments(gh('api', '--paginate', `repos/${repo}/pulls/comments?since=${since}T00:00:00Z&per_page=100`)).map((c) => ({ ...c, pr: prOf(c.pull_request_url) })).filter((c) => inWindow.has(c.pr));
-  const threads = [], compare = new Map();
+  const threads = [], compare = new Map(), commits = new Map();
   const [owner, name] = repo.split('/');
   for (const n of [...new Set(review_comments.filter((c) => COPILOT.test(c.user?.login || '') && !c.in_reply_to_id).map((c) => c.pr))]) {
     const g = tryGh('api', 'graphql', '-f', 'query=query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100){nodes{isResolved resolvedBy{login} comments(first:30){nodes{databaseId author{login}}}}}}}}', '-f', `o=${owner}`, '-f', `r=${name}`, '-F', `n=${n}`);
@@ -60,12 +92,11 @@ function loadLive({ repo, since, until, 'baseline-since': bs, 'baseline-until': 
     for (const c of review_comments.filter((x) => x.pr === n && COPILOT.test(x.user?.login || '') && !x.in_reply_to_id)) {
       const key = `${c.original_commit_id}...${head}`;
       if (!compare.has(key)) compare.set(key, head && c.original_commit_id ? tryGh('api', `repos/${repo}/compare/${key}`) : null);
-      const files = compare.get(key)?.files;
-      if (!files) continue; // force-push or unreachable commit: unknown, never "unchanged"
+      const cmp = compare.get(key); // force-push or unreachable commit: null, so unknown, never "unchanged"
+      const git = apiGit(cmp, head, (sha) => { if (!commits.has(sha)) commits.set(sha, tryGh('api', `repos/${repo}/commits/${sha}`)?.files || null); return commits.get(sha); });
       const l = c.original_line ?? c.line, s = c.original_start_line ?? l;
-      const f = files.find((x) => x.filename === c.path || x.previous_filename === c.path);
-      c.anchor_touched = !!f && (f.status === 'removed' || (l ? patchTouches(f.patch, s, l) : false));
-      c.tests_changed = files.some((x) => isTestPath(x.filename));
+      c.anchor_touched = post.anchorTouched(c.original_commit_id, head, c.path, s, l, null, git);
+      c.tests_changed = post.testsChanged(c.original_commit_id, head, null, git);
     }
   }
   return { repo, since, until: end, prs, baseline, issue_comments, review_comments, threads };
@@ -255,5 +286,5 @@ function main() {
   const r = analyze(load(o), { labels: o.labels ? readLabels(parseCsv(fs.readFileSync(o.labels, 'utf8'))) : null });
   console.log(o.json ? JSON.stringify(r, null, 2) : render(r));
 }
-module.exports = { load, findingsOf, copilotOutcome, patchTouches, analyze, decide, render, quantile, TARGET, RULE };
+module.exports = { apiGit, unified0, load, findingsOf, copilotOutcome, patchTouches, analyze, decide, render, quantile, TARGET, RULE };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exit(1); }
