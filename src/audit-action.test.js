@@ -241,10 +241,35 @@ test('tee-summary.js: the summary markdown also lands in CTX/summary.md while th
 test('the manual-run workflow turns fail_on_error on; the PR workflow examples leave it off', () => {
   const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
   assert.match(read('.github', 'workflows', 'specguard-run.yml'), /^ +fail_on_error: "true"/m);
-  assert.doesNotMatch(read('.github', 'workflows', 'specguard.yml'), /fail_on_error/);
+  assert.match(read('.github', 'workflows', 'specguard.yml'), /fail_on_error: \{[^}]*type: boolean, default: false \}/, 'forwarded, off unless the caller turns it on');
   assert.doesNotMatch(read('README.md'), /fail_on_error: ?["']?true/);
 });
 
 test('action.yml: test_paths reaches the collector and the scan post step as TEST_PATHS, so collect and verify use one test scope (F26)', () => {
   for (const s of [find(/id: audit_collect/), find(/audit-post\.js/)]) assert.match(s, /TEST_PATHS: \$\{\{ inputs\.test_paths \}\}/);
+});
+
+test('S13: the preflight step and the post step build CFG from the identical expression, and it includes the base SHA', () => {
+  const exprs = [...yml.matchAll(/^ +CFG: (\$\{\{ .* \}\})/gm)].map((m) => m[1]);
+  assert.equal(exprs.length, 2, 'one CFG in preflight, one in post');
+  assert.equal(exprs[0], exprs[1]);
+  assert.match(exprs[0], /github\.event\.pull_request\.base\.sha/);
+});
+
+test('S12: the reusable workflow forwards every action input; the rest are documented exclusions, so a new input cannot be forgotten', () => {
+  const wf = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'specguard.yml'), 'utf8').replace(/\r\n/g, '\n');
+  const block = yml.slice(yml.indexOf('\ninputs:\n'), yml.indexOf('\noutputs:\n'));
+  const actionInputs = [...block.matchAll(/^ {2}(\w+): \{/gm)].map((m) => m[1]);
+  assert.ok(actionInputs.length >= 47, `parsed ${actionInputs.length} action inputs`);
+  const withBlock = /uses: Mira190\/SpecGuard@\w+ # specguard-pin\n {8}with:\n((?: {10}.*\n)+)/.exec(wf)[1];
+  const forwarded = [...withBlock.matchAll(/^ {10}(\w+): /gm)].map((m) => m[1]);
+  // the "Deliberately NOT forwarded" comment: "#   name[, name]  reason" lines
+  const excluded = [...wf.slice(wf.indexOf('Deliberately NOT forwarded')).split('\non:')[0].matchAll(/^# {3}(\w+(?:, \w+)*) {2}\S/gm)].flatMap((m) => m[1].split(', '));
+  assert.ok(excluded.length >= 5, 'the exclusions are documented in a comment');
+  assert.deepEqual([...new Set([...forwarded, ...excluded])].sort(), [...actionInputs].sort());
+  assert.deepEqual(forwarded.filter((k) => excluded.includes(k) && k !== 'github_token'), [], 'a documented exclusion is not forwarded');
+  // each non-secret input is declared with the action's own default, so an omitted input behaves as the action does
+  const norm = (v) => v.replace(/"/g, '') || 'false'; // a boolean input's empty default means false
+  const declared = Object.fromEntries([...wf.matchAll(/^ {6}(\w+): \{[^\n]*default: ([^}]*?) \}$/gm)].map((m) => [m[1], m[2]]));
+  for (const k of actionInputs.filter((n) => declared[n] !== undefined && !/^review_timeout_minutes|copilot_max_ai_credits$/.test(n))) assert.equal(norm(declared[k]), norm(new RegExp(`^ {2}${k}: \\{[^\\n]*default: ([^}]*?) \\}$`, 'm').exec(block)[1]), k);
 });

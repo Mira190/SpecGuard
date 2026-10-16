@@ -193,6 +193,34 @@ test('a stub copilot (VS Code prints "Cannot find GitHub Copilot CLI", exit 0) f
   assert.strictEqual(git(repo, 'worktree', 'list').split('\n').length, 1, 'no worktree was created');
 });
 
+test('U4: --fail-on-gaps exits 2 when the run did not complete (failed or incomplete), not 0; without the flag it stays advisory', async () => {
+  const { repo } = makeRepo('exit2');
+  const cwd = process.cwd(), log = console.log, err = console.error;
+  process.chdir(repo); console.log = quiet; console.error = quiet;
+  try {
+    const bad = path.join(tmp, 'bad.json'); fs.writeFileSync(bad, 'this is not json');
+    process.env.SPECGUARD_LOCAL_FINDINGS = bad;
+    assert.strictEqual(await main(['--base', 'main', '--fail-on-gaps']), 2, 'failed run');
+    assert.strictEqual(await main(['--base', 'main']), 0);
+    process.env.SPECGUARD_LOCAL_FINDINGS = canned('incomplete', findings({ findings: [], coverage: [{ ...findings().coverage[0], status: 'covered', evidence: [{ path: 'src/price.js', line: 2, quote: behaviour.quote, layer: 'unit', kind: 'assertion', proves: 'x' }] }] })); // citation is not an assertion: validation degrades it, the review is reduced (status incomplete)
+    assert.strictEqual(await main(['--base', 'main', '--fail-on-gaps']), 2, 'incomplete run');
+  } finally { process.chdir(cwd); console.log = log; console.error = err; delete process.env.SPECGUARD_LOCAL_FINDINGS; }
+});
+
+test('U4 control: a clean COMPLETE run (the cap is asserted in a test) exits 0 with --fail-on-gaps', async () => {
+  const { repo } = makeRepo('exit0');
+  fs.writeFileSync(path.join(repo, 'src', 'price.test.js'), "const test = require('node:test');\ntest('caps', () => {\n  assert.equal(total(101), 100);\n});\n");
+  git(repo, 'add', '-A'); git(repo, 'commit', '-q', '-m', 'test the cap');
+  const cwd = process.cwd(), log = console.log, err = console.error, lines = [];
+  process.chdir(repo); console.log = (m) => lines.push(m); console.error = quiet;
+  try {
+    const ev = { path: 'src/price.test.js', line: 3, quote: 'assert.equal(total(101), 100);', layer: 'unit', kind: 'assertion', proves: 'The cap is asserted.' };
+    process.env.SPECGUARD_LOCAL_FINDINGS = canned('complete', findings({ findings: [], coverage: [{ ...findings().coverage[0], status: 'covered', evidence: [ev], reason: 'The cap is asserted.' }] }));
+    assert.strictEqual(await main(['--base', 'main', '--fail-on-gaps', '--json']), 0);
+    assert.strictEqual(JSON.parse(lines.join('\n')).status, 'complete');
+  } finally { process.chdir(cwd); console.log = log; console.error = err; delete process.env.SPECGUARD_LOCAL_FINDINGS; }
+});
+
 test('main: exit code is 0 (advisory) unless --fail-on-gaps and gaps exist; --json is parseable', async () => {
   const { repo } = makeRepo('exit');
   const cwd = process.cwd(), log = console.log, err = console.error, lines = [];
@@ -206,6 +234,6 @@ test('main: exit code is 0 (advisory) unless --fail-on-gaps and gaps exist; --js
     const j = JSON.parse(lines.join('\n'));
     assert.strictEqual(j.gaps, true); assert.strictEqual(j.comments.length, 1); assert.ok(j.summary);
     process.env.SPECGUARD_LOCAL_FINDINGS = canned('clean', findings({ findings: [], coverage: [{ ...findings().coverage[0], status: 'covered', evidence: [{ path: 'src/price.js', line: 2, quote: behaviour.quote, layer: 'unit', kind: 'assertion', proves: 'The cap is asserted.' }] }] }));
-    assert.strictEqual(await main(['--base', 'main', '--fail-on-gaps']), 0);
+    assert.strictEqual(await main(['--base', 'main', '--fail-on-gaps']), 2); // no gap, but the cited evidence is not an assertion: a reduced (incomplete) review, not a clean one (U4; the clean control is below)
   } finally { process.chdir(cwd); console.log = log; console.error = err; delete process.env.SPECGUARD_LOCAL_FINDINGS; }
 });

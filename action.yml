@@ -91,6 +91,7 @@ runs:
         GH_REPO: ${{ inputs.repository || github.repository }}
         INCLUDE_BOTS: ${{ inputs.include_bots }}
         FORCE: ${{ inputs.force }}
+        CFG: ${{ format('{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}|{9}|{10}|{11}|{12}|{13}|{14}|{15}|{16}|{17}', inputs.engine, inputs.model, inputs.effort, inputs.auto_tier, inputs.fast_models, inputs.max_comments, inputs.max_diff_kb, inputs.focus_threshold, inputs.focus_files, inputs.ignore, inputs.standards_checks, inputs.standards_ref, inputs.requirements_paths, inputs.test_paths, inputs.standards_paths, inputs.coverage_files, inputs.trace, inputs.base_sha || github.event.pull_request.base.sha) }} # same list as the post step: the summary's cfg marker must match
       run: node "$GITHUB_ACTION_PATH/src/preflight.js"
 
     - id: collect
@@ -252,6 +253,7 @@ runs:
         STANDARDS_CHECKS: ${{ inputs.standards_checks }}
         STANDARDS_REF: ${{ inputs.standards_ref }}
         REVIEW_TIMEOUT_MINUTES: ${{ inputs.review_timeout_minutes }}
+        CFG: ${{ format('{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}|{9}|{10}|{11}|{12}|{13}|{14}|{15}|{16}|{17}', inputs.engine, inputs.model, inputs.effort, inputs.auto_tier, inputs.fast_models, inputs.max_comments, inputs.max_diff_kb, inputs.focus_threshold, inputs.focus_files, inputs.ignore, inputs.standards_checks, inputs.standards_ref, inputs.requirements_paths, inputs.test_paths, inputs.standards_paths, inputs.coverage_files, inputs.trace, inputs.base_sha || github.event.pull_request.base.sha) }}
       with:
         github-token: ${{ inputs.github_token }}
         retries: 3 # GitHub API 5xx (e.g. "diff temporarily unavailable") would otherwise drop the review

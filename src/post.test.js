@@ -3186,6 +3186,13 @@ test('v2 contract: example.json is schema-valid, passes validate, and derives th
   assert.equal(d.findings.length, 1);
 });
 
+test('U9: every covered example.json row whose behaviour is a >=/<= boundary cites at least 2 assertions (references/trace.md: both sides of the boundary)', () => {
+  const rows = exampleJson().coverage.filter((c) => c.status === 'covered' && /[<>]=/.test(`${c.obligation} ${c.behaviour.quote}`));
+  assert.ok(rows.length, 'the example shows a covered boundary');
+  for (const c of rows) assert.ok(c.evidence.length >= 2, `${c.id} cites ${c.evidence.length} assertion(s)`);
+  assert.deepEqual(exampleJson(), JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.github', 'skills', 'test-review', 'references', 'example.json'), 'utf8')), 'the .github copy matches');
+});
+
 test('v2 contract: the old full shape (change, alignment, layer, kind, proves, requirement copies) is schema-valid and validates unchanged', () => {
   const old = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'q', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('weak_test')], findings: [finding('weak_test')] });
   assert.deepEqual(schemaErrors(old, SCHEMA), []);

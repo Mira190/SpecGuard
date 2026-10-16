@@ -10,21 +10,22 @@ const read = (...p) => fs.readFileSync(path.join(root, ...p), 'utf8').replace(/\
 const reusable = () => read('.github', 'workflows', 'specguard.yml');
 const central = () => read('.github', 'workflows', 'specguard-run.yml');
 
-test('specguard.yml: on workflow_call with exactly the core inputs, and no other trigger', () => {
+test('specguard.yml: on workflow_call with the action inputs (src/audit-action.test.js checks the full set), and no other trigger', () => {
   const y = reusable();
   assert.match(y, /^on:\n {2}workflow_call:\n {4}inputs:\n/m);
   assert.doesNotMatch(y, /^ {2}(pull_request|pull_request_target|workflow_dispatch|schedule|push):/m);
   const form = /^ {4}inputs:\n((?: {6}.*\n)+)/m.exec(y)[1];
-  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['mode', 'requirements_paths', 'standards_paths', 'test_paths', 'scan_issue', 'model', 'effort']);
+  const names = [...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]);
+  for (const k of ['mode', 'requirements_paths', 'standards_paths', 'test_paths', 'scan_issue', 'model', 'effort']) assert.ok(names.includes(k), k);
   assert.match(y, /^ {6}mode: \{[^}]*default: pr \}/m);
   assert.match(y, /^ {6}scan_issue: \{[^}]*type: boolean, default: false \}/m);
-  assert.match(y, /^ {4}secrets:\n {6}llm_token: \{[^}]*required: false \}\n {6}copilot_token: \{[^}]*required: false \}\n/m, 'the only secrets are the optional LLM token and its Copilot alias');
+  assert.match(y, /^ {4}secrets:\n {6}llm_token: \{[^}]*required: false \}\n {6}copilot_token: \{[^}]*required: false \}\n {6}scan_issue_token: \{[^}]*required: false \}\n/m, 'the only secrets are the optional tokens: LLM, its Copilot alias, the scan issue');
 });
 
 test('specguard.yml: repository access is the caller job token; the only secret read is the optional Copilot PAT, forwarded to the action', () => {
   const y = reusable();
   assert.match(y, /github_token: \$\{\{ github\.token \}\}/);
-  assert.deepEqual([...y.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i).sort(), ['SPECGUARD_COPILOT_TOKEN', 'SPECGUARD_LLM_TOKEN', 'copilot_token', 'llm_token']);
+  assert.deepEqual([...y.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i).sort(), ['SPECGUARD_COPILOT_TOKEN', 'SPECGUARD_LLM_TOKEN', 'copilot_token', 'llm_token', 'scan_issue_token']);
   assert.match(y, /^ {10}copilot_token: \$\{\{ secrets\.copilot_token \|\| secrets\.SPECGUARD_COPILOT_TOKEN \}\}/m, 'explicit secrets: { copilot_token } or secrets: inherit');
   assert.doesNotMatch(y, /SPECGUARD_PAT|create-github-app-token|pull_request_target/);
   assert.doesNotMatch(y, /^ *permissions: *write-all/m);
@@ -53,7 +54,7 @@ test('specguard.yml: forks and drafts are skipped in pr mode only; the action ge
   assert.match(y, /if: \$\{\{ inputs\.mode != 'pr' \|\| \(!github\.event\.pull_request\.draft && github\.event\.pull_request\.head\.repo\.full_name == github\.repository\) \}\}/);
   for (const k of ['mode', 'requirements_paths', 'standards_paths', 'test_paths', 'scan_issue', 'model', 'effort']) assert.match(y, new RegExp(`^ {10}${k}: \\$\\{\\{ inputs\\.${k} \\}\\}`, 'm'), k);
   assert.match(y, /fetch-depth: 0/, 'blame and the diff need history');
-  assert.match(y, /review_timeout_minutes: \$\{\{ inputs\.mode == 'scan' && '25' \|\| '12' \}\}/);
+  assert.match(y, /review_timeout_minutes: \$\{\{ inputs\.review_timeout_minutes \|\| \(inputs\.mode == 'scan' && '25' \|\| '12'\) \}\}/);
   assert.ok(+/timeout-minutes: (\d+)/.exec(y)[1] >= 25 + 3, 'job timeout is at least 3 above the engine limit');
 });
 
