@@ -284,3 +284,8 @@ test('apiGit U3: -w drops a whitespace-only change like real git, and keeps a re
     assert.equal(post.anchorTouched(a, b, f, 7, 7, null, git([{ filename: f, status: 'modified', patch }])), want, name);
   }
 });
+test('unified0 -w: a run with different removed/added counts is kept even if one pair matches', () => {
+  const { unified0 } = require('./weekly-report');
+  assert.match(unified0('@@ -7,2 +7 @@\n-a b\n-c\n+a  b', true), /^@@ -7,2 /);
+  assert.equal(unified0('@@ -7 +7 @@\n-a b\n+a  b', true), '');
+});
