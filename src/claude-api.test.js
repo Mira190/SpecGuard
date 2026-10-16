@@ -331,6 +331,9 @@ test('context pack: pack-cut.txt lists every file that was cut or not included, 
   const whole = repo(t, { 'a.js': 'a();\n' }, { 'files.txt': 'a.js\n' });
   await whole.go();
   assert.equal(whole.h.file('pack-cut.txt'), '', 'the pack ran and cut nothing: an empty list');
+  const denied = repo(t, { 'a.js': 'a();\n', '.env.example': 'K=1\n', 'k.pem': 'x\n' }, { 'files.txt': 'a.js\n.env.example\nk.pem\n' });
+  await denied.go();
+  assert.equal(denied.h.file('pack-cut.txt'), '', 'a deny-listed file is nothing to read, not a cut');
   const off = repo(t, { 'a.js': body }, { 'files.txt': 'a.js\n' }, { CONTEXT_PACK_BYTES: '0' });
   await off.go();
   assert.equal(off.h.file('pack-cut.txt'), null);

@@ -40,7 +40,7 @@ const bytes = (s) => Buffer.byteLength(s);
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const cell = (s, n = Infinity) => oneLine(neutralize(String(s)), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-// why units were not reviewed this run (after a count of units): cut = the pack did not hold them whole, bad = the model's answer for them was unusable (F20)
+// why units were not reviewed this run (after a count of units): cut = the pack did not hold them whole, bad = the model gave no usable answer for them (F20)
 const unseenTail = (cut, bad) => (cut && bad ? `were not reviewed: ${cut} did not fit the model's context, ${bad} had no usable model answer` : bad ? 'had no usable model answer' : "did not fit the model's context");
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
 const solid = (q) =>String(q).replace(/\s/g, '').length >= MIN_QUOTE;
@@ -241,7 +241,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     if (!locate(source)) { drop(r, solid(source.quote) ? 'the requirement quote was not found at the cited line' : `the requirement quote is under ${MIN_QUOTE} characters`); continue; }
     // the candidate's path and block are the trust boundary: a valid id may not carry another block's text (.1/.2 splits share the block, so they stay inside it)
     const own = cands && cands.get(cidOf(r.id));
-    if (own && (source.path !== safeRel(own.path) || source.line < own.line || source.line > (own.end || blockEnd(file(source.path) || [], own.line, Math.min(...[...cands.values()].filter((c) => c.path === own.path && c.line > own.line).map((c) => c.line)))))) { drop(r, `its source is not inside block ${own.cid} (${own.path}:${own.line})`); foreign.add(own.cid); continue; }
+    if (own && (source.path !== safeRel(own.path) || source.line < own.line || source.line > (own.end || blockEnd(file(source.path) || [], own.line, Math.min(...[...cands.values()].filter((c) => c.path === own.path && c.line > own.line).map((c) => c.line)))))) { drop(r, `its source is not inside block ${own.cid} (${own.path}:${own.line}-${own.end || own.line})`); foreign.add(own.cid); continue; }
     const code = r.code.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && !testFile(c.path));
     const located = r.tests.map((c) => ({ ...c })).filter((c) => locate(c) && !isDoc(c.path) && testFile(c.path));
     // same rule as PR mode (post.verifyEvidence): a declaration, an empty or a skipped test carries no coverage
@@ -458,7 +458,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   // code-first part (code = { list: Map of the reviewed units, inv: audit-inventory.json, findings: verified unit findings }): confirmed findings first, then by the unit's risk; low-confidence ones are Details only
   const uall = code ? trackFindings(code.findings, prior, sha).sort((a, b) => (b.confirmed - a.confirmed) || (((code.list.get(b.unit) || {}).score || 0) - ((code.list.get(a.unit) || {}).score || 0))) : [];
   const uf = uall.filter((f) => !f.low), ulow = uall.filter((f) => f.low), inv = code ? code.inv : null;
-  const unseen = (code && code.unseen) || [], cutN = ((code && code.cut) || []).length, badN = ((code && code.bad) || []).length, unfit = code && code.unitsFailed ? 'were not reviewed: the unit call failed' : unseenTail(cutN, badN), seenN = inv ? inv.rotation.picked - unseen.length : 0; // unseen: picked units the model's context did not hold whole (pack-cut.txt): not reviewed this run
+  const unseen = (code && code.unseen) || [], cutN = ((code && code.cut) || []).length, badN = ((code && code.bad) || []).length, unfit = code && code.unitsFailed ? 'were not reviewed: the unit call failed' : unseenTail(cutN, badN), seenN = inv ? inv.rotation.picked - unseen.length : 0; // unseen: picked units cut from the model's context (pack-cut.txt) or with no usable model answer: not reviewed this run
   const riskiest = inv && unseen.length ? `${seenN} unit${seenN === 1 ? '' : 's'} reviewed` : inv ? (inv.rotation.picked === 1 ? 'riskiest unit' : `${inv.rotation.picked} riskiest units`) : '';
   // static test signals (no model): rule-based leads for the reviewed units, from the inventory's counts; an older inventory without `signals` has none. Never counted as gaps, never in the state.
   const sig = code && inv && Array.isArray(inv.rows) ? staticFindings(inv.rows.filter((r) => code.list.has(r.id))) : [];
@@ -529,7 +529,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     const both = [unitPart, docPart].filter(Boolean).join('; ');
     if (partial) verdict = `**⚠️ Incomplete scan: ${both ? `${both} found so far` : 'no unit test gaps found so far'}**`;
     else if (both) verdict = `**❌ ${both}**${at7}. Static review; tests were not run.`;
-    else if (unseen.length && !seenN) verdict = `**⚠️ The scan could not review any unit: ${code.unitsFailed ? 'the unit call failed' : badN && !cutN ? "the model's answers were unusable" : "none fit the model's context"}**${at7}.`;
+    else if (unseen.length && !seenN) verdict = `**⚠️ The scan could not review any unit: ${code.unitsFailed ? 'the unit call failed' : badN && cutN ? `${cutN} did not fit the model's context, ${badN} had no usable model answer` : badN ? 'no unit had a usable model answer' : "none fit the model's context"}**${at7}.`;
     else if (unsure.length) verdict = `**❔ No unit test gaps in the ${riskiest}; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${at7}. Static review; tests were not run.`;
     else if (sig.length) verdict = `**❔ No model-verified unit test gaps in the ${riskiest}; ${plural(sig.length, 'unit')} ${sig.length === 1 ? 'has' : 'have'} static test signals to check**${at7}. Static review; tests were not run.`;
     else verdict = `**✅ No unit test gaps in the ${riskiest}**${at7}. Static review; tests were not run.`;
@@ -548,7 +548,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   }
   const inParts = code ? [...code.list.values()].filter((u) => u.part && !unseen.includes(u.id)) : []; // too large for one call: one part per run (review F07)
   if (code && data && !failure && inParts.length) top += `**Reviewed in parts** (too large for one call; one part per run): ${inParts.slice(0, 5).map((u) => `\`${cell(u.path, 100)}\` part ${u.part.k + 1} of ${u.part.n} (lines ${u.part.a}-${u.part.b})`).join(', ')}${inParts.length > 5 ? `, +${inParts.length - 5} more` : ''}.\n\n`;
-  if (code && data && !failure && unseen.length) top += `**Not reviewed this run:** ${plural(unseen.length, 'unit')} ${badN && !cutN && !code.unitsFailed ? 'had no usable answer from the model (see Not reviewed)' : unfit}: ${unseen.slice(0, 5).map((u) => `\`${cell((code.list.get(u) || {}).path || u, 100)}\``).join(', ')}${unseen.length > 5 ? `, +${unseen.length - 5} more` : ''}. ${unseen.length === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
+  if (code && data && !failure && unseen.length) top += `**Not reviewed this run:** ${plural(unseen.length, 'unit')} ${badN && !cutN && !code.unitsFailed ? 'had no usable model answer (see Not reviewed)' : unfit}: ${unseen.slice(0, 5).map((u) => `\`${cell((code.list.get(u) || {}).path || u, 100)}\``).join(', ')}${unseen.length > 5 ? `, +${unseen.length - 5} more` : ''}. ${unseen.length === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
   if (data && !failure && notAudited.blocks.length) top += `**Not audited this run:** ${plural(notAudited.blocks.length, 'document block')} (${[notAudited.failed && `${notAudited.failed} in a call that failed`, notAudited.dropped && `${notAudited.dropped} left out by max_budget_usd`].filter(Boolean).join(', ')}): ${notAudited.blocks.slice(0, 5).map((b) => `\`${cell(b.path, 100)}:${b.line}\``).join(', ')}${notAudited.blocks.length > 5 ? `, +${notAudited.blocks.length - 5} more` : ''}. ${notAudited.blocks.length === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
   if (data && !failure && unanswered > 0) top += `**Not answered by the model:** ${plural(unanswered, 'document block')} (shown as unconfirmed). ${unanswered === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
   if (partial && !failure) top += `> **Incomplete scan.** The rows below passed verification but the list may be incomplete${partial ? ` (${cell(partial, 200)})` : ''}. The scan issue, if enabled, was not updated.\n\n`;

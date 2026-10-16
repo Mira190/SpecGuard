@@ -2,7 +2,7 @@
 // Unit test gap scan (mode scan; audit is an alias), step 1: deterministic context for the checked-out HEAD (no diff, no AI, no repo code executed).
 // Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) MAX_UNITS (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
 // Also SCAN_PATHS (scope globs), SCAN_ISSUE (rotate through the blocks), GH_TOKEN + GH_REPO (to read the scan issue's state when SCAN_ISSUE is true).
-// Writes audit-docs.txt, audit-candidates.txt (cid, path:line, heading, text: the blocks the model must assess this run), audit-evidence.txt (per block: up to 3 code and 3 test
+// Writes audit-docs.txt, audit-candidates.txt (cid, path:line-end, heading, text: the blocks the model must assess this run), audit-evidence.txt (per block: up to 3 code and 3 test
 // locations found deterministically), audit-carried.txt (the blocks not audited this run), audit-ruled.txt (blocks the trace.js prefilter dropped: cid, path:line, heading, text, reason), audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
 // Code-first (always, with or without design documents): audit-units.txt, audit-units-carried.txt and audit-inventory.json for the max_units riskiest source files (src/audit-units.js).
 const fs = require('node:fs');

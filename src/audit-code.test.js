@@ -564,15 +564,17 @@ test('run: units whose file the model did not see whole (pack-cut.txt) are not r
   assert.doesNotMatch(vis(all.calls.summary), /✅/);
   // the model's answer for a unit was unusable (bad), not cut by the pack: its own wording; both together name each count
   const bad = vis((await post(t, { env, files: { 'findings.json': result([uf({ unit: U1, ...cite('src/js/orders.js', 1), title: '' })]), 'pack-cut.txt': '' } })).calls.summary);
-  assert.match(bad, /\*\*Not reviewed this run:\*\* 1 unit had no usable answer from the model \(see Not reviewed\): `src\/js\/orders\.js`\. It stays due for the next run\./);
+  assert.match(bad, /\*\*Not reviewed this run:\*\* 1 unit had no usable model answer \(see Not reviewed\): `src\/js\/orders\.js`\. It stays due for the next run\./);
   assert.match(bad, /\*\*⚠️ Incomplete scan: no gaps found so far\*\*/);
   const both = await post(t, { env, files: { 'findings.json': result([uf({ unit: U1, ...cite('src/js/orders.js', 1), title: '' })]), 'pack-cut.txt': 'src/js/cart.js\n' } });
   assert.match(vis(both.calls.summary), /\*\*Not reviewed this run:\*\* 2 units were not reviewed: 1 did not fit the model's context, 1 had no usable model answer: /);
   assert.equal(both.calls.outputs.reason, "2 units were not reviewed: 1 did not fit the model's context, 1 had no usable model answer");
+  const mixed = await post(t, { env, files: { 'findings.json': result([uf({ unit: U1, ...cite('src/js/orders.js', 1), title: '' })]), 'pack-cut.txt': 'src/js/legacy.js\nsrc/js/cart.js\n' } });
+  assert.match(vis(mixed.calls.summary), /\*\*⚠️ The scan could not review any unit: 2 did not fit the model's context, 1 had no usable model answer\*\*/);
   const allBad = await post(t, { env, files: { 'findings.json': result([]), 'pack-cut.txt': '' } });
   assert.doesNotMatch(vis(allBad.calls.summary), /unusable/, 'a legit empty answer: nothing unusable');
   const none = vis((await post(t, { env, files: { 'findings.json': (() => { const o = result([]); delete o.unit_findings; return o; })(), 'pack-cut.txt': '' } })).calls.summary);
-  assert.match(none, /\*\*⚠️ The scan could not review any unit: the model's answers were unusable\*\*/);
+  assert.match(none, /\*\*⚠️ The scan could not review any unit: no unit had a usable model answer\*\*/);
   const plain = await post(t, { env, files: { 'findings.json': result([uf()]) } });
   assert.doesNotMatch(plain.calls.summary, /Not reviewed this run/);
   assert.match(vis(plain.calls.summary), /in the 3 riskiest units/);
