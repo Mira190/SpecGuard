@@ -1001,3 +1001,68 @@ test('classify: credit/billing is quota and unknown model is model (config); 429
   assert.equal(api.classify(529, 'overloaded_error', 'busy')[0], 'rate');
   assert.equal(api.classify(500, 'api_error', 'oops')[0], '');
 });
+
+// --- a configuration failure in one part of a split scan fails the job; the parts that succeeded are kept ---
+// Runs the real chain: planner + adapter (api.run) -> audit-post -> fail-on-error.js. `second` is the reply of every call after the first.
+async function scanChain(t, second, env = {}) {
+  const s = scanRepo(t, 2, { SCAN_BATCH_BLOCKS: '1', ...env }), head = 'a'.repeat(40);
+  s.answers((req, ok) => (req === s.h.calls[0] ? ok(req) : second));
+  fs.writeFileSync(path.join(s.h.ctx, 'audit-meta.json'), JSON.stringify({ head, max_requirements: 80, candidates: 2, candidates_listed: 2, units: { total: 3, picked: 3 }, max_units: 12 }));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  const saved = { ...process.env }, outputs = {};
+  try {
+    Object.assign(process.env, { CTX: s.h.ctx, GITHUB_WORKSPACE: s.root, SCAN_ISSUE: 'false', ENGINE: 'claude', MODEL: 'claude-haiku-5-5' });
+    const summary = { addRaw() { return this; }, async write() {} };
+    await require('./audit-post.js')({ github: {}, context: { repo: { owner: 'o', repo: 'r' }, sha: head }, core: { setOutput: (k, v) => { outputs[k] = v; }, warning() {}, summary } });
+  } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
+  const gate = (FAIL_ON_ERROR) => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, CTX: s.h.ctx, STATUS: outputs.status, REASON: outputs.reason || '', FAIL_ON_ERROR } });
+  return { s, outputs, gate };
+}
+
+for (const [name, reply, cls] of [['quota', err(402, 'billing_error', 'no credit balance'), 'quota'], ['auth', err(401, 'authentication_error', 'invalid x-api-key'), 'auth']]) {
+  test(`scan parts: 200 then ${name}: findings of the first part are kept, status incomplete, engine-error says ${cls}, the gate fails even without fail_on_error`, async (t) => {
+    const { s, outputs, gate } = await scanChain(t, reply);
+    assert.equal(s.h.calls.length, 3);
+    assert.equal(JSON.parse(s.h.file('findings.json')).unit_findings.length, 1, 'part 1 is kept');
+    assert.equal(outputs.status, 'incomplete');
+    assert.match(s.h.file('engine-error'), new RegExp(`^${cls}\\n.*; 1 of 3 parts were reviewed$`));
+    for (const f of ['false', 'true']) {
+      const g = gate(f);
+      assert.equal(g.status, 1);
+      assert.match(g.stdout, new RegExp(`^::error::SpecGuard could not finish the scan \\(${cls}\\): .*; 1 of 3 parts were reviewed; the partial result was kept`));
+    }
+  });
+}
+
+test('scan parts: 200 then a rate limit stays incomplete with a warning and exit 0 (no engine-error)', async (t) => {
+  const { s, outputs, gate } = await scanChain(t, err(529, 'overloaded_error', 'busy'));
+  assert.equal(outputs.status, 'incomplete');
+  assert.equal(s.h.file('engine-error'), null);
+  const g = gate('true');
+  assert.equal(g.status, 0);
+  assert.match(g.stdout, /^::warning::SpecGuard result is incomplete/);
+});
+
+test('scan parts: the budget stop (parts left for the next run) stays incomplete, exit 0', async (t) => {
+  const { s, outputs, gate } = await scanChain(t, err(402, 'billing_error', 'never reached'), { MAX_BUDGET_USD: '0.02' });
+  assert.equal(s.h.calls.length, 1, 'the second part was dropped, not sent');
+  assert.equal(s.h.file('engine-error'), null);
+  assert.equal(outputs.status, 'incomplete');
+  assert.equal(gate('true').status, 0);
+});
+
+test('fail-on-error.js: incomplete without engine-error, with a non-configuration class, or reduced exits 0; incomplete with a configuration class exits 1', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-foe2-'));
+  try {
+    const run = (STATUS = 'incomplete') => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, CTX: dir, REASON: 'r', FAIL_ON_ERROR: 'true' } });
+    assert.equal(run().status, 0, 'no engine-error');
+    fs.writeFileSync(path.join(dir, 'engine-error'), 'rate\nbusy\n');
+    assert.equal(run().status, 0, 'rate');
+    fs.writeFileSync(path.join(dir, 'counts.json'), JSON.stringify({ reduced: true }));
+    fs.writeFileSync(path.join(dir, 'engine-error'), 'policy\nblocked\n');
+    assert.equal(run().status, 1, 'policy fails even when incomplete');
+    fs.rmSync(path.join(dir, 'engine-error'));
+    assert.equal(run().status, 0, 'a reduced fast-tier run');
+    assert.match(run().stdout, /reduced review/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
