@@ -249,6 +249,13 @@ test('action.yml: test_paths reaches the collector and the scan post step as TES
   for (const s of [find(/id: audit_collect/), find(/audit-post\.js/)]) assert.match(s, /TEST_PATHS: \$\{\{ inputs\.test_paths \}\}/);
 });
 
+test('S13: the preflight step and the post step build CFG from the identical expression, and it includes the base SHA', () => {
+  const exprs = [...yml.matchAll(/^ +CFG: (\$\{\{ .* \}\})/gm)].map((m) => m[1]);
+  assert.equal(exprs.length, 2, 'one CFG in preflight, one in post');
+  assert.equal(exprs[0], exprs[1]);
+  assert.match(exprs[0], /github\.event\.pull_request\.base\.sha/);
+});
+
 test('S12: the reusable workflow forwards every action input; the rest are documented exclusions, so a new input cannot be forgotten', () => {
   const wf = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'specguard.yml'), 'utf8').replace(/\r\n/g, '\n');
   const block = yml.slice(yml.indexOf('\ninputs:\n'), yml.indexOf('\noutputs:\n'));
