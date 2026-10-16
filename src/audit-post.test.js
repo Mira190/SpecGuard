@@ -828,7 +828,7 @@ test('run: a carried covered block whose cited code or tests changed since (audi
     'audit-meta.json': { head: 'abc123', max_requirements: 1, docs: 1, candidates: 2, limitations: [], rotation: ROT, evidence: { blocks: 1, with_code: 1, with_tests: 0, cut: false } } },
     env: { SCAN_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT, state: 'open', title: TITLE }] } });
   const md = r.calls.updated[0].body;
-  assert.match(md, /`2222222b`[^\n]*covered when last audited; its code or tests changed since \(recheck due\)/);
+  assert.match(md, /`2222222b`[^\n]*covered when last audited; its code, tests or requirement text changed since \(recheck due\)/);
   assert.doesNotMatch(md, /\*\*Covered \(\d+\)\*\*[^#]*`2222222b`/, 'not listed under Covered');
   assert.deepEqual(audit.readState(md).blocks.find((b) => b.cid === C2), { cid: C2, status: 'covered', since: 'bbbb222', runs: 1, at: { head: 'bbbb222', date: '2026-08-01' } }, 'the old entry: the next run still sees it stale');
 });
@@ -1080,7 +1080,7 @@ test('run: a deterministic low-confidence unit is tracked as unsure every run (n
   const part = { ...UFILES, 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\tnone\t-\tabcdef12\tpart 1/2 lines 1-2\n` };
   const outside = await run([{ ...low[0], line: 3, quote: FILES['src/plan.js'][2], title: 'No test', skeleton: 'it("x", () => {});' }], [], part);
   assert.match(outside.calls.summary, /outside this run's part/);
-  assert.equal(audit.readState(stateOf(outside)).versions.uc[UID], 1, 'the cursor moves to part 2');
+  assert.deepEqual(audit.readState(stateOf(outside)).versions.uc[UID], [1, 2], 'the cursor moves to part 2 of 2');
   assert.equal(outside.calls.outputs.status, 'complete');
 });
 
@@ -1102,6 +1102,15 @@ test('run: an inconclusive run (low-only finding) keeps a confirmed gap: still a
   assert.deepEqual([gap4.status, gap4.runs, gap4.at.date], ['gap', 2, DATE], 'verify-dropped: same outcome');
   assert.deepEqual(st(dropped).findings, st(two).findings);
   assert.equal(dropped.calls.outputs.status, 'incomplete');
+});
+
+test('run (F23 review): a forced unit whose test was cut is written to the state as unsure with today\'s date, and the status names the cut', async (t) => {
+  const inv = { ...invOf([urow(UID, { path: 'src/plan.js', tests: ['test/a.test.js'] })]), forced: [UID] };
+  const r = await runPost(t, { ctxFiles: { 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\ttest/a.test.js\t-\tabcdef12\t-\n`, 'audit-inventory.json': inv, 'findings.json': result(), 'pack-cut.txt': 'test/a.test.js\n' }, env: { AUDIT_ISSUE: 'true' } });
+  assert.equal(r.calls.outputs.status, 'incomplete');
+  assert.match(r.calls.outputs.reason, /1 unit did not fit the model's context/);
+  const b = audit.readState(r.calls.created[0].body).blocks.find((x) => x.cid === UID);
+  assert.deepEqual([b.status, b.at.date], ['unsure', DATE]);
 });
 
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
@@ -1143,4 +1152,80 @@ test('verify: incomplete block evidence cannot prove absence, but positive cited
   assert.equal(v.requirements[0].status, 'covered');
   const other = verify(result([req({ status: 'missing_test', tests: [] })]), { read, blockCuts: { [C2]: ['test/other.test.js'] } });
   assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
+});
+
+// F21 (audit 3.3, P4): a row's source must be its own candidate's block (same document, line inside the block), whatever else it cites
+test('verify: a row citing another candidate\'s requirement (other document, or outside its own block) is unknown and never borrows that evidence; the control still covers', () => {
+  const F = { ...FILES, 'docs/A.md': ['# A', '', 'The service must reject negative amounts.', '', 'Other filler text for the second block here.'], 'docs/B.md': ['# B', '', 'The service must accept positive amounts.'] };
+  const cite = (p, l) => ({ path: p, line: l, quote: F[p][l - 1] }), rd = (p) => F[p] || null;
+  const own = { cid: 'aaaaaaaa', path: 'docs/A.md', line: 3, end: 3, heading: 'A', text: 'The service must reject negative amounts.' };
+  const other = { cid: 'bbbbbbbb', path: 'docs/B.md', line: 3, end: 3, heading: 'B', text: 'The service must accept positive amounts.' };
+  const cs = candsOf(own, other);
+  const row = (id, source) => req({ id, source, text: 'x' });
+  const o = result([row('aaaaaaaa', cite('docs/B.md', 3)), row('bbbbbbbb', cite('docs/B.md', 3))]);
+  const v = verify(o, { read: rd, cands: cs });
+  const by = Object.fromEntries(v.requirements.map((r) => [r.id, r]));
+  assert.equal(by.aaaaaaaa.status, 'unknown');
+  assert.deepEqual([by.aaaaaaaa.code, by.aaaaaaaa.tests], [[], []]);
+  assert.ok(v.not_reviewed.some((n) => /^aaaaaaaa /.test(n) && /not the block/.test(n)), JSON.stringify(v.not_reviewed));
+  assert.equal(by.bbbbbbbb.status, 'covered', 'control: a row citing its own block verifies');
+  // same document, line outside the block's range (and a .N sub-row uses its parent's range)
+  const o2 = result([row('aaaaaaaa.1', cite('docs/A.md', 5)), row('aaaaaaaa.2', cite('docs/A.md', 3))]);
+  const v2 = verify(o2, { read: rd, cands: cs });
+  assert.ok(!v2.requirements.some((r) => r.id === 'aaaaaaaa.1' && r.status === 'covered'), 'line 5 is outside the block 3-3');
+  assert.ok(v2.requirements.some((r) => r.id === 'aaaaaaaa.2' && r.status === 'covered'));
+});
+
+test('readCandidates: path:line-end carries the block range; path:line stays valid', () => {
+  const m = audit.readCandidates('aaaaaaaa\tdocs/A.md:3-6\th\ttext\nbbbbbbbb\tdocs/B.md:9\th\ttext\n');
+  assert.deepEqual([m.get('aaaaaaaa').line, m.get('aaaaaaaa').end, m.get('bbbbbbbb').line, m.get('bbbbbbbb').end], [3, 6, 9, undefined]);
+});
+
+// F25 (audit 3.5, N1): the text version of a block is part of the persisted state
+test('state: the requirement-text version (tv) round-trips through the scan state', () => {
+  const data = result([req()]);
+  const s = audit.readState(audit.stateComment('h1', data, null, { date: DATE, tv: new Map([[C1, 'deadbeef']]) }));
+  assert.deepEqual(s.versions.tv, { [C1]: 'deadbeef' });
+  const carried = [{ cid: C1, status: 'covered', since: 'h1', runs: 1, at: { head: 'h1', date: DATE } }];
+  const kept = audit.readState(audit.stateComment('h2', result([]), s, { date: DATE, carried }));
+  assert.deepEqual(kept.versions.tv, { [C1]: 'deadbeef' }, 'a carried block keeps its recorded version');
+});
+
+test('verify: test_paths is authoritative for what a test file is (F26); without it the name heuristic applies', () => {
+  const files = { ...FILES, 'qa/checks/amount.js': ['check("amount", () => {', '  assert.equal(total([1, 2]), 3);', '});'] };
+  const rd = (p) => files[p] || null;
+  const r = () => result([req({ tests: [{ path: 'qa/checks/amount.js', line: 2, quote: files['qa/checks/amount.js'][1], layer: 'unit' }] })]);
+  const scoped = verify(r(), { read: rd, testPaths: 'qa/checks/**' });
+  assert.equal(scoped.requirements[0].status, 'covered');
+  assert.equal(scoped.requirements[0].tests.length, 1);
+  const heuristic = verify(r(), { read: rd });
+  assert.equal(heuristic.requirements[0].status, 'unknown', 'no scope: qa/checks/amount.js is not recognised as a test by name');
+  const out = verify(result([req()]), { read: rd, testPaths: 'qa/checks/**' }); // authoritative: tests/plan.test.js is outside the scope
+  assert.equal(out.requirements[0].tests.length, 0);
+});
+
+test('state (F22): the part cursor is written as [next part, part count], dropped after the last part, and rejected when malformed', () => {
+  const ID = 'a0000001', V = 'b0000001', data = dataOf({});
+  const at = (prior, k) => audit.stateOf('h1', data, prior, { date: DATE, code: { picked: [ID], findings: [], carried: [], versions: new Map([[ID, V]]), parts: new Map([[ID, { k, n: 3 }]]) } });
+  const s1 = audit.readState(at(null, 0).raw);
+  assert.deepEqual(s1.versions.uc, { [ID]: [1, 3] });
+  const s2 = audit.readState(at(s1, 1).raw);
+  assert.deepEqual(s2.versions.uc, { [ID]: [2, 3] });
+  assert.equal(audit.readState(at(s2, 2).raw).versions.uc, undefined, 'after the last part the cursor is gone, not left at the last part');
+  const bad = at(null, 0).raw.replace(`"uc":{"${ID}":[1,3]}`, `"uc":{"${ID}":2}`);
+  assert.notEqual(bad, at(null, 0).raw);
+  assert.equal(audit.readState(bad).versions.uc, undefined, 'a bare integer (old format) is ignored: the unit restarts at part 0');
+});
+
+test('state (F22 review): a restart after an edit drops the findings of the old parts, so a clean pass ends covered', () => {
+  const ID = 'a0000001', V1 = 'b0000001', V2 = 'b0000002', data = dataOf({});
+  const run = (prior, k, v, findings = []) => audit.readState(audit.stateOf('h1', data, prior, { date: DATE, code: { picked: [ID], findings, carried: [], versions: new Map([[ID, v]]), parts: new Map([[ID, { k, n: 3 }]]) } }).raw);
+  const s0 = run(null, 0, V1), s1 = run(s0, 1, V1, [{ unit: ID, next: ['c0000001', ID, 'h1', 1, 1] }]);
+  assert.equal(s1.blocks[0].status, 'gap');
+  const r0 = run(s1, 0, V2); // edited: the unit restarts at part 0
+  assert.deepEqual([r0.blocks[0].status, r0.findings], ['unsure', undefined], 'the part-1 finding of the old version is gone');
+  const r2 = run(run(r0, 1, V2), 2, V2);
+  assert.equal(r2.blocks[0].status, 'covered');
+  const cont = run(s1, 2, V1); // control: the same version continuing keeps the part-1 finding
+  assert.deepEqual([cont.blocks[0].status, cont.findings.map((f) => f.part)], ['gap', [1]]);
 });
