@@ -3846,3 +3846,14 @@ test('a model-low missing_test that the test-map guard reports as covered is not
   assert.match(await run(''), /Removal confirmed by the diff\./, 'control: no guard hit, raised');
   assert.doesNotMatch(await run('other.test.js has the message'), /Removal confirmed|Assertion removed with no replacement|confidence: high/);
 });
+
+test('findLine (S8): a quote whose first 20 characters match but whose tail is not on the line is not located; a truncated quote still is', () => {
+  const at = (l) => ['test("x", () => {', '  assert.equal(compute(1), 3);', '});'][l - 1], all = [1, 2, 3];
+  assert.equal(post.findLine('assert.equal(compute(1), 2)', 2, at, all), 0, 'different tail on the hinted line');
+  assert.equal(post.findLine('assert.equal(compute(1), 2)', 99, at, all), 0, 'different tail among all');
+  assert.equal(post.findLine('assert.equal(compute(1),', 2, at, all), 2, 'truncated by the model');
+  assert.equal(post.findLine('assert.equal(compute(1), 3)...', 2, at, all), 2, 'trailing ellipsis');
+  const d = report({ coverage: [row('covered', { evidence: [{ ...evidence, path: 'test.js', line: 2, quote: 'assert.equal(compute(1), 2)' }] })], findings: [] });
+  post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (p) => (p === 'src.js' ? ['l1', 'l2', behaviour.quote] : ['test("x", () => {', '  assert.equal(compute(1), 3);', '});']), new Map([['src.js', post.parsePatch(patch)]]));
+  assert.equal(d.coverage[0].status, 'unknown', 'the citation is unverified, not covered evidence');
+});
