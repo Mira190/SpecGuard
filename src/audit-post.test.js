@@ -1023,6 +1023,26 @@ test('run: units the model context did not hold make the status incomplete with 
   assert.equal(ok.calls.outputs.reason, undefined);
 });
 
+test('run: a unit finding that fails validation leaves its unit unreviewed (not covered, runs not advanced, status incomplete); a valid finding or no finding is unchanged (F20)', async (t) => {
+  const bad = { unit: UID, kind: 'missing_test', path: 'src/plan.js', line: 2, quote: FILES['src/plan.js'][1] }; // no title
+  const prior = { number: 7, body: stateBody(MARK, 'old1234', [['old1234', '2026-01-01']], [[UID, 'covered', 'old1234', 1, 0]]), user: BOT };
+  const run = (findings, issues = []) => runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result([req()], { unit_findings: findings }) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues } });
+  const blockOf = (r) => audit.readState((r.calls.created[0] || r.calls.updated[0]).body).blocks.find((b) => b.cid === UID);
+  const fresh = await run([bad]);
+  assert.equal(fresh.calls.outputs.status, 'incomplete');
+  assert.match(fresh.calls.outputs.reason, /1 unit had a finding that failed validation/);
+  assert.equal(blockOf(fresh), undefined, 'a never-reviewed unit is not recorded as covered');
+  assert.doesNotMatch(fresh.calls.summary, /✅/);
+  const again = await run([bad], [prior]);
+  assert.equal(again.calls.outputs.status, 'incomplete');
+  assert.deepEqual([blockOf(again).status, blockOf(again).runs], ['covered', 1], 'the prior state is carried, runs do not advance');
+  const good = await run([]);
+  assert.equal(good.calls.outputs.status, 'complete');
+  assert.equal(blockOf(good).status, 'covered');
+  const valid = await run([{ ...bad, title: 'No test for the plan', skeleton: 'it("keeps a repeating plan on", () => {});' }]);
+  assert.equal(blockOf(valid).status, 'gap');
+});
+
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
   const five = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), ...[1, 2, 3, 4].map((i) => cand(cid(i), 4, `Block ${i}.`)));
   const skip = (i) => ({ cid: cid(i), reason: 'rationale' });
