@@ -11,6 +11,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { inventory, write: writeUnits } = require('./audit-units');
+const UNBOUNDED = 'ffffffff'; // audit-post.js: the state's ev marker for a block that cited more files than it keeps
 const { PER_FILE } = require('./pack-cap');
 const { run, matchGlob, isTestPath, blocksOf, testScope, tokenize, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP } = require('./trace');
 
@@ -115,7 +116,8 @@ function select(all, cap, prior, changedDocs = null, stale = new Set()) {
   const asc = (a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0); // Array.sort is stable: ties keep document order
   take(all.filter((b) => !st.has(b.cid) && changedDocs && changedDocs.has(b.path) && !changedDocs.get(b.path).has(b.cid)), 'd');
   take(all.filter((b) => stale.has(b.cid)).sort(asc), 'd');
-  take(all.filter((b) => st.has(b.cid) && ((st.get(b.cid).status === 'gap' && st.get(b.cid).runs === 1) || st.get(b.cid).status === 'recheck')).sort(asc), 'c');
+  const retry = new Set((prior.versions && prior.versions.un) || []); // not answered by the model last run: one more try, first (review S6)
+  take(all.filter((b) => st.has(b.cid) && ((st.get(b.cid).status === 'gap' && st.get(b.cid).runs === 1) || st.get(b.cid).status === 'recheck' || retry.has(b.cid))).sort(asc), 'c');
   take(all.filter((b) => !st.has(b.cid)), 'n');
   take(all.filter((b) => st.has(b.cid)).sort(asc), 'o');
   const tally = { d: 0, c: 0, n: 0, o: 0 };
@@ -253,7 +255,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
       const h = auditedAt.get(cid);
       if (h && !diffs.has(h)) { try { diffs.set(h, new Set(git(cwd, ['diff', '--name-only', '--no-renames', '-z', h, head]).split('\0').filter(Boolean).map(hashOf))); } catch { diffs.set(h, null); } }
       const d = h ? diffs.get(h) : null;
-      if (!d || hs.some((x) => d.has(x))) stale.add(cid);
+      if (!d || (hs.includes(UNBOUNDED) ? d.size > 0 : hs.some((x) => d.has(x)))) stale.add(cid); // UNBOUNDED: it cited more files than the state keeps, so any change counts (review S4)
     }
     // requirement text changed under an unchanged cid; a block with no recorded version (an older state) is left alone, not reset
     const tvNow = new Map(all.map((b) => [b.cid, b.tv]));

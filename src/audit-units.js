@@ -96,7 +96,10 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const inScope = files.filter((e) => !skip(e.path) && (!scope || scope(e.path)));
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
   const testEntries = inScope.filter((e) => isTest(e.path)), tests = testEntries.map((e) => e.path).sort();
-  let cand = inScope.filter((e) => !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && !TEST_INFRA.test(e.path) && e.size <= MAX_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
+  let cand = inScope.filter((e) => !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && !TEST_INFRA.test(e.path)).sort((a, b) => (a.path < b.path ? -1 : 1));
+  const big = cand.filter((e) => e.size > MAX_FILE); // the largest files are often the most complex: say so, never drop them silently
+  if (big.length) limits.push(`${big.length} source file(s) over 512 KiB were not inventoried: ${big.slice(0, 3).map((e) => e.path).join(', ')}${big.length > 3 ? ', ...' : ''}`);
+  cand = cand.filter((e) => e.size <= MAX_FILE);
   if (cand.length > MAX_UNITS_READ) { limits.push(`only the first ${MAX_UNITS_READ} of ${cand.length} source files were inventoried (narrow with scan_paths)`); cand = cand.slice(0, MAX_UNITS_READ); }
   const units = [];
   for (let i = 0; i < cand.length && !dl.over(); i += 300) {
@@ -157,7 +160,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
   for (const r of sel.picked) { const p = partOf(r, prior, size); if (p) r.part = p; }
   return { rows, picked: sel.picked, forced, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
-    totals: { units: rows.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
+    totals: { units: rows.length, not_inventoried: big.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
     stale: rows.filter((r) => known.has(r.id) && !chosen.has(r.id) && staleUnit(r, prior)).map((r) => r.id),
     review: (r) => (chosen.has(r.id) ? 'this run' : known.has(r.id) ? `reviewed ${date(r) || 'earlier'}${staleUnit(r, prior) ? '; changed since, due again' : ''}` : 'not yet reviewed') };
 }
