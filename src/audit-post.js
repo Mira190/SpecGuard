@@ -353,7 +353,7 @@ const findingsOf = (o) => (Array.isArray(o.f) && o.f.length <= FINDINGS_MAX && o
 // Versions (review F06), optional, ignored by older readers: uv { unit id: version } (audit-units.js: hash of the unit's and its matched tests' blobs when it was reviewed);
 // ev [[cid, path hash...]]: the code and test files a covered block's verdict cited, as sha8(path) (the state holds ids, never repository text). The collector marks
 // a unit or block whose inputs changed since as stale (audit-stale.txt).
-const EV_PER_BLOCK = 8, HEX8 = /^[0-9a-f]{8}$/;
+const EV_PER_BLOCK = 8, HEX8 = /^[0-9a-f]{8}$/, UNBOUNDED = 'ffffffff'; // a block citing more than EV_PER_BLOCK files stores [cid, UNBOUNDED] instead of a truncated list: stale when any file changed (review S4)
 const versionsOf = (o) => {
   const uv = o.uv && typeof o.uv === 'object' && !Array.isArray(o.uv) ? Object.fromEntries(Object.entries(o.uv).filter(([k, v]) => HEX8.test(k) && HEX8.test(v))) : {};
   const ev = {};
@@ -362,11 +362,13 @@ const versionsOf = (o) => {
   const uc = o.uc && typeof o.uc === 'object' && !Array.isArray(o.uc) ? Object.fromEntries(Object.entries(o.uc).filter(([k, v]) => HEX8.test(k) && Array.isArray(v) && v.length === 2 && v.every(Number.isInteger) && v[0] >= 1 && v[0] <= 100 && v[1] > v[0] && v[1] <= 1000)) : {};
   // tv { cid: text version }: sha8 of the block's text with symbols and case kept (the cid drops them), so an edited requirement under the same cid is noticed
   const tv = o.tv && typeof o.tv === 'object' && !Array.isArray(o.tv) ? Object.fromEntries(Object.entries(o.tv).filter(([k, v]) => HEX8.test(k) && HEX8.test(v))) : {};
-  return { uv, ev, ...(Object.keys(uc).length ? { uc } : {}), ...(Object.keys(tv).length ? { tv } : {}) };
+  // un [cid]: blocks the model did not answer in the last run; the next run retries them first, once (review S6)
+  const un = Array.isArray(o.un) ? [...new Set(o.un.filter((c) => HEX8.test(c)))].slice(0, STATE_MAX) : [];
+  return { uv, ev, ...(Object.keys(uc).length ? { uc } : {}), ...(Object.keys(tv).length ? { tv } : {}), ...(un.length ? { un } : {}) };
 };
-const versionsRaw = ({ uv = {}, ev = {}, uc = {}, tv = {} } = {}) => {
-  const rows = Object.entries(ev).map(([cid, hs]) => [cid, ...[...new Set(hs)].slice(0, EV_PER_BLOCK)]).filter((x) => x.length > 1);
-  return { ...(Object.keys(uv).length ? { uv } : {}), ...(rows.length ? { ev: rows } : {}), ...(Object.keys(uc).length ? { uc } : {}), ...(Object.keys(tv).length ? { tv } : {}) };
+const versionsRaw = ({ uv = {}, ev = {}, uc = {}, tv = {}, un = [] } = {}) => {
+  const rows = Object.entries(ev).map(([cid, hs]) => { const u = [...new Set(hs)]; return [cid, ...(u.length > EV_PER_BLOCK ? [UNBOUNDED] : u)]; }).filter((x) => x.length > 1);
+  return { ...(Object.keys(uv).length ? { uv } : {}), ...(rows.length ? { ev: rows } : {}), ...(Object.keys(uc).length ? { uc } : {}), ...(Object.keys(tv).length ? { tv } : {}), ...(un.length ? { un } : {}) };
 };
 const stateRaw = (head, entries, findings = [], versions = {}) => { // entries: [cid, status, since, runs, at: { head, date } | null]; findings: [[fid, unit, since, runs]]
   const audits = [], idx = new Map();
@@ -383,7 +385,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 // This run's blocks (tracked against prior, audited now) plus the carried ones (prior blocks this run did not audit, still in the documents). dropped: carried blocks over STATE_MAX.
 // code (code-first run): { picked: [unit ids audited now], findings: tracked verified findings (trackFindings), carried: prior block entries of units not audited now that are still in the repository }.
 // stale: unit ids and block cids the collector found changed since their last review (audit-stale.txt): a stale carried unit's findings are not carried.
-function stateOf(head, data, prior = null, { carried = [], date = today(), code = null, stale = new Set(), tv: tvNow = new Map() } = {}) {
+function stateOf(head, data, prior = null, { carried = [], date = today(), code = null, stale = new Set(), tv: tvNow = new Map(), unanswered = new Set() } = {}) {
   const at = { head: String(head || '').slice(0, 7), date };
   const now = track(blocksOf(data), prior, head).filter((b) => /^[0-9a-f]{8}$/.test(b.cid)).map((b) => [b.next[0], b.next[1], b.next[2], b.next[3], at, b.next[4], b.next[5]]);
   // a unit reviewed in parts (code.parts: id -> { k, n }, review F07) keeps the findings of its other parts and is covered only after its last part with none
@@ -413,7 +415,10 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
   if (code && code.versions) for (const id of code.picked) if (code.versions.get(id)) uv[id] = code.versions.get(id);
   for (const b of blocksOf(data)) if (tvNow.get(b.cid)) tv[b.cid] = tvNow.get(b.cid); // this run's text version (audit-textver.txt)
   for (const b of blocksOf(data)) if (b.status === 'covered') ev[b.cid] = b.rows.flatMap((r) => [...r.code, ...r.tests].map((c) => sha8(c.path)));
-  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl])], fs_, { uv, ev, uc, tv }), dropped: all.length - old.length };
+  // unanswered once: retried first next run (collector select); unanswered again: stored unsure with this run's date and not retried (the caller names it in the limitations), so rotation moves on
+  const audited = new Set(blocksOf(data).map((b) => b.cid)), un0 = new Set(pv.un || []);
+  const un = [...unanswered].filter((c) => audited.has(c) && !un0.has(c)).concat([...un0].filter((c) => kept.has(c) && !audited.has(c)));
+  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl])], fs_, { uv, ev, uc, tv, un }), dropped: all.length - old.length };
 }
 // Verified unit findings against the previous state: confirmed = the same finding (unit, kind, quote) was reported in the previous run (`!!p`).
 // -> copies with .confirmed and .next, the state entry [fid, unit, first-seen sha7, consecutive runs].
@@ -432,7 +437,7 @@ function readState(body) {
     if (v && (o.v === 3 || (Array.isArray(o.audits) && audits.every((a) => Array.isArray(a) && /^[\w.-]{0,40}$/.test(a[0]) && ISO_DATE.test(a[1]))))
       && o.blocks.every((x) => Array.isArray(x) && /^[0-9a-f]{8}$/.test(x[0]) && BSTATE.includes(x[1]) && /^[\w.-]{0,40}$/.test(x[2]) && Number.isInteger(x[3]) && x[3] >= 1 && x[3] <= MAXRUN
         && (o.v === 3 || (Number.isInteger(x[4]) && x[4] >= -1 && x[4] < audits.length)) && (x[5] === undefined || (STATUS.includes(x[5]) && (x[6] === 0 || x[6] === 1)))))
-      return { head, blocks: o.blocks.map(([cid, status, since, runs, a, top, hl]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null, ...(top ? { top, hl } : {}) })), ...(findingsOf(o).length ? { findings: findingsOf(o) } : {}), ...((vs) => (Object.keys(vs.uv).length || Object.keys(vs.ev).length || vs.uc || vs.tv ? { versions: vs } : {}))(versionsOf(o)) };
+      return { head, blocks: o.blocks.map(([cid, status, since, runs, a, top, hl]) => ({ cid, status, since, runs, at: o.v === 4 && a >= 0 ? { head: audits[a][0], date: audits[a][1] } : null, ...(top ? { top, hl } : {}) })), ...(findingsOf(o).length ? { findings: findingsOf(o) } : {}), ...((vs) => (Object.keys(vs.uv).length || Object.keys(vs.ev).length || vs.uc || vs.tv || vs.un ? { versions: vs } : {}))(versionsOf(o)) };
     if (o && o.v === 2 && Array.isArray(o.rows) && o.rows.every((x) => Array.isArray(x) && CID.test(x[0]) && STATUS.includes(x[1]))) {
       const by = new Map();
       for (const [id, s] of o.rows) by.set(cidOf(id), [...(by.get(cidOf(id)) || []), s]);
@@ -787,7 +792,10 @@ async function main({ github, issueGithub, context, core, date = today() }) {
     ? prior.blocks.filter((b) => left.has(b.cid) && !cands.has(b.cid)).map((b) => ({ ...left.get(b.cid), ...b, ...(stale.has(b.cid) ? { stale: true } : {}) })) : [];
   if (prior) carried.push(...prior.blocks.filter((b) => skip.has(b.cid)).map((b) => ({ ...cands.get(b.cid), ...b }))); // an unaudited block keeps its previous status and age: it stays due
   // blocks sent to the model that it neither answered nor ruled out (validate tolerates up to MISSING_MAX of them: they become 'Unconfirmed' rows)
-  const answeredC = new Set([...data.requirements.map((r) => cidOf(r.id)), ...data.not_requirements.map((n) => n.cid)]), unanswered = [...sent.keys()].filter((c) => !answeredC.has(c)).length;
+  const answeredC = new Set([...data.requirements.map((r) => cidOf(r.id)), ...data.not_requirements.map((n) => n.cid)]), unansweredC = new Set([...sent.keys()].filter((c) => !answeredC.has(c))), unanswered = unansweredC.size;
+  // unanswered in the previous run too (review S6): recorded unsure with this run's date, no third try; named so it is not lost
+  const twice = [...unansweredC].filter((c) => prior && prior.versions && (prior.versions.un || []).includes(c));
+  if (twice.length) shared.limitations = [...shared.limitations, `${plural(twice.length, 'document block')} not answered in two consecutive runs (recorded unsure; rotation moves on): ${twice.slice(0, 3).map((c) => `${sent.get(c).path}:${sent.get(c).line} (${c})`).join(', ')}${twice.length > 3 ? ', ...' : ''}`];
   const incomplete = [partial, notAudited.blocks.length && `${plural(notAudited.blocks.length, 'document block')} not audited`, hasCode && unitsFailed && 'the unit call failed',
     !unitsFailed && cutUnits.length && `${plural(cutUnits.length, 'unit')} did not fit the model's context`, dropU.length && `${plural(dropU.length, 'unit')} had a finding that failed validation or verification`, unanswered && `${plural(unanswered, 'document block')} ${unanswered === 1 ? 'was' : 'were'} not answered by the model`].filter(Boolean).join('; ');
   outcome(incomplete ? 'incomplete' : 'complete', incomplete);
@@ -798,7 +806,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const forced = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), cut = new Set(unseen.filter((u) => forced.has(u) && !unitsFailed));
   const codeState = code && { cut, unsure, picked: [...units.keys()].filter((u) => !unseen.includes(u) || cut.has(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || (unseen.includes(b.cid) && !cut.has(b.cid))) : [],
     versions: new Map([...units.values()].filter((u) => u.ver).map((u) => [u.id, u.ver])), parts: new Map([...units.values()].filter((u) => u.part && !unseen.includes(u.id)).map((u) => [u.id, u.part])) }; // an unseen unit is not tracked: its prior state is carried, it stays due
-  const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale, tv });
+  const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale, tv, unanswered: unansweredC });
   await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
 }
 

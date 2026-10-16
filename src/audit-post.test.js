@@ -1124,6 +1124,23 @@ test('run: a block the model neither answered nor ruled out makes the status inc
   assert.equal(all.calls.outputs.status, 'complete');
 });
 
+test('run (review S6): a block unanswered once is marked for a retry; unanswered in two consecutive runs it is named in the limitations and no longer marked', async (t) => {
+  const five = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), ...[1, 2, 3, 4].map((i) => cand(cid(i), 4, `Block ${i}.`)));
+  const skip = (i) => ({ cid: cid(i), reason: 'rationale' });
+  const run = (issues = []) => runPost(t, { ctxFiles: { 'audit-candidates.txt': candTxt(five), 'findings.json': result([req()], { not_requirements: [1, 2, 3].map(skip) }) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues } });
+  const body = (r) => (r.calls.created[0] || r.calls.updated[0]).body;
+  const one = await run();
+  assert.deepEqual(audit.readState(body(one)).versions.un, [cid(4)]);
+  assert.doesNotMatch(one.calls.summary, /two consecutive runs/);
+  const two = await run([{ number: 7, body: body(one), user: BOT }]);
+  assert.match(two.calls.summary, new RegExp(`1 document block not answered in two consecutive runs.*${cid(4)}`));
+  const st = audit.readState(body(two)), b4 = st.blocks.find((b) => b.cid === cid(4));
+  assert.deepEqual([b4.status, b4.at.date, st.versions && st.versions.un], ['unsure', DATE, undefined]);
+  const three = await run([{ number: 7, body: body(two), user: BOT }]);
+  assert.deepEqual(audit.readState(body(three)).versions.un, [cid(4)], 'a third miss starts the count again: one retry, not a loop');
+  assert.doesNotMatch(three.calls.summary, /two consecutive runs/);
+});
+
 test('run: a failed issue write or lookup, or a failed job summary, fails the status (last output wins) and warns', async (t) => {
   const env = { AUDIT_ISSUE: 'true' };
   const w = await runPost(t, { env, mock: { failWrite: true }, ctxFiles: { 'findings.json': result() } });
