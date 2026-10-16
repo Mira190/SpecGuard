@@ -286,7 +286,8 @@ const fmt = (x) => x.toFixed(x < 0.1 ? 4 : 2);
 function classify(status, type = '', message = '') {
   const t = `${type} ${message}`;
   if (status === 402 || /billing_error|credit balance/i.test(t)) return ['quota', 'The Anthropic account has no credit left or hit its quota (add credits to the API account; this is not the per-run budget)'];
-  if (status === 401 || status === 403 || /authentication_error|permission_error|invalid x-api-key/i.test(t)) return ['auth', 'The Anthropic API key was rejected (check the llm_token secret)'];
+  if (status === 403 || /permission_error/i.test(t)) return ['auth', 'The Anthropic API key lacks permission for this model or workspace (check the llm_token secret and the model input)'];
+  if (status === 401 || /authentication_error|invalid x-api-key/i.test(t)) return ['auth', 'The Anthropic API key was rejected (check the llm_token secret)'];
   if (status === 429 || status === 529 || /rate_limit|overloaded/i.test(t)) return ['rate', 'Anthropic rate limit or overload; the next push retries'];
   if (status === 404 || /model.*(not found|not available|does not exist)|invalid model|issue with the selected model/i.test(message)) return ['model', null]; // text needs the model name
   return ['', null];
@@ -305,10 +306,13 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     if (why) notes.unshift(`${why}${raw ? `: ${scrub(raw).slice(0, 200)}` : ''}`);
     w('engine-notes', notes.map((n) => scrub(n).slice(0, 300)).join('\n') + (notes.length ? '\n' : ''));
     if (status === 'timeout') console.log('::warning::Claude review timed out');
-    else if (status === 'failed') console.log(`::warning::Claude review failed${why ? `: ${scrub(why)}` : ''}`);
+    else if (status === 'failed') { // the class and the HTTP status, never the response body
+      const http = /^HTTP (\d+)/.exec(raw || '')?.[1], tag = [reason, http && `HTTP ${http}`].filter(Boolean).join(', ');
+      console.log(`::warning::Claude review failed${tag ? ` (${tag})` : ''}${why ? `: ${scrub(why)}` : ''}`);
+    }
   };
   try {
-    if (!key) return end('failed', 'auth', 'The Anthropic API key was rejected (check the llm_token secret)', 'no ANTHROPIC_API_KEY in the environment');
+    if (!key) return end('failed', 'auth', 'No API key was provided (set llm_token)', 'no ANTHROPIC_API_KEY in the environment');
     const prompt = env.PROMPT_FILE ? fs.readFileSync(env.PROMPT_FILE, 'utf8') : env.PROMPT || '';
     const model = env.MODEL || 'claude-haiku-5-5';
     const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
