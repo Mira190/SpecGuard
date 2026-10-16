@@ -458,3 +458,10 @@ test('source files over 512 KiB are named in a limitation and counted as not inv
   assert.ok(!ok.limitations.some((l) => /512 KiB/.test(l)));
   assert.equal(ok.totals.not_inventoried, 0);
 });
+
+test('test_paths with exclusions only: the excluded test no longer maps to the unit', (t) => {
+  const f = { 'src/js/cart.js': ['exports.a = 1;', 'exports.b = 2;', 'exports.c = 3;'], 'tests/legacy/cart.test.js': ['test("x", () => { assert(1); });'], 'tests/new/cart.test.js': ['test("y", () => { assert(1); });'] };
+  const r = repo(t, f), tests = (o) => byPath(inventory({ cwd: r.root, head: 'HEAD', now: NOW, ...o }))['src/js/cart.js'].tests;
+  assert.deepEqual(tests({}), ['tests/legacy/cart.test.js', 'tests/new/cart.test.js']);
+  assert.deepEqual(tests({ testPaths: '!tests/legacy/**' }), ['tests/new/cart.test.js']);
+});
