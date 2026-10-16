@@ -63,7 +63,7 @@ function messages(prompt, pack = '') {
 // Trust boundary: every path comes from the (PR-influenced) context files, so it is resolved against the repo root after realpath and anything outside, secret-like or binary is skipped. Nothing read here is ever logged.
 const { PER_FILE, fileCap } = require('../pack-cap');
 const MAX_FILE = 2 * 1024 * 1024, OVERHEAD = 300; // OVERHEAD: the block markup around a body
-const DENY = /(^|\/)(\.git|\.specguard-(ctx|src))(\/|$)|(^|\/)(\.env(\.[^/]*)?|[^/]*\.env|[^/]*\.pem|[^/]*\.key|id_rsa[^/]*)$/i;
+const { DENY } = require('../deny.js');
 function packRead(root, rel) { // text of a regular, small, non-binary file inside the repo, else null
   if (!rel || /["<>\x00-\x1f]/.test(rel) || path.isAbsolute(rel)) return null; // quotes and angle brackets would break the block label
   try {

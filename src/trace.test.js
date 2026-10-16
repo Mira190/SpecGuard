@@ -1085,3 +1085,30 @@ test('PR mode: the assembled prompt carries the inherited Background of a Backgr
   const p = require('./prompt').assemble({ skillDir: path.join(__dirname, '..', 'skills', 'test-review'), ctxDir: r.ctx, schemaPath: path.join(__dirname, 'findings.schema.json') });
   assert.match(p, /ACTIVE_TENANT/);
 });
+
+// U5: the secret-path deny list applies to every model input trace.js builds, not only to the diff.
+const U5 = 'SYNTHETIC_NOT_A_REAL_SECRET_U5';
+const u5Doc = () => `# Runtime requirements\n\nThe deployment MUST retain ${U5}.\nThe service MUST reject missing configuration.\n`;
+function u5Run(t, files, reqPaths) {
+  const r = repo(t, { 'app.js': 'module.exports = 1;\n' }, { 'app.js': 'module.exports = 2;\n', ...files });
+  fs.writeFileSync(path.join(r.ctx, 'requirements-status.json'), JSON.stringify({ documents: [], criteria: [] }));
+  fs.writeFileSync(path.join(r.ctx, 'files.txt'), 'app.js\n');
+  fs.writeFileSync(path.join(r.ctx, 'diff.patch'), execFileSync('git', ['diff', r.base, r.head, '--', 'app.js'], { cwd: r.dir, encoding: 'utf8' }));
+  fs.writeFileSync(path.join(r.ctx, 'denied.txt'), '');
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, reqPaths });
+  const prompt = require('./prompt.js').assemble({ skillDir: path.resolve(__dirname, '../skills/test-review'), ctxDir: r.ctx, schemaPath: path.resolve(__dirname, 'findings.schema.json') });
+  return { r, prompt };
+}
+test('U5: a secret-like doc named in requirements_paths reaches neither spec-files, the index nor the prompt, and is listed in denied.txt', (t) => {
+  const { r, prompt } = u5Run(t, { '.env.production.md': u5Doc() }, '.env.production.md');
+  for (const [name, text] of [['spec-files.txt', out(r, 'spec-files.txt')], ['requirements-index.md', out(r, 'requirements-index.md')], ['prompt', prompt]]) assert.ok(!text.includes(U5), `${name} carries the secret doc`);
+  assert.ok(!out(r, 'spec-files.txt').includes('.env.production.md'));
+  assert.deepEqual(out(r, 'denied.txt').split('\n').filter(Boolean), ['.env.production.md']);
+  assert.match(status(r).spec.limitations.join('\n'), /secret-like requirement document\(s\) were not read: \.env\.production\.md/);
+});
+test('U5 controls: a normal docs/req.md is still indexed; docs/environment.md is not denied', (t) => {
+  const { r } = u5Run(t, { 'docs/req.md': u5Doc(), 'docs/environment.md': u5Doc() }, 'docs/req.md\ndocs/environment.md');
+  assert.deepEqual(out(r, 'spec-files.txt').split('\n').filter(Boolean).sort(), ['docs/environment.md', 'docs/req.md']);
+  assert.match(out(r, 'requirements-index.md'), /docs\/req\.md/);
+  assert.equal(out(r, 'denied.txt'), '');
+});
