@@ -1246,3 +1246,19 @@ test('state (F22 review): a restart after an edit drops the findings of the old 
   const cont = run(s1, 2, V1); // control: the same version continuing keeps the part-1 finding
   assert.deepEqual([cont.blocks[0].status, cont.findings.map((f) => f.part)], ['gap', [1]]);
 });
+
+test('E1 scan: a covered requirement whose only test is a truthiness or interaction assertion is unknown; value evidence still covers', () => {
+  const withTest = (line) => { const f = { ...FILES, 'tests/plan.test.js': ['test("repeat stays on", () => {', line, '});'] }; return verify(result([req({ tests: [{ path: 'tests/plan.test.js', line: 2, quote: line, layer: 'unit' }] })]), { read: (p) => f[p] || null }).requirements[0]; };
+  for (const q of ['  assert.ok(fire({ repeat: true }));', '  expect(fire(p)).toBeTruthy();', '  expect(spy).toHaveBeenCalled();']) {
+    const r = withTest(q);
+    assert.equal(r.status, 'unknown', q);
+    assert.match(r.note, /only truthiness\/interaction assertions/);
+  }
+  for (const q of ['  assert.equal(fire({ repeat: true }).on, true);', '  expect(spy).toHaveBeenCalledWith(100);']) assert.equal(withTest(q).status, 'covered', q);
+});
+
+test('E2 scan: a unit weak_test finding refuted by its own assertion is low; a different input is not', () => {
+  const run = (counterexample) => verify(result([req()], { unit_findings: [{ unit: 'u', kind: 'weak_test', path: 'tests/plan.test.js', line: 2, quote: FILES['tests/plan.test.js'][1], title: 't', body: 'b', counterexample, skeleton: 'x' }] }), { read }).unit_findings[0];
+  assert.equal(run('fire({ repeat: true }).on returns false -> still passes').low, true);
+  assert.equal(run('fire({ repeat: false }).on returns false -> still passes').low, false);
+});
