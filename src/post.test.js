@@ -3930,3 +3930,13 @@ test('pack error end to end (S7): run() with a throwing pack, then post on the s
   assert.doesNotMatch(body, /<!-- specguard:head=/);
   assert.match(body, /Review context was cut: the model saw only part of/);
 });
+
+test('the cover guard is asked about the cited file\'s candidate tests only (wave 4 E5): a listed set is passed, an unlisted file passes none', async (t) => {
+  const tm = require('./test-map'), real = tm.makeCoverGuard, seen = [];
+  t.after(() => { tm.makeCoverGuard = real; });
+  tm.makeCoverGuard = () => (lines, line, p, eligible) => { seen.push([p, eligible]); return ''; };
+  const s = setup(t, report({ coverage: [row('missing_test')], findings: [finding('missing_test', { path: 'src.js', line: 2, quote: behaviour.quote })] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/test-candidates.txt'), 'src.js\n  tests/src.test.js  (same stem)\nother.js\n  (no candidate test)\n');
+  await post(s);
+  assert.deepEqual(seen.find(([p]) => p === 'src.js'), ['src.js', ['tests/src.test.js']]);
+});

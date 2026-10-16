@@ -465,3 +465,31 @@ test('test_paths with exclusions only: the excluded test no longer maps to the u
   assert.deepEqual(tests({}), ['tests/legacy/cart.test.js', 'tests/new/cart.test.js']);
   assert.deepEqual(tests({ testPaths: '!tests/legacy/**' }), ['tests/new/cart.test.js']);
 });
+
+// wave 4 E3: ver also folds in the blobs of first-level relative imports (the unit's own, and its matched tests' helpers)
+test('ver: a weakened test helper or a changed imported file makes the covered unit stale; an unrelated file does not; a legacy ver is not a change', (t) => {
+  const f = {
+    'src/b.js': ['function base(v) {', '  return v * 2;', '}', 'module.exports = { base };'],
+    'src/a.js': ["const { base } = require('./b');", 'function a(v) {', '  return base(v) + 1;', '}', 'module.exports = { a };'],
+    'src/unrelated.js': ['function u(v) {', '  return v;', '}', 'module.exports = { u };'],
+    'tests/a.test.js': ["const { a } = require('../src/a');", "const { verifyExact } = require('./helpers/check');", "test('a', () => { verifyExact(a(2), 5); });"],
+    'tests/helpers/check.js': ["const assert = require('node:assert/strict');", 'exports.verifyExact = (actual, expected) => {', '  assert.equal(actual, expected);', '};'],
+  };
+  const r = repo(t, f), first = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 5 }), A = byPath(first)['src/a.js'];
+  const mk = (uv) => ({ head: 'x', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 2, at: { date: '2026-10-01' } })), versions: { uv, ev: {} } });
+  const uvNow = Object.fromEntries(first.rows.map((u) => [u.id, u.ver])), inv = () => inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 0, prior: mk(uvNow) });
+  const change = (file, lines, msg) => { r.put(file, lines); r.git(OLD, 'add', '.'); r.git(OLD, 'commit', '-m', msg); };
+  assert.deepEqual(A.tests, ['tests/a.test.js']);
+  assert.deepEqual(inv().stale, [], 'control: nothing changed');
+  change('src/unrelated.js', ['function u(v) {', '  return v + 1;', '}', 'module.exports = { u };'], 'unrelated');
+  assert.deepEqual(inv().stale, [byPath(first)['src/unrelated.js'].id], 'control: only the changed unit is stale, a.js is not');
+  change('tests/helpers/check.js', ["const assert = require('node:assert/strict');", 'exports.verifyExact = (actual, expected) => {', '  assert.ok(actual);', '};'], 'weaken helper');
+  assert.ok(inv().stale.includes(A.id), 'a weakened helper of a matched test makes the unit stale');
+  change('src/b.js', ['function base(v) {', '  return v * 3;', '}', 'module.exports = { base };'], 'change b');
+  const next = inv(), row = byPath(next)['src/a.js'];
+  assert.ok(next.stale.includes(A.id) && next.stale.includes(byPath(first)['src/b.js'].id), 'a changed imported file makes the importer stale');
+  // migration: a stored ver from before imports were folded in is not a change
+  assert.notEqual(row.ver, row.verLegacy);
+  assert.ok(!inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 0, prior: mk({ ...uvNow, [A.id]: row.verLegacy }) }).stale.includes(A.id), 'a legacy ver is not a change');
+  assert.equal(byPath(next)['src/unrelated.js'].ver, byPath(next)['src/unrelated.js'].verLegacy, 'no imports: ver is unchanged from before');
+});
