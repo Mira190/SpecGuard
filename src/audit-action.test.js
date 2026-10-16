@@ -187,16 +187,17 @@ test('action.yml: the status output covers both post steps (PR and scan) and fai
   assert.match(find(/src\/post\.js'/), /^id: post$/m);
 });
 
-test('action.yml: the last step runs fail-on-error.js only when fail_on_error is true, with the status and reason of whichever post step ran', () => {
+test('action.yml: the last step runs fail-on-error.js on every non-cancelled run (configuration failures always fail), passes fail_on_error through, with the status and reason of whichever post step ran', () => {
   const s = steps[steps.length - 1];
-  assert.match(cond(s), /^\$\{\{ !cancelled\(\) && inputs\.fail_on_error == 'true' \}\}$/);
+  assert.match(cond(s), /^\$\{\{ !cancelled\(\) \}\}$/);
+  assert.match(s, /FAIL_ON_ERROR: \$\{\{ inputs\.fail_on_error \}\}/);
   assert.match(s, /STATUS: \$\{\{ steps\.post\.outputs\.status \|\| steps\.scan_post\.outputs\.status \}\}/);
   assert.match(s, /REASON: \$\{\{ steps\.post\.outputs\.reason \|\| steps\.scan_post\.outputs\.reason \}\}/);
   assert.match(s, /node "\$GITHUB_ACTION_PATH\/src\/fail-on-error\.js"/);
 });
 
 test('fail-on-error.js: failed exits 1 with ::error::, incomplete only warns, complete or empty is silent; the reason cannot inject a command', () => {
-  const run = (STATUS, REASON = '') => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, REASON } });
+  const run = (STATUS, REASON = '') => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, REASON, FAIL_ON_ERROR: 'true' } });
   const f = run('failed', 'You have exceeded your monthly quota');
   assert.equal(f.status, 1);
   assert.equal(f.stdout.trim(), '::error::SpecGuard could not complete: You have exceeded your monthly quota');
@@ -211,7 +212,7 @@ test('fail-on-error.js: failed exits 1 with ::error::, incomplete only warns, co
 test('fail-on-error.js: an incomplete status whose counts.json says reduced prints the reduced wording; real incomplete keeps its wording; the exit code is unchanged', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-foe-'));
   try {
-    const run = (STATUS, REASON = '', CTX = dir) => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, REASON, CTX } });
+    const run = (STATUS, REASON = '', CTX = dir) => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, REASON, CTX, FAIL_ON_ERROR: "true" } });
     assert.match(run('incomplete').stdout, /^::warning::SpecGuard result is incomplete \(see the job summary\)/, 'no counts.json');
     fs.writeFileSync(path.join(dir, 'counts.json'), JSON.stringify({ v: 1, complete: false, reduced: true }));
     const r = run('incomplete');
@@ -272,4 +273,29 @@ test('S12: the reusable workflow forwards every action input; the rest are docum
   const norm = (v) => v.replace(/"/g, '') || 'false'; // a boolean input's empty default means false
   const declared = Object.fromEntries([...wf.matchAll(/^ {6}(\w+): \{[^\n]*default: ([^}]*?) \}$/gm)].map((m) => [m[1], m[2]]));
   for (const k of actionInputs.filter((n) => declared[n] !== undefined && !/^review_timeout_minutes|copilot_max_ai_credits$/.test(n))) assert.equal(norm(declared[k]), norm(new RegExp(`^ {2}${k}: \\{[^\\n]*default: ([^}]*?) \\}$`, 'm').exec(block)[1]), k);
+});
+
+test('fail-on-error.js: a configuration failure (auth, quota, model) fails the job without fail_on_error; transient and budget failures stay advisory unless it is true', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-cfg-'));
+  try {
+    const run = (STATUS, cls, FAIL_ON_ERROR = '') => {
+      fs.writeFileSync(path.join(dir, 'engine-error'), cls ? `${cls}\nwhy\n` : '');
+      const env = { ...process.env, STATUS, REASON: 'The Anthropic API key was rejected', CTX: dir };
+      delete env.FAIL_ON_ERROR; if (FAIL_ON_ERROR) env.FAIL_ON_ERROR = FAIL_ON_ERROR;
+      return spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env });
+    };
+    for (const c of ['auth', 'quota', 'model']) {
+      const r = run('failed', c);
+      assert.equal(r.status, 1, c);
+      assert.equal(r.stdout.trim(), `::error::SpecGuard could not run the model (${c}): The Anthropic API key was rejected`);
+    }
+    for (const c of ['rate', 'budget', 'timeout', '']) {
+      const r = run('failed', c);
+      assert.equal(r.status, 0, `${c || 'unclassified'} stays advisory`);
+      assert.match(r.stdout, /^::warning::SpecGuard could not complete/);
+      if (c) assert.match(r.stdout, new RegExp(`\\(${c}\\)`), 'the warning names the class');
+      assert.equal(run('failed', c, 'true').status, 1, `${c || 'unclassified'} with fail_on_error true`);
+    }
+    for (const s of ['complete', 'incomplete', 'skip', '']) assert.equal(run(s, 'auth').status, 0, `${s || 'empty'} is not a failure`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

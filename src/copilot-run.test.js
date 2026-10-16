@@ -141,7 +141,7 @@ test('known Copilot failures are classified from stderr: reason file, note with 
   const generic = /needs 'permissions: copilot-requests: write'/;
   const cases = [
     ['You have exceeded your monthly quota (Request ID: ABC)', 'quota', /quota or budget exhausted/, false],
-    ['Error: AI credits limit exceeded for this org', 'quota', /quota or budget exhausted/, false],
+    ['Error: AI credits limit exceeded for this org', 'budget', /quota or budget exhausted/, false],
     ['Error: Access denied by policy settings', 'policy', /disabled by an organization or enterprise policy/, false],
     ['Error: Copilot is disabled by your organization', 'policy', /disabled by an organization/, false],
     ['Error: 401 Unauthorized', 'auth', /cannot use Copilot: set SPECGUARD_COPILOT_TOKEN \(a user-owned fine-grained PAT with Copilot Requests\)/, true],
