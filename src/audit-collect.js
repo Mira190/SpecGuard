@@ -256,7 +256,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
       if (!d || hs.some((x) => d.has(x))) stale.add(cid);
     }
     // requirement text changed under an unchanged cid; a block with no recorded version (an older state) is left alone, not reset
-    const tvNow = new Map(all.map((b) => [b.cid, b.tv])), tvOld = new Map(all.map((b) => [b.cid, b.tvLegacy])); // a state written before Background context holds the legacy tv: not a change (the new tv replaces it when the block is next audited)
+    const tvNow = new Map(all.map((b) => [b.cid, b.tv])), tvOld = new Map(all.map((b) => [b.cid, b.tvLegacy])); // ponytail: temporary migration. A state written before Background context holds the legacy tv: not a change (the new tv replaces it when the block is next audited). Drop tvLegacy after one full rotation has re-audited every block.
     for (const [cid, v] of Object.entries(prior.versions.tv || {})) if (tvNow.has(cid) && tvNow.get(cid) !== v && tvOld.get(cid) !== v) stale.add(cid);
     if ([...diffs.values()].includes(null)) notes.push('could not diff against an earlier audit commit (shallow clone? use fetch-depth: 0): its covered blocks are treated as changed and rechecked first');
   }
