@@ -68,6 +68,8 @@ const globs = (s) => {
 
 // Block ids: a stable hash of the block (blocksOf, the block universe, lives in trace.js).
 const normText = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+// The text version of a block (stored in the scan state as versions.tv): whitespace and markdown emphasis/code marks are ignored, symbols and case are kept (the cid ignores them: `>= 10` and `> 10` share one).
+const textVer = (t) => crypto.createHash('sha1').update(String(t).replace(/\*\*|__|`/g, '').replace(/\s+/g, ' ').trim()).digest('hex').slice(0, 8);
 const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).digest('hex').slice(0, 8);
 
 // Scope predicate for scan_paths (same syntax as requirements_paths: newline globs, '!' excludes; a plain path is a file or a folder). null = the whole repository.
@@ -94,7 +96,7 @@ function allBlocks(cwd, head, docs, ruled = null) { // ruled (optional array) re
       for (let k = 2; seen.has(cid); k++) cid = sha8(p, h, t, `#${k}`);
       seen.add(cid);
       if (i.reason) { if (ruled) ruled.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), reason: i.reason }); continue; }
-      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT), body: blockBody(i.raw) });
+      all.push({ cid, path: p, line: i.line, heading: flat(h), text: flat(i.text).slice(0, CAND_TEXT), full: flat(i.text).slice(0, EV_TEXT), end: i.end, tv: textVer(i.raw), body: blockBody(i.raw) });
     }
   }
   return all;
@@ -171,7 +173,7 @@ function evidenceText(blocks, by) {
 
 // The blocks to audit, in document order, after the priority pick and the CAND_CAP byte cap (never a cut row). carried: the others the state already knows.
 function candidates(all, cap, prior, changedDocs, stale) {
-  const sel = select(all, cap, prior, changedDocs, stale), at = new Map(all.map((c, i) => [c.cid, i])), row = (c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`;
+  const sel = select(all, cap, prior, changedDocs, stale), at = new Map(all.map((c, i) => [c.cid, i])), row = (c) => `${c.cid}\t${c.path}:${c.line}${c.end ? `-${c.end}` : ''}\t${c.heading}\t${c.text}\n`;
   let used = 0;
   const fit = [];
   for (const c of sel.picked) {
@@ -253,6 +255,9 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
       const d = h ? diffs.get(h) : null;
       if (!d || hs.some((x) => d.has(x))) stale.add(cid);
     }
+    // requirement text changed under an unchanged cid; a block with no recorded version (an older state) is left alone, not reset
+    const tvNow = new Map(all.map((b) => [b.cid, b.tv]));
+    for (const [cid, v] of Object.entries(prior.versions.tv || {})) if (tvNow.has(cid) && tvNow.get(cid) !== v) stale.add(cid);
     if ([...diffs.values()].includes(null)) notes.push('could not diff against an earlier audit commit (shallow clone? use fetch-depth: 0): its covered blocks are treated as changed and rechecked first');
   }
   const cand = candidates(all, maxRequirements, prior, changedDocs, stale);
@@ -264,6 +269,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   if (et.left) notes.push(`audit-evidence.txt would pass ${EV_CAP / 1024} KB: ${et.left} block(s) have no candidate locations`);
   if (cand.fit.length) notes.push(`evidence candidates are capped at ${EV_PER} code and ${EV_PER} test locations per block`);
   w('audit-candidates.txt', cand.text);
+  w('audit-textver.txt', cand.fit.map((c) => `${c.cid}\t${c.tv}\n`).join('')); // text version per audited block, for the scan state
   w('audit-blocks.txt', cand.fit.map((c) => `${c.cid}\t${c.body}\n`).join('')); // the full block text (audit-candidates.txt rows are cut at CAND_TEXT)
   const cutBlocks = cand.fit.filter((c) => c.body.endsWith(' [truncated]'));
   if (cutBlocks.length) notes.push(`${cutBlocks.length} block(s) are longer than ${BLOCK_CAP} characters and were shown to the model cut (marked [truncated]), so not fully read: ${cutBlocks.slice(0, 5).map((c) => `${c.path}:${c.line}`).join(', ')}${cutBlocks.length > 5 ? ', ...' : ''}`);
