@@ -242,3 +242,50 @@ test('apiGit: a truncated compare (more commits than returned) is unusable, so u
   const sha = 'a'.repeat(40), cmp = { status: 'ahead', total_commits: 300, commits: [{ sha, parents: [{ sha: 'b'.repeat(40) }] }] };
   assert.equal(post.testsChanged('b'.repeat(40), sha, null, apiGit(cmp, sha, () => [{ filename: 'x.test.js' }])), null);
 });
+
+// U1-U3: the API stand-in must keep git's semantics: unknown stays unknown, --no-renames, and -w.
+const stand = () => {
+  const post = require('../src/post'), { apiGit } = require('./weekly-report');
+  const a = 'a'.repeat(40), b = 'b'.repeat(40), cmp = { status: 'ahead', total_commits: 1, commits: [{ sha: b, parents: [{ sha: a }] }] };
+  return { post, a, b, git: (files) => apiGit(cmp, b, () => files) };
+};
+test('apiGit U1: a modified file without a patch, or a possibly truncated file list, is unknown; a patch gives true', () => {
+  const { post, a, b, git } = stand();
+  assert.equal(post.anchorTouched(a, b, 'app.js', 7, 7, null, git([{ filename: 'app.js', status: 'modified', changes: 90000 }])), null);
+  assert.equal(post.anchorTouched(a, b, 'app.js', 7, 7, null, git([{ filename: 'app.js', status: 'modified', patch: '@@ -7 +7 @@\n-old();\n+newer();' }])), true);
+  const full = Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}.js`, status: 'modified', patch: '@@ -1 +1 @@\n-a\n+b' }));
+  assert.equal(post.anchorTouched(a, b, 'app.js', 7, 7, null, git(full)), null); // target not in a full list: maybe cut off
+  assert.equal(post.anchorTouched(a, b, 'app.js', 7, 7, null, git(full.slice(1))), false); // complete list: really unchanged
+  assert.equal(post.testsChanged(a, b, null, git(full)), null);
+  assert.equal(post.testsChanged(a, b, null, git([...full.slice(1), { filename: 'x.test.js', status: 'added' }])), true);
+});
+test('apiGit U2: a rename counts both paths, like git --no-renames, in both directions', () => {
+  const { post, a, b, git } = stand();
+  assert.equal(post.testsChanged(a, b, null, git([{ filename: 'app.js', previous_filename: 'app.test.js', status: 'renamed' }])), true);
+  assert.equal(post.testsChanged(a, b, null, git([{ filename: 'app.test.js', previous_filename: 'app.js', status: 'renamed' }])), true);
+  assert.equal(post.testsChanged(a, b, null, git([{ filename: 'b.js', previous_filename: 'a.js', status: 'renamed' }])), false);
+  assert.equal(post.testsChanged(a, b, null, git([{ filename: 'app.test.js', status: 'modified' }])), true);
+});
+test('apiGit U3: -w drops a whitespace-only change like real git, and keeps a real one', () => {
+  const cpm = require('node:child_process');
+  const { post, a, b, git } = stand();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-w-'));
+  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', HOME: dir, USERPROFILE: dir };
+  const g = (...x) => cpm.execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@e.invalid', ...x], { cwd: dir, encoding: 'utf8', env });
+  g('init', '-q', '-b', 'main');
+  const base = Array.from({ length: 12 }, (_, i) => `line ${i + 1};`);
+  for (const [name, edit, want] of [['ws', 'line 7;  ', false], ['ws2', '  line   7 ;', false], ['real', 'line 7 changed;', true]]) {
+    const f = `${name}.js`, lines = [...base];
+    fs.writeFileSync(path.join(dir, f), lines.join('\n') + '\n'); g('add', '-A'); g('commit', '-q', '-m', `a ${name}`);
+    const from = g('rev-parse', 'HEAD').trim(); lines[6] = edit;
+    fs.writeFileSync(path.join(dir, f), lines.join('\n') + '\n'); g('add', '-A'); g('commit', '-q', '-m', `b ${name}`);
+    const d3 = g('diff', '-U3', 'HEAD~1', 'HEAD', '--', f), patch = d3.slice(d3.indexOf('@@'));
+    assert.equal(post.anchorTouched(from, g('rev-parse', 'HEAD').trim(), f, 7, 7, dir), want, `real git ${name}`);
+    assert.equal(post.anchorTouched(a, b, f, 7, 7, null, git([{ filename: f, status: 'modified', patch }])), want, name);
+  }
+});
+test('unified0 -w: a run with different removed/added counts is kept even if one pair matches', () => {
+  const { unified0 } = require('./weekly-report');
+  assert.match(unified0('@@ -7,2 +7 @@\n-a b\n-c\n+a  b', true), /^@@ -7,2 /);
+  assert.equal(unified0('@@ -7 +7 @@\n-a b\n+a  b', true), '');
+});

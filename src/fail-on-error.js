@@ -10,8 +10,12 @@ const ctxFile = (n) => { try { return fs.readFileSync(path.join(CTX, n), 'utf8')
 const reduced = () => { try { return JSON.parse(ctxFile('counts.json')).reduced === true; } catch { return false; } };
 // CTX is fresh per run (.specguard-ctx in the workspace), so engine-error is never stale. policy: Copilot disabled by the org, only an admin can fix it.
 const CONFIG = ['auth', 'quota', 'model', 'policy'];
+const [cls = '', why = ''] = ctxFile('engine-error').split('\n').map((l) => l.trim());
+if (STATUS === 'incomplete' && CONFIG.includes(cls)) { // a multi-part scan where a part hit a configuration failure: the partial result is kept, the job still goes red
+  console.log(`::error::SpecGuard could not finish the scan (${cls}): ${esc(why || REASON || 'see the job summary')}; the partial result was kept`);
+  process.exit(1);
+}
 if (STATUS === 'failed') {
-  const cls = ctxFile('engine-error').split('\n')[0].trim();
   if (CONFIG.includes(cls)) {
     console.log(`::error::SpecGuard could not run the model (${cls}): ${esc(REASON || 'see the job summary')}`);
     process.exit(1);
