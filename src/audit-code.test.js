@@ -221,7 +221,7 @@ test('render: no design documents, two findings: verdict, counts table, sections
   assert.match(det, /\*\*Riskiest units \(top 4 of 140\)\*\*\n\n\| Unit \| Risk \| Why \| Matched tests \| Review \|\n\|---\|---\|---\|---\|---\|\n\| \[src\/js\/orders\.js\]\(https:\/\/github\.com\/o\/r\/blob\/abc\/src\/js\/orders\.js#L1\) \| 54\.2 \| 1 weak assertion, 2 fix commits in 180 days \| test\/orders\.test\.js \| this run \|\n/);
   assert.match(det, /\| \[src\/js\/legacy\.js\]\([^)]*\) \| 21\.5 \| no test \| none \| this run \|/);
   assert.match(det, /\*\*Inventory\*\*\n\n140 source files \(units\), 100 with a matched test file and 40 without\. The matched tests hold 9 skipped tests, 3 tests without an assertion and 4 weak assertions\./);
-  assert.match(det, /The 3 riskiest of 140 units were reviewed\. Schedule with scan_issue: true to rotate through all units\./);
+  assert.match(det, /3 of the 3 selected units were reviewed whole. Schedule with scan_issue: true to rotate through all units\./);
   assert.match(det, /\*\*Units not yet reviewed \(137\)\*\*\n\n- \[src\/js\/other\.js\]\([^)]*\) \(risk 3\)\n- \+122 more\n/);
   assert.match(det, /\*\*How to read the unit part\*\*[\s\S]*risk is \(1 \+ public definitions\) times log2\(2 \+ lines \/ 50\)[\s\S]*not a prediction of defects[\s\S]*every finding is a first report/);
   assert.doesNotMatch(md, /Sub-row|This scan\*\*|How to read this scan|requirements\*\* from/, 'no document statistics when there are no documents');
@@ -720,4 +720,45 @@ test('verifyUnits: test_paths decides which cited files are tests (F26): weak_te
   assert.equal(verify(result([miss]), { read: rd, units: UNITS(), testPaths: 'qa/checks/**' }).unit_findings.length, 0, 'missing_test cites code, not a configured test file');
   assert.equal(verify(result([PUSH()]), { read: rd, units: UNITS(), testPaths: 'qa/checks/**' }).unit_findings.length, 0, 'authoritative: test/e2e is outside the scope');
   assert.equal(verify(result([PUSH()]), { read: rd, units: UNITS() }).unit_findings.length, 1, 'control: heuristic');
+});
+
+test('funnel through the real collect -> pack -> audit-post path: 8 eligible = 7 inventoried + 1 over 512 KiB; 6 selected = 5 reviewed whole + 1 did not fit', async (t) => {
+  const fn = (n, k) => Array.from({ length: k }, (_, i) => `exports.${n}${i} = (v) => (v > ${i} ? v - ${i} : ${i});`).join('\n') + '\n';
+  const files = {};
+  for (let i = 0; i < 6; i++) files[`src/u${i}.js`] = fn(`u${i}_`, 10 + i);
+  files['tests/u0.test.js'] = 'const assert = require("node:assert/strict");\ntest("u0", () => { assert.equal(u0_0(5), 5); });\n';
+  files['tests/u1.test.js'] = 'const assert = require("node:assert/strict");\ntest("u1", () => { assert.equal(u1_0(5), 5); });\n';
+  files['src/over.js'] = fn('over_', 20); // its matched tests are too big for the pack together
+  for (let k = 0; k < 4; k++) files[`tests/over${k}.test.js`] = Array.from({ length: 300 }, (_, i) => `test("t${i}", () => { assert.equal(over_${i % 20}(${i}), ${i}); }); // ${'pad '.repeat(10)}`).join('\n') + '\n';
+  files['src/huge.js'] = Array.from({ length: 5000 }, (_, i) => `exports.h${i} = (v) => v + ${i}; // ${'padding '.repeat(12)}`).join('\n') + '\n'; // over 512 KiB
+  const { root, ctx } = repoOf(t, files), head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  require('./audit-collect').collect({ cwd: root, ctx, maxUnits: 6, rotate: true, packBytes: 60000 });
+  const pack = require('./engines/claude-api').contextPack(ctx, root, 60000), put = (n, v) => fs.writeFileSync(path.join(ctx, n), typeof v === 'string' ? v : JSON.stringify(v));
+  put('engine-status', 'success'); put('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join(''));
+  put('findings.json', { requirements: [], not_requirements: [], not_reviewed: [], docs_reviewed: [], unit_findings: [] });
+  const m = mocks(), saved = { ...process.env };
+  Object.assign(process.env, { CTX: ctx, GITHUB_WORKSPACE: root, SCAN_ISSUE: 'true', ISSUE_REPO: '', SKIP: 'false', ENGINE: 'claude' });
+  try { await audit({ github: m.github, context: { ...m.context, sha: head }, core: m.core, date: DATE }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
+  const l = /^Units: .*$/m.exec(m.calls.summary)[0];
+  assert.match(l, /^Units: 8 eligible = 7 inventoried \+ 1 not inventoried \(over 512 KiB\); 6 selected this run = 5 reviewed whole \+ 1 did not fit/);
+  assert.match(m.calls.summary, /\| \[src\/over\.js\][^\n]*selected, did not fit \(not reviewed\) \|/);
+  assert.match(m.calls.summary, /5 of the 6 selected units were reviewed whole/);
+});
+
+test('render: the funnel line reconciles eligible, selected, reviewed, did not fit and forced; the Details row says what happened', () => {
+  const data = checked([uf()]), vis = (code) => { const md = render({ data, code, blob: BLOB, head: 'abc1234def', usage: '', run: '' }); return { md, top: md.slice(0, md.indexOf('<details>')) }; };
+  const line = (t) => /^Units: .*$/m.exec(t)[0], num = (l, re) => Number((re.exec(l) || [0, 0])[1]);
+  const ok = line(vis(CODE(data.unit_findings, { eligible: 140 })).top); // everything reviewed whole: no zero terms
+  assert.equal(ok, 'Units: 140 eligible = 140 inventoried; 3 selected this run = 3 reviewed whole; 137 not yet reviewed.');
+  const a = vis({ ...CODE(data.unit_findings, { eligible: 141, not_inventoried: 1 }), unseen: [U1] }), l = line(a.top); // one file over 512 KiB, one selected unit did not fit
+  assert.equal(l, 'Units: 141 eligible = 140 inventoried + 1 not inventoried (over 512 KiB); 3 selected this run = 2 reviewed whole + 1 did not fit; 138 not yet reviewed.');
+  assert.equal(num(l, /^Units: (\d+) eligible/), num(l, /= (\d+) inventoried/) + num(l, /\+ (\d+) not inventoried/));
+  assert.equal(num(l, /selected this run = (\d+) reviewed/) + num(l, /\+ (\d+) did not fit/), 3);
+  assert.match(a.md, /\| \[src\/js\/orders\.js\]\([^)]*\) \| 54\.2 \| [^|]* \| [^|]* \| selected, did not fit \(not reviewed\) \|/);
+  assert.match(a.md, /\| \[src\/js\/legacy\.js\]\([^)]*\) \| 21\.5 \| no test \| none \| this run \|/);
+  assert.doesNotMatch(a.md, /riskiest of \d+ units were reviewed/);
+  assert.match(line(vis(CODE(data.unit_findings, { eligible: 145, not_reached: 5 })).top), /^Units: 145 eligible = 140 inventoried \+ 5 not reached \(inventory cap \/ time budget\); /);
+  const f = vis({ ...CODE(data.unit_findings, { eligible: 140, forced: [U1] }), unseen: [U1] }); // forced: nothing fits, tests cut
+  assert.match(line(f.top), /3 selected this run = 2 reviewed whole \+ 1 forced \(recorded unsure\)/);
+  assert.match(f.md, /forced: tests cut \(unsure\)/);
 });
