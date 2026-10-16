@@ -264,6 +264,8 @@ function assertionDelta(diff, isTest) {
   const litList = (t) => [...String(t).replace(/\s\/\/[^'"`\n]*$/gm, '').matchAll(LIT)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]); // every literal in order, duplicates kept; a trailing comment is not part of it
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const [f, { rm, add, lines }] of per) for (const r of rm) {
+    const flat = (t) => t.replace(/\s+/g, '').replace(/["'`]/g, "'");
+    if (add.some((a) => flat(a.text) === flat(r.text))) continue; // the same assertion added anywhere in the file: moved
     const same = add.filter((a) => a.x === r.x && a.hk === r.hk); // only the same hunk re-pins: an assertion elsewhere in the file may pin something else
     const exact = !r.weak && EXACT.test(r.text) && literalsOf(r.text, 1).size > 0; // an exact value replaced by a range matcher is weakened
     if (same.some((a) => !a.weak && !(exact && RANGE.test(a.text))) || (r.weak && same.length)) continue; // still pinned: moved, reformatted or strengthened
