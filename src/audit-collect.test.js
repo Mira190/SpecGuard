@@ -495,3 +495,45 @@ test('loadPrior: with scan_issue_repo the state is read from that repository und
   const same = await loadPrior({ GH_REPO: 'o/src', GH_TOKEN: 'src-tok', ISSUE_REPO: 'o/src', ISSUE_TOKEN: 'x' }, async (u) => (u.endsWith('/user') ? { ok: false, status: 403, json: async () => ({}) } : { ok: true, json: async () => [{ number: 3, body: `${audit.MARK}\n${state}`, user: bot }] }));
   assert.deepEqual(same && same.blocks.map((b) => b.cid), ['ddddddd1'], 'control: the same repository is read as before');
 });
+
+test('loadPrior: a malformed scan_issue_repo warns and reads nothing (F24 review)', async () => {
+  const logs = [], log = console.log;
+  console.log = (m) => logs.push(m);
+  try { assert.equal(await loadPrior({ GH_REPO: 'o/src', GH_TOKEN: 't', ISSUE_REPO: 'not-a-repo' }, async () => { throw new Error('no request expected'); }), null); } finally { console.log = log; }
+  assert.match(logs.join('\n'), /::warning::SpecGuard: scan_issue_repo "not-a-repo" is not owner\/name; the previous scan state is not read/);
+});
+
+test('the publisher and loadPrior pick the same scan issue: same repository, another repository, another repository with scan_paths (F24 review)', async () => {
+  const os = require('node:os'), BOT = { type: 'Bot', login: 'github-actions[bot]' };
+  const state = (cid) => `<!-- specguard:audit-state {"v":4,"head":"abc","audits":[["abc","2026-10-01"]],"blocks":[["${cid}","gap","abc",1,0]]} -->`;
+  const scoped = audit.scopeOf('packages/a/**', 'acme/shop'), plain = audit.scopeOf('', 'acme/shop'), local = audit.scopeOf('packages/a/**');
+  const issues = [
+    { number: 1, title: audit.TITLE, body: `${audit.MARK}\n${state('00000001')}`, user: BOT, state: 'open' },
+    { number: 2, title: plain.title, body: `${plain.mark}\n${state('00000002')}`, user: BOT, state: 'open' },
+    { number: 3, title: scoped.title, body: `${scoped.mark}\n${state('00000003')}`, user: BOT, state: 'open' },
+    { number: 4, title: audit.scopeOf('', 'acme/other').title, body: `${plain.mark}\n${state('00000004')}`, user: BOT, state: 'open' },
+    { number: 5, title: local.title, body: `${local.mark}\n${state('00000005')}`, user: BOT, state: 'open' },
+  ];
+  const cases = [
+    ['same repository', { ISSUE_REPO: '', SCAN_PATHS: '' }, 1],
+    ['another repository', { ISSUE_REPO: 'corp/reports', SCAN_PATHS: '' }, 2],
+    ['another repository with scan_paths', { ISSUE_REPO: 'corp/reports', SCAN_PATHS: 'packages/a/**' }, 3],
+  ];
+  for (const [name, extra, number] of cases) {
+    const ctx = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-same-'));
+    fs.writeFileSync(path.join(ctx, 'audit-meta.json'), JSON.stringify({ head: 'abc123', max_requirements: 80, docs: 0, limitations: [] }));
+    const updated = [];
+    const client = { rest: { users: { getAuthenticated: async () => { throw new Error('no /user'); } }, repos: { get: async () => ({ data: { visibility: 'private' } }) },
+      issues: { listForRepo: () => issues, update: async (a) => { updated.push(a.issue_number); }, create: async () => { updated.push('create'); } } }, paginate: async (fn, a) => fn(a) };
+    const env = { CTX: ctx, SKIP: 'true', SCAN_ISSUE: 'true', ENGINE: '', MODEL: '', ...extra }, saved = { ...process.env };
+    const core = { warning() {}, summary: { addRaw() { return this; }, async write() {} } };
+    try {
+      Object.assign(process.env, env);
+      await audit({ github: client, issueGithub: client, context: { repo: { owner: 'acme', repo: 'shop' }, sha: 'abc123' }, core });
+    } finally { for (const k of Object.keys(env)) if (k in saved) process.env[k] = saved[k]; else delete process.env[k]; fs.rmSync(ctx, { recursive: true, force: true }); }
+    const fetchFn = async (u) => (/\/repos\/[^/]+\/[^/]+$/.test(u) ? { ok: true, json: async () => ({ visibility: 'private' }) } : u.endsWith('/user') ? { ok: false, status: 403, json: async () => ({}) } : { ok: true, json: async () => issues });
+    const prior = await loadPrior({ GH_REPO: 'acme/shop', GH_TOKEN: 't', ISSUE_TOKEN: 'i', ...extra }, fetchFn);
+    assert.deepEqual(updated, [number], `${name}: the publisher updates issue ${number}`);
+    assert.deepEqual(prior && prior.blocks.map((b) => b.cid), [`0000000${number}`], `${name}: the loader reads the same issue`);
+  }
+});

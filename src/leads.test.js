@@ -197,3 +197,8 @@ test('removed assertions: assert.match, notEqual and throws count as assertions'
   const d = assertionDelta('diff --git a/t.test.js b/t.test.js\n--- a/t.test.js\n+++ b/t.test.js\n@@ -1,4 +1,1 @@\n-assert.match(f("zq1"), /x/)\n-assert.notEqual(g("zq2"), 1)\n-assert.throws(() => h("zq3"), /bad/)\n x\n', () => true);
   assert.equal(d.length, 3);
 });
+
+test('symbols: with test_paths set, a test-named file outside it is no test reference (same rule as the cover guard)', (t) => {
+  const { sections } = leads(t, {}, { 'src/lib.js': 'export function fooBar() {\n  return 1;\n}\n', 'test/x.test.js': 'fooBar();\n', 'check/y.js': 'fooBar();\n' }, {}, { TEST_PATHS: 'check/' });
+  assert.deepEqual(sections[YES], ['fooBar -> check/y.js']);
+});

@@ -646,6 +646,21 @@ async function findIssue({ github, owner, repo, me, mark = MARK, title = '' }) {
   return mine.find((i) => i.state !== 'closed') || mine[0] || null;
 }
 
+// The scan issue's target, shared by the publisher (main) and the collector's loadPrior so what is written is what is read back: scan_issue_repo (owner/name) or the scanned repository,
+// and the scope (marker, title; the title names the scanned repository when the issue lives elsewhere). -> { error } | { away, target: { owner, repo }, scope }
+function resolveIssueTarget(env, owner, repo) {
+  const m = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!m && !(m[1] === owner && m[2] === repo);
+  if (env.ISSUE_REPO && !m) return { error: `scan_issue_repo "${oneLine(env.ISSUE_REPO, 60)}" is not owner/name` };
+  return { away, target: away ? { owner: m[1], repo: m[2] } : { owner, repo }, scope: scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '') };
+}
+// The visibility a repository response reports ('' = unknown, which the guard refuses).
+const visibilityOf = (d) => d.visibility || (d.private === false ? 'public' : d.private ? 'private' : '');
+// A scan issue in another repository may not reach a wider audience than the scanned one (fails closed). visTarget() / visSource() -> visibility string.
+async function guardIssueTarget(t, visTarget, visSource) {
+  if (!t.away) return { ok: true, reason: '' };
+  return require('./visibility-guard').decide(await visTarget(), await visSource());
+}
+
 const whoami = async (github) => { try { return (await github.rest.users.getAuthenticated()).data.login; } catch { return null; } };
 const wantsIssue = (env) => String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
 
@@ -669,10 +684,9 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const cands = readCandidates(readCtx('audit-candidates.txt'));
   let wantIssue = wantsIssue(env);
   // ISSUE_REPO (scan_issue_repo): the issue lives in another repository under its own client (issueGithub); one issue per scanned repository, told apart by the title
-  const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(ir[1] === owner && ir[2] === repo);
-  if (env.ISSUE_REPO && !ir && wantIssue) { wantIssue = false; core.warning('SpecGuard: scan_issue_repo is not owner/name; no scan issue is written'); }
-  const igh = issueGithub || github, issueRepo = away ? { owner: ir[1], repo: ir[2] } : { owner, repo };
-  const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
+  const rt = resolveIssueTarget(env, owner, repo);
+  if (rt.error && wantIssue) { wantIssue = false; core.warning(`SpecGuard: ${rt.error}; no scan issue is written`); }
+  const { away = false, target: issueRepo = { owner, repo }, scope = scopeOf(env.SCAN_PATHS) } = rt, igh = issueGithub || github;
   const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, run: runHtml, cap, candidates: (meta && meta.candidates) || 0,
     ruled, rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   let last = '';
@@ -682,11 +696,11 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   let mine = null, prior = null, issueErr = '';
   const issueFail = (e) => { issueErr = `could not write the scan issue: ${e.message}`; core.warning(`SpecGuard: could not write the scan issue (needs permissions: issues: write): ${e.message}`); outcome('failed', issueErr); };
   // a scan issue in another repository may not reach a wider audience than the scanned one (the manual workflow's guard, at the action's own boundary; fails closed)
-  const vis = async (g, r) => { try { const d = (await g.rest.repos.get(r)).data; return d.visibility || (d.private === false ? 'public' : d.private ? 'private' : ''); } catch { return ''; } };
+  const vis = async (g, r) => { try { return visibilityOf((await g.rest.repos.get(r)).data); } catch { return ''; } };
   const lookup = async () => {
     if (!wantIssue) return;
     if (away) {
-      const g = require('./visibility-guard').decide(await vis(igh, issueRepo), await vis(github, { owner, repo }));
+      const g = await guardIssueTarget(rt, () => vis(igh, issueRepo), () => vis(github, { owner, repo }));
       if (!g.ok) { issueErr = `scan issue not written to ${issueRepo.owner}/${issueRepo.repo}: ${g.reason}`; core.warning(`SpecGuard: ${issueErr}`); outcome('failed', issueErr); return false; }
     }
     try {
@@ -738,6 +752,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   // valid JSON can still come from a run that timed out or failed (or whose repair turn failed): show what verifies, change nothing else
   const partial = st && st !== 'success' ? `engine ${st}` : repair === 'repair_failed' ? 'engine JSON repair failed' : '';
 
+  // TEST_PATHS first: the exact input the collector scoped by; test-paths.txt (PR-mode collect.sh writes it from the same input) is only the fallback, so the two cannot disagree
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), testPaths = process.env.TEST_PATHS || readCtx('test-paths.txt') || '', covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths });
   const unseen = hasCode && unitsFailed ? [...units.keys()] : hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path) || u.tests.some((t) => packCut.has(t))).map((u) => u.id) : [];
   const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths });
@@ -769,4 +784,4 @@ async function main({ github, issueGithub, context, core, date = today() }) {
 module.exports = async (args) => {
   try { await main(args); } catch (e) { try { args.core.setOutput?.('status', 'failed'); args.core.setOutput?.('reason', `the scan report failed: ${e.message}`); args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, STATUS, CLASS, MARK, TITLE, HEADING });
+Object.assign(module.exports, { readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, resolveIssueTarget, guardIssueTarget, visibilityOf, STATUS, CLASS, MARK, TITLE, HEADING });
