@@ -186,3 +186,20 @@ test('makeCoverGuard: test_paths, when set, is authoritative over the name heuri
   assert.equal(makeCoverGuard({ cwd: root, testPaths: 'qa/**' })(line('bang'), 1), null, 'tests/b.test.js is outside the configured scope');
   assert.match(makeCoverGuard({ cwd: root })(line('bang'), 1), /^tests\/b\.test\.js:1$/, 'control: no scope, the heuristic');
 });
+
+test('makeCoverGuard: an eligible-test set limits a hit to the claim\'s own candidate tests (wave 4 E5)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-guard-'));
+  const run = (...a) => execFileSync('git', a, { cwd: root, stdio: 'ignore' });
+  try {
+    run('init'); fs.mkdirSync(path.join(root, 'tests'));
+    fs.writeFileSync(path.join(root, 'tests/logger.test.js'), 'test("logger", () => { expect(log).toContain("invalid amount"); });\n');
+    fs.writeFileSync(path.join(root, 'tests/amount.test.js'), 'test("amount", () => { expect(() => amount(-1)).toThrow("invalid amount"); });\n');
+    run('add', '.');
+    const covers = makeCoverGuard({ cwd: root }), src = ['function amount(v) {', '  if (v < 0) throw new Error("invalid amount");', '}'];
+    assert.match(covers(src, 2, 'src/amount.js'), /^tests\/(logger|amount)\.test\.js:1$/, 'no set: any tracked test counts, as before');
+    assert.equal(covers(src, 2, 'src/amount.js', ['tests/other.test.js']), null, 'a hit in an unrelated test is no demotion');
+    assert.equal(covers(src, 2, 'src/amount.js', ['tests/logger.test.js']), 'tests/logger.test.js:1');
+    assert.equal(covers(src, 2, 'src/amount.js', ['tests/amount.test.js']), 'tests/amount.test.js:1', 'the unit\'s own candidate test still demotes');
+    assert.equal(covers(src, 2, 'src/amount.js', []), null, 'no candidate tests: no demotion');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
