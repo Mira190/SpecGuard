@@ -414,7 +414,7 @@ It reviews committed changes only (uncommitted work is ignored, with a warning),
 
 Config parity with CI: `--requirements-paths`, `--standards-paths`, `--test-paths` and `--ignore` are the action inputs of the same names (repeat a flag for each line; `!glob` excludes). Copy them from your workflow; the runner does not read the workflow or any config file, and ignores `REQ_PATHS`-style environment variables.
 
-The exit code is 0 unless the tool crashed (advisory), or 1 with `--fail-on-gaps`. The gate reads what the post step delivered after validation (citations verified, anchored to the diff): a high-confidence missing or weak unit test in the comments, or in the summary list when it is not marked "low confidence". Findings the validator drops never block.
+The exit code is 0 unless the tool crashed (advisory). With `--fail-on-gaps`: 1 on a gap, 2 when the run did not complete (failed or incomplete, so the review is not whole), else 0. The gate reads what the post step delivered after validation (citations verified, anchored to the diff): a high-confidence missing or weak unit test in the comments, or in the summary list when it is not marked "low confidence". Findings the validator drops never block.
 
 It takes a few minutes and spends AI credits, so run it on demand, not on every push:
 

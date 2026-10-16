@@ -16,7 +16,8 @@ const USAGE = `Usage: node bin/specguard-local.js [--base REF] [--body FILE] [--
 
 Reviews the commits between the merge-base of --base (default: the remote default branch, else main, else master) and HEAD with Copilot.
 The base is fetched first (a warning when offline). Uncommitted changes are not reviewed.
-Advisory: exit 0 unless the tool crashed, or 1 with --fail-on-gaps when the VALIDATED review (what post.js would post) holds a high-confidence unit test gap.
+Advisory: exit 0 unless the tool crashed (3). With --fail-on-gaps: 1 when the VALIDATED review (what post.js would post) holds a high-confidence unit test gap,
+2 when the run did not complete (status failed or incomplete: "no gaps" is not known), else 0.
 --body FILE            requirement text (default: the commit messages since the base; linked issues are unavailable offline)
 --requirements-paths, --standards-paths, --test-paths, --ignore
                        the CI action's inputs of the same names (a glob or folder per flag, repeatable; !glob excludes). Copy them from your workflow so the local run matches CI.
@@ -202,7 +203,7 @@ async function main(argv = process.argv.slice(2)) {
   if (o.help) { console.log(USAGE); return 0; }
   const r = await run({ opts: o });
   console.log(o.json ? JSON.stringify({ status: r.status, base: r.base, head: r.head, gaps: r.gaps, comments: r.comments, summary: r.summary, warnings: r.warnings }, null, 2) : format(r));
-  return o['fail-on-gaps'] && r.gaps ? 1 : 0;
+  return !o['fail-on-gaps'] ? 0 : r.gaps ? 1 : r.status === 'complete' ? 0 : 2; // a gap is conclusive; "no gap" on a run that did not complete is not
 }
 
 if (require.main === module) main().then((c) => { process.exitCode = c; }, (e) => { console.error(`specguard-local: ${e.message}`); process.exitCode = 3; });
