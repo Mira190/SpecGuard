@@ -1,7 +1,7 @@
 {
 "requirements_source":"PR body",
 "coverage":[
-{"id":"O1","obligation":"Orders of 100 or more get a 10% discount","source":"PR body AC 1","behaviour":{"path":"src/discount.js","line":4,"quote":"if (total >= 100) return total * 0.9;"},"evidence":[{"path":"test/discount.test.js","line":9,"quote":"assert.equal(discount(100), 90);"}],"status":"covered","reason":"The unit test asserts the boundary 100 against the literal 90.","alignment":{"status":"consistent","reason":"R: 100 or more; C: total >= 100"}},
+{"id":"O1","obligation":"Orders of 100 or more get a 10% discount","source":"PR body AC 1","behaviour":{"path":"src/discount.js","line":4,"quote":"if (total >= 100) return total * 0.9;"},"evidence":[{"path":"test/discount.test.js","line":9,"quote":"assert.equal(discount(100), 90);"},{"path":"test/discount.test.js","line":10,"quote":"assert.equal(discount(99), 99);"}],"status":"covered","reason":"The unit tests assert both sides of the boundary: 100 against the literal 90 and 99 against 99.","alignment":{"status":"consistent","reason":"R: 100 or more; C: total >= 100"}},
 {"id":"O2","obligation":"A negative total is rejected","source":"from behaviour","behaviour":{"path":"src/discount.js","line":2,"quote":"if (total < 0) throw new RangeError('total');"},"evidence":[],"status":"missing_test","reason":"Searched test/ and the repo for RangeError and discount(-: no assertion reaches this branch."}
 ],
 "findings":[
