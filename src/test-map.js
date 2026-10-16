@@ -151,16 +151,15 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
       return out.split('\n').some((l) => { const m = /^(.*?):\d+:/.exec(l); return m && !isTest(m[1]) && !DOC.test(m[1]); });
     } catch { return false; }
   };
-  // eligible (optional): the test files that can cover this source file (its candidate tests); a hit elsewhere is an unrelated test. Empty: no candidate test, so no demotion (that gap is more likely real). Not passed: any tracked test counts.
+  // eligible (optional): the test files that can cover this source file (its candidate tests); a hit elsewhere is an unrelated test. Empty: no candidate test, so no literal demotion (that gap is more likely real). Not passed: any tracked test counts. A delegated helper's test lives with the helper, so it is not limited by the set.
   return (lines, line, p = '', eligible = null) => {
     if (!Array.isArray(lines) || !Number.isInteger(line)) return null;
     const only = eligible ? new Set(eligible) : null;
-    if (only && !only.size) return null;
-    const needles = needlesOf(lines, line), hit = needles.length ? grep(needles.flatMap((n) => ['-e', n]), only) : null, cm = hit ? null : classAndMethod(lines, line);
+    const needles = needlesOf(lines, line), hit = needles.length && !(only && !only.size) ? grep(needles.flatMap((n) => ['-e', n]), only) : null, cm = hit || (only && !only.size) ? null : classAndMethod(lines, line);
     const lit = hit || (cm ? grep(['-e', cm.method, '--and', '-e', cm.cls], only) : null);
     if (lit) return lit;
     if (p && isTest(p)) return null; // a claim about a test file has no delegate to follow
-    for (const name of calledNames(lines, line)) { if (!definedHere(name)) continue; const h = grep(['-w', '-e', name], only); if (h) return `a delegated helper is tested: ${name} at ${h}`; }
+    for (const name of calledNames(lines, line)) { if (!definedHere(name)) continue; const h = grep(['-w', '-e', name]); if (h) return `a delegated helper is tested: ${name} at ${h}`; }
     return null;
   };
 }
