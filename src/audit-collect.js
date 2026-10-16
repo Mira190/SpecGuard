@@ -11,6 +11,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { inventory, write: writeUnits } = require('./audit-units');
+const { PER_FILE } = require('./pack-cap');
 const { run, matchGlob, isTestPath, blocksOf, testScope, tokenize, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP } = require('./trace');
 
 const MAX_AUDIT_DOCS = 60; // the model reads every admitted document in full
@@ -207,7 +208,7 @@ function branchGuard({ refName = '', eventPath = '' } = {}) {
 }
 
 // scanPaths: the scope (docs and evidence); rotate: scan_issue is on, so the run is one of a rotation; prior: that issue's state (null on the first run or without an issue).
-function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now() }) {
+function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0 }) { // packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
   const head = git(cwd, ['rev-parse', 'HEAD']).trim();
   fs.rmSync(ctx, { recursive: true, force: true });
   fs.mkdirSync(ctx, { recursive: true });
@@ -282,7 +283,9 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   let units = null;
   try {
     const rules = RULE_GLOBS.concat(lines(ignoreExtra)), docSet = new Set(found);
-    units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, prior, now });
+    // the pack carries the rule files first (each cut at the per-file cap, plus a header): units share what is left
+    const left = packBytes && Math.max(1, packBytes - standards.reduce((n, f) => { try { return n + Math.min(fs.statSync(path.join(cwd, f)).size, PER_FILE) + 300; } catch { return n; } }, 0));
+    units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, prior, now, packBytes: left });
     if (units.rows.length) writeUnits(ctx, head, maxUnits, units);
     notes.push(...units.limitations);
   } catch (e) { notes.push(`the unit inventory failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the scan covers the design documents only`); units = null; }
@@ -297,20 +300,27 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
 // The scan issue's state for this scope ({ head, blocks } or null: no issue, no state, no access). Read over the REST API with GH_TOKEN/GH_REPO, as this step runs before any github-script step.
 async function loadPrior(env, fetchFn = globalThis.fetch) {
   try {
-    const { findIssue, readState, scopeOf } = require('./audit-post');
+    const { findIssue, readState, resolveIssueTarget, guardIssueTarget, visibilityOf } = require('./audit-post');
     const api = env.GITHUB_API_URL || 'https://api.github.com', [owner, repo] = String(env.GH_REPO || env.GITHUB_REPOSITORY || '').split('/');
-    const get = async (u) => {
-      const r = await fetchFn(`${api}${u}`, { headers: { authorization: `Bearer ${env.GH_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' } });
+    // the publisher's target, scope and guard (audit-post), so the state is read from where it is written
+    const rt = resolveIssueTarget(env, owner, repo);
+    if (rt.error) { console.log(`::warning::SpecGuard: ${rt.error}; the previous scan state is not read (this run starts from the first block)`); return null; }
+    const { target, scope: sc } = rt, token = (rt.away && env.ISSUE_TOKEN) || env.GH_TOKEN;
+    const get = async (u, tok = token) => {
+      const r = await fetchFn(`${api}${u}`, { headers: { authorization: `Bearer ${tok}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' } });
       if (!r.ok) throw new Error(`${r.status} ${u}`);
       return r.json();
     };
+    const vis = async (o, r, tok) => { try { return visibilityOf(await get(`/repos/${o}/${r}`, tok)); } catch { return ''; } };
+    const g = await guardIssueTarget(rt, () => vis(target.owner, target.repo, token), () => vis(owner, repo, env.GH_TOKEN));
+    if (!g.ok) { console.log(`::warning::SpecGuard: scan issue not read from ${target.owner}/${target.repo}: ${g.reason}`); return null; }
     // the two calls audit-post's findIssue makes, over REST
     const github = {
       paginate: async (_f, o) => { const all = []; for (let p = 1; ; p++) { const page = await get(`/repos/${o.owner}/${o.repo}/issues?state=all&per_page=100&page=${p}`); all.push(...page); if (page.length < 100) return all; } },
       rest: { issues: { listForRepo: null } },
     };
     const me = await get('/user').then((u) => u.login, () => null); // an app or job token cannot: the issue is then ours when a github-actions bot opened it
-    const issue = await findIssue({ github, owner, repo, me, mark: scopeOf(env.SCAN_PATHS).mark });
+    const issue = await findIssue({ github, ...target, me, mark: sc.mark, title: rt.away ? sc.title : '' });
     return (issue && readState(issue.body)) || null;
   } catch (e) {
     console.log(`::warning::SpecGuard: could not read the previous scan state (this run starts from the first block): ${e.message}`);
@@ -330,7 +340,7 @@ async function main(env) {
   if (g.warn) console.log(`::warning::${g.warn}`);
   const rotate = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
   const prior = rotate ? await loadPrior(env) : null;
-  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior });
+  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, packBytes: env.PACK_SPLIT === 'true' ? 250000 : 0 });
   console.log(`SpecGuard unit test gap scan: ${r.units ? `${r.units.picked.length} of ${r.units.total} units` : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);
 }
