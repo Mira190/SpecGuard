@@ -115,3 +115,21 @@ test('A3 preflight: the recorded login lets an App-token run skip; a person or a
   assert.match(decide({ pr, comments: [c({ type: 'Bot', login: 'github-actions[bot]' }, head('github-actions[bot]'))], headSha: SHA }), /already/);
   assert.equal(decide({ pr, comments: [c(APP, head('my-app[bot]'))], headSha: SHA, actor: 'github-actions[bot]' }), '', 'a known actor wins over a recorded login');
 });
+
+// S13: the skip key must cover what the review used (SpecGuard build + review inputs), not only the head SHA
+test('a rerun on the same head is skipped only when the config marker matches', () => {
+  const { cfgKey } = require('./preflight');
+  const cfg = cfgKey('copilot|gpt-5|||');
+  const withCfg = (k) => ({ ...mine(), body: mine().body.replace('## SpecGuard', `<!-- specguard:cfg=${k} -->\n## SpecGuard`) });
+  assert.match(decide({ pr: pr(), comments: [withCfg(cfg)], headSha: SHA, cfg }), /already/, 'same everything: skip');
+  assert.equal(decide({ pr: pr(), comments: [withCfg(cfg)], headSha: SHA, cfg: cfgKey('copilot|other-model|||') }), '', 'changed model: review');
+  assert.equal(decide({ pr: pr(), comments: [mine()], headSha: SHA, cfg }), '', 'summary without a cfg marker (older version): review once');
+  assert.match(decide({ pr: pr(), comments: [mine()], headSha: SHA }), /already/, 'no CFG in the env: not checked');
+});
+
+test('post.js writes the cfg marker that preflight computes from the same CFG', () => {
+  const { buildSummary } = require('./post');
+  const { cfgKey } = require('./preflight');
+  const cfg = cfgKey('claude|opus|||');
+  assert.match(buildSummary({ headSha: SHA, req: 'abc123', cfg, state: 'complete' }), new RegExp(`<!-- specguard:cfg=${cfg} -->`));
+});

@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { inspectChecks } = require('./checks');
-const { ours, recordedLogin, reqKey } = require('./preflight');
+const { ours, recordedLogin, reqKey, cfgKey } = require('./preflight');
 const { isFactLimitation } = require('./limitations');
 
 const KINDS = ['spec_mismatch', 'missing_test', 'weak_test', 'standard', 'pushdown'];
@@ -721,14 +721,14 @@ const STD_WORD = { checked: 'reviewed', no_rules: 'no rule files found', not_rev
 // anything visible, and what does not fit is counted, never cut mid-item.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
 // status: the whole verdict for a run without findings data (a skipped run); delivery: how the findings reached the PR ("7 inline comments"); runNotes: Details-only facts about the run.
-function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, req, issues = [], manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [] }) {
+function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, req, cfg, issues = [], manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [] }) {
   const isLow = (x) => x.f.confidence === 'low' || x.why === 'low confidence', lows = [...posted, ...items].filter(isLow); // low-confidence findings are never an action: Details only
   posted = posted.filter((x) => !isLow(x)); items = items.filter((x) => !isLow(x));
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)], failed = state === 'failed';
   const urls = new Map(posted.map((x) => [x.f, x.url]));
   const inc = incomplete.length > 0;
   // hidden: the preflight skips a rerun on a head SHA that already has a completed summary (never written for a failed run)
-  const markers = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}${/^\w+$/.test(headSha || '') && /^\w+$/.test(req || '') ? `<!-- specguard:req=${req} -->\n` : ''}${/^\w+$/.test(headSha || '') && issues.length ? `<!-- specguard:issues=${issues.join(',')} -->\n` : ''}<!-- specguard:status=${state || (inc ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n`;
+  const markers = `<!-- specguard:summary -->\n${/^\w+$/.test(headSha || '') ? `<!-- specguard:head=${headSha} -->\n` : ''}${counts ? `${countsComment(counts)}\n` : ''}${/^\w+$/.test(headSha || '') && /^\w+$/.test(req || '') ? `<!-- specguard:req=${req} -->\n` : ''}${/^\w+$/.test(headSha || '') && /^\w+$/.test(cfg || '') ? `<!-- specguard:cfg=${cfg} -->\n` : ''}${/^\w+$/.test(headSha || '') && issues.length ? `<!-- specguard:issues=${issues.join(',')} -->\n` : ''}<!-- specguard:status=${state || (inc ? 'incomplete' : 'complete')} -->\n## SpecGuard\n\n`;
   const act = acts(all), rows = data && !failed ? criteriaOf(data, all) : [], todo = rows.filter((x) => x.kind !== 'evidenced');
   // One displayed sentence = one row: the model often splits a PR-body bullet into several criteria that show the same sentence. Counts: the counts table and the verdict count
   // criteria (as the model assessed them); the "Requirements to check (N)" heading counts the merged rows actually shown.
@@ -1422,7 +1422,7 @@ async function run({ github, context, core }) {
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
   const ctxLines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
   const lint = { count: ctxLines('lint-configs.txt').length, changed: ctxLines('lint-changes.txt') }; // linter/formatter configs at base; those the PR changes
-  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, req: reqFp, issues: issueVers, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
+  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -1742,7 +1742,7 @@ async function run({ github, context, core }) {
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
   const delivered = summaryOnly ? 'summary only, nothing posted' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, req: reqFp, issues: issueVers, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }

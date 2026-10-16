@@ -39,18 +39,23 @@ const issuesFresh = (body, issueAt) => {
     try { return issueAt(x[1], +x[2]) === x[3]; } catch { return false; }
   });
 };
-const sticky = (c, sha, actor, req, issueAt = null) => !!c && ours(c.user, actor) && typeof c.body === 'string'
+// Config fingerprint: the SpecGuard build plus the inputs that change what is reviewed (action.yml passes them as one CFG string to both preflight and post). Shared by post.js
+// (writes <!-- specguard:cfg=... -->) and preflight (compares). '' when no CFG (a bare test run): not checked.
+// ponytail: the rule files' content is not in it: they are read from the base commit by collect, which runs after preflight. A rule-file edit alone does not re-review; force: true does.
+const cfgKey = (cfg) => (cfg ? require('node:crypto').createHash('sha1').update(`${require('./version').version().build}\0${cfg}`).digest('hex').slice(0, 8) : '');
+const sticky = (c, sha, actor, req, issueAt = null, cfg = '') => !!c && ours(c.user, actor) && typeof c.body === 'string'
   && c.body.startsWith(SUMMARY) && c.body.includes(`<!-- specguard:head=${sha} -->`)
   && !(req && /<!-- specguard:req=\w+ -->/.test(c.body) && !c.body.includes(`<!-- specguard:req=${req} -->`))
+  && (!cfg || c.body.includes(`<!-- specguard:cfg=${cfg} -->`)) // no cfg marker (older summary) or another one: review again
   && issuesFresh(c.body, issueAt);
 
 // Returns the reason to skip, or '' to review.
-function decide({ pr, comments = [], headSha, includeBots = false, force = false, actor = null, issueAt = null }) {
+function decide({ pr, comments = [], headSha, includeBots = false, force = false, actor = null, issueAt = null, cfg = '' }) {
   if (pr.state === 'closed') return 'PR is closed';
   const u = pr.user || {};
   if (!includeBots && (u.type === 'Bot' || /\[bot\]$/i.test(u.login || ''))) return `PR author ${u.login} is a bot (set include_bots: true to review bot PRs)`;
   const who = actor || recordedLogin(comments);
-  if (!force && comments.some((c) => sticky(c, headSha, who, reqKey(pr), issueAt))) return `head ${String(headSha).slice(0, 7)} already has a SpecGuard summary (set force: true to rerun)`;
+  if (!force && comments.some((c) => sticky(c, headSha, who, reqKey(pr), issueAt, cfg))) return `head ${String(headSha).slice(0, 7)} already has a SpecGuard summary (set force: true to rerun)`;
   return '';
 }
 
@@ -65,9 +70,9 @@ if (require.main === module) {
     let actor = null;
     try { actor = gh(['api', 'user']).login; } catch { /* GITHUB_TOKEN cannot read /user: github-actions[bot] */ }
     const issueAt = (repo, n) => execFileSync('gh', ['api', `repos/${repo}/issues/${n}`, '--jq', '.updated_at'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 }).trim();
-    why = decide({ pr, comments, headSha: env.HEAD_SHA, includeBots: on(env.INCLUDE_BOTS), force: on(env.FORCE), actor, issueAt });
+    why = decide({ pr, comments, headSha: env.HEAD_SHA, includeBots: on(env.INCLUDE_BOTS), force: on(env.FORCE), actor, issueAt, cfg: cfgKey(env.CFG) });
   } catch (e) { console.log(`::warning::preflight could not read the PR (${String(e.message).split('\n')[0]}); reviewing`); }
   console.log(why ? `SpecGuard: skipping the run: ${why}` : 'SpecGuard: preflight passed');
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${why ? 'true' : 'false'}\n`);
 }
-module.exports = { decide, sticky, reqKey, ours, recordedLogin };
+module.exports = { cfgKey, decide, sticky, reqKey, ours, recordedLogin };
