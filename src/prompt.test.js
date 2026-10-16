@@ -31,6 +31,15 @@ test('assemble: plain PR keeps every invariant section the model needs', () => {
   assert.ok(p.includes('2b. Trace requirements to code. Document tracing is separate from alignment: `alignment.status` is `not_applicable` only for a row that links no requirement at all'));
 });
 
+test('trace.md: a spec_mismatch asks which side is intended; one direction only for an untouched authoritative source or a declared change', () => {
+  const p = build(ctx({ 'spec-files.txt': 'docs/s.md\n' }));
+  assert.match(p, /update the code to match <source>, or update <source> if the new behaviour is intended/);
+  assert.match(p, /Never default to reverting the code/);
+  assert.match(p, /does not change that source: say "update the code to match <source>"/);
+  assert.match(p, /PR body itself declares the behaviour change: say "update <source>"/);
+  assert.ok(!p.includes('or revert the code.'), 'revert-by-default wording is gone');
+});
+
 test('assemble: CI prompt drops local and Copilot-code-review mode text and all markers', () => {
   const p = build(ctx({ 'spec-files.txt': 'docs/s.md\n', 'standards.txt': 'REVIEW.md\n' }));
   for (const gone of ['**Local mode**', '**Copilot code review mode**', 'Discovery (local mode)', '## Local mode: report', 'local mode: look', 'Without these files (local mode)']) assert.ok(!p.includes(gone), gone);

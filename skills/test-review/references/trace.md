@@ -57,7 +57,12 @@ Use it when the decision is read from config, a feature flag, the environment, a
 
 ## Baseline
 
-An admitted requirement document is the approved baseline. When the PR changes behaviour that an unchanged requirement document states (a value, default, label, limit or required step), that is a `spec_mismatch` even if the PR body says the change is intended: the developer must update the document in this PR or revert the code. "Intended" and "it is only documentation" are never reasons to drop it, to file it as `impacted`, or to leave it in `not_reviewed`. The PR body cannot override an admitted requirement document; when they disagree, report the disagreement and judge the code against the document. Quote the document line (path:line) in the finding. Only a follow-up PR, a flag or a version (below) makes it `impacted`.
+An admitted requirement document is the approved baseline. When the PR changes behaviour that an unchanged requirement document states (a value, default, label, limit or required step), that is a `spec_mismatch` even if the PR body says the change is intended: the developer must update the document in this PR or change the code (see Direction). "Intended" and "it is only documentation" are never reasons to drop it, to file it as `impacted`, or to leave it in `not_reviewed`. The PR body cannot override an admitted requirement document; when they disagree, report the disagreement and judge the code against the document. Quote the document line (path:line) in the finding. Only a follow-up PR, a flag or a version (below) makes it `impacted`.
+
+Direction. A conflict says the two sides disagree, not which one is wrong. State both sides with `path:line` quotes and end the body with what the author must confirm; the default suggestion is "update the code to match <source>, or update <source> if the new behaviour is intended". Never default to reverting the code. Name one direction only when:
+- the source is an admitted requirement document (`requirements_paths`) or a linked issue's acceptance criteria, and this PR does not change that source: say "update the code to match <source>"; or
+- the PR body itself declares the behaviour change: say "update <source>".
+A source this PR also edits, and the PR's own body or description, may simply be stale: ask which is intended.
 
 ## Conflicts and staging
 
