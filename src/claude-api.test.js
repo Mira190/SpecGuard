@@ -300,7 +300,7 @@ test('context pack: rule files, changed files (focus order) each followed by its
   assert.equal(u.split('name="src/b.js"').length, 2, 'de-duplicated');
   assert.ok(!u.includes('gone.js"'));
   assert.match(u, /no file tools[\s\S]*Repository files[\s\S]*full current text/);
-  assert.match(r.h.file('engine-notes'), /^context pack: 5 files, \d+ KB; not included: src\/gone\.js$/);
+  assert.match(r.h.file('engine-notes'), /^context pack: 5 files, \d+ KB$/);
 });
 
 test('context pack: a source file is followed at once by its tests, before the next source file', async (t) => {
@@ -811,12 +811,22 @@ test('context pack: a long matching test with its assertion outside the slice re
   assert.match(r.user(), /matching tests were truncated/);
 });
 
-test('context pack: unreadable candidate tests are listed as incomplete', async (t) => {
-  const r = repo(t, { 'src/a.js': 'function alpha() {}\n' }, {
-    'files.txt': 'src/a.js\n', 'test-candidates.txt': 'src/a.js\n  test/missing.test.js  (same stem)\n',
+test('context pack: a candidate test the model cannot read for size is listed as incomplete; one that is gone at HEAD or binary is not (nothing to see)', async (t) => {
+  const r = repo(t, { 'src/a.js': 'function alpha() {}\n', 'test/huge.test.js': 'x'.repeat(2 * 1024 * 1024 + 1), 'logo.png': 'PNG\0\0data' }, {
+    'files.txt': 'src/a.js\n', 'test-candidates.txt': 'src/a.js\n  test/missing.test.js  (same stem)\n  test/huge.test.js  (same stem)\n  logo.png  (x)\n',
   });
   await r.go();
-  assert.equal(r.h.file('pack-cut.txt'), 'test/missing.test.js');
+  assert.equal(r.h.file('pack-cut.txt'), 'test/huge.test.js');
+});
+
+test('context pack: a review set of a changed file, a binary and a deleted file lists nothing as cut; a budget-cut file is still listed', async (t) => {
+  const r = repo(t, { 'a.js': 'a();\n', 'logo.png': 'PNG\0\0data' }, { 'files.txt': 'a.js\nlogo.png\ngone.js\n' });
+  await r.go();
+  assert.equal(r.h.file('pack-cut.txt'), '');
+  const body = Array.from({ length: 10 }, () => 'x'.repeat(99)).join('\n') + '\n';
+  const tight = repo(t, { 'a.js': body, 'b.js': body, 'logo.png': 'PNG\0\0data' }, { 'files.txt': 'a.js\nlogo.png\ngone.js\nb.js\n' }, { CONTEXT_PACK_BYTES: '1300' });
+  await tight.go();
+  assert.equal(tight.h.file('pack-cut.txt'), 'a.js\nb.js', 'budget cuts are listed; the binary and the deleted file are not');
 });
 
 test('windowPack: omitted and partial evidence files are reported instead of claiming a complete pack', (t) => {

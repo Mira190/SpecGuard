@@ -3765,3 +3765,51 @@ test('a non-422 failure on a FILE-level comment is incomplete too (no head marke
   assert.match(down.calls.summary[0].body, /src\.js:8/, 'the finding is not lost');
   assert.equal((await run(422)).outputs.status, 'complete');
 });
+
+test('F19: a real pack over a PR with a changed file, a binary and a deleted file lists nothing as cut: complete, clean verdict, head marker; a budget-cut pack is incomplete', async (t) => {
+  const { contextPack } = require('./engines/claude-api');
+  const run = async (limit) => {
+    const s = setup(t, report({ coverage: [row()], findings: [] }));
+    fs.writeFileSync(path.join(s.dir, 'logo.png'), Buffer.from([0x89, 0x50, 0, 0x47, 1, 2, 3]));
+    track(s, 'logo.png');
+    fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\nlogo.png\ngone.js\n'); // gone.js: deleted in the PR, absent at HEAD
+    fs.writeFileSync(path.join(s.dir, 'ctx/pack-cut.txt'), contextPack(path.join(s.dir, 'ctx'), s.dir, limit).notWhole.map((x) => `${x}\n`).join(''));
+    await post(s);
+    return [fs.readFileSync(path.join(s.dir, 'ctx/pack-cut.txt'), 'utf8'), s.calls.summary[0].body];
+  };
+  const [cut, body] = await run(100000);
+  assert.equal(cut, '');
+  assert.match(body, /No unit test gaps found/);
+  assert.match(body, /specguard:head=HEADSHA/);
+  assert.doesNotMatch(body, /Incomplete review/);
+  const [tight, tbody] = await run(300);
+  assert.match(tight, /src\.js/);
+  assert.match(tbody, /Incomplete review[\s\S]*repository file\(s\) only partly or not at all/);
+  assert.doesNotMatch(tbody, /specguard:head=/);
+});
+
+test('F19: a cut pack stays incomplete beside a failed, timed out or unknown engine status, and every status is named', async (t) => {
+  for (const [st, re] of [['failed', /review engine failed/], ['timeout', /timed out after 7 minutes/], ['unknown', /did not finish cleanly \(unknown\)/]]) {
+    const s = setup(t, report({ coverage: [row()], findings: [] }));
+    writeCtx(s, 'engine-status', `${st}\n`); writeCtx(s, 'pack-cut.txt', 'src.js\n');
+    process.env.REVIEW_TIMEOUT_MINUTES = '7';
+    t.after(() => { delete process.env.REVIEW_TIMEOUT_MINUTES; });
+    await post(s);
+    const body = s.calls.summary[0].body;
+    assert.match(body, /Incomplete review/, st);
+    assert.match(body, /repository file\(s\) only partly or not at all/, `${st}: the cut is named`);
+    assert.match(body, re, `${st}: the engine status is named`);
+    assert.doesNotMatch(body, /No unit test gaps found|specguard:head=/, st);
+  }
+});
+
+test('F19: a cut pack on a run with no new findings withholds resolving stale threads; the same run with a full pack resolves them', async (t) => {
+  const run = async (cut) => {
+    const s = withThreads(t, [GONE()]);
+    writeCtx(s, 'pack-cut.txt', cut);
+    await post(s);
+    return s.resolved;
+  };
+  assert.deepEqual(await run('src.js\n'), [], 'not resolved: the model did not see everything, so a missing finding is not a fix');
+  assert.deepEqual(await run(''), ['gone']);
+});

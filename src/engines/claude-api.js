@@ -74,6 +74,8 @@ function packRead(root, rel) { // text of a regular, small, non-binary file insi
     return buf.subarray(0, 8192).includes(0) ? null : buf.toString('utf8').replace(/\r\n/g, '\n');
   } catch { return null; }
 }
+// A path the model could never read: gone at HEAD, or binary (a NUL in the first 8 KB). Not listed as cut: there is nothing to see, so nothing is hidden. A file over MAX_FILE is not this.
+const nothingToRead = (root, rel) => { try { const real = fs.realpathSync(path.resolve(root, rel)), st = fs.statSync(real); return !st.isFile() || (st.size <= MAX_FILE && fs.readFileSync(real).subarray(0, 8192).includes(0)); } catch (e) { return e.code === 'ENOENT' || e.code === 'ENOTDIR'; } };
 // Tiers after the review files: files the requirements name, and small neighbours of review files. Source files only (docs, data and tests are not candidates here).
 const NOT_CODE = /\.(md|mdx|markdown|rst|txt|json|ya?ml|toml|lock|svg|png|jpe?g|gif|snap)$/i, TESTISH = /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/i, SIBLING = 16 * 1024, NAMED_MAX = 8, NAMED_GENERIC = 3, PER_DIR = 3;
 const dirOf = (p) => path.posix.dirname(p), stemOf = (p) => path.posix.basename(p).replace(/\.[^.]*$/, '');
@@ -187,7 +189,7 @@ function contextPack(ctx, root, limit) {
     if (seen.has(rel)) return;
     seen.add(rel);
     const text = packRead(root, rel);
-    if (text === null) return void (quiet || omitted.push(rel));
+    if (text === null) return void (quiet || nothingToRead(root, rel) || omitted.push(rel));
     if (!text.trim()) return;
     const room = Math.min(num ? cap : PER_FILE, (quiet ? limit * 0.6 : top) - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
     if (room < 200) return void (quiet || omitted.push(rel));

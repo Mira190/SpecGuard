@@ -1467,7 +1467,7 @@ async function run({ github, context, core }) {
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
   const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean)); // the claude engine's pack: files the model saw only partly or not at all
-  if (packCut.size) incomplete.push(`The model saw ${packCut.size} source or test file(s) only partly or not at all (${[...packCut].slice(0, 5).join(', ')}${packCut.size > 5 ? ', \u2026' : ''}); absence of findings there is not evidence.`); // a clean verdict or head marker would hide the gap
+  if (packCut.size) incomplete.push(`The model saw ${packCut.size} repository file(s) only partly or not at all (${[...packCut].slice(0, 5).join(', ')}${packCut.size > 5 ? ', \u2026' : ''}); absence of findings there is not evidence.`); // a clean verdict or head marker would hide the gap
   if (packCut.size) { // a missing/weak-test claim is only trustworthy when its candidate tests were fully visible
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
     for (const f of data.findings) {
