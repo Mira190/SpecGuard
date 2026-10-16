@@ -43,10 +43,13 @@ test('degrades only the part with a semantic problem and records a note', () => 
   assert.deepEqual([d.standards.status, d.layering.status, d.findings.length], ['not_reviewed', 'not_reviewed', 1]);
   d = run(report({ coverage: [row('covered', { evidence: [] })], findings: [] }));
   assert.equal(d.coverage[0].status, 'unknown'); noted(d, /covered needs a current unit assertion/);
+  assert.deepEqual(d.degraded, [d.coverage[0].id], 'a malformed row is recorded by id');
   d = run(report({ coverage: [row('covered', { evidence: [{ ...evidence, layer: 'integration' }] })], findings: [] }));
   assert.equal(d.coverage[0].status, 'unknown');
   d = run(report({ findings: [] }));
   assert.equal(d.coverage[0].status, 'unknown'); noted(d, /needs exactly one missing_test/);
+  assert.deepEqual(d.degraded, [d.coverage[0].id], 'so is an inconsistent-findings demotion');
+  assert.deepEqual(run(report({ degraded: ['forged'] })).degraded, [], 'a model-supplied list is never trusted; a clean run has none');
   d = run(report({ findings: [finding(), finding()] }));
   assert.deepEqual([d.coverage[0].status, d.findings.length], ['unknown', 0]);
   d = run(report({ findings: [finding('pushdown')] }));
@@ -3272,7 +3275,7 @@ test('v2 contract: the obligations table omits an absent proves', () => {
 
 // ---- reduced review mode ----
 test('reduced: each of the four triggers, and none for a normal run', () => {
-  const data = (notes = [], n = 4) => ({ coverage: Array.from({ length: n }, (_, i) => ({ id: `O${i}` })), validation_notes: notes });
+  const data = (notes = [], n = 4) => ({ coverage: Array.from({ length: n }, (_, i) => ({ id: `O${i}` })), validation_notes: notes, degraded: notes.flatMap((m) => { const x = /^Obligation (.+?) marked unknown: (?!The linked requirement)/.exec(m); return x ? [x[1]] : []; }) }); // degraded: the explicit kind validation sets when it marks a row unknown on its own citations
   const r = (o) => post.reducedReasons({ engineNotes: [], data: data(), ...o });
   assert.deepEqual(r({}), []);
   assert.deepEqual(r({ em: { tier: 'normal', used: ['gpt-6-luna'] }, repair: '', engineNotes: ['a', 'b'] }), []);
@@ -3284,6 +3287,7 @@ test('reduced: each of the four triggers, and none for a normal run', () => {
   assert.deepEqual(r({ data: data(['Obligation O0 marked unknown: x.', 'Obligation O0 marked unknown: again.', 'Obligation O1 alignment unknown: not stated.']) }), [], '25% exactly is not more than 25%; a derived alignment is not a degraded row');
   const viaRequirement = (i) => `Obligation O${i} marked unknown: The linked requirement citation could not be verified (requirement X1 PR body: its ID did not match the collected source text).`;
   assert.deepEqual(r({ data: data([0, 1, 2, 3].map(viaRequirement).concat('Obligation O0 alignment unknown: requirement wording not verified.')) }), [], 'rows reached only through an unverified requirement link do not count');
+  assert.deepEqual(r({ data: { ...data(['Obligation O0 marked unknown: wording only.', 'Obligation O1 marked unknown: wording only.']), degraded: [] } }), [], 'note text that says "marked unknown" is not a degradation without the explicit kind');
   assert.deepEqual(r({ data: data([viaRequirement(0), viaRequirement(1), 'Obligation O2 marked unknown: could not verify citation: behaviour a.js:1.', 'Obligation O3 marked unknown: could not verify citation: evidence 1 t.js:2.']) }), ['2 of 4 obligations degraded by validation'], 'only the own-citation failures count');
 });
 
@@ -3999,4 +4003,26 @@ test('the cover guard is asked about the cited file\'s candidate tests only (wav
   fs.writeFileSync(path.join(s.dir, 'ctx/test-candidates.txt'), 'src.js\n  tests/src.test.js  (same stem)\nother.js\n  (no candidate test)\n');
   await post(s);
   assert.deepEqual(seen.find(([p]) => p === 'src.js'), ['src.js', ['tests/src.test.js']]);
+});
+
+test('the real cover guard in PR mode: a literal in an unrelated test does not demote the finding; the same literal in the cited file\'s candidate test does', async (t) => {
+  const thrown = 'throw new Error("invalid amount");', p2 = patch.replace('if (x) {', thrown);
+  const run = async (amountTest) => {
+    const s = setup(t, report({ coverage: [row('missing_test', { behaviour: { path: 'src.js', line: 3, quote: thrown }, change: { path: 'src.js', line: 3, quote: thrown } })], findings: [finding('missing_test', { quote: thrown })] }), { listed: [{ filename: 'src.js', patch: p2 }] });
+    fs.writeFileSync(path.join(s.dir, 'src.js'), `l1\nl2\n${thrown}\nl4\n`);
+    fs.mkdirSync(path.join(s.dir, 'tests'));
+    fs.writeFileSync(path.join(s.dir, 'tests/amount.test.js'), amountTest);
+    fs.writeFileSync(path.join(s.dir, 'tests/logger.test.js'), 'expect(log).toContain("invalid amount");\n');
+    track(s, 'src.js', 'tests/amount.test.js', 'tests/logger.test.js');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', p2));
+    fs.writeFileSync(path.join(s.dir, 'ctx/test-candidates.txt'), 'src.js\n  tests/amount.test.js  (same stem)\n');
+    await post(s);
+    return s;
+  };
+  const free = await run('test("ok", () => {});\n');
+  assert.equal(free.calls.review[0]?.comments.length, 1, 'posted inline');
+  assert.doesNotMatch(free.calls.summary[0].body, /low confidence: a test may already cover this/);
+  const own = await run('expect(() => f()).toThrow("invalid amount");\n');
+  assert.equal(own.calls.review.length, 0, 'control: demoted');
+  assert.match(own.calls.summary[0].body, /low confidence: a test may already cover this: tests\/amount\.test\.js/);
 });
