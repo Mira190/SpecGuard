@@ -327,6 +327,7 @@ test('context pack: pack-cut.txt lists every file that was cut or not included, 
   const r = repo(t, { 'a.js': body, 'b.js': body, 'c.js': body, 'd.js': body, 'e.js': body, 'f.js': body }, { 'files.txt': 'a.js\nb.js\nc.js\nd.js\ne.js\nf.js\n' }, { CONTEXT_PACK_BYTES: '2000' });
   await r.go();
   assert.equal(r.h.file('pack-cut.txt'), 'b.js\nc.js\nd.js\ne.js\nf.js', 'b.js cut, c.js-f.js not included, a.js whole');
+  assert.match(r.h.file('pack-shown.txt'), /^b\.js\t\d+$/, 'a file cut from the top records how many lines were shown; files not included have no entry');
   assert.match(r.user(), /Do not report a missing or weak test when a candidate test file for that code was cut or not included/);
   const whole = repo(t, { 'a.js': 'a();\n' }, { 'files.txt': 'a.js\n' });
   await whole.go();
