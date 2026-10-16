@@ -78,7 +78,10 @@ files=(); rules=(); ignored=(); docs=(); dropped=(); specs=(); lintchg=(); nctl=
 # A path with a control character (git allows a newline) would split the newline-delimited lists below: drop it, say so.
 cntrl() { [[ $1 == *[[:cntrl:]]* ]]; }
 # The name list is read to a file first: a failed diff inside `< <(...)` is invisible and would end as "nothing to review".
-git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA" > "$CTX/diff-names.tmp"   || { echo "::error::git diff $BASE_SHA...$HEAD_SHA failed (base commit missing or no merge-base: shallow clone? use actions/checkout with fetch-depth: 0); the PR was not reviewed"; exit 1; }
+# post.js reads collect-error.txt and publishes a failed run naming the cause (the job's red/green then follows fail_on_error); skip=true keeps the engine steps off.
+git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA" > "$CTX/diff-names.tmp" || {
+  echo "the PR diff could not be computed: base commit $BASE_SHA is missing from the clone or has no merge-base with the head (shallow clone); check out with fetch-depth: 0" > "$CTX/collect-error.txt"
+  echo "::error::$(cat "$CTX/collect-error.txt")"; rm -f "$CTX/diff-names.tmp"; : > "$CTX/files.txt"; : > "$CTX/diff.patch"; out skip true; exit 0; }
 while IFS= read -r -d '' f; do
   if cntrl "$f"; then nctl=$((nctl + 1)); continue; fi
   if lintcfg "$f" "$HEAD_SHA" "$BASE_SHA"; then lintchg+=("$f"); fi

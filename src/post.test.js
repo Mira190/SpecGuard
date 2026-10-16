@@ -3755,3 +3755,26 @@ test('candidates-cut.txt: a missing_test about a file whose candidate tests were
   assert.match(JSON.stringify(cut.calls.summary[0].body), /candidate tests were not looked up for src\.js/);
   for (const s of [await run('other.js\n'), await run(undefined)]) assert.equal(s.calls.review.length, 1, 'still posted inline');
 });
+
+test('collect-error.txt: a diff collect.sh could not compute publishes a failed summary naming the cause (fetch-depth: 0), never "Nothing to review", with no head marker', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx', 'collect-error.txt'), 'the PR diff could not be computed: base commit abc is missing from the clone; check out with fetch-depth: 0\n');
+  process.env.SKIP = 'true'; // what collect.sh leaves
+  const out = {}; s.core.setOutput = (k, v) => { out[k] = v; };
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.match(body, /Could not complete: the PR diff could not be computed.*fetch-depth: 0/);
+  assert.doesNotMatch(body, /Nothing to review|specguard:head/);
+  assert.equal(out.status, 'failed'); assert.match(out.reason, /fetch-depth: 0/);
+});
+
+test('candidates-cut.txt: a clean report is still incomplete (no head marker) when candidate tests were not looked up for a changed file', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx', 'candidates-cut.txt'), 'other.js\n');
+  const out = {}; s.core.setOutput = (k, v) => { out[k] = v; };
+  await post(s);
+  assert.equal(out.status, 'incomplete');
+  assert.match(s.calls.summary[0].body, /Candidate tests were not looked up for 1 changed file/);
+  assert.doesNotMatch(s.calls.summary[0].body, /specguard:head/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(s.dir, 'ctx', 'counts.json'), 'utf8')).complete, false);
+});

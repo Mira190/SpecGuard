@@ -530,9 +530,9 @@ test('leads.txt: changed symbols without a test reference and mirror assertions 
 });
 
 test('U1: a diff that cannot be computed (base commit missing) fails collection instead of ending as "nothing reviewable"; an all-ignored PR is still a skip', (t) => {
-  const e = withOutput(t, { BASE_SHA: '1'.repeat(40) });
-  assert.throws(() => scenario(t, { 'src.js': 'a\n' }, ({ write }) => write('src.js', 'b\n'), e), (err) => /::error::.*fetch-depth: 0/.test(String(err.stdout)) && err.status !== 0);
-  assert.doesNotMatch(fs.existsSync(e.GITHUB_OUTPUT) ? fs.readFileSync(e.GITHUB_OUTPUT, 'utf8') : '', /skip=true/);
+  const r = run(t, { 'src.js': 'a\n' }, ({ write }) => write('src.js', 'b\n'), { BASE_SHA: '1'.repeat(40) });
+  assert.match(r.ctxFile('collect-error.txt'), /base commit 1{40} is missing.*fetch-depth: 0/); // post.js publishes it as a failed run (post.test.js)
+  assert.ok(skipped(r), 'engine steps stay off');
   const ctl = run(t, { 'a.lock': 'x\n' }, ({ write }) => write('a.lock', 'y\n'), {});
   assert.ok(skipped(ctl)); // control
 });

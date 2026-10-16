@@ -1422,7 +1422,8 @@ async function run({ github, context, core }) {
   try { rules = fs.readFileSync(path.join(ctx, 'rule-changes.txt'), 'utf8').split('\n').filter(Boolean); } catch {}
   const ctxLines = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
   const lint = { count: ctxLines('lint-configs.txt').length, changed: ctxLines('lint-changes.txt') }; // linter/formatter configs at base; those the PR changes
-  if (env.SKIP === 'true') return publish(buildSummary({ rules, lint, headSha, req: reqFp, issues: issueVers, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
+  const collectError = (() => { try { return fs.readFileSync(path.join(ctx, 'collect-error.txt'), 'utf8'); } catch { return ''; } })().trim(); // collect.sh could not compute the diff: a failed run, never "nothing to review"
+  if (env.SKIP === 'true' && !collectError) return publish(buildSummary({ rules, lint, headSha, req: reqFp, issues: issueVers, state: 'complete', status: 'Nothing to review: every changed file is ignored (lockfiles, docs, generated files).' }), 'complete');
   const target = env.STANDARDS_REF || 'head';
   const ref = target === 'head' ? headSha : target === 'merge' && livePR?.mergeable === true ? livePR.merge_commit_sha : null;
   const tooling = ref ? await inspectChecks({ github, owner, repo, ref, names: env.STANDARDS_CHECKS })
@@ -1447,6 +1448,7 @@ async function run({ github, context, core }) {
     return { ...(runs > 0 && { runs }), ...(ms !== undefined && { ms }), ...(nano !== undefined && { nanoAiu: nano, credits: nano / 1e9 }), model: used.join(', ') || model || undefined, mode: 'pr', delivery: summaryOnly ? 'summary' : 'pr', ...(ev && { event: ev }) };
   };
   const failed = (why) => (core.setOutput?.('reason', why), publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes: notes.filter((n) => !n.startsWith(why)), partial, dropped, state: 'failed', used, tier }), 'failed'));
+  if (collectError) return failed(collectError);
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();
@@ -1476,6 +1478,7 @@ async function run({ github, context, core }) {
   }
   const noCands = new Set((readCtx('candidates-cut.txt') || '').split('\n').filter(Boolean)); // collect.sh: changed files whose candidate tests were never looked up (list cap)
   for (const f of data.findings) if (f.kind === 'missing_test' && f.confidence !== 'low' && noCands.has(f.path)) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: candidate tests were not looked up for ${f.path} (too many changed files); missing_test ${f.path} is not counted.`); }
+  if (noCands.size) incomplete.push(`Candidate tests were not looked up for ${noCands.size} changed file(s) (too many changed files): ${[...noCands].slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${noCands.size > 5 ? ', …' : ''}; their missing-test claims are not counted.`);
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
   if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);
   const addNote = (m) => { data.not_reviewed = [data.not_reviewed, m].filter(Boolean).join(' '); };
