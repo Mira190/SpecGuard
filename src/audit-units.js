@@ -18,6 +18,18 @@ const CODE = /\.(?:[cm]?[jt]sx?|py|go|java|kt|cs|rb|php|rs|swift|scala)$/i;
 const NOT_UNIT = /(^|\/)(?:examples?|samples?|demos?|benchmarks?|bench|docs?|dist|build|out|coverage|migrations?|node_modules|vendor|third_party|generated)\/|\.d\.[cm]?ts$|(^|\/)(?:[\w.-]*\.config|\.[\w-]*rc|gulpfile|Gruntfile|Rakefile|setup|conftest|__init__)\.[a-z]+$|\.(?:min|bundle)\./i;
 // Test infrastructure by name: a basename with a smoke/e2e/harness/runner/fixture/playwright/cypress token (runner-utils.js counts, testrunner.js does not), or a support/helpers dir under a test dir.
 const TEST_INFRA = /(^|\/)[^/]*(?<![a-z0-9])(?:smoke|e2e|harness|runners?|fixtures?|playwright|cypress)(?![a-z0-9])[^/]*$|(^|\/)(?:tests?|specs?|__tests__|e2e)\/(?:[^/]+\/)*(?:support|helpers)\//i;
+// First-level relative imports of a source text (JS/TS require, import, export-from, dynamic import), resolved against the tracked files -> blob shas.
+// ponytail: one level only (a change two imports deep is not tracked), relative specifiers only (bare packages, Python and Go imports are ignored); the extension/index list is the Node/TS one.
+const REL = /(?:\brequire\s*\(|\bfrom\s*|\bimport\s*\(?)\s*['"](\.\.?(?:\/[^'"\n]*)?)['"]/g, EXTS = ['', '.js', '.cjs', '.mjs', '.ts', '.tsx', '.jsx', '.json'];
+function importShas(from, src, shaOf) {
+  const out = new Set();
+  for (const m of src.matchAll(REL)) {
+    const base = path.posix.join(path.posix.dirname(from), m[1]), stem = base.replace(/\.[cm]?jsx?$/, ''); // ./x.js in TS means x.ts
+    const hit = [base, stem !== base && stem].filter((b) => b !== false).flatMap((b) => [...EXTS.map((e) => b + e), ...EXTS.slice(1).map((e) => path.posix.join(b, 'index' + e))]).find((p) => shaOf.has(p));
+    if (hit) out.add(`${hit}:${shaOf.get(hit)}`);
+  }
+  return [...out];
+}
 const sha8 = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 8);
 const comment = (l) => /^\s*(?:\/\/|#|\*|\/\*|--)/.test(l);
 const loc = (ls) => ls.filter((l) => l.trim() && !comment(l)).length;
@@ -57,7 +69,9 @@ const factorOf = (tests, s) => (!tests.length ? 1 : s.asserts === 0 || (s.tests 
 // Which units this run reviews (at most cap). rows: sorted by risk, highest first. prior = the scan issue's state { head, blocks: [{ cid, status, runs, at: { date } }] } (unit id = cid); null = the riskiest first.
 //   c confirming: a unit whose findings were seen in one run only; s stale: the unit or its matched tests changed since it was reviewed (the state's version differs);
 //   n never reviewed (riskiest first); o everything else, least recently reviewed first (ties: riskiest first).
-const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.versions.uv[r.id]; return !!v && v !== r.ver; };
+// ponytail: verLegacy (ver before first-level imports were folded in) is a temporary migration: a stored legacy ver is not a change. Drop it after one full rotation has re-reviewed every unit.
+const sameVer = (v, r) => v === r.ver || v === r.verLegacy;
+const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.versions.uv[r.id]; return !!v && !sameVer(v, r); };
 // A unit too large for one model call is reviewed in parts (review F07): fixed line windows of about PART_BYTES, one per run, the cursor in the state (uc: [next part, part count]).
 // -> { k, n, a, b } (part k of n, 0-based, lines a-b) or null when the file fits whole. A unit in progress is picked again until its last part.
 const PART_BYTES = 40 * 1024;
@@ -70,7 +84,7 @@ const shownOf = (r, bytes) => r.size + (bytes.pre && Math.max(bytes.pre, String(
 const partOf = (r, prior, bytes = partBytes(0)) => {
   const shown = shownOf(r, bytes);
   if (!(shown > bytes.max)) return null;
-  const n = Math.ceil(shown / bytes.max), per = Math.ceil(r.lines / n), v = prior && prior.versions, at = v && v.uc && v.uv && v.uv[r.id] === r.ver ? v.uc[r.id] : null, k = Array.isArray(at) && at[1] === n && at[0] > 0 && at[0] < n ? at[0] : 0; // the cursor [next part, part count] counts only for the same content version and the same layout; otherwise the unit restarts at part 0
+  const n = Math.ceil(shown / bytes.max), per = Math.ceil(r.lines / n), v = prior && prior.versions, at = v && v.uc && v.uv && sameVer(v.uv[r.id], r) ? v.uc[r.id] : null, k = Array.isArray(at) && at[1] === n && at[0] > 0 && at[0] < n ? at[0] : 0; // the cursor [next part, part count] counts only for the same content version and the same layout; otherwise the unit restarts at part 0
   return { k, n, a: k * per + 1, b: Math.min(r.lines, (k + 1) * per) };
 };
 const inProgress = (r, prior, bytes) => { const p = partOf(r, prior, bytes); return !!p && p.k > 0; };
@@ -102,7 +116,9 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   cand = cand.filter((e) => e.size <= MAX_FILE);
   const capped = Math.max(0, cand.length - MAX_UNITS_READ); // files past the read cap, never reached
   if (cand.length > MAX_UNITS_READ) { limits.push(`only the first ${MAX_UNITS_READ} of ${cand.length} source files were inventoried (narrow with scan_paths)`); cand = cand.slice(0, MAX_UNITS_READ); }
-  const units = []; let reached = 0; // reached: files whose chunk was read before the time budget ended
+  const units = [], srcImports = new Map(); // path -> the relative imports of its text (units and read tests)
+  const shaOf = new Map(files.map((e) => [e.path, e.sha]));
+  let reached = 0; // reached: files whose chunk was read before the time budget ended
   for (let i = 0; i < cand.length && !dl.over(); i += 300) {
     const part = cand.slice(i, i + 300), bufs = catBatch(cwd, part.map((e) => e.sha));
     reached = Math.min(cand.length, i + 300);
@@ -110,7 +126,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (!bufs[k] || bufs[k].subarray(0, 8192).includes(0)) return;
       const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
       const n = loc(ls);
-      if (n >= MIN_LOC) { const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0) }); }
+      if (n >= MIN_LOC) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0) }); }
     });
   }
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
@@ -125,7 +141,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (!bufs[k] || readN >= MAX_TESTS_READ || bufs[k].subarray(0, 8192).includes(0)) return;
       readN++; bytes += bufs[k].length;
       const src = bufs[k].toString('utf8');
-      sig.set(e.path, testSignals(src));
+      sig.set(e.path, testSignals(src)); srcImports.set(e.path, importShas(e.path, src, shaOf));
       for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) if (stems.has(w)) { if (!mention.has(w)) mention.set(w, []); mention.get(w).push(e.path); }
       for (const w of new Set(src.match(/[A-Za-z_$][\w$]*(?=\s*\()/g) || [])) if (names.has(w)) { if (!called.has(w)) called.set(w, []); called.get(w).push(e.path); }
     });
@@ -135,7 +151,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const hist = history(cwd, now);
   if (!hist) limits.push('no git history (shallow clone? use fetch-depth: 0): churn and fix commits are not used in the ranking');
   const notReached = capped + cand.length - reached;
-  const none = { tests: 0, noAssert: 0, skipped: 0, asserts: 0, weak: [] }, shaOf = new Map(files.map((e) => [e.path, e.sha]));
+  const none = { tests: 0, noAssert: 0, skipped: 0, asserts: 0, weak: [] };
   const index = indexTests(tests);
   const rows = units.map((u) => {
     const got = [...mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: PER_UNIT_TESTS }).keys()];
@@ -144,8 +160,9 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     const h = (hist && hist.get(u.path)) || { churn: 0, fixes: 0 }, factor = factorOf(got, got.some((t) => !sig.has(t)) ? { ...s, asserts: Math.max(s.asserts, 1) } : s); // a test file that was not read is assumed to assert
     const why = [!got.length && 'no test', s.skipped && `${s.skipped} skipped test${s.skipped === 1 ? '' : 's'}`, s.noAssert && `${s.noAssert} test${s.noAssert === 1 ? '' : 's'} without an assertion`, s.weak.length && `${s.weak.length} weak assertion${s.weak.length === 1 ? '' : 's'}`,
       h.fixes && `${h.fixes} fix commit${h.fixes === 1 ? '' : 's'} in ${DAYS} days`, !h.fixes && h.churn >= 3 && `${h.churn} commits in ${DAYS} days`].filter(Boolean).join(', ') || `${u.pub} public definition${u.pub === 1 ? '' : 's'}`;
-    const ver = sha8([u.path, ...got].map((p) => `${p}:${shaOf.get(p) || ''}`).join('\n')); // what a review of this unit saw: its blob and its matched tests' blobs
-    return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, score: risk({ ...u, ...h, factor }) };
+    const seen = [u.path, ...got].map((p) => `${p}:${shaOf.get(p) || ''}`).join('\n'), deps = [...new Set([u.path, ...got].flatMap((p) => srcImports.get(p) || []))].sort().join('\n');
+    const verLegacy = sha8(seen), ver = deps ? sha8(`${seen}\n${deps}`) : verLegacy; // what a review of this unit saw: its blob, its matched tests' blobs, and the blobs they import (helpers, fixtures, the unit's own dependencies)
+    return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
   const size = partBytes(packBytes, maxUnits), tsize = new Map(testEntries.map((e) => [e.path, e.size]));
   // what a unit costs in the pack: its part (or whole file) and its matched tests, line-numbered (about 15% more) plus a block header each; 90% of the pack, the rest is markup and neighbours
