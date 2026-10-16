@@ -179,7 +179,7 @@ function windowPack(root, locs, limit) {
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
-  const parts = [], seen = new Set(), omitted = [], partial = []; // partial: cut at the budget
+  const parts = [], seen = new Set(), omitted = [], partial = [], shown = new Map(); // partial: cut at the budget; shown: path -> lines shown, for a file cut from the top (post.js checks the changed lines against it)
   let used = 0, files = 0;
   const cap = Math.min(PER_FILE, Math.max(8 * 1024, limit / 6)); // a smaller cap on source/test files when the pack is tight, so each file and its test fit
   const addFile = (p, num, quiet, syms, top = limit, part = null) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
@@ -209,7 +209,7 @@ function contextPack(ctx, root, limit) {
     }
     const c = cut(full, room);
     if (c.cut && c.lines < 1) return void (quiet || omitted.push(rel));
-    if (c.cut && !quiet) partial.push(rel);
+    if (c.cut && !quiet) { partial.push(rel); shown.set(rel, c.lines); }
     const b = block(rel, c.text, `${c.cut ? `first ${c.lines} of ${src.length} lines` : 'full file'}${num ? ', line-numbered' : ''}`);
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
@@ -243,7 +243,7 @@ function contextPack(ctx, root, limit) {
   for (const p of list('spec-files.txt')) addFile(p, false);
   const text = parts.length ? `Repository files (read from the checked-out repository; rule files, each file under review followed by its candidate tests, files the requirements name and small neighbours of reviewed files, the rest of a cut diff, requirement documents):\n\n${parts.join('\n\n')}` : '';
   const note = files || omitted.length ? `context pack: ${files} files, ${Math.round(used / 1024)} KB${omitted.length ? `; not included: ${omitted.slice(0, 4).join(', ')}${omitted.length > 4 ? ` (+${omitted.length - 4} more)` : ''}` : ''}` : '';
-  return { text, note, notWhole: [...partial, ...omitted] };
+  return { text, note, notWhole: [...partial, ...omitted], shown };
 }
 
 const tokenRe = /github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|sk-ant-[A-Za-z0-9_-]+|Bearer [^\s]+/g;
@@ -413,7 +413,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     }
 
     let pack = { text: '', note: '' };
-    if (packBytes > 0) try { pack = contextPack(ctx, root(), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
+    if (packBytes > 0) try { pack = contextPack(ctx, root(), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); w('pack-shown.txt', [...pack.shown].map(([x, n]) => `${x}\t${n}\n`).join('')); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
     const { system, user } = messages(prompt, pack.text); // the pre-flight below sees the pack
     const est = worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user), maxTokens);
     if (est.usd > budget) { // the budget is hard here: nothing is sent

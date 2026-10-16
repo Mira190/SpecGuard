@@ -228,6 +228,11 @@ test('pack-cut.txt listing a changed file or its candidate test: the run is inco
     assert.doesNotMatch(body, /<!-- specguard:head=/); assert.match(body, /<!-- specguard:status=incomplete -->/);
     assert.equal(require('./preflight.js').decide({ pr: { state: 'open', user: { type: 'User', login: 'dev' } }, headSha: 'HEADSHA', comments: [{ user: { type: 'Bot', login: 'github-actions[bot]' }, body }] }), '');
   }
+  // a changed file cut from the top is incomplete only when a changed line (here 2-3) lies past the lines shown; its cut candidate test always counts
+  const big = async (shown, cut = 'src.js\n') => { const s = setup(t, report({ coverage: [row()], findings: [] })); fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut); fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-shown.txt'), shown); await post(s); return JSON.parse(fs.readFileSync(path.join(s.dir, 'ctx/counts.json'), 'utf8')); };
+  assert.equal((await big('src.js\t50\n')).complete, true, 'cut beyond the changed hunk');
+  assert.equal((await big('src.js\t2\n')).complete, false, 'cut over the changed hunk');
+  assert.equal((await big('src.js\t50\n', 'src.js\ntest.js\n')).complete, true, 'no candidates listed: only the changed file matters');
   for (const cut of ['', 'other.js\nbig.js\n']) {
     const { body, counts } = await run(cut);
     assert.equal(counts.complete, true); assert.equal(counts.execution_complete, true);
