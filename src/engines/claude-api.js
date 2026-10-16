@@ -147,7 +147,7 @@ function slices(src, syms, room) {
 }
 // A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
 // a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Partial or omitted files are returned in notWhole for per-block verification (separate from the unit pack-cut.txt). ponytail: no per-file fairness, first files first.
-const WIN = 40, HEAD = 15;
+const WIN = 40, HEAD = 15, UNIT_SYMS = 150; // UNIT_SYMS: names of a unit part searched for in its tests
 function windowPack(root, locs, limit) {
   const cap = fileCap(limit), parts = [], notWhole = [];
   let used = 0;
@@ -177,13 +177,28 @@ function windowPack(root, locs, limit) {
   return { text: parts.length ? `Repository files (the code and tests cited by the candidate blocks' evidence rows; a file noted "relevant windows" shows the lines around each cited line):\n\n${parts.join('\n\n')}` : '', note: '', notWhole };
 }
 
+// The evidence of candidate blocks (audit-evidence.txt rows: cid, kind, path:line, text) as windows around the cited lines, code first, then tests. One path for the single call (contextPack) and the block parts (src/scan-parts.js). skip: files already shown whole. blockCuts: cid -> its cited files that are not shown whole (post-processing turns a missing/absent claim of that block into unknown).
+function evidencePack(root, rows, limit, skip = new Set()) {
+  const locs = new Map(), cited = new Map();
+  for (const kind of ['code', 'test']) for (const l of rows) {
+    const c = l.split('\t'), x = c[2] || '', k = x.lastIndexOf(':'), file = x.slice(0, k);
+    if (k <= 0) continue;
+    if (c[1] === kind && !skip.has(file)) locs.set(file, [...(locs.get(file) || []), parseInt(x.slice(k + 1), 10) || 1]);
+    if (kind === 'code') cited.set(c[0], new Set([...(cited.get(c[0]) || []), file]));
+  }
+  if (limit <= 0) return { text: '', note: '', notWhole: [], blockCuts: {} };
+  const p = windowPack(root, locs, limit), cut = new Set(p.notWhole), blockCuts = {};
+  for (const [cid, files] of cited) { const missing = [...files].filter((f) => cut.has(f)); if (missing.length) blockCuts[cid] = missing; }
+  return { ...p, blockCuts };
+}
+
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
-  const parts = [], seen = new Set(), omitted = [], partial = []; // partial: cut at the budget
+  const parts = [], seen = new Set(), whole = new Set(), omitted = [], partial = []; // partial: cut at the budget
   let used = 0, files = 0;
   const cap = fileCap(limit);
-  const addFile = (p, num, quiet, syms, top = limit, part = null) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
+  const addFile = (p, num, quiet, syms, top = limit, part = null, incomplete = false) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
     const rel = path.posix.normalize(p.replace(/\\/g, '/'));
     if (seen.has(rel)) return;
     seen.add(rel);
@@ -203,7 +218,7 @@ function contextPack(ctx, root, limit) {
     const full = num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text;
     const sl = syms && syms.length && Buffer.byteLength(full) > room ? slices(src, syms, room) : null;
     if (sl) { // pack-cut.txt: not listed when every test that mentions the changed symbols is shown (its relevant tests were visible); listed when some matching block did not fit
-      if (!sl.complete && !quiet) partial.push(rel);
+      if ((!sl.complete || incomplete) && !quiet) partial.push(rel); // incomplete: more symbols than were searched for
       const b = block(rel, sl.text, sl.note);
       parts.push(b); used += Buffer.byteLength(b); files++;
       return;
@@ -211,6 +226,7 @@ function contextPack(ctx, root, limit) {
     const c = cut(full, room);
     if (c.cut && c.lines < 1) return void (quiet || omitted.push(rel));
     if (c.cut && !quiet) partial.push(rel);
+    if (!c.cut && num) whole.add(rel);
     const b = block(rel, c.text, `${c.cut ? `first ${c.lines} of ${src.length} lines` : 'full file'}${num ? ', line-numbered' : ''}`);
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
@@ -220,10 +236,10 @@ function contextPack(ctx, root, limit) {
   const units = new Map(list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1]).map((u) => [u[1], u[4] && u[4] !== 'none' ? u[4].split(', ') : []])), review = units.size ? [...units.keys()] : focus.length ? focus : list('files.txt');
   const cands = parseCandidates(rd('test-candidates.txt'));
   const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch'), leads = rd('leads.txt');
-  const unitSymbols = (p) => { const out = new Set(), add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n) && out.size < 40) out.add(n); }; for (const l of (packRead(root, p) || '').split('\n')) symbolsIn(l, add); return [...out]; }; // names the unit defines: a big test file is shown as the tests that mention them
+  const unitSymbols = (p) => { const out = new Set(), part = unitPart.get(p); let capped = false; const add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n)) { if (out.size < UNIT_SYMS) out.add(n); else if (!out.has(n)) capped = true; } }; for (const l of (packRead(root, p) || '').split('\n').slice(part ? part.a - 1 : 0, part ? part.b : undefined)) symbolsIn(l, add); const syms = [...out]; syms.capped = capped; return syms; }; // names the unit defines in this run's part (all of the file when it is not in parts): a big test file is shown as the tests that mention them; capped: more names than UNIT_SYMS, so the file is listed as cut
   const unitPart = new Map(list('audit-units.txt').map((l) => l.split('\t')).map((u) => [u[1], /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(u[7] || '')]).filter((x) => x[1]).map(([p, w]) => [p, { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] }]));
   if (units.size) for (const p of review) addFile(p, true, false, null, limit, unitPart.get(p)); // scan: every unit file first, so no test starves a later unit (addFile skips a file already added)
-  review.forEach((p, i) => { addFile(p, true, false, null, limit, unitPart.get(p)); const top = Math.min(limit, used + (limit - used) / (review.length - i)); const syms = units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of (units.size ? units.get(p) : cands.get(p)) || []) addFile(t, true, false, syms, top); }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+  review.forEach((p, i) => { addFile(p, true, false, null, limit, unitPart.get(p)); const top = Math.min(limit, used + (limit - used) / (review.length - i)); const syms = units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads); for (const t of (units.size ? units.get(p) : cands.get(p)) || []) addFile(t, true, false, syms, top, null, syms.capped); }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
     const named = [], crit = criteriaText(rd('requirements-status.json'));
@@ -242,10 +258,13 @@ function contextPack(ctx, root, limit) {
     const dl = diff.replace(/\n$/, '').split('\n'), c = cut(dl.slice(head.lines).join('\n'), limit - used - OVERHEAD), all = dl.length;
     if (c.lines > 0) { const b = block(`${dname} (rest)`, c.text, `lines ${head.lines + 1} to ${head.lines + c.lines} of ${all}; continues the diff block above${c.cut ? '; cut at the context budget' : ''}`); parts.push(b); used += Buffer.byteLength(b); }
   }
+  const ev = evidencePack(root, list('audit-evidence.txt'), Math.max(limit - used, 1), whole); // single-call scan: the evidence files of the candidate blocks, as the block parts load them (a file shown only as slices or a head is windowed again)
+  if (ev.text) { parts.push(ev.text); used += Buffer.byteLength(ev.text); files++; }
+  for (const p of ev.notWhole) if (!partial.includes(p)) partial.push(p);
   for (const p of list('spec-files.txt')) addFile(p, false);
   const text = parts.length ? `Repository files (read from the checked-out repository; rule files, each file under review followed by its candidate tests, files the requirements name and small neighbours of reviewed files, the rest of a cut diff, requirement documents):\n\n${parts.join('\n\n')}` : '';
   const note = files || omitted.length ? `context pack: ${files} files, ${Math.round(used / 1024)} KB${omitted.length ? `; not included: ${omitted.slice(0, 4).join(', ')}${omitted.length > 4 ? ` (+${omitted.length - 4} more)` : ''}` : ''}` : '';
-  return { text, note, notWhole: [...partial, ...omitted] };
+  return { text, note, notWhole: [...partial, ...omitted], blockCuts: ev.blockCuts };
 }
 
 const tokenRe = /github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|sk-ant-[A-Za-z0-9_-]+|Bearer [^\s]+/g;
@@ -356,7 +375,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     if (!PRICES[model]) notes.push(`cost estimated at default rates: ${model} is not in the price table`);
 
     // A scan with more document blocks than SCAN_BATCH_BLOCKS (default 20) is split into budgeted parts (src/scan-parts.js): one unit call and block calls, answers merged here. Fewer blocks: one call, below.
-    const batch = Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), split = env.CHECK === 'audit' ? require('../scan-parts.js').plan({ ctx, root: root(), batch, limit: packBytes, schemaFile, contextPack, windowPack, assembleAudit: require('../prompt.js').assembleAudit }) : null;
+    const batch = Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), split = env.CHECK === 'audit' ? require('../scan-parts.js').plan({ ctx, root: root(), batch, limit: packBytes, schemaFile, contextPack, evidencePack, assembleAudit: require('../prompt.js').assembleAudit }) : null;
     if (split) {
       const priced = (p) => {
         const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1500 * p.cids.length + 2000) : maxTokens; // a batch of n blocks needs about 1500 tokens each (20 blocks overflowed 22000 live)
@@ -415,7 +434,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     }
 
     let pack = { text: '', note: '' };
-    if (packBytes > 0) try { pack = contextPack(ctx, root(), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
+    if (packBytes > 0) try { pack = contextPack(ctx, root(), packBytes); w('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join('')); if (Object.keys(pack.blockCuts || {}).length) w('scan-parts.json', JSON.stringify({ blockCuts: pack.blockCuts })); } catch { /* the pack is optional */ } // pack-cut.txt: files the model did not see whole; post.js distrusts missing/weak-test claims about them
     const { system, user } = messages(prompt, pack.text); // the pre-flight below sees the pack
     const est = worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user), maxTokens);
     if (est.usd > budget) { // the budget is hard here: nothing is sent
@@ -434,4 +453,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack };
+module.exports = { run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, evidencePack };

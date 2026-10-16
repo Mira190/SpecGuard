@@ -679,6 +679,21 @@ test('run: a unit with an incomplete candidate test stays due instead of being s
   assert.match(r.calls.summary, /Not reviewed this run/);
 });
 
+test('run: a single call (20 blocks or fewer) hands blockCuts alone in scan-parts.json: a missing_test block whose evidence was cut ends unknown', async (t) => {
+  const w = workspace(t), id = '1111111a';
+  w.put('audit-docs.txt', 'docs/design.md\tdiscovered\n');
+  w.put('audit-candidates.txt', `${id}\tdocs/design.md:3\tPlan design\tA repeating plan stays on after it fires.\n`);
+  const doc = { id, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'missing_test', code: [cite('src/js/orders.js', 1)], tests: [], note: 'No test was visible.' };
+  const r = await post(t, { w, files: {
+    'findings.json': result([], { docs_reviewed: ['docs/design.md'], requirements: [doc] }),
+    'scan-parts.json': { blockCuts: { [id]: ['config/policy.yaml'] } },
+    'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, candidates: 1, limitations: [] },
+  } });
+  const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
+  assert.equal(saved.requirements[0].status, 'unknown');
+  assert.match(saved.requirements[0].note, /config\/policy.yaml/);
+});
+
 test('run: per-block context omissions reach the validated audit artifact', async (t) => {
   const w = workspace(t), id = '1111111a';
   w.put('audit-docs.txt', 'docs/design.md\tdiscovered\n');
