@@ -29,7 +29,7 @@ function scopeOf(spec, target = '') {
 }
 // The one state address (publisher and collector): the repository holding the scan issue, its scope marker and (away from the scanned repository) its full title.
 function stateAddress(env, owner, repo) {
-  const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(ir[1] === owner && ir[2] === repo);
+  const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(`${ir[1]}/${ir[2]}`.toLowerCase() === `${owner}/${repo}`.toLowerCase());
   const scope = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
   return { ir, away, issueRepo: away ? { owner: ir[1], repo: ir[2] } : { owner, repo }, scope, title: away ? scope.title : '' };
 }
@@ -644,7 +644,8 @@ function changedSince(prior, blocks) {
 // Our scan issue among open and closed issues (marker plus identity); an open one wins.
 async function findIssue({ github, owner, repo, me, mark = MARK, title = '' }) {
   // same-repository lookup (no title): an issue titled for another target (`TITLE: owner/repo`) is that target's, never ours; a legacy title without a target stays ours
-  const foreign = (t) => { const m = /^SpecGuard: unit test gap scan: ([\w.-]+\/[\w.-]+)(?: \(|$)/.exec(t); return !!m && m[1] !== `${owner}/${repo}`; };
+  const own = new RegExp(`^${TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: ([\\w.-]+/[\\w.-]+)(?: \\(|$)`);
+  const foreign = (t) => { const m = own.exec(t); return !!m && m[1].toLowerCase() !== `${owner}/${repo}`.toLowerCase(); };
   // ponytail: lists every issue; narrow with a label or `creator` if a repo has thousands
   const all = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
   const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (title ? i.title === title : !foreign(i.title)) && typeof i.body === 'string' && i.body.startsWith(mark));

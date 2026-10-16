@@ -1097,8 +1097,19 @@ test('scan state address (review F24, probe P3): the collector reads where the p
     try { Object.assign(process.env, { CTX: ctx2, SKIP: 'true', SCAN_ISSUE: 'true', ISSUE_REPO: 'org/reports', ENGINE: '', MODEL: '' }); await audit({ github: c2, issueGithub: c2, context: { repo: { owner: 'org', repo: 'reports' }, sha: 'abc1234' }, core }); }
     finally { for (const k of ['CTX', 'SKIP', 'SCAN_ISSUE', 'ISSUE_REPO', 'ENGINE', 'MODEL']) if (k in saved2) process.env[k] = saved2[k]; else delete process.env[k]; fs.rmSync(ctx2, { recursive: true, force: true }); }
     assert.deepEqual(writes, issues.length > 1 ? [['update', 9]] : [], 'SKIP only refreshes an existing issue of its own');
-  }  const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8'), step = /- id: audit_collect[\s\S]*?run: node/.exec(y)[0];
+  }
+  const y = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8'), step = /- id: audit_collect[\s\S]*?run: node/.exec(y)[0];
   assert.match(step, /ISSUE_REPO: \$\{\{ inputs\.scan_issue_repo \}\}/);
   assert.match(step, /ISSUE_TOKEN: \$\{\{ inputs\.scan_issue_token \}\}/);
   assert.match(step, /GH_TOKEN: \$\{\{ inputs\.github_token \}\}/, 'source reads keep the source token');
+});
+
+test('scan state address is case-insensitive: ISSUE_REPO=Org/Reports scanning org/reports is not away, and its own mixed-case title is accepted', async () => {
+  const a = audit.stateAddress({ ISSUE_REPO: 'Org/Reports' }, 'org', 'reports');
+  assert.deepEqual([a.away, a.title], [false, '']);
+  const issues = [{ number: 3, state: 'open', user: { type: 'Bot', login: 'github-actions[bot]' }, title: audit.TITLE + ': Org/Reports', body: MARK }];
+  const github = { paginate: async () => issues, rest: { issues: { listForRepo: null } } };
+  assert.equal((await audit.findIssue({ github, owner: 'org', repo: 'reports', me: null, mark: MARK }))?.number, 3);
+  issues[0].title = audit.TITLE + ': org/source';
+  assert.equal(await audit.findIssue({ github, owner: 'org', repo: 'reports', me: null, mark: MARK }), null);
 });

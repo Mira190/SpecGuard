@@ -469,7 +469,8 @@ test('loadPrior: reads back the state at the publisher\'s address: same reposito
   // an invalid ISSUE_REPO reads nothing (never the source repository) and warns like the publisher
   const seen = [], log = console.log; console.log = (m) => seen.push(m);
   try { assert.equal(await loadPrior({ ...same, ISSUE_REPO: 'not-a-repo' }, world({ 'org/source': [written(same, 'org', 'source', 'aaaaaaa1')] }).fetchFn), null); } finally { console.log = log; }
-  assert.ok(seen.some((m) => /scan_issue_repo is not owner\/name/.test(m)));});
+  assert.ok(seen.some((m) => /scan_issue_repo is not owner\/name/.test(m)));
+});
 
 test('collect: blocks the prefilter rules out are listed in audit-ruled.txt with the reason, never reach the candidates, and do not count against the cap', (t) => {
   const design = [
