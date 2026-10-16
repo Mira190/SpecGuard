@@ -58,7 +58,7 @@ const factorOf = (tests, s) => (!tests.length ? 1 : s.asserts === 0 || (s.tests 
 //   c confirming: a unit whose findings were seen in one run only; s stale: the unit or its matched tests changed since it was reviewed (the state's version differs);
 //   n never reviewed (riskiest first); o everything else, least recently reviewed first (ties: riskiest first).
 const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.versions.uv[r.id]; return !!v && v !== r.ver; };
-// A unit too large for one model call is reviewed in parts (review F07): fixed line windows of about PART_BYTES, one per run, the cursor in the state (uc).
+// A unit too large for one model call is reviewed in parts (review F07): fixed line windows of about PART_BYTES, one per run, the cursor in the state (uc: [next part, part count]).
 // -> { k, n, a, b } (part k of n, 0-based, lines a-b) or null when the file fits whole. A unit in progress is picked again until its last part.
 const PART_BYTES = 40 * 1024;
 // Claude api engine only (the one engine with a context pack; the others read files themselves): a part, as shown line-numbered (6 bytes a line), must fit the per-file cap and a 1/N share of the pack
@@ -66,25 +66,28 @@ const PART_BYTES = 40 * 1024;
 // shortcut: the collector assumes the default 250000-byte pack (the action has no input for CONTEXT_PACK_BYTES); wire it through if one is added.
 // shortcut: parts are equal line counts, so a part of unusually long lines can exceed the average; the pack then lists it as cut.
 const partBytes = (packBytes, units) => (packBytes ? { max: Math.min(PART_BYTES, Math.max(4096, Math.floor(Math.min(fileCap(packBytes), packBytes / units) * 5 / 6))), pre: 4 } : { max: PART_BYTES, pre: 0 }); // pre: minimum width of the line number in the pack's prefix (0 = no prefix)
+const shownOf = (r, bytes) => r.size + (bytes.pre && Math.max(bytes.pre, String(r.lines).length) + 2) * r.lines; // prefix: the number, padded, plus 2
 const partOf = (r, prior, bytes = partBytes(0)) => {
-  const shown = r.size + (bytes.pre && Math.max(bytes.pre, String(r.lines).length) + 2) * r.lines; // prefix: the number, padded, plus 2
+  const shown = shownOf(r, bytes);
   if (!(shown > bytes.max)) return null;
-  const n = Math.ceil(shown / bytes.max), per = Math.ceil(r.lines / n), at = prior && prior.versions && prior.versions.uc ? prior.versions.uc[r.id] : 0, k = Number.isInteger(at) && at > 0 && at < n ? at : 0;
+  const n = Math.ceil(shown / bytes.max), per = Math.ceil(r.lines / n), v = prior && prior.versions, at = v && v.uc && v.uv && v.uv[r.id] === r.ver ? v.uc[r.id] : null, k = Array.isArray(at) && at[1] === n && at[0] > 0 && at[0] < n ? at[0] : 0; // the cursor [next part, part count] counts only for the same content version and the same layout; otherwise the unit restarts at part 0
   return { k, n, a: k * per + 1, b: Math.min(r.lines, (k + 1) * per) };
 };
 const inProgress = (r, prior, bytes) => { const p = partOf(r, prior, bytes); return !!p && p.k > 0; };
-function pick(rows, cap, prior, bytes) {
-  const kind = new Map(), picked = [];
-  if (!prior) { for (const r of rows.slice(0, cap)) { kind.set(r.id, 'n'); picked.push(r); } return { picked, kind, tally: { c: 0, s: 0, n: picked.length, o: 0 } }; }
+// room (claude api engine): { left, cost(r) }: a unit is taken only while its whole context (part, matched tests) still fits in what is left of the pack, so every run finishes at least one unit's context (review F23).
+// Nothing fits: the first unit alone, and over = the units that never fit.
+function pick(rows, cap, prior, bytes, room = null) {
+  const kind = new Map(), picked = [], over = [], afford = (r) => { if (!room) return true; const c = room.cost(r); if (c > room.total && !over.includes(r)) over.push(r); if (c > room.left) return false; room.left -= c; return true; };
+  if (!prior) { for (const r of rows) if (picked.length < cap && afford(r)) { kind.set(r.id, 'n'); picked.push(r); } return { picked, kind, over, tally: { c: 0, s: 0, n: picked.length, o: 0 } }; }
   const st = new Map(prior.blocks.map((b) => [b.cid, b])), when = (r) => (st.get(r.id).at || {}).date || '';
-  const take = (list, k) => { for (const r of list) if (picked.length < cap && !kind.has(r.id)) { kind.set(r.id, k); picked.push(r); } };
+  const take = (list, k) => { for (const r of list) if (picked.length < cap && !kind.has(r.id) && afford(r)) { kind.set(r.id, k); picked.push(r); } };
   take(rows.filter((r) => st.has(r.id) && ((st.get(r.id).status === 'gap' && st.get(r.id).runs === 1) || inProgress(r, prior, bytes))), 'c'); // confirming, or continuing a unit reviewed in parts
   take(rows.filter((r) => st.has(r.id) && staleUnit(r, prior)), 's');
   take(rows.filter((r) => !st.has(r.id)), 'n');
   take(rows.filter((r) => st.has(r.id)).sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0)), 'o'); // stable: ties keep the risk order
   const tally = { c: 0, s: 0, n: 0, o: 0 };
   for (const k of kind.values()) tally[k]++;
-  return { picked, kind, tally };
+  return { picked, kind, over, tally };
 }
 
 // files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
@@ -138,7 +141,14 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     const ver = sha8([u.path, ...got].map((p) => `${p}:${shaOf.get(p) || ''}`).join('\n')); // what a review of this unit saw: its blob and its matched tests' blobs
     return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
-  const size = partBytes(packBytes, maxUnits), sel = pick(rows, maxUnits, prior, size), chosen = new Set(sel.picked.map((r) => r.id));
+  const size = partBytes(packBytes, maxUnits), tsize = new Map(testEntries.map((e) => [e.path, e.size]));
+  // what a unit costs in the pack: its part (or whole file) and its matched tests, line-numbered (about 15% more) plus a block header each; 90% of the pack, the rest is markup and neighbours
+  const room = packBytes ? { total: Math.floor(packBytes * 0.9), cost: (r) => { const p = partOf(r, prior, size); return Math.ceil(shownOf(r, size) / (p ? p.n : 1)) + 300 + r.tests.reduce((n, t) => n + Math.ceil(Math.min(tsize.get(t) || 0, fileCap(packBytes)) * 1.15) + 300, 0); } } : null;
+  if (room) room.left = room.total;
+  let sel = pick(rows, maxUnits, prior, size, room);
+  if (room && !sel.picked.length && rows.length) { sel = pick(rows, 1, prior, size); limits.push('no unit fits the context pack with its matched tests; the scan reviews the first one and its tests may be cut'); }
+  if (sel.over.length) limits.push(`${sel.over.length} unit${sel.over.length === 1 ? '' : 's'} (${sel.over.slice(0, 3).map((r) => r.path).join(', ')}${sel.over.length > 3 ? ', ...' : ''}) cannot fit the context pack with their matched tests and ${sel.over.length === 1 ? 'is' : 'are'} not reviewed`);
+  const chosen = new Set(sel.picked.map((r) => r.id));
   const distinct = (rs) => [...new Set(rs.flatMap((r) => r.tests))].map((t) => sig.get(t) || none);
   const tot = (ss) => ({ skipped_tests: ss.reduce((a, s) => a + s.skipped, 0), tests_without_assertion: ss.reduce((a, s) => a + s.noAssert, 0), weak_assertions: ss.reduce((a, s) => a + s.weak.length, 0) });
   const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), reviewed = new Set([...rows.filter((r) => known.has(r.id)).map((r) => r.id), ...chosen]);
