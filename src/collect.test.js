@@ -528,3 +528,40 @@ test('leads.txt: changed symbols without a test reference and mirror assertions 
   const none = scenario(t, { 'src.js': 'return 1;\n' }, ({ write }) => write('src.js', 'return 2;\n'));
   assert.equal(none.ctxFile('leads.txt'), null);
 });
+
+test('U1: a diff that cannot be computed (base commit missing) fails collection instead of ending as "nothing reviewable"; an all-ignored PR is still a skip', (t) => {
+  const r = run(t, { 'src.js': 'a\n' }, ({ write }) => write('src.js', 'b\n'), { BASE_SHA: '1'.repeat(40) });
+  assert.match(r.ctxFile('collect-error.txt'), /base commit 1{40} is missing.*fetch-depth: 0/); // post.js publishes it as a failed run (post.test.js)
+  assert.ok(skipped(r), 'engine steps stay off');
+  const ctl = run(t, { 'a.lock': 'x\n' }, ({ write }) => write('a.lock', 'y\n'), {});
+  assert.ok(skipped(ctl)); // control
+});
+
+test('U2: files dropped by an ignore pattern are listed with the pattern in collect-limits.txt, also when the PR is then skipped; patterns are unchanged', (t) => {
+  const r = run(t, { 'internal/build/x.go': 'a\n', 'internal/other/y.go': 'a\n', 'yarn.lock': 'a\n' }, ({ write }) => { write('internal/build/x.go', 'b\n'); write('internal/other/y.go', 'b\n'); write('yarn.lock', 'b\n'); }, {});
+  assert.deepEqual(r.ctxFile('files.txt').split('\n').filter(Boolean), ['internal/other/y.go']);
+  const lim = r.ctxFile('collect-limits.txt');
+  assert.match(lim, /`internal\/build\/x\.go \(build\/\)`/);
+  assert.match(lim, /`yarn\.lock \(yarn\.lock\)`/);
+  assert.doesNotMatch(lim, /other/);
+  const only = run(t, { 'internal/build/x.go': 'a\n' }, ({ write }) => write('internal/build/x.go', 'b\n'), {});
+  assert.ok(skipped(only));
+  assert.match(only.ctxFile('collect-limits.txt'), /internal\/build\/x\.go \(build\/\)/);
+  const none = run(t, { 'src.js': 'a\n' }, ({ write }) => write('src.js', 'b\n'), {});
+  assert.equal(none.ctxFile('collect-limits.txt'), '');
+});
+
+test('U3: a file past the 60-file candidate cap that focus chooses gets its candidate tests; files still without any are listed in candidates-cut.txt', (t) => {
+  const base = {}, edit = {};
+  for (let i = 0; i < 61; i++) { base[`src/f${String(i).padStart(2, '0')}.js`] = 'exports.a = 1;\n'; edit[`src/f${String(i).padStart(2, '0')}.js`] = 'exports.a = 2;\n'; }
+  base['src/zzz.js'] = 'exports.z = 0;\n'; base['tests/zzz.test.js'] = 'require("../src/zzz");\n';
+  edit['src/zzz.js'] = ['exports.zzz = function (v) {'].concat(Array.from({ length: 40 }, (_, i) => `  if (v === ${i}) { throw new Error("bad ${i}"); } else if (v > ${i + 100}) { return ${i}; }`), ['  return v + 1;', '};']).join('\n') + '\n';
+  const r = scenario(t, base, ({ write }) => { for (const [f, c] of Object.entries(edit)) write(f, c); }, { FOCUS_THRESHOLD: '50,2', FOCUS_FILES: '3' });
+  assert.match(r.ctxFile('focus.txt'), /^src\/zzz\.js\t/m);
+  assert.match(r.ctxFile('test-candidates.txt'), /^src\/zzz\.js\n {2}tests\/zzz\.test\.js/m);
+  const cut = r.ctxFile('candidates-cut.txt').split('\n').filter(Boolean);
+  assert.ok(cut.length > 0 && !cut.includes('src/zzz.js'));
+  assert.match(r.ctxFile('test-candidates.txt'), new RegExp(`\\(${cut.length} more changed file\\(s\\) not listed\\)`));
+  const small = scenario(t, { 'src/a.js': 'a\n' }, ({ write }) => write('src/a.js', 'b\n'));
+  assert.equal(small.ctxFile('candidates-cut.txt'), ''); // control: nothing cut
+});
