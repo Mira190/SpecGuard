@@ -8,7 +8,8 @@ const esc = (s) => String(s).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(
 const { STATUS = '', REASON = '', CTX = '', FAIL_ON_ERROR = '' } = process.env;
 const ctxFile = (n) => { try { return fs.readFileSync(path.join(CTX, n), 'utf8'); } catch { return ''; } };
 const reduced = () => { try { return JSON.parse(ctxFile('counts.json')).reduced === true; } catch { return false; } };
-const CONFIG = ['auth', 'quota', 'model'];
+// CTX is fresh per run (.specguard-ctx in the workspace), so engine-error is never stale. policy: Copilot disabled by the org, only an admin can fix it.
+const CONFIG = ['auth', 'quota', 'model', 'policy'];
 if (STATUS === 'failed') {
   const cls = ctxFile('engine-error').split('\n')[0].trim();
   if (CONFIG.includes(cls)) {
