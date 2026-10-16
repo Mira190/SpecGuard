@@ -123,7 +123,7 @@ test('a unit reviewed in parts (review F07): a finding outside this run\'s lines
   const parts = (k) => new Map([[U2, { k, n: 2, a: 1, b: 2 }]]);
   // part 1: one finding; part 2 (next run): none new, the part-1 finding is kept, the unit stays a gap; with none anywhere the last part makes it covered
   const one = readState(stateOf('a1', result([]), null, { date: DATE, code: { picked: [U2], findings: trackFindings(v.unit_findings, null, 'a1'), carried: [], parts: parts(0) } }).raw);
-  assert.deepEqual([one.blocks[0].status, one.versions.uc, one.findings.map((f) => f.part)], ['gap', { [U2]: 1 }, [0]]);
+  assert.deepEqual([one.blocks[0].status, one.versions.uc, one.findings.map((f) => f.part)], ['gap', { [U2]: [1, 2] }, [0]]);
   const two = readState(stateOf('b2', result([]), one, { date: DATE, code: { picked: [U2], findings: [], carried: [], parts: parts(1) } }).raw);
   assert.deepEqual([two.blocks[0].status, two.versions && two.versions.uc, two.findings.map((f) => f.part)], ['gap', undefined, [0]], 'cursor done; the other part\'s finding stays');
   const clean1 = readState(stateOf('a1', result([]), null, { date: DATE, code: { picked: [U2], findings: [], carried: [], parts: parts(0) } }).raw);
