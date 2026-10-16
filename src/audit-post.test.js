@@ -1076,3 +1076,16 @@ test('state (F22): the part cursor is written as [next part, part count], droppe
   assert.notEqual(bad, at(null, 0).raw);
   assert.equal(audit.readState(bad).versions.uc, undefined, 'a bare integer (old format) is ignored: the unit restarts at part 0');
 });
+
+test('state (F22 review): a restart after an edit drops the findings of the old parts, so a clean pass ends covered', () => {
+  const ID = 'a0000001', V1 = 'b0000001', V2 = 'b0000002', data = dataOf({});
+  const run = (prior, k, v, findings = []) => audit.readState(audit.stateOf('h1', data, prior, { date: DATE, code: { picked: [ID], findings, carried: [], versions: new Map([[ID, v]]), parts: new Map([[ID, { k, n: 3 }]]) } }).raw);
+  const s0 = run(null, 0, V1), s1 = run(s0, 1, V1, [{ unit: ID, next: ['c0000001', ID, 'h1', 1, 1] }]);
+  assert.equal(s1.blocks[0].status, 'gap');
+  const r0 = run(s1, 0, V2); // edited: the unit restarts at part 0
+  assert.deepEqual([r0.blocks[0].status, r0.findings], ['unsure', undefined], 'the part-1 finding of the old version is gone');
+  const r2 = run(run(r0, 1, V2), 2, V2);
+  assert.equal(r2.blocks[0].status, 'covered');
+  const cont = run(s1, 2, V1); // control: the same version continuing keeps the part-1 finding
+  assert.deepEqual([cont.blocks[0].status, cont.findings.map((f) => f.part)], ['gap', [1]]);
+});
