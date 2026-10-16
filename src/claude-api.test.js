@@ -930,3 +930,52 @@ test('evidence (Q8): from the real collector, the validator the requirement name
   const tight = api.contextPack(ctx, root, 100);
   assert.ok(Object.values(tight.blockCuts).some((f) => f.includes('billing/validator.js')), 'with no room it is cut for its block');
 });
+
+// S3: a big test file shared by several review files is sliced around the symbols of all of them
+const sharedRepo = (t, extra = {}) => {
+  const pad = 'x'.repeat(100), tests = [];
+  for (let i = 0; i < 400; i++) tests.push(`test('filler ${i}', () => { assert.equal(filler${i}(1), ${i}); }); // ${pad}`);
+  tests.splice(100, 0, "test('alpha', () => {\n  assert.equal(alphaThing(1), 111);\n});");
+  tests.splice(300, 0, "test('beta', () => {\n  assert.equal(betaThing(2), 222);\n});");
+  const diff = (p, fn) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -0,0 +1,2 @@\n+function ${fn}(v) { return v; }\n+module.exports = { ${fn} };\n`;
+  return tmpRepo(t, { 'src/a.js': 'function alphaThing(v) { return v + 110; }\n', 'src/b.js': 'function betaThing(v) { return v + 220; }\n', 'tests/shared.test.js': tests.join('\n') + '\n', 'tests/only-b.test.js': tests.join('\n') + '\n', ...extra }, {
+    'files.txt': 'src/a.js\nsrc/b.js\n', 'diff.patch': diff('src/a.js', 'alphaThing') + diff('src/b.js', 'betaThing'),
+    'test-candidates.txt': 'src/a.js\n  tests/shared.test.js  (name)\nsrc/b.js\n  tests/shared.test.js  (name)\n  tests/only-b.test.js  (name)\n' });
+};
+
+test('context pack (S3): a big test shared by two review files shows the assertions of both, not only those of the first', (t) => {
+  const r = sharedRepo(t), p = api.contextPack(r.ctx, r.root, 250000);
+  const shared = p.text.slice(p.text.indexOf('tests/shared.test.js'), p.text.indexOf('tests/only-b.test.js'));
+  assert.ok(shared.includes('assert.equal(alphaThing(1), 111)'));
+  assert.ok(shared.includes('assert.equal(betaThing(2), 222)'), 'the second file\'s assertion is visible too');
+  assert.ok(!p.notWhole.includes('tests/shared.test.js'));
+  assert.equal((p.text.match(/tests\/shared\.test\.js/g) || []).length, 1, 'still added once');
+});
+
+test('context pack (S3 control): a big test used by one review file is sliced around that file\'s symbols only', (t) => {
+  const r = sharedRepo(t), p = api.contextPack(r.ctx, r.root, 250000);
+  const only = p.text.slice(p.text.indexOf('tests/only-b.test.js'));
+  assert.ok(only.includes('assert.equal(betaThing(2), 222)'));
+  assert.ok(!only.includes('assert.equal(alphaThing(1), 111)'));
+});
+
+test('context pack (S3): when the union of symbols does not fit, the shared test is listed as cut', (t) => {
+  const r = sharedRepo(t), p = api.contextPack(r.ctx, r.root, 1000);
+  assert.ok(p.notWhole.includes('tests/shared.test.js'), JSON.stringify(p.notWhole));
+});
+
+// S7: a pack that throws must not look like a pack that cut nothing
+test('pack error (S7): the single call lists the review files and their candidate tests in pack-cut.txt and warns with the error\'s first line', async (t) => {
+  const r = repo(t, { 'src.js': 'a();\n' }, { 'files.txt': 'src.js\nb.js\n', 'test-candidates.txt': 'src.js\n  test.js  (same stem)\nb.js\n  (no candidate test file found)\n' });
+  await r.go({ GITHUB_WORKSPACE: path.join(r.h.dir, 'does-not-exist') });
+  assert.equal(r.h.file('pack-cut.txt'), 'src.js\ntest.js\nb.js');
+  assert.ok(r.h.logged.some((l) => /^::warning::Context pack failed \(.*ENOENT.*\)/.test(l)), r.h.logged.join('|'));
+  assert.ok(r.h.file('findings.json'), 'the review itself still ran');
+});
+
+test('pack error (S7): scan-parts returns the unit files and their tests as cut, not []', (t) => {
+  const r = tmpRepo(t, { 'src/a.js': 'x\n' }, { 'audit-units.txt': 'aaaaaaaa\tsrc/a.js\t5\tno test\ttests/a.test.js, tests/b.test.js\t-\tabcdef12\t-\n', 'audit-candidates.txt': Array.from({ length: 21 }, (_, i) => `${i.toString(16).padStart(8, '0')}\td.md:${i + 1}\tH\ttext`).join('\n') + '\n' });
+  const log = console.log; console.log = () => {};
+  let plan; try { plan = require('./scan-parts.js').plan({ ctx: r.ctx, root: r.root, batch: 20, limit: 250000, schemaFile: path.join(__dirname, 'audit.schema.json'), contextPack: () => { throw new Error('injected'); }, evidencePack: api.evidencePack, assembleAudit: require('./prompt.js').assembleAudit }); } finally { console.log = log; }
+  assert.deepEqual(plan.packCut, ['src/a.js', 'tests/a.test.js', 'tests/b.test.js']);
+});
