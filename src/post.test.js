@@ -210,6 +210,36 @@ test('pack-cut.txt: a missing_test whose candidate test the model saw only partl
   assert.match(weak.calls.summary[0].body, /Low-confidence findings \(1\)/);
 });
 
+test('pack-cut.txt listing a changed file or its candidate test: the run is incomplete (no clean verdict, no head marker, execution_complete false); unrelated or empty pack-cut stays complete (F19)', async (t) => {
+  const run = async (cut) => {
+    const s = setup(t, report({ coverage: [row()], findings: [] }));
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), 'src.js\n  test.js  (same stem)\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut);
+    await post(s);
+    const counts = JSON.parse(fs.readFileSync(path.join(s.dir, 'ctx/counts.json'), 'utf8'));
+    return { body: s.calls.summary[0].body, counts };
+  };
+  for (const cut of ['src.js\n', 'test.js\n']) {
+    const { body, counts } = await run(cut);
+    assert.equal(counts.complete, false); assert.equal(counts.execution_complete, false);
+    assert.doesNotMatch(body, /No unit test gaps found(?! so far)/);
+    assert.match(body, /Incomplete review/);
+    assert.match(body, new RegExp(`Review context was cut: the model saw only part of \`${cut.trim().replace('.', '\\.')}\``));
+    assert.doesNotMatch(body, /<!-- specguard:head=/); assert.match(body, /<!-- specguard:status=incomplete -->/);
+    assert.equal(require('./preflight.js').decide({ pr: { state: 'open', user: { type: 'User', login: 'dev' } }, headSha: 'HEADSHA', comments: [{ user: { type: 'Bot', login: 'github-actions[bot]' }, body }] }), '');
+  }
+  // a changed file cut from the top is incomplete only when a changed line (here 2-3) lies past the lines shown; its cut candidate test always counts
+  const big = async (shown, cut = 'src.js\n') => { const s = setup(t, report({ coverage: [row()], findings: [] })); fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut); fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-shown.txt'), shown); await post(s); return JSON.parse(fs.readFileSync(path.join(s.dir, 'ctx/counts.json'), 'utf8')); };
+  assert.equal((await big('src.js\t50\n')).complete, true, 'cut beyond the changed hunk');
+  assert.equal((await big('src.js\t2\n')).complete, false, 'cut over the changed hunk');
+  assert.equal((await big('src.js\t50\n', 'src.js\ntest.js\n')).complete, true, 'no candidates listed: only the changed file matters');
+  for (const cut of ['', 'other.js\nbig.js\n']) {
+    const { body, counts } = await run(cut);
+    assert.equal(counts.complete, true); assert.equal(counts.execution_complete, true);
+    assert.match(body, /No unit test gaps found/); assert.match(body, /<!-- specguard:head=HEADSHA -->/);
+  }
+});
+
 test('literal guard: a missing_test whose error message a tracked test already contains goes to Details as low confidence, citing that test; a message no test contains is still posted', async (t) => {
   const run = async (testText) => {
     const s = setup(t);
@@ -2257,6 +2287,18 @@ test('V7: an unreadable or other-repository reference is a note in the summary, 
   assert.match(lost.calls.summary[0].body, /Incomplete review/);
 });
 
+test('S2: an unreadable closing issue makes the run incomplete: no head marker, and the preflight does not skip the next push', async (t) => {
+  const { decide } = require('./preflight');
+  const s = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
+  writeCtx(s, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: ['Could not read closing issue #7 (HTTP 403); its acceptance criteria were not reviewed. Grant the token issues:read, or paste the acceptance criteria into the PR body.'] });
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.match(body, /Incomplete review/);
+  assert.match(body, /"complete":false/);
+  assert.doesNotMatch(body, /specguard:head=/);
+  assert.equal(decide({ pr: { title: 'T', body: 'x' }, comments: [{ user: { login: 'github-actions[bot]', type: 'Bot' }, body }], headSha: 'HEADSHA' }), '');
+});
+
 test('M4: an engine timeout or failure beside valid findings.json posts the verified findings but marks the run incomplete', async (t) => {
   for (const [st, re] of [['timeout', /timed out after 7 minutes/], ['failed', /review engine failed/]]) {
     const s = withThreads(t, [GONE()]);
@@ -3627,6 +3669,65 @@ test('a removed-assertion lead the model ignored becomes one LEFT finding; an ad
   assert.doesNotMatch(weakened, /Assertion removed with no replacement/);
 });
 
+test('a removed-assertion lead next to a low-confidence finding raises that finding to high with a note and adds none; a high one is untouched', async (t) => {
+  const lead = 'assertion removed: assert.equal(gone, 1); (test.js:2)';
+  const near = (confidence) => [finding('weak_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence, title: 'NEARBY ONE' })];
+  const run = async (confidence) => { // the posted comment text is the full finding; the summary only shows its first sentence
+    const s = setup(t, report({ coverage: [row('weak_test')], findings: near(confidence) }));
+    fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+    fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), `${lead}\n`);
+    await post(s);
+    return JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]);
+  };
+  const low = await run('low');
+  assert.doesNotMatch(low, /Assertion removed with no replacement/);
+  assert.equal([...low.matchAll(/NEARBY ONE/g)].length, 2, 'one inline comment and one summary line');
+  assert.match(low, /Removal confirmed by the diff\./);
+  assert.match(low, /confidence: high/, 'the posted comment trailer says high');
+  const high = await run('high');
+  assert.doesNotMatch(high, /Assertion removed with no replacement|Removal confirmed/);
+});
+
+test('a low weak_test without a usable counterexample next to a removal lead is not raised and no lead is added', async (t) => {
+  const s = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence: 'low', title: 'NEARBY ONE', counterexample: undefined })] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+  fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), 'assertion removed: assert.equal(gone, 1); (test.js:2)\n');
+  await post(s);
+  const all = JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]);
+  assert.doesNotMatch(all, /Removal confirmed|Assertion removed with no replacement|confidence: high/);
+});
+
+test('demoted nearby finding is not raised: a pack-cut-demoted weak_test stays low next to a removal lead, with no confirmation note', async (t) => {
+  const s = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence: 'high', title: 'NEARBY ONE' })] }));
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+  fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), 'assertion removed: assert.equal(gone, 1); (test.js:2)\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/pack-cut.txt'), 'test.js\n');
+  await post(s);
+  const all = JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]);
+  assert.match(all, /Low-confidence findings \(1\)/);
+  assert.doesNotMatch(all, /Removal confirmed|Assertion removed with no replacement|confidence: high/);
+});
+
+test('removal lead nearness is measured in one coordinate system: 6 lines added above the removal move its RIGHT position, so a RIGHT finding at the same number is not near, one at the mapped position is', async (t) => {
+  const run = async (line) => {
+    const s = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', { path: 'test.js', line, quote: evidence.quote, confidence: 'low', title: 'NEARBY ONE' })] }));
+    fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,8 @@\n+a1\n+a2\n+a3\n+a4\n+a5\n+a6\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+    fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), 'assertion removed: assert.equal(gone, 1); (test.js:2)\n');
+    await post(s);
+    return { all: JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]) };
+  };
+  const far = await run(2); // numerically equal to the LEFT line, 6 away from the mapped RIGHT line 8
+  assert.doesNotMatch(far.all, /Removal confirmed|confidence: high/);
+  assert.match(far.all, /Assertion removed with no replacement/, 'the lead is still added');
+  const near = await run(8);
+  assert.match(near.all, /Removal confirmed by the diff\./);
+  assert.doesNotMatch(near.all, /Assertion removed with no replacement/);
+});
+
 test('posting failures propagate: a failed summary comment, a failed job summary and a crash are status failed; a non-422 inline failure is incomplete (no head marker); a 422 is normal', async (t) => {
   const go = async (prep) => {
     const s = setup(t);
@@ -3740,4 +3841,56 @@ test('a non-422 failure on a FILE-level comment is incomplete too (no head marke
   assert.doesNotMatch(down.calls.summary[0].body, /specguard:head/, 'the preflight retries this head');
   assert.match(down.calls.summary[0].body, /src\.js:8/, 'the finding is not lost');
   assert.equal((await run(422)).outputs.status, 'complete');
+});
+
+test('candidates-cut.txt: a missing_test about a file whose candidate tests were never looked up is low confidence and not counted; other files are unaffected', async (t) => {
+  const run = async (cut) => {
+    const s = setup(t);
+    if (cut !== undefined) fs.writeFileSync(path.join(s.dir, 'ctx', 'candidates-cut.txt'), cut);
+    await post(s);
+    return s;
+  };
+  const cut = await run('src.js\n');
+  assert.equal(cut.calls.review.length, 0, 'no inline comment');
+  assert.match(cut.calls.summary[0].body, /Low-confidence findings \(1\)/);
+  assert.match(JSON.stringify(cut.calls.summary[0].body), /candidate tests were not looked up for src\.js/);
+  for (const s of [await run('other.js\n'), await run(undefined)]) assert.equal(s.calls.review.length, 1, 'still posted inline');
+});
+
+test('collect-error.txt: a diff collect.sh could not compute publishes a failed summary naming the cause (fetch-depth: 0), never "Nothing to review", with no head marker', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx', 'collect-error.txt'), 'the PR diff could not be computed: base commit abc is missing from the clone; check out with fetch-depth: 0\n');
+  process.env.SKIP = 'true'; // what collect.sh leaves
+  const out = {}; s.core.setOutput = (k, v) => { out[k] = v; };
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.match(body, /Could not complete: the PR diff could not be computed.*fetch-depth: 0/);
+  assert.doesNotMatch(body, /Nothing to review|specguard:head/);
+  assert.equal(out.status, 'failed'); assert.match(out.reason, /fetch-depth: 0/);
+});
+
+test('candidates-cut.txt: a clean report is still incomplete (no head marker) when candidate tests were not looked up for a changed file', async (t) => {
+  const s = setup(t);
+  fs.writeFileSync(path.join(s.dir, 'ctx', 'candidates-cut.txt'), 'other.js\n');
+  const out = {}; s.core.setOutput = (k, v) => { out[k] = v; };
+  await post(s);
+  assert.equal(out.status, 'incomplete');
+  assert.match(s.calls.summary[0].body, /Candidate tests were not looked up for 1 changed file/);
+  assert.doesNotMatch(s.calls.summary[0].body, /specguard:head/);
+});
+
+test('a model-low missing_test that the test-map guard reports as covered is not raised next to a removal lead; without the guard hit it is', async (t) => {
+  const tm = require('./test-map'), real = tm.makeCoverGuard;
+  t.after(() => { tm.makeCoverGuard = real; });
+  const run = async (hit) => {
+    tm.makeCoverGuard = () => () => hit;
+    const s = setup(t, report({ coverage: [row('missing_test')], findings: [finding('missing_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence: 'low', title: 'NEARBY ONE' })] }));
+    fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+    fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), 'assertion removed: assert.equal(gone, 1); (test.js:2)\n');
+    await post(s);
+    return JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]);
+  };
+  assert.match(await run(''), /Removal confirmed by the diff\./, 'control: no guard hit, raised');
+  assert.doesNotMatch(await run('other.test.js has the message'), /Removal confirmed|Assertion removed with no replacement|confidence: high/);
 });
