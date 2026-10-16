@@ -1498,9 +1498,9 @@ async function run({ github, context, core }) {
   // citations (evidence, behaviour, findings, requirement files) are read only from files tracked at the checked-out head
   const readLines = memoed((p) => { const rel = safeRel(p); return rel && tracked && tracked.has(rel) ? readFile(rel) : null; });
   { // a missing_test claim whose error message or literal already sits in a tracked test file may be covered there: low confidence, not counted (src/test-map.js)
-    const covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
+    const cands = parseCandidates(readCtx('test-candidates.txt') || ''), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
     for (const f of data.findings) {
-      const hit = f.kind === 'missing_test' && covers(readLines(f.path), f.line, f.path);
+      const hit = f.kind === 'missing_test' && covers(readLines(f.path), f.line, f.path, cands.get(f.path));
       if (hit && f.confidence === 'low') f.gated = true; // already low: just keep it from being raised later
       else if (hit) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
     }

@@ -644,7 +644,7 @@ test('run: TEST_PATHS reaches the scan post step: a file under a non-test direct
   const P = unitId('src/pay.js');
   const run = async (env) => {
     const w = workspace(t); addFiles(w, extra);
-    await post(t, { w, env, files: { 'findings.json': result([scanFinding(P, extra, 'src/pay.js', 1, 'pay rejects a bad total')]), 'audit-units.txt': [P, 'src/pay.js', 30, 'no test', 'none', '-'].join('\t') + '\n' } });
+    await post(t, { w, env, files: { 'findings.json': result([scanFinding(P, extra, 'src/pay.js', 1, 'pay rejects a bad total')]), 'audit-units.txt': [P, 'src/pay.js', 30, 'no test', 'qa/checks/orders.js', '-'].join('\t') + '\n' } });
     return JSON.parse(fs.readFileSync(path.join(w.ctx, 'audit.json'), 'utf8')).unit_findings[0];
   };
   const on = await run({ TEST_PATHS: 'qa/checks' });

@@ -267,7 +267,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
   const dropped = new Set();
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c) => covers(file(c.path), c.line, c.path)), notes: out.not_reviewed, file, testFile, dropped });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), notes: out.not_reviewed, file, testFile, dropped });
   out.unit_dropped = [...dropped]; // units whose finding verification dropped: not "no gap" (see main)
   return out;
 }
@@ -296,7 +296,7 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes
     seen.add(fid);
     const skeleton = f.skeleton && placeholder(f.skeleton) ? '' : f.skeleton;
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
-    const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c) : null;
+    const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c, u) : null;
     const noSketch = f.kind !== 'pushdown' && !skeleton; // no test sketch: "no gap found" findings arrive this way
     const vague = f.kind === 'weak_test' && !post.counterexampleOk(f.counterexample); // review F04: a weak test needs a wrong behaviour the assertion still accepts
     out.push({ ...f, ...c, skeleton, fid, ...(u && u.part ? { part: u.part.k } : {}), low: cut || !!hit || noSketch || vague, ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
