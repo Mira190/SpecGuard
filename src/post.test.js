@@ -3901,7 +3901,25 @@ test('findLine (S8): a quote whose first 20 characters match but whose tail is n
   assert.equal(post.findLine('assert.equal(compute(1), 2)', 99, at, all), 0, 'different tail among all');
   assert.equal(post.findLine('assert.equal(compute(1),', 2, at, all), 2, 'truncated by the model');
   assert.equal(post.findLine('assert.equal(compute(1), 3)...', 2, at, all), 2, 'trailing ellipsis');
+  const multi = (l) => ['x', '  assert.deepEqual(f(1),', '    { a: 1 });', '});'][l - 1];
+  assert.equal(post.findLine('assert.deepEqual(f(1),\n  { a: 1 })', 2, multi, [1, 2, 3, 4]), 2, 'a call split over two lines');
+  assert.equal(post.findLine('assert.deepEqual(f(1),\n  { a: 2 })', 2, multi, [1, 2, 3, 4]), 0, 'a different tail on the second line');
   const d = report({ coverage: [row('covered', { evidence: [{ ...evidence, path: 'test.js', line: 2, quote: 'assert.equal(compute(1), 2)' }] })], findings: [] });
   post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), (p) => (p === 'src.js' ? ['l1', 'l2', behaviour.quote] : ['test("x", () => {', '  assert.equal(compute(1), 3);', '});']), new Map([['src.js', post.parsePatch(patch)]]));
   assert.equal(d.coverage[0].status, 'unknown', 'the citation is unverified, not covered evidence');
+});
+
+test('pack error end to end (S7): run() with a throwing pack, then post on the same ctx: incomplete, no head marker, "Review context was cut"', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] })), ctx = path.join(s.dir, 'ctx'), data = fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8');
+  fs.writeFileSync(path.join(ctx, 'test-candidates.txt'), 'src.js\n  test.js  (same stem)\n');
+  fs.writeFileSync(path.join(ctx, 'prompt.txt'), `Review.\n\n---\n\nContext directory (absolute path): ${ctx}\n`);
+  const fetchFn = async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ model: 'claude-haiku-5-5', stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'text', text: data }] }) });
+  const log = console.log; console.log = () => {};
+  try { await require('./engines/claude-api.js').run({ CTX: ctx, PROMPT_FILE: path.join(ctx, 'prompt.txt'), ANTHROPIC_API_KEY: 'sk-ant-api03-TESTONLY_0123456789-abcdef', MODEL: 'claude-haiku-5-5', GITHUB_WORKSPACE: path.join(s.dir, 'does-not-exist') }, { fetchFn }); } finally { console.log = log; }
+  assert.equal(fs.readFileSync(path.join(ctx, 'pack-cut.txt'), 'utf8'), 'src.js\ntest.js\n');
+  await post(s);
+  const counts = JSON.parse(fs.readFileSync(path.join(ctx, 'counts.json'), 'utf8')), body = s.calls.summary[0].body;
+  assert.equal(counts.complete, false);
+  assert.doesNotMatch(body, /<!-- specguard:head=/);
+  assert.match(body, /Review context was cut: the model saw only part of/);
 });
