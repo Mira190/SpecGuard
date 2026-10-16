@@ -132,7 +132,9 @@ function grade(spec, obs) {
   // Reasonable findings the fixture truly leaves untested but did not seed: neither TP nor FP.
   const spare = [...(exp.acceptable || [])], acceptable = [], falsePositives = [];
   // A summary item the developer reads counts like a posted comment: moving a finding into the summary must not hide a false positive.
-  const unmatched = [...posted.filter((_, j) => !used.has(j)), ...sum.items.filter((h, j) => sum.actionable.has(h) && !usedItems.has(j)).map((h) => ({ ...h, level: 'summary' }))];
+  // A coverage row saying weak/missing test asks the same thing: one per F29 group that no summary item or posted comment already stands for, so a row and its bullet are one candidate.
+  const rowFps = summaryHits.filter((h, j) => h.item === undefined && h.group === j && !usedGroups.has(j) && ['weak_test', 'missing_test'].includes(h.kind) && !posted.some((c) => c.line != null && c.kind === h.kind && c.path === h.path && Math.abs(h.line - c.line) <= 2)).map((h) => ({ ...h, level: 'coverage' }));
+  const unmatched = [...posted.filter((_, j) => !used.has(j)), ...sum.items.filter((h, j) => sum.actionable.has(h) && !usedItems.has(j)).map((h) => ({ ...h, level: 'summary' })), ...rowFps];
   for (const { kind, path, line, title, level } of unmatched) {
     const k = spare.findIndex((a) => arr(a.kind).includes(kind) && arr(a.path).includes(path) && line != null && Math.abs(line - a.line) <= (a.tolerance ?? 2));
     if (k >= 0) acceptable.push({ kind, path, line, title, reason: spare.splice(k, 1)[0].reason });
@@ -166,7 +168,7 @@ function grade(spec, obs) {
   // With the raw artifact, JSON validity is about the model output alone; a skipped run has none. Without it, fall back to the summary.
   const jsonValid = obs.raw_findings_present === undefined || sum.skipped ? complete : !!(obs.raw_findings_present && obs.raw_findings_valid_json);
   const skipOk = exp.expect_skip ? sum.skipped && comments.length === 0 : true;
-  const cleanOk = exp.expect_clean ? posted.length === 0 && sum.actionable.size === 0 : true;
+  const cleanOk = exp.expect_clean ? posted.length === 0 && sum.actionable.size === 0 && !rowFps.length : true;
   return {
     id: spec.id, goal: spec.goal, tp, fp: falsePositives.length, acceptable: acceptable.length, fn: missed.length, summary_only: sum.items.length,
     matched, missed, summary_misses: sm, false_positives: falsePositives, acceptable_findings: acceptable, must_not_violations: mustNot, text_misses: textMisses,
