@@ -593,3 +593,83 @@ test('the publisher and loadPrior pick the same scan issue: same repository, ano
     assert.deepEqual(prior && prior.blocks.map((b) => b.cid), [`0000000${number}`], `${name}: the loader reads the same issue`);
   }
 });
+
+// state built through the real audit-post (verify/stateOf/readState), the collector reads it back (review S4, S6)
+const stateFixture = (t, files, docs = 'docs/design.md') => {
+  const ap = require('./audit-post'), { allBlocks } = require('./audit-collect');
+  const r = repo(t, files), head = r.git('rev-parse', 'HEAD'), blocks = allBlocks(r.root, head, [docs]);
+  const base = { not_requirements: [], not_reviewed: [], docs_reviewed: [], unit_findings: [] };
+  const covered = (b, cited = ['src/x.js', 'tests/x.test.js']) => ({ id: b.cid, source: { path: b.path, line: b.line, quote: b.text }, text: b.text, class: 'unit', status: 'covered',
+    code: cited.filter((p) => !p.startsWith('tests/')).map((p) => ({ path: p, line: 1, quote: 'x' })), tests: cited.filter((p) => p.startsWith('tests/')).map((p) => ({ path: p, line: 1, quote: 'x', layer: 'unit' })), note: '' });
+  return { ...r, ap, head, blocks, base, covered };
+};
+const pickedBy = (r, prior, cap = 1) => { collect({ cwd: r.root, ctx: r.ctx, reqPaths: 'docs/design.md', maxRequirements: cap, maxUnits: 1, rotate: true, prior }); return { picked: cands(r.ctx).map((c) => c[0]), stale: rows(r.ctx, 'audit-stale.txt').map((c) => c[0]) }; };
+
+test('review S4: a covered block citing more than 8 files is stale when only the 9th changes; a block citing exactly 8 behaves as before', (t) => {
+  for (const [n, untouched] of [[9, null], [8, 'tests/t4.test.js']]) {
+    const cited = [1, 2, 3, 4, 5].map((i) => `src/c${i}.js`).concat([1, 2, 3, 4].map((i) => `tests/t${i}.test.js`)).slice(0, n);
+    const files = { 'docs/design.md': '# Design\n\n## Rule\nService must reject invalid amounts.\n' };
+    for (const p of [1, 2, 3, 4, 5].map((i) => `src/c${i}.js`).concat([1, 2, 3, 4].map((i) => `tests/t${i}.test.js`))) files[p] = `// ${p}\n`;
+    const f = stateFixture(t, files), cid = f.blocks[0].cid;
+    const prior = f.ap.readState(f.ap.stateOf(f.head, { ...f.base, requirements: [f.covered(f.blocks[0], cited)] }, null, { date: '2026-10-01' }).raw);
+    assert.ok(prior.versions.ev[cid].length <= 8, 'the state stays small');
+    const edit = (p) => { fs.appendFileSync(path.join(f.root, p), '// edited\n'); f.git('add', '.'); f.git('commit', '-m', `edit ${p}`); };
+    if (n === 9) { edit(cited[8]); assert.deepEqual(pickedBy(f, prior).stale, [cid], 'only the 9th cited file changed'); assert.ok(JSON.parse(fs.readFileSync(path.join(f.ctx, 'audit-meta.json'), 'utf8')).limitations.includes('1 block(s) cite more than 8 files; their freshness cannot be tracked, so they are rechecked each run')); }
+    else {
+      edit(untouched); assert.deepEqual(pickedBy(f, prior).stale, [], 'an uncited file changed: not stale (8-file control)');
+      assert.ok(!JSON.parse(fs.readFileSync(path.join(f.ctx, 'audit-meta.json'), 'utf8')).limitations.some((l) => /cite more than 8 files/.test(l)));
+      edit(cited[7]); assert.deepEqual(pickedBy(f, prior).stale, [cid], 'the 8th cited file changed');
+    }
+  }
+});
+
+test('review S6: a block the model did not answer is retried first once; unanswered twice it is recorded unsure with the date advanced and rotation moves on', (t) => {
+  const f = stateFixture(t, { 'docs/design.md': '# D\n\n## A\nService must reject negative amounts.\n\n## B\nService must reject blank names.\n\n## C\nService must round totals half up.\n\n## D\nService must log every refund.\n', 'src/x.js': 'exports.x = () => 1;\n', 'tests/x.test.js': 'assert.equal(x(), 1);\n' });
+  const [A, B, C, D] = f.blocks, { ap, base, covered } = f;
+  const s0 = ap.readState(ap.stateOf(f.head, { ...base, requirements: f.blocks.map((b) => covered(b)) }, null, { date: '2026-10-01' }).raw);
+  const read = (p) => { try { return fs.readFileSync(path.join(f.root, p), 'utf8').split('\n'); } catch { return null; } };
+  const answer = (sent, answered) => ap.verify({ ...base, requirements: answered.map((b) => covered(b)) }, { read, cands: ap.readCandidates(sent.map((b) => `${b.cid}\t${b.path}:${b.line}\t${b.heading}\t${b.text}`).join('\n') + '\n'), docs: new Set(['docs/design.md']) });
+  // run 1: A, B, C sent, C not answered; D not sent
+  const s1 = ap.readState(ap.stateOf(f.head, answer([A, B, C], [A, B]), s0, { date: '2026-10-15', carried: [s0.blocks.find((b) => b.cid === D.cid)], unanswered: new Set([C.cid]) }).raw);
+  assert.deepEqual([s1.blocks.find((b) => b.cid === C.cid).status, s1.versions.un], ['unsure', [C.cid]]);
+  assert.deepEqual(pickedBy(f, s1).picked, [C.cid], 'run 2 retries C before the older D');
+  // run 2: C sent again and still unanswered: no more retry, the date advances
+  const carried = s1.blocks.filter((b) => b.cid !== C.cid);
+  const s2 = ap.readState(ap.stateOf(f.head, answer([C], []), s1, { date: '2026-10-16', carried, unanswered: new Set([C.cid]) }).raw);
+  const c2 = s2.blocks.find((b) => b.cid === C.cid);
+  assert.deepEqual([c2.status, c2.at.date, s2.versions && s2.versions.un], ['unsure', '2026-10-16', undefined]);
+  assert.notDeepEqual(pickedBy(f, s2).picked, [C.cid], 'run 3 is not forced to pick C again');
+  // control: C answered in run 2 clears the retry
+  const ok = ap.readState(ap.stateOf(f.head, answer([C], [C]), s1, { date: '2026-10-16', carried }).raw);
+  assert.equal(ok.versions && ok.versions.un, undefined);
+});
+
+test('collect: a Gherkin Background is in every scenario body and tv, but the cid is unchanged by it', (t) => {
+  const feat = (who) => `Feature: Tenants\n\n  Background:\n    Given a tenant in state ${who}\n\n  Scenario: Login is refused\n    When the user logs in\n    Then access is denied\n\n  Scenario: Export is refused\n    When the user exports data\n    Then access is denied\n`;
+  const { allBlocks } = require('./audit-collect');
+  const a = repo(t, { 'f/t.feature': feat('SUSPENDED_TENANT') }), b = repo(t, { 'f/t.feature': feat('ACTIVE_TENANT') });
+  const x = allBlocks(a.root, 'HEAD', ['f/t.feature']), y = allBlocks(b.root, 'HEAD', ['f/t.feature']);
+  assert.equal(x.length, 2);
+  assert.equal(x[1].cid, y[1].cid);
+  assert.notEqual(x[1].tv, y[1].tv);
+  assert.match(x[1].body, /SUSPENDED_TENANT/);
+  assert.match(y[1].body, /ACTIVE_TENANT/);
+  const plain = allBlocks(repo(t, { 'f/p.feature': 'Feature: P\n\n  Scenario: Only one\n    When the user logs in\n    Then access is denied\n' }).root, 'HEAD', ['f/p.feature'])[0];
+  assert.doesNotMatch(plain.body, /Background/);
+});
+
+test('collect with versions (F32): a legacy tv (written without the Background) is not stale; a real Background edit is', (t) => {
+  const feat = (who) => `Feature: Tenants\n\n  Background:\n    Given a tenant in state ${who}\n\n  Scenario: Login is refused\n    When the user logs in\n    Then access is denied\n`;
+  const { allBlocks } = require('./audit-collect');
+  const { root, ctx, git } = repo(t, { 'f/t.feature': feat('SUSPENDED_TENANT') });
+  collect({ cwd: root, ctx, reqPaths: 'f/t.feature' });
+  const [cid] = cands(ctx).map((c) => c[0]), h = git('rev-parse', 'HEAD').slice(0, 7);
+  const blk = allBlocks(root, 'HEAD', ['f/t.feature'])[0];
+  const stateWith = (tv) => ({ head: h, blocks: [{ cid, status: 'covered', since: h, runs: 1, at: { head: h, date: '2026-09-01' } }], versions: { uv: {}, ev: {}, tv: { [cid]: tv } } });
+  const staleFor = (tv) => { collect({ cwd: root, ctx, reqPaths: 'f/t.feature', rotate: true, prior: stateWith(tv) }); return rows(ctx, 'audit-stale.txt').map((r) => r[0]); };
+  assert.notEqual(blk.tv, blk.tvLegacy);
+  assert.deepEqual(staleFor(blk.tvLegacy), [], 'a state from before Background context is not reset');
+  assert.deepEqual(staleFor(blk.tv), []);
+  fs.writeFileSync(path.join(root, 'f/t.feature'), feat('ACTIVE_TENANT')); git('add', '.'); git('commit', '-m', 'edit');
+  assert.deepEqual(staleFor(blk.tv), [cid], 'a Background edit makes the scenario stale');
+});
