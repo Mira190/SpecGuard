@@ -446,6 +446,17 @@ test('F23 (review): when no unit fits, a unit unfinished in parts does not take 
   assert.notEqual(second.id, first.id, 'the unit in progress is not chosen again while nothing fits');
 });
 
+test('eligible counts the source files the time budget never reached: eligible = inventoried + over 512 KiB + not reached', (t) => {
+  const body = ['function a(v) {', '  return v + 1;', '}', 'function b(v) {', '  return v + 2;', '}', 'module.exports = { a, b };'];
+  const r = repo(t, { 'src/one.js': body, 'src/two.js': body, 'src/three.js': body });
+  const full = inventory({ cwd: r.root, head: 'HEAD', now: NOW }), cut = inventory({ cwd: r.root, head: 'HEAD', now: NOW, budgetMs: 0 });
+  assert.equal(full.totals.not_reached, 0);
+  assert.equal(full.totals.eligible, 3);
+  assert.ok(cut.totals.not_reached > 0, JSON.stringify(cut.totals));
+  assert.equal(cut.totals.eligible, 3, 'the files the budget cut are still eligible');
+  assert.equal(cut.totals.eligible, cut.totals.units + cut.totals.not_inventoried + cut.totals.not_reached);
+});
+
 test('source files over 512 KiB are named in a limitation and counted as not inventoried; no big file, no limitation; skipped paths are not counted', (t) => {
   const big = '// big\n' + Array.from({ length: 16000 }, (_, i) => `function f${i}(v) { return v + ${i}; }`).join('\n');
   const small = ['function a(v) {', '  return v + 1;', '}', 'function b(v) {', '  return v + 2;', '}', 'module.exports = { a, b };'];
@@ -454,6 +465,8 @@ test('source files over 512 KiB are named in a limitation and counted as not inv
   assert.deepEqual(inv.rows.map((x) => x.path), ['src/small.js']);
   assert.ok(inv.limitations.includes('4 source file(s) over 512 KiB were not inventoried: src/big1.js, src/big2.js, src/big3.js, ...'), inv.limitations.join('|'));
   assert.equal(inv.totals.not_inventoried, 4);
+  assert.equal(inv.totals.eligible, inv.totals.units + inv.totals.not_inventoried, 'eligible = inventoried + not inventoried; vendor/ and .min.js are skipped, not eligible');
+  assert.equal(inv.totals.eligible, 5);
   const ok = inventory({ cwd: repo(t, { 'src/small.js': small }).root, head: 'HEAD', now: NOW });
   assert.ok(!ok.limitations.some((l) => /512 KiB/.test(l)));
   assert.equal(ok.totals.not_inventoried, 0);
