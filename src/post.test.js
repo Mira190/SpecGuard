@@ -3931,6 +3931,46 @@ test('pack error end to end (S7): run() with a throwing pack, then post on the s
   assert.match(body, /Review context was cut: the model saw only part of/);
 });
 
+test('E1 PR: a covered row whose only verified evidence is truthiness or interaction-only becomes unknown; value evidence still covers', () => {
+  const verifyWith = (quotes) => {
+    const lines = ['test', ...quotes];
+    const read = (p) => ({ 'src.js': ['l1', 'l2', behaviour.quote], 'test.js': lines })[p];
+    const d = report({ coverage: [row('covered', { evidence: quotes.map((q, i) => ({ ...evidence, line: i + 2, quote: q })) })], findings: [] });
+    return post.verifyEvidence(d, new Set(['src.js']), new Set(['RULES.md']), read, new Map([['src.js', post.parsePatch(patch)]]));
+  };
+  for (const q of ['assert.ok(result);', 'expect(result).toBeTruthy();', 'expect(spy).toHaveBeenCalled();', 'expect(fn).toThrow();', 'expect(x).not.toBeNull();']) {
+    const d = verifyWith([q]);
+    assert.equal(d.coverage[0].status, 'unknown', q);
+    assert.match(d.coverage[0].reason, /only truthiness\/interaction assertions/);
+    assert.equal(post.validate(d).ok, true, q);
+  }
+  for (const q of ['assert.equal(discount(100), 90);', 'expect(spy).toHaveBeenCalledWith(100);', 'expect(send).toHaveBeenCalledTimes(1);', 'expect(fn).toThrow(/bad/);', 'expect(x).toMatchSnapshot();']) assert.equal(verifyWith([q]).coverage[0].status, 'covered', q);
+  assert.equal(verifyWith(['assert.ok(result);', 'assert.equal(result, 42);']).coverage[0].status, 'covered', 'one weak and one value assertion');
+});
+
+test('E2: a weak_test counterexample that the cited assertion itself refutes is demoted to low and gated; other counterexamples are unchanged', () => {
+  const run = (quote, counterexample) => { const d = report({ coverage: [row('weak_test')], findings: [finding('weak_test', { quote, counterexample })] }); assert.equal(post.validate(d).ok, true); return d.findings[0]; };
+  for (const [q, ce] of [['assert.equal(f(1), 2);', 'f(1) returns 3 -> the test still passes'], ['expect( f(1) ).toBe(2);', "f(1)  gives '3' -> still passes"], ['assert.strictEqual(f(1), "a");', 'f(1) yields "b" so the assertion still passes']]) {
+    const f = run(q, ce);
+    assert.equal(f.confidence, 'low', q); assert.equal(f.gated, true);
+  }
+  assert.equal(run('assert.ok(f(1));', "f(1) returns 'oops' -> the test still passes").confidence, 'high', 'genuinely weak assertion');
+  assert.equal(run('assert.equal(f(1), 2);', 'f(2) returns 3 -> the test still passes').confidence, 'high', 'different input');
+  assert.equal(run('assert.equal(f(1), 2);', 'f(1) returns 2 or f(1) returns 3 -> still passes').confidence, 'high', 'ambiguous claim is not refuted');
+});
+
+test('E1 end to end: an all-weak covered row is unknown but the run stays complete (head marker present, no re-run loop) and is not a clean verdict', async (t) => {
+  const weak = { ...evidence, quote: 'assert.ok(result);' };
+  const s = setup(t, report({ coverage: [row('covered', { evidence: [weak] })], findings: [] }));
+  fs.writeFileSync(path.join(s.dir, 'test.js'), `test\n${weak.quote}\n`);
+  await post(s);
+  const counts = JSON.parse(fs.readFileSync(path.join(s.dir, 'ctx/counts.json'), 'utf8')), body = s.calls.summary[0].body;
+  assert.equal(counts.complete, true);
+  assert.match(body, /<!-- specguard:head=/);
+  assert.doesNotMatch(body, /No unit test gaps found/);
+  assert.match(body, /unknown|could not be assessed/i);
+});
+
 test('the cover guard is asked about the cited file\'s candidate tests only (wave 4 E5): a listed set is passed, an unlisted file passes none', async (t) => {
   const tm = require('./test-map'), real = tm.makeCoverGuard, seen = [];
   t.after(() => { tm.makeCoverGuard = real; });
