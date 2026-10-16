@@ -1023,6 +1023,15 @@ test('run: units the model context did not hold make the status incomplete with 
   assert.equal(ok.calls.outputs.reason, undefined);
 });
 
+test('run (F23 review): a forced unit whose test was cut is written to the state as unsure with today\'s date, and the status names the cut', async (t) => {
+  const inv = { ...invOf([urow(UID, { path: 'src/plan.js', tests: ['test/a.test.js'] })]), forced: [UID] };
+  const r = await runPost(t, { ctxFiles: { 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\ttest/a.test.js\t-\tabcdef12\t-\n`, 'audit-inventory.json': inv, 'findings.json': result(), 'pack-cut.txt': 'test/a.test.js\n' }, env: { AUDIT_ISSUE: 'true' } });
+  assert.equal(r.calls.outputs.status, 'incomplete');
+  assert.match(r.calls.outputs.reason, /1 unit did not fit the model's context/);
+  const b = audit.readState(r.calls.created[0].body).blocks.find((x) => x.cid === UID);
+  assert.deepEqual([b.status, b.at.date], ['unsure', DATE]);
+});
+
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
   const five = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), ...[1, 2, 3, 4].map((i) => cand(cid(i), 4, `Block ${i}.`)));
   const skip = (i) => ({ cid: cid(i), reason: 'rationale' });
@@ -1062,4 +1071,30 @@ test('verify: incomplete block evidence cannot prove absence, but positive cited
   assert.equal(v.requirements[0].status, 'covered');
   const other = verify(result([req({ status: 'missing_test', tests: [] })]), { read, blockCuts: { [C2]: ['test/other.test.js'] } });
   assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
+});
+
+test('state (F22): the part cursor is written as [next part, part count], dropped after the last part, and rejected when malformed', () => {
+  const ID = 'a0000001', V = 'b0000001', data = dataOf({});
+  const at = (prior, k) => audit.stateOf('h1', data, prior, { date: DATE, code: { picked: [ID], findings: [], carried: [], versions: new Map([[ID, V]]), parts: new Map([[ID, { k, n: 3 }]]) } });
+  const s1 = audit.readState(at(null, 0).raw);
+  assert.deepEqual(s1.versions.uc, { [ID]: [1, 3] });
+  const s2 = audit.readState(at(s1, 1).raw);
+  assert.deepEqual(s2.versions.uc, { [ID]: [2, 3] });
+  assert.equal(audit.readState(at(s2, 2).raw).versions.uc, undefined, 'after the last part the cursor is gone, not left at the last part');
+  const bad = at(null, 0).raw.replace(`"uc":{"${ID}":[1,3]}`, `"uc":{"${ID}":2}`);
+  assert.notEqual(bad, at(null, 0).raw);
+  assert.equal(audit.readState(bad).versions.uc, undefined, 'a bare integer (old format) is ignored: the unit restarts at part 0');
+});
+
+test('state (F22 review): a restart after an edit drops the findings of the old parts, so a clean pass ends covered', () => {
+  const ID = 'a0000001', V1 = 'b0000001', V2 = 'b0000002', data = dataOf({});
+  const run = (prior, k, v, findings = []) => audit.readState(audit.stateOf('h1', data, prior, { date: DATE, code: { picked: [ID], findings, carried: [], versions: new Map([[ID, v]]), parts: new Map([[ID, { k, n: 3 }]]) } }).raw);
+  const s0 = run(null, 0, V1), s1 = run(s0, 1, V1, [{ unit: ID, next: ['c0000001', ID, 'h1', 1, 1] }]);
+  assert.equal(s1.blocks[0].status, 'gap');
+  const r0 = run(s1, 0, V2); // edited: the unit restarts at part 0
+  assert.deepEqual([r0.blocks[0].status, r0.findings], ['unsure', undefined], 'the part-1 finding of the old version is gone');
+  const r2 = run(run(r0, 1, V2), 2, V2);
+  assert.equal(r2.blocks[0].status, 'covered');
+  const cont = run(s1, 2, V1); // control: the same version continuing keeps the part-1 finding
+  assert.deepEqual([cont.blocks[0].status, cont.findings.map((f) => f.part)], ['gap', [1]]);
 });
