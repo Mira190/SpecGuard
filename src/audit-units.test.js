@@ -262,7 +262,7 @@ test('a unit too large for one call is reviewed in parts (review F07): fixed lin
   const first = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 20 }), row = first.rows.find((u) => u.id === id);
   assert.deepEqual(first.picked.find((u) => u.id === id).part, { k: 0, n: 3, a: 1, b: 667 });
   assert.equal(first.picked.find((u) => u.path === 'src/js/orders.js').part, undefined, 'a small unit is reviewed whole');
-  const prior = { head: 'a', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: {}, ev: {}, uc: { [id]: 2 } } };
+  const prior = { head: 'a', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: { [id]: row.ver }, ev: {}, uc: { [id]: [2, 3] } } };
   const next = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, prior });
   assert.deepEqual([next.picked[0].id, next.picked[0].part], [id, { k: 2, n: 3, a: 1335, b: 2000 }], 'the unfinished unit first, at its cursor');
   const ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
@@ -271,28 +271,28 @@ test('a unit too large for one call is reviewed in parts (review F07): fixed lin
   assert.ok(row.size > 80 * 1024);
 });
 
-test('claude api scan: 8 split units (short and long lines), a rule file and big matched tests: every part of every unit lands whole in the pack; another engine keeps 40 KB parts', (t) => {
+test('claude api scan: 8 split units (short and long lines), a rule file and big matched tests: the units chosen are the ones whose part and tests fit, and each lands whole in the pack; another engine keeps 40 KB parts', (t) => {
   const N = 8, LIMIT = 250000, files = { 'docs/rules.md': `# Rules\n${'- keep functions small and tested\n'.repeat(300)}` };
   for (let u = 0; u < N; u++) { // 4 units of short lines (the line prefix is most of what the pack shows), 4 of long lines; each over a 1/8 share of the pack
     files[`src/js/u${u}.js`] = Array.from({ length: u < 4 ? 24000 : 330 }, (_, i) => (u < 4 ? (i % 2 ? '' : 'x;') : `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(40)};`));
     files[`test/u${u}.test.js`] = [`const u = require('../src/js/u${u}');`, "it('works', () => { assert.equal(u.f1, 1); });", ...Array.from({ length: 700 }, (_, i) => `// ${'filler '.repeat(4)}${i}`)];
   }
-  const r = repo(t, files), ids = Array.from({ length: N }, (_, u) => sha8(`src/js/u${u}.js`));
+  const r = repo(t, files);
   const inv = (o) => inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: N, ...o });
-  const first = inv({ packBytes: LIMIT });
-  const parts = Math.max(...first.picked.map((u) => u.part ? u.part.n : 1));
-  assert.ok(first.picked.length === N && first.picked.every((u) => u.part && u.part.n > 1), 'every unit is split');
-  assert.equal(inv({ packBytes: LIMIT }).picked.length, N);
-  for (let k = 0; k < parts; k++) { // run k of the scan: every unit at part k
-    const prior = k ? { head: 'a', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: {}, ev: {}, uc: Object.fromEntries(ids.map((id) => [id, k])) } } : null;
+  let cur = inv({ packBytes: LIMIT });
+  assert.ok(cur.picked.length >= 1 && cur.picked.length < N && cur.picked.every((u) => u.part && u.part.n > 1), 'fewer units than the cap are chosen: their tests would not fit otherwise');
+  const first = cur, parts = Math.max(...first.picked.map((u) => u.part.n));
+  for (let k = 0; k < parts; k++) { // run k of the scan
     const ctx = path.join(r.root, `.ctx${k}`); fs.mkdirSync(ctx);
-    write(ctx, 'HEAD', N, inv({ packBytes: LIMIT, prior }));
+    write(ctx, 'HEAD', N, cur);
     fs.writeFileSync(path.join(ctx, 'standards.txt'), 'docs/rules.md\n');
     const pack = contextPack(ctx, r.root, LIMIT);
-    assert.deepEqual(pack.notWhole.filter((p) => p.startsWith('src/js/')), [], `run ${k + 1}: a unit part was cut or left out`);
-    assert.equal((pack.text.match(/part \d+ of \d+: lines/g) || []).length, N, `run ${k + 1}: every unit shown`);
+    assert.deepEqual(pack.notWhole.filter((p) => p.startsWith('src/js/') || p.startsWith('test/')), [], `run ${k + 1}: a unit part or one of its tests was cut or left out`);
+    assert.equal((pack.text.match(/part \d+ of \d+: lines/g) || []).length, cur.picked.length, `run ${k + 1}: every chosen unit shown`);
+    const uv = Object.fromEntries(first.rows.map((u) => [u.id, u.ver])), uc = Object.fromEntries(cur.picked.filter((u) => u.part && u.part.k + 1 < u.part.n).map((u) => [u.id, [u.part.k + 1, u.part.n]]));
+    cur = inv({ packBytes: LIMIT, prior: { head: 'a', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv, ev: {}, uc } } });
   }
-  assert.ok(inv({}).picked.every((u) => u.part.n < first.picked.find((x) => x.id === u.id).part.n), 'without a pack (another engine) the parts are bigger: 40 KB');
+  assert.ok(inv({}).picked.filter((u) => first.picked.some((x) => x.id === u.id)).every((u) => u.part.n < first.picked.find((x) => x.id === u.id).part.n), 'without a pack (another engine) the parts are bigger: 40 KB');
 });
 
 test('write: audit-units.txt, audit-units-carried.txt and audit-inventory.json carry the selected units, the totals and a capped risk table', (t) => {
@@ -356,4 +356,92 @@ test('a unit over 9999 lines is sized with a 7-byte prefix (5-digit number plus 
   const r = repo(t, { 'src/js/long.js': Array.from({ length: 11000 }, () => 'x;') }); // 33 KB: 3 parts at a 6-byte prefix, 4 at 7
   const u = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 250000 }).picked.find((x) => x.path === 'src/js/long.js');
   assert.equal(u.part.n, 4);
+});
+
+// the cursor [next part, part count] holds only for the content version and the layout it was recorded under (review F22)
+function cursorRepo(t) {
+  const big = Array.from({ length: 600 }, (_, i) => `exports.function${i} = () => '${'x'.repeat(80)}';`).join('\n') + '\n';
+  return { big, ...repo(t, { 'src/js/big.js': big }) };
+}
+const cursorState = (row) => { const a = require("./audit-post"); return a.readState(a.stateOf("h1", { requirements: [], not_requirements: [], not_reviewed: [], docs_reviewed: [], unit_findings: [] }, null, { date: "2026-10-01", code: { picked: [row.id], findings: [], carried: [], versions: new Map([[row.id, row.ver]]), parts: new Map([[row.id, row.part]]) } }).raw); }; // the state as the publisher writes it after reviewing row
+
+test('F22 control: the same content and layout continue at the next part', (t) => {
+  const r = cursorRepo(t), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 250000 }, first = inventory(o).picked[0];
+  assert.equal(first.part.k, 0);
+  const next = inventory({ ...o, prior: cursorState(first) }).picked[0];
+  assert.equal(next.part.k, 1);
+});
+
+test('F22 (P1): a unit edited between parts restarts at part 0 instead of continuing', (t) => {
+  const r = cursorRepo(t), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 250000 }, first = inventory(o).picked[0], prior = cursorState(first);
+  fs.writeFileSync(path.join(r.root, 'src/js/big.js'), r.big.replace('xxxxxxxx', 'yyyyyyyy'));
+  r.git(OLD, 'add', '.'); r.git(OLD, 'commit', '-m', 'edit part 1');
+  const next = inventory({ ...o, prior }).picked[0];
+  assert.notEqual(next.ver, first.ver);
+  assert.equal(next.part.k, 0, 'the edited first part is read again');
+});
+
+test('F22 (P2): a changed part layout (max_units, pack budget) restarts at part 0', (t) => {
+  const r = cursorRepo(t), o = { cwd: r.root, head: 'HEAD', now: NOW, packBytes: 250000 }, small = inventory({ ...o, maxUnits: 12 }).picked[0];
+  const large = inventory({ ...o, maxUnits: 1 }).picked[0];
+  assert.notEqual(small.part.n, large.part.n, 'the fixture changes the layout');
+  const next = inventory({ ...o, maxUnits: 1, prior: cursorState(small) }).picked[0];
+  assert.equal(next.part.k, 0, 'lines past the first part of the old layout are not skipped');
+});
+
+// a unit's whole context (part, matched tests) must fit the pack, or the scan repeats the same cut forever (review F23)
+test('F23 (P7): units with big matched tests are chosen so that they fit whole, and the next run chooses others', (t) => {
+  const files = { 'docs/rules.md': `# Rules\n${'- keep functions small and tested\n'.repeat(300)}` };
+  for (let u = 0; u < 8; u++) {
+    files[`src/js/u${u}.js`] = Array.from({ length: u < 4 ? 3500 : 330 }, (_, i) => (u < 4 ? `exports.f${i} = ${i};` : `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(40)}`));
+    files[`test/u${u}.test.js`] = [`const u = require('../src/js/u${u}');`, "it('works', () => { assert.equal(u.f1, 1); });", ...Array.from({ length: 700 }, (_, i) => `// ${'filler '.repeat(4)}${i}`)];
+  }
+  const r = repo(t, files), inv = (prior) => inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 8, packBytes: 250000, prior });
+  const first = inv(), ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
+  write(ctx, 'HEAD', 8, first); fs.writeFileSync(path.join(ctx, 'standards.txt'), 'docs/rules.md\n');
+  const cut = new Set(contextPack(ctx, r.root, 250000).notWhole);
+  const unseen = first.picked.filter((u) => cut.has(u.path) || u.tests.some((x) => cut.has(x)));
+  assert.ok(first.picked.length >= 1 && first.picked.length < 8, 'fewer units than the cap');
+  assert.deepEqual(unseen, [], 'every chosen unit is seen whole with its tests, so it is written to state');
+  const prior = { head: 'a', blocks: first.picked.map((u) => ({ cid: u.id, status: u.part ? 'unsure' : 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: Object.fromEntries(first.picked.map((u) => [u.id, u.ver])), ev: {}, uc: Object.fromEntries(first.picked.filter((u) => u.part).map((u) => [u.id, [1, u.part.n]])) } };
+  assert.notDeepEqual(inv(prior).picked.map((u) => [u.id, u.part]), first.picked.map((u) => [u.id, u.part]), 'the next run does not repeat the same selection');
+});
+
+test('F23 control: small units are still packed many per run; a unit that can never fit is named, not silently retried', (t) => {
+  const small = {}; for (let u = 0; u < 8; u++) { small[`src/js/s${u}.js`] = Array.from({ length: 60 }, (_, i) => `exports.f${i} = (x) => x + ${i};`); small[`test/s${u}.test.js`] = ["it('works', () => { assert.equal(1, 1); });"]; }
+  assert.equal(inventory({ cwd: repo(t, small).root, head: 'HEAD', now: NOW, maxUnits: 8, packBytes: 250000 }).picked.length, 8);
+  const huge = { 'src/js/h.js': Array.from({ length: 200 }, (_, i) => `exports.f${i} = (x) => x + ${i};`), 'test/h.test.js': Array.from({ length: 4000 }, (_, i) => `// ${'filler '.repeat(6)}${i}`).concat("it('h', () => { assert.equal(h.f1(1), 2); });") };
+  const b = inventory({ cwd: repo(t, huge).root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 6000 });
+  assert.equal(b.picked.length, 1, 'the unit is still chosen');
+  assert.ok(b.limitations.some((l) => /cannot fit|no unit fits/.test(l)), 'and the limit is named');
+});
+
+test('F23 (review): when no unit fits, the unit chosen anyway is recorded as unsure, so the next run chooses another', (t) => {
+  const files = {};
+  for (const u of ['a', 'b']) {
+    files[`src/js/${u}.js`] = Array.from({ length: 200 }, (_, i) => `exports.f${i} = (x) => x + ${i};`);
+    files[`test/${u}.test.js`] = Array.from({ length: 4000 }, (_, i) => `// ${'filler '.repeat(6)}${i}`).concat(`it('${u}', () => { assert.equal(${u}.f1(1), 2); });`);
+  }
+  const r = repo(t, files), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 6000 };
+  const first = inventory(o);
+  assert.deepEqual(first.forced, [first.picked[0].id], 'the unit chosen although it cannot fit is named');
+  const post = require('./audit-post'), pick1 = first.picked[0];
+  const state = post.readState(post.stateOf('h1', { requirements: [], not_requirements: [], not_reviewed: [], docs_reviewed: [], unit_findings: [] }, null, { date: '2026-10-01', code: { picked: [pick1.id], cut: new Set([pick1.id]), findings: [], carried: [], versions: new Map([[pick1.id, pick1.ver]]), parts: new Map() } }).raw);
+  assert.equal(state.blocks[0].status, 'unsure', 'reviewed with its tests cut: not covered');
+  const second = inventory({ ...o, prior: state });
+  assert.notEqual(second.picked[0].id, pick1.id, 'the rotation moves on');
+});
+
+test('F23 (review): when no unit fits, a unit unfinished in parts does not take the single place again', (t) => {
+  const files = {};
+  for (const u of ['a', 'b']) {
+    files[`src/js/${u}.js`] = Array.from({ length: 600 }, (_, i) => `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(6)}`);
+    files[`test/${u}.test.js`] = Array.from({ length: 4000 }, (_, i) => `// ${'filler '.repeat(6)}${i}`).concat(`it('${u}', () => { assert.equal(${u}.f1(1), 2); });`);
+  }
+  const r = repo(t, files), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 6000 };
+  const first = inventory(o).picked[0];
+  assert.ok(first.part && first.part.n > 1, 'the fixture splits the unit');
+  const prior = { head: 'a', blocks: [{ cid: first.id, status: 'unsure', runs: 1, at: { date: '2026-10-01' } }], versions: { uv: { [first.id]: first.ver }, ev: {}, uc: { [first.id]: [1, first.part.n] } } };
+  const second = inventory({ ...o, prior }).picked[0];
+  assert.notEqual(second.id, first.id, 'the unit in progress is not chosen again while nothing fits');
 });
