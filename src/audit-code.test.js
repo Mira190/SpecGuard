@@ -123,7 +123,7 @@ test('a unit reviewed in parts (review F07): a finding outside this run\'s lines
   const parts = (k) => new Map([[U2, { k, n: 2, a: 1, b: 2 }]]);
   // part 1: one finding; part 2 (next run): none new, the part-1 finding is kept, the unit stays a gap; with none anywhere the last part makes it covered
   const one = readState(stateOf('a1', result([]), null, { date: DATE, code: { picked: [U2], findings: trackFindings(v.unit_findings, null, 'a1'), carried: [], parts: parts(0) } }).raw);
-  assert.deepEqual([one.blocks[0].status, one.versions.uc, one.findings.map((f) => f.part)], ['gap', { [U2]: 1 }, [0]]);
+  assert.deepEqual([one.blocks[0].status, one.versions.uc, one.findings.map((f) => f.part)], ['gap', { [U2]: [1, 2] }, [0]]);
   const two = readState(stateOf('b2', result([]), one, { date: DATE, code: { picked: [U2], findings: [], carried: [], parts: parts(1) } }).raw);
   assert.deepEqual([two.blocks[0].status, two.versions && two.versions.uc, two.findings.map((f) => f.part)], ['gap', undefined, [0]], 'cursor done; the other part\'s finding stays');
   const clean1 = readState(stateOf('a1', result([]), null, { date: DATE, code: { picked: [U2], findings: [], carried: [], parts: parts(0) } }).raw);
@@ -677,6 +677,21 @@ test('run: a unit with an incomplete candidate test stays due instead of being s
   assert.equal(r.calls.outputs.status, 'incomplete');
   assert.ok(!readState(r.calls.created[0].body).blocks.some((b) => b.cid === U1));
   assert.match(r.calls.summary, /Not reviewed this run/);
+});
+
+test('run: a single call (20 blocks or fewer) hands blockCuts alone in scan-parts.json: a missing_test block whose evidence was cut ends unknown', async (t) => {
+  const w = workspace(t), id = '1111111a';
+  w.put('audit-docs.txt', 'docs/design.md\tdiscovered\n');
+  w.put('audit-candidates.txt', `${id}\tdocs/design.md:3\tPlan design\tA repeating plan stays on after it fires.\n`);
+  const doc = { id, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'missing_test', code: [cite('src/js/orders.js', 1)], tests: [], note: 'No test was visible.' };
+  const r = await post(t, { w, files: {
+    'findings.json': result([], { docs_reviewed: ['docs/design.md'], requirements: [doc] }),
+    'scan-parts.json': { blockCuts: { [id]: ['config/policy.yaml'] } },
+    'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, candidates: 1, limitations: [] },
+  } });
+  const saved = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
+  assert.equal(saved.requirements[0].status, 'unknown');
+  assert.match(saved.requirements[0].note, /config\/policy.yaml/);
 });
 
 test('run: per-block context omissions reach the validated audit artifact', async (t) => {
