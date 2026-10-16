@@ -1476,7 +1476,11 @@ async function run({ github, context, core }) {
   }
   if (packCut.size) { // a cut changed file, or a cut candidate test of one, means the model never saw what the obligations depend on: no clean verdict, no head marker
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
-    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [f, ...(cands.get(f) || [])]).filter((x) => packCut.has(x)))];
+    // a cut candidate test always counts; a cut changed file only when a changed line lies past the lines the pack showed (pack-shown.txt; no entry = not shown at all). ponytail: the diff section itself is not checked for cuts.
+    const shown = new Map((readCtx('pack-shown.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')));
+    const dm = parseDiff(readCtx('diff.patch') || '');
+    const past = (f) => !shown.has(f) || [...(dm.get(f)?.changed.RIGHT.keys() || [])].some((n) => n > +shown.get(f));
+    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [...(packCut.has(f) && past(f) ? [f] : []), ...(cands.get(f) || []).filter((x) => packCut.has(x))]))];
     if (lost.length) incomplete.push(`Review context was cut: the model saw only part of ${lost.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${lost.length > 10 ? `, … (+${lost.length - 10} more)` : ''}; obligations that depend on them are unknown.`);
   }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.

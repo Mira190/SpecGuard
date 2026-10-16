@@ -1043,6 +1043,33 @@ test('run: a unit finding that fails validation leaves its unit unreviewed (not 
   assert.equal(blockOf(valid).status, 'gap');
 });
 
+test('run: a unit whose finding is dropped past the cap, dropped by verification or kept only as low confidence is not recorded covered (prior state carried, incomplete); a solid finding keeps the unit a gap (F20 siblings)', async (t) => {
+  const U2 = '6666666f', q = FILES['src/plan.js'][0];
+  const f = (unit, over = {}) => ({ unit, kind: 'missing_test', path: 'src/plan.js', line: 1, quote: q, title: 'No test', skeleton: 'it("fires", () => {});', ...over });
+  const files = { 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\tnone\t-\n${U2}\tsrc/plan.js\t4\twhy\tnone\t-\n`, 'audit-inventory.json': invOf([urow(UID, { path: 'src/plan.js', tests: [] }), urow(U2, { path: 'src/plan.js', tests: [] })]) };
+  const prior = { number: 7, body: stateBody(MARK, 'old1234', [['old1234', '2026-01-01']], [[U2, 'covered', 'old1234', 1, 0]]), user: BOT };
+  const run = (unit_findings, issues = []) => runPost(t, { ctxFiles: { ...files, 'findings.json': result([req()], { unit_findings }) }, env: { AUDIT_ISSUE: 'true' }, mock: { issues } });
+  const block = (r, id) => audit.readState((r.calls.created[0] || r.calls.updated[0]).body).blocks.find((b) => b.cid === id);
+  const stages = {
+    cap: [...Array.from({ length: 60 }, () => f(UID)), f(U2)], // the 61st finding, the only one of U2, is past UNIT_MAX
+    verify: [f(UID), f(U2, { quote: 'a line that is not in the file' })],
+    low: [f(UID), f(U2, { skeleton: '' })],
+  };
+  for (const [stage, list] of Object.entries(stages)) {
+    const fresh = await run(list);
+    assert.equal(fresh.calls.outputs.status, 'incomplete', stage);
+    assert.equal(block(fresh, U2), undefined, `${stage}: never reviewed, not covered`);
+    assert.equal(block(fresh, UID).status, 'gap', `${stage}: the unit with a solid finding is a gap`);
+    const carried = await run(list, [prior]);
+    assert.deepEqual([block(carried, U2).status, block(carried, U2).runs], ['covered', 1], `${stage}: prior state carried, runs do not advance`);
+  }
+  assert.match((await run(stages.low)).calls.outputs.reason, /1 unit had only low-confidence findings/);
+  assert.match((await run(stages.verify)).calls.outputs.reason, /1 unit had a finding that failed validation or verification/);
+  assert.match((await run(stages.low)).calls.summary, /low-confidence|Low-confidence/, 'the low finding stays visible');
+  const none = await run([f(UID)]);
+  assert.equal(none.calls.outputs.status, 'complete'); assert.equal(block(none, U2).status, 'covered');
+});
+
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
   const five = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), ...[1, 2, 3, 4].map((i) => cand(cid(i), 4, `Block ${i}.`)));
   const skip = (i) => ({ cid: cid(i), reason: 'rationale' });
