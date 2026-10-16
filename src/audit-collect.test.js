@@ -458,6 +458,13 @@ test('collect: blocks the prefilter rules out are listed in audit-ruled.txt with
   assert.equal(r.candidates, 3);
 });
 
+test('collect: with a pack size, rule files shrink the room for unit parts (a unit that fits alone is split once a big AGENTS.md rides in the pack)', (t) => {
+  const src = { 'src/js/a.js': ('x'.repeat(149) + '\n').repeat(100) };
+  const part = (files) => { const { root, ctx } = repo(t, { ...src, ...files }); collect({ cwd: root, ctx, packBytes: 250000 }); return rows(ctx, 'audit-units.txt')[0][7]; };
+  assert.equal(part({}), '-');
+  assert.match(part({ 'AGENTS.md': 'rule\n'.repeat(10000) }), /^part 1\/\d+/);
+});
+
 test('collect: audit-blocks.txt holds each candidate block whole (past the 240-character row cut); a block over 4000 characters is marked [truncated] and noted as not fully read', (t) => {
   const decisive = 'The writer MUST use the atomic rename DECISIVE_CLAUSE.', long = `The importer MUST validate ${'every field of the record and '.repeat(150)}end.`;
   const { root, ctx } = repo(t, { 'docs/design.md': `# Design\n\n${'The plan MUST keep state and also '.repeat(10)}${decisive}\n\n${long}\n` });
@@ -518,4 +525,71 @@ test('F21 through the real chain: collect writes path:line-end for a single-line
   assert.ok(v.not_reviewed.some((n) => n.startsWith(a.cid)), JSON.stringify(v.not_reviewed));
   assert.equal(v.requirements.find((r) => r.id === a.cid).note.startsWith('Unconfirmed'), true);
   assert.deepEqual(run(a.line).not_reviewed, [], 'control: its own line verifies');
+});
+
+test('loadPrior: with scan_issue_repo the state is read from that repository under its token, titled by the scanned repository (F24)', async () => {
+  const state = '<!-- specguard:audit-state {"v":4,"head":"abc","audits":[["abc","2026-10-01"]],"blocks":[["ddddddd1","gap","abc",1,0]]} -->';
+  const bot = { type: 'Bot', login: 'github-actions[bot]' };
+  const sc = audit.scopeOf('', 'o/src');
+  const issues = [{ number: 1, title: sc.title, body: `${sc.mark}\n${state}`, user: bot }, { number: 2, title: audit.scopeOf('', 'o/other').title, body: `${sc.mark}\n${state.replace('ddddddd1', 'eeeeeee2')}`, user: bot }];
+  const seen = [];
+  const mk = (reportsVisibility, srcVisibility = 'private') => async (url, init) => {
+    seen.push([url, init.headers.authorization]);
+    if (url.endsWith('/repos/org/reports')) return { ok: true, json: async () => ({ visibility: reportsVisibility }) };
+    if (url.endsWith('/repos/o/src')) return { ok: true, json: async () => ({ visibility: srcVisibility }) };
+    if (url.endsWith('/user')) return { ok: false, status: 403, json: async () => ({}) };
+    return { ok: true, json: async () => issues };
+  };
+  const env = { GH_REPO: 'o/src', GH_TOKEN: 'src-tok', ISSUE_REPO: 'org/reports', ISSUE_TOKEN: 'rep-tok', SCAN_PATHS: '' };
+  const p = await loadPrior(env, mk('private'));
+  assert.deepEqual(p && p.blocks.map((b) => b.cid), ['ddddddd1'], 'only this source repository\'s issue');
+  assert.ok(seen.some(([u, a]) => u === 'https://api.github.com/repos/org/reports/issues?state=all&per_page=100&page=1' && a === 'Bearer rep-tok'));
+  assert.ok(!seen.some(([u]) => u.includes('/repos/o/src/issues')));
+  const logs = [], log = console.log; console.log = (m) => logs.push(m);
+  try { assert.equal(await loadPrior(env, mk('public', 'private')), null, 'a public report repository is not used for a private source (the publisher guard)'); } finally { console.log = log; }
+  assert.match(logs.join('\n'), /scan issue not read from org\/reports/);
+  const same = await loadPrior({ GH_REPO: 'o/src', GH_TOKEN: 'src-tok', ISSUE_REPO: 'o/src', ISSUE_TOKEN: 'x' }, async (u) => (u.endsWith('/user') ? { ok: false, status: 403, json: async () => ({}) } : { ok: true, json: async () => [{ number: 3, body: `${audit.MARK}\n${state}`, user: bot }] }));
+  assert.deepEqual(same && same.blocks.map((b) => b.cid), ['ddddddd1'], 'control: the same repository is read as before');
+});
+
+test('loadPrior: a malformed scan_issue_repo warns and reads nothing (F24 review)', async () => {
+  const logs = [], log = console.log;
+  console.log = (m) => logs.push(m);
+  try { assert.equal(await loadPrior({ GH_REPO: 'o/src', GH_TOKEN: 't', ISSUE_REPO: 'not-a-repo' }, async () => { throw new Error('no request expected'); }), null); } finally { console.log = log; }
+  assert.match(logs.join('\n'), /::warning::SpecGuard: scan_issue_repo "not-a-repo" is not owner\/name; the previous scan state is not read/);
+});
+
+test('the publisher and loadPrior pick the same scan issue: same repository, another repository, another repository with scan_paths (F24 review)', async () => {
+  const os = require('node:os'), BOT = { type: 'Bot', login: 'github-actions[bot]' };
+  const state = (cid) => `<!-- specguard:audit-state {"v":4,"head":"abc","audits":[["abc","2026-10-01"]],"blocks":[["${cid}","gap","abc",1,0]]} -->`;
+  const scoped = audit.scopeOf('packages/a/**', 'acme/shop'), plain = audit.scopeOf('', 'acme/shop'), local = audit.scopeOf('packages/a/**');
+  const issues = [
+    { number: 1, title: audit.TITLE, body: `${audit.MARK}\n${state('00000001')}`, user: BOT, state: 'open' },
+    { number: 2, title: plain.title, body: `${plain.mark}\n${state('00000002')}`, user: BOT, state: 'open' },
+    { number: 3, title: scoped.title, body: `${scoped.mark}\n${state('00000003')}`, user: BOT, state: 'open' },
+    { number: 4, title: audit.scopeOf('', 'acme/other').title, body: `${plain.mark}\n${state('00000004')}`, user: BOT, state: 'open' },
+    { number: 5, title: local.title, body: `${local.mark}\n${state('00000005')}`, user: BOT, state: 'open' },
+  ];
+  const cases = [
+    ['same repository', { ISSUE_REPO: '', SCAN_PATHS: '' }, 1],
+    ['another repository', { ISSUE_REPO: 'corp/reports', SCAN_PATHS: '' }, 2],
+    ['another repository with scan_paths', { ISSUE_REPO: 'corp/reports', SCAN_PATHS: 'packages/a/**' }, 3],
+  ];
+  for (const [name, extra, number] of cases) {
+    const ctx = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-same-'));
+    fs.writeFileSync(path.join(ctx, 'audit-meta.json'), JSON.stringify({ head: 'abc123', max_requirements: 80, docs: 0, limitations: [] }));
+    const updated = [];
+    const client = { rest: { users: { getAuthenticated: async () => { throw new Error('no /user'); } }, repos: { get: async () => ({ data: { visibility: 'private' } }) },
+      issues: { listForRepo: () => issues, update: async (a) => { updated.push(a.issue_number); }, create: async () => { updated.push('create'); } } }, paginate: async (fn, a) => fn(a) };
+    const env = { CTX: ctx, SKIP: 'true', SCAN_ISSUE: 'true', ENGINE: '', MODEL: '', ...extra }, saved = { ...process.env };
+    const core = { warning() {}, summary: { addRaw() { return this; }, async write() {} } };
+    try {
+      Object.assign(process.env, env);
+      await audit({ github: client, issueGithub: client, context: { repo: { owner: 'acme', repo: 'shop' }, sha: 'abc123' }, core });
+    } finally { for (const k of Object.keys(env)) if (k in saved) process.env[k] = saved[k]; else delete process.env[k]; fs.rmSync(ctx, { recursive: true, force: true }); }
+    const fetchFn = async (u) => (/\/repos\/[^/]+\/[^/]+$/.test(u) ? { ok: true, json: async () => ({ visibility: 'private' }) } : u.endsWith('/user') ? { ok: false, status: 403, json: async () => ({}) } : { ok: true, json: async () => issues });
+    const prior = await loadPrior({ GH_REPO: 'acme/shop', GH_TOKEN: 't', ISSUE_TOKEN: 'i', ...extra }, fetchFn);
+    assert.deepEqual(updated, [number], `${name}: the publisher updates issue ${number}`);
+    assert.deepEqual(prior && prior.blocks.map((b) => b.cid), [`0000000${number}`], `${name}: the loader reads the same issue`);
+  }
 });
