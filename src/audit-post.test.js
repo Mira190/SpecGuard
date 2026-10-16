@@ -828,7 +828,7 @@ test('run: a carried covered block whose cited code or tests changed since (audi
     'audit-meta.json': { head: 'abc123', max_requirements: 1, docs: 1, candidates: 2, limitations: [], rotation: ROT, evidence: { blocks: 1, with_code: 1, with_tests: 0, cut: false } } },
     env: { SCAN_ISSUE: 'true' }, mock: { issues: [{ number: 9, body: old, user: BOT, state: 'open', title: TITLE }] } });
   const md = r.calls.updated[0].body;
-  assert.match(md, /`2222222b`[^\n]*covered when last audited; its code or tests changed since \(recheck due\)/);
+  assert.match(md, /`2222222b`[^\n]*covered when last audited; its code, tests or requirement text changed since \(recheck due\)/);
   assert.doesNotMatch(md, /\*\*Covered \(\d+\)\*\*[^#]*`2222222b`/, 'not listed under Covered');
   assert.deepEqual(audit.readState(md).blocks.find((b) => b.cid === C2), { cid: C2, status: 'covered', since: 'bbbb222', runs: 1, at: { head: 'bbbb222', date: '2026-08-01' } }, 'the old entry: the next run still sees it stale');
 });

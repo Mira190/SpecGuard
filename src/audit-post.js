@@ -462,7 +462,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const evidence = (r) => [r.code.length ? `code: ${r.code.map(at).join('; ')}` : '', r.tests.length ? `tests: ${r.tests.map((t) => `${t.layer} ${at(t)}`).join('; ')}` : ''].filter(Boolean).join('<br>');
   const first = (r) => `${name(r)} ${cell(r.text, 300)}${r.note ? `<br><sub>${cell(r.note, 300)}</sub>` : ''}`;
   const label = (b) => (b.status === 'gap' ? (b.mark === 'confirmed' ? `gap (reported in two runs${b.next[2] ? ` since ${cell(b.next[2], 12)}` : ''})` : 'gap (first report)')
-    : b.mark === 'resolved' ? 'covered (resolved)' : b.mark === 'recheck' ? 'covered (resolved? recheck next run)' : b.mark === 'stale' ? 'covered when last audited; its code or tests changed since (recheck due)' : b.status);
+    : b.mark === 'resolved' ? 'covered (resolved)' : b.mark === 'recheck' ? 'covered (resolved? recheck next run)' : b.mark === 'stale' ? 'covered when last audited; its code, tests or requirement text changed since (recheck due)' : b.status);
   const subs = (b) => count(b.rows, 'status', RISK).map(([v, n]) => `${v.replace(/_/g, ' ')} ×${n}`).join(', ');
   const bline = (b) => `| \`${b.cid}\` | ${link(b.path, b.line, `${b.path}:${b.line}`)} | ${cell(b.text, 120)} | ${label(b)}${b.carried ? `<br><sub>from ${b.at ? cell(b.at.date, 12) : 'an earlier run'}</sub>` : ''} | ${subs(b)} |\n`;
   const BTOP = '| Block | Line | Requirement | Status | Sub-rows |\n|---|---|---|---|---|\n';
@@ -499,7 +499,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const NEXT = { contradicted: 'The code contradicts it: see Documents and code disagree.', not_implemented: 'Not implemented: add the behaviour and a unit test.', missing_test: 'Add a unit test that checks it.', partial: 'Strengthen the unit test: it checks only part of it.' };
   const HIGH = { missing_test: 'Add a component or integration test that checks it.', partial: 'Strengthen the component or integration test: it checks only part of it.' };
   const nextStep = (b) => { // a requirement only a higher layer can prove asks for a test at that layer
-    if (b.mark === 'stale') return 'Covered when last audited; its code or tests changed since. It is rechecked first in the next run.';
+    if (b.mark === 'stale') return 'Covered when last audited; its code, tests or requirement text changed since. It is rechecked first in the next run.';
     if (b.carried && b.top) return b.top === 'contradicted' ? 'The code contradicted it when last audited: fix the code or the requirement.' : (b.hl && HIGH[b.top]) || NEXT[b.top] || NEXT.missing_test; // a carried row has no sub-rows: its status comes from the state
     const v = RISK.find((x) => GAP.includes(x) && b.rows.some((r) => r.status === x)) || 'missing_test', rs = b.rows.filter((r) => r.status === v);
     return (rs.length && rs.every((r) => r.class === 'higher_level') && HIGH[v]) || NEXT[v];

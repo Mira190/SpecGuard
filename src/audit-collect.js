@@ -172,7 +172,7 @@ function evidenceText(blocks, by) {
 
 // The blocks to audit, in document order, after the priority pick and the CAND_CAP byte cap (never a cut row). carried: the others the state already knows.
 function candidates(all, cap, prior, changedDocs, stale) {
-  const sel = select(all, cap, prior, changedDocs, stale), at = new Map(all.map((c, i) => [c.cid, i])), row = (c) => `${c.cid}\t${c.path}:${c.line}${c.end > c.line ? `-${c.end}` : ''}\t${c.heading}\t${c.text}\n`;
+  const sel = select(all, cap, prior, changedDocs, stale), at = new Map(all.map((c, i) => [c.cid, i])), row = (c) => `${c.cid}\t${c.path}:${c.line}${c.end ? `-${c.end}` : ''}\t${c.heading}\t${c.text}\n`;
   let used = 0;
   const fit = [];
   for (const c of sel.picked) {
