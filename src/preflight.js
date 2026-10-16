@@ -41,7 +41,7 @@ const issuesFresh = (body, issueAt) => {
 };
 // Config fingerprint: the SpecGuard build plus the inputs that change what is reviewed (action.yml passes them as one CFG string to both preflight and post). Shared by post.js
 // (writes <!-- specguard:cfg=... -->) and preflight (compares). '' when no CFG (a bare test run): not checked.
-// ponytail: the rule files' content is not in it: they are read from the base commit by collect, which runs after preflight. A rule-file edit alone does not re-review; force: true does.
+// ponytail: the rule files' content is still not hashed (collect reads them from the base commit after preflight), but the base SHA is in CFG, so a base move (the usual way rule files change) re-reviews. A rule-file edit on an unmoved base does not; force: true does.
 const cfgKey = (cfg) => (cfg ? require('node:crypto').createHash('sha1').update(`${require('./version').version().build}\0${cfg}`).digest('hex').slice(0, 8) : '');
 const sticky = (c, sha, actor, req, issueAt = null, cfg = '') => !!c && ours(c.user, actor) && typeof c.body === 'string'
   && c.body.startsWith(SUMMARY) && c.body.includes(`<!-- specguard:head=${sha} -->`)

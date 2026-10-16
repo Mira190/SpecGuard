@@ -123,6 +123,7 @@ test('a rerun on the same head is skipped only when the config marker matches', 
   const withCfg = (k) => ({ ...mine(), body: mine().body.replace('## SpecGuard', `<!-- specguard:cfg=${k} -->\n## SpecGuard`) });
   assert.match(decide({ pr: pr(), comments: [withCfg(cfg)], headSha: SHA, cfg }), /already/, 'same everything: skip');
   assert.equal(decide({ pr: pr(), comments: [withCfg(cfg)], headSha: SHA, cfg: cfgKey('copilot|other-model|||') }), '', 'changed model: review');
+  assert.equal(decide({ pr: pr(), comments: [withCfg(cfg)], headSha: SHA, cfg: cfgKey('copilot|gpt-5|||' + '|base2') }), '', 'same head, different base: review');
   assert.equal(decide({ pr: pr(), comments: [mine()], headSha: SHA, cfg }), '', 'summary without a cfg marker (older version): review once');
   assert.match(decide({ pr: pr(), comments: [mine()], headSha: SHA }), /already/, 'no CFG in the env: not checked');
 });
