@@ -42,14 +42,14 @@ function neutralize(s) {
 
 // line -> hunk index per side. RIGHT: '+' and ' ' lines, LEFT: '-' lines.
 function parsePatch(patch) {
-  const m = { RIGHT: new Map(), LEFT: new Map(), changed: { RIGHT: new Map(), LEFT: new Map() } };
+  const m = { RIGHT: new Map(), LEFT: new Map(), changed: { RIGHT: new Map(), LEFT: new Map() }, rightAt: new Map() }; // rightAt: removed LEFT line -> the RIGHT line it sits before
   let h = -1, l = 0, r = 0;
   for (const ln of String(patch || '').split(/\r?\n/)) { // CRLF files: content lines end in CR
     const hd = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(ln);
     if (hd) { h++; l = +hd[1]; r = +hd[2]; continue; }
     if (h < 0 || ln === '' || ln[0] === '\\') continue;
     if (ln[0] === '+') { m.changed.RIGHT.set(r, ln.slice(1)); m.RIGHT.set(r++, h); }
-    else if (ln[0] === '-') { m.changed.LEFT.set(l, ln.slice(1)); m.LEFT.set(l++, h); }
+    else if (ln[0] === '-') { m.changed.LEFT.set(l, ln.slice(1)); m.rightAt.set(l, r); m.LEFT.set(l++, h); }
     else { m.RIGHT.set(r++, h); l++; }
   }
   return m;
@@ -286,7 +286,7 @@ function validate(o) {
       const r = rows.find((c) => c.id === id);
       if (r && r.status === 'covered') { r.status = want; r.reason = `The model raised a ${f.kind} finding on this obligation although it marked it covered.`; fixed = true; }
     }
-    if (fixed) { f.confidence = 'low'; notes.push(`Obligation row contradicted finding ${f.kind} ${f.path}: kept the finding at low confidence and marked the row ${want}.`); }
+    if (fixed) { f.confidence = 'low'; f.gated = true; notes.push(`Obligation row contradicted finding ${f.kind} ${f.path}: kept the finding at low confidence and marked the row ${want}.`); }
   };
   let kept = [];
   for (const [i, f] of o.findings.entries()) {
@@ -297,7 +297,7 @@ function validate(o) {
   }
   // a high weak_test must name a wrong behaviour the assertion still accepts (review F04); the claim is the model's, but without one it is only a lead
   for (const f of kept) if (f.kind === 'weak_test' && f.confidence === 'high' && !counterexampleOk(f.counterexample)) {
-    f.confidence = 'low';
+    f.confidence = 'low'; f.gated = true;
     notes.push(`low confidence: weak_test ${f.path}:${f.line} names no concrete wrong behaviour that the assertion still accepts.`);
   }
   const d = { coverage: rows, requirements: reqs, findings: kept };
@@ -1471,7 +1471,7 @@ async function run({ github, context, core }) {
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
     for (const f of data.findings) {
       const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
-      if (seen) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
+      if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }
   if (packCut.size) { // a cut changed file, or a cut candidate test of one, means the model never saw what the obligations depend on: no clean verdict, no head marker
@@ -1495,8 +1495,9 @@ async function run({ github, context, core }) {
   { // a missing_test claim whose error message or literal already sits in a tracked test file may be covered there: low confidence, not counted (src/test-map.js)
     const covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
     for (const f of data.findings) {
-      const hit = f.kind === 'missing_test' && f.confidence !== 'low' && covers(readLines(f.path), f.line, f.path);
-      if (hit) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
+      const hit = f.kind === 'missing_test' && covers(readLines(f.path), f.line, f.path);
+      if (hit && f.confidence === 'low') f.gated = true; // already low: just keep it from being raised later
+      else if (hit) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
     }
   }
   const readRule = memoed(readFile); // the trusted rule inventory may include base-restored files that are not tracked at head
@@ -1590,10 +1591,16 @@ async function run({ github, context, core }) {
   // leads.txt indents each lead; and a lead is trusted only as far as the diff agrees: recomputing it drops removals re-pinned through a helper.
   const standing = new Set(require('./leads').assertionDelta(local, () => true).filter((d) => d.kind === 'removed').map((d) => `${d.file}:${d.line}`));
   for (const m of (readCtx('leads.txt') || '').matchAll(/^\s*assertion removed: .* \((.+):(\d+)\)\s*$/gm)) {
-    const path_ = m[1], line = +m[2], ch = maps.get(path_)?.changed.LEFT;
+    const path_ = m[1], line = +m[2], ch = maps.get(path_)?.changed.LEFT, rightAt = maps.get(path_)?.rightAt.get(line);
     if (!standing.has(`${path_}:${line}`)) continue;
     if (auto.length >= 5 || !ch || !reviewable.has(path_) || !ch.has(line)) continue;
-    if (data.findings.some((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - line) <= 5)) continue;
+    const near = data.findings.findIndex((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - (f.side === 'LEFT' ? line : rightAt)) <= 5); // one coordinate system: a RIGHT finding is compared at the removal's RIGHT position
+    if (near >= 0) {
+      // a low-confidence nearby finding is raised, not duplicated. A cross-file re-pin is no new risk: the lead is already posted when no finding is nearby.
+      const n = data.findings[near];
+      if (n.confidence !== 'high' && !n.gated && (n.kind !== 'weak_test' || counterexampleOk(n.counterexample))) data.findings[near] = { ...n, confidence: 'high', body: `${n.body}\n\nRemoval confirmed by the diff.` };
+      continue;
+    }
     const quote = ch.get(line).trim();
     auto.push({ kind: 'missing_test', confidence: 'high', path: path_, side: 'LEFT', line, quote, title: 'Assertion removed with no replacement', obligation_ids: [], // ponytail: no coverage row; the LEFT path below never reads obligations
       body: `The assertion \`${quote}\` was removed and nothing in this change pins the same behaviour. Restore it or pin the behaviour in another test.` });

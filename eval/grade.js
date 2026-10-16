@@ -62,7 +62,7 @@ function parseSummary(text) {
     const c = ln.split(/(?<!\\)\|/).map((x) => x.trim());
     const st = STATUS.exec(c[4] || '');
     const at = /; (\S+?):(\d+) — /.exec(c[2] || '');
-    if (st && at) rows.push({ status: STATUS_WORD[st[1]] || st[1], path: at[1], line: +at[2], text: ln });
+    if (st && at) rows.push({ status: STATUS_WORD[st[1]] || st[1], path: at[1], line: +at[2], title: c[1].replace(/^\S+?: /, ''), text: ln });
   });
   // "Pre-existing drift (not caused by this PR)" section: up to the next heading or the end of its <details>. Null when absent.
   const pe = /Pre-existing drift \(not caused by this PR\)/.exec(s);
@@ -93,13 +93,16 @@ function grade(spec, obs) {
   const posted = comments.filter((c) => c.confidence === 'high');
   const sum = parseSummary(obs.summary);
   const used = new Set(), usedItems = new Set(), matched = [], missed = [], textMisses = [];
-  // summary candidates, each consumable once (an item or a coverage row cannot stand for two expected findings)
-  const summaryHits = [...sum.items.map((h, j) => ({ kind: h.kind, path: h.path, line: h.line, text: `${h.title}\n${h.why}`, item: j })), ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
-    .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path, line: r.line, text: r.text }))], usedHits = new Set();
-  const pickSummary = (e) => { // the unused candidate of the expected kind and path nearest the expected line; -1 when none
+  // summary candidates: an item and a coverage row for the same finding (same kind, path and line, or the row's obligation text is the item's title) share a group, and a group satisfies at most one expected finding
+  const summaryHits = [...sum.items.map((h, j) => ({ kind: h.kind, path: h.path, line: h.line, text: `${h.title}\n${h.why}`, title: h.title, item: j })), ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
+    .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path, line: r.line, text: r.text, title: r.title }))], usedGroups = new Set();
+  summaryHits.forEach((h, j) => { h.group = summaryHits.slice(0, j).find((g) => g.kind === h.kind && g.path === h.path && (g.line === h.line || (h.title && lc(g.title) === lc(h.title))))?.group ?? j; });
+  const useGroup = (g) => { usedGroups.add(g); summaryHits.forEach((h) => { if (h.group === g && h.item !== undefined) usedItems.add(h.item); }); };
+  const pickSummary = (e) => { // the unused candidate of the expected kind and path nearest the expected line, within its tolerance or with the expected text; -1 when none
     let k = -1;
     summaryHits.forEach((h, j) => {
-      if (usedHits.has(j) || !arr(e.kind).includes(h.kind) || !arr(e.path).includes(h.path)) return;
+      if (usedGroups.has(h.group) || !arr(e.kind).includes(h.kind) || !arr(e.path).includes(h.path)) return;
+      if (Math.abs(h.line - e.line) > (e.tolerance ?? 2) && !(e.text && new RegExp(e.text, 'i').test(h.text))) return; // path and kind alone are not an identity
       if (k < 0 || Math.abs(h.line - e.line) < Math.abs(summaryHits[k].line - e.line)) k = j;
     });
     return k;
@@ -117,10 +120,11 @@ function grade(spec, obs) {
     });
     if (best >= 0) {
       used.add(best); tp++; matched.push({ expected: e, observed: posted[best] });
+      summaryHits.forEach((h) => { if (posted[best].line != null && h.kind === posted[best].kind && h.path === posted[best].path && Math.abs(h.line - posted[best].line) <= 2) useGroup(h.group); }); // the summary's copy of an inline finding is not a second one
       if (e.text && !new RegExp(e.text, 'i').test(`${posted[best].title}\n${posted[best].body}`)) textMisses.push(e);
     } else if (e.allow_summary && (best = pickSummary(e)) >= 0) {
       const h = summaryHits[best];
-      usedHits.add(best); if (h.item !== undefined) usedItems.add(h.item);
+      useGroup(h.group);
       tp++; matched.push({ expected: e, observed: null, via_summary: true });
       if (e.text && !new RegExp(e.text, 'i').test(h.text)) textMisses.push(e);
     } else missed.push(e);
