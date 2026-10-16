@@ -440,8 +440,8 @@ test('run: a scan without design documents validates the unit findings at HEAD, 
 test('run: a unit finding about an unlisted unit, or a result with neither requirements nor unit_findings, is handled without rejecting the scan', async (t) => {
   const r = await post(t, { files: { 'findings.json': { docs_reviewed: [], not_requirements: [], not_reviewed: [], unit_findings: [{ ...uf(), unit: 'abababab' }] } } });
   assert.match(r.calls.summary, /unit_findings\[0\] dropped: unknown unit abababab/);
-  assert.doesNotMatch(r.calls.summary, /✅/, 'an unattributable row: no unit was judged');
-  assert.equal(r.calls.outputs.status, 'incomplete');
+  assert.match(r.calls.summary, /\*\*✅ No unit test gaps in the 3 riskiest units\*\*/, 'a stray unit id taints no real unit');
+  assert.equal(r.calls.outputs.status, 'complete');
   const old = await post(t, { files: { 'findings.json': { docs_reviewed: [], not_requirements: [], not_reviewed: [] } } });
   assert.doesNotMatch(old.calls.summary, /✅/, 'a missing unit_findings is no verdict');
   assert.equal(old.calls.outputs.status, 'incomplete');
@@ -555,13 +555,24 @@ test('run: units whose file the model did not see whole (pack-cut.txt) are not r
   const env = { SCAN_ISSUE: 'true', ENGINE: 'claude' }, vis = (s) => s.slice(0, s.indexOf('<details>'));
   const r = await post(t, { env, files: { 'findings.json': result([uf()]), 'pack-cut.txt': 'src/js/cart.js\n' } });
   const v = vis(r.calls.summary);
-  assert.match(v, /\*\*❌ 1 unit test gap in the 2 units that fit the model's context\*\*/);
+  assert.match(v, /\*\*❌ 1 unit test gap in the 2 units reviewed\*\*/);
   assert.match(v, /\| 2 of 140 \|/);
   assert.match(v, /\*\*Not reviewed this run:\*\* 1 unit did not fit the model's context: `src\/js\/cart\.js`\. It stays due for the next run\./);
   assert.deepEqual(readState(r.calls.created[0].body).blocks.map((b) => b.cid).sort(), [U1, U2].sort(), 'the unseen unit is not recorded as covered');
   const all = await post(t, { env, files: { 'findings.json': result([]), 'pack-cut.txt': 'src/js/orders.js\nsrc/js/legacy.js\nsrc/js/cart.js\n' } });
   assert.match(vis(all.calls.summary), /\*\*⚠️ The scan could not review any unit: none fit the model's context\*\*/);
   assert.doesNotMatch(vis(all.calls.summary), /✅/);
+  // the model's answer for a unit was unusable (bad), not cut by the pack: its own wording; both together name each count
+  const bad = vis((await post(t, { env, files: { 'findings.json': result([uf({ unit: U1, ...cite('src/js/orders.js', 1), title: '' })]), 'pack-cut.txt': '' } })).calls.summary);
+  assert.match(bad, /\*\*Not reviewed this run:\*\* 1 unit had no usable answer from the model \(see Not reviewed\): `src\/js\/orders\.js`\. It stays due for the next run\./);
+  assert.match(bad, /\*\*⚠️ Incomplete scan: no gaps found so far\*\*/);
+  const both = await post(t, { env, files: { 'findings.json': result([uf({ unit: U1, ...cite('src/js/orders.js', 1), title: '' })]), 'pack-cut.txt': 'src/js/cart.js\n' } });
+  assert.match(vis(both.calls.summary), /\*\*Not reviewed this run:\*\* 2 units were not reviewed: 1 did not fit the model's context, 1 had no usable model answer: /);
+  assert.equal(both.calls.outputs.reason, "2 units were not reviewed: 1 did not fit the model's context, 1 had no usable model answer");
+  const allBad = await post(t, { env, files: { 'findings.json': result([]), 'pack-cut.txt': '' } });
+  assert.doesNotMatch(vis(allBad.calls.summary), /unusable/, 'a legit empty answer: nothing unusable');
+  const none = vis((await post(t, { env, files: { 'findings.json': (() => { const o = result([]); delete o.unit_findings; return o; })(), 'pack-cut.txt': '' } })).calls.summary);
+  assert.match(none, /\*\*⚠️ The scan could not review any unit: the model's answers were unusable\*\*/);
   const plain = await post(t, { env, files: { 'findings.json': result([uf()]) } });
   assert.doesNotMatch(plain.calls.summary, /Not reviewed this run/);
   assert.match(vis(plain.calls.summary), /in the 3 riskiest units/);
@@ -666,11 +677,11 @@ test('chained: the real collector writes the ctx files and the post step reads t
   const saved = { ...process.env };
   Object.assign(process.env, { CTX: ctx, GITHUB_WORKSPACE: root, ENGINE: '', MODEL: '', SKIP: '', SCAN_ISSUE: '', AUDIT_ISSUE: '' });
   try { await audit({ github: m.github, context: m.context, core: m.core, date: DATE }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
-  assert.match(m.calls.summary, /1 unit test gap/);
+  assert.match(m.calls.summary, /\*\*❌ 1 unit test gap in the /);
   assert.ok(m.calls.summary.includes(`unit_findings[1] dropped: unknown unit ${U1}`));
   const rows = JSON.parse(fs.readFileSync(path.join(ctx, 'audit.json'), 'utf8')).unit_findings;
   assert.deepEqual(rows.map((r) => [r.unit, r.low]), [[U2, false]]);
-  assert.equal(m.calls.outputs.status, 'incomplete', 'a row naming an unlisted unit cannot be attributed: the call is not a verdict');
+  assert.equal(m.calls.outputs.status, 'complete', 'a well-formed unlisted unit id is not a unit of this call: it taints nothing');
 });
 
 test('F20: a unit whose finding was dropped as malformed, or whose answer is missing, is not saved as covered and the run is incomplete; a legit empty answer and valid findings keep their behaviour', async (t) => {
@@ -688,11 +699,16 @@ test('F20: a unit whose finding was dropped as malformed, or whose answer is mis
     assert.deepEqual(r.ids, without(U2), `${name}: the unit stays unknown and due, the others are recorded`);
     assert.doesNotMatch(r.summary, /\u2705/, name);
   }
-  for (const [name, f] of [['missing unit_findings', (() => { const o = result([]); delete o.unit_findings; return o; })()], ['non-array unit_findings', result('none')], ['unit id that is not a unit', result([uf({ unit: 'zz' })])], ['unlisted unit id', result([uf({ unit: 'abababab' })])]]) {
+  for (const [name, f] of [['missing unit_findings', (() => { const o = result([]); delete o.unit_findings; return o; })()], ['non-array unit_findings', result('none')], ['unit id that is not a unit', result([uf({ unit: 'zz' })])]]) {
     const r = await run(f);
     assert.equal(r.status, 'incomplete', name);
     assert.deepEqual(r.ids, [], `${name}: every unit of the call is unseen`);
   }
+  const stray = await run(result([uf({ unit: 'abababab' })]));
+  assert.deepEqual([stray.status, stray.ids], ['complete', all], 'a well-formed unlisted unit id taints nothing');
+  const over = result([...Array.from({ length: 60 }, (_, i) => uf({ title: `gap ${i}` })), uf({ unit: U1, ...cite('src/js/orders.js', 1), title: 'the 61st' })]);
+  const ovr = await run(over);
+  assert.deepEqual([ovr.status, ovr.ids], ['incomplete', without(U1)], '61 valid findings: only the unit of the overflow row is unseen');
 });
 
 test('run: a unit with an incomplete candidate test stays due instead of being saved as covered', async (t) => {
