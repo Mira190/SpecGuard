@@ -30,14 +30,8 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, evidencePack, 
     const cids = rows.map((l) => l.split('\t')[0]), set = new Set(cids), ev = evidence.filter((l) => set.has(l.split('\t')[0]));
     const prompt = render({ 'audit-docs.txt': rd('audit-docs.txt'), 'audit-candidates.txt': rows.join('\n') + '\n', 'audit-blocks.txt': bodies.filter((l) => set.has(l.split('\t')[0])).join('\n'),'audit-evidence.txt': ev.join('\n') }, { ...bm, candidates: cids.length, candidates_listed: cids.length });
     // the pack: windows around the lines the evidence rows cite, not whole files (evidencePack in claude-api.js; the single call loads the same)
-    const at = (l) => { const x = l.split('\t')[2] || '', k = x.lastIndexOf(':'); return k > 0 ? [x.slice(0, k), parseInt(x.slice(k + 1), 10) || 1] : null; };
     const p = evidencePack(root, ev, limit);
-    const cut = new Set(p.notWhole), blockCuts = {};
-    for (const cid of cids) {
-      const missing = [...new Set(ev.filter((l) => l.split('\t')[0] === cid).map(at).filter(Boolean).map(([file]) => file).filter((file) => cut.has(file)))];
-      if (missing.length) blockCuts[cid] = missing;
-    }
-    return { prompt, pack: p, cids, blockCuts };
+    return { prompt, pack: p, cids, blockCuts: p.blockCuts };
   };
   const byCid = new Map(cands.map((l) => [l.split('\t')[0], l]));
   const withTmp = (f) => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-part-')); try { return f(); } finally { fs.rmSync(tmp, { recursive: true, force: true }); } };
