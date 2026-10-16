@@ -171,3 +171,18 @@ test('the guard follows a delegated helper: a guard line that calls a tested hel
   assert.equal(covers(['  for (const c of cases) assert.deepEqual(nextTrigger(c.now), c.want)'], 1, 'test/schedule.test.ts'), null, 'a test file');
   assert.equal(covers(['  assert.deepEqual(isDirectChild(a, b), true)'], 1, 'test/other.test.ts'), null, 'a test file, even with a tested helper');
 });
+
+test('makeCoverGuard: test_paths, when set, is authoritative over the name heuristic (F26)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-'));
+  const git = (...a) => execFileSync('git', a, { cwd: root });
+  git('init', '-q');
+  fs.mkdirSync(path.join(root, 'qa'));
+  fs.mkdirSync(path.join(root, 'tests'));
+  fs.writeFileSync(path.join(root, 'qa/a.js'), "assert.throws(f, /boom happened here/);\n");
+  fs.writeFileSync(path.join(root, 'tests/b.test.js'), "assert.throws(f, /bang happened here/);\n");
+  git('add', '.');
+  const line = (m) => [`throw new Error('${m} happened here');`];
+  assert.match(makeCoverGuard({ cwd: root, testPaths: 'qa/**' })(line('boom'), 1), /^qa\/a\.js:1$/);
+  assert.equal(makeCoverGuard({ cwd: root, testPaths: 'qa/**' })(line('bang'), 1), null, 'tests/b.test.js is outside the configured scope');
+  assert.match(makeCoverGuard({ cwd: root })(line('bang'), 1), /^tests\/b\.test\.js:1$/, 'control: no scope, the heuristic');
+});

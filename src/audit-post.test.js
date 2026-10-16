@@ -1063,3 +1063,16 @@ test('verify: incomplete block evidence cannot prove absence, but positive cited
   const other = verify(result([req({ status: 'missing_test', tests: [] })]), { read, blockCuts: { [C2]: ['test/other.test.js'] } });
   assert.equal(other.requirements[0].status, 'missing_test', 'another block does not contaminate this one');
 });
+
+test('verify: test_paths is authoritative for what a test file is (F26); without it the name heuristic applies', () => {
+  const files = { ...FILES, 'qa/checks/amount.js': ['check("amount", () => {', '  assert.equal(total([1, 2]), 3);', '});'] };
+  const rd = (p) => files[p] || null;
+  const r = () => result([req({ tests: [{ path: 'qa/checks/amount.js', line: 2, quote: files['qa/checks/amount.js'][1], layer: 'unit' }] })]);
+  const scoped = verify(r(), { read: rd, testPaths: 'qa/checks/**' });
+  assert.equal(scoped.requirements[0].status, 'covered');
+  assert.equal(scoped.requirements[0].tests.length, 1);
+  const heuristic = verify(r(), { read: rd });
+  assert.equal(heuristic.requirements[0].status, 'unknown', 'no scope: qa/checks/amount.js is not recognised as a test by name');
+  const out = verify(result([req()]), { read: rd, testPaths: 'qa/checks/**' }); // authoritative: tests/plan.test.js is outside the scope
+  assert.equal(out.requirements[0].tests.length, 0);
+});

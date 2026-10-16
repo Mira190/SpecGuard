@@ -693,3 +693,16 @@ test('run: per-block context omissions reach the validated audit artifact', asyn
   assert.equal(saved.requirements[0].status, 'unknown');
   assert.match(saved.requirements[0].note, /test\/orders.test.js/);
 });
+
+test('verifyUnits: test_paths decides which cited files are tests (F26): weak_test and pushdown may cite a configured path, missing_test may not; no scope keeps the name heuristic', () => {
+  const files = { ...FILES, 'qa/checks/orders.js': ["check('creates', () => {", '  assert.ok(create({}));', '});'] };
+  const rd = (p) => files[p] || null;
+  const weak = () => uf({ unit: U1, kind: 'weak_test', path: 'qa/checks/orders.js', line: 2, quote: 'assert.ok(create({}));', title: 'create is only checked to be truthy', body: 'passes for any object', counterexample: 'create({}) returns a broken object -> still passes' });
+  const n = (o) => verify(result([weak()]), { read: rd, units: UNITS(), ...o }).unit_findings.length;
+  assert.equal(n({ testPaths: 'qa/checks/**' }), 1, 'a configured test path is a test');
+  assert.equal(n({}), 0, 'control: without a scope the heuristic does not know qa/checks');
+  const miss = uf({ unit: U1, kind: 'missing_test', path: 'qa/checks/orders.js', line: 2, quote: 'assert.ok(create({}));' });
+  assert.equal(verify(result([miss]), { read: rd, units: UNITS(), testPaths: 'qa/checks/**' }).unit_findings.length, 0, 'missing_test cites code, not a configured test file');
+  assert.equal(verify(result([PUSH()]), { read: rd, units: UNITS(), testPaths: 'qa/checks/**' }).unit_findings.length, 0, 'authoritative: test/e2e is outside the scope');
+  assert.equal(verify(result([PUSH()]), { read: rd, units: UNITS() }).unit_findings.length, 1, 'control: heuristic');
+});

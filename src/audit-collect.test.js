@@ -470,3 +470,28 @@ test('collect: audit-blocks.txt holds each candidate block whole (past the 240-c
   const meta = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
   assert.ok(meta.limitations.some((l) => /longer than 4000 characters.*not fully read/.test(l)), JSON.stringify(meta.limitations));
 });
+
+test('loadPrior: with scan_issue_repo the state is read from that repository under its token, titled by the scanned repository (F24)', async () => {
+  const state = '<!-- specguard:audit-state {"v":4,"head":"abc","audits":[["abc","2026-10-01"]],"blocks":[["ddddddd1","gap","abc",1,0]]} -->';
+  const bot = { type: 'Bot', login: 'github-actions[bot]' };
+  const sc = audit.scopeOf('', 'o/src');
+  const issues = [{ number: 1, title: sc.title, body: `${sc.mark}\n${state}`, user: bot }, { number: 2, title: audit.scopeOf('', 'o/other').title, body: `${sc.mark}\n${state.replace('ddddddd1', 'eeeeeee2')}`, user: bot }];
+  const seen = [];
+  const mk = (reportsVisibility, srcVisibility = 'private') => async (url, init) => {
+    seen.push([url, init.headers.authorization]);
+    if (url.endsWith('/repos/org/reports')) return { ok: true, json: async () => ({ visibility: reportsVisibility }) };
+    if (url.endsWith('/repos/o/src')) return { ok: true, json: async () => ({ visibility: srcVisibility }) };
+    if (url.endsWith('/user')) return { ok: false, status: 403, json: async () => ({}) };
+    return { ok: true, json: async () => issues };
+  };
+  const env = { GH_REPO: 'o/src', GH_TOKEN: 'src-tok', ISSUE_REPO: 'org/reports', ISSUE_TOKEN: 'rep-tok', SCAN_PATHS: '' };
+  const p = await loadPrior(env, mk('private'));
+  assert.deepEqual(p && p.blocks.map((b) => b.cid), ['ddddddd1'], 'only this source repository\'s issue');
+  assert.ok(seen.some(([u, a]) => u === 'https://api.github.com/repos/org/reports/issues?state=all&per_page=100&page=1' && a === 'Bearer rep-tok'));
+  assert.ok(!seen.some(([u]) => u.includes('/repos/o/src/issues')));
+  const logs = [], log = console.log; console.log = (m) => logs.push(m);
+  try { assert.equal(await loadPrior(env, mk('public', 'private')), null, 'a public report repository is not used for a private source (the publisher guard)'); } finally { console.log = log; }
+  assert.match(logs.join('\n'), /scan issue not read from org\/reports/);
+  const same = await loadPrior({ GH_REPO: 'o/src', GH_TOKEN: 'src-tok', ISSUE_REPO: 'o/src', ISSUE_TOKEN: 'x' }, async (u) => (u.endsWith('/user') ? { ok: false, status: 403, json: async () => ({}) } : { ok: true, json: async () => [{ number: 3, body: `${audit.MARK}\n${state}`, user: bot }] }));
+  assert.deepEqual(same && same.blocks.map((b) => b.cid), ['ddddddd1'], 'control: the same repository is read as before');
+});

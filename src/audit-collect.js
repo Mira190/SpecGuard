@@ -293,18 +293,28 @@ async function loadPrior(env, fetchFn = globalThis.fetch) {
   try {
     const { findIssue, readState, scopeOf } = require('./audit-post');
     const api = env.GITHUB_API_URL || 'https://api.github.com', [owner, repo] = String(env.GH_REPO || env.GITHUB_REPOSITORY || '').split('/');
-    const get = async (u) => {
-      const r = await fetchFn(`${api}${u}`, { headers: { authorization: `Bearer ${env.GH_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' } });
+    // the same target as the publisher (audit-post main): ISSUE_REPO under ISSUE_TOKEN, titled by the scanned repository; the visibility guard fails closed
+    const ir = /^([\w.-]+)\/([\w.-]+)$/.exec(env.ISSUE_REPO || ''), away = !!ir && !(ir[1] === owner && ir[2] === repo);
+    if (env.ISSUE_REPO && !ir) return null;
+    const target = away ? { owner: ir[1], repo: ir[2] } : { owner, repo }, token = (away && env.ISSUE_TOKEN) || env.GH_TOKEN;
+    const get = async (u, tok = token) => {
+      const r = await fetchFn(`${api}${u}`, { headers: { authorization: `Bearer ${tok}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' } });
       if (!r.ok) throw new Error(`${r.status} ${u}`);
       return r.json();
     };
+    if (away) {
+      const vis = async (o, r, tok) => { try { const d = await get(`/repos/${o}/${r}`, tok); return d.visibility || (d.private === false ? 'public' : d.private ? 'private' : ''); } catch { return ''; } };
+      const g = require('./visibility-guard').decide(await vis(target.owner, target.repo, token), await vis(owner, repo, env.GH_TOKEN));
+      if (!g.ok) { console.log(`::warning::SpecGuard: scan issue not read from ${target.owner}/${target.repo}: ${g.reason}`); return null; }
+    }
     // the two calls audit-post's findIssue makes, over REST
     const github = {
       paginate: async (_f, o) => { const all = []; for (let p = 1; ; p++) { const page = await get(`/repos/${o.owner}/${o.repo}/issues?state=all&per_page=100&page=${p}`); all.push(...page); if (page.length < 100) return all; } },
       rest: { issues: { listForRepo: null } },
     };
     const me = await get('/user').then((u) => u.login, () => null); // an app or job token cannot: the issue is then ours when a github-actions bot opened it
-    const issue = await findIssue({ github, owner, repo, me, mark: scopeOf(env.SCAN_PATHS).mark });
+    const sc = scopeOf(env.SCAN_PATHS, away ? `${owner}/${repo}` : '');
+    const issue = await findIssue({ github, ...target, me, mark: sc.mark, title: away ? sc.title : '' });
     return (issue && readState(issue.body)) || null;
   } catch (e) {
     console.log(`::warning::SpecGuard: could not read the previous scan state (this run starts from the first block): ${e.message}`);
