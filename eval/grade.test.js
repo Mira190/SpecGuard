@@ -359,3 +359,19 @@ test('S10: a coverage row for a gap that is also a posted comment counts once', 
   const g = grade({ id: 'clean', goal: 'requirements', expected: { findings: [], expect_clean: true } }, obs([com({ line: 10 })], { summary }));
   assert.equal(g.fp, 1);
 });
+
+// U4 contract: a coverage row is a request for action only when its gap's finding is actionable. A low-confidence/Details copy of the same gap
+// is explicitly discounted, so the row is not an FP; a row with no finding at all still counts (S10).
+test('coverage-row FP contract: row with a low-confidence copy is not an FP; the row alone is', () => {
+  const { buildSummary } = require('../src/post');
+  const clean = { id: 'c', goal: 'requirements', expected: { findings: [], expect_clean: true } };
+  const b = { path: 'a.js', line: 10, quote: 'return boundary(value);' };
+  const row = '| O1: Boundary A | PR body; a.js:10 — return boundary(value); | none | Missing test: No test |\n';
+  const data = { requirements: [], requirements_source: 'none', not_reviewed: '', coverage: [{ id: 'O1', obligation: 'Boundary A', source: 'from behaviour', behaviour: b, change: b, evidence: [], status: 'missing_test', reason: 'No test', alignment: { status: 'not_applicable', reason: 'No explicit requirement' } }], findings: [], standards: { status: 'no_rules', sources: [], reason: 'None' }, layering: { status: 'checked', reason: 'None' } };
+  const f = { kind: 'missing_test', path: 'a.js', line: 10, title: 'Boundary A', body: 'Missing assertion', confidence: 'low', obligation_ids: ['O1'] };
+  const built = buildSummary({ cov: { reports: 0 }, data: { ...data, findings: [f] }, items: [{ f, why: 'low confidence' }], notes: [], blob: 'https://github.com/example/repo/blob/abc/' });
+  const o = (summary) => ({ comments: [], reviews: [], summary, latency_s: 1 });
+  const hidden = grade(clean, o(built)), alone = grade(clean, o('## SpecGuard\n\n' + row));
+  assert.equal(hidden.fp, 0); assert.equal(hidden.clean_ok, true);
+  assert.equal(alone.fp, 1); assert.equal(alone.clean_ok, false);
+});

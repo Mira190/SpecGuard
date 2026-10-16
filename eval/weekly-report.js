@@ -39,6 +39,7 @@ function patchTouches(patch, start, end) {
   return false;
 }
 
+const CAP = 300;
 // The same rule as post.js (its own anchorTouched/testsChanged, not a copy), fed from the GitHub API instead of a clone: a stand-in for the two
 // git calls they make, answering from the first-parent, non-merge commits of the compare (a base merged into the PR is not the author's change).
 function apiGit(cmp, head, filesOf) {
@@ -48,23 +49,33 @@ function apiGit(cmp, head, filesOf) {
     if (!cmp || !['ahead', 'identical'].includes(cmp.status) || (cmp.total_commits || 0) > by.size) throw new Error('compare not usable');
     if (a[0] === 'merge-base') return '';
     const per = chain.map((sha) => filesOf(sha) || (() => { throw new Error('commit unavailable'); })());
-    if (!a.includes('-p')) return per.flat().map((f) => f.filename).join('\n');
-    const file = a[a.length - 1];
+    const cut = (fs) => fs.length >= CAP; // GitHub caps a commit's file list at 300: a file missing from a full list may only be cut off
+    if (!a.includes('-p')) { // --no-renames: a rename is a delete of the old path plus an add of the new one
+      const names = per.flat().flatMap((f) => (f.status === 'renamed' && f.previous_filename ? [f.previous_filename, f.filename] : [f.filename]));
+      if (per.some(cut) && !names.some((n) => require('../src/trace').isTestPath(n))) throw new Error('commit file list may be truncated');
+      return names.join('\n');
+    }
+    const file = a[a.length - 1], ws = a.includes('-w');
     return per.map((fs) => {
       const f = fs.find((x) => x.filename === file), gone = f?.status === 'removed' || fs.some((x) => x.status === 'renamed' && x.previous_filename === file);
-      return gone ? 'deleted file mode 100644\n' : f ? unified0(f.patch) : '';
+      if (!gone && !f && cut(fs)) throw new Error('commit file list may be truncated');
+      if (!gone && f && f.patch == null && f.changes !== 0) throw new Error('no patch for a changed file (large or binary)'); // unknown, not unchanged
+      return gone ? 'deleted file mode 100644\n' : f ? unified0(f.patch, ws) : '';
     }).join('\0');
   };
 }
 // A -U3 patch as the -U0 hunks post.anchorTouched reads: only the changed runs, with their old-side position.
-function unified0(patch) {
+// ws (git's -w): a run whose removed and added lines are equal pairwise once all whitespace is gone is dropped.
+// ponytail: git's -w can realign hunks, so this pairwise check is an approximation; exact only for same-length runs.
+function unified0(patch, ws) {
   const out = []; let old = 0, run = null;
-  const end = () => { if (run) out.push(`@@ -${run.d ? run.a : run.a - 1},${run.d} +0,${run.k} @@`); run = null; };
+  const nw = (x) => x.replace(/\s+/g, '');
+  const end = () => { if (run && !(ws && run.d && run.dl.length === run.al.length && run.dl.every((x, i) => nw(x) === nw(run.al[i])))) out.push(`@@ -${run.d ? run.a : run.a - 1},${run.d} +0,${run.k} @@`); run = null; };
   for (const l of String(patch || '').split('\n')) {
     const h = /^@@ -(\d+)/.exec(l);
     if (h) { end(); old = +h[1]; } else if (!old || l[0] === '\\') continue;
-    else if (l[0] === '-') { run ||= { a: old, d: 0, k: 0 }; run.d++; old++; }
-    else if (l[0] === '+') { run ||= { a: old, d: 0, k: 0 }; run.k++; }
+    else if (l[0] === '-') { run ||= { a: old, d: 0, k: 0, dl: [], al: [] }; run.d++; run.dl.push(l.slice(1)); old++; }
+    else if (l[0] === '+') { run ||= { a: old, d: 0, k: 0, dl: [], al: [] }; run.k++; run.al.push(l.slice(1)); }
     else { end(); old++; }
   }
   end();

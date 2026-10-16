@@ -401,7 +401,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       while (plans.length > 1 && total() > budget) dropped.unshift(...plans.pop().cids || []); // the budget is hard: trailing block batches go first (candidate order = rotation priority), the first part (units) last
       if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
-      let first = null, ok = 0, splits = 0;
+      let first = null, ok = 0, splits = 0, cfg = null; // cfg: the first part that failed on a configuration class
       const blockCuts = {};
       const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: cids }), reason });
       while (queue.length) {
@@ -422,7 +422,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
           unanswered = p.cids.filter((c) => !got.has(c));
           if (unanswered.length <= (p.retry ? 0 : p.cids.length * 0.2)) unanswered = [];
         }
-        if (!obj) { fail(p, why); first ||= r.ok ? { status: 'failed', reason: '', why } : r; if (r.status === 'timeout') break; continue; }
+        if (!obj) { fail(p, why); if (['auth', 'quota', 'model', 'policy'].includes(r.reason)) cfg ||= r; first ||= r.ok ? { status: 'failed', reason: '', why } : r; if (r.status === 'timeout') break; continue; }
         ok++;
         if (p.cids) Object.assign(blockCuts, p.blockCuts);
         if (p.cids) merged.requirements.push(...arr('requirements')), merged.not_requirements.push(...arr('not_requirements'));
@@ -445,6 +445,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       if (!failed.some((f) => f.part === 'units')) w('pack-cut.txt', split.packCut.map((x) => `${x}\n`).join('')); // the unit part's pack (what the unit findings may rely on)
       notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
       for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);
+      if (cfg) w('engine-error', `${cfg.reason}\n${cfg.why}; ${ok} of ${ok + failed.length} parts were reviewed\n`); // still a partial success, but the account problem must reach the job gate (src/fail-on-error.js)
       return end('success');
     }
 
