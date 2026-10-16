@@ -190,7 +190,9 @@ function weakCandidates(src) {
 // ---- removed / weakened assertions (diff only) ----
 // value assertions VALUE does not list (kept out of VALUE: it also decides which weak assertions are "pinned")
 const EXTRA = /\bassert\.(?:match|doesNotMatch|notEqual|notStrictEqual|notDeepEqual|notDeepStrictEqual|throws|doesNotThrow|rejects|doesNotReject|ifError)\s*\(|\.(?:toMatch|toThrow|toThrowError|toHaveBeenCalledWith|toBeGreaterThan|toBeLessThan)\s*\(|\.rejects\./;
-const LIT = /'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`|(?<![\w$.])(\d+(?:\.\d+)?)(?![\w$])/g; // quoted strings and numbers
+const EXACT = /\.(?:toBe|toEqual|toStrictEqual)\s*\(|\b(?:equal|deepEqual|strictEqual|deepStrictEqual)\s*\(/;
+const RANGE = /\.(?:toBeGreaterThan|toBeGreaterThanOrEqual|toBeLessThan|toBeLessThanOrEqual|toBeCloseTo)\s*\(/;
+const LIT =/'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\])*)`|(?<![\w$.])(\d+(?:\.\d+)?)(?![\w$])/g; // quoted strings and numbers
 const literalsOf = (text, min = 2) => new Set([...text.matchAll(LIT)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]).filter((x) => x.length >= min));
 const subjectOf = (text) => { // the expression under test on one assertion line, whitespace and quote style normalised; null when it is no assertion
   let m, x = null;
@@ -207,20 +209,21 @@ const subjectOf = (text) => { // the expression under test on one assertion line
 // -> [{file, kind: 'removed'|'weakened', line (old side), old, new}] per changed test file
 // ponytail: same-file, single-line assertions, subject = first argument / expect() operand. Ceiling: multi-line assertions, renamed subjects.
 function assertionDelta(diff, isTest) {
-  const per = new Map(); let file = null, body = false, o = 0;
+  const per = new Map(); let file = null, old = null, body = false, o = 0, hk = 0;
   for (const l of diff.split('\n')) {
     if (l.startsWith('diff --git ')) { body = false; file = null; continue; }
     if (!body) {
-      if (l.startsWith('+++ ')) file = l === '+++ /dev/null' ? null : l.slice(4).replace(/^b\//, '').replace(/^"|"$/g, '');
+      if (l.startsWith('--- ')) old = l === '--- /dev/null' ? null : l.slice(4).replace(/^a\//, '').replace(/^"|"$/g, '');
+      if (l.startsWith('+++ ')) file = l === '+++ /dev/null' ? old : l.slice(4).replace(/^b\//, '').replace(/^"|"$/g, ''); // a deleted file keeps its old path
       const m = /^@@ -(\d+)/.exec(l);
-      if (m) { body = true; o = +m[1]; if (file && isTest(file) && !per.has(file)) per.set(file, { rm: [], add: [], lines: [] }); }
+      if (m) { body = true; hk++; o = +m[1]; if (file && isTest(file) && !per.has(file)) per.set(file, { rm: [], add: [], lines: [] }); }
       continue;
     }
     const m = /^@@ -(\d+)/.exec(l);
-    if (m) { o = +m[1]; continue; }
+    if (m) { o = +m[1]; hk++; continue; }
     const e = file && per.get(file), t = l.slice(1).replace(/\r$/, '');
-    if (l[0] === '-') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.rm.push({ line: o, text: t.trim(), ...s }); } o++; }
-    else if (l[0] === '+') { if (e && !quiet(t)) { const u = t.slice(0, 400); e.lines.push(u); const s = subjectOf(u); if (s) e.add.push({ text: u.trim(), at: e.lines.length - 1, ...s }); } } // a long added line still re-pins: its subject comes first
+    if (l[0] === '-') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.rm.push({ hk, line: o, text: t.trim(), ...s }); } o++; }
+    else if (l[0] === '+') { if (e && !quiet(t)) { const u = t.slice(0, 400); e.lines.push(u); const s = subjectOf(u); if (s) e.add.push({ hk, text: u.trim(), at: e.lines.length - 1, ...s }); } } // a long added line still re-pins: its subject comes first
     else if (l[0] === ' ') o++;
   }
   const out = [];
@@ -261,8 +264,11 @@ function assertionDelta(diff, isTest) {
   const litList = (t) => [...String(t).replace(/\s\/\/[^'"`\n]*$/gm, '').matchAll(LIT)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]); // every literal in order, duplicates kept; a trailing comment is not part of it
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const [f, { rm, add, lines }] of per) for (const r of rm) {
-    const same = add.filter((a) => a.x === r.x);
-    if (same.some((a) => !a.weak) || (r.weak && same.length)) continue; // still pinned: moved, reformatted or strengthened
+    const flat = (t) => t.replace(/\s+/g, '').replace(/["'`]/g, "'");
+    if (add.some((a) => flat(a.text) === flat(r.text))) continue; // the same assertion added anywhere in the file: moved
+    const same = add.filter((a) => a.x === r.x && a.hk === r.hk); // only the same hunk re-pins: an assertion elsewhere in the file may pin something else
+    const exact = !r.weak && EXACT.test(r.text) && literalsOf(r.text, 1).size > 0; // an exact value replaced by a range matcher is weakened
+    if (same.some((a) => !a.weak && !(exact && RANGE.test(a.text))) || (r.weak && same.length)) continue; // still pinned: moved, reformatted or strengthened
     // re-pinned through a helper or alias: an added assertion holds every distinctive literal of the removed one (literals most assertion lines share, like '.mp4', say nothing)
     const all = [...rm, ...add], has = (a, x) => literalsOf(a.text, 1).has(x);
     const distinct = (min) => [...literalsOf(r.text, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive

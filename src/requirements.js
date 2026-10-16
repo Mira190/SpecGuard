@@ -23,6 +23,9 @@ const sanitize = (s) => {
     .replace(/(\]\(\s*<?[^\s)]+>?)\s+(?:"[^"]*"|'[^']*')\s*\)/g, '$1)'); // link and image titles
 };
 
+// A labelled criterion line: "AC 1:", "AC1:", "AC-1:", "AC.1:", "AC_1:" (never "ACME-1:"). One regex for the inventory and the body cut.
+const AC_LINE = /^\s*AC[\s._-]*\d+\s*[:：]/i;
+const AC_LABELLED = new RegExp(`${AC_LINE.source}\\s*(.+)$`, 'i');
 const AC_HEAD = /^(acceptance criteria|acceptance tests|验收标准|验收条件|AC)\s*[:：]?$/i;
 // The same words (plus "definition of done" and "requirements") as a plain line: "Acceptance criteria:", "**Acceptance criteria**", "AC:".
 const PLAIN_HEAD = /^\s{0,3}(?:\*\*|__|\*|_)?\s*(?:acceptance criteria|acceptance tests|验收标准|验收条件|AC|definition of done|requirements)\s*[:：]?\s*(?:\*\*|__|\*|_)?\s*[:：]?\s*$/i;
@@ -59,7 +62,7 @@ function extractCriteria(documents) {
       if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; return; }
       if (fenced) return;
       if (/^#{1,6}\s+\S/.test(line) || PLAIN_HEAD.test(line)) { active = null; return; }
-      const labelled = /^\s*AC\s*\d+\s*[:：]\s*(.+)$/i.exec(line);
+      const labelled = AC_LABELLED.exec(line);
       const indent = /^\s*/.exec(line)[0].length;
       // an item indented deeper than the current criterion is a sub-point of it (continuation below)
       const item = inAc[i] && !(active && indent > top) && LIST_ITEM.exec(line);
@@ -213,7 +216,7 @@ function trustedComments(comments, cap = COMMENT_CAP) {
 function fitBody(body, cap = ISSUE_CAP) {
   if (body.length <= cap) return { text: body, cut: false };
   const lines = body.split('\n'), inAc = acMask(lines);
-  const keep = lines.map((l, i) => inAc[i] || /^\s*AC\s*\d+\s*[:：]/i.test(l));
+  const keep = lines.map((l, i) => inAc[i] || AC_LINE.test(l));
   let room = cap - lines.reduce((n, l, i) => n + (keep[i] ? l.length + 1 : 0), 0), cut = false;
   const out = [];
   lines.forEach((l, i) => {
@@ -282,7 +285,11 @@ function collectRequirements({ pr, repo, commits = '', loadIssue, history }) {
       sources.push(closing ? (fromBranch.has(key) ? `${label} (branch name)` : label) : `${label} (context)`);
       const doc = { source: closing ? label : `${label} (context)`, text: sanitize(`${issue.title || ''}\n${issue.body || ''}`) };
       if (closing) documents.push(doc); else context.push({ ...doc, untrusted: true });
-    } catch { if (!fromBranch.has(key)) limitations.push(fact(`Could not read ${label}.`)); } // a number guessed from the branch name may not be an issue
+    } catch (e) {
+      if (fromBranch.has(key)) continue;
+      const why = /\bHTTP (\d{3})\b/.exec(String(e && e.message))?.[1] || e?.status; // gh prints "HTTP 403: ..." on stderr
+      limitations.push(closing ? gap(`Could not read closing ${label}${why ? ` (HTTP ${why})` : ''}; its acceptance criteria were not reviewed. Grant the token issues:read, or paste the acceptance criteria into the PR body.`) : fact(`Could not read ${label}.`));
+    } // a number guessed from the branch name may not be an issue; an unreadable closing issue lost requirement text (a gap, like the cap), a mention is only context (a fact)
   }
   for (const r of trackerRefs({ title: scan[0], branch: String(pr.headRefName || ''), texts: scan })) limitations.push(fact(`Referenced but not readable: ${r}. Paste the acceptance criteria into the PR body to have them reviewed.`));
   if (Object.keys(labels).length) parts.splice(1, 0, `Labels: ${Object.entries(labels).map(([k, v]) => `${k}: ${v.join(', ')}`).join('; ')}`);
