@@ -246,6 +246,10 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     const row = { ...r, heading, source, code, tests, note: r.note };
     if (lost) row.note = `${row.note} ${lost} citation(s) could not be verified and were removed.`.trim();
     if (inert) row.note = `${row.note} ${inert} test citation(s) removed: not an assertion or in a skipped test.`.trim();
+    if (row.status === 'covered' && tests.length && tests.every((t) => post.weakAssertion(t.quote))) {
+      row.status = 'unknown';
+      row.note = `${row.note} Downgraded to unknown: only truthiness/interaction assertions are cited; no assertion pins the expected value.`.trim();
+    }
     const cut = blockCuts[cidOf(r.id)];
     if (Array.isArray(cut) && cut.length && ['missing_test', 'partial', 'not_implemented'].includes(row.status)) {
       row.status = 'unknown';
@@ -298,7 +302,7 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
     const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c) : null;
     const noSketch = f.kind !== 'pushdown' && !skeleton; // no test sketch: "no gap found" findings arrive this way
-    const vague = f.kind === 'weak_test' && !post.counterexampleOk(f.counterexample); // review F04: a weak test needs a wrong behaviour the assertion still accepts
+    const vague = f.kind === 'weak_test' && (!post.counterexampleOk(f.counterexample) || post.refutedBy(c.quote, f.counterexample)); // review F04: a weak test needs a wrong behaviour the assertion still accepts
     out.push({ ...f, ...c, skeleton, fid, ...(u && u.part ? { part: u.part.k } : {}), low: cut || !!hit || noSketch || vague, ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
   }
   return out;
