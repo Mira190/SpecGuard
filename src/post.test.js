@@ -2257,6 +2257,18 @@ test('V7: an unreadable or other-repository reference is a note in the summary, 
   assert.match(lost.calls.summary[0].body, /Incomplete review/);
 });
 
+test('S2: an unreadable closing issue makes the run incomplete: no head marker, and the preflight does not skip the next push', async (t) => {
+  const { decide } = require('./preflight');
+  const s = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
+  writeCtx(s, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: ['Could not read closing issue #7 (HTTP 403); its acceptance criteria were not reviewed. Grant the token issues:read, or paste the acceptance criteria into the PR body.'] });
+  await post(s);
+  const body = s.calls.summary[0].body;
+  assert.match(body, /Incomplete review/);
+  assert.match(body, /"complete":false/);
+  assert.doesNotMatch(body, /specguard:head=/);
+  assert.equal(decide({ pr: { title: 'T', body: 'x' }, comments: [{ user: { login: 'github-actions[bot]', type: 'Bot' }, body }], headSha: 'HEADSHA' }), '');
+});
+
 test('M4: an engine timeout or failure beside valid findings.json posts the verified findings but marks the run incomplete', async (t) => {
   for (const [st, re] of [['timeout', /timed out after 7 minutes/], ['failed', /review engine failed/]]) {
     const s = withThreads(t, [GONE()]);

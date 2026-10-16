@@ -33,7 +33,9 @@ test('an unreadable mention stays a note; an unreadable closing issue is a gap',
   assert.ok(mention.limitations.some((l) => /Could not read issue #7/.test(l)));
   assert.ok(mention.limitations.filter((l) => /Could not read/.test(l)).every(isFactLimitation));
   const closing = collectRequirements({ repo: 'org/app', pr: { number: 10, body: 'Closes #7' }, loadIssue: load });
-  assert.deepEqual(closing.limitations.filter((l) => !isFactLimitation(l)), ['Could not read closing issue #7; its acceptance criteria were not reviewed.']);
+  assert.deepEqual(closing.limitations.filter((l) => !isFactLimitation(l)), ['Could not read closing issue #7; its acceptance criteria were not reviewed. Grant the token issues:read, or paste the acceptance criteria into the PR body.']);
+  const e403 = collectRequirements({ repo: 'org/app', pr: { number: 10, body: 'Closes #7' }, loadIssue: () => { throw new Error('Command failed: gh issue view\nHTTP 403: Resource not accessible by integration'); } });
+  assert.match(e403.limitations[0], /Could not read closing issue #7 \(HTTP 403\); .*issues:read/);
 });
 
 test('AC labels accept a separator between AC and the number, and not ACME-1', () => {
