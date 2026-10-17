@@ -244,3 +244,41 @@ test('hunkTokens: a deleted file (+++ /dev/null) does not leak its removed lines
   assert.ok(p.get('lib/a.js').includes('afterPlusLine'));
 });
 
+
+// a guard whose child_process.execFileSync is wrapped (test-map binds it at require time): records every git grep, optionally failing it
+function withSpy(root, fail) {
+  const cp = require('node:child_process'), real = cp.execFileSync, calls = [], mod = require.resolve('./test-map');
+  delete require.cache[mod];
+  cp.execFileSync = (cmd, args, ...r) => {
+    if (cmd === 'git' && args[0] === 'grep') { calls.push(args); if (fail) throw Object.assign(new Error('x'), fail); }
+    return real(cmd, args, ...r);
+  };
+  try { var guard = require('./test-map').makeCoverGuard({ cwd: root }); } finally { cp.execFileSync = real; delete require.cache[mod]; }
+  return { guard, calls };
+}
+
+test('the cover guard greps only tracked test files (pathspec), not large tracked data', (t) => {
+  const root = repo(t);
+  fs.mkdirSync(path.join(root, 'docs'));
+  fs.writeFileSync(path.join(root, 'docs/big.json'), '{"m":"Invalid status code"}\n');
+  execFileSync('git', ['add', '.'], { cwd: root });
+  const s = withSpy(root, null);
+  assert.match(s.guard(RESPONSE, 5), /^test\/res\.status\.js:\d+$/, 'control: a real covering test still demotes');
+  assert.ok(s.calls.length > 0);
+  for (const a of s.calls) {
+    const i = a.indexOf('--');
+    assert.ok(i > 0, 'a pathspec follows --');
+    assert.ok(a.length > i + 1 && a.slice(i + 1).every((p) => /^tests?\//.test(p)), `only test paths: ${a.slice(i + 1)}`);
+  }
+  assert.deepEqual(s.guard.limits, []);
+});
+
+test('the cover guard reports a timed-out search instead of a silent no-hit; exit 1 is a plain no-hit', (t) => {
+  const root = repo(t);
+  const slow = withSpy(root, { code: 'ETIMEDOUT', killed: true, status: null });
+  assert.equal(slow.guard(RESPONSE, 5, 'lib/response.js'), null);
+  assert.deepEqual(slow.guard.limits, ['could not check whether a test covers lib/response.js (timeout)']);
+  const none = withSpy(root, { status: 1 });
+  assert.equal(none.guard(RESPONSE, 5, 'lib/response.js'), null);
+  assert.deepEqual(none.guard.limits, [], 'no match is not a limitation');
+});

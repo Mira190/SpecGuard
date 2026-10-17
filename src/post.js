@@ -1589,6 +1589,7 @@ async function run({ github, context, core }) {
       if (hit && f.confidence === 'low') f.gated = true; // already low: just keep it from being raised later
       else if (hit) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
     }
+    for (const n of new Set(covers.limits)) (data.validation_notes ||= []).push(n); // a timed-out search is not "no test covers it": the finding keeps its confidence
   }
   const readRule = memoed(readFile); // the trusted rule inventory may include base-restored files that are not tracked at head
   data.tooling = tooling; // Always overwrite any model-supplied tooling claim.
