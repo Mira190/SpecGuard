@@ -1197,3 +1197,31 @@ test('PR pack (control): the pack never exceeds CONTEXT_PACK_BYTES, however tigh
   const r = hitRepo(t);
   for (const limit of [500, 5000, 20000, 60000]) assert.ok(Buffer.byteLength(api.contextPack(r.ctx, r.root, limit).text) <= limit + 400, `limit ${limit}`); // +400: the one-line header
 });
+
+const partRows = ['aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 1/2 lines 1-1\n', 'bbbbbbbb\tlib/b.js\t1\tw\tnone\t-\t-\t-\n', 'aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 2/2 lines 2-2\n'].join('');
+
+test('unit rooms: a budget for one call drops the room of a second part; the unit stays reached and the part is named (droppedParts), not counted as a unit not reached', async (t) => {
+  const env = { MODEL: 'claude-sonnet-5-5', MAX_OUTPUT_TOKENS: '4000' }, rooms = [['aaaaaaaa:1', 'bbbbbbbb'], ['aaaaaaaa:2']];
+  const all = roomRepo(t, { ...env, MAX_BUDGET_USD: '5' }, rooms, partRows);
+  all.answers((req, ok) => ok(req));
+  await all.go();
+  assert.equal(all.h.calls.length, 2);
+  const per = api.worstCase('claude-sonnet-5-5', 0, Math.max(...all.h.calls.map((c) => Buffer.byteLength(c.body.messages[0].content) + Buffer.byteLength(JSON.stringify(c.body.system || '')))), 4000).usd;
+  const s = roomRepo(t, env, rooms, partRows);
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String((per * 1.5).toFixed(4)) });
+  assert.equal(s.h.calls.length, 1);
+  const parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.deepEqual(parts.droppedParts, ['aaaaaaaa:2']);
+  assert.equal(parts.droppedUnits, undefined, 'unit a was reached through its first part');
+  assert.match(s.h.file('engine-notes'), /1 unit part not reached \(max_budget_usd\)/);
+  assert.doesNotMatch(s.h.file('engine-notes'), /unit not reached/);
+});
+
+test('keptRooms: the pre-flight on a ctx says how many unit calls stay (the collector plans that many); one call is null', async (t) => {
+  const rooms = [['aaaaaaaa:1', 'bbbbbbbb'], ['aaaaaaaa:2']], s = roomRepo(t, {}, rooms, partRows), base = { ctx: s.h.ctx, root: s.root, batch: 20, model: 'claude-sonnet-5-5', maxTokens: 4000, packBytes: 250000 };
+  assert.equal(api.keptRooms({ ...base, budget: 5 }).rooms, 2);
+  assert.equal(api.keptRooms({ ...base, budget: 0.0001 }).rooms, 1, 'the first unit call always stays');
+  const one = roomRepo(t, {}, [['aaaaaaaa', 'bbbbbbbb', 'cccccccc']]);
+  assert.equal(api.keptRooms({ ...base, ctx: one.h.ctx, root: one.root, budget: 5 }), null);
+});

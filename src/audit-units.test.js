@@ -765,3 +765,12 @@ test('staticLeads: at most 20 leads in row (risk) order, the rest counted; a wea
   assert.equal(staticLeads([{ id: 'a', path: 'src/a.js', leads: { weak: [w] } }, { id: 'b', path: 'src/b.js', leads: { weak: [w] } }]).items.length, 1);
   assert.deepEqual(staticLeads([{ id: 'a', path: 'src/a.js' }, undefined]), { items: [], extra: 0 });
 });
+
+test('staticLeads: when the cap bites, unreferenced exports (near-certain) come before weak-assertion leads; each group keeps risk order', () => {
+  const { staticLeads } = require('./audit-units');
+  const w = (i) => ({ path: `test/w${i}.test.js`, line: 4, text: 'assert.ok(f(x))' });
+  const rows = [...Array.from({ length: 15 }, (_, i) => ({ id: `w${i}`, path: `src/w${i}.js`, leads: { weak: [w(i)] } })), ...Array.from({ length: 8 }, (_, i) => ({ id: `u${i}`, path: `src/u${i}.js`, leads: { unref: [{ name: `fn${i}ab`, line: 2 }] } }))];
+  const L = staticLeads(rows);
+  assert.deepEqual(L.items.map((i) => i.unit), [...rows.slice(15).map((r) => r.id), ...rows.slice(0, 12).map((r) => r.id)]);
+  assert.equal(L.extra, 3);
+});
