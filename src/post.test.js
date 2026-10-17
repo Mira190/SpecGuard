@@ -2607,6 +2607,21 @@ test('fix-through: a dismissed thread stays dismissed on an incomplete run; a fa
   assert.deepEqual([c.outcomes, c.outcome_valid], [[], false]);
 });
 
+test('fix-through: a finding validation dropped makes only priors in its own file unobserved; unrecoverable dropped paths invalidate the run', async (t) => {
+  const run = async (dropPath) => {
+    const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]], report({ findings: [finding(), finding('missing_test', { path: dropPath, obligation_ids: ['NOPE'] })] }));
+    await post(s);
+    return countsOf(s.calls.summary[0].body);
+  };
+  const other = await run('x.js');
+  assert.equal(other.execution_complete, false, 'the run is degraded');
+  assert.deepEqual(other.outcomes.map((o) => [o.outcome, o.judged]), [['addressed', undefined]], 'the prior is in y, the drop in x');
+  const same = await run('src.js');
+  assert.deepEqual(same.outcomes.map((o) => [o.outcome, o.judged]), [['not_observed', false]], 'the dropped finding may be the re-report');
+  const unknown = await run(42);
+  assert.deepEqual([unknown.outcomes, unknown.outcome_valid], [[], false]);
+});
+
 // Summary-only findings have no comment: the previous summary's counts (`sum`) make them synthetic priors.
 const stickyWith = (A, sum) => [{ id: 9, user: BOT, body: `<!-- specguard:summary -->\n<!-- specguard:counts ${JSON.stringify({ head: A, sum })} -->\n## SpecGuard\n` }];
 test('fix-through: a summary-only finding from the previous summary is tracked: anchor touched and gone -> addressed; re-reported -> open; deduped against an inline prior', async (t) => {

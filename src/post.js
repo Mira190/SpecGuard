@@ -1536,6 +1536,7 @@ async function run({ github, context, core }) {
     return failed(`no valid findings.json (${e.code || 'parse error'}); see the job log`);
   }
   const proposed = Array.isArray(data?.findings) ? data.findings.length : 0; // what the model reported: a finding dropped or demoted later is a degrade, not a fix
+  const proposedPaths = Array.isArray(data?.findings) ? data.findings.map((f) => f?.path) : []; // for the fix-through telemetry: which files lost a proposed finding to validation
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
   const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean)); // the claude engine's pack: files the model saw only partly or not at all
@@ -1813,10 +1814,14 @@ async function run({ github, context, core }) {
   // A run whose engine failed or that lost findings to validation has no valid outcomes at all. A reduced (fast-tier) run judges like any other: its `survive` set
   // holds every finding it reported, low confidence and summary ones included, and the counts carry `tier` for stratifying. Review F09 (superseded).
   const execComplete = !incomplete.length && !degraded, complete = execComplete && !reduced;
-  const valid = !degraded && !withheld && !(st && st !== 'success');
+  // A finding validation dropped may be the re-report of a prior: that file's priors are not judged. If the dropped paths cannot be recovered, the whole run is not valid.
+  const left = new Map(); for (const f of data.findings) left.set(f.path, (left.get(f.path) || 0) + 1);
+  const droppedPaths = new Set(), pathsKnown = proposedPaths.every((x) => typeof x === 'string' && x);
+  for (const x of proposedPaths) if (typeof x === 'string') { if (left.get(x)) left.set(x, left.get(x) - 1); else droppedPaths.add(x); }
+  const valid = (!degraded || pathsKnown) && !withheld && !(st && st !== 'success');
   const me = await actor();
   const cutSet = new Set([...packCut, ...dropped, ...skipped]);
-  const outcomes = valid && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads, unseen: (p) => partial || cutSet.has(p) || !reviewable.has(p) }) : [];
+  const outcomes = valid && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads, unseen: (p) => partial || cutSet.has(p) || droppedPaths.has(p) || !reviewable.has(p) }) : [];
   const sum = [], seenSum = new Set(); // this run's summary-only and unanchored findings, tracked by the next run
   for (const { f } of [...p.summary, ...unanchored]) {
     const fp = (f.fp || f.sfp || '').slice(0, 16);
