@@ -1171,6 +1171,8 @@ function verifyRequirements(data, context, read = readFile) {
     (data.validation_notes ||= []).push(`Obligation ${c.id} alignment unknown: requirement wording not verified.`);
     c.alignment = unknownAlign('Requirement wording not verified.');
   }
+  // A broken requirement link drops only the link: a row whose own behaviour citation stands (verifyEvidence already unknowned any that failed) keeps its status and finding; settle() makes its alignment unknown.
+  for (const c of data.coverage) if (invalid.has(c.id) && c.behaviour && c.status !== 'unknown') invalid.delete(c.id);
   for (const c of data.coverage) if (invalid.has(c.id)) {
     const why = `The linked requirement citation could not be verified (${invalid.get(c.id)})`;
     c.status = 'unknown'; c.reason = `${why}.`;
