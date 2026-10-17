@@ -1,0 +1,94 @@
+{
+  "main_sha": "8415eae217a5c4eed3c1d46ccf9294b127fc97d2",
+  "pr223_sha": "84475bad28af4f452f70ab4bbc779851cc36c094",
+  "network_calls": 0,
+  "real_secrets_used": false,
+  "results": [
+    {
+      "id": "U1-missing-api-patch",
+      "observed": {
+        "anchor_touched": false,
+        "wanted": null
+      },
+      "control": {
+        "complete_patch_touched": true
+      },
+      "scope": "real weekly adapter + real post helpers, synthetic GitHub commit objects"
+    },
+    {
+      "id": "U2-renamed-test",
+      "observed": {
+        "tests_changed": false,
+        "wanted": true
+      },
+      "control": {
+        "modified_test_detected": true
+      },
+      "scope": "GitHub rename object; post git command uses --no-renames and would include both paths"
+    },
+    {
+      "id": "U3-whitespace-adapter",
+      "observed": {
+        "anchor_touched": true,
+        "wanted": false
+      },
+      "control": {
+        "non_whitespace_touched": true,
+        "real_git_ignore_whitespace_exit": 0,
+        "real_git_patch": ""
+      },
+      "scope": "real apiGit ignores -w; independent real git diff -w control, no Git repository created"
+    },
+    {
+      "id": "U4-low-item-hides-coverage-fp",
+      "observed": {
+        "fp": 0,
+        "clean_ok": true,
+        "pass": true
+      },
+      "control": {
+        "row_without_low_item_fp": 1,
+        "row_without_low_item_clean_ok": false
+      },
+      "scope": "real buildSummary -> real grade, identical missing_test coverage claim"
+    },
+    {
+      "id": "U5-denied-doc-trace-path",
+      "observed": {
+        "prompt_contains_sentinel": true,
+        "index_contains_sentinel": true,
+        "spec_files": ".env.production.md"
+      },
+      "control": {
+        "prompt_contains_sentinel": false,
+        "index_contains_sentinel": false,
+        "spec_files": ""
+      },
+      "scope": "latest main trace.run -> prompt.assemble with fake Git objects; not full collect.sh e2e; synthetic marker only"
+    },
+    {
+      "id": "U6-partial-config-failure",
+      "observed": {
+        "calls": 2,
+        "part_failed": [
+          {
+            "part": "blocks",
+            "blocks": [
+              "5678dcba"
+            ],
+            "reason": "The Anthropic account has no credit left or hit its quota (add credits to the API account; this is not the per-run budget)"
+          }
+        ],
+        "engine_error_present": false,
+        "scan_status": "incomplete",
+        "gate_exit": 0,
+        "fail_on_error_true_exit": 0
+      },
+      "control": {
+        "first_part_output_preserved": true,
+        "failed_quota_gate_exit": 1
+      },
+      "scope": "real scan-parts planner -> API adapter -> audit-post -> config gate; synthetic fetch responses; no provider/network calls"
+    }
+  ]
+}
