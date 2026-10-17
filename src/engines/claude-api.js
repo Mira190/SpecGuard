@@ -34,6 +34,9 @@ const worstCase = (model, sysBytes, userBytes, maxTokens) => {
   return { tokens: s + u, usd: (s * 1.25 * p.in + u * p.in + maxTokens * p.out) / 1e6 };
 };
 
+// Scan: how many full-pack unit calls max_budget_usd covers by the worst case above (1-8). The collector asks before it picks the units (the system prompt is about 15 KB, the rest of a unit part's prompt well under 32 KB).
+const unitCalls = ({ model, budget, maxTokens, packBytes }) => { const one = worstCase(model, 16 * 1024, packBytes + 32 * 1024, maxTokens).usd; return Math.max(1, Math.min(8, Math.floor(budget / one) || 1)); };
+
 // Structured outputs accept a subset of JSON Schema: every object closed (additionalProperties:false), no string/number bounds, no uniqueItems/maxItems, no if/then/else, minItems only 0 or 1.
 // post.js validates the answer against the full schema anyway.
 const DROP = new Set(['$schema', 'minLength', 'maxLength', 'minimum', 'maximum', 'multipleOf', 'uniqueItems', 'maxItems', 'if', 'then', 'else']);
@@ -397,13 +400,13 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
         return { ...p, system: s, user: x, tokens, usd: worstCase(model, Buffer.byteLength(s), Buffer.byteLength(x), tokens).usd };
       };
       const plans = split.parts.map(priced);
-      const total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd, dropped = [];
-      while (plans.length > 1 && total() > budget) dropped.unshift(...plans.pop().cids || []); // the budget is hard: trailing block batches go first (candidate order = rotation priority), the first part (units) last
+      const total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd, dropped = [], droppedUnits = [];
+      while (plans.length > 1 && total() > budget) { const q = plans.pop(); dropped.unshift(...q.cids || []); droppedUnits.unshift(...q.units || []); } // the budget is hard: the last part goes first (the extra unit parts, then the block batches in reverse candidate order = rotation priority), the first part last; dropped units are not reached this run, they stay due
       if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
       let first = null, ok = 0, splits = 0, cfg = null; // cfg: the first part that failed on a configuration class
       const blockCuts = {};
-      const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: cids }), reason });
+      const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids ? { blocks: cids } : { units: p.units }), reason });
       while (queue.length) {
         const p = queue.shift();
         const r = await call(p.system, p.user, p.tokens);
@@ -441,9 +444,10 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       for (const p of queue) fail(p, 'not started: the review timed out'); // a timeout stops the run: the parts not started are not audited either
       if (!ok) return failEnd(first); // nothing usable at all: the run fails as one call would
       w('findings.json', JSON.stringify(merged));
-      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
-      if (!failed.some((f) => f.part === 'units')) w('pack-cut.txt', split.packCut.map((x) => `${x}\n`).join('')); // the unit part's pack (what the unit findings may rely on)
-      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
+      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(droppedUnits.length && { droppedUnits }), ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
+      const seenParts = plans.filter((p) => p.units && !failed.some((x) => x.part === 'units' && x.units === p.units)); // the unit parts that answered: their packs are what the unit findings may rely on
+      if (seenParts.length) w('pack-cut.txt', [...new Set(seenParts.flatMap((p) => p.pack.notWhole))].map((x) => `${x}\n`).join(''));
+      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}${droppedUnits.length ? `; ${plural(droppedUnits.length, 'unit')} not reached (max_budget_usd), due again` : ''}`);
       for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);
       if (cfg) w('engine-error', `${cfg.reason}\n${cfg.why}; ${ok} of ${ok + failed.length} parts were reviewed\n`); // still a partial success, but the account problem must reach the job gate (src/fail-on-error.js)
       return end('success');
@@ -471,4 +475,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, PRICES, contextPack, windowPack, evidencePack, packFiles };
