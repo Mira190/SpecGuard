@@ -3410,7 +3410,7 @@ test('reduced: a normal run posts every finding inline and writes the head marke
   assert.doesNotMatch(s.calls.summary[0].body, /Reduced review/);
 });
 
-test('reduced: fast tier posts at most 3 inline (high confidence, two citations), the rest as one-liners; no head marker, no resolve, no clean wording; banner and tier shown', async (t) => {
+test('reduced: fast tier posts at most 3 inline (high confidence, two citations), the rest as one-liners; status complete, head marker, no resolve, no clean wording; banner and tier shown', async (t) => {
   const s = withThreads(t, [[thread('gone', FP('a'))]], reducedData());
   writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['mai-code-1.1-flash'], turns: [{ turn: 'main', chosen: 'mai-code-1.1-flash' }] }));
   writeCtxR(s, 'usage.json', JSON.stringify({ currentModel: 'something-else', modelMetrics: {} }));
@@ -3418,16 +3418,17 @@ test('reduced: fast tier posts at most 3 inline (high confidence, two citations)
   const body = s.calls.summary[0].body;
   assert.equal(s.calls.review[0].comments.length, 3);
   assert.ok(s.calls.review[0].comments.every((c) => /kind: weak_test, confidence: high/.test(c.body)));
-  assert.match(body, /## SpecGuard\n\n\*\*❌ [^\n]*\*\*\n\n\|[\s\S]*\n> Reduced review \(fast model\): only high-confidence findings are shown\.\n\n<details>/);
+  assert.match(body, /## SpecGuard\n\n\*\*❌ [^\n]*\*\*\n\n\|[\s\S]*\n> Fast-tier model: only high-confidence findings are posted inline\.\n\n<details>/);
   assert.match(body, /\*\*Reduced review\*\*\n\nReasons: fast-tier model \(model: mai-code-1\.1-flash\)\. Only high-confidence findings were posted inline\.\n/);
-  assert.ok(body.indexOf('> Reduced review (fast model)') > body.lastIndexOf('### ') && body.indexOf('> Reduced review (fast model)') < body.indexOf('<details>'), 'after the last section, right before Details');
+  assert.ok(body.indexOf('> Fast-tier model') > body.lastIndexOf('### ') && body.indexOf('> Fast-tier model') < body.indexOf('<details>'), 'after the last section, right before Details');
   assert.equal((body.match(/^> /gm) || []).length, 1, 'one blockquote line');
   assert.match(body, /\nRun: engine copilot · mai-code-1\.1-flash\n/, 'no usage recorded: the model is in the run line');
   assert.doesNotMatch(body, /something-else/);
   assert.match(body, /### Missing unit tests \(\d+\)\n\n- Untested branch.*src\.js:4.*\(reduced review: needs high confidence and two citations\)/);
   assert.match(body, /### Weak unit tests \(\d+\)[\s\S]*\n- Weak assertion \d.*\(inline limit reached\)/);
-  assert.doesNotMatch(body, /specguard:head=|No unit test gaps found/);
-  assert.match(body, /specguard:status=incomplete/);
+  assert.doesNotMatch(body, /No unit test gaps found/);
+  assert.match(body, /specguard:head=HEADSHA/, 'the fast tier alone is a finished run: the head marker is written');
+  assert.match(body, /specguard:status=complete/);
   assert.deepEqual(s.resolved, [], 'a reduced run never resolves threads');
   assert.match(body, /"tier":"fast"/); assert.match(body, /"reduced":true/);
   const control = withThreads(t, [[thread('gone', FP('a'))]], reducedData());
@@ -3435,18 +3436,22 @@ test('reduced: fast tier posts at most 3 inline (high confidence, two citations)
   assert.deepEqual(control.resolved, ['gone'], 'the same run on a normal model resolves it');
 });
 
-test('reduced: no findings says "Reduced review: no high-confidence gaps", never the clean wording; the repair trigger names itself', async (t) => {
-  const s = setup(t, report({ coverage: [row('covered')], findings: [], standards: { status: 'no_rules', sources: [], reason: 'none' } }));
+test('reduced: a fast-tier run with no findings is "Review complete (fast model)" and complete; the repair trigger still makes the run incomplete and names itself', async (t) => {
+  const s = setup(t, report({ coverage: [row('covered')], findings: [] }));
   writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5.5'] }));
   await post(s);
-  assert.match(s.calls.summary[0].body, /## SpecGuard\n\n\*\*⚠️ Reduced review: no high-confidence gaps\*\*\n\n\| Unit tests \| [^\n]*\n\|---\|---\|---\|---\|\n\| no high-confidence gaps \|[^\n]*\n\n<details>/);
-  assert.doesNotMatch(s.calls.summary[0].body, /No unit test gaps found|✅ no gaps|^> /m, 'the verdict already says it: no blockquote');
+  const c0 = countsOf(s.calls.summary[0].body);
+  assert.match(s.calls.summary[0].body, /## SpecGuard\n\n\*\*✅ Review complete \(fast model\): no high-confidence gaps\*\*\. Static review; tests were not run\.\n\n\| Unit tests \| [^\n]*\n\|---\|---\|---\|---\|\n\| no high-confidence gaps \|[^\n]*\n\n> Fast-tier model: only high-confidence findings are posted inline\.\n\n<details>/);
+  assert.doesNotMatch(s.calls.summary[0].body, /No unit test gaps found|✅ no gaps|⚠️/);
+  assert.match(s.calls.summary[0].body, /specguard:status=complete -->/); assert.match(s.calls.summary[0].body, /specguard:head=HEADSHA/);
+  assert.deepEqual([c0.reduced, c0.complete, c0.execution_complete, c0.tier], [true, false, true, 'fast'], 'counts keep their meanings');
   const r = setup(t, reducedData());
   writeCtxR(r, 'engine-repair', 'repaired\n');
   writeCtxR(r, 'usage.json', JSON.stringify({ currentModel: 'gpt-6-luna', modelMetrics: {} }));
   await post(r);
   assert.match(r.calls.summary[0].body, /Reasons: the JSON needed a repair turn \(model: gpt-6-luna\)/);
   assert.equal(r.calls.review[0].comments.length, 3);
+  assert.match(r.calls.summary[0].body, /specguard:status=incomplete/); assert.doesNotMatch(r.calls.summary[0].body, /specguard:head=/);
 });
 
 test('reduced: a garbled engine-model.json means a normal review; the used model replaces the request in the usage line', async (t) => {
@@ -3724,7 +3729,7 @@ test('layout: the full visible order, with the cost as the last small line outsi
     usage: { totalCostUsd: 0.0069, totalApiDurationMs: 43200, tokenDetails: { input: { tokenCount: 17300 }, cache_read: { tokenCount: 11700 }, cache_write: { tokenCount: 0 }, output: { tokenCount: 10200 } } }, notes: ['context pack: 14 files, 30 KB'],
     delivery: 'summary only, nothing posted', reduced: { reasons: ['fast-tier model'], model: 'claude-haiku-5-5' }, counts: { v: 1, complete: true, since_total: 1, since: { addressed: 1, open: 0, dismissed: 0, not_observed: 0 } } });
   const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
-  const order = ['**❌', '| Unit tests |', 'Since last push:', '### Missing unit tests', '### Weak unit tests', '### Spec mismatches', '### Coding standard violations', '### Tests to move down', '> Reduced review', '<details>', 'Run: engine claude · context pack: 14 files, 30 KB', '</details>', '<sub>Cost $0.0069'].map(at);
+  const order = ['**❌', '| Unit tests |', 'Since last push:', '### Missing unit tests', '### Weak unit tests', '### Spec mismatches', '### Coding standard violations', '### Tests to move down', '> Fast-tier model', '<details>', 'Run: engine claude · context pack: 14 files, 30 KB', '</details>', '<sub>Cost $0.0069'].map(at);
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   const last = s.trimEnd().split('\n').pop();
   assert.equal(last, '<sub>Cost $0.0069 · claude-haiku-5-5 · 29.0k in (11.7k cached) · 10.2k out · 43s · summary only, nothing posted</sub>');
@@ -4255,4 +4260,21 @@ test('control: a row whose own behaviour citation fails verifyEvidence is still 
   post.verifyRequirements(d, { documents: [], criteria: [], specFiles: [] });
   assert.equal(d.coverage[0].status, 'unknown');
   assert.deepEqual(d.findings, []);
+});
+
+test('status separates finishing from grade: a fast-tier run with gaps is ❌ and complete; with the context cut it is ⚠️ incomplete with no head marker; stale threads stay unresolved', async (t) => {
+  const fast = (s) => writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5.5'] }));
+  const s = withThreads(t, [[thread('gone', FP('a'))]], reducedData());
+  s.outputs = {}; s.core.setOutput = (k, v) => { s.outputs[k] = v; };
+  fast(s); await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, /\*\*❌ /); assert.match(b, /specguard:status=complete -->/); assert.equal(s.outputs.status, 'complete');
+  assert.deepEqual(s.resolved, [], 'control: a reduced run still never resolves threads');
+  const cut = setup(t, report({ coverage: [row()], findings: [] }));
+  fast(cut); writeCtxR(cut, 'test-candidates.txt', 'src.js\n  test.js  (same stem)\n'); writeCtxR(cut, 'pack-cut.txt', 'src.js\n');
+  cut.outputs = {}; cut.core.setOutput = (k, v) => { cut.outputs[k] = v; };
+  await post(cut);
+  const cb = cut.calls.summary[0].body;
+  assert.match(cb, /\*\*⚠️ Incomplete review/); assert.match(cb, /specguard:status=incomplete -->/); assert.equal(cut.outputs.status, 'incomplete'); assert.doesNotMatch(cb, /specguard:head=/);
+  assert.deepEqual([countsOf(cb).reduced, countsOf(cb).execution_complete], [true, false]);
 });

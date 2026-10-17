@@ -465,6 +465,8 @@ function plan(findings, maps, maxComments = 10) {
 // Reduced review: a fast-tier model or a struggling run gives weaker evidence, so it publishes less (never wrong beats complete).
 // ponytail: the triggers are the four cheap signals the engine step and validation already leave behind; add one here when a new failure mode shows up in telemetry.
 const REDUCED_INLINE = 3;
+// The fast tier alone is a grade, not a gap: the run finished, so status and the head marker follow `incomplete`. The other triggers (repair, engine notes, degraded rows) say the run struggled and still make it incomplete.
+const gradeOnly = (r) => !!r && r.reasons.length > 0 && r.reasons.every((x) => x === 'fast-tier model');
 // a validation note that counts toward a reduced review: its obligation id goes in data.degraded, so completeness never depends on the note's wording
 const degrade = (data, id, text) => { (data.validation_notes ||= []).push(text); (data.degraded ||= []).push(id); };
 function reducedReasons({ em, repair, engineNotes = [], data }) {
@@ -781,18 +783,19 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const merged = [...groups.values()].map((g) => ({ ...g.reduce((a, b) => (RANK[b.kind] < RANK[a.kind] ? b : a)), grp: g }));
   const todoKeys = new Set(groups.keys()), seenEv = new Set();
   const evidenced = rows.filter((x) => x.kind === 'evidenced' && !todoKeys.has(sentOf(x)) && !seenEv.has(sentOf(x)) && seenEv.add(sentOf(x))); // a sentence with a gap or unconfirmed row is not also "evidenced"
-  const checks = todo.filter((x) => x.kind === 'unassessed' || x.kind === 'check').length, isClean = !!data && noGaps({ findings: [], ...data }) && !inc && !reduced;
+  const checks = todo.filter((x) => x.kind === 'unassessed' || x.kind === 'check').length, isClean = !!data && noGaps({ findings: [], ...data }) && !inc && (!reduced || gradeOnly(reduced));
   const changed = !!data && reqChanged(data);
 
   let verdict = '';
   if (failed) verdict = `**⚠️ Could not complete: ${neutralize(String(status || '').replace(/^Could not complete:\s*/i, ''))}**`;
   else if (!data) verdict = status ? `**${neutralize(status)}**` : '';
-  else if (reduced) verdict = act.length ? `**❌ ${andList(act)} to fix**` : '**⚠️ Reduced review: no high-confidence gaps**'; // the explanation is a blockquote after the table; never a pass line
+  else if (reduced && !gradeOnly(reduced)) verdict = act.length ? `**❌ ${andList(act)} to fix**` : '**⚠️ Reduced review: no high-confidence gaps**'; // the explanation is a blockquote after the table; never a pass line
   else if (inc) verdict = `**⚠️ Incomplete review: ${act.length ? `${andList(act)} found so far` : 'no unit test gaps found so far'}**`;
   else if (act.length) verdict = `**❌ ${andList(act)} to fix**`;
   else if (checks) verdict = `**❔ No gaps found; ${plural(checks, 'criterion', 'criteria')} need${checks === 1 ? 's' : ''} a person to check**`;
   else if (changed) verdict = '**❔ No gaps found; requirement text changed in this PR, so review it**';
   else if (!data.coverage.length) verdict = '**❔ No gaps found; no behaviour was assessed, so this is not evidence that tests are sufficient**';
+  else if (isClean && reduced) verdict = '**✅ Review complete (fast model): no high-confidence gaps**. Static review; tests were not run.';
   else if (isClean) verdict = `**✅ No unit test gaps found** in ${rows.length ? `the ${rows.length} assessed ${rows.length === 1 ? 'criterion' : 'criteria'}` : 'the changed behaviour'}. Static review; tests were not run.`;
   else verdict = '**❔ No gaps found; part of the review could not be assessed**';
 
@@ -814,7 +817,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const bullets = [...banner.map((r) => cell(r)), ...(changed ? ['Requirement text was changed by this PR: consistency with the changed text does not prove the change itself is approved.'] : []),
     ...(rules.length ? [`This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`] : []),
     ...(lintChanged.length ? [`Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`] : [])];
-  const notice = failed ? '' : [inc ? '> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.' : '', reduced && act.length ? `> Reduced review${reduced.reasons?.includes('fast-tier model') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
+  const notice = failed ? '' : [inc ? '> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.' : '', gradeOnly(reduced) ? '> Fast-tier model: only high-confidence findings are posted inline.' : reduced && act.length ? `> Reduced review${reduced.reasons?.includes('fast-tier model') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
   // the model's not_reviewed text as sentences; the automatic "Requirement X is not assessed" note is dropped when X has its own row in the table
   const shownIds = new Set(rows.map((x) => String(x.r.id)));
   const nrParts = (t) => String(t || '').split(/(?<=[.!?])\s+(?=[A-Z0-9`"'(])/).filter((x) => x.trim() && !shownIds.has((/^Requirement (\S+) is not assessed: /.exec(x) || [])[1]));
@@ -1839,11 +1842,11 @@ async function run({ github, context, core }) {
   if (ctx) try { fs.writeFileSync(path.join(ctx, 'counts.json'), JSON.stringify(tele) + '\n'); } catch { /* ctx not writable: the sticky comment still carries the counts */ } // summary-only and manual runs have no sticky comment: the artifact carries it
   const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
-  const state = incomplete.length || reduced ? 'incomplete' : 'complete';
+  const struggling = reduced && !gradeOnly({ reasons }), state = incomplete.length || struggling ? 'incomplete' : 'complete'; // the fast tier alone is reported in counts and the notice, not in the status
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
   const delivered = summaryOnly ? 'summary only, nothing posted' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || reduced ? undefined : headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || struggling ? undefined : headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
