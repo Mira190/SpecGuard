@@ -491,6 +491,10 @@ Contributors: run `node --test src/*.test.js eval/*.test.js bin/*.test.js` from 
 
 Design and rationale: [docs/design.md](docs/design.md).
 
+Shift-left value strategy and validation (中文): [docs/shift-left-value-strategy-2026-10-16.md](docs/shift-left-value-strategy-2026-10-16.md).
+
+Industry research, cross-repository scanning, observability and traces (中文): [research report](docs/shift-left-industry-research-2026-10-16.md), [scan playbook](docs/cross-repository-scan-playbook-2026-10-16.md), [repository report template](docs/templates/repository-shift-left-report.md).
+
 ## Credits
 
 Rubric and approach are adapted from prior art, listed in [NOTICE](NOTICE).
