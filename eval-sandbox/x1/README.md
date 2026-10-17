@@ -1,3 +1,3 @@
 # x1
 
-A sandbox package.
+A sandbox package. Updated docs.
