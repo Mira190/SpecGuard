@@ -350,9 +350,10 @@ test('run writes the contract: S criterion, changed document, spec summary, stdo
   assert.match(s1.previous, /30 days/); assert.match(s1.quote, /45 days/);
   assert.deepEqual(s.documents.map((d) => d.source), ['PR body', 'docs/specs/claims.md']);
   assert.match(s.documents[1].text, /45 days/);
-  assert.deepEqual(s.spec, { files: 1, items: 5, added: [], limitations: [] });
+  assert.deepEqual(s.spec, { files: 1, items: 5, added: [], limitations: ['1 more code/test candidate(s) for S1 not shown (top 3 kept): src/premium.ts.'] }); // the top-3 cut is visible
   assert.deepEqual(Object.keys(c), ['requirement_to_code', 'code_to_requirement', 'occurrences', 'limitations']);
-  assert.deepEqual(Object.keys(c.requirement_to_code[0]), ['criterion', 'code', 'tests']);
+  assert.deepEqual(Object.keys(c.requirement_to_code[0]), ['criterion', 'code', 'tests', 'more']);
+  assert.deepEqual(c.requirement_to_code[0].more, ['src/premium.ts']);
   assert.deepEqual(Object.keys(c.requirement_to_code[0].code[0]), ['path', 'line', 'end', 'score', 'hits']);
   assert.deepEqual(Object.keys(c.requirement_to_code[0].tests[0]).sort(), ['end', 'hits', 'line', 'path', 'score', 'via']);
   assert.deepEqual(Object.keys(c.occurrences[0]), ['criterion', 'value', 'variants', 'hits']);
@@ -1111,4 +1112,98 @@ test('U5 controls: a normal docs/req.md is still indexed; docs/environment.md is
   assert.deepEqual(out(r, 'spec-files.txt').split('\n').filter(Boolean).sort(), ['docs/environment.md', 'docs/req.md']);
   assert.match(out(r, 'requirements-index.md'), /docs\/req\.md/);
   assert.equal(out(r, 'denied.txt'), '');
+});
+
+// ---- retrieval recall: heading subject, docs are not code, size forms, same-heading pairing, visible top-3 cut (fastify measurement) ----
+const OPT_DOC = (v) => `### \`return503OnClosing\`\n\nDefault: \`${v}\`\n`;
+const runOpt = (t, extra = {}) => {
+  const r = repo(t, { 'docs/Reference/Server.md': OPT_DOC('false'), 'src/server.js': 'const opts = { return503OnClosing: false }\n', 'src/a.js': '// Default: false\nconst x = 1\n', 'src/b.js': '// Default: false\nconst y = 2\n', ...extra },
+    { 'docs/Reference/Server.md': OPT_DOC('true') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, reqPaths: 'docs/Reference/**' });
+  return r;
+};
+
+test('requirement_to_code searches the heading: "Default: false" under return503OnClosing finds the option, not every default', (t) => {
+  const r = runOpt(t);
+  assert.equal(cands(r).requirement_to_code[0].code[0].path, 'src/server.js');
+});
+
+test('requirement_to_code: an exact quote still ranks first when the heading words are in the query too (control)', (t) => {
+  const r = repo(t, { 'docs/Reference/Server.md': '### `quota`\n\nThe gizmo quota resets after 30 days.\n', 'src/exact.js': '// the gizmo quota resets after 45 days\n', 'src/quota.js': 'const quota = 1\n' },
+    { 'docs/Reference/Server.md': '### `quota`\n\nThe gizmo quota resets after 45 days.\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, reqPaths: 'docs/Reference/**' });
+  assert.equal(cands(r).requirement_to_code[0].code[0].path, 'src/exact.js');
+});
+
+test('requirement_to_code does not rank documents as code, even other documents that repeat the words', (t) => {
+  const r = runOpt(t, { 'notes/other.md': 'return503OnClosing return503OnClosing Default: false Default: false\n', 'docs/Reference/Other.md': 'return503OnClosing Default: false\n' });
+  const paths = cands(r).requirement_to_code.flatMap((x) => x.code.map((c) => c.path));
+  assert.ok(paths.includes('src/server.js'));
+  assert.deepEqual(paths.filter((p) => /\.md$/.test(p)), []);
+});
+
+test('sizeVariants: bytes, KiB, MiB and products as code writes them; other numbers get none', () => {
+  assert.deepEqual(T.sizeVariants('1048576'), ['1048576', '1024 * 1024', '1024*1024', '1 MiB', '1 MB']);
+  assert.deepEqual(T.sizeVariants('1 MiB'), T.sizeVariants('1048576'));
+  assert.deepEqual(T.sizeVariants('1048576 bytes'), T.sizeVariants('1048576'));
+  assert.ok(T.sizeVariants('2 mb').includes('2 * 1024 * 1024'));
+  assert.ok(T.sizeVariants('64 KB').includes('64 * 1024'));
+  for (const v of ['30', '5000', '1000', '30 days', '45 %', 'open', '7']) assert.deepEqual(T.sizeVariants(v), [], v);
+});
+
+test('valueDeltas reads bytes and MiB as values', () => {
+  assert.deepEqual(T.valueDeltas('', 'Default: 1048576 (1MiB)'), { removed: [], added: ['1048576', '1 mib'] });
+});
+
+test('occurrences search a size in its other forms: 1048576 (1MiB) in the doc finds 1024 * 1024 in code', (t) => {
+  const doc = (v) => `### \`bodyLimit\`\n\nThe maximum payload, in bytes. Default: \`${v}\`\n`;
+  const r = repo(t, { 'docs/Reference/Server.md': doc('1048576 (1MiB)'), 'build/validation.js': 'const MAX = 1024 * 1024\n' }, { 'docs/Reference/Server.md': doc('2097152 (2MiB)') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, reqPaths: 'docs/Reference/**' });
+  const occ = cands(r).occurrences.find((o) => o.value.startsWith('1048576'));
+  assert.ok(occ.variants.includes('1024 * 1024'));
+  assert.ok(occ.hits.some((h) => h.path === 'build/validation.js'));
+});
+
+test('occurrences: a non-size number is searched as before (control)', (t) => {
+  const r = repo(t, { 'docs/Reference/Server.md': '### `retries`\n\nDefault: `30`\n', 'src/a.js': 'const N = 30\nconst M = 1024 * 1024\n' }, { 'docs/Reference/Server.md': '### `retries`\n\nDefault: `31`\n' });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, reqPaths: 'docs/Reference/**' });
+  const occ = cands(r).occurrences.find((o) => o.value === '30');
+  assert.deepEqual(occ.variants, ['30']);
+  assert.deepEqual(occ.hits.map((h) => h.path), ['src/a.js']);
+});
+
+test('pairItems: one removed and one added block under the same heading are one edited block, whatever their similarity', () => {
+  const it = (ref, heading, raw) => ({ ref, heading, raw, kind: 'changed' });
+  const pairs = T.pairItems([it('h#default', 'connectionTimeout', 'Default: 0')], [it('h#the', 'connectionTimeout', 'Server timeout for idle sockets, in milliseconds')]);
+  assert.equal(pairs.length, 1);
+  assert.ok(pairs[0].base && pairs[0].head);
+});
+
+test('pairItems: dissimilar blocks stay apart when the heading has several, or the headings differ (control)', () => {
+  const it = (ref, heading, raw) => ({ ref, heading, raw, kind: 'changed' });
+  const many = T.pairItems([it('h#a', 'H', 'alpha beta gamma')], [it('h#b', 'H', 'delta epsilon zeta'), it('h#c', 'H', 'eta theta iota')]);
+  assert.equal(many.length, 3);
+  const other = T.pairItems([it('h#a', 'H', 'alpha beta gamma')], [it('h#b', 'G', 'delta epsilon zeta')]);
+  assert.equal(other.length, 2);
+});
+
+test('the top-3 cut is visible: more candidates are listed as paths in the row and in limitations', (t) => {
+  const doc = 'AC-1: the gizmo quota resets after 30 days\n';
+  const src = (v) => Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`src/gizmo${i}.js`, `// gizmo quota resets after ${v} days\nexport const gizmoQuota${i} = ${v};\n`]));
+  const r = repo(t, { 'docs/spec.md': doc, ...src(30) }, { 'docs/spec.md': doc.replace('30', '45') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const c = cands(r), row = c.requirement_to_code[0];
+  assert.equal(row.code.length, 3);
+  assert.equal(row.more.length, 5);
+  assert.ok(row.more.every((p) => !row.code.some((x) => x.path === p)));
+  assert.ok(c.limitations.some((l) => l.includes('more code/test candidate') && l.includes('S1') && l.includes(row.more[0])), c.limitations.join('\n'));
+});
+
+test('no "more candidates" limitation when nothing was cut (control)', (t) => {
+  const doc = 'AC-1: the gizmo quota resets after 30 days\n';
+  const r = repo(t, { 'docs/spec.md': doc, 'src/gizmo.js': '// gizmo quota resets after 30 days\n' }, { 'docs/spec.md': doc.replace('30', '45') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx });
+  const c = cands(r);
+  assert.ok(!('more' in c.requirement_to_code[0]));
+  assert.deepEqual(c.limitations.filter((l) => /more code\/test/.test(l)), []);
 });
