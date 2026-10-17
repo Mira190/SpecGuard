@@ -1012,9 +1012,10 @@ test('run: a part of a reached unit dropped for the budget is named in a line an
     assert.match(v, /`src\/js\/orders\.js` part 1 of 2 \(lines 1-2\)/);
     assert.doesNotMatch(v, /Not reviewed this run|did not fit/);
     assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: 'the unit call failed; 1 unit part failed' });
-    const all = await run(t, { sp: f([`${U1}:1`, `${U1}:2`]) });
+    const all = await run(t, { inv: { eligible: 140 }, sp: f([`${U1}:1`, `${U1}:2`]) });
     assert.match(vis(all.calls.summary), /1 unit were not reviewed: the unit call failed/);
     assert.doesNotMatch(vis(all.calls.summary), /did not fit/);
+    assert.match(/^Units: .*$/m.exec(vis(all.calls.summary))[0], /1 failed/);
     const old = await run(t, { sp: f(null) });
     assert.match(vis(old.calls.summary), /1 unit were not reviewed: the unit call failed/);
   });
