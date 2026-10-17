@@ -18,7 +18,7 @@
      "req_to_code": [{ "criterion": "S1", "code": [{ "path": "x.js", "line": 1, "end": 1 }, { "path": "y.js", "line": 1, "end": 1 }, { "path": "z.js", "line": 1, "end": 1 }, { "path": "f1.js", "line": 10, "end": 12 }], "tests": [] }],
      "code_to_req": [
       { "path": "f1.js", "line": 12, "candidates": [{ "path": "D.md", "line": 9, "score": 7 }] },
-      { "path": "f2.js", "line": 5, "candidates": [{ "path": "D.md", "line": 3, "score": 1 }] }],
+      { "path": "f2.js", "line": 5, "candidates": [{ "path": "D.md", "line": 9, "score": 7 }, { "path": "D.md", "line": 3, "score": 1 }] }],
      "test_candidates": "f1.js\n  (no candidate test file found)\n" },
    { "id": "B-R", "case": "B", "variant": "R", "trace_ms": 5, "cand_ms": 5,
      "req_to_code": [{ "criterion": "S1", "code": [{ "path": "x.js", "line": 1, "end": 1 }], "tests": [] }],
