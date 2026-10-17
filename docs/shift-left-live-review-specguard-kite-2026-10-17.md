@@ -1,5 +1,7 @@
 # SpecGuard 与 Kite：基于实际 Actions、PR review 和 scan 的 shift-left 复核
 
+> **处置状态（2026-10-17，main 45713a2）：** 本文发现已复核。已修复：6.1/6.2 来源与层级协议噪音（#229）；6.3 规格冲突方向（#227）；失败重跑覆盖结果（#228）；需求链接召回（#232）；fix-through 计量（#233）；大测试上下文截断（#234）；扫描吞吐（#230、#231、#235，实测 nest 每次 7→32 个 unit）。未修复/待办：Kite 种子复测受阻于 Kite 的 Anthropic secret 过期；"reduced=incomplete" 状态语义待定。行号与 SHA 以本文写作时为准。
+
 日期：2026-10-17，Australia/Sydney。线上最终快照：2026-10-16 23:43 UTC（悉尼 10:43）；本地读取延续至约 10:45。本文续接[策略报告](/C:/Files/Projects/SpecGuard/docs/shift-left-value-strategy-2026-10-16.md)和[上一轮未知风险复查](/C:/Files/Projects/SpecGuard/docs/unknown-unknown-review-2026-10-17.md)。
 
 **判断：已证明能在合并前发现有价值的测试与需求问题，并出现了实际修复闭环；尚不足以证明稳定、全面地满足 shift left，更不能据此宣称降低了真实团队的 QA 返工或缺陷逃逸。** 当前优先级应是让已有证据被正确识别、让范围和失败状态可解释、让发现与修复对应起来，再扩大扫描量。
