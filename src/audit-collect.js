@@ -125,9 +125,9 @@ function select(all, cap, prior, changedDocs = null, stale = new Set()) {
   return { picked, tally, kind };
 }
 
-// Per block: up to EV_PER code and EV_PER test locations (path:line + the best line) by the PR-mode requirement-to-code scorer, over the files in scope.
+// Per block: up to EV_PER code and EV_PER test locations (path:line + the best line) by the PR-mode requirement-to-code scorer, over the whole tree.
 // A location needs two matched terms and a fair share of the best score: a block that merely shares a word with the code gets nothing. cut: the time budget ended the search.
-// ponytail: BM25 over 40-line windows of the whole tree; per-package scoping (scan_paths) is what keeps it affordable on a monorepo.
+// ponytail: BM25 over 40-line windows of the whole tree; the time budget bounds it on a large monorepo.
 // the block's concrete values for the search: numbers of two or more digits (sizes, limits, timeouts). ponytail: numbers only; quoted names and units are left to the words
 const litsOf = (t) => [...new Set(String(t).match(/(?<![\w.])\d{2,}(?![\w.])/g) || [])].slice(0, 8);
 function evidence({ cwd, head, blocks, scope = null, docs = [], ignoreExtra = '', budgetMs = EV_BUDGET_MS }) {
@@ -209,7 +209,7 @@ function branchGuard({ refName = '', eventPath = '' } = {}) {
   return refName === def ? {} : { error: `mode scan reads the default branch (${def}); this run is on ${refName}. Run it from the default branch (a schedule or workflow_dispatch there).` };
 }
 
-// scanPaths: the scope (docs and evidence); rotate: scan_issue is on, so the run is one of a rotation; prior: that issue's state (null on the first run or without an issue).
+// scanPaths: the units reviewed (docs, tests and evidence are read repo-wide); rotate: scan_issue is on, so the run is one of a rotation; prior: that issue's state (null on the first run or without an issue).
 function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0, unitParts = 1 }) { // unitParts: unit calls of one run (claude api engine; each holds maxUnits units); packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
   const head = git(cwd, ['rev-parse', 'HEAD']).trim();
   fs.rmSync(ctx, { recursive: true, force: true });
@@ -220,7 +220,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   const std = globs(standardsPaths), scope = scopeFn(scanPaths);
   try {
     // STANDARDS_PATHS documents are rule files, not requirement documents (trace.js does the same in PR mode)
-    run({ cwd, base: head, head, ctx: scratch, reqPaths, ignoreExtra: [ignoreExtra, ...std.inc].filter(Boolean).join('\n'), scope });
+    run({ cwd, base: head, head, ctx: scratch, reqPaths, ignoreExtra: [ignoreExtra, ...std.inc].filter(Boolean).join('\n') });
     const read = (n) => { try { return fs.readFileSync(path.join(scratch, n), 'utf8'); } catch { return ''; } };
     found = lines(read('spec-files.txt'));
     rejected = lines(read('spec-rejected.txt')).map((l) => l.split('\t'));
@@ -233,7 +233,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   const docs = ordered.slice(0, MAX_AUDIT_DOCS);
   for (const p of ordered.slice(MAX_AUDIT_DOCS)) rejected.push([p, `over the ${MAX_AUDIT_DOCS}-document audit limit`]);
 
-  const files = tracked(cwd), inScope = scope ? files.filter((f) => scope(f) || !f.includes('/')) : files; // the layout hint describes the scope (plus root manifests)
+  const files = tracked(cwd);
   const listed = STANDARDS.concat(std.inc);
   const standards = files.filter((f) => listed.some((g) => matchGlob(f, g)) && !std.exc.some((g) => matchGlob(f, g)) && !OWN.some((g) => matchGlob(f, g)));
   const w = (n, s) => fs.writeFileSync(path.join(ctx, n), s);
@@ -265,10 +265,28 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
     if (unbounded) notes.push(`${unbounded} block(s) cite more than 8 files; their freshness cannot be tracked, so they are rechecked each run`);
     if ([...diffs.values()].includes(null)) notes.push('could not diff against an earlier audit commit (shallow clone? use fetch-depth: 0): its covered blocks are treated as changed and rechecked first');
   }
-  const cand = candidates(all, maxRequirements, prior, changedDocs, stale);
-  let ev = { by: new Map(), cut: false, files: 0 };
-  try { ev = evidence({ cwd, head, blocks: cand.fit, scope, docs: found, ignoreExtra, budgetMs: evidenceBudgetMs }); }
-  catch (e) { notes.push(`evidence search failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the model searches by itself`); }
+  // a scoped run audits a block only when its document is in scope or one of its code candidates is. The rest are set aside BEFORE the cap applies (so they never take a slot: the next blocks fill it) and keep their last status (carried). Only while the search is complete: an unseen block is never skipped.
+  let pool = all, cand, ev;
+  const skipped = [], t0 = Date.now();
+  for (;;) {
+    cand = candidates(pool, maxRequirements, prior, changedDocs, stale);
+    ev = { by: new Map(), cut: false, files: 0 };
+    try { ev = evidence({ cwd, head, blocks: cand.fit, docs: found, ignoreExtra, budgetMs: Math.max(0, evidenceBudgetMs - (Date.now() - t0)) }); }
+    catch (e) { notes.push(`evidence search failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the model searches by itself`); break; }
+    if (!scope || ev.cut) break;
+    const inside = (b) => scope(b.path) || (ev.by.get(b.cid) || []).some((l) => { const f = l.split('\t'); return f[1] === 'code' && scope(f[2].replace(/:\d+$/, '')); });
+    const out = cand.fit.filter((b) => !inside(b));
+    if (!out.length) break;
+    skipped.push(...out);
+    const gone = new Set(out.map((b) => b.cid));
+    pool = pool.filter((b) => !gone.has(b.cid));
+  }
+  if (skipped.length) {
+    const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), docsOut = [...new Set(skipped.map((b) => b.path))];
+    cand.carried.push(...skipped.filter((b) => known.has(b.cid)));
+    cand.total = all.length;
+    notes.push(`${skipped.length} document block(s) skipped: their evidence is outside scan_paths (${docsOut.slice(0, 3).join(', ')}${docsOut.length > 3 ? ', ...' : ''})`);
+  }
   const et = evidenceText(cand.fit, ev.by);
   if (ev.cut) notes.push(`the ${Math.round(evidenceBudgetMs / 1000)} s time budget ended the evidence search: blocks marked none may still have code and tests`);
   if (et.left) notes.push(`audit-evidence.txt would pass ${EV_CAP / 1024} KB: ${et.left} block(s) have no candidate locations`);
@@ -283,7 +301,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   w('audit-carried.txt', cand.carried.map((c) => `${c.cid}\t${c.path}:${c.line}\t${c.heading}\t${c.text}\n`).join(''));
   w('audit-rejected.txt', rejected.map(([p, why]) => `${p}\t${why}\n`).join(''));
   w('standards.txt', standards.map((f) => `${f}\n`).join(''));
-  w('test-layout.txt', testLayout(inScope, testPaths));
+  w('test-layout.txt', testLayout(files, testPaths));
   // code-first: the riskiest source files, with or without design documents (a repository with none is the common case)
   let units = null;
   try {
