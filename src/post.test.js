@@ -2660,6 +2660,26 @@ test('fix-through: this run\'s summary-only findings are recorded in counts.sum 
   assert.deepEqual(c.sum.map((e) => [e.fp, e.path, e.kind]), [[REAL_FP.slice(0, 16), 'src.js', 'missing_test']]);
 });
 
+test('fix-through: an addressed summary-only finding stays in counts.sum (blind labels keep matching); a re-reported one is not duplicated', async (t) => {
+  const wr = require('../eval/weekly-report');
+  const e = { fp: FP('a').slice(0, 16), path: 'src.js', line: 7, kind: 'missing_test', title: 'Verify the boundary total' };
+  const dataset = (c) => ({ repo: 'o/r', since: '2026-10-01', until: '2026-10-17', baseline: [], threads: [], review_comments: [], prs: [{ number: 5, created_at: '2026-10-01T00:00:00Z', user: { login: 'dev', type: 'User' }, labels: [{ name: 'review-arm:0' }] }],
+    issue_comments: [{ issue_url: 'https://api.github.com/repos/o/r/issues/5', updated_at: '2026-10-17T00:00:00Z', body: `<!-- specguard:summary -->\n${post.countsComment({ ...c, pr: 5, complete: true, outcome_valid: true })}` }] });
+  const round1 = dataset({ since: { addressed: 0, open: 1, dismissed: 0, not_observed: 0 }, sum: [e], outcomes: [{ fp: e.fp, kind: 'missing_test', outcome: 'open' }] });
+  const labels = new Map([[wr.findingsOf(round1)[0].fid, 'valid']]);
+  const gone = followSetup(t, () => [], [[]], report({ coverage: [row()], findings: [] }));
+  gone.github.rest.issues.listComments = async () => ({ data: stickyWith(gone.A, [e]) });
+  await post(gone);
+  const c = countsOf(gone.calls.summary[0].body);
+  assert.deepEqual(c.sum, [e], 'carried forward unchanged');
+  const a = wr.analyze(dataset(c), { labels });
+  assert.deepEqual([a.labels.unmatched, a.joint.with_outcome], [undefined, 1]);
+  const again = followSetup(t, () => [], [[]], report({ coverage: [row()], findings: [finding('missing_test', { confidence: 'low' })] }));
+  again.github.rest.issues.listComments = async () => ({ data: stickyWith(again.A, [{ ...e, fp: REAL_FP.slice(0, 16) }]) });
+  await post(again);
+  assert.equal(countsOf(again.calls.summary[0].body).sum.length, 1, 're-reported: this run\'s entry only');
+});
+
 test('fix-through: a counts.sum entry carries the neutralized title (max 100 chars); 20 long titles stay under COUNTS_MAX', async (t) => {
   const s = setup(t, report({ coverage: [row()], findings: [finding('missing_test', { confidence: 'low', title: `Needs a test <!-- x --> ${'long '.repeat(40)}` })] }));
   await post(s);
