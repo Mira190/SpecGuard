@@ -1,0 +1,72 @@
+{
+  "snapshot": "44ed3eb8f093981c685027d0c1596aa78fa92939",
+  "created_at": "2026-10-17T08:38:02.532Z",
+  "method": "Immutable Git modules, synthetic file fixtures and controlled Git reads; no provider/network/GitHub writes.",
+  "results": [
+    {
+      "id": "U1",
+      "name": "A quote in an unexecuted part is accepted as a non-low finding",
+      "dropped": {
+        "unexecuted_part": "dropped",
+        "retained": 1,
+        "low": false,
+        "status": "incomplete",
+        "citation_line": 3,
+        "reviewed": "**Reviewed in parts** (too large for one call; every part planned in this run, as far as max_budget_usd reaches): `src/unit.js` part 1 of 2 (lines 1-2)."
+      },
+      "failed": {
+        "unexecuted_part": "failed",
+        "retained": 1,
+        "low": false,
+        "status": "incomplete",
+        "citation_line": 3,
+        "reviewed": "**Reviewed in parts** (too large for one call; every part planned in this run, as far as max_budget_usd reaches): `src/unit.js` part 1 of 2 (lines 1-2)."
+      }
+    },
+    {
+      "id": "U2",
+      "name": "Negative numeric boundary explicitly present in an assertion still yields boundary_unpinned",
+      "positive_control": [],
+      "negative": [
+        {
+          "line": 3,
+          "name": "LOWER_LIMIT",
+          "value": -10
+        }
+      ]
+    },
+    {
+      "id": "U3",
+      "name": "Legacy rows have unknown delivered TP but precision_delivered is 0 instead of null",
+      "precision_delivered": 0,
+      "recall_delivered": null
+    }
+  ],
+  "controls": [
+    "SpecGuard identity stable across channel and location changes",
+    "Invalid pack config rejected; default retained",
+    "Unknown expected count in old error gives null end-to-end recall"
+  ],
+  "source_hashes": {
+    "src/audit-post.js": "531e1a58ca073da0961d1b1295fe56abccc83a751ac52b1305e6995feb3d2f20",
+    "src/post.js": "ce43474743bbfa6182324250ebda07536e6dc9c194578aa0d6dd13b4fc64a3e8",
+    "src/checks.js": "ced268685a198655f0b71e598361a115794a3cb38cfb2e57120dba0e9ce928d6",
+    "src/preflight.js": "615e5489d96f4156b61255026370238ae0bdccc6112ce65c996af7d37a084759",
+    "src/limitations.js": "5413bf06c3980ec45c6a91d37457d6623976d1aebfdfb27e8dec65c147387ac0",
+    "src/standards-map.js": "40aaa82f017b8b5d9c7a2e7ce00d2a854e9fb361339baf60332cef831e0f4b26",
+    "src/focus.js": "7314c9fcaa26fabcb27df8009cf38db2ad763bb5e9d7fb7cb87db10e261b550f",
+    "src/numdiff.js": "20f3bdccc2ef03d8b6d27a5650657ae222986c84e4b01c9e26056d0b1bc73a9d",
+    "src/prompt.js": "84ceb07e97f9e6cddca93c828c09490208eb58ba5481a75972a80ee95cd61630",
+    "src/test-map.js": "72eac3013e1607eb7af4e4dd4a08f6a50db550bab746850a1bab7e588d828313",
+    "src/leads.js": "4716f4d6219250a4374648d16911bea9b163238c52864b94eda94bc1af4557ad",
+    "src/trace.js": "48d736e0da96cda8eeab2c5bbd392fa2ca0d5343e28920958628bd2efbb10006",
+    "src/deny.js": "bfc2e2ed0aebd65b48066f2957f18e5ae491426daad91ce6dea47eda97ba4145",
+    "src/version.js": "ae70422a338d03cd26626a8da7c1cf2c27766c682564b0a264bcfcb5b35b8e75",
+    "src/audit-units.js": "c5b046b814ea01b19a4247c9005cbc4d78066bd9269e044763802f17e83db17f",
+    "src/pack-cap.js": "2bcdf2585255817a597403bbb633e65cfe6a4a2d14378224d3a889cc13a6c60a",
+    "eval/grade.js": "334ad42feba6c160d59525f6066c4f988edb3f61a22856b999043da9cb86793e",
+    "eval/label-export.js": "dd39aacdd0b6d3f013adf9dd609745be72d5ab9a28e98da163ca8c812ad068ac",
+    "eval/aggregate-counts.js": "e32bca30976af9a4635c73f2b018c528858f7c0baa540515fd630518998d6dff",
+    "eval/szz.js": "7bedef5068f7bd039ab12501fa7e7deee8453a0ae0fa8dcd410c62e1b291fd7d"
+  }
+}
