@@ -776,7 +776,8 @@ test('CLI: a CONTEXT_PACK_BYTES override reaches the collector, so its planned r
     const r = spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_REF_NAME: 'main', GITHUB_EVENT_PATH: ev, SCAN_ISSUE: '', AUDIT_ISSUE: '', GH_TOKEN: '', PACK_SPLIT: 'true', MAX_UNITS: '60', MODEL: 'claude-haiku-5-5', MAX_BUDGET_USD: '0.5', MAX_OUTPUT_TOKENS: '32000', CONTEXT_PACK_BYTES: pack } });
     assert.equal(r.status, 0, r.stdout + r.stderr);
     const f = path.join(ctx, 'audit-unit-rooms.json');
-    return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')).length : 1;
+    const x = path.join(ctx, 'audit-unit-extra.json'); // the last rooms are extras the engine admits at run time, not planned rooms
+    return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')).length - (fs.existsSync(x) ? +fs.readFileSync(x, 'utf8') : 0) : 1;
   };
   const kept = (packBytes) => require('./engines/claude-api').keptRooms({ ctx, root: fs.realpathSync(root), batch: 20, model: 'claude-haiku-5-5', maxTokens: 32000, budget: 0.5, packBytes });
   const small = run('120000');
