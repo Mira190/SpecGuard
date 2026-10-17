@@ -240,5 +240,7 @@ test('hunkTokens: a deleted file (+++ /dev/null) does not leak its removed lines
   assert.ok(t.get('lib/a.js').includes('aOnlyIdentifier') && !t.get('lib/a.js').includes('zOnlyIdentifier'));
   const c = hunkTokens(mod('lib/a.js', 'aOnlyIdentifier') + mod('lib/b.js', 'bOnlyIdentifier'));
   assert.ok(c.get('lib/a.js').includes('aOnlyIdentifier') && !c.get('lib/a.js').includes('bOnlyIdentifier') && c.get('lib/b.js').includes('bOnlyIdentifier'));
+  const p = hunkTokens(mod('lib/a.js', 'aOnlyIdentifier') + '+++ markdown rule\n+const afterPlusLine = 3;\n'); // an added line "++ markdown rule" looks like a header: it must not end the file
+  assert.ok(p.get('lib/a.js').includes('afterPlusLine'));
 });
 
