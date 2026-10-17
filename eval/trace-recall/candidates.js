@@ -18,4 +18,12 @@ function checkNotAllEmpty(codeVariants) {
   if (codeVariants.length && codeVariants.every((v) => !v.text.trim())) throw new Error(`candidates step wrote no test-candidates.txt for any of the ${codeVariants.length} code variants`);
 }
 
-module.exports = { extractCandidates, checkCandidates, checkNotAllEmpty };
+// The child env: the ambient shell must not change what trace.js does. These are pinned to the harness defaults (unset); the run records them.
+const PINNED_UNSET = ['TEST_PATHS', 'TRACE', 'IGNORE_EXTRA', 'STANDARDS_PATHS', 'TRACE_BUDGET_MS'];
+function harnessEnv(base, extra) {
+  const env = { ...base, ...extra };
+  for (const k of PINNED_UNSET) delete env[k];
+  return env;
+}
+
+module.exports = { extractCandidates, checkCandidates, checkNotAllEmpty, harnessEnv, PINNED_UNSET };
