@@ -295,7 +295,7 @@ const H = (c, n = 40) => c.repeat(n).slice(0, n);
 function mixed(extra = {}) { // PR 5 (arm 2): one inline finding (fp a..) and one summary-only finding (counts.sum, fp b..16)
   id = 100;
   return { repo: 'o/r', since: '2026-09-01', until: '2026-09-30', prs: [pr(5, 2, 10)], baseline: [], threads: [],
-    issue_comments: [counts(5, S(1, 1), { sum: [{ fp: H('b', 16), path: 'b.js', line: 4, kind: 'missing_test' }], outcomes: [{ fp: H('a'), outcome: 'addressed' }, { fp: H('b', 16), outcome: 'open' }], ...extra })],
+    issue_comments: [counts(5, S(1, 1), { sum: [{ fp: H('b', 16), path: 'b.js', line: 4, kind: 'missing_test', title: 'Missing test for b' }], outcomes: [{ fp: H('a'), outcome: 'addressed' }, { fp: H('b', 16), outcome: 'open' }], ...extra })],
     review_comments: [sg(5, 'a.js', 10, 'a')] };
 }
 
@@ -304,8 +304,9 @@ test('M5: a summary-only finding is a blind-label candidate on the id fix-throug
   assert.deepEqual(f.map((x) => [x.delivery, x.ref]), [['inline', H('a')], ['summary', H('b', 16)]]);
   const rows = exportRows(f, { sample: 0, seed: 1 });
   assert.equal(rows.length, 2);
-  assert.deepEqual(rows.map((r) => r.delivery).sort(), ['inline', 'summary']);
   assert.deepEqual(rows.map((r) => r.id).sort(), f.map((x) => x.fid).sort());
+  assert.ok(rows.some((r) => r.text === 'Missing test for b'), 'the recorded title is the claim');
+  assert.ok(!('delivery' in rows[0]) && !/issuecomment|delivery/.test(toCsv(rows)), 'the sheet does not say how a finding was delivered');
   // the outcome list in the counts names the same refs, so a label on either id has an outcome to join
   const ds = mixed(), labels = new Map(f.map((x) => [x.fid, 'valid']));
   const j = analyze(ds, { labels }).joint;
@@ -321,6 +322,20 @@ test('M5: the same fp inline and in sum counts once; counts without sum add noth
   assert.equal(f[0].delivery, 'inline');
   const old = mixed(); old.issue_comments = [counts(5, S(1, 1))];
   assert.equal(findingsOf(old).length, 1);
+});
+
+test('M5: a summary-only entry without a title (older counts) has no claim text: left out of the sheet, counted in the report', () => {
+  const ds = mixed({ sum: [{ fp: H('b', 16), path: 'b.js', line: 4, kind: 'missing_test' }] });
+  const f = findingsOf(ds);
+  assert.equal(f.length, 2);
+  assert.equal(exportRows(f, { sample: 0, seed: 1 }).length, 1);
+  assert.match(render(analyze(ds)), /1 summary-only findings have no claim text/);
+});
+
+test('M5: channel outcomes are printed next to the combined tally, with the trimmed count when they differ', () => {
+  const md = render(analyze(mixed({ outcomes: [{ fp: H('a'), outcome: 'addressed' }] })));
+  assert.match(md, /1 listed vs 2 in the combined tally\. 1 outcomes trimmed/);
+  assert.match(render(analyze(mixed())), /2 listed vs 2 in the combined tally\.(?! \d+ outcomes trimmed)/);
 });
 
 test('M5 control: summary-only findings from a PR outside the usable set are not added', () => {

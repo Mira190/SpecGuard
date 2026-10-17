@@ -134,12 +134,13 @@ function findingsOf(ds) {
   }
   // Summary-only findings have no review comment; the latest sticky summary's counts list them in `sum`, keyed by the 16-hex fp prefix post.js tracks them under.
   // They join the same exposure set as inline ones, so blind labels, findings/PR, overlap and fix-through see one list. Counts written before `sum` existed carry none.
-  for (const [pr, { t, url }] of lastCounts(ds, new Set(armBy.keys()))) {
+  for (const [pr, { t }] of lastCounts(ds, new Set(armBy.keys()))) {
     for (const e of Array.isArray(t.sum) ? t.sum.slice(0, 20) : []) {
       const fp = e?.fp;
       if (!/^[0-9a-f]{16}$/.test(fp) || typeof e.path !== 'string' || out.some((g) => g.tool === 'specguard' && g.pr === pr && g.ref.startsWith(fp))) continue; // also inline: counted once
       const line = Number.isInteger(e.line) ? e.line : null;
-      out.push({ tool: 'specguard', delivery: 'summary', repo: ds.repo, pr, arm: armBy.get(pr), path: e.path, line, ref: fp, text: `${e.kind || 'finding'} at ${e.path}${line == null ? '' : `:${line}`}; the full text is in the PR's sticky summary comment`, url });
+      const claim = typeof e.title === 'string' ? e.title.trim() : ''; // counts written before titles were recorded have none: no claim text, not labellable
+      out.push({ tool: 'specguard', delivery: 'summary', repo: ds.repo, pr, arm: armBy.get(pr), path: e.path, line, ref: fp, text: claim || 'no claim text', ...(!claim && { no_claim: true }) });
     }
   }
   // Overlap, arm 2 only: same path and a line within 3 (a file-level comment matches any line of its file).
@@ -245,7 +246,7 @@ function analyze(ds, { labels } = {}) {
   for (const d of ['inline', 'summary']) {
     const mine = sgAll.filter((f) => f.delivery === d), m2 = mine.filter((f) => f.arm === 2), v2 = labels ? m2.filter((f) => labels.get(f.fid) === 'valid') : null;
     const fx = summarize(asPrs(oc.filter((r) => r.delivery === d)));
-    channels[d] = { findings: mine.length, fix_through: { prs: fx.prs, findings: fx.findings, outcomes: fx.outcomes, A: fx.A }, overlap: { findings: m2.length, also_raised_by_copilot: m2.filter((f) => f.overlap).length },
+    channels[d] = { findings: mine.length, no_claim: mine.filter((f) => f.no_claim).length, fix_through: { prs: fx.prs, findings: fx.findings, outcomes: fx.outcomes, A: fx.A }, overlap: { findings: m2.length, also_raised_by_copilot: m2.filter((f) => f.overlap).length },
       labels: labels ? (() => { const x = labelPrecision(mine, labels).specguard; return x || null; })() : null, unique: v2 ? { valid: v2.length, unique: v2.filter((f) => !f.overlap).length } : null };
   }
   // Measured joint: valid AND addressed, over labelled (valid|invalid) findings that have an observed outcome on the same id (outcome fp prefix = finding ref prefix).
@@ -328,10 +329,12 @@ function render(r) {
   L.push('## SpecGuard by delivery channel (arms 0+2)', '', '| Channel | findings (blind-label pool) | fix-through findings | A | precision | unique / valid (arm 2) |', '|---|---|---|---|---|---|');
   for (const d of ['inline', 'summary']) {
     const c = r.channels[d], x = c.fix_through, l = c.labels;
-    L.push(`| ${d} | ${c.findings} | ${x.findings} | ${x.findings ? `${P(x.A)} (${x.outcomes.addressed}/${x.findings})` : 'n/a'} | ${l ? `${P(l.precision)} (${l.valid}/${l.n})` : 'n/a'} | ${c.unique ? `${c.unique.unique}/${c.unique.valid}` : 'n/a'} |`);
+    L.push(`| ${d} | ${c.findings - c.no_claim} | ${x.findings} | ${x.findings ? `${P(x.A)} (${x.outcomes.addressed}/${x.findings})` : 'n/a'} | ${l ? `${P(l.precision)} (${l.valid}/${l.n})` : 'n/a'} | ${c.unique ? `${c.unique.unique}/${c.unique.valid}` : 'n/a'} |`);
   }
-  L.push(`| combined | ${r.channels.inline.findings + r.channels.summary.findings} | ${r.specguard.findings} | ${P(r.specguard.A)} | ${r.labels?.specguard ? `${P(r.labels.specguard.precision)} (${r.labels.specguard.valid}/${r.labels.specguard.n})` : 'n/a'} | ${r.unique ? `${r.unique.unique}/${r.unique.valid}` : 'n/a'} |`, '',
-    'Summary-only findings are tracked from SpecGuard #233 (2026-10-17): counts written before it carry none, so earlier weeks have only inline findings in every channel. Outcomes are the per-finding list in the counts line, which drops its oldest entries when long, so channel outcome counts can be below the combined tally.', '');
+  L.push(`| combined | ${r.channels.inline.findings + r.channels.summary.findings - r.channels.summary.no_claim} | ${r.specguard.findings} | ${P(r.specguard.A)} | ${r.labels?.specguard ? `${P(r.labels.specguard.precision)} (${r.labels.specguard.valid}/${r.labels.specguard.n})` : 'n/a'} | ${r.unique ? `${r.unique.unique}/${r.unique.valid}` : 'n/a'} |`, '',
+    'Summary-only findings are tracked from SpecGuard #233 (2026-10-17): counts written before it carry none, so earlier weeks have only inline findings in every channel.',
+    ...(r.channels.summary.no_claim ? [`${r.channels.summary.no_claim} summary-only findings have no claim text (counts written before titles were recorded): excluded from the blind-label sample.`] : []),
+    `Channel outcomes come from the per-finding list in the counts line: ${r.channels.inline.fix_through.findings + r.channels.summary.fix_through.findings} listed vs ${r.specguard.findings} in the combined tally.${r.channels.inline.fix_through.findings + r.channels.summary.fix_through.findings === r.specguard.findings ? '' : ` ${r.specguard.findings - r.channels.inline.fix_through.findings - r.channels.summary.fix_through.findings} outcomes trimmed (the list drops its oldest entries when long): the channel split is not complete.`}`, '');
   const o = r.overlap;
   L.push('## Overlap in arm 2 (same file, lines within 3)', '', `SpecGuard findings also raised by Copilot: ${o.specguard_also_raised_by_copilot}/${o.specguard_findings}. Copilot findings also raised by SpecGuard: ${o.copilot_also_raised_by_specguard}/${o.copilot_findings}. This is location overlap, not agreement on the same defect: the labels decide.`, '');
   if (r.labels) {
