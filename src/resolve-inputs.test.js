@@ -191,14 +191,14 @@ test('as a script (no token: nothing is looked up): writes multi-line outputs (r
 
 const workflow = () => fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'specguard-run.yml'), 'utf8').replace(/\r\n/g, '\n');
 
-test('specguard-run.yml: one required target plus five optional inputs, nothing else on the form', () => {
+test('specguard-run.yml: one required target plus optional inputs, nothing else on the form', () => {
   const y = workflow(), form = /^ {4}inputs:\n((?: {6}.*\n)+)/m.exec(y)[1];
-  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'scan_issue']);
+  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_units', 'max_budget_usd', 'max_output_tokens', 'scan_issue']);
   assert.match(y, /^ {6}target: \{[^}]*required: true/m);
-  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'scan_issue']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
+  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_units', 'max_budget_usd', 'max_output_tokens', 'scan_issue']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
   assert.match(y, /^ {6}post_to_pr: \{[^}]*type: boolean, default: false/m);
-  assert.doesNotMatch(form, /\b(repo|pr|ref|mode|model|effort):/);
-  assert.doesNotMatch(y, /inputs\.(repo|pr|ref|mode|model|effort)\b/);
+  assert.doesNotMatch(form, /\b(repo|pr|ref|mode|effort):/);
+  assert.doesNotMatch(y, /inputs\.(repo|pr|ref|mode|effort)\b/);
   assert.match(y, /target: \{ description: "Paste a PR link to review it, or a repo or branch link to scan it\."/);
   assert.match(y, /mode: \$\{\{ needs\.resolve\.outputs\.mode \}\}/, 'the mode comes from the target');
 });
@@ -224,7 +224,7 @@ test('specguard-run.yml: minimal permissions, PAT checkout without persisted cre
   assert.equal((y.match(/issues: write/g) || []).length, 2, 'the job permission and its comment, nowhere else');
   assert.match(y, /repository: \$\{\{ needs\.resolve\.outputs\.repo \}\}\n {10}token: \$\{\{ steps\.app\.outputs\.token \|\| secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
   assert.equal((y.match(/persist-credentials: false/g) || []).length, 3, 'every checkout');
-  assert.match(y, /fetch-depth: 0/);
+  assert.match(y, /fetch-depth: 1\n\s+filter: blob:none/);
   assert.match(y, /delivery: \$\{\{ inputs\.post_to_pr && needs\.resolve\.outputs\.mode == 'pr' && 'pr' \|\| 'summary' \}\}/, 'post_to_pr only counts for PR targets');
   assert.match(y, /github_token: \$\{\{ steps\.app\.outputs\.token \|\| secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
   assert.match(y, /ctx_retention_days: "0"/);
@@ -232,7 +232,7 @@ test('specguard-run.yml: minimal permissions, PAT checkout without persisted cre
   assert.match(y, /standards_paths: \$\{\{ needs\.resolve\.outputs\.rules \}\}/);
   assert.match(y, /test_paths: \$\{\{ needs\.resolve\.outputs\.tests \}\}/);
   assert.doesNotMatch(y, /resolve_stale/, 'the action default (false) applies: the manual PAT is not known to resolve threads');
-  assert.doesNotMatch(y, /^ +(model|effort): (?!haiku-5\.5$)/m, 'Copilot Auto with the action defaults (the temporary haiku-5.5 test pin excepted: remove it with `|| secrets.SPEC`)');
+  assert.doesNotMatch(y, /^ +(model|effort): (?!haiku-5\.5$|\{ description|\$\{\{ inputs\.model \}\}$)/m, 'Copilot Auto with the action defaults (the temporary haiku-5.5 test default excepted: remove it with `|| secrets.SPEC`)');
   assert.equal(y.split('upload-artifact@').length, 2, 'the one results artifact (enterprise-workflows.test.js checks what it holds); the action-level ctx artifact stays off via ctx_retention_days 0');
   // a ${{ }} inside a run: block is shell-injectable; inputs go through env: only
   for (const m of y.matchAll(/^ +run: \|\n((?: {10,}.*\n?)+)/gm)) assert.doesNotMatch(m[1], /\$\{\{/, m[1]);
