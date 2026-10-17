@@ -208,13 +208,15 @@ function summarize(rs) {
   const acceptable = ok.reduce((t, r) => t + (r.acceptable || 0), 0);
   // End-to-end: errored runs stay in the denominator as misses (not FPs). An errored row carries expected_findings when the runner stamps it, else 0.
   const expectedOf = (r) => r.expected_findings ?? (r.tp ?? 0) + (r.fn ?? 0);
-  const tpd = ok.reduce((t, r) => t + (r.tp_delivered ?? r.tp), 0), allExpected = rs.reduce((t, r) => t + expectedOf(r), 0);
+  // Old result files lack the delivered fields: report null for those metrics instead of silently falling back to the raw ones.
+  const noDelivered = ok.some((r) => r.tp_delivered === undefined), noStrict = ok.filter((r) => r.strict_pass === undefined).length;
+  const tpd = ok.reduce((t, r) => t + (r.tp_delivered ?? 0), 0), allExpected = rs.reduce((t, r) => t + expectedOf(r), 0);
   const lat = ok.map((r) => r.latency_s).filter((x) => x != null);
   return {
     runs: rs.length, errors: rs.length - ok.length, tp, fp, acceptable, fn, summary_only: n('summary_only'),
     precision: ratio(tp, tp + fp), recall: ratio(tp, tp + fn),
-    recall_delivered: ratio(tpd, tpd + ok.reduce((t, r) => t + (r.fn_delivered ?? r.fn), 0)), recall_delivered_e2e: ratio(tpd, allExpected), errors_expected_findings: rs.filter((r) => r.error).reduce((t, r) => t + expectedOf(r), 0),
-    strict_pass_rate: ratio(ok.filter((r) => r.strict_pass ?? r.pass).length, ok.length),
+    recall_delivered: noDelivered ? null : ratio(tpd, tpd + ok.reduce((t, r) => t + r.fn_delivered, 0)), recall_delivered_e2e: noDelivered ? null : ratio(tpd, allExpected), errors_expected_findings: rs.filter((r) => r.error).reduce((t, r) => t + expectedOf(r), 0),
+    strict_pass_rate: noStrict ? null : ratio(ok.filter((r) => r.strict_pass).length, ok.length), strict_pass_n: ok.length - noStrict, strict_pass_missing: noStrict,
     json_valid_rate: ratio(ok.filter((r) => r.json_valid).length, ok.length),
     degraded_rate: ratio(ok.filter((r) => r.degraded).length, ok.length),
     pass_rate: ratio(ok.filter((r) => r.pass).length, ok.length),

@@ -399,6 +399,23 @@ test('M1 control: an actionable summary-only finding is a delivered TP; so is a 
   assert.deepEqual([p.tp, p.tp_delivered, p.strict_pass], [1, 1, true]);
 });
 
+test('delivered recall for coverage rows: a row with no finding is delivered; a row whose group has only a low-confidence item is not', () => {
+  const row = '| O1: Boundary A | PR body; a.js:10 — return boundary(value); | none | Missing test: No test |\n';
+  const alone = grade(sumSpec, obs([], { summary: '## SpecGuard\n\n' + row }));
+  assert.deepEqual([alone.tp, alone.tp_delivered], [1, 1]);
+  const hidden = grade(sumSpec, obs([], { summary: mkSummary('low', 'low confidence') }));
+  assert.deepEqual([hidden.tp, hidden.tp_delivered, hidden.summary_only], [1, 0, 1]);
+});
+
+test('strict_pass_rate counts strict passes; rows from old result files give null, not the pass rate', () => {
+  const good = grade(spec(), obs([com()])), loose = grade(spec(), obs([com(), com({ line: 50 })]));
+  const a = aggregate([good, loose]);
+  assert.deepEqual([a.pass_rate, a.strict_pass_rate, a.strict_pass_n, a.strict_pass_missing], [1, 0.5, 2, 0]);
+  const { strict_pass, tp_delivered, fn_delivered, ...old } = good;
+  const o = aggregate([old, loose]);
+  assert.deepEqual([o.strict_pass_rate, o.strict_pass_n, o.strict_pass_missing, o.recall_delivered, o.recall_delivered_e2e], [null, 1, 1, null, null]);
+});
+
 test('M3: 1 TP + 1 FP is an acceptance pass but not a strict pass', () => {
   const g = grade(spec(), obs([com(), com({ line: 50 })]));
   assert.deepEqual([g.tp, g.fp, g.pass, g.strict_pass], [1, 1, true, false]);
