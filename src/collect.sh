@@ -272,7 +272,7 @@ node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null |
 # candidates-cut.txt: changed files left without a block (file or byte cap); post.js distrusts missing_test claims about them.
 candidates() { timeout 60 node - "$HERE/trace.js" "$CTX" <<'JS'
 const fs = require('node:fs'), path = require('node:path'), { execFileSync } = require('node:child_process');
-const { isTestPath, testScope } = require(path.resolve(process.argv[2])), { mapTests, publicDefs } = require(path.join(path.dirname(path.resolve(process.argv[2])), 'test-map.js'));
+const { isTestPath, testScope } = require(path.resolve(process.argv[2])), { mapTests, publicDefs, hunkTests } = require(path.join(path.dirname(path.resolve(process.argv[2])), 'test-map.js'));
 const ctx = process.argv[3], CAP = 16 * 1024, PER = 5, MAX_FILES = 60;
 const lines = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
 const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter((p) => p && !/[\x00-\x1F]/.test(p));
@@ -287,11 +287,22 @@ const only = process.env.CAND_ONLY ? new Set(lines(path.relative(ctx, process.en
 const prev = only ? lines('test-candidates.txt').filter((l) => !/^\(\d+ more changed file/.test(l)).join('\n') : '';
 const listed = new Set(prev.split('\n').filter((l) => l && !/^[ (]/.test(l)));
 const todo = changed.filter((f) => !listed.has(f) && (!only || only.has(f)));
+// tests that use the identifiers the diff changes: one diff and one batched git grep for all files (hunkTests); a bound that cut the search goes to collect-limits.txt
+const hunks = (() => {
+  try {
+    const git = (a, o = {}) => { try { return execFileSync('git', a, { encoding: 'utf8', maxBuffer: 1 << 28, env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' }, ...o }); } catch (e) { if (e.status === 1 && !e.stdout) return ''; throw e; } };
+    const files = todo.slice(0, MAX_FILES), range = `${process.env.DIFF_BASE_SHA || process.env.BASE_SHA}...${process.env.HEAD_SHA}`;
+    const diff = git(['-c', 'core.quotepath=false', 'diff', '-U0', '--no-color', '--no-ext-diff', '--no-renames', range, '--', ...files], { timeout: 20000 });
+    const r = hunkTests(files, diff, (toks) => git(['grep', '-o', '-w', '-F', '-I', ...toks.flatMap((x) => ['-e', x])], { timeout: 20000 }), testSet);
+    for (const l of r.limits) fs.appendFileSync(path.join(ctx, 'collect-limits.txt'), l + '\n');
+    return r.byFile;
+  } catch { return new Map(); }
+})();
 const out = []; let size = prev.length;
 for (const [k, f] of todo.entries()) {
   if (k >= MAX_FILES) break;
   let names = []; try { names = publicDefs(f, fs.readFileSync(f, 'utf8').split(/\r?\n/)).names; } catch {} // public names: a test file named after one (res.status.js) is a candidate
-  const got = mapTests(f, { tests, names, per: PER, mentions: (stem) => { // tests that name the stem as a whole word (a timeout or no match: none)
+  const got = mapTests(f, { tests, names, per: PER, changed: hunks.get(f) || [], mentions: (stem) => { // tests that name the stem as a whole word (a timeout or no match: none)
     try { return execFileSync('git', ['grep', '-l', '-w', '-F', '-I', '-e', stem], { encoding: 'utf8', timeout: 15000, maxBuffer: 1 << 26, env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } }).split('\n').filter((t) => testSet.has(t)); } catch { return []; }
   } });
   const block = f + '\n' + (got.size ? [...got].map(([t, why]) => `  ${t}  (${why})\n`).join('') : '  (no candidate test file found)\n');

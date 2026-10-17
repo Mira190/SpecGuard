@@ -59,9 +59,68 @@ function indexTests(tests) {
   return { byStem, byDir, byToken };
 }
 
-// tests: every test path; mentions(stem) -> test paths that name the stem as a whole word (the caller's search: git grep, or an index); names: the unit's public names (publicDefs);
+// ---- tokens of the changed hunks ----
+// Tests name the option or literal a diff changes (`bodyLimit`), not the file stem. Identifier-like tokens (camelCase, snake_case, numbers of >= 5 digits) of a file's added and removed lines are searched in
+// the test files with one batched git grep; a token in more than MAX_DF test files says nothing and is dropped. A test scores idf * (1 + log count) per token, +100 when its stem is the token.
+// ponytail: whole-word, case-sensitive text matches; no scope check, so a test that only shares a literal can rank (3 per file at most, after the name tiers).
+const MAX_DF = 25, TOKENS_PER_FILE = 40, TOKENS_PER_PR = 200, HUNK_TOP = 3;
+// unified diff (-U0) text -> Map(file -> tokens, in order of appearance)
+function hunkTokens(diff) {
+  const out = new Map(); let cur = null;
+  for (const l of diff.split('\n')) {
+    const h = /^\+\+\+ b\/(.+)$/.exec(l);
+    if (h) { cur = new Set(); out.set(h[1], cur); continue; }
+    if (!cur || !/^[+-]/.test(l) || /^(\+\+\+|---) /.test(l)) continue;
+    for (const m of l.slice(1).matchAll(/[A-Za-z_$][\w$]{5,}|\b\d{5,}\b/g)) if (/^\d+$/.test(m[0]) || /[a-z][A-Z]|_/.test(m[0])) cur.add(m[0]);
+  }
+  return new Map([...out].map(([f, s]) => [f, [...s]]));
+}
+// files: the changed files to map; diff: their -U0 diff; grepOut(tokens) -> `git grep -o -w -F` output (path:match lines; throws on a timeout); tests: Set of test paths
+// -> { byFile: Map(file -> [[test, [tokens]], ...] best first), limits: [text] }
+function hunkTests(files, diff, grepOut, tests) {
+  const all = hunkTokens(diff), limits = [], pick = new Map(); let total = 0, cutFile = 0, cutPr = 0;
+  for (const f of files) {
+    let toks = all.get(f) || [];
+    if (toks.length > TOKENS_PER_FILE) { cutFile++; toks = toks.slice(0, TOKENS_PER_FILE); }
+    if (total + toks.length > TOKENS_PER_PR) { cutPr++; toks = toks.slice(0, Math.max(0, TOKENS_PER_PR - total)); }
+    total += toks.length; if (toks.length) pick.set(f, toks);
+  }
+  if (cutFile) limits.push(`${cutFile} changed file(s) have more than ${TOKENS_PER_FILE} identifiers in their hunks: only the first ${TOKENS_PER_FILE} were searched in the tests.`);
+  if (cutPr) limits.push(`More than ${TOKENS_PER_PR} changed identifiers in this PR: the rest were not searched in the tests.`);
+  const byFile = new Map(), uniq = [...new Set([...pick.values()].flat())];
+  if (!uniq.length) return { byFile, limits };
+  const count = new Map(); // token -> Map(test -> hits)
+  try {
+    for (const l of grepOut(uniq).split('\n')) {
+      const i = l.lastIndexOf(':'), p = l.slice(0, i), tok = l.slice(i + 1);
+      if (i < 0 || !tests.has(p)) continue;
+      if (!count.has(tok)) count.set(tok, new Map());
+      count.get(tok).set(p, (count.get(tok).get(p) || 0) + 1);
+    }
+  } catch (e) {
+    if (e.status !== 1) limits.push('The search for changed identifiers in the tests failed or timed out: tests were not ranked by what the diff changes.'); // status 1: no match at all
+    return { byFile, limits };
+  }
+  const stems = new Map([...tests].map((t) => [t, testStem(t)]));
+  for (const [f, toks] of pick) {
+    const score = new Map(), why = new Map();
+    for (const tok of toks) {
+      const hits = count.get(tok); if (!hits || hits.size > MAX_DF) continue;
+      const idf = Math.log(1 + tests.size / hits.size);
+      for (const [t, c] of hits) {
+        score.set(t, (score.get(t) || 0) + idf * (1 + Math.log(c)) + (stems.get(t) === key(tok) && !/^\d+$/.test(tok) ? 100 : 0));
+        if (!why.has(t)) why.set(t, []); why.get(t).push(tok);
+      }
+    }
+    const top = [...score].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, HUNK_TOP).map(([t]) => [t, why.get(t)]);
+    if (top.length) byFile.set(f, top);
+  }
+  return { byFile, limits };
+}
+
+// tests: every test path; changed: [[test, [changed identifiers]]] best first (hunkTests; optional); mentions(stem) -> test paths that name the stem as a whole word (the caller's search: git grep, or an index); names: the unit's public names (publicDefs);
 // calls(name) -> test paths that call that name (optional) -> Map(test path -> why), at most `per`.
-function mapTests(f, { tests, mentions, names = [], calls = null, per = 5, index = indexTests(tests) }) {
+function mapTests(f, { tests, mentions, changed = [], names = [], calls = null, per = 5, index = indexTests(tests) }) {
   const stem = noExt(f), want = key(stem), dir = path.posix.dirname(f), got = new Map();
   const add = (list, why, limit = per) => { for (const t of list.slice().sort((a, b) => near(f, b) - near(f, a) || (a < b ? -1 : 1))) if (got.size < limit && !got.has(t)) got.set(t, typeof why === 'function' ? why(t) : why); };
   // more names first, then a file name that also starts like the unit (res.status.js for response.js), then a shallower path
@@ -77,7 +136,9 @@ function mapTests(f, { tests, mentions, names = [], calls = null, per = 5, index
     for (const n of pub) for (const t of calls(n)) { if (!called.has(t)) called.set(t, new Set()); called.get(t).add(n); }
     for (const t of ranked(called)) if (called.get(t).size >= 2) add([t], label('calls', called));
   }
-  if (got.size < per && stem.length >= 3 && !GENERIC.has(stem.toLowerCase())) add(mentions(stem), `mentions ${stem}`);
+  for (const [t, toks] of changed) add([t], `mentions changed ${toks.slice(0, 3).map((x) => '`' + x + '`').join(', ')}`);
+  // a stem that most tests name (route, fastify) says nothing and would fill a capped list in path order; an uncapped caller (the scan) keeps them all
+  if (got.size < per && stem.length >= 3 && !GENERIC.has(stem.toLowerCase())) { const m = mentions(stem); if (per === Infinity || m.length <= MAX_DF) add(m, `mentions ${stem}`); }
   add(index.byDir.get(dir) || [], 'same directory', Math.min(per, 5));
   return got;
 }
@@ -179,4 +240,4 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
   }, { symbol });
 }
 
-module.exports = { mapTests, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, makeCoverGuard };
+module.exports = { mapTests, hunkTests, hunkTokens, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, makeCoverGuard };
