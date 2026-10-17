@@ -96,11 +96,30 @@ test('no leads, no output; a focused review only gets leads for the chosen files
 const WEAK = 'Weak assertions (only existence, truthiness or type is checked)';
 const weak = (src) => weakCandidates(src).map((c) => `${c.line} ${c.x} ${c.what}`);
 
+test('weak classifier: node:test t.assert.ok is seen, foo.assert.ok is not', () => {
+  assert.deepEqual(weak("test('a', (t) => {\n  const result = f();\n  t.assert.ok(result);\n  foo.assert.ok(other);\n});\n"), ['3 result truthy']);
+});
+test('weak classifier: toBeInstanceOf / toBeTypeOf pin the class, toBeDefined stays weak', () => {
+  assert.deepEqual(weak("it('a', () => {\n  expect(p).toBeInstanceOf(Foo);\n  expect(e).toBeTypeOf('number');\n  expect(user).toBeDefined();\n});\n"), ['4 user exists']);
+});
+test('weak classifier: boolean values are value checks, objects stay weak', () => {
+  assert.deepEqual(weak("it('a', async () => {\n  expect(handlerExecuted).toBeTruthy();\n  expect(c.req.headers.has('x')).toBeTruthy();\n  expect(await isMatch(a, b)).toBeTruthy();\n  expect(app2).not.toBeUndefined();\n  expect(result).toBeTruthy();\n});\n"), ['5 app2 exists', '6 result truthy']);
+  assert.deepEqual(weak("def test_a():\n    assert app_after_called\n    assert rv.is_json\n    assert session.modified\n    assert result\n"), ['5 result truthy']);
+});
+test('weak classifier: ok flags and Equal/Match helpers are booleans, a plain result stays weak', () => {
+  assert.deepEqual(weak("test('a', (t) => {\n  t.assert.ok(result.ok);\n  t.assert.ok(result2.ok);\n  t.assert.ok(ok);\n  t.assert.ok(ok2);\n  t.assert.ok(partialDeepStrictEqual(line, x));\n  t.assert.ok(isMatch(a));\n  t.assert.ok(result);\n});\n"), ['8 result truthy']);
+});
+test('weak classifier: Go nil guard is skipped when else or a later line pins the value', () => {
+  assert.deepEqual(weak('func TestA(t *testing.T) {\n\tif got == nil {\n\t\tt.Fatal("x")\n\t} else if got.Name() != "a" {\n\t\tt.Error("y")\n\t}\n}\n'), []);
+  assert.deepEqual(weak('func TestA(t *testing.T) {\n\tif called == nil {\n\t\tt.Fatal("x")\n\t}\n\tif called.Name() != "a" {\n\t\tt.Error("y")\n\t}\n}\n'), []);
+  assert.deepEqual(weak('func TestA(t *testing.T) {\n\tif got == nil {\n\t\tt.Fatal("x")\n\t}\n}\n'), ['2 got exists']);
+});
+
 test('weak assertions: every language form is a lead', () => {
   assert.deepEqual(weak("test('a', () => {\n  const total = f();\n  assert.ok(total);\n  assert(total2);\n  assert.ok(total3, 'msg');\n  assert.notEqual(r, null);\n  assert.notStrictEqual(r2, undefined);\n  assert(typeof r3 === 'number');\n  assert.ok(!!r4);\n});\n"),
     ['3 total truthy', '4 total2 truthy', '5 total3 truthy', '6 r exists', '7 r2 exists', '8 r3 type', '9 r4 truthy']);
-  assert.deepEqual(weak("it('a', () => {\n  expect(f(1)).toBeDefined();\n  expect(a).toBeTruthy();\n  expect(b).not.toBeNull();\n  expect(c).not.toBeUndefined();\n  expect(d).toBeInstanceOf(Foo);\n  expect(e).toBeTypeOf('number');\n});\n"),
-    ['2 f(1) exists', '3 a truthy', '4 b exists', '5 c exists', '6 d type', '7 e type']);
+  assert.deepEqual(weak("it('a', () => {\n  expect(f(1)).toBeDefined();\n  expect(a).toBeTruthy();\n  expect(b).not.toBeNull();\n  expect(c).not.toBeUndefined();\n});\n"),
+    ['2 f(1) exists', '3 a truthy', '4 b exists', '5 c exists']);
   assert.deepEqual(weak("def test_a():\n    assert x\n    assert y is not None\n    assert z, 'msg'\n    self.assertIsNotNone(r)\n    self.assertTrue(q)\n    self.assertTrue(s is not None)\n"),
     ['2 x truthy', '3 y exists', '4 z truthy', '5 r exists', '6 q truthy', '7 s exists']);
   assert.deepEqual(weak('@Test\nvoid a() {\n  assertNotNull(r);\n  assertNotNull("msg", r2);\n  assertTrue(s != null);\n}\n'), ['3 r exists', '4 r2 exists', '5 s exists']);
