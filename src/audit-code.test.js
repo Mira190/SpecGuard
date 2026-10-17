@@ -607,8 +607,8 @@ test('render: a stateless part left out for the budget is named next to the part
 test('render: units no call had room for get one line with K and the budget that would cover them; a rotating run adds the rotation', () => {
   const hint = { left: 18, calls: 1, need: 5, usd: 3.63, budget: 1, max: 8, runs: 5 };
   const text = (over) => render({ data: result([]), code: CODE([], over), head: 'abc1234' });
-  assert.match(text({ budget_hint: hint }), /18 units not reviewed this run: max_budget_usd \$1\.00 allows 1 call; about \$3\.63 would cover all units in one pass\./);
-  assert.match(text({ budget_hint: hint, rotation: { ...INV().rotation, rotate: true } }), /about \$3\.63 would cover all units in one pass, or they rotate in over ~5 runs\./);
+  assert.match(text({ budget_hint: hint }), /18 units not reviewed this run: max_budget_usd \$1\.00 allows 1 call; covering all units needs a budget of about \$3\.63 \(the pre-flight reserves the worst case per call; actual spend is usually far lower\)\./);
+  assert.match(text({ budget_hint: hint, rotation: { ...INV().rotation, rotate: true } }), /actual spend is usually far lower\), or they rotate in over ~5 runs\./);
   assert.match(text({ budget_hint: { ...hint, need: 17 } }), /covering all units takes 17 calls, more than the 8 a run makes \(narrow scan_paths\)/);
   assert.doesNotMatch(text({}), /max_budget_usd \$/, 'control: no hint, no line');
 });
