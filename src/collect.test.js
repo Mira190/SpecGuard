@@ -559,6 +559,16 @@ test('test-candidates.txt: 650 test paths are grepped in 3 chunks and the hits o
   assert.match(r.cands, /t400\.test\.js {2}\(mentions changed `alphaChanged`\)/, 'hit from chunk 2');
 });
 
+test('test-candidates.txt: a grep failure in the second chunk is recorded with its code or exit status, and the candidates are still written', () => {
+  const tests = Array.from({ length: 650 }, (_, i) => `t${i}.test.js`);
+  for (const [err, want] of [[{ code: 'ETIMEDOUT' }, /failed or timed out \(ETIMEDOUT\)/], [{ status: 2 }, /failed or timed out \(exit 2\)/], [{}, /failed or timed out \(error\)/]]) {
+    let n = 0;
+    const r = runCandidates(IDS_DIFF, { tracked: ['a.js', ...tests], grep: () => { if (++n === 2) throw Object.assign(new Error('grep failed'), err); return ''; } });
+    assert.match(r.limits, want);
+    assert.match(r.cands, /a\.js/);
+  }
+});
+
 test('test-candidates.txt: no tracked test file, no changed-identifier grep', () => {
   const calls = [], r = runCandidates(IDS_DIFF, { tracked: ['a.js'], grep: grepFake(calls) });
   assert.equal(calls.length, 0);
