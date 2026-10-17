@@ -677,7 +677,8 @@ test('run: a unit with an incomplete candidate test is recorded unsure with the 
   assert.equal(r.calls.outputs.status, 'incomplete');
   const b = readState(r.calls.created[0].body).blocks.find((x) => x.cid === U1);
   assert.deepEqual([b.status, b.at.date], ['unsure', DATE], 'only its test was cut: reviewed, so the rotation moves on');
-  assert.match(r.calls.summary, /Not reviewed this run/);
+  assert.match(r.calls.summary, /Reviewed with part of their tests/);
+  assert.doesNotMatch(r.calls.summary, /Not reviewed this run/);
 });
 
 test('run: a single call (20 blocks or fewer) hands blockCuts alone in scan-parts.json: a missing_test block whose evidence was cut ends unknown', async (t) => {
@@ -850,4 +851,16 @@ test('render: a forced unit (tests cut, recorded unsure) was reviewed: the headl
   const none = vis({ ...CODE([], { eligible: 140 }), unseen: [U1, U2, U3] });
   assert.match(none, /The scan could not review any unit: none fit the model's context/);
   assert.match(none, /\| 0 of 140 \|/);
+});
+
+test('render: forced units are listed as reviewed with part of their tests, not under "Not reviewed ... stay due"; the unseen one still is', () => {
+  const data = checked([]), vis = (code) => render({ data, code, blob: BLOB, head: 'abc1234def', usage: '', run: '' }).split('<details>')[0];
+  const t = vis({ ...CODE([], { eligible: 140, forced: [U1, U2] }), unseen: [U1, U2, U3] });
+  const nr = t.split('\n').find((l) => l.startsWith('**Not reviewed this run:**')), pt = t.split('\n').find((l) => l.startsWith('**Reviewed with part of their tests**'));
+  assert.match(nr, /^\*\*Not reviewed this run:\*\* 1 unit did not fit the model's context: `src\/js\/cart\.js`\. It stays due/);
+  assert.ok(pt && !/stay/.test(pt) && /orders\.js[^]*legacy\.js/.test(pt) && !/cart\.js/.test(pt), pt);
+  assert.match(t, /2 forced \(recorded unsure\)/);
+  const none = vis({ ...CODE([], { eligible: 140 }), unseen: [U1] });
+  assert.doesNotMatch(none, /Reviewed with part of their tests/);
+  assert.match(none, /\*\*Not reviewed this run:\*\* 1 unit did not fit the model's context: `[^`]+`\. It stays due for the next run\./);
 });
