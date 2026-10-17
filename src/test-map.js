@@ -101,7 +101,7 @@ function hunkTests(files, diff, grepOut, tests) {
       count.get(tok).set(p, (count.get(tok).get(p) || 0) + 1);
     }
   } catch (e) {
-    if (e.status !== 1) limits.push('The search for changed identifiers in the tests failed or timed out: tests were not ranked by what the diff changes.'); // status 1: no match at all
+    if (e.status !== 1) limits.push(`The search for changed identifiers in the tests failed or timed out (${e.code || (e.status != null ? 'exit ' + e.status : 'error')}): tests were not ranked by what the diff changes.`); // status 1: no match at all
     return { byFile, limits };
   }
   const stems = new Map([...tests].map((t) => [t, testStem(t)]));
