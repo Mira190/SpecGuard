@@ -142,9 +142,11 @@ const WEAK = /\.(?:toBeTruthy|toBeFalsy|toBeDefined)\(|\.not\.(?:toBeNull|toBeUn
 // assert.ok(x) / assert(x) / t.ok(x) whose only argument (an optional message may follow) is an identifier, a member chain or ONE call result: truthiness, not a value.
 // A boolean predicate (list.includes(x), isFoo(x), s.startsWith(y)) or any operator (a === b, !x) is a value check. -> that argument's text, else null.
 // The scan's weak detector (leads.js) uses it too, so PR mode and the scan share one definition.
-const OK_ARG = /(?<![.\w$])(?:t\.ok|assert(?:\.ok)?)\(\s*([A-Za-z_$][\w$.!?\[\]]*(?:\((?:[^()]|\([^()]*\))*\))?)\s*(?:,\s*(?:'[^']*'|"[^"]*"|`[^`]*`)\s*)?\)/;
+const OK_ARG = /(?:(?<![.\w$])(?:t\.ok|assert(?:\.ok)?)|(?<=\bt\.)assert(?:\.ok)?)\(\s*([A-Za-z_$][\w$.!?\[\]]*(?:\((?:[^()]|\([^()]*\))*\))?)\s*(?:,\s*(?:'[^']*'|"[^"]*"|`[^`]*`)\s*)?\)/;
 const BOOL_CALL = /^(?:(?:is|has|can|should|was|did|are)(?![a-z])\w*|includes|startsWith|endsWith|test|some|every|equals|matches|contains|exists\w*)$/;
-const okArg = (l) => { const m = OK_ARG.exec(l); return m && !/^(?:true|false|null|undefined)$/.test(m[1]) && !BOOL_CALL.test(m[1].replace(/\(.*$/, '').split('.').pop()) ? m[1] : null; };
+// A boolean-looking value (isFoo, x.has(..), handlerCalled, session.modified): asserting it IS the value check. Name = last member, call args dropped.
+const boolName = (x) => { const n = String(x).replace(/^await\s+/, '').replace(/\(.*$/, '').split('.').pop(); return BOOL_CALL.test(n) || /(?:^|[a-z_])(?:[Cc]alled|[Ee]xecuted|[Mm]odified)$/.test(n) || /^ok\d*$|(?:Equals?|Match(?:es)?)$/.test(n); };
+const okArg = (l) => { const m = OK_ARG.exec(l); return m && !/^(?:true|false|null|undefined)$/.test(m[1]) && !boolName(m[1]) ? m[1] : null; };
 const isWeak = (l) => !!okArg(l) || WEAK.test(l);
 const weakAssertion = (quote) => { const ls = String(quote).split('\n').filter((l) => !COMMENT_LINE.test(l) && ASSERTION.test(l)); return ls.length > 0 && ls.every(isWeak); };
 // A weak_test counterexample refuted by the cited assertion itself: assert.equal(EXPR, LIT) / expect(EXPR).toBe(LIT) with a primitive literal, and the counterexample says the SAME EXPR gives a different literal.
@@ -1869,4 +1871,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { assertionKind, weakAssertion, okArg, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
