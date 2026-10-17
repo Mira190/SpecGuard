@@ -26,3 +26,9 @@ test('filterSummary keeps only items and coverage rows under the prefix', () => 
   assert.deepEqual(out.split(String.fromCharCode(10)).map((l) => /r2/.test(l)), [false, false, false]);
   assert.equal(filterSummary(null, 'x'), null);
 });
+
+test('filterSummary attributes bare bullets under a kind heading by path', () => {
+  const s = ['### Missing unit tests (2)', '', '- Discount is untested [`eval-sandbox/r1/discount.js:11`](https://x/y) (inline limit reached) — no test', '- Other [`eval-sandbox/r2/b.js:4`](https://x/y) (inline limit reached) — no test'].join('\n');
+  assert.deepEqual(filterSummary(s, 'eval-sandbox/r1/').split('\n').map((l) => /r2/.test(l)), [false, false, false]);
+  assert.equal(filterSummary(s, 'eval-sandbox/r3/').includes('- '), false);
+});
