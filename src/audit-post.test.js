@@ -91,6 +91,23 @@ test('validate: cosmetic defects are normalised and per-row problems degrade onl
   assert.match(w.not_reviewed.join('|'), /not_requirements\[0\] ignored: it needs a block cid[\s\S]*unknown block ffffffff[\s\S]*duplicate block/);
 });
 
+test('validate: a not_requirements entry whose reason says the block was not assessed is an unanswered block, not a non-requirement', () => {
+  const D = ['4444444d', '5555555e', '6666666f', '7777777a', '8888888b'], six = () => candsOf(cand(C1, 3, 'A.'), cand(C2, 4, 'B.'), ...D.map((c, i) => cand(c, 5 + i, 'C.'))), others = D.map((c) => ({ cid: c, reason: 'rationale, not behaviour' })); // six blocks: one unanswered stays under MISSING_MAX
+  const bad = ['not assessed in this run', 'crash recovery behaviour not assessed', 'Shortcut set not fully reviewed', 'Live settings ranges need deeper review', 'Not yet reviewed', 'unassessed'];
+  for (const reason of bad) {
+    const o = result([req()], { not_requirements: [{ cid: C2, reason }, ...others] });
+    assert.deepEqual(validate(o, six()), { ok: true }, reason);
+    assert.equal(o.not_requirements.length, D.length, reason);
+    assert.ok(!o.not_requirements.some((n) => n.cid === C2), reason);
+    assert.match(o.not_reviewed.join('|'), /was not assessed.*counts as not reviewed/, reason);
+  }
+  for (const reason of ['Document introduction, no checkable behaviour', 'UI hint text only', 'rationale, reviewed and not behaviour']) {
+    const o = result([req()], { not_requirements: [{ cid: C2, reason }, ...others] });
+    validate(o, six());
+    assert.equal(o.not_requirements.length, D.length + 1, `control: ${reason}`);
+  }
+});
+
 test('verify: good citations pass, a near-miss line is corrected, an untracked or escaping path fails', () => {
   const o = result([req({ code: [{ ...cite('src/plan.js', 2), line: 4 }] })]);
   const v = verify(o, { read, tracked: new Set(Object.keys(FILES)), docs: new Set(['docs/design.md']) });
@@ -1328,6 +1345,16 @@ test('render: static leads (truthiness-only assertion, exported name no test ref
   const all = render({ data: clean(), code: codeOf(many) });
   assert.match(all, /\| \+5 more \| \| not listed: only the top 20 leads by unit risk are shown \|/);
   assert.equal((all.match(/ is exported and no test file references it/g) || []).length, 20);
+});
+
+test('render: scan_scope all lists the leads past the top 20 in Details; without it the count line says they are not listed', () => {
+  const many = Array.from({ length: 25 }, (_, i) => urow(`0000c0${i.toString(16).padStart(2, '0')}`, { leads: { unref: [{ name: `fn${i}abc`, line: 3 }] } }));
+  const all = render({ data: clean(), code: codeOf(many), reach: { scope: 'all', notReached: {} } }), vis = all.slice(0, all.indexOf('<details>'));
+  assert.equal((vis.match(/ is exported and no test file references it/g) || []).length, 20, 'the visible top 20 is unchanged');
+  assert.match(vis, /\| \+5 more \| \| listed in Details \|/);
+  assert.match(all, /All other static leads \(5\)/);
+  assert.equal((all.match(/ is exported and no test file references it/g) || []).length, 25, 'every generated lead is in the report');
+  assert.doesNotMatch(render({ data: clean(), code: codeOf(many) }), /All other static leads/);
 });
 
 test('render: the lead table shows 20 rows in the visible part, shared round-robin by lead kind when the cap bites; control: 12 rule signals are all listed', () => {
