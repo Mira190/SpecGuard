@@ -313,7 +313,8 @@ test('scan_paths: documents, code and tests are still read from the whole reposi
   const a = repo(t, MONO);
   collect({ cwd: a.root, ctx: a.ctx, scanPaths: 'packages/a/**' });
   assert.deepEqual(rows(a.ctx, 'audit-docs.txt').map((d) => d[0]).sort(), ['packages/a/docs/design.md', 'packages/b/docs/design.md'], 'the other package\'s documents are still read');
-  assert.ok(cands(a.ctx).some((c) => c[1].startsWith('packages/b/')));
+  assert.ok(cands(a.ctx).every((c) => c[1].startsWith('packages/a/')), 'blocks whose evidence is only in packages/b are not audited');
+  assert.ok(metaOf(a.ctx).limitations.some((l) => /document block\(s\) skipped: their evidence is outside scan_paths \(packages\/b\/docs\/design\.md\)/.test(l)));
   assert.deepEqual(evRows(a.ctx).filter((e) => e[0] === retry && e[1] === 'code').map((e) => e[2].split(':')[0]).sort(), ['packages/a/src/scheduler.js', 'packages/b/src/scheduler.js']);
   assert.deepEqual(metaOf(a.ctx).scope, ['packages/a/**']);
   assert.deepEqual(metaOf(a.ctx).candidates, metaOf(all.ctx).candidates);
@@ -325,6 +326,19 @@ test('scan_paths: documents, code and tests are still read from the whole reposi
   assert.ok(only('packages/a/x.js') && !only('packages/b/x.js'), 'an exclude-only scope keeps the rest');
   assert.equal(scopeFn(''), null);
   assert.ok(scopeFn('packages/a')('packages/a/src/x.js') && !scopeFn('packages/a')('packages/ab/x.js'), 'a plain path is a folder');
+});
+
+test('scan_paths: a document block is audited in a scoped run only when its evidence touches the scope; the rest are skipped, listed and carried; no scope audits all', (t) => {
+  const files = { 'docs/design.md': SCHED_DOC.replace(/\nThe community.*\n/, '') + '\nThe billing service MUST round every invoice total to two decimals before sending it.\n', 'packages/core/src/scheduler.js': SCHED_SRC, 'packages/other/src/billing.js': MONO['packages/b/src/billing.js'] };
+  const all = repo(t, files);
+  collect({ cwd: all.root, ctx: all.ctx });
+  assert.equal(cands(all.ctx).length, 2, 'control: no scope audits every block');
+  const bill = cidOfText(all.ctx, /invoice total/), retry = cidOfText(all.ctx, /retry delay/);
+  const s = repo(t, files);
+  collect({ cwd: s.root, ctx: s.ctx, scanPaths: 'packages/core/**', prior: { head: 'x', blocks: [{ cid: bill, status: 'covered', runs: 1, since: 'x', at: { date: '2026-10-01' } }] }, rotate: true });
+  assert.deepEqual(cands(s.ctx).map((c) => c[0]), [retry]);
+  assert.deepEqual(rows(s.ctx, 'audit-carried.txt').map((c) => c[0]), [bill], 'its last status is kept');
+  assert.ok(metaOf(s.ctx).limitations.some((l) => /1 document block\(s\) skipped: their evidence is outside scan_paths \(docs\/design\.md\)/.test(l)));
 });
 
 const B = (cid, p) => ({ cid, path: p, line: 1, heading: '', text: cid, full: cid });
