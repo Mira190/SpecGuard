@@ -64,8 +64,12 @@ function readUnits(txt) {
   for (const l of lines(txt)) {
     const [id, p = '', score = '0', why = '', tests = 'none', leads = '-', ver = '', part = '-'] = l.split('\t');
     const w = /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(part); // a unit reviewed in parts: this run's window (audit-units.js partOf)
-    if (/^[0-9a-f]{8}$/.test(id) && p) m.set(id, { id, path: p, score: +score || 0, why, tests: tests === 'none' ? [] : tests.split(', ').filter(Boolean), leads, ...(/^[0-9a-f]{8}$/.test(ver) ? { ver } : {}),
-      ...(w && +w[1] >= 1 && +w[1] <= +w[2] ? { part: { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] } } : {}) });
+    if (/^[0-9a-f]{8}$/.test(id) && p) {
+      const win = w && +w[1] >= 1 && +w[1] <= +w[2] ? { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] } : null, was = m.get(id) && m.get(id).part;
+      // a stateless run lists several parts of one unit (one row each): they merge into one unit; ks = the parts, spans = their line windows, k = the last part
+      if (was && win) { (was.ks ||= [was.k + 1]).push(win.k + 1); (was.spans ||= [[was.a, was.b]]).push([win.a, win.b]); was.k = Math.max(was.k, win.k); was.a = Math.min(was.a, win.a); was.b = Math.max(was.b, win.b); continue; }
+      m.set(id, { id, path: p, score: +score || 0, why, tests: tests === 'none' ? [] : tests.split(', ').filter(Boolean), leads, ...(/^[0-9a-f]{8}$/.test(ver) ? { ver } : {}), ...(win ? { part: win } : {}) });
+    }
   }
   return m;
 }
@@ -329,7 +333,7 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
     if (!locate(c)) { notes.push(`${at}: ${solid(f.quote) ? 'the quote was not found at the cited line' : `the quote is under ${MIN_QUOTE} characters`}`); dropped.add(f.unit); continue; }
     if (isDoc(c.path) || (f.kind === 'missing_test') === testFile(c.path)) { notes.push(`${at}: ${f.kind === 'missing_test' ? 'a missing_test cites the unit\'s code, not a test or a document' : `a ${f.kind} cites a test file`}`); dropped.add(f.unit); continue; }
-    if (u && u.part && c.path === u.path && (c.line < u.part.a || c.line > u.part.b)) { notes.push(`${at}: outside this run's part of the unit (lines ${u.part.a}-${u.part.b}); that part is reviewed in another run`); continue; }
+    if (u && u.part && c.path === u.path && !(u.part.spans || [[u.part.a, u.part.b]]).some(([a, b]) => c.line >= a && c.line <= b)) { notes.push(`${at}: outside this run's part of the unit (lines ${u.part.a}-${u.part.b}); that part is reviewed in another run`); continue; }
     if (NO_GAP.test(f.title) || NO_GAP.test(f.body || '')) { notes.push(`${at}: dropped: the finding says there is no gap`); continue; }
     const fid = sha8(f.unit, f.kind, key(c.quote));
     if (seen.has(fid)) continue;
@@ -610,7 +614,10 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
 `;
   }
   const inParts = code ? [...code.list.values()].filter((u) => u.part && !unseen.includes(u.id)) : []; // too large for one call: one part per run (review F07)
-  if (code && data && !failure && inParts.length) top += `**Reviewed in parts** (too large for one call; one part per run): ${inParts.slice(0, 5).map((u) => `\`${cell(u.path, 100)}\` part ${u.part.k + 1} of ${u.part.n} (lines ${u.part.a}-${u.part.b})`).join(', ')}${inParts.length > 5 ? `, +${inParts.length - 5} more` : ''}.\n\n`;
+  const allParts = !!(inv && inv.all_parts), partsLeft = new Map(((inv && inv.parts_left) || []).map((x) => [x.path, x])); // a stateless run plans every part of a unit; parts_left: the ones no call had room for
+  if (code && data && !failure && inParts.length) top += `**Reviewed in parts** (too large for one call; ${allParts ? 'every part planned in this run, as far as max_budget_usd reaches' : 'one part per run'}): ${inParts.slice(0, 5).map((u) => `\`${cell(u.path, 100)}\` ${(u.part.ks || [u.part.k + 1]).length > 1 ? 'parts' : 'part'} ${(u.part.ks || [u.part.k + 1]).slice().sort((a, b) => a - b).join(', ')} of ${u.part.n} (lines ${u.part.a}-${u.part.b})${partsLeft.has(u.path) ? `; part ${partsLeft.get(u.path).part} not reached (budget)` : ''}`).join(', ')}${inParts.length > 5 ? `, +${inParts.length - 5} more` : ''}.\n\n`;
+  const bh = inv && inv.budget_hint; // units no call had room for: say what the budget allowed and what would cover them
+  if (code && data && !failure && bh) top += `${plural(bh.left, 'unit')} not reviewed this run: max_budget_usd $${bh.budget.toFixed(2)} allows ${plural(bh.calls, 'call')}; ${bh.need > bh.max ? `covering all units takes ${bh.need} calls, more than the ${bh.max} a run makes (narrow scan_paths)` : `covering all units needs a budget of about $${bh.usd.toFixed(2)} (the pre-flight reserves the worst case per call; actual spend is usually far lower)`}${inv.rotation && inv.rotation.rotate ? `, or they rotate in over ~${bh.runs} runs` : ''}.\n\n`;
   const fzd = new Set(inv ? inv.forced || [] : []);
   for (const [why, list] of [['were not reviewed: the unit call failed', unseen.filter((u) => failedS.has(u))], ['not reached: max_budget_usd did not cover its call', unseen.filter((u) => reachS.has(u))], ["did not fit the model's context", unseen.filter((u) => !failedS.has(u) && !reachS.has(u) && !fzd.has(u))]]) {
     if (code && data && !failure && list.length) top += `**Not reviewed this run:** ${plural(list.length, 'unit')} ${why}: ${list.slice(0, 5).map((u) => `\`${cell((code.list.get(u) || {}).path || u, 100)}\``).join(', ')}${list.length > 5 ? `, +${list.length - 5} more` : ''}. ${list.length === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
