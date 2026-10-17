@@ -196,6 +196,17 @@ test('action.yml: the last step runs fail-on-error.js on every non-cancelled run
   assert.match(s, /node "\$GITHUB_ACTION_PATH\/src\/fail-on-error\.js"/);
 });
 
+test('fail-on-error.js: an incomplete run is red only for scan_scope all with fail_on_error true; every other incomplete run only warns', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-foe-')), ctx = (all) => { fs.writeFileSync(path.join(dir, 'audit-meta.json'), JSON.stringify(all ? { scan_scope: 'all' } : {})); return dir; };
+  const run = (all, FAIL_ON_ERROR, STATUS = 'incomplete') => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, REASON: '3 unit parts not reached (budget)', CTX: ctx(all), FAIL_ON_ERROR } });
+  try {
+    const red = run(true, 'true');
+    assert.equal(red.status, 1);
+    assert.match(red.stdout, /::error::SpecGuard did not review the whole repository \(scan_scope: all\): 3 unit parts not reached/);
+    for (const [all, foe, st] of [[true, 'false', 'incomplete'], [false, 'true', 'incomplete'], [true, 'true', 'complete']]) { const r = run(all, foe, st); assert.equal(r.status, 0, `${all} ${foe} ${st}`); assert.doesNotMatch(r.stdout, /::error::/); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('fail-on-error.js: failed exits 1 with ::error::, incomplete only warns, complete or empty is silent; the reason cannot inject a command', () => {
   const run = (STATUS, REASON = '') => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS, REASON, FAIL_ON_ERROR: 'true' } });
   const f = run('failed', 'You have exceeded your monthly quota');
