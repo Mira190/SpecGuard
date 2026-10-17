@@ -15,6 +15,7 @@ inputs:
   max_budget_usd: { description: "claude engine: the budget in USD per run (positive decimal, at most 20). In api mode (default) it is a HARD bound: the worst-case cost (prompt size plus max_output_tokens at the model's price) is computed before the call and the call is not made when it exceeds this. In agent mode it is the Claude Code CLI's soft cap (checked between turns; a run can cost several times this) plus a finalize turn of 20% of it. Ignored by the copilot engine.", default: "1.00" }
   claude_mode: { description: "claude engine: api (default; ONE Anthropic Messages API call with the context SpecGuard already built, schema-enforced JSON, cost bounded up front by max_budget_usd, no CLI install) | agent (Claude Code CLI with read-only tools; the tool loop re-sends the whole context every turn, so cost is not bounded up front). Ignored by the copilot engine.", default: api }
   max_output_tokens: { description: "claude engine, api mode: most output tokens the model may produce (integer 1000-64000). Part of the worst-case cost checked against max_budget_usd.", default: "32000" }
+  context_pack_bytes: { description: "claude engine, api mode: most bytes of repository files appended to the prompt (integer, 0 = none; empty = 250000). The scan collector reads it too, so it plans the unit calls the budget buys at this size.", default: "" }
   max_comments: { description: "Max inline comments (hard cap 30).", default: "10" }
   max_diff_kb: { description: "Diff size above which the review is partial.", default: "300" }
   focus_threshold: { description: "Advanced. Large-PR gate as 'lines,files' (default '600,25'; 'off' disables). Above it only the highest-risk changed files are reviewed and the summary says so.", default: "600,25" }
@@ -140,6 +141,7 @@ runs:
         MODEL: ${{ inputs.model }} # with MAX_BUDGET_USD and MAX_OUTPUT_TOKENS: how many unit calls the budget allows (claude api engine)
         MAX_BUDGET_USD: ${{ inputs.max_budget_usd }}
         MAX_OUTPUT_TOKENS: ${{ inputs.max_output_tokens }}
+        CONTEXT_PACK_BYTES: ${{ inputs.context_pack_bytes }}
         SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }} # the block calls take budget before the later unit calls
         SCAN_PATHS: ${{ inputs.scan_paths }}
         SCAN_ISSUE: ${{ inputs.scan_issue }}
@@ -194,6 +196,7 @@ runs:
         MAX_BUDGET_USD: ${{ inputs.max_budget_usd }}
         CLAUDE_MODE: ${{ inputs.claude_mode }}
         MAX_OUTPUT_TOKENS: ${{ inputs.max_output_tokens }}
+        CONTEXT_PACK_BYTES: ${{ inputs.context_pack_bytes }}
         SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}
         MAX_UNITS: ${{ inputs.max_units }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
@@ -223,6 +226,7 @@ runs:
         MAX_BUDGET_USD: ${{ inputs.max_budget_usd }}
         CLAUDE_MODE: ${{ inputs.claude_mode }}
         MAX_OUTPUT_TOKENS: ${{ inputs.max_output_tokens }}
+        CONTEXT_PACK_BYTES: ${{ inputs.context_pack_bytes }}
         SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |

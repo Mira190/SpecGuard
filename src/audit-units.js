@@ -93,7 +93,6 @@ const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.ver
 const PART_BYTES = 40 * 1024;
 // Claude api engine only (the one engine with a context pack; the others read files themselves): a part, as shown line-numbered (6 bytes a line), must fit the per-file cap and a 1/N share of the pack
 // (claude-api.js contextPack adds every unit file before any test); 5/6 leaves slack for the block markup and rule files.
-// shortcut: the collector assumes the default 250000-byte pack (the action has no input for CONTEXT_PACK_BYTES); wire it through if one is added.
 // shortcut: parts are equal line counts, so a part of unusually long lines can exceed the average; the pack then lists it as cut.
 const partBytes = (packBytes, units) => (packBytes ? { max: Math.min(PART_BYTES, Math.max(4096, Math.floor(Math.min(fileCap(packBytes), packBytes / units) * 5 / 6))), pre: 4 } : { max: PART_BYTES, pre: 0 }); // pre: minimum width of the line number in the pack's prefix (0 = no prefix)
 const shownOf = (r, bytes) => r.size + (bytes.pre && Math.max(bytes.pre, String(r.lines).length) + 2) * r.lines; // prefix: the number, padded, plus 2
