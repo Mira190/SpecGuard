@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Unit test gap scan (mode scan; audit is an alias), step 1: deterministic context for the checked-out HEAD (no diff, no AI, no repo code executed).
-// Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) MAX_UNITS (per unit call) SCAN_UNIT_PARTS (unit calls per run; empty = what MAX_BUDGET_USD allows on MODEL, claude api engine only) (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
+// Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) MAX_UNITS (per unit call) MODEL MAX_BUDGET_USD MAX_OUTPUT_TOKENS (claude api engine, PACK_SPLIT: unit calls per run = what the budget allows) (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
 // Also SCAN_PATHS (scope globs), SCAN_ISSUE (rotate through the blocks), GH_TOKEN + GH_REPO (to read the scan issue's state when SCAN_ISSUE is true).
 // Writes audit-docs.txt, audit-candidates.txt (cid, path:line, heading, text: the blocks the model must assess this run), audit-evidence.txt (per block: up to 3 code and 3 test
 // locations found deterministically), audit-carried.txt (the blocks not audited this run), audit-ruled.txt (blocks the trace.js prefilter dropped: cid, path:line, heading, text, reason), audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
@@ -346,7 +346,7 @@ async function main(env) {
   const rotate = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
   const prior = rotate ? await loadPrior(env) : null;
   const packBytes = env.PACK_SPLIT === 'true' ? 250000 : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run
-  const unitParts = !packBytes ? 1 : /^[1-8]$/.test(env.SCAN_UNIT_PARTS || '') ? +env.SCAN_UNIT_PARTS : require('./engines/claude-api').unitCalls({ model: require('./credential').resolveModel(env.MODEL, 'claude') || 'claude-haiku-5-5', budget: parseFloat(env.MAX_BUDGET_USD || '1.00'), maxTokens: parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, packBytes });
+  const unitParts = !packBytes ? 1 : require('./engines/claude-api').unitCalls({ model: require('./credential').resolveModel(env.MODEL, 'claude') || 'claude-haiku-5-5', budget: parseFloat(env.MAX_BUDGET_USD || '1.00'), maxTokens: parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, packBytes });
   const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, packBytes, unitParts });
   console.log(`SpecGuard unit test gap scan: ${r.units ? `${r.units.picked.length} of ${r.units.total} units` : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);
