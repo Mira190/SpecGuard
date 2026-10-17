@@ -1,5 +1,5 @@
 function graceWindowLabel() {
-  return 'Grace window';
+  return 'Claim grace window';
 }
 
 module.exports = { graceWindowLabel };
