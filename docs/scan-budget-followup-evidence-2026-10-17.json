@@ -1,0 +1,1262 @@
+{
+  "captured_at": "2026-10-17T06:42:27.840Z",
+  "baseline": "2fb6f911b262a239bc8e21d84b7ff92a6bbfa8b7",
+  "prs": [
+    {
+      "number": 258,
+      "title": "Scan: the collector and the engine size the context pack the same way, so they agree on how many calls the budget buys",
+      "state": "closed",
+      "merged_at": "2026-10-17T04:35:44Z",
+      "head": "db9984d2677bb5b9974df75529263d1744cf4f3d",
+      "url": "https://github.com/Mira190/SpecGuard/pull/258"
+    },
+    {
+      "number": 257,
+      "title": "Docs: assessment with the default-settings seeded scan",
+      "state": "closed",
+      "merged_at": "2026-10-17T04:19:11Z",
+      "head": "a4e0e1795646e4873c059752c93299e054090ac4",
+      "url": "https://github.com/Mira190/SpecGuard/pull/257"
+    },
+    {
+      "number": 256,
+      "title": "Stateless scans: plan no more unit calls than the budget affords, first parts before second parts; show every unref lead up to the cap",
+      "state": "closed",
+      "merged_at": "2026-10-17T04:14:53Z",
+      "head": "d6a60f6230969c78918e8adadb2048afb0ce288d",
+      "url": "https://github.com/Mira190/SpecGuard/pull/256"
+    },
+    {
+      "number": 255,
+      "title": "Stateless scans read every part of large units, and say what budget would cover the whole repository",
+      "state": "closed",
+      "merged_at": "2026-10-17T03:33:31Z",
+      "head": "d4198056adb9134eb229ae14beecb44da0a59518",
+      "url": "https://github.com/Mira190/SpecGuard/pull/255"
+    },
+    {
+      "number": 254,
+      "title": "Docs: assessment with measured seeded scan recall",
+      "state": "closed",
+      "merged_at": "2026-10-17T03:13:44Z",
+      "head": "2f1f05587dc818a0a3b3d473da1030befc8732c4",
+      "url": "https://github.com/Mira190/SpecGuard/pull/254"
+    },
+    {
+      "number": 253,
+      "title": "Scan static signals: truthiness-only assertions (one classifier with PR mode) and exported symbols no test references",
+      "state": "closed",
+      "merged_at": "2026-10-17T03:11:40Z",
+      "head": "bacbcd47dfd6cf386cab2a3da90d9cce1efd3777",
+      "url": "https://github.com/Mira190/SpecGuard/pull/253"
+    },
+    {
+      "number": 251,
+      "title": "Cover guard: tests that only share an identifier with the diff do not demote a missing_test",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:49:39Z",
+      "head": "34709585be3f7b787a74671ca54183f94c3d876c",
+      "url": "https://github.com/Mira190/SpecGuard/pull/251"
+    },
+    {
+      "number": 252,
+      "title": "Scan: allow a non-default branch when the run reads and writes no scan state",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:48:27Z",
+      "head": "494a9fa9b3ca860b857508bf795f4ff69ea5ca99",
+      "url": "https://github.com/Mira190/SpecGuard/pull/252"
+    },
+    {
+      "number": 250,
+      "title": "Docs: goal completion, full-repo audit and unknown-unknown assessment (2026-10-17)",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:37:17Z",
+      "head": "3e512921edbe51dc492b7ffd1454c45ec5cddc12",
+      "url": "https://github.com/Mira190/SpecGuard/pull/250"
+    },
+    {
+      "number": 249,
+      "title": "Test candidates: rank tests that use the identifiers the diff changes, and stop generic stems filling the cap",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:35:39Z",
+      "head": "8cad03c03228e76701cffbf0ea0d0e2b408ef2f0",
+      "url": "https://github.com/Mira190/SpecGuard/pull/249"
+    },
+    {
+      "number": 248,
+      "title": "Follow-ups from the 10-17 reviews: tier reason by id, loud harness failures, dated branch names, scoped block count, root test/ trees",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:33:09Z",
+      "head": "ed60df611123f9900eb163d314c8dd776d6b29e4",
+      "url": "https://github.com/Mira190/SpecGuard/pull/248"
+    },
+    {
+      "number": 246,
+      "title": "Weekly report: blind-label summary-only findings on the same IDs as fix-through, and stop presenting P×A as a measured rate",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:12:10Z",
+      "head": "f70317df69195da184ca668da1d0df01d74d7b72",
+      "url": "https://github.com/Mira190/SpecGuard/pull/246"
+    },
+    {
+      "number": 247,
+      "title": "Eval: versioned requirement↔code retrieval set (fastify, 12 cases × R/C/RC) with Recall@K, MRR and All-required; parse thousands separators in size values",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:08:30Z",
+      "head": "219e0666ad6b01460dd0efec1b601c210bafe809",
+      "url": "https://github.com/Mira190/SpecGuard/pull/247"
+    },
+    {
+      "number": 245,
+      "title": "Eval: score delivered recall on the same exposure set as false positives; add end-to-end recall and strict pass",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:05:28Z",
+      "head": "081c6b11254422a231d5bd5a0a3038cd7486b506",
+      "url": "https://github.com/Mira190/SpecGuard/pull/245"
+    },
+    {
+      "number": 243,
+      "title": "Status says whether the review finished; the fast-tier grade is reported separately",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:01:00Z",
+      "head": "3f980e24e69736034fa4f05df0b300f1e5826c18",
+      "url": "https://github.com/Mira190/SpecGuard/pull/243"
+    }
+  ],
+  "specguard_runs": [
+    {
+      "id": 39003157050,
+      "name": "CI",
+      "head": "2fb6f911b262a239bc8e21d84b7ff92a6bbfa8b7",
+      "created_at": "2026-10-17T04:35:47Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39002998923,
+      "name": "CI",
+      "head": "db9984d2677bb5b9974df75529263d1744cf4f3d",
+      "created_at": "2026-10-17T04:33:15Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39002444159,
+      "name": "CI",
+      "head": "57bb35d8137569a30da1ab5dce1b7bb3bd1129ba",
+      "created_at": "2026-10-17T04:24:24Z",
+      "conclusion": "failure"
+    },
+    {
+      "id": 39002114652,
+      "name": "CI",
+      "head": "027bd7332cb11e57924b0d61f847dd40cea9bb7f",
+      "created_at": "2026-10-17T04:19:13Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39002006470,
+      "name": "CI",
+      "head": "a4e0e1795646e4873c059752c93299e054090ac4",
+      "created_at": "2026-10-17T04:17:28Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39001844121,
+      "name": "CI",
+      "head": "9c08f80589832f62b3f1176a8f07fda05a1ab481",
+      "created_at": "2026-10-17T04:14:56Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39001226227,
+      "name": "CI",
+      "head": "d6a60f6230969c78918e8adadb2048afb0ce288d",
+      "created_at": "2026-10-17T04:05:05Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39000874405,
+      "name": "CI",
+      "head": "c126a7f7c2d69e659aa4f92f7b3db935ddeb96e8",
+      "created_at": "2026-10-17T03:59:40Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39000768603,
+      "name": "CI",
+      "head": "72a077d75b93fb761fee2190f8fddf53abc4ea5a",
+      "created_at": "2026-10-17T03:57:53Z",
+      "conclusion": "failure"
+    },
+    {
+      "id": 39000640380,
+      "name": "CI",
+      "head": "128cb3fcda3e26c97a9671c9648f00d1708340a4",
+      "created_at": "2026-10-17T03:55:39Z",
+      "conclusion": "failure"
+    },
+    {
+      "id": 38999250822,
+      "name": "CI",
+      "head": "ac56adb1705fc3f874ea7f68f5c59df19089d5b1",
+      "created_at": "2026-10-17T03:33:33Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38999036629,
+      "name": "CI",
+      "head": "d4198056adb9134eb229ae14beecb44da0a59518",
+      "created_at": "2026-10-17T03:30:25Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38998841112,
+      "name": "CI",
+      "head": "106491b7be4f7b74da8e4c7013a90d33840499f4",
+      "created_at": "2026-10-17T03:27:21Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38997975614,
+      "name": "CI",
+      "head": "ff854760af80624c230e01436da5e7746ab9a971",
+      "created_at": "2026-10-17T03:13:46Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38997899948,
+      "name": "CI",
+      "head": "2f1f05587dc818a0a3b3d473da1030befc8732c4",
+      "created_at": "2026-10-17T03:12:34Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38997841611,
+      "name": "CI",
+      "head": "cb2b1f99987e61802a0cd44a295b2d6feaf42fb7",
+      "created_at": "2026-10-17T03:11:43Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38997621552,
+      "name": "CI",
+      "head": "bacbcd47dfd6cf386cab2a3da90d9cce1efd3777",
+      "created_at": "2026-10-17T03:08:15Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38996431023,
+      "name": "CI",
+      "head": "b6dc45c6e273cac68b428a230ba760f74c1ebe94",
+      "created_at": "2026-10-17T02:49:41Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38996357737,
+      "name": "CI",
+      "head": "e94765b5023206fa0ab6c27b1469cfbd9eb760b9",
+      "created_at": "2026-10-17T02:48:29Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38996261102,
+      "name": "CI",
+      "head": "34709585be3f7b787a74671ca54183f94c3d876c",
+      "created_at": "2026-10-17T02:46:55Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38996181974,
+      "name": "CI",
+      "head": "494a9fa9b3ca860b857508bf795f4ff69ea5ca99",
+      "created_at": "2026-10-17T02:45:38Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38996053676,
+      "name": "CI",
+      "head": "9bb42c485c8660ac6664386e0d224301ea46478f",
+      "created_at": "2026-10-17T02:43:41Z",
+      "conclusion": "failure"
+    },
+    {
+      "id": 38996018481,
+      "name": "CI",
+      "head": "53438797b259ae9c29e73ea3afe1085258d9b83b",
+      "created_at": "2026-10-17T02:43:09Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38996010022,
+      "name": "CI",
+      "head": "b63b993971c58dcd3ff178223056616b3fc02c45",
+      "created_at": "2026-10-17T02:43:01Z",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38995834823,
+      "name": "CI",
+      "head": "5cd5293a666d9f3fcd2785ff0eb75e4c4f1299cb",
+      "created_at": "2026-10-17T02:40:18Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38995709971,
+      "name": "CI",
+      "head": "1c17ee36739eb5d5bcef1e00d27f59f15000e468",
+      "created_at": "2026-10-17T02:38:23Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38995641146,
+      "name": "CI",
+      "head": "ab2cfc0aafe098d5e47704ebe36df85d687847e5",
+      "created_at": "2026-10-17T02:37:19Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38995563606,
+      "name": "CI",
+      "head": "3e512921edbe51dc492b7ffd1454c45ec5cddc12",
+      "created_at": "2026-10-17T02:36:07Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38995537094,
+      "name": "CI",
+      "head": "c474a2c4408b41f1a890ebdedc4b3fd0fa16e149",
+      "created_at": "2026-10-17T02:35:42Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38995369880,
+      "name": "CI",
+      "head": "a476dde0f1cfcb4ab2d03ef2d2e05b756ba2a1c5",
+      "created_at": "2026-10-17T02:33:12Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38995285046,
+      "name": "CI",
+      "head": "8cad03c03228e76701cffbf0ea0d0e2b408ef2f0",
+      "created_at": "2026-10-17T02:31:56Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38995166731,
+      "name": "CI",
+      "head": "ed60df611123f9900eb163d314c8dd776d6b29e4",
+      "created_at": "2026-10-17T02:30:15Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38994808987,
+      "name": "CI",
+      "head": "3076c301bcdb702b86a3a586ebcaae8ef5257455",
+      "created_at": "2026-10-17T02:24:42Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38994550844,
+      "name": "SpecGuard manual run",
+      "head": "d3365c0b6e21dca8acc3a9f2a4c6fae17c110e7b",
+      "created_at": "2026-10-17T02:20:41Z",
+      "conclusion": "failure"
+    },
+    {
+      "id": 38994525308,
+      "name": "SpecGuard manual run",
+      "head": "d3365c0b6e21dca8acc3a9f2a4c6fae17c110e7b",
+      "created_at": "2026-10-17T02:20:20Z",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38994519895,
+      "name": "SpecGuard manual run",
+      "head": "d3365c0b6e21dca8acc3a9f2a4c6fae17c110e7b",
+      "created_at": "2026-10-17T02:20:16Z",
+      "conclusion": "failure"
+    },
+    {
+      "id": 38993991575,
+      "name": "CI",
+      "head": "d3365c0b6e21dca8acc3a9f2a4c6fae17c110e7b",
+      "created_at": "2026-10-17T02:12:13Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38993863537,
+      "name": "CI",
+      "head": "f70317df69195da184ca668da1d0df01d74d7b72",
+      "created_at": "2026-10-17T02:10:18Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38993746718,
+      "name": "CI",
+      "head": "94196844df85cb0525fe68e84a698e6025df1454",
+      "created_at": "2026-10-17T02:08:32Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38993668758,
+      "name": "CI",
+      "head": "9f2ece815d5b64673e9ff67e82942ac1a8824f0b",
+      "created_at": "2026-10-17T02:07:21Z",
+      "conclusion": "success"
+    }
+  ],
+  "kite_runs": [
+    {
+      "id": 39002428421,
+      "head": "b90f22c7906e2197afb1d7935b1622e439142d97",
+      "created_at": "2026-10-17T04:24:10Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39001362367,
+      "head": "11e80a98139ac83af59d9d013a85d1db31b591b6",
+      "created_at": "2026-10-17T04:07:15Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 39001043636,
+      "head": "b847c9be5db5c89595ecd8404bb0fd2a8bd388d7",
+      "created_at": "2026-10-17T04:02:12Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38999386969,
+      "head": "149f540137ede4a8bbcd29cfad7e65c4adc71e24",
+      "created_at": "2026-10-17T03:35:41Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38997334590,
+      "head": "a65fc2b84683dbb0af0853f15592eae1eb3ddb39",
+      "created_at": "2026-10-17T03:03:51Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38997046179,
+      "head": "47859891cca9b716a7a1b9dbcec1edbbad223885",
+      "created_at": "2026-10-17T02:59:36Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38996979567,
+      "head": "c06ad632e07304679b6bc47d9403b9236fa2d4fb",
+      "created_at": "2026-10-17T02:58:27Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 38996458158,
+      "head": "d47acf9d3bcb628e21e257b5c703aab88bf4cc6b",
+      "created_at": "2026-10-17T02:50:07Z",
+      "conclusion": "success"
+    }
+  ],
+  "comments": {
+    "253": {
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/253#issuecomment-6228880365",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":85503,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":253,\"merged\":false,\"head\":\"bacbcd47dfd6cf386cab2a3da90d9cce1efd3777\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"58cea6caf9e55e70eba4904bc93bfc9a00090434\",\"build\":\"1005775bdd7c\"},\"complete\":false,\"execution_complete\":false,\"outcome_valid\":true,\"findings\":{},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Incomplete review: no unit test gaps found so far**\n\n### Requirements to check (2)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| Unconfirmed | Truthiness-only assertions, one classifier. The scan's weak detector (`weakOf` in leads.js) only counted… | Point to the unit test or add one: not covered: only truthiness/interaction assertions are cited; no assertion pins the expected value. |\n| Unconfirmed | Exported but never referenced by a test. Per unit, each public name (`publicDefs`) of 4+ characters, not… | Point to the unit test or add one: audit-units.test.js was only partly visible (lines 154-565 and 595-709 cut); a test for a unit with no matched test may… |\n\n### Not reviewed (4)\n\n- Review context was cut: the model saw only part of `src/audit-post.js`, `src/audit-post.test.js`, `src/audit-units.test.js`, `eval/mutate.test.js`, `research/ai-unit-test-review.yml`, `src/audit-action.test.js`, `src/test-map.js`, `src/audit-code.test.js`, `src/audit-collect.test.js`, `src/claude-api.test.js`, … (+2 more); obligations that depend on them are unknown.\n- post.test.js and audit-units.test.js were partly cut (their omitted line ranges may hold tests for okArg, the no-matched-test unit and the assert.ok(true) case).\n- Static review; tests were not run.\n- 1 changed file(s) have more than 40 identifiers in their hunks: only the first 40 were searched in the tests.\n\n> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n> Fast-tier model: only high-confidence findings are posted inline.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (1)**\n\n- Evidenced: **X3** Presentation. Both are facts in the existing \"Static test signals (no model)\" table, with the exact location. Never…\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Applied to src/** changes: node:test, unit tests next to code, return-value assertions on exported functions. okArg's direct test is marked unknown (O12); no violation confirmed. ste-mini governs prose, not code, so it was not applied. Sources: `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. The changed logic is pure functions (leads.js, post.js, audit-units.js), each covered at unit level by visible tests. No higher-layer test is involved, so no pushdown is needed.\n\n**Requirements source:** PR body, history PR #162, history PR #137, history PR #189 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (12) · Unit evidence: 7/12 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: assert.ok(x) whose only argument is a value reference is a truthiness-only weak assertion, shared by PR mode and the scan | PR body; src/post.js:147 — const okArg = (l) => { const m = OK_ARG.exec(l); return m && !/^(?:true\\|false\\|null\\|undefined)$/.test(m[1]) && !BOOL_CALL.test(m[1].replace(/\\(.*$/, '').split('.').pop()) ? m[1] : null; }; | unit: src/audit-units.test.js:669 —   assert.equal(post.weakAssertion('assert.ok(list.includes(x))'), false, 'PR mode: a boolean predicate is a value check'); (assertion); unit: src/audit-units.test.js:670 —   assert.equal(post.weakAssertion('assert.ok(keyName(k))'), true); (assertion) | Evidenced: Line 670 pins a truthiness-only call result as weak; line 669 pins a boolean predicate as a value check. Dropping the predicate check fails line 669. |\n| O2: The scan's weak detector flags assert.ok(f(x)) and leaves comparisons and boolean predicates as value checks | PR body; src/leads.js:157 —   if (ok) return { x: ok, what: 'truthy' }; | unit: src/audit-units.test.js:666 —   assert.deepEqual(s.weak.map((w) => w.line), [3], 'only assert.ok(clampValue(5)): a === b, list.includes(x) and isReady(x) are value checks'); (assertion) | Unconfirmed: Not covered: only truthiness/interaction assertions are cited; no assertion pins the expected value. |\n| O3: assert.ok(f(x)) is not weak when the same test also asserts assert.ok(!f(y)) | PR body; src/leads.js:189 —     if (callee && ls.slice(lo, hi).some((l) => NEGATED.test(l) && l.includes(`!${callee[1]}(`))) return; | unit: src/audit-units.test.js:676 —   assert.equal(testSignals([\"it('x', () => {\", '  assert.ok(firstValid(c));', '  assert.ok(!firstValid(d));', '});'].join('\\n')).weak.length, 0); (assertion) | Unconfirmed: Not covered: only truthiness/interaction assertions are cited; no assertion pins the expected value. |\n| O4: An exported name no test file references becomes a lead carrying its definition line | from behaviour; src/audit-units.js:51 — .map((name) => { const re = new RegExp(`(?<)${name.replace(/\\$/g, '\\\\$')}(?)`), i = ls.findIndex((l) => !comment(l) && re.test(l)); return { name, line: i + 1, type: i >= 0 && /^\\s*(?:export\\s+)?(?:declare\\s+)?(?:interface\\|type)\\s/.test(ls[i]) }; }).filter((x) => x.line && !x.type && !/^[A-Z][A-Z0-9_]+$/.test(x.name)).map(({ name, line }) => ({ name, line })); | unit: src/audit-units.test.js:683 —   assert.deepEqual(row.leads.unref, [{ name: 'moveCrop', line: 1 }]); (assertion) | Evidenced: Line 683 pins the unreferenced name and its definition line 1. A wrong line or a missed name fails it. |\n| O5: Referenced, short, stoplisted, interface and constant names are not unreferenced-export leads | PR body; src/audit-units.js:50 — const leadNames = (names, ls) => names.filter((n) => n.length >= 4 && .some((s) => s.has(n.toLowerCase()))) | unit: src/audit-units.test.js:683 —   assert.deepEqual(row.leads.unref, [{ name: 'moveCrop', line: 1 }]); (assertion) | Evidenced: The exact list in line 683 excludes clampValue (referenced), fit (short), render (generic), STAMP_MAX (constant) and Options (interface). A type-alias branch is not exercised separately. |\n| O6: No unreferenced-export lead is made when any test file was not read | PR body; src/audit-units.js:224 —     const unref = unread \\|\\| !got.length ? [] : u.defs.filter((d) => !refd.has(d.name)); | unit: src/audit-units.test.js:695 —   assert.equal(json.rows.find((x) => x.path === 'src/calc.js').leads.unref.length, 0); (assertion) | Evidenced: Line 695 expects no unreferenced leads when one test file was unread. Removing the unread gate fails it. |\n| O7: Static leads are capped at 20 and a weak line shared by two units is listed once | PR body; src/audit-units.js:284 — function staticLeads(rows, cap = 20) { | unit: src/audit-units.test.js:703 —   assert.equal(L.items.length, 20); (assertion); unit: src/audit-units.test.js:707 —   assert.equal(staticLeads([{ id: 'a', path: 'src/a.js', leads: { weak: [w] } }, { id: 'b', path: 'src/b.js', leads: { weak: [w] } }]).items.length, 1); (assertion) | Evidenced: Line 703 pins the cap at 20 with 25 input rows; line 707 pins deduplication of a shared weak line. |\n| O8: A unit with no matched test file produces no unreferenced-export lead | from behaviour; src/audit-units.js:224 —     const unref = unread \\|\\| !got.length ? [] : u.defs.filter((d) => !refd.has(d.name)); | none | Unconfirmed: audit-units.test.js was only partly visible (lines 154-565 and 595-709 cut); a test for a unit with no matched test may exist there. The visible lead tests always have one matched test. |\n| O9: Static leads render as table rows with the exact file and line | PR body; src/audit-post.js:679 — const srow = (s) => `\\| ${link(s.path, s.line \\|\\| 1, s.line ? `${s.path}:${s.line}` : s.path)} \\| ${SIGN[s.kind]} \\| ${cell(s.why, 200)} \\|\\n`; | unit: src/audit-post.test.js:1322 — assert.match(vis, /\\\\| test\\/keys\\.test\\.js:12 \\\\| asserts only truthiness \\\\| `keys\\.test\\.js:12` asserts only truthiness \\(`assert\\.ok\\(keyName\\('A'\\)\\)`\\) \\\\|/); (assertion); unit: src/audit-post.test.js:1327 —   assert.match(all, /\\\\| \\+5 more \\\\| \\\\| not listed: only the top 20 leads by unit risk are shown \\\\|/); (assertion) | Evidenced: Line 1322 pins the exact-location row for a truthiness lead; line 1327 pins the overflow row for 25 leads. |\n| O10: The unit-level verdict counts units with leads, not rows | PR body; src/audit-post.js:591 — else if (sigUnits) verdict = `**❔ No model-verified unit test gaps in the ${riskiest}; ${plural(sigUnits, 'unit')} ${sigUnits === 1 ? 'has' : 'have'} static test signals to check**${at7}. Static review; tests were not run.`; | unit: src/audit-post.test.js:1321 —   assert.match(vis, /1 unit has static test signals to check/); (assertion) | Evidenced: The fixture has two leads on one unit (a weak line and an unreferenced name). Line 1321 expects \"1 unit\", so counting rows would fail. |\n| O11: PR mode no longer counts assert.ok(true) as weak after the okArg change | from behaviour; src/post.js:148 — const isWeak = (l) => !!okArg(l) \\|\\| WEAK.test(l); | none | Unconfirmed: The change makes assert.ok(true) non-weak in PR mode (the literal is excluded from okArg, and the old assert.ok branch of WEAK is removed). The requirement does not mention it. post.test.js was cut, so a pinning test may exist there. |\n| O12: okArg, a new exported helper, has a unit test that asserts on its return value | from behaviour; src/post.js:147 — const okArg = (l) => { const m = OK_ARG.exec(l); return m && !/^(?:true\\|false\\|null\\|undefined)$/.test(m[1]) && !BOOL_CALL.test(m[1].replace(/\\(.*$/, '').split('.').pop()) ? m[1] : null; }; | none | Unconfirmed: okArg is exercised through weakAssertion in audit-units.test.js (lines 669-671), but no direct test is visible. post.test.js was cut, so a direct test may exist there. |\n\n**Validation notes (6)**\n\n- Obligation O3 alignment unknown: needs a linked requirement.\n- Obligation O4 alignment unknown: needs a linked requirement.\n- Obligation O5 alignment unknown: needs a linked requirement.\n- Obligation O10 alignment unknown: needs a linked requirement.\n- Obligation O2 not covered: only truthiness/interaction assertions are cited.\n- Obligation O3 not covered: only truthiness/interaction assertions are cited.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `bacbcd4`, base `b6dc45c`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 14 files, 242 KB; not included: eval/mutate.test.js, research/ai-unit-test-review.yml, src/audit-action.test.js, src/claude-api.test.js (+2 more)\nSpecGuard build 1005775bdd7c (ref 58cea6caf9e55e70eba4904bc93bfc9a00090434)\n\n</details>\n\n<sub>Cost $0.13 · claude-haiku-5-5 · 150.2k in · 19.8k out · 1m26s</sub>\n",
+          "user": {
+            "login": "github-actions[bot]",
+            "name": "github-actions[bot]",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/in/15368?v=4",
+            "id": 41898282
+          },
+          "id": 6228880365,
+          "pull_request_review_id": null,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T03:09:58Z",
+          "updated_at": "2026-10-17T03:09:59Z",
+          "review": null,
+          "side": null,
+          "line": null,
+          "start_line": null,
+          "path": null,
+          "body_html": "\n\n\n\n<h2 dir=\"auto\">SpecGuard</h2>\n<p dir=\"auto\"><strong><g-emoji class=\"g-emoji\" alias=\"warning\">⚠️</g-emoji> Incomplete review: no unit test gaps found so far</strong></p>\n<h3 dir=\"auto\">Requirements to check (2)</h3>\n<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>Status</th>\n<th>Requirement</th>\n<th>What to do</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>Unconfirmed</td>\n<td>Truthiness-only assertions, one classifier. The scan's weak detector (<code class=\"notranslate\">weakOf</code> in leads.js) only counted…</td>\n<td>Point to the unit test or add one: not covered: only truthiness/interaction assertions are cited; no assertion pins the expected value.</td>\n</tr>\n<tr>\n<td>Unconfirmed</td>\n<td>Exported but never referenced by a test. Per unit, each public name (<code class=\"notranslate\">publicDefs</code>) of 4+ characters, not…</td>\n<td>Point to the unit test or add one: audit-units.test.js was only partly visible (lines 154-565 and 595-709 cut); a test for a unit with no matched test may…</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>\n<h3 dir=\"auto\">Not reviewed (4)</h3>\n<ul dir=\"auto\">\n<li>Review context was cut: the model saw only part of <code class=\"notranslate\">src/audit-post.js</code>, <code class=\"notranslate\">src/audit-post.test.js</code>, <code class=\"notranslate\">src/audit-units.test.js</code>, <code class=\"notranslate\">eval/mutate.test.js</code>, <code class=\"notranslate\">research/ai-unit-test-review.yml</code>, <code class=\"notranslate\">src/audit-action.test.js</code>, <code class=\"notranslate\">src/test-map.js</code>, <code class=\"notranslate\">src/audit-code.test.js</code>, <code class=\"notranslate\">src/audit-collect.test.js</code>, <code class=\"notranslate\">src/claude-api.test.js</code>, … (+2 more); obligations that depend on them are unknown.</li>\n<li>post.test.js and audit-units.test.js were partly cut (their omitted line ranges may hold tests for okArg, the no-matched-test unit and the assert.ok(true) case).</li>\n<li>Static review; tests were not run.</li>\n<li>1 changed file(s) have more than 40 identifiers in their hunks: only the first 40 were searched in the tests.</li>\n</ul>\n<blockquote>\n<p dir=\"auto\"><strong>Incomplete review.</strong> Not everything was covered; the findings above were verified, and the next push or rerun reviews again.<br>\nFast-tier model: only high-confidence findings are posted inline.</p>\n</blockquote>\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n<p dir=\"auto\"><strong>Evidenced criteria (1)</strong></p>\n<ul dir=\"auto\">\n<li>Evidenced: <strong>X3</strong> Presentation. Both are facts in the existing \"Static test signals (no model)\" table, with the exact location. Never…</li>\n</ul>\n<p dir=\"auto\"><strong>Coding standards and test layers</strong></p>\n<ul dir=\"auto\">\n<li>Coding standards: reviewed. Applied to src/** changes: node:test, unit tests next to code, return-value assertions on exported functions. okArg's direct test is marked unknown (O12); no violation confirmed. ste-mini governs prose, not code, so it was not applied. Sources: <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code>.</li>\n<li>Test layers: reviewed. The changed logic is pure functions (leads.js, post.js, audit-units.js), each covered at unit level by visible tests. No higher-layer test is involved, so no pushdown is needed.</li>\n</ul>\n<p dir=\"auto\"><strong>Requirements source:</strong> PR body, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5840128931\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/162\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/162/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/162\">#162</a>, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5839528168\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/137\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/137/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/137\">#137</a>, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5855911616\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/189\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/189/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/189\">#189</a> (no structured acceptance criteria found)</p>\n<p dir=\"auto\">No requirement documents found (content-based discovery; see <code class=\"notranslate\">requirements_paths</code> to add or exclude).</p>\n<p dir=\"auto\"><strong>Obligations (12) · Unit evidence: 7/12 obligations</strong></p>\n<p dir=\"auto\">An obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.</p>\n<table role=\"table\">\n<thead>\n<tr>\n<th>Obligation</th>\n<th>Source / behaviour</th>\n<th>Assertion evidence / layer</th>\n<th>Status / reason</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>O1: assert.ok(x) whose only argument is a value reference is a truthiness-only weak assertion, shared by PR mode and the scan</td>\n<td>PR body; src/post.js:147 — const okArg = (l) =&gt; { const m = OK_ARG.exec(l); return m &amp;&amp; !/^(?:true|false|null|undefined)$/.test(m[1]) &amp;&amp; !BOOL_CALL.test(m[1].replace(/(.*$/, '').split('.').pop()) ? m[1] : null; };</td>\n<td>unit: src/audit-units.test.js:669 —   assert.equal(post.weakAssertion('assert.ok(list.includes(x))'), false, 'PR mode: a boolean predicate is a value check'); (assertion); unit: src/audit-units.test.js:670 —   assert.equal(post.weakAssertion('assert.ok(keyName(k))'), true); (assertion)</td>\n<td>Evidenced: Line 670 pins a truthiness-only call result as weak; line 669 pins a boolean predicate as a value check. Dropping the predicate check fails line 669.</td>\n</tr>\n<tr>\n<td>O2: The scan's weak detector flags assert.ok(f(x)) and leaves comparisons and boolean predicates as value checks</td>\n<td>PR body; src/leads.js:157 —   if (ok) return { x: ok, what: 'truthy' };</td>\n<td>unit: src/audit-units.test.js:666 —   assert.deepEqual(s.weak.map((w) =&gt; w.line), [3], 'only assert.ok(clampValue(5)): a === b, list.includes(x) and isReady(x) are value checks'); (assertion)</td>\n<td>Unconfirmed: Not covered: only truthiness/interaction assertions are cited; no assertion pins the expected value.</td>\n</tr>\n<tr>\n<td>O3: assert.ok(f(x)) is not weak when the same test also asserts assert.ok(!f(y))</td>\n<td>PR body; src/leads.js:189 —     if (callee &amp;&amp; ls.slice(lo, hi).some((l) =&gt; NEGATED.test(l) &amp;&amp; l.includes(<code class=\"notranslate\">!${callee[1]}(</code>))) return;</td>\n<td>unit: src/audit-units.test.js:676 —   assert.equal(testSignals([\"it('x', () =&gt; {\", '  assert.ok(firstValid(c));', '  assert.ok(!firstValid(d));', '});'].join('\\n')).weak.length, 0); (assertion)</td>\n<td>Unconfirmed: Not covered: only truthiness/interaction assertions are cited; no assertion pins the expected value.</td>\n</tr>\n<tr>\n<td>O4: An exported name no test file references becomes a lead carrying its definition line</td>\n<td>from behaviour; src/audit-units.js:51 — .map((name) =&gt; { const re = new RegExp(<code class=\"notranslate\">(?&lt;)${name.replace(/\\$/g, '\\\\$')}(?)</code>), i = ls.findIndex((l) =&gt; !comment(l) &amp;&amp; re.test(l)); return { name, line: i + 1, type: i &gt;= 0 &amp;&amp; /^\\s*(?:export\\s+)?(?:declare\\s+)?(?:interface|type)\\s/.test(ls[i]) }; }).filter((x) =&gt; x.line &amp;&amp; !x.type &amp;&amp; !/^[A-Z][A-Z0-9_]+$/.test(x.name)).map(({ name, line }) =&gt; ({ name, line }));</td>\n<td>unit: src/audit-units.test.js:683 —   assert.deepEqual(row.leads.unref, [{ name: 'moveCrop', line: 1 }]); (assertion)</td>\n<td>Evidenced: Line 683 pins the unreferenced name and its definition line 1. A wrong line or a missed name fails it.</td>\n</tr>\n<tr>\n<td>O5: Referenced, short, stoplisted, interface and constant names are not unreferenced-export leads</td>\n<td>PR body; src/audit-units.js:50 — const leadNames = (names, ls) =&gt; names.filter((n) =&gt; n.length &gt;= 4 &amp;&amp; .some((s) =&gt; s.has(n.toLowerCase())))</td>\n<td>unit: src/audit-units.test.js:683 —   assert.deepEqual(row.leads.unref, [{ name: 'moveCrop', line: 1 }]); (assertion)</td>\n<td>Evidenced: The exact list in line 683 excludes clampValue (referenced), fit (short), render (generic), STAMP_MAX (constant) and Options (interface). A type-alias branch is not exercised separately.</td>\n</tr>\n<tr>\n<td>O6: No unreferenced-export lead is made when any test file was not read</td>\n<td>PR body; src/audit-units.js:224 —     const unref = unread || !got.length ? [] : u.defs.filter((d) =&gt; !refd.has(d.name));</td>\n<td>unit: src/audit-units.test.js:695 —   assert.equal(json.rows.find((x) =&gt; x.path === 'src/calc.js').leads.unref.length, 0); (assertion)</td>\n<td>Evidenced: Line 695 expects no unreferenced leads when one test file was unread. Removing the unread gate fails it.</td>\n</tr>\n<tr>\n<td>O7: Static leads are capped at 20 and a weak line shared by two units is listed once</td>\n<td>PR body; src/audit-units.js:284 — function staticLeads(rows, cap = 20) {</td>\n<td>unit: src/audit-units.test.js:703 —   assert.equal(L.items.length, 20); (assertion); unit: src/audit-units.test.js:707 —   assert.equal(staticLeads([{ id: 'a', path: 'src/a.js', leads: { weak: [w] } }, { id: 'b', path: 'src/b.js', leads: { weak: [w] } }]).items.length, 1); (assertion)</td>\n<td>Evidenced: Line 703 pins the cap at 20 with 25 input rows; line 707 pins deduplication of a shared weak line.</td>\n</tr>\n<tr>\n<td>O8: A unit with no matched test file produces no unreferenced-export lead</td>\n<td>from behaviour; src/audit-units.js:224 —     const unref = unread || !got.length ? [] : u.defs.filter((d) =&gt; !refd.has(d.name));</td>\n<td>none</td>\n<td>Unconfirmed: audit-units.test.js was only partly visible (lines 154-565 and 595-709 cut); a test for a unit with no matched test may exist there. The visible lead tests always have one matched test.</td>\n</tr>\n<tr>\n<td>O9: Static leads render as table rows with the exact file and line</td>\n<td>PR body; src/audit-post.js:679 — const srow = (s) =&gt; <code class=\"notranslate\">| ${link(s.path, s.line || 1, s.line ? </code>${s.path}:${s.line}<code class=\"notranslate\"> : s.path)} | ${SIGN[s.kind]} | ${cell(s.why, 200)} |\\n</code>;</td>\n<td>unit: src/audit-post.test.js:1322 — assert.match(vis, /| test/keys.test.js:12 | asserts only truthiness | <code class=\"notranslate\">keys\\.test\\.js:12</code> asserts only truthiness (<code class=\"notranslate\">assert\\.ok\\(keyName\\('A'\\)\\)</code>) |/); (assertion); unit: src/audit-post.test.js:1327 —   assert.match(all, /| +5 more | | not listed: only the top 20 leads by unit risk are shown |/); (assertion)</td>\n<td>Evidenced: Line 1322 pins the exact-location row for a truthiness lead; line 1327 pins the overflow row for 25 leads.</td>\n</tr>\n<tr>\n<td>O10: The unit-level verdict counts units with leads, not rows</td>\n<td>PR body; src/audit-post.js:591 — else if (sigUnits) verdict = <code class=\"notranslate\">**❔ No model-verified unit test gaps in the ${riskiest}; ${plural(sigUnits, 'unit')} ${sigUnits === 1 ? 'has' : 'have'} static test signals to check**${at7}. Static review; tests were not run.</code>;</td>\n<td>unit: src/audit-post.test.js:1321 —   assert.match(vis, /1 unit has static test signals to check/); (assertion)</td>\n<td>Evidenced: The fixture has two leads on one unit (a weak line and an unreferenced name). Line 1321 expects \"1 unit\", so counting rows would fail.</td>\n</tr>\n<tr>\n<td>O11: PR mode no longer counts assert.ok(true) as weak after the okArg change</td>\n<td>from behaviour; src/post.js:148 — const isWeak = (l) =&gt; !!okArg(l) || WEAK.test(l);</td>\n<td>none</td>\n<td>Unconfirmed: The change makes assert.ok(true) non-weak in PR mode (the literal is excluded from okArg, and the old assert.ok branch of WEAK is removed). The requirement does not mention it. post.test.js was cut, so a pinning test may exist there.</td>\n</tr>\n<tr>\n<td>O12: okArg, a new exported helper, has a unit test that asserts on its return value</td>\n<td>from behaviour; src/post.js:147 — const okArg = (l) =&gt; { const m = OK_ARG.exec(l); return m &amp;&amp; !/^(?:true|false|null|undefined)$/.test(m[1]) &amp;&amp; !BOOL_CALL.test(m[1].replace(/(.*$/, '').split('.').pop()) ? m[1] : null; };</td>\n<td>none</td>\n<td>Unconfirmed: okArg is exercised through weakAssertion in audit-units.test.js (lines 669-671), but no direct test is visible. post.test.js was cut, so a direct test may exist there.</td>\n</tr>\n</tbody>\n</table>\n<p dir=\"auto\"><strong>Validation notes (6)</strong></p>\n<ul dir=\"auto\">\n<li>Obligation O3 alignment unknown: needs a linked requirement.</li>\n<li>Obligation O4 alignment unknown: needs a linked requirement.</li>\n<li>Obligation O5 alignment unknown: needs a linked requirement.</li>\n<li>Obligation O10 alignment unknown: needs a linked requirement.</li>\n<li>Obligation O2 not covered: only truthiness/interaction assertions are cited.</li>\n<li>Obligation O3 not covered: only truthiness/interaction assertions are cited.</li>\n</ul>\n<p dir=\"auto\"><strong>Sources read</strong></p>\n<ul dir=\"auto\">\n<li>Requirement documents: none</li>\n<li>Standards files: <code class=\"notranslate\">.claude/skills/ste-mini/SKILL.md</code> (672 bytes, 13 lines), <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code> (567 bytes, 10 lines)</li>\n<li>Trace: SPEC_NOT_FOUND</li>\n<li>Commits: head <code class=\"notranslate\">bacbcd4</code>, base <code class=\"notranslate\">b6dc45c</code>\n</li>\n</ul>\n<p dir=\"auto\"><strong>Reduced review</strong></p>\n<p dir=\"auto\">Reasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.</p>\n<p dir=\"auto\">Run: engine claude · context pack: 14 files, 242 KB; not included: eval/mutate.test.js, research/ai-unit-test-review.yml, src/audit-action.test.js, src/claude-api.test.js (+2 more)<br>\nSpecGuard build 1005775bdd7c (ref <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/Mira190/SpecGuard/commit/58cea6caf9e55e70eba4904bc93bfc9a00090434/hovercard\" href=\"https://github.com/Mira190/SpecGuard/commit/58cea6caf9e55e70eba4904bc93bfc9a00090434\"><tt>58cea6c</tt></a>)</p>\n</details>\n<p dir=\"auto\"><sub>Cost $0.13 · claude-haiku-5-5 · 150.2k in · 19.8k out · 1m26s</sub></p>"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/253#pullrequestreview-5555723573",
+          "body": "Review against the seeded Kite evaluation: 8 planted gaps, and the full stateless haiku scan found 0/8. Six seeds were fully visible to the model and still unreported.\n\n- These are two deterministic signals that need no model and cost nothing. Offline on the seeded branch they surface **seeds 1–6** as exact-location leads. Seeds 1–3 are exported symbols that no test references. Seeds 4–6 are truthiness-only assertions; seed 4 was not expected and came out of the member-chain case.\n- There is now one weak-assertion classifier (`okArg`) shared by PR mode and scan, so the two modes can't drift. Comparisons and boolean predicates are value checks, which also fixes PR mode wrongly calling `assert.ok(list.includes(x))` weak.\n- No false claims. There is no unreferenced-export lead when a test file wasn't read (a limitation says so), and none for units without matched tests. Types and constants are skipped. Leads are never gaps and never state.\n- Control on `master`: 18 leads, and all 9 spot-checked are true as facts. The new tests fail on main.\n\nLGTM. One P3 inline; merging.",
+          "user": {
+            "login": "Mira190",
+            "name": "Mira190",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/u/163523387?u=b3b2c50cf3cd8cfd5f24eefa31a74a83ece97d84&v=4",
+            "id": 163523387
+          },
+          "id": 5555723573,
+          "pull_request_review_id": null,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T03:11:18Z",
+          "updated_at": null,
+          "review": "COMMENTED",
+          "side": null,
+          "line": null,
+          "start_line": null,
+          "path": null,
+          "body_html": "<p dir=\"auto\">Review against the seeded Kite evaluation: 8 planted gaps, and the full stateless haiku scan found 0/8. Six seeds were fully visible to the model and still unreported.</p>\n<ul dir=\"auto\">\n<li>These are two deterministic signals that need no model and cost nothing. Offline on the seeded branch they surface <strong>seeds 1–6</strong> as exact-location leads. Seeds 1–3 are exported symbols that no test references. Seeds 4–6 are truthiness-only assertions; seed 4 was not expected and came out of the member-chain case.</li>\n<li>There is now one weak-assertion classifier (<code class=\"notranslate\">okArg</code>) shared by PR mode and scan, so the two modes can't drift. Comparisons and boolean predicates are value checks, which also fixes PR mode wrongly calling <code class=\"notranslate\">assert.ok(list.includes(x))</code> weak.</li>\n<li>No false claims. There is no unreferenced-export lead when a test file wasn't read (a limitation says so), and none for units without matched tests. Types and constants are skipped. Leads are never gaps and never state.</li>\n<li>Control on <code class=\"notranslate\">master</code>: 18 leads, and all 9 spot-checked are true as facts. The new tests fail on main.</li>\n</ul>\n<p dir=\"auto\">LGTM. One P3 inline; merging.</p>"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/253#discussion_r4301048811",
+          "body": "P3: on `master` the 18 leads are all true, but several are React components (`BoardBar`, `ScheduleDialog`, `useTheme`) or helpers only reachable through UI. \"No test references `BoardBar`\" is a fact, but rarely the thing a reviewer wants unit-tested. In `.tsx`/`.jsx` files, consider ranking PascalCase components and `use*` hooks below plain exported functions, or listing them in a separate \"UI exports without a test\" line, so the top 20 leads are the logic gaps. Also, a name that appears in a test comment or string counts as referenced. That errs toward silence, which is the safe direction, so it's fine.",
+          "user": {
+            "login": "Mira190",
+            "name": "Mira190",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/u/163523387?v=4",
+            "id": 163523387
+          },
+          "id": 4301048811,
+          "pull_request_review_id": 5555723573,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T03:11:19Z",
+          "updated_at": "2026-10-17T03:11:19Z",
+          "review": null,
+          "side": "RIGHT",
+          "line": 50,
+          "start_line": null,
+          "path": "src/audit-units.js",
+          "body_html": "<p dir=\"auto\">P3: on <code class=\"notranslate\">master</code> the 18 leads are all true, but several are React components (<code class=\"notranslate\">BoardBar</code>, <code class=\"notranslate\">ScheduleDialog</code>, <code class=\"notranslate\">useTheme</code>) or helpers only reachable through UI. \"No test references <code class=\"notranslate\">BoardBar</code>\" is a fact, but rarely the thing a reviewer wants unit-tested. In <code class=\"notranslate\">.tsx</code>/<code class=\"notranslate\">.jsx</code> files, consider ranking PascalCase components and <code class=\"notranslate\">use*</code> hooks below plain exported functions, or listing them in a separate \"UI exports without a test\" line, so the top 20 leads are the logic gaps. Also, a name that appears in a test comment or string counts as referenced. That errs toward silence, which is the safe direction, so it's fine.</p>"
+        }
+      ],
+      "url": "https://github.com/Mira190/SpecGuard/pull/253",
+      "title": "Mira190/SpecGuard PR #253 comments",
+      "display_url": "https://github.com/Mira190/SpecGuard/pull/253",
+      "display_title": "Mira190/SpecGuard PR #253 comments"
+    },
+    "255": {
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/255#issuecomment-6229042644",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":88975,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":255,\"merged\":false,\"head\":\"d4198056adb9134eb229ae14beecb44da0a59518\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"bb0756e11e4af55982db5bca6105b05b253ecd5b\",\"build\":\"0ade26f40688\"},\"complete\":false,\"execution_complete\":false,\"outcome_valid\":true,\"findings\":{},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":1},\"since_total\":1,\"prior_total\":1,\"outcomes\":[{\"fp\":\"8f9eee4b3b3b2a78\",\"kind\":\"weak_test\",\"still_reported\":false,\"anchor_touched\":true,\"tests_changed\":true,\"thread\":\"unknown\",\"up\":0,\"down\":0,\"outcome\":\"not_observed\",\"judged\":false}]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Reduced review: no high-confidence gaps**\n\n### Requirements to check (3)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| Unconfirmed | All parts in one stateless run (`audit-units.js`, `inventory({ allParts })`). When the run has no state, each part of a… | Point to the unit test or add one. |\n| Unconfirmed | Budget hint. When units are left out because the K calls were used up (not because of max_units), the summary gets one… | Point to the unit test or add one: the unit tests use a hard-coded price (audit-units.test.js:590). No visible test asserts callUsd's value. The… |\n| Unconfirmed | Static leads (P3 from #253). In `.tsx`/`.jsx` units PascalCase components and `use*` hooks rank after plain exported… | Point to the unit test or add one. |\n\n### Not reviewed (6)\n\n- Review context was cut: the model saw only part of `src/audit-collect.test.js`, `src/audit-units.test.js`, `src/claude-api.test.js`, `src/audit-action.test.js`, `src/audit-code.test.js`, `src/audit-post.test.js`, `src/engines/claude-api.js`, `src/auto-engine.test.js`, `src/post.test.js`, `src/scan-parts.js`, … (+1 more); obligations that depend on them are unknown.\n- The diff was inlined only for its first 300 of 376 lines: the rest of audit-units.test.js (after line 610, incl. the .ts control), and changes to claude-api.js and scan-parts.js, were not visible.\n- Acceptance rows in requirements.md (offline haiku K=5 and sonnet K=1 runs on seeded Kite) are run-level results, not unit obligations, and are not reviewed.\n- Weak? assertion leads in unchanged test files (audit-code.test.js:30, audit-units.test.js:722, claude-api.test.js:104) are outside the diff and not reported.\n- 1 changed file(s) have more than 40 identifiers in their hunks: only the first 40 were searched in the tests.\n- Context trimmed: issue #253 body cut to about 3 KB in requirements.md (acceptance criteria kept).\n\n> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Applied to the changed files under src/: node:test and node:assert, tests next to the code as &lt;name>.test.js, exported changes have return-value tests in the visible files, and no npm dependency is added. ste-mini is a writing-style rule for prose, not applied to code. Sources: `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. Changed logic is pure inventory, pick, render and read functions with direct unit tests through their exports. No higher-layer test holds logic that a unit test could take over.\n\n**Requirements source:** PR body, issue #253 (context), history PR #162, history PR #235, history PR #195 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (12) · Unit evidence: 4/12 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: A stateless run plans every part of a unit reviewed in parts as its own item, each in its own call | PR body; src/audit-units.js:237 — const items = room && allParts && !prior ? rows.flatMap((r) => { const p = partOf(r, null, size); return p ? Array.from({ length: p.n }, (_, k) => ({ ...r, partK: k })) : [r]; }).sort((a, b) => (a.partK \\|\\| 0) - (b.partK \\|\\| 0)) : rows; // one item per part of a unit reviewed in parts; every unit's first part comes before any second part, so a unit is read before another is read twice | unit: src/audit-units.test.js:562 — assert.deepEqual(big.map((u) => [u.part.k + 1, u.part.n]), [[1, 2], [2, 2]]); (assertion); unit: src/audit-units.test.js:570 — assert.equal(inventory(o).picked.filter((u) => u.path === 'src/js/big.js').length, 1, 'control: without allParts one part, as before'); (assertion) | Evidenced: The stateless test asserts parts 1 and 2 of the unit are both picked across three rooms, and that each part sits in a different call. The control without allParts asserts one part, so removing the allParts path changes the result. |\n| O2: Parts that get no room are listed as not reached (budget) and the unit keeps its first part | PR body; src/audit-units.js:244 — if (partsLeft.length) limits.push(`${partsLeft.length} unit part${partsLeft.length === 1 ? '' : 's'} not reached (${partsLeft.some((r) => sel.noRoom.includes(r)) ? 'budget' : 'max_units'}): ${partsLeft.slice(0, 3).map((r) => `${r.path} part ${r.partK + 1} of ${partOf(r, null, size).n}`).join(', ')}${partsLeft.length > 3 ? ', ...' : ''}`); | unit: src/audit-units.test.js:583 — assert.deepEqual(inv.picked.filter((u) => u.path === 'src/js/big.js').map((u) => u.part.k), [0], 'one call holds one part of a unit'); (assertion); unit: src/audit-units.test.js:585 — assert.match(inv.limitations.join('\\n'), new RegExp(`${n - 1} unit parts? not reached \\(budget\\): src/js/big\\.js part 2 of ${n}`)); (assertion) | Unconfirmed: Could not verify the citation: evidence 2 src/audit-units.test.js:585. |\n| O3: A run with state keeps the one-part-per-run cursor | PR body; src/audit-units.js:237 — const items = room && allParts && !prior ? rows.flatMap((r) => { const p = partOf(r, null, size); return p ? Array.from({ length: p.n }, (_, k) => ({ ...r, partK: k })) : [r]; }).sort((a, b) => (a.partK \\|\\| 0) - (b.partK \\|\\| 0)) : rows; // one item per part of a unit reviewed in parts; every unit's first part comes before any second part, so a unit is read before another is read twice | unit: src/audit-units.test.js:577 — assert.equal(inv.picked.filter((u) => u.path === 'src/js/big.js').length, 1); (assertion); unit: src/audit-units.test.js:578 — assert.ok(!inv.allParts, \"a run with state plans no extra parts\"); (assertion) | Evidenced: The rotating-run test with a prior state asserts one part picked and allParts false, so the !prior gate is pinned. |\n| O4: The budget hint names the units left out and the budget that would cover them, and is absent when every unit was reached or units were left by max_units | PR body; src/audit-units.js:249 — if (price && left.length) { const need = pick(items, maxUnits, null, size, room, Infinity).rooms; hint = { left: left.length, calls, need, usd: Math.ceil(need * price.usd * 100) / 100, budget: price.budget, max: price.max, runs: Math.ceil(need / calls) }; } | unit: src/audit-units.test.js:593 — assert.equal(one.hint.left, 70 - one.picked.length); (assertion); unit: src/audit-units.test.js:595 — assert.ok(one.hint.need > 1 && one.hint.usd > 0.2 * one.hint.calls, JSON.stringify(one.hint)); // the budget needed exceeds the one call that was afforded (assertion); unit: src/audit-units.test.js:598 — assert.equal(wide.hint, null, 'control: everything fits, no hint'); (assertion); unit: src/audit-units.test.js:600 — assert.equal(inventory({ ...o, cwd: capped.root, maxUnits: 12, rooms: 1 }).hint, null, 'control: units left because of max_units are not a budget problem'); (assertion) | Evidenced: The test pins the left count, the calls count and that the dollar figure exceeds one call's cost. Two controls assert no hint when everything fits and when max_units is the cause. |\n| O5: The summary renders the budget hint line, with the rotation suffix and the 8-call wording when covering all units needs more calls than a run makes | PR body; src/audit-post.js:620 — if (code && data && !failure && bh) top += `${plural(bh.left, 'unit')} not reviewed this run: max_budget_usd $${bh.budget.toFixed(2)} allows ${plural(bh.calls, 'call')}; ${bh.need > bh.max ? `covering all units takes ${bh.need} calls, more than the ${bh.max} a run makes (narrow scan_paths)` : `covering all units needs a budget of about $${bh.usd.toFixed(2)} (the pre-flight reserves the worst case per call; actual spend is usually far lower)`}${inv.rotation && in… | unit: src/audit-code.test.js:610 — assert.match(text({ budget_hint: hint }), /18 units not reviewed this run: max_budget_usd \\$1\\.00 allows 1 call; covering all units needs a budget of about \\$3\\.63 \\(the pre-flight reserves the worst case per call; actual spend is usually far lower\\)\\./); (assertion); unit: src/audit-code.test.js:611 — assert.match(text({ budget_hint: hint, rotation: { ...INV().rotation, rotate: true } }), /actual spend is usually far lower\\), or they rotate in over ~5 runs\\./); (assertion); unit: src/audit-code.test.js:612 — assert.match(text({ budget_hint: { ...hint, need: 17 } }), /covering all units takes 17 calls, more than the 8 a run makes (narrow scan_paths)/); (assertion); unit: src/audit-code.test.js:613 — assert.doesNotMatch(text({}), /max_budget_usd \\$/, 'con… | Unconfirmed: Could not verify the citation: evidence 3 src/audit-code.test.js:612. |\n| O6: The Reviewed in parts line names every part a stateless run read and the parts left for the budget | PR body; src/audit-post.js:618 — if (code && data && !failure && inParts.length) top += `**Reviewed in parts** (too large for one call; ${allParts ? 'every part planned in this run, as far as max_budget_usd reaches' : 'one part per run'}): ${inParts.slice(0, 5).map((u) => `\\`${cell(u.path, 100)}\\` ${(u.part.ks \\|\\| [u.part.k + 1]).length > 1 ? 'parts' : 'part'} ${(u.part.ks \\|\\| [u.part.k + 1]).slice().sort((a, b) => a - b).join(', ')} of ${u.part.n} (lines ${u.part.a}-${u.part.b})${partsLeft.has(u… | unit: src/audit-code.test.js:598 — assert.match(render({ data: result([]), code, head: 'abc1234' }), /\\*\\*Reviewed in parts\\*\\* (too large for one call; every part planned in this run (assertion); unit: src/audit-code.test.js:604 — assert.match(render({ data: result([]), code, head: 'abc1234' }), /part 1 of 2 (lines 1-100); part 2 not reached (budget)/); (assertion) | Unconfirmed: Could not verify the citation: evidence 1 src/audit-code.test.js:598; evidence 2 src/audit-code.test.js:604. |\n| O7: Rows of one unit from several parts merge into one unit, and a finding in any part read this run is kept | PR body; src/audit-post.js:70 — if (was && win) { (was.ks \\|\\|= [was.k + 1]).push(win.k + 1); (was.spans \\|\\|= [[was.a, was.b]]).push([win.a, win.b]); was.k = Math.max(was.k, win.k); was.a = Math.min(was.a, win.a); was.b = Math.max(was.b, win.b); continue; } | unit: src/audit-code.test.js:597 — assert.equal(list.size, 1, 'two rows of one unit are one unit'); (assertion); unit: src/audit-code.test.js:599 — for (const line of [1, 2]) assert.equal(verify(result([uf({ unit: U1, ...cite('src/js/orders.js', line) })]), { read, units: list }).unit_findings.length, 1, `line ${line} is in a part this run read`); (assertion) | Evidenced: The test asserts two rows give one unit and that findings on line 1 and line 2, one in each part, both survive verification. This also exercises the widened span check at audit-post.js:336. |\n| O8: Static leads in a tsx unit rank plain functions before PascalCase components and use* hooks, with none dropped | PR body; src/audit-units.js:53 — .map(({ name, line }) => ({ name, line })).sort((a, b) => | unit: src/audit-units.test.js:610 — assert.deepEqual(names('src/ui/panel.tsx'), ['clampValue', 'mapRows', 'Panel', 'useThing', 'Frame']); (assertion) | Unconfirmed: Could not verify the citation: changed line src/audit-units.js:53; behaviour src/audit-units.js:53. |\n| O9: The budget hint price is the pre-flight worst case of one call (callUsd) times the calls a dry pick needs | PR body; src/audit-collect.js:373 — const unitParts = api ? api.unitCalls(pre) : 1, price = api ? { usd: api.callUsd(pre), budget: pre.budget, max: api.MAX_UNIT_CALLS } : null; // price: the pre-flight's own worst case, for the budget hint | none | Unconfirmed: The unit tests use a hard-coded price (audit-units.test.js:590). No visible test asserts callUsd's value. The claude-api.test.js and audit-collect.test.js files were not fully visible, so a test may exist outside the inlined slices. |\n| O10: Stateless run enumerates parts when the claude api engine packs units (packBytes set) | from behaviour; implementation not located | none | Unconfirmed: Only the audit-collect.js caller is visible; the scan-parts.js and claude-api.js changed helpers that drive the pack were not fully read (see the next two rows). |\n| O11: withTmp helper in scan-parts.js (no test reference in the leads) | from behaviour; implementation not located | none | Unconfirmed: src/scan-parts.js was inlined only for its first two lines; line 41 (withTmp) and its tests were not visible. Not reported as a gap. |\n| O12: arr helper in claude-api.js (no test reference in the leads) | from behaviour; implementation not located | none | Unconfirmed: claude-api.js line 451 lies in the omitted range of the inlined slices; the helper's behaviour and tests were not visible. |\n\n**Validation notes (5)**\n\n- Obligation O7 alignment unknown: needs a linked requirement.\n- Obligation O2 marked unknown: could not verify citation: evidence 2 src/audit-units.test.js:585.\n- Obligation O5 marked unknown: could not verify citation: evidence 3 src/audit-code.test.js:612.\n- Obligation O6 marked unknown: could not verify citation: evidence 1 src/audit-code.test.js:598; evidence 2 src/audit-code.test.js:604.\n- Obligation O8 marked unknown: could not verify citation: changed line src/audit-units.js:53; behaviour src/audit-units.js:53.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `d419805`, base `ff85476`\n\n**Reduced review**\n\nReasons: fast-tier model; 4 of 12 obligations degraded by validation (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 15 files, 244 KB; not included: src/prompt.test.js\nSpecGuard build 0ade26f40688 (ref bb0756e11e4af55982db5bca6105b05b253ecd5b)\n\n</details>\n\n<sub>Cost $0.12 · claude-haiku-5-5 · 152.8k in (12.5k cached) · 20.2k out · 1m29s</sub>\n",
+          "user": {
+            "login": "github-actions[bot]",
+            "name": "github-actions[bot]",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/in/15368?v=4",
+            "id": 41898282
+          },
+          "id": 6229042644,
+          "pull_request_review_id": null,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T03:28:27Z",
+          "updated_at": "2026-10-17T03:32:13Z",
+          "review": null,
+          "side": null,
+          "line": null,
+          "start_line": null,
+          "path": null,
+          "body_html": "\n\n\n\n<h2 dir=\"auto\">SpecGuard</h2>\n<p dir=\"auto\"><strong><g-emoji class=\"g-emoji\" alias=\"warning\">⚠️</g-emoji> Reduced review: no high-confidence gaps</strong></p>\n<h3 dir=\"auto\">Requirements to check (3)</h3>\n<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>Status</th>\n<th>Requirement</th>\n<th>What to do</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>Unconfirmed</td>\n<td>All parts in one stateless run (<code class=\"notranslate\">audit-units.js</code>, <code class=\"notranslate\">inventory({ allParts })</code>). When the run has no state, each part of a…</td>\n<td>Point to the unit test or add one.</td>\n</tr>\n<tr>\n<td>Unconfirmed</td>\n<td>Budget hint. When units are left out because the K calls were used up (not because of max_units), the summary gets one…</td>\n<td>Point to the unit test or add one: the unit tests use a hard-coded price (audit-units.test.js:590). No visible test asserts callUsd's value. The…</td>\n</tr>\n<tr>\n<td>Unconfirmed</td>\n<td>Static leads (P3 from <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894247584\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/253\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/253/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/253\">#253</a>). In <code class=\"notranslate\">.tsx</code>/<code class=\"notranslate\">.jsx</code> units PascalCase components and <code class=\"notranslate\">use*</code> hooks rank after plain exported…</td>\n<td>Point to the unit test or add one.</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>\n<h3 dir=\"auto\">Not reviewed (6)</h3>\n<ul dir=\"auto\">\n<li>Review context was cut: the model saw only part of <code class=\"notranslate\">src/audit-collect.test.js</code>, <code class=\"notranslate\">src/audit-units.test.js</code>, <code class=\"notranslate\">src/claude-api.test.js</code>, <code class=\"notranslate\">src/audit-action.test.js</code>, <code class=\"notranslate\">src/audit-code.test.js</code>, <code class=\"notranslate\">src/audit-post.test.js</code>, <code class=\"notranslate\">src/engines/claude-api.js</code>, <code class=\"notranslate\">src/auto-engine.test.js</code>, <code class=\"notranslate\">src/post.test.js</code>, <code class=\"notranslate\">src/scan-parts.js</code>, … (+1 more); obligations that depend on them are unknown.</li>\n<li>The diff was inlined only for its first 300 of 376 lines: the rest of audit-units.test.js (after line 610, incl. the .ts control), and changes to claude-api.js and scan-parts.js, were not visible.</li>\n<li>Acceptance rows in requirements.md (offline haiku K=5 and sonnet K=1 runs on seeded Kite) are run-level results, not unit obligations, and are not reviewed.</li>\n<li>Weak? assertion leads in unchanged test files (audit-code.test.js:30, audit-units.test.js:722, claude-api.test.js:104) are outside the diff and not reported.</li>\n<li>1 changed file(s) have more than 40 identifiers in their hunks: only the first 40 were searched in the tests.</li>\n<li>Context trimmed: issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894247584\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/253\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/253/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/253\">#253</a> body cut to about 3 KB in requirements.md (acceptance criteria kept).</li>\n</ul>\n<blockquote>\n<p dir=\"auto\"><strong>Incomplete review.</strong> Not everything was covered; the findings above were verified, and the next push or rerun reviews again.</p>\n</blockquote>\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n<p dir=\"auto\"><strong>Coding standards and test layers</strong></p>\n<ul dir=\"auto\">\n<li>Coding standards: reviewed. Applied to the changed files under src/: node:test and node:assert, tests next to the code as &lt;name&gt;.test.js, exported changes have return-value tests in the visible files, and no npm dependency is added. ste-mini is a writing-style rule for prose, not applied to code. Sources: <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code>.</li>\n<li>Test layers: reviewed. Changed logic is pure inventory, pick, render and read functions with direct unit tests through their exports. No higher-layer test holds logic that a unit test could take over.</li>\n</ul>\n<p dir=\"auto\"><strong>Requirements source:</strong> PR body, issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894247584\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/253\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/253/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/253\">#253</a> (context), history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5840128931\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/162\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/162/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/162\">#162</a>, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5893163689\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/235\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/235/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/235\">#235</a>, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5863516246\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/195\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/195/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/195\">#195</a> (no structured acceptance criteria found)</p>\n<p dir=\"auto\">No requirement documents found (content-based discovery; see <code class=\"notranslate\">requirements_paths</code> to add or exclude).</p>\n<p dir=\"auto\"><strong>Obligations (12) · Unit evidence: 4/12 obligations</strong></p>\n<p dir=\"auto\">An obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.</p>\n<table role=\"table\">\n<thead>\n<tr>\n<th>Obligation</th>\n<th>Source / behaviour</th>\n<th>Assertion evidence / layer</th>\n<th>Status / reason</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>O1: A stateless run plans every part of a unit reviewed in parts as its own item, each in its own call</td>\n<td>PR body; src/audit-units.js:237 — const items = room &amp;&amp; allParts &amp;&amp; !prior ? rows.flatMap((r) =&gt; { const p = partOf(r, null, size); return p ? Array.from({ length: p.n }, (_, k) =&gt; ({ ...r, partK: k })) : [r]; }).sort((a, b) =&gt; (a.partK || 0) - (b.partK || 0)) : rows; // one item per part of a unit reviewed in parts; every unit's first part comes before any second part, so a unit is read before another is read twice</td>\n<td>unit: src/audit-units.test.js:562 — assert.deepEqual(big.map((u) =&gt; [u.part.k + 1, u.part.n]), [[1, 2], [2, 2]]); (assertion); unit: src/audit-units.test.js:570 — assert.equal(inventory(o).picked.filter((u) =&gt; u.path === 'src/js/big.js').length, 1, 'control: without allParts one part, as before'); (assertion)</td>\n<td>Evidenced: The stateless test asserts parts 1 and 2 of the unit are both picked across three rooms, and that each part sits in a different call. The control without allParts asserts one part, so removing the allParts path changes the result.</td>\n</tr>\n<tr>\n<td>O2: Parts that get no room are listed as not reached (budget) and the unit keeps its first part</td>\n<td>PR body; src/audit-units.js:244 — if (partsLeft.length) limits.push(<code class=\"notranslate\">${partsLeft.length} unit part${partsLeft.length === 1 ? '' : 's'} not reached (${partsLeft.some((r) =&gt; sel.noRoom.includes(r)) ? 'budget' : 'max_units'}): ${partsLeft.slice(0, 3).map((r) =&gt; </code>${r.path} part ${r.partK + 1} of ${partOf(r, null, size).n}<code class=\"notranslate\">).join(', ')}${partsLeft.length &gt; 3 ? ', ...' : ''}</code>);</td>\n<td>unit: src/audit-units.test.js:583 — assert.deepEqual(inv.picked.filter((u) =&gt; u.path === 'src/js/big.js').map((u) =&gt; u.part.k), [0], 'one call holds one part of a unit'); (assertion); unit: src/audit-units.test.js:585 — assert.match(inv.limitations.join('\\n'), new RegExp(<code class=\"notranslate\">${n - 1} unit parts? not reached \\(budget\\): src/js/big\\.js part 2 of ${n}</code>)); (assertion)</td>\n<td>Unconfirmed: Could not verify the citation: evidence 2 src/audit-units.test.js:585.</td>\n</tr>\n<tr>\n<td>O3: A run with state keeps the one-part-per-run cursor</td>\n<td>PR body; src/audit-units.js:237 — const items = room &amp;&amp; allParts &amp;&amp; !prior ? rows.flatMap((r) =&gt; { const p = partOf(r, null, size); return p ? Array.from({ length: p.n }, (_, k) =&gt; ({ ...r, partK: k })) : [r]; }).sort((a, b) =&gt; (a.partK || 0) - (b.partK || 0)) : rows; // one item per part of a unit reviewed in parts; every unit's first part comes before any second part, so a unit is read before another is read twice</td>\n<td>unit: src/audit-units.test.js:577 — assert.equal(inv.picked.filter((u) =&gt; u.path === 'src/js/big.js').length, 1); (assertion); unit: src/audit-units.test.js:578 — assert.ok(!inv.allParts, \"a run with state plans no extra parts\"); (assertion)</td>\n<td>Evidenced: The rotating-run test with a prior state asserts one part picked and allParts false, so the !prior gate is pinned.</td>\n</tr>\n<tr>\n<td>O4: The budget hint names the units left out and the budget that would cover them, and is absent when every unit was reached or units were left by max_units</td>\n<td>PR body; src/audit-units.js:249 — if (price &amp;&amp; left.length) { const need = pick(items, maxUnits, null, size, room, Infinity).rooms; hint = { left: left.length, calls, need, usd: Math.ceil(need * price.usd * 100) / 100, budget: price.budget, max: price.max, runs: Math.ceil(need / calls) }; }</td>\n<td>unit: src/audit-units.test.js:593 — assert.equal(one.hint.left, 70 - one.picked.length); (assertion); unit: src/audit-units.test.js:595 — assert.ok(one.hint.need &gt; 1 &amp;&amp; one.hint.usd &gt; 0.2 * one.hint.calls, JSON.stringify(one.hint)); // the budget needed exceeds the one call that was afforded (assertion); unit: src/audit-units.test.js:598 — assert.equal(wide.hint, null, 'control: everything fits, no hint'); (assertion); unit: src/audit-units.test.js:600 — assert.equal(inventory({ ...o, cwd: capped.root, maxUnits: 12, rooms: 1 }).hint, null, 'control: units left because of max_units are not a budget problem'); (assertion)</td>\n<td>Evidenced: The test pins the left count, the calls count and that the dollar figure exceeds one call's cost. Two controls assert no hint when everything fits and when max_units is the cause.</td>\n</tr>\n<tr>\n<td>O5: The summary renders the budget hint line, with the rotation suffix and the 8-call wording when covering all units needs more calls than a run makes</td>\n<td>PR body; src/audit-post.js:620 — if (code &amp;&amp; data &amp;&amp; !failure &amp;&amp; bh) top += <code class=\"notranslate\">${plural(bh.left, 'unit')} not reviewed this run: max_budget_usd $${bh.budget.toFixed(2)} allows ${plural(bh.calls, 'call')}; ${bh.need &gt; bh.max ? </code>covering all units takes ${bh.need} calls, more than the ${bh.max} a run makes (narrow scan_paths)<code class=\"notranslate\">:</code>covering all units needs a budget of about $${bh.usd.toFixed(2)} (the pre-flight reserves the worst case per call; actual spend is usually far lower)`}${inv.rotation &amp;&amp; in…</td>\n<td>unit: src/audit-code.test.js:610 — assert.match(text({ budget_hint: hint }), /18 units not reviewed this run: max_budget_usd $1.00 allows 1 call; covering all units needs a budget of about <math-renderer class=\"js-inline-math\" style=\"display: inline-block\" data-run-id=\"1ccf4804c20ec896d98b64c749377081\">$3.63 (the pre-flight reserves the worst case per call; actual spend is usually far lower)./); (assertion); unit: src/audit-code.test.js:611 — assert.match(text({ budget_hint: hint, rotation: { ...INV().rotation, rotate: true } }), /actual spend is usually far lower), or they rotate in over ~5 runs./); (assertion); unit: src/audit-code.test.js:612 — assert.match(text({ budget_hint: { ...hint, need: 17 } }), /covering all units takes 17 calls, more than the 8 a run makes (narrow scan_paths)/); (assertion); unit: src/audit-code.test.js:613 — assert.doesNotMatch(text({}), /max_budget_usd $</math-renderer>/, 'con…</td>\n<td>Unconfirmed: Could not verify the citation: evidence 3 src/audit-code.test.js:612.</td>\n</tr>\n<tr>\n<td>O6: The Reviewed in parts line names every part a stateless run read and the parts left for the budget</td>\n<td>PR body; src/audit-post.js:618 — if (code &amp;&amp; data &amp;&amp; !failure &amp;&amp; inParts.length) top += <code class=\"notranslate\">**Reviewed in parts** (too large for one call; ${allParts ? 'every part planned in this run, as far as max_budget_usd reaches' : 'one part per run'}): ${inParts.slice(0, 5).map((u) =&gt; </code>`${cell(u.path, 100)}` ${(u.part.ks || [u.part.k + 1]).length &gt; 1 ? 'parts' : 'part'} ${(u.part.ks || [u.part.k + 1]).slice().sort((a, b) =&gt; a - b).join(', ')} of ${u.part.n} (lines ${u.part.a}-${u.part.b})${partsLeft.has(u…</td>\n<td>unit: src/audit-code.test.js:598 — assert.match(render({ data: result([]), code, head: 'abc1234' }), /**Reviewed in parts** (too large for one call; every part planned in this run (assertion); unit: src/audit-code.test.js:604 — assert.match(render({ data: result([]), code, head: 'abc1234' }), /part 1 of 2 (lines 1-100); part 2 not reached (budget)/); (assertion)</td>\n<td>Unconfirmed: Could not verify the citation: evidence 1 src/audit-code.test.js:598; evidence 2 src/audit-code.test.js:604.</td>\n</tr>\n<tr>\n<td>O7: Rows of one unit from several parts merge into one unit, and a finding in any part read this run is kept</td>\n<td>PR body; src/audit-post.js:70 — if (was &amp;&amp; win) { (was.ks ||= [was.k + 1]).push(win.k + 1); (was.spans ||= [[was.a, was.b]]).push([win.a, win.b]); was.k = Math.max(was.k, win.k); was.a = Math.min(was.a, win.a); was.b = Math.max(was.b, win.b); continue; }</td>\n<td>unit: src/audit-code.test.js:597 — assert.equal(list.size, 1, 'two rows of one unit are one unit'); (assertion); unit: src/audit-code.test.js:599 — for (const line of [1, 2]) assert.equal(verify(result([uf({ unit: U1, ...cite('src/js/orders.js', line) })]), { read, units: list }).unit_findings.length, 1, <code class=\"notranslate\">line ${line} is in a part this run read</code>); (assertion)</td>\n<td>Evidenced: The test asserts two rows give one unit and that findings on line 1 and line 2, one in each part, both survive verification. This also exercises the widened span check at audit-post.js:336.</td>\n</tr>\n<tr>\n<td>O8: Static leads in a tsx unit rank plain functions before PascalCase components and use* hooks, with none dropped</td>\n<td>PR body; src/audit-units.js:53 — .map(({ name, line }) =&gt; ({ name, line })).sort((a, b) =&gt;</td>\n<td>unit: src/audit-units.test.js:610 — assert.deepEqual(names('src/ui/panel.tsx'), ['clampValue', 'mapRows', 'Panel', 'useThing', 'Frame']); (assertion)</td>\n<td>Unconfirmed: Could not verify the citation: changed line src/audit-units.js:53; behaviour src/audit-units.js:53.</td>\n</tr>\n<tr>\n<td>O9: The budget hint price is the pre-flight worst case of one call (callUsd) times the calls a dry pick needs</td>\n<td>PR body; src/audit-collect.js:373 — const unitParts = api ? api.unitCalls(pre) : 1, price = api ? { usd: api.callUsd(pre), budget: pre.budget, max: api.MAX_UNIT_CALLS } : null; // price: the pre-flight's own worst case, for the budget hint</td>\n<td>none</td>\n<td>Unconfirmed: The unit tests use a hard-coded price (audit-units.test.js:590). No visible test asserts callUsd's value. The claude-api.test.js and audit-collect.test.js files were not fully visible, so a test may exist outside the inlined slices.</td>\n</tr>\n<tr>\n<td>O10: Stateless run enumerates parts when the claude api engine packs units (packBytes set)</td>\n<td>from behaviour; implementation not located</td>\n<td>none</td>\n<td>Unconfirmed: Only the audit-collect.js caller is visible; the scan-parts.js and claude-api.js changed helpers that drive the pack were not fully read (see the next two rows).</td>\n</tr>\n<tr>\n<td>O11: withTmp helper in scan-parts.js (no test reference in the leads)</td>\n<td>from behaviour; implementation not located</td>\n<td>none</td>\n<td>Unconfirmed: src/scan-parts.js was inlined only for its first two lines; line 41 (withTmp) and its tests were not visible. Not reported as a gap.</td>\n</tr>\n<tr>\n<td>O12: arr helper in claude-api.js (no test reference in the leads)</td>\n<td>from behaviour; implementation not located</td>\n<td>none</td>\n<td>Unconfirmed: claude-api.js line 451 lies in the omitted range of the inlined slices; the helper's behaviour and tests were not visible.</td>\n</tr>\n</tbody>\n</table>\n<p dir=\"auto\"><strong>Validation notes (5)</strong></p>\n<ul dir=\"auto\">\n<li>Obligation O7 alignment unknown: needs a linked requirement.</li>\n<li>Obligation O2 marked unknown: could not verify citation: evidence 2 src/audit-units.test.js:585.</li>\n<li>Obligation O5 marked unknown: could not verify citation: evidence 3 src/audit-code.test.js:612.</li>\n<li>Obligation O6 marked unknown: could not verify citation: evidence 1 src/audit-code.test.js:598; evidence 2 src/audit-code.test.js:604.</li>\n<li>Obligation O8 marked unknown: could not verify citation: changed line src/audit-units.js:53; behaviour src/audit-units.js:53.</li>\n</ul>\n<p dir=\"auto\"><strong>Sources read</strong></p>\n<ul dir=\"auto\">\n<li>Requirement documents: none</li>\n<li>Standards files: <code class=\"notranslate\">.claude/skills/ste-mini/SKILL.md</code> (672 bytes, 13 lines), <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code> (567 bytes, 10 lines)</li>\n<li>Trace: SPEC_NOT_FOUND</li>\n<li>Commits: head <code class=\"notranslate\">d419805</code>, base <code class=\"notranslate\">ff85476</code>\n</li>\n</ul>\n<p dir=\"auto\"><strong>Reduced review</strong></p>\n<p dir=\"auto\">Reasons: fast-tier model; 4 of 12 obligations degraded by validation (model: claude-haiku-5-5). Only high-confidence findings were posted inline.</p>\n<p dir=\"auto\">Run: engine claude · context pack: 15 files, 244 KB; not included: src/prompt.test.js<br>\nSpecGuard build 0ade26f40688 (ref <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/Mira190/SpecGuard/commit/bb0756e11e4af55982db5bca6105b05b253ecd5b/hovercard\" href=\"https://github.com/Mira190/SpecGuard/commit/bb0756e11e4af55982db5bca6105b05b253ecd5b\"><tt>bb0756e</tt></a>)</p>\n</details>\n<p dir=\"auto\"><sub>Cost $0.12 · claude-haiku-5-5 · 152.8k in (12.5k cached) · 20.2k out · 1m29s</sub></p>"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/255#discussion_r4301119865",
+          "body": "note: the gap between the hint's worst case and real spend comes from the pre-flight itself (claude-api.js: 1.5 B/token, the long-context price card, full max_output_tokens). It reserves about 4x what calls actually cost, which is also why the normal tier needed about $6 of budget to cover Kite. A follow-up worth measuring: calibrate the pre-flight against usage.json from real runs, for example by using the observed bytes per token for the model, so K reflects what the budget can really buy. Keep it a hard ceiling. Don't change it before you have a few runs of data.",
+          "user": {
+            "login": "Mira190",
+            "name": "Mira190",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/u/163523387?v=4",
+            "id": 163523387
+          },
+          "id": 4301119865,
+          "pull_request_review_id": 5555811463,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T03:33:12Z",
+          "updated_at": "2026-10-17T03:33:12Z",
+          "review": null,
+          "side": "RIGHT",
+          "line": 237,
+          "start_line": null,
+          "path": "src/audit-units.js",
+          "body_html": "<p dir=\"auto\">note: the gap between the hint's worst case and real spend comes from the pre-flight itself (claude-api.js: 1.5 B/token, the long-context price card, full max_output_tokens). It reserves about 4x what calls actually cost, which is also why the normal tier needed about $6 of budget to cover Kite. A follow-up worth measuring: calibrate the pre-flight against usage.json from real runs, for example by using the observed bytes per token for the model, so K reflects what the budget can really buy. Keep it a hard ceiling. Don't change it before you have a few runs of data.</p>"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/255#pullrequestreview-5555811463",
+          "body": "Review against the seeded Kite scan. Two of its 8 seeds (mouse.ts 53-58, live.ts 73-74) sit in part 2 of large units, and a stateless run never rotates, so it only ever read part 1. Separately, with normal-tier pricing the default $1 budget silently reviewed only 25 of 43 units.\n\n- A stateless run now plans every part, breadth first: all first parts come before any second part, and a call holds at most one part of a unit, so one huge file can't starve the rest. Parts that don't fit are listed as not reached (budget), and a stateful rotating run is unchanged. Offline on the seeded clone at haiku pricing, mouse.ts and live.ts get both parts, so the seed lines are now read.\n- The budget hint appears only when the K calls (not max_units) left units out, and it uses the existing pre-flight pricing. My wording change is in: it reads as a budget ceiling (\"the pre-flight reserves the worst case per call; actual spend is usually far lower\"), not a cost estimate. On the real sonnet run, actual spend was $1.91 against a ~$12 worst-case figure. The over-8-calls branch points to scan_paths.\n- In tsx/jsx, leads rank functions before components and hooks. None are dropped.\n- The 8 new tests fail on main. The stateful control passes on main and still passes here.\n\nLGTM. One note inline; merging.",
+          "user": {
+            "login": "Mira190",
+            "name": "Mira190",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/u/163523387?u=b3b2c50cf3cd8cfd5f24eefa31a74a83ece97d84&v=4",
+            "id": 163523387
+          },
+          "id": 5555811463,
+          "pull_request_review_id": null,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T03:33:12Z",
+          "updated_at": null,
+          "review": "COMMENTED",
+          "side": null,
+          "line": null,
+          "start_line": null,
+          "path": null,
+          "body_html": "<p dir=\"auto\">Review against the seeded Kite scan. Two of its 8 seeds (mouse.ts 53-58, live.ts 73-74) sit in part 2 of large units, and a stateless run never rotates, so it only ever read part 1. Separately, with normal-tier pricing the default $1 budget silently reviewed only 25 of 43 units.</p>\n<ul dir=\"auto\">\n<li>A stateless run now plans every part, breadth first: all first parts come before any second part, and a call holds at most one part of a unit, so one huge file can't starve the rest. Parts that don't fit are listed as not reached (budget), and a stateful rotating run is unchanged. Offline on the seeded clone at haiku pricing, mouse.ts and live.ts get both parts, so the seed lines are now read.</li>\n<li>The budget hint appears only when the K calls (not max_units) left units out, and it uses the existing pre-flight pricing. My wording change is in: it reads as a budget ceiling (\"the pre-flight reserves the worst case per call; actual spend is usually far lower\"), not a cost estimate. On the real sonnet run, actual spend was $1.91 against a ~$12 worst-case figure. The over-8-calls branch points to scan_paths.</li>\n<li>In tsx/jsx, leads rank functions before components and hooks. None are dropped.</li>\n<li>The 8 new tests fail on main. The stateful control passes on main and still passes here.</li>\n</ul>\n<p dir=\"auto\">LGTM. One note inline; merging.</p>"
+        }
+      ],
+      "url": "https://github.com/Mira190/SpecGuard/pull/255",
+      "title": "Mira190/SpecGuard PR #255 comments",
+      "display_url": "https://github.com/Mira190/SpecGuard/pull/255",
+      "display_title": "Mira190/SpecGuard PR #255 comments"
+    },
+    "256": {
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/256#issuecomment-6229335004",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":51359,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":256,\"merged\":false,\"head\":\"d6a60f6230969c78918e8adadb2048afb0ce288d\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"8bbd96eb786bf9e687fa9608df5e277cdb5cbd3b\",\"build\":\"60642e44073d\"},\"complete\":false,\"execution_complete\":false,\"outcome_valid\":true,\"findings\":{\"missing_test\":{\"posted\":0,\"already\":0,\"summary\":2}},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":2,\"dismissed\":0,\"not_observed\":1},\"since_total\":3,\"prior_total\":3,\"outcomes\":[{\"fp\":\"a6f28e1d3ceb9992\",\"kind\":\"weak_test\",\"still_reported\":false,\"anchor_touched\":false,\"tests_changed\":true,\"thread\":\"unknown\",\"up\":0,\"down\":0,\"outcome\":\"not_observed\",\"judged\":false},{\"fp\":\"184b182280af3566\",\"kind\":\"missing_test\",\"still_reported\":true,\"anchor_touched\":false,\"tests_changed\":true,\"thread\":\"unknown\",\"up\":0,\"down\":0,\"outcome\":\"open\"},{\"fp\":\"56bc7a0f706cda0a\",\"kind\":\"missing_test\",\"still_reported\":true,\"anchor_touched\":false,\"tests_changed\":true,\"thread\":\"unknown\",\"up\":0,\"down\":0,\"outcome\":\"open\"}],\"sum\":[{\"fp\":\"184b182280af3566\",\"path\":\"src/audit-post.test.js\",\"line\":994,\"kind\":\"missing_test\",\"title\":\"Assertion removed with no replacement\"},{\"fp\":\"56bc7a0f706cda0a\",\"path\":\"src/audit-post.test.js\",\"line\":995,\"kind\":\"missing_test\",\"title\":\"Assertion removed with no replacement\"}]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 2 unit test gaps to fix**\n\n### Missing unit tests (2)\n\n- Assertion removed with no replacement [`src/audit-post.test.js:994`](https://github.com/Mira190/SpecGuard/blob/d6a60f6230969c78918e8adadb2048afb0ce288d/src/audit-post.test.js#L994) (removed test or assertion) — The assertion `assert.match(md.slice(0, md.indexOf('&lt;details>')), /### Static test signals \\(no model\\) \\(12\\)[\\s\\S]*\\+2 more in Details\\./);` was removed and nothing in this change pins the same …\n  The assertion `assert.match(md.slice(0, md.indexOf('&lt;details>')), /### Static test signals \\(no model\\) \\(12\\)[\\s\\S]*\\+2 more in Details\\./);` was removed and nothing in this change pins the same behaviour. Restore it or pin the behaviour in another test.\n- Assertion removed with no replacement [`src/audit-post.test.js:995`](https://github.com/Mira190/SpecGuard/blob/d6a60f6230969c78918e8adadb2048afb0ce288d/src/audit-post.test.js#L995) (removed test or assertion) — The assertion `assert.match(md.slice(md.indexOf('&lt;details>')), /\\*\\*More static test signals \\(2 more\\)\\*\\*/);` was removed and nothing in this change pins the same behaviour.\n  Restore it or pin the behaviour in another test.\n\n### Requirements to check (1)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| Unconfirmed | The engine records dropped keys as `id` or `id:part`. A unit with a part in a call that still runs is not in… | Test layer not stated, so the cited test is not counted as unit evidence |\n\n### Not reviewed (5)\n\n- Review context was cut: the model saw only part of `src/audit-collect.test.js`, `src/audit-units.test.js`, `src/claude-api.test.js`, `src/audit-code.test.js`, `src/audit-post.js`, `src/audit-post.test.js`, `src/engines/claude-api.js`, `src/auto-engine.test.js`, `src/post.test.js`; obligations that depend on them are unknown.\n- The diff was cut after line 387 of 435 (the rest of claude-api.js: fit, pricePart and the part loop). keptRooms, fit and pricePart implementations were not visible, so O4 is unknown.\n- Removed assertions at src/audit-post.test.js:994-995 (overflow into Details at cap 10) are answered: the cap changed on purpose, and lines 995-997 pin the 12 visible rows and the absence of the Details overflow.\n- Weak? assertions in unchanged tests were not reported, since they are outside the change. pricePart and withTmp have no test reference; they were not checked for export status.\n- Context trimmed: issue #255 body cut to about 3 KB in requirements.md (acceptance criteria kept).\n\n> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n> Fast-tier model: only high-confidence findings are posted inline.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (2)**\n\n- Evidenced: **X1** The collector now runs the engine's own pre-flight (`keptRooms`, same `scan-parts.plan` + pricing + `fit`) on the ctx…\n- Evidenced: **X4** Lead table: the visible table was capped by `UCAP` (10) instead of the 20 `staticLeads` allows. The cap is now rule…\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Applied to the changed src/ files: the exported functions changed (keptRooms, write, staticLeads, callUsd) have tests asserting return values, and the new test names describe behaviour. No violation found. Sources: `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. Unit seams exist for the collector plan (audit-collect), inventory and staticLeads (audit-units), and the engine's split and fit (claude-api, mocked fetch). The render-level checks use the existing unit harness and need no pushdown.\n\n**Requirements source:** PR body, issue #255 (context), history PR #253, history PR #162, history PR #255 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (10) · Unit evidence: 8/10 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: The collector plans no more unit calls than the engine pre-flight keeps | PR body; src/audit-collect.js:319 — if (kept && (kept.rooms < units.unitRooms.length \\|\\| units.hint)) units = plan(Math.max(1, kept.rooms), kept.blockUsd); | unit: src/audit-collect.test.js:758 — assert.equal(cut.rooms.length, 0, 'one room kept: no room file, one call'); (assertion); unit: src/audit-collect.test.js:759 — assert.equal(cut.inv.selected.units, room1); (assertion) | Evidenced: The test runs the collector with a pre-flight that keeps one room and asserts one call and no room file. The control with a pre-flight that keeps all rooms passes unchanged. Removing the re-plan would leave three rooms and fail line 758. |\n| O2: The budget hint counts the document block calls | PR body; src/audit-units.js:249 — if (price && left.length) { const need = pick(items, maxUnits, null, size, room, Infinity).rooms; hint = { left: left.length, calls, need, usd: Math.ceil((need * price.usd + (price.reserve \\|\\| 0)) * 100) / 100, budget: price.budget, max: price.max, runs: Math.ceil(need / calls) }; } | unit: src/audit-collect.test.js:763 — assert.equal(h.usd, Math.ceil((h.need * 0.1 + 0.5) * 100) / 100, 'the rooms it takes at 0.10 plus the 0.50 the block calls take'); (assertion) | Evidenced: The hint usd must equal the rooms at 0.10 plus the 0.50 reserve. Dropping the reserve term changes the value and fails the assertion. |\n| O3: A dropped second-part room is reported as droppedParts, not as droppedUnits | PR body; src/engines/claude-api.js:430 — const seen = new Set(plans.flatMap((q) => q.units \\|\\| [])), idOf = (k) => k.split(':')[0], droppedUnits = [...new Set(droppedKeys.map(idOf).filter((u) => !seen.has(u)))], droppedParts = droppedKeys.filter((k) => seen.has(idOf(k))); // a unit with a part in a call that still runs was reached: its dropped parts are named on their own | unit: src/claude-api.test.js:1215 — assert.deepEqual(parts.droppedParts, ['aaaaaaaa:2']); (assertion); unit: src/claude-api.test.js:1216 — assert.equal(parts.droppedUnits, undefined, 'unit a was reached through its first part'); (assertion) | Unconfirmed: Test layer not stated (the test path is not clearly a unit test); not counted as unit evidence. |\n| O4: keptRooms reports the unit calls the pre-flight keeps; one call gives null | PR body; implementation not located | unit: src/claude-api.test.js:1223 — assert.equal(api.keptRooms({ ...base, budget: 5 }).rooms, 2); (assertion); unit: src/claude-api.test.js:1226 — assert.equal(api.keptRooms({ ...base, ctx: one.h.ctx, root: one.root, budget: 5 }), null); (assertion) | Unconfirmed: The tests pin the return value, but the keptRooms implementation lies in the part of the diff not shown, so its branches could not be checked against the assertions. |\n| O5: The summary names unit parts dropped for the budget and does not call the unit not reached | PR body; src/audit-post.js:619 — if (code && data && !failure && (code.partsDropped \\|\\| []).length) top += `**Unit parts not reached:** ${plural(code.partsDropped.length, 'part')} of units that were otherwise reviewed: max_budget_usd did not cover the call that held ${code.partsDropped.length === 1 ? 'it' : 'them'}: ${code.partsDropped.slice(0, 5).map((k) => `\\`${cell((code.list.get(k.split(':')[0]) \\|\\| {}).path \\|\\| k, 100)}\\` part ${k.split(':')[1]}`).join(', ')}${code.partsDropped.length > 5 ? `… | unit: src/audit-code.test.js:970 — assert.doesNotMatch(v, /Not reviewed this run/); (assertion); unit: src/audit-code.test.js:974 — assert.doesNotMatch(vis(ok.calls.summary), /Unit parts not reached/); (assertion) | Evidenced: The test asserts the dropped-part line, that no not-reviewed line appears, and that the control with no dropped parts has no line. |\n| O6: The run is marked incomplete when unit parts were dropped for the budget | PR body; src/audit-post.js:878 — const incomplete = [partial, notAudited.blocks.length && `${plural(notAudited.blocks.length, 'document block')} not audited`, hasCode && unitsFailed && 'the unit call failed', reachedNot.size && `${plural(reachedNot.size, 'unit')} not reached (max_budget_usd)`, partsDropped.length && `${plural(partsDropped.length, 'unit part')} not reached (max_budget_usd)`, | unit: src/audit-code.test.js:972 — assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: '2 unit parts not reached (max_budget_usd)' }); (assertion) | Evidenced: The test asserts status incomplete and the reason naming the two unit parts not reached. |\n| O7: The visible lead table shows the rule signals, then the top 20 leads with unreferenced exports first | PR body; src/audit-post.js:691 — if (!failure && data) body += vis('Static test signals (no model)', srows, SIGH, SCAP); | unit: src/audit-post.test.js:1340 — assert.equal(n(/ asserts only truthiness \\\\|/g), 5, 'the weak leads fill the rest of the 20'); (assertion); unit: src/audit-post.test.js:1341 — assert.match(vis, /\\\\| \\+10 more \\\\| \\\\| not listed: only the top 20 leads by unit risk are shown \\\\|/); (assertion); unit: src/audit-post.test.js:1343 — assert.equal((render({ data: clean(), code: codeOf(many) }).match(/test evidence not found \\\\|/g) \\|\\| []).length, 12, 'control: rule signals are not capped at 10 any more'); (assertion) | Evidenced: The test pins 15 unreferenced rows, 5 weak rows, the +10 count line, and 12 uncapped rule signals as the control. |\n| O8: Unreferenced exports are ranked before weak-assertion leads when the cap bites | PR body; src/audit-units.js:303 — all.unshift(...unref); // no test file names the export: a near-certain fact, listed before the weak-assertion leads when the cap bites | unit: src/audit-units.test.js:774 — assert.deepEqual(L.items.map((i) => i.unit), [...rows.slice(15).map((r) => r.id), ...rows.slice(0, 12).map((r) => r.id)]); (assertion) | Evidenced: Eight unreferenced rows come first, then the weak rows in risk order, and the extra count is 3. Removing the unshift changes the order and fails line 774. |\n| O9: An adapter exception is class internal and always fails the job | PR body; src/engines/claude-api.js:499 — end('failed', 'internal', 'Claude API adapter error', e?.message \\|\\| String(e)); // our own code threw: a class of its own, so the last step goes red | unit: src/claude-api.test.js:1244 — assert.equal(h.file('engine-error').split('\\n')[0], 'internal'); (assertion); unit: src/audit-action.test.js:311 — assert.equal(bad.status, 1); (assertion) | Evidenced: The engine test asserts the class is internal, and the action test asserts the job goes red for that class. A 529 stays rate and advisory. |\n| O10: A stale unit-rooms file from an earlier plan is removed when the new plan has one room | PR body; src/audit-units.js:268 — fs.rmSync(path.join(ctx, 'audit-unit-rooms.json'), { force: true }); // a plan written earlier into this ctx (the collector plans again when the pre-flight keeps fewer calls) | unit: src/audit-collect.test.js:758 — assert.equal(cut.rooms.length, 0, 'one room kept: no room file, one call'); (assertion) | Evidenced: The first plan writes three rooms, then the second plan keeps one. Without the rm, the room file from the first plan would remain and the assertion would fail. |\n\n**Validation notes (1)**\n\n- Obligation O3: test layer not stated (the test path is not clearly a unit test); not counted as unit evidence.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `d6a60f6`, base `ac56adb`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 16 files, 244 KB; not included: src/post.test.js\nSpecGuard build 60642e44073d (ref 8bbd96eb786bf9e687fa9608df5e277cdb5cbd3b)\n\n</details>\n\n<sub>Cost $0.11 · claude-haiku-5-5 · 151.7k in · 11.9k out · 51s</sub>\n",
+          "user": {
+            "login": "github-actions[bot]",
+            "name": "github-actions[bot]",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/in/15368?v=4",
+            "id": 41898282
+          },
+          "id": 6229335004,
+          "pull_request_review_id": null,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T03:57:00Z",
+          "updated_at": "2026-10-17T04:06:17Z",
+          "review": null,
+          "side": null,
+          "line": null,
+          "start_line": null,
+          "path": null,
+          "body_html": "\n\n\n\n<h2 dir=\"auto\">SpecGuard</h2>\n<p dir=\"auto\"><strong>❌ 2 unit test gaps to fix</strong></p>\n<h3 dir=\"auto\">Missing unit tests (2)</h3>\n<ul dir=\"auto\">\n<li>Assertion removed with no replacement <a href=\"https://github.com/Mira190/SpecGuard/blob/d6a60f6230969c78918e8adadb2048afb0ce288d/src/audit-post.test.js#L994\"><code class=\"notranslate\">src/audit-post.test.js:994</code></a> (removed test or assertion) — The assertion <code class=\"notranslate\">assert.match(md.slice(0, md.indexOf('&amp;lt;details&gt;')), /### Static test signals \\(no model\\) \\(12\\)[\\s\\S]*\\+2 more in Details\\./);</code> was removed and nothing in this change pins the same …<br>\nThe assertion <code class=\"notranslate\">assert.match(md.slice(0, md.indexOf('&amp;lt;details&gt;')), /### Static test signals \\(no model\\) \\(12\\)[\\s\\S]*\\+2 more in Details\\./);</code> was removed and nothing in this change pins the same behaviour. Restore it or pin the behaviour in another test.</li>\n<li>Assertion removed with no replacement <a href=\"https://github.com/Mira190/SpecGuard/blob/d6a60f6230969c78918e8adadb2048afb0ce288d/src/audit-post.test.js#L995\"><code class=\"notranslate\">src/audit-post.test.js:995</code></a> (removed test or assertion) — The assertion <code class=\"notranslate\">assert.match(md.slice(md.indexOf('&amp;lt;details&gt;')), /\\*\\*More static test signals \\(2 more\\)\\*\\*/);</code> was removed and nothing in this change pins the same behaviour.<br>\nRestore it or pin the behaviour in another test.</li>\n</ul>\n<h3 dir=\"auto\">Requirements to check (1)</h3>\n<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>Status</th>\n<th>Requirement</th>\n<th>What to do</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>Unconfirmed</td>\n<td>The engine records dropped keys as <code class=\"notranslate\">id</code> or <code class=\"notranslate\">id:part</code>. A unit with a part in a call that still runs is not in…</td>\n<td>Test layer not stated, so the cited test is not counted as unit evidence</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>\n<h3 dir=\"auto\">Not reviewed (5)</h3>\n<ul dir=\"auto\">\n<li>Review context was cut: the model saw only part of <code class=\"notranslate\">src/audit-collect.test.js</code>, <code class=\"notranslate\">src/audit-units.test.js</code>, <code class=\"notranslate\">src/claude-api.test.js</code>, <code class=\"notranslate\">src/audit-code.test.js</code>, <code class=\"notranslate\">src/audit-post.js</code>, <code class=\"notranslate\">src/audit-post.test.js</code>, <code class=\"notranslate\">src/engines/claude-api.js</code>, <code class=\"notranslate\">src/auto-engine.test.js</code>, <code class=\"notranslate\">src/post.test.js</code>; obligations that depend on them are unknown.</li>\n<li>The diff was cut after line 387 of 435 (the rest of claude-api.js: fit, pricePart and the part loop). keptRooms, fit and pricePart implementations were not visible, so O4 is unknown.</li>\n<li>Removed assertions at src/audit-post.test.js:994-995 (overflow into Details at cap 10) are answered: the cap changed on purpose, and lines 995-997 pin the 12 visible rows and the absence of the Details overflow.</li>\n<li>Weak? assertions in unchanged tests were not reported, since they are outside the change. pricePart and withTmp have no test reference; they were not checked for export status.</li>\n<li>Context trimmed: issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894377265\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/255\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/255/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/255\">#255</a> body cut to about 3 KB in requirements.md (acceptance criteria kept).</li>\n</ul>\n<blockquote>\n<p dir=\"auto\"><strong>Incomplete review.</strong> Not everything was covered; the findings above were verified, and the next push or rerun reviews again.<br>\nFast-tier model: only high-confidence findings are posted inline.</p>\n</blockquote>\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n<p dir=\"auto\"><strong>Evidenced criteria (2)</strong></p>\n<ul dir=\"auto\">\n<li>Evidenced: <strong>X1</strong> The collector now runs the engine's own pre-flight (<code class=\"notranslate\">keptRooms</code>, same <code class=\"notranslate\">scan-parts.plan</code> + pricing + <code class=\"notranslate\">fit</code>) on the ctx…</li>\n<li>Evidenced: <strong>X4</strong> Lead table: the visible table was capped by <code class=\"notranslate\">UCAP</code> (10) instead of the 20 <code class=\"notranslate\">staticLeads</code> allows. The cap is now rule…</li>\n</ul>\n<p dir=\"auto\"><strong>Coding standards and test layers</strong></p>\n<ul dir=\"auto\">\n<li>Coding standards: reviewed. Applied to the changed src/ files: the exported functions changed (keptRooms, write, staticLeads, callUsd) have tests asserting return values, and the new test names describe behaviour. No violation found. Sources: <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code>.</li>\n<li>Test layers: reviewed. Unit seams exist for the collector plan (audit-collect), inventory and staticLeads (audit-units), and the engine's split and fit (claude-api, mocked fetch). The render-level checks use the existing unit harness and need no pushdown.</li>\n</ul>\n<p dir=\"auto\"><strong>Requirements source:</strong> PR body, issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894377265\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/255\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/255/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/255\">#255</a> (context), history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894247584\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/253\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/253/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/253\">#253</a>, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5840128931\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/162\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/162/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/162\">#162</a>, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894377265\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/255\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/255/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/255\">#255</a> (no structured acceptance criteria found)</p>\n<p dir=\"auto\">No requirement documents found (content-based discovery; see <code class=\"notranslate\">requirements_paths</code> to add or exclude).</p>\n<p dir=\"auto\"><strong>Obligations (10) · Unit evidence: 8/10 obligations</strong></p>\n<p dir=\"auto\">An obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.</p>\n<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>Obligation</th>\n<th>Source / behaviour</th>\n<th>Assertion evidence / layer</th>\n<th>Status / reason</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>O1: The collector plans no more unit calls than the engine pre-flight keeps</td>\n<td>PR body; src/audit-collect.js:319 — if (kept &amp;&amp; (kept.rooms &lt; units.unitRooms.length || units.hint)) units = plan(Math.max(1, kept.rooms), kept.blockUsd);</td>\n<td>unit: src/audit-collect.test.js:758 — assert.equal(cut.rooms.length, 0, 'one room kept: no room file, one call'); (assertion); unit: src/audit-collect.test.js:759 — assert.equal(cut.inv.selected.units, room1); (assertion)</td>\n<td>Evidenced: The test runs the collector with a pre-flight that keeps one room and asserts one call and no room file. The control with a pre-flight that keeps all rooms passes unchanged. Removing the re-plan would leave three rooms and fail line 758.</td>\n</tr>\n<tr>\n<td>O2: The budget hint counts the document block calls</td>\n<td>PR body; src/audit-units.js:249 — if (price &amp;&amp; left.length) { const need = pick(items, maxUnits, null, size, room, Infinity).rooms; hint = { left: left.length, calls, need, usd: Math.ceil((need * price.usd + (price.reserve || 0)) * 100) / 100, budget: price.budget, max: price.max, runs: Math.ceil(need / calls) }; }</td>\n<td>unit: src/audit-collect.test.js:763 — assert.equal(h.usd, Math.ceil((h.need * 0.1 + 0.5) * 100) / 100, 'the rooms it takes at 0.10 plus the 0.50 the block calls take'); (assertion)</td>\n<td>Evidenced: The hint usd must equal the rooms at 0.10 plus the 0.50 reserve. Dropping the reserve term changes the value and fails the assertion.</td>\n</tr>\n<tr>\n<td>O3: A dropped second-part room is reported as droppedParts, not as droppedUnits</td>\n<td>PR body; src/engines/claude-api.js:430 — const seen = new Set(plans.flatMap((q) =&gt; q.units || [])), idOf = (k) =&gt; k.split(':')[0], droppedUnits = [...new Set(droppedKeys.map(idOf).filter((u) =&gt; !seen.has(u)))], droppedParts = droppedKeys.filter((k) =&gt; seen.has(idOf(k))); // a unit with a part in a call that still runs was reached: its dropped parts are named on their own</td>\n<td>unit: src/claude-api.test.js:1215 — assert.deepEqual(parts.droppedParts, ['aaaaaaaa:2']); (assertion); unit: src/claude-api.test.js:1216 — assert.equal(parts.droppedUnits, undefined, 'unit a was reached through its first part'); (assertion)</td>\n<td>Unconfirmed: Test layer not stated (the test path is not clearly a unit test); not counted as unit evidence.</td>\n</tr>\n<tr>\n<td>O4: keptRooms reports the unit calls the pre-flight keeps; one call gives null</td>\n<td>PR body; implementation not located</td>\n<td>unit: src/claude-api.test.js:1223 — assert.equal(api.keptRooms({ ...base, budget: 5 }).rooms, 2); (assertion); unit: src/claude-api.test.js:1226 — assert.equal(api.keptRooms({ ...base, ctx: one.h.ctx, root: one.root, budget: 5 }), null); (assertion)</td>\n<td>Unconfirmed: The tests pin the return value, but the keptRooms implementation lies in the part of the diff not shown, so its branches could not be checked against the assertions.</td>\n</tr>\n<tr>\n<td>O5: The summary names unit parts dropped for the budget and does not call the unit not reached</td>\n<td>PR body; src/audit-post.js:619 — if (code &amp;&amp; data &amp;&amp; !failure &amp;&amp; (code.partsDropped || []).length) top += <code class=\"notranslate\">**Unit parts not reached:** ${plural(code.partsDropped.length, 'part')} of units that were otherwise reviewed: max_budget_usd did not cover the call that held ${code.partsDropped.length === 1 ? 'it' : 'them'}: ${code.partsDropped.slice(0, 5).map((k) =&gt; </code>`${cell((code.list.get(k.split(':')[0]) || {}).path || k, 100)}` part ${k.split(':')[1]}<code class=\"notranslate\">).join(', ')}${code.partsDropped.length &gt; 5 ? </code>…</td>\n<td>unit: src/audit-code.test.js:970 — assert.doesNotMatch(v, /Not reviewed this run/); (assertion); unit: src/audit-code.test.js:974 — assert.doesNotMatch(vis(ok.calls.summary), /Unit parts not reached/); (assertion)</td>\n<td>Evidenced: The test asserts the dropped-part line, that no not-reviewed line appears, and that the control with no dropped parts has no line.</td>\n</tr>\n<tr>\n<td>O6: The run is marked incomplete when unit parts were dropped for the budget</td>\n<td>PR body; src/audit-post.js:878 — const incomplete = [partial, notAudited.blocks.length &amp;&amp; <code class=\"notranslate\">${plural(notAudited.blocks.length, 'document block')} not audited</code>, hasCode &amp;&amp; unitsFailed &amp;&amp; 'the unit call failed', reachedNot.size &amp;&amp; <code class=\"notranslate\">${plural(reachedNot.size, 'unit')} not reached (max_budget_usd)</code>, partsDropped.length &amp;&amp; <code class=\"notranslate\">${plural(partsDropped.length, 'unit part')} not reached (max_budget_usd)</code>,</td>\n<td>unit: src/audit-code.test.js:972 — assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: '2 unit parts not reached (max_budget_usd)' }); (assertion)</td>\n<td>Evidenced: The test asserts status incomplete and the reason naming the two unit parts not reached.</td>\n</tr>\n<tr>\n<td>O7: The visible lead table shows the rule signals, then the top 20 leads with unreferenced exports first</td>\n<td>PR body; src/audit-post.js:691 — if (!failure &amp;&amp; data) body += vis('Static test signals (no model)', srows, SIGH, SCAP);</td>\n<td>unit: src/audit-post.test.js:1340 — assert.equal(n(/ asserts only truthiness |/g), 5, 'the weak leads fill the rest of the 20'); (assertion); unit: src/audit-post.test.js:1341 — assert.match(vis, /| +10 more | | not listed: only the top 20 leads by unit risk are shown |/); (assertion); unit: src/audit-post.test.js:1343 — assert.equal((render({ data: clean(), code: codeOf(many) }).match(/test evidence not found |/g) || []).length, 12, 'control: rule signals are not capped at 10 any more'); (assertion)</td>\n<td>Evidenced: The test pins 15 unreferenced rows, 5 weak rows, the +10 count line, and 12 uncapped rule signals as the control.</td>\n</tr>\n<tr>\n<td>O8: Unreferenced exports are ranked before weak-assertion leads when the cap bites</td>\n<td>PR body; src/audit-units.js:303 — all.unshift(...unref); // no test file names the export: a near-certain fact, listed before the weak-assertion leads when the cap bites</td>\n<td>unit: src/audit-units.test.js:774 — assert.deepEqual(L.items.map((i) =&gt; i.unit), [...rows.slice(15).map((r) =&gt; r.id), ...rows.slice(0, 12).map((r) =&gt; r.id)]); (assertion)</td>\n<td>Evidenced: Eight unreferenced rows come first, then the weak rows in risk order, and the extra count is 3. Removing the unshift changes the order and fails line 774.</td>\n</tr>\n<tr>\n<td>O9: An adapter exception is class internal and always fails the job</td>\n<td>PR body; src/engines/claude-api.js:499 — end('failed', 'internal', 'Claude API adapter error', e?.message || String(e)); // our own code threw: a class of its own, so the last step goes red</td>\n<td>unit: src/claude-api.test.js:1244 — assert.equal(h.file('engine-error').split('\\n')[0], 'internal'); (assertion); unit: src/audit-action.test.js:311 — assert.equal(bad.status, 1); (assertion)</td>\n<td>Evidenced: The engine test asserts the class is internal, and the action test asserts the job goes red for that class. A 529 stays rate and advisory.</td>\n</tr>\n<tr>\n<td>O10: A stale unit-rooms file from an earlier plan is removed when the new plan has one room</td>\n<td>PR body; src/audit-units.js:268 — fs.rmSync(path.join(ctx, 'audit-unit-rooms.json'), { force: true }); // a plan written earlier into this ctx (the collector plans again when the pre-flight keeps fewer calls)</td>\n<td>unit: src/audit-collect.test.js:758 — assert.equal(cut.rooms.length, 0, 'one room kept: no room file, one call'); (assertion)</td>\n<td>Evidenced: The first plan writes three rooms, then the second plan keeps one. Without the rm, the room file from the first plan would remain and the assertion would fail.</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>\n<p dir=\"auto\"><strong>Validation notes (1)</strong></p>\n<ul dir=\"auto\">\n<li>Obligation O3: test layer not stated (the test path is not clearly a unit test); not counted as unit evidence.</li>\n</ul>\n<p dir=\"auto\"><strong>Sources read</strong></p>\n<ul dir=\"auto\">\n<li>Requirement documents: none</li>\n<li>Standards files: <code class=\"notranslate\">.claude/skills/ste-mini/SKILL.md</code> (672 bytes, 13 lines), <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code> (567 bytes, 10 lines)</li>\n<li>Trace: SPEC_NOT_FOUND</li>\n<li>Commits: head <code class=\"notranslate\">d6a60f6</code>, base <code class=\"notranslate\">ac56adb</code></li>\n</ul>\n<p dir=\"auto\"><strong>Reduced review</strong></p>\n<p dir=\"auto\">Reasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.</p>\n<p dir=\"auto\">Run: engine claude · context pack: 16 files, 244 KB; not included: src/post.test.js<br>\nSpecGuard build 60642e44073d (ref <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/Mira190/SpecGuard/commit/8bbd96eb786bf9e687fa9608df5e277cdb5cbd3b/hovercard\" href=\"https://github.com/Mira190/SpecGuard/commit/8bbd96eb786bf9e687fa9608df5e277cdb5cbd3b\"><tt>8bbd96e</tt></a>)</p>\n</details>\n<p dir=\"auto\"><sub>Cost $0.11 · claude-haiku-5-5 · 151.7k in · 11.9k out · 51s</sub></p>"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/256#discussion_r4301307462",
+          "body": "note: the re-plan only stays consistent if the collector prices calls exactly as the engine does. Today they diverge if a workflow sets `context_pack_bytes`: the collector plans with `packBytes` 250000 and the engine reads `CONTEXT_PACK_BYTES`. That gap predates this PR, but it would bring this exact regression back. Pass the same value to both (map `CONTEXT_PACK_BYTES` into the collect step and use it for `packBytes`), and add one test asserting the collector and the engine agree on K when it is overridden. Follow-up PR.",
+          "user": {
+            "login": "Mira190",
+            "name": "Mira190",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/u/163523387?v=4",
+            "id": 163523387
+          },
+          "id": 4301307462,
+          "pull_request_review_id": 5556083187,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T04:14:32Z",
+          "updated_at": "2026-10-17T04:14:32Z",
+          "review": null,
+          "side": "RIGHT",
+          "line": 318,
+          "start_line": null,
+          "path": "src/audit-collect.js",
+          "body_html": "<p dir=\"auto\">note: the re-plan only stays consistent if the collector prices calls exactly as the engine does. Today they diverge if a workflow sets <code class=\"notranslate\">context_pack_bytes</code>: the collector plans with <code class=\"notranslate\">packBytes</code> 250000 and the engine reads <code class=\"notranslate\">CONTEXT_PACK_BYTES</code>. That gap predates this PR, but it would bring this exact regression back. Pass the same value to both (map <code class=\"notranslate\">CONTEXT_PACK_BYTES</code> into the collect step and use it for <code class=\"notranslate\">packBytes</code>), and add one test asserting the collector and the engine agree on K when it is overridden. Follow-up PR.</p>"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/256#pullrequestreview-5556083187",
+          "body": "Review against the #255 regression found by a real seeded run. At default haiku/$1, whole-unit coverage fell from 30+13 to 16+7, with 20 units \"not reached\", while only $0.42 was spent and no hint was shown.\n\n- **Root cause:** the collector's K (`unitCalls`) ignored the block-call reserve, so the engine's pre-flight dropped unit rooms 4–5. Those rooms held only second-or-later parts, but `droppedUnits` recorded whole unit ids. Units already reviewed in part were then reported as not reached.\n- **Fix:** the collector runs the engine's own pre-flight (`keptRooms`) and re-plans to the K the engine will keep. First-fit is a prefix, so first parts stay first. Drops are recorded per part, and a unit with a surviving part counts as reached. Dropped parts get a visible line. The lead table cap is now 20, with unreferenced exports first.\n- **The crash my gate caught on the first real run is fixed:** a TDZ error where `run()` reached `const pricePart` before it was initialised. A new test runs the engine as a script through the split path. Adapter exceptions are now class `internal` and always red, so a bug of ours can't hide behind a green check on a weekly scan.\n- **Real seeded run (Kite 39001362367, default settings):** 43/43 reviewed (30 whole + 13 forced, 0 not reached), against 23 before. Cost is the same ($0.42), the run took 4m40s against 4m33s, and the `moveCrop`/`pointerNote` leads are now visible. Recall is unchanged (model 3/8, static 6/8, combined 6/8), as expected, since this PR restores coverage rather than adding detection.\n- The dogfood's two \"assertion removed\" findings (audit-post.test.js:994-995) are the old cap-of-10 assertions, deliberately replaced. They are false positives.\n\nLGTM. One note inline; merging.",
+          "user": {
+            "login": "Mira190",
+            "name": "Mira190",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/u/163523387?u=b3b2c50cf3cd8cfd5f24eefa31a74a83ece97d84&v=4",
+            "id": 163523387
+          },
+          "id": 5556083187,
+          "pull_request_review_id": null,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T04:14:32Z",
+          "updated_at": null,
+          "review": "COMMENTED",
+          "side": null,
+          "line": null,
+          "start_line": null,
+          "path": null,
+          "body_html": "<p dir=\"auto\">Review against the <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894377265\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/255\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/255/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/255\">#255</a> regression found by a real seeded run. At default haiku/$1, whole-unit coverage fell from 30+13 to 16+7, with 20 units \"not reached\", while only $0.42 was spent and no hint was shown.</p>\n<ul dir=\"auto\">\n<li><strong>Root cause:</strong> the collector's K (<code class=\"notranslate\">unitCalls</code>) ignored the block-call reserve, so the engine's pre-flight dropped unit rooms 4–5. Those rooms held only second-or-later parts, but <code class=\"notranslate\">droppedUnits</code> recorded whole unit ids. Units already reviewed in part were then reported as not reached.</li>\n<li><strong>Fix:</strong> the collector runs the engine's own pre-flight (<code class=\"notranslate\">keptRooms</code>) and re-plans to the K the engine will keep. First-fit is a prefix, so first parts stay first. Drops are recorded per part, and a unit with a surviving part counts as reached. Dropped parts get a visible line. The lead table cap is now 20, with unreferenced exports first.</li>\n<li><strong>The crash my gate caught on the first real run is fixed:</strong> a TDZ error where <code class=\"notranslate\">run()</code> reached <code class=\"notranslate\">const pricePart</code> before it was initialised. A new test runs the engine as a script through the split path. Adapter exceptions are now class <code class=\"notranslate\">internal</code> and always red, so a bug of ours can't hide behind a green check on a weekly scan.</li>\n<li><strong>Real seeded run (Kite 39001362367, default settings):</strong> 43/43 reviewed (30 whole + 13 forced, 0 not reached), against 23 before. Cost is the same ($0.42), the run took 4m40s against 4m33s, and the <code class=\"notranslate\">moveCrop</code>/<code class=\"notranslate\">pointerNote</code> leads are now visible. Recall is unchanged (model 3/8, static 6/8, combined 6/8), as expected, since this PR restores coverage rather than adding detection.</li>\n<li>The dogfood's two \"assertion removed\" findings (audit-post.test.js:994-995) are the old cap-of-10 assertions, deliberately replaced. They are false positives.</li>\n</ul>\n<p dir=\"auto\">LGTM. One note inline; merging.</p>"
+        }
+      ],
+      "url": "https://github.com/Mira190/SpecGuard/pull/256",
+      "title": "Mira190/SpecGuard PR #256 comments",
+      "display_url": "https://github.com/Mira190/SpecGuard/pull/256",
+      "display_title": "Mira190/SpecGuard PR #256 comments"
+    },
+    "258": {
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/258#issuecomment-6229607959",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":52246,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":258,\"merged\":false,\"head\":\"db9984d2677bb5b9974df75529263d1744cf4f3d\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"54db4d08e0e91b1fcae16d0ed3b9e63f885d4db7\",\"build\":\"89b1e3504c13\"},\"complete\":false,\"execution_complete\":false,\"outcome_valid\":true,\"findings\":{\"standard\":{\"posted\":0,\"already\":0,\"summary\":1}},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[],\"sum\":[{\"fp\":\"68704aec440f0d10\",\"path\":\"src/pack-cap.js\",\"line\":4,\"kind\":\"standard\",\"title\":\"packLimit's unit test lives outside pack-cap.test.js\"}]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Incomplete review: no unit test gaps found so far**\n\n### Not reviewed (6)\n\n- Review context was cut: the model saw only part of `src/audit-units.test.js`, `src/claude-api.test.js`, `src/audit-code.test.js`, `src/auto-engine.test.js`, `src/audit-post.test.js`; obligations that depend on them are unknown.\n- Not read: .github/workflows/specguard-run.yml (the PR says it forwards the input; not in the diff), src/claude-api.test.js lines 289-653 and 675-1249, and any test of the engine's run() env parse. claude-api.js now calls packLimit where it used an identical inline parse; that one-line pass-through raises no obligation.\n- The fileCap lead (src/pack-cap.js:3) is unchanged code, so it is not a changed-behaviour obligation.\n- The removed 'shortcut' comment in audit-units.js carries no behaviour.\n- Context trimmed: issue #256 body cut to about 3 KB in requirements.md (acceptance criteria kept).\n- Context trimmed: issue #255 body cut to about 3 KB in requirements.md (acceptance criteria kept).\n\n> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n> Fast-tier model: only high-confidence findings are posted inline.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Low-confidence findings (1)**\n\n- **Violation:** packLimit's unit test lives outside pack-cap.test.js [`src/pack-cap.js:4`](https://github.com/Mira190/SpecGuard/blob/db9984d2677bb5b9974df75529263d1744cf4f3d/src/pack-cap.js#L4) (reduced review: needs high confidence and two citations; low confidence) — rule: `.github/instructions/specguard.instructions.md`\n\n**Evidenced criteria (2)**\n\n- Evidenced: **X1** `packLimit(env)` in src/pack-cap.js is the one parse of CONTEXT_PACK_BYTES (default 250000, 0 = off). claude-api.js and…\n- Evidenced: **X2** New action input `context_pack_bytes` (empty = 250000). It is mapped as CONTEXT_PACK_BYTES into the scan collect step…\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Applied the src/** coding standard to the changed src files. Node built-ins only, node:test with &lt;name>.test.js placement, and Error throws were checked; only the placement of packLimit's tests is a finding. ste-mini governs prose, not code, and was not applied to the code. Sources: `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. Searched the changed src files and their tests. packLimit is already a pure env-to-number function with direct return-value tests, and the collector CLI test covers the wiring. No logic needs pushing down.\n\n**Requirements source:** PR body, issue #256 (context), issue #255 (context), history PR #214, history PR #198, history PR #120 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (4) · Unit evidence: 4/4 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: packLimit returns 250000 when CONTEXT_PACK_BYTES is unset or empty, the parsed value otherwise, and 0 for garbage | PR body; src/pack-cap.js:4 — const packLimit = (env) => (env.CONTEXT_PACK_BYTES === undefined \\|\\| env.CONTEXT_PACK_BYTES === '' ? 250000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) \\|\\| 0)); // the pack's size: the engine and the collector both read it here, so they plan the same number of calls | unit: src/audit-action.test.js:324 —   assert.deepEqual([{}, { CONTEXT_PACK_BYTES: '' }, { CONTEXT_PACK_BYTES: '120000' }, { CONTEXT_PACK_BYTES: '0' }, { CONTEXT_PACK_BYTES: 'x' }].map(packLimit), [250000, 250000, 120000, 0, 0]); (assertion) | Evidenced: The test calls packLimit directly on unset, empty, 120000, 0 and garbage inputs and asserts the exact return values. Dropping the default or the parse changes at least one of them. A negative input is not pinned, but the documented contract is an integer with 0 = none. |\n| O2: The scan collector sizes the pack with packLimit when PACK_SPLIT is true, so its planned unit calls match the engine pre-flight; unset keeps the 250000 default | PR body; src/audit-collect.js:374 — const packBytes = env.PACK_SPLIT === 'true' ? require('./pack-cap').packLimit(env) : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run | unit: src/audit-collect.test.js:783 —   assert.equal(small, 3, 'a 120000-byte pack buys three unit calls at 0.50 USD'); (assertion); unit: src/audit-collect.test.js:784 —   assert.equal(small, kept(120000).rooms, 'the collector plans the rooms the engine keeps'); (assertion); unit: src/audit-collect.test.js:787 —   assert.equal(dflt, kept(250000).rooms); (assertion) | Evidenced: The CLI test runs the collector with CONTEXT_PACK_BYTES=120000 and asserts 3 planned rooms, a literal independent of the code, and that this equals the engine pre-flight's kept rooms. Before this change the collector hard-coded 250000 and would plan 2 rooms, so the test fails on main. The unset case is pinned at 2 rooms with a control. |\n| O3: The context_pack_bytes action input is mapped as CONTEXT_PACK_BYTES into the scan collect step and every engine step | PR body; action.yml:144 — CONTEXT_PACK_BYTES: ${{ inputs.context_pack_bytes }} | unit: src/audit-action.test.js:321 —   assert.match(find(/id: audit_collect/), map); (assertion); unit: src/audit-action.test.js:322 —   for (const s of steps.filter((x) => /CLAUDE_MODE: /.test(x))) assert.match(s, map, 'every engine step'); (assertion) | Evidenced: The action test asserts the mapping line in the audit_collect step and in every step that sets CLAUDE_MODE (the engine and run steps). Removing the mapping from any of those steps fails the test. |\n| O4: The reusable workflow forwards context_pack_bytes to the action | PR body; .github/workflows/specguard.yml:89 — context_pack_bytes: ${{ inputs.context_pack_bytes }} | unit: src/audit-action.test.js:274 —   assert.deepEqual([...new Set([...forwarded, ...excluded])].sort(), [...actionInputs].sort()); (assertion) | Evidenced: The S12 test requires the set of forwarded and documented-excluded inputs to equal every action input. A new action input that the workflow does not forward fails this test. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `db9984d`, base `027bd73`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 13 files, 226 KB; not included: src/auto-engine.test.js, src/audit-post.test.js\nSpecGuard build 89b1e3504c13 (ref 54db4d08e0e91b1fcae16d0ed3b9e63f885d4db7)\n\n</details>\n\n<sub>Cost $0.10 · claude-haiku-5-5 · 129.9k in · 12.1k out · 52s</sub>\n",
+          "user": {
+            "login": "github-actions[bot]",
+            "name": "github-actions[bot]",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/in/15368?v=4",
+            "id": 41898282
+          },
+          "id": 6229607959,
+          "pull_request_review_id": null,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T04:25:16Z",
+          "updated_at": "2026-10-17T04:34:25Z",
+          "review": null,
+          "side": null,
+          "line": null,
+          "start_line": null,
+          "path": null,
+          "body_html": "\n\n\n\n<h2 dir=\"auto\">SpecGuard</h2>\n<p dir=\"auto\"><strong><g-emoji class=\"g-emoji\" alias=\"warning\">⚠️</g-emoji> Incomplete review: no unit test gaps found so far</strong></p>\n<h3 dir=\"auto\">Not reviewed (6)</h3>\n<ul dir=\"auto\">\n<li>Review context was cut: the model saw only part of <code class=\"notranslate\">src/audit-units.test.js</code>, <code class=\"notranslate\">src/claude-api.test.js</code>, <code class=\"notranslate\">src/audit-code.test.js</code>, <code class=\"notranslate\">src/auto-engine.test.js</code>, <code class=\"notranslate\">src/audit-post.test.js</code>; obligations that depend on them are unknown.</li>\n<li>Not read: .github/workflows/specguard-run.yml (the PR says it forwards the input; not in the diff), src/claude-api.test.js lines 289-653 and 675-1249, and any test of the engine's run() env parse. claude-api.js now calls packLimit where it used an identical inline parse; that one-line pass-through raises no obligation.</li>\n<li>The fileCap lead (src/pack-cap.js:3) is unchanged code, so it is not a changed-behaviour obligation.</li>\n<li>The removed 'shortcut' comment in audit-units.js carries no behaviour.</li>\n<li>Context trimmed: issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894587249\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/256\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/256/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/256\">#256</a> body cut to about 3 KB in requirements.md (acceptance criteria kept).</li>\n<li>Context trimmed: issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894377265\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/255\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/255/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/255\">#255</a> body cut to about 3 KB in requirements.md (acceptance criteria kept).</li>\n</ul>\n<blockquote>\n<p dir=\"auto\"><strong>Incomplete review.</strong> Not everything was covered; the findings above were verified, and the next push or rerun reviews again.<br>\nFast-tier model: only high-confidence findings are posted inline.</p>\n</blockquote>\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n<p dir=\"auto\"><strong>Low-confidence findings (1)</strong></p>\n<ul dir=\"auto\">\n<li><strong>Violation:</strong> packLimit's unit test lives outside pack-cap.test.js <a href=\"https://github.com/Mira190/SpecGuard/blob/db9984d2677bb5b9974df75529263d1744cf4f3d/src/pack-cap.js#L4\"><code class=\"notranslate\">src/pack-cap.js:4</code></a> (reduced review: needs high confidence and two citations; low confidence) — rule: <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code></li>\n</ul>\n<p dir=\"auto\"><strong>Evidenced criteria (2)</strong></p>\n<ul dir=\"auto\">\n<li>Evidenced: <strong>X1</strong> <code class=\"notranslate\">packLimit(env)</code> in src/pack-cap.js is the one parse of CONTEXT_PACK_BYTES (default 250000, 0 = off). claude-api.js and…</li>\n<li>Evidenced: <strong>X2</strong> New action input <code class=\"notranslate\">context_pack_bytes</code> (empty = 250000). It is mapped as CONTEXT_PACK_BYTES into the scan collect step…</li>\n</ul>\n<p dir=\"auto\"><strong>Coding standards and test layers</strong></p>\n<ul dir=\"auto\">\n<li>Coding standards: reviewed. Applied the src/** coding standard to the changed src files. Node built-ins only, node:test with &lt;name&gt;.test.js placement, and Error throws were checked; only the placement of packLimit's tests is a finding. ste-mini governs prose, not code, and was not applied to the code. Sources: <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code>.</li>\n<li>Test layers: reviewed. Searched the changed src files and their tests. packLimit is already a pure env-to-number function with direct return-value tests, and the collector CLI test covers the wiring. No logic needs pushing down.</li>\n</ul>\n<p dir=\"auto\"><strong>Requirements source:</strong> PR body, issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894587249\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/256\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/256/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/256\">#256</a> (context), issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894377265\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/255\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/255/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/255\">#255</a> (context), history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5882589528\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/214\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/214/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/214\">#214</a>, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5873918090\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/198\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/198/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/198\">#198</a>, history PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5830138111\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/120\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/120/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/120\">#120</a> (no structured acceptance criteria found)</p>\n<p dir=\"auto\">No requirement documents found (content-based discovery; see <code class=\"notranslate\">requirements_paths</code> to add or exclude).</p>\n<p dir=\"auto\"><strong>Obligations (4) · Unit evidence: 4/4 obligations</strong></p>\n<p dir=\"auto\">An obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.</p>\n<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>Obligation</th>\n<th>Source / behaviour</th>\n<th>Assertion evidence / layer</th>\n<th>Status / reason</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>O1: packLimit returns 250000 when CONTEXT_PACK_BYTES is unset or empty, the parsed value otherwise, and 0 for garbage</td>\n<td>PR body; src/pack-cap.js:4 — const packLimit = (env) =&gt; (env.CONTEXT_PACK_BYTES === undefined || env.CONTEXT_PACK_BYTES === '' ? 250000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) || 0)); // the pack's size: the engine and the collector both read it here, so they plan the same number of calls</td>\n<td>unit: src/audit-action.test.js:324 —   assert.deepEqual([{}, { CONTEXT_PACK_BYTES: '' }, { CONTEXT_PACK_BYTES: '120000' }, { CONTEXT_PACK_BYTES: '0' }, { CONTEXT_PACK_BYTES: 'x' }].map(packLimit), [250000, 250000, 120000, 0, 0]); (assertion)</td>\n<td>Evidenced: The test calls packLimit directly on unset, empty, 120000, 0 and garbage inputs and asserts the exact return values. Dropping the default or the parse changes at least one of them. A negative input is not pinned, but the documented contract is an integer with 0 = none.</td>\n</tr>\n<tr>\n<td>O2: The scan collector sizes the pack with packLimit when PACK_SPLIT is true, so its planned unit calls match the engine pre-flight; unset keeps the 250000 default</td>\n<td>PR body; src/audit-collect.js:374 — const packBytes = env.PACK_SPLIT === 'true' ? require('./pack-cap').packLimit(env) : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run</td>\n<td>unit: src/audit-collect.test.js:783 —   assert.equal(small, 3, 'a 120000-byte pack buys three unit calls at 0.50 USD'); (assertion); unit: src/audit-collect.test.js:784 —   assert.equal(small, kept(120000).rooms, 'the collector plans the rooms the engine keeps'); (assertion); unit: src/audit-collect.test.js:787 —   assert.equal(dflt, kept(250000).rooms); (assertion)</td>\n<td>Evidenced: The CLI test runs the collector with CONTEXT_PACK_BYTES=120000 and asserts 3 planned rooms, a literal independent of the code, and that this equals the engine pre-flight's kept rooms. Before this change the collector hard-coded 250000 and would plan 2 rooms, so the test fails on main. The unset case is pinned at 2 rooms with a control.</td>\n</tr>\n<tr>\n<td>O3: The context_pack_bytes action input is mapped as CONTEXT_PACK_BYTES into the scan collect step and every engine step</td>\n<td>PR body; action.yml:144 — CONTEXT_PACK_BYTES: ${{ inputs.context_pack_bytes }}</td>\n<td>unit: src/audit-action.test.js:321 —   assert.match(find(/id: audit_collect/), map); (assertion); unit: src/audit-action.test.js:322 —   for (const s of steps.filter((x) =&gt; /CLAUDE_MODE: /.test(x))) assert.match(s, map, 'every engine step'); (assertion)</td>\n<td>Evidenced: The action test asserts the mapping line in the audit_collect step and in every step that sets CLAUDE_MODE (the engine and run steps). Removing the mapping from any of those steps fails the test.</td>\n</tr>\n<tr>\n<td>O4: The reusable workflow forwards context_pack_bytes to the action</td>\n<td>PR body; .github/workflows/specguard.yml:89 — context_pack_bytes: ${{ inputs.context_pack_bytes }}</td>\n<td>unit: src/audit-action.test.js:274 —   assert.deepEqual([...new Set([...forwarded, ...excluded])].sort(), [...actionInputs].sort()); (assertion)</td>\n<td>Evidenced: The S12 test requires the set of forwarded and documented-excluded inputs to equal every action input. A new action input that the workflow does not forward fails this test.</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>\n<p dir=\"auto\"><strong>Sources read</strong></p>\n<ul dir=\"auto\">\n<li>Requirement documents: none</li>\n<li>Standards files: <code class=\"notranslate\">.claude/skills/ste-mini/SKILL.md</code> (672 bytes, 13 lines), <code class=\"notranslate\">.github/instructions/specguard.instructions.md</code> (567 bytes, 10 lines)</li>\n<li>Trace: SPEC_NOT_FOUND</li>\n<li>Commits: head <code class=\"notranslate\">db9984d</code>, base <code class=\"notranslate\">027bd73</code></li>\n</ul>\n<p dir=\"auto\"><strong>Reduced review</strong></p>\n<p dir=\"auto\">Reasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.</p>\n<p dir=\"auto\">Run: engine claude · context pack: 13 files, 226 KB; not included: src/auto-engine.test.js, src/audit-post.test.js<br>\nSpecGuard build 89b1e3504c13 (ref <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/Mira190/SpecGuard/commit/54db4d08e0e91b1fcae16d0ed3b9e63f885d4db7/hovercard\" href=\"https://github.com/Mira190/SpecGuard/commit/54db4d08e0e91b1fcae16d0ed3b9e63f885d4db7\"><tt>54db4d0</tt></a>)</p>\n</details>\n<p dir=\"auto\"><sub>Cost $0.10 · claude-haiku-5-5 · 129.9k in · 12.1k out · 52s</sub></p>"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/258#discussion_r4301394677",
+          "body": "note: with a smaller pack the same Kite scan used 10 calls and cost $0.09, against 7 calls and $0.42 at 250000 bytes. That is the sort of real usage data the pre-flight calibration follow-up needs. Before we change the pre-flight's worst-case reserve, collect a few `usage.json` files across pack sizes and models. The reserve is about 4× pessimistic today, and that is why K is small at the default budget.",
+          "user": {
+            "login": "Mira190",
+            "name": "Mira190",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/u/163523387?v=4",
+            "id": 163523387
+          },
+          "id": 4301394677,
+          "pull_request_review_id": 5556216391,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T04:35:23Z",
+          "updated_at": "2026-10-17T04:35:23Z",
+          "review": null,
+          "side": "RIGHT",
+          "line": 4,
+          "start_line": null,
+          "path": "src/pack-cap.js",
+          "body_html": "<p dir=\"auto\">note: with a smaller pack the same Kite scan used 10 calls and cost $0.09, against 7 calls and $0.42 at 250000 bytes. That is the sort of real usage data the pre-flight calibration follow-up needs. Before we change the pre-flight's worst-case reserve, collect a few <code class=\"notranslate\">usage.json</code> files across pack sizes and models. The reserve is about 4× pessimistic today, and that is why K is small at the default budget.</p>"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/258#pullrequestreview-5556216391",
+          "body": "Review against the #256 follow-up. The collector planned with a hard-coded 250000-byte pack while the engine read `CONTEXT_PACK_BYTES`, so any override would bring back the #255 class of bug: planned rooms the engine then drops.\n\n- One parse (`packLimit`) is now used by both sides, and the `fileCap` callers already follow `packBytes`. A CLI test shows the collector's rooms equal the engine's `keptRooms` at 120000, with the default unchanged.\n- The real seeded run passed my gate (Kite 39002428421, `context_pack_bytes: 150000`, haiku, $1). The funnel is 30 whole + 13 forced, with 0 units not reached, `dropped: []`, and the only \"not reached\" being a later part (SceneEditor part 3). Cost was $0.09.\n- Scope note: there was no `context_pack_bytes` input before, so this PR adds a public input. That's a reasonable size for the fix and it's documented. Keeping the fixed-form `specguard-run.yml` unchanged was the right call.\n\nLGTM. One note inline; merging.",
+          "user": {
+            "login": "Mira190",
+            "name": "Mira190",
+            "email": null,
+            "avatar_url": "https://avatars.githubusercontent.com/u/163523387?u=b3b2c50cf3cd8cfd5f24eefa31a74a83ece97d84&v=4",
+            "id": 163523387
+          },
+          "id": 5556216391,
+          "pull_request_review_id": null,
+          "in_reply_to_id": null,
+          "created_at": "2026-10-17T04:35:23Z",
+          "updated_at": null,
+          "review": "COMMENTED",
+          "side": null,
+          "line": null,
+          "start_line": null,
+          "path": null,
+          "body_html": "<p dir=\"auto\">Review against the <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894587249\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/256\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/256/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/256\">#256</a> follow-up. The collector planned with a hard-coded 250000-byte pack while the engine read <code class=\"notranslate\">CONTEXT_PACK_BYTES</code>, so any override would bring back the <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5894377265\" data-permission-text=\"Title is private\" data-url=\"https://github.com/Mira190/SpecGuard/issues/255\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/Mira190/SpecGuard/pull/255/hovercard\" href=\"https://github.com/Mira190/SpecGuard/pull/255\">#255</a> class of bug: planned rooms the engine then drops.</p>\n<ul dir=\"auto\">\n<li>One parse (<code class=\"notranslate\">packLimit</code>) is now used by both sides, and the <code class=\"notranslate\">fileCap</code> callers already follow <code class=\"notranslate\">packBytes</code>. A CLI test shows the collector's rooms equal the engine's <code class=\"notranslate\">keptRooms</code> at 120000, with the default unchanged.</li>\n<li>The real seeded run passed my gate (Kite 39002428421, <code class=\"notranslate\">context_pack_bytes: 150000</code>, haiku, $1). The funnel is 30 whole + 13 forced, with 0 units not reached, <code class=\"notranslate\">dropped: []</code>, and the only \"not reached\" being a later part (SceneEditor part 3). Cost was $0.09.</li>\n<li>Scope note: there was no <code class=\"notranslate\">context_pack_bytes</code> input before, so this PR adds a public input. That's a reasonable size for the fix and it's documented. Keeping the fixed-form <code class=\"notranslate\">specguard-run.yml</code> unchanged was the right call.</li>\n</ul>\n<p dir=\"auto\">LGTM. One note inline; merging.</p>"
+        }
+      ],
+      "url": "https://github.com/Mira190/SpecGuard/pull/258",
+      "title": "Mira190/SpecGuard PR #258 comments",
+      "display_url": "https://github.com/Mira190/SpecGuard/pull/258",
+      "display_title": "Mira190/SpecGuard PR #258 comments"
+    }
+  },
+  "jobs": {
+    "39002428421": {
+      "jobs": [
+        {
+          "id": 117307986123,
+          "name": "audit",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 39002428421,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run Mira190/SpecGuard@fix/pack-bytes-agree",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Post Run Mira190/SpecGuard@fix/pack-bytes-agree",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            }
+          ]
+        }
+      ]
+    },
+    "39001362367": {
+      "jobs": [
+        {
+          "id": 117304799180,
+          "name": "audit",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 39001362367,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run Mira190/SpecGuard@fix/stateless-parts-budget",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Post Run Mira190/SpecGuard@fix/stateless-parts-budget",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            }
+          ]
+        }
+      ]
+    },
+    "39001043636": {
+      "jobs": [
+        {
+          "id": 117303828771,
+          "name": "audit",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 39001043636,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run Mira190/SpecGuard@fix/stateless-parts-budget",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Post Run Mira190/SpecGuard@fix/stateless-parts-budget",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            }
+          ]
+        }
+      ]
+    },
+    "39003157050": {
+      "jobs": [
+        {
+          "id": 117310127634,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 39003157050,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js eval/trace-recall/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        },
+        {
+          "id": 117310128436,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 39003157050,
+          "logs_url": null,
+          "steps": null
+        }
+      ]
+    },
+    "39002444159": {
+      "jobs": [
+        {
+          "id": 117308028369,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 39002444159,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        },
+        {
+          "id": 117308028648,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 39002444159,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js eval/trace-recall/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        }
+      ]
+    },
+    "39000640380": {
+      "jobs": [
+        {
+          "id": 117302620413,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 39000640380,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js eval/trace-recall/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        },
+        {
+          "id": 117302620602,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 39000640380,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "logs": {
+    "117307986123": [
+      "2026-10-17T04:24:17.5796320Z   CONTEXT_PACK_BYTES: 150000",
+      "2026-10-17T04:24:19.1985706Z SpecGuard unit test gap scan: 71 of 43 units, 1 design document(s), 2 not admitted",
+      "2026-10-17T04:24:20.0171740Z   CONTEXT_PACK_BYTES: 150000",
+      "2026-10-17T04:24:20.0418650Z   CONTEXT_PACK_BYTES: 150000",
+      "2026-10-17T04:28:57.1109572Z   SPECGUARD_REF: fix/pack-bytes-agree",
+      "2026-10-17T04:28:58.8828264Z Artifact specguard-audit-1 successfully finalized. Artifact ID 12089722584",
+      "2026-10-17T04:28:58.8830097Z Artifact specguard-audit-1 has been successfully uploaded! Final size is 123609 bytes. Artifact ID is 12089722584",
+      "2026-10-17T04:28:58.8837786Z Artifact download URL: https://github.com/Mira190/Kite/actions/runs/39002428421/artifacts/12089722584",
+      "2026-10-17T04:28:58.9013615Z   STATUS: incomplete"
+    ],
+    "117304799180": [
+      "2026-10-17T04:07:26.2733817Z SpecGuard unit test gap scan: 58 of 43 units, 1 design document(s), 2 not admitted",
+      "2026-10-17T04:12:02.8442037Z   SPECGUARD_REF: fix/stateless-parts-budget",
+      "2026-10-17T04:12:04.5096219Z Artifact specguard-audit-1 successfully finalized. Artifact ID 12089725713",
+      "2026-10-17T04:12:04.5103162Z Artifact specguard-audit-1 has been successfully uploaded! Final size is 113486 bytes. Artifact ID is 12089725713",
+      "2026-10-17T04:12:04.5105497Z Artifact download URL: https://github.com/Mira190/Kite/actions/runs/39001362367/artifacts/12089725713",
+      "2026-10-17T04:12:04.5307172Z   STATUS: incomplete"
+    ],
+    "117303828771": [
+      "2026-10-17T04:02:22.2900765Z SpecGuard unit test gap scan: 58 of 43 units, 1 design document(s), 2 not admitted",
+      "2026-10-17T04:02:23.1370559Z   SPECGUARD_REF: fix/stateless-parts-budget",
+      "2026-10-17T04:02:24.7075976Z Artifact specguard-audit-1 successfully finalized. Artifact ID 12089515336",
+      "2026-10-17T04:02:24.7077195Z Artifact specguard-audit-1 has been successfully uploaded! Final size is 63936 bytes. Artifact ID is 12089515336",
+      "2026-10-17T04:02:24.7078530Z Artifact download URL: https://github.com/Mira190/Kite/actions/runs/39001043636/artifacts/12089515336",
+      "2026-10-17T04:02:24.7172152Z   STATUS: failed"
+    ],
+    "117308028648": [
+      "2026-10-17T04:24:43.3311758Z not ok 101 - k2 toolbox (wanted): the has() claim is not posted as a weak test # TODO no deterministic weak_test guard; model-dependent",
+      "2026-10-17T04:25:32.0352048Z not ok 1196 - specguard-run.yml: one required target plus optional inputs, nothing else on the form",
+      "2026-10-17T04:25:32.0532448Z # tests 1362",
+      "2026-10-17T04:25:32.0532629Z # pass 1357",
+      "2026-10-17T04:25:32.0532708Z # fail 1",
+      "2026-10-17T04:25:32.0532879Z # skipped 3",
+      "2026-10-17T04:25:32.0532964Z # todo 1",
+      "2026-10-17T04:25:32.0546145Z ##[error]Process completed with exit code 1."
+    ],
+    "117310127634": [
+      "2026-10-17T04:36:02.4093258Z not ok 101 - k2 toolbox (wanted): the has() claim is not posted as a weak test # TODO no deterministic weak_test guard; model-dependent",
+      "2026-10-17T04:36:58.2660028Z # tests 1362",
+      "2026-10-17T04:36:58.2660195Z # pass 1358",
+      "2026-10-17T04:36:58.2660277Z # fail 0",
+      "2026-10-17T04:36:58.2660446Z # skipped 3",
+      "2026-10-17T04:36:58.2660527Z # todo 1"
+    ]
+  },
+  "artifact": {
+    "repo": "Mira190/Kite",
+    "run": 39002428421,
+    "id": 12089722584,
+    "file_reference_obtained": true,
+    "zip_inspected": false,
+    "reason": "Local terminal DNS could not resolve download host; signed URL deliberately excluded."
+  }
+}

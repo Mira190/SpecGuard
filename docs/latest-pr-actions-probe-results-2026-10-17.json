@@ -1,0 +1,342 @@
+{
+  "snapshot": "ab2cfc0aafe098d5e47704ebe36df85d687847e5",
+  "created_at": "2026-10-17T02:42:24.100Z",
+  "method": "Immutable Git modules; deterministic synthetic observations; no model calls or network; product files untouched.",
+  "results": [
+    {
+      "id": "F1",
+      "name": "Resolved summary finding disappears from rebuilt blind-label pool",
+      "before": {
+        "pool": 1,
+        "joint": {
+          "labelled": 1,
+          "with_outcome": 1,
+          "valid": 1,
+          "valid_addressed": 0,
+          "rate": null
+        }
+      },
+      "after": {
+        "pool": 0,
+        "outcomes": 1,
+        "A": 1,
+        "joint": {
+          "labelled": 0,
+          "with_outcome": 0,
+          "valid": 0,
+          "valid_addressed": 0,
+          "rate": null
+        },
+        "unmatched": [
+          "F9a5e30c2e"
+        ]
+      }
+    },
+    {
+      "id": "F2",
+      "name": "Summary-to-inline promotion changes blind-label id with the same location and fingerprint prefix",
+      "before": {
+        "id": "F9a5e30c2e",
+        "ref": "bbbbbbbbbbbbbbbb"
+      },
+      "after": {
+        "id": "F420a685ac",
+        "ref": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "unmatched": [
+          "F9a5e30c2e"
+        ]
+      }
+    },
+    {
+      "id": "F3",
+      "name": "Failed trace is indistinguishable from successful empty retrieval in analysis output",
+      "result": {
+        "variants": 1,
+        "cases": 1,
+        "directions": {
+          "req->code": {
+            "code": {
+              "queries": 0,
+              "empty_relevant_excluded": 0,
+              "relevant_items": 0,
+              "hit_at_1": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "hit_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_1": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_K": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "mrr_at_10": {
+                "sum": 0,
+                "n": 0,
+                "value": null
+              },
+              "all_required_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              }
+            },
+            "code_file_level": {
+              "queries": 0,
+              "empty_relevant_excluded": 0,
+              "relevant_items": 0,
+              "hit_at_1": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "hit_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_1": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_K": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "mrr_at_10": {
+                "sum": 0,
+                "n": 0,
+                "value": null
+              },
+              "all_required_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              }
+            },
+            "tests": {
+              "queries": 0,
+              "empty_relevant_excluded": 0,
+              "relevant_items": 0,
+              "hit_at_1": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "hit_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_1": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "recall_at_K": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              },
+              "mrr_at_10": {
+                "sum": 0,
+                "n": 0,
+                "value": null
+              },
+              "all_required_at_3": {
+                "k": 0,
+                "n": 0,
+                "rate": null
+              }
+            }
+          },
+          "code->req": {
+            "requirement": {
+              "queries": 1,
+              "empty_relevant_excluded": 0,
+              "relevant_items": 1,
+              "hit_at_1": {
+                "k": 0,
+                "n": 1,
+                "rate": 0
+              },
+              "hit_at_3": {
+                "k": 0,
+                "n": 1,
+                "rate": 0
+              },
+              "recall_at_1": {
+                "k": 0,
+                "n": 1,
+                "rate": 0
+              },
+              "recall_at_3": {
+                "k": 0,
+                "n": 1,
+                "rate": 0
+              },
+              "recall_at_K": {
+                "k": 0,
+                "n": 1,
+                "rate": 0
+              },
+              "mrr_at_10": {
+                "sum": 0,
+                "n": 1,
+                "value": 0
+              },
+              "all_required_at_3": {
+                "k": 0,
+                "n": 1,
+                "rate": 0
+              }
+            },
+            "tests": {
+              "queries": 1,
+              "empty_relevant_excluded": 0,
+              "relevant_items": 1,
+              "hit_at_1": {
+                "k": 1,
+                "n": 1,
+                "rate": 1
+              },
+              "hit_at_3": {
+                "k": 1,
+                "n": 1,
+                "rate": 1
+              },
+              "recall_at_1": {
+                "k": 1,
+                "n": 1,
+                "rate": 1
+              },
+              "recall_at_3": {
+                "k": 1,
+                "n": 1,
+                "rate": 1
+              },
+              "recall_at_K": {
+                "k": 1,
+                "n": 1,
+                "rate": 1
+              },
+              "mrr_at_10": {
+                "sum": 1,
+                "n": 1,
+                "value": 1
+              },
+              "all_required_at_3": {
+                "k": 1,
+                "n": 1,
+                "rate": 1
+              }
+            }
+          }
+        },
+        "runtime_ms": {
+          "n": 1,
+          "p50": 5,
+          "max": 5
+        }
+      },
+      "formatted": "1 variants of 1 independent cases (a case is counted once per variant; do not read this as 1 cases)\n\nreq->code / code: 0 queries, 0 relevant items\n  Hit@1 -  Hit@3 -\n  Recall@1 -  Recall@3 -  Recall@K -\n  MRR@10 - (sum 0 over 0)  All-required@3 -\n\nreq->code / code_file_level: 0 queries, 0 relevant items\n  Hit@1 -  Hit@3 -\n  Recall@1 -  Recall@3 -  Recall@K -\n  MRR@10 - (sum 0 over 0)  All-required@3 -\n\nreq->code / tests: 0 queries, 0 relevant items\n  Hit@1 -  Hit@3 -\n  Recall@1 -  Recall@3 -  Recall@K -\n  MRR@10 - (sum 0 over 0)  All-required@3 -\n\ncode->req / requirement: 1 queries, 1 relevant items\n  Hit@1 0% (0/1)  Hit@3 0% (0/1)\n  Recall@1 0% (0/1)  Recall@3 0% (0/1)  Recall@K 0% (0/1)\n  MRR@10 0.000 (sum 0 over 1)  All-required@3 0% (0/1)\n\ncode->req / tests: 1 queries, 1 relevant items\n  Hit@1 100% (1/1)  Hit@3 100% (1/1)\n  Recall@1 100% (1/1)  Recall@3 100% (1/1)  Recall@K 100% (1/1)\n  MRR@10 1.000 (sum 1 over 1)  All-required@3 100% (1/1)\n\nruntime per variant (trace + test candidates): p50 5 ms, max 5 ms, n=1"
+    },
+    {
+      "id": "F4",
+      "name": "Retrieval analysis accepts results for a mismatched target SHA",
+      "expected": "target-a",
+      "supplied": "different-target",
+      "metric": {
+        "k": 1,
+        "n": 1,
+        "rate": 1
+      }
+    },
+    {
+      "id": "F5",
+      "name": "Delivered recall exists but precision still uses raw TP; the exposure sets remain different",
+      "raw_tp": 1,
+      "fp": 1,
+      "precision": 0.5,
+      "recall_delivered": 0,
+      "delivered_precision_if_added": 0
+    },
+    {
+      "id": "F6",
+      "name": "Legacy error with unknown expected count is treated as zero rather than an unknown E2E denominator",
+      "legacy_error": 1,
+      "stamped_error": 0.5
+    },
+    {
+      "id": "C1",
+      "name": "Control: candidate-step failures now throw; successful empty output is allowed",
+      "verified": true
+    },
+    {
+      "id": "F8",
+      "name": "Actual candidates heredoc silently discards git diff timeout and produces ordinary candidates without collect-limits",
+      "injected_error": "git diff timeout, status 124",
+      "limits": "",
+      "candidates": "a.js\n  a.test.js  (same name)\n"
+    },
+    {
+      "id": "F7",
+      "name": "Control: inherited TRACE=off makes trace return valid empty output without limitations; harness inherits that variable",
+      "count": 0,
+      "candidates": {
+        "requirement_to_code": [],
+        "code_to_requirement": [],
+        "occurrences": [],
+        "limitations": []
+      }
+    }
+  ],
+  "loaded_source_hashes": {
+    "eval/weekly-report.js": "7b8d0a7dbe8acc3e26097411c77396582abbb100c20d5d477d800234371b9dc6",
+    "eval/aggregate-counts.js": "e32bca30976af9a4635c73f2b018c528858f7c0baa540515fd630518998d6dff",
+    "eval/assign.js": "37d7b7b1dbea010e8b9d5b72e8e72dde139f0ce1347aa203ad17f9d6c16adf7f",
+    "eval/label-export.js": "8c06658b07de66d933bf09cec2d4f79f56b590f5ca7cd613111baf09d9b3178c",
+    "eval/szz.js": "7bedef5068f7bd039ab12501fa7e7deee8453a0ae0fa8dcd410c62e1b291fd7d",
+    "src/post.js": "0d130d002d4da43860f71f0c4d674e197540a661b992453cbf8601a21a5d9a6f",
+    "src/checks.js": "ced268685a198655f0b71e598361a115794a3cb38cfb2e57120dba0e9ce928d6",
+    "src/preflight.js": "615e5489d96f4156b61255026370238ae0bdccc6112ce65c996af7d37a084759",
+    "src/limitations.js": "5413bf06c3980ec45c6a91d37457d6623976d1aebfdfb27e8dec65c147387ac0",
+    "src/standards-map.js": "40aaa82f017b8b5d9c7a2e7ce00d2a854e9fb361339baf60332cef831e0f4b26",
+    "src/focus.js": "eb6b49a2012d5e42519d36956ea6174dd16e40da4e9bd6fd45bfbfdd0aeddfbe",
+    "src/numdiff.js": "20f3bdccc2ef03d8b6d27a5650657ae222986c84e4b01c9e26056d0b1bc73a9d",
+    "src/prompt.js": "84ceb07e97f9e6cddca93c828c09490208eb58ba5481a75972a80ee95cd61630",
+    "eval/trace-recall/analyze.js": "bc5ec436928fefc98099de26e990dba7a7f1add37cce41368f2aab03e10c03cb",
+    "eval/grade.js": "872f5d904b3dc49151b55c7b2d1409b45c25de8678d6d85fd29cc57d66ad7ad4",
+    "eval/trace-recall/candidates.js": "d1987c7a55d3137196a8558b5d5b96c2e3408b34ea480bbe7b481ccd0ead439b",
+    "src/trace.js": "419c34c485c2129fe5a5f611c325a87128602cc3ce3a557703f74cced11291d8",
+    "src/deny.js": "bfc2e2ed0aebd65b48066f2957f18e5ae491426daad91ce6dea47eda97ba4145",
+    "src/test-map.js": "201662e302dc66ef2577382db37632d5fa318adceaff187ebd73084fcdb20a88",
+    "src/leads.js": "3dbd26320d085bdfe0c27941763713f7d6e2ec70bc81b9ec4885676ab2fc0255"
+  }
+}
