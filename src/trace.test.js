@@ -1236,6 +1236,6 @@ test('a .feature test is still a test candidate: the document skip does not appl
 
 test('isTestPath: a test directory or a basename suffix/prefix, never a leading word or a bare spec.js', () => {
   for (const p of ['src/test-map.test.js', 'test/parallel/test-fs.js', 'src/users/users.service.spec.ts', 'pkg/foo_test.go', 'test_x.py', 'pkg/tests/x.py', 'tests/x.py', 'spec/models/a_spec.rb', 'src/specs/a.js', 'test.js', 'a/__tests__/b.js', 'eval/prove.test.js']) assert.equal(T.isTestPath(p), true, p);
-  for (const p of ['src/test-map.js', 'src/spec-loader.js', 'src/spec.js', 'lib/testing-utils.js']) assert.equal(T.isTestPath(p), false, p);
+  for (const p of ['src/test-map.js', 'src/spec-loader.js', 'src/spec.js', 'lib/testing-utils.js', 'foo_test_helper.py', 'x.spec-helper.js']) assert.equal(T.isTestPath(p), false, p);
 });
 
