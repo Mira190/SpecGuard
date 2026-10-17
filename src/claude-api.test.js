@@ -1456,3 +1456,73 @@ test('PR pack: a changed test reached first as a candidate keeps its hunk when t
   const p = api.contextPack(r.ctx, r.root, 40000);
   assert.ok(p.text.includes('CHANGED_OWN'), 'the changed test\'s added line is shown although its source\'s share is spent');
 });
+
+// The provider refused the findings schema ("The compiled grammar is too large"): the API copy has no optional property and no union, and back() maps the empties to "absent" again.
+const FULL = JSON.parse(fs.readFileSync(path.join(__dirname, 'findings.schema.json'), 'utf8'));
+const cit = { path: 'a.js', line: 3, quote: 'x()', side: 'RIGHT' };
+const ORIGINAL = () => ({
+  requirements_source: 'pr', not_reviewed: '', standards: { status: 'checked', sources: ['S.md'], reason: 'r' }, layering: { status: 'checked', reason: 'r' },
+  coverage: [
+    { id: 'o1', obligation: 'o', source: 's', behaviour: { ...cit }, change: { ...cit }, evidence: [{ path: 't.js', line: 1, quote: 'q', layer: 'unit', proves: 'p', kind: 'assertion', side: 'RIGHT' }, { path: 't.js', line: 2, quote: 'q' }], status: 'covered', reason: 'r', alignment: { status: 'mismatch', since: 'introduced', reason: 'r' } },
+    { id: 'o2', obligation: 'o', source: 's', behaviour: null, evidence: [], status: 'unknown', reason: 'r' },
+  ],
+  findings: [
+    { kind: 'weak_test', path: 'a.js', line: 4, start_line: 2, quote: 'q', title: 't', body: 'b', counterexample: 'c', rule_source: 'R.md:1', rule_quote: 'rq', suggestion: 's', source: 'x', confidence: 'high', obligation_ids: ['o1'], side: 'LEFT' },
+    { kind: 'missing_test', path: 'a.js', line: 4, quote: 'q', title: 't', body: 'b', confidence: 'low', obligation_ids: [] },
+  ],
+  requirements: [{ id: 'R1', source: 's', quote: 'q', obligation_ids: ['o1'], reason: 'r', ref: 'x', line: 2, pr_quote: 'p' }, { id: 'R2', obligation_ids: [], reason: 'r' }],
+});
+// what a model fills in: every property present, the absent ones as their empty value (the inverse of back())
+const fillApi = (s, v) => {
+  if (Array.isArray(v)) return v.map((x) => fillApi(s.items, x));
+  if (v === null && s.anyOf) return fillApi(s.anyOf.find((b) => b.type !== 'null'), undefined);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(s.properties || s.anyOf.find((b) => b.type !== 'null').properties).map(([k, p]) => [k, fillApi(p, v[k])]));
+  if (v !== undefined) return v;
+  const t = s.anyOf ? s.anyOf.find((b) => b.type !== 'null') : s;
+  return t.enum || t.type === 'string' ? '' : t.type === 'integer' ? 0 : t.type === 'array' ? [] : Object.fromEntries(Object.entries(t.properties).map(([k, p]) => [k, fillApi(p, undefined)]));
+};
+
+test('findings API schema: no optional property, no union, every full-schema property representable, required enums keep their values', () => {
+  const a = api.apiSchema(api.strict(FULL));
+  let opt = 0, unions = 0, objects = 0;
+  const walk = (n, f, p) => { // n: API node, f: full node
+    if (!n || typeof n !== 'object') return;
+    if (n.anyOf) unions++;
+    assert.ok(!('description' in n), `description kept at ${p}`);
+    const fn = f.anyOf ? f.anyOf.find((b) => b.type !== 'null') : f;
+    if (n.properties) {
+      objects++;
+      opt += Object.keys(n.properties).filter((k) => !(n.required || []).includes(k)).length;
+      for (const k of Object.keys(fn.properties)) { assert.ok(n.properties[k], `${p}.${k} missing from the API schema`); walk(n.properties[k], fn.properties[k], `${p}.${k}`); }
+    } else if (n.items) walk(n.items, fn.items, `${p}[]`);
+  };
+  walk(a, FULL, '$');
+  assert.ok(objects > 5);
+  assert.equal(opt, 0, 'optional properties');
+  assert.equal(unions, 0, 'anyOf unions');
+  assert.ok(!a.properties.findings.items.properties.kind.enum.includes(''), 'a required enum is not widened');
+  assert.ok(a.properties.findings.items.properties.side.enum.includes(''), 'an optional enum can say not applicable');
+  assert.ok(JSON.stringify(a).length < JSON.stringify(api.strict(FULL)).length, 'smaller than the schema the provider refused');
+});
+
+test('findings API form round-trips: empties become absent again, real values and required nulls are never changed', () => {
+  const want = ORIGINAL(), sent = fillApi(FULL, want);
+  assert.equal(sent.findings[1].start_line, 0);
+  assert.equal(sent.coverage[1].alignment.status, '');
+  const got = api.back(FULL, structuredClone(sent));
+  assert.equal(got.coverage[1].behaviour, null, 'an empty required nullable is null');
+  assert.ok(!('change' in got.coverage[1]) && !('start_line' in got.findings[1]) && !('alignment' in got.coverage[1]) && !('pr_quote' in got.requirements[1]) && !('side' in got.coverage[0].evidence[1]));
+  delete want.coverage[1].change; // the model has no null for change: post.js defaults an absent one to the behaviour
+  assert.deepEqual(got, want);
+  // control: plain JSON (the unconstrained fallback) passes through, an explicit null change stays null
+  const plain = ORIGINAL(); plain.coverage[1].change = null;
+  assert.deepEqual(api.back(FULL, structuredClone(plain)), plain);
+});
+
+test('the request carries the API schema and findings.json is written in post.js form', async (t) => {
+  const want = ORIGINAL(); delete want.coverage[1].change;
+  const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(fillApi(FULL, ORIGINAL())) }] })]);
+  await h.go();
+  assert.deepEqual(h.calls[0].body.output_config.format.schema, api.apiSchema(api.strict(FULL)));
+  assert.deepEqual(JSON.parse(h.file('findings.json')), want);
+});

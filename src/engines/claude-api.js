@@ -55,6 +55,44 @@ function strict(s) {
   return o;
 }
 
+// The findings schema is too big for the provider's grammar compiler ("The compiled grammar is too large"): every optional property and every anyOf multiplies it. The API copy has NO optional property and NO union:
+// an optional property becomes required and says "not applicable" by its empty value ("" / 0 / [] / "" in an enum / an all-empty object), a nullable X becomes X. back() maps the empties to "absent" again (null for a required nullable)
+// before post.js validates against the FULL schema, so a real value is never changed. ponytail: findings schema only; the audit schema compiles. A null the model really wrote (plain-JSON fallback) is left alone.
+const nonNull = (s) => (s.anyOf || []).find((b) => b.type !== 'null') || s, nullable = (s) => !!s.anyOf?.some((b) => b.type === 'null');
+function apiSchema(s, opt = false) { // opt: inside an optional or nullable subtree, where an enum also needs its "" (required enums keep their values only)
+  if (Array.isArray(s)) return s.map((x) => apiSchema(x, opt));
+  if (!s || typeof s !== 'object') return s;
+  if (s.anyOf && nullable(s)) return apiSchema(nonNull(s), true);
+  const o = {}, req = s.required || [];
+  for (const [k, v] of Object.entries(s)) if (k !== 'description') o[k] = k === 'properties' ? Object.fromEntries(Object.entries(v).map(([n, p]) => [n, apiSchema(p, opt || !req.includes(n))])) : apiSchema(v, opt);
+  if (o.properties) o.required = Object.keys(o.properties);
+  if (opt && o.enum) o.enum = [...o.enum, ''];
+  return o;
+}
+const emptyIn = (s, v) => { // is v the "not applicable" value of its (full-schema) type?
+  s = nonNull(s);
+  if (s.enum) return v === '';
+  if (s.type === 'string') return v === '';
+  if (s.type === 'integer') return v === 0;
+  if (s.type === 'array') return Array.isArray(v) && !v.length;
+  if (s.type === 'object') return !!v && typeof v === 'object' && Object.entries(s.properties || {}).every(([k, p]) => emptyIn(p, v[k]));
+  return false;
+};
+function back(s, v) { // s: the FULL schema; v is changed in place
+  s = nonNull(s);
+  if (Array.isArray(v) && s.items) v.forEach((x) => back(s.items, x));
+  else if (v && typeof v === 'object' && s.properties) {
+    for (const [k, p] of Object.entries(s.properties)) {
+      if (!(k in v) || v[k] === null) continue;
+      const empty = emptyIn(p, v[k]);
+      if (empty && !(s.required || []).includes(k)) delete v[k];
+      else if (empty && nullable(p)) v[k] = null;
+      else back(p, v[k]);
+    }
+  }
+  return v;
+}
+
 // The prompt is "static prefix (skill, references, schema) + --- + per-PR context" (src/prompt.js): the prefix becomes the cached system block, the rest the user message.
 const SPLIT = '\n\n---\n\nContext directory (absolute path):';
 const NO_TOOLS = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Use only the context inlined below; where the answer would need a file you cannot see, mark it unknown and say so. Output only the JSON object.\n\n';
@@ -356,7 +394,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const model = env.MODEL || 'claude-haiku-5-5';
     const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
     const schemaFile = path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json');
-    const schema = strict(JSON.parse(fs.readFileSync(schemaFile, 'utf8')));
+    const full = JSON.parse(fs.readFileSync(schemaFile, 'utf8')), audit = env.CHECK === 'audit', schema = audit ? strict(full) : apiSchema(strict(full));
     let packBytes;
     try { packBytes = packLimit(env); } catch (e) { return end('failed', 'config', e.message); }
     if (env.CHECK === 'audit' && packBytes === 0) return end('failed', 'config', 'context_pack_bytes=0 sends the model no repository files, so a scan would publish without any source reviewed; use a positive value'); // PR mode keeps 0 = diff only
@@ -510,7 +548,8 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const r = await call(system, user, maxTokens);
     writeUsage([r]);
     if (!r.ok) return failEnd(r);
-    w('findings.json', r.found);
+    let found = r.found; try { found = JSON.stringify(back(full, JSON.parse(found))); } catch { /* not JSON: post.js rejects it as before */ }
+    w('findings.json', found);
     end('success');
   } catch (e) {
     end('failed', 'internal', 'Claude API adapter error', e?.message || String(e)); // our own code threw: a class of its own, so the last step goes red
@@ -538,6 +577,6 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
   } catch { return null; }
 }
 
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, apiSchema, back, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts
