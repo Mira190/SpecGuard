@@ -673,3 +673,19 @@ test('collect with versions (F32): a legacy tv (written without the Background) 
   fs.writeFileSync(path.join(root, 'f/t.feature'), feat('ACTIVE_TENANT')); git('add', '.'); git('commit', '-m', 'edit');
   assert.deepEqual(staleFor(blk.tv), [cid], 'a Background edit makes the scenario stale');
 });
+
+test('prior-head diff uses --no-renames: in a blobless clone with no network, rename detection needs old blobs and fails, names-only does not', () => {
+  assert.match(fs.readFileSync(path.join(__dirname, 'audit-collect.js'), 'utf8'), /\['diff', '--name-only', '--no-renames', '-z', prior\.head, head\]/);
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-blobless-')), run = (cwd, ...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd, encoding: 'utf8' });
+  try {
+    const src = path.join(d, 'src'), cl = path.join(d, 'cl');
+    fs.mkdirSync(src); run(src, 'init', '-q'); run(src, 'config', 'uploadpack.allowFilter', 'true'); run(src, 'config', 'uploadpack.allowAnySHA1InWant', 'true');
+    fs.writeFileSync(path.join(src, 'a.md'), Array.from({ length: 40 }, (_, i) => `line ${i} of the design`).join('\n') + '\n'); run(src, 'add', '.'); run(src, 'commit', '-qm', 'one');
+    const first = run(src, 'rev-parse', 'HEAD').trim();
+    run(src, 'mv', 'a.md', 'b.md'); fs.appendFileSync(path.join(src, 'b.md'), 'one more line\n'); run(src, 'add', '.'); run(src, 'commit', '-qm', 'two');
+    run(d, 'clone', '-q', '--filter=blob:none', 'file://' + src.replace(/\\/g, '/'), 'cl');
+    run(cl, 'remote', 'remove', 'origin'); // no network from here on
+    assert.deepEqual(run(cl, 'diff', '--name-only', '--no-renames', '-z', first, 'HEAD').split('\0').filter(Boolean).sort(), ['a.md', 'b.md']);
+    assert.throws(() => execFileSync('git', ['diff', '--name-only', '-z', first, 'HEAD'], { cwd: cl, stdio: 'pipe' }), 'rename detection reads the old blob');
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});

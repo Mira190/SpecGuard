@@ -230,9 +230,10 @@ test('specguard-run.yml: manual model/size/budget inputs reach the action (empty
   assert.match(step, /\n {10}model: \$\{\{ inputs\.model \}\}\n/);
   assert.match(step, /fail_on_error: "true"/);
   const co = y.slice(y.indexOf('repository: ${{ needs.resolve.outputs.repo }}\n          token:'), y.indexOf('Refuse a target that already'));
-  assert.match(co, /fetch-depth: 1\n\s+filter: blob:none/);
+  assert.match(co, /fetch-depth: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && 1 \|\| 0 \}\}[^\n]*\n\s+filter: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && 'blob:none' \|\| '' \}\}/, 'scans are blobless depth 1; PR reviews keep the full clone');
+  assert.match(co, /if: needs\.resolve\.outputs\.mode == 'scan'[\s\S]*--unshallow origin "[^\n]*\|\| echo "::warning::could not fetch the git history/, 'the history fetch is non-fatal and warns');
   assert.match(co, /fetch --no-tags --filter=blob:none --unshallow origin/);
-  assert.doesNotMatch(co.replace(/#.*/g, ''), /--shallow-since|fetch-depth: 0/);
+  assert.doesNotMatch(co.replace(/#.*/g, ''), /--shallow-since|fetch-depth: 0$/m);
   assert.match(action, /SPECGUARD_REF: \$\{\{ github\.action_ref \|\| github\.sha \}\}/);
   assert.doesNotMatch(action, /SPECGUARD_REF: \$\{\{ github\.action_ref \}\}/);
 });

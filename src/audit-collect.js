@@ -242,7 +242,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   let changedDocs = null; // changed document -> the block cids it had at the last scanned head; null = unknown (no state, or the old head is not in this clone)
   if (prior && prior.head) {
     try {
-      const names = new Set(git(cwd, ['diff', '--name-only', '-z', prior.head, head]).split('\0').filter(Boolean));
+      const names = new Set(git(cwd, ['diff', '--name-only', '--no-renames', '-z', prior.head, head]).split('\0').filter(Boolean));
       changedDocs = new Map(docs.filter((p) => names.has(p)).map((p) => [p, new Set(allBlocks(cwd, prior.head, [p]).map((b) => b.cid))]));
     }
     catch { notes.push(`could not diff against the last scanned commit ${prior.head.slice(0, 7)} (shallow clone? use fetch-depth: 0): changed documents are not prioritised`); }

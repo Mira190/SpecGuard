@@ -224,7 +224,7 @@ test('specguard-run.yml: minimal permissions, PAT checkout without persisted cre
   assert.equal((y.match(/issues: write/g) || []).length, 2, 'the job permission and its comment, nowhere else');
   assert.match(y, /repository: \$\{\{ needs\.resolve\.outputs\.repo \}\}\n {10}token: \$\{\{ steps\.app\.outputs\.token \|\| secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
   assert.equal((y.match(/persist-credentials: false/g) || []).length, 3, 'every checkout');
-  assert.match(y, /fetch-depth: 1\n\s+filter: blob:none/);
+  assert.match(y, /fetch-depth: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && 1 \|\| 0 \}\}[^\n]*\n\s+filter: \$\{\{ [^\n]*'blob:none'/);
   assert.match(y, /delivery: \$\{\{ inputs\.post_to_pr && needs\.resolve\.outputs\.mode == 'pr' && 'pr' \|\| 'summary' \}\}/, 'post_to_pr only counts for PR targets');
   assert.match(y, /github_token: \$\{\{ steps\.app\.outputs\.token \|\| secrets\.SPECGUARD_PAT \|\| github\.token \}\}/);
   assert.match(y, /ctx_retention_days: "0"/);
