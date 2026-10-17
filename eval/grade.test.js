@@ -360,6 +360,14 @@ test('S10: a coverage row for a gap that is also a posted comment counts once', 
   assert.equal(g.fp, 1);
 });
 
+test('a coverage row whose assertion evidence sits at the posted comment is the same finding, not an FP (PR 296)', () => {
+  const summary = '<!-- specguard:summary -->\n## SpecGuard\n\n<details><summary>Details: x</summary>\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n'
+    + '| O1: clamp returns the maximum | PR body; t2/limits.js:2 — return Math.min(); | unit: t2/limits.test.js:6 —   assert.ok(clamp(15, 0, 10)); (assertion) | Weak test: only truthy. |\n</details>\n';
+  const g = grade(spec([exp({ kind: 'weak_test', path: 't2/limits.test.js', line: 6 })]), obs([com({ kind: 'weak_test', path: 't2/limits.test.js', line: 6 })], { summary }));
+  assert.deepEqual([g.tp, g.fp], [1, 0]);
+  assert.equal(grade(spec([]), obs([], { summary })).fp, 1); // control: without the comment the row is a FP
+});
+
 // U4 contract: a coverage row is a request for action only when its gap's finding is actionable. A low-confidence/Details copy of the same gap
 // is explicitly discounted, so the row is not an FP; a row with no finding at all still counts (S10).
 test('coverage-row FP contract: row with a low-confidence copy is not an FP; the row alone is', () => {
