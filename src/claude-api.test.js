@@ -768,10 +768,10 @@ test('scan parts: a budget too small for every part drops the trailing batches (
   assert.equal(none.h.file('engine-error').split('\n')[0], 'budget');
 });
 
-test('action.yml: scan_batch_blocks (default 20) reaches the validation and engine steps; validate-inputs.sh accepts 1 to 100 only', () => {
+test('action.yml: scan_batch_blocks (default 20) reaches the validation, collector and engine steps; validate-inputs.sh accepts 1 to 100 only', () => {
   const yml = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8');
   assert.match(/^ {2}scan_batch_blocks: \{[^}]*\}/m.exec(yml)[0], /default: "20" \}$/);
-  assert.equal(yml.split('SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}').length - 1, 2);
+  assert.equal(yml.split('SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}').length - 1, 3); // validation, collector (it prices the block calls), engine
   for (const [v, code] of [['0', 1], ['101', 1], ['x', 1], ['20', 0], ['100', 0]]) assert.equal(spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh')], { env: { ...process.env, ENGINE: 'claude', SCAN_BATCH_BLOCKS: v }, encoding: 'utf8' }).status, code, v);
 });
 
