@@ -198,7 +198,7 @@ function candidates(all, cap, prior, changedDocs, stale) {
     left.push(...notAudited.map(({ where, n: k }) => `${where}: ${k} block${k === 1 ? '' : 's'} not scanned (cap)`));
   } else if (rest.length) left.push(`${rest.length} of ${all.length} blocks were not audited this run (scan_max_blocks ${cap}); ${carried.length} keep the status of their last audit, ${rest.length - carried.length} have never been audited`);
   if (fit.length < Math.min(cap, all.length)) left.unshift(`audit-candidates.txt would pass ${CAND_CAP / 1024} KB: the cap was lowered to ${fit.length} blocks`);
-  return { text: fit.map(row).join(''), fit, tally, carried, total: all.length, left };
+  return { text: fit.map(row).join(''), fit, tally, kind: sel.kind, carried, total: all.length, left };
 }
 
 // The scan reads the default branch only: another ref's documents would overwrite the one scan issue. Returns { error } or { warn } or {}.
@@ -269,6 +269,20 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   let ev = { by: new Map(), cut: false, files: 0 };
   try { ev = evidence({ cwd, head, blocks: cand.fit, docs: found, ignoreExtra, budgetMs: evidenceBudgetMs }); }
   catch (e) { notes.push(`evidence search failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the model searches by itself`); }
+  // a scoped run audits a block only when its document is in scope or one of its code candidates is; the rest keep their last status (carried), like blocks cut by the cap. Only on a complete search: an unseen block is never skipped.
+  if (scope && ev.by.size && !ev.cut) {
+    const inside = (b) => scope(b.path) || (ev.by.get(b.cid) || []).some((l) => { const f = l.split('\t'); return f[1] === 'code' && scope(f[2].replace(/:\d+$/, '')); });
+    const out = cand.fit.filter((b) => !inside(b));
+    if (out.length) {
+      const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), gone = new Set(out.map((b) => b.cid));
+      cand.fit = cand.fit.filter((b) => !gone.has(b.cid));
+      cand.carried.push(...out.filter((b) => known.has(b.cid)));
+      cand.text = cand.fit.map((c) => `${c.cid}\t${c.path}:${c.line}${c.end ? `-${c.end}` : ''}\t${c.heading}\t${c.text}\n`).join('');
+      for (const b of out) if (cand.tally[prior ? cand.kind.get(b.cid) : 'n']) cand.tally[prior ? cand.kind.get(b.cid) : 'n']--;
+      const docsOut = [...new Set(out.map((b) => b.path))];
+      notes.push(`${out.length} document block(s) skipped: their evidence is outside scan_paths (${docsOut.slice(0, 3).join(', ')}${docsOut.length > 3 ? ', ...' : ''})`);
+    }
+  }
   const et = evidenceText(cand.fit, ev.by);
   if (ev.cut) notes.push(`the ${Math.round(evidenceBudgetMs / 1000)} s time budget ended the evidence search: blocks marked none may still have code and tests`);
   if (et.left) notes.push(`audit-evidence.txt would pass ${EV_CAP / 1024} KB: ${et.left} block(s) have no candidate locations`);
