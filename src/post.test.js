@@ -4026,3 +4026,46 @@ test('the real cover guard in PR mode: a literal in an unrelated test does not d
   assert.equal(own.calls.review.length, 0, 'control: demoted');
   assert.match(own.calls.summary[0].body, /low confidence: a test may already cover this: tests\/amount\.test\.js/);
 });
+
+// A failed re-run must not erase a real review of the same commit (the incident: a stale API key replaced ten valid summaries with "Could not complete").
+const authFail = (s) => { fs.unlinkSync(path.join(s.dir, 'ctx/findings.json')); writeCtx(s, 'engine-status', 'failed\n'); writeCtx(s, 'engine-error', 'auth\nThe Anthropic API key was rejected\n'); s.outputs = {}; s.core.setOutput = (k, v) => { s.outputs[k] = v; }; };
+const priorBody = async (t) => { const p = setup(t, report()); await post(p); return p.calls.summary[0].body; };
+const rerun = async (t, body) => { const s = setup(t, report(), { issueComments: [{ id: 5, user: BOT, body }] }); authFail(s); s.context.runId = 99; await post(s); return s; };
+
+test('a failed re-run on the same head keeps the previous findings under a banner; the job output stays failed and auth still exits 1', async (t) => {
+  const prior = await priorBody(t);
+  const s = await rerun(t, prior);
+  const b = s.calls.summary[0].body;
+  assert.equal(s.calls.summary[0].comment_id, 5);
+  assert.match(b, /O1: Returns the required total/, 'the prior findings survive');
+  assert.match(b, /⚠️ The latest run \(\[run 99\]\(https:\/\/github\.com\/o\/r\/actions\/runs\/99\)\) could not complete: The Anthropic API key was rejected\. Showing the previous result for this same commit\./);
+  assert.match(b, /<!-- specguard:status=complete -->/);
+  assert.match(b, /<!-- specguard:head=HEADSHA -->/);
+  assert.deepEqual(s.outputs, { reason: 'The Anthropic API key was rejected', status: 'failed' });
+  assert.match(s.jobSummary.join(''), /Could not complete: The Anthropic API key was rejected/, 'the job summary is the failure');
+  const gate = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: s.outputs.status, REASON: s.outputs.reason, CTX: path.join(s.dir, 'ctx'), FAIL_ON_ERROR: '' } });
+  assert.equal(gate.status, 1);
+  assert.notEqual(require('./preflight.js').decide({ pr: { state: 'open', user: { type: 'User', login: 'dev' } }, headSha: 'HEADSHA', comments: [{ user: BOT, body: b }] }), '', 'the prior result is still the cached verdict for this head');
+});
+
+test('a second failed re-run replaces the banner, not stacks it; the next success replaces the bannered comment with a fresh result', async (t) => {
+  const once = (await rerun(t, await priorBody(t))).calls.summary[0].body;
+  const twice = (await rerun(t, once)).calls.summary[0].body;
+  assert.equal(twice.match(/could not complete/g).length, 1);
+  const ok = setup(t, report(), { issueComments: [{ id: 5, user: BOT, body: twice }] });
+  await post(ok);
+  assert.doesNotMatch(ok.calls.summary[0].body, /could not complete|Showing the previous result/);
+  assert.match(ok.calls.summary[0].body, /<!-- specguard:status=complete -->/);
+});
+
+test('a failed run replaces the comment when the prior is for another head, failed, or missing', async (t) => {
+  const prior = await priorBody(t);
+  const other = await rerun(t, prior.replace(/HEADSHA/g, 'OLDSHA'));
+  assert.match(other.calls.summary[0].body, /<!-- specguard:status=failed -->[\s\S]*Could not complete: The Anthropic API key was rejected/);
+  assert.doesNotMatch(other.calls.summary[0].body, /Showing the previous result|O1: Returns/);
+  const failedPrior = await rerun(t, prior.replace('specguard:status=complete', 'specguard:status=failed'));
+  assert.doesNotMatch(failedPrior.calls.summary[0].body, /Showing the previous result|O1: Returns/);
+  const none = setup(t, report()); authFail(none); await post(none);
+  assert.equal(none.calls.summary[0].comment_id, undefined);
+  assert.match(none.calls.summary[0].body, /<!-- specguard:status=failed -->[\s\S]*Could not complete: The Anthropic API key was rejected/);
+});
