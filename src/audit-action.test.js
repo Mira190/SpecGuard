@@ -314,3 +314,12 @@ test('fail-on-error.js: an adapter exception (engine-error class internal) alway
   assert.equal(ok.status, 0);
   assert.match(ok.stdout, /^::warning::/);
 });
+
+test('action.yml: context_pack_bytes (empty = the 250000 default) reaches the scan collect step and the engine steps as CONTEXT_PACK_BYTES, parsed by the one packLimit', () => {
+  assert.match(input('context_pack_bytes'), /default: "" \}$/);
+  const map = /CONTEXT_PACK_BYTES: \$\{\{ inputs\.context_pack_bytes \}\}/;
+  assert.match(find(/id: audit_collect/), map);
+  for (const s of steps.filter((x) => /CLAUDE_MODE: /.test(x))) assert.match(s, map, 'every engine step');
+  const { packLimit } = require('./pack-cap');
+  assert.deepEqual([{}, { CONTEXT_PACK_BYTES: '' }, { CONTEXT_PACK_BYTES: '120000' }, { CONTEXT_PACK_BYTES: '0' }, { CONTEXT_PACK_BYTES: 'x' }].map(packLimit), [250000, 250000, 120000, 0, 0]);
+});

@@ -766,3 +766,23 @@ test('stateless: the collector plans no more unit rooms than the pre-flight keep
   const keep = (o) => run({ rotate: true, prior: null, ...o }).rooms.map((x) => x.length);
   assert.deepEqual(keep({ price: price(() => ({ rooms: 3, blockUsd: 0.1 })) }), keep({ price: { usd: 0.1, budget: 1, max: 8 } }), 'control: a stateful run whose rooms the pre-flight keeps is unchanged');
 });
+
+// the collector sizes the pack with the engine's own parse of CONTEXT_PACK_BYTES (src/pack-cap.js packLimit), so both plan the same number of unit calls
+test('CLI: a CONTEXT_PACK_BYTES override reaches the collector, so its planned rooms equal what the engine pre-flight keeps; unset keeps the 250000 default', (t) => {
+  const files = Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`src/m${i}.js`, Array.from({ length: 300 }, (_, j) => `exports.f${i}_${j} = () => '${'x'.repeat(70)}';`).join('\n') + '\n']));
+  const { root, ctx } = repo(t, files), ev = path.join(root, 'event.json');
+  fs.writeFileSync(ev, JSON.stringify({ repository: { default_branch: 'main' } }));
+  const run = (pack) => {
+    const r = spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_REF_NAME: 'main', GITHUB_EVENT_PATH: ev, SCAN_ISSUE: '', AUDIT_ISSUE: '', GH_TOKEN: '', PACK_SPLIT: 'true', MAX_UNITS: '60', MODEL: 'claude-haiku-5-5', MAX_BUDGET_USD: '0.5', MAX_OUTPUT_TOKENS: '32000', CONTEXT_PACK_BYTES: pack } });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const f = path.join(ctx, 'audit-unit-rooms.json');
+    return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')).length : 1;
+  };
+  const kept = (packBytes) => require('./engines/claude-api').keptRooms({ ctx, root: fs.realpathSync(root), batch: 20, model: 'claude-haiku-5-5', maxTokens: 32000, budget: 0.5, packBytes });
+  const small = run('120000');
+  assert.equal(small, 3, 'a 120000-byte pack buys three unit calls at 0.50 USD');
+  assert.equal(small, kept(120000).rooms, 'the collector plans the rooms the engine keeps');
+  const dflt = run('');
+  assert.equal(dflt, 2, 'control: unset is the 250000 default, two calls');
+  assert.equal(dflt, kept(250000).rooms);
+});

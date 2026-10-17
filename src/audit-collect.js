@@ -371,7 +371,7 @@ async function main(env) {
   if (g.error) { console.log(`::error::${g.error}`); process.exit(1); }
   if (g.warn) console.log(`::warning::${g.warn}`);
   const prior = rotate ? await loadPrior(env) : null;
-  const packBytes = env.PACK_SPLIT === 'true' ? 250000 : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run
+  const packBytes = env.PACK_SPLIT === 'true' ? require('./pack-cap').packLimit(env) : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run
   const api = packBytes ? require('./engines/claude-api') : null, pre = { model: require('./credential').resolveModel(env.MODEL, 'claude') || 'claude-haiku-5-5', budget: parseFloat(env.MAX_BUDGET_USD || '1.00'), maxTokens: parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, packBytes };
   const unitParts = api ? api.unitCalls(pre) : 1, price = api ? { usd: api.callUsd(pre), budget: pre.budget, max: api.MAX_UNIT_CALLS, fit: (ctx) => api.keptRooms({ ...pre, ctx, root: fs.realpathSync(process.cwd()), batch: Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20) }) } : null; // price: the pre-flight's own worst case, for the budget hint
   const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, refNote: g.note || '', packBytes, unitParts, price });
