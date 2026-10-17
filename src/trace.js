@@ -498,7 +498,7 @@ function sizeVariants(value) {
   return [...new Set(out)];
 }
 
-const isTestPath = (p) => !/\.(md|mdx|markdown|rst|adoc)$/i.test(p) && (/(^|\/)([^/]*[._-])?(tests?|specs?|__tests__)\//i.test(p) || /[._-](tests?|spec)(\.[^/]*)?$/i.test(p) || /(^|\/)(test_[^/]*|tests?\.[^/]*)$/i.test(p) || /[a-z0-9](Tests?|Spec)\.[^/]*$/.test(p)); // a test DIRECTORY (Foo.Tests/, Tests/), a basename SUFFIX (a.test.ts, a_spec.rb, foo-test.go) or the test_ prefix; a leading word is not (src/test-map.js, spec-loader.js), nor is a bare spec.js; words are case-insensitive;the PascalCase suffix (AppTests.swift, FooSpec.scala) is case-sensitive so latest.ts is not a test; docs are never tests (SPEC.md)
+const isTestPath = (p) => !/\.(md|mdx|markdown|rst|adoc)$/i.test(p) && (/(^|\/)([^/]*[._-])?(tests?|spec|__tests__)\//i.test(p) || /[._-](tests?|spec)(\.[^/]*)?$/i.test(p) || /(^|\/)(test_[^/]*|tests?\.[^/]*)$/i.test(p) || /[a-z0-9](Tests?|Spec)\.[^/]*$/.test(p)); // a test DIRECTORY (Foo.Tests/, Tests/), a basename SUFFIX (a.test.ts, a_spec.rb, foo-test.go) or the test_ prefix; a leading word is not (src/test-map.js, spec-loader.js), nor is a bare spec.js; words are case-insensitive;the PascalCase suffix (AppTests.swift, FooSpec.scala) is case-sensitive so latest.ts is not a test; docs are never tests (SPEC.md)
 function pathKind(p) {
   if (/(^|\/)__snapshots__\/|\.snap$/.test(p)) return 'snapshot';
   if (isTestPath(p)) return 'test';

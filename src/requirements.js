@@ -78,7 +78,7 @@ function extractCriteria(documents) {
 }
 
 const DOC_EXT = /\.(md|mdx|markdown|rst|adoc|txt|feature)$/i;
-const TEST_PATH = { test: (p) => /(^|\/)([^/]*[._-])?(tests?|specs?|__tests__)\//i.test(p) || /[._-](tests?|spec)(\.[^/]*)?$/i.test(p) || /(^|\/)(test_[^/]*|tests?\.[^/]*)$/i.test(p) || /[a-z0-9](Tests?|Spec)\.[^/]*$/.test(p) }; // same rule as trace.isTestPath (not imported: trace pulls in post.js)
+const TEST_PATH = { test: (p) => /(^|\/)([^/]*[._-])?(tests?|spec|__tests__)\//i.test(p) || /[._-](tests?|spec)(\.[^/]*)?$/i.test(p) || /(^|\/)(test_[^/]*|tests?\.[^/]*)$/i.test(p) || /[a-z0-9](Tests?|Spec)\.[^/]*$/.test(p) }; // same rule as trace.isTestPath (not imported: trace pulls in post.js)
 
 // Limitation kinds live in limitations.js (a FACT is a note, a GAP makes the run incomplete); every limitation emitted below goes through fact() or gap().
 // A test scans this file for a bare push. Kept out of post.js's import chain: the collector stubs this file in tests.
