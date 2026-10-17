@@ -33,8 +33,18 @@ All fixtures live under `eval-sandbox/<id>/` in the PR, so cases never touch rea
 - Low-confidence and summary-only items are counted as `summary_only`, never TP or FP. An expectation with `allow_summary: true` (t4: the finding sits on removed lines, so it lands in the summary) is satisfied by a summary item or coverage row with matching kind and path, whose line is within the expectation's tolerance (or whose text matches `text`). An item and the coverage row for the same finding, or the summary copy of a matched inline comment, count once.
 - `must_not` entries: `{kind?, path?, line?, tolerance?, text?}` against posted comments (a text-only entry also scans review bodies), or `{state: "APPROVED"}` against review states.
 - `expect_skip`: the summary says "Nothing to review" and nothing was posted. `expect_clean`: no high-confidence comment. `json_valid`: a sticky summary exists and does not say "Could not complete" or "Partially reviewed" and does not report standards tooling as incomplete.
-- A case passes with no FN, no `must_not` violation, no `text` miss, `json_valid`, and skip/clean as expected. FPs lower precision but do not fail a case.
-- Aggregate: precision = TP/(TP+FP), recall = TP/(TP+FN), JSON validity rate, pass rate, latency median and max, overall and per goal. Runs that errored (timeout, push or API failure) are counted as `errors` and excluded from every metric.
+- `pass` is the acceptance pass: no FN, no `must_not` violation, no `text` miss, `json_valid`, and skip/clean as expected. FPs lower precision, not `pass`. `strict_pass` also needs every expected finding delivered (see below) and `fp === 0`.
+- Aggregate: precision = TP/(TP+FP), JSON validity rate, pass rate, latency median and max, overall and per goal. Runs that errored (timeout, push or API failure) are counted as `errors` and excluded from the model-conditional metrics; the end-to-end metric below keeps them.
+
+| Metric | Matches against | Errored runs | Answers |
+| --- | --- | --- | --- |
+| `recall` (`tp`, `fn`) | posted comments + any summary item or coverage row, including low-confidence and Details | excluded | Did the model find it? (model-conditional) |
+| `recall_delivered` (`tp_delivered`, `fn_delivered`) | posted comments + actionable summary items/rows only (the exposure set the FP path uses) | excluded | Was the developer asked to act on it? |
+| `recall_delivered_e2e` | same as delivered | in the denominator as misses, never as FPs (`errors_expected_findings`) | What share of expected findings reached developers, infrastructure failures included? |
+| `pass` / `pass_rate` | acceptance pass above | excluded | Case acceptable; extra FPs allowed |
+| `strict_pass` / `strict_pass_rate` | `pass` + all findings delivered + no FP | excluded | Case clean and fully delivered |
+
+A low-confidence or Details-only hit improves raw `recall` but not `recall_delivered`. `run.js` stamps `expected_findings` on errored rows so `recall_delivered_e2e` counts them as misses. Result files from before these fields exist report `recall_delivered`, `recall_delivered_e2e` and `strict_pass_rate` as null (`strict_pass_n` / `strict_pass_missing` count the rows with and without `strict_pass`) rather than falling back to the raw numbers.
 
 ## Traceability cases (tr1-tr17)
 
