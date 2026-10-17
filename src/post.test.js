@@ -1255,9 +1255,9 @@ test('spec path allow-list: a requirement citing a file outside spec-files.txt i
   post.validate(d);
   post.verifyRequirements(d, { documents: [], criteria: [], specFiles: ['docs/spec.md'] }, specRead);
   assert.deepEqual(d.requirements[0].obligation_ids, []);
-  assert.equal(d.coverage[0].status, 'unknown');
+  assert.equal(d.coverage[0].status, 'missing_test', 'the test gap stands: only the requirement link is dropped');
   assert.equal(d.coverage[0].alignment.status, 'unknown');
-  assert.deepEqual(d.findings, []);
+  assert.deepEqual(d.findings, [], 'the spec_mismatch finding needed the requirement');
   assert.match(d.requirements[0].reason, /not a collected requirement document/);
   assert.match(d.not_reviewed, /Requirement G1 is not assessed/);
   d = build('src/code.js'); // no allow-list (older collector): unchanged behaviour
@@ -2683,7 +2683,7 @@ test('R3 G4: a demoted row names the citation that failed (behaviour, evidence N
   assert.equal(req.coverage[0].status, 'covered'); // wording not verified: no cascade onto the obligation
   assert.equal(req.coverage[0].alignment.status, 'unknown');
   assert.match(req.requirements[0].reason, /^Requirement wording not verified/);
-  const other = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Return 42.', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('covered')], findings: [] });
+  const other = report({ requirements: [{ id: 'R1', source: 'PR body', quote: 'Return 42.', obligation_ids: ['O1'], reason: 'r' }], coverage: [row('missing_test', { behaviour: null })], findings: [] }); // no behaviour citation: the requirement was the only basis
   post.validate(other);
   post.verifyRequirements(other, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [{ id: 'R1', source: 'PR body', quote: 'Different criterion.' }] }); // an ID that does not match its collected text still cascades
   assert.equal(other.coverage[0].status, 'unknown');
@@ -4046,11 +4046,11 @@ test('a canonical source followed by an item label resolves to the source; the l
   assert.deepEqual([miss.requirements[0].source, miss.requirements[0].ref, miss.coverage[0].status], ['PR body', undefined, 'covered'], 'a label the text does not have is dropped');
   const path = proto([xreq('docs/x.md AC-3')], [row('covered', { alignment: OK })], [{ source: 'docs/x.md', text: 'Return 42.\nAC-3 holds.' }]);
   assert.deepEqual([path.requirements[0].source, path.requirements[0].ref, path.coverage[0].status], ['docs/x.md', 'AC-3', 'covered']);
-  assert.equal(proto([xreq('PR bodyU1')], [row('covered')]).coverage[0].status, 'unknown', 'no separator: not a label');
+  assert.match(proto([xreq('PR bodyU1')], [row('covered')]).requirements[0].proto, /Requirement link not verified/, 'no separator: not a label');
 });
 
 test('control: a source naming an uncollected document is still rejected and unknown, and says the link is not verified', () => {
-  const d = proto([xreq('docs/other.md U1')], [row('covered', { alignment: OK })]);
+  const d = proto([xreq('docs/other.md U1')], [row('missing_test', { behaviour: null, alignment: OK })]); // the requirement was the row's only basis
   assert.equal(d.coverage[0].status, 'unknown');
   assert.match(d.coverage[0].reason, /could not be verified/);
   assert.deepEqual(d.requirements[0].obligation_ids, []);
@@ -4121,4 +4121,39 @@ test('a failed run replaces the comment when the prior is for another head, fail
   const none = setup(t, report()); authFail(none); await post(none);
   assert.equal(none.calls.summary[0].comment_id, undefined);
   assert.match(none.calls.summary[0].body, /<!-- specguard:status=failed -->[\s\S]*Could not complete: The Anthropic API key was rejected/);
+});
+
+// ---- a broken requirement link drops only the link, not the test gap it was attached to ----
+test('a requirement citing an uncollected doc leaves a missing_test or weak_test row and its finding in place', () => {
+  for (const kind of ['missing_test', 'weak_test']) {
+    const d = report({ requirements: [xreq('docs/other.md U1')], coverage: [row(kind, kind === 'weak_test' ? { evidence: [{ ...evidence, proves: 'p' }] } : {})], findings: [finding(kind)] });
+    assert.equal(post.validate(d).ok, true);
+    post.verifyRequirements(d, { documents: [{ source: 'PR body', text: 'Return 42.' }], criteria: [], specFiles: [] });
+    assert.equal(d.coverage[0].status, kind, kind);
+    assert.equal(d.findings.length, 1, `${kind}: finding kept`);
+    assert.deepEqual(d.findings[0].obligation_ids, ['O1']);
+    assert.notEqual(d.coverage[0].alignment.status, 'consistent');
+    assert.deepEqual(d.requirements[0].obligation_ids, []);
+    assert.ok(!(d.degraded || []).includes('O1'), 'not degraded');
+    const s = post.buildSummary({ data: d });
+    assert.match(s, /Requirement link not verified/);
+    assert.doesNotMatch(s, /Point to the unit test/);
+  }
+});
+
+test('control: a covered row stays covered; a valid link is untouched', () => {
+  const c = proto([xreq('docs/other.md U1')], [row('covered', { alignment: OK })]);
+  assert.equal(c.coverage[0].status, 'covered');
+  assert.equal(c.coverage[0].alignment.status, 'unknown');
+  const v = proto([xreq('PR body')], [row('covered', { alignment: OK })]);
+  assert.deepEqual([v.coverage[0].status, v.coverage[0].alignment.status, v.requirements[0].obligation_ids], ['covered', 'consistent', ['O1']]);
+});
+
+test('control: a row whose own behaviour citation fails verifyEvidence is still unknown and loses its finding', () => {
+  const d = report({ requirements: [xreq('docs/other.md U1')], coverage: [row('missing_test', { behaviour: { ...behaviour, line: 30, quote: 'absent' } })], findings: [finding()] });
+  post.validate(d);
+  post.verifyEvidence(d, new Set(['src.js']), new Set(), (p) => (p === 'src.js' ? ['l1', 'l2', 'if (x) {'] : null), new Map([['src.js', post.parsePatch(patch)]]));
+  post.verifyRequirements(d, { documents: [], criteria: [], specFiles: [] });
+  assert.equal(d.coverage[0].status, 'unknown');
+  assert.deepEqual(d.findings, []);
 });
