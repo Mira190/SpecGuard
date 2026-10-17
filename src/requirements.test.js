@@ -445,7 +445,7 @@ test('V7: every limitation requirements.js (and trace.js) can emit is classified
   // trace.js limitations are gaps (lost requirement text) except the capped index file
   const trace = [...src('trace.js').matchAll(/limitations\.push\(`([^`]*)`/g)].map((m) => m[1].replace(/\$\{[^}]*\}/g, '1'));
   assert.ok(trace.length >= 8);
-  assert.deepEqual(trace.filter(isFactLimitation).map((l) => l.slice(0, 30)), ['requirements-index.md exceeded']);
+  assert.deepEqual(trace.filter(isFactLimitation).map((l) => l.slice(0, 30)), ['1 more code/test candidate(s) ', 'requirements-index.md exceeded']); // and the informational top-3 cut note
 });
 
 // Issue #1 of Mira190/SpecGuard (gh issue view 1 --json body): the criteria are a plain "Acceptance criteria:" line and a numbered list, no heading.
