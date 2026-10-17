@@ -103,6 +103,14 @@ test('verify: the quote must sit at path:line (a near line is corrected); the ki
   assert.equal(rows[0].fid, sha8(U2, 'missing_test', 'module exports function legacy a'), 'the key is the unit, the kind and the normalised quote');
 });
 
+test('verify: the same kind cited at the same path:line by two units is one finding, kept for the unit whose file matches the cited test; other lines stay', () => {
+  const rows = (fs_) => checked(fs_).unit_findings.map((f) => [f.unit === U1 ? 'orders' : f.unit === U2 ? 'legacy' : 'cart', f.line]);
+  const other = { ...WEAK(), unit: U2 };
+  assert.deepEqual(rows([other, WEAK()]), [['orders', 2]], 'orders.js matches orders.test.js, whichever came first');
+  assert.deepEqual(rows([{ ...WEAK(), unit: U3 }, other]), [['cart', 2]], 'no basename match: the first stays');
+  assert.deepEqual(rows([other, { ...WEAK(), ...cite('test/orders.test.js', 5), quote: 'assert.equal(total(), 1);' }]).length, 2, 'control: another line is another finding');
+});
+
 test('verify: a missing_test on a unit with no matched test file is deterministic; one on a unit whose tests were cut from the pack, or a weak_test on a cut file, is low confidence', () => {
   const a = checked([uf(), uf({ unit: U3, ...cite('src/js/cart.js', 2), title: 'count is untested' }), uf({ unit: U1, ...cite('src/js/orders.js', 1), title: 'create is untested' })]).unit_findings;
   assert.deepEqual(a.map((f) => [f.confirmed, f.low]), [[undefined, false], [undefined, false], [undefined, false]], 'no matched test file is no longer a confirmation: the verdict waits for a second run');
