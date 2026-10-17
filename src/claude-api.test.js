@@ -557,19 +557,19 @@ test('context pack: a test file over its cap is shown as the relevant slices (he
   assert.equal(r.h.file('pack-cut.txt'), '', 'every test that mentions the symbol is visible: not listed as cut');
 });
 
-test('context pack: a symbol counts only as a whole word: recomputeTotal is no reference to computeTotal (the head is shown and the file listed as cut)', async (t) => {
+test('context pack: a symbol counts only as a whole word: recomputeTotal is no reference to computeTotal (the file is omitted and listed as cut, no head)', async (t) => {
   const r = repo(t, { 'src/svc.js': 'const x = 1;\nfunction computeTotal(a) {\n  return a;\n}\n', 'test/svc.test.js': bigTest((i) => i === 400).replace('computeTotal(1);', 'recomputeTotal(1);') }, {
     'files.txt': 'src/svc.js\n', 'test-candidates.txt': 'src/svc.js\n  test/svc.test.js  (same stem)\n',
     'diff.numbered.txt': 'diff --git a/src/svc.js b/src/svc.js\n--- a/src/svc.js\n+++ b/src/svc.js\n@@ -1,1 +1,4 @@\n   1 |  const x = 1;\n   2 | +function computeTotal(a) {\n   3 | +  return a;\n   4 | +}\n' });
   await r.go();
-  assert.match(r.user(), /name="test\/svc\.test\.js" note="first \d+ of 2999 lines, line-numbered"/);
+  assert.doesNotMatch(r.user(), /name="test\/svc\.test\.js"/);
   assert.equal(r.h.file('pack-cut.txt'), 'test/svc.test.js');
 });
 
-test('context pack: no symbol of the diff in the test file -> the head, as before, and the file is listed as cut; leads.txt symbols and a raw diff.patch are used too', async (t) => {
+test('context pack: no symbol of the diff in the test file -> the file is omitted (no head) and listed as cut; leads.txt symbols and a raw diff.patch are used too', async (t) => {
   const none = sliceRepo(t, (i) => i === 400, { 'diff.numbered.txt': '+++ b/src/svc.js\n@@ -1,1 +1,2 @@\n   2 | +function zzzNothing() {}\n' });
   await none.go();
-  assert.match(none.user(), /name="test\/svc\.test\.js" note="first \d+ of 2999 lines, line-numbered"/);
+  assert.doesNotMatch(none.user(), /name="test\/svc\.test\.js"/);
   assert.equal(none.h.file('pack-cut.txt'), 'test/svc.test.js');
   const leads = sliceRepo(t, (i) => i === 400, { 'diff.numbered.txt': '', 'diff.patch': 'diff --git a/src/svc.js b/src/svc.js\n+++ b/src/svc.js\n@@ -1 +1,2 @@\n+function other() {}\n', 'leads.txt': 'Changed symbols with no test reference:\n  src/svc.js:2 computeTotal\n  src/other.js:9 helper\n' });
   await leads.go();
@@ -960,7 +960,7 @@ test('context pack (S3 control): a big test used by one review file is sliced ar
 });
 
 test('context pack (S3): when the union of symbols does not fit, the shared test is listed as cut', (t) => {
-  const r = sharedRepo(t), p = api.contextPack(r.ctx, r.root, 1000);
+  const r = sharedRepo(t), p = api.contextPack(r.ctx, r.root, 650);
   assert.ok(p.notWhole.includes('tests/shared.test.js'), JSON.stringify(p.notWhole));
 });
 
@@ -1065,4 +1065,67 @@ test('fail-on-error.js: incomplete without engine-error, with a non-configuratio
     assert.equal(run().status, 0, 'a reduced fast-tier run');
     assert.match(run().stdout, /reduced review/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// --- PR pack: large changed and candidate files are sliced around the diff's own hunks, never kept as a head cut ---
+const hunkDiff = (p, start, lines) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -${start - 1},0 +${start},${lines.length} @@\n${lines.map((l) => `+${l}`).join('\n')}\n`;
+const padLine = (n = 900) => `// ${'x'.repeat(n)}`;
+
+test('PR pack: a changed 4000-line test file shows the tests the PR added at its end, not only the head', (t) => {
+  const lines = Array.from({ length: 4000 }, (_, i) => `test('filler ${i}', () => { assert.ok(${i}); }); // ${'x'.repeat(40)}`);
+  const added = ["test('added by the PR', () => {", ...Array.from({ length: 49 }, (_, i) => `  assert.ok(ADDED_MARK_${i});`), '});'];
+  lines.splice(3899, 51, ...added); // lines 3900-3950
+  const r = tmpRepo(t, { 'tests/big.test.js': lines.join('\n') + '\n' }, { 'files.txt': 'tests/big.test.js\n', 'diff.patch': hunkDiff('tests/big.test.js', 3900, added) });
+  const p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(p.text.includes("test('added by the PR'") && p.text.includes('ADDED_MARK_0') && p.text.includes('ADDED_MARK_48'), 'the added test and its whole block are shown');
+  assert.ok(p.notWhole.includes('tests/big.test.js'), 'still not whole');
+  assert.equal(p.shown.get('tests/big.test.js'), 4000, 'every changed line was shown (post.js then raises no "Review context was cut" for it)');
+});
+
+const hitRepo = (t, extra = {}) => {
+  const lines = Array.from({ length: 2000 }, () => padLine());
+  lines[1500] = "test('hit', () => {"; for (let i = 1501; i < 1531; i++) lines[i] = `  // body ${'y'.repeat(900)}`;
+  lines[1502] = '  assert.equal(alphaThing(1), 1);'; lines[1531] = '});'; lines[1532] = "test('after', () => {";
+  return tmpRepo(t, { 'src/a.js': 'function alphaThing(v) { return v; }\n', 'tests/c.test.js': lines.join('\n') + '\n', ...extra }, {
+    'files.txt': 'src/a.js\n', 'diff.patch': hunkDiff('src/a.js', 1, ['function alphaThing(v) { return v; }']), 'test-candidates.txt': 'src/a.js\n  tests/c.test.js  (name)\n' });
+};
+
+test('PR pack: a big candidate test shows the block with the symbol hit when the head plus the block do not fit', (t) => {
+  const r = hitRepo(t), p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(p.text.includes('assert.equal(alphaThing(1), 1)'), 'the hit block is shown');
+});
+
+test('PR pack: a big candidate test with no hit is omitted and listed as cut, with no head lines', (t) => {
+  const r = hitRepo(t, { 'tests/d.test.js': Array.from({ length: 2000 }, () => padLine()).join('\n') + '\n' });
+  fs.writeFileSync(path.join(r.ctx, 'test-candidates.txt'), 'src/a.js\n  tests/d.test.js  (name)\n');
+  const p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(!p.text.includes('name="tests/d.test.js"'), 'no block for it');
+  assert.ok(p.notWhole.includes('tests/d.test.js'));
+});
+
+test('PR pack: five candidate tests of one review file each get at least 8 KB while the budget allows', (t) => {
+  const cands = [1, 2, 3, 4, 5].map((k) => {
+    const lines = Array.from({ length: 100 }, () => padLine());
+    lines[60] = `test('hit ${k}', () => {`; for (let i = 62; i < 69; i++) lines[i] = `  // body ${'y'.repeat(900)}`; lines[61] = `  assert.equal(alphaThing(${k}), ${k}); // HIT_${k}`; lines[69] = '});'; lines[70] = "test('after', () => {"; // a 7 KB block
+    return [`tests/t${k}.test.js`, lines.join('\n') + '\n'];
+  });
+  const r = tmpRepo(t, { 'src/a.js': 'function alphaThing(v) { return v; }\n', 'src/r2.js': 'x();\n', 'src/r3.js': 'y();\n', ...Object.fromEntries(cands) }, {
+    'files.txt': 'src/a.js\nsrc/r2.js\nsrc/r3.js\n', 'diff.patch': hunkDiff('src/a.js', 1, ['function alphaThing(v) { return v; }']),
+    'test-candidates.txt': `src/a.js\n${cands.map(([n]) => `  ${n}  (name)\n`).join('')}` });
+  const limit = 100000, p = api.contextPack(r.ctx, r.root, limit);
+  for (let k = 1; k <= 5; k++) assert.ok(p.text.includes(`HIT_${k}`), `candidate ${k} is shown`);
+  assert.ok(Buffer.byteLength(p.text) <= limit, 'the pack stays within CONTEXT_PACK_BYTES');
+});
+
+test('PR pack (control): a changed file that fits whole is shown whole and unlisted', (t) => {
+  const r = tmpRepo(t, { 'src/s.js': 'a();\nb();\nc();\n' }, { 'files.txt': 'src/s.js\n', 'diff.patch': hunkDiff('src/s.js', 2, ['b();']) });
+  const p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(p.text.includes('note="full file, line-numbered">\n   1| a();\n   2| b();\n   3| c();\n</untrusted-data>'));
+  assert.deepEqual(p.notWhole, []);
+  assert.equal(p.shown.size, 0);
+});
+
+test('PR pack (control): the pack never exceeds CONTEXT_PACK_BYTES, however tight', (t) => {
+  const r = hitRepo(t);
+  for (const limit of [500, 5000, 20000, 60000]) assert.ok(Buffer.byteLength(api.contextPack(r.ctx, r.root, limit).text) <= limit + 400, `limit ${limit}`); // +400: the one-line header
 });
