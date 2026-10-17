@@ -20,6 +20,8 @@ const PRICES = {
   'claude-opus-5-5': { in: 4, out: 20 },
   'claude-opus-5': { in: 5, out: 25 },
 };
+// A reply whose usage lacks input_tokens or output_tokens (or no reply at all: timeout, HTTP failure) may still have been billed: the scan budget charges its part's worst case instead of 0.
+const known = (u) => !!u && typeof u.input_tokens === 'number' && typeof u.output_tokens === 'number', charge = (x) => (known(x.u) ? cost(x.used, x.u) : x.usd || 0);
 const DEFAULT_PRICE = { in: 5, out: 25 };
 const priceOf = (model, promptTokens) => { const p = PRICES[model] || DEFAULT_PRICE; return p.longFrom && promptTokens > p.longFrom ? { in: p.longIn, out: p.longOut } : { in: p.in, out: p.out }; };
 const cost = (model, u) => { // u = the API usage object
@@ -407,15 +409,18 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const writeUsage = (rs) => {
       const got = rs.filter((x) => x.u);
       if (!got.length) return;
+      const guessed = rs.filter((x) => !known(x.u));
       const sum = { i: 0, cr: 0, cw: 0, o: 0 }, by = {};
       let usd = 0;
       for (const r of got) {
         const i = r.u.input_tokens || 0, cr = r.u.cache_read_input_tokens || 0, cw = r.u.cache_creation_input_tokens || 0, o = r.u.output_tokens || 0, m = (by[r.used] ||= { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 });
-        usd += cost(r.used, r.u); sum.i += i; sum.cr += cr; sum.cw += cw; sum.o += o;
+        usd += charge(r); sum.i += i; sum.cr += cr; sum.cw += cw; sum.o += o;
         m.inputTokens += i + cr + cw; m.cacheReadTokens += cr; m.cacheWriteTokens += cw; m.outputTokens += o; // the copilot shape: inputTokens include the cache tokens
       }
+      usd += guessed.filter((x) => !x.u).reduce((a, x) => a + charge(x), 0); // no reply at all
+      if (guessed.length) notes.push(`usage unknown for ${guessed.length} call(s): charged their worst-case reserve`);
       w('usage.json', JSON.stringify({
-        currentModel: got[0].used, totalCostUsd: usd, totalApiDurationMs: Date.now() - t0,
+        currentModel: got[0].used, totalCostUsd: usd, ...(guessed.length && { costEstimated: true }), totalApiDurationMs: Date.now() - t0,
         tokenDetails: { input: { tokenCount: sum.i }, cache_read: { tokenCount: sum.cr }, cache_write: { tokenCount: sum.cw }, output: { tokenCount: sum.o } },
         modelMetrics: Object.fromEntries(Object.entries(by).map(([m, usage]) => [m, { usage }])),
       }));
@@ -435,15 +440,16 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
       let first = null, ok = 0, splits = 0, cfg = null; // cfg: the first part that failed on a configuration class
       const blockCuts = {};
-      const queue = [...plans], retried = [], spent = () => rs.reduce((a, x) => a + (x.u ? cost(x.used, x.u) : 0), 0), fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids ? { blocks: cids } : { units: p.units, ...(p.keys && { keys: p.keys }) }), reason });
+      const queue = [...plans], retried = [], spent = () => rs.reduce((a, x) => a + charge(x), 0), fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids ? { blocks: cids } : { units: p.units, ...(p.keys && { keys: p.keys }) }), reason });
       for (;;) {
         while (!queue.length && extras.length) { const x = extras.shift(); if (spent() + x.usd <= budget) { plans.push(x); queue.push(x); } else skippedEx.push(x); }
         if (!queue.length) break;
         const p = queue.shift();
         const r = await call(p.system, p.user, p.tokens);
+        r.usd = p.usd; // the worst case of this part: what an attempt with unknown usage is charged
         rs.push(r);
         if (!r.ok && r.reason === 'length' && p.cids && p.cids.length > 1) { // the reply overflowed: run the two halves as parts of their own, if the budget still covers them
-          const h = Math.ceil(p.cids.length / 2), halves = [p.cids.slice(0, h), p.cids.slice(h)].map((c) => priced({ ...split.sub(c), retry: p.retry })), spent = rs.reduce((a, x) => a + (x.u ? cost(x.used, x.u) : 0), 0);
+          const h = Math.ceil(p.cids.length / 2), halves = [p.cids.slice(0, h), p.cids.slice(h)].map((c) => priced({ ...split.sub(c), retry: p.retry })), spent = rs.reduce((a, x) => a + charge(x), 0);
           if (spent + queue.reduce((a, x) => a + x.usd, 0) + halves.reduce((a, x) => a + x.usd, 0) <= budget) { splits++; queue.unshift(...halves); continue; }
           fail(p, `${r.why}; not split: the halves would exceed max_budget_usd`); first ||= r; continue;
         }
@@ -466,7 +472,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
         if (unanswered.length) {
           const why = `${unanswered.length} of ${p.cids.length} blocks were not answered`;
           if (p.retry) { fail(p, `${why} in two attempts`, unanswered); continue; }
-          const again = priced({ ...split.sub(unanswered), retry: true }), spent = rs.reduce((a, x) => a + (x.u ? cost(x.used, x.u) : 0), 0);
+          const again = priced({ ...split.sub(unanswered), retry: true }), spent = rs.reduce((a, x) => a + charge(x), 0);
           if (spent + queue.reduce((a, x) => a + x.usd, 0) + again.usd > budget) { fail(p, `${why}; not retried: the retry would exceed max_budget_usd`, unanswered); continue; }
           retried.push(unanswered); queue.push(again);
         }
