@@ -52,3 +52,11 @@ test('import rejects unknown labels and duplicate ids; unlabelled rows are skipp
   assert.deepEqual(labelPrecision(FINDINGS, new Map([['Fnope', 'valid']])).unmatched, ['Fnope']);
   assert.throws(() => parseCsv('a,b\n1,2'), /id and label/);
 });
+
+test('export: a delivery column; summary-only rows link to the summary comment, inline rows to the files page', () => {
+  const rows = exportRows([{ ...F('specguard', 5, 10, 'x'), delivery: 'summary', url: 'https://github.com/o/r/pull/5#issuecomment-1' }, F('copilot', 5, 12, 'y')], { sample: 0, seed: 1 });
+  const by = Object.fromEntries(rows.map((r) => [r.delivery, r]));
+  assert.equal(by.summary.link, 'https://github.com/o/r/pull/5#issuecomment-1');
+  assert.equal(by.inline.link, 'https://github.com/o/r/pull/5/files'); // a finding with no delivery field is inline
+  assert.match(toCsv(rows).split('\n')[0], /,link,delivery,label,notes$/);
+});
