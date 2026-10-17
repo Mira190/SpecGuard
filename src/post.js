@@ -213,7 +213,10 @@ function validate(o) {
     }
     const unitProof = (e) => e.layer === 'unit' && e.kind === 'assertion' && e.side !== 'LEFT';
     if (c.status === 'covered' && (!c.behaviour || !c.evidence.some(unitProof))) return 'covered needs a current unit assertion';
-    if (c.status === 'covered' && !c.evidence.some((e) => unitProof(e) && !loose.has(e))) return 'layer not stated (the test path is not clearly a unit test)';
+    if (c.status === 'covered' && !c.evidence.some((e) => unitProof(e) && !loose.has(e))) { // a test file with no stated layer is not a malformed row: keep its evidence, do not count it as unit proof, and say what is unknown
+      notes.push(`Obligation ${c.id}: test layer not stated (the test path is not clearly a unit test); not counted as unit evidence.`);
+      Object.assign(c, { status: 'unknown', reason: 'Test layer not stated (the test path is not clearly a unit test); not counted as unit evidence.', proto: 'Test layer not stated, so the cited test is not counted as unit evidence' });
+    }
     if (c.status === 'weak_test' && !c.evidence.some((e) => e.layer === 'unit')) return 'weak_test needs a unit test location';
     if (c.status === 'higher_level_only' && (!c.evidence.length || c.evidence.some((e) => e.layer === 'unit'))) return 'higher_level_only needs higher-layer evidence only';
     if (c.status === 'missing_test' && c.evidence.some((e) => e.kind === 'assertion')) { // citing the nearby test that shows the gap is how a model explains a missing_test; drop the claim of proof, keep the row and its finding
@@ -539,6 +542,16 @@ const cell = (s, n = Infinity) => oneLine(neutralize(s), n).replace(/\|/g, '\\|'
 const LABEL = /^(?:PR body|issue (?:[\w.-]+\/[\w.-]+)?#\d+|history (?:PR|issue) (?:[\w.-]+\/[\w.-]+)?#\d+)$/;
 const REMOVED = / [(]removed[)]$/;
 const specPath = (src) => !LABEL.test(String(src).replace(/ AC \d+$/, '')); // the source cites a repository file, not a PR/issue label
+// A canonical source followed by an item label ("PR body U1", "PR body — U1", "docs/x.md AC-3") is that source; the label is returned apart.
+function canonSource(src, labels) {
+  const s = String(src);
+  if (labels.has(s)) return { source: s };
+  for (const l of [...labels].sort((a, b) => b.length - a.length)) {
+    const m = s.startsWith(l) && /^(?:\s+|\s*[:—–]\s*)(?:[-—–:]\s+)?(\S.*)$/.exec(s.slice(l.length));
+    if (m) return { source: l, item: m[1].trim() };
+  }
+  return { source: s };
+}
 // Normalised workspace-relative path, or null for anything absolute, parent-relative, backslashed or with control characters.
 function safeRel(p) {
   if (typeof p !== 'string' || !p || /[\\\u0000-\u001F\u007F]/.test(p) || p.startsWith('/') || /^[A-Za-z]:/.test(p)) return null;
@@ -739,7 +752,8 @@ function criteriaOf(data, all) {
     // a governing requirement (D*, or linked by the trace) with no verified gap or mismatch whose alignment nobody settled: the open question is whether the code does what the text says, so ask for that, not for a test
     // (a missing test on it has its own finding and takes the gap branch; the model may also have filed the sentence itself as an "unknown" obligation)
     const align = (!!r.trace_linked || /^D\d+$/.test(r.id)) && cs.length > 0 && !mismatch && !gap && cs.some((c) => c?.alignment?.status === 'unknown');
-    const kind = !cs.length ? 'unassessed' : mismatch ? 'mismatch' : gap ? 'gap' : align ? 'check' : done ? 'evidenced' : 'check';
+    const proto = !cs.length ? !!r.proto : cs.some((c) => c?.proto) && cs.every((c) => c?.proto || c?.status === 'covered'); // unknown only because of a source or layer format problem: no test is shown missing
+    const kind = !cs.length ? (proto ? 'link' : 'unassessed') : mismatch ? 'mismatch' : gap ? 'gap' : proto ? 'link' : align ? 'check' : done ? 'evidenced' : 'check';
     return { r, kind, align, cs, f: (mismatch ? mine(['spec_mismatch']) : mine(['missing_test', 'weak_test']))[0], higher: cs.some((c) => c?.status === 'higher_level_only') };
   });
 }
@@ -761,7 +775,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   // One displayed sentence = one row: the model often splits a PR-body bullet into several criteria that show the same sentence. Counts: the counts table and the verdict count
   // criteria (as the model assessed them); the "Requirements to check (N)" heading counts the merged rows actually shown.
   const sentOf = (x) => mdPlain(x.r.sentence || x.r.quote).replace(/\s+/g, ' ').trim() || `#${x.r.id}`;
-  const RANK = { mismatch: 0, gap: 1, unassessed: 2, check: 2 }, groups = new Map();
+  const RANK = { mismatch: 0, gap: 1, unassessed: 2, check: 2, link: 3 }, groups = new Map();
   for (const x of todo) { const k = sentOf(x); groups.set(k, [...(groups.get(k) || []), x]); }
   const merged = [...groups.values()].map((g) => ({ ...g.reduce((a, b) => (RANK[b.kind] < RANK[a.kind] ? b : a)), grp: g }));
   const todoKeys = new Set(groups.keys()), seenEv = new Set();
@@ -785,7 +799,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   let line2 = '';
   if (data && !failed && !inc) {
     const n = (k) => rows.filter((x) => x.kind === k).length, nk = (k) => all.filter((f) => f.kind === k).length;
-    const req = rows.length ? `${rows.length}: ${[`${n('evidenced')} evidenced`, plural(n('gap'), 'gap'), plural(n('mismatch'), 'mismatch', 'mismatches'), `${n('unassessed') + n('check')} unconfirmed`].filter((x) => !x.startsWith('0 ')).join(', ')}` : specFiles?.length ? 'none linked' : 'none found'; // a requirement document was read, but no criterion links to the change
+    const req = rows.length ? `${rows.length}: ${[`${n('evidenced')} evidenced`, plural(n('gap'), 'gap'), plural(n('mismatch'), 'mismatch', 'mismatches'), `${n('unassessed') + n('check')} unconfirmed`, `${n('link')} not verified`].filter((x) => !x.startsWith('0 ')).join(', ')}` : specFiles?.length ? 'none linked' : 'none found'; // a requirement document was read, but no criterion links to the change
     const tool = tooling && tooling.status !== 'not_configured' ? `; tool checks ${cell(tooling.status)}` : ''; // a configured check always says its state, a pass too (review F11)
     const std = data.standards.status === 'checked' ? (nk('standard') ? plural(nk('standard'), 'violation') : 'no violations') : data.standards.status === 'no_rules' ? 'none found' : 'not reviewed';
     const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
@@ -847,6 +861,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
           const q = String(x.cs.find((c) => c?.alignment?.status === 'unknown' && c.alignment.reason)?.alignment.reason || '').trim(), say = 'Check that the change does what this requirement says';
           return q && !INTERNAL.test(q) && !/^not stated\.?$/i.test(q) ? cell(`${say}: ${words(q.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase()), 160 - say.length - 2)}`, 160) : say;
         }
+        if (x.kind === 'link') return cell(x.r.proto || x.cs.find((c) => c?.proto).proto, 160); // what is unknown, with no request for a test
         if (x.kind === 'unassessed' || x.kind === 'check') return cell(`${ask}${why(x.grp.find((y) => RANK[y.kind] === 2 && why(y) !== '.') || x)}`, 160); // the first human reason in the group
         const say = x.kind === 'mismatch' ? 'Fix the code or the requirement' : x.f?.kind === 'weak_test' ? 'Strengthen the test' : 'Add the test';
         const links = [...new Set(x.grp.filter((y) => y.kind === x.kind).map(url).filter(Boolean))]; // each finding once
@@ -1076,6 +1091,15 @@ function verifyRequirements(data, context, read = readFile) {
   const byId = new Map(data.requirements.map((r) => [r.id, r]));
   const docs = new Map();
   for (const d of context.documents || []) if (!docs.has(d.source)) docs.set(d.source, d);
+  const labels = new Set([...docs.keys(), ...(context.criteria || []).map((e) => e.source)]);
+  const collectedIds = new Set((context.criteria || []).map((e) => e.id));
+  for (const r of data.requirements) { // the model's source may carry an item label: it becomes the item (ref) only when the source text has that ID, else it is display text and dropped
+    const c = typeof r.source === 'string' && !collectedIds.has(r.id) ? canonSource(r.source, labels) : null; // a collected criterion keeps the strict check below
+    if (!c || c.source === r.source) continue;
+    r.source = c.source;
+    const d = docs.get(c.source);
+    if (c.item && !r.ref && d && new RegExp(`(?<![\\w-])${c.item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`).test(d.text) && safeRef(c.item)) r.ref = safeRef(c.item);
+  }
   for (const expected of context.criteria || []) {
     const r = byId.get(expected.id);
     if (r) { if (!r.source) r.source = expected.source; if (!r.quote) r.quote = expected.quote; } // omitted by the model: the collected text is the trusted copy
@@ -1121,6 +1145,7 @@ function verifyRequirements(data, context, read = readFile) {
       if (rejected) fail(r, 'not a collected requirement document');
       else if (!context.unavailable) r.obligation_ids.forEach((id) => unverified.add(id)); // the criterion is unassessed; the obligations' own citations are verified independently
       r.obligation_ids = [];
+      if (rejected) r.proto = 'Requirement link not verified: the cited source is not a collected requirement document';
       r.reason = rejected ? 'The cited file is not a collected requirement document.' : 'Requirement wording not verified: the quote was not found in its source, so this criterion is not assessed.';
     } else if (!T.x.includes(norm(r.quote))) { // matched only as plain text: store the source's own line when the quote is one whole line
       const line = T.text.split(/\r\n|\r|\n/).find((l) => plain(l) === plain(r.quote));
