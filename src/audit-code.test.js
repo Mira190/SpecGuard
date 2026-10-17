@@ -1005,6 +1005,13 @@ test('run: a part of a reached unit dropped for the budget is named in a line an
     assert.match(l, /3 selected this run = 2 reviewed whole \+ 1 reviewed in part \(72 parts not reached\)/);
   });
 
+  test('run: parts_left_by_path names every unit with parts left: the one outside the 10-entry list is in part, the other multi-part units stay whole', async (t) => {
+    const rows = [[U1, 'src/js/orders.js'], [U2, 'src/js/legacy.js'], [U3, 'src/js/cart.js']].map(([id, p]) => rowOf(id, p, 1)).join('');
+    const left = Array.from({ length: 10 }, () => ({ path: 'src/js/orders.js', part: 2, of: 3 }));
+    const d = await post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: { 'audit-units.txt': rows, 'audit-inventory.json': INV({ ...E, all_parts: true, parts_left: left, parts_left_n: 72, parts_left_by_path: { 'src/js/orders.js': 60, 'src/js/legacy.js': 12 } }), 'findings.json': result([uf()]) } });
+    assert.match(funnel(d), /3 selected this run = 1 reviewed whole \+ 2 reviewed in part \(72 parts not reached\)/);
+  });
+
   test('run: a stateful rotation defers later parts on purpose: no parts_left, still complete', async (t) => {
     const r = await post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: { 'audit-units.txt': rowOf(U1, 'src/js/orders.js', 1), 'audit-inventory.json': INV({ rotation: { rotate: true, picked: 3, confirming: 0, new: 0, oldest: 3, reviewed: 3, total: 140, run: 1, runs: 12 } }), 'findings.json': result([uf()]) } });
     assert.deepEqual(r.calls.outputs, { status: 'complete' });
