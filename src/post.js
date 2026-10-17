@@ -661,7 +661,7 @@ const runLine = (a) => `Run: engine ${cell(a.engine, 80)}${[usageParts(a).record
 //   not_observed: not reported, nothing observed to change, or unknown (could be a miss)
 const outcome = (p) => ((p.thread === 'human' && p.anchor_touched === false && p.tests_changed !== true) || p.down - p.up >= 2 ? 'dismissed' : p.still_reported ? 'open' : p.anchor_touched === true || p.tests_changed === true ? 'addressed' : 'not_observed');
 const COUNTS_MAX = 8192;
-// Hidden machine-readable line in the sticky summary. `outcomes` drops its oldest entries first to stay under COUNTS_MAX; the tally in `since` always covers all of them.
+// Hidden machine-readable line in the sticky summary. It repeats finding titles, so a consumer that greps the comment body for finding text must strip the `specguard:counts` line first. `outcomes` drops its oldest entries first to stay under COUNTS_MAX; the tally in `since` always covers all of them.
 function countsComment(c) {
   const o = { ...c, outcomes: [...(c.outcomes || [])], ...(c.sum && { sum: [...c.sum] }) };
   const json = () => JSON.stringify(o).replace(/[<>]/g, (ch) => (ch === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d'); // can never close the HTML comment
