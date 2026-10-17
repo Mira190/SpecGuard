@@ -325,7 +325,7 @@ test('M5: the same fp inline and in sum counts once; counts without sum add noth
 
 test('M5 control: summary-only findings from a PR outside the usable set are not added', () => {
   const ds = mixed(); ds.prs = [pr(5, 2, 10, { labels: [{ name: 'review-arm:2' }, { name: 'copilot-request-failed' }] })];
-  assert.equal(analyze(ds).channels.summary.findings, 0);
+  assert.equal(analyze(ds).arms[2].specguard.findings, 0);
 });
 
 // 40-odd PRs of arm 0/2, each one inline finding with an outcome: even n addressed, odd n open; valid when n % 4 < 2.
@@ -381,7 +381,5 @@ test('control: the existing report lines are unchanged; the new blocks only add 
   const md = render(analyze(small()));
   for (const line of ['| 0 SpecGuard only | 2 | 1.00 | - | 15.0 | 17.5 | 2 | 2.50 | 2/2 |', '## Overlap in arm 2 (same file, lines within 3)', '## Decision rule', '- **INSUFFICIENT DATA**: Blind precision >= 65%.', '**KEEP COLLECTING: insufficient data for at least one rule.**'])
     assert.ok(md.includes(line), line);
-  const r = analyze(small());
-  assert.equal(r.channels.summary.findings, 0);
-  assert.equal(r.channels.inline.findings, 4);
+  assert.equal(findingsOf(small()).filter((f) => f.tool === 'specguard').length, 4); // no sum in these counts: nothing new
 });
