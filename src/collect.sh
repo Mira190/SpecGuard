@@ -296,7 +296,7 @@ const hunks = (() => {
     const r = hunkTests(files, diff, (toks) => git(['grep', '-o', '-w', '-F', '-I', ...toks.flatMap((x) => ['-e', x])], { timeout: 20000 }), testSet);
     for (const l of r.limits) fs.appendFileSync(path.join(ctx, 'collect-limits.txt'), l + '\n');
     return r.byFile;
-  } catch { return new Map(); }
+  } catch (e) { fs.appendFileSync(path.join(ctx, 'collect-limits.txt'), `Could not read the diff for changed-hunk test matching (${e.code || (e.status != null ? 'exit ' + e.status : e.message)}); test candidates come from names only.\n`); return new Map(); }
 })();
 const out = []; let size = prev.length;
 for (const [k, f] of todo.entries()) {
