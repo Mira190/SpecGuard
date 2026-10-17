@@ -174,7 +174,7 @@ function evidenceText(blocks, by) {
 }
 
 // The blocks to audit, in document order, after the priority pick and the CAND_CAP byte cap (never a cut row). carried: the others the state already knows.
-function candidates(all, cap, prior, changedDocs, stale) {
+function candidates(all, cap, prior, changedDocs, stale, skipped = []) {
   const sel = select(all, cap, prior, changedDocs, stale), at = new Map(all.map((c, i) => [c.cid, i])), row = (c) => `${c.cid}\t${c.path}:${c.line}${c.end ? `-${c.end}` : ''}\t${c.heading}\t${c.text}\n`;
   let used = 0;
   const fit = [];
@@ -196,7 +196,10 @@ function candidates(all, cap, prior, changedDocs, stale) {
       if (last && last.where === where) last.n++; else notAudited.push({ where, n: 1 });
     }
     left.push(...notAudited.map(({ where, n: k }) => `${where}: ${k} block${k === 1 ? '' : 's'} not scanned (cap)`));
-  } else if (rest.length) left.push(`${rest.length} of ${all.length} blocks were not audited this run (scan_max_blocks ${cap}); ${carried.length} keep the status of their last audit, ${rest.length - carried.length} have never been audited`);
+  } else if (rest.length || skipped.length) { // blocks set aside by scan_paths are not audited either, and `all` no longer holds them
+    const nCarried = carried.length + skipped.filter((c) => known.has(c.cid)).length, n = rest.length + skipped.length;
+    left.push(`${n} of ${all.length + skipped.length} blocks were not audited this run (scan_max_blocks ${cap}); ${nCarried} keep the status of their last audit, ${n - nCarried} have never been audited`);
+  }
   if (fit.length < Math.min(cap, all.length)) left.unshift(`audit-candidates.txt would pass ${CAND_CAP / 1024} KB: the cap was lowered to ${fit.length} blocks`);
   return { text: fit.map(row).join(''), fit, tally, carried, total: all.length, left };
 }
@@ -269,7 +272,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   let pool = all, cand, ev;
   const skipped = [], t0 = Date.now();
   for (;;) {
-    cand = candidates(pool, maxRequirements, prior, changedDocs, stale);
+    cand = candidates(pool, maxRequirements, prior, changedDocs, stale, skipped);
     ev = { by: new Map(), cut: false, files: 0 };
     try { ev = evidence({ cwd, head, blocks: cand.fit, docs: found, ignoreExtra, budgetMs: Math.max(0, evidenceBudgetMs - (Date.now() - t0)) }); }
     catch (e) { notes.push(`evidence search failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the model searches by itself`); break; }
