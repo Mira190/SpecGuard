@@ -141,6 +141,7 @@ function mirrorCandidates(src) {
 // ---- weak assertions ----
 const TEST_START = /(?<![.\w$])(?:it|test|specify)(?:\s*\(\s*['"`]|(?:\.(?:only|skip|todo|each|concurrent|failing|serial|fails|cb|sequential|fixme))+\s*\()|^\s*(?:async\s+)?def\s+test|^\s*func\s+Test|@Test\b|\[(?:Test|Fact|Theory|TestMethod)\b|#\[test\]|^\s*(?:public\s+)?(?:void|fun)\s+test/;
 const VALUE = /\bassert\.(?:equal|strictEqual|deepEqual|deepStrictEqual|equals|eq)\s*\(|\b(?:assertEquals?|assert_equal|assertSame|assertArrayEquals|assert_eq!)\s*\(|[Aa]ssert\.(?:Equal\w*|AreEqual|Same|Exactly)\s*\(|\brequire\.Equal\w*\s*\(|\.(?:toBe|toEqual|toStrictEqual|toBeCloseTo|toMatchObject|toHaveLength|toContain|isEqualTo)\s*\(|^\s*assert\s.*==/;
+const NEGATED = /\b(?:assert(?:\.ok)?|t\.ok)\(\s*!/;
 const WHAT = { truthy: 'is truthy', exists: 'is not null/undefined', type: 'has the expected type' };
 const truthyArg = (x) => { // the argument of assert/assertTrue: a bare reference, a not-null check or a typeof check
   let m; const bare = x.replace(/^!!/, '');
@@ -152,6 +153,8 @@ const truthyArg = (x) => { // the argument of assert/assertTrue: a bare referenc
 const lastArg = (a) => (a.length > 1 && /^['"`]/.test(a[0]) ? a[1] : a[0]) || ''; // JUnit4 puts the message first
 function weakOf(text, next) { // -> {x, what} | null
   let m, a;
+  const ok = require('./post').okArg(text); // assert.ok(f(x)) / assert(x): the one classifier PR mode uses (post.js); required lazily
+  if (ok) return { x: ok, what: 'truthy' };
   const at = (re) => { m = re.exec(text); return m && args(text, m.index + m[0].length - 1); };
   if ((a = at(/(?<![.\w$])assert(?:\.ok)?\s*\(/)) && (a.length === 1 || (a.length === 2 && /^['"`]/.test(a[1])))) return truthyArg(a[0]);
   if ((a = at(/\bassert\.not(?:Strict)?Equal\s*\(/)) && a.length === 2 && /^(?:null|undefined)$/.test(a[1])) return { x: a[0], what: 'exists' };
@@ -182,6 +185,8 @@ function weakCandidates(src) {
     const lo = starts.filter((s) => s <= i).pop() ?? 0, hi = starts.find((s) => s > i) ?? ls.length;
     const same = REF.test(w.x) ? new RegExp(`(?<![\\w$])${w.x.replace(/[$.]/g, '\\$&')}(?![\\w$])`) : { test: (l) => l.includes(w.x) };
     if (ls.slice(lo, hi).some((l) => VALUE.test(l) && same.test(l))) return;
+    const callee = /^([A-Za-z_$][\w$.]*)\(/.exec(w.x); // assert.ok(f(x)) and assert.ok(!f(y)) in one test: f's boolean is checked both ways
+    if (callee && ls.slice(lo, hi).some((l) => NEGATED.test(l) && l.includes(`!${callee[1]}(`))) return;
     out.push({ line: i + 1, text: text.trim(), ...w });
   });
   return out;

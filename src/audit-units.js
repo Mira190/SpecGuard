@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { fileCap } = require('./pack-cap');
 const { isTestPath, testScope, lsTree, catBatch, makeClock } = require('./trace');
-const { weakCandidates, TEST_START } = require('./leads');
+const { weakCandidates, TEST_START, GENERIC: LEAD_GENERIC } = require('./leads');
 const { ASSERTION, SKIPPED } = require('./post');
 const { mapTests, indexTests, testStem, near, key, noExt, publicDefs: baseDefs, GENERIC } = require('./test-map');
 
@@ -45,6 +45,10 @@ function publicDefs(file, ls) {
   return more.length ? { count: d.count, names: [...d.names, ...new Set(more)] } : d;
 }
 const publicCount = (file, ls) => publicDefs(file, ls).count;
+// Names a "no test references it" lead may be about: 4+ characters, not a generic word, not a type (no runtime value to test) or an UPPER_CASE constant. [{name, line}] with the line of the first code line that has the name (its definition).
+const STOP = new Set('props state config options types data value values name test util utils helper helpers exports module'.split(' '));
+const leadNames = (names, ls) => names.filter((n) => n.length >= 4 && ![GENERIC, LEAD_GENERIC, STOP].some((s) => s.has(n.toLowerCase())))
+  .map((name) => { const re = new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`), i = ls.findIndex((l) => !comment(l) && re.test(l)); return { name, line: i + 1, type: i >= 0 && /^\s*(?:export\s+)?(?:declare\s+)?(?:interface|type)\s/.test(ls[i]) }; }).filter((x) => x.line && !x.type && !/^[A-Z][A-Z0-9_]+$/.test(x.name)).map(({ name, line }) => ({ name, line }));
 
 // Signals of one test file: tests, tests without an assertion, skipped or disabled tests, assertion lines, weak assertion lines (leads.js).
 // ponytail: a test is a block from one test declaration to the next, an assertion is any line post.js's ASSERTION matches; an assertion inside a helper the test calls reads as no assertion.
@@ -52,7 +56,7 @@ function testSignals(src) {
   const ls = src.split('\n').slice(0, 6000).map((l) => l.replace(/\r$/, '')), starts = [];
   ls.forEach((l, i) => { if (l.length <= 400 && START.test(l)) starts.push(i); });
   const noAssert = starts.filter((s, k) => !ls.slice(s, starts[k + 1] ?? ls.length).some((l) => !comment(l) && ASSERTION.test(l))).length;
-  return { tests: starts.length, noAssert, skipped: ls.filter((l) => SKIPPED.test(l)).length, asserts: ls.filter((l) => !comment(l) && ASSERTION.test(l)).length, weak: weakCandidates(src).map((w) => ({ line: w.line, what: w.what })) };
+  return { tests: starts.length, noAssert, skipped: ls.filter((l) => SKIPPED.test(l)).length, asserts: ls.filter((l) => !comment(l) && ASSERTION.test(l)).length, weak: weakCandidates(src).map((w) => ({ line: w.line, what: w.what, text: w.text.slice(0, 100) })) };
 }
 
 // ONE git log pass: path -> { churn: commits touching it in the last DAYS days, fixes: of those, commits whose subject says fix/bug/hotfix/regression/revert }. A shallow clone has no history: null.
@@ -172,7 +176,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (!bufs[k] || bufs[k].subarray(0, 8192).includes(0)) return;
       const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
       const n = loc(ls);
-      if (n >= MIN_LOC) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0) }); }
+      if (n >= MIN_LOC) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls), size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0) }); }
     });
   }
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
@@ -184,6 +188,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const classOf = new Map(units.filter((u) => /[-_.]/.test(noExt(u.path)) && u.names.includes(pascal(u.path))).map((u) => [u.path, pascal(u.path)])), classes = new Set(classOf.values());
   const names = new Set(units.flatMap((u) => u.names)), sig = new Map(), mention = new Map(), called = new Map(), token = new Map(), classHit = new Map();
   const put = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
+  const want = new Set(units.flatMap((u) => u.defs.map((d) => d.name))), refd = new Set(); // refd: lead names some read test file mentions as a word
   let bytes = 0, readN = 0;
   const readable = testEntries.filter((e) => e.size <= TEST_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
   for (let i = 0; i < readable.length && readN < MAX_TESTS_READ && bytes < TEST_TOTAL && !dl.over(); i += 300) {
@@ -193,13 +198,13 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       readN++; bytes += bufs[k].length;
       const src = bufs[k].toString('utf8');
       sig.set(e.path, testSignals(src)); const ip = importPaths(e.path, src, shaOf); srcImports.set(e.path, ip.map((p) => `${p}:${shaOf.get(p)}`)); for (const p of ip) put(importers, p, e.path);
-      for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) { if (stems.has(w)) put(mention, w, e.path); if (classes.has(w)) put(classHit, w, e.path); }
+      for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) { if (want.has(w)) refd.add(w); if (stems.has(w)) put(mention, w, e.path); if (classes.has(w)) put(classHit, w, e.path); }
       if (pathStems.size) for (const c of new Set(src.match(/[\w$][\w$.-]*/g) || [])) { const w = c.replace(/[.-]+$/, ''); for (const k of new Set([w, w.replace(/\.[a-z]{1,4}$/i, '')])) if (pathStems.has(k)) put(token, k, e.path); }
       for (const w of new Set(src.match(/[A-Za-z_$][\w$]*(?=\s*\()/g) || [])) if (names.has(w)) { if (!called.has(w)) called.set(w, []); called.get(w).push(e.path); }
     });
   }
   const unread = tests.length - sig.size;
-  if (unread > 0) limits.push(`${unread} of ${tests.length} test files were not read (over the size, count or time limit): their assertions are unknown, and a unit they alone cover may be missed`);
+  if (unread > 0) limits.push(`${unread} of ${tests.length} test files were not read (over the size, count or time limit): their assertions are unknown, and a unit they alone cover may be missed, and no "no test references it" lead is made`);
   const hist = history(cwd, now);
   if (!hist) limits.push('no git history (shallow clone? use fetch-depth: 0): churn and fix commits are not used in the ranking');
   const notReachedTime = cand.length - reached;
@@ -215,7 +220,9 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       h.fixes && `${h.fixes} fix commit${h.fixes === 1 ? '' : 's'} in ${DAYS} days`, !h.fixes && h.churn >= 3 && `${h.churn} commits in ${DAYS} days`].filter(Boolean).join(', ') || `${u.pub} public definition${u.pub === 1 ? '' : 's'}`;
     const seen = [u.path, ...got].map((p) => `${p}:${shaOf.get(p) || ''}`).join('\n'), deps = [...new Set([u.path, ...got].flatMap((p) => srcImports.get(p) || []))].sort().join('\n');
     const verLegacy = sha8(seen), ver = deps ? sha8(`${seen}\n${deps}`) : verLegacy; // what a review of this unit saw: its blob, its matched tests' blobs, and the blobs they import (helpers, fixtures, the unit's own dependencies)
-    return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
+    // ponytail: "no test references it" is only claimed when every test file was read (an unread one may name it) and the unit has matched tests (else test_evidence_not_found already says it); an in-memory word match, so a name in a comment counts as a reference
+    const unref = unread || !got.length ? [] : u.defs.filter((d) => !refd.has(d.name));
+    return { ...u, unref, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
   const size = partBytes(packBytes, maxUnits), tsize = new Map(testEntries.map((e) => [e.path, e.size]));
   const tcost = (t) => Math.ceil(Math.min(tsize.get(t) || 0, fileCap(packBytes)) * 1.15) + 300;
@@ -251,7 +258,8 @@ function write(ctx, head, maxUnits, inv) {
   if (inv.unitRooms && inv.unitRooms.length > 1) w('audit-unit-rooms.json', JSON.stringify(inv.unitRooms)); // more than one call: scan-parts.js makes one unit part per room
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
   w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...(inv.unitCalls > 1 && { unit_calls: inv.unitCalls }), ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
-    rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r), signals: { tests: r.signals.tests, noAssert: r.signals.noAssert, skipped: r.signals.skipped, asserts: r.signals.asserts, weak: r.signals.weak.length, unread: r.signals.unread } })),
+    rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r), signals: { tests: r.signals.tests, noAssert: r.signals.noAssert, skipped: r.signals.skipped, asserts: r.signals.asserts, weak: r.signals.weak.length, unread: r.signals.unread },
+      ...((r.signals.weak.length || r.unref.length) && { leads: { weak: r.signals.weak.slice(0, LEADS).map((x) => ({ path: x.path, line: x.line, text: x.text })), unref: r.unref.slice(0, 5) } }) })),
     forced: inv.forced, // picked although it cannot fit the pack: the publisher records it as unsure even when its tests were cut, so the rotation moves on
     unreviewed: inv.rows.filter((r) => inv.review(r) === 'not yet reviewed').slice(0, 30).map((r) => ({ id: r.id, path: r.path, score: r.score })) }) + '\n');
 }
@@ -271,4 +279,17 @@ function staticFindings(rows) {
   return out;
 }
 
-module.exports = { staticFindings, inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };
+// Exact-location facts from the same rows (row.leads, written by write()): a weak assertion that only checks truthiness, an exported name no test file mentions. In row order (risk order); at most `cap` kept, `extra` counts the rest.
+// Facts for a reader to check, never counted as gaps and never in the state.
+function staticLeads(rows, cap = 20) {
+  const all = [], seen = new Set(), exp = (p) => (/\.[cm]?[jt]sx?$/i.test(p) ? 'exported' : 'public');
+  for (const r of rows || []) {
+    const l = r && r.leads;
+    if (!l) continue;
+    for (const w of l.weak || []) !seen.has(w.path + ":" + w.line) && seen.add(w.path + ":" + w.line) && all.push({ unit: r.id, path: w.path, line: w.line, kind: 'truthiness_only', why: `\`${w.path.split('/').pop()}:${w.line}\` asserts only truthiness (\`${String(w.text).replace(/`/g, "'")}\`)` });
+    for (const d of l.unref || []) all.push({ unit: r.id, path: r.path, line: d.line, kind: 'unreferenced_export', why: `\`${d.name}\` (${r.path}:${d.line}) is ${exp(r.path)} and no test file references it` });
+  }
+  return { items: all.slice(0, cap), extra: Math.max(0, all.length - cap) };
+}
+
+module.exports = { staticFindings, staticLeads, inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };

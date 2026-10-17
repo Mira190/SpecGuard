@@ -9,7 +9,7 @@ const { ours } = require('./preflight');
 const { enclosingName } = require('./test-map');
 const { ASSERTION, TEST_DECL, SKIPPED } = post;
 const { version, versionLine } = require('./version');
-const { staticFindings } = require('./audit-units');
+const { staticFindings, staticLeads } = require('./audit-units');
 // trace.js's test-path rule; the fallback is a local copy of it in case the export moves (ponytail: keep in sync).
 const { isTestPath = (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/.test(p) } = require('./trace');
 
@@ -518,7 +518,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const unseen = (code && code.unseen) || [], failedS = new Set(code ? code.failed || (code.unitsFailed ? unseen : []) : []), reachS = new Set((code && code.unreached) || []), unfit = failedS.size ? 'were not reviewed: the unit call failed' : reachS.size ? 'were not reached (max_budget_usd)' : "did not fit the model's context", forcedS = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), lost = unseen.filter((u) => !forcedS.has(u) || failedS.has(u) || reachS.has(u)), seenN = inv ? inv.rotation.picked - lost.length : 0; // a forced unit (tests cut, recorded unsure) was reviewed: it counts as seen here, only the funnel line tells it apart // unseen: picked units the model's context did not hold whole (pack-cut.txt): not reviewed this run
   const riskiest = inv && lost.length ? `${seenN} unit${seenN === 1 ? '' : 's'} that fit the model's context` : inv ? (inv.rotation.picked === 1 ? 'riskiest unit' : `${inv.rotation.picked} riskiest units`) : '';
   // static test signals (no model): rule-based leads for the reviewed units, from the inventory's counts; an older inventory without `signals` has none. Never counted as gaps, never in the state.
-  const sig = code && inv && Array.isArray(inv.rows) ? staticFindings(inv.rows.filter((r) => code.list.has(r.id))) : [];
+  const sigRows = code && inv && Array.isArray(inv.rows) ? inv.rows.filter((r) => code.list.has(r.id)) : [], sig = staticFindings(sigRows), lead = staticLeads(sigRows), sigUnits = new Set([...sig, ...lead.items].map((s) => s.unit)).size; // lead: exact-location facts (a truthiness-only assertion, an exported name no test mentions), top 20 by unit risk
   const docless = !!code &&!docs.length && !rows.length; // a repository without design documents: the document statistics would only say zero
   // carried blocks: the previous status, no sub-rows; a pending recheck stays pending; blocks that were not requirements are only counted
   // a carried covered block whose cited code or tests changed since (p.stale, review F06) is no longer shown as covered: unsure until it is audited again
@@ -588,7 +588,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     else if (both) verdict = `**❌ ${both}**${at7}. Static review; tests were not run.`;
     else if (lost.length && !seenN) verdict = `**⚠️ The scan could not review any unit: ${code.unitsFailed ? 'the unit call failed' : reachS.size ? 'max_budget_usd did not cover the unit calls' : "none fit the model's context"}**${at7}.`;
     else if (unsure.length) verdict = `**❔ No unit test gaps in the ${riskiest}; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${at7}. Static review; tests were not run.`;
-    else if (sig.length) verdict = `**❔ No model-verified unit test gaps in the ${riskiest}; ${plural(sig.length, 'unit')} ${sig.length === 1 ? 'has' : 'have'} static test signals to check**${at7}. Static review; tests were not run.`;
+    else if (sigUnits) verdict = `**❔ No model-verified unit test gaps in the ${riskiest}; ${plural(sigUnits, 'unit')} ${sigUnits === 1 ? 'has' : 'have'} static test signals to check**${at7}. Static review; tests were not run.`;
     else verdict = `**✅ No unit test gaps in the ${riskiest}**${at7}. Static review; tests were not run.`;
   }
   else if (!data) verdict = '**No design documents were found, so nothing was scanned.**';
@@ -675,9 +675,10 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const uitem = (f) => findingBlock({ f: { kind: f.kind, title: f.title, path: f.path, line: f.line, body: `${neutralize(f.body)}${f.counterexample ? ` Still passes when: ${neutralize(f.counterexample)}` : ''}${f.skeleton ? fence(f.skeleton) : ''}` }, why: f.confirmed ? '' : 'first report' }, blob, rank++, { bare: true, posted: true, sketch: true });
   const uhead = (f) => findingHead({ kind: f.kind, title: f.title, path: f.path, line: f.line, body: f.body }, { why: f.low ? f.lowWhy || 'low confidence' : f.confirmed ? '' : 'first report', posted: true, bare: true }, blob);
   for (const l of ulists) body += vis(l.title, l.fs.map(uitem), '', UCAP);
-  const SIGH = 'Found by rule from the test files at this commit, not by the model; a missing or weak signal is a lead, not a confirmed gap.\n\n| Unit | Signal | Why |\n|---|---|---|\n', SIGN = { test_evidence_not_found: 'test evidence not found', weak_test_signal: 'weak test signal' };
-  const srow = (s) => `| ${link(s.path, 1, s.path)} | ${SIGN[s.kind]} | ${cell(s.why, 200)} |\n`;
-  if (!failure && data) body += vis('Static test signals (no model)', sig.map(srow), SIGH, UCAP);
+  const SIGH = 'Found by rule from the test files at this commit, not by the model; a missing or weak signal is a lead, not a confirmed gap.\n\n| Unit | Signal | Why |\n|---|---|---|\n', SIGN = { test_evidence_not_found: 'test evidence not found', weak_test_signal: 'weak test signal', truthiness_only: 'asserts only truthiness', unreferenced_export: 'no test references it' };
+  const srow = (s) => `| ${link(s.path, s.line || 1, s.line ? `${s.path}:${s.line}` : s.path)} | ${SIGN[s.kind]} | ${cell(s.why, 200)} |\n`;
+  const srows = [...sig, ...lead.items].map(srow).concat(lead.extra ? [`| +${lead.extra} more | | not listed: only the top 20 leads by unit risk are shown |\n`] : []);
+  if (!failure && data) body += vis('Static test signals (no model)', srows, SIGH, UCAP);
   body += vis('Reported in two runs', confirmed.map(grow), GTOP);
   body += vis(prior ? 'New since the last scan' : 'New gaps', fresh.map(grow), GTOP);
   body += clashes.length ? take(`### Documents and code disagree (${clashes.length})\n\nA model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Document says | Code says |\n|---|---|\n`, clashes.slice(0, CAP), clashes.length > CAP ? `\n+${clashes.length - CAP} more in Details.\n` : '') : '';
@@ -699,7 +700,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     const left = Math.max(0, inv.units - r.reviewed);
     cdet = take(`**Riskiest units (top ${Math.min(15, inv.rows.length)} of ${inv.units})**\n\n${URISK}`, inv.rows.slice(0, 15).map(urow), '') + fit(text)
       + (left ? take(`**Units not yet reviewed (${left})**\n\n`, [...inv.unreviewed.slice(0, 15).map((u) => `- ${link(u.path, 1, u.path)} (risk ${u.score})\n`), ...(left > 15 ? [`- +${left - 15} more\n`] : [])], '') : '')
-      + ulists.map((l) => more(l.more, l.fs.map(uhead), '', UCAP)).join('') + (failure || !data ? '' : more('More static test signals', sig.map(srow), SIGH, UCAP))
+      + ulists.map((l) => more(l.more, l.fs.map(uhead), '', UCAP)).join('') + (failure || !data ? '' : more('More static test signals', srows, SIGH, UCAP))
       + (ulow.length ? take(`**Low-confidence unit findings (${ulow.length})**\n\nA test file the model could not see whole, or a test that may already cover it, is behind each; they are not counted.\n\n`, ulow.map(uhead), '') : '');
   }
   let det = [more('More confirmed gaps', confirmed.map(grow), GTOP), more('More new gaps', fresh.map(grow), GTOP), more('More disagreements', clashes, '| Document says | Code says |\n|---|---|\n')].join('');
