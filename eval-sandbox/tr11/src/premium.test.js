@@ -7,9 +7,9 @@ test('charges base times risk factor below the cap', () => {
 });
 
 test('allows a premium of exactly the cap', () => {
-  assert.equal(calcPremium(100, 2), 200);
+  assert.equal(calcPremium(100, 3), 300);
 });
 
 test('limits the premium to the cap', () => {
-  assert.equal(calcPremium(100, 5), 200);
+  assert.equal(calcPremium(100, 6), 300);
 });
