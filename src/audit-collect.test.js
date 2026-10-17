@@ -329,6 +329,9 @@ test('scan_paths: documents, code and tests are still read from the whole reposi
   assert.ok(only('packages/a/x.js') && !only('packages/b/x.js'), 'an exclude-only scope keeps the rest');
   assert.equal(scopeFn(''), null);
   assert.ok(scopeFn('packages/a')('packages/a/src/x.js') && !scopeFn('packages/a')('packages/ab/x.js'), 'a plain path is a folder');
+  const anchored = scopeFn('/packages/payments'), brackets = scopeFn('/packages/[core]');
+  assert.ok(anchored('packages/payments/pay.js') && !anchored('legacy/packages/payments/pay.js'), 'a leading / anchors the folder at the repository root');
+  assert.ok(brackets('packages/[core]/a.js') && !brackets('packages/c/a.js'), '[ ] in a folder name are literal');
 });
 
 test('scan_paths: a document block is audited in a scoped run only when its evidence touches the scope; the rest are skipped, listed and carried; no scope audits all', (t) => {

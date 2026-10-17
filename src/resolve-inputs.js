@@ -135,10 +135,10 @@ function resolve(env, api = ghApi, log = () => {}) {
     const s = splitRef(t.rest, ctx);
     if (!REF_OK.test(s.ref)) throw new Error('the branch in the link must be a branch, tag or commit SHA (letters, digits and . _ / -)');
     out.ref = ctx.ref = ctx.at = s.ref;
-    if (!s.verified && t.rest.includes('/')) log(`::warning::could not check which part of the link is the branch name (the token cannot read ${t.repo}?): scanning branch "${s.ref}". A branch name that contains a slash needs a token that can read the repository.`);
+    if (!s.verified && t.rest.includes('/')) throw new Error(`could not tell the branch from the path in the link: the token cannot read the branches of ${t.repo}. Use a token that can read the repository, or link the branch root (github.com/${t.repo}/tree/BRANCH) and narrow with scan_paths`);
     else if (s.path) { // a plain path: scan_paths reads it as a file or a folder
       if (/[\x00-\x1F\x7F]/.test(s.path) || s.path.split('/').some((p) => p === '..' || !p)) throw new Error('the path in the link is not valid');
-      out.scan_paths = s.path;
+      out.scan_paths = `/${s.path}`; // anchored at the repository root: `legacy/packages/payments` is not `packages/payments`
       log(`::notice::the scan covers the source files under ${s.path} on ${s.ref}; documents and tests still come from the whole repository (narrow them with design_docs and test_dirs).`);
     }
   }
