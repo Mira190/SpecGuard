@@ -6,3 +6,11 @@
 
 # agent worktrees
 .claude/worktrees/
+
+# Local review evidence can contain private repository context and source copies.
+/docs/branch-archives/
+/docs/action-results-rereview-2026-10-17/*
+!/docs/action-results-rereview-2026-10-17/report-public.md
+/docs/version-eval-2026-10-17/*
+!/docs/version-eval-2026-10-17/report.md
+!/docs/version-eval-2026-10-17/summary.md
