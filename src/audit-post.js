@@ -787,6 +787,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   // TEST_PATHS first: the exact input the collector scoped by; test-paths.txt (PR-mode collect.sh writes it from the same input) is only the fallback, so the two cannot disagree
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), testPaths = process.env.TEST_PATHS || readCtx('test-paths.txt') || '', covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths });
   const cutUnits = hasCode && unitsFailed ? [...units.keys()] : hasCode && packCutOn ? [...units.values()].filter((u) => packCut.has(u.path) || u.tests.some((t) => packCut.has(t))).map((u) => u.id) : [];
+  if (inv && !unitsFailed) { const testCut = cutUnits.filter((id) => !packCut.has(units.get(id).path)); if (testCut.length) inv.forced = [...(Array.isArray(inv.forced) ? inv.forced : []), ...testCut]; } // only the tests were cut: the unit was reviewed, so it is recorded unsure like a forced one and the rotation moves on, instead of looking never reviewed
   const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths });
   // A unit is "covered" only when no finding of it was dropped or lowered at any stage (validate, verify, low confidence): otherwise it was seen but inconclusive, tracked as unsure.
   const solid = new Set(checked.unit_findings.filter((f) => !f.low).map((f) => f.unit)), notCut = (u) => !cutUnits.includes(u) && !solid.has(u);

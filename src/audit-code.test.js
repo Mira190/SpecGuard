@@ -670,12 +670,13 @@ test('chained: the real collector writes the ctx files and the post step reads t
   assert.equal(m.calls.outputs.status, 'complete');
 });
 
-test('run: a unit with an incomplete candidate test stays due instead of being saved as covered', async (t) => {
+test('run: a unit with an incomplete candidate test is recorded unsure with the scan date instead of being saved as covered or left looking never reviewed', async (t) => {
   const r = await post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: {
     'findings.json': result([]), 'pack-cut.txt': 'test/orders.test.js\n',
   } });
   assert.equal(r.calls.outputs.status, 'incomplete');
-  assert.ok(!readState(r.calls.created[0].body).blocks.some((b) => b.cid === U1));
+  const b = readState(r.calls.created[0].body).blocks.find((x) => x.cid === U1);
+  assert.deepEqual([b.status, b.at.date], ['unsure', DATE], 'only its test was cut: reviewed, so the rotation moves on');
   assert.match(r.calls.summary, /Not reviewed this run/);
 });
 
@@ -722,7 +723,7 @@ test('verifyUnits: test_paths decides which cited files are tests (F26): weak_te
   assert.equal(verify(result([PUSH()]), { read: rd, units: UNITS() }).unit_findings.length, 1, 'control: heuristic');
 });
 
-test('funnel through the real collect -> pack -> audit-post path: 8 eligible = 7 inventoried + 1 over 512 KiB; 6 selected = 5 reviewed whole + 1 did not fit', async (t) => {
+test('funnel through the real collect -> pack -> audit-post path: 8 eligible = 7 inventoried + 1 over 512 KiB; 6 selected = 5 reviewed whole + 1 tests cut (recorded unsure)', async (t) => {
   const fn = (n, k) => Array.from({ length: k }, (_, i) => `exports.${n}${i} = (v) => (v > ${i} ? v - ${i} : ${i});`).join('\n') + '\n';
   const files = {};
   for (let i = 0; i < 6; i++) files[`src/u${i}.js`] = fn(`u${i}_`, 10 + i);
@@ -740,8 +741,8 @@ test('funnel through the real collect -> pack -> audit-post path: 8 eligible = 7
   Object.assign(process.env, { CTX: ctx, GITHUB_WORKSPACE: root, SCAN_ISSUE: 'true', ISSUE_REPO: '', SKIP: 'false', ENGINE: 'claude' });
   try { await audit({ github: m.github, context: { ...m.context, sha: head }, core: m.core, date: DATE }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
   const l = /^Units: .*$/m.exec(m.calls.summary)[0];
-  assert.match(l, /^Units: 8 eligible = 7 inventoried \+ 1 not inventoried \(over 512 KiB\); 6 selected this run = 5 reviewed whole \+ 1 did not fit/);
-  assert.match(m.calls.summary, /\| \[src\/over\.js\][^\n]*selected, did not fit \(not reviewed\) \|/);
+  assert.match(l, /^Units: 8 eligible = 7 inventoried \+ 1 not inventoried \(over 512 KiB\); 6 selected this run = 5 reviewed whole \+ 1 forced \(recorded unsure\)/);
+  assert.match(m.calls.summary, /\| \[src\/over\.js\][^\n]*forced: tests cut \(unsure\) \|/);
   assert.match(m.calls.summary, /5 of the 6 selected units were reviewed whole/);
 });
 
@@ -764,4 +765,51 @@ test('render: the funnel line reconciles eligible, selected, reviewed, did not f
   const f = vis({ ...CODE(data.unit_findings, { eligible: 140, forced: [U1] }), unseen: [U1] }); // forced: nothing fits, tests cut
   assert.match(line(f.top), /3 selected this run = 2 reviewed whole \+ 1 forced \(recorded unsure\)/);
   assert.match(f.md, /forced: tests cut \(unsure\)/);
+});
+
+// collect -> pack -> audit-post for one scan run; prior = the scan issue body of the run before. -> { picked: unit paths in order, body, summary, cut: the pack's cut files }
+async function scanRun(repo, { prior = null, maxUnits = 1, packBytes = 60000 } = {}) {
+  const { root, ctx } = repo;
+  fs.rmSync(ctx, { recursive: true, force: true });
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  require('./audit-collect').collect({ cwd: root, ctx, maxUnits, rotate: true, packBytes, prior: prior && readState(prior) });
+  const pack = require('./engines/claude-api').contextPack(ctx, root, packBytes), put = (n, v) => fs.writeFileSync(path.join(ctx, n), typeof v === 'string' ? v : JSON.stringify(v));
+  put('engine-status', 'success'); put('pack-cut.txt', pack.notWhole.map((x) => `${x}\n`).join(''));
+  put('findings.json', { requirements: [], not_requirements: [], not_reviewed: [], docs_reviewed: [], unit_findings: [] });
+  const picked = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n').filter(Boolean).map((l) => l.split('\t')[1]);
+  const m = mocks({ issues: prior ? [{ number: 7, state: 'open', title: audit.TITLE, user: BOT, body: prior }] : [] }), saved = { ...process.env };
+  Object.assign(process.env, { CTX: ctx, GITHUB_WORKSPACE: root, SCAN_ISSUE: 'true', ISSUE_REPO: '', SKIP: 'false', ENGINE: 'claude' });
+  try { await audit({ github: m.github, context: { ...m.context, sha: head }, core: m.core, date: DATE }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
+  return { picked, body: (m.calls.created[0] || m.calls.updated[0] || {}).body, summary: m.calls.summary, cut: pack.notWhole };
+}
+const fns = (n, k) => Array.from({ length: k }, (_, i) => `exports.${n}${i} = (v) => (v > ${i} ? v - ${i} : ${i});`).join('\n') + '\n';
+const bigTest = (n, k) => Array.from({ length: k }, (_, i) => `test("t${i}", () => { assert.equal(${n}${i % 20}(${i}), ${i}); }); // ${'pad '.repeat(10)}`).join('\n') + '\n';
+const unitState = (run, p) => readState(run.body).blocks.find((x) => x.cid === unitId(p));
+
+test('stall: a unit whose matched test is over the per-file cap is recorded unsure with a date, and the next run picks another unit', async (t) => {
+  const repo = repoOf(t, { 'src/big.js': fns('big_', 30), 'tests/big.test.js': bigTest('big_', 400), 'src/small.js': fns('small_', 8), 'tests/small.test.js': 'test("s", () => { assert.equal(small_0(1), 1); });\n' });
+  const one = await scanRun(repo);
+  assert.deepEqual(one.picked, ['src/big.js'], 'the riskiest unit is chosen first');
+  assert.ok(one.cut.includes('tests/big.test.js') && !one.cut.includes('src/big.js'), `only its test is cut: ${one.cut}`);
+  const b = unitState(one, 'src/big.js');
+  assert.deepEqual([b.status, b.at.date], ['unsure', DATE], 'reviewed with its test cut: unsure and dated, not left untracked');
+  assert.match(one.summary, /forced: tests cut \(unsure\)/);
+  const two = await scanRun(repo, { prior: one.body });
+  assert.deepEqual(two.picked, ['src/small.js'], 'the rotation moves past the unit instead of choosing it first again');
+});
+
+test('over-cap: a unit whose part plus tests exceed the pack is chosen in risk order, reviewed with the tests that fit, labelled tests cut and recorded unsure', async (t) => {
+  const files = { 'src/over.js': fns('over_', 30), 'src/small.js': fns('small_', 8), 'tests/small.test.js': 'test("s", () => { assert.equal(small_0(1), 1); });\n' };
+  for (let k = 0; k < 6; k++) files[`tests/over${k}.test.js`] = bigTest('over_', 300);
+  const one = await scanRun(repoOf(t, files));
+  assert.deepEqual(one.picked, ['src/over.js']);
+  assert.match(one.summary, /forced: tests cut \(unsure\)/);
+  assert.equal(unitState(one, 'src/over.js').status, 'unsure');
+});
+
+test('control: a unit whose tests fit whole is reviewed normally and recorded as before', async (t) => {
+  const one = await scanRun(repoOf(t, { 'src/small.js': fns('small_', 8), 'tests/small.test.js': 'const assert = require("node:assert/strict");\ntest("s", () => { assert.equal(small_0(1), 1); });\n' }));
+  assert.deepEqual([one.picked, one.cut], [['src/small.js'], []]);
+  assert.equal(unitState(one, 'src/small.js').status, 'covered');
+  assert.doesNotMatch(one.summary, /tests cut/);
 });

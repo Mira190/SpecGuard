@@ -422,7 +422,7 @@ test('F23 (review): when no unit fits, the unit chosen anyway is recorded as uns
     files[`src/js/${u}.js`] = Array.from({ length: 200 }, (_, i) => `exports.f${i} = (x) => x + ${i};`);
     files[`test/${u}.test.js`] = Array.from({ length: 4000 }, (_, i) => `// ${'filler '.repeat(6)}${i}`).concat(`it('${u}', () => { assert.equal(${u}.f1(1), 2); });`);
   }
-  const r = repo(t, files), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 6000 };
+  const r = repo(t, files), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 2000 };
   const first = inventory(o);
   assert.deepEqual(first.forced, [first.picked[0].id], 'the unit chosen although it cannot fit is named');
   const post = require('./audit-post'), pick1 = first.picked[0];
@@ -438,7 +438,7 @@ test('F23 (review): when no unit fits, a unit unfinished in parts does not take 
     files[`src/js/${u}.js`] = Array.from({ length: 600 }, (_, i) => `exports.f${i} = (x) => x + ${i}; // ${'pad '.repeat(6)}`);
     files[`test/${u}.test.js`] = Array.from({ length: 4000 }, (_, i) => `// ${'filler '.repeat(6)}${i}`).concat(`it('${u}', () => { assert.equal(${u}.f1(1), 2); });`);
   }
-  const r = repo(t, files), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 6000 };
+  const r = repo(t, files), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, packBytes: 2000 };
   const first = inventory(o).picked[0];
   assert.ok(first.part && first.part.n > 1, 'the fixture splits the unit');
   const prior = { head: 'a', blocks: [{ cid: first.id, status: 'unsure', runs: 1, at: { date: '2026-10-01' } }], versions: { uv: { [first.id]: first.ver }, ev: {}, uc: { [first.id]: [1, first.part.n] } } };
