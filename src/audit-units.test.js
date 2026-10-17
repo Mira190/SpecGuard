@@ -582,6 +582,7 @@ test('stateless: parts that do not fit are listed as not reached (budget) and th
   const r = twoPart(t), inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, rooms: 1, packBytes: 250000, allParts: true }), n = inv.picked.find((u) => u.path === 'src/js/big.js').part.n;
   assert.deepEqual(inv.picked.filter((u) => u.path === 'src/js/big.js').map((u) => u.part.k), [0], 'one call holds one part of a unit');
   assert.equal(inv.partsLeft.length, n - 1);
+  assert.deepEqual(inv.partsLeftBy, { "src/js/big.js": n - 1 }, "per-path count of the parts left");
   assert.match(inv.limitations.join('\n'), new RegExp(`${n - 1} unit parts? not reached \\(budget\\): src/js/big\\.js part 2 of ${n}`));
 });
 
