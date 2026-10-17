@@ -1273,3 +1273,30 @@ test('context_pack_bytes: a scan with 0 or a non-number fails as a config error 
   await ok.go({ CHECK: 'audit' });
   assert.equal(ok.calls.length, 1, 'the default pack is unchanged');
 });
+
+// --- PR pack: a changed test file that is also a candidate of an earlier source keeps its own hunks; candidate tests are sliced by the hunk identifiers too ---
+const padTest = (hits) => { const lines = Array.from({ length: 2000 }, () => padLine()); for (const [i, l] of hits) { lines[i] = "test('block', () => {"; lines[i + 1] = l; lines[i + 2] = '});'; lines[i + 3] = "test('next', () => {"; } return lines; };
+
+test('PR pack: a changed test that is also a candidate of an earlier source shows its added lines', (t) => {
+  const lines = padTest([[500, '  assert.ok(alphaThing(1)); // CAND_HIT'], [1800, '  assert.ok(ADDED_BY_PR); // ADDED_HUNK']]);
+  const r = tmpRepo(t, { 'src/a.js': 'function alphaThing(v) { return v; }\n', 'tests/a.test.js': lines.join('\n') + '\n' }, {
+    'files.txt': 'src/a.js\ntests/a.test.js\n', 'diff.patch': hunkDiff('src/a.js', 1, ['function alphaThing(v) { return v; }']) + hunkDiff('tests/a.test.js', 1802, ['  assert.ok(ADDED_BY_PR); // ADDED_HUNK']),
+    'test-candidates.txt': 'src/a.js\n  tests/a.test.js  (name)\n' });
+  const p = api.contextPack(r.ctx, r.root, 250000);
+  assert.ok(p.text.includes('ADDED_HUNK'), 'the hunk window of the changed test is in the pack');
+});
+
+test('PR pack (control): a changed test that is not a candidate keeps showing its added lines', (t) => {
+  const lines = padTest([[1800, '  assert.ok(ADDED_BY_PR); // ADDED_HUNK']]);
+  const r = tmpRepo(t, { 'src/a.js': 'function alphaThing(v) { return v; }\n', 'tests/a.test.js': lines.join('\n') + '\n' }, {
+    'files.txt': 'src/a.js\ntests/a.test.js\n', 'diff.patch': hunkDiff('src/a.js', 1, ['function alphaThing(v) { return v; }']) + hunkDiff('tests/a.test.js', 1802, ['  assert.ok(ADDED_BY_PR); // ADDED_HUNK']) });
+  assert.ok(api.contextPack(r.ctx, r.root, 250000).text.includes('ADDED_HUNK'));
+});
+
+test('PR pack: a candidate test is sliced by an identifier on a changed (not declared) line of the source', (t) => {
+  const lines = padTest([[1500, '  assert.equal(run(), maxRetryCount); // HUNK_TOKEN_HIT']]);
+  const r = tmpRepo(t, { 'src/a.js': 'function run() {\n  return maxRetryCount;\n}\n', 'tests/c.test.js': lines.join('\n') + '\n' }, {
+    'files.txt': 'src/a.js\n', 'diff.patch': hunkDiff('src/a.js', 2, ['  return maxRetryCount;']), 'test-candidates.txt': 'src/a.js\n  tests/c.test.js  (name)\n' });
+  assert.ok(api.contextPack(r.ctx, r.root, 250000).text.includes('HUNK_TOKEN_HIT'), 'the block that names the changed identifier is shown');
+  for (const limit of [5000, 20000, 60000]) assert.ok(Buffer.byteLength(api.contextPack(r.ctx, r.root, limit).text) <= limit + 400, `limit ${limit}`);
+});
