@@ -24,8 +24,11 @@ function shuffle(a, seed) { // Fisher-Yates, deterministic for a seed
 // The labeller sees plain text: hidden markers, tool names and suggestion fences' tool boilerplate are removed.
 const clean = (t) => String(t || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/\b(spec\s?guard|copilot|github-actions)\b(\[bot\])?/gi, '[tool]').replace(/\s+/g, ' ').trim().slice(0, 700);
 
-function exportRows(findings, { sample = 30, seed = 1 } = {}) {
-  const picked = [];
+// A summary-only finding from older counts has no claim text, so a labeller cannot judge it: it is left out of the sheet (and the sample) and counted.
+// The sheet never says how a finding was delivered (that would unblind SpecGuard): `delivery` stays on the findings the importer rebuilds from the same window.
+const claimless = (findings) => findings.filter((f) => f.no_claim).length;
+function exportRows(all, { sample = 30, seed = 1 } = {}) {
+  const findings = all.filter((f) => !f.no_claim), picked = [];
   for (const tool of [...new Set(findings.map((f) => f.tool))].sort()) {
     const mine = shuffle(findings.filter((f) => f.tool === tool).sort((a, b) => findingId(a).localeCompare(findingId(b))), seed);
     picked.push(...(sample > 0 ? mine.slice(0, sample) : mine));
@@ -97,7 +100,8 @@ function main() {
   const findings = findingsOf(load(o));
   if (o.import) { console.log(JSON.stringify(labelPrecision(findings, readLabels(parseCsv(fs.readFileSync(o.import, 'utf8')))), null, 2)); return; }
   const csv = toCsv(exportRows(findings, { sample: +o.sample, seed: +o.seed || 1 }));
+  if (claimless(findings)) console.error(`${claimless(findings)} summary-only findings have no claim text (counts written before titles were recorded): left out of the sheet and the precision sample.`);
   if (o.out) { fs.writeFileSync(o.out, csv); console.error(`wrote ${o.out}: ${csv.split('\n').length - 2} findings. Send it to the labellers; keep the tool column out of their view.`); } else process.stdout.write(csv);
 }
-module.exports = { findingId, shuffle, exportRows, toCsv, parseCsv, readLabels, labelPrecision, COLUMNS };
+module.exports = { findingId, shuffle, exportRows, claimless, toCsv, parseCsv, readLabels, labelPrecision, COLUMNS };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exit(1); }

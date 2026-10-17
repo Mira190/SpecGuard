@@ -1828,7 +1828,7 @@ async function run({ github, context, core }) {
   const sum = [], seenSum = new Set(); // this run's summary-only and unanchored findings, tracked by the next run
   for (const { f } of [...p.summary, ...unanchored]) {
     const fp = (f.fp || f.sfp || '').slice(0, 16);
-    if (/^[0-9a-f]{16}$/.test(fp) && !seenSum.has(fp) && sum.length < 20) { seenSum.add(fp); sum.push({ fp, path: f.path, line: f.line, kind: f.kind }); }
+    if (/^[0-9a-f]{16}$/.test(fp) && !seenSum.has(fp) && sum.length < 20) { seenSum.add(fp); sum.push({ fp, path: f.path, line: f.line, kind: f.kind, title: oneLine(neutralize(f.title).replace(/\s+/g, ' ').trim(), 100) }); } // title: the claim a blind labeller judges (eval/label-export.js)
   }
   const byKind = {};
   const tally = (list, k) => list.forEach((f) => { (byKind[f.kind] ||= { posted: 0, already: 0, summary: 0 })[k]++; });

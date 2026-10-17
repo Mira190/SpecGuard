@@ -52,3 +52,18 @@ test('import rejects unknown labels and duplicate ids; unlabelled rows are skipp
   assert.deepEqual(labelPrecision(FINDINGS, new Map([['Fnope', 'valid']])).unmatched, ['Fnope']);
   assert.throws(() => parseCsv('a,b\n1,2'), /id and label/);
 });
+
+test('export: the labeller sheet has no delivery column and no sticky-comment link; the claim is the recorded title', () => {
+  const s = { ...F('specguard', 5, 10, 'Missing test for foo'), delivery: 'summary', url: 'https://github.com/o/r/pull/5#issuecomment-1' };
+  const rows = exportRows([s, F('copilot', 5, 12, 'y')], { sample: 0, seed: 1 });
+  const csv = toCsv(rows);
+  assert.ok(!COLUMNS.includes('delivery') && !/delivery|issuecomment/.test(csv));
+  assert.ok(rows.every((r) => r.link === 'https://github.com/o/r/pull/5/files'));
+  assert.ok(rows.some((r) => r.text === 'Missing test for foo'));
+});
+
+test('export: a finding with no claim text is left out and counted', () => {
+  const fs_ = [{ ...F('specguard', 5, 10, 'no claim text'), no_claim: true }, F('specguard', 6, 10, 'real')];
+  assert.equal(exportRows(fs_, { sample: 0, seed: 1 }).length, 1);
+  assert.equal(require('./label-export').claimless(fs_), 1);
+});
