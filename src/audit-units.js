@@ -8,7 +8,7 @@ const { fileCap } = require('./pack-cap');
 const { isTestPath, testScope, lsTree, catBatch, makeClock } = require('./trace');
 const { weakCandidates, TEST_START } = require('./leads');
 const { ASSERTION, SKIPPED } = require('./post');
-const { mapTests, indexTests, noExt, publicDefs, GENERIC } = require('./test-map');
+const { mapTests, indexTests, testStem, near, key, noExt, publicDefs: baseDefs, GENERIC } = require('./test-map');
 
 const DAYS = 180, FIX = /\b(fix|bug|hotfix|regression|revert)\b/i, MIN_LOC = 3;
 const MAX_FILE = 512 * 1024, MAX_UNITS_READ = 6000, MAX_TESTS_READ = 4000, TEST_FILE = 512 * 1024, TEST_TOTAL = 48 * 1024 * 1024, BUDGET_MS = 40000;
@@ -21,20 +21,29 @@ const TEST_INFRA = /(^|\/)[^/]*(?<![a-z0-9])(?:smoke|e2e|harness|runners?|fixtur
 // First-level relative imports of a source text (JS/TS require, import, export-from, dynamic import), resolved against the tracked files -> blob shas.
 // ponytail: one level only (a change two imports deep is not tracked), relative specifiers only (bare packages, Python and Go imports are ignored); the extension/index list is the Node/TS one.
 const REL = /(?:\brequire\s*\(|\bfrom\s*|\bimport\s*\(?)\s*['"](\.\.?(?:\/[^'"\n]*)?)['"]/g, EXTS = ['', '.js', '.cjs', '.mjs', '.ts', '.tsx', '.jsx', '.json'];
-function importShas(from, src, shaOf) {
+function importPaths(from, src, shaOf) {
   const out = new Set();
   for (const m of src.matchAll(REL)) {
     const base = path.posix.join(path.posix.dirname(from), m[1]), stem = base.replace(/\.[cm]?jsx?$/, ''); // ./x.js in TS means x.ts
     const hit = [base, stem !== base && stem].filter((b) => b !== false).flatMap((b) => [...EXTS.map((e) => b + e), ...EXTS.slice(1).map((e) => path.posix.join(b, 'index' + e))]).find((p) => shaOf.has(p));
-    if (hit) out.add(`${hit}:${shaOf.get(hit)}`);
+    if (hit) out.add(hit);
   }
   return [...out];
 }
+const importShas = (from, src, shaOf) => importPaths(from, src, shaOf).map((p) => `${p}:${shaOf.get(p)}`);
 const sha8 = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 8);
 const comment = (l) => /^\s*(?:\/\/|#|\*|\/\*|--)/.test(l);
 const loc = (ls) => ls.filter((l) => l.trim() && !comment(l)).length;
 const START = new RegExp(`${TEST_START.source}|(?<![.\\w$])x(?:it|test)\\s*\\(`); // leads.js's test start, plus xit/xtest (a disabled test is still a test)
 
+// test-map's publicDefs plus `export const NAME =` (a constant or config object: no function, so the base list has no name for it).
+const EXPORT_VAR = /^\s*export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/;
+function publicDefs(file, ls) {
+  const d = baseDefs(file, ls);
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return d;
+  const more = ls.filter((l) => !comment(l)).map((l) => (EXPORT_VAR.exec(l) || [])[1]).filter((n) => n && !d.names.includes(n));
+  return more.length ? { count: d.count, names: [...d.names, ...new Set(more)] } : d;
+}
 const publicCount = (file, ls) => publicDefs(file, ls).count;
 
 // Signals of one test file: tests, tests without an assertion, skipped or disabled tests, assertion lines, weak assertion lines (leads.js).
@@ -120,6 +129,27 @@ function pick(rows, cap, prior, bytes, room = null, rooms = 1) {
   return out(tally);
 }
 
+// A test file's directory relates to a unit's: the same folder, below it, or the unit's folder mirrored under a test/ segment (pkg/test/x for pkg/x).
+const related = (unit, t) => { const d = path.posix.dirname(unit), td = path.posix.dirname(t); return td === d || td.startsWith(d + '/') || td.split('/').filter((x) => !/^(?:tests?|__tests__|specs?)$/.test(x)).join('/') === d; };
+const plural = (k) => k.replace(/(?<=[sxz]|ch|sh)es$|(?<!s)s$/, ''); // listeners -> listener, classes -> class
+const fold = (p) => noExt(p).replace(/^tests?[_-]/i, '').replace(/[._-]?(?:tests?|spec)$/i, '').toLowerCase().split(/[-_.]+/).map(plural).join(''); // a file name with every segment singular: both sides of a comparison are folded
+// The unit's tests, best evidence first, at most PER_UNIT_TESTS: same name > imports the unit > plural-folded name (related folder only) > file name or calls of its public names > class or dotted/kebab stem as a token > stem as a word > same folder.
+// base: mapTests' own tiers (uncapped), whose reasons say which tier a test came from.
+function rankTests(u, base, { importers, token, classHit, classOf, folded }) {
+  const stem = noExt(u.path), want = key(stem), folded1 = fold(u.path), tiers = [[], [], [], [], [], [], []], seen = new Set();
+  const add = (i, ts) => { for (const t of ts) if (!seen.has(t)) { seen.add(t); tiers[i].push(t); } };
+  const closest = (ts) => ts.slice().sort((a, b) => near(u.path, b) - near(u.path, a) || (a < b ? -1 : 1));
+  const of = (re) => [...base].filter(([, why]) => re.test(why)).map(([t]) => t);
+  add(0, of(/^same name/));
+  add(1, closest(importers.get(u.path) || []));
+  if (folded1.length >= 4) add(2, closest((folded.get(folded1) || []).filter((t) => testStem(t) !== want && related(u.path, t))));
+  add(3, of(/^(?:file name has|calls) /));
+  add(4, closest([...(token.get(stem) || []), ...(classHit.get(classOf.get(u.path)) || [])]));
+  add(5, of(/^mentions /));
+  add(6, of(/^same directory/));
+  return tiers.flat().slice(0, PER_UNIT_TESTS);
+}
+
 // files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
 function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, rooms = 1, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 0, maxRead = MAX_UNITS_READ }) {
   const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
@@ -132,7 +162,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   cand = cand.filter((e) => e.size <= MAX_FILE);
   const capped = Math.max(0, cand.length - maxRead); // files past the read cap, never reached
   if (cand.length > maxRead) { limits.push(`only the first ${maxRead} of ${cand.length} source files were inventoried (narrow with scan_paths)`); cand = cand.slice(0, maxRead); }
-  const units = [], srcImports = new Map(); // path -> the relative imports of its text (units and read tests)
+  const units = [], srcImports = new Map(), importers = new Map(); // srcImports: path -> the relative imports of its text (units and read tests); importers: unit path -> the read tests that import it
   const shaOf = new Map(files.map((e) => [e.path, e.sha]));
   let reached = 0; // reached: files whose chunk was read before the time budget ended
   for (let i = 0; i < cand.length && !dl.over(); i += 300) {
@@ -148,7 +178,12 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
   // tests: text read once (capped); words that are a unit's file stem indexed for the "mentions" tier, calls of a unit's public names for the "calls" tier
   const stems = new Set(units.map((u) => noExt(u.path)).filter((s) => s.length >= 3 && !GENERIC.has(s.toLowerCase()) && /^[\w$]+$/.test(s)));
-  const names = new Set(units.flatMap((u) => u.names)), sig = new Map(), mention = new Map(), called = new Map();
+  // dotted or kebab stems (multer.constants, listener-metadata-explorer) match only as a whole path-like token; a class named like the PascalCase stem (ListenerMetadataExplorer) as a word
+  const pascal = (p) => noExt(p).split(/[-_.]+/).map((x) => x.charAt(0).toUpperCase() + x.slice(1)).join('');
+  const pathStems = new Set(units.map((u) => noExt(u.path)).filter((s) => s.length >= 3 && !GENERIC.has(s.toLowerCase()) && /^[\w$][\w$.-]*$/.test(s) && !/^[\w$]+$/.test(s)));
+  const classOf = new Map(units.filter((u) => /[-_.]/.test(noExt(u.path)) && u.names.includes(pascal(u.path))).map((u) => [u.path, pascal(u.path)])), classes = new Set(classOf.values());
+  const names = new Set(units.flatMap((u) => u.names)), sig = new Map(), mention = new Map(), called = new Map(), token = new Map(), classHit = new Map();
+  const put = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
   let bytes = 0, readN = 0;
   const readable = testEntries.filter((e) => e.size <= TEST_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
   for (let i = 0; i < readable.length && readN < MAX_TESTS_READ && bytes < TEST_TOTAL && !dl.over(); i += 300) {
@@ -157,8 +192,9 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (!bufs[k] || readN >= MAX_TESTS_READ || bufs[k].subarray(0, 8192).includes(0)) return;
       readN++; bytes += bufs[k].length;
       const src = bufs[k].toString('utf8');
-      sig.set(e.path, testSignals(src)); srcImports.set(e.path, importShas(e.path, src, shaOf));
-      for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) if (stems.has(w)) { if (!mention.has(w)) mention.set(w, []); mention.get(w).push(e.path); }
+      sig.set(e.path, testSignals(src)); const ip = importPaths(e.path, src, shaOf); srcImports.set(e.path, ip.map((p) => `${p}:${shaOf.get(p)}`)); for (const p of ip) put(importers, p, e.path);
+      for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) { if (stems.has(w)) put(mention, w, e.path); if (classes.has(w)) put(classHit, w, e.path); }
+      if (pathStems.size) for (const c of new Set(src.match(/[\w$][\w$.-]*/g) || [])) { const w = c.replace(/[.-]+$/, ''); for (const k of new Set([w, w.replace(/\.[a-z]{1,4}$/i, '')])) if (pathStems.has(k)) put(token, k, e.path); }
       for (const w of new Set(src.match(/[A-Za-z_$][\w$]*(?=\s*\()/g) || [])) if (names.has(w)) { if (!called.has(w)) called.set(w, []); called.get(w).push(e.path); }
     });
   }
@@ -168,9 +204,10 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   if (!hist) limits.push('no git history (shallow clone? use fetch-depth: 0): churn and fix commits are not used in the ranking');
   const notReachedTime = cand.length - reached;
   const none = { tests: 0, noAssert: 0, skipped: 0, asserts: 0, weak: [] };
-  const index = indexTests(tests);
+  const index = indexTests(tests), folded = new Map();
+  for (const t of tests) put(folded, fold(t), t);
   const rows = units.map((u) => {
-    const got = [...mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: PER_UNIT_TESTS }).keys()];
+    const got = rankTests(u, mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: Infinity }), { importers, token, classHit, classOf, folded });
     const ss = got.map((t) => sig.get(t) || none), sum = (f) => ss.reduce((a, s) => a + f(s), 0);
     const s = { tests: sum((x) => x.tests), noAssert: sum((x) => x.noAssert), skipped: sum((x) => x.skipped), asserts: sum((x) => x.asserts), weak: got.flatMap((t) => (sig.get(t) || none).weak.map((w) => ({ ...w, path: t }))), unread: got.filter((t) => !sig.has(t)).length };
     const h = (hist && hist.get(u.path)) || { churn: 0, fixes: 0 }, factor = factorOf(got, got.some((t) => !sig.has(t)) ? { ...s, asserts: Math.max(s.asserts, 1) } : s); // a test file that was not read is assumed to assert
