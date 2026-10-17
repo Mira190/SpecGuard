@@ -2660,6 +2660,18 @@ test('fix-through: this run\'s summary-only findings are recorded in counts.sum 
   assert.deepEqual(c.sum.map((e) => [e.fp, e.path, e.kind]), [[REAL_FP.slice(0, 16), 'src.js', 'missing_test']]);
 });
 
+test('fix-through: a counts.sum entry carries the neutralized title (max 100 chars); 20 long titles stay under COUNTS_MAX', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [finding('missing_test', { confidence: 'low', title: `Needs a test <!-- x --> ${'long '.repeat(40)}` })] }));
+  await post(s);
+  const e = countsOf(s.calls.summary[0].body).sum[0];
+  assert.ok(e.title.startsWith('Needs a test') && e.title.length <= 100 && !/<!--/.test(e.title), e.title);
+  const outcomes = Array.from({ length: 300 }, (_, i) => ({ fp: String(i).padStart(40, '0'), kind: 'missing_test', still_reported: false, anchor_touched: null, thread: 'open', up: 0, down: 0, outcome: 'not_observed' }));
+  const sum = Array.from({ length: 20 }, (_, i) => ({ fp: String(i).padStart(16, '0'), path: `src/some/long/path/file${i}.js`, line: i + 1, kind: 'missing_test', title: 'x'.repeat(100) }));
+  const json = /^<!-- specguard:counts (.*) -->$/.exec(post.countsComment({ v: 1, head: 'abc', complete: true, since: { addressed: 0, open: 0, dismissed: 0, not_observed: 300 }, outcomes, sum }))[1];
+  assert.ok(json.length <= 8192);
+  assert.equal(JSON.parse(json).sum.length, 20);
+});
+
 test('counts JSON with 20 sum entries and many outcomes stays under COUNTS_MAX; sum is trimmed only after outcomes', () => {
   const outcomes = Array.from({ length: 300 }, (_, i) => ({ fp: String(i).padStart(40, '0'), kind: 'missing_test', still_reported: false, anchor_touched: null, thread: 'open', up: 0, down: 0, outcome: 'not_observed' }));
   const sum = Array.from({ length: 20 }, (_, i) => ({ fp: String(i).padStart(16, '0'), path: `src/some/long/path/file${i}.js`, line: i + 1, kind: 'missing_test' }));
@@ -3776,7 +3788,7 @@ const withLead = async (t, lead, findings = [], coverage = []) => {
   fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
   fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), `${lead}\n`);
   await post(s);
-  return s.calls.summary[0].body;
+  return s.calls.summary[0].body.replace(/<!-- specguard:counts .*? -->/s, ""); // the counts line now repeats finding titles
 };
 test('Kite U1 (exact artifact): of three removed-assertion leads only the deleted BIG assertion becomes a finding; the two re-pinned through the check helper do not', async (t) => {
   const s = setup(t, report({ coverage: [], findings: [] }));
@@ -3789,7 +3801,7 @@ test('Kite U1 (exact artifact): of three removed-assertion leads only the delete
     "  assertion removed: assert.match(validateBaseName('BIG', '.mp4', others), /已存在/) // case-insensitive FS (test/filename.test.ts:31)",
     "  assertion removed: assert.equal(validateBaseName('a', '.mp3', others), '') // different extension is a different file (test/filename.test.ts:32)", ''].join('\n'));
   await post(s);
-  const body = s.calls.summary[0].body;
+  const body = s.calls.summary[0].body.replace(/<!-- specguard:counts .*? -->/s, "");
   assert.equal([...body.matchAll(/Assertion removed with no replacement/g)].length, 1);
   assert.match(body, /BIG/);
   assert.doesNotMatch(body, /new name|\.mp3/);
