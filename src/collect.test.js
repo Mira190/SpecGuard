@@ -478,6 +478,44 @@ test('test-candidates.txt: files with no candidate say so, and the file is cappe
   assert.match(r2.ctxFile('test-candidates.txt'), /\(10 more changed file\(s\) not listed\)\n$/); // MAX_FILES = 60
 });
 
+// ---- test candidates from the changed hunks ----
+const candBlocks = (r) => Object.fromEntries(r.ctxFile('test-candidates.txt').split(/\n(?=\S)/).map((b) => { const [h, ...rest] = b.trim().split('\n'); return [h, rest.map((l) => l.trim())]; }));
+const noise = (n, body) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`test/n${String(i).padStart(2, '0')}.test.js`, body(i)]));
+
+test('test-candidates.txt: a test that uses the identifier the hunk changes is a candidate though it never names the file', (t) => {
+  const r = scenario(t, { 'lib/a.js': 'module.exports = { bodyLimit: 1024 };\n', 'test/body-limit.test.js': "t({ bodyLimit: 1 });\n", 'test/other.test.js': 'nothing\n' },
+    ({ write }) => write('lib/a.js', 'module.exports = { bodyLimit: 2048 };\n'));
+  assert.deepEqual(candBlocks(r)['lib/a.js'], ['test/body-limit.test.js  (mentions changed `bodyLimit`)']);
+});
+
+test('test-candidates.txt: an identifier that more than 25 test files use produces no candidates', (t) => {
+  const r = scenario(t, { 'lib/a.js': 'const x = 1;\n', ...noise(26, () => 'use(commonOption);\n') }, ({ write }) => write('lib/a.js', 'const x = commonOption;\n'));
+  assert.ok(!/mentions changed/.test(r.ctxFile('test-candidates.txt')), r.ctxFile('test-candidates.txt'));
+});
+
+test('test-candidates.txt: 30 tests that name the stem do not fill the cap; the one test of the changed symbol is in the top 3', (t) => {
+  const base = { 'lib/route.js': 'exports.x = 1;\n', ...noise(30, () => "require('../lib/route');\n"), 'test/zz.test.js': 'matchRouteTable();\n' };
+  const r = scenario(t, base, ({ write }) => write('lib/route.js', 'exports.x = matchRouteTable;\n'));
+  const got = candBlocks(r)['lib/route.js'];
+  assert.ok(got.slice(0, 3).some((l) => l.startsWith('test/zz.test.js  (mentions changed `matchRouteTable`')), got.join('\n'));
+  assert.ok(!got.some((l) => /\(mentions route\)/.test(l)), 'a stem named by more than 25 tests is dropped');
+});
+
+test('test-candidates.txt: a huge hunk is searched up to 40 identifiers per file and the cut is recorded in collect-limits', (t) => {
+  const body = Array.from({ length: 60 }, (_, i) => `const idName${String(i).padStart(2, '0')} = 1;`).join('\n') + '\n';
+  const r = scenario(t, { 'lib/big.js': 'a\n', 'test/last.test.js': 'idName59();\n', 'test/first.test.js': 'idName00();\n' }, ({ write }) => write('lib/big.js', body));
+  assert.match(r.ctxFile('collect-limits.txt'), /more than 40 identifiers in their hunks: only the first 40 were searched/);
+  const got = candBlocks(r)['lib/big.js'].join('\n');
+  assert.match(got, /test\/first\.test\.js  \(mentions changed `idName00`\)/);
+  assert.doesNotMatch(got, /last\.test\.js/, 'the 41st identifier onward is not searched');
+});
+
+test('test-candidates.txt: the same-name test still ranks first, and the hunk tier fills only the slots after it', (t) => {
+  const r = scenario(t, { 'lib/b.js': 'x\n', 'test/b.test.js': 'x\n', 'test/uses.test.js': 'fooBarBaz();\n' }, ({ write }) => write('lib/b.js', 'fooBarBaz\n'));
+  assert.deepEqual(candBlocks(r)['lib/b.js'], ['test/b.test.js  (same name)', 'test/uses.test.js  (mentions changed `fooBarBaz`)']);
+  assert.equal(r.ctxFile('collect-limits.txt'), '', 'no bound hit, no limit recorded');
+});
+
 test('test_paths (TEST_PATHS): the configured folders are the authoritative test locations; discovery by name applies only when empty', (t) => {
   const base = { 'src/pay.js': 'module.exports = 1;\n', 'qa/checks/pay_check.js': "require('../../src/pay');\n", 'qa/checks/fixtures/pay.data.js': "// pay\n", 'tests/pay.test.js': 'x\n' };
   const change = ({ write }) => write('src/pay.js', 'module.exports = 2;\n');
