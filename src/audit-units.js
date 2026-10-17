@@ -89,22 +89,21 @@ const partOf = (r, prior, bytes = partBytes(0)) => {
 };
 const inProgress = (r, prior, bytes) => { const p = partOf(r, prior, bytes); return !!p && p.k > 0; };
 // room (claude api engine): { total, cost(r) }: a unit is taken only while its whole context (part, matched tests) still fits in what is left of a call's pack, so every call finishes at least one unit's context (review F23).
-// rooms = how many calls (packs) the run makes, each holding at most cap units: a unit goes into the first room it fits. A unit whose tests do not fit whole ("trimmed") gets a room of its own, closed behind it, so it cannot starve the rest;
-// with one room (or none left) it takes what is left of the current room, as before. Nothing fits: the first unit alone, and over = the units that never fit.
+// rooms = how many calls (packs) the run makes, each holding at most cap units: a unit goes into the first room it fits. A unit whose tests do not fit a whole pack ("trimmed") keeps the tests that fit in half a room (room.trim: r.packTests),
+// so it cannot starve the rest. over = the units whose own part never fits.
 function pick(rows, cap, prior, bytes, room = null, rooms = 1) {
   const kind = new Map(), picked = [], over = [], trimmed = [], slots = [], roomOf = new Map(), max = cap * rooms;
-  const open = (c) => slots.find((s) => !s.closed && s.n < cap && c <= s.left), fresh = (left, closed) => { const s = { left, n: 0, closed }; slots.push(s); return s; };
+  const open = (c) => slots.find((s) => s.n < cap && c <= s.left), fresh = (left) => { const s = { left, n: 0 }; slots.push(s); return s; };
   const afford = (r) => {
     if (!room) return true;
-    let c = room.cost(r), s;
-    if (c > room.total) { // c > total: the part plus the tests that fit (the pack cuts the later tests); the unit is reviewed and recorded unsure
-      const b = room.cost(r, false);
-      if (b > room.total) { if (!over.includes(r)) over.push(r); return false; }
-      if (rooms > 1 && slots.length < rooms) s = fresh(0, true);
-      else if ((s = open(b) || (slots.length < rooms && fresh(room.total)))) c = Math.min(c, s.left);
-      else return false;
-      trimmed.push(r);
-    } else if (!(s = open(c) || (slots.length < rooms && fresh(room.total)))) return false;
+    let c = room.cost(r), t = null;
+    if (c > room.total) { // the tests do not fit a whole pack: the unit is reviewed with the tests that fit in half a room and recorded unsure (the pack lists the rest as cut)
+      if (room.cost(r, false) > room.total) { if (!over.includes(r)) over.push(r); return false; }
+      t = room.trim(r); c = t.cost;
+    }
+    const s = open(c) || (slots.length < rooms && fresh(room.total));
+    if (!s) return false;
+    if (t) { r.packTests = t.tests; trimmed.push(r); }
     s.left -= c; s.n++; roomOf.set(r.id, slots.indexOf(s));
     return true;
   };
@@ -182,8 +181,10 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     return { ...u, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
   const size = partBytes(packBytes, maxUnits), tsize = new Map(testEntries.map((e) => [e.path, e.size]));
+  const tcost = (t) => Math.ceil(Math.min(tsize.get(t) || 0, fileCap(packBytes)) * 1.15) + 300;
   // what a unit costs in the pack: its part (or whole file) and its matched tests, line-numbered (about 15% more) plus a block header each; 90% of the pack, the rest is markup and neighbours
-  const room = packBytes ? { total: Math.floor(packBytes * 0.9), cost: (r, withTests = true) => { const p = partOf(r, prior, size); return Math.ceil(shownOf(r, size) / (p ? p.n : 1)) + 300 + (withTests ? r.tests : []).reduce((n, t) => n + Math.ceil(Math.min(tsize.get(t) || 0, fileCap(packBytes)) * 1.15) + 300, 0); } } : null;
+  const room = packBytes ? { total: Math.floor(packBytes * 0.9), cost: (r, withTests = true) => { const p = partOf(r, prior, size); return Math.ceil(shownOf(r, size) / (p ? p.n : 1)) + 300 + (withTests ? r.tests : []).reduce((n, t) => n + tcost(t), 0); } } : null;
+  if (room) room.trim = (r) => { let left = Math.min(Math.floor(room.total / 2), room.total - room.cost(r, false)); const tests = r.tests.filter((t) => tcost(t) <= left && (left -= tcost(t), true)); return { tests, cost: room.cost(r, false) + tests.reduce((n, t) => n + tcost(t), 0) }; }; // a trimmed unit's tests get at most half a room, in priority order
   const calls = room ? Math.max(1, rooms) : 1; // rooms: the run's unit calls (claude api engine); maxUnits applies to each
   let sel = pick(rows, maxUnits, prior, size, room, calls);
   let forced = []; // nothing fits: the fallback ignores the part cursors, so a unit unfinished in parts does not take the single place again
@@ -209,7 +210,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
 // audit-units.txt (id, path, risk, why, matched tests, leads: tab separated), audit-units-carried.txt (id, path: units the state knows that this run does not review), audit-inventory.json.
 function write(ctx, head, maxUnits, inv) {
   const w = (n, s) => fs.writeFileSync(path.join(ctx, n), s), flat = (s) => String(s).replace(/[\t\r\n]+/g, ' ');
-  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-'].map(flat).join('\t') + '\n').join(''));
+  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-', ...(r.packTests ? [r.packTests.join(', ') || '-'] : [])].map(flat).join('\t') + '\n').join(''));
   if (inv.unitRooms && inv.unitRooms.length > 1) w('audit-unit-rooms.json', JSON.stringify(inv.unitRooms)); // more than one call: scan-parts.js makes one unit part per room
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
   w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...(inv.unitCalls > 1 && { unit_calls: inv.unitCalls }), ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
