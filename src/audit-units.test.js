@@ -653,3 +653,57 @@ test('test matching: a folder import (index.ts) matches the index unit; the exac
   assert.deepEqual(m['src/foo.ts'].tests, ['test/foo.spec.ts', 'test/a-importer.spec.ts']);
   assert.deepEqual(m['src/bar/index.ts'].tests, ['test/bar-importer.spec.ts']);
 });
+
+// ---- static leads: truthiness-only assertions (one classifier with PR mode) and exported names no test references ----
+const LEAD_FILES = {
+  'src/calc.js': ['export function moveCrop(r, d) {', '  return { ...r, x: r.x + d };', '}', 'export function clampValue(v) {', '  return Math.min(v, 9);', '}', 'export function fit(v) {', '  return v;', '}', 'export function render(v) {', '  return v;', '}', 'export const STAMP_MAX = 5;', 'export interface Options { a: number }'],
+  'test/calc.test.js': ["import { clampValue } from '../src/calc';", "it('clamps', () => {", '  assert.ok(clampValue(5));', '  assert.ok(a === b);', '  assert.ok(list.includes(x));', '  assert.ok(isReady(x));', '  assert.equal(clampValue(20), 9);', '});'],
+};
+const leadRows = (t, files = LEAD_FILES) => { const r = repo(t, files), inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW }), ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx); write(ctx, 'abc', 12, inv); return { r, inv, json: JSON.parse(fs.readFileSync(path.join(ctx, 'audit-inventory.json'), 'utf8')) }; };
+
+test('testSignals: assert.ok(f(x)) is a weak assertion (one classifier with PR mode); a comparison and a boolean predicate are not', () => {
+  const s = testSignals(LEAD_FILES['test/calc.test.js'].join('\n'));
+  assert.deepEqual(s.weak.map((w) => w.line), [3], 'only assert.ok(clampValue(5)): a === b, list.includes(x) and isReady(x) are value checks');
+  assert.equal(s.weak[0].text, 'assert.ok(clampValue(5));');
+  const post = require('./post');
+  assert.equal(post.weakAssertion('assert.ok(list.includes(x))'), false, 'PR mode: a boolean predicate is a value check');
+  assert.equal(post.weakAssertion('assert.ok(keyName(k))'), true);
+  assert.equal(post.weakAssertion('assert.ok(r.streams![0].duration)'), true);
+  assert.equal(post.weakAssertion('assert.ok(a === b)'), false);
+});
+
+test('testSignals: a weak assertion whose boolean is also asserted negated in the same test is pinned both ways, not weak', () => {
+  assert.equal(testSignals(["it('x', () => {", '  assert.ok(firstValid(c));', '  assert.ok(!firstValid(d));', '});'].join('\n')).weak.length, 0);
+  assert.equal(testSignals(["it('x', () => {", '  assert.ok(firstValid(c));', '});'].join('\n')).weak.length, 1);
+});
+
+test('staticLeads: an exported name no test file references is a lead with its definition line; a referenced name, a short or stoplisted name, a type and a constant are not', (t) => {
+  const { staticLeads } = require('./audit-units');
+  const { json } = leadRows(t), row = json.rows.find((x) => x.path === 'src/calc.js');
+  assert.deepEqual(row.leads.unref, [{ name: 'moveCrop', line: 1 }]);
+  const L = staticLeads(json.rows);
+  const un = L.items.filter((i) => i.kind === 'unreferenced_export');
+  assert.deepEqual(un.map((i) => [i.path, i.line]), [['src/calc.js', 1]]);
+  assert.equal(un[0].why, '`moveCrop` (src/calc.js:1) is exported and no test file references it');
+  assert.deepEqual(L.items.filter((i) => i.kind === 'truthiness_only').map((i) => [i.path, i.line]), [['test/calc.test.js', 3]]);
+  assert.equal(L.items.find((i) => i.kind === 'truthiness_only').why, '`calc.test.js:3` asserts only truthiness (`assert.ok(clampValue(5));`)');
+  assert.equal(L.extra, 0);
+});
+
+test('inventory: a test file that was not read means no "no test references it" lead (it may name the symbol)', (t) => {
+  const { json } = leadRows(t, { ...LEAD_FILES, 'test/zz.test.js': 'it("x", () => {});\n\0binary' });
+  assert.equal(json.rows.find((x) => x.path === 'src/calc.js').leads.unref.length, 0);
+  assert.match(json.limitations.join('\n'), /no "no test references it" lead is made/);
+});
+
+test('staticLeads: at most 20 leads in row (risk) order, the rest counted; a weak line shared by two units is listed once', () => {
+  const { staticLeads } = require('./audit-units');
+  const rows = Array.from({ length: 25 }, (_, i) => ({ id: `u${i}`, path: `src/u${i}.js`, leads: { unref: [{ name: `fn${i}ab`, line: 2 }] } }));
+  const L = staticLeads(rows);
+  assert.equal(L.items.length, 20);
+  assert.equal(L.extra, 5);
+  assert.deepEqual(L.items.map((i) => i.unit), rows.slice(0, 20).map((r) => r.id));
+  const w = { path: 'test/a.test.js', line: 4, text: 'assert.ok(f(x))' };
+  assert.equal(staticLeads([{ id: 'a', path: 'src/a.js', leads: { weak: [w] } }, { id: 'b', path: 'src/b.js', leads: { weak: [w] } }]).items.length, 1);
+  assert.deepEqual(staticLeads([{ id: 'a', path: 'src/a.js' }, undefined]), { items: [], extra: 0 });
+});

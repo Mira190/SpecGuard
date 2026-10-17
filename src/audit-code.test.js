@@ -18,7 +18,7 @@ const FILES = {
   'src/js/orders.js': ['exports.create = (o) => o;', 'exports.cancel = (o) => ({ ...o, on: false });', 'exports.total = (o) => o.items.length;'],
   'src/js/legacy.js': ['module.exports = function legacy(a) {', '  return a * 2;', '};'],
   'src/js/cart.js': ['export function add(c, i) { return [...c, i]; }', 'export const count = (c) => c.length;', 'export default add;'],
-  'test/orders.test.js': ["it('creates', () => {", '  assert.ok(create({}));', '});'],
+  'test/orders.test.js': ["it('creates', () => {", '  assert.ok(create({}));', '});', "it('totals', () => {", '  assert.equal(total(), 1);', '  assert.equal(total(2), 2);', '});'],
   'test/e2e/checkout.test.js': ["it('checks out', async () => {", "  const res = await request(app).post('/checkout');", '  assert.equal(res.body.total, 12);', '});'],
   'docs/design.md': ['# Plan design', '', 'A repeating plan stays on after it fires.', 'A plan must start in the future.'],
 };
