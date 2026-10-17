@@ -145,7 +145,7 @@ const WEAK = /\.(?:toBeTruthy|toBeFalsy|toBeDefined)\(|\.not\.(?:toBeNull|toBeUn
 const OK_ARG = /(?:(?<![.\w$])(?:t\.ok|assert(?:\.ok)?)|(?<=\bt\.)assert(?:\.ok)?)\(\s*([A-Za-z_$][\w$.!?\[\]]*(?:\((?:[^()]|\([^()]*\))*\))?)\s*(?:,\s*(?:'[^']*'|"[^"]*"|`[^`]*`)\s*)?\)/;
 const BOOL_CALL = /^(?:(?:is|has|can|should|was|did|are)(?![a-z])\w*|includes|startsWith|endsWith|test|some|every|equals|matches|contains|exists\w*)$/;
 // A boolean-looking value (isFoo, x.has(..), handlerCalled, session.modified): asserting it IS the value check. Name = last member, call args dropped.
-const boolName = (x) => { const n = String(x).replace(/^await\s+/, '').replace(/\(.*$/, '').split('.').pop(); return BOOL_CALL.test(n) || /(?:^|[a-z_])(?:[Cc]alled|[Ee]xecuted|[Mm]odified)$/.test(n); };
+const boolName = (x) => { const n = String(x).replace(/^await\s+/, '').replace(/\(.*$/, '').split('.').pop(); return BOOL_CALL.test(n) || /(?:^|[a-z_])(?:[Cc]alled|[Ee]xecuted|[Mm]odified)$/.test(n) || /^ok\d*$|(?:Equals?|Match(?:es)?)$/.test(n); };
 const okArg = (l) => { const m = OK_ARG.exec(l); return m && !/^(?:true|false|null|undefined)$/.test(m[1]) && !boolName(m[1]) ? m[1] : null; };
 const isWeak = (l) => !!okArg(l) || WEAK.test(l);
 const weakAssertion = (quote) => { const ls = String(quote).split('\n').filter((l) => !COMMENT_LINE.test(l) && ASSERTION.test(l)); return ls.length > 0 && ls.every(isWeak); };
