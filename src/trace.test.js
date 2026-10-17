@@ -1208,6 +1208,19 @@ test('no "more candidates" limitation when nothing was cut (control)', (t) => {
   assert.deepEqual(c.limitations.filter((l) => /more code\/test/.test(l)), []);
 });
 
+test('sizeVariants: thousands separators (comma, underscore, thin/narrow space) are read as one number', () => {
+  const want = T.sizeVariants('1048576');
+  assert.ok(want.length > 0);
+  for (const v of ['1,048,576', '1,048,576 bytes', '1_048_576', '1 048 576', '1 048 576 bytes', '1,024 KB']) assert.deepEqual(T.sizeVariants(v), want, v);
+  assert.ok(T.sizeVariants('64,000 KiB').includes('65536000'));
+});
+
+test('sizeVariants control: a decimal comma or a malformed group is not mangled into a bigger number', () => {
+  // "1,5" must not become 15 or 1500; "1,5 MB" is ambiguous (1.5 MB or 15 MB?) and gets no variants
+  for (const v of ['1,5', '1,5 MB', '1,0485,76', '1,0485', '1_0485', '10,24', '1,048,57', '1,048,5760 bytes', '1.048.576']) assert.deepEqual(T.sizeVariants(v), [], v);
+  assert.deepEqual(T.sizeVariants('1048576'), ['1048576', '1024 * 1024', '1024*1024', '1 MiB', '1 MB']); // plain values unchanged
+});
+
 test('sizeVariants: zero is not a size worth searching', () => {
   assert.deepEqual([T.sizeVariants('0 MB'), T.sizeVariants('0')], [[], []]);
 });
