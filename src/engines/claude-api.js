@@ -351,7 +351,9 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
     const schemaFile = path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json');
     const schema = strict(JSON.parse(fs.readFileSync(schemaFile, 'utf8')));
-    const packBytes = packLimit(env);
+    let packBytes;
+    try { packBytes = packLimit(env); } catch (e) { return end('failed', 'config', e.message); }
+    if (env.CHECK === 'audit' && packBytes === 0) return end('failed', 'config', 'context_pack_bytes=0 sends the model no repository files, so a scan would publish without any source reviewed; use a positive value'); // PR mode keeps 0 = diff only
     const root = () => fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd());
     const deadline = Date.now() + (parseInt(env.TIMEOUT, 10) || 12) * 60000, t0 = Date.now();
     // One API call with its retries: { timeout } or { res }. Each call asks for plain JSON at most once and retries a transient failure once.

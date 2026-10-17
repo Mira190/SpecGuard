@@ -766,11 +766,70 @@ test('staticLeads: at most 20 leads in row (risk) order, the rest counted; a wea
   assert.deepEqual(staticLeads([{ id: 'a', path: 'src/a.js' }, undefined]), { items: [], extra: 0 });
 });
 
-test('staticLeads: when the cap bites, unreferenced exports (near-certain) come before weak-assertion leads; each group keeps risk order', () => {
+test('staticLeads: when the cap bites, the 20 slots go round-robin over weak, boundary and unreferenced leads: 25 unref + 3 weak + 2 boundary show all 5, then 15 unref, +10 more', () => {
+  const { staticLeads } = require('./audit-units');
+  const rows = [...Array.from({ length: 25 }, (_, i) => ({ id: `u${i}`, path: `src/u${i}.js`, leads: { unref: [{ name: `fn${i}ab`, line: 2 }] } })),
+    ...Array.from({ length: 3 }, (_, i) => ({ id: `w${i}`, path: `src/w${i}.js`, leads: { weak: [{ path: `test/w${i}.test.js`, line: 4, text: 'assert.ok(f(x))' }] } })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: `b${i}`, path: `src/b${i}.js`, leads: { boundary: [{ line: 3, name: 'LIMIT_X', value: 5 }] } }))];
+  const L = staticLeads(rows), n = (k) => L.items.filter((i) => i.kind === k).length;
+  assert.deepEqual([L.items.length, n('truthiness_only'), n('boundary_unpinned'), n('unreferenced_export'), L.extra], [20, 3, 2, 15, 10]);
+  assert.deepEqual(L.items.slice(0, 3).map((i) => i.kind), ['truthiness_only', 'boundary_unpinned', 'unreferenced_export'], 'weak, boundary, unref in each round');
+});
+
+test('staticLeads: control: with 15 weak and 8 unref leads the cap alternates weak and unref, each kind in its risk order', () => {
   const { staticLeads } = require('./audit-units');
   const w = (i) => ({ path: `test/w${i}.test.js`, line: 4, text: 'assert.ok(f(x))' });
   const rows = [...Array.from({ length: 15 }, (_, i) => ({ id: `w${i}`, path: `src/w${i}.js`, leads: { weak: [w(i)] } })), ...Array.from({ length: 8 }, (_, i) => ({ id: `u${i}`, path: `src/u${i}.js`, leads: { unref: [{ name: `fn${i}ab`, line: 2 }] } }))];
   const L = staticLeads(rows);
-  assert.deepEqual(L.items.map((i) => i.unit), [...rows.slice(15).map((r) => r.id), ...rows.slice(0, 12).map((r) => r.id)]);
+  assert.deepEqual(L.items.map((i) => i.unit), [...Array.from({ length: 8 }, (_, i) => [rows[i].id, rows[15 + i].id]).flat(), ...rows.slice(8, 12).map((r) => r.id)]);
   assert.equal(L.extra, 3);
+});
+
+test('write: the selected units stay in the persisted rows even beyond the 100 kept by risk, so their static leads survive; selecting #1 keeps exactly 100', (t) => {
+  const { staticLeads } = require('./audit-units');
+  const rows = Array.from({ length: 101 }, (_, i) => ({ id: i.toString(16).padStart(8, '0'), path: `src/u${i}.js`, score: 1, why: 'w', tests: [`test/u${i}.test.js`], ver: 'abcdef12', loc: 3, pub: 1, churn: 0, fixes: 0, signals: { tests: 1, noAssert: 0, skipped: 0, asserts: 1, weak: [], unread: 0 }, unref: [{ name: `missing${i}`, line: 1 }] }));
+  const persist = (sel) => {
+    sel = { ...sel, partK: 0 }; // a stateless all-parts run picks copies { ...r, partK }, never the original row
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-rows-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    write(dir, 'h', 12, { rows, picked: [sel], carried: [], unitRooms: [[sel.id]], unitCalls: 1, totals: {}, rotation: { picked: 1, reviewed: 101, total: 101 }, shallow: false, limitations: [], forced: [], stale: [], review: () => 'this run' });
+    return JSON.parse(fs.readFileSync(path.join(dir, 'audit-inventory.json'), 'utf8'));
+  };
+  const last = persist(rows[100]);
+  assert.equal(last.rows.length, 101);
+  assert.equal(staticLeads(last.rows.filter((r) => r.id === rows[100].id)).items.length, 1);
+  assert.equal(persist(rows[0]).rows.length, 100);
+});
+
+// ---- boundary lead: a comparison against a named numeric constant that no matched test uses ----
+const bsrc = (...ls) => ['export const LOW_SPACE_BYTES = 50 * 1024 * 1024;', 'export function check(f) {', ...ls, '}', 'export const pad1 = 1;'];
+const bound = (t, src, files = {}) => { const { json } = leadRows(t, { 'src/precheck.js': src, ...files }); return require('./audit-units').staticLeads(json.rows).items.filter((i) => i.kind === 'boundary_unpinned'); };
+const btest = (...ls) => ({ 'test/precheck.test.js': ["import { check, LOW_SPACE_BYTES } from '../src/precheck';", "it('checks', () => {", '  assert.equal(check({ freeBytes: 1 }), true);', ...ls, '});'] });
+const BCMP = bsrc('  return f.freeBytes < LOW_SPACE_BYTES;');
+
+test('boundary lead: a comparison with a named constant whose name and value no matched test uses is a lead (the test imports the constant and never uses it)', (t) => {
+  assert.deepEqual(bound(t, BCMP, btest()).map((i) => [i.path, i.line, i.why]), [['src/precheck.js', 3, 'line 3 compares with LOW_SPACE_BYTES (= 52428800); no matched test uses LOW_SPACE_BYTES or its value']]);
+});
+
+test('boundary lead: control: a test that uses the constant by name or by value pins it; the name or number inside arithmetic does not', (t) => {
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: LOW_SPACE_BYTES }), false);')).length, 0);
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: 52_428_800 }), false);')).length, 0);
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: LOW_SPACE_BYTES - 1 }), true);')).length, 1);
+});
+
+test('boundary lead: control: a literal comparison, a unit with no matched test and a constant that is not a plain numeric expression make no lead', (t) => {
+  assert.equal(bound(t, bsrc('  return f.freeBytes < 200;'), btest()).length, 0);
+  assert.equal(bound(t, BCMP, { 'test/other.test.js': "it('x', () => { assert.equal(1, 1); });" }).length, 0);
+  assert.equal(bound(t, ['export const LOW_SPACE_BYTES = os.total() / 2;', ...BCMP.slice(1)], btest()).length, 0);
+});
+
+test('boundary lead: a constant that matches the definition pattern but is not valid arithmetic (division by zero, unbalanced paren, stray operator) makes no lead; a valid parenthesised one uses its value', (t) => {
+  const withDef = (def) => [def, ...BCMP.slice(1)];
+  for (const def of ['export const LOW_SPACE_BYTES = 10 / (2 - 2);', 'export const LOW_SPACE_BYTES = (5 + 3;', 'export const LOW_SPACE_BYTES = 5 + ;', 'export const LOW_SPACE_BYTES = 5 5;']) assert.equal(bound(t, withDef(def), btest()).length, 0, def);
+  assert.match(bound(t, withDef('export const LOW_SPACE_BYTES = 2 * (3 + 4);'), btest())[0].why, /LOW_SPACE_BYTES \(= 14\)/);
+  assert.equal(bound(t, withDef('export const LOW_SPACE_BYTES = 2 * (3 + 4);'), btest('  assert.equal(check({ freeBytes: 14 }), false);')).length, 0);
+});
+
+test('boundary lead: a matched test file that was not read gives no boundary lead (it may pin the constant); control: the same unit with every test read does', (t) => {
+  assert.equal(bound(t, BCMP, btest()).length, 1);
+  assert.equal(bound(t, BCMP, { ...btest(), 'test/zz.test.js': 'it("x", () => {});\n\0binary' }).length, 0);
 });
