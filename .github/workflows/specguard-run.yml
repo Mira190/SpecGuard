@@ -126,18 +126,20 @@ jobs:
           repository: ${{ needs.resolve.outputs.repo }}
           token: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
           ref: ${{ needs.resolve.outputs.head_sha || needs.resolve.outputs.ref }}
-          fetch-depth: 1
-          filter: blob:none
+          fetch-depth: ${{ needs.resolve.outputs.mode == 'scan' && 1 || 0 }} # PR reviews diff against the base blobs, so they keep the full clone
+          filter: ${{ needs.resolve.outputs.mode == 'scan' && 'blob:none' || '' }}
           persist-credentials: false
-      # Full history of the checked-out commit only (no other branches, no tags, no blobs): the scan runs git log --since=180d and diffs against the last scanned head, and needs a non-shallow clone
+      # Scans: full history of the checked-out commit only (no other branches, no tags, no blobs): the scan runs git log --since=180d and diffs against the last scanned head, and needs a non-shallow clone
       # (--shallow-since would stay shallow, so the history is skipped). The files at HEAD are already checked out; older blobs are never read. A last scanned head off this history degrades with a note.
+      # Not fatal: without history the scan runs on the depth-1 checkout and says "no git history (shallow clone?)" (churn ranking off).
       - name: Fetch the history of the checked-out commit
+        if: needs.resolve.outputs.mode == 'scan'
         shell: bash
         env:
           TOKEN: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
         run: |
           h="$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"; echo "::add-mask::$h"
-          git -c "http.extraheader=AUTHORIZATION: basic $h" fetch --no-tags --filter=blob:none --unshallow origin "$(git rev-parse HEAD)"
+          git -c "http.extraheader=AUTHORIZATION: basic $h" fetch --no-tags --filter=blob:none --unshallow origin "$(git rev-parse HEAD)" || echo "::warning::could not fetch the git history; churn ranking is off for this run"
       # SpecGuard itself beside it, in a path that must not exist yet: a reviewed repository that tracks a file, folder or symlink named .specguard-src cannot shadow the code that runs
       # with the token (the job fails instead). A checkout of the root would delete a folder created before the target. uses: cannot take an expression, and actions/checkout cannot
       # write outside the workspace, so the action runs from this path and its review ignores it (ignore below).
