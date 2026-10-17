@@ -77,3 +77,15 @@ test('parseComments: one array, concatenated gh pages, and empty input; CLI read
   assert.deepEqual([out.prs, out.findings], [3, 12]);
   assert.equal(spawnSync(process.execPath, [path.join(__dirname, 'aggregate-counts.js')], { encoding: 'utf8' }).status, 2);
 });
+
+test('lastPerPr: the latest run with valid outcomes wins, even when incomplete; old counts keep the complete-only rule', () => {
+  const rows = [
+    c(1, counts(S(0, 2)), '2026-01-01'), // complete, old counts
+    c(1, counts(S(3, 0), { complete: false, outcome_valid: true }), '2026-01-02'), // later, incomplete but judged per finding
+    c(2, counts(S(1, 1)), '2026-01-01'),
+    c(2, counts(S(9), { complete: false }), '2026-01-02'), // old counts, incomplete: skipped
+    c(3, counts(S(0, 1)), '2026-01-01'),
+    c(3, counts(S(5), { complete: true, outcome_valid: false }), '2026-01-02'), // explicitly not valid
+  ];
+  assert.deepEqual(lastPerPr(rows).map((p) => p.since), [S(3, 0), S(1, 1), S(0, 1)]);
+});
