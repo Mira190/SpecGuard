@@ -230,7 +230,7 @@ async function runOne({ c, n, ...rest }) {
     const { observed, url, run } = await runPR({ ...rest, cs: [c], name: c.id, title: c.pr_title, body: c.pr_body, n });
     return { ...grade(c, observed), rep: n, pr_url: url, run_url: run.url, conclusion: run.conclusion, job_conclusion: observed.job_conclusion, observed };
   } catch (e) {
-    return { id: c.id, goal: c.goal, rep: n, error: String(e.message || e).split('\n')[0], pr_url: e.pr_url };
+    return { id: c.id, goal: c.goal, rep: n, expected_findings: expectedN(c), error: String(e.message || e).split('\n')[0], pr_url: e.pr_url };
   }
 }
 
@@ -249,7 +249,7 @@ async function runCombined({ cs, n, ...rest }) {
       posted: observed.comments.length, budget: BUDGET, overflow: items.filter((i) => /over max_comments/.test(i.why)).length, latency_s: observed.latency_s, observed } };
   } catch (e) {
     const error = String(e.message || e).split('\n')[0];
-    return { rows: cs.map((c) => ({ id: c.id, goal: c.goal, rep: n, error, pr_url: e.pr_url })), combined: { rep: n, error, pr_url: e.pr_url } };
+    return { rows: cs.map((c) => ({ id: c.id, goal: c.goal, rep: n, expected_findings: expectedN(c), error, pr_url: e.pr_url })), combined: { rep: n, error, pr_url: e.pr_url } };
   }
 }
 
@@ -337,7 +337,8 @@ function injectWorkflow({ dir, base, head, workflow, tag, exec = sh }) {
   return { baseBr, headBr, baseSha: g('rev-parse', baseBr), headSha: g('rev-parse', headBr) };
 }
 
-const extError = (e, mode, err) => ({ id: `${e.id} [trace ${mode}]`, goal: e.goal || 'external', rep: 1, trace: mode, error: String(err.message || err).split('\n')[0] });
+const expectedN = (c) => ((c.expected || {}).findings || []).length; // an errored run still owed these findings (end-to-end recall, eval/grade.js)
+const extError = (e, mode, err) => ({ expected_findings: expectedN(e), id: `${e.id} [trace ${mode}]`, goal: e.goal || 'external', rep: 1, trace: mode, error: String(err.message || err).split('\n')[0] });
 const cloneRepo = (url, dir) => sh('git', ['clone', '-q', '--no-checkout', url, dir]);
 
 // Stages every entry (clone, verify, inject) and, unless dryRun, pushes it to the mirror and runs each trace mode.
