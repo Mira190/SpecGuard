@@ -3788,7 +3788,7 @@ const withLead = async (t, lead, findings = [], coverage = []) => {
   fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
   fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), `${lead}\n`);
   await post(s);
-  return s.calls.summary[0].body;
+  return s.calls.summary[0].body.replace(/<!-- specguard:counts .*? -->/s, ""); // the counts line now repeats finding titles
 };
 test('Kite U1 (exact artifact): of three removed-assertion leads only the deleted BIG assertion becomes a finding; the two re-pinned through the check helper do not', async (t) => {
   const s = setup(t, report({ coverage: [], findings: [] }));
@@ -3801,7 +3801,7 @@ test('Kite U1 (exact artifact): of three removed-assertion leads only the delete
     "  assertion removed: assert.match(validateBaseName('BIG', '.mp4', others), /已存在/) // case-insensitive FS (test/filename.test.ts:31)",
     "  assertion removed: assert.equal(validateBaseName('a', '.mp3', others), '') // different extension is a different file (test/filename.test.ts:32)", ''].join('\n'));
   await post(s);
-  const body = s.calls.summary[0].body;
+  const body = s.calls.summary[0].body.replace(/<!-- specguard:counts .*? -->/s, "");
   assert.equal([...body.matchAll(/Assertion removed with no replacement/g)].length, 1);
   assert.match(body, /BIG/);
   assert.doesNotMatch(body, /new name|\.mp3/);
