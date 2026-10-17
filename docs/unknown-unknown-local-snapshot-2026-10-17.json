@@ -1,0 +1,2386 @@
+{
+  "snapshot_utc": "2026-10-16T22:40:26.660Z",
+  "main_sha": "fd8c62b877ecbc74ff704425cdd7593bbb68c28c",
+  "local_branches": [
+    {
+      "name": "chore/pin-reusable",
+      "sha": "d075e245d9106af8e39020c1e167ace0d71b038d",
+      "upstream": "origin/chore/pin-reusable",
+      "date": "2026-10-13T21:29:07+11:00",
+      "in_main": true
+    },
+    {
+      "name": "chore/reusable-name",
+      "sha": "603d30e0c2e3bc1c4b9599cbb6124cfad07578fc",
+      "upstream": "origin/chore/reusable-name",
+      "date": "2026-10-13T22:43:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "codex/critical-shift-left-followup-2026-10-15",
+      "sha": "9ae180b36c782d4583971d53bee1870373ecbdf7",
+      "upstream": "origin/codex/critical-shift-left-followup-2026-10-15",
+      "date": "2026-10-15T18:43:21+11:00",
+      "in_main": true
+    },
+    {
+      "name": "codex/critical-shift-left-review-2026-10-15",
+      "sha": "fe69027d13561803d77d4426b8950ce21239f74f",
+      "upstream": "origin/codex/critical-shift-left-review-2026-10-15",
+      "date": "2026-10-15T08:23:26+11:00",
+      "in_main": true
+    },
+    {
+      "name": "codex/full-repo-shift-left-audit-2026-10-16",
+      "sha": "6684ffd11bdeaae5e9eb8c442975cc2970bce2c0",
+      "upstream": "origin/codex/full-repo-shift-left-audit-2026-10-16",
+      "date": "2026-10-16T20:17:33+11:00",
+      "in_main": true
+    },
+    {
+      "name": "codex/shift-left-rereview-2026-10-16",
+      "sha": "60a3028e265b40f7c016129f87f2593d15c1f369",
+      "upstream": "origin/codex/shift-left-rereview-2026-10-16",
+      "date": "2026-10-16T08:08:34+11:00",
+      "in_main": false
+    },
+    {
+      "name": "docs/audit-supplement-2026-10-16",
+      "sha": "dabd1edc9f123b3470c1d502a5dbff094f6c747e",
+      "upstream": "origin/codex/full-repo-shift-left-audit-2026-10-16",
+      "date": "2026-10-16T20:43:10+11:00",
+      "in_main": true
+    },
+    {
+      "name": "docs/design-update",
+      "sha": "798e6e55bbf67c67776aaa7c3a599bc407e736e8",
+      "upstream": "",
+      "date": "2026-10-09T16:26:29+11:00",
+      "in_main": true
+    },
+    {
+      "name": "docs/handoff-2026-10-15",
+      "sha": "a446fd428a79839a19de44b873b28fefe0f046fd",
+      "upstream": "origin/docs/handoff-2026-10-15",
+      "date": "2026-10-15T20:34:32+11:00",
+      "in_main": true
+    },
+    {
+      "name": "docs/kite-recall",
+      "sha": "5c9a07a994ee744a499ea3f66d7beac6dcfc67da",
+      "upstream": "origin/docs/kite-recall",
+      "date": "2026-10-14T20:05:04+11:00",
+      "in_main": true
+    },
+    {
+      "name": "docs/shift-left-afternoon",
+      "sha": "c668b7485e0cfea6b7989fdc31c63ff38c58eae0",
+      "upstream": "origin/docs/shift-left-afternoon",
+      "date": "2026-10-14T14:07:35+11:00",
+      "in_main": true
+    },
+    {
+      "name": "docs/shift-left-evening",
+      "sha": "3bf3b51a4ead5014fbef546b1459c7b77f400d9a",
+      "upstream": "origin/docs/shift-left-evening",
+      "date": "2026-10-14T16:44:03+11:00",
+      "in_main": true
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-js2-1-base",
+      "sha": "dc19208921f29709e72d962e0809fa1edac961a7",
+      "upstream": "origin/eval/recall-claude-2026-10-14-js2-1-base",
+      "date": "2026-10-14T10:36:47+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-js2-1-head",
+      "sha": "1ec49808a914d2a942b8b0ec901533f492e25edf",
+      "upstream": "origin/eval/recall-claude-2026-10-14-js2-1-head",
+      "date": "2026-10-14T10:36:49+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-l1-1-base",
+      "sha": "7fc69df4dee161d31c74d69f1a1e8c576f87ddc0",
+      "upstream": "origin/eval/recall-claude-2026-10-14-l1-1-base",
+      "date": "2026-10-14T10:38:07+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-l1-1-head",
+      "sha": "404b42e006908061206a7895e40ecff8d5f2eb81",
+      "upstream": "origin/eval/recall-claude-2026-10-14-l1-1-head",
+      "date": "2026-10-14T10:38:09+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-p1-1-base",
+      "sha": "bdb8bca8266db8a6db6e9a581851b124d6ff150e",
+      "upstream": "origin/eval/recall-claude-2026-10-14-p1-1-base",
+      "date": "2026-10-14T10:39:47+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-p1-1-head",
+      "sha": "1f402d54143e48fc8842b70f25c30aa4b1cf7aa1",
+      "upstream": "origin/eval/recall-claude-2026-10-14-p1-1-head",
+      "date": "2026-10-14T10:39:50+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-r1-1-base",
+      "sha": "0e08047145e8108660bbc897eb78658beb7589e8",
+      "upstream": "origin/eval/recall-claude-2026-10-14-r1-1-base",
+      "date": "2026-10-14T10:41:28+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-r1-1-head",
+      "sha": "c92dd030d5d351096d83222a754bf4f3011e1dd9",
+      "upstream": "origin/eval/recall-claude-2026-10-14-r1-1-head",
+      "date": "2026-10-14T10:41:30+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-r2-1-base",
+      "sha": "35e2a83768776a0929b58a29d3bd1e1a69a426eb",
+      "upstream": "origin/eval/recall-claude-2026-10-14-r2-1-base",
+      "date": "2026-10-14T10:43:08+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-r2-1-head",
+      "sha": "c04f653df3b66bfe3cc2a87d7f691b5dc1c7ca90",
+      "upstream": "origin/eval/recall-claude-2026-10-14-r2-1-head",
+      "date": "2026-10-14T10:43:10+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-r3-1-base",
+      "sha": "c3bee2304f51934777150a0f5c46b911a1c262d8",
+      "upstream": "origin/eval/recall-claude-2026-10-14-r3-1-base",
+      "date": "2026-10-14T10:44:47+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-r3-1-head",
+      "sha": "9fcea624a00fe35911083719b028a083d39936fa",
+      "upstream": "origin/eval/recall-claude-2026-10-14-r3-1-head",
+      "date": "2026-10-14T10:44:49+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-r4-1-base",
+      "sha": "33e676e7e09837fa2571d51c1344f99239ebd7b6",
+      "upstream": "origin/eval/recall-claude-2026-10-14-r4-1-base",
+      "date": "2026-10-14T10:46:26+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-r4-1-head",
+      "sha": "99363ac39d7d04c80643b0f10fe31ef0f20199ca",
+      "upstream": "origin/eval/recall-claude-2026-10-14-r4-1-head",
+      "date": "2026-10-14T10:46:28+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-rx1-1-base",
+      "sha": "55ed25eaa2ece6eaa3bb77b4f7824c36e5993ef8",
+      "upstream": "origin/eval/recall-claude-2026-10-14-rx1-1-base",
+      "date": "2026-10-14T10:48:15+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-rx1-1-head",
+      "sha": "526bc0e25e14afca40f3c5e2b56bf94f0cc541e0",
+      "upstream": "origin/eval/recall-claude-2026-10-14-rx1-1-head",
+      "date": "2026-10-14T10:48:20+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-rx2-1-base",
+      "sha": "bfa9b6a2c7c3da752a0013bde5fe3ae76e9e5188",
+      "upstream": "origin/eval/recall-claude-2026-10-14-rx2-1-base",
+      "date": "2026-10-14T10:50:06+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-rx2-1-head",
+      "sha": "8c8ecf2e54f286d176cc9142c97ac1a0928fcf3e",
+      "upstream": "origin/eval/recall-claude-2026-10-14-rx2-1-head",
+      "date": "2026-10-14T10:50:10+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-rx3-1-base",
+      "sha": "16ca1d5c5e191fb5fbda165109d2f451b54ba2c4",
+      "upstream": "origin/eval/recall-claude-2026-10-14-rx3-1-base",
+      "date": "2026-10-14T10:51:51+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-rx3-1-head",
+      "sha": "23f02460e87ca8c4509db6d136ceb68004b0a291",
+      "upstream": "origin/eval/recall-claude-2026-10-14-rx3-1-head",
+      "date": "2026-10-14T10:51:53+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-s1-1-base",
+      "sha": "24fc0277bd485622fcfcd028ee293e1f9290d6b8",
+      "upstream": "origin/eval/recall-claude-2026-10-14-s1-1-base",
+      "date": "2026-10-14T10:53:11+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-s1-1-head",
+      "sha": "81508b06ced661fa53386161f766344f17a92945",
+      "upstream": "origin/eval/recall-claude-2026-10-14-s1-1-head",
+      "date": "2026-10-14T10:53:13+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-t1-1-base",
+      "sha": "561752fbd054c084996fc3e582db1ea4508278f4",
+      "upstream": "origin/eval/recall-claude-2026-10-14-t1-1-base",
+      "date": "2026-10-14T10:54:52+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-t1-1-head",
+      "sha": "a7b2a54b29cf60fd07dea5bdade7c4356d6d5fee",
+      "upstream": "origin/eval/recall-claude-2026-10-14-t1-1-head",
+      "date": "2026-10-14T10:54:54+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-t2-1-base",
+      "sha": "d21524277fc239c87f29c17fcf525bb61cad8eb6",
+      "upstream": "origin/eval/recall-claude-2026-10-14-t2-1-base",
+      "date": "2026-10-14T10:56:32+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-t2-1-head",
+      "sha": "feb8eb3ecb7599e1960668138f1035e95df63d64",
+      "upstream": "origin/eval/recall-claude-2026-10-14-t2-1-head",
+      "date": "2026-10-14T10:56:34+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-t3-1-base",
+      "sha": "5a9ee9ecdef3bc438f6caa3a52b8ea3af25791d7",
+      "upstream": "origin/eval/recall-claude-2026-10-14-t3-1-base",
+      "date": "2026-10-14T10:57:51+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-t3-1-head",
+      "sha": "f0159aa9c05332a61f16994395bd205be42f40fb",
+      "upstream": "origin/eval/recall-claude-2026-10-14-t3-1-head",
+      "date": "2026-10-14T10:57:54+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-t4-1-base",
+      "sha": "c90595916e73bdcdb8460100eb8385062a1b4ab0",
+      "upstream": "origin/eval/recall-claude-2026-10-14-t4-1-base",
+      "date": "2026-10-14T10:59:33+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-t4-1-head",
+      "sha": "98d757e505cebe4353980c4053f9799b06440ee2",
+      "upstream": "origin/eval/recall-claude-2026-10-14-t4-1-head",
+      "date": "2026-10-14T10:59:35+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-ts1-1-base",
+      "sha": "62b530289033013390435c3b9c712d5277ff1e5f",
+      "upstream": "origin/eval/recall-claude-2026-10-14-ts1-1-base",
+      "date": "2026-10-14T11:01:17+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-ts1-1-head",
+      "sha": "397aafd24ecea7f3b9194e5b3f130ec5a9c05422",
+      "upstream": "origin/eval/recall-claude-2026-10-14-ts1-1-head",
+      "date": "2026-10-14T11:01:20+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-ts2-1-base",
+      "sha": "b49a2b14ced38d4d4063ddd6c249b40b7ef6f3fc",
+      "upstream": "origin/eval/recall-claude-2026-10-14-ts2-1-base",
+      "date": "2026-10-14T11:03:10+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-ts2-1-head",
+      "sha": "3c37e796997adea6e2f3361c1daa65321fa3048c",
+      "upstream": "origin/eval/recall-claude-2026-10-14-ts2-1-head",
+      "date": "2026-10-14T11:03:15+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-ts3-1-base",
+      "sha": "1f5bcf4fef8f6681efe7c8459a133c4ecd64b320",
+      "upstream": "origin/eval/recall-claude-2026-10-14-ts3-1-base",
+      "date": "2026-10-14T11:04:50+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14-ts3-1-head",
+      "sha": "ae1d54d131fa8882bc3573addb2d8de994b7fc14",
+      "upstream": "origin/eval/recall-claude-2026-10-14-ts3-1-head",
+      "date": "2026-10-14T11:04:56+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-js2-1-base",
+      "sha": "050d523ad1761828e4c576413b03a48b63ad44cb",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-js2-1-base",
+      "date": "2026-10-14T11:23:17+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-js2-1-head",
+      "sha": "c33b6b774a34b8bc3c1960729499b4a84b8e2790",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-js2-1-head",
+      "date": "2026-10-14T11:23:19+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-l1-1-base",
+      "sha": "e3227a5821cc42af3b04a1f0ac128d66f8555469",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-l1-1-base",
+      "date": "2026-10-14T11:24:57+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-l1-1-head",
+      "sha": "1460696428a69d556801b595c05ae351e87e10b7",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-l1-1-head",
+      "date": "2026-10-14T11:24:59+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-p1-1-base",
+      "sha": "54a28b65d51eb0f096596543114354eea5027ac5",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-p1-1-base",
+      "date": "2026-10-14T11:26:37+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-p1-1-head",
+      "sha": "235dc79b00e660fde1b4f5f14c4397742eeec614",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-p1-1-head",
+      "date": "2026-10-14T11:26:39+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-r1-1-base",
+      "sha": "b7480627a25107a7875e763228bec1457ee8ef5a",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-r1-1-base",
+      "date": "2026-10-14T11:28:17+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-r1-1-head",
+      "sha": "a00973f0670dfaf520c7895712731b741a2958b6",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-r1-1-head",
+      "date": "2026-10-14T11:28:19+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-r2-1-base",
+      "sha": "03782b4bf85d843f3bf9c0402407f2128d77eef5",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-r2-1-base",
+      "date": "2026-10-14T11:29:59+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-r2-1-head",
+      "sha": "81dbfc50b5816791f3bb3651b79e6c351762361b",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-r2-1-head",
+      "date": "2026-10-14T11:30:01+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-r3-1-base",
+      "sha": "12e71d22f27494ccdc0244f5a2f85ba50fb70a4a",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-r3-1-base",
+      "date": "2026-10-14T11:31:38+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-r3-1-head",
+      "sha": "36e7193cd61f6213f30ce555e2d9bc022a6287dc",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-r3-1-head",
+      "date": "2026-10-14T11:31:41+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-r4-1-base",
+      "sha": "898f676f8ba781055271b14f590e4f328f260c2b",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-r4-1-base",
+      "date": "2026-10-14T11:33:19+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-r4-1-head",
+      "sha": "78816f3fde77fb5786c17b9318527c92fe48d041",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-r4-1-head",
+      "date": "2026-10-14T11:33:21+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-rx1-1-base",
+      "sha": "b964c80256a215dea35dec56ca61c6da911b5a43",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-rx1-1-base",
+      "date": "2026-10-14T11:34:38+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-rx1-1-head",
+      "sha": "954ffc162fdb85a3d4a2af6b246cac57f3379db8",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-rx1-1-head",
+      "date": "2026-10-14T11:34:40+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-rx2-1-base",
+      "sha": "498a8a3ce6ba4d703d2a6cfa39aae0250527f1ef",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-rx2-1-base",
+      "date": "2026-10-14T11:36:19+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-rx2-1-head",
+      "sha": "cd4db8628b42be8e339f04fe417bd932901ed530",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-rx2-1-head",
+      "date": "2026-10-14T11:36:21+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-rx3-1-base",
+      "sha": "25efd8e3b1713303af99bf972fbd8b70dfe8eb82",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-rx3-1-base",
+      "date": "2026-10-14T11:38:01+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-rx3-1-head",
+      "sha": "b2e3350747848649f33d4f752c51f7a389afa471",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-rx3-1-head",
+      "date": "2026-10-14T11:38:04+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-s1-1-base",
+      "sha": "20bf622aa73b67ef17b349c145c9af0f77cbd40f",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-s1-1-base",
+      "date": "2026-10-14T11:39:23+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-s1-1-head",
+      "sha": "dc370754bc56dfe2521fefc208c459f67f29d571",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-s1-1-head",
+      "date": "2026-10-14T11:39:25+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-t1-1-base",
+      "sha": "13cecac75e9ff0889e2069cc2af1f6ef4c9b67b1",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-t1-1-base",
+      "date": "2026-10-14T11:41:05+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-t1-1-head",
+      "sha": "d7bd0e1be6bafba06ab46b4df61afedf2881e55a",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-t1-1-head",
+      "date": "2026-10-14T11:41:08+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-t2-1-base",
+      "sha": "bd2e81099839e39bdb0aca36f10edb6200da75b4",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-t2-1-base",
+      "date": "2026-10-14T11:42:48+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-t2-1-head",
+      "sha": "0843c0a7a33de0e53be2540a38534d28202626ab",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-t2-1-head",
+      "date": "2026-10-14T11:42:50+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-t3-1-base",
+      "sha": "061acaa89cf8f575a5c2dd48958f8b1126ae5840",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-t3-1-base",
+      "date": "2026-10-14T11:44:28+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-t3-1-head",
+      "sha": "ce4212f34c30c27d8b20cca1a4fbca86770cdefc",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-t3-1-head",
+      "date": "2026-10-14T11:44:30+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-t4-1-base",
+      "sha": "f58939f997993c53abcb8c2b483bedba4d30f2a8",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-t4-1-base",
+      "date": "2026-10-14T11:45:48+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-t4-1-head",
+      "sha": "a0a9827a19455241ca88d97d4c10ca8d4e2e68cf",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-t4-1-head",
+      "date": "2026-10-14T11:45:50+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-ts1-1-base",
+      "sha": "bf84fba50cf4ce37e349d4eb436af45782b822d6",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-ts1-1-base",
+      "date": "2026-10-14T11:47:08+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-ts1-1-head",
+      "sha": "817bb4065b1d69023d159bdac5bbcde45abde7bd",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-ts1-1-head",
+      "date": "2026-10-14T11:47:10+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-ts2-1-base",
+      "sha": "ddbc7b36aa0660e49edd0d31fbd43fe27977dc30",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-ts2-1-base",
+      "date": "2026-10-14T11:49:02+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-ts2-1-head",
+      "sha": "7d57b9ea9d51f00c86f51702a8b9b6c40b9e0515",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-ts2-1-head",
+      "date": "2026-10-14T11:49:07+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-ts3-1-base",
+      "sha": "9abcfb9b960103e61cc12aacb7872dce024e3310",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-ts3-1-base",
+      "date": "2026-10-14T11:50:42+11:00",
+      "in_main": false
+    },
+    {
+      "name": "eval/recall-claude-2026-10-14b-ts3-1-head",
+      "sha": "35c0778e6f9945b1d78594baaeca27f449be55ad",
+      "upstream": "origin/eval/recall-claude-2026-10-14b-ts3-1-head",
+      "date": "2026-10-14T11:50:48+11:00",
+      "in_main": false
+    },
+    {
+      "name": "experiment/trace-local-eval",
+      "sha": "8f69d4d9c0eab291b8b9e88f912ea05694ebcbb9",
+      "upstream": "origin/experiment/trace-local-eval",
+      "date": "2026-10-13T10:29:14+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/adopt",
+      "sha": "f4a9388d066a1a1369bbd05e0966e5c3d82c8fda",
+      "upstream": "",
+      "date": "2026-10-09T16:21:20+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/code-first-scan",
+      "sha": "9d2ae19e6696548544612734dd1064ccc49087f2",
+      "upstream": "origin/feat/code-first-scan",
+      "date": "2026-10-14T12:02:11+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/d-literal-anchor",
+      "sha": "bcc95784e3490ca332efa0a3a62531ebd472a1df",
+      "upstream": "origin/feat/d-literal-anchor",
+      "date": "2026-10-14T19:27:00+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/governing-criteria",
+      "sha": "65f5128e8c94af76a5d844fd4c77d283f08974b1",
+      "upstream": "origin/feat/governing-criteria",
+      "date": "2026-10-14T14:15:19+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/internal-access",
+      "sha": "1c0f5d721bcccf2dfdbee592644839822bb72489",
+      "upstream": "origin/feat/internal-access",
+      "date": "2026-10-13T21:23:19+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/llm-token",
+      "sha": "2f4e55f2d971f5cbe52fa01fc991ea2b117a964d",
+      "upstream": "origin/feat/llm-token",
+      "date": "2026-10-14T02:27:30+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/manual-run-quality",
+      "sha": "7dec78a37b61ae38a27cf48355d5709c1a47aba2",
+      "upstream": "origin/feat/manual-run-quality",
+      "date": "2026-10-14T10:11:55+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/metrics",
+      "sha": "78cde9b603638377c4f71301d22682b7684cb3eb",
+      "upstream": "",
+      "date": "2026-10-09T16:54:24+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/pat-first",
+      "sha": "def398a9f2860eb3c60b8ef720b387d50b11a090",
+      "upstream": "origin/feat/pat-first",
+      "date": "2026-10-13T22:08:53+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/scan-batches",
+      "sha": "81b74a9fce58f2592ef43921d8361825c7af9cc4",
+      "upstream": "origin/feat/scan-batches",
+      "date": "2026-10-14T14:13:21+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/stale-threads",
+      "sha": "dfc92414c793c019300291b435ef93ed73fd1822",
+      "upstream": "",
+      "date": "2026-10-09T17:01:36+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/summary-calm",
+      "sha": "db165b64450805fa3c6852f96e2bd71fc29ce953",
+      "upstream": "origin/feat/summary-calm",
+      "date": "2026-10-14T12:32:45+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/summary-clarity",
+      "sha": "5aaa9f787f7854734d5212197a0c6ca8fdd71160",
+      "upstream": "origin/feat/summary-clarity",
+      "date": "2026-10-14T11:21:01+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/summary-headings",
+      "sha": "30f2e389dfcd86117ac2f07ff665a67375363cb6",
+      "upstream": "origin/feat/summary-headings",
+      "date": "2026-10-14T08:53:24+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feat/summary-v2",
+      "sha": "957b1541ca41563a8f3c7312b42b5eb5fe7dbf31",
+      "upstream": "origin/feat/summary-v2",
+      "date": "2026-10-14T08:22:10+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feature/ccr-mode",
+      "sha": "92eaebba2fcf8a7acaf1a320720128e1f95c6c30",
+      "upstream": "origin/feature/ccr-mode",
+      "date": "2026-10-06T12:18:20+11:00",
+      "in_main": true
+    },
+    {
+      "name": "feature/verified-review",
+      "sha": "58bc607c09a229f8e21e91e8e12c2fd004b8f167",
+      "upstream": "origin/feature/verified-review",
+      "date": "2026-10-07T01:38:58+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix-pack-quote",
+      "sha": "88476d48fa1d69cf926ec7fc0e648222d791b98c",
+      "upstream": "origin/main",
+      "date": "2026-10-16T21:32:34+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix-scan-funnel-report",
+      "sha": "461079b681d8a33a5d4835016b48018c1719801a",
+      "upstream": "origin/main",
+      "date": "2026-10-16T22:51:19+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/align-any",
+      "sha": "1899c92837e4106e5c7b46e9c6eb339acada95e2",
+      "upstream": "origin/fix/align-any",
+      "date": "2026-10-14T16:32:08+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/align-next",
+      "sha": "177834bfd5cae00528d15652709bd36881a5c3c4",
+      "upstream": "origin/fix/align-next",
+      "date": "2026-10-14T15:22:41+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/auto-lead-low-confidence",
+      "sha": "b1aaf113aae3ca69fcc70e7b9026130affa6c30f",
+      "upstream": "origin/fix/auto-lead-low-confidence",
+      "date": "2026-10-15T23:16:52+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/block-windows",
+      "sha": "2e4c55b11303d28bc7c3c340576a0fa15a460a61",
+      "upstream": "origin/fix/block-windows",
+      "date": "2026-10-14T15:09:46+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/collect-honest-skip",
+      "sha": "2aa9d0ad2bab47718ef8a7a0f1bda46279fa15b9",
+      "upstream": "origin/fix/collect-honest-skip",
+      "date": "2026-10-16T21:04:31+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/config-end-to-end",
+      "sha": "a69f9356ec910d176a58c3fbf6e2c93235a2238a",
+      "upstream": "origin/fix/config-end-to-end",
+      "date": "2026-10-16T20:28:14+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/crlf",
+      "sha": "fc0e503519b0337d4a998265fd4939b06238e303",
+      "upstream": "",
+      "date": "2026-10-09T14:36:22+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/cut-test-guard",
+      "sha": "e2c599e636d90f998509cabed0ce6629f9961533",
+      "upstream": "origin/fix/cut-test-guard",
+      "date": "2026-10-14T09:02:30+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/d-links",
+      "sha": "eafa4c2c8199e43fd1dae8d93e8557c015779ea3",
+      "upstream": "origin/fix/d-links",
+      "date": "2026-10-14T15:01:13+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/delegation-scope",
+      "sha": "e84cf079f81d842f8c85781851427602ccd23cb3",
+      "upstream": "origin/fix/delegation-scope",
+      "date": "2026-10-14T19:49:07+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/deletion-hunk",
+      "sha": "95f4afe345f1d8b82b9a86c8a154624371278dab",
+      "upstream": "origin/fix/deletion-hunk",
+      "date": "2026-10-15T19:32:48+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/deletion-touched",
+      "sha": "4b1667af645257b336e15a56943125e0893ca6e2",
+      "upstream": "origin/fix/deletion-touched",
+      "date": "2026-10-14T20:36:03+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/deny-secret-diff",
+      "sha": "84475bad28af4f452f70ab4bbc779851cc36c094",
+      "upstream": "origin/fix/deny-secret-diff",
+      "date": "2026-10-17T09:33:42+11:00",
+      "in_main": false
+    },
+    {
+      "name": "fix/discovery",
+      "sha": "8af3a8892e8c0a0953e5a9082523f2b10caec00b",
+      "upstream": "",
+      "date": "2026-10-09T16:00:04+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/drift-rubric-leads",
+      "sha": "68f97a18a76becde708eb69e0209c710e2510662",
+      "upstream": "origin/fix/drift-rubric-leads",
+      "date": "2026-10-14T19:36:53+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/eval-finding-identity",
+      "sha": "981b26b4e91b1d1afe3c501cf667b27334aad6dd",
+      "upstream": "origin/fix/eval-finding-identity",
+      "date": "2026-10-16T20:27:52+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/eval-metric-integrity",
+      "sha": "73d407cdec5b93930f4a33d1d3dbc9e85f7c8d63",
+      "upstream": "origin/fix/eval-metric-integrity",
+      "date": "2026-10-17T09:15:02+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/evidence-depth",
+      "sha": "1dc4c6c16ce742c9198cce719a03c03e9961765e",
+      "upstream": "origin/fix/evidence-depth",
+      "date": "2026-10-14T19:08:32+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/funnel-deterministic-split",
+      "sha": "5f2b1904e80cb3ca28059d1ec147b44f943b949d",
+      "upstream": "origin/main",
+      "date": "2026-10-16T23:27:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/gherkin-ctx",
+      "sha": "2e9646e54ef0a150c698fd52fa8b0886d1e3551c",
+      "upstream": "origin/main",
+      "date": "2026-10-16T21:31:19+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/leads-removed-assertions",
+      "sha": "5a75641e7b190aa22e266f952e5f00f14f4a24d7",
+      "upstream": "origin/fix/leads-removed-assertions",
+      "date": "2026-10-16T20:46:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/left-side-repair",
+      "sha": "95dec9042e05c6c773cc5311fc75c5ae59bc2425",
+      "upstream": "origin/fix/left-side-repair",
+      "date": "2026-10-14T19:59:23+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/llm-config-failure-red",
+      "sha": "cd12c7781659208d1b333b1f24f1876b946af631",
+      "upstream": "origin/fix/llm-config-failure-red",
+      "date": "2026-10-17T09:29:33+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/open-items",
+      "sha": "a0f8b243f1ebf98711e787621747b609ae74e2dc",
+      "upstream": "origin/fix/open-items",
+      "date": "2026-10-15T20:26:44+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/pack-admission",
+      "sha": "a922bc6a6511c76d12872864c5d3061c6f1086d0",
+      "upstream": "origin/fix/pack-admission",
+      "date": "2026-10-14T13:35:05+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/pushdown",
+      "sha": "79defdbfa0c4067dd64eba5802c5b60a34238461",
+      "upstream": "",
+      "date": "2026-10-09T16:31:19+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/removed-lead-precision",
+      "sha": "8387bc47fb20ff85468f1e85f96ae52dbd2c3239",
+      "upstream": "origin/fix/removed-lead-precision",
+      "date": "2026-10-14T20:37:58+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/removed-lines",
+      "sha": "1a1612a7cd80c3a259f9600b4ac807dac0fb2fbb",
+      "upstream": "origin/fix/removed-lines",
+      "date": "2026-10-14T20:17:44+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/requirement-identity",
+      "sha": "0c495a7b81fb4aeeae7534abe11191bbe4f8cf51",
+      "upstream": "origin/fix/requirement-identity",
+      "date": "2026-10-16T20:30:12+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/requirements-ac-and-unreadable-issue",
+      "sha": "c66b92e30006c8519443c5569bf8d2ebf209b281",
+      "upstream": "origin/fix/requirements-ac-and-unreadable-issue",
+      "date": "2026-10-16T20:44:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/rereview-batch1",
+      "sha": "8921744df2ebbd467166b4b8e594e14b30968ebd",
+      "upstream": "origin/main",
+      "date": "2026-10-16T13:33:30+11:00",
+      "in_main": false
+    },
+    {
+      "name": "fix/review-batch1",
+      "sha": "f4d3db962ae52909cdcafe42005aafdaea83548f",
+      "upstream": "origin/fix/review-batch1",
+      "date": "2026-10-15T08:54:18+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/review-batch2",
+      "sha": "a44355ee75bde3ece0a1876a267d7a642cbccfc5",
+      "upstream": "origin/fix/review-batch2",
+      "date": "2026-10-15T18:56:23+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/run-integrity",
+      "sha": "b17702283970cdef450d1ca24f60ad4fc163ecd3",
+      "upstream": "origin/fix/run-integrity",
+      "date": "2026-10-13T16:19:32+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/scan-cursor-progress",
+      "sha": "de756c3cb2247bd9730b5b6022f76ca9d1872629",
+      "upstream": "origin/fix/scan-cursor-progress",
+      "date": "2026-10-16T20:34:31+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/scan-evidence-visibility",
+      "sha": "a49015024bd3eb5e27cc0b0515d7a5e0dab86ae2",
+      "upstream": "origin/fix/scan-evidence-visibility",
+      "date": "2026-10-16T20:29:46+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/scan-issue-foreign-target",
+      "sha": "7ac45b219b0a2c30cec2d6b4bfb2cbb5518d2504",
+      "upstream": "origin/fix/scan-issue-foreign-target",
+      "date": "2026-10-17T09:15:02+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/scan-ledger",
+      "sha": "6c907924b50840b06392e24eded0a39d26dc1542",
+      "upstream": "origin/fix/scan-ledger",
+      "date": "2026-10-14T19:23:17+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/scan-overflow",
+      "sha": "b74377094029808875abd68f35964202482c8e06",
+      "upstream": "origin/fix/scan-overflow",
+      "date": "2026-10-14T15:29:07+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/scan-part-size",
+      "sha": "c392b5b13eb732eaf744038af0c3a270c05f3dc2",
+      "upstream": "origin/fix/scan-part-size",
+      "date": "2026-10-16T13:42:05+11:00",
+      "in_main": false
+    },
+    {
+      "name": "fix/scan-precision",
+      "sha": "1b77f74f73040efffe9e32ab3bc7621e4348c5d2",
+      "upstream": "origin/fix/scan-precision",
+      "date": "2026-10-14T12:56:18+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/scan-review-findings",
+      "sha": "f6a524a7deb958a9a95f87c4d23e663aefccfe21",
+      "upstream": "origin/fix/scan-review-findings",
+      "date": "2026-10-14T16:11:31+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/scan-state-address",
+      "sha": "3d591727f328026e53e2d6c211329177beda86b9",
+      "upstream": "origin/main",
+      "date": "2026-10-16T13:28:18+11:00",
+      "in_main": false
+    },
+    {
+      "name": "fix/scan-unanswered",
+      "sha": "b218d30bc9282ad437706447e6d54053f8ea72d8",
+      "upstream": "origin/fix/scan-unanswered",
+      "date": "2026-10-14T16:42:36+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/shift-left-improvements",
+      "sha": "be383dca986a5dc93765f46590be77e8a7041f9f",
+      "upstream": "origin/fix/shift-left-improvements",
+      "date": "2026-10-15T08:23:45+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/structured-reduced-reasons",
+      "sha": "ee18f873254ee38bf475a44b192cd74e4cc480b5",
+      "upstream": "origin/fix/structured-reduced-reasons",
+      "date": "2026-10-17T09:14:21+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/table-rows-kite",
+      "sha": "447b8aa120c73bcdf06057c9d747ad519e0998f8",
+      "upstream": "origin/fix/table-rows-kite",
+      "date": "2026-10-15T19:24:27+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/trust-cut-and-invalid",
+      "sha": "7e2af155da1adb50622b0dd4ded492cfe8b089d5",
+      "upstream": "origin/fix/trust-cut-and-invalid",
+      "date": "2026-10-16T20:37:20+11:00",
+      "in_main": true
+    },
+    {
+      "name": "fix/visibility-fullblocks",
+      "sha": "3ce33466f11242cfb5c8f5160fbd7b9ea3ebe75c",
+      "upstream": "origin/fix/visibility-fullblocks",
+      "date": "2026-10-14T15:59:30+11:00",
+      "in_main": true
+    },
+    {
+      "name": "gates/evidence",
+      "sha": "a562095e629b1c85d0a30cd61894279f2eff3517",
+      "upstream": "",
+      "date": "2026-10-09T15:08:46+11:00",
+      "in_main": false
+    },
+    {
+      "name": "gates/g4-only",
+      "sha": "9e97df5b61852b675fe39747fb60a564745e7f7d",
+      "upstream": "",
+      "date": "2026-10-09T15:16:59+11:00",
+      "in_main": true
+    },
+    {
+      "name": "hardening/security",
+      "sha": "e8d84d2fc4056bed13f329ad95834d0c6d636a17",
+      "upstream": "",
+      "date": "2026-10-09T13:52:38+11:00",
+      "in_main": true
+    },
+    {
+      "name": "hotfix/esm-target",
+      "sha": "c6d672cb5fb675adeb2da94e067ec30b60a7b202",
+      "upstream": "origin/hotfix/esm-target",
+      "date": "2026-10-13T20:49:13+11:00",
+      "in_main": true
+    },
+    {
+      "name": "lean/v1",
+      "sha": "a9fa14377f955c43830a33d71bace8828aaf4094",
+      "upstream": "",
+      "date": "2026-10-09T13:52:14+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m197",
+      "sha": "226aa67e0a363019cd2d525bdc4e21c335a1892e",
+      "upstream": "origin/fix/auto-lead-low-confidence",
+      "date": "2026-10-16T20:47:24+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m200",
+      "sha": "93ae1d42fec95d83b27be7a85be127810d1d3005",
+      "upstream": "origin/fix/config-end-to-end",
+      "date": "2026-10-16T20:51:11+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m201",
+      "sha": "dbdc98f2dcfe398d5ff17979915b35c52cd48f56",
+      "upstream": "origin/fix/trust-cut-and-invalid",
+      "date": "2026-10-16T21:00:25+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m203",
+      "sha": "45ebba3b8a2963c15777f18db224eb68eea32148",
+      "upstream": "origin/fix/requirement-identity",
+      "date": "2026-10-16T20:53:59+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m205",
+      "sha": "4a9d014bb0683d24d5269d9e9b788588974e738f",
+      "upstream": "origin/fix/scan-evidence-visibility",
+      "date": "2026-10-16T20:40:30+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m206",
+      "sha": "89415c0b080642def0937061939c76c2831ae208",
+      "upstream": "origin/codex/full-repo-shift-left-audit-2026-10-16",
+      "date": "2026-10-16T21:24:05+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m208",
+      "sha": "c5bc1070c7ba973e398d10dd96658ffb1afae4d3",
+      "upstream": "origin/fix/requirements-ac-and-unreadable-issue",
+      "date": "2026-10-16T21:12:39+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m209",
+      "sha": "9cb3a7fde3ded00ee393a273adb261c8bd5e0882",
+      "upstream": "origin/fix/leads-removed-assertions",
+      "date": "2026-10-16T21:15:01+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m210",
+      "sha": "94a0810b7fe5abb988540172d79fb07af6086802",
+      "upstream": "origin/fix/collect-honest-skip",
+      "date": "2026-10-16T21:17:01+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m211",
+      "sha": "c7e8ccd1f2dc3c4b416b3ee6093e40e77d544c8c",
+      "upstream": "origin/fix/scan-state-honesty",
+      "date": "2026-10-16T22:21:00+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m212",
+      "sha": "2e9646e54ef0a150c698fd52fa8b0886d1e3551c",
+      "upstream": "origin/fix/gherkin-context-and-test-scope",
+      "date": "2026-10-16T21:31:19+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m213",
+      "sha": "ec2c01b173017ff61a60a709b25094fbdcd654b0",
+      "upstream": "origin/fix/pack-and-quote-integrity",
+      "date": "2026-10-16T22:24:14+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m214",
+      "sha": "00fa3fa505cc495931e6594ff0df8b8610b75d61",
+      "upstream": "origin/fix/rerun-key-and-entry-points",
+      "date": "2026-10-16T22:27:11+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m215",
+      "sha": "40f8be196a519019cea022ee9a680f609899d323",
+      "upstream": "origin/fix/assertion-evidence-tiers",
+      "date": "2026-10-16T23:07:53+11:00",
+      "in_main": true
+    },
+    {
+      "name": "m217",
+      "sha": "ca496f4ddba50c2f6ad683f050041341a30f3d0d",
+      "upstream": "origin/fix/dependency-freshness-and-cover-scope",
+      "date": "2026-10-16T22:58:36+11:00",
+      "in_main": true
+    },
+    {
+      "name": "main",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "origin/main",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "opt/round3",
+      "sha": "6686ea34b71c8d55e36da9ba31e66bad4203f54a",
+      "upstream": "origin/opt/round3",
+      "date": "2026-10-13T17:28:57+11:00",
+      "in_main": true
+    },
+    {
+      "name": "opt/round4",
+      "sha": "158fac8b6507464097f40f3296193c628eda3976",
+      "upstream": "origin/opt/round4",
+      "date": "2026-10-13T18:52:43+11:00",
+      "in_main": true
+    },
+    {
+      "name": "opt/round5",
+      "sha": "92f79b3bc5c8e356dad85406cfb79fd84e96f2c8",
+      "upstream": "origin/opt/round5",
+      "date": "2026-10-13T19:47:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "opt/round6",
+      "sha": "bb880cfd47d9e14bff12895595df83597659c8a8",
+      "upstream": "origin/opt/round6",
+      "date": "2026-10-13T20:19:00+11:00",
+      "in_main": true
+    },
+    {
+      "name": "opt/round7",
+      "sha": "e9648c33b3b4b63d775080b435907dace5d18ca8",
+      "upstream": "origin/opt/round7",
+      "date": "2026-10-13T21:17:03+11:00",
+      "in_main": true
+    },
+    {
+      "name": "rename/test-gap-scan",
+      "sha": "744a18cd6a683b81a631f7e5c31f6f8dc60bd10f",
+      "upstream": "origin/rename/test-gap-scan",
+      "date": "2026-10-13T16:53:22+11:00",
+      "in_main": true
+    },
+    {
+      "name": "scan-state",
+      "sha": "04d9103d3f3e9ef1fc61cd159ec381f9a1491b17",
+      "upstream": "origin/main",
+      "date": "2026-10-16T21:31:29+11:00",
+      "in_main": true
+    },
+    {
+      "name": "skill/v2",
+      "sha": "0fd801881a7494bfaa37790dd3aa722c51e37618",
+      "upstream": "",
+      "date": "2026-10-09T13:39:09+11:00",
+      "in_main": true
+    },
+    {
+      "name": "test/ccr-seeded",
+      "sha": "c58dd83cdc040072bda8d4281628606ef5592647",
+      "upstream": "origin/test/ccr-seeded",
+      "date": "2026-10-06T12:18:39+11:00",
+      "in_main": false
+    },
+    {
+      "name": "test/seeded-gaps-v7",
+      "sha": "b00e58bf4a70ca1150dcda4cb72339b20fbbbed6",
+      "upstream": "origin/test/seeded-gaps-v7",
+      "date": "2026-10-06T12:00:02+11:00",
+      "in_main": false
+    },
+    {
+      "name": "w208",
+      "sha": "d23956e12a10c5a732df8a3f4e013611dbabfc2f",
+      "upstream": "origin/fix/requirements-ac-and-unreadable-issue",
+      "date": "2026-10-16T21:01:38+11:00",
+      "in_main": true
+    },
+    {
+      "name": "w209",
+      "sha": "984340bc6890f9e779577b3af19ee8e901ca442b",
+      "upstream": "origin/fix/leads-removed-assertions",
+      "date": "2026-10-16T21:02:58+11:00",
+      "in_main": true
+    },
+    {
+      "name": "w4-dep",
+      "sha": "8ab8efd232200021e7e9d7e5591fd700112ee2cb",
+      "upstream": "origin/main",
+      "date": "2026-10-16T22:51:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "w4-evidence",
+      "sha": "debb50a66d933bee825457a90e254d3775d5a0d6",
+      "upstream": "origin/main",
+      "date": "2026-10-16T22:52:43+11:00",
+      "in_main": true
+    },
+    {
+      "name": "wave3-rerun",
+      "sha": "23877aa7c4fd75b17d6e1fa06b98e43e23259999",
+      "upstream": "origin/main",
+      "date": "2026-10-16T21:33:09+11:00",
+      "in_main": true
+    },
+    {
+      "name": "work-197",
+      "sha": "4698b7c4dbca595601b484f69c31a4139a7f2da4",
+      "upstream": "origin/fix/auto-lead-low-confidence",
+      "date": "2026-10-16T20:03:14+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a05d415c283266d17",
+      "sha": "bcddf784f70d4f5b5a854d2c75789bd33f1591aa",
+      "upstream": "",
+      "date": "2026-10-16T23:12:36+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a061f44428e1b584f",
+      "sha": "d79437999c9cbee2b3325b8f3e6e8f2e85ebd94d",
+      "upstream": "",
+      "date": "2026-10-16T22:29:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a0ae4bad15e422630",
+      "sha": "4ca22e659b4505da0bbf2ff2c24d1c514353a0b1",
+      "upstream": "",
+      "date": "2026-10-14T14:26:14+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a187a4581b8f41347",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a18c56e4ca2e5ebab",
+      "sha": "cd531b3852b71e717265454d584cfa991a8e7c59",
+      "upstream": "",
+      "date": "2026-10-14T15:11:42+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a21db00316f7a2b38",
+      "sha": "1cd951b74450f61dbcd242c586ad1bc98ab8845b",
+      "upstream": "",
+      "date": "2026-10-16T23:01:58+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a22a260b5512f34ff",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a26fb035a7472e73e",
+      "sha": "ccf12ee08f3bb331445b168b1a890a8f40831bbc",
+      "upstream": "",
+      "date": "2026-10-16T20:55:22+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a2895d9b59a6a0884",
+      "sha": "e9ae31886b8da1cefece4a6e0040e23436bc25a0",
+      "upstream": "",
+      "date": "2026-10-16T21:12:23+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a2eaa6a0f0448877c",
+      "sha": "0e1f87744f238fa18a17b4a54156a36bb79ea57c",
+      "upstream": "",
+      "date": "2026-10-14T16:45:33+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a2f0626ecb79baf6c",
+      "sha": "d79437999c9cbee2b3325b8f3e6e8f2e85ebd94d",
+      "upstream": "",
+      "date": "2026-10-16T22:29:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a30f13df4363ec8f9",
+      "sha": "e9ae31886b8da1cefece4a6e0040e23436bc25a0",
+      "upstream": "",
+      "date": "2026-10-16T21:12:23+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a320e8ef5cacef9ef",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a36d20dad99f782cf",
+      "sha": "1cd951b74450f61dbcd242c586ad1bc98ab8845b",
+      "upstream": "",
+      "date": "2026-10-16T23:01:58+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a3ef6608e744b7854",
+      "sha": "bcddf784f70d4f5b5a854d2c75789bd33f1591aa",
+      "upstream": "",
+      "date": "2026-10-16T23:12:36+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a41a268488108ff77",
+      "sha": "ccf12ee08f3bb331445b168b1a890a8f40831bbc",
+      "upstream": "",
+      "date": "2026-10-16T20:55:22+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a45b4751eaa530f5d",
+      "sha": "41e73c307c083b779dd9c83441b82a01f2636aee",
+      "upstream": "",
+      "date": "2026-10-14T16:18:24+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a46f387ac62302489",
+      "sha": "d8ade52103f35163bee79e86c2e0c0baf6263168",
+      "upstream": "",
+      "date": "2026-10-16T22:53:49+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a4f05b845c3c24067",
+      "sha": "85daf48894c68b8b2a672f87b4948ab2bce120a2",
+      "upstream": "",
+      "date": "2026-10-14T15:31:28+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a5b57609a427cb6ee",
+      "sha": "0e1f87744f238fa18a17b4a54156a36bb79ea57c",
+      "upstream": "",
+      "date": "2026-10-14T16:45:33+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a5eff36ec95b68ecc",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a68ad592a0aee6add",
+      "sha": "d79437999c9cbee2b3325b8f3e6e8f2e85ebd94d",
+      "upstream": "",
+      "date": "2026-10-16T22:29:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a68d7ed7ea1ff5d5a",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a69e5fee820393912",
+      "sha": "85daf48894c68b8b2a672f87b4948ab2bce120a2",
+      "upstream": "",
+      "date": "2026-10-14T15:31:28+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a7240fd2a4c83dd80",
+      "sha": "0e1f87744f238fa18a17b4a54156a36bb79ea57c",
+      "upstream": "",
+      "date": "2026-10-14T16:45:33+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a72b7f7bbeeef3abe",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a7f5f6f2224021222",
+      "sha": "5814f9d0e1500738720edbfe0a6961dee965a82e",
+      "upstream": "",
+      "date": "2026-10-16T21:26:06+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a7f68d86f7b7c03bb",
+      "sha": "d79437999c9cbee2b3325b8f3e6e8f2e85ebd94d",
+      "upstream": "",
+      "date": "2026-10-16T22:29:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a83839b0495e1edaf",
+      "sha": "d643c71d0af0c7566408e173a0e6fdb112a3dcd7",
+      "upstream": "",
+      "date": "2026-10-14T11:22:52+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a855bf6d044471bcf",
+      "sha": "d79437999c9cbee2b3325b8f3e6e8f2e85ebd94d",
+      "upstream": "",
+      "date": "2026-10-16T22:29:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a882cb57cf16b9238",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a925d0e2b9fa181e0",
+      "sha": "e9ae31886b8da1cefece4a6e0040e23436bc25a0",
+      "upstream": "",
+      "date": "2026-10-16T21:12:23+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a93d545b01794f154",
+      "sha": "bcddf784f70d4f5b5a854d2c75789bd33f1591aa",
+      "upstream": "",
+      "date": "2026-10-16T23:12:36+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a954d9c464092b7f6",
+      "sha": "3523e94c7850977637bd8452d2aea16b162dac07",
+      "upstream": "",
+      "date": "2026-10-14T20:00:58+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a9909d02d8a8d089b",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-a9bc9b1bbfded027b",
+      "sha": "7ed5b9f5f73dbdff4619809490cedad4e4b4d638",
+      "upstream": "",
+      "date": "2026-10-14T20:06:37+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-aa19f6f0fd9dcee91",
+      "sha": "e9ae31886b8da1cefece4a6e0040e23436bc25a0",
+      "upstream": "",
+      "date": "2026-10-16T21:12:23+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-aa93919c4bfe15b7e",
+      "sha": "87667c09dc557fd1d5d07193bf0bf717d3772b30",
+      "upstream": "",
+      "date": "2026-10-14T13:38:54+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-ab0bfc29d5fbdc7c8",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-ab57a4de5f8efbf07",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-acdb857c44570bfe1",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-ad0844b45c7caf065",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-ad6a6dd2198c5d490",
+      "sha": "1cd951b74450f61dbcd242c586ad1bc98ab8845b",
+      "upstream": "",
+      "date": "2026-10-16T23:01:58+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-ae70e2ec0826252f0",
+      "sha": "0e1f87744f238fa18a17b4a54156a36bb79ea57c",
+      "upstream": "",
+      "date": "2026-10-14T16:45:33+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-aeb5dcca893a90ec7",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    },
+    {
+      "name": "worktree-agent-afffd274d1add6bc6",
+      "sha": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "upstream": "",
+      "date": "2026-10-15T20:35:56+11:00",
+      "in_main": true
+    }
+  ],
+  "worktrees": [
+    {
+      "worktree": "C:/Files/Projects/SpecGuard",
+      "HEAD": "b1aaf113aae3ca69fcc70e7b9026130affa6c30f",
+      "branch": "refs/heads/fix/auto-lead-low-confidence",
+      "status_error": null,
+      "status_count": 11,
+      "status_sample": [
+        "M README.md",
+        "?? docs/branch-review-evidence-2026-10-17.json",
+        "?? docs/branch-review-inventory-2026-10-17.csv",
+        "?? docs/cross-repository-scan-playbook-2026-10-16.md",
+        "?? docs/github-actions-pr-evidence-2026-10-17.json",
+        "?? docs/github-actions-pr-review-2026-10-17.md",
+        "?? docs/repository-branch-review-2026-10-17.md",
+        "?? docs/shift-left-industry-research-2026-10-16.md",
+        "?? docs/shift-left-value-strategy-2026-10-16.md",
+        "?? docs/templates/repository-shift-left-report.md",
+        "?? docs/worktree-review-inventory-2026-10-17.csv"
+      ]
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a05d415c283266d17",
+      "HEAD": "7ac45b219b0a2c30cec2d6b4bfb2cbb5518d2504",
+      "branch": "refs/heads/fix/scan-issue-foreign-target",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a061f44428e1b584f",
+      "HEAD": "8ab8efd232200021e7e9d7e5591fd700112ee2cb",
+      "branch": "refs/heads/w4-dep",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a0ae4bad15e422630",
+      "HEAD": "2e4c55b11303d28bc7c3c340576a0fa15a460a61",
+      "branch": "refs/heads/fix/block-windows",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a187a4581b8f41347",
+      "HEAD": "c66b92e30006c8519443c5569bf8d2ebf209b281",
+      "branch": "refs/heads/fix/requirements-ac-and-unreadable-issue",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a18c56e4ca2e5ebab",
+      "HEAD": "b74377094029808875abd68f35964202482c8e06",
+      "branch": "refs/heads/fix/scan-overflow",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a21db00316f7a2b38",
+      "HEAD": "ee18f873254ee38bf475a44b192cd74e4cc480b5",
+      "branch": "refs/heads/fix/structured-reduced-reasons",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a22a260b5512f34ff",
+      "HEAD": "de756c3cb2247bd9730b5b6022f76ca9d1872629",
+      "branch": "refs/heads/fix/scan-cursor-progress",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a26fb035a7472e73e",
+      "HEAD": "984340bc6890f9e779577b3af19ee8e901ca442b",
+      "branch": "refs/heads/w209",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a2895d9b59a6a0884",
+      "HEAD": "04d9103d3f3e9ef1fc61cd159ec381f9a1491b17",
+      "branch": "refs/heads/scan-state",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a2eaa6a0f0448877c",
+      "HEAD": "6c907924b50840b06392e24eded0a39d26dc1542",
+      "branch": "refs/heads/fix/scan-ledger",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a2f0626ecb79baf6c",
+      "HEAD": "d79437999c9cbee2b3325b8f3e6e8f2e85ebd94d",
+      "detached": true,
+      "status_error": null,
+      "status_count": 3,
+      "status_sample": [
+        "?? .audit-probe/audit-wave4-results.json",
+        "?? .audit-probe/audit-wave4.cjs",
+        "?? .audit-probe/run.log"
+      ]
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a30f13df4363ec8f9",
+      "HEAD": "2e9646e54ef0a150c698fd52fa8b0886d1e3551c",
+      "branch": "refs/heads/fix/gherkin-ctx",
+      "locked": "claude agent agent-a30f13df4363ec8f9 (pid 8384)",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a320e8ef5cacef9ef",
+      "HEAD": "dbdc98f2dcfe398d5ff17979915b35c52cd48f56",
+      "branch": "refs/heads/m201",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a36d20dad99f782cf",
+      "HEAD": "5f2b1904e80cb3ca28059d1ec147b44f943b949d",
+      "branch": "refs/heads/fix/funnel-deterministic-split",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a3ef6608e744b7854",
+      "HEAD": "84475bad28af4f452f70ab4bbc779851cc36c094",
+      "branch": "refs/heads/fix/deny-secret-diff",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a41a268488108ff77",
+      "HEAD": "89415c0b080642def0937061939c76c2831ae208",
+      "branch": "refs/heads/m206",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a45b4751eaa530f5d",
+      "HEAD": "b218d30bc9282ad437706447e6d54053f8ea72d8",
+      "branch": "refs/heads/fix/scan-unanswered",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a46f387ac62302489",
+      "HEAD": "40f8be196a519019cea022ee9a680f609899d323",
+      "branch": "refs/heads/m215",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a4f05b845c3c24067",
+      "HEAD": "3ce33466f11242cfb5c8f5160fbd7b9ea3ebe75c",
+      "branch": "refs/heads/fix/visibility-fullblocks",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a5b57609a427cb6ee",
+      "HEAD": "1dc4c6c16ce742c9198cce719a03c03e9961765e",
+      "branch": "refs/heads/fix/evidence-depth",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a5eff36ec95b68ecc",
+      "HEAD": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "detached": true,
+      "status_error": null,
+      "status_count": 2,
+      "status_sample": [
+        "?? .audit-probe/audit-supplement.cjs",
+        "?? .audit-probe/out.json"
+      ]
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a68ad592a0aee6add",
+      "HEAD": "461079b681d8a33a5d4835016b48018c1719801a",
+      "branch": "refs/heads/fix-scan-funnel-report",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a68d7ed7ea1ff5d5a",
+      "HEAD": "7e2af155da1adb50622b0dd4ded492cfe8b089d5",
+      "branch": "refs/heads/fix/trust-cut-and-invalid",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a69e5fee820393912",
+      "HEAD": "f6a524a7deb958a9a95f87c4d23e663aefccfe21",
+      "branch": "refs/heads/fix/scan-review-findings",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a7240fd2a4c83dd80",
+      "HEAD": "68f97a18a76becde708eb69e0209c710e2510662",
+      "branch": "refs/heads/fix/drift-rubric-leads",
+      "status_error": null,
+      "status_count": 1,
+      "status_sample": [
+        "M src/leads.js"
+      ]
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a72b7f7bbeeef3abe",
+      "HEAD": "a69f9356ec910d176a58c3fbf6e2c93235a2238a",
+      "branch": "refs/heads/fix/config-end-to-end",
+      "locked": "claude agent agent-a72b7f7bbeeef3abe (pid 8384)",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a7f5f6f2224021222",
+      "HEAD": "00fa3fa505cc495931e6594ff0df8b8610b75d61",
+      "branch": "refs/heads/m214",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a7f68d86f7b7c03bb",
+      "HEAD": "ca496f4ddba50c2f6ad683f050041341a30f3d0d",
+      "branch": "refs/heads/m217",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a83839b0495e1edaf",
+      "HEAD": "db165b64450805fa3c6852f96e2bd71fc29ce953",
+      "branch": "refs/heads/feat/summary-calm",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a855bf6d044471bcf",
+      "HEAD": "debb50a66d933bee825457a90e254d3775d5a0d6",
+      "branch": "refs/heads/w4-evidence",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a882cb57cf16b9238",
+      "HEAD": "5a75641e7b190aa22e266f952e5f00f14f4a24d7",
+      "branch": "refs/heads/fix/leads-removed-assertions",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a925d0e2b9fa181e0",
+      "HEAD": "23877aa7c4fd75b17d6e1fa06b98e43e23259999",
+      "branch": "refs/heads/wave3-rerun",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a93d545b01794f154",
+      "HEAD": "cd12c7781659208d1b333b1f24f1876b946af631",
+      "branch": "refs/heads/fix/llm-config-failure-red",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a954d9c464092b7f6",
+      "HEAD": "1a1612a7cd80c3a259f9600b4ac807dac0fb2fbb",
+      "branch": "refs/heads/fix/removed-lines",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a9909d02d8a8d089b",
+      "HEAD": "4698b7c4dbca595601b484f69c31a4139a7f2da4",
+      "branch": "refs/heads/work-197",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-a9bc9b1bbfded027b",
+      "HEAD": "8387bc47fb20ff85468f1e85f96ae52dbd2c3239",
+      "branch": "refs/heads/fix/removed-lead-precision",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-aa19f6f0fd9dcee91",
+      "HEAD": "88476d48fa1d69cf926ec7fc0e648222d791b98c",
+      "branch": "refs/heads/fix-pack-quote",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-aa93919c4bfe15b7e",
+      "HEAD": "81b74a9fce58f2592ef43921d8361825c7af9cc4",
+      "branch": "refs/heads/feat/scan-batches",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-ab0bfc29d5fbdc7c8",
+      "HEAD": "0c495a7b81fb4aeeae7534abe11191bbe4f8cf51",
+      "branch": "refs/heads/fix/requirement-identity",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-ab57a4de5f8efbf07",
+      "HEAD": "dabd1edc9f123b3470c1d502a5dbff094f6c747e",
+      "branch": "refs/heads/docs/audit-supplement-2026-10-16",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-acdb857c44570bfe1",
+      "HEAD": "a49015024bd3eb5e27cc0b0515d7a5e0dab86ae2",
+      "branch": "refs/heads/fix/scan-evidence-visibility",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-ad0844b45c7caf065",
+      "HEAD": "2aa9d0ad2bab47718ef8a7a0f1bda46279fa15b9",
+      "branch": "refs/heads/fix/collect-honest-skip",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-ad6a6dd2198c5d490",
+      "HEAD": "73d407cdec5b93930f4a33d1d3dbc9e85f7c8d63",
+      "branch": "refs/heads/fix/eval-metric-integrity",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-ae70e2ec0826252f0",
+      "HEAD": "bcc95784e3490ca332efa0a3a62531ebd472a1df",
+      "branch": "refs/heads/feat/d-literal-anchor",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-aeb5dcca893a90ec7",
+      "HEAD": "981b26b4e91b1d1afe3c501cf667b27334aad6dd",
+      "branch": "refs/heads/fix/eval-finding-identity",
+      "status_error": null,
+      "status_count": 1,
+      "status_sample": [
+        "?? full29.log"
+      ]
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard/.claude/worktrees/agent-afffd274d1add6bc6",
+      "HEAD": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+      "detached": true,
+      "status_error": null,
+      "status_count": 4,
+      "status_sample": [
+        "?? .audit-probe/audit-supplement-2.cjs",
+        "?? .audit-probe/dbg.cjs",
+        "?? .audit-probe/err.txt",
+        "?? .audit-probe/out.json"
+      ]
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard-wt/batch1",
+      "HEAD": "8921744df2ebbd467166b4b8e594e14b30968ebd",
+      "branch": "refs/heads/fix/rereview-batch1",
+      "status_error": "fatal: this operation must be run in a work tree",
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard-wt/scan",
+      "HEAD": "8921744df2ebbd467166b4b8e594e14b30968ebd",
+      "detached": true,
+      "status_error": "fatal: this operation must be run in a work tree",
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Files/Projects/SpecGuard-wt/state",
+      "HEAD": "3d591727f328026e53e2d6c211329177beda86b9",
+      "branch": "refs/heads/fix/scan-state-address",
+      "status_error": "fatal: this operation must be run in a work tree",
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Users/emily/.codex/worktrees/critical-shift-left-review/SpecGuard",
+      "HEAD": "9ae180b36c782d4583971d53bee1870373ecbdf7",
+      "branch": "refs/heads/codex/critical-shift-left-followup-2026-10-15",
+      "status_error": "fatal: this operation must be run in a work tree",
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Users/emily/.codex/worktrees/shift-left-rereview-2026-10-15/SpecGuard",
+      "HEAD": "6684ffd11bdeaae5e9eb8c442975cc2970bce2c0",
+      "branch": "refs/heads/codex/full-repo-shift-left-audit-2026-10-16",
+      "status_error": "fatal: this operation must be run in a work tree",
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/5d9bdf6a-5abb-4015-a20e-77d0f8543212/scratchpad/wt-summary",
+      "HEAD": "957b1541ca41563a8f3c7312b42b5eb5fe7dbf31",
+      "branch": "refs/heads/feat/summary-v2",
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/adopt",
+      "HEAD": "f4a9388d066a1a1369bbd05e0966e5c3d82c8fda",
+      "branch": "refs/heads/feat/adopt",
+      "status_error": null,
+      "status_count": 367,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D docs/competitors/copilot-instructions-discovery.md",
+        " D docs/competitors/copilot-review.md",
+        " D docs/competitors/head-to-head.md",
+        " D docs/competitors/landscape-verification.md",
+        " D docs/competitors/matt-pocock-review.md"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/crlffix",
+      "HEAD": "fc0e503519b0337d4a998265fd4939b06238e303",
+      "branch": "refs/heads/fix/crlf",
+      "status_error": null,
+      "status_count": 346,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/workflows/ci.yml",
+        " D eval/ab/README.md",
+        " D eval/bench/README.md",
+        " D eval/cases/js2/base/package.json",
+        " D eval/cases/js2/case.json",
+        " D eval/cases/js2/head/fetchWithRetry.js",
+        " D eval/cases/js2/head/fetchWithRetry.spec.js",
+        " D eval/cases/l1/case.json",
+        " D eval/cases/l1/head/app.py",
+        " D eval/cases/l1/head/pricing.py",
+        " D eval/cases/l1/head/test_quote_api.py",
+        " D eval/cases/p1/case.json"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/disc",
+      "HEAD": "8af3a8892e8c0a0953e5a9082523f2b10caec00b",
+      "branch": "refs/heads/fix/discovery",
+      "status_error": null,
+      "status_count": 363,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D docs/competitors/copilot-review.md",
+        " D docs/competitors/matt-pocock-review.md",
+        " D docs/competitors/real-bot-reviews.md",
+        " D eval/ab/README.md",
+        " D eval/bench/README.md"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/docs2",
+      "HEAD": "798e6e55bbf67c67776aaa7c3a599bc407e736e8",
+      "branch": "refs/heads/docs/design-update",
+      "status_error": null,
+      "status_count": 367,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D docs/competitors/copilot-instructions-discovery.md",
+        " D docs/competitors/copilot-review.md",
+        " D docs/competitors/head-to-head.md",
+        " D docs/competitors/landscape-verification.md",
+        " D docs/competitors/matt-pocock-review.md"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/gates",
+      "HEAD": "9e97df5b61852b675fe39747fb60a564745e7f7d",
+      "branch": "refs/heads/gates/g4-only",
+      "status_error": null,
+      "status_count": 363,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D docs/competitors/copilot-review.md",
+        " D docs/competitors/matt-pocock-review.md",
+        " D docs/competitors/real-bot-reviews.md",
+        " D eval/ab/README.md",
+        " D eval/bench/README.md"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/harden",
+      "HEAD": "e8d84d2fc4056bed13f329ad95834d0c6d636a17",
+      "branch": "refs/heads/hardening/security",
+      "status_error": null,
+      "status_count": 346,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D eval/bench/README.md",
+        " D eval/cases/js2/base/package.json",
+        " D eval/cases/js2/case.json",
+        " D eval/cases/js2/head/fetchWithRetry.js",
+        " D eval/cases/js2/head/fetchWithRetry.spec.js"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/lean",
+      "HEAD": "a9fa14377f955c43830a33d71bace8828aaf4094",
+      "branch": "refs/heads/lean/v1",
+      "status_error": null,
+      "status_count": 341,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D eval/bench/README.md",
+        " D eval/cases/js2/base/package.json",
+        " D eval/cases/js2/case.json",
+        " D eval/cases/js2/head/fetchWithRetry.js",
+        " D eval/cases/js2/head/fetchWithRetry.spec.js"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/met",
+      "HEAD": "78cde9b603638377c4f71301d22682b7684cb3eb",
+      "branch": "refs/heads/feat/metrics",
+      "status_error": null,
+      "status_count": 367,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D docs/competitors/copilot-instructions-discovery.md",
+        " D docs/competitors/copilot-review.md",
+        " D docs/competitors/head-to-head.md",
+        " D docs/competitors/landscape-verification.md",
+        " D docs/competitors/matt-pocock-review.md"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/pd",
+      "HEAD": "79defdbfa0c4067dd64eba5802c5b60a34238461",
+      "branch": "refs/heads/fix/pushdown",
+      "status_error": null,
+      "status_count": 367,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D docs/competitors/copilot-instructions-discovery.md",
+        " D docs/competitors/copilot-review.md",
+        " D docs/competitors/head-to-head.md",
+        " D docs/competitors/landscape-verification.md",
+        " D docs/competitors/matt-pocock-review.md"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/scratchpad/skillv2-base",
+      "HEAD": "d60f13f4665e985b76babfa2d5b9e23458d16459",
+      "detached": true,
+      "status_error": null,
+      "status_count": 0,
+      "status_sample": []
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/skillv2",
+      "HEAD": "0fd801881a7494bfaa37790dd3aa722c51e37618",
+      "branch": "refs/heads/skill/v2",
+      "status_error": null,
+      "status_count": 346,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D eval/bench/README.md",
+        " D eval/cases/js2/base/package.json",
+        " D eval/cases/js2/case.json",
+        " D eval/cases/js2/head/fetchWithRetry.js",
+        " D eval/cases/js2/head/fetchWithRetry.spec.js"
+      ]
+    },
+    {
+      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/stale",
+      "HEAD": "dfc92414c793c019300291b435ef93ed73fd1822",
+      "branch": "refs/heads/feat/stale-threads",
+      "status_error": null,
+      "status_count": 367,
+      "status_sample": [
+        "D .github/instructions/specguard.instructions.md",
+        " D .github/instructions/test-review.instructions.md",
+        " D .github/skills/test-review/SKILL.md",
+        " D .github/skills/test-review/references/ccr.md",
+        " D .github/skills/test-review/references/evidence.md",
+        " D .github/skills/test-review/references/output.md",
+        " D .github/skills/test-review/references/standards.md",
+        " D .github/skills/test-review/references/test-skeletons.md",
+        " D .github/skills/test-review/references/trace.md",
+        " D .github/workflows/ci.yml",
+        " D docs/competitors/copilot-instructions-discovery.md",
+        " D docs/competitors/copilot-review.md",
+        " D docs/competitors/head-to-head.md",
+        " D docs/competitors/landscape-verification.md",
+        " D docs/competitors/matt-pocock-review.md"
+      ]
+    }
+  ]
+}
