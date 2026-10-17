@@ -1535,3 +1535,19 @@ test('repair turn: prose twice fails after exactly two calls; a budget that cann
   await http.go();
   assert.equal(http.calls.length, 1);
 });
+
+test('single call: a reply with unknown usage is charged the call\'s worst case and the cost is flagged as estimated', async (t) => {
+  const h = harness(t, [good({ usage: {} })]);
+  await h.go();
+  const u = JSON.parse(h.file('usage.json'));
+  assert.ok(u.totalCostUsd > 0, 'was 0');
+  assert.equal(u.costEstimated, true);
+});
+
+test('unit rooms: each unit finding carries the part keys of the call that returned it', async (t) => {
+  const rows = ['aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 1/2 lines 1-1\n', 'aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 2/2 lines 2-2\n'].join('');
+  const s = roomRepo(t, {}, [['aaaaaaaa:1'], ['aaaaaaaa:2']], rows);
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.callKeys), [['aaaaaaaa:1'], ['aaaaaaaa:2']]);
+});
