@@ -1247,3 +1247,12 @@ test('an adapter exception (our own code throwing) is class internal; a 529 stay
   await o.go();
   assert.equal(o.file('engine-error').split('\n')[0], 'rate');
 });
+
+test('unit rooms: a failed unit call names the parts it held (keys, like droppedParts), so the publisher can fail those parts and not the whole unit', async (t) => {
+  const rows = ['aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 1/2 lines 1-1\n', 'aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 2/2 lines 2-2\n'].join('');
+  const s = roomRepo(t, {}, [['aaaaaaaa:1'], ['aaaaaaaa:2']], rows);
+  s.answers((req, ok) => (/part 2\/2/.test(req.body.messages[0].content) ? good({ content: [{ type: 'text', text: 'not json at all' }] }) : ok(req)));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  const parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.deepEqual(parts.failed.map((x) => [x.part, x.units, x.keys]), [['units', ['aaaaaaaa'], ['aaaaaaaa:2']]]);
+});
