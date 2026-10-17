@@ -1,0 +1,2850 @@
+{
+  "snapshot_utc": "2026-10-16T21:54:28Z",
+  "repository": "Mira190/SpecGuard",
+  "main_sha": "bcddf784f70d4f5b5a854d2c75789bd33f1591aa",
+  "remote_branch_heads": [
+    {
+      "name": "chore/pin-reusable",
+      "sha": "d075e245d9106af8e39020c1e167ace0d71b038d"
+    },
+    {
+      "name": "chore/reusable-name",
+      "sha": "603d30e0c2e3bc1c4b9599cbb6124cfad07578fc"
+    },
+    {
+      "name": "codex/critical-shift-left-followup-2026-10-15",
+      "sha": "9ae180b36c782d4583971d53bee1870373ecbdf7"
+    },
+    {
+      "name": "codex/critical-shift-left-review-2026-10-15",
+      "sha": "fe69027d13561803d77d4426b8950ce21239f74f"
+    },
+    {
+      "name": "codex/full-repo-shift-left-audit-2026-10-16",
+      "sha": "89415c0b080642def0937061939c76c2831ae208"
+    },
+    {
+      "name": "codex/shift-left-rereview-2026-10-16",
+      "sha": "60a3028e265b40f7c016129f87f2593d15c1f369"
+    },
+    {
+      "name": "docs/audit-supplement-2026-10-16",
+      "sha": "dabd1edc9f123b3470c1d502a5dbff094f6c747e"
+    },
+    {
+      "name": "docs/first-principles-review-2026-10-16",
+      "sha": "7bc1cb3f2103d8e387cd6a9232333b9d2ac23f99"
+    },
+    {
+      "name": "docs/handoff-2026-10-15",
+      "sha": "a446fd428a79839a19de44b873b28fefe0f046fd"
+    },
+    {
+      "name": "docs/kite-recall",
+      "sha": "5c9a07a994ee744a499ea3f66d7beac6dcfc67da"
+    },
+    {
+      "name": "docs/shift-left-afternoon",
+      "sha": "c668b7485e0cfea6b7989fdc31c63ff38c58eae0"
+    },
+    {
+      "name": "docs/shift-left-evening",
+      "sha": "3bf3b51a4ead5014fbef546b1459c7b77f400d9a"
+    },
+    {
+      "name": "experiment/trace-local-eval",
+      "sha": "8f69d4d9c0eab291b8b9e88f912ea05694ebcbb9"
+    },
+    {
+      "name": "feat/code-first-scan",
+      "sha": "9d2ae19e6696548544612734dd1064ccc49087f2"
+    },
+    {
+      "name": "feat/d-literal-anchor",
+      "sha": "bcc95784e3490ca332efa0a3a62531ebd472a1df"
+    },
+    {
+      "name": "feat/governing-criteria",
+      "sha": "65f5128e8c94af76a5d844fd4c77d283f08974b1"
+    },
+    {
+      "name": "feat/internal-access",
+      "sha": "1c0f5d721bcccf2dfdbee592644839822bb72489"
+    },
+    {
+      "name": "feat/llm-token",
+      "sha": "2f4e55f2d971f5cbe52fa01fc991ea2b117a964d"
+    },
+    {
+      "name": "feat/manual-run-quality",
+      "sha": "7dec78a37b61ae38a27cf48355d5709c1a47aba2"
+    },
+    {
+      "name": "feat/pat-first",
+      "sha": "def398a9f2860eb3c60b8ef720b387d50b11a090"
+    },
+    {
+      "name": "feat/scan-batches",
+      "sha": "81b74a9fce58f2592ef43921d8361825c7af9cc4"
+    },
+    {
+      "name": "feat/summary-calm",
+      "sha": "db165b64450805fa3c6852f96e2bd71fc29ce953"
+    },
+    {
+      "name": "feat/summary-clarity",
+      "sha": "5aaa9f787f7854734d5212197a0c6ca8fdd71160"
+    },
+    {
+      "name": "feat/summary-headings",
+      "sha": "30f2e389dfcd86117ac2f07ff665a67375363cb6"
+    },
+    {
+      "name": "feat/summary-v2",
+      "sha": "957b1541ca41563a8f3c7312b42b5eb5fe7dbf31"
+    },
+    {
+      "name": "feature/ccr-mode",
+      "sha": "92eaebba2fcf8a7acaf1a320720128e1f95c6c30"
+    },
+    {
+      "name": "feature/verified-review",
+      "sha": "58bc607c09a229f8e21e91e8e12c2fd004b8f167"
+    },
+    {
+      "name": "fix/align-any",
+      "sha": "1899c92837e4106e5c7b46e9c6eb339acada95e2"
+    },
+    {
+      "name": "fix/align-next",
+      "sha": "177834bfd5cae00528d15652709bd36881a5c3c4"
+    },
+    {
+      "name": "fix/assertion-evidence-tiers",
+      "sha": "40f8be196a519019cea022ee9a680f609899d323"
+    },
+    {
+      "name": "fix/auto-lead-low-confidence",
+      "sha": "226aa67e0a363019cd2d525bdc4e21c335a1892e"
+    },
+    {
+      "name": "fix/block-windows",
+      "sha": "2e4c55b11303d28bc7c3c340576a0fa15a460a61"
+    },
+    {
+      "name": "fix/collect-honest-skip",
+      "sha": "94a0810b7fe5abb988540172d79fb07af6086802"
+    },
+    {
+      "name": "fix/config-end-to-end",
+      "sha": "93ae1d42fec95d83b27be7a85be127810d1d3005"
+    },
+    {
+      "name": "fix/cut-test-guard",
+      "sha": "e2c599e636d90f998509cabed0ce6629f9961533"
+    },
+    {
+      "name": "fix/d-links",
+      "sha": "eafa4c2c8199e43fd1dae8d93e8557c015779ea3"
+    },
+    {
+      "name": "fix/delegation-scope",
+      "sha": "e84cf079f81d842f8c85781851427602ccd23cb3"
+    },
+    {
+      "name": "fix/deletion-hunk",
+      "sha": "95f4afe345f1d8b82b9a86c8a154624371278dab"
+    },
+    {
+      "name": "fix/deletion-touched",
+      "sha": "4b1667af645257b336e15a56943125e0893ca6e2"
+    },
+    {
+      "name": "fix/dependency-freshness-and-cover-scope",
+      "sha": "ca496f4ddba50c2f6ad683f050041341a30f3d0d"
+    },
+    {
+      "name": "fix/drift-rubric-leads",
+      "sha": "68f97a18a76becde708eb69e0209c710e2510662"
+    },
+    {
+      "name": "fix/eval-finding-identity",
+      "sha": "dd7f586a05f238f9870ae615298b90d7c03bf8ea"
+    },
+    {
+      "name": "fix/evidence-depth",
+      "sha": "1dc4c6c16ce742c9198cce719a03c03e9961765e"
+    },
+    {
+      "name": "fix/funnel-deterministic-split",
+      "sha": "5f2b1904e80cb3ca28059d1ec147b44f943b949d"
+    },
+    {
+      "name": "fix/gherkin-context-and-test-scope",
+      "sha": "2e9646e54ef0a150c698fd52fa8b0886d1e3551c"
+    },
+    {
+      "name": "fix/leads-removed-assertions",
+      "sha": "9cb3a7fde3ded00ee393a273adb261c8bd5e0882"
+    },
+    {
+      "name": "fix/left-side-repair",
+      "sha": "95dec9042e05c6c773cc5311fc75c5ae59bc2425"
+    },
+    {
+      "name": "fix/open-items",
+      "sha": "a0f8b243f1ebf98711e787621747b609ae74e2dc"
+    },
+    {
+      "name": "fix/pack-admission",
+      "sha": "a922bc6a6511c76d12872864c5d3061c6f1086d0"
+    },
+    {
+      "name": "fix/pack-and-quote-integrity",
+      "sha": "ec2c01b173017ff61a60a709b25094fbdcd654b0"
+    },
+    {
+      "name": "fix/removed-lead-precision",
+      "sha": "8387bc47fb20ff85468f1e85f96ae52dbd2c3239"
+    },
+    {
+      "name": "fix/removed-lines",
+      "sha": "1a1612a7cd80c3a259f9600b4ac807dac0fb2fbb"
+    },
+    {
+      "name": "fix/requirement-identity",
+      "sha": "45ebba3b8a2963c15777f18db224eb68eea32148"
+    },
+    {
+      "name": "fix/requirements-ac-and-unreadable-issue",
+      "sha": "c5bc1070c7ba973e398d10dd96658ffb1afae4d3"
+    },
+    {
+      "name": "fix/rerun-key-and-entry-points",
+      "sha": "00fa3fa505cc495931e6594ff0df8b8610b75d61"
+    },
+    {
+      "name": "fix/review-batch1",
+      "sha": "f4d3db962ae52909cdcafe42005aafdaea83548f"
+    },
+    {
+      "name": "fix/review-batch2",
+      "sha": "a44355ee75bde3ece0a1876a267d7a642cbccfc5"
+    },
+    {
+      "name": "fix/review-context-completeness-2026-10-15",
+      "sha": "5cac39cb9a3d7f0ae3815f67ce3415e670383ab3"
+    },
+    {
+      "name": "fix/run-integrity",
+      "sha": "b17702283970cdef450d1ca24f60ad4fc163ecd3"
+    },
+    {
+      "name": "fix/scan-cursor-progress",
+      "sha": "de756c3cb2247bd9730b5b6022f76ca9d1872629"
+    },
+    {
+      "name": "fix/scan-evidence-visibility",
+      "sha": "4a9d014bb0683d24d5269d9e9b788588974e738f"
+    },
+    {
+      "name": "fix/scan-funnel-report",
+      "sha": "461079b681d8a33a5d4835016b48018c1719801a"
+    },
+    {
+      "name": "fix/scan-ledger",
+      "sha": "6c907924b50840b06392e24eded0a39d26dc1542"
+    },
+    {
+      "name": "fix/scan-overflow",
+      "sha": "b74377094029808875abd68f35964202482c8e06"
+    },
+    {
+      "name": "fix/scan-part-size",
+      "sha": "ea5554dac9bc5e226ae2b994236c35ba6d10639f"
+    },
+    {
+      "name": "fix/scan-precision",
+      "sha": "1b77f74f73040efffe9e32ab3bc7621e4348c5d2"
+    },
+    {
+      "name": "fix/scan-review-findings",
+      "sha": "f6a524a7deb958a9a95f87c4d23e663aefccfe21"
+    },
+    {
+      "name": "fix/scan-state-honesty",
+      "sha": "c7e8ccd1f2dc3c4b416b3ee6093e40e77d544c8c"
+    },
+    {
+      "name": "fix/scan-unanswered",
+      "sha": "b218d30bc9282ad437706447e6d54053f8ea72d8"
+    },
+    {
+      "name": "fix/shift-left-improvements",
+      "sha": "be383dca986a5dc93765f46590be77e8a7041f9f"
+    },
+    {
+      "name": "fix/table-rows-kite",
+      "sha": "447b8aa120c73bcdf06057c9d747ad519e0998f8"
+    },
+    {
+      "name": "fix/trust-cut-and-invalid",
+      "sha": "dbdc98f2dcfe398d5ff17979915b35c52cd48f56"
+    },
+    {
+      "name": "fix/visibility-fullblocks",
+      "sha": "3ce33466f11242cfb5c8f5160fbd7b9ea3ebe75c"
+    },
+    {
+      "name": "hotfix/esm-target",
+      "sha": "c6d672cb5fb675adeb2da94e067ec30b60a7b202"
+    },
+    {
+      "name": "main",
+      "sha": "bcddf784f70d4f5b5a854d2c75789bd33f1591aa"
+    },
+    {
+      "name": "opt/round3",
+      "sha": "6686ea34b71c8d55e36da9ba31e66bad4203f54a"
+    },
+    {
+      "name": "opt/round4",
+      "sha": "158fac8b6507464097f40f3296193c628eda3976"
+    },
+    {
+      "name": "opt/round5",
+      "sha": "92f79b3bc5c8e356dad85406cfb79fd84e96f2c8"
+    },
+    {
+      "name": "opt/round6",
+      "sha": "bb880cfd47d9e14bff12895595df83597659c8a8"
+    },
+    {
+      "name": "opt/round7",
+      "sha": "e9648c33b3b4b63d775080b435907dace5d18ca8"
+    },
+    {
+      "name": "rename/test-gap-scan",
+      "sha": "744a18cd6a683b81a631f7e5c31f6f8dc60bd10f"
+    },
+    {
+      "name": "test/ccr-seeded",
+      "sha": "c58dd83cdc040072bda8d4281628606ef5592647"
+    },
+    {
+      "name": "test/seeded-gaps-v7",
+      "sha": "b00e58bf4a70ca1150dcda4cb72339b20fbbbed6"
+    }
+  ],
+  "scope": {
+    "latest_runs": 50,
+    "latest_prs_inspected": 22,
+    "latest_pr_range": "197..218",
+    "job_logs_read": 10,
+    "manual_run_jobs_additionally_inspected": [
+      38515041761,
+      38515025925
+    ]
+  },
+  "latest_runs": [
+    {
+      "id": 38900709026,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38900709026",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/funnel-deterministic-split",
+      "head_sha": "5f2b1904e80cb3ca28059d1ec147b44f943b949d",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T12:28:06Z",
+      "updated_at": "2026-10-16T12:29:05Z"
+    },
+    {
+      "id": 38898934737,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38898934737",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "bcddf784f70d4f5b5a854d2c75789bd33f1591aa",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T12:12:39Z",
+      "updated_at": "2026-10-16T12:13:44Z"
+    },
+    {
+      "id": 38898412110,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38898412110",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/assertion-evidence-tiers",
+      "head_sha": "40f8be196a519019cea022ee9a680f609899d323",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T12:08:01Z",
+      "updated_at": "2026-10-16T12:09:07Z"
+    },
+    {
+      "id": 38897728713,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38897728713",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "1cd951b74450f61dbcd242c586ad1bc98ab8845b",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T12:02:01Z",
+      "updated_at": "2026-10-16T12:03:05Z"
+    },
+    {
+      "id": 38897355440,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38897355440",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/dependency-freshness-and-cover-scope",
+      "head_sha": "ca496f4ddba50c2f6ad683f050041341a30f3d0d",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:58:44Z",
+      "updated_at": "2026-10-16T11:59:51Z"
+    },
+    {
+      "id": 38896823771,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38896823771",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "d8ade52103f35163bee79e86c2e0c0baf6263168",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:53:52Z",
+      "updated_at": "2026-10-16T11:54:54Z"
+    },
+    {
+      "id": 38896707739,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38896707739",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/assertion-evidence-tiers",
+      "head_sha": "debb50a66d933bee825457a90e254d3775d5a0d6",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:52:51Z",
+      "updated_at": "2026-10-16T11:53:57Z"
+    },
+    {
+      "id": 38896615479,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38896615479",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/dependency-freshness-and-cover-scope",
+      "head_sha": "8ab8efd232200021e7e9d7e5591fd700112ee2cb",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:52:02Z",
+      "updated_at": "2026-10-16T11:52:55Z"
+    },
+    {
+      "id": 38896552551,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38896552551",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/scan-funnel-report",
+      "head_sha": "461079b681d8a33a5d4835016b48018c1719801a",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:51:28Z",
+      "updated_at": "2026-10-16T11:52:20Z"
+    },
+    {
+      "id": 38896210918,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38896210918",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/dependency-freshness-and-cover-scope",
+      "head_sha": "6b0c692f8ab52e790618947a80a71562fc5b5cf0",
+      "status": "completed",
+      "conclusion": "failure",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:48:24Z",
+      "updated_at": "2026-10-16T11:49:31Z"
+    },
+    {
+      "id": 38896143978,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38896143978",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/assertion-evidence-tiers",
+      "head_sha": "85005d4e2bd54e618d6cca2d90a2df1e5c0a0316",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:47:47Z",
+      "updated_at": "2026-10-16T11:48:35Z"
+    },
+    {
+      "id": 38895954541,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38895954541",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/scan-funnel-report",
+      "head_sha": "d2d448ec056e30ad161032da16dbe1da7e1611e0",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:46:03Z",
+      "updated_at": "2026-10-16T11:46:52Z"
+    },
+    {
+      "id": 38895860994,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38895860994",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/assertion-evidence-tiers",
+      "head_sha": "b7a5f5452b11612df041571e3c8057094b2047a5",
+      "status": "completed",
+      "conclusion": "failure",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:45:13Z",
+      "updated_at": "2026-10-16T11:46:05Z"
+    },
+    {
+      "id": 38894163320,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38894163320",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "d79437999c9cbee2b3325b8f3e6e8f2e85ebd94d",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:29:57Z",
+      "updated_at": "2026-10-16T11:31:02Z"
+    },
+    {
+      "id": 38894040754,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38894040754",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/rerun-key-and-entry-points",
+      "head_sha": "00fa3fa505cc495931e6594ff0df8b8610b75d61",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:28:48Z",
+      "updated_at": "2026-10-16T11:29:35Z"
+    },
+    {
+      "id": 38893862379,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38893862379",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "beca9175e954584125bff46aa3bc847d91eaa11d",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:27:10Z",
+      "updated_at": "2026-10-16T11:28:04Z"
+    },
+    {
+      "id": 38893729587,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38893729587",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/pack-and-quote-integrity",
+      "head_sha": "ec2c01b173017ff61a60a709b25094fbdcd654b0",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:25:56Z",
+      "updated_at": "2026-10-16T11:27:00Z"
+    },
+    {
+      "id": 38893538782,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38893538782",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "250cd02df358c1fe210778a72237970a81ab9a28",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:24:13Z",
+      "updated_at": "2026-10-16T11:25:17Z"
+    },
+    {
+      "id": 38893384100,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38893384100",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/scan-state-honesty",
+      "head_sha": "c7e8ccd1f2dc3c4b416b3ee6093e40e77d544c8c",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:22:50Z",
+      "updated_at": "2026-10-16T11:23:56Z"
+    },
+    {
+      "id": 38892987375,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38892987375",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "e5d4697fad5ddf85d7f59686a50a000e5ef7a90f",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T11:19:16Z",
+      "updated_at": "2026-10-16T11:20:26Z"
+    },
+    {
+      "id": 38887995182,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887995182",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/rerun-key-and-entry-points",
+      "head_sha": "23877aa7c4fd75b17d6e1fa06b98e43e23259999",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:33:18Z",
+      "updated_at": "2026-10-16T10:34:21Z"
+    },
+    {
+      "id": 38887929549,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887929549",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/pack-and-quote-integrity",
+      "head_sha": "88476d48fa1d69cf926ec7fc0e648222d791b98c",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:32:42Z",
+      "updated_at": "2026-10-16T10:33:47Z"
+    },
+    {
+      "id": 38887809149,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887809149",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/scan-state-honesty",
+      "head_sha": "04d9103d3f3e9ef1fc61cd159ec381f9a1491b17",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:31:37Z",
+      "updated_at": "2026-10-16T10:32:45Z"
+    },
+    {
+      "id": 38887794995,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887794995",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/gherkin-context-and-test-scope",
+      "head_sha": "2e9646e54ef0a150c698fd52fa8b0886d1e3551c",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:31:29Z",
+      "updated_at": "2026-10-16T10:32:14Z"
+    },
+    {
+      "id": 38887721932,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887721932",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/rerun-key-and-entry-points",
+      "head_sha": "12eb7b4bc6bb5ce34917ce3cfc5b5af16376856e",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:30:49Z",
+      "updated_at": "2026-10-16T10:31:49Z"
+    },
+    {
+      "id": 38887582848,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887582848",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/gherkin-context-and-test-scope",
+      "head_sha": "6dace6bb24d3a13a6bd6ec6c26ced2e011f7519d",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:29:38Z",
+      "updated_at": "2026-10-16T10:30:44Z"
+    },
+    {
+      "id": 38887413601,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887413601",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/pack-and-quote-integrity",
+      "head_sha": "ff949d01b2c8df5a75dc2a8d1e174eb38fcea5a9",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:28:04Z",
+      "updated_at": "2026-10-16T10:28:52Z"
+    },
+    {
+      "id": 38887382986,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887382986",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/scan-state-honesty",
+      "head_sha": "b265a119cdfb94b8e9e95469615ced4cc170f84e",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:27:46Z",
+      "updated_at": "2026-10-16T10:28:52Z"
+    },
+    {
+      "id": 38887207013,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887207013",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "5814f9d0e1500738720edbfe0a6961dee965a82e",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:26:09Z",
+      "updated_at": "2026-10-16T10:27:07Z"
+    },
+    {
+      "id": 38887151397,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887151397",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/gherkin-context-and-test-scope",
+      "head_sha": "ebe1b9317c4c861d703d6d6527d1276190366bd5",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:25:38Z",
+      "updated_at": "2026-10-16T10:26:27Z"
+    },
+    {
+      "id": 38887070834,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887070834",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/scan-state-honesty",
+      "head_sha": "ce2f7adfe7957a1d3610330c97e3bee29f0310d0",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:24:54Z",
+      "updated_at": "2026-10-16T10:26:02Z"
+    },
+    {
+      "id": 38887002082,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38887002082",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "codex/full-repo-shift-left-audit-2026-10-16",
+      "head_sha": "89415c0b080642def0937061939c76c2831ae208",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:24:18Z",
+      "updated_at": "2026-10-16T10:25:49Z"
+    },
+    {
+      "id": 38886937890,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38886937890",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "codex/full-repo-shift-left-audit-2026-10-16",
+      "head_sha": "82cb84ae1d5167e0426f9dd7cb563165bc4191d3",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:23:44Z",
+      "updated_at": "2026-10-16T10:24:49Z"
+    },
+    {
+      "id": 38886924637,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38886924637",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "45edf88f09008da575e3ba21581504276dc1b2eb",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:23:36Z",
+      "updated_at": "2026-10-16T10:24:43Z"
+    },
+    {
+      "id": 38886747861,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38886747861",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/collect-honest-skip",
+      "head_sha": "94a0810b7fe5abb988540172d79fb07af6086802",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:22:02Z",
+      "updated_at": "2026-10-16T10:23:08Z"
+    },
+    {
+      "id": 38886152636,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38886152636",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "4cfafe64ae9d8d272a4a1c41a955cc955a96beec",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:16:38Z",
+      "updated_at": "2026-10-16T10:17:46Z"
+    },
+    {
+      "id": 38886001324,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38886001324",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/leads-removed-assertions",
+      "head_sha": "9cb3a7fde3ded00ee393a273adb261c8bd5e0882",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:15:18Z",
+      "updated_at": "2026-10-16T10:16:24Z"
+    },
+    {
+      "id": 38885958091,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38885958091",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "d18f4d8efa59ecd6d3a0195d2bff90f47ee1e639",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:14:56Z",
+      "updated_at": "2026-10-16T10:16:00Z"
+    },
+    {
+      "id": 38885801389,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38885801389",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/requirements-ac-and-unreadable-issue",
+      "head_sha": "c5bc1070c7ba973e398d10dd96658ffb1afae4d3",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:13:31Z",
+      "updated_at": "2026-10-16T10:14:40Z"
+    },
+    {
+      "id": 38885677691,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38885677691",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "e9ae31886b8da1cefece4a6e0040e23436bc25a0",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:12:26Z",
+      "updated_at": "2026-10-16T10:13:33Z"
+    },
+    {
+      "id": 38884798532,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38884798532",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/collect-honest-skip",
+      "head_sha": "2aa9d0ad2bab47718ef8a7a0f1bda46279fa15b9",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:04:38Z",
+      "updated_at": "2026-10-16T10:05:40Z"
+    },
+    {
+      "id": 38884620430,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38884620430",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/leads-removed-assertions",
+      "head_sha": "984340bc6890f9e779577b3af19ee8e901ca442b",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:03:04Z",
+      "updated_at": "2026-10-16T10:04:09Z"
+    },
+    {
+      "id": 38884567266,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38884567266",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/requirements-ac-and-unreadable-issue",
+      "head_sha": "d23956e12a10c5a732df8a3f4e013611dbabfc2f",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:02:36Z",
+      "updated_at": "2026-10-16T10:03:36Z"
+    },
+    {
+      "id": 38884329677,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38884329677",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/trust-cut-and-invalid",
+      "head_sha": "dbdc98f2dcfe398d5ff17979915b35c52cd48f56",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T10:00:32Z",
+      "updated_at": "2026-10-16T10:01:36Z"
+    },
+    {
+      "id": 38883771110,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38883771110",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "ccf12ee08f3bb331445b168b1a890a8f40831bbc",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T09:55:25Z",
+      "updated_at": "2026-10-16T09:56:23Z"
+    },
+    {
+      "id": 38883617965,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38883617965",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/requirement-identity",
+      "head_sha": "45ebba3b8a2963c15777f18db224eb68eea32148",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T09:54:05Z",
+      "updated_at": "2026-10-16T09:55:06Z"
+    },
+    {
+      "id": 38883449604,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38883449604",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "378ef90c10fa51da858acf4706d6ca0bf951aa20",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T09:52:39Z",
+      "updated_at": "2026-10-16T09:53:42Z"
+    },
+    {
+      "id": 38883295709,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38883295709",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/config-end-to-end",
+      "head_sha": "93ae1d42fec95d83b27be7a85be127810d1d3005",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T09:51:18Z",
+      "updated_at": "2026-10-16T09:52:20Z"
+    },
+    {
+      "id": 38883128318,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38883128318",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "branch": "main",
+      "head_sha": "6a7320cfe7b5058cc97dc004a0b8fb48ff260080",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T09:49:51Z",
+      "updated_at": "2026-10-16T09:51:01Z"
+    },
+    {
+      "id": 38882968722,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38882968722",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "branch": "fix/auto-lead-low-confidence",
+      "head_sha": "226aa67e0a363019cd2d525bdc4e21c335a1892e",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "created_at": "2026-10-16T09:48:24Z",
+      "updated_at": "2026-10-16T09:49:32Z"
+    }
+  ],
+  "recent_pr_summaries": [
+    {
+      "pr": 218,
+      "head": "5f2b1904e80cb3ca28059d1ec147b44f943b949d",
+      "title": "Scan funnel: split 'not reached' into the inventory cap and the time budget",
+      "merged_at": null,
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/218#issuecomment-6215503834",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 8 files, 202 KB; not included: src/audit-collect.test.js, src/audit-units.test.js\nSpecGuard build 57222a1e5971\n\n</details>\n",
+          "updated_at": "2026-10-16T12:28:23Z",
+          "created_at": "2026-10-16T12:28:23Z"
+        }
+      ]
+    },
+    {
+      "pr": 215,
+      "head": "40f8be196a519019cea022ee9a680f609899d323",
+      "title": "Evidence tiers: weak-only assertions do not cover; refuted counterexamples demoted (E1, E2)",
+      "merged_at": "2026-10-16T12:12:37Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/215#issuecomment-6214784943",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 7 files, 203 KB; not included: src/audit-action.test.js, src/audit-collect.test.js, src/audit-units.test.js\nSpecGuard build 4eb756aa99fc\n\n</details>\n",
+          "updated_at": "2026-10-16T12:08:24Z",
+          "created_at": "2026-10-16T11:45:31Z"
+        }
+      ]
+    },
+    {
+      "pr": 217,
+      "head": "ca496f4ddba50c2f6ad683f050041341a30f3d0d",
+      "title": "Track first-level imports in unit freshness; scope the cover guard to candidate tests",
+      "merged_at": "2026-10-16T12:01:59Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/217#issuecomment-6214838288",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 12 files, 224 KB; not included: src/audit-collect.test.js, src/audit-units.test.js\nSpecGuard build c1046544918f\n\n</details>\n",
+          "updated_at": "2026-10-16T11:59:06Z",
+          "created_at": "2026-10-16T11:48:43Z"
+        }
+      ]
+    },
+    {
+      "pr": 216,
+      "head": "461079b681d8a33a5d4835016b48018c1719801a",
+      "title": "Scan report: reconcile the unit funnel in one visible line",
+      "merged_at": "2026-10-16T11:53:50Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/216#issuecomment-6214800701",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 8 files, 182 KB; not included: src/audit-collect.test.js, src/audit-units.test.js\nSpecGuard build 3ed8be96742a\n\n</details>\n",
+          "updated_at": "2026-10-16T11:51:44Z",
+          "created_at": "2026-10-16T11:46:21Z"
+        }
+      ]
+    },
+    {
+      "pr": 199,
+      "head": "7bc1cb3f2103d8e387cd6a9232333b9d2ac23f99",
+      "title": "docs: first-principles review and unknown-unknown probes",
+      "merged_at": null,
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/199#issuecomment-6205647388",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:head=7bc1cb3f2103d8e387cd6a9232333b9d2ac23f99 -->\n<!-- specguard:req=fc0ddf2fd398 -->\n<!-- specguard:status=complete -->\n## SpecGuard\n\n**Nothing to review: every changed file is ignored (lockfiles, docs, generated files).**\n\n",
+          "updated_at": "2026-10-16T01:04:18Z",
+          "created_at": "2026-10-16T01:04:17Z"
+        }
+      ]
+    },
+    {
+      "pr": 214,
+      "head": "00fa3fa505cc495931e6594ff0df8b8610b75d61",
+      "title": "Fix rerun skip key, --fail-on-gaps exit code, reusable workflow inputs, example boundary (S13, U4, S12, U9)",
+      "merged_at": "2026-10-16T11:29:54Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/214#issuecomment-6213523088",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 16 files, 223 KB; not included: bin/pin-reusable.test.js, src/audit-code.test.js, src/audit-collect.test.js, src/audit-post.test.js\nSpecGuard build 0844539ec676\n\n</details>\n",
+          "updated_at": "2026-10-16T11:29:04Z",
+          "created_at": "2026-10-16T10:31:07Z"
+        }
+      ]
+    },
+    {
+      "pr": 213,
+      "head": "ec2c01b173017ff61a60a709b25094fbdcd654b0",
+      "title": "Pack and quote integrity (S3, S7, S8)",
+      "merged_at": "2026-10-16T11:27:07Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/213#issuecomment-6213474983",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 12 files, 195 KB; not included: src/post.test.js\nSpecGuard build f4d820cf728b\n\n</details>\n",
+          "updated_at": "2026-10-16T11:26:11Z",
+          "created_at": "2026-10-16T10:28:29Z"
+        }
+      ]
+    },
+    {
+      "pr": 211,
+      "head": "c7e8ccd1f2dc3c4b416b3ee6093e40e77d544c8c",
+      "title": "Scan state honesty: S4 unbounded evidence, S6 unanswered retry, S14 oversized sources",
+      "merged_at": "2026-10-16T11:24:10Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/211#issuecomment-6213420984",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 9 files, 166 KB; not included: src/claude-api.test.js, src/audit-post.test.js\nSpecGuard build 1a5d02e9fb34\n\n</details>\n",
+          "updated_at": "2026-10-16T11:23:14Z",
+          "created_at": "2026-10-16T10:25:09Z"
+        }
+      ]
+    },
+    {
+      "pr": 212,
+      "head": "2e9646e54ef0a150c698fd52fa8b0886d1e3551c",
+      "title": "Gherkin Background context for scenarios; exclusion-only test_paths",
+      "merged_at": "2026-10-16T11:19:13Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/212#issuecomment-6213433756",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 10 files, 200 KB; not included: src/claude-api.test.js, src/audit-post.test.js, src/post.test.js, src/prompt.test.js (+1 more)\nSpecGuard build ce0e2ffe945c\n\n</details>\n",
+          "updated_at": "2026-10-16T10:31:49Z",
+          "created_at": "2026-10-16T10:25:57Z"
+        }
+      ]
+    },
+    {
+      "pr": 206,
+      "head": "89415c0b080642def0937061939c76c2831ae208",
+      "title": "docs: full-repo shift-left audit and requirements/chunking research (2026-10-16)",
+      "merged_at": "2026-10-16T10:26:06Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/206#issuecomment-6212340326",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:head=89415c0b080642def0937061939c76c2831ae208 -->\n<!-- specguard:req=1934f276e851 -->\n<!-- specguard:issues=Mira190/SpecGuard#197@2026-10-16T09:49:48Z,Mira190/SpecGuard#198@2026-10-16T09:45:49Z,Mira190/SpecGuard#200@2026-10-16T09:52:37Z,Mira190/SpecGuard#201@2026-10-16T10:12:23Z,Mira190/SpecGuard#203@2026-10-16T09:55:23Z -->\n<!-- specguard:status=complete -->\n## SpecGuard\n\n**Nothing to review: every changed file is ignored (lockfiles, docs, generated files).**\n\n",
+          "updated_at": "2026-10-16T10:25:07Z",
+          "created_at": "2026-10-16T09:22:02Z"
+        }
+      ]
+    },
+    {
+      "pr": 207,
+      "head": "dabd1edc9f123b3470c1d502a5dbff094f6c747e",
+      "title": "docs: full-repo audit supplement — coverage record, 27 reproduced defects + 1 by design (2026-10-16)",
+      "merged_at": "2026-10-16T10:23:38Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/207#issuecomment-6212546041",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:head=dabd1edc9f123b3470c1d502a5dbff094f6c747e -->\n<!-- specguard:req=275667da59ad -->\n<!-- specguard:issues=Mira190/SpecGuard#206@2026-10-16T09:27:35Z,Mira190/SpecGuard#197@2026-10-16T09:22:49Z,Mira190/SpecGuard#205@2026-10-16T09:42:04Z -->\n<!-- specguard:status=complete -->\n## SpecGuard\n\n**Nothing to review: every changed file is ignored (lockfiles, docs, generated files).**\n\n",
+          "updated_at": "2026-10-16T09:43:31Z",
+          "created_at": "2026-10-16T09:33:13Z"
+        }
+      ]
+    },
+    {
+      "pr": 210,
+      "head": "94a0810b7fe5abb988540172d79fb07af6086802",
+      "title": "collect: honest skip, recorded ignores, focus-aware candidates (U1-U3)",
+      "merged_at": "2026-10-16T10:23:34Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/210#issuecomment-6212783229",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 9 files, 182 KB; not included: src/audit-collect.test.js, src/claude-api.test.js\nSpecGuard build 9e83d5119565\n\n</details>\n",
+          "updated_at": "2026-10-16T10:22:21Z",
+          "created_at": "2026-10-16T09:47:08Z"
+        }
+      ]
+    },
+    {
+      "pr": 209,
+      "head": "9cb3a7fde3ded00ee393a273adb261c8bd5e0882",
+      "title": "leads: removed assertions re-pin per hunk, exact-to-range is weakened, deleted test files give leads (U5, U6)",
+      "merged_at": "2026-10-16T10:16:35Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/209#issuecomment-6212747167",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 11 files, 128 KB\nSpecGuard build 979f71746b91\n\n</details>\n",
+          "updated_at": "2026-10-16T10:15:33Z",
+          "created_at": "2026-10-16T09:45:00Z"
+        }
+      ]
+    },
+    {
+      "pr": 208,
+      "head": "c5bc1070c7ba973e398d10dd96658ffb1afae4d3",
+      "title": "requirements: AC-1 style labels; unreadable closing issue is a gap (U13, S2)",
+      "merged_at": "2026-10-16T10:14:54Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/208#issuecomment-6212669416",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 9 files, 184 KB; not included: src/audit-post.test.js, src/audit-units.test.js, src/collect.test.js\nSpecGuard build d8b31ec8cc85\n\n</details>\n",
+          "updated_at": "2026-10-16T10:13:52Z",
+          "created_at": "2026-10-16T09:40:33Z"
+        }
+      ]
+    },
+    {
+      "pr": 201,
+      "head": "dbdc98f2dcfe398d5ff17979915b35c52cd48f56",
+      "title": "Cut context and invalid unit findings no longer read as clean (F19, F20)",
+      "merged_at": "2026-10-16T10:12:23Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/201#issuecomment-6212282012",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 9 files, 226 KB; not included: src/audit-action.test.js, src/audit-code.test.js, src/audit-collect.test.js, src/audit-units.test.js\nSpecGuard build 113291b4fc0a\n\n</details>\n",
+          "updated_at": "2026-10-16T10:00:52Z",
+          "created_at": "2026-10-16T09:18:57Z"
+        }
+      ]
+    },
+    {
+      "pr": 203,
+      "head": "45ebba3b8a2963c15777f18db224eb68eea32148",
+      "title": "audit: bind row source to its candidate (F21), version requirement text (F25)",
+      "merged_at": "2026-10-16T09:55:22Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/203#issuecomment-6212287077",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 8 files, 166 KB; not included: src/claude-api.test.js, src/audit-post.test.js\nSpecGuard build ae5f1285c587\n\n</details>\n",
+          "updated_at": "2026-10-16T09:54:26Z",
+          "created_at": "2026-10-16T09:19:12Z"
+        }
+      ]
+    },
+    {
+      "pr": 200,
+      "head": "93ae1d42fec95d83b27be7a85be127810d1d3005",
+      "title": "audit: test_paths authoritative at verify time; read prior state from scan_issue_repo (F26, F24)",
+      "merged_at": "2026-10-16T09:52:37Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/200#issuecomment-6212060723",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 13 files, 238 KB; not included: src/audit-post.test.js\nSpecGuard build 0dc0b7f9cbd5\n\n</details>\n",
+          "updated_at": "2026-10-16T09:51:39Z",
+          "created_at": "2026-10-16T09:07:02Z"
+        }
+      ]
+    },
+    {
+      "pr": 197,
+      "head": "226aa67e0a363019cd2d525bdc4e21c335a1892e",
+      "title": "Raise low-confidence finding when the diff confirms an assertion removal (handoff item 1)",
+      "merged_at": "2026-10-16T09:49:48Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/197#issuecomment-6202263053",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 11 files, 134 KB\nSpecGuard build c36c887d7a09\n\n</details>\n",
+          "updated_at": "2026-10-16T09:48:39Z",
+          "created_at": "2026-10-15T21:05:32Z"
+        }
+      ]
+    },
+    {
+      "pr": 204,
+      "head": "dd7f586a05f238f9870ae615298b90d7c03bf8ea",
+      "title": "eval: one finding is one match identity (F29)",
+      "merged_at": "2026-10-16T09:47:19Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/204#issuecomment-6212297188",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 12 files, 146 KB\nSpecGuard build 54df56dbd714\n\n</details>\n",
+          "updated_at": "2026-10-16T09:46:23Z",
+          "created_at": "2026-10-16T09:19:40Z"
+        }
+      ]
+    },
+    {
+      "pr": 198,
+      "head": "ea5554dac9bc5e226ae2b994236c35ba6d10639f",
+      "title": "Derive scan part size from the actual pack budget (handoff item 2)",
+      "merged_at": "2026-10-16T09:45:49Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/198#issuecomment-6202263329",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 14 files, 244 KB; not included: src/claude-api.test.js, src/audit-post.test.js\nSpecGuard build 54df56dbd714\n\n</details>\n",
+          "updated_at": "2026-10-16T09:44:56Z",
+          "created_at": "2026-10-15T21:05:33Z"
+        }
+      ]
+    },
+    {
+      "pr": 205,
+      "head": "4a9d014bb0683d24d5269d9e9b788588974e738f",
+      "title": "scan pack: unit-part test slices and single-call block evidence (F27, F28)",
+      "merged_at": "2026-10-16T09:44:32Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/205#issuecomment-6212304807",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 11 files, 244 KB\nSpecGuard build 54df56dbd714\n\n</details>\n",
+          "updated_at": "2026-10-16T09:42:04Z",
+          "created_at": "2026-10-16T09:20:07Z"
+        }
+      ]
+    },
+    {
+      "pr": 202,
+      "head": "de756c3cb2247bd9730b5b6022f76ca9d1872629",
+      "title": "scan: part cursor tied to version and layout; pack selection guarantees progress (F22, F23)",
+      "merged_at": "2026-10-16T09:40:22Z",
+      "summaries": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/202#issuecomment-6212282822",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:status=failed -->\n## SpecGuard\n\n**⚠️ Could not complete: The Anthropic API key was rejected (check the llm_token secret)**\n\n<details><summary>Details: run information</summary>\n\nRun: engine claude · claude-haiku-5-5 · context pack: 10 files, 160 KB\nSpecGuard build 283620387c44\n\n</details>\n",
+          "updated_at": "2026-10-16T09:34:55Z",
+          "created_at": "2026-10-16T09:19:00Z"
+        }
+      ]
+    }
+  ],
+  "selected_jobs": [
+    {
+      "run_id": 38900709026,
+      "jobs": [
+        {
+          "id": 116971973269,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38900709026,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        },
+        {
+          "id": 116971973683,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38900709026,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run_id": 38898934737,
+      "jobs": [
+        {
+          "id": 116966103621,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38898934737,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        },
+        {
+          "id": 116966105242,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 38898934737,
+          "logs_url": null,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "run_id": 38898412110,
+      "jobs": [
+        {
+          "id": 116964379407,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38898412110,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        },
+        {
+          "id": 116964379616,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38898412110,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run_id": 38897355440,
+      "jobs": [
+        {
+          "id": 116960930096,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38897355440,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        },
+        {
+          "id": 116960930272,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38897355440,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run_id": 38896210918,
+      "jobs": [
+        {
+          "id": 116957179466,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38896210918,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        },
+        {
+          "id": 116957180120,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 38896210918,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run_id": 38895860994,
+      "jobs": [
+        {
+          "id": 116956040137,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 38895860994,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        },
+        {
+          "id": 116956040386,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38895860994,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run_id": 38833078565,
+      "jobs": [
+        {
+          "id": 116755970919,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38833078565,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        },
+        {
+          "id": 116755971194,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38833078565,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run_id": 38515041761,
+      "jobs": [
+        {
+          "id": 115691828842,
+          "name": "resolve",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38515041761,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run spec=\"${SPEC//[[:space:]]/}\"; spec=\"${spec#http*://*/}\"; owner=\"${spec%%/*}\"; name=\"${spec#*/}\"; name=\"${name%%/*}\"; name=\"${name%.git}\"",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 4
+            },
+            {
+              "name": "Run actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5
+            },
+            {
+              "name": "Run [ \"$HAVE_PAT\" = true ] || [ \"$HAVE_APP\" = true ] || echo \"::notice::neither the App secrets nor SPECGUARD_PAT is set in the specguard environment: using the job token, which reads only this repository and public repositories\"",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Refuse a non-public target when this repository is public",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15
+            }
+          ]
+        },
+        {
+          "id": 115691893065,
+          "name": "review",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38515041761,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run spec=\"${SPEC//[[:space:]]/}\"; spec=\"${spec#http*://*/}\"; owner=\"${spec%%/*}\"; name=\"${spec#*/}\"; name=\"${name%%/*}\"; name=\"${name%.git}\"",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 2
+            },
+            {
+              "name": "Run actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 3
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Refuse a target that already has .specguard-src",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Run echo \"sha=$(git rev-parse HEAD)\" >> \"$GITHUB_OUTPUT\"",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Run echo '**One-off scan: gaps are unconfirmed; run it again with a scan issue (scan_issue: specguard or target) to confirm across runs.**' >> \"$GITHUB_STEP_SUMMARY\"",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Run ./.specguard-src",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Post Run ./.specguard-src",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run_id": 38515025925,
+      "jobs": [
+        {
+          "id": 115691779809,
+          "name": "resolve",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 38515025925,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run spec=\"${SPEC//[[:space:]]/}\"; spec=\"${spec#http*://*/}\"; owner=\"${spec%%/*}\"; name=\"${spec#*/}\"; name=\"${name%%/*}\"; name=\"${name%.git}\"",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 4
+            },
+            {
+              "name": "Run actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5
+            },
+            {
+              "name": "Run [ \"$HAVE_PAT\" = true ] || [ \"$HAVE_APP\" = true ] || echo \"::notice::neither the App secrets nor SPECGUARD_PAT is set in the specguard environment: using the job token, which reads only this repository and public repositories\"",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Refuse a non-public target when this repository is public",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 13
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15
+            }
+          ]
+        },
+        {
+          "id": 115691824278,
+          "name": "review",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 38515025925,
+          "logs_url": null,
+          "steps": null
+        }
+      ]
+    }
+  ],
+  "job_log_evidence": [
+    {
+      "job_id": 116971973269,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38900709026/job/116971973269",
+      "lines": [
+        "2026-10-16T12:28:20.7324991Z ##[warning]Claude review failed: The Anthropic API key was rejected (check the llm_token secret)",
+        "2026-10-16T12:28:20.7385781Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=317]"
+      ]
+    },
+    {
+      "job_id": 116971973683,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38900709026/job/116971973683",
+      "lines": [
+        "2026-10-16T12:28:19.9434823Z ok 30 - competitor prompt files never mention SpecGuard, coverage, alignment, obligation # SKIP",
+        "2026-10-16T12:28:19.9987106Z not ok 91 - k2 toolbox (wanted): the has() claim is not posted as a weak test # TODO no deterministic weak_test guard; model-dependent",
+        "2026-10-16T12:28:45.7164842Z ok 330 - replay: two real audits of the same commit confirm the gaps that agree (46 of the 80 blocks) # SKIP",
+        "2026-10-16T12:28:51.4175650Z ok 613 - specguard.yml: the pin is a commit of this repository (skipped when the object is absent from the clone) # SKIP pinned commit not in this clone (shallow checkout)",
+        "2026-10-16T12:29:01.3754539Z # tests 1187",
+        "2026-10-16T12:29:01.3754678Z # pass 1183",
+        "2026-10-16T12:29:01.3754749Z # fail 0",
+        "2026-10-16T12:29:01.3754893Z # skipped 3",
+        "2026-10-16T12:29:01.3754965Z # todo 1",
+        "2026-10-16T12:29:01.3755054Z # duration_ms 48872.268111"
+      ]
+    },
+    {
+      "job_id": 116966103621,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38898934737/job/116966103621",
+      "lines": [
+        "2026-10-16T12:12:54.8114301Z ok 30 - competitor prompt files never mention SpecGuard, coverage, alignment, obligation # SKIP",
+        "2026-10-16T12:12:54.8524893Z not ok 91 - k2 toolbox (wanted): the has() claim is not posted as a weak test # TODO no deterministic weak_test guard; model-dependent",
+        "2026-10-16T12:13:23.7532910Z ok 330 - replay: two real audits of the same commit confirm the gaps that agree (46 of the 80 blocks) # SKIP",
+        "2026-10-16T12:13:32.3950356Z ok 612 - specguard.yml: the pin is a commit of this repository (skipped when the object is absent from the clone) # SKIP pinned commit not in this clone (shallow checkout)",
+        "2026-10-16T12:13:40.3325068Z # tests 1186",
+        "2026-10-16T12:13:40.3325213Z # pass 1182",
+        "2026-10-16T12:13:40.3325280Z # fail 0",
+        "2026-10-16T12:13:40.3325447Z # skipped 3",
+        "2026-10-16T12:13:40.3325513Z # todo 1",
+        "2026-10-16T12:13:40.3325602Z # duration_ms 53961.521488"
+      ]
+    },
+    {
+      "job_id": 116964379407,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38898412110/job/116964379407",
+      "lines": [
+        "2026-10-16T12:08:22.2136896Z ##[warning]Claude review failed: The Anthropic API key was rejected (check the llm_token secret)",
+        "2026-10-16T12:08:22.2186274Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=333]"
+      ]
+    },
+    {
+      "job_id": 116960930096,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38897355440/job/116960930096",
+      "lines": [
+        "2026-10-16T11:59:04.0662253Z ##[warning]Claude review failed: The Anthropic API key was rejected (check the llm_token secret)",
+        "2026-10-16T11:59:04.0735683Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=463]"
+      ]
+    },
+    {
+      "job_id": 116957180120,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38896210918/job/116957180120",
+      "lines": [
+        "2026-10-16T11:48:38.9786141Z ok 30 - competitor prompt files never mention SpecGuard, coverage, alignment, obligation # SKIP",
+        "2026-10-16T11:48:39.0090369Z not ok 88 - k1 ownFile: a missing_test on a wrapper whose delegate (isDirectChild) is unit-tested is kept off the PR; the untested wrapper (titleOf -> labelOf) still posts",
+        "2026-10-16T11:48:39.0124136Z not ok 91 - k2 toolbox (wanted): the has() claim is not posted as a weak test # TODO no deterministic weak_test guard; model-dependent",
+        "2026-10-16T11:49:10.4024487Z not ok 248 - run: scan mode with the real guard downgrades a wrapper that delegates to a unit-tested helper, and keeps the untested one (recall control)",
+        "2026-10-16T11:49:10.4037887Z not ok 249 - run: TEST_PATHS reaches the scan post step: a file under a non-test directory then counts as a test that already holds the literal",
+        "2026-10-16T11:49:10.4454399Z ok 328 - replay: two real audits of the same commit confirm the gaps that agree (46 of the 80 blocks) # SKIP",
+        "2026-10-16T11:49:16.4304203Z ok 607 - specguard.yml: the pin is a commit of this repository (skipped when the object is absent from the clone) # SKIP pinned commit not in this clone (shallow checkout)",
+        "2026-10-16T11:49:28.3862919Z # tests 1178",
+        "2026-10-16T11:49:28.3863098Z # pass 1171",
+        "2026-10-16T11:49:28.3863191Z # fail 3",
+        "2026-10-16T11:49:28.3863374Z # skipped 3",
+        "2026-10-16T11:49:28.3863465Z # todo 1",
+        "2026-10-16T11:49:28.3863578Z # duration_ms 58564.743335"
+      ]
+    },
+    {
+      "job_id": 116956040137,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38895860994/job/116956040137",
+      "lines": [
+        "2026-10-16T11:45:26.8547857Z ok 30 - competitor prompt files never mention SpecGuard, coverage, alignment, obligation # SKIP",
+        "2026-10-16T11:45:26.8915892Z not ok 91 - k2 toolbox (wanted): the has() claim is not posted as a weak test # TODO no deterministic weak_test guard; model-dependent",
+        "2026-10-16T11:45:48.7608252Z not ok 238 - run: a scan with documents and units runs the document audit too; units without findings still count as reviewed",
+        "2026-10-16T11:45:48.7685314Z not ok 246 - run: blocks of a failed or dropped scan part are not rejected, not answered \"unknown\", not recorded as audited and listed as not audited; a failed unit call leaves the units unreviewed",
+        "2026-10-16T11:45:48.7841989Z ok 328 - replay: two real audits of the same commit confirm the gaps that agree (46 of the 80 blocks) # SKIP",
+        "2026-10-16T11:45:55.8618563Z ok 608 - specguard.yml: the pin is a commit of this repository (skipped when the object is absent from the clone) # SKIP pinned commit not in this clone (shallow checkout)",
+        "2026-10-16T11:46:02.1270825Z # tests 1179",
+        "2026-10-16T11:46:02.1270925Z # pass 1173",
+        "2026-10-16T11:46:02.1270971Z # fail 2",
+        "2026-10-16T11:46:02.1271072Z # skipped 3",
+        "2026-10-16T11:46:02.1271117Z # todo 1",
+        "2026-10-16T11:46:02.1271181Z # duration_ms 41704.753637"
+      ]
+    },
+    {
+      "job_id": 116755970919,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38833078565/job/116755970919",
+      "lines": [
+        "2026-10-16T01:04:14.6623463Z ##[end-action id=__self.credential;outcome=skipped;conclusion=skipped;duration_ms=0]"
+      ]
+    },
+    {
+      "job_id": 115691893065,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38515041761/job/115691893065",
+      "lines": [
+        "2026-10-14T05:08:51.0781915Z   scan_issue: false",
+        "2026-10-14T05:08:51.0782366Z   fail_on_error: true",
+        "2026-10-14T05:08:51.1188444Z   MODE: scan",
+        "2026-10-14T05:08:51.6221849Z SpecGuard unit test gap scan: 6 of 6 units, 0 design document(s), 1 not admitted",
+        "2026-10-14T05:08:52.3119042Z   MODE: scan",
+        "2026-10-14T05:08:57.2472903Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=4946]",
+        "2026-10-14T05:08:57.4082019Z   STATUS: complete",
+        "2026-10-14T05:08:57.4082370Z   REASON: "
+      ]
+    },
+    {
+      "job_id": 115691779809,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38515025925/job/115691779809",
+      "lines": [
+        "2026-10-14T05:08:25.4285973Z ##[error]cannot determine the visibility of the target repository (no answer); the token may not reach it"
+      ]
+    }
+  ],
+  "review_discussions": [
+    {
+      "pr": 215,
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/215#discussion_r4294337805",
+          "body": "**[P2] Make sure an all-weak row cannot cause a permanent re-run.** If an `unknown` coverage row makes the run `incomplete` (no head marker), then every PR whose tests use `assert.ok`/`toBeTruthy` would re-run the paid review on every push and never get a cached verdict. That is the same failure shape as an unreadable closing issue. As I read it, `unknown` rows give the \"❔ … could not be assessed\" headline with status `complete`. Please pin that with one assertion in your E1 PR test: `counts.complete === true` and the head marker is present, while the row is `unknown` and the headline is not a clean \"No unit test gaps found\".",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/215#discussion_r4294337811",
+          "body": "P3: `toHaveBeenCalledTimes(n)` pins a count, so it is a value check for interaction obligations (\"sends exactly one email\", \"retries 3 times\"). Classing it as weak downgrades a correctly covered obligation to `unknown`. That is a recall loss, though not noise. I'd move it to `value`, like `toHaveBeenCalledWith(args)`, and keep only bare `toHaveBeenCalled()` as weak. Add a control: `expect(send).toHaveBeenCalledTimes(1)` still covers.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/215#pullrequestreview-5547372588",
+          "body": "Review against probes E1/E2 (from the #199 review).\n\n- E1: one exported classifier shared by both modes. All-weak evidence downgrades the row to `unknown` with a stated reason, and no finding is posted, so there is no new noise. The controls (`toHaveBeenCalledWith`, mixed weak+value, `toThrow(/bad/)`) are the right boundary.\n- E2: refutation needs the same normalised EXPR and a different primitive literal in every claim. Different-input and ambiguous claims are untouched, and the refuted finding is gated so #197 cannot re-raise it.\n- All 4 tests fail on main. Repointing the two `audit-code` tests to a value assertion is correct, since they modelled exactly the E1 bug.\n\nOne P2 (verify no re-run loop) and one P3 (classification) inline.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/215#discussion_r4294373791",
+          "body": "Good catch, it was a real loop. The new validation note started with `Obligation O1 marked unknown:`, which the reduced-review counter reads as a citation failure. A 1-row PR then counted as 'degraded by validation', so the run became a reduced review, `complete:false`, with no head marker. Fixed in debb50a: the note now says `not covered:`, so it is not counted. New test 'E1 end to end' asserts `counts.complete === true`, the head marker is present, the headline is not 'No unit test gaps found', and the row is unknown. The test failed before the wording fix.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/215#discussion_r4294374016",
+          "body": "Agreed. `toHaveBeenCalledTimes` is removed from the weak list in debb50a; only bare `toHaveBeenCalled()` stays weak. Control added: `expect(send).toHaveBeenCalledTimes(1)` still covers.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/215#discussion_r4294380962",
+          "body": "P3, root cause: the fix avoids a regex in `reducedReasons` by changing a note's wording. Completeness now depends on message text. The next person who rewords this note (or adds a similar one) silently brings the loop back. Your end-to-end test would catch it, which is why this is not blocking. The durable fix is to classify by a structured field: push `{ kind: 'weak_evidence' }` (or set a flag on the row) and have `reducedReasons` count only explicit citation-failure kinds, not text matches. Worth a follow-up.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/215#pullrequestreview-5547426471",
+          "body": "Re-review of debb50a. Both points are resolved.\n- P2 was a real re-run loop. `reducedReasons` read the \"marked unknown\" note as a citation failure, so a one-obligation PR became reduced/incomplete with no head marker. The new end-to-end test pins `complete === true`, the marker present, the row `unknown`, and no clean verdict.\n- P3: `toHaveBeenCalledTimes(n)` is now value, with a control.\n\nLGTM; one P3 on the root cause inline. Merging after #216/#217 land.",
+          "user": "Mira190"
+        }
+      ]
+    },
+    {
+      "pr": 217,
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/217#discussion_r4294378210",
+          "body": "P3 follow-up: PR mode is tested by mocking the guard and checking its arguments. The probe's actual symptom (a real `missing_test` with `tests/logger.test.js` containing \"invalid amount\" → demoted, 0 inline) has no end-to-end inverse. One post-level test with the real guard (1 inline, no low-confidence note) would pin it.\n\nAlso worth a comment here: a file absent from `test-candidates.txt` passes `undefined` (an unscoped search). Since #210, such a file is in `candidates-cut.txt`, which already makes its `missing_test` low and the run incomplete, so this is safe today. But the safety depends on that ordering.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/217#discussion_r4294378224",
+          "body": "note: folding the tests' imports into `ver` means a change to a widely shared test helper makes every unit whose tests import it stale at once. That is correct, since their evidence changed, but it can flood the changed tier for several runs. The funnel line from #216 will show it. If it becomes a problem, rank stale-by-helper below stale-by-own-code within the tier. No change now.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/217#pullrequestreview-5547423001",
+          "body": "Review against probes E3/E5 (research F33 and the #199 metamorphic row \"add an unrelated test\").\n\n- E3: first-level relative imports of the unit and of its matched tests feed `ver`. The one-level ceiling is named, and `verLegacy` avoids a one-time stale burst (same pattern as #212's `tvLegacy`).\n- E5: the literal and class+method searches are scoped to the claim's own candidate tests, and an empty set means no demotion. Leaving the delegated-helper search unscoped is right: CI showed a delegate's test lives with the helper, not the wrapper.\n- All three tests fail on main.\n\nLGTM. One P3 and one note inline; merging.",
+          "user": "Mira190"
+        }
+      ]
+    },
+    {
+      "pr": 199,
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/199#discussion_r4294200402",
+          "body": "**Executing the counterexample is the expensive and risky way to get this.** Running target code from a PR inside the Action means executing untrusted code in a job that holds `GITHUB_TOKEN` and the LLM key. Even \"sandboxed opt-in\" needs a separate job with no secrets, which is a significant design change.\n\nA cheaper deterministic step covers much of the value first: **statically refute** counterexamples against strict assertions. If the cited assertion is exact equality against a literal (`assert.equal(f(1), 2)`, `toBe(2)`, `toEqual({...})`), a counterexample claiming that some *different* output still passes is false by construction, so demote it. If the assertion is a recognised weak matcher (`ok`, `toBeTruthy`, `toBeDefined`, `toHaveBeenCalled`, `toBeGreaterThan`), the weakness is demonstrated without the model, so it can be labelled *statically supported*. Only the rest stays *model-proposed*.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/199#discussion_r4294200416",
+          "body": "Fixed since this was written: #197 (a low-confidence nearby finding is raised with \"Removal confirmed by the diff\" instead of suppressing the lead; demotions from deterministic gates block the raise; nearness is measured in one coordinate system) and #209 (a removal is re-pinned only by same-text or same-hunk replacements). The three-case test you propose (none / irrelevant low / corroborating high) is covered by #197's tests. Please mark this resolved, or rebase the doc on main.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/199#discussion_r4294200428",
+          "body": "The mechanism is fixed (#198, #202, #205), but this line's one *remaining* ask is right and is cheap: the scan report should show the funnel as numbers (eligible / inventoried / selected / transmitted whole / verified / deferred-with-reason), so that \"complete\" can be checked by arithmetic. Today the pieces exist separately (rotation counts, unseen, limitations, not_inventoried) but nowhere add up. I'm treating this as a concrete follow-up.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/199#discussion_r4294200438",
+          "body": "Agreed, and this is the highest-value open item. Concretely, on main: an `expect(spy).toHaveBeenCalled()` or `assert.ok(result)` line is a real, executed assertion, so it passes `verifyEvidence`. It can then make a *value* obligation (\"returns 90 for 100\") `covered`. A minimal evidence tier: classify each cited assertion as value / interaction-only / truthiness. A value obligation backed only by interaction or truthiness assertions is at most `weak_test`, never `covered`. This needs no execution, only the matcher name the post-processor already parses. Being reproduced now.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/199#discussion_r4294200441",
+          "body": "This row has a deterministic instance worth testing without a model: the `covers` guard (`test-map.js` `makeCoverGuard`) demotes a `missing_test` to low when **any** test file contains the cited line's error message or literal. An unrelated test that happens to contain the same string (e.g. a log assertion) would make a real gap disappear from the counted findings. Being reproduced now.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/199#pullrequestreview-5547200106",
+          "body": "## First-principles review of this review (against main d794379)\n\nThe product invariant here (changed behaviour → falsifiable obligation → executable assertion → trustworthy conclusion, with unavailable context reported honestly) is the right lens. The metamorphic table is the most useful part of the doc.\n\nBut the doc's baseline (`ee1c158`) is stale. Since it was written, PRs #197–#214 landed fixes for the full-repo audit, its supplement and the chunking research. Re-checked against current main:\n\n| Finding | Status on main |\n|---|---|\n| P1 counterexample shape-only | **Still open.** `counterexampleOk` is unchanged. |\n| P1 weak model output suppresses deterministic lead | **Fixed.** #197 raises instead of suppressing; gated demotions are excluded; coordinates are LEFT/RIGHT-correct. #209 handles same-hunk vs moved assertions. |\n| P1 selected ≠ transmitted | **Fixed in substance.** #198/#202/#205: part size from the pack budget, whole-context budgeting, forced→unsure, per-block evidence cuts. A single funnel count (inventory → selected → transmitted → verified → deferred) is still missing from the report. |\n| P1 assertion presence ≠ protection | **Partly open.** Skipped, empty and declaration-only tests carry no coverage, but interaction-only (`toHaveBeenCalled*`) and truthiness assertions can still count as `covered` for a value obligation. |\n| P2 transitive invalidation | **Partly fixed.** Requirement text (`tv`, #203) and Gherkin Background (#212) are fixed. Test-helper and imported-dependency changes (research F33) are still open. |\n| P2 canaries / seeded vs real precision | Operational, not code. Still valid. |\n\nThe inline comments below are about the parts that would mislead if acted on as written. I'm reproducing the open items on main now and will fix the confirmed ones.",
+          "user": "Mira190"
+        }
+      ]
+    }
+  ],
+  "ci_workflow": {
+    "sha": "bcddf784f70d4f5b5a854d2c75789bd33f1591aa",
+    "path": ".github/workflows/ci.yml",
+    "content": "name: CI\non:\n  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review]\n  push: { branches: [main] }\nconcurrency: { group: \"ci-${{ github.event.pull_request.number || github.ref }}\", cancel-in-progress: true }\npermissions:\n  contents: read\n  pull-requests: write\n  issues: read\n  copilot-requests: write\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0\n        with: { persist-credentials: false }\n      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0\n        with: { node-version: 22 }\n      - run: node --test src/*.test.js bin/*.test.js eval/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null) # sandbox tests exist only on eval PRs; never run eval/cases fixtures\n      - run: diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md\n  dogfood:\n    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    steps:\n      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0\n        with: { fetch-depth: 0, persist-credentials: false }\n      - uses: ./\n        with:\n          review_timeout_minutes: \"15\"\n          ignore: eval/cases/\n          # content-based discovery would otherwise index this repo's own docs and eval fixtures; only eval-sandbox/** is a requirement source here\n          requirements_paths: |\n            !docs/**\n            !eval/**\n            !research/**\n            !README.md\n            !skills/**\n            !.github/**\n            !ccr/**\n          # TEMPORARY test credential and model (the Copilot quota is used up): remove `|| secrets.SPEC` and the model pin when done (model back to `${{ vars.SPECGUARD_EVAL_MODEL }}`)\n          llm_token: ${{ secrets.SPECGUARD_LLM_TOKEN || secrets.SPEC }}\n          model: haiku-5.5\n          max_comments: \"${{ vars.SPECGUARD_EVAL_MAX_COMMENTS || '10' }}\"\n      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1\n        if: ${{ !cancelled() }}\n        with: { name: specguard-ctx, path: .specguard-ctx/, retention-days: 7, include-hidden-files: true }\n"
+  },
+  "artifacts": [
+    {
+      "run_id": 38900709026,
+      "metadata": [
+        {
+          "id": 12045871582,
+          "name": "specguard-ctx-218-1",
+          "size_in_bytes": 32102,
+          "url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/12045871582",
+          "archive_download_url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/12045871582/zip",
+          "expired": false,
+          "created_at": "2026-10-16T12:28:24Z",
+          "expires_at": "2026-10-17T12:28:24Z",
+          "updated_at": "2026-10-16T12:28:24Z",
+          "digest": "sha256:66c9af80cdada0558054911b04f1d4b1c6de7e42b40f8a86d809e7b45c65d4a1",
+          "workflow_run": {
+            "id": 38900709026,
+            "repository_id": 1406447720,
+            "head_repository_id": 1406447720,
+            "head_branch": "fix/funnel-deterministic-split",
+            "head_sha": "5f2b1904e80cb3ca28059d1ec147b44f943b949d"
+          }
+        },
+        {
+          "id": 12045009773,
+          "name": "specguard-ctx",
+          "size_in_bytes": 32102,
+          "url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/12045009773",
+          "archive_download_url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/12045009773/zip",
+          "expired": false,
+          "created_at": "2026-10-16T12:28:25Z",
+          "expires_at": "2026-10-23T12:28:24Z",
+          "updated_at": "2026-10-16T12:28:25Z",
+          "digest": "sha256:2f5bef6838c2cb6911dbfb64296210f59fc0393378ff92c3a4033c843993158c",
+          "workflow_run": {
+            "id": 38900709026,
+            "repository_id": 1406447720,
+            "head_repository_id": 1406447720,
+            "head_branch": "fix/funnel-deterministic-split",
+            "head_sha": "5f2b1904e80cb3ca28059d1ec147b44f943b949d"
+          }
+        }
+      ]
+    },
+    {
+      "run_id": 38898934737,
+      "metadata": []
+    },
+    {
+      "run_id": 38898412110,
+      "metadata": [
+        {
+          "id": 12045390891,
+          "name": "specguard-ctx",
+          "size_in_bytes": 43013,
+          "url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/12045390891",
+          "archive_download_url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/12045390891/zip",
+          "expired": false,
+          "created_at": "2026-10-16T12:08:27Z",
+          "expires_at": "2026-10-23T12:08:26Z",
+          "updated_at": "2026-10-16T12:08:27Z",
+          "digest": "sha256:38adfd97c550101634ce1e3316f8e425d3d2b4af38ec547f407ee95317502787",
+          "workflow_run": {
+            "id": 38898412110,
+            "repository_id": 1406447720,
+            "head_repository_id": 1406447720,
+            "head_branch": "fix/assertion-evidence-tiers",
+            "head_sha": "40f8be196a519019cea022ee9a680f609899d323"
+          }
+        },
+        {
+          "id": 12045286140,
+          "name": "specguard-ctx-215-1",
+          "size_in_bytes": 43013,
+          "url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/12045286140",
+          "archive_download_url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/12045286140/zip",
+          "expired": false,
+          "created_at": "2026-10-16T12:08:26Z",
+          "expires_at": "2026-10-17T12:08:25Z",
+          "updated_at": "2026-10-16T12:08:26Z",
+          "digest": "sha256:a275790f6ae7a440d20a89c5b340493012bcd740213561b5aaef872a850abb20",
+          "workflow_run": {
+            "id": 38898412110,
+            "repository_id": 1406447720,
+            "head_repository_id": 1406447720,
+            "head_branch": "fix/assertion-evidence-tiers",
+            "head_sha": "40f8be196a519019cea022ee9a680f609899d323"
+          }
+        }
+      ]
+    },
+    {
+      "run_id": 38515041761,
+      "metadata": [
+        {
+          "id": 11871187746,
+          "name": "specguard-result-38515041761",
+          "size_in_bytes": 3971,
+          "url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/11871187746",
+          "archive_download_url": "https://api.github.com/repos/Mira190/SpecGuard/actions/artifacts/11871187746/zip",
+          "expired": false,
+          "created_at": "2026-10-14T05:08:58Z",
+          "expires_at": "2026-10-28T05:08:57Z",
+          "updated_at": "2026-10-14T05:08:58Z",
+          "digest": "sha256:4739c54f2610da46189fec77056365a3b9b194f6b874a3fb998aece4b95e272a",
+          "workflow_run": {
+            "id": 38515041761,
+            "repository_id": 1406447720,
+            "head_repository_id": 1406447720,
+            "head_branch": "main",
+            "head_sha": "eb324296c8ee5c17ddd5aa10846d4dd35de2d611"
+          }
+        }
+      ]
+    }
+  ],
+  "manual_dispatch_sample": [
+    {
+      "id": 38515041761,
+      "head_sha": "eb324296c8ee5c17ddd5aa10846d4dd35de2d611",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-14T05:08:27Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38515041761",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38515025925,
+      "head_sha": "eb324296c8ee5c17ddd5aa10846d4dd35de2d611",
+      "conclusion": "failure",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-14T05:08:16Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38515025925",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38501812606,
+      "head_sha": "a922bc6a6511c76d12872864c5d3061c6f1086d0",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-14T02:35:15Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38501812606",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38501802063,
+      "head_sha": "a922bc6a6511c76d12872864c5d3061c6f1086d0",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-14T02:35:09Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38501802063",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38501117484,
+      "head_sha": "32eaf9a182c24b717152b9c6daa9d0feb17aecaa",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-14T02:27:29Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38501117484",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38497410153,
+      "head_sha": "0b95081e5ccb8ed1f6d66ec1d7a2e44d09e6f407",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-14T01:45:18Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38497410153",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38493708028,
+      "head_sha": "921fb30d4b5209079a104b5608b8b9f66eaec0d9",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-14T01:04:29Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38493708028",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38485218302,
+      "head_sha": "59bfffb2a54da6d8c91af9979d7dd3ef58a7cdd5",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-13T23:35:55Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38485218302",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38483069732,
+      "head_sha": "59bfffb2a54da6d8c91af9979d7dd3ef58a7cdd5",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-13T23:15:04Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38483069732",
+      "path": ".github/workflows/specguard-run.yml"
+    },
+    {
+      "id": 38483064848,
+      "head_sha": "59bfffb2a54da6d8c91af9979d7dd3ef58a7cdd5",
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "created_at": "2026-10-13T23:15:01Z",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38483064848",
+      "path": ".github/workflows/specguard-run.yml"
+    }
+  ],
+  "manual_dispatch_total": 19,
+  "schedule_total": 0,
+  "open_prs": [
+    {
+      "number": 218,
+      "head_sha": "5f2b1904e80cb3ca28059d1ec147b44f943b949d",
+      "base": "main",
+      "url": "https://github.com/Mira190/SpecGuard/pull/218"
+    },
+    {
+      "number": 199,
+      "head_sha": "7bc1cb3f2103d8e387cd6a9232333b9d2ac23f99",
+      "base": "main",
+      "url": "https://github.com/Mira190/SpecGuard/pull/199"
+    },
+    {
+      "number": 9,
+      "head_sha": "c58dd83cdc040072bda8d4281628606ef5592647",
+      "base": "feature/ccr-mode",
+      "url": "https://github.com/Mira190/SpecGuard/pull/9"
+    },
+    {
+      "number": 8,
+      "head_sha": "b00e58bf4a70ca1150dcda4cb72339b20fbbbed6",
+      "base": "main",
+      "url": "https://github.com/Mira190/SpecGuard/pull/8"
+    }
+  ],
+  "remote_branch_count": 83,
+  "limitations": {
+    "raw_artifact_zip_contents_read": false,
+    "artifact_download_reference_obtained": true,
+    "local_artifact_download_failed": "DNS host resolution; no archive entries were read",
+    "model_requests_triggered": 0,
+    "workflows_triggered": 0,
+    "remote_writes": 0,
+    "run_success_is_not_model_review_success": true,
+    "pr_summary_is_latest_mutable_snapshot_not_per_attempt_history": true
+  }
+}
