@@ -1,0 +1,196 @@
+{
+  "snapshot": "cb235b11f4234570f6506d0a278d786554b287d3",
+  "created_at": "2026-10-17T01:46:08.927Z",
+  "method": "Immutable Git source loaded by CommonJS; deterministic synthetic observations; no external repository execution.",
+  "results": [
+    {
+      "id": "M1",
+      "name": "allow_summary credits a low-confidence item inside Details; the same item costs no FP on a clean case",
+      "positive": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "pass": true,
+        "text_misses": 0,
+        "clean_ok": true
+      },
+      "negative": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "pass": true,
+        "text_misses": 0,
+        "clean_ok": true
+      }
+    },
+    {
+      "id": "M2",
+      "name": "Semantic text failure remains a positional TP by the documented contract",
+      "result": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "pass": false,
+        "text_misses": 1,
+        "clean_ok": true
+      }
+    },
+    {
+      "id": "M3",
+      "name": "Documented pass contract permits FP in positive cases",
+      "result": {
+        "tp": 1,
+        "fp": 1,
+        "fn": 0,
+        "pass": true,
+        "text_misses": 0,
+        "clean_ok": true
+      },
+      "aggregate": {
+        "runs": 1,
+        "errors": 0,
+        "tp": 1,
+        "fp": 1,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 0.5,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 1,
+        "latency_max_s": 1,
+        "cost": "not measured",
+        "by_goal": {
+          "test_quality": {
+            "runs": 1,
+            "errors": 0,
+            "tp": 1,
+            "fp": 1,
+            "acceptable": 0,
+            "fn": 0,
+            "summary_only": 0,
+            "precision": 0.5,
+            "recall": 1,
+            "json_valid_rate": 1,
+            "degraded_rate": 0,
+            "pass_rate": 1,
+            "latency_median_s": 1,
+            "latency_max_s": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "M4",
+      "name": "Infrastructure failures excluded from metric denominator; one delivered of two intended positives still reports conditional recall 1",
+      "aggregate": {
+        "runs": 2,
+        "errors": 1,
+        "tp": 1,
+        "fp": 0,
+        "acceptable": 0,
+        "fn": 0,
+        "summary_only": 0,
+        "precision": 1,
+        "recall": 1,
+        "json_valid_rate": 1,
+        "degraded_rate": 0,
+        "pass_rate": 1,
+        "latency_median_s": 1,
+        "latency_max_s": 1,
+        "cost": "not measured",
+        "by_goal": {
+          "test_quality": {
+            "runs": 2,
+            "errors": 1,
+            "tp": 1,
+            "fp": 0,
+            "acceptable": 0,
+            "fn": 0,
+            "summary_only": 0,
+            "precision": 1,
+            "recall": 1,
+            "json_valid_rate": 1,
+            "degraded_rate": 0,
+            "pass_rate": 1,
+            "latency_median_s": 1,
+            "latency_max_s": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "M1b",
+      "name": "Same asymmetry using the actual product summary renderer and coverage row",
+      "positive": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "pass": true,
+        "text_misses": 0,
+        "clean_ok": true
+      },
+      "negative": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "pass": true,
+        "text_misses": 0,
+        "clean_ok": true
+      },
+      "summary": "<!-- specguard:summary -->\n<!-- specguard:status=complete -->\n## SpecGuard\n\n**❔ No gaps found; part of the review could not be assessed**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| no gaps | none found | none found | nothing to move down |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Low-confidence findings (1)**\n\n- **Missing test:** Boundary A [`a.js:10`](https://github.com/example/repo/blob/abc//a.js#L10) (low confidence) — Missing assertion\n\n**Coding standards and test layers**\n\n- Coding standards: no rule files found. None\n- Test layers: reviewed. None\n\n**Requirements source:** none\n\n**Obligations (1) · Unit evidence: 0/1 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Boundary A | from behaviour; a.js:10 — return boundary(value); | none | Missing test: No test |\n\n\n</details>\n"
+    },
+    {
+      "id": "M5",
+      "name": "Summary-only finding has valid fix-through counts but is absent from the blind-label candidate list",
+      "label_candidates": 0,
+      "fix_through_findings": 1,
+      "fix_through_A": 1
+    },
+    {
+      "id": "M6",
+      "name": "200 unrelated baseline paths demote an otherwise identical missing-test finding; an intentional conservative gate, not evidence of actual coverage",
+      "control": false,
+      "with_baselines": true,
+      "reason": "this repository tests through baselines (testdata/baselines, 200 files); check whether a baseline exercises it"
+    },
+    {
+      "id": "M7",
+      "name": "Known follow-up: comma-separated size literal retrieval",
+      "plain": [
+        "1048576",
+        "1024 * 1024",
+        "1024*1024",
+        "1 MiB",
+        "1 MB"
+      ],
+      "formatted": []
+    }
+  ],
+  "loaded_source_hashes": {
+    "eval/grade.js": "d68f27395321b05ffdd5a9e3a7c779d2ff3eb71cf4139d1233dc76b64d843249",
+    "eval/weekly-report.js": "9349781b81b70e4a3e28dd4bbef8c823cece4e154e175c0a2e70515bdae6b201",
+    "eval/aggregate-counts.js": "e32bca30976af9a4635c73f2b018c528858f7c0baa540515fd630518998d6dff",
+    "eval/assign.js": "37d7b7b1dbea010e8b9d5b72e8e72dde139f0ce1347aa203ad17f9d6c16adf7f",
+    "eval/label-export.js": "36d5ee9847aff2dca3ac5e89a734e0e7b7c91b463294df81319ced7a2845dc1f",
+    "eval/szz.js": "7bedef5068f7bd039ab12501fa7e7deee8453a0ae0fa8dcd410c62e1b291fd7d",
+    "src/post.js": "b14d2140add8769f5cc0b105157ffd8fa5888ef93d3347f445f9ba897d0b8372",
+    "src/checks.js": "ced268685a198655f0b71e598361a115794a3cb38cfb2e57120dba0e9ce928d6",
+    "src/preflight.js": "615e5489d96f4156b61255026370238ae0bdccc6112ce65c996af7d37a084759",
+    "src/limitations.js": "5413bf06c3980ec45c6a91d37457d6623976d1aebfdfb27e8dec65c147387ac0",
+    "src/standards-map.js": "40aaa82f017b8b5d9c7a2e7ce00d2a854e9fb361339baf60332cef831e0f4b26",
+    "src/focus.js": "eb6b49a2012d5e42519d36956ea6174dd16e40da4e9bd6fd45bfbfdd0aeddfbe",
+    "src/numdiff.js": "20f3bdccc2ef03d8b6d27a5650657ae222986c84e4b01c9e26056d0b1bc73a9d",
+    "src/prompt.js": "84ceb07e97f9e6cddca93c828c09490208eb58ba5481a75972a80ee95cd61630",
+    "src/audit-post.js": "c8763b0db6d949fc855dc15e94201f5ba7a20eb914815bcf6dbd5cd6b69761fe",
+    "src/test-map.js": "5f2b6cdd27c885917feab65d9c0a8a629f4c625ab1e5efc1823a138259066ed3",
+    "src/leads.js": "3dbd26320d085bdfe0c27941763713f7d6e2ec70bc81b9ec4885676ab2fc0255",
+    "src/trace.js": "1de3e3a5fecc3b5857a99a61799d4bb51049b87c17c9657cf9a44a9430848279",
+    "src/deny.js": "bfc2e2ed0aebd65b48066f2957f18e5ae491426daad91ce6dea47eda97ba4145",
+    "src/version.js": "ae70422a338d03cd26626a8da7c1cf2c27766c682564b0a264bcfcb5b35b8e75",
+    "src/audit-units.js": "22a14f1a41a330d40d03a2e977bedb3bb4db71300328266dcaa7dbdb3b199eef",
+    "src/pack-cap.js": "6fe45268b76784a6a56250980f10d39611d29864a4add76b732ae9e14c32b739"
+  }
+}
