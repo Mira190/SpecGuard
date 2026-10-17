@@ -1026,3 +1026,11 @@ test('collect: the log counts units and parts apart (a unit reviewed in parts is
   const out = spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_REF_NAME: '', GITHUB_EVENT_PATH: '', PACK_SPLIT: 'true', CONTEXT_PACK_BYTES: '250000', MAX_BUDGET_USD: '5', MODEL: 'claude-haiku-5-5' } }).stdout;
   assert.match(out, /scan: 2 of 2 units \(\d+ parts\), 0 design/);
 });
+
+test('run: parts_left is capped at 10 entries; the status counts the true total (parts_left_n) and the list says "+2 more"', async (t) => {
+  const rowOf = (k) => [U1, 'src/js/orders.js', 5, 'why', 'none', '-', 'abcdef12', `part ${k}/13 lines ${k}-${k}`].join('\t') + '\n';
+  const left = Array.from({ length: 10 }, (_, i) => ({ path: 'src/js/orders.js', part: i + 2, of: 13 }));
+  const d = await post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: { 'audit-units.txt': rowOf(1), 'audit-inventory.json': INV({ all_parts: true, parts_left: left, parts_left_n: 12 }), 'findings.json': result([uf()]) } });
+  assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: '12 unit parts not reached (budget)' });
+  assert.match(d.calls.summary, /\+2 more unit parts not reached \(budget\)/);
+});
