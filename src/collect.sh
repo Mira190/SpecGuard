@@ -293,7 +293,10 @@ const hunks = (() => {
     const git = (a, o = {}) => { try { return execFileSync('git', a, { encoding: 'utf8', maxBuffer: 1 << 28, env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' }, ...o }); } catch (e) { if (e.status === 1 && !e.stdout) return ''; throw e; } };
     const files = todo.slice(0, MAX_FILES), range = `${process.env.DIFF_BASE_SHA || process.env.BASE_SHA}...${process.env.HEAD_SHA}`;
     const diff = git(['-c', 'core.quotepath=false', 'diff', '-U0', '--no-color', '--no-ext-diff', '--no-renames', range, '--', ...files], { timeout: 20000 });
-    const r = hunkTests(files, diff, (toks) => git(['grep', '-o', '-w', '-F', '-I', ...toks.flatMap((x) => ['-e', x])], { timeout: 20000 }), testSet);
+    const r = hunkTests(files, diff, (toks) => { // only the test files are read (hunkTests drops other paths): over every tracked file a multi-pattern -w -F stalls on big data files; chunked for the Windows command-line limit
+      let o = ''; for (let i = 0; i < tests.length; i += 300) o += git(['grep', '-o', '-w', '-F', '-I', ...toks.flatMap((x) => ['-e', x]), '--', ...tests.slice(i, i + 300)], { timeout: 20000 });
+      return o;
+    }, testSet);
     for (const l of r.limits) fs.appendFileSync(path.join(ctx, 'collect-limits.txt'), l + '\n');
     return r.byFile;
   } catch (e) { fs.appendFileSync(path.join(ctx, 'collect-limits.txt'), `Could not read the diff for changed-hunk test matching (${e.code || (e.status != null ? 'exit ' + e.status : e.message)}); test candidates come from names only.\n`); return new Map(); }
