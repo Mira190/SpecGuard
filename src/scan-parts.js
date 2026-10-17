@@ -42,8 +42,8 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, evidencePack, 
   try {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-part-'));
     if (units.trim()) {
-      const { candidates, candidates_listed, ...m } = meta, rows = lines(units), idOf = (l) => l.split('\t')[0];
-      (rooms ? rooms.map((ids) => rows.filter((l) => ids.includes(idOf(l)))) : [rows]).filter((g) => g.length).forEach((g, k) => {
+      const { candidates, candidates_listed, ...m } = meta, rows = lines(units), idOf = (l) => l.split('\t')[0], keyOf = (l) => { const c = l.split('\t'), w = /^part (\d+)\//.exec(c[7] || ''); return w ? [c[0], `${c[0]}:${w[1]}`] : [c[0]]; }; // a stateless run names each part of a unit id:part in the room (audit-units.js partId)
+      (rooms ? rooms.map((ids) => rows.filter((l) => keyOf(l).some((k) => ids.includes(k)))) : [rows]).filter((g) => g.length).forEach((g, k) => {
         const prompt = render({ 'audit-units.txt': rooms ? g.join('\n') + '\n' : units }, { ...m, ...(m.units && { units: { ...m.units, picked: g.length } }) }), p = limit > 0 ? pack() : { text: '', note: '', notWhole: [] };
         (k ? later : out).push({ prompt, pack: p, units: g.map(idOf) });
       });
