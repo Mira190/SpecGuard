@@ -1313,3 +1313,17 @@ test('run: a stateless scan of a non-default ref names the ref in the summary an
   const ctl = await runPost(t, { ctxFiles: { 'findings.json': result([req()]) } });
   assert.doesNotMatch(ctl.calls.summary, /Scanned ref:/);
 });
+
+test('render: static leads (truthiness-only assertion, exported name no test references) are table rows with exact locations; 25 leads show 20 and a count; nothing enters the state', () => {
+  const leads = { weak: [{ path: 'test/keys.test.js', line: 12, text: "assert.ok(keyName('A'))" }], unref: [{ name: 'moveCrop', line: 28 }] };
+  const md = render({ data: clean(), code: codeOf([urow(A1, { leads })]), head: 'abc1234def' });
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.match(vis, /1 unit has static test signals to check/);
+  assert.match(vis, /\| test\/keys\.test\.js:12 \| asserts only truthiness \| `keys\.test\.js:12` asserts only truthiness \(`assert\.ok\(keyName\('A'\)\)`\) \|/);
+  assert.match(vis, /\| src\/00000a01\.js:28 \| no test references it \| `moveCrop` \(src\/00000a01\.js:28\) is exported and no test file references it \|/);
+  assert.doesNotMatch(audit.stateComment('h', clean(), null, { date: DATE, code: { picked: [A1], findings: [], carried: [] } }), /moveCrop|truthiness/);
+  const many = Array.from({ length: 25 }, (_, i) => urow(`0000c0${i.toString(16).padStart(2, '0')}`, { leads: { unref: [{ name: `fn${i}abc`, line: 3 }] } }));
+  const all = render({ data: clean(), code: codeOf(many) });
+  assert.match(all, /\| \+5 more \| \| not listed: only the top 20 leads by unit risk are shown \|/);
+  assert.equal((all.match(/ is exported and no test file references it/g) || []).length, 20);
+});
