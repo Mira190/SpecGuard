@@ -45,11 +45,11 @@ const RULE_GLOBS = [
 ];
 const LOCK_EXCLUDES = ['**/node_modules/**', '**/vendor/**', '**/dist/**', '**/*.lock', '**/package-lock.json', '**/pnpm-lock.yaml', '**/go.sum'];
 
-// collect.sh `match`: '*' crosses '/', a leading '**/' is optional, a trailing '/' means a directory prefix.
+// collect.sh `match`: '*' crosses '/', a leading '**/' is optional, a trailing '/' means a directory prefix, a leading '/' anchors at the repository root (`/docs/**` is not `eval-sandbox/x/docs/`).
 function matchGlob(file, pattern) {
-  const p = pattern.replace(/^\*\*\//, '');
+  const root = pattern.startsWith('/'), p = pattern.replace(/^\/|^\*\*\//, '');
   const re = p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*+/g, '.*').replace(/\?/g, '[^/]');
-  return new RegExp(`^(?:.*/)?${re}${p.endsWith('/') ? '.*' : ''}$`).test(file);
+  return new RegExp(`^${root ? '' : '(?:.*/)?'}${re}${p.endsWith('/') ? '.*' : ''}$`).test(file);
 }
 
 const CJK = String.raw`\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}`;

@@ -30,15 +30,21 @@ jobs:
         with:
           review_timeout_minutes: "15"
           ignore: eval/cases/
-          # content-based discovery would otherwise index this repo's own docs and eval fixtures; only eval-sandbox/** is a requirement source here
+          # content-based discovery would otherwise index this repo's own docs and eval fixtures; only eval-sandbox/** is a requirement source here. A leading / anchors at the repo root: a bare !docs/** would also exclude eval-sandbox/*/docs/.
           requirements_paths: |
-            !docs/**
-            !eval/**
-            !research/**
-            !README.md
-            !skills/**
-            !.github/**
-            !ccr/**
+            !/docs/**
+            !/eval/**
+            !/research/**
+            !/README.md
+            !/skills/**
+            !/.github/**
+            !/ccr/**
+          # eval PRs (branch eval/*): the candidate tests come from eval-sandbox only, not this repo's own src/bin/eval tests (a normal PR keeps them)
+          test_paths: |
+            ${{ startsWith(github.head_ref, 'eval/') && '!/src/
+            !/bin/
+            !/eval/
+            !/skills/' || '' }}
           # TEMPORARY test credential and model (the Copilot quota is used up): remove `|| secrets.SPEC` and the model pin when done (model back to `${{ vars.SPECGUARD_EVAL_MODEL }}`)
           llm_token: ${{ secrets.SPECGUARD_LLM_TOKEN || secrets.SPEC }}
           model: haiku-5.5
