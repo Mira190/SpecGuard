@@ -1207,3 +1207,16 @@ test('no "more candidates" limitation when nothing was cut (control)', (t) => {
   assert.ok(!('more' in c.requirement_to_code[0]));
   assert.deepEqual(c.limitations.filter((l) => /more code\/test/.test(l)), []);
 });
+
+test('sizeVariants: zero is not a size worth searching', () => {
+  assert.deepEqual([T.sizeVariants('0 MB'), T.sizeVariants('0')], [[], []]);
+});
+
+test('a .feature test is still a test candidate: the document skip does not apply to Gherkin files', (t) => {
+  const doc = 'AC-1: the gizmo quota resets after 30 days\n';
+  const feat = (v) => `Feature: gizmo\n  Scenario: quota\n    Given a gizmo quota that resets after ${v} days\n    Then it resets\n`;
+  const r = repo(t, { 'docs/spec.md': doc, 'test/gizmo.feature': feat(30), 'src/other.js': 'x\n' }, { 'docs/spec.md': doc.replace('30', '45') });
+  T.run({ cwd: r.dir, base: r.base, head: r.head, ctx: r.ctx, reqPaths: 'docs/spec.md\n!test/gizmo.feature' });
+  const row = cands(r).requirement_to_code[0];
+  assert.ok([...row.code, ...row.tests].some((w) => w.path === 'test/gizmo.feature'), JSON.stringify(row));
+});

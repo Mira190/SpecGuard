@@ -485,7 +485,7 @@ function sizeVariants(value) {
   const m = /^(\d+(?:\.\d+)?)\s*(bytes?|[KMG]i?B)?$/i.exec(String(value).trim().replace(/\s*\([^)]*\)$/, '')); // a quoted "1048576 (1MiB)" is one value
   if (!m) return [];
   const bytes = +m[1] * (m[2] ? SIZE[m[2].toLowerCase().replace(/s$/, '')] : 1);
-  if (!Number.isSafeInteger(bytes) || (!m[2] && (bytes < 1024 || bytes % 1024))) return [];
+  if (!Number.isSafeInteger(bytes) || bytes === 0 || (!m[2] && (bytes < 1024 || bytes % 1024))) return [];
   const out = [String(bytes)];
   for (let j = 1, u = 1024; j <= 3 && bytes % u === 0; j++, u *= 1024) {
     const k = bytes / u;
@@ -1013,7 +1013,7 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
     cand.limitations.push(`deferred: ${left.length} changed requirement item(s) were not traced to code in depth (only the ${MAX_DEEP} largest changes were): ${left.slice(0, 10).join(', ')}${left.length > 10 ? ', ...' : ''}.`);
   }
   if (deep.length) {
-    try { cand.requirement_to_code = requirementToCode({ cwd, head, entries: d.entries, crits: deep, dl, info, skip: (p) => d.docs.has(p) || d.ruled(p) || docLike(p) }); } catch (e) { lim('requirement-to-code ranking', e); }
+    try { cand.requirement_to_code = requirementToCode({ cwd, head, entries: d.entries, crits: deep, dl, info, skip: (p) => d.docs.has(p) || d.ruled(p) || (docLike(p) && !/\.feature$/i.test(p)) }); } catch (e) { lim('requirement-to-code ranking', e); }
     try { cand.occurrences = occurrences({ cwd, head, crits: deep.filter((c) => c.deltas.removed.length), maps, dl, info }); } catch (e) { lim('occurrence search', e); }
   }
   if (info.cut) cand.limitations.push(`The ${Math.round(budgetMs / 1000)} s time budget was reached; code, test and occurrence search for the changed requirements is partial.`);
