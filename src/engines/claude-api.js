@@ -136,15 +136,15 @@ function diffSeeds(diff, file) { // 0-based new-file line numbers of the added l
 const TEST_START = /^\s*(?:(?:test|it|describe)\b|def test_|func Test|@Test\b)/, indentOf = (l) => /^\s*/.exec(l)[0].length;
 // seeds: 0-based lines of the diff's own hunks, treated like a symbol hit. Priority when room runs out: seed windows, then symbol windows, then the head; position order within a class.
 // -> { text, note, complete, coveredTo } or null (no seed or symbol appears in the file, or no matching block fits). complete: every block that mentions a symbol or seed is shown. coveredTo: every seed on lines 1..coveredTo is shown.
-function slices(src, syms, room, seeds = []) {
+function slices(src, syms, room, seeds = [], [back, span] = [30, 80]) { // back, span: the most lines of a window above a hit and in all (a source file needs less than a test block)
   const n = src.length, re = syms.length ? new RegExp(`(?<![\\w$])(?:${syms.map((x) => x.replace(/\$/g, '\\$')).join('|')})(?![\\w$])`, 'g') : null, found = new Set(), wins = [], seedAt = new Set(seeds);
   let truncated = false;
   src.forEach((l, i) => {
     const m = re ? [...l.matchAll(re)].map((x) => x[0]) : [], sd = seedAt.has(i);
     if (!m.length && !sd) return;
     m.forEach((x) => found.add(x));
-    let s = i; while (s > 0 && i - s < 30 && !TEST_START.test(src[s])) s--; // up to the enclosing test start, or 30 lines
-    let e = i; while (e + 1 < n && e + 1 - s < 80 && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))) e++; // down to the next test at the same or lower indentation, 80 lines at most
+    let s = i; while (s > 0 && i - s < back && !TEST_START.test(src[s])) s--; // up to the enclosing test start, or 30 lines
+    let e = i; while (e + 1 < n && e + 1 - s < span && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))) e++; // down to the next test at the same or lower indentation, 80 lines at most
     if (!TEST_START.test(src[s]) || (e + 1 < n && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s])))) truncated = true;
     wins.push({ s, e, m: true, k: sd ? 2 : 1 });
   });
@@ -176,6 +176,7 @@ function slices(src, syms, room, seeds = []) {
 // A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
 // a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Partial or omitted files are returned in notWhole for per-block verification (separate from the unit pack-cut.txt). ponytail: no per-file fairness, first files first.
 const MIN_CAND = 8 * 1024; // a candidate test's least room, so one early candidate cannot starve the later ones (the total budget still bounds it)
+const SHARE_AT = 0.5, SHARE_X = 2; // review files together over SHARE_AT of the pack: each is given SHARE_X times a fair share of what is left (its hunks need more than its tests)
 const WIN = 40, HEAD = 15, UNIT_SYMS = 150; // UNIT_SYMS: names of a unit part searched for in its tests
 function windowPack(root, locs, limit) {
   const cap = fileCap(limit), parts = [], notWhole = [];
@@ -236,7 +237,7 @@ function contextPack(ctx, root, limit) {
   const parts = [], seen = new Set(), whole = new Set(), omitted = [], partial = [], shown = new Map(); // partial: cut at the budget; shown: path -> lines shown, for a file cut from the top (post.js checks the changed lines against it)
   let used = 0, files = 0;
   const cap = fileCap(limit);
-  const addFile = (p, num, quiet, syms, top = limit, part = null, incomplete = false, seeds = null) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
+  const addFile = (p, num, quiet, syms, top = limit, part = null, incomplete = false, seeds = null, win) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
     const rel = path.posix.normalize(p.replace(/\\/g, '/'));
     if (seen.has(rel)) return;
     seen.add(rel);
@@ -254,7 +255,7 @@ function contextPack(ctx, root, limit) {
       return;
     }
     const full = num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text;
-    const over = Buffer.byteLength(full) > room, sl = over && ((syms && syms.length) || (seeds && seeds.length)) ? slices(src, syms || [], room, seeds || []) : null;
+    const over = Buffer.byteLength(full) > room, sl = over && ((syms && syms.length) || (seeds && seeds.length)) ? slices(src, syms || [], room, seeds || [], win) : null;
     if (over && cand && !sl) return void omitted.push(rel); // a candidate test over its room with no hit that fits: unseen, never a head that only looks like evidence
     if (sl) {
       if (seeds) { partial.push(rel); shown.set(rel, sl.coveredTo); } else // pack-cut.txt: not listed when every test that mentions the changed symbols is shown (its relevant tests were visible); listed when some matching block did not fit
@@ -282,7 +283,9 @@ function contextPack(ctx, root, limit) {
   if (units.size) for (const p of review) addFile(p, true, false, null, limit, unitPart.get(p)); // scan: every unit file first, so no test starves a later unit (addFile skips a file already added)
   const symsOf = new Map(review.map((p) => [p, units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads)])), testsOf = (p) => (units.size ? packTests.get(p) || units.get(p) : cands.get(p)) || [], shared = new Map(), hunk = units.size ? new Map() : require('../test-map.js').hunkTokens(rd('diff.patch')); // hunk: file -> identifiers on its changed lines (the collector ranks candidate tests by them); shared: a test -> the union of the symbols of every review file that lists it (it is added once, for the first of them, so it must be sliced for all)
   for (const p of review) for (const t of testsOf(p)) { const u = shared.get(t) || Object.assign(new Set(), { capped: false }); symsOf.get(p).forEach((n) => u.add(n)); (hunk.get(path.posix.normalize(p.replace(/\\/g, '/'))) || []).forEach((n) => u.add(n)); u.capped ||= !!symsOf.get(p).capped; shared.set(t, u); }
-  review.forEach((p, i) => { addFile(p, true, false, units.size ? null : symsOf.get(p), limit, unitPart.get(p), false, units.size ? null : diffSeeds(diff, path.posix.normalize(p.replace(/\\/g, '/')))); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t), own = !units.size && review.includes(t); addFile(t, true, false, own ? symsOf.get(t) : [...u], top, null, !own && u.capped, own ? diffSeeds(diff, path.posix.normalize(t.replace(/\\/g, '/'))) : null); } }); // own: a changed test file reached first as a candidate is added as the review loop adds it (its own symbols and diff hunks), else its hunks would never be seeded // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+  const tight = !units.size && review.reduce((n, p) => n + Math.min(cap, Buffer.byteLength(packRead(root, p) || '')), 0) > limit * SHARE_AT; // the review files together would fill the pack: each gets a fair share too (shown as slices around its hunks when over it), else the early ones starve the later files and their tests
+  review.forEach((p, i) => { const sd = units.size ? null : diffSeeds(diff, path.posix.normalize(p.replace(/\\/g, '/'))), share = tight && sd && sd.length, hunks = share && !TESTISH.test(p); // share: a file with changed lines is cut to its share; hunks: a source file is then shown as its hunks with a little context (a test file keeps its symbol windows)
+    addFile(p, true, false, units.size ? null : hunks ? [] : symsOf.get(p), share ? used + SHARE_X * (limit - used) / (review.length - i) : limit, unitPart.get(p), false, sd, hunks ? [10, 30] : undefined); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t), own = !units.size && review.includes(t); addFile(t, true, false, own ? symsOf.get(t) : [...u], own ? Math.max(top, used + MIN_CAND) : top, null, !own && u.capped, own ? diffSeeds(diff, path.posix.normalize(t.replace(/\\/g, '/'))) : null); } }); // own: a changed test file reached first as a candidate is added as the review loop adds it (its own symbols and diff hunks), else its hunks would never be seeded // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
   for (const [p, keep] of packTests) for (const t of units.get(p) || []) if (!keep.includes(t) && !partial.includes(t)) partial.push(t); // counted out by the collector: not shown, so listed as cut
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
