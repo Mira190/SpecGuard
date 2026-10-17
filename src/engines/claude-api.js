@@ -34,6 +34,9 @@ const worstCase = (model, sysBytes, userBytes, maxTokens) => {
   return { tokens: s + u, usd: (s * 1.25 * p.in + u * p.in + maxTokens * p.out) / 1e6 };
 };
 
+// Scan: how many full-pack unit calls max_budget_usd covers by the worst case above (1-8). The collector asks before it picks the units (the system prompt is about 15 KB, the rest of a unit part's prompt well under 32 KB).
+const unitCalls = ({ model, budget, maxTokens, packBytes }) => { const one = worstCase(model, 16 * 1024, packBytes + 32 * 1024, maxTokens).usd; return Math.max(1, Math.min(8, Math.floor(budget / one) || 1)); };
+
 // Structured outputs accept a subset of JSON Schema: every object closed (additionalProperties:false), no string/number bounds, no uniqueItems/maxItems, no if/then/else, minItems only 0 or 1.
 // post.js validates the answer against the full schema anyway.
 const DROP = new Set(['$schema', 'minLength', 'maxLength', 'minimum', 'maximum', 'multipleOf', 'uniqueItems', 'maxItems', 'if', 'then', 'else']);
@@ -273,11 +276,13 @@ function contextPack(ctx, root, limit) {
   const cands = parseCandidates(rd('test-candidates.txt'));
   const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch'), leads = rd('leads.txt');
   const unitSymbols = (p) => { const out = new Set(), part = unitPart.get(p); let capped = false; const add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n)) { if (out.size < UNIT_SYMS) out.add(n); else if (!out.has(n)) capped = true; } }; for (const l of (packRead(root, p) || '').split('\n').slice(part ? part.a - 1 : 0, part ? part.b : undefined)) symbolsIn(l, add); const syms = [...out]; syms.capped = capped; return syms; }; // names the unit defines in this run's part (all of the file when it is not in parts): a big test file is shown as the tests that mention them; capped: more names than UNIT_SYMS, so the file is listed as cut
+  const packTests = new Map(list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1] && u[8]).map((u) => [u[1], u[8] === '-' ? [] : u[8].split(', ')])); // a unit with more tests than its share of the pack: the collector's list of the ones to load (audit-units.js room.trim)
   const unitPart = new Map(list('audit-units.txt').map((l) => l.split('\t')).map((u) => [u[1], /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(u[7] || '')]).filter((x) => x[1]).map(([p, w]) => [p, { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] }]));
   if (units.size) for (const p of review) addFile(p, true, false, null, limit, unitPart.get(p)); // scan: every unit file first, so no test starves a later unit (addFile skips a file already added)
-  const symsOf = new Map(review.map((p) => [p, units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads)])), testsOf = (p) => (units.size ? units.get(p) : cands.get(p)) || [], shared = new Map(); // shared: a test -> the union of the symbols of every review file that lists it (it is added once, for the first of them, so it must be sliced for all)
+  const symsOf = new Map(review.map((p) => [p, units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads)])), testsOf = (p) => (units.size ? packTests.get(p) || units.get(p) : cands.get(p)) || [], shared = new Map(); // shared: a test -> the union of the symbols of every review file that lists it (it is added once, for the first of them, so it must be sliced for all)
   for (const p of review) for (const t of testsOf(p)) { const u = shared.get(t) || Object.assign(new Set(), { capped: false }); symsOf.get(p).forEach((n) => u.add(n)); u.capped ||= !!symsOf.get(p).capped; shared.set(t, u); }
   review.forEach((p, i) => { addFile(p, true, false, units.size ? null : symsOf.get(p), limit, unitPart.get(p), false, units.size ? null : diffSeeds(diff, path.posix.normalize(p.replace(/\\/g, '/')))); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t); addFile(t, true, false, [...u], top, null, u.capped); } }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+  for (const [p, keep] of packTests) for (const t of units.get(p) || []) if (!keep.includes(t) && !partial.includes(t)) partial.push(t); // counted out by the collector: not shown, so listed as cut
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
     const named = [], crit = criteriaText(rd('requirements-status.json'));
@@ -424,13 +429,13 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
         return { ...p, system: s, user: x, tokens, usd: worstCase(model, Buffer.byteLength(s), Buffer.byteLength(x), tokens).usd };
       };
       const plans = split.parts.map(priced);
-      const total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd, dropped = [];
-      while (plans.length > 1 && total() > budget) dropped.unshift(...plans.pop().cids || []); // the budget is hard: trailing block batches go first (candidate order = rotation priority), the first part (units) last
+      const total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd, dropped = [], droppedUnits = [];
+      while (plans.length > 1 && total() > budget) { const q = plans.pop(); dropped.unshift(...q.cids || []); droppedUnits.unshift(...q.units || []); } // the budget is hard: the last part goes first (the extra unit parts, then the block batches in reverse candidate order = rotation priority), the first part last; dropped units are not reached this run, they stay due
       if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
       let first = null, ok = 0, splits = 0, cfg = null; // cfg: the first part that failed on a configuration class
       const blockCuts = {};
-      const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids && { blocks: cids }), reason });
+      const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids ? { blocks: cids } : { units: p.units }), reason });
       while (queue.length) {
         const p = queue.shift();
         const r = await call(p.system, p.user, p.tokens);
@@ -468,9 +473,10 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       for (const p of queue) fail(p, 'not started: the review timed out'); // a timeout stops the run: the parts not started are not audited either
       if (!ok) return failEnd(first); // nothing usable at all: the run fails as one call would
       w('findings.json', JSON.stringify(merged));
-      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
-      if (!failed.some((f) => f.part === 'units')) w('pack-cut.txt', split.packCut.map((x) => `${x}\n`).join('')); // the unit part's pack (what the unit findings may rely on)
-      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}`);
+      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(droppedUnits.length && { droppedUnits }), ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
+      const seenParts = plans.filter((p) => p.units && !failed.some((x) => x.part === 'units' && x.units === p.units)); // the unit parts that answered: their packs are what the unit findings may rely on
+      if (seenParts.length) w('pack-cut.txt', [...new Set(seenParts.flatMap((p) => p.pack.notWhole))].map((x) => `${x}\n`).join(''));
+      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}${droppedUnits.length ? `; ${plural(droppedUnits.length, 'unit')} not reached (max_budget_usd), due again` : ''}`);
       for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);
       if (cfg) w('engine-error', `${cfg.reason}\n${cfg.why}; ${ok} of ${ok + failed.length} parts were reviewed\n`); // still a partial success, but the account problem must reach the job gate (src/fail-on-error.js)
       return end('success');
@@ -498,4 +504,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, PRICES, contextPack, windowPack, evidencePack, packFiles };

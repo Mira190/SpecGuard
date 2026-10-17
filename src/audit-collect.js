@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Unit test gap scan (mode scan; audit is an alias), step 1: deterministic context for the checked-out HEAD (no diff, no AI, no repo code executed).
-// Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) MAX_UNITS (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
+// Env: CTX REQ_PATHS STANDARDS_PATHS TEST_PATHS IGNORE_EXTRA SCAN_MAX_BLOCKS (deprecated alias MAX_REQUIREMENTS; the new name wins) MAX_UNITS (per unit call) MODEL MAX_BUDGET_USD MAX_OUTPUT_TOKENS (claude api engine, PACK_SPLIT: unit calls per run = what the budget allows) (+ GITHUB_REF_NAME, GITHUB_EVENT_PATH for the default-branch guard).
 // Also SCAN_PATHS (scope globs), SCAN_ISSUE (rotate through the blocks), GH_TOKEN + GH_REPO (to read the scan issue's state when SCAN_ISSUE is true).
 // Writes audit-docs.txt, audit-candidates.txt (cid, path:line, heading, text: the blocks the model must assess this run), audit-evidence.txt (per block: up to 3 code and 3 test
 // locations found deterministically), audit-carried.txt (the blocks not audited this run), audit-ruled.txt (blocks the trace.js prefilter dropped: cid, path:line, heading, text, reason), audit-rejected.txt, standards.txt, test-layout.txt, audit-meta.json.
@@ -210,7 +210,7 @@ function branchGuard({ refName = '', eventPath = '' } = {}) {
 }
 
 // scanPaths: the scope (docs and evidence); rotate: scan_issue is on, so the run is one of a rotation; prior: that issue's state (null on the first run or without an issue).
-function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0 }) { // packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
+function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0, unitParts = 1 }) { // unitParts: unit calls of one run (claude api engine; each holds maxUnits units); packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
   const head = git(cwd, ['rev-parse', 'HEAD']).trim();
   fs.rmSync(ctx, { recursive: true, force: true });
   fs.mkdirSync(ctx, { recursive: true });
@@ -290,7 +290,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
     const rules = RULE_GLOBS.concat(lines(ignoreExtra)), docSet = new Set(found);
     // the pack carries the rule files first (each cut at the per-file cap, plus a header): units share what is left
     const left = packBytes && Math.max(1, packBytes - standards.reduce((n, f) => { try { return n + Math.min(fs.statSync(path.join(cwd, f)).size, PER_FILE) + 300; } catch { return n; } }, 0));
-    units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, prior, now, packBytes: left });
+    units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, rooms: unitParts, prior, now, packBytes: left });
     if (units.rows.length) writeUnits(ctx, head, maxUnits, units);
     notes.push(...units.limitations);
   } catch (e) { notes.push(`the unit inventory failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the scan covers the design documents only`); units = null; }
@@ -345,7 +345,9 @@ async function main(env) {
   if (g.warn) console.log(`::warning::${g.warn}`);
   const rotate = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
   const prior = rotate ? await loadPrior(env) : null;
-  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, packBytes: env.PACK_SPLIT === 'true' ? 250000 : 0 });
+  const packBytes = env.PACK_SPLIT === 'true' ? 250000 : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run
+  const unitParts = !packBytes ? 1 : require('./engines/claude-api').unitCalls({ model: require('./credential').resolveModel(env.MODEL, 'claude') || 'claude-haiku-5-5', budget: parseFloat(env.MAX_BUDGET_USD || '1.00'), maxTokens: parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, packBytes });
+  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, packBytes, unitParts });
   console.log(`SpecGuard unit test gap scan: ${r.units ? `${r.units.picked.length} of ${r.units.total} units` : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);
 }
