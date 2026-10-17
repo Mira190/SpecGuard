@@ -434,7 +434,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
       let first = null, ok = 0, splits = 0, cfg = null; // cfg: the first part that failed on a configuration class
       const blockCuts = {};
-      const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids ? { blocks: cids } : { units: p.units }), reason });
+      const queue = [...plans], retried = [], fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids ? { blocks: cids } : { units: p.units, ...(p.keys && { keys: p.keys }) }), reason });
       while (queue.length) {
         const p = queue.shift();
         const r = await call(p.system, p.user, p.tokens);

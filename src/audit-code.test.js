@@ -973,3 +973,65 @@ test('run: a part of a reached unit dropped for the budget is named in a line an
   const ok = await post(t, { env, files: { 'audit-inventory.json': INV({ eligible: 140 }), 'findings.json': result([uf()]), 'scan-parts.json': { calls: 2, failed: [], dropped: [] } } });
   assert.doesNotMatch(vis(ok.calls.summary), /Unit parts not reached/);
 });
+
+// Part ledger: the collector's parts_left, the engine's droppedParts/failed keys and the "Reviewed in parts" line must agree on which parts ran.
+{
+  const rowOf = (id, p, k) => [id, p, 5, 'why', 'none', '-', 'abcdef12', `part ${k}/2 lines ${k * 2 - 1}-${k * 2}`].join('\t') + '\n';
+  const parts = (ks) => ks.map((k) => rowOf(U1, 'src/js/orders.js', k)).join('');
+  const run = (t, { ks = [1, 2], inv = {}, sp = null } = {}) => post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: { 'audit-units.txt': parts(ks), 'audit-inventory.json': INV({ all_parts: true, ...inv }), 'findings.json': result([uf()]), ...(sp && { 'scan-parts.json': sp }) } });
+  const vis = (s) => s.slice(0, s.indexOf('<details>'));
+
+  test('run: a part the collector did not select for the budget (parts_left) makes the run incomplete like an engine-dropped part; control: no part left, complete and every part listed', async (t) => {
+    const left = await run(t, { ks: [1], inv: { parts_left: [{ path: 'src/js/orders.js', part: 2, of: 2 }] } });
+    assert.deepEqual(left.calls.outputs, { status: 'incomplete', reason: '1 unit part not reached (budget)' });
+    assert.match(vis(left.calls.summary), /part 1 of 2 \(lines 1-2\); part 2 not reached \(budget\)/);
+    const ok = await run(t);
+    assert.deepEqual(ok.calls.outputs, { status: 'complete' });
+    assert.match(vis(ok.calls.summary), /Reviewed in parts.*parts 1, 2 of 2 \(lines 1-4\)/);
+  });
+
+  test('run: a stateful rotation defers later parts on purpose: no parts_left, still complete', async (t) => {
+    const r = await post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: { 'audit-units.txt': rowOf(U1, 'src/js/orders.js', 1), 'audit-inventory.json': INV({ rotation: { rotate: true, picked: 3, confirming: 0, new: 0, oldest: 3, reviewed: 3, total: 140, run: 1, runs: 12 } }), 'findings.json': result([uf()]) } });
+    assert.deepEqual(r.calls.outputs, { status: 'complete' });
+    assert.match(vis(r.calls.summary), /one part per run.*part 1 of 2/);
+  });
+
+  test('run: "Reviewed in parts" lists only the parts that ran, not the ones the engine dropped', async (t) => {
+    const d = await run(t, { sp: { calls: 1, failed: [], dropped: [], droppedParts: [`${U1}:2`] } });
+    const v = vis(d.calls.summary);
+    assert.match(v, /`src\/js\/orders\.js` part 1 of 2 \(lines 1-2\)/);
+    assert.doesNotMatch(v, /parts 1, 2 of 2/);
+    assert.match(v, /Unit parts not reached.*part 2/);
+  });
+
+  test('run: a failed unit part with part keys leaves the unit partly reviewed (incomplete, not "not reviewed", never "did not fit"); an artifact without keys keeps failing the whole unit', async (t) => {
+    const f = (keys) => ({ calls: 2, failed: [{ part: 'units', units: [U1], ...(keys && { keys }), reason: 'second part timeout' }], dropped: [] });
+    const d = await run(t, { sp: f([`${U1}:2`]) });
+    const v = vis(d.calls.summary);
+    assert.match(v, /Partly reviewed.*`src\/js\/orders\.js` \(part 2 failed: second part timeout\)/);
+    assert.match(v, /`src\/js\/orders\.js` part 1 of 2 \(lines 1-2\)/);
+    assert.doesNotMatch(v, /Not reviewed this run|did not fit/);
+    assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: 'the unit call failed; 1 unit part failed' });
+    const all = await run(t, { inv: { eligible: 140 }, sp: f([`${U1}:1`, `${U1}:2`]) });
+    assert.match(vis(all.calls.summary), /1 unit were not reviewed: the unit call failed/);
+    assert.doesNotMatch(vis(all.calls.summary), /did not fit/);
+    assert.match(/^Units: .*$/m.exec(vis(all.calls.summary))[0], /1 failed/);
+    const old = await run(t, { sp: f(null) });
+    assert.match(vis(old.calls.summary), /1 unit were not reviewed: the unit call failed/);
+  });
+}
+
+test('collect: the log counts units and parts apart (a unit reviewed in parts is one unit, not several)', (t) => {
+  const big = Array.from({ length: 3000 }, (_, i) => `function f${i}(a) { return a + ${i}; }\n`).join('');
+  const { root, ctx } = repoOf(t, { 'src/js/big.js': big, 'src/js/orders.js': FILES['src/js/orders.js'] });
+  const out = spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_REF_NAME: '', GITHUB_EVENT_PATH: '', PACK_SPLIT: 'true', CONTEXT_PACK_BYTES: '250000', MAX_BUDGET_USD: '5', MODEL: 'claude-haiku-5-5' } }).stdout;
+  assert.match(out, /scan: 2 of 2 units \(\d+ parts\), 0 design/);
+});
+
+test('run: parts_left is capped at 10 entries; the status counts the true total (parts_left_n) and the list says "+2 more"', async (t) => {
+  const rowOf = (k) => [U1, 'src/js/orders.js', 5, 'why', 'none', '-', 'abcdef12', `part ${k}/13 lines ${k}-${k}`].join('\t') + '\n';
+  const left = Array.from({ length: 10 }, (_, i) => ({ path: 'src/js/orders.js', part: i + 2, of: 13 }));
+  const d = await post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: { 'audit-units.txt': rowOf(1), 'audit-inventory.json': INV({ all_parts: true, parts_left: left, parts_left_n: 12 }), 'findings.json': result([uf()]) } });
+  assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: '12 unit parts not reached (budget)' });
+  assert.match(d.calls.summary, /\+2 more unit parts not reached \(budget\)/);
+});
