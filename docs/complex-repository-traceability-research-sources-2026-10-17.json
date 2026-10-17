@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "accessed_at_utc": "2026-10-17T00:39:00Z",
+  "remote_baseline": "da1579313a856edced3516021c827e6cd502c57b",
+  "remote_baseline_commit_time": "2026-10-17T00:36:18Z",
+  "local_baseline": "b1aaf113aae3ca69fcc70e7b9026130affa6c30f",
+  "purpose": "Architecture research; no new external scan, model run, benchmark, indexer installation or product changes.",
+  "files": [
+    {
+      "path": "src/trace.js",
+      "url": "https://github.com/Mira190/SpecGuard/blob/da1579313a856edced3516021c827e6cd502c57b/src/trace.js",
+      "lines": 1061,
+      "characters": 80359
+    },
+    {
+      "path": "src/audit-collect.js",
+      "url": "https://github.com/Mira190/SpecGuard/blob/da1579313a856edced3516021c827e6cd502c57b/src/audit-collect.js",
+      "lines": 355,
+      "characters": 32689
+    },
+    {
+      "path": "src/audit-units.js",
+      "url": "https://github.com/Mira190/SpecGuard/blob/da1579313a856edced3516021c827e6cd502c57b/src/audit-units.js",
+      "lines": 217,
+      "characters": 24903
+    },
+    {
+      "path": "src/scan-parts.js",
+      "url": "https://github.com/Mira190/SpecGuard/blob/da1579313a856edced3516021c827e6cd502c57b/src/scan-parts.js",
+      "lines": 54,
+      "characters": 4591
+    },
+    {
+      "path": "src/engines/claude-api.js",
+      "url": "https://github.com/Mira190/SpecGuard/blob/da1579313a856edced3516021c827e6cd502c57b/src/engines/claude-api.js",
+      "lines": 502,
+      "characters": 48081
+    },
+    {
+      "path": "action.yml",
+      "url": "https://github.com/Mira190/SpecGuard/blob/da1579313a856edced3516021c827e6cd502c57b/action.yml",
+      "lines": 319,
+      "characters": 27869
+    },
+    {
+      "path": ".github/workflows/specguard-run.yml",
+      "url": "https://github.com/Mira190/SpecGuard/blob/da1579313a856edced3516021c827e6cd502c57b/.github/workflows/specguard-run.yml",
+      "lines": 203,
+      "characters": 16690
+    },
+    {
+      "path": "src/post.js",
+      "url": "https://github.com/Mira190/SpecGuard/blob/da1579313a856edced3516021c827e6cd502c57b/src/post.js",
+      "lines": 1858,
+      "characters": 164592
+    }
+  ],
+  "sources": [
+    {
+      "id": "anthropic-context",
+      "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+      "used_for": "按需检索、有限上下文与混合策略；不是需求追踪完整性保证",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "anthropic-retrieval",
+      "url": "https://www.anthropic.com/engineering/contextual-retrieval",
+      "used_for": "词法与语义混合、块上下文、rerank；基准结果不能直接外推到本项目",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "google-migration",
+      "url": "https://research.google/blog/accelerating-code-migrations-with-ai/",
+      "used_for": "先定位及扩展符号引用，再生成和验证；不是自然语言需求自动映射证明",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "github-navigation",
+      "url": "https://docs.github.com/en/repositories/working-with-files/using-files/navigating-code-on-github",
+      "used_for": "Tree-sitter 符号与引用导航；不能等同类型解析或稳定 SHA 的可消费索引 API",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "tree-sitter",
+      "url": "https://tree-sitter.github.io/tree-sitter/",
+      "used_for": "增量语法树与结构边界；不自行解析动态调用和需求语义",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "scip",
+      "url": "https://github.com/scip-code/scip",
+      "used_for": "定义/引用/实现的索引协议；不自动提供完备调用图或需求边",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "scip-ci",
+      "url": "https://7.3.sourcegraph.com/code-navigation/how-to/adding-scip-to-workflows",
+      "used_for": "按 commit 建索引和频率权衡；文档为 7.3 版本",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "strictdoc",
+      "url": "https://strictdoc.readthedocs.io/en/stable/stable/docs/strictdoc_01_user_guide-TRACE.html",
+      "used_for": "显式 UID 和源码关系；源码 traceability 有实验性/语言支持边界",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "graphrag",
+      "url": "https://microsoft.github.io/graphrag/",
+      "used_for": "文本知识图与局部/全局查询；不等于编译语义或满足需求的证明",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "codeql",
+      "url": "https://codeql.github.com/docs/writing-codeql-queries/about-data-flow-analysis/",
+      "used_for": "局部/全局数据流、运行时/别名与规模限制",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "github-workflow",
+      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax",
+      "used_for": "paths diff 截断、触发与 Actions 语法",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "github-pr-files",
+      "url": "https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files",
+      "used_for": "PR 文件端点分页及最多3000文件",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "github-diff",
+      "url": "https://docs.github.com/en/pull-requests/reference/branches",
+      "used_for": "PR 三点 diff / merge-base 语义",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "github-caches",
+      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching",
+      "used_for": "cache 可访问性与信任边界，不是长期不可变证据库",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "github-untrusted",
+      "url": "https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target",
+      "used_for": "特权作业处理不可信代码，静态读取不等于执行",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "github-token",
+      "url": "https://docs.github.com/en/actions/concepts/security/compromised-runners",
+      "used_for": "GITHUB_TOKEN 单仓范围，跨仓 App token",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "otel",
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/",
+      "used_for": "span、trace context、attributes 和跨异步任务 links",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    },
+    {
+      "id": "openapi",
+      "url": "https://spec.openapis.org/oas/v3.1.0",
+      "used_for": "operationId 等显式契约锚点，作用域内唯一而非全球唯一",
+      "accessed_utc": "2026-10-17",
+      "kind": "primary"
+    }
+  ],
+  "last_observed_main": "45713a26e62b60db0b8474bbd4eb42894e1fbbfa",
+  "late_delta": {
+    "pr": 235,
+    "url": "https://github.com/Mira190/SpecGuard/pull/235",
+    "merge_commit": "45713a26e62b60db0b8474bbd4eb42894e1fbbfa",
+    "merged_at": "2026-10-17T00:40:27Z",
+    "evidence_method": "Read PR body and all file patches; no new model or external repository execution.",
+    "files": [
+      {
+        "path": "README.md",
+        "additions": 1,
+        "deletions": 1
+      },
+      {
+        "path": "action.yml",
+        "additions": 4,
+        "deletions": 1
+      },
+      {
+        "path": "src/audit-code.test.js",
+        "additions": 39,
+        "deletions": 1
+      },
+      {
+        "path": "src/audit-collect.js",
+        "additions": 6,
+        "deletions": 4
+      },
+      {
+        "path": "src/audit-post.js",
+        "additions": 17,
+        "deletions": 13
+      },
+      {
+        "path": "src/audit-units.js",
+        "additions": 36,
+        "deletions": 15
+      },
+      {
+        "path": "src/audit-units.test.js",
+        "additions": 70,
+        "deletions": 0
+      },
+      {
+        "path": "src/claude-api.test.js",
+        "additions": 60,
+        "deletions": 0
+      },
+      {
+        "path": "src/engines/claude-api.js",
+        "additions": 14,
+        "deletions": 8
+      },
+      {
+        "path": "src/scan-parts.js",
+        "additions": 13,
+        "deletions": 8
+      }
+    ],
+    "expected_metrics_not_measured_in_this_review": true
+  },
+  "recent_fix_states": [
+    {
+      "number": 235,
+      "title": "Scan: review several packs of units per run within max_budget_usd (one call each), so a large repo is covered in far fewer runs",
+      "merged_at": "2026-10-17T00:40:27Z",
+      "head": "c9108b3ad787a48bd77a902dbf6030c4fd4af3eb",
+      "merge_commit": "45713a26e62b60db0b8474bbd4eb42894e1fbbfa"
+    },
+    {
+      "number": 234,
+      "title": "PR context: slice large changed and candidate tests around the diff's own hunks instead of keeping the file head",
+      "merged_at": "2026-10-17T00:32:59Z",
+      "head": "a1d8cf9d8ac51313c0dc32fa30bd027b4e716c7f",
+      "merge_commit": "5ea5cb4afcb7a9133cca640730bd4a1ec53384b3"
+    },
+    {
+      "number": 233,
+      "title": "Measure fix-through on real runs: judge each finding by what this run saw, and track summary-only findings",
+      "merged_at": "2026-10-17T00:36:19Z",
+      "head": "3dd1399a006b78a135d232cd72c3c56f92bd2b86",
+      "merge_commit": "da1579313a856edced3516021c827e6cd502c57b"
+    },
+    {
+      "number": 232,
+      "title": "A broken requirement link drops only the link, not the test gap it was attached to",
+      "merged_at": "2026-10-17T00:20:09Z",
+      "head": "48a10abde736f672a76e95458215363da871900f",
+      "merge_commit": "2571716b45ada5c8777617b0ebcdbf338a7c937e"
+    },
+    {
+      "number": 231,
+      "title": "Scan: a unit whose tests don't fit is reviewed with the tests that fit and recorded unsure, instead of stalling or never being reviewed",
+      "merged_at": "2026-10-17T00:10:43Z",
+      "head": "396c7d2bf0812b56f5263dd01050763b09ae7965",
+      "merge_commit": "57c8ed1e582a59240e9c5cf717334667548f3494"
+    },
+    {
+      "number": 230,
+      "title": "Manual runs: model/budget/size inputs, blobless single-branch checkout, full action SHA in counts",
+      "merged_at": "2026-10-17T00:12:06Z",
+      "head": "14220cae7089345207472182e5362bcd04d1cdb6",
+      "merge_commit": "a8bb70c3c4d6cb687e9fafb45a98610385e0c588"
+    },
+    {
+      "number": 229,
+      "title": "Normalize requirement source labels and missing test layers instead of asking for tests that exist",
+      "merged_at": "2026-10-17T00:07:53Z",
+      "head": "96ff722361e09761a4d190eb3eab2861f0ea1ec4",
+      "merge_commit": "9665e190ea69d8191e361e116e19fad41c35043c"
+    },
+    {
+      "number": 228,
+      "title": "A failed re-run keeps the previous result for the same commit instead of erasing it",
+      "merged_at": "2026-10-16T23:59:59Z",
+      "head": "26c3503c5f7451b58ab55bde0b243aa135516600",
+      "merge_commit": "9339646a85319fae036285c883e5b27de92fbf4e"
+    },
+    {
+      "number": 227,
+      "title": "Spec conflicts: ask which side is intended instead of defaulting to reverting the code",
+      "merged_at": "2026-10-16T23:54:36Z",
+      "head": "82eb6f80baa80250f4b70e8dfb4a492838d96e1c",
+      "merge_commit": "9cc7cb73c8c63878e1a69b68a1a725e72f6b1cb4"
+    },
+    {
+      "number": 226,
+      "title": "Apply the secret-path deny list to requirement docs and every other model input",
+      "merged_at": "2026-10-16T23:47:01Z",
+      "head": "e367359e2e729b16d3f2307fb1b0a5be9021d14e",
+      "merge_commit": "aa281a155e740fc6e760926e6657b47c22d2c8a7"
+    },
+    {
+      "number": 225,
+      "title": "Scan: a configuration failure in any part fails the job, keeping the parts that succeeded",
+      "merged_at": "2026-10-16T23:39:09Z",
+      "head": "11ba5c9e15022dedfe62cf194610a18e25c5cba6",
+      "merge_commit": "94b7255b9c7d4bea24a1f885e44ebd384b347adb"
+    },
+    {
+      "number": 224,
+      "title": "Weekly report: the API git stand-in keeps unknown, renames and -w like real git (U1–U3); pin the coverage-row FP contract (U4)",
+      "merged_at": "2026-10-16T23:40:06Z",
+      "head": "f6204b8a2e7e7063cd9c38a87cca548f79854e7b",
+      "merge_commit": "9cdc780c55e1352fffab6397698c87edc388175d"
+    }
+  ]
+}
