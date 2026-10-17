@@ -1,0 +1,436 @@
+{
+ "note": "Measured on the pinned fastify SHA with the metric set of analyze.js. Both rows come from raw trace.js outputs of the original scratch harness (same cases and edits as cases.json), not from the discussion numbers. \"after_239\" was re-measured by run.js on current main and matches rank for rank. Runtimes were measured on a Windows laptop and vary by machine.",
+ "target_sha": "37df44a421817e7bb048fce834bf691abb0999d6",
+ "before_239": {
+  "source": "main before PR #239 (trace.js before its retrieval changes)",
+  "variants": 36,
+  "cases": 12,
+  "directions": {
+   "req->code": {
+    "code": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 58,
+     "hit_at_1": {
+      "k": 8,
+      "n": 24,
+      "rate": 0.3333333333333333
+     },
+     "hit_at_3": {
+      "k": 14,
+      "n": 24,
+      "rate": 0.5833333333333334
+     },
+     "recall_at_1": {
+      "k": 8,
+      "n": 58,
+      "rate": 0.13793103448275862
+     },
+     "recall_at_3": {
+      "k": 15,
+      "n": 58,
+      "rate": 0.25862068965517243
+     },
+     "recall_at_K": {
+      "k": 15,
+      "n": 58,
+      "rate": 0.25862068965517243
+     },
+     "mrr_at_10": {
+      "sum": 10.666667,
+      "n": 24,
+      "value": 0.4444444444444444
+     },
+     "all_required_at_3": {
+      "k": 3,
+      "n": 24,
+      "rate": 0.125
+     }
+    },
+    "code_file_level": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 58,
+     "hit_at_1": {
+      "k": 8,
+      "n": 24,
+      "rate": 0.3333333333333333
+     },
+     "hit_at_3": {
+      "k": 14,
+      "n": 24,
+      "rate": 0.5833333333333334
+     },
+     "recall_at_1": {
+      "k": 10,
+      "n": 58,
+      "rate": 0.1724137931034483
+     },
+     "recall_at_3": {
+      "k": 18,
+      "n": 58,
+      "rate": 0.3103448275862069
+     },
+     "recall_at_K": {
+      "k": 18,
+      "n": 58,
+      "rate": 0.3103448275862069
+     },
+     "mrr_at_10": {
+      "sum": 10.666667,
+      "n": 24,
+      "value": 0.4444444444444444
+     },
+     "all_required_at_3": {
+      "k": 4,
+      "n": 24,
+      "rate": 0.16666666666666666
+     }
+    },
+    "tests": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 54,
+     "hit_at_1": {
+      "k": 14,
+      "n": 24,
+      "rate": 0.5833333333333334
+     },
+     "hit_at_3": {
+      "k": 20,
+      "n": 24,
+      "rate": 0.8333333333333334
+     },
+     "recall_at_1": {
+      "k": 14,
+      "n": 54,
+      "rate": 0.25925925925925924
+     },
+     "recall_at_3": {
+      "k": 24,
+      "n": 54,
+      "rate": 0.4444444444444444
+     },
+     "recall_at_K": {
+      "k": 24,
+      "n": 54,
+      "rate": 0.4444444444444444
+     },
+     "mrr_at_10": {
+      "sum": 16.333333,
+      "n": 24,
+      "value": 0.6805555555555555
+     },
+     "all_required_at_3": {
+      "k": 4,
+      "n": 24,
+      "rate": 0.16666666666666666
+     }
+    }
+   },
+   "code->req": {
+    "requirement": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 24,
+     "hit_at_1": {
+      "k": 10,
+      "n": 24,
+      "rate": 0.4166666666666667
+     },
+     "hit_at_3": {
+      "k": 15,
+      "n": 24,
+      "rate": 0.625
+     },
+     "recall_at_1": {
+      "k": 10,
+      "n": 24,
+      "rate": 0.4166666666666667
+     },
+     "recall_at_3": {
+      "k": 15,
+      "n": 24,
+      "rate": 0.625
+     },
+     "recall_at_K": {
+      "k": 15,
+      "n": 24,
+      "rate": 0.625
+     },
+     "mrr_at_10": {
+      "sum": 12.166667,
+      "n": 24,
+      "value": 0.5069444444444444
+     },
+     "all_required_at_3": {
+      "k": 15,
+      "n": 24,
+      "rate": 0.625
+     }
+    },
+    "tests": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 54,
+     "hit_at_1": {
+      "k": 4,
+      "n": 24,
+      "rate": 0.16666666666666666
+     },
+     "hit_at_3": {
+      "k": 4,
+      "n": 24,
+      "rate": 0.16666666666666666
+     },
+     "recall_at_1": {
+      "k": 4,
+      "n": 54,
+      "rate": 0.07407407407407407
+     },
+     "recall_at_3": {
+      "k": 4,
+      "n": 54,
+      "rate": 0.07407407407407407
+     },
+     "recall_at_K": {
+      "k": 4,
+      "n": 54,
+      "rate": 0.07407407407407407
+     },
+     "mrr_at_10": {
+      "sum": 4,
+      "n": 24,
+      "value": 0.16666666666666666
+     },
+     "all_required_at_3": {
+      "k": 2,
+      "n": 24,
+      "rate": 0.08333333333333333
+     }
+    }
+   }
+  },
+  "runtime_ms": {
+   "n": 36,
+   "p50": 1480,
+   "max": 2556
+  }
+ },
+ "after_239": {
+  "source": "main after PR #239; re-measured on main 1f84964 with run.js and identical",
+  "variants": 36,
+  "cases": 12,
+  "directions": {
+   "req->code": {
+    "code": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 58,
+     "hit_at_1": {
+      "k": 18,
+      "n": 24,
+      "rate": 0.75
+     },
+     "hit_at_3": {
+      "k": 18,
+      "n": 24,
+      "rate": 0.75
+     },
+     "recall_at_1": {
+      "k": 18,
+      "n": 58,
+      "rate": 0.3103448275862069
+     },
+     "recall_at_3": {
+      "k": 26,
+      "n": 58,
+      "rate": 0.4482758620689655
+     },
+     "recall_at_K": {
+      "k": 26,
+      "n": 58,
+      "rate": 0.4482758620689655
+     },
+     "mrr_at_10": {
+      "sum": 18,
+      "n": 24,
+      "value": 0.75
+     },
+     "all_required_at_3": {
+      "k": 6,
+      "n": 24,
+      "rate": 0.25
+     }
+    },
+    "code_file_level": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 58,
+     "hit_at_1": {
+      "k": 20,
+      "n": 24,
+      "rate": 0.8333333333333334
+     },
+     "hit_at_3": {
+      "k": 20,
+      "n": 24,
+      "rate": 0.8333333333333334
+     },
+     "recall_at_1": {
+      "k": 26,
+      "n": 58,
+      "rate": 0.4482758620689655
+     },
+     "recall_at_3": {
+      "k": 34,
+      "n": 58,
+      "rate": 0.5862068965517241
+     },
+     "recall_at_K": {
+      "k": 34,
+      "n": 58,
+      "rate": 0.5862068965517241
+     },
+     "mrr_at_10": {
+      "sum": 20,
+      "n": 24,
+      "value": 0.8333333333333334
+     },
+     "all_required_at_3": {
+      "k": 6,
+      "n": 24,
+      "rate": 0.25
+     }
+    },
+    "tests": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 54,
+     "hit_at_1": {
+      "k": 18,
+      "n": 24,
+      "rate": 0.75
+     },
+     "hit_at_3": {
+      "k": 20,
+      "n": 24,
+      "rate": 0.8333333333333334
+     },
+     "recall_at_1": {
+      "k": 18,
+      "n": 54,
+      "rate": 0.3333333333333333
+     },
+     "recall_at_3": {
+      "k": 28,
+      "n": 54,
+      "rate": 0.5185185185185185
+     },
+     "recall_at_K": {
+      "k": 28,
+      "n": 54,
+      "rate": 0.5185185185185185
+     },
+     "mrr_at_10": {
+      "sum": 19,
+      "n": 24,
+      "value": 0.7916666666666666
+     },
+     "all_required_at_3": {
+      "k": 8,
+      "n": 24,
+      "rate": 0.3333333333333333
+     }
+    }
+   },
+   "code->req": {
+    "requirement": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 24,
+     "hit_at_1": {
+      "k": 10,
+      "n": 24,
+      "rate": 0.4166666666666667
+     },
+     "hit_at_3": {
+      "k": 15,
+      "n": 24,
+      "rate": 0.625
+     },
+     "recall_at_1": {
+      "k": 10,
+      "n": 24,
+      "rate": 0.4166666666666667
+     },
+     "recall_at_3": {
+      "k": 15,
+      "n": 24,
+      "rate": 0.625
+     },
+     "recall_at_K": {
+      "k": 15,
+      "n": 24,
+      "rate": 0.625
+     },
+     "mrr_at_10": {
+      "sum": 12.166667,
+      "n": 24,
+      "value": 0.5069444444444444
+     },
+     "all_required_at_3": {
+      "k": 15,
+      "n": 24,
+      "rate": 0.625
+     }
+    },
+    "tests": {
+     "queries": 24,
+     "empty_relevant_excluded": 0,
+     "relevant_items": 54,
+     "hit_at_1": {
+      "k": 4,
+      "n": 24,
+      "rate": 0.16666666666666666
+     },
+     "hit_at_3": {
+      "k": 4,
+      "n": 24,
+      "rate": 0.16666666666666666
+     },
+     "recall_at_1": {
+      "k": 4,
+      "n": 54,
+      "rate": 0.07407407407407407
+     },
+     "recall_at_3": {
+      "k": 4,
+      "n": 54,
+      "rate": 0.07407407407407407
+     },
+     "recall_at_K": {
+      "k": 4,
+      "n": 54,
+      "rate": 0.07407407407407407
+     },
+     "mrr_at_10": {
+      "sum": 4,
+      "n": 24,
+      "value": 0.16666666666666666
+     },
+     "all_required_at_3": {
+      "k": 2,
+      "n": 24,
+      "rate": 0.08333333333333333
+     }
+    }
+   }
+  },
+  "runtime_ms": {
+   "n": 36,
+   "p50": 1419,
+   "max": 2861
+  }
+ }
+}

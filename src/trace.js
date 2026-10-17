@@ -482,7 +482,8 @@ function durationVariants(value) {
 const SIZE = { byte: 1, kb: 1024, kib: 1024, mb: 1024 ** 2, mib: 1024 ** 2, gb: 1024 ** 3, gib: 1024 ** 3 };
 // Other forms of a size: the byte count, `a * 1024 * 1024` products as code writes them, and KiB/MiB/GiB text. A bare number counts only when it is a whole multiple of 1024 (30 and 5000 are not sizes).
 function sizeVariants(value) {
-  const m = /^(\d+(?:\.\d+)?)\s*(bytes?|[KMG]i?B)?$/i.exec(String(value).trim().replace(/\s*\([^)]*\)$/, '')); // a quoted "1048576 (1MiB)" is one value
+  // thousands separators (1,048,576 / 1_048_576 / thin or narrow space) only as 3-digit groups, so "1,5" is not 15; it stays unparsed
+  const m = /^(\d+(?:\.\d+)?)\s*(bytes?|[KMG]i?B)?$/i.exec(String(value).trim().replace(/\s*\([^)]*\)$/, '').replace(/^\d{1,3}(?:[,_  ]\d{3})+(?=\D|$)/, (g) => g.replace(/\D/g, ''))); // a quoted "1048576 (1MiB)" is one value
   if (!m) return [];
   const bytes = +m[1] * (m[2] ? SIZE[m[2].toLowerCase().replace(/s$/, '')] : 1);
   if (!Number.isSafeInteger(bytes) || bytes === 0 || (!m[2] && (bytes < 1024 || bytes % 1024))) return [];

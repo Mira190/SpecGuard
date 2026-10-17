@@ -1,0 +1,784 @@
+{
+ "description": "Versioned requirement<->code retrieval capability set. 12 independent behaviours; each is run as 3 variants (R: requirement edited, C: code edited, RC: both). Paths and line ranges are ground truth for the pinned SHA; no target source is stored here.",
+ "target": {
+  "repo": "https://github.com/fastify/fastify.git",
+  "sha": "37df44a421817e7bb048fce834bf691abb0999d6",
+  "req_paths": "docs/Reference/**"
+ },
+ "cases": [
+  {
+   "id": "bodyLimit",
+   "stmt": "bodyLimit default is 1048576 (1MiB) bytes",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 296,
+      "old": "`1048576` (1MiB)",
+      "new": "`2097152` (2MiB)"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "all": true,
+      "old": "1048576",
+      "new": "2097152"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      296,
+      300
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       32,
+       32
+      ],
+      "note": "source default"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       31,
+       31
+      ],
+      "note": "generated default",
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "lib/content-type-parser.js",
+      "lines": [
+       33,
+       38
+      ],
+      "note": "default parsers use limit"
+     }
+    ],
+    "tests": [
+     "test/body-limit.test.js",
+     "test/internals/initial-config.test.js"
+    ]
+   }
+  },
+  {
+   "id": "connectionTimeout",
+   "stmt": "connectionTimeout default 0 (no timeout)",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 143,
+      "old": "`0` (no timeout)",
+      "new": "`30000` (30 seconds)"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "old": "data.connectionTimeout = 0;",
+      "new": "data.connectionTimeout = 30000;"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"connectionTimeout\":{\"type\":\"integer\",\"default\":0}",
+      "new": "\"connectionTimeout\":{\"type\":\"integer\",\"default\":30000}"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"connectionTimeout\":0,",
+      "new": "\"connectionTimeout\":30000,"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      140,
+      150
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       26,
+       26
+      ]
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       16,
+       16
+      ],
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "lib/server.js",
+      "lines": [
+       329,
+       340
+      ],
+      "note": "server.setTimeout use"
+     }
+    ],
+    "tests": [
+     "test/connection-timeout.test.js",
+     "test/internals/initial-config.test.js"
+    ]
+   }
+  },
+  {
+   "id": "keepAliveTimeout",
+   "stmt": "keepAliveTimeout default 72000 (72 seconds)",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 155,
+      "old": "`72000` (72 seconds)",
+      "new": "`5000` (5 seconds)"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "old": "data.keepAliveTimeout = 72000;",
+      "new": "data.keepAliveTimeout = 5000;"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"keepAliveTimeout\":{\"type\":\"integer\",\"default\":72000}",
+      "new": "\"keepAliveTimeout\":{\"type\":\"integer\",\"default\":5000}"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"keepAliveTimeout\":72000,",
+      "new": "\"keepAliveTimeout\":5000,"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      152,
+      162
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       27,
+       27
+      ]
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       19,
+       19
+      ],
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "lib/server.js",
+      "lines": [
+       338,
+       338
+      ],
+      "note": "server.keepAliveTimeout use"
+     }
+    ],
+    "tests": [
+     "test/keep-alive-timeout.test.js",
+     "test/internals/initial-config.test.js"
+    ]
+   }
+  },
+  {
+   "id": "maxParamLength",
+   "stmt": "maxParamLength default 100 characters; over the limit invokes not found route",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 1071,
+      "old": "`100`",
+      "new": "`200`"
+     },
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 1074,
+      "old": "value is 100",
+      "new": "value is 200"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "old": "data18.maxParamLength = 100;",
+      "new": "data18.maxParamLength = 200;"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"maxParamLength\":{\"type\":\"integer\",\"default\":100}",
+      "new": "\"maxParamLength\":{\"type\":\"integer\",\"default\":200}"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"maxParamLength\":100,",
+      "new": "\"maxParamLength\":200,"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      1068,
+      1078
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       46,
+       46
+      ]
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       889,
+       889
+      ],
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "lib/route.js",
+      "lines": [
+       69,
+       69
+      ],
+      "note": "router option key list"
+     }
+    ],
+    "tests": [
+     "test/router-options.test.js",
+     "test/router-compile.test.js",
+     "test/internals/initial-config.test.js"
+    ]
+   }
+  },
+  {
+   "id": "ignoreTrailingSlash",
+   "stmt": "ignoreTrailingSlash default false; /foo and /foo/ are different paths",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 1041,
+      "old": "`false`",
+      "new": "`true`"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "old": "data18.ignoreTrailingSlash = false;",
+      "new": "data18.ignoreTrailingSlash = true;"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"ignoreTrailingSlash\":{\"type\":\"boolean\",\"default\":false}",
+      "new": "\"ignoreTrailingSlash\":{\"type\":\"boolean\",\"default\":true}"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"ignoreTrailingSlash\":false,",
+      "new": "\"ignoreTrailingSlash\":true,"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      1038,
+      1048
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       44,
+       44
+      ]
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       883,
+       883
+      ],
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "lib/route.js",
+      "lines": [
+       108,
+       108
+      ],
+      "note": "router option read"
+     }
+    ],
+    "tests": [
+     "test/router-options.test.js",
+     "test/route-prefix.test.js",
+     "test/internals/initial-config.test.js"
+    ]
+   }
+  },
+  {
+   "id": "return503OnClosing",
+   "stmt": "return503OnClosing default true: requests after close() get 503",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 667,
+      "old": "`true`",
+      "new": "`false`"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/route.js",
+      "old": "options.return503OnClosing : true",
+      "new": "options.return503OnClosing : false"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      664,
+      676
+     ]
+    },
+    "code": [
+     {
+      "file": "lib/route.js",
+      "lines": [
+       110,
+       110
+      ],
+      "note": "default"
+     },
+     {
+      "file": "lib/route.js",
+      "lines": [
+       498,
+       509
+      ],
+      "note": "503 response"
+     }
+    ],
+    "tests": [
+     "test/close.test.js",
+     "test/close-pipelining.test.js"
+    ]
+   }
+  },
+  {
+   "id": "pluginTimeout",
+   "stmt": "pluginTimeout default 10000 ms",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 614,
+      "old": "`10000`",
+      "new": "`20000`"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "old": "data.pluginTimeout = 10000;",
+      "new": "data.pluginTimeout = 20000;"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"pluginTimeout\":{\"type\":\"integer\",\"default\":10000}",
+      "new": "\"pluginTimeout\":{\"type\":\"integer\",\"default\":20000}"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"pluginTimeout\":10000,",
+      "new": "\"pluginTimeout\":20000,"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      611,
+      620
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       35,
+       35
+      ]
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       40,
+       40
+      ],
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "fastify.js",
+      "lines": [
+       367,
+       370
+      ],
+      "note": "avvio timeout use (root file, not lib)"
+     }
+    ],
+    "tests": [
+     "test/plugin.4.test.js",
+     "test/hooks.on-ready.test.js",
+     "test/internals/initial-config.test.js"
+    ]
+   }
+  },
+  {
+   "id": "requestIdHeader",
+   "stmt": "requestIdHeader true uses header \"request-id\"",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 511,
+      "old": "`\"request-id\"`",
+      "new": "`\"x-request-id\"`"
+     }
+    ],
+    "C": [
+     {
+      "file": "fastify.js",
+      "old": "=== true && 'request-id'",
+      "new": "=== true && 'x-request-id'"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      503,
+      515
+     ]
+    },
+    "code": [
+     {
+      "file": "fastify.js",
+      "lines": [
+       883,
+       883
+      ],
+      "note": "true -> request-id (root file)"
+     },
+     {
+      "file": "lib/req-id-gen-factory.js",
+      "lines": [
+       16,
+       50
+      ],
+      "note": "header lookup"
+     }
+    ],
+    "tests": [
+     "test/request-id.test.js",
+     "test/internals/req-id-gen-factory.test.js",
+     "test/genReqId.test.js"
+    ]
+   }
+  },
+  {
+   "id": "hookOrder",
+   "stmt": "route-level hooks always run after the shared (instance) hooks",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Hooks.md",
+      "all": true,
+      "old": "executed after the shared",
+      "new": "executed before the shared"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/route.js",
+      "old": "this[kHooks][hook]\n              .concat(opts[hook] || [])",
+      "new": "(opts[hook] || [])\n              .concat(this[kHooks][hook])"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Hooks.md",
+     "lines": [
+      770,
+      815
+     ]
+    },
+    "code": [
+     {
+      "file": "lib/route.js",
+      "lines": [
+       392,
+       397
+      ],
+      "note": "hook concat order"
+     }
+    ],
+    "tests": [
+     "test/route-hooks.test.js",
+     "test/hooks.test.js"
+    ]
+   }
+  },
+  {
+   "id": "redirect302",
+   "stmt": "reply.redirect without code sets status 302",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Reply.md",
+      "line": 360,
+      "old": "status code to `302`",
+      "new": "status code to `301`"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/reply.js",
+      "old": "this.raw.statusCode : 302",
+      "new": "this.raw.statusCode : 301"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Reply.md",
+     "lines": [
+      360,
+      364
+     ]
+    },
+    "code": [
+     {
+      "file": "lib/reply.js",
+      "lines": [
+       473,
+       477
+      ],
+      "note": "redirect default"
+     }
+    ],
+    "tests": [
+     "test/internals/reply.test.js"
+    ]
+   }
+  },
+  {
+   "id": "stringPlain",
+   "stmt": "send(string) without Content-Type is text/plain; charset=utf-8",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Reply.md",
+      "line": 705,
+      "old": "`text/plain; charset=utf-8`. If",
+      "new": "`text/html; charset=utf-8`. If"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/reply.js",
+      "old": "PLAIN: 'text/plain; charset=utf-8'",
+      "new": "PLAIN: 'text/html; charset=utf-8'"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Reply.md",
+     "lines": [
+      700,
+      710
+     ]
+    },
+    "code": [
+     {
+      "file": "lib/reply.js",
+      "lines": [
+       44,
+       44
+      ],
+      "note": "constant"
+     },
+     {
+      "file": "lib/reply.js",
+      "lines": [
+       205,
+       205
+      ],
+      "note": "use site"
+     }
+    ],
+    "tests": [
+     "test/content-type.test.js",
+     "test/500s.test.js",
+     "test/internals/reply.test.js"
+    ]
+   }
+  },
+  {
+   "id": "notFound404",
+   "stmt": "default 404 handler is installed at startup before plugins register",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 1927,
+      "old": "at startup before",
+      "new": "at startup after"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/four-oh-four.js",
+      "old": "error: 'Not Found',",
+      "new": "error: 'Missing',"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      1884,
+      1931
+     ]
+    },
+    "code": [
+     {
+      "file": "lib/four-oh-four.js",
+      "lines": [
+       52,
+       60
+      ],
+      "note": "basic404"
+     },
+     {
+      "file": "lib/four-oh-four.js",
+      "lines": [
+       119,
+       119
+      ],
+      "note": "default handler"
+     },
+     {
+      "file": "fastify.js",
+      "lines": [
+       445,
+       447
+      ],
+      "note": "startup registration (root file)"
+     }
+    ],
+    "tests": [
+     "test/404s.test.js"
+    ]
+   }
+  }
+ ]
+}
