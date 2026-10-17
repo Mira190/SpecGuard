@@ -341,6 +341,17 @@ test('scan_paths: a document block is audited in a scoped run only when its evid
   assert.ok(metaOf(s.ctx).limitations.some((l) => /1 document block\(s\) skipped: their evidence is outside scan_paths \(docs\/design\.md\)/.test(l)));
 });
 
+test('scan_paths: out-of-scope blocks do not take selection slots run after run (scan_max_blocks 1: the in-scope block is audited in run 2)', (t) => {
+  const files = { 'docs/design.md': '# Billing\n\nThe billing service MUST round every invoice total to two decimals before sending it.\n\n# Delivery\n\nThe scheduler MUST double the retry delay after each failed delivery attempt, up to the maxDelay limit.\n', 'packages/core/src/scheduler.js': SCHED_SRC, 'packages/other/src/billing.js': MONO['packages/b/src/billing.js'] };
+  const r = repo(t, files);
+  const run = (prior) => { collect({ cwd: r.root, ctx: r.ctx, scanPaths: 'packages/core/**', maxRequirements: 1, rotate: true, prior }); return cands(r.ctx).map((c) => c[0]); };
+  const first = run(null), second = run({ head: 'x', blocks: first.map((cid) => ({ cid, status: 'covered', runs: 1, since: 'x', at: { date: '2026-10-01' } })) });
+  const retry = cidOfText(r.ctx, /retry delay/);
+  assert.deepEqual(first, [retry], 'the out-of-scope billing block (ranked first) does not take the single slot');
+  assert.deepEqual(second, [retry], 'run 2 audits the in-scope block again, not the skipped one');
+  assert.match(metaOf(r.ctx).limitations.join('\n'), /1 document block\(s\) skipped/);
+});
+
 const B = (cid, p) => ({ cid, path: p, line: 1, heading: '', text: cid, full: cid });
 const [A1, A2, A3, B1, B2, B3, B4, B5, B6, C1] = ['aaaaaaa1', 'aaaaaaa2', 'aaaaaaa3', 'bbbbbbb1', 'bbbbbbb2', 'bbbbbbb3', 'bbbbbbb4', 'bbbbbbb5', 'bbbbbbb6', 'ccccccc1'];
 const at = (date) => ({ head: 'h', date });
