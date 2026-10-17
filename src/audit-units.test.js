@@ -575,7 +575,7 @@ test('stateful: a rotating run still reads one part of the unit', (t) => {
   const first = inventory({ ...o, allParts: false }), prior = { head: 'a', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: Object.fromEntries(first.rows.map((u) => [u.id, u.ver])), ev: {}, uc: {} } };
   const inv = inventory({ ...o, prior });
   assert.equal(inv.picked.filter((u) => u.path === 'src/js/big.js').length, 1);
-  assert.equal(inv.allParts, false);
+  assert.ok(!inv.allParts, "a run with state plans no extra parts");
 });
 
 test('stateless: parts that do not fit are listed as not reached (budget) and the unit keeps its first part', (t) => {
