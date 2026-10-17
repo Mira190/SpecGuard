@@ -1479,8 +1479,7 @@ test('PR pack: a changed test reached first as a candidate keeps its hunk when t
   assert.ok(p.text.includes('CHANGED_OWN'), 'the changed test\'s added line is shown although its source\'s share is spent');
 });
 
-// The provider refused the findings schema ("The compiled grammar is too large"): the API copy has no optional property and no union, and back() maps the empties to "absent" again.
-const FULL = JSON.parse(fs.readFileSync(path.join(__dirname, 'findings.schema.json'), 'utf8'));
+// The provider refuses the findings schema ("The compiled grammar is too large"), so PR mode sends none; scans still send theirs.
 const cit = { path: 'a.js', line: 3, quote: 'x()', side: 'RIGHT' };
 const ORIGINAL = () => ({
   requirements_source: 'pr', not_reviewed: '', standards: { status: 'checked', sources: ['S.md'], reason: 'r' }, layering: { status: 'checked', reason: 'r' },
@@ -1495,75 +1494,18 @@ const ORIGINAL = () => ({
   ],
   requirements: [{ id: 'R1', source: 's', quote: 'q', obligation_ids: ['o1'], reason: 'r', ref: 'x', line: 2, pr_quote: 'p' }, { id: 'R2', obligation_ids: [], reason: 'r' }],
 });
-// what a model fills in: every property present, the absent ones as their empty value (the inverse of back())
-const fillApi = (s, v) => {
-  if (Array.isArray(v)) return v.map((x) => fillApi(s.items, x));
-  if (v === null && s.anyOf) return fillApi(s.anyOf.find((b) => b.type !== 'null'), undefined);
-  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(s.properties || s.anyOf.find((b) => b.type !== 'null').properties).map(([k, p]) => [k, fillApi(p, v[k])]));
-  if (v !== undefined) return v;
-  const t = s.anyOf ? s.anyOf.find((b) => b.type !== 'null') : s;
-  return t.enum || t.type === 'string' ? '' : t.type === 'integer' ? 0 : t.type === 'array' ? [] : Object.fromEntries(Object.entries(t.properties).map(([k, p]) => [k, fillApi(p, undefined)]));
-};
-
-// the request form: evidence moves to a top-level array with its coverage row, change becomes change_mode + the object
-const flat = (o, orig) => {
-  o.evidence = o.coverage.flatMap((c, i) => c.evidence.map((e) => ({ row: i, ...e })));
-  o.coverage.forEach((c, i) => { delete c.evidence; const ch = orig.coverage[i].change; c.change_mode = ch === undefined ? 'same' : ch === null ? 'none' : 'cited'; });
-  return o;
-};
-
-test('findings API schema: no optional property, no union, every full-schema property representable, required enums keep their values', () => {
-  const a = api.apiSchema(api.strict(FULL)), small = api.grammarSmall(api.strict(FULL));
-  assert.ok(!('evidence' in small.properties.coverage.items.properties) && small.properties.evidence.items.properties.row, 'evidence is a top-level array of rows');
-  assert.deepEqual(small.properties.coverage.items.properties.change_mode.enum, ['same', 'none', 'cited']);
-  let opt = 0, unions = 0, objects = 0;
-  const walk = (n, f, p) => { // n: API node, f: full node
-    if (!n || typeof n !== 'object') return;
-    if (n.anyOf) unions++;
-    assert.ok(!('description' in n), `description kept at ${p}`);
-    const fn = f.anyOf ? f.anyOf.find((b) => b.type !== 'null') : f;
-    if (n.properties) {
-      objects++;
-      opt += Object.keys(n.properties).filter((k) => !(n.required || []).includes(k)).length;
-      for (const k of Object.keys(fn.properties)) {
-        const m = p === '$.coverage[]' && k === 'evidence' ? small.properties.evidence : n.properties[k], fk = fn.properties[k], ft = fk.anyOf ? fk.anyOf.find((x) => x.type !== 'null') : fk;
-        assert.ok(m, `${p}.${k} missing from the API schema`);
-        assert.equal(m.type, ft.type, `${p}.${k} type`);
-        if (ft.enum) { // the full values all stay; only an optional enum gains ""
-          assert.ok([JSON.stringify(ft.enum), JSON.stringify([...ft.enum, ''])].includes(JSON.stringify(m.enum)), `${p}.${k} enum ${m.enum}`);
-        }
-        walk(m, fk, `${p}.${k}`);
-      }
-    } else if (n.items) walk(n.items, fn.items, `${p}[]`);
-  };
-  walk(small, FULL, '$');
-  assert.ok(objects > 5);
-  assert.equal(opt, 0, 'optional properties');
-  assert.equal(unions, 0, 'anyOf unions');
-  assert.ok(!a.properties.findings.items.properties.kind.enum.includes(''), 'a required enum is not widened');
-  assert.ok(a.properties.findings.items.properties.side.enum.includes(''), 'an optional enum can say not applicable');
-  assert.ok(JSON.stringify(small).length < JSON.stringify(api.strict(FULL)).length, 'smaller than the schema the provider refused');
-});
-
-test('findings API form round-trips: empties become absent again, real values and required nulls are never changed', () => {
-  const want = ORIGINAL(), sent = flat(fillApi(FULL, want), want);
-  assert.equal(sent.findings[1].start_line, 0);
-  assert.equal(sent.coverage[1].alignment.status, '');
-  const got = api.fromApi(FULL, structuredClone(sent));
-  assert.equal(got.coverage[1].behaviour, null, 'an empty required nullable is null');
-  assert.ok(!('change' in got.coverage[1]) && !('start_line' in got.findings[1]) && !('alignment' in got.coverage[1]) && !('pr_quote' in got.requirements[1]) && !('side' in got.coverage[0].evidence[1]));
-  assert.deepEqual(got, want);
-  // control: plain JSON (the unconstrained fallback) passes through, an explicit null change stays null
-  const plain = ORIGINAL(); plain.coverage[1].change = null;
-  assert.deepEqual(api.fromApi(FULL, structuredClone(plain)), plain);
-});
-
 test('PR mode sends no output_config and writes the answer as the model gave it', async (t) => {
   const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(ORIGINAL()) }] })]);
   await h.go();
   assert.equal(h.calls.length, 1);
   assert.ok(!h.calls[0].body.output_config);
   assert.deepEqual(JSON.parse(h.file('findings.json')), ORIGINAL());
+});
+
+test('scan mode still sends its schema as structured output', async (t) => {
+  const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [] }) }] })]);
+  await h.go({ CHECK: 'audit' });
+  assert.equal(h.calls[0].body.output_config.format.type, 'json_schema');
 });
 
 test('repair turn: prose with no JSON, then ONE more call with the answer as the assistant turn and a request for the JSON object only; both calls are in usage', async (t) => {

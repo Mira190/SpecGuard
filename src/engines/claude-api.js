@@ -55,67 +55,6 @@ function strict(s) {
   return o;
 }
 
-// The findings schema is too big for the provider's grammar compiler ("The compiled grammar is too large"): every optional property and every anyOf multiplies it. The API copy has NO optional property and NO union:
-// an optional property becomes required and says "not applicable" by its empty value ("" / 0 / [] / "" in an enum / an all-empty object), a nullable X becomes X. back() maps the empties to "absent" again (null for a required nullable)
-// before post.js validates against the FULL schema, so a real value is never changed. ponytail: findings schema only; the audit schema compiles. A null the model really wrote (plain-JSON fallback) is left alone.
-const nonNull = (s) => (s.anyOf || []).find((b) => b.type !== 'null') || s, nullable = (s) => !!s.anyOf?.some((b) => b.type === 'null');
-function apiSchema(s, opt = false) { // opt: inside an optional or nullable subtree, where an enum also needs its "" (required enums keep their values only)
-  if (Array.isArray(s)) return s.map((x) => apiSchema(x, opt));
-  if (!s || typeof s !== 'object') return s;
-  if (s.anyOf && nullable(s)) return apiSchema(nonNull(s), true);
-  const o = {}, req = s.required || [];
-  for (const [k, v] of Object.entries(s)) if (k !== 'description') o[k] = k === 'properties' ? Object.fromEntries(Object.entries(v).map(([n, p]) => [n, apiSchema(p, opt || !req.includes(n))])) : apiSchema(v, opt);
-  if (o.properties) o.required = Object.keys(o.properties);
-  if (opt && o.enum) o.enum = [...o.enum, ''];
-  return o;
-}
-// Attempt 4: the provider still refused the grammar with the optionals and unions gone. coverage[].evidence[] (an array of objects inside an array of objects) moves to a top-level array of { row, ...evidence } and `change` becomes
-// change_mode + an all-empty object, so all three states survive: "same" (absent: post.js reads it as the cited behaviour), "none" (null), "cited" (the object). fromApi() regroups by row; post.js validates the result as before.
-const grammarSmall = (s) => {
-  const a = apiSchema(s), row = a.properties.coverage.items, ev = row.properties.evidence.items;
-  delete row.properties.evidence;
-  row.properties = Object.fromEntries(Object.entries(row.properties).flatMap(([k, p]) => (k === 'change' ? [['change_mode', { enum: ['same', 'none', 'cited'] }], [k, p]] : [[k, p]])));
-  row.required = Object.keys(row.properties);
-  a.properties.evidence = { type: 'array', items: { ...ev, properties: { row: { type: 'integer' }, ...ev.properties }, required: ['row', ...ev.required] } };
-  a.required = Object.keys(a.properties);
-  return a;
-};
-function unflatten(v) { // the flat API form -> the full schema's shape; anything else (plain JSON) passes through
-  if (!v || typeof v !== 'object' || !Array.isArray(v.evidence) || !Array.isArray(v.coverage)) return v;
-  v.coverage.forEach((c, i) => {
-    if (!c || typeof c !== 'object') return;
-    c.evidence = v.evidence.filter((e) => e && e.row === i).map(({ row, ...e }) => e);
-    if (c.change_mode === 'same') delete c.change; else if (c.change_mode === 'none') c.change = null;
-    delete c.change_mode;
-  });
-  delete v.evidence;
-  return v;
-}
-const emptyIn = (s, v) => { // is v the "not applicable" value of its (full-schema) type?
-  s = nonNull(s);
-  if (s.enum) return v === '';
-  if (s.type === 'string') return v === '';
-  if (s.type === 'integer') return v === 0;
-  if (s.type === 'array') return Array.isArray(v) && !v.length;
-  if (s.type === 'object') return !!v && typeof v === 'object' && Object.entries(s.properties || {}).every(([k, p]) => emptyIn(p, v[k]));
-  return false;
-};
-const fromApi = (full, v) => back(full, unflatten(v));
-function back(s, v) { // s: the FULL schema; v is changed in place
-  s = nonNull(s);
-  if (Array.isArray(v) && s.items) v.forEach((x) => back(s.items, x));
-  else if (v && typeof v === 'object' && s.properties) {
-    for (const [k, p] of Object.entries(s.properties)) {
-      if (!(k in v) || v[k] === null) continue;
-      const empty = emptyIn(p, v[k]);
-      if (empty && !(s.required || []).includes(k)) delete v[k];
-      else if (empty && nullable(p)) v[k] = null;
-      else back(p, v[k]);
-    }
-  }
-  return v;
-}
-
 // The prompt is "static prefix (skill, references, schema) + --- + per-PR context" (src/prompt.js): the prefix becomes the cached system block, the rest the user message.
 const SPLIT = '\n\n---\n\nContext directory (absolute path):';
 const REPAIR = 'Return only the JSON object for the schema.';
@@ -418,7 +357,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const model = env.MODEL || 'claude-haiku-5-5';
     const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
     const schemaFile = path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json');
-    const full = JSON.parse(fs.readFileSync(schemaFile, 'utf8')), audit = env.CHECK === 'audit', schema = audit ? strict(full) : grammarSmall(strict(full));
+    const full = JSON.parse(fs.readFileSync(schemaFile, 'utf8')), audit = env.CHECK === 'audit', schema = strict(full);
     let packBytes;
     try { packBytes = packLimit(env); } catch (e) { return end('failed', 'config', e.message); }
     if (env.CHECK === 'audit' && packBytes === 0) return end('failed', 'config', 'context_pack_bytes=0 sends the model no repository files, so a scan would publish without any source reviewed; use a positive value'); // PR mode keeps 0 = diff only
@@ -605,6 +544,6 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
   } catch { return null; }
 }
 
-module.exports = { DENY, run, strict, apiSchema, grammarSmall, back, fromApi, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts
