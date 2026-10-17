@@ -8,7 +8,7 @@ function ageOnDate(birthDate, today) {
 }
 
 function canRegister(age) {
-  return age >= 18;
+  return age > 18;
 }
 
 module.exports = { ageOnDate, canRegister };
