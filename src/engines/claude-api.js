@@ -69,6 +69,9 @@ function apiSchema(s, opt = false) { // opt: inside an optional or nullable subt
   if (opt && o.enum) o.enum = [...o.enum, ''];
   return o;
 }
+// Attempt 2: the provider still refused the grammar with the optionals and unions gone, so the deepest repeated object (coverage[].evidence[], 7 properties and 3 enums, inside an array inside an array) is a JSON STRING per entry; back() parses it.
+// The parsed entry is validated by post.js like any other. ponytail: if this is still too large, stringify alignment next.
+const grammarSmall = (s) => { const a = apiSchema(s); a.properties.coverage.items.properties.evidence = { type: 'array', items: { type: 'string' } }; return a; };
 const emptyIn = (s, v) => { // is v the "not applicable" value of its (full-schema) type?
   s = nonNull(s);
   if (s.enum) return v === '';
@@ -80,7 +83,7 @@ const emptyIn = (s, v) => { // is v the "not applicable" value of its (full-sche
 };
 function back(s, v) { // s: the FULL schema; v is changed in place
   s = nonNull(s);
-  if (Array.isArray(v) && s.items) v.forEach((x) => back(s.items, x));
+  if (Array.isArray(v) && s.items) v.forEach((x, i) => { if (typeof x === 'string' && nonNull(s.items).type === 'object') try { v[i] = JSON.parse(x); } catch { /* left as is: post.js reports it malformed */ } back(s.items, v[i]); });
   else if (v && typeof v === 'object' && s.properties) {
     for (const [k, p] of Object.entries(s.properties)) {
       if (!(k in v) || v[k] === null) continue;
@@ -394,7 +397,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const model = env.MODEL || 'claude-haiku-5-5';
     const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
     const schemaFile = path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json');
-    const full = JSON.parse(fs.readFileSync(schemaFile, 'utf8')), audit = env.CHECK === 'audit', schema = audit ? strict(full) : apiSchema(strict(full));
+    const full = JSON.parse(fs.readFileSync(schemaFile, 'utf8')), audit = env.CHECK === 'audit', schema = audit ? strict(full) : grammarSmall(strict(full));
     let packBytes;
     try { packBytes = packLimit(env); } catch (e) { return end('failed', 'config', e.message); }
     if (env.CHECK === 'audit' && packBytes === 0) return end('failed', 'config', 'context_pack_bytes=0 sends the model no repository files, so a scan would publish without any source reviewed; use a positive value'); // PR mode keeps 0 = diff only
@@ -578,6 +581,6 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
   } catch { return null; }
 }
 
-module.exports = { DENY, run, strict, apiSchema, back, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, apiSchema, grammarSmall, back, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts

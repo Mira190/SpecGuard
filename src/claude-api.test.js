@@ -1505,8 +1505,11 @@ const fillApi = (s, v) => {
   return t.enum || t.type === 'string' ? '' : t.type === 'integer' ? 0 : t.type === 'array' ? [] : Object.fromEntries(Object.entries(t.properties).map(([k, p]) => [k, fillApi(p, undefined)]));
 };
 
+const stringified = (o) => { o.coverage.forEach((c) => { c.evidence = c.evidence.map((e) => JSON.stringify(e)); }); return o; }; // the request form of evidence
+
 test('findings API schema: no optional property, no union, every full-schema property representable, required enums keep their values', () => {
-  const a = api.apiSchema(api.strict(FULL));
+  const a = api.apiSchema(api.strict(FULL)), small = api.grammarSmall(api.strict(FULL));
+  assert.deepEqual(small.properties.coverage.items.properties.evidence, { type: 'array', items: { type: 'string' } }, 'evidence entries are JSON strings in the request');
   let opt = 0, unions = 0, objects = 0;
   const walk = (n, f, p) => { // n: API node, f: full node
     if (!n || typeof n !== 'object') return;
@@ -1525,11 +1528,11 @@ test('findings API schema: no optional property, no union, every full-schema pro
   assert.equal(unions, 0, 'anyOf unions');
   assert.ok(!a.properties.findings.items.properties.kind.enum.includes(''), 'a required enum is not widened');
   assert.ok(a.properties.findings.items.properties.side.enum.includes(''), 'an optional enum can say not applicable');
-  assert.ok(JSON.stringify(a).length < JSON.stringify(api.strict(FULL)).length, 'smaller than the schema the provider refused');
+  assert.ok(JSON.stringify(small).length < JSON.stringify(api.strict(FULL)).length, 'smaller than the schema the provider refused');
 });
 
 test('findings API form round-trips: empties become absent again, real values and required nulls are never changed', () => {
-  const want = ORIGINAL(), sent = fillApi(FULL, want);
+  const want = ORIGINAL(), sent = stringified(fillApi(FULL, want));
   assert.equal(sent.findings[1].start_line, 0);
   assert.equal(sent.coverage[1].alignment.status, '');
   const got = api.back(FULL, structuredClone(sent));
@@ -1544,8 +1547,8 @@ test('findings API form round-trips: empties become absent again, real values an
 
 test('the request carries the API schema and findings.json is written in post.js form', async (t) => {
   const want = ORIGINAL(); delete want.coverage[1].change;
-  const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(fillApi(FULL, ORIGINAL())) }] })]);
+  const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(stringified(fillApi(FULL, ORIGINAL()))) }] })]);
   await h.go();
-  assert.deepEqual(h.calls[0].body.output_config.format.schema, api.apiSchema(api.strict(FULL)));
+  assert.deepEqual(h.calls[0].body.output_config.format.schema, api.grammarSmall(api.strict(FULL)));
   assert.deepEqual(JSON.parse(h.file('findings.json')), want);
 });
