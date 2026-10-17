@@ -225,6 +225,12 @@ test('audit prompt: carries the skill, the oracle rule and the untrusted-data fr
   assert.ok(p.endsWith('matching the schema.\n'));
 });
 
+test('audit prompt: no missing_test for data-only tables, one-line accessors or build-tagged files; weak_test only when no other test of the describe asserts it; no-gap rows are not rows', () => {
+  const p = abuild(actx());
+  for (const s of ['Do not raise `missing_test` for data-only constant, enum or message tables', 'one-line accessors', 'platform build-tagged files', 'Raise `weak_test` only if no other test in the same `describe` block asserts the behaviour', 'A row that says there is no gap is not a row'])
+    assert.ok(p.includes(s), s);
+});
+
 test('audit prompt: per-run context is inlined as untrusted-data blocks after a static prefix; empty inputs are named', () => {
   const a = actx({ 'standards.txt': 'CONTRIBUTING.md\n', 'test-layout.txt': 'test directories: tests (3)\n' }), b = actx({ 'audit-docs.txt': 'other.md\tdiscovered\n' });
   const p = abuild(a);
