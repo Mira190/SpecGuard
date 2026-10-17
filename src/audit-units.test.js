@@ -823,6 +823,16 @@ test('boundary lead: control: a literal comparison, a unit with no matched test 
   assert.equal(bound(t, ['export const LOW_SPACE_BYTES = os.total() / 2;', ...BCMP.slice(1)], btest()).length, 0);
 });
 
+test('U2 boundary lead: signed, decimal and _-separated constants are pinned by the same number in a test; a binary minus is not a sign', (t) => {
+  const src = (v) => ['export const LIMIT_VAL = ' + v + ';', 'export function check(f) {', '  return f.x < LIMIT_VAL;', '}'];
+  const tst = (call) => ({ 'test/precheck.test.js': ["import { check } from '../src/precheck';", "it('checks', () => {", `  assert.equal(${call}, false);`, '});'] });
+  for (const [v, call] of [['-10', 'check(-10)'], ['-0.5', 'check({ x: -0.5 })'], ['1_000', 'check({ x: 1000 })'], ['10', 'check(10)'], ['-10', 'check({ y: 1, x: -10 })']]) assert.equal(bound(t, src(v), tst(call)).length, 0, `${v} pinned by ${call}`);
+  assert.equal(bound(t, src('-10'), tst('check(5 - 10)')).length, 1, 'x - 10 is not -10');
+  assert.equal(bound(t, src('-10'), tst('check(x-10)')).length, 1, 'x-10 is not -10');
+  assert.equal(bound(t, src('-10'), tst('check(10)')).length, 1, 'positive 10 does not pin -10');
+  assert.equal(bound(t, src('-10'), tst('check(3)')).length, 1, 'unpinned negative still leads');
+});
+
 // ---- third-party / non-unit noise ----
 const rowsByPath = (t, files) => { const r = repo(t, files); return Object.fromEntries(inventory({ cwd: r.root, head: 'HEAD', now: NOW }).rows.map((x) => [x.path, x])); };
 const fnSrc = (n) => [`export function ${n}(a) {`, '  return a + 1;', '}', 'export function other(a) {', '  return a;', '}'];

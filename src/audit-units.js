@@ -66,12 +66,12 @@ function testSignals(src) {
 
 // Boundary lead: a comparison against a named numeric constant (`x < LOW_SPACE_BYTES`) whose value no matched test uses. Static, from the unit text and the matched tests' words.
 // ponytail: JS/TS only; the constant must be `const NAME = <digits and + - * / ( )>` (this file first, else the one repo definition); a literal or a dynamic bound is too noisy to claim.
-const CMP = /([\w$.]+(?:\(\))?)\s+(<=|>=|<|>)\s+(-?[\w$.]+(?:\(\))?)/g, CONSTANT = /^(?:\w+\.)*([A-Z][A-Z0-9_]{2,})$/, CONST_DEF = /\bconst\s+([A-Z][A-Z0-9_]{2,})\s*(?::\s*\w+\s*)?=\s*([-\d_*+/() ]+?)\s*(?:as const)?\s*;?\s*$/;
+const CMP = /([\w$.]+(?:\(\))?)\s+(<=|>=|<|>)\s+(-?[\w$.]+(?:\(\))?)/g, CONSTANT = /^(?:\w+\.)*([A-Z][A-Z0-9_]{2,})$/, CONST_DEF = /\bconst\s+([A-Z][A-Z0-9_]{2,})\s*(?::\s*\w+\s*)?=\s*([-\d_.*+/() ]+?)\s*(?:as const)?\s*;?\s*$/;
 const FN = /^\s*(?:export\s+)?(?:async\s+)?(?:function\*?\s+([\w$]+)|(?:const|let)\s+([\w$]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[\w$]+)\s*(?::[^=]+)?=>|(?:public\s+|private\s+|protected\s+|static\s+|async\s+)*([\w$]+)\s*\([^)]*\)\s*(?::\s*[^{]+)?\{)/, NOT_FN = new Set(['if', 'for', 'while', 'switch', 'catch', 'return', 'function']);
 function arith(src) { // + - * / ( ) over numbers, no eval; NaN when it is anything else
-  const t = src.replace(/(\d)_(?=\d)/g, '$1').match(/\d+|[-+*/()]|\S/g) || [];
+  const t = src.replace(/(\d)_(?=\d)/g, '$1').match(/\d+(?:\.\d+)?|[-+*/()]|\S/g) || [];
   let i = 0;
-  const unary = () => { const c = t[i++]; if (c === '-') return -unary(); if (c === '(') { const v = sum(); return t[i++] === ')' ? v : NaN; } return /^\d+$/.test(c) ? Number(c) : NaN; };
+  const unary = () => { const c = t[i++]; if (c === '-') return -unary(); if (c === '(') { const v = sum(); return t[i++] === ')' ? v : NaN; } return /^\d+(?:\.\d+)?$/.test(c) ? Number(c) : NaN; };
   const prod = () => { let v = unary(); while (t[i] === '*' || t[i] === '/') v = t[i++] === '*' ? v * unary() : v / unary(); return v; };
   const sum = () => { let v = prod(); while (t[i] === '+' || t[i] === '-') v = t[i++] === '+' ? v + prod() : v - prod(); return v; };
   const v = sum();
@@ -259,7 +259,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (bw.size) { // an import line is not a use
         const t = src.replace(/\bimport\s+[^;'"]*?\bfrom\s*['"][^'"]*['"]/g, '').split('\n').filter((l) => !/^\s*(import\b|.*\brequire\(|export\s.*\bfrom\b)/.test(l)).join('\n').replace(/(\d)_(?=\d)/g, '$1'), b = { w: new Set(), p: new Set(), n: new Set() };
         for (const m of t.matchAll(/([A-Za-z_$][\w$]*)(\s*[-+*/])?/g)) if (bw.has(m[1])) { b.w.add(m[1]); if (!m[2]) b.p.add(m[1]); }
-        for (const m of t.matchAll(/(?<![\w.])\d+(?:\.\d+)?(?![\w.])/g)) if (bn.has(m[0])) b.n.add(m[0]);
+        for (const m of t.matchAll(/(?<![\w.])(-?)(\d+(?:\.\d+)?)(?![\w.])/g)) { const neg = m[1] && !/[\w$)\]]$/.test(t.slice(0, m.index).trimEnd()), n = String(neg ? -m[2] : +m[2]); if (bn.has(n)) b.n.add(n); } // a minus is a sign only when unary (`f(-10)`, `= -10`), not `x-10`; same normal form as String(c.v)
         bt.set(e.path, b);
       } const ip = importPaths(e.path, src, shaOf); srcImports.set(e.path, ip.map((p) => `${p}:${shaOf.get(p)}`)); for (const p of ip) put(importers, p, e.path);
       for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) { if (want.has(w)) refd.add(w); if (stems.has(w)) put(mention, w, e.path); if (classes.has(w)) put(classHit, w, e.path); }
