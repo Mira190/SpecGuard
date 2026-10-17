@@ -71,7 +71,8 @@ function apiSchema(s, opt = false) { // opt: inside an optional or nullable subt
 }
 // Attempt 2: the provider still refused the grammar with the optionals and unions gone, so the deepest repeated object (coverage[].evidence[], 7 properties and 3 enums, inside an array inside an array) is a JSON STRING per entry; back() parses it.
 // The parsed entry is validated by post.js like any other. ponytail: if this is still too large, stringify alignment next.
-const grammarSmall = (s) => { const a = apiSchema(s); a.properties.coverage.items.properties.evidence = { type: 'array', items: { type: 'string' } }; return a; };
+const EVIDENCE_TEXT = 'One evidence entry as the TEXT of a JSON object, exactly the evidence object of the schema in the prompt: {"path":"t.js","line":12,"quote":"the cited line","layer":"unit","proves":"...","kind":"assertion","side":"RIGHT"}. Use "" for layer, proves, kind or side when not applicable.';
+const grammarSmall = (s) => { const a = apiSchema(s); a.properties.coverage.items.properties.evidence = { type: 'array', items: { type: 'string', description: EVIDENCE_TEXT } }; return a; };
 const emptyIn = (s, v) => { // is v the "not applicable" value of its (full-schema) type?
   s = nonNull(s);
   if (s.enum) return v === '';

@@ -1509,7 +1509,8 @@ const stringified = (o) => { o.coverage.forEach((c) => { c.evidence = c.evidence
 
 test('findings API schema: no optional property, no union, every full-schema property representable, required enums keep their values', () => {
   const a = api.apiSchema(api.strict(FULL)), small = api.grammarSmall(api.strict(FULL));
-  assert.deepEqual(small.properties.coverage.items.properties.evidence, { type: 'array', items: { type: 'string' } }, 'evidence entries are JSON strings in the request');
+  assert.match(small.properties.coverage.items.properties.evidence.items.description, /TEXT of a JSON object/);
+  assert.deepEqual(small.properties.coverage.items.properties.evidence, { type: 'array', items: { type: 'string', description: small.properties.coverage.items.properties.evidence.items.description } }, 'evidence entries are JSON strings in the request');
   let opt = 0, unions = 0, objects = 0;
   const walk = (n, f, p) => { // n: API node, f: full node
     if (!n || typeof n !== 'object') return;
