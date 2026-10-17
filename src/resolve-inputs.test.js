@@ -134,14 +134,18 @@ test('URLs of another repository are rejected with the reason; non-GitHub URLs s
 
 test('resolve: a PR link reviews the PR (head and base from the API, open only); a repo link or owner/name scans the default branch; a tree link scans that branch', () => {
   const pulls = { 9: [H, B, 'open'], 10: [H, B, 'closed'] }, api = fake({ refs: ['main', 'feat/x'], tree: { 'docs/specs': 'dir' }, pulls });
-  assert.deepEqual(resolve({ TARGET: 'https://github.com/acme/shop/pull/9' }, api), { repo: 'acme/shop', pr: '9', ref: '', mode: 'pr', head_sha: H, base_sha: B, design: '', rules: '', tests: '' });
-  const scan = { repo: 'acme/shop', pr: '', ref: '', mode: 'scan', head_sha: '', base_sha: '', design: '', rules: '', tests: '' };
+  assert.deepEqual(resolve({ TARGET: 'https://github.com/acme/shop/pull/9' }, api), { repo: 'acme/shop', pr: '9', ref: '', mode: 'pr', head_sha: H, base_sha: B, scan_paths: '', design: '', rules: '', tests: '' });
+  const scan = { repo: 'acme/shop', pr: '', ref: '', mode: 'scan', head_sha: '', base_sha: '', scan_paths: '', design: '', rules: '', tests: '' };
   assert.deepEqual(resolve({ TARGET: 'acme/shop' }, api), scan);
   assert.deepEqual(resolve({ TARGET: 'https://github.com/acme/shop' }, api), scan);
   assert.deepEqual(resolve({ TARGET: 'https://github.com/acme/shop/tree/main' }, api), { ...scan, ref: 'main' });
   const logs = [];
-  assert.deepEqual(resolve({ TARGET: 'https://github.com/acme/shop/tree/feat/x/docs' }, api, (m) => logs.push(m)), { ...scan, ref: 'feat/x' });
-  assert.match(logs.join('\n'), /^::notice::the scan covers the whole branch feat\/x; the part of the link after it \(docs\) is ignored/);
+  assert.deepEqual(resolve({ TARGET: 'https://github.com/acme/shop/tree/feat/x/docs' }, api, (m) => logs.push(m)), { ...scan, ref: 'feat/x', scan_paths: 'docs' });
+  assert.match(logs.join('\n'), /^::notice::the scan covers the source files under docs on feat\/x; documents and tests still come from the whole repository/);
+  assert.equal(resolve({ TARGET: 'https://github.com/acme/shop/tree/main/packages/payments' }, api).scan_paths, 'packages/payments', 'a directory link scopes the scan');
+  const unv = [], noApi = resolve({ TARGET: 'https://github.com/acme/shop/tree/main/packages/payments' }, () => null, (m) => unv.push(m));
+  assert.deepEqual([noApi.ref, noApi.scan_paths], ['main', ''], 'an unverified split does not scope');
+  assert.match(unv.join('\n'), /^::warning::could not check which part of the link is the branch name/);
   assert.equal(resolve({ TARGET: `https://github.com/acme/shop/tree/${'d'.repeat(40)}` }, api).ref, 'd'.repeat(40));
   err(() => resolve({ TARGET: 'https://github.com/acme/shop/pull/10' }, api), /is closed; SpecGuard reviews open PRs/);
   err(() => resolve({ TARGET: 'https://github.com/acme/shop/pull/11' }, api), /could not read acme\/shop#11/);
@@ -193,17 +197,18 @@ const workflow = () => fs.readFileSync(path.join(__dirname, '..', '.github', 'wo
 
 test('specguard-run.yml: one required target plus optional inputs, nothing else on the form', () => {
   const y = workflow(), form = /^ {4}inputs:\n((?: {6}.*\n)+)/m.exec(y)[1];
-  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_units', 'max_budget_usd', 'max_output_tokens', 'scan_scope', 'scan_issue']);
+  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_budget_usd', 'scan_scope', 'scan_issue']);
   assert.match(y, /^ {6}target: \{[^}]*required: true/m);
-  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_units', 'max_budget_usd', 'max_output_tokens', 'scan_scope', 'scan_issue']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
+  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_budget_usd', 'scan_scope', 'scan_issue']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
   assert.match(y, /^ {6}post_to_pr: \{[^}]*type: boolean, default: false/m);
+  assert.match(y, /^ {10}scan_paths: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && needs\.resolve\.outputs\.scan_paths \|\| '' \}\}/m, 'the link path scopes scans only');
   assert.match(y, /^ {6}scan_scope: \{[^}]*type: choice, default: all, options: \[all, selected\]/m, 'the whole repository by default');
   assert.match(y, /scan_scope: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && inputs\.scan_scope \|\| 'selected' \}\}/, 'reaches the action, scans only');
   assert.match(y, /^ {4}timeout-minutes: 180\b/m, 'the review job outlasts the longest all run');
   assert.match(y, /review_timeout_minutes: \$\{\{[^}]*'150' \|\| '12' \}\}/, 'the engine limit sits inside the job timeout');
   assert.doesNotMatch(form, /\b(repo|pr|ref|mode|effort):/);
   assert.doesNotMatch(y, /inputs\.(repo|pr|ref|mode|effort)\b/);
-  assert.match(y, /target: \{ description: "Paste a PR link to review it, or a repo or branch link to scan it\."/);
+  assert.match(y, /target: \{ description: "A PR link \(reviews it\)[^"]*directory[^"]*Use workflow from[^"]*code reviewed comes from here\."/);
   assert.match(y, /mode: \$\{\{ needs\.resolve\.outputs\.mode \}\}/, 'the mode comes from the target');
 });
 
