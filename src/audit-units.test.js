@@ -774,3 +774,25 @@ test('staticLeads: when the cap bites, unreferenced exports (near-certain) come 
   assert.deepEqual(L.items.map((i) => i.unit), [...rows.slice(15).map((r) => r.id), ...rows.slice(0, 12).map((r) => r.id)]);
   assert.equal(L.extra, 3);
 });
+
+// ---- boundary lead: a comparison against a named numeric constant that no matched test uses ----
+const bsrc = (...ls) => ['export const LOW_SPACE_BYTES = 50 * 1024 * 1024;', 'export function check(f) {', ...ls, '}', 'export const pad1 = 1;'];
+const bound = (t, src, files = {}) => { const { json } = leadRows(t, { 'src/precheck.js': src, ...files }); return require('./audit-units').staticLeads(json.rows).items.filter((i) => i.kind === 'boundary_unpinned'); };
+const btest = (...ls) => ({ 'test/precheck.test.js': ["import { check, LOW_SPACE_BYTES } from '../src/precheck';", "it('checks', () => {", '  assert.equal(check({ freeBytes: 1 }), true);', ...ls, '});'] });
+const BCMP = bsrc('  return f.freeBytes < LOW_SPACE_BYTES;');
+
+test('boundary lead: a comparison with a named constant whose name and value no matched test uses is a lead (the test imports the constant and never uses it)', (t) => {
+  assert.deepEqual(bound(t, BCMP, btest()).map((i) => [i.path, i.line, i.why]), [['src/precheck.js', 3, 'line 3 compares with LOW_SPACE_BYTES (= 52428800); no matched test uses LOW_SPACE_BYTES or its value']]);
+});
+
+test('boundary lead: control: a test that uses the constant by name or by value pins it; the name or number inside arithmetic does not', (t) => {
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: LOW_SPACE_BYTES }), false);')).length, 0);
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: 52_428_800 }), false);')).length, 0);
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: LOW_SPACE_BYTES - 1 }), true);')).length, 1);
+});
+
+test('boundary lead: control: a literal comparison, a unit with no matched test and a constant that is not a plain numeric expression make no lead', (t) => {
+  assert.equal(bound(t, bsrc('  return f.freeBytes < 200;'), btest()).length, 0);
+  assert.equal(bound(t, BCMP, { 'test/other.test.js': "it('x', () => { assert.equal(1, 1); });" }).length, 0);
+  assert.equal(bound(t, ['export const LOW_SPACE_BYTES = os.total() / 2;', ...BCMP.slice(1)], btest()).length, 0);
+});

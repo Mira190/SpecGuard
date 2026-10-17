@@ -61,6 +61,54 @@ function testSignals(src) {
   return { tests: starts.length, noAssert, skipped: ls.filter((l) => SKIPPED.test(l)).length, asserts: ls.filter((l) => !comment(l) && ASSERTION.test(l)).length, weak: weakCandidates(src).map((w) => ({ line: w.line, what: w.what, text: w.text.slice(0, 100) })) };
 }
 
+// Boundary lead: a comparison against a named numeric constant (`x < LOW_SPACE_BYTES`) whose value no matched test uses. Static, from the unit text and the matched tests' words.
+// ponytail: JS/TS only; the constant must be `const NAME = <digits and + - * / ( )>` (this file first, else the one repo definition); a literal or a dynamic bound is too noisy to claim.
+const CMP = /([\w$.]+(?:\(\))?)\s+(<=|>=|<|>)\s+(-?[\w$.]+(?:\(\))?)/g, CONSTANT = /^(?:\w+\.)*([A-Z][A-Z0-9_]{2,})$/, CONST_DEF = /\bconst\s+([A-Z][A-Z0-9_]{2,})\s*(?::\s*\w+\s*)?=\s*([-\d_*+/() ]+?)\s*(?:as const)?\s*;?\s*$/;
+const FN = /^\s*(?:export\s+)?(?:async\s+)?(?:function\*?\s+([\w$]+)|(?:const|let)\s+([\w$]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[\w$]+)\s*(?::[^=]+)?=>|(?:public\s+|private\s+|protected\s+|static\s+|async\s+)*([\w$]+)\s*\([^)]*\)\s*(?::\s*[^{]+)?\{)/, NOT_FN = new Set(['if', 'for', 'while', 'switch', 'catch', 'return', 'function']);
+function arith(src) { // + - * / ( ) over numbers, no eval; NaN when it is anything else
+  const t = src.replace(/(\d)_(?=\d)/g, '$1').match(/\d+|[-+*/()]|\S/g) || [];
+  let i = 0;
+  const unary = () => { const c = t[i++]; if (c === '-') return -unary(); if (c === '(') { const v = sum(); return t[i++] === ')' ? v : NaN; } return /^\d+$/.test(c) ? Number(c) : NaN; };
+  const prod = () => { let v = unary(); while (t[i] === '*' || t[i] === '/') v = t[i++] === '*' ? v * unary() : v / unary(); return v; };
+  const sum = () => { let v = prod(); while (t[i] === '+' || t[i] === '-') v = t[i++] === '+' ? v + prod() : v - prod(); return v; };
+  const v = sum();
+  return i === t.length && Number.isFinite(v) ? v : NaN;
+}
+function codeLines(ls) { // lines without comments and string contents
+  let inB = false;
+  return ls.map((l) => {
+    let o = '', i = 0;
+    while (i < l.length) {
+      if (inB) { const e = l.indexOf('*/', i); if (e < 0) i = l.length; else { inB = false; i = e + 2; } continue; }
+      const c = l[i];
+      if (c === '/' && l[i + 1] === '*') { inB = true; i += 2; continue; }
+      if (c === '/' && l[i + 1] === '/') break;
+      if (c === "'" || c === '"' || c === '`') { let j = i + 1; while (j < l.length && l[j] !== c) j += l[j] === '\\' ? 2 : 1; o += '""'; i = j + 1; continue; }
+      o += c; i++;
+    }
+    return o;
+  });
+}
+// -> { consts: {NAME: value}, cmps: [{ line, name, fn }] } of one file; cmps only when asked (a unit)
+function boundaryOf(file, ls, wantCmps) {
+  const out = { consts: {}, cmps: [] };
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return out;
+  const cl = codeLines(ls);
+  cl.forEach((l, i) => {
+    const d = CONST_DEF.exec(l), v = d && /\d/.test(d[2]) ? arith(d[2]) : NaN;
+    if (d && Number.isFinite(v)) out.consts[d[1]] = v;
+    if (!wantCmps || /^\s*(import|export\s+(type|interface)|type\s|interface\s)/.test(l) || /\bextends\b.*</.test(l)) return;
+    for (const m of l.matchAll(CMP)) {
+      const c = CONSTANT.exec(m[1]) || CONSTANT.exec(m[3]);
+      if (!c) continue;
+      let fn = null; const ind = l.search(/\S/);
+      for (let k = i; k >= 0 && !fn; k--) { const f = FN.exec(cl[k]); if (f && /(\{|=>|\()\s*$/.test(cl[k]) && cl[k].search(/\S/) < ind) { const n = f[1] || f[2] || f[3]; if (n && !NOT_FN.has(n)) fn = n; } }
+      if (!out.cmps.some((x) => x.line === i + 1)) out.cmps.push({ line: i + 1, name: c[1], fn });
+    }
+  });
+  return out;
+}
+
 // ONE git log pass: path -> { churn: commits touching it in the last DAYS days, fixes: of those, commits whose subject says fix/bug/hotfix/regression/revert }. A shallow clone has no history: null.
 function history(cwd, now = Date.now()) {
   const git = (...a) => execFileSync('git', ['-c', 'core.quotepath=off', ...a], { cwd, encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] });
@@ -170,6 +218,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const capped = Math.max(0, cand.length - maxRead); // files past the read cap, never reached
   if (cand.length > maxRead) { limits.push(`only the first ${maxRead} of ${cand.length} source files were inventoried (narrow with scan_paths)`); cand = cand.slice(0, maxRead); }
   const units = [], srcImports = new Map(), importers = new Map(); // srcImports: path -> the relative imports of its text (units and read tests); importers: unit path -> the read tests that import it
+  const consts = new Map(), anyConst = new Map(); // numeric constants per file; any name -> value when the repo has one definition (NaN: two)
   const shaOf = new Map(files.map((e) => [e.path, e.sha]));
   let reached = 0; // reached: files whose chunk was read before the time budget ended
   for (let i = 0; i < cand.length && !dl.over(); i += 300) {
@@ -178,8 +227,9 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     part.forEach((e, k) => {
       if (!bufs[k] || bufs[k].subarray(0, 8192).includes(0)) return;
       const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
-      const n = loc(ls);
-      if (n >= MIN_LOC) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls, e.path), size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0) }); }
+      const n = loc(ls), bd = boundaryOf(e.path, ls, n >= MIN_LOC);
+      if (Object.keys(bd.consts).length) { consts.set(e.path, bd.consts); for (const [k, v] of Object.entries(bd.consts)) anyConst.set(k, anyConst.has(k) && anyConst.get(k) !== v ? NaN : v); }
+      if (n >= MIN_LOC) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls, e.path), size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0), cmps: bd.cmps }); }
     });
   }
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
@@ -192,6 +242,8 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const names = new Set(units.flatMap((u) => u.names)), sig = new Map(), mention = new Map(), called = new Map(), token = new Map(), classHit = new Map();
   const put = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
   const want = new Set(units.flatMap((u) => u.defs.map((d) => d.name))), refd = new Set(); // refd: lead names some read test file mentions as a word
+  const bw = new Set(), bn = new Set(), bt = new Map(); // boundary lead: words and numbers of interest, and what each read test file has of them
+  for (const u of units) u.cmps = u.cmps.filter((c) => { c.v = (consts.get(u.path) || {})[c.name] ?? anyConst.get(c.name); if (!Number.isFinite(c.v)) return false; bw.add(c.name); if (c.fn) bw.add(c.fn); bn.add(String(c.v)); return true; });
   let bytes = 0, readN = 0;
   const readable = testEntries.filter((e) => e.size <= TEST_FILE).sort((a, b) => (a.path < b.path ? -1 : 1));
   for (let i = 0; i < readable.length && readN < MAX_TESTS_READ && bytes < TEST_TOTAL && !dl.over(); i += 300) {
@@ -200,7 +252,13 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (!bufs[k] || readN >= MAX_TESTS_READ || bufs[k].subarray(0, 8192).includes(0)) return;
       readN++; bytes += bufs[k].length;
       const src = bufs[k].toString('utf8');
-      sig.set(e.path, testSignals(src)); const ip = importPaths(e.path, src, shaOf); srcImports.set(e.path, ip.map((p) => `${p}:${shaOf.get(p)}`)); for (const p of ip) put(importers, p, e.path);
+      sig.set(e.path, testSignals(src));
+      if (bw.size) { // an import line is not a use
+        const t = src.replace(/\bimport\s+[^;'"]*?\bfrom\s*['"][^'"]*['"]/g, '').split('\n').filter((l) => !/^\s*(import\b|.*\brequire\(|export\s.*\bfrom\b)/.test(l)).join('\n').replace(/(\d)_(?=\d)/g, '$1'), b = { w: new Set(), p: new Set(), n: new Set() };
+        for (const m of t.matchAll(/([A-Za-z_$][\w$]*)(\s*[-+*/])?/g)) if (bw.has(m[1])) { b.w.add(m[1]); if (!m[2]) b.p.add(m[1]); }
+        for (const m of t.matchAll(/(?<![\w.])\d+(?:\.\d+)?(?![\w.])/g)) if (bn.has(m[0])) b.n.add(m[0]);
+        bt.set(e.path, b);
+      } const ip = importPaths(e.path, src, shaOf); srcImports.set(e.path, ip.map((p) => `${p}:${shaOf.get(p)}`)); for (const p of ip) put(importers, p, e.path);
       for (const w of new Set(src.match(/[A-Za-z_$][\w$]*/g) || [])) { if (want.has(w)) refd.add(w); if (stems.has(w)) put(mention, w, e.path); if (classes.has(w)) put(classHit, w, e.path); }
       if (pathStems.size) for (const c of new Set(src.match(/[\w$][\w$.-]*/g) || [])) { const w = c.replace(/[.-]+$/, ''); for (const k of new Set([w, w.replace(/\.[a-z]{1,4}$/i, '')])) if (pathStems.has(k)) put(token, k, e.path); }
       for (const w of new Set(src.match(/[A-Za-z_$][\w$]*(?=\s*\()/g) || [])) if (names.has(w)) { if (!called.has(w)) called.set(w, []); called.get(w).push(e.path); }
@@ -225,7 +283,9 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     const verLegacy = sha8(seen), ver = deps ? sha8(`${seen}\n${deps}`) : verLegacy; // what a review of this unit saw: its blob, its matched tests' blobs, and the blobs they import (helpers, fixtures, the unit's own dependencies)
     // ponytail: "no test references it" is only claimed when every test file was read (an unread one may name it) and the unit has matched tests (else test_evidence_not_found already says it); an in-memory word match, so a name in a comment counts as a reference
     const unref = unread || !got.length ? [] : u.defs.filter((d) => !refd.has(d.name));
-    return { ...u, unref, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
+    // a comparison in a function the tests call (else it is a missing test, which has its own signal) whose constant no matched test uses by name or by value
+    const boundary = unread || !got.length ? [] : u.cmps.filter((c) => (!c.fn || got.some((t) => bt.get(t)?.w.has(c.fn))) && !got.some((t) => bt.get(t)?.p.has(c.name) || bt.get(t)?.n.has(String(c.v)))).map((c) => ({ line: c.line, name: c.name, value: c.v }));
+    return { ...u, unref, boundary, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
   const size = partBytes(packBytes, maxUnits), tsize = new Map(testEntries.map((e) => [e.path, e.size]));
   const tcost = (t) => Math.ceil(Math.min(tsize.get(t) || 0, fileCap(packBytes)) * 1.15) + 300;
@@ -269,7 +329,7 @@ function write(ctx, head, maxUnits, inv) {
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
   w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...(inv.unitCalls > 1 && { unit_calls: inv.unitCalls }), ...(inv.allParts && { all_parts: true, parts_left: inv.partsLeft }), ...(inv.hint && { budget_hint: inv.hint }), ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
     rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r), signals: { tests: r.signals.tests, noAssert: r.signals.noAssert, skipped: r.signals.skipped, asserts: r.signals.asserts, weak: r.signals.weak.length, unread: r.signals.unread },
-      ...((r.signals.weak.length || r.unref.length) && { leads: { weak: r.signals.weak.slice(0, LEADS).map((x) => ({ path: x.path, line: x.line, text: x.text })), unref: r.unref.slice(0, 5) } }) })),
+      ...((r.signals.weak.length || r.unref.length || (r.boundary || []).length) && { leads: { boundary: (r.boundary || []).slice(0, 3), weak: r.signals.weak.slice(0, LEADS).map((x) => ({ path: x.path, line: x.line, text: x.text })), unref: r.unref.slice(0, 5) } }) })),
     forced: inv.forced, // picked although it cannot fit the pack: the publisher records it as unsure even when its tests were cut, so the rotation moves on
     unreviewed: inv.rows.filter((r) => inv.review(r) === 'not yet reviewed').slice(0, 30).map((r) => ({ id: r.id, path: r.path, score: r.score })) }) + '\n');
 }
@@ -292,14 +352,15 @@ function staticFindings(rows) {
 // Exact-location facts from the same rows (row.leads, written by write()): a weak assertion that only checks truthiness, an exported name no test file mentions. In row order (risk order); at most `cap` kept, `extra` counts the rest.
 // Facts for a reader to check, never counted as gaps and never in the state.
 function staticLeads(rows, cap = 20) {
-  const all = [], unref = [], seen = new Set(), exp = (p) => (/\.[cm]?[jt]sx?$/i.test(p) ? 'exported' : 'public');
+  const all = [], unref = [], bnd = [], seen = new Set(), exp = (p) => (/\.[cm]?[jt]sx?$/i.test(p) ? 'exported' : 'public');
   for (const r of rows || []) {
     const l = r && r.leads;
     if (!l) continue;
     for (const w of l.weak || []) !seen.has(w.path + ":" + w.line) && seen.add(w.path + ":" + w.line) && all.push({ unit: r.id, path: w.path, line: w.line, kind: 'truthiness_only', why: `\`${w.path.split('/').pop()}:${w.line}\` asserts only truthiness (\`${String(w.text).replace(/`/g, "'")}\`)` });
+    for (const b of l.boundary || []) bnd.push({ unit: r.id, path: r.path, line: b.line, kind: 'boundary_unpinned', why: `line ${b.line} compares with ${b.name} (= ${b.value}); no matched test uses ${b.name} or its value` });
     for (const d of l.unref || []) unref.push({ unit: r.id, path: r.path, line: d.line, kind: 'unreferenced_export', why: `\`${d.name}\` (${r.path}:${d.line}) is ${exp(r.path)} and no test file references it` });
   }
-  all.unshift(...unref); // no test file names the export: a near-certain fact, listed before the weak-assertion leads when the cap bites
+  all.unshift(...unref); all.push(...bnd); // boundary leads last: a static guess about what a test pins // no test file names the export: a near-certain fact, listed before the weak-assertion leads when the cap bites
   return { items: all.slice(0, cap), extra: Math.max(0, all.length - cap) };
 }
 
