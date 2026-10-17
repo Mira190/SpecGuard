@@ -312,8 +312,11 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
     const rules = RULE_GLOBS.concat(lines(ignoreExtra)), docSet = new Set(found);
     // the pack carries the rule files first (each cut at the per-file cap, plus a header): units share what is left
     const left = packBytes && Math.max(1, packBytes - standards.reduce((n, f) => { try { return n + Math.min(fs.statSync(path.join(cwd, f)).size, PER_FILE) + 300; } catch { return n; } }, 0));
-    units = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, rooms: unitParts, prior, now, packBytes: left, allParts: !rotate, price });
-    if (units.rows.length) writeUnits(ctx, head, maxUnits, units);
+    const plan = (rooms, reserve) => { const u = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, rooms, prior, now, packBytes: left, allParts: !rotate, price: price && { ...price, reserve } }); if (u.rows.length) writeUnits(ctx, head, maxUnits, u); return u; };
+    units = plan(unitParts, 0);
+    // the engine's pre-flight on this very ctx: it drops the last unit calls when the document block calls take the budget. Plan no more unit calls than it keeps (the first parts of every unit are in the first rooms), and price the hint with the real block calls.
+    const kept = price && price.fit && (units.unitRooms.length > 1 || units.hint) ? price.fit(ctx) : null;
+    if (kept && (kept.rooms < units.unitRooms.length || units.hint)) units = plan(Math.max(1, kept.rooms), kept.blockUsd);
     notes.push(...units.limitations);
   } catch (e) { notes.push(`the unit inventory failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the scan covers the design documents only`); units = null; }
   w('audit-stale.txt', [...[...stale].filter((c) => all.some((b) => b.cid === c)), ...((units && units.stale) || [])].map((c) => `${c}\n`).join('')); // block cids and unit ids changed since their review
@@ -370,7 +373,7 @@ async function main(env) {
   const prior = rotate ? await loadPrior(env) : null;
   const packBytes = env.PACK_SPLIT === 'true' ? 250000 : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run
   const api = packBytes ? require('./engines/claude-api') : null, pre = { model: require('./credential').resolveModel(env.MODEL, 'claude') || 'claude-haiku-5-5', budget: parseFloat(env.MAX_BUDGET_USD || '1.00'), maxTokens: parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, packBytes };
-  const unitParts = api ? api.unitCalls(pre) : 1, price = api ? { usd: api.callUsd(pre), budget: pre.budget, max: api.MAX_UNIT_CALLS } : null; // price: the pre-flight's own worst case, for the budget hint
+  const unitParts = api ? api.unitCalls(pre) : 1, price = api ? { usd: api.callUsd(pre), budget: pre.budget, max: api.MAX_UNIT_CALLS, fit: (ctx) => api.keptRooms({ ...pre, ctx, root: fs.realpathSync(process.cwd()), batch: Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20) }) } : null; // price: the pre-flight's own worst case, for the budget hint
   const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, refNote: g.note || '', packBytes, unitParts, price });
   console.log(`SpecGuard unit test gap scan: ${r.units ? `${r.units.picked.length} of ${r.units.total} units` : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);

@@ -988,11 +988,13 @@ test('render: static test signals are listed visibly with the caveat, the verdic
   assert.doesNotMatch(audit.stateComment('h', clean(), null, { date: DATE, code: { picked: [A1], findings: [], carried: [] } }), /static|test_evidence/);
 });
 
-test('render: more than 10 static signals overflow into Details; none: the clean verdict stays; an inventory without signals still renders', () => {
+test('render: static signals are not capped (the lead table has its own cap of 20); none: the clean verdict stays; an inventory without signals still renders', () => {
   const many = Array.from({ length: 12 }, (_, i) => urow(`0000b0${i.toString(16).padStart(2, '0')}`, { tests: [], signals: SIG() }));
   const md = render({ data: clean(), code: codeOf(many) });
-  assert.match(md.slice(0, md.indexOf('<details>')), /### Static test signals \(no model\) \(12\)[\s\S]*\+2 more in Details\./);
-  assert.match(md.slice(md.indexOf('<details>')), /\*\*More static test signals \(2 more\)\*\*/);
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.match(vis, /### Static test signals \(no model\) \(12\)/);
+  assert.equal((vis.match(/test evidence not found \|/g) || []).length, 12);
+  assert.doesNotMatch(md, /More static test signals/);
   const none = render({ data: clean(), code: codeOf([urow(A1)]) });
   assert.match(none, /\*\*✅ No unit test gaps in the riskiest unit\*\*/);
   assert.doesNotMatch(none, /Static test signals/);
@@ -1326,4 +1328,17 @@ test('render: static leads (truthiness-only assertion, exported name no test ref
   const all = render({ data: clean(), code: codeOf(many) });
   assert.match(all, /\| \+5 more \| \| not listed: only the top 20 leads by unit risk are shown \|/);
   assert.equal((all.match(/ is exported and no test file references it/g) || []).length, 20);
+});
+
+test('render: the lead table shows 20 rows in the visible part, unreferenced exports before weak-assertion leads when the cap bites; control: 12 rule signals are all listed', () => {
+  const id = (i) => `0000d${i.toString(16).padStart(3, '0')}`;
+  const weak = Array.from({ length: 15 }, (_, i) => urow(id(i), { leads: { weak: [{ path: `test/w${i}.test.js`, line: 3, text: 'assert.ok(x)' }] } }));
+  const unref = Array.from({ length: 15 }, (_, i) => urow(id(100 + i), { leads: { unref: [{ name: `moveCrop${i}`, line: 28 }] } }));
+  const md = render({ data: clean(), code: codeOf([...weak, ...unref]), head: 'abc1234def' }), vis = md.slice(0, md.indexOf('<details>'));
+  const n = (re) => (vis.match(re) || []).length;
+  assert.equal(n(/ no test references it \|/g), 15, 'every unreferenced export is visible');
+  assert.equal(n(/ asserts only truthiness \|/g), 5, 'the weak leads fill the rest of the 20');
+  assert.match(vis, /\| \+10 more \| \| not listed: only the top 20 leads by unit risk are shown \|/);
+  const many = Array.from({ length: 12 }, (_, i) => urow(id(200 + i), { tests: [], signals: SIG() }));
+  assert.equal((render({ data: clean(), code: codeOf(many) }).match(/test evidence not found \|/g) || []).length, 12, 'control: rule signals are not capped at 10 any more');
 });

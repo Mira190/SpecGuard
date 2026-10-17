@@ -961,3 +961,15 @@ test('render: forced units are listed as reviewed with part of their tests, not 
   assert.doesNotMatch(none, /Reviewed with part of their tests/);
   assert.match(none, /\*\*Not reviewed this run:\*\* 1 unit did not fit the model's context: `[^`]+`\. It stays due for the next run\./);
 });
+
+test('run: a part of a reached unit dropped for the budget is named in a line and makes the run incomplete, and the unit is not "not reached"; control: no dropped part, no line', async (t) => {
+  const env = { SCAN_ISSUE: 'true', ENGINE: 'claude' }, vis = (s) => s.slice(0, s.indexOf('<details>'));
+  const d = await post(t, { env, files: { 'audit-inventory.json': INV({ eligible: 140 }), 'findings.json': result([uf()]), 'scan-parts.json': { calls: 2, failed: [], dropped: [], droppedParts: [`${U1}:2`, `${U1}:3`] } } });
+  const v = vis(d.calls.summary);
+  assert.match(v, /\*\*Unit parts not reached:\*\* 2 parts of units that were otherwise reviewed: max_budget_usd did not cover the call that held them: `src\/js\/orders\.js` part 2, `src\/js\/orders\.js` part 3\./);
+  assert.doesNotMatch(v, /Not reviewed this run/);
+  assert.match(/^Units: .*$/m.exec(v)[0], /3 selected this run = 3 reviewed whole/);
+  assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: '2 unit parts not reached (max_budget_usd)' });
+  const ok = await post(t, { env, files: { 'audit-inventory.json': INV({ eligible: 140 }), 'findings.json': result([uf()]), 'scan-parts.json': { calls: 2, failed: [], dropped: [] } } });
+  assert.doesNotMatch(vis(ok.calls.summary), /Unit parts not reached/);
+});
