@@ -586,6 +586,34 @@ test('stateless: parts that do not fit are listed as not reached (budget) and th
   assert.match(inv.limitations.join('\n'), new RegExp(`${n - 1} unit parts? not reached \\(budget\\): src/js/big\\.js part 2 of ${n}`));
 });
 
+test('extra: a stateless run queues the parts the planned calls left out in more rooms, breadth first, and writes them as extras; parts_left shrinks; control: extra 0 is as before', (t) => {
+  const r = twoPart(t), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, rooms: 1, packBytes: 250000, allParts: true }, plain = inventory(o), n = plain.picked.find((u) => u.path === 'src/js/big.js').part.n;
+  const inv = inventory({ ...o, extra: 3 }), ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
+  assert.deepEqual(inv.unitRooms, plain.unitRooms, 'the planned rooms are the same with or without extras');
+  assert.equal(inv.extraRooms.length, n - 1, 'one part of a unit per room');
+  assert.deepEqual(inv.extraKeys, inv.extraRooms.flat());
+  assert.equal(inv.partsLeftN, 0);
+  write(ctx, 'HEAD', 12, inv);
+  const rooms = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-unit-rooms.json'), 'utf8')), json = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-inventory.json'), 'utf8'));
+  assert.equal(fs.readFileSync(path.join(ctx, 'audit-unit-extra.json'), 'utf8'), String(n - 1));
+  assert.deepEqual(rooms.slice(-(n - 1)), inv.extraRooms);
+  assert.deepEqual(json.extra_keys, inv.extraKeys);
+  assert.equal(fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split(/\r?\n/).filter(Boolean).length, inv.picked.length, 'the units file lists the extras too: the publisher sees what the engine may run');
+  const ctl = inventory({ ...o, extra: 0 });
+  assert.equal(ctl.extraKeys.length, 0);
+  assert.equal(ctl.partsLeftN, n - 1);
+  assert.equal(inventory({ ...o, extra: 3, prior: null, allParts: false }).extraKeys.length, 0, 'a rotating run (no allParts) queues no extras');
+});
+
+test('extra (control): when the planned calls hold every unit part there is nothing to queue and no extra file is written', (t) => {
+  const r = twoPart(t), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, rooms: 8, packBytes: 250000, allParts: true }, ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
+  const a = inventory(o), b = inventory({ ...o, extra: 3 });
+  assert.deepEqual(b.picked.map((u) => u.id + (u.part ? u.part.k : '')), a.picked.map((u) => u.id + (u.part ? u.part.k : '')));
+  assert.equal(b.extraKeys.length, 0);
+  write(ctx, 'HEAD', 12, b);
+  assert.ok(!fs.existsSync(path.join(ctx, 'audit-unit-extra.json')));
+});
+
 test('budget hint: units no call had room for give K and the cost of covering all of them; ample budget gives none', (t) => {
   const files = Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`src/m${i}.js`, Array.from({ length: 300 }, (_, j) => `exports.f${i}_${j} = () => '${'x'.repeat(70)}';`)]));
   const r = repo(t, files), price = { usd: 0.2, budget: 1, max: 8 }, o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 60, packBytes: 250000, price };
