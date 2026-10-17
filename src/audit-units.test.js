@@ -819,9 +819,9 @@ test('boundary lead: control: a test that uses the constant by name or by value 
 test('boundary lead: control: a literal comparison, a unit with no matched test and a constant that is not a plain numeric expression make no lead', (t) => {
   assert.equal(bound(t, bsrc('  return f.freeBytes < 200;'), btest()).length, 0);
   assert.equal(bound(t, BCMP, { 'test/other.test.js': "it('x', () => { assert.equal(1, 1); });" }).length, 0);
+  assert.equal(bound(t, ['export const LOW_SPACE_BYTES = os.total() / 2;', ...BCMP.slice(1)], btest()).length, 0);
 });
 
-  assert.equal(bound(t, ['export const LOW_SPACE_BYTES = os.total() / 2;', ...BCMP.slice(1)], btest()).length, 0);
 // ---- third-party / non-unit noise ----
 const rowsByPath = (t, files) => { const r = repo(t, files); return Object.fromEntries(inventory({ cwd: r.root, head: 'HEAD', now: NOW }).rows.map((x) => [x.path, x])); };
 const fnSrc = (n) => [`export function ${n}(a) {`, '  return a + 1;', '}', 'export function other(a) {', '  return a;', '}'];
