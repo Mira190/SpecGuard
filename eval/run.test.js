@@ -141,3 +141,16 @@ test('the mirror workflow template matches what run.js expects', () => {
   const wf = fs.readFileSync(path.join(__dirname, 'mirror-workflow.yml'), 'utf8');
   for (const re of [/^ {2}dogfood:/m, /uses: OWNER\/specguard@SHA/, /vars\.SPECGUARD_EVAL_MODEL/, /trace: .*vars\.SPECGUARD_EVAL_TRACE/, /name: specguard-ctx/, /^name: specguard-eval$/m]) assert.match(wf, re);
 });
+
+test('stage: a head overlay copied only in part fails the construction gate; a full one passes', () => {
+  const cp = fs.cpSync, wt = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-'));
+  try {
+    git(wt, 'init', '-q'); git(wt, 'config', 'commit.gpgsign', 'false'); git(wt, 'config', 'user.name', 't'); git(wt, 'config', 'user.email', 't@example.invalid');
+    const c = loadCase('tr2');
+    stage(wt, [c], 'base', 'base');
+    fs.cpSync = (s, d, o) => { cp(s, d, o); if (/head$/.test(s)) fs.rmSync(path.join(d, 'src/premium.test.js')); }; // the overlay lands without one file
+    assert.throws(() => stage(wt, [c], 'head', 'head'), /construction: case tr2 head file eval-sandbox\/tr2\/src\/premium\.test\.js is not staged/);
+    fs.cpSync = cp;
+    stage(wt, [c], 'head', 'head');
+  } finally { fs.cpSync = cp; fs.rmSync(wt, { recursive: true, force: true }); }
+});

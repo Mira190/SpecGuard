@@ -23,7 +23,7 @@ inputs:
   ignore: { description: "Extra ignore globs, one per line, appended to the defaults.", default: "" }
   standards_checks: { description: "Exact check:NAME or status:CONTEXT entries, one per line. Requires checks/statuses read permission. Empty means not configured.", default: "" }
   standards_ref: { description: "head or merge: commit on which your lint/format jobs run. Defaults to head.", default: head }
-  requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes. Empty = content-based discovery only.", default: "" }
+  requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes; a leading / anchors at the repository root (!/docs/** leaves docs/ folders deeper in the tree alone). Empty = content-based discovery only.", default: "" }
   test_paths: { description: "Globs or folders (one per line; a !glob line excludes) that are the authoritative unit-test locations. Empty = discover test files by name and layout.", default: "" }
   standards_paths: { description: "Globs (one per line) that add coding-standard or review-guideline documents, read from the base commit; a !glob line excludes.", default: "" }
   coverage_files: { description: "Optional. Coverage report globs, one per line, relative to the workspace (LCOV, Cobertura XML, JaCoCo XML, Go cover profile, Istanbul coverage-final.json). SpecGuard never runs tests: your workflow must run them with coverage BEFORE this step, in the same job. With a report, changed lines that no test executed are reported as facts and a 'covered' judgement for such a line is downgraded. Empty = off.", default: "" }
