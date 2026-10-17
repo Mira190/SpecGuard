@@ -1239,3 +1239,14 @@ test('isTestPath: a test directory or a basename suffix/prefix, never a leading 
   for (const p of ['src/test-map.js', 'src/spec-loader.js', 'src/spec.js', 'specs/x.js', 'src/Testing/x.js', 'lib/testing-utils.js', 'foo_test_helper.py', 'x.spec-helper.js']) assert.equal(T.isTestPath(p), false, p);
 });
 
+
+test('matchGlob: a leading / anchors at the repository root; the ci.yml dogfood exclusions admit eval-sandbox docs and still exclude root docs', () => {
+  const g = T.matchGlob;
+  assert.ok(g('docs/a.md', '/docs/**') && !g('eval-sandbox/tr19/docs/requirements.md', '/docs/**') && g('eval-sandbox/tr19/docs/requirements.md', 'docs/**'));
+  assert.ok(g('README.md', '/README.md') && !g('eval-sandbox/tr16/README.md', '/README.md') && g('docs/x.md', '/docs/') && !g('a/docs/x.md', '/docs/'));
+  const yml = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'ci.yml'), 'utf8');
+  const exc = yml.match(/requirements_paths: \|\r?\n((?: {12}\S.*\r?\n)+)/)[1].split(/\r?\n/).map((l) => l.trim()).filter((l) => l.startsWith('!')).map((l) => l.slice(1));
+  const excluded = (p) => exc.some((x) => g(p, x));
+  for (const p of ['eval-sandbox/tr19/docs/requirements.md', 'eval-sandbox/tr22/docs/specs/signup.md', 'eval-sandbox/tr23/docs/specs/http.md', 'eval-sandbox/tr16/README.md']) assert.ok(!excluded(p), p);
+  for (const p of ['docs/a.md', 'README.md', 'eval/cases/x/base/spec.md', 'skills/s/SKILL.md', '.github/x.md']) assert.ok(excluded(p), p);
+});

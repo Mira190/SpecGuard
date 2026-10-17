@@ -235,7 +235,7 @@ test('wp1: the dogfood workflow excludes this repo\'s own docs and fixtures from
   const ci = fs.readFileSync(path.join(__dirname, '../.github/workflows/ci.yml'), 'utf8').replace(/\r/g, '');
   const block = /requirements_paths: \|\n((?: {12}\S.*\n)+)/.exec(ci);
   assert.ok(block, 'dogfood step passes requirements_paths');
-  assert.deepEqual(block[1].split('\n').filter(Boolean).map((l) => l.trim()), ['!docs/**', '!eval/**', '!research/**', '!README.md', '!skills/**', '!.github/**', '!ccr/**']);
+  assert.deepEqual(block[1].split('\n').filter(Boolean).map((l) => l.trim()), ['!/docs/**', '!/eval/**', '!/research/**', '!/README.md', '!/skills/**', '!/.github/**', '!/ccr/**']);
   const action = fs.readFileSync(path.join(__dirname, '../action.yml'), 'utf8');
   assert.match(action, /REQ_PATHS: \$\{\{ inputs\.requirements_paths \}\}/);
   assert.match(action, /TRACE: \$\{\{ inputs\.trace \}\}/);
@@ -717,3 +717,11 @@ test('candidates: a source named test-*.js is a changed source, and its same-ste
   assert.match(out, /^src\/test-map\.js\n  src\/test-map\.test\.js/m);
 });
 
+
+test('test-candidates.txt: ignored paths and test_paths exclusions (anchored with a leading /) are never candidates; the same name deeper in the tree stays', (t) => {
+  const base = { 'eval-sandbox/l1/pricing.py': 'x = 1\n', 'eval-sandbox/l1/test_pricing.py': 'import pricing\n', 'src/pricing.test.js': "require('pricing');\n", 'eval/cases/l1/test_pricing.py': 'import pricing\n' };
+  const go = (env) => candBlocks(scenario(t, base, ({ write }) => write('eval-sandbox/l1/pricing.py', 'x = 2\n'), env))['eval-sandbox/l1/pricing.py'].map((l) => l.split('  ')[0]);
+  assert.deepEqual(go({}).sort(), ['eval-sandbox/l1/test_pricing.py', 'eval/cases/l1/test_pricing.py', 'src/pricing.test.js']);
+  assert.deepEqual(go({ IGNORE_EXTRA: 'eval/cases/' }).sort(), ['eval-sandbox/l1/test_pricing.py', 'src/pricing.test.js']);
+  assert.deepEqual(go({ IGNORE_EXTRA: 'eval/cases/', TEST_PATHS: '!/src/', MSYS_NO_PATHCONV: '1' }), ['eval-sandbox/l1/test_pricing.py']);
+});

@@ -150,7 +150,11 @@ function stage(wt, cs, layer, message) {
   git(wt, ['add', '-A']); // fresh worktree: only these cases' overlays and deletes are changed
   if (layer === 'head') for (const c of cs) { // construction gate: a case whose head stages nothing would be graded as a reviewer miss
     const dir = `eval-sandbox/${c.id}`;
-    if (walk(path.join(CASES, c.id, 'head')).length && !git(wt, ['diff', '--cached', '--name-only', '--', dir])) throw new Error(`construction: case ${c.id} head stages no change under ${dir}/`);
+    const src = path.join(CASES, c.id, 'head'), over = walk(src);
+    if (over.length && !git(wt, ['diff', '--cached', '--name-only', '--', dir])) throw new Error(`construction: case ${c.id} head stages no change under ${dir}/`);
+    // a partial overlay would grade as a reviewer miss too: every overlay file is staged exactly as the fixture, every delete is out of the index
+    for (const f of over) if (git(wt, ['ls-files', '-s', '--', `${dir}/${f}`]).split(/\s/)[1] !== git(wt, ['hash-object', `--path=${dir}/${f}`, path.join(src, f)])) throw new Error(`construction: case ${c.id} head file ${dir}/${f} is not staged as in the fixture`);
+    for (const d of c.delete) if (git(wt, ['ls-files', '--', d])) throw new Error(`construction: case ${c.id} delete ${d} is still in the index`);
     for (const e of c.expected.findings) if (![].concat(e.path).some((p) => fs.existsSync(path.join(wt, p)))) throw new Error(`construction: case ${c.id} expected path ${[].concat(e.path)[0]} is not in the head tree`);
   }
   git(wt, ['commit', '-q', '--allow-empty', '-m', message]);
