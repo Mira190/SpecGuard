@@ -65,7 +65,7 @@ function messages(prompt, pack = '') {
 
 // The context pack: repository files appended to the user message, in priority order, until CONTEXT_PACK_BYTES is spent. The prompt was written for an agent that Reads files; here nobody can.
 // Trust boundary: every path comes from the (PR-influenced) context files, so it is resolved against the repo root after realpath and anything outside, secret-like or binary is skipped. Nothing read here is ever logged.
-const { PER_FILE, fileCap } = require('../pack-cap');
+const { PER_FILE, fileCap, packLimit } = require('../pack-cap');
 const MAX_FILE = 2 * 1024 * 1024, OVERHEAD = 300; // OVERHEAD: the block markup around a body
 const { DENY } = require('../deny.js');
 function packRead(root, rel) { // text of a regular, small, non-binary file inside the repo, else null
@@ -351,7 +351,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const maxTokens = parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, budget = parseFloat(env.MAX_BUDGET_USD || '1.00');
     const schemaFile = path.join(__dirname, '..', env.CHECK === 'audit' ? 'audit.schema.json' : 'findings.schema.json');
     const schema = strict(JSON.parse(fs.readFileSync(schemaFile, 'utf8')));
-    const packBytes = env.CONTEXT_PACK_BYTES === undefined || env.CONTEXT_PACK_BYTES === '' ? 250000 : Math.max(0, parseInt(env.CONTEXT_PACK_BYTES, 10) || 0);
+    const packBytes = packLimit(env);
     const root = () => fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd());
     const deadline = Date.now() + (parseInt(env.TIMEOUT, 10) || 12) * 60000, t0 = Date.now();
     // One API call with its retries: { timeout } or { res }. Each call asks for plain JSON at most once and retries a transient failure once.
