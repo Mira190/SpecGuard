@@ -19,6 +19,10 @@ on:
       rules_docs: { description: "Coding-standard documents, same format. Empty = found automatically.", required: false, type: string }
       test_dirs: { description: "Unit-test folders, same format. Empty = found automatically.", required: false, type: string }
       post_to_pr: { description: "PR links only: also post the review on the PR. Off = results stay on this run page.", required: false, type: boolean, default: false }
+      model: { description: "Model name passed to the engine (short alias haiku-5.5 or a full id).", required: false, type: string, default: "haiku-5.5" }
+      max_units: { description: "Scans only: most source files reviewed per run, 1-100. Empty = the action default (12).", required: false, type: string, default: "" }
+      max_budget_usd: { description: "Claude engine: hard budget in USD per run, at most 20. Empty = the action default (1.00).", required: false, type: string, default: "" }
+      max_output_tokens: { description: "Claude engine: most output tokens per call, 1000-64000. Empty = the action default (32000).", required: false, type: string, default: "" }
       scan_issue: { description: "Scans only: where the scan keeps its state, so gaps can be confirmed across runs. specguard = one issue per scanned repository in THIS repository (the target needs no write access); target = the issue in the scanned repository; none = run page only.", required: false, type: choice, default: specguard, options: [specguard, target, none] }
 permissions: {}
 concurrency: { group: "specguard-run-${{ inputs.target }}", cancel-in-progress: false }
@@ -122,8 +126,20 @@ jobs:
           repository: ${{ needs.resolve.outputs.repo }}
           token: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
           ref: ${{ needs.resolve.outputs.head_sha || needs.resolve.outputs.ref }}
-          fetch-depth: 0
+          fetch-depth: ${{ needs.resolve.outputs.mode == 'scan' && 1 || 0 }} # PR reviews diff against the base blobs, so they keep the full clone
+          filter: ${{ needs.resolve.outputs.mode == 'scan' && 'blob:none' || '' }}
           persist-credentials: false
+      # Scans: full history of the checked-out commit only (no other branches, no tags, no blobs): the scan runs git log --since=180d and diffs against the last scanned head, and needs a non-shallow clone
+      # (--shallow-since would stay shallow, so the history is skipped). The files at HEAD are already checked out; older blobs are never read. A last scanned head off this history degrades with a note.
+      # Not fatal: without history the scan runs on the depth-1 checkout and says "no git history (shallow clone?)" (churn ranking off).
+      - name: Fetch the history of the checked-out commit
+        if: needs.resolve.outputs.mode == 'scan'
+        shell: bash
+        env:
+          TOKEN: ${{ steps.app.outputs.token || secrets.SPECGUARD_PAT || github.token }}
+        run: |
+          h="$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"; echo "::add-mask::$h"
+          git -c "http.extraheader=AUTHORIZATION: basic $h" fetch --no-tags --filter=blob:none --unshallow origin "$(git rev-parse HEAD)" || echo "::warning::could not fetch the git history; churn ranking is off for this run"
       # SpecGuard itself beside it, in a path that must not exist yet: a reviewed repository that tracks a file, folder or symlink named .specguard-src cannot shadow the code that runs
       # with the token (the job fails instead). A checkout of the root would delete a folder created before the target. uses: cannot take an expression, and actions/checkout cannot
       # write outside the workspace, so the action runs from this path and its review ignores it (ignore below).
@@ -153,7 +169,10 @@ jobs:
           # TEMPORARY test credential and model (the Copilot quota is used up): remove `|| secrets.SPEC` and the model pin when done.
           # llm_token wins over the Copilot alias above: a GitHub fine-grained PAT runs Copilot, an Anthropic API key (sk-ant-...) runs Claude Code (engine auto).
           llm_token: ${{ secrets.SPECGUARD_LLM_TOKEN || secrets.SPEC }}
-          model: haiku-5.5
+          model: ${{ inputs.model }}
+          max_units: ${{ inputs.max_units }} # empty = the action default; the action validates the range
+          max_budget_usd: ${{ inputs.max_budget_usd }}
+          max_output_tokens: ${{ inputs.max_output_tokens }}
           delivery: ${{ inputs.post_to_pr && needs.resolve.outputs.mode == 'pr' && 'pr' || 'summary' }}
           requirements_paths: ${{ needs.resolve.outputs.design }}
           standards_paths: ${{ needs.resolve.outputs.rules }}

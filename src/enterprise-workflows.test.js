@@ -219,3 +219,21 @@ test('specguard-run.yml: the results artifact uploads only the named result file
   assert.ok(paths.every((p) => /\.(md|json)$/.test(p)), 'files, not the directory');
   assert.match(y, /quote the target repository, so this repository must stay private/);
 });
+
+test('specguard-run.yml: manual model/size/budget inputs reach the action (empty = action default); the target checkout is blobless and non-shallow without --shallow-since; counts get the full SHA', () => {
+  const y = central(), step = y.slice(y.indexOf('uses: ./.specguard-src')), action = fs.readFileSync(path.join(root, 'action.yml'), 'utf8');
+  for (const k of ['max_units', 'max_budget_usd', 'max_output_tokens']) {
+    assert.match(y, new RegExp(`\\n {6}${k}: \\{ description: "[^"\\n]+", required: false, type: string, default: "" \\}`), `${k} is an optional input, empty by default`);
+    assert.match(step, new RegExp(`\\n {10}${k}: \\$\\{\\{ inputs\\.${k} \\}\\}`), `${k} is passed to the action`);
+  }
+  assert.match(y, /\n {6}model: \{ description: "[^"\n]+", required: false, type: string, default: "haiku-5\.5" \}/);
+  assert.match(step, /\n {10}model: \$\{\{ inputs\.model \}\}\n/);
+  assert.match(step, /fail_on_error: "true"/);
+  const co = y.slice(y.indexOf('repository: ${{ needs.resolve.outputs.repo }}\n          token:'), y.indexOf('Refuse a target that already'));
+  assert.match(co, /fetch-depth: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && 1 \|\| 0 \}\}[^\n]*\n\s+filter: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && 'blob:none' \|\| '' \}\}/, 'scans are blobless depth 1; PR reviews keep the full clone');
+  assert.match(co, /if: needs\.resolve\.outputs\.mode == 'scan'[\s\S]*--unshallow origin "[^\n]*\|\| echo "::warning::could not fetch the git history/, 'the history fetch is non-fatal and warns');
+  assert.match(co, /fetch --no-tags --filter=blob:none --unshallow origin/);
+  assert.doesNotMatch(co.replace(/#.*/g, ''), /--shallow-since|fetch-depth: 0$/m);
+  assert.match(action, /SPECGUARD_REF: \$\{\{ github\.action_ref \|\| github\.sha \}\}/);
+  assert.doesNotMatch(action, /SPECGUARD_REF: \$\{\{ github\.action_ref \}\}/);
+});
