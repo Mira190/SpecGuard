@@ -220,7 +220,11 @@ test('fail-on-error.js: an incomplete status whose counts.json says reduced prin
     assert.equal(r.stdout.trim(), '::warning::SpecGuard ran a reduced review (fast-tier model): only high-confidence findings are shown (see the job summary)');
     assert.equal(run('failed', 'quota').status, 1, 'failed stays red');
     assert.match(run('failed', 'quota').stdout, /could not complete: quota/);
-    assert.equal(run('complete').stdout, '');
+    const c = run('complete'); // a finished fast-tier review is not incomplete: at most a notice
+    assert.equal(c.status, 0); assert.match(c.stdout, /^::notice::SpecGuard ran a fast-tier review/); assert.doesNotMatch(c.stdout, /incomplete|::warning/);
+    fs.writeFileSync(path.join(dir, 'counts.json'), JSON.stringify({ v: 1, complete: true }));
+    assert.equal(run('complete').stdout, '', 'control: a full-strength complete run prints nothing');
+    fs.writeFileSync(path.join(dir, 'counts.json'), JSON.stringify({ v: 1, complete: false, reduced: true }));
     fs.writeFileSync(path.join(dir, 'counts.json'), JSON.stringify({ v: 1, complete: false }));
     assert.match(run('incomplete', 'diff truncated').stdout, /is incomplete: diff truncated/, 'not reduced: the old wording');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

@@ -26,5 +26,6 @@ if (STATUS === 'failed') {
   }
   console.log(`::warning::SpecGuard could not complete${cls ? ` (${esc(cls)})` : ''}: ${esc(REASON || 'see the job summary')}`);
 }
+else if (STATUS === 'complete' && CTX && reduced()) console.log('::notice::SpecGuard ran a fast-tier review: only high-confidence findings are shown (see the job summary)');
 else if (STATUS === 'incomplete' && CTX && reduced()) console.log('::warning::SpecGuard ran a reduced review (fast-tier model): only high-confidence findings are shown (see the job summary)');
 else if (STATUS === 'incomplete') console.log(`::warning::SpecGuard result is incomplete${REASON ? `: ${esc(REASON)}` : ' (see the job summary)'}`);
