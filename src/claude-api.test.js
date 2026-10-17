@@ -1488,6 +1488,7 @@ const ORIGINAL = () => ({
   coverage: [
     { id: 'o1', obligation: 'o', source: 's', behaviour: { ...cit }, change: { ...cit }, evidence: [{ path: 't.js', line: 1, quote: 'q', layer: 'unit', proves: 'p', kind: 'assertion', side: 'RIGHT' }, { path: 't.js', line: 2, quote: 'q' }], status: 'covered', reason: 'r', alignment: { status: 'mismatch', since: 'introduced', reason: 'r' } },
     { id: 'o2', obligation: 'o', source: 's', behaviour: null, evidence: [], status: 'unknown', reason: 'r' },
+    { id: 'o3', obligation: 'o', source: 's', behaviour: { ...cit }, change: null, evidence: [{ path: 't.js', line: 9, quote: 'q', kind: 'no_assertion' }], status: 'needs_human', reason: 'r' },
   ],
   findings: [
     { kind: 'weak_test', path: 'a.js', line: 4, start_line: 2, quote: 'q', title: 't', body: 'b', counterexample: 'c', rule_source: 'R.md:1', rule_quote: 'rq', suggestion: 's', source: 'x', confidence: 'high', obligation_ids: ['o1'], side: 'LEFT' },
@@ -1505,12 +1506,17 @@ const fillApi = (s, v) => {
   return t.enum || t.type === 'string' ? '' : t.type === 'integer' ? 0 : t.type === 'array' ? [] : Object.fromEntries(Object.entries(t.properties).map(([k, p]) => [k, fillApi(p, undefined)]));
 };
 
-const stringified = (o) => { o.coverage.forEach((c) => { c.evidence = c.evidence.map((e) => JSON.stringify(e)); }); return o; }; // the request form of evidence
+// the request form: evidence moves to a top-level array with its coverage row, change becomes change_mode + the object
+const flat = (o, orig) => {
+  o.evidence = o.coverage.flatMap((c, i) => c.evidence.map((e) => ({ row: i, ...e })));
+  o.coverage.forEach((c, i) => { delete c.evidence; const ch = orig.coverage[i].change; c.change_mode = ch === undefined ? 'same' : ch === null ? 'none' : 'cited'; });
+  return o;
+};
 
 test('findings API schema: no optional property, no union, every full-schema property representable, required enums keep their values', () => {
   const a = api.apiSchema(api.strict(FULL)), small = api.grammarSmall(api.strict(FULL));
-  assert.match(small.properties.coverage.items.properties.evidence.items.description, /TEXT of a JSON object/);
-  assert.deepEqual(small.properties.coverage.items.properties.evidence, { type: 'array', items: { type: 'string', description: small.properties.coverage.items.properties.evidence.items.description } }, 'evidence entries are JSON strings in the request');
+  assert.ok(!('evidence' in small.properties.coverage.items.properties) && small.properties.evidence.items.properties.row, 'evidence is a top-level array of rows');
+  assert.deepEqual(small.properties.coverage.items.properties.change_mode.enum, ['same', 'none', 'cited']);
   let opt = 0, unions = 0, objects = 0;
   const walk = (n, f, p) => { // n: API node, f: full node
     if (!n || typeof n !== 'object') return;
@@ -1520,10 +1526,18 @@ test('findings API schema: no optional property, no union, every full-schema pro
     if (n.properties) {
       objects++;
       opt += Object.keys(n.properties).filter((k) => !(n.required || []).includes(k)).length;
-      for (const k of Object.keys(fn.properties)) { assert.ok(n.properties[k], `${p}.${k} missing from the API schema`); walk(n.properties[k], fn.properties[k], `${p}.${k}`); }
+      for (const k of Object.keys(fn.properties)) {
+        const m = p === '$.coverage[]' && k === 'evidence' ? small.properties.evidence : n.properties[k], fk = fn.properties[k], ft = fk.anyOf ? fk.anyOf.find((x) => x.type !== 'null') : fk;
+        assert.ok(m, `${p}.${k} missing from the API schema`);
+        assert.equal(m.type, ft.type, `${p}.${k} type`);
+        if (ft.enum) { // the full values all stay; only an optional enum gains ""
+          assert.ok([JSON.stringify(ft.enum), JSON.stringify([...ft.enum, ''])].includes(JSON.stringify(m.enum)), `${p}.${k} enum ${m.enum}`);
+        }
+        walk(m, fk, `${p}.${k}`);
+      }
     } else if (n.items) walk(n.items, fn.items, `${p}[]`);
   };
-  walk(a, FULL, '$');
+  walk(small, FULL, '$');
   assert.ok(objects > 5);
   assert.equal(opt, 0, 'optional properties');
   assert.equal(unions, 0, 'anyOf unions');
@@ -1533,22 +1547,21 @@ test('findings API schema: no optional property, no union, every full-schema pro
 });
 
 test('findings API form round-trips: empties become absent again, real values and required nulls are never changed', () => {
-  const want = ORIGINAL(), sent = stringified(fillApi(FULL, want));
+  const want = ORIGINAL(), sent = flat(fillApi(FULL, want), want);
   assert.equal(sent.findings[1].start_line, 0);
   assert.equal(sent.coverage[1].alignment.status, '');
-  const got = api.back(FULL, structuredClone(sent));
+  const got = api.fromApi(FULL, structuredClone(sent));
   assert.equal(got.coverage[1].behaviour, null, 'an empty required nullable is null');
   assert.ok(!('change' in got.coverage[1]) && !('start_line' in got.findings[1]) && !('alignment' in got.coverage[1]) && !('pr_quote' in got.requirements[1]) && !('side' in got.coverage[0].evidence[1]));
-  delete want.coverage[1].change; // the model has no null for change: post.js defaults an absent one to the behaviour
   assert.deepEqual(got, want);
   // control: plain JSON (the unconstrained fallback) passes through, an explicit null change stays null
   const plain = ORIGINAL(); plain.coverage[1].change = null;
-  assert.deepEqual(api.back(FULL, structuredClone(plain)), plain);
+  assert.deepEqual(api.fromApi(FULL, structuredClone(plain)), plain);
 });
 
 test('the request carries the API schema and findings.json is written in post.js form', async (t) => {
-  const want = ORIGINAL(); delete want.coverage[1].change;
-  const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(stringified(fillApi(FULL, ORIGINAL()))) }] })]);
+  const want = ORIGINAL();
+  const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(flat(fillApi(FULL, ORIGINAL()), ORIGINAL())) }] })]);
   await h.go();
   assert.deepEqual(h.calls[0].body.output_config.format.schema, api.grammarSmall(api.strict(FULL)));
   assert.deepEqual(JSON.parse(h.file('findings.json')), want);

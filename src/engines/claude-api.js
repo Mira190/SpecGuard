@@ -69,10 +69,28 @@ function apiSchema(s, opt = false) { // opt: inside an optional or nullable subt
   if (opt && o.enum) o.enum = [...o.enum, ''];
   return o;
 }
-// Attempt 2: the provider still refused the grammar with the optionals and unions gone, so the deepest repeated object (coverage[].evidence[], 7 properties and 3 enums, inside an array inside an array) is a JSON STRING per entry; back() parses it.
-// The parsed entry is validated by post.js like any other. ponytail: if this is still too large, stringify alignment next.
-const EVIDENCE_TEXT = 'One evidence entry as the TEXT of a JSON object, exactly the evidence object of the schema in the prompt: {"path":"t.js","line":12,"quote":"the cited line","layer":"unit","proves":"...","kind":"assertion","side":"RIGHT"}. Use "" for layer, proves, kind or side when not applicable.';
-const grammarSmall = (s) => { const a = apiSchema(s); a.properties.coverage.items.properties.evidence = { type: 'array', items: { type: 'string', description: EVIDENCE_TEXT } }; return a; };
+// Attempt 4: the provider still refused the grammar with the optionals and unions gone. coverage[].evidence[] (an array of objects inside an array of objects) moves to a top-level array of { row, ...evidence } and `change` becomes
+// change_mode + an all-empty object, so all three states survive: "same" (absent: post.js reads it as the cited behaviour), "none" (null), "cited" (the object). fromApi() regroups by row; post.js validates the result as before.
+const grammarSmall = (s) => {
+  const a = apiSchema(s), row = a.properties.coverage.items, ev = row.properties.evidence.items;
+  delete row.properties.evidence;
+  row.properties = Object.fromEntries(Object.entries(row.properties).flatMap(([k, p]) => (k === 'change' ? [['change_mode', { enum: ['same', 'none', 'cited'] }], [k, p]] : [[k, p]])));
+  row.required = Object.keys(row.properties);
+  a.properties.evidence = { type: 'array', items: { ...ev, properties: { row: { type: 'integer' }, ...ev.properties }, required: ['row', ...ev.required] } };
+  a.required = Object.keys(a.properties);
+  return a;
+};
+function unflatten(v) { // the flat API form -> the full schema's shape; anything else (plain JSON) passes through
+  if (!v || typeof v !== 'object' || !Array.isArray(v.evidence) || !Array.isArray(v.coverage)) return v;
+  v.coverage.forEach((c, i) => {
+    if (!c || typeof c !== 'object') return;
+    c.evidence = v.evidence.filter((e) => e && e.row === i).map(({ row, ...e }) => e);
+    if (c.change_mode === 'same') delete c.change; else if (c.change_mode === 'none') c.change = null;
+    delete c.change_mode;
+  });
+  delete v.evidence;
+  return v;
+}
 const emptyIn = (s, v) => { // is v the "not applicable" value of its (full-schema) type?
   s = nonNull(s);
   if (s.enum) return v === '';
@@ -82,9 +100,10 @@ const emptyIn = (s, v) => { // is v the "not applicable" value of its (full-sche
   if (s.type === 'object') return !!v && typeof v === 'object' && Object.entries(s.properties || {}).every(([k, p]) => emptyIn(p, v[k]));
   return false;
 };
+const fromApi = (full, v) => back(full, unflatten(v));
 function back(s, v) { // s: the FULL schema; v is changed in place
   s = nonNull(s);
-  if (Array.isArray(v) && s.items) v.forEach((x, i) => { if (typeof x === 'string' && nonNull(s.items).type === 'object') try { v[i] = JSON.parse(x); } catch { /* left as is: post.js reports it malformed */ } back(s.items, v[i]); });
+  if (Array.isArray(v) && s.items) v.forEach((x) => back(s.items, x));
   else if (v && typeof v === 'object' && s.properties) {
     for (const [k, p] of Object.entries(s.properties)) {
       if (!(k in v) || v[k] === null) continue;
@@ -553,7 +572,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const r = await call(system, user, maxTokens);
     writeUsage([r]);
     if (!r.ok) return failEnd(r);
-    let found = r.found; try { found = JSON.stringify(back(full, JSON.parse(found))); } catch { /* not JSON: post.js rejects it as before */ }
+    let found = r.found; try { found = JSON.stringify(fromApi(full, JSON.parse(found))); } catch { /* not JSON: post.js rejects it as before */ }
     w('findings.json', found);
     end('success');
   } catch (e) {
@@ -582,6 +601,6 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
   } catch { return null; }
 }
 
-module.exports = { DENY, run, strict, apiSchema, grammarSmall, back, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, apiSchema, grammarSmall, back, fromApi, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts
