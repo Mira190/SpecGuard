@@ -148,6 +148,67 @@ test('verify: a missing_test whose cited line a tracked test already contains (c
   assert.equal(checked([uf()], { covers: () => null }).unit_findings[0].low, false);
 });
 
+// ---- scan precision gates: symbol hit anywhere, sibling test, baseline system, non-finding ----
+const GATE_FILES = {
+  ...FILES,
+  'src/js/gated.js': ['export function legacyWrap(a) {', '  return a * 2;', '}'],
+  'src/js/short.js': ['exports.run = () => 1;'],
+  'src/js/big.js': Array.from({ length: 60 }, (_, i) => `exports.legacyName${i} = function (a) { return a; };`),
+  'test/mid.spec.js': ["describe('mid', () => {", "  it('has a use method', () => {", '    expect(new T().use).toBeDefined();', '  });', "  it('runs the wrapped function', () => {", '    const spy = vi.fn();', '    new T(spy).use();', '    expect(spy).toHaveBeenCalled();', '  });', "  it('has a name', () => {", '    expect(new T().label).toBeDefined();', '  });', '});'],
+};
+const gread = (p) => GATE_FILES[p] || null;
+const gcite = (p, line) => ({ path: p, line, quote: GATE_FILES[p][line - 1].trim() });
+const withSymbol = (fn) => Object.assign(() => null, { symbol: fn });
+
+test('scan gate: a missing_test whose enclosing symbol a test elsewhere references is low with the citation; no hit, a generic short name and a missing symbol search stay counted', () => {
+  const G = () => uf({ unit: U2, ...gcite('src/js/gated.js', 1), title: 'legacyWrap doubles' }), seen = [];
+  const covers = withSymbol((n, own) => { seen.push([n, own]); return n === 'legacyWrap' ? 'test/other.spec.js:3' : null; });
+  const out = verify(result([G()]), { read: gread, units: UNITS(), covers }).unit_findings[0];
+  assert.deepEqual([out.low, out.lowWhy], [true, 'may be covered by test/other.spec.js:3 (legacyWrap is referenced there)']);
+  assert.deepEqual(seen, [['legacyWrap', 'src/js/gated.js']]);
+  assert.equal(verify(result([G()]), { read: gread, units: UNITS(), covers: withSymbol(() => null) }).unit_findings[0].low, false, 'control: no test names it');
+  seen.length = 0;
+  assert.equal(verify(result([uf({ unit: U1, ...gcite('src/js/short.js', 1), title: 'run is untested' })]), { read: gread, units: UNITS(), covers: withSymbol((n) => { seen.push(n); return 'test/x.js:1'; }) }).unit_findings[0].low, false, 'control: `run` is too short and generic to search');
+  assert.deepEqual(seen, []);
+  assert.equal(verify(result([G()]), { read: gread, units: UNITS(), covers: () => null }).unit_findings[0].low, false, 'control: a plain covers function has no symbol search');
+});
+
+test('scan gate: the symbol search is bounded to 50 findings per result', () => {
+  let n = 0;
+  const many = Array.from({ length: 60 }, (_, i) => uf({ unit: U1, ...gcite('src/js/big.js', i + 1), title: `big ${i}` }));
+  const out = verify(result(many), { read: gread, units: UNITS(), covers: withSymbol(() => { n++; return 'test/t.js:1'; }) }).unit_findings;
+  assert.equal(n, 50);
+  assert.equal(out.filter((f) => f.low).length, 50);
+});
+
+test('scan gate: a weak_test whose counterexample names a call that another test of the same file makes and asserts is low citing that line; no sibling call stays counted', () => {
+  const weak = (line, cx) => uf({ unit: U1, kind: 'weak_test', ...gcite('test/mid.spec.js', line), title: 'use only checked for definedness', body: 'toBeDefined passes for null.', counterexample: cx });
+  const out = verify(result([weak(3, 'the class sets use = null -> toBeDefined passes although calling use throws')]), { read: gread, units: UNITS() }).unit_findings[0];
+  assert.deepEqual([out.low, out.lowWhy], [true, 'another test in the same file calls it and asserts: test/mid.spec.js:7']);
+  const keep = verify(result([weak(11, 'the class sets label = null -> toBeDefined passes although label is wrong')]), { read: gread, units: UNITS() }).unit_findings[0];
+  assert.equal(keep.low, false, 'control: nobody calls label');
+});
+
+test('scan gate: a repository that tests through >= 200 baseline files shows every missing_test as low once-noted; 199 files change nothing', () => {
+  const base = (n) => new Set([...Object.keys(GATE_FILES), ...Array.from({ length: n }, (_, i) => `tsc/testdata/baselines/reference/c${i}.js`)]);
+  const two = [uf(), uf({ unit: U1, ...gcite('src/js/orders.js', 1), title: 'create is untested' })];
+  const out = verify(result(two), { read: gread, units: UNITS(), tracked: base(200) });
+  assert.deepEqual(out.unit_findings.map((f) => [f.low, f.lowWhy]), two.map(() => [true, 'this repository tests through baselines (tsc/testdata/baselines, 200 files); check whether a baseline exercises it']));
+  assert.equal(out.not_reviewed.filter((x) => /tests through baselines/.test(x)).length, 1, 'noted once');
+  assert.deepEqual(verify(result(two), { read: gread, units: UNITS(), tracked: base(199) }).unit_findings.map((f) => f.low), [false, false]);
+  const weak = verify(result([WEAK()]), { read: gread, units: UNITS(), tracked: base(300) }).unit_findings[0];
+  assert.equal(weak.low, false, 'control: a weak_test is not a missing_test');
+  const snaps = new Set([...Object.keys(GATE_FILES), ...Array.from({ length: 210 }, (_, i) => `pkg${i % 7}/__snapshots__/s${i}.snap`)]);
+  assert.match(verify(result([uf()]), { read: gread, units: UNITS(), tracked: snaps }).unit_findings[0].lowWhy, /baselines \(__snapshots__, 210 files\)/);
+});
+
+test('scan gate: a finding whose title or body says there is no gap is dropped with a note; a real finding is kept', () => {
+  const out = verify(result([uf({ title: 'redirect covered; no finding' }), uf({ body: 'The visible tests cover it, so no gap is reported.' }), uf()]), { read: gread, units: UNITS() });
+  assert.equal(out.unit_findings.length, 1);
+  assert.equal(out.unit_findings[0].title, 'legacy doubles its argument');
+  assert.equal(out.not_reviewed.filter((x) => /says there is no gap/.test(x)).length, 2);
+});
+
 test('confirmation: a finding is confirmed by the same (unit, kind, quote) in the previous run, never at once', () => {
   const [det, weak] = checked([uf(), WEAK()]).unit_findings;
   const first = trackFindings([det, weak], null, 'abcdef1234');
@@ -601,7 +662,7 @@ test('summary: a gap on a higher_level row asks for a component or integration t
   assert.equal(next('higher_level', 'missing_test'), '| Add a component or integration test that checks it. |');
   assert.equal(next('higher_level', 'partial'), '| Strengthen the component or integration test: it checks only part of it. |');
   assert.equal(next('unit', 'missing_test'), '| Add a unit test that checks it. |');
-  const data = checked([uf(), uf({ unit: U3, ...cite('src/js/cart.js', 1), title: 'cursorBoxes covered by unit tests; no gap found', skeleton: '' })]);
+  const data = checked([uf(), uf({ unit: U3, ...cite('src/js/cart.js', 1), title: 'cursorBoxes behaviour is checked by unit tests', skeleton: '' })]);
   assert.deepEqual(data.unit_findings.map((f) => [f.low, f.lowWhy]), [[false, undefined], [true, 'no test sketch: the finding may not be a gap']]);
   const rows = Array.from({ length: 30 }, (_, i) => ROW(sha8('r', String(i)), `src/js/f${i}.js`, 30 - i, 'no test', []));
   const md = render({ data, code: CODE(data.unit_findings, { rows }), blob: BLOB, head: 'abc1234def' });
