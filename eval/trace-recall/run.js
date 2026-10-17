@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { extractCandidates, checkCandidates, checkNotAllEmpty } =require('./candidates.js');
+const { extractCandidates, checkCandidates, checkNotAllEmpty, harnessEnv, PINNED_UNSET } = require('./candidates.js');
 
 const args = process.argv.slice(2), opt = (n, d) => { const i = args.indexOf(n); return i < 0 ? d : args[i + 1]; };
 const cases = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases.json'), 'utf8'));
@@ -78,8 +78,7 @@ function runVariant(id, h, candJs) {
   const ctx = path.join(WORK, 'out', id); fs.rmSync(ctx, { recursive: true, force: true }); fs.mkdirSync(ctx, { recursive: true });
   git(['checkout', '-q', '--detach', '-f', h.head]);
   fs.writeFileSync(path.join(ctx, 'files.txt'), git(['diff', '--name-only', BASE, h.head]) + '\n');
-  const env = { ...process.env, CTX: ctx, DIFF_BASE_SHA: BASE, BASE_SHA: BASE, HEAD_SHA: h.head, REQ_PATHS };
-  delete env.TEST_PATHS;
+  const env = harnessEnv(process.env, { CTX: ctx, DIFF_BASE_SHA: BASE, BASE_SHA: BASE, HEAD_SHA: h.head, REQ_PATHS });
   const t0 = Date.now();
   const tr = spawnSync(process.execPath, [path.join(SRC, 'trace.js')], { cwd: TARGET, env, encoding: 'utf8', timeout: 60000, maxBuffer: 1 << 28 });
   const t1 = Date.now();
@@ -107,5 +106,5 @@ const variants = [];
 for (const [id, h] of Object.entries(heads)) { const r = runVariant(id, h, candJs); variants.push(r); console.log(`${id}: ${r.status} ${r.trace_ms + r.cand_ms} ms`); }
 checkNotAllEmpty(variants.filter((v) => v.variant !== 'R').map((v) => ({ id: v.id, text: v.test_candidates })));
 let srcSha = ''; try { srcSha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: SRC, encoding: 'utf8' }).stdout.trim(); } catch {}
-fs.writeFileSync(OUT, JSON.stringify({ target: cases.target, specguard_sha: srcSha, node: process.version, variants }, null, 1) + '\n');
+fs.writeFileSync(OUT, JSON.stringify({ target: cases.target, specguard_sha: srcSha, node: process.version, env_unset: PINNED_UNSET, variants }, null, 1) + '\n');
 console.log(`wrote ${OUT}`);

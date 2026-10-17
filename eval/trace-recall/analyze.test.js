@@ -87,3 +87,29 @@ test('candidates step fails loudly: no heredoc, non-zero exit, or every code var
   checkNotAllEmpty([{ id: 'a-C', text: '' }, { id: 'b-RC', text: 'lib/a.js\n  (no candidate test file found)\n' }]); // control: one empty variant among others
   checkNotAllEmpty([]);
 });
+
+test('a failed trace is reported and stays in the denominator; a successful empty retrieval is not flagged', () => {
+  const v = fx.results.variants[1]; // A-C, scores a hit in the fixture
+  const bad = { variants: [{ ...v, status: 'trace failed: timeout', trace_ms: undefined, req_to_code: [], code_to_req: [] }] };
+  const r = analyze(bad, fx.cases);
+  assert.deepEqual([r.variants, r.ok_variants, r.failed_variants], [1, 0, [{ case: v.case, variant: v.variant, status: 'trace failed: timeout' }]]);
+  assert.equal(r.directions['code->req'].requirement.hit_at_3.n, 1); // still counted, as a miss
+  assert.match(format(r), /FAILED: 1 of 1 variants.*A\/C \(trace failed: timeout\)/);
+  assert.equal(r.runtime_ms.n, 0); // missing trace_ms is not 0 ms
+  const empty = analyze({ variants: [{ ...v, status: 'ok', req_to_code: [], code_to_req: [] }] }, fx.cases); // control
+  assert.deepEqual([empty.ok_variants, empty.failed_variants, empty.directions['code->req'].requirement.hit_at_3.k], [1, [], 0]);
+  assert.doesNotMatch(format(empty), /FAILED/);
+});
+
+test('results for another target sha are refused; the same sha passes', () => {
+  const cases = { ...fx.cases, target: { sha: 'aaa' } };
+  assert.throws(() => analyze({ ...fx.results, target: { sha: 'bbb' } }, cases), /bbb.*pins aaa/);
+  assert.equal(analyze({ ...fx.results, target: { sha: 'aaa' } }, cases).variants, 4);
+});
+
+test('the harness child env drops every ambient trace setting and keeps the rest', () => {
+  const { harnessEnv, PINNED_UNSET } = require('./candidates.js');
+  const e = harnessEnv({ TRACE: 'off', IGNORE_EXTRA: 'x', STANDARDS_PATHS: 'y', TRACE_BUDGET_MS: '1', TEST_PATHS: 'z', PATH: 'p' }, { CTX: 'c' });
+  assert.deepEqual(e, { PATH: 'p', CTX: 'c' });
+  assert.ok(PINNED_UNSET.includes('TRACE'));
+});
