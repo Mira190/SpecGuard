@@ -35,7 +35,8 @@ const worstCase = (model, sysBytes, userBytes, maxTokens) => {
 };
 
 // Scan: how many full-pack unit calls max_budget_usd covers by the worst case above (1-8). The collector asks before it picks the units (the system prompt is about 15 KB, the rest of a unit part's prompt well under 32 KB).
-const unitCalls = ({ model, budget, maxTokens, packBytes }) => { const one = worstCase(model, 16 * 1024, packBytes + 32 * 1024, maxTokens).usd; return Math.max(1, Math.min(8, Math.floor(budget / one) || 1)); };
+const MAX_UNIT_CALLS = 8, callUsd = ({ model, maxTokens, packBytes }) => worstCase(model, 16 * 1024, packBytes + 32 * 1024, maxTokens).usd; // callUsd: the worst case of one full unit call
+const unitCalls = ({ model, budget, maxTokens, packBytes }) => Math.max(1, Math.min(MAX_UNIT_CALLS, Math.floor(budget / callUsd({ model, maxTokens, packBytes })) || 1));
 
 // Structured outputs accept a subset of JSON Schema: every object closed (additionalProperties:false), no string/number bounds, no uniqueItems/maxItems, no if/then/else, minItems only 0 or 1.
 // post.js validates the answer against the full schema anyway.
@@ -504,4 +505,4 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 }
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, PRICES, contextPack, windowPack, evidencePack, packFiles };

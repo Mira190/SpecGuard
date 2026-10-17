@@ -47,8 +47,10 @@ function publicDefs(file, ls) {
 const publicCount = (file, ls) => publicDefs(file, ls).count;
 // Names a "no test references it" lead may be about: 4+ characters, not a generic word, not a type (no runtime value to test) or an UPPER_CASE constant. [{name, line}] with the line of the first code line that has the name (its definition).
 const STOP = new Set('props state config options types data value values name test util utils helper helpers exports module'.split(' '));
-const leadNames = (names, ls) => names.filter((n) => n.length >= 4 && ![GENERIC, LEAD_GENERIC, STOP].some((s) => s.has(n.toLowerCase())))
-  .map((name) => { const re = new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`), i = ls.findIndex((l) => !comment(l) && re.test(l)); return { name, line: i + 1, type: i >= 0 && /^\s*(?:export\s+)?(?:declare\s+)?(?:interface|type)\s/.test(ls[i]) }; }).filter((x) => x.line && !x.type && !/^[A-Z][A-Z0-9_]+$/.test(x.name)).map(({ name, line }) => ({ name, line }));
+// In a .tsx/.jsx unit PascalCase components and use* hooks come after the plain functions (a component renders, a function is what a unit test reaches); the lead list is capped, so the order decides what is named.
+const UI = /^(?:[A-Z]|use[A-Z])/;
+const leadNames = (names, ls, file = '') => names.filter((n) => n.length >= 4 && ![GENERIC, LEAD_GENERIC, STOP].some((s) => s.has(n.toLowerCase())))
+  .map((name) => { const re = new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`), i = ls.findIndex((l) => !comment(l) && re.test(l)); return { name, line: i + 1, type: i >= 0 && /^\s*(?:export\s+)?(?:declare\s+)?(?:interface|type)\s/.test(ls[i]) }; }).filter((x) => x.line && !x.type && !/^[A-Z][A-Z0-9_]+$/.test(x.name)).map(({ name, line }) => ({ name, line })).sort((a, b) => /\.[jt]sx$/i.test(file) ? UI.test(a.name) - UI.test(b.name) : 0);
 
 // Signals of one test file: tests, tests without an assertion, skipped or disabled tests, assertion lines, weak assertion lines (leads.js).
 // ponytail: a test is a block from one test declaration to the next, an assertion is any line post.js's ASSERTION matches; an assertion inside a helper the test calls reads as no assertion.
@@ -86,6 +88,7 @@ const factorOf = (tests, s) => (!tests.length ? 1 : s.asserts === 0 || (s.tests 
 const sameVer = (v, r) => v === r.ver || v === r.verLegacy;
 const staleUnit = (r, prior) => { const v = prior && prior.versions && prior.versions.uv[r.id]; return !!v && !sameVer(v, r); };
 // A unit too large for one model call is reviewed in parts (review F07): fixed line windows of about PART_BYTES, one per run, the cursor in the state (uc: [next part, part count]).
+// A stateless run (no cursor, so it would never get past part 1) plans every part as its own item (r.partK, see inventory allParts).
 // -> { k, n, a, b } (part k of n, 0-based, lines a-b) or null when the file fits whole. A unit in progress is picked again until its last part.
 const PART_BYTES = 40 * 1024;
 // Claude api engine only (the one engine with a context pack; the others read files themselves): a part, as shown line-numbered (6 bytes a line), must fit the per-file cap and a 1/N share of the pack
@@ -97,30 +100,31 @@ const shownOf = (r, bytes) => r.size + (bytes.pre && Math.max(bytes.pre, String(
 const partOf = (r, prior, bytes = partBytes(0)) => {
   const shown = shownOf(r, bytes);
   if (!(shown > bytes.max)) return null;
-  const n = Math.ceil(shown / bytes.max), per = Math.ceil(r.lines / n), v = prior && prior.versions, at = v && v.uc && v.uv && sameVer(v.uv[r.id], r) ? v.uc[r.id] : null, k = Array.isArray(at) && at[1] === n && at[0] > 0 && at[0] < n ? at[0] : 0; // the cursor [next part, part count] counts only for the same content version and the same layout; otherwise the unit restarts at part 0
+  const n = Math.ceil(shown / bytes.max), per = Math.ceil(r.lines / n), v = prior && prior.versions, at = v && v.uc && v.uv && sameVer(v.uv[r.id], r) ? v.uc[r.id] : null, k = r.partK ?? (Array.isArray(at) && at[1] === n && at[0] > 0 && at[0] < n ? at[0] : 0); // the cursor [next part, part count] counts only for the same content version and the same layout; otherwise the unit restarts at part 0
   return { k, n, a: k * per + 1, b: Math.min(r.lines, (k + 1) * per) };
 };
 const inProgress = (r, prior, bytes) => { const p = partOf(r, prior, bytes); return !!p && p.k > 0; };
 // room (claude api engine): { total, cost(r) }: a unit is taken only while its whole context (part, matched tests) still fits in what is left of a call's pack, so every call finishes at least one unit's context (review F23).
 // rooms = how many calls (packs) the run makes, each holding at most cap units: a unit goes into the first room it fits. A unit whose tests do not fit a whole pack ("trimmed") keeps the tests that fit in half a room (room.trim: r.packTests),
 // so it cannot starve the rest. over = the units whose own part never fits.
+const partId = (r) => (r.partK === undefined ? r.id : `${r.id}:${r.partK + 1}`); // a part of a stateless run is told apart from its unit's other parts
 function pick(rows, cap, prior, bytes, room = null, rooms = 1) {
-  const kind = new Map(), picked = [], over = [], trimmed = [], slots = [], roomOf = new Map(), max = cap * rooms;
-  const open = (c) => slots.find((s) => s.n < cap && c <= s.left), fresh = (left) => { const s = { left, n: 0 }; slots.push(s); return s; };
+  const kind = new Map(), picked = [], over = [], trimmed = [], slots = [], roomOf = new Map(), noRoom = [], max = cap * rooms; // noRoom: units refused because every call's room was taken (the budget), not because of cap
+  const open = (c, id) => slots.find((s) => s.n < cap && c <= s.left && !s.ids.has(id)), fresh = (left) => { const s = { left, n: 0, ids: new Set() }; slots.push(s); return s; };
   const afford = (r) => {
     if (!room) return true;
     let c = room.cost(r), t = null;
     if (c > room.total) { // the tests do not fit a whole pack: the unit is reviewed with the tests that fit in half a room and recorded unsure (the pack lists the rest as cut)
-      if (room.cost(r, false) > room.total) { if (!over.includes(r)) over.push(r); return false; }
+      if (room.cost(r, false) > room.total) { if (!over.some((o) => o.id === r.id)) over.push(r); return false; }
       t = room.trim(r); c = t.cost;
     }
-    const s = open(c) || (slots.length < rooms && fresh(room.total));
-    if (!s) return false;
+    const s = open(c, r.id) || (slots.length < rooms && fresh(room.total));
+    if (!s) { noRoom.push(r); return false; }
     if (t) { r.packTests = t.tests; trimmed.push(r); }
-    s.left -= c; s.n++; roomOf.set(r.id, slots.indexOf(s));
+    s.left -= c; s.n++; s.ids.add(r.id); roomOf.set(partId(r), slots.indexOf(s));
     return true;
   };
-  const out = (tally) => ({ picked, kind, over, trimmed, tally, roomOf });
+  const out = (tally) => ({ picked, kind, over, trimmed, tally, roomOf, noRoom, rooms: slots.length });
   if (!prior) { for (const r of rows) if (picked.length < max && afford(r)) { kind.set(r.id, 'n'); picked.push(r); } return out({ c: 0, s: 0, n: picked.length, o: 0 }); }
   const st = new Map(prior.blocks.map((b) => [b.cid, b])), when = (r) => (st.get(r.id).at || {}).date || '';
   const take = (list, k) => { for (const r of list) if (picked.length < max && !kind.has(r.id) && afford(r)) { kind.set(r.id, k); picked.push(r); } };
@@ -154,8 +158,8 @@ function rankTests(u, base, { importers, token, classHit, classOf, folded }) {
   return tiers.flat().slice(0, PER_UNIT_TESTS);
 }
 
-// files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
-function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, rooms = 1, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 0, maxRead = MAX_UNITS_READ }) {
+// allParts: a stateless run plans every part of a unit reviewed in parts; price { usd, budget, max }: one unit call's worst case, max_budget_usd, the most calls a run makes (for the budget hint). files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
+function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, rooms = 1, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 0, maxRead = MAX_UNITS_READ, allParts = false, price = null }) {
   const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
   const inScope = files.filter((e) => !skip(e.path)); // read repo-wide: scope only picks the units, their tests may live outside it
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
@@ -176,7 +180,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       if (!bufs[k] || bufs[k].subarray(0, 8192).includes(0)) return;
       const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
       const n = loc(ls);
-      if (n >= MIN_LOC) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls), size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0) }); }
+      if (n >= MIN_LOC) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls, e.path), size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0) }); }
     });
   }
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
@@ -230,23 +234,29 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const room = packBytes ? { total: Math.floor(packBytes * 0.9), cost: (r, withTests = true) => { const p = partOf(r, prior, size); return Math.ceil(shownOf(r, size) / (p ? p.n : 1)) + 300 + (withTests ? r.tests : []).reduce((n, t) => n + tcost(t), 0); } } : null;
   if (room) room.trim = (r) => { let left = Math.min(Math.floor(room.total / 2), room.total - room.cost(r, false)); const tests = r.tests.filter((t) => tcost(t) <= left && (left -= tcost(t), true)); return { tests, cost: room.cost(r, false) + tests.reduce((n, t) => n + tcost(t), 0) }; }; // a trimmed unit's tests get at most half a room, in priority order
   const calls = room ? Math.max(1, rooms) : 1; // rooms: the run's unit calls (claude api engine); maxUnits applies to each
-  let sel = pick(rows, maxUnits, prior, size, room, calls);
+  const items = room && allParts && !prior ? rows.flatMap((r) => { const p = partOf(r, null, size); return p ? Array.from({ length: p.n }, (_, k) => ({ ...r, partK: k })) : [r]; }).sort((a, b) => (a.partK || 0) - (b.partK || 0)) : rows; // one item per part of a unit reviewed in parts; every unit's first part comes before any second part, so a unit is read before another is read twice
+  let sel = pick(items, maxUnits, prior, size, room, calls);
   let forced = []; // nothing fits: the fallback ignores the part cursors, so a unit unfinished in parts does not take the single place again
   if (room && !sel.picked.length && rows.length) { sel = pick(rows, 1, prior && { ...prior, versions: { ...prior.versions, uc: {} } }, size); forced = sel.picked.map((r) => r.id); limits.push('no unit fits the context pack with its matched tests; the scan reviews the first one and its tests may be cut; it is recorded as reviewed in part (unsure), so the next run moves on'); }
   if (sel.over.length) limits.push(`${sel.over.length} unit${sel.over.length === 1 ? '' : 's'} (${sel.over.slice(0, 3).map((r) => r.path).join(', ')}${sel.over.length > 3 ? ', ...' : ''}) cannot fit the context pack with their matched tests and ${sel.over.length === 1 ? 'is' : 'are'} not reviewed`);
-  const trimmed = sel.trimmed.filter((r) => sel.picked.includes(r));
+  const uniq = (rs) => [...new Map(rs.map((r) => [r.id, r])).values()], trimmed = uniq(sel.trimmed.filter((r) => sel.picked.includes(r)));
+  const got = new Set(sel.picked.map((r) => r.id)), partsLeft = items.filter((r) => r.partK !== undefined && got.has(r.id) && !sel.picked.includes(r) && !sel.over.some((o) => o.id === r.id)); // a unit read in some parts but not all: none of this run's calls had room for the rest (a unit not read at all is in the budget hint)
+  if (partsLeft.length) limits.push(`${partsLeft.length} unit part${partsLeft.length === 1 ? '' : 's'} not reached (${partsLeft.some((r) => sel.noRoom.includes(r)) ? 'budget' : 'max_units'}): ${partsLeft.slice(0, 3).map((r) => `${r.path} part ${r.partK + 1} of ${partOf(r, null, size).n}`).join(', ')}${partsLeft.length > 3 ? ', ...' : ''}`);
   if (trimmed.length) limits.push(`${trimmed.length} unit${trimmed.length === 1 ? '' : 's'} (${trimmed.slice(0, 3).map((r) => r.path).join(', ')}${trimmed.length > 3 ? ', ...' : ''}) ${trimmed.length === 1 ? "has" : "have"} matched tests that cannot fit the context pack whole: reviewed with the tests that fit, recorded unsure`);
   const chosen = new Set(sel.picked.map((r) => r.id));
+  const left = uniq(sel.noRoom.filter((r) => !chosen.has(r.id))); // units no call had room for
+  let hint = null;
+  if (price && left.length) { const need = pick(items, maxUnits, null, size, room, Infinity).rooms; hint = { left: left.length, calls, need, usd: Math.ceil(need * price.usd * 100) / 100, budget: price.budget, max: price.max, runs: Math.ceil(need / calls) }; }
   const distinct = (rs) => [...new Set(rs.flatMap((r) => r.tests))].map((t) => sig.get(t) || none);
   const tot = (ss) => ({ skipped_tests: ss.reduce((a, s) => a + s.skipped, 0), tests_without_assertion: ss.reduce((a, s) => a + s.noAssert, 0), weak_assertions: ss.reduce((a, s) => a + s.weak.length, 0) });
   const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), reviewed = new Set([...rows.filter((r) => known.has(r.id)).map((r) => r.id), ...chosen]);
-  const rotation = { rotate: !!prior, picked: sel.picked.length, confirming: sel.tally.c, changed: sel.tally.s, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / (maxUnits * calls))), runs: Math.max(1, Math.ceil(rows.length / (maxUnits * calls))) };
+  const rotation = { rotate: !!prior, picked: chosen.size, confirming: sel.tally.c, changed: sel.tally.s, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / (maxUnits * calls))), runs: Math.max(1, Math.ceil(rows.length / (maxUnits * calls))) };
   const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
   for (const r of sel.picked) { const p = partOf(r, prior, size); if (p) r.part = p; }
   const unitRooms = []; // the picked unit ids per call, in risk order
-  for (const r of sel.picked) (unitRooms[(sel.roomOf && sel.roomOf.get(r.id)) || 0] ||= []).push(r.id);
-  return { rows, picked: sel.picked, unitRooms: unitRooms.filter(Boolean), unitCalls: calls, forced, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation,
-    totals: { eligible: rows.length + big.length + capped + notReachedTime, not_reached: capped + notReachedTime, not_reached_cap: capped, not_reached_time: notReachedTime, units: rows.length, not_inventoried: big.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: sel.picked.length, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
+  for (const r of sel.picked) (unitRooms[(sel.roomOf && sel.roomOf.get(partId(r))) || 0] ||= []).push(partId(r));
+  return { rows, picked: sel.picked, unitRooms: unitRooms.filter(Boolean), unitCalls: calls, forced, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation, hint, allParts: items !== rows, partsLeft: partsLeft.slice(0, 10).map((r) => ({ path: r.path, part: r.partK + 1, of: partOf(r, null, size).n })),
+    totals: { eligible: rows.length + big.length + capped + notReachedTime, not_reached: capped + notReachedTime, not_reached_cap: capped, not_reached_time: notReachedTime, units: rows.length, not_inventoried: big.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: chosen.size, without_tests: sel.picked.filter((r) => !r.tests.length).length, ...tot(distinct(sel.picked)) } },
     stale: rows.filter((r) => known.has(r.id) && !chosen.has(r.id) && staleUnit(r, prior)).map((r) => r.id),
     review: (r) => (chosen.has(r.id) ? 'this run' : known.has(r.id) ? `reviewed ${date(r) || 'earlier'}${staleUnit(r, prior) ? '; changed since, due again' : ''}` : 'not yet reviewed') };
 }
@@ -257,7 +267,7 @@ function write(ctx, head, maxUnits, inv) {
   w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-', ...(r.packTests ? [r.packTests.join(', ') || '-'] : [])].map(flat).join('\t') + '\n').join(''));
   if (inv.unitRooms && inv.unitRooms.length > 1) w('audit-unit-rooms.json', JSON.stringify(inv.unitRooms)); // more than one call: scan-parts.js makes one unit part per room
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
-  w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...(inv.unitCalls > 1 && { unit_calls: inv.unitCalls }), ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
+  w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...(inv.unitCalls > 1 && { unit_calls: inv.unitCalls }), ...(inv.allParts && { all_parts: true, parts_left: inv.partsLeft }), ...(inv.hint && { budget_hint: inv.hint }), ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
     rows: inv.rows.slice(0, ROWS_KEPT).map((r) => ({ id: r.id, path: r.path, score: r.score, why: r.why, tests: r.tests, loc: r.loc, public: r.pub, churn: r.churn, fixes: r.fixes, review: inv.review(r), signals: { tests: r.signals.tests, noAssert: r.signals.noAssert, skipped: r.signals.skipped, asserts: r.signals.asserts, weak: r.signals.weak.length, unread: r.signals.unread },
       ...((r.signals.weak.length || r.unref.length) && { leads: { weak: r.signals.weak.slice(0, LEADS).map((x) => ({ path: x.path, line: x.line, text: x.text })), unref: r.unref.slice(0, 5) } }) })),
     forced: inv.forced, // picked although it cannot fit the pack: the publisher records it as unsure even when its tests were cut, so the rotation moves on
