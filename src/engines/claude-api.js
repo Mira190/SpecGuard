@@ -139,7 +139,7 @@ function diffSeeds(diff, file) { // 0-based new-file line numbers of the added l
   }
   return [...out].sort((a, b) => a - b);
 }
-const TEST_START = /^\s*(?:(?:test|it|describe)\b|def test_|func Test|@Test\b)/, indentOf = (l) => /^\s*/.exec(l)[0].length;
+const IMPORT = /^\s*(?:import\b|from\s+\S+\s+import\b|.*\brequire\(|export\s.*\bfrom\b)/, TEST_START = /^\s*(?:(?:test|it|describe)\b|def test_|func Test|@Test\b)/, indentOf = (l) => /^\s*/.exec(l)[0].length;
 // seeds: 0-based lines of the diff's own hunks, treated like a symbol hit. Priority when room runs out: seed windows, then symbol windows, then the head; position order within a class.
 // -> { text, note, complete, coveredTo } or null (no seed or symbol appears in the file, or no matching block fits). complete: every block that mentions a symbol or seed is shown. coveredTo: every seed on lines 1..coveredTo is shown.
 function slices(src, syms, room, seeds = [], [back, span] = [30, 80]) { // back, span: the most lines of a window above a hit and in all (a source file needs less than a test block)
@@ -151,7 +151,7 @@ function slices(src, syms, room, seeds = [], [back, span] = [30, 80]) { // back,
     m.forEach((x) => found.add(x));
     let s = i; while (s > 0 && i - s < back && !TEST_START.test(src[s])) s--; // up to the enclosing test start, or 30 lines
     let e = i; while (e + 1 < n && e + 1 - s < span && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))) e++; // down to the next test at the same or lower indentation, 80 lines at most
-    if (!TEST_START.test(src[s]) || (e + 1 < n && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s])))) truncated = true;
+    if (!IMPORT.test(src[i]) && (!TEST_START.test(src[s]) || (e + 1 < n && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))))) truncated = true; // an import line names the symbol outside any test: its window is the preamble, not a cut test
     wins.push({ s, e, m: true, k: sd ? 2 : 1 });
   });
   if (!wins.length) return null;

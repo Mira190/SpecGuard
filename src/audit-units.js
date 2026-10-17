@@ -170,7 +170,7 @@ function pick(rows, cap, prior, bytes, room = null, rooms = 1) {
     }
     const s = open(c, r.id) || (slots.length < rooms && fresh(room.total));
     if (!s) { noRoom.push(r); return false; }
-    if (t) { r.packTests = t.tests; trimmed.push(r); }
+    if (t) { r.packTests = t.tests; r.weakCut = new Set(r.tests.filter((x, i) => i >= (r.strong ?? Infinity) && !t.tests.includes(x))); if (r.tests.length - r.weakCut.size > t.tests.length) trimmed.push(r); } // ponytail: name-only matches that do not fit are left out of the unit's list instead of cutting it (else every big-test repo is mostly forced); ceiling: a gap only such a test would cover is reported missing
     s.left -= c; s.n++; s.ids.add(r.id); roomOf.set(partId(r), slots.indexOf(s));
     return true;
   };
@@ -198,14 +198,18 @@ function rankTests(u, base, { importers, token, classHit, classOf, folded }) {
   const add = (i, ts) => { for (const t of ts) if (!seen.has(t)) { seen.add(t); tiers[i].push(t); } };
   const closest = (ts) => ts.slice().sort((a, b) => near(u.path, b) - near(u.path, a) || (a < b ? -1 : 1));
   const of = (re) => [...base].filter(([, why]) => re.test(why)).map(([t]) => t);
-  add(0, of(/^same name/));
-  add(1, closest(importers.get(u.path) || []));
+  const same = of(/^same name/), imp = importers.get(u.path) || [], mine = same.filter((t) => related(u.path, t) || imp.includes(t));
+  // ponytail: a generic stem (index, handler, types) names a test in every folder; once some same-name test sits in the unit's own tree or imports it, the others are other units' tests and are dropped (they fill the 20 and the pack and get the unit's tests cut). Ceiling: a unit tested from a mirrored tree outside related() loses a same-name test when another sits in its tree.
+  if (mine.length && mine.length < same.length) for (const t of same) if (!mine.includes(t)) seen.add(t);
+  add(0, same);
+  add(1, closest(imp));
   if (folded1.length >= 4) add(2, closest((folded.get(folded1) || []).filter((t) => testStem(t) !== want && related(u.path, t))));
   add(3, of(/^(?:file name has|calls) /));
   add(4, closest([...(token.get(stem) || []), ...(classHit.get(classOf.get(u.path)) || [])]));
   add(5, of(/^mentions /));
   add(6, of(/^same directory/));
-  return tiers.flat().slice(0, PER_UNIT_TESTS);
+  const tests = tiers.flat().slice(0, PER_UNIT_TESTS);
+  return { tests, strong: Math.min(tests.length, tiers.slice(0, 5).reduce((n, t) => n + t.length, 0)) }; // the first `strong` carry the unit's name or import it; the rest only mention its name or sit in its folder
 }
 
 // extra: more unit calls for the engine to admit at run time (claude api engine, stateless run): the items the planned calls left out, in the same breadth-first order, packed into that many more rooms. allParts: a stateless run plans every part of a unit reviewed in parts; price { usd, budget, max, reserve }: one unit call's worst case, max_budget_usd, the most calls a run makes, and what the document block calls take of the budget (for the budget hint). files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
@@ -276,7 +280,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const index = indexTests(tests), folded = new Map();
   for (const t of tests) put(folded, fold(t), t);
   const rows = units.map((u) => {
-    const got = rankTests(u, mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: Infinity }), { importers, token, classHit, classOf, folded });
+    const { tests: got, strong } = rankTests(u, mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: Infinity }), { importers, token, classHit, classOf, folded });
     const real = got.filter((t) => !sig.has(t) || sig.get(t).tests > 0); // a matched file that declares no test (a fixture) is a match, not evidence
     const ss = real.map((t) => sig.get(t) || none), sum = (f) => ss.reduce((a, s) => a + f(s), 0);
     const s = { tests: sum((x) => x.tests), noAssert: sum((x) => x.noAssert), skipped: sum((x) => x.skipped), asserts: sum((x) => x.asserts), weak: real.flatMap((t) => (sig.get(t) || none).weak.map((w) => ({ ...w, path: t }))), unread: real.filter((t) => !sig.has(t)).length };
@@ -289,7 +293,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     const unref = unread || !got.length ? [] : u.defs.filter((d) => !refd.has(d.name));
     // a comparison in a function the tests call (else it is a missing test, which has its own signal) whose constant no matched test uses by name or by value
     const boundary = unread || !got.length ? [] : u.cmps.filter((c) => (!c.fn || got.some((t) => bt.get(t)?.w.has(c.fn))) && !got.some((t) => bt.get(t)?.p.has(c.name) || bt.get(t)?.n.has(String(c.v)))).map((c) => ({ line: c.line, name: c.name, value: c.v }));
-    return { ...u, unref, boundary, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
+    return { ...u, strong, unref, boundary, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
   const size = partBytes(packBytes, maxUnits), tsize = new Map(testEntries.map((e) => [e.path, e.size]));
   const tcost = (t) => Math.ceil(Math.min(tsize.get(t) || 0, fileCap(packBytes)) * 1.15) + 300;
@@ -332,7 +336,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
 // audit-units.txt (id, path, risk, why, matched tests, leads: tab separated), audit-units-carried.txt (id, path: units the state knows that this run does not review), audit-inventory.json.
 function write(ctx, head, maxUnits, inv) {
   const picked = new Set(inv.picked.map((r) => r.id)), w = (n, s) => fs.writeFileSync(path.join(ctx, n), s), flat = (s) => String(s).replace(/[\t\r\n]+/g, ' ');
-  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-', ...(r.packTests ? [r.packTests.join(', ') || '-'] : [])].map(flat).join('\t') + '\n').join(''));
+  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, (r.weakCut ? r.tests.filter((t) => !r.weakCut.has(t)) : r.tests).join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-', ...(r.packTests ? [r.packTests.join(', ') || '-'] : [])].map(flat).join('\t') + '\n').join(''));
   fs.rmSync(path.join(ctx, 'audit-unit-extra.json'), { force: true });
   fs.rmSync(path.join(ctx, 'audit-unit-rooms.json'), { force: true }); // a plan written earlier into this ctx (the collector plans again when the pre-flight keeps fewer calls)
   const xr = inv.extraRooms || [], rooms = [...(inv.unitRooms || []), ...xr];
