@@ -766,11 +766,43 @@ test('staticLeads: at most 20 leads in row (risk) order, the rest counted; a wea
   assert.deepEqual(staticLeads([{ id: 'a', path: 'src/a.js' }, undefined]), { items: [], extra: 0 });
 });
 
-test('staticLeads: when the cap bites, unreferenced exports (near-certain) come before weak-assertion leads; each group keeps risk order', () => {
+test('staticLeads: when the cap bites, the 20 slots go round-robin over weak, boundary and unreferenced leads: 25 unref + 3 weak + 2 boundary show all 5, then 15 unref, +10 more', () => {
+  const { staticLeads } = require('./audit-units');
+  const rows = [...Array.from({ length: 25 }, (_, i) => ({ id: `u${i}`, path: `src/u${i}.js`, leads: { unref: [{ name: `fn${i}ab`, line: 2 }] } })),
+    ...Array.from({ length: 3 }, (_, i) => ({ id: `w${i}`, path: `src/w${i}.js`, leads: { weak: [{ path: `test/w${i}.test.js`, line: 4, text: 'assert.ok(f(x))' }] } })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: `b${i}`, path: `src/b${i}.js`, leads: { boundary: [{ line: 3, name: 'LIMIT_X', value: 5 }] } }))];
+  const L = staticLeads(rows), n = (k) => L.items.filter((i) => i.kind === k).length;
+  assert.deepEqual([L.items.length, n('truthiness_only'), n('boundary_unpinned'), n('unreferenced_export'), L.extra], [20, 3, 2, 15, 10]);
+  assert.deepEqual(L.items.slice(0, 3).map((i) => i.kind), ['truthiness_only', 'boundary_unpinned', 'unreferenced_export'], 'weak, boundary, unref in each round');
+});
+
+test('staticLeads: control: with 15 weak and 8 unref leads the cap alternates weak and unref, each kind in its risk order', () => {
   const { staticLeads } = require('./audit-units');
   const w = (i) => ({ path: `test/w${i}.test.js`, line: 4, text: 'assert.ok(f(x))' });
   const rows = [...Array.from({ length: 15 }, (_, i) => ({ id: `w${i}`, path: `src/w${i}.js`, leads: { weak: [w(i)] } })), ...Array.from({ length: 8 }, (_, i) => ({ id: `u${i}`, path: `src/u${i}.js`, leads: { unref: [{ name: `fn${i}ab`, line: 2 }] } }))];
   const L = staticLeads(rows);
-  assert.deepEqual(L.items.map((i) => i.unit), [...rows.slice(15).map((r) => r.id), ...rows.slice(0, 12).map((r) => r.id)]);
+  assert.deepEqual(L.items.map((i) => i.unit), [...Array.from({ length: 8 }, (_, i) => [rows[i].id, rows[15 + i].id]).flat(), ...rows.slice(8, 12).map((r) => r.id)]);
   assert.equal(L.extra, 3);
+});
+
+// ---- boundary lead: a comparison against a named numeric constant that no matched test uses ----
+const bsrc = (...ls) => ['export const LOW_SPACE_BYTES = 50 * 1024 * 1024;', 'export function check(f) {', ...ls, '}', 'export const pad1 = 1;'];
+const bound = (t, src, files = {}) => { const { json } = leadRows(t, { 'src/precheck.js': src, ...files }); return require('./audit-units').staticLeads(json.rows).items.filter((i) => i.kind === 'boundary_unpinned'); };
+const btest = (...ls) => ({ 'test/precheck.test.js': ["import { check, LOW_SPACE_BYTES } from '../src/precheck';", "it('checks', () => {", '  assert.equal(check({ freeBytes: 1 }), true);', ...ls, '});'] });
+const BCMP = bsrc('  return f.freeBytes < LOW_SPACE_BYTES;');
+
+test('boundary lead: a comparison with a named constant whose name and value no matched test uses is a lead (the test imports the constant and never uses it)', (t) => {
+  assert.deepEqual(bound(t, BCMP, btest()).map((i) => [i.path, i.line, i.why]), [['src/precheck.js', 3, 'line 3 compares with LOW_SPACE_BYTES (= 52428800); no matched test uses LOW_SPACE_BYTES or its value']]);
+});
+
+test('boundary lead: control: a test that uses the constant by name or by value pins it; the name or number inside arithmetic does not', (t) => {
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: LOW_SPACE_BYTES }), false);')).length, 0);
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: 52_428_800 }), false);')).length, 0);
+  assert.equal(bound(t, BCMP, btest('  assert.equal(check({ freeBytes: LOW_SPACE_BYTES - 1 }), true);')).length, 1);
+});
+
+test('boundary lead: control: a literal comparison, a unit with no matched test and a constant that is not a plain numeric expression make no lead', (t) => {
+  assert.equal(bound(t, bsrc('  return f.freeBytes < 200;'), btest()).length, 0);
+  assert.equal(bound(t, BCMP, { 'test/other.test.js': "it('x', () => { assert.equal(1, 1); });" }).length, 0);
+  assert.equal(bound(t, ['export const LOW_SPACE_BYTES = os.total() / 2;', ...BCMP.slice(1)], btest()).length, 0);
 });
