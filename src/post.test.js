@@ -2945,7 +2945,7 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   assert.equal((inc.match(/^> /gm) || []).length, 4, 'one blockquote, one line each');
   assert.doesNotMatch(inc, /Criteria:|✅|\[!WARNING\]/);
   assert.match(inc, /specguard:status=incomplete/);
-  const red = post.buildSummary({ ...common, reduced: { reasons: ['fast-tier model', '3 engine notes'], model: 'mini' } });
+  const red = post.buildSummary({ ...common, reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }], model: 'mini' } });
   assert.match(red, /## SpecGuard\n\n\*\*❌ 1 unit test gap to fix\*\*\n\n\| Unit tests \| Requirements \| Coding standards \| Test layers \|\n\|---\|---\|---\|---\|\n\| 1 missing \| 1: 1 gap \| no violations \| nothing to move down \|\n\n### Missing unit tests \(1\)[^]*\n> Reduced review \(fast model\): only high-confidence findings are shown\.\n\n<details>/);
   assert.doesNotMatch(red, /No unit test gaps found|✅ No/);
   assert.match(red, /\*\*Reduced review\*\*\n\nReasons: fast-tier model; 3 engine notes \(model: mini\)\. Only high-confidence findings were posted inline\./);
@@ -2965,10 +2965,10 @@ test('grade reads the completeness this summary declares: an incomplete or faile
   assert.equal(g({ incomplete: ['Requirement tracing was not done: x.'] }).complete, false);
   assert.equal(g({ incomplete: ['Requirement tracing was not done: x.'] }).pass, false);
   assert.equal(g({ status: 'Could not complete: x', state: 'failed' }).complete, false);
-  const red = g({ reduced: { reasons: ['fast-tier model'], model: 'mini' }, counts: { v: 1, reduced: true } });
+  const red = g({ reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }], model: 'mini' }, counts: { v: 1, reduced: true } });
   assert.deepEqual([red.complete, red.reduced], [true, true]);
   // the shape a real reduced run writes (status=incomplete, review F09): finished means complete for grading; a reduced run that did not finish is not
-  const real = (done) => g({ reduced: { reasons: ['fast-tier model'], model: 'mini' }, state: 'incomplete', counts: { v: 1, reduced: true, complete: false, execution_complete: done } });
+  const real = (done) => g({ reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }], model: 'mini' }, state: 'incomplete', counts: { v: 1, reduced: true, complete: false, execution_complete: done } });
   assert.deepEqual([real(true).complete, real(true).reduced, real(false).complete], [true, true, false]);
 });
 
@@ -2977,7 +2977,7 @@ test('layout: one icon per summary, on the verdict line only; status words are p
   const posted = [{ f: finding('missing_test'), url: 'https://github.com/o/r/pull/1#discussion_r1' }];
   const d = report({ requirements: [reqOf('R1', ['O1']), reqOf('R2', []), reqOf('R3', ['O3'])], coverage: [row('missing_test'), row('covered', { id: 'O3' })], findings: [finding()] });
   const base = { data: d, posted, blob: BLOB, engine: 'copilot', usage: COPILOT_USAGE, delivery: '1 inline comment' };
-  for (const [name, x] of Object.entries({ gap: base, incomplete: { ...base, incomplete: ['x'] }, reduced: { ...base, reduced: { reasons: ['fast-tier model'], model: 'mini' } }, clean: { data: report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] }) }, person: { data: report({ requirements: [reqOf('R1', [])], coverage: [row()], findings: [] }) }, failed: { status: 'Could not complete: x', state: 'failed' } })) {
+  for (const [name, x] of Object.entries({ gap: base, incomplete: { ...base, incomplete: ['x'] }, reduced: { ...base, reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }], model: 'mini' } }, clean: { data: report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] }) }, person: { data: report({ requirements: [reqOf('R1', [])], coverage: [row()], findings: [] }) }, failed: { status: 'Could not complete: x', state: 'failed' } })) {
     const s = post.buildSummary(x);
     assert.equal(icons(s), 1, `${name}: one icon in the whole summary`);
     assert.equal(icons(visibleOf(s).split('\n').slice(1).filter((l) => !l.startsWith('**')).join('\n')), 0, `${name}: none below the verdict line`);
@@ -3387,7 +3387,7 @@ test('v2 contract: the obligations table omits an absent proves', () => {
 // ---- reduced review mode ----
 test('reduced: each of the four triggers, and none for a normal run', () => {
   const data = (notes = [], n = 4) => ({ coverage: Array.from({ length: n }, (_, i) => ({ id: `O${i}` })), validation_notes: notes, degraded: notes.flatMap((m) => { const x = /^Obligation (.+?) marked unknown: (?!The linked requirement)/.exec(m); return x ? [x[1]] : []; }) }); // degraded: the explicit kind validation sets when it marks a row unknown on its own citations
-  const r = (o) => post.reducedReasons({ engineNotes: [], data: data(), ...o });
+  const r = (o) => post.reducedReasons({ engineNotes: [], data: data(), ...o }).map((x) => x.text);
   assert.deepEqual(r({}), []);
   assert.deepEqual(r({ em: { tier: 'normal', used: ['gpt-6-luna'] }, repair: '', engineNotes: ['a', 'b'] }), []);
   assert.deepEqual(r({ em: { tier: 'fast' } }), ['fast-tier model']);
@@ -3739,7 +3739,7 @@ test('layout: the full visible order, with the cost as the last small line outsi
   });
   const s = post.buildSummary({ data: d, items: d.findings.map((f) => ({ f, why: '' })), engine: 'claude', model: 'claude-haiku-5-5', tier: 'fast', blob: BLOB, headSha: 'HEADSHA',
     usage: { totalCostUsd: 0.0069, totalApiDurationMs: 43200, tokenDetails: { input: { tokenCount: 17300 }, cache_read: { tokenCount: 11700 }, cache_write: { tokenCount: 0 }, output: { tokenCount: 10200 } } }, notes: ['context pack: 14 files, 30 KB'],
-    delivery: 'summary only, nothing posted', reduced: { reasons: ['fast-tier model'], model: 'claude-haiku-5-5' }, counts: { v: 1, complete: true, since_total: 1, since: { addressed: 1, open: 0, dismissed: 0, not_observed: 0 } } });
+    delivery: 'summary only, nothing posted', reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }], model: 'claude-haiku-5-5' }, counts: { v: 1, complete: true, since_total: 1, since: { addressed: 1, open: 0, dismissed: 0, not_observed: 0 } } });
   const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
   const order = ['**❌', '| Unit tests |', 'Since last push:', '### Missing unit tests', '### Weak unit tests', '### Spec mismatches', '### Coding standard violations', '### Tests to move down', '> Fast-tier model', '<details>', 'Run: engine claude · context pack: 14 files, 30 KB', '</details>', '<sub>Cost $0.0069'].map(at);
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
@@ -4303,4 +4303,11 @@ test('headline precedence is unchanged from main: fast tier + cut + gaps stays �
   assert.match(fast, /## SpecGuard\n\n\*\*❌ \d+ unit test gaps? to fix\*\*/); assert.match(fast, /specguard:status=incomplete -->/); assert.match(fast, /Incomplete review\./);
   const full = await go('');
   assert.match(full, /## SpecGuard\n\n\*\*⚠️ Incomplete review: \d+ unit test gaps? found so far\*\*/); assert.match(full, /specguard:status=incomplete -->/);
+});
+
+test('tier-only reduced review is a grade by id, not by reason wording', () => {
+  const d = report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] });
+  const s = (reasons) => post.buildSummary({ data: d, blob: BLOB, reduced: { reasons, model: 'mini' } });
+  assert.match(s([{ id: 'tier', text: 'small model' }]), /Fast-tier model: only high-confidence/, 'rewording the tier text keeps it a grade');
+  assert.doesNotMatch(s([{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }]), /Fast-tier model: only high-confidence/, 'control: another reason is not grade-only');
 });
