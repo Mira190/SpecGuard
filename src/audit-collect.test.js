@@ -302,7 +302,8 @@ const MONO = {
   'packages/b/tests/billing.test.js': "test('rounds every invoice total to two decimals before sending it', () => { assert.equal(roundInvoiceTotal(1.005), 1.01); });\n",
 };
 
-test('scan_paths: documents, code and tests are searched only in the scope (! excludes); without it the whole repository is', (t) => {
+// scan_paths selects the units to review; documents, tests and evidence are read repo-wide (a unit's tests often live outside its package)
+test('scan_paths: documents, code and tests are still read from the whole repository (! excludes only narrow the units); without it the result is the same', (t) => {
   const all = repo(t, MONO);
   collect({ cwd: all.root, ctx: all.ctx });
   assert.deepEqual(rows(all.ctx, 'audit-docs.txt').map((d) => d[0]).sort(), ['packages/a/docs/design.md', 'packages/b/docs/design.md']);
@@ -311,20 +312,44 @@ test('scan_paths: documents, code and tests are searched only in the scope (! ex
 
   const a = repo(t, MONO);
   collect({ cwd: a.root, ctx: a.ctx, scanPaths: 'packages/a/**' });
-  assert.deepEqual(rows(a.ctx, 'audit-docs.txt').map((d) => d[0]), ['packages/a/docs/design.md']);
-  assert.ok(cands(a.ctx).every((c) => c[1].startsWith('packages/a/')));
-  const ev = evRows(a.ctx).filter((e) => e[1] !== 'none');
-  assert.ok(ev.length > 0 && ev.every((e) => e[2].startsWith('packages/a/')), JSON.stringify(ev));
+  assert.deepEqual(rows(a.ctx, 'audit-docs.txt').map((d) => d[0]).sort(), ['packages/a/docs/design.md', 'packages/b/docs/design.md'], 'the other package\'s documents are still read');
+  assert.ok(cands(a.ctx).every((c) => c[1].startsWith('packages/a/')), 'blocks whose evidence is only in packages/b are not audited');
+  assert.ok(metaOf(a.ctx).limitations.some((l) => /document block\(s\) skipped: their evidence is outside scan_paths \(packages\/b\/docs\/design\.md\)/.test(l)));
+  assert.deepEqual(evRows(a.ctx).filter((e) => e[0] === retry && e[1] === 'code').map((e) => e[2].split(':')[0]).sort(), ['packages/a/src/scheduler.js', 'packages/b/src/scheduler.js']);
   assert.deepEqual(metaOf(a.ctx).scope, ['packages/a/**']);
-  assert.deepEqual(metaOf(a.ctx).candidates, 2);
+  assert.deepEqual(metaOf(a.ctx).candidates, metaOf(all.ctx).candidates);
 
   const x = repo(t, MONO);
   collect({ cwd: x.root, ctx: x.ctx, scanPaths: 'packages/a/**\n!packages/a/tests/**' });
-  assert.ok(evRows(x.ctx).some((e) => e[1] === 'code') && !evRows(x.ctx).some((e) => e[1] === 'test'), 'the excluded tests are not offered');
+  assert.ok(evRows(x.ctx).some((e) => e[1] === 'test'), 'tests are evidence wherever they live');
   const only = scopeFn('!packages/b/**');
   assert.ok(only('packages/a/x.js') && !only('packages/b/x.js'), 'an exclude-only scope keeps the rest');
   assert.equal(scopeFn(''), null);
   assert.ok(scopeFn('packages/a')('packages/a/src/x.js') && !scopeFn('packages/a')('packages/ab/x.js'), 'a plain path is a folder');
+});
+
+test('scan_paths: a document block is audited in a scoped run only when its evidence touches the scope; the rest are skipped, listed and carried; no scope audits all', (t) => {
+  const files = { 'docs/design.md': SCHED_DOC.replace(/\nThe community.*\n/, '') + '\nThe billing service MUST round every invoice total to two decimals before sending it.\n', 'packages/core/src/scheduler.js': SCHED_SRC, 'packages/other/src/billing.js': MONO['packages/b/src/billing.js'] };
+  const all = repo(t, files);
+  collect({ cwd: all.root, ctx: all.ctx });
+  assert.equal(cands(all.ctx).length, 2, 'control: no scope audits every block');
+  const bill = cidOfText(all.ctx, /invoice total/), retry = cidOfText(all.ctx, /retry delay/);
+  const s = repo(t, files);
+  collect({ cwd: s.root, ctx: s.ctx, scanPaths: 'packages/core/**', prior: { head: 'x', blocks: [{ cid: bill, status: 'covered', runs: 1, since: 'x', at: { date: '2026-10-01' } }] }, rotate: true });
+  assert.deepEqual(cands(s.ctx).map((c) => c[0]), [retry]);
+  assert.deepEqual(rows(s.ctx, 'audit-carried.txt').map((c) => c[0]), [bill], 'its last status is kept');
+  assert.ok(metaOf(s.ctx).limitations.some((l) => /1 document block\(s\) skipped: their evidence is outside scan_paths \(docs\/design\.md\)/.test(l)));
+});
+
+test('scan_paths: out-of-scope blocks do not take selection slots run after run (scan_max_blocks 1: the in-scope block is audited in run 2)', (t) => {
+  const files = { 'docs/design.md': '# Billing\n\nThe billing service MUST round every invoice total to two decimals before sending it.\n\n# Delivery\n\nThe scheduler MUST double the retry delay after each failed delivery attempt, up to the maxDelay limit.\n', 'packages/core/src/scheduler.js': SCHED_SRC, 'packages/other/src/billing.js': MONO['packages/b/src/billing.js'] };
+  const r = repo(t, files);
+  const run = (prior) => { collect({ cwd: r.root, ctx: r.ctx, scanPaths: 'packages/core/**', maxRequirements: 1, rotate: true, prior }); return cands(r.ctx).map((c) => c[0]); };
+  const first = run(null), second = run({ head: 'x', blocks: first.map((cid) => ({ cid, status: 'covered', runs: 1, since: 'x', at: { date: '2026-10-01' } })) });
+  const retry = cidOfText(r.ctx, /retry delay/);
+  assert.deepEqual(first, [retry], 'the out-of-scope billing block (ranked first) does not take the single slot');
+  assert.deepEqual(second, [retry], 'run 2 audits the in-scope block again, not the skipped one');
+  assert.match(metaOf(r.ctx).limitations.join('\n'), /1 document block\(s\) skipped/);
 });
 
 const B = (cid, p) => ({ cid, path: p, line: 1, heading: '', text: cid, full: cid });

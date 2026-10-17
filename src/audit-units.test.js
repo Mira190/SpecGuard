@@ -191,13 +191,13 @@ test('risk: (1 + public) * log2(2 + loc/50) * (1 + churn/5 + fixes) * testFactor
   assert.equal(o.score, risk({ pub: o.pub, loc: o.loc, churn: o.churn, fixes: o.fixes, factor: o.factor }));
 });
 
-test('scope (scan_paths) limits both units and tests; test_paths makes any non-document file there a test', (t) => {
+test('scope (scan_paths) limits the units only, not their tests; test_paths makes any non-document file there a test', (t) => {
   const r = repo(t);
   const scoped = inventory({ cwd: r.root, head: 'HEAD', now: NOW, scope: (p) => p.startsWith('src/js/') || p.startsWith('test/') });
   assert.ok(scoped.rows.every((u) => u.path.startsWith('src/js/')));
   assert.deepEqual(scoped.rows.find((u) => u.path === 'src/js/cart.js').tests, ['test/cart.test.js']);
   const only = inventory({ cwd: r.root, head: 'HEAD', now: NOW, scope: (p) => p.startsWith('src/js/') });
-  assert.deepEqual(only.rows.find((u) => u.path === 'src/js/cart.js').tests, [], 'a test outside the scope is not searched');
+  assert.deepEqual(only.rows.find((u) => u.path === 'src/js/cart.js').tests, ['test/cart.test.js'], 'a test outside the scope still matches: scope selects units only');
   const set = inventory({ cwd: r.root, head: 'HEAD', now: NOW, testPaths: 'src/js/orders.js' }); // a source file declared as the test location
   assert.ok(!set.rows.some((u) => u.path === 'src/js/orders.js'));
 });

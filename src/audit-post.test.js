@@ -817,7 +817,7 @@ test('run: per-scope issues do not collide; the unscoped scan still finds the is
   const s = await go('packages/search/**');
   assert.deepEqual([s.calls.updated.length, s.calls.created.length], [0, 1], 'a new scope gets its own issue');
   assert.equal(s.calls.created[0].title, 'SpecGuard: unit test gap scan (packages/search/**)');
-  assert.match(s.calls.created[0].body, /Scope \(scan_paths\): `packages\/search\/\*\*`\./);
+  assert.match(s.calls.created[0].body, /Units reviewed \(scan_paths\): `packages\/search\/\*\*`; requirements, tests and evidence are read from the whole repository\./);
 });
 
 const ROT = { rotate: true, state: true, picked: 1, changed: 0, confirming: 1, new: 0, oldest: 0, carried: 3 };
@@ -869,7 +869,7 @@ test('render: coverage without an issue says to schedule with scan_issue: true; 
   const dropped = render({ data, candidates: 9, cap: 5, stateDropped: 7, rotation: ROT });
   assert.match(dropped, /the scan issue state keeps at most 600 blocks: 7 older block\(s\) are dropped and will count as never audited/, 'a state cap is visible');
   const scoped = render({ data, candidates: 9, cap: 5, scope: ['packages/payments/**', '!**/legacy/**'], rotation: ROT });
-  assert.match(scoped, /Scope \(scan_paths\): `packages\/payments\/\*\*`, `!\*\*\/legacy\/\*\*`\./);
+  assert.match(scoped, /Units reviewed \(scan_paths\): `packages\/payments\/\*\*`, `!\*\*\/legacy\/\*\*`; requirements, tests and evidence are read from the whole repository\./);
 });
 
 test('state: only the newest runs fit STATE_MAX; covered, long-ago blocks go first and the drop is counted', () => {
