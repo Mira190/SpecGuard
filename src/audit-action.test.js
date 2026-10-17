@@ -288,7 +288,7 @@ test('fail-on-error.js: a configuration failure (auth, quota, model) fails the j
       delete env.FAIL_ON_ERROR; if (FAIL_ON_ERROR) env.FAIL_ON_ERROR = FAIL_ON_ERROR;
       return spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env });
     };
-    for (const c of ['auth', 'quota', 'model', 'policy']) {
+    for (const c of ['auth', 'quota', 'model', 'policy', 'config']) {
       const r = run('failed', c);
       assert.equal(r.status, 1, c);
       assert.equal(r.stdout.trim(), `::error::SpecGuard could not run the model (${c}): The Anthropic API key was rejected`);
@@ -321,5 +321,6 @@ test('action.yml: context_pack_bytes (empty = the 250000 default) reaches the sc
   assert.match(find(/id: audit_collect/), map);
   for (const s of steps.filter((x) => /CLAUDE_MODE: /.test(x))) assert.match(s, map, 'every engine step');
   const { packLimit } = require('./pack-cap');
-  assert.deepEqual([{}, { CONTEXT_PACK_BYTES: '' }, { CONTEXT_PACK_BYTES: '120000' }, { CONTEXT_PACK_BYTES: '0' }, { CONTEXT_PACK_BYTES: 'x' }].map(packLimit), [250000, 250000, 120000, 0, 0]);
+  assert.deepEqual([{}, { CONTEXT_PACK_BYTES: '' }, { CONTEXT_PACK_BYTES: '120000' }, { CONTEXT_PACK_BYTES: '0' }].map(packLimit), [250000, 250000, 120000, 0]);
+  for (const bad of ['x', '-5', '1.5', '12k']) assert.throws(() => packLimit({ CONTEXT_PACK_BYTES: bad }), /context_pack_bytes/, bad);
 });
