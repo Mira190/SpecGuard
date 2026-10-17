@@ -774,3 +774,17 @@ test('staticLeads: when the cap bites, unreferenced exports (near-certain) come 
   assert.deepEqual(L.items.map((i) => i.unit), [...rows.slice(15).map((r) => r.id), ...rows.slice(0, 12).map((r) => r.id)]);
   assert.equal(L.extra, 3);
 });
+
+test('write: the selected units stay in the persisted rows even beyond the 100 kept by risk, so their static leads survive; selecting #1 keeps exactly 100', (t) => {
+  const { staticLeads } = require('./audit-units');
+  const rows = Array.from({ length: 101 }, (_, i) => ({ id: i.toString(16).padStart(8, '0'), path: `src/u${i}.js`, score: 1, why: 'w', tests: [`test/u${i}.test.js`], ver: 'abcdef12', loc: 3, pub: 1, churn: 0, fixes: 0, signals: { tests: 1, noAssert: 0, skipped: 0, asserts: 1, weak: [], unread: 0 }, unref: [{ name: `missing${i}`, line: 1 }] }));
+  const persist = (sel) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-rows-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    write(dir, 'h', 12, { rows, picked: [sel], carried: [], unitRooms: [[sel.id]], unitCalls: 1, totals: {}, rotation: { picked: 1, reviewed: 101, total: 101 }, shallow: false, limitations: [], forced: [], stale: [], review: () => 'this run' });
+    return JSON.parse(fs.readFileSync(path.join(dir, 'audit-inventory.json'), 'utf8'));
+  };
+  const last = persist(rows[100]);
+  assert.equal(last.rows.length, 101);
+  assert.equal(staticLeads(last.rows.filter((r) => r.id === rows[100].id)).items.length, 1);
+  assert.equal(persist(rows[0]).rows.length, 100);
+});
