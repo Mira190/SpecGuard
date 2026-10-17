@@ -1247,3 +1247,20 @@ test('an adapter exception (our own code throwing) is class internal; a 529 stay
   await o.go();
   assert.equal(o.file('engine-error').split('\n')[0], 'rate');
 });
+
+test('context_pack_bytes: a scan with 0 or a non-number fails as a config error with no call (the model would see no source); PR mode keeps 0 = diff only', async (t) => {
+  for (const bad of ['0', 'abc', '-1']) {
+    const h = harness(t, [good()]);
+    await h.go({ CHECK: 'audit', CONTEXT_PACK_BYTES: bad });
+    assert.equal(h.calls.length, 0, bad);
+    assert.equal(h.file('engine-status'), 'failed');
+    assert.match(h.file('engine-error'), /^config\n.*context_pack_bytes/s);
+  }
+  const pr = harness(t, [good()]);
+  await pr.go({ CONTEXT_PACK_BYTES: '0' });
+  assert.equal(pr.calls.length, 1);
+  assert.notEqual(pr.file('engine-status'), 'failed');
+  const ok = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [] }) }] })]);
+  await ok.go({ CHECK: 'audit' });
+  assert.equal(ok.calls.length, 1, 'the default pack is unchanged');
+});
