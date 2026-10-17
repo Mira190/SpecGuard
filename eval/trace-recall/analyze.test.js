@@ -46,10 +46,11 @@ test('req->code / tests: rank is the position in the delivered test list', () =>
 });
 
 test('code->req: candidates are ranked by score; best rank over hunks; items outside the doc range do not count', () => {
-  const r = res.directions['code->req'].requirement; // A-C: D.md has the top score. A-RC: second hunk hits D.md:3, first hunk is D.md:9 (outside 1-3 +-1)
+  // A-C: D.md:2 has the top score (rank 1). A-RC: D.md:9 is outside 1-3 +-1 and scores higher, so D.md:3 is rank 2 (the other hunk has only D.md:9)
+  const r = res.directions['code->req'].requirement;
   assert.equal(r.queries, 2);
-  assert.deepEqual([r.hit_at_1, r.recall_at_3, r.all_required_at_3], [kr(2, 2), kr(2, 2), kr(2, 2)]);
-  assert.equal(r.mrr_at_10.value, 1);
+  assert.deepEqual([r.hit_at_1, r.recall_at_3, r.all_required_at_3], [kr(1, 2), kr(2, 2), kr(2, 2)]);
+  assert.equal(r.mrr_at_10.value, 0.75);
   const t = res.directions['code->req'].tests; // test-candidates.txt: A-C lists t1 first; A-RC says none found
   assert.deepEqual([t.queries, t.hit_at_1, t.recall_at_3, t.all_required_at_3], [2, kr(1, 2), kr(1, 2), kr(1, 2)]);
 });
