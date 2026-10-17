@@ -768,10 +768,10 @@ test('scan parts: a budget too small for every part drops the trailing batches (
   assert.equal(none.h.file('engine-error').split('\n')[0], 'budget');
 });
 
-test('action.yml: scan_batch_blocks (default 20) reaches the validation and engine steps; validate-inputs.sh accepts 1 to 100 only', () => {
+test('action.yml: scan_batch_blocks (default 20) reaches the validation, collector and engine steps; validate-inputs.sh accepts 1 to 100 only', () => {
   const yml = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8');
   assert.match(/^ {2}scan_batch_blocks: \{[^}]*\}/m.exec(yml)[0], /default: "20" \}$/);
-  assert.equal(yml.split('SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}').length - 1, 2);
+  assert.equal(yml.split('SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}').length - 1, 3); // validation, collector (it prices the block calls), engine
   for (const [v, code] of [['0', 1], ['101', 1], ['x', 1], ['20', 0], ['100', 0]]) assert.equal(spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh')], { env: { ...process.env, ENGINE: 'claude', SCAN_BATCH_BLOCKS: v }, encoding: 'utf8' }).status, code, v);
 });
 
@@ -1196,4 +1196,54 @@ test('PR pack (control): a changed file that fits whole is shown whole and unlis
 test('PR pack (control): the pack never exceeds CONTEXT_PACK_BYTES, however tight', (t) => {
   const r = hitRepo(t);
   for (const limit of [500, 5000, 20000, 60000]) assert.ok(Buffer.byteLength(api.contextPack(r.ctx, r.root, limit).text) <= limit + 400, `limit ${limit}`); // +400: the one-line header
+});
+
+const partRows = ['aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 1/2 lines 1-1\n', 'bbbbbbbb\tlib/b.js\t1\tw\tnone\t-\t-\t-\n', 'aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 2/2 lines 2-2\n'].join('');
+
+test('unit rooms: a budget for one call drops the room of a second part; the unit stays reached and the part is named (droppedParts), not counted as a unit not reached', async (t) => {
+  const env = { MODEL: 'claude-sonnet-5-5', MAX_OUTPUT_TOKENS: '4000' }, rooms = [['aaaaaaaa:1', 'bbbbbbbb'], ['aaaaaaaa:2']];
+  const all = roomRepo(t, { ...env, MAX_BUDGET_USD: '5' }, rooms, partRows);
+  all.answers((req, ok) => ok(req));
+  await all.go();
+  assert.equal(all.h.calls.length, 2);
+  const per = api.worstCase('claude-sonnet-5-5', 0, Math.max(...all.h.calls.map((c) => Buffer.byteLength(c.body.messages[0].content) + Buffer.byteLength(JSON.stringify(c.body.system || '')))), 4000).usd;
+  const s = roomRepo(t, env, rooms, partRows);
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String((per * 1.5).toFixed(4)) });
+  assert.equal(s.h.calls.length, 1);
+  const parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.deepEqual(parts.droppedParts, ['aaaaaaaa:2']);
+  assert.equal(parts.droppedUnits, undefined, 'unit a was reached through its first part');
+  assert.match(s.h.file('engine-notes'), /1 unit part not reached \(max_budget_usd\)/);
+  assert.doesNotMatch(s.h.file('engine-notes'), /unit not reached/);
+});
+
+test('keptRooms: the pre-flight on a ctx says how many unit calls stay (the collector plans that many); one call is null', async (t) => {
+  const rooms = [['aaaaaaaa:1', 'bbbbbbbb'], ['aaaaaaaa:2']], s = roomRepo(t, {}, rooms, partRows), base = { ctx: s.h.ctx, root: s.root, batch: 20, model: 'claude-sonnet-5-5', maxTokens: 4000, packBytes: 250000 };
+  assert.equal(api.keptRooms({ ...base, budget: 5 }).rooms, 2);
+  assert.equal(api.keptRooms({ ...base, budget: 0.0001 }).rooms, 1, 'the first unit call always stays');
+  const one = roomRepo(t, {}, [['aaaaaaaa', 'bbbbbbbb', 'cccccccc']]);
+  assert.equal(api.keptRooms({ ...base, ctx: one.h.ctx, root: one.root, budget: 5 }), null);
+});
+
+test('run as a script: a split scan gets past planning (no initialisation error) and ends with the budget class, offline', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-script-')), ctx = path.join(dir, 'ctx');
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(ctx);
+  const cands = Array.from({ length: 25 }, (_, i) => `${i.toString(16).padStart(8, '0')}\tdocs/d.md:${i + 1}\th\tA block MUST hold ${i}.\n`).join('');
+  fs.writeFileSync(path.join(ctx, 'audit-candidates.txt'), cands);
+  fs.writeFileSync(path.join(ctx, 'audit-docs.txt'), 'docs/d.md\n');
+  const r = spawnSync(process.execPath, [path.join(__dirname, 'engines', 'claude-api.js')], { encoding: 'utf8', cwd: dir, env: { ...process.env, CHECK: 'audit', CTX: ctx, PROMPT: 'p', ANTHROPIC_API_KEY: 'sk-ant-fake', MAX_BUDGET_USD: '0.0001', SCAN_BATCH_BLOCKS: '20', GITHUB_WORKSPACE: dir } });
+  assert.doesNotMatch(r.stdout + r.stderr + (fs.existsSync(path.join(ctx, 'engine-notes')) ? fs.readFileSync(path.join(ctx, 'engine-notes'), 'utf8') : ''), /before initialization|adapter error/);
+  assert.equal(fs.readFileSync(path.join(ctx, 'engine-error'), 'utf8').split('\n')[0], 'budget');
+});
+
+test('an adapter exception (our own code throwing) is class internal; a 529 stays rate', async (t) => {
+  const h = harness(t, [good()]);
+  await h.go({ PROMPT_FILE: path.join(h.dir, 'missing.txt') });
+  assert.equal(h.file('engine-error').split('\n')[0], 'internal');
+  assert.equal(h.file('engine-status'), 'failed');
+  const o = harness(t, [err(529, 'overloaded_error', 'Overloaded')]);
+  await o.go();
+  assert.equal(o.file('engine-error').split('\n')[0], 'rate');
 });

@@ -616,6 +616,9 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const inParts = code ? [...code.list.values()].filter((u) => u.part && !unseen.includes(u.id)) : []; // too large for one call: one part per run (review F07)
   const allParts = !!(inv && inv.all_parts), partsLeft = new Map(((inv && inv.parts_left) || []).map((x) => [x.path, x])); // a stateless run plans every part of a unit; parts_left: the ones no call had room for
   if (code && data && !failure && inParts.length) top += `**Reviewed in parts** (too large for one call; ${allParts ? 'every part planned in this run, as far as max_budget_usd reaches' : 'one part per run'}): ${inParts.slice(0, 5).map((u) => `\`${cell(u.path, 100)}\` ${(u.part.ks || [u.part.k + 1]).length > 1 ? 'parts' : 'part'} ${(u.part.ks || [u.part.k + 1]).slice().sort((a, b) => a - b).join(', ')} of ${u.part.n} (lines ${u.part.a}-${u.part.b})${partsLeft.has(u.path) ? `; part ${partsLeft.get(u.path).part} not reached (budget)` : ''}`).join(', ')}${inParts.length > 5 ? `, +${inParts.length - 5} more` : ''}.\n\n`;
+  if (code && data && !failure && (code.partsDropped || []).length) top += `**Unit parts not reached:** ${plural(code.partsDropped.length, 'part')} of units that were otherwise reviewed: max_budget_usd did not cover the call that held ${code.partsDropped.length === 1 ? 'it' : 'them'}: ${code.partsDropped.slice(0, 5).map((k) => `\`${cell((code.list.get(k.split(':')[0]) || {}).path || k, 100)}\` part ${k.split(':')[1]}`).join(', ')}${code.partsDropped.length > 5 ? `, +${code.partsDropped.length - 5} more` : ''}.
+
+`;
   const bh = inv && inv.budget_hint; // units no call had room for: say what the budget allowed and what would cover them
   if (code && data && !failure && bh) top += `${plural(bh.left, 'unit')} not reviewed this run: max_budget_usd $${bh.budget.toFixed(2)} allows ${plural(bh.calls, 'call')}; ${bh.need > bh.max ? `covering all units takes ${bh.need} calls, more than the ${bh.max} a run makes (narrow scan_paths)` : `covering all units needs a budget of about $${bh.usd.toFixed(2)} (the pre-flight reserves the worst case per call; actual spend is usually far lower)`}${inv.rotation && inv.rotation.rotate ? `, or they rotate in over ~${bh.runs} runs` : ''}.\n\n`;
   const fzd = new Set(inv ? inv.forced || [] : []);
@@ -684,8 +687,8 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   for (const l of ulists) body += vis(l.title, l.fs.map(uitem), '', UCAP);
   const SIGH = 'Found by rule from the test files at this commit, not by the model; a missing or weak signal is a lead, not a confirmed gap.\n\n| Unit | Signal | Why |\n|---|---|---|\n', SIGN = { test_evidence_not_found: 'test evidence not found', weak_test_signal: 'weak test signal', truthiness_only: 'asserts only truthiness', unreferenced_export: 'no test references it' };
   const srow = (s) => `| ${link(s.path, s.line || 1, s.line ? `${s.path}:${s.line}` : s.path)} | ${SIGN[s.kind]} | ${cell(s.why, 200)} |\n`;
-  const srows = [...sig, ...lead.items].map(srow).concat(lead.extra ? [`| +${lead.extra} more | | not listed: only the top 20 leads by unit risk are shown |\n`] : []);
-  if (!failure && data) body += vis('Static test signals (no model)', srows, SIGH, UCAP);
+  const srows = [...sig, ...lead.items].map(srow).concat(lead.extra ? [`| +${lead.extra} more | | not listed: only the top 20 leads by unit risk are shown |\n`] : []), SCAP = sig.length + 21; // the rule findings, then the top 20 leads (staticLeads' cap) and the line that counts the rest
+  if (!failure && data) body += vis('Static test signals (no model)', srows, SIGH, SCAP);
   body += vis('Reported in two runs', confirmed.map(grow), GTOP);
   body += vis(prior ? 'New since the last scan' : 'New gaps', fresh.map(grow), GTOP);
   body += clashes.length ? take(`### Documents and code disagree (${clashes.length})\n\nA model judgement: only the existence of both quotes was verified. Check before acting.\n\n| Document says | Code says |\n|---|---|\n`, clashes.slice(0, CAP), clashes.length > CAP ? `\n+${clashes.length - CAP} more in Details.\n` : '') : '';
@@ -707,7 +710,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     const left = Math.max(0, inv.units - r.reviewed);
     cdet = take(`**Riskiest units (top ${Math.min(15, inv.rows.length)} of ${inv.units})**\n\n${URISK}`, inv.rows.slice(0, 15).map(urow), '') + fit(text)
       + (left ? take(`**Units not yet reviewed (${left})**\n\n`, [...inv.unreviewed.slice(0, 15).map((u) => `- ${link(u.path, 1, u.path)} (risk ${u.score})\n`), ...(left > 15 ? [`- +${left - 15} more\n`] : [])], '') : '')
-      + ulists.map((l) => more(l.more, l.fs.map(uhead), '', UCAP)).join('') + (failure || !data ? '' : more('More static test signals', srows, SIGH, UCAP))
+      + ulists.map((l) => more(l.more, l.fs.map(uhead), '', UCAP)).join('') + (failure || !data ? '' : more('More static test signals', srows, SIGH, SCAP))
       + (ulow.length ? take(`**Low-confidence unit findings (${ulow.length})**\n\nA test file the model could not see whole, or a test that may already cover it, is behind each; they are not counted.\n\n`, ulow.map(uhead), '') : '');
   }
   let det = [more('More confirmed gaps', confirmed.map(grow), GTOP), more('More new gaps', fresh.map(grow), GTOP), more('More disagreements', clashes, '| Document says | Code says |\n|---|---|\n')].join('');
@@ -832,7 +835,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const sp = json('scan-parts.json') || {}, spFailed = Array.isArray(sp.failed) ? sp.failed : [], isCid = (c) => /^[0-9a-f]{8}$/.test(c), spDropped = (Array.isArray(sp.dropped) ? sp.dropped : []).filter(isCid);
   const skip = new Set([...spFailed.flatMap((x) => (Array.isArray(x.blocks) ? x.blocks : [])).filter(isCid), ...spDropped].filter((c) => cands.has(c))), unitsFailed = spFailed.some((x) => x.part === 'units');
   // units: a failed unit part leaves only its own units unseen (a failure without a unit list, from an older engine, leaves all); units of a unit part dropped for the budget were not reached: both are not tracked, still due
-  const unitIn = (a) => (Array.isArray(a) ? a : []).filter((u) => units.has(u)), failedU = new Set(spFailed.filter((x) => x.part === 'units').flatMap((x) => (Array.isArray(x.units) ? unitIn(x.units) : [...units.keys()]))), reachedNot = new Set(unitIn(sp.droppedUnits).filter((u) => !failedU.has(u))), notSeen = new Set([...failedU, ...reachedNot]);
+  const unitIn = (a) => (Array.isArray(a) ? a : []).filter((u) => units.has(u)), failedU = new Set(spFailed.filter((x) => x.part === 'units').flatMap((x) => (Array.isArray(x.units) ? unitIn(x.units) : [...units.keys()]))), reachedNot = new Set(unitIn(sp.droppedUnits).filter((u) => !failedU.has(u))), notSeen = new Set([...failedU, ...reachedNot]), partsDropped = (Array.isArray(sp.droppedParts) ? sp.droppedParts : []).filter((k) => typeof k === 'string' && units.has(k.split(':')[0]) && !notSeen.has(k.split(':')[0])); // parts of a unit that has other parts reviewed: the budget dropped the call that held them
   const sent = new Map([...cands].filter(([k]) => !skip.has(k))); // only the blocks sent in a part that succeeded can be missing from the answer
   const v = validate(data, sent, units);
   const why = v.ok ? '' : data ? `the result failed validation: ${v.error}` : 'the engine returned no usable JSON';
@@ -856,7 +859,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const dropU = hasCode ? [...new Set([...data.invalid_units, ...checked.unit_dropped])].filter(notCut) : [];
   const lowU = hasCode ? [...new Set(checked.unit_findings.map((f) => f.unit))].filter((u) => notCut(u) && !dropU.includes(u)) : [];
   const unsure = [...dropU, ...lowU], unseen = cutUnits; // seen but inconclusive: tracked this run as unsure (rotation moves on, never covered); unseen: not tracked, still due
-  const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed, failed: [...failedU], unreached: [...reachedNot] } : null;
+  const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed, failed: [...failedU], unreached: [...reachedNot], partsDropped } : null;
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
@@ -872,7 +875,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const twice = [...unansweredC].filter((c) => prior && prior.versions && (prior.versions.un || []).includes(c));
   if (twice.length) shared.limitations = [...shared.limitations, `${plural(twice.length, 'document block')} not answered in two consecutive runs (recorded unsure; rotation moves on): ${twice.slice(0, 3).map((c) => `${sent.get(c).path}:${sent.get(c).line} (${c})`).join(', ')}${twice.length > 3 ? ', ...' : ''}`];
   const fzAll = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), partN = cutUnits.filter((id) => !notSeen.has(id) && fzAll.has(id)).length, fitN = cutUnits.length - notSeen.size - partN; // forced = reviewed with part of their tests
-  const incomplete = [partial, notAudited.blocks.length && `${plural(notAudited.blocks.length, 'document block')} not audited`, hasCode && unitsFailed && 'the unit call failed', reachedNot.size && `${plural(reachedNot.size, 'unit')} not reached (max_budget_usd)`,
+  const incomplete = [partial, notAudited.blocks.length && `${plural(notAudited.blocks.length, 'document block')} not audited`, hasCode && unitsFailed && 'the unit call failed', reachedNot.size && `${plural(reachedNot.size, 'unit')} not reached (max_budget_usd)`, partsDropped.length && `${plural(partsDropped.length, 'unit part')} not reached (max_budget_usd)`,
     fitN > 0 && `${plural(fitN, 'unit')} did not fit the model's context`, partN > 0 && `${plural(partN, 'unit')} ${partN === 1 ? 'was' : 'were'} reviewed with only part of their tests (recorded unsure)`, dropU.length && `${plural(dropU.length, 'unit')} had a finding that failed validation or verification`, unanswered && `${plural(unanswered, 'document block')} ${unanswered === 1 ? 'was' : 'were'} not answered by the model`].filter(Boolean).join('; ');
   outcome(incomplete ? 'incomplete' : 'complete', incomplete);
   if (issueErr) outcome('failed', issueErr); // the lookup ran before the status was known

@@ -425,13 +425,9 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     // A scan with more document blocks than SCAN_BATCH_BLOCKS (default 20) is split into budgeted parts (src/scan-parts.js): one unit call and block calls, answers merged here. Fewer blocks: one call, below.
     const batch = Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), split = env.CHECK === 'audit' ? require('../scan-parts.js').plan({ ctx, root: root(), batch, limit: packBytes, schemaFile, contextPack, evidencePack, assembleAudit: require('../prompt.js').assembleAudit }) : null;
     if (split) {
-      const priced = (p) => {
-        const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1500 * p.cids.length + 2000) : maxTokens; // a batch of n blocks needs about 1500 tokens each (20 blocks overflowed 22000 live)
-        return { ...p, system: s, user: x, tokens, usd: worstCase(model, Buffer.byteLength(s), Buffer.byteLength(x), tokens).usd };
-      };
-      const plans = split.parts.map(priced);
-      const total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd, dropped = [], droppedUnits = [];
-      while (plans.length > 1 && total() > budget) { const q = plans.pop(); dropped.unshift(...q.cids || []); droppedUnits.unshift(...q.units || []); } // the budget is hard: the last part goes first (the extra unit parts, then the block batches in reverse candidate order = rotation priority), the first part last; dropped units are not reached this run, they stay due
+      const priced = (p) => pricePart(model, maxTokens, p);
+      const { plans, dropped, droppedKeys } = fit(split.parts.map(priced), budget), total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd;
+      const seen = new Set(plans.flatMap((q) => q.units || [])), idOf = (k) => k.split(':')[0], droppedUnits = [...new Set(droppedKeys.map(idOf).filter((u) => !seen.has(u)))], droppedParts = droppedKeys.filter((k) => seen.has(idOf(k))); // a unit with a part in a call that still runs was reached: its dropped parts are named on their own
       if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
       let first = null, ok = 0, splits = 0, cfg = null; // cfg: the first part that failed on a configuration class
@@ -474,10 +470,10 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       for (const p of queue) fail(p, 'not started: the review timed out'); // a timeout stops the run: the parts not started are not audited either
       if (!ok) return failEnd(first); // nothing usable at all: the run fails as one call would
       w('findings.json', JSON.stringify(merged));
-      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(droppedUnits.length && { droppedUnits }), ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
+      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(droppedUnits.length && { droppedUnits }), ...(droppedParts.length && { droppedParts }), ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
       const seenParts = plans.filter((p) => p.units && !failed.some((x) => x.part === 'units' && x.units === p.units)); // the unit parts that answered: their packs are what the unit findings may rely on
       if (seenParts.length) w('pack-cut.txt', [...new Set(seenParts.flatMap((p) => p.pack.notWhole))].map((x) => `${x}\n`).join(''));
-      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}${droppedUnits.length ? `; ${plural(droppedUnits.length, 'unit')} not reached (max_budget_usd), due again` : ''}`);
+      notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}${droppedUnits.length ? `; ${plural(droppedUnits.length, 'unit')} not reached (max_budget_usd), due again` : ''}${droppedParts.length ? `; ${plural(droppedParts.length, 'unit part')} not reached (max_budget_usd)` : ''}`);
       for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);
       if (cfg) w('engine-error', `${cfg.reason}\n${cfg.why}; ${ok} of ${ok + failed.length} parts were reviewed\n`); // still a partial success, but the account problem must reach the job gate (src/fail-on-error.js)
       return end('success');
@@ -500,9 +496,31 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     w('findings.json', r.found);
     end('success');
   } catch (e) {
-    end('failed', '', 'Claude API adapter error', e?.message || String(e));
+    end('failed', 'internal', 'Claude API adapter error', e?.message || String(e)); // our own code threw: a class of its own, so the last step goes red
   }
 }
 
-if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, PRICES, contextPack, windowPack, evidencePack, packFiles };
+// A scan part with its worst-case price. A batch of n blocks needs about 1500 tokens each (20 blocks overflowed 22000 live).
+const pricePart = (model, maxTokens, p) => {
+  const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1500 * p.cids.length + 2000) : maxTokens;
+  return { ...p, system: s, user: x, tokens, usd: worstCase(model, Buffer.byteLength(s), Buffer.byteLength(x), tokens).usd };
+};
+// The budget is hard: the last part goes first (the extra unit parts, then the block batches in reverse candidate order = rotation priority), the first part last. -> the parts that stay, the dropped block cids and the dropped unit keys (id or id:part).
+function fit(all, budget) {
+  const plans = all.slice(), dropped = [], droppedKeys = [], total = () => plans.reduce((a, p) => a + p.usd, 0);
+  while (plans.length > 1 && total() > budget) { const q = plans.pop(); dropped.unshift(...q.cids || []); droppedKeys.unshift(...q.keys || []); }
+  return { plans, dropped, droppedKeys };
+}
+// What the pre-flight of a scan over this ctx keeps (the collector calls it, so the units it picks are the units the engine will afford): { rooms: unit calls kept, blockUsd: what the block calls cost } or null (one call, or no way to tell).
+function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
+  try {
+    const split = require('../scan-parts.js').plan({ ctx, root, batch, limit: packBytes, schemaFile: path.join(__dirname, '..', 'audit.schema.json'), contextPack, evidencePack, assembleAudit: require('../prompt.js').assembleAudit });
+    if (!split) return null;
+    const all = split.parts.map((p) => pricePart(model, maxTokens, p));
+    return { rooms: fit(all, budget).plans.filter((p) => p.units).length, blockUsd: all.filter((p) => p.cids).reduce((a, p) => a + p.usd, 0) };
+  } catch { return null; }
+}
+
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+
+if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts

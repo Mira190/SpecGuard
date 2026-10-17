@@ -304,3 +304,13 @@ test('fail-on-error.js: a configuration failure (auth, quota, model) fails the j
     assert.equal(run('incomplete', 'auth').status, 1, 'incomplete with a configuration class (a part of a split scan hit it) fails too');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('fail-on-error.js: an adapter exception (engine-error class internal) always goes red and names the class, without FAIL_ON_ERROR; a 529 (rate) stays advisory', () => {
+  const run = (cls) => { const ctx = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-foe-')); fs.writeFileSync(path.join(ctx, 'engine-error'), `${cls}\nwhy\n`); const r = spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: 'failed', REASON: 'Claude API adapter error', CTX: ctx, FAIL_ON_ERROR: '' } }); fs.rmSync(ctx, { recursive: true, force: true }); return r; };
+  const bad = run('internal');
+  assert.equal(bad.status, 1);
+  assert.match(bad.stdout, /^::error::SpecGuard could not run the model \(internal\): Claude API adapter error/);
+  const ok = run('rate');
+  assert.equal(ok.status, 0);
+  assert.match(ok.stdout, /^::warning::/);
+});

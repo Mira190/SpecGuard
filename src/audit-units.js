@@ -158,7 +158,7 @@ function rankTests(u, base, { importers, token, classHit, classOf, folded }) {
   return tiers.flat().slice(0, PER_UNIT_TESTS);
 }
 
-// allParts: a stateless run plans every part of a unit reviewed in parts; price { usd, budget, max }: one unit call's worst case, max_budget_usd, the most calls a run makes (for the budget hint). files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
+// allParts: a stateless run plans every part of a unit reviewed in parts; price { usd, budget, max, reserve }: one unit call's worst case, max_budget_usd, the most calls a run makes, and what the document block calls take of the budget (for the budget hint). files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
 function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, rooms = 1, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 0, maxRead = MAX_UNITS_READ, allParts = false, price = null }) {
   const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
   const inScope = files.filter((e) => !skip(e.path)); // read repo-wide: scope only picks the units, their tests may live outside it
@@ -246,7 +246,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const chosen = new Set(sel.picked.map((r) => r.id));
   const left = uniq(sel.noRoom.filter((r) => !chosen.has(r.id))); // units no call had room for
   let hint = null;
-  if (price && left.length) { const need = pick(items, maxUnits, null, size, room, Infinity).rooms; hint = { left: left.length, calls, need, usd: Math.ceil(need * price.usd * 100) / 100, budget: price.budget, max: price.max, runs: Math.ceil(need / calls) }; }
+  if (price && left.length) { const need = pick(items, maxUnits, null, size, room, Infinity).rooms; hint = { left: left.length, calls, need, usd: Math.ceil((need * price.usd + (price.reserve || 0)) * 100) / 100, budget: price.budget, max: price.max, runs: Math.ceil(need / calls) }; }
   const distinct = (rs) => [...new Set(rs.flatMap((r) => r.tests))].map((t) => sig.get(t) || none);
   const tot = (ss) => ({ skipped_tests: ss.reduce((a, s) => a + s.skipped, 0), tests_without_assertion: ss.reduce((a, s) => a + s.noAssert, 0), weak_assertions: ss.reduce((a, s) => a + s.weak.length, 0) });
   const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), reviewed = new Set([...rows.filter((r) => known.has(r.id)).map((r) => r.id), ...chosen]);
@@ -265,6 +265,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
 function write(ctx, head, maxUnits, inv) {
   const w = (n, s) => fs.writeFileSync(path.join(ctx, n), s), flat = (s) => String(s).replace(/[\t\r\n]+/g, ' ');
   w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, r.tests.join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-', ...(r.packTests ? [r.packTests.join(', ') || '-'] : [])].map(flat).join('\t') + '\n').join(''));
+  fs.rmSync(path.join(ctx, 'audit-unit-rooms.json'), { force: true }); // a plan written earlier into this ctx (the collector plans again when the pre-flight keeps fewer calls)
   if (inv.unitRooms && inv.unitRooms.length > 1) w('audit-unit-rooms.json', JSON.stringify(inv.unitRooms)); // more than one call: scan-parts.js makes one unit part per room
   w('audit-units-carried.txt', inv.carried.map((r) => `${r.id}\t${flat(r.path)}\n`).join(''));
   w('audit-inventory.json', JSON.stringify({ head, max_units: maxUnits, ...(inv.unitCalls > 1 && { unit_calls: inv.unitCalls }), ...(inv.allParts && { all_parts: true, parts_left: inv.partsLeft }), ...(inv.hint && { budget_hint: inv.hint }), ...inv.totals, rotation: inv.rotation, shallow: inv.shallow, limitations: inv.limitations,
@@ -292,13 +293,14 @@ function staticFindings(rows) {
 // Exact-location facts from the same rows (row.leads, written by write()): a weak assertion that only checks truthiness, an exported name no test file mentions. In row order (risk order); at most `cap` kept, `extra` counts the rest.
 // Facts for a reader to check, never counted as gaps and never in the state.
 function staticLeads(rows, cap = 20) {
-  const all = [], seen = new Set(), exp = (p) => (/\.[cm]?[jt]sx?$/i.test(p) ? 'exported' : 'public');
+  const all = [], unref = [], seen = new Set(), exp = (p) => (/\.[cm]?[jt]sx?$/i.test(p) ? 'exported' : 'public');
   for (const r of rows || []) {
     const l = r && r.leads;
     if (!l) continue;
     for (const w of l.weak || []) !seen.has(w.path + ":" + w.line) && seen.add(w.path + ":" + w.line) && all.push({ unit: r.id, path: w.path, line: w.line, kind: 'truthiness_only', why: `\`${w.path.split('/').pop()}:${w.line}\` asserts only truthiness (\`${String(w.text).replace(/`/g, "'")}\`)` });
-    for (const d of l.unref || []) all.push({ unit: r.id, path: r.path, line: d.line, kind: 'unreferenced_export', why: `\`${d.name}\` (${r.path}:${d.line}) is ${exp(r.path)} and no test file references it` });
+    for (const d of l.unref || []) unref.push({ unit: r.id, path: r.path, line: d.line, kind: 'unreferenced_export', why: `\`${d.name}\` (${r.path}:${d.line}) is ${exp(r.path)} and no test file references it` });
   }
+  all.unshift(...unref); // no test file names the export: a near-certain fact, listed before the weak-assertion leads when the cap bites
   return { items: all.slice(0, cap), extra: Math.max(0, all.length - cap) };
 }
 
