@@ -1572,7 +1572,8 @@ async function run({ github, context, core }) {
   // citations (evidence, behaviour, findings, requirement files) are read only from files tracked at the checked-out head
   const readLines = memoed((p) => { const rel = safeRel(p); return rel && tracked && tracked.has(rel) ? readFile(rel) : null; });
   { // a missing_test claim whose error message or literal already sits in a tracked test file may be covered there: low confidence, not counted (src/test-map.js)
-    const cands = parseCandidates(readCtx('test-candidates.txt') || ''), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
+    // hunk-tier candidates stay out of the guard's scope: a test that merely shares a literal with the diff is the "logger test contains 'invalid amount'" case (#217)
+    const cands = parseCandidates(readCtx('test-candidates.txt') || '', { skipHunk: true }), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
     for (const f of data.findings) {
       // a file absent from test-candidates.txt gets an unscoped search (cands.get is undefined); safe only because such files are in candidates-cut.txt, which already makes the run incomplete
       const hit = f.kind === 'missing_test' && covers(readLines(f.path), f.line, f.path, cands.get(f.path));

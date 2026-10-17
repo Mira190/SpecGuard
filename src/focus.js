@@ -53,14 +53,15 @@ function thresholds(env) {
 }
 
 // test-candidates.txt -> Map(source path -> [test paths]); a source with "(no candidate test file found)" maps to []
-function parseCandidates(text) {
+// skipHunk: leave out the hunk tier ("mentions changed `x`"): such a test only shares an identifier with the diff, it is not the file's own test
+function parseCandidates(text, { skipHunk = false } = {}) {
   const m = new Map();
   let cur = null;
   for (const l of String(text).split('\n')) {
     if (!l.trim()) continue;
     if (!l.startsWith(' ')) { if (!l.startsWith('(')) m.set((cur = l), []); continue; }
     const t = /^\s+(\S.*?)\s{2}\(/.exec(l);
-    if (cur && t && !l.includes('no candidate test')) m.get(cur).push(t[1]);
+    if (cur && t && !l.includes('no candidate test') && !(skipHunk && /\(mentions changed /.test(l))) m.get(cur).push(t[1]);
   }
   return m;
 }
