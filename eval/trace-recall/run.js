@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { extractCandidates, checkCandidates } = require('./candidates.js');
+const { extractCandidates, checkCandidates, checkNotAllEmpty } =require('./candidates.js');
 
 const args = process.argv.slice(2), opt = (n, d) => { const i = args.indexOf(n); return i < 0 ? d : args[i + 1]; };
 const cases = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases.json'), 'utf8'));
@@ -86,7 +86,7 @@ function runVariant(id, h, candJs) {
   const cd = spawnSync(process.execPath, [candJs, path.join(SRC, 'trace.js'), ctx], { cwd: TARGET, env, encoding: 'utf8', timeout: 60000, maxBuffer: 1 << 28 });
   const t2 = Date.now();
   const rd = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8'); } catch { return ''; } };
-  checkCandidates(id, cd, rd('test-candidates.txt'), h.variant !== 'R' && cases.cases.find((c) => c.id === h.case).edits.C.length > 0); // R edits only the requirement text
+  checkCandidates(id, cd);
   let tc = null; try { tc = JSON.parse(rd('trace-candidates.json')); } catch {}
   const failed = tr.status !== 0 || !tc;
   return {
@@ -105,6 +105,7 @@ const heads = makeVariants();
 const candJs = candidatesScript();
 const variants = [];
 for (const [id, h] of Object.entries(heads)) { const r = runVariant(id, h, candJs); variants.push(r); console.log(`${id}: ${r.status} ${r.trace_ms + r.cand_ms} ms`); }
+checkNotAllEmpty(variants.filter((v) => v.variant !== 'R').map((v) => ({ id: v.id, text: v.test_candidates })));
 let srcSha = ''; try { srcSha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: SRC, encoding: 'utf8' }).stdout.trim(); } catch {}
 fs.writeFileSync(OUT, JSON.stringify({ target: cases.target, specguard_sha: srcSha, node: process.version, variants }, null, 1) + '\n');
 console.log(`wrote ${OUT}`);
