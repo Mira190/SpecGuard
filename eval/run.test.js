@@ -97,6 +97,17 @@ test('a live run needs --action and a missing commit becomes an error row per tr
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
 });
 
+test('an errored external run keeps its expected finding count, so end-to-end recall counts it as missed', async () => {
+  const s = sourceRepo(false);
+  try {
+    const two = [{ kind: 'spec_mismatch', path: 'src/a.js', line: 1 }, { kind: 'missing_test', path: 'src/a.js', line: 5 }];
+    const out = await runExternal({ entries: [entry(s, { base: 'f'.repeat(40), expected: { findings: two, must_not: [] } })], repo: 'me/mirror', modes: ['off'], runId: 'r', dryRun: true, clone: cloneLocal(s.dir) });
+    assert.equal(out.results[0].expected_findings, 2);
+    const a = require('./grade.js').aggregate(out.results);
+    assert.deepEqual([a.recall_delivered_e2e, a.errors_expected_findings, a.errors], [0, 2, 1]);
+  } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
+});
+
 test('a live run sets the trace variable before each PR, grades each observation and cleans up', async () => {
   const s = sourceRepo(false), log = [];
   const exec = (cmd, args) => {

@@ -375,3 +375,54 @@ test('coverage-row FP contract: row with a low-confidence copy is not an FP; the
   assert.equal(hidden.fp, 0); assert.equal(hidden.clean_ok, true);
   assert.equal(alone.fp, 1); assert.equal(alone.clean_ok, false);
 });
+
+// M1/M3/M4 (shift-left review 2026-10-17): delivered recall shares the FP exposure set; end-to-end recall keeps errored runs.
+const mkSummary = (confidence, why) => {
+  const b = { path: 'a.js', line: 10, quote: 'return boundary(value);' };
+  const f = { kind: 'missing_test', path: 'a.js', line: 10, title: 'Boundary A', body: 'Missing assertion', confidence, obligation_ids: ['O1'] };
+  return buildSummary({ cov: { reports: 0 }, data: { requirements: [], requirements_source: 'none', not_reviewed: '', coverage: [{ id: 'O1', obligation: 'Boundary A', source: 'from behaviour', behaviour: b, change: b, evidence: [], status: 'missing_test', reason: 'No test', alignment: { status: 'not_applicable', reason: 'No explicit requirement' } }], findings: [f], standards: { status: 'no_rules', sources: [], reason: 'None' }, layering: { status: 'checked', reason: 'None' } }, items: [{ f, why }], notes: [], blob: 'https://github.com/example/repo/blob/abc/' });
+};
+const sumSpec = spec([exp({ allow_summary: true })]);
+
+test('M1: a low-confidence Details-only hit is a raw TP but not a delivered TP, and costs no FP on a clean case', () => {
+  const low = mkSummary('low', 'low confidence');
+  const g = grade(sumSpec, obs([], { summary: low }));
+  assert.deepEqual([g.tp, g.fn, g.tp_delivered, g.fn_delivered, g.pass, g.strict_pass], [1, 0, 0, 1, true, false]);
+  const clean = grade(spec([], { expect_clean: true }), obs([], { summary: low }));
+  assert.deepEqual([clean.fp, clean.clean_ok], [0, true]);
+});
+
+test('M1 control: an actionable summary-only finding is a delivered TP; so is a posted comment', () => {
+  const g = grade(sumSpec, obs([], { summary: mkSummary('high', 'not on diff') }));
+  assert.deepEqual([g.tp, g.tp_delivered, g.fn_delivered, g.strict_pass], [1, 1, 0, true]);
+  const p = grade(spec(), obs([com()]));
+  assert.deepEqual([p.tp, p.tp_delivered, p.strict_pass], [1, 1, true]);
+});
+
+test('delivered recall for coverage rows: a row with no finding is delivered; a row whose group has only a low-confidence item is not', () => {
+  const row = '| O1: Boundary A | PR body; a.js:10 — return boundary(value); | none | Missing test: No test |\n';
+  const alone = grade(sumSpec, obs([], { summary: '## SpecGuard\n\n' + row }));
+  assert.deepEqual([alone.tp, alone.tp_delivered], [1, 1]);
+  const hidden = grade(sumSpec, obs([], { summary: mkSummary('low', 'low confidence') }));
+  assert.deepEqual([hidden.tp, hidden.tp_delivered, hidden.summary_only], [1, 0, 1]);
+});
+
+test('strict_pass_rate counts strict passes; rows from old result files give null, not the pass rate', () => {
+  const good = grade(spec(), obs([com()])), loose = grade(spec(), obs([com(), com({ line: 50 })]));
+  const a = aggregate([good, loose]);
+  assert.deepEqual([a.pass_rate, a.strict_pass_rate, a.strict_pass_n, a.strict_pass_missing], [1, 0.5, 2, 0]);
+  const { strict_pass, tp_delivered, fn_delivered, ...old } = good;
+  const o = aggregate([old, loose]);
+  assert.deepEqual([o.strict_pass_rate, o.strict_pass_n, o.strict_pass_missing, o.recall_delivered, o.recall_delivered_e2e], [null, 1, 1, null, null]);
+});
+
+test('M3: 1 TP + 1 FP is an acceptance pass but not a strict pass', () => {
+  const g = grade(spec(), obs([com(), com({ line: 50 })]));
+  assert.deepEqual([g.tp, g.fp, g.pass, g.strict_pass], [1, 1, true, false]);
+});
+
+test('M4: an errored positive run stays in the end-to-end denominator and is not an FP', () => {
+  const ok = grade(spec(), obs([com()]));
+  const a = aggregate([{ ...ok, goal: 'requirements' }, { goal: 'requirements', error: 'timeout', expected_findings: 1 }]);
+  assert.deepEqual([a.recall, a.precision, a.pass_rate, a.recall_delivered, a.recall_delivered_e2e, a.errors, a.errors_expected_findings, a.fp], [1, 1, 1, 1, 0.5, 1, 1, 0]);
+});
