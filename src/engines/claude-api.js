@@ -496,11 +496,10 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     w('findings.json', r.found);
     end('success');
   } catch (e) {
-    end('failed', '', 'Claude API adapter error', e?.message || String(e));
+    end('failed', 'internal', 'Claude API adapter error', e?.message || String(e)); // our own code threw: a class of its own, so the last step goes red
   }
 }
 
-if (require.main === module) run().catch(() => {}).then(() => process.exit(0));
 // A scan part with its worst-case price. A batch of n blocks needs about 1500 tokens each (20 blocks overflowed 22000 live).
 const pricePart = (model, maxTokens, p) => {
   const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1500 * p.cids.length + 2000) : maxTokens;
@@ -523,3 +522,5 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
 }
 
 module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+
+if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts
