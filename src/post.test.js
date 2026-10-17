@@ -2722,6 +2722,11 @@ test('counts JSON with 20 sum entries and many outcomes stays under COUNTS_MAX; 
   assert.equal(JSON.parse(json).sum.length, 20);
   const huge = JSON.parse(/^<!-- specguard:counts (.*) -->$/.exec(post.countsComment({ v: 1, outcomes: [], sum: sum.map((e) => ({ ...e, path: 'p/'.repeat(300) + e.path })) }))[1]);
   assert.ok(huge.sum.length < 20 && huge.sum_dropped === 20 - huge.sum.length);
+  assert.deepEqual(huge.sum.map((e) => e.fp), sum.slice(0, huge.sum.length).map((e) => e.fp), 'the trim keeps the leading entries');
+  const mixed = sum.map((e, i) => ({ ...e, path: 'p/'.repeat(300) + e.path, ...(i >= 10 && { at: 'abc1234' }) })); // 10 of this run's, then 10 carried
+  const kept = JSON.parse(/^<!-- specguard:counts (.*) -->$/.exec(post.countsComment({ v: 1, outcomes: [], sum: mixed }))[1]).sum;
+  assert.ok(kept.length > 0 && kept.length < 20 && kept.every((e, i) => e.fp === mixed[i].fp), 'overflow drops the carried (trailing) entries first');
+  assert.ok(kept.slice(0, 10).every((e) => !e.at), 'all of this run\'s entries survive');
 });
 
 test('G1 an incomplete run still emits counts, marked complete:false, with no outcomes, no since line and nothing resolved', async (t) => {
