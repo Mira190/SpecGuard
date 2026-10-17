@@ -44,7 +44,7 @@ All fixtures live under `eval-sandbox/<id>/` in the PR, so cases never touch rea
 | `pass` / `pass_rate` | acceptance pass above | excluded | Case acceptable; extra FPs allowed |
 | `strict_pass` / `strict_pass_rate` | `pass` + all findings delivered + no FP | excluded | Case clean and fully delivered |
 
-A low-confidence or Details-only hit improves raw `recall` but not `recall_delivered`. An errored row counts toward `recall_delivered_e2e` only if the runner stamps `expected_findings` on it; without that field it contributes 0 expected findings.
+A low-confidence or Details-only hit improves raw `recall` but not `recall_delivered`. `run.js` stamps `expected_findings` on errored rows so `recall_delivered_e2e` counts them as misses. Result files from before these fields exist report `recall_delivered`, `recall_delivered_e2e` and `strict_pass_rate` as null (`strict_pass_n` / `strict_pass_missing` count the rows with and without `strict_pass`) rather than falling back to the raw numbers.
 
 ## Traceability cases (tr1-tr17)
 
