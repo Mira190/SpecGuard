@@ -53,8 +53,7 @@ test('success: one POST with key and version headers, cached static system block
   assert.equal(body.messages[0].role, 'user');
   assert.match(body.messages[0].content, /no file tools[\s\S]*---\n\nContext directory[\s\S]*PER-PR CONTEXT/);
   assert.ok(!body.tools, 'no tools: nothing to loop');
-  assert.equal(body.output_config.format.type, 'json_schema');
-  assert.ok('findings' in body.output_config.format.schema.properties);
+  assert.ok(!body.output_config, 'the PR findings schema is too large for the provider grammar: plain JSON, validated by post.js');
   assert.deepEqual(JSON.parse(h.file('findings.json')), VALID);
   assert.ok([null, 'success'].includes(h.file('engine-status')));
   assert.equal(h.file('engine-notes'), '');
@@ -231,9 +230,9 @@ test('unavailable model: model, naming the model; other 400s are failed with the
   assert.match(o.file('engine-notes'), /HTTP 400 invalid_request_error: messages: text content blocks must be non-empty/);
 });
 
-test('a refused output schema: ONE retry asking for plain JSON (no output_config), with a note; a plain answer is still extracted', async (t) => {
+test('a refused output schema (scan): ONE retry asking for plain JSON (no output_config), with a note; a plain answer is still extracted', async (t) => {
   const h = harness(t, [err(400, 'invalid_request_error', 'Schema is too complex for compilation.'), good({ content: [{ type: 'text', text: `Here you go:\n${JSON.stringify(VALID)}` }] })]);
-  await h.go();
+  await h.go({ CHECK: 'audit' });
   assert.equal(h.calls.length, 2);
   assert.ok(h.calls[0].body.output_config && !h.calls[1].body.output_config);
   assert.deepEqual(JSON.parse(h.file('findings.json')), VALID);
@@ -242,10 +241,10 @@ test('a refused output schema: ONE retry asking for plain JSON (no output_config
   assert.ok([null, 'success'].includes(h.file('engine-status')));
 });
 
-test('a refused output schema logs the provider message (scrubbed, capped); the log never carries the key', async (t) => {
+test('a refused output schema (scan) logs the provider message (scrubbed, capped); the log never carries the key', async (t) => {
   const h = harness(t, [err(400, 'invalid_request_error', `Schema is too complex for compilation. ${KEY} ${'x'.repeat(400)}`), good()]);
   const errs = [], e0 = console.error; console.error = (...a) => errs.push(a.join(' '));
-  try { await h.go(); } finally { console.error = e0; }
+  try { await h.go({ CHECK: 'audit' }); } finally { console.error = e0; }
   const line = errs.find((l) => /structured output unavailable/.test(l));
   assert.match(line, /structured output unavailable \(Schema is too complex for compilation\. \*\*\* x+\); plain JSON requested$/);
   assert.ok(!line.includes('sk-ant') && line.length < 400);
@@ -1478,4 +1477,61 @@ test('PR pack: a changed test reached first as a candidate keeps its hunk when t
     'diff.patch': hunkDiff('src/a.js', 1, ['function alphaThing() { return 1; }']) + hunkDiff('tests/own.test.js', 1, ["test('own', () => { alphaThing(); /* CHANGED_OWN */ });"]) });
   const p = api.contextPack(r.ctx, r.root, 40000);
   assert.ok(p.text.includes('CHANGED_OWN'), 'the changed test\'s added line is shown although its source\'s share is spent');
+});
+
+// The provider refuses the findings schema ("The compiled grammar is too large"), so PR mode sends none; scans still send theirs.
+const cit = { path: 'a.js', line: 3, quote: 'x()', side: 'RIGHT' };
+const ORIGINAL = () => ({
+  requirements_source: 'pr', not_reviewed: '', standards: { status: 'checked', sources: ['S.md'], reason: 'r' }, layering: { status: 'checked', reason: 'r' },
+  coverage: [
+    { id: 'o1', obligation: 'o', source: 's', behaviour: { ...cit }, change: { ...cit }, evidence: [{ path: 't.js', line: 1, quote: 'q', layer: 'unit', proves: 'p', kind: 'assertion', side: 'RIGHT' }, { path: 't.js', line: 2, quote: 'q' }], status: 'covered', reason: 'r', alignment: { status: 'mismatch', since: 'introduced', reason: 'r' } },
+    { id: 'o2', obligation: 'o', source: 's', behaviour: null, evidence: [], status: 'unknown', reason: 'r' },
+    { id: 'o3', obligation: 'o', source: 's', behaviour: { ...cit }, change: null, evidence: [{ path: 't.js', line: 9, quote: 'q', kind: 'no_assertion' }], status: 'needs_human', reason: 'r' },
+  ],
+  findings: [
+    { kind: 'weak_test', path: 'a.js', line: 4, start_line: 2, quote: 'q', title: 't', body: 'b', counterexample: 'c', rule_source: 'R.md:1', rule_quote: 'rq', suggestion: 's', source: 'x', confidence: 'high', obligation_ids: ['o1'], side: 'LEFT' },
+    { kind: 'missing_test', path: 'a.js', line: 4, quote: 'q', title: 't', body: 'b', confidence: 'low', obligation_ids: [] },
+  ],
+  requirements: [{ id: 'R1', source: 's', quote: 'q', obligation_ids: ['o1'], reason: 'r', ref: 'x', line: 2, pr_quote: 'p' }, { id: 'R2', obligation_ids: [], reason: 'r' }],
+});
+test('PR mode sends no output_config and writes the answer as the model gave it', async (t) => {
+  const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(ORIGINAL()) }] })]);
+  await h.go();
+  assert.equal(h.calls.length, 1);
+  assert.ok(!h.calls[0].body.output_config);
+  assert.deepEqual(JSON.parse(h.file('findings.json')), ORIGINAL());
+});
+
+test('scan mode still sends its schema as structured output', async (t) => {
+  const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [] }) }] })]);
+  await h.go({ CHECK: 'audit' });
+  assert.equal(h.calls[0].body.output_config.format.type, 'json_schema');
+});
+
+test('repair turn: prose with no JSON, then ONE more call with the answer as the assistant turn and a request for the JSON object only; both calls are in usage', async (t) => {
+  const h = harness(t, [good({ content: [{ type: 'text', text: 'I reviewed the diff and found it fine.' }] }), good()]);
+  await h.go();
+  assert.equal(h.calls.length, 2);
+  const m = h.calls[1].body.messages;
+  assert.deepEqual(m.slice(1), [{ role: 'assistant', content: 'I reviewed the diff and found it fine.' }, { role: 'user', content: 'Return only the JSON object for the schema.' }]);
+  assert.deepEqual(JSON.parse(h.file('findings.json')), VALID);
+  assert.ok([null, 'success'].includes(h.file('engine-status')));
+  assert.equal(JSON.parse(h.file('usage.json')).tokenDetails.output.tokenCount, 8000, 'two replies summed');
+});
+
+test('repair turn: prose twice fails after exactly two calls; a budget that cannot cover the second call, a length stop and an HTTP error make no second call', async (t) => {
+  const prose = () => good({ content: [{ type: 'text', text: 'no json here' }] });
+  const twice = harness(t, [prose(), prose()]);
+  await twice.go();
+  assert.equal(twice.calls.length, 2);
+  assert.equal(twice.file('engine-status'), 'failed');
+  const poor = harness(t, [prose(), good()]);
+  await poor.go({ MAX_BUDGET_USD: '0.02' });
+  assert.equal(poor.calls.length, 1, 'worst case of a second call does not fit');
+  const len = harness(t, [good({ stop_reason: 'max_tokens', content: [{ type: 'text', text: 'cut off' }] }), good()]);
+  await len.go();
+  assert.equal(len.calls.length, 1);
+  const http = harness(t, [err(401, 'authentication_error', 'bad key'), good()]);
+  await http.go();
+  assert.equal(http.calls.length, 1);
 });
