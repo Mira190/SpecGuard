@@ -516,6 +516,35 @@ test('test-candidates.txt: the same-name test still ranks first, and the hunk ti
   assert.equal(r.ctxFile('collect-limits.txt'), '', 'no bound hit, no limit recorded');
 });
 
+// The real candidates() heredoc with an in-memory fs and an injected git; `diff` is what `git diff` does (throws or returns text).
+function runCandidates(diff) {
+  const { extractCandidates } = require('../eval/trace-recall/candidates.js');
+  const mem = new Map(), ctx = path.resolve(__dirname, 'virtual-ctx');
+  mem.set(path.join(ctx, 'files.txt'), 'a.js\n'); mem.set('a.js', 'function alpha() {}\n');
+  const vfs = { readFileSync: (p) => { if (!mem.has(p)) throw new Error('ENOENT'); return mem.get(p); }, writeFileSync: (p, s) => mem.set(p, String(s)), appendFileSync: (p, s) => mem.set(p, (mem.get(p) || '') + String(s)) };
+  const git = (bin, args) => { if (args[0] === 'ls-files') return 'a.js\0a.test.js\0'; if (args.includes('diff')) return diff(); return ''; };
+  require('node:vm').runInNewContext(extractCandidates(fs.readFileSync(path.join(__dirname, 'collect.sh'), 'utf8')), {
+    require: (n) => { const id = n.replace(/^node:/, ''); return id === 'fs' ? vfs : id === 'path' ? path : id === 'child_process' ? { execFileSync: git } : require(id); },
+    process: { argv: ['node', '-', path.join(__dirname, 'trace.js'), ctx], env: { BASE_SHA: 'base', HEAD_SHA: 'head' } }, console,
+  });
+  return { limits: mem.get(path.join(ctx, 'collect-limits.txt')) || '', cands: mem.get(path.join(ctx, 'test-candidates.txt')) };
+}
+
+test('test-candidates.txt: a git diff that times out or fails is recorded in collect-limits, and the name-based candidates are still written', () => {
+  for (const [status, want] of [[124, /exit 124/], [128, /exit 128/]]) {
+    const r = runCandidates(() => { throw Object.assign(new Error('diff failed'), { status }); });
+    assert.match(r.limits, /Could not read the diff for changed-hunk test matching/);
+    assert.match(r.limits, want);
+    assert.match(r.cands, /a\.test\.js/);
+  }
+});
+
+test('test-candidates.txt: a diff that reads fine but matches no identifier records nothing', () => {
+  const r = runCandidates(() => '');
+  assert.equal(r.limits, '');
+  assert.match(r.cands, /a\.test\.js/);
+});
+
 test('test_paths (TEST_PATHS): the configured folders are the authoritative test locations; discovery by name applies only when empty', (t) => {
   const base = { 'src/pay.js': 'module.exports = 1;\n', 'qa/checks/pay_check.js': "require('../../src/pay');\n", 'qa/checks/fixtures/pay.data.js': "// pay\n", 'tests/pay.test.js': 'x\n' };
   const change = ({ write }) => write('src/pay.js', 'module.exports = 2;\n');

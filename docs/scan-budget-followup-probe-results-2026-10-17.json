@@ -1,0 +1,74 @@
+{
+  "snapshot": "2fb6f911b262a239bc8e21d84b7ff92a6bbfa8b7",
+  "created_at": "2026-10-17T06:44:31.967Z",
+  "method": "Immutable Git modules; local file fixtures, controlled Git reads, mocked provider and GitHub; no network or product changes.",
+  "results": [
+    {
+      "id": "N1",
+      "name": "Collector-deferred part is disclosed but status is complete",
+      "status": "complete",
+      "lines": [
+        "**Reviewed in parts** (too large for one call; every part planned in this run, as far as max_budget_usd reaches): `src/unit.js` part 1 of 2 (lines 1-2); part 2 not reached (budget).",
+        "- 1 unit part not reached (budget): src/unit.js part 2 of 2"
+      ]
+    },
+    {
+      "id": "N2",
+      "name": "Budget-dropped part is also labelled reviewed in parts",
+      "status": "incomplete",
+      "lines": [
+        "**Reviewed in parts** (too large for one call; every part planned in this run, as far as max_budget_usd reaches): `src/unit.js` parts 1, 2 of 2 (lines 1-4).",
+        "**Unit parts not reached:** 1 part of units that were otherwise reviewed: max_budget_usd did not cover the call that held it: `src/unit.js` part 2."
+      ]
+    },
+    {
+      "id": "N3",
+      "name": "One failed part makes the whole partly successful unit not reviewed",
+      "status": "incomplete",
+      "lines": [
+        "**⚠️ The scan could not review any unit: the unit call failed** at `2fb6f91`.",
+        "Units: 1 eligible = 1 inventoried; 1 selected this run = 1 did not fit; 1 not yet reviewed.",
+        "**Not reviewed this run:** 1 unit were not reviewed: the unit call failed: `src/unit.js`. It stays due for the next run.",
+        "0 of the 1 selected units were reviewed whole (1 more were not reviewed: the unit call failed). Schedule with scan_issue: true to rotate through all units."
+      ]
+    },
+    {
+      "id": "N4",
+      "name": "Zero pack can produce complete scan without source",
+      "status": "complete",
+      "engine_status": "success",
+      "pack_cut_exists": false,
+      "source_was_sent": false
+    },
+    {
+      "id": "N5",
+      "name": "Static leads disappear for selected units beyond the 100 retained inventory rows",
+      "inventory_units": 101,
+      "persisted_rows": 100,
+      "selected_unit": "src/u100.js",
+      "lead_before_serialization": 1,
+      "lead_available_to_publisher": 0
+    }
+  ],
+  "source_hashes": {
+    "src/audit-post.js": "4810cc131c98be87861299a5096de8abc40f31472c2f17cb4e24d58f962736ca",
+    "src/post.js": "41bacef20c9538b603a88a5e2bd81d17fa584ab947ed5c73454b86991bdd887c",
+    "src/checks.js": "ced268685a198655f0b71e598361a115794a3cb38cfb2e57120dba0e9ce928d6",
+    "src/preflight.js": "615e5489d96f4156b61255026370238ae0bdccc6112ce65c996af7d37a084759",
+    "src/limitations.js": "5413bf06c3980ec45c6a91d37457d6623976d1aebfdfb27e8dec65c147387ac0",
+    "src/standards-map.js": "40aaa82f017b8b5d9c7a2e7ce00d2a854e9fb361339baf60332cef831e0f4b26",
+    "src/focus.js": "7314c9fcaa26fabcb27df8009cf38db2ad763bb5e9d7fb7cb87db10e261b550f",
+    "src/numdiff.js": "20f3bdccc2ef03d8b6d27a5650657ae222986c84e4b01c9e26056d0b1bc73a9d",
+    "src/prompt.js": "84ceb07e97f9e6cddca93c828c09490208eb58ba5481a75972a80ee95cd61630",
+    "src/test-map.js": "6e38d85dd0b6ff37198c8caafd20e07dd2e3151cde63f9e04511df70183d4427",
+    "src/leads.js": "fd342794f9c849aa0612e901fde2e31bc9c8d001bf70330f87756a7702cb9e4e",
+    "src/trace.js": "419c34c485c2129fe5a5f611c325a87128602cc3ce3a557703f74cced11291d8",
+    "src/deny.js": "bfc2e2ed0aebd65b48066f2957f18e5ae491426daad91ce6dea47eda97ba4145",
+    "src/version.js": "ae70422a338d03cd26626a8da7c1cf2c27766c682564b0a264bcfcb5b35b8e75",
+    "src/audit-units.js": "288303ab5c89b56257abe378c86baa3757f19025afe1ff8f083a47c4fe15ae17",
+    "src/pack-cap.js": "ab01386f62e4113703cc80a030f4f517376d6c3cadc2e7f7401a15435f02ebdd",
+    "src/engines/claude-api.js": "44c6f44a78adbb9709b879865c546a80a2de7d17aabfdef114ccf0ccb23ea544",
+    "src/scan-parts.js": "41f84407e68d18c5d5e43f93f3f4e9ec0cd0ab61fdf0f82ea90e5a1dc20cbd90",
+    "src/engine-model.js": "11e2ecd8a9866783b400966812a79b1c97421f78fc3237031ab64c22d1367376"
+  }
+}

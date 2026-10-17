@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Blind labelling of review findings (docs/validation-plan.md). Tool names are hidden and rows are shuffled with a seed, so the
-// labeller judges the text, not the tool. ids are hashes of (tool, repo, pr, path, line, ref): the importer rebuilds them from the
+// labeller judges the text, not the tool. ids are hashes of (tool, repo, pr, fingerprint) for SpecGuard, (tool, repo, pr, path, line, comment id) otherwise: the importer rebuilds them from the
 // same window, so no key file has to be kept.
 //   node eval/label-export.js --repo OWNER/REPO --since YYYY-MM-DD [--until D] [--sample 30] [--seed N] [--out labels.csv]
 //   node eval/label-export.js --repo ... --since ... --import labels.csv        (precision per tool; feed the file to weekly-report --labels)
@@ -13,7 +13,8 @@ const { mulberry32 } = require('./szz');
 const COLUMNS = ['id', 'repo', 'pr', 'path', 'line', 'text', 'link', 'label', 'notes'];
 const LABELS = ['valid', 'invalid', 'unsure'];
 
-const findingId = (f) => `F${crypto.createHash('sha1').update([f.tool, f.repo, f.pr, f.path, f.line ?? '', f.ref ?? ''].join('\0')).digest('hex').slice(0, 9)}`;
+// A SpecGuard finding is its fingerprint (16-hex prefix: summary refs are 16, inline 40); path, line and channel change on promotion. Other tools keep the comment-id key.
+const findingId = (f) => `F${crypto.createHash('sha1').update((f.tool === 'specguard' && f.ref ? [f.tool, f.repo, f.pr, String(f.ref).slice(0, 16)] : [f.tool, f.repo, f.pr, f.path, f.line ?? '', f.ref ?? '']).join('\0')).digest('hex').slice(0, 9)}`;
 
 function shuffle(a, seed) { // Fisher-Yates, deterministic for a seed
   const r = mulberry32(seed), x = [...a];
