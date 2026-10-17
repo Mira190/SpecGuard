@@ -1256,3 +1256,20 @@ test('unit rooms: a failed unit call names the parts it held (keys, like dropped
   const parts = JSON.parse(s.h.file('scan-parts.json'));
   assert.deepEqual(parts.failed.map((x) => [x.part, x.units, x.keys]), [['units', ['aaaaaaaa'], ['aaaaaaaa:2']]]);
 });
+
+test('context_pack_bytes: a scan with 0 or a non-number fails as a config error with no call (the model would see no source); PR mode keeps 0 = diff only', async (t) => {
+  for (const bad of ['0', 'abc', '-1']) {
+    const h = harness(t, [good()]);
+    await h.go({ CHECK: 'audit', CONTEXT_PACK_BYTES: bad });
+    assert.equal(h.calls.length, 0, bad);
+    assert.equal(h.file('engine-status'), 'failed');
+    assert.match(h.file('engine-error'), /^config\n.*context_pack_bytes/s);
+  }
+  const pr = harness(t, [good()]);
+  await pr.go({ CONTEXT_PACK_BYTES: '0' });
+  assert.equal(pr.calls.length, 1);
+  assert.notEqual(pr.file('engine-status'), 'failed');
+  const ok = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [] }) }] })]);
+  await ok.go({ CHECK: 'audit' });
+  assert.equal(ok.calls.length, 1, 'the default pack is unchanged');
+});
