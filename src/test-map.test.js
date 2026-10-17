@@ -282,3 +282,42 @@ test('the cover guard reports a timed-out search instead of a silent no-hit; exi
   assert.equal(none.guard(RESPONSE, 5, 'lib/response.js'), null);
   assert.deepEqual(none.guard.limits, [], 'no match is not a limitation');
 });
+
+// a guard over a fake git: `git ls-files` lists n test files, each `git grep` goes to onGrep(paths after --, call number) and is recorded
+function withFakeGit(n, onGrep) {
+  const cp = require('node:child_process'), real = cp.execFileSync, calls = [], mod = require.resolve('./test-map');
+  const files = Array.from({ length: n }, (_, i) => `test/t${String(i).padStart(4, '0')}.test.js`);
+  delete require.cache[mod];
+  cp.execFileSync = (cmd, args) => {
+    if (args[0] === 'ls-files') return files.join('\0') + '\0';
+    if (args[0] === 'grep') { const paths = args.slice(args.indexOf('--') + 1); calls.push(paths); return onGrep(paths, calls.length); }
+    throw Object.assign(new Error('x'), { status: 1 });
+  };
+  try { var guard = require('./test-map').makeCoverGuard({ cwd: '.' }); } finally { cp.execFileSync = real; delete require.cache[mod]; }
+  return { guard, calls, files };
+}
+const NO_MATCH = () => { throw Object.assign(new Error('no match'), { status: 1 }); };
+
+test('the cover guard searches every 300-file batch: a hit in the third of 650 test files is found', () => {
+  const s = withFakeGit(650, (paths, k) => (k === 3 ? `${paths[5]}:7:x\n` : NO_MATCH()));
+  assert.equal(s.guard(RESPONSE, 5, 'lib/response.js'), `${s.files[605]}:7`);
+  assert.deepEqual(s.calls.map((c) => c.length), [300, 300, 50]);
+  assert.deepEqual(s.calls.flat(), s.files, 'every tracked test file searched once, in order');
+  assert.deepEqual(s.guard.limits, []);
+});
+
+test('the cover guard reports a timeout in batch 2 even when the hit is in batch 3 (no silent no-hit)', () => {
+  const s = withFakeGit(650, (paths) => { // keyed on the batch, since the guard may run further searches after the first fails
+    if (paths[0] === 'test/t0300.test.js') throw Object.assign(new Error('x'), { code: 'ETIMEDOUT', killed: true, status: null });
+    return paths[0] === 'test/t0600.test.js' ? `${paths[0]}:1:x\n` : NO_MATCH();
+  });
+  assert.equal(s.guard(RESPONSE, 5, 'lib/response.js'), null);
+  assert.deepEqual(s.guard.limits, ['could not check whether a test covers lib/response.js (timeout)']);
+});
+
+test('the cover guard stops at the first batch that hits (control)', () => {
+  const s = withFakeGit(650, (paths) => `${paths[2]}:4:x\n`);
+  assert.equal(s.guard(RESPONSE, 5, 'lib/response.js'), `${s.files[2]}:4`);
+  assert.equal(s.calls.length, 1);
+  assert.equal(s.calls[0].length, 300);
+});
