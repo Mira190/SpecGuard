@@ -230,3 +230,23 @@ test('symbol guard: a whole-word hit in a tracked test file; no hit for an unref
   assert.equal(symbol('multerException', 'src/a.ts'), null, 'whole word only');
   assert.equal(symbol('TransformSourceFile', 'src/b.go'), null, 'another file defines the same method');
 });
+
+// CommonJS export shapes: the exported names, and nothing for a helper that is not exported
+const names = (file, src) => publicDefs(file, src.split('\n')).names;
+test('publicDefs: module.exports = { a, b: c, d() {} } names the keys and the referenced functions', () => {
+  const n = names('lib/a.js', 'function foo() {}\nfunction bar() {}\nfunction helper() {}\nmodule.exports = {\n  foo,\n  baz: bar,\n  qux() { return { nested: 1 }; },\n  z: make(1),\n};');
+  assert.deepEqual(n.sort(), ['bar', 'baz', 'foo', 'qux', 'z']);
+});
+test('publicDefs: module.exports = name / function name', () => {
+  assert.deepEqual(names('lib/a.js', 'function build() {}\nfunction helper() {}\nmodule.exports = build;'), ['build']);
+  assert.deepEqual(names('lib/a.js', 'module.exports = function make() {};'), ['make']);
+});
+test('publicDefs: exports.x = and module.exports.x = still name x', () => {
+  assert.deepEqual(names('lib/a.js', 'function helper() {}\nmodule.exports.x = function () {};\nexports.y = 1;'), ['x', 'y']);
+});
+test('publicDefs: ESM, TS, Python and Go are unchanged', () => {
+  assert.deepEqual(names('a.js', 'function helper() {}\nexport function pub() {}'), ['pub']);
+  assert.deepEqual(names('a.ts', 'export const x = 1;\nexport function run(): void {}'), ['run']);
+  assert.deepEqual(names('a.py', 'def _h(): pass\ndef api(): pass'), ['api']);
+  assert.deepEqual(names('a.go', 'func helper() {}\nfunc Serve() {}'), ['Serve']);
+});
