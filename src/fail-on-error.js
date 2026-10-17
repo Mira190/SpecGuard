@@ -15,9 +15,17 @@ if (STATUS === 'incomplete' && CONFIG.includes(cls)) { // a multi-part scan wher
   console.log(`::error::SpecGuard could not finish the scan (${cls}): ${esc(why || REASON || 'see the job summary')}; the partial result was kept`);
   process.exit(1);
 }
-const scopeAll = () => { try { return JSON.parse(ctxFile('audit-meta.json')).scan_scope === 'all'; } catch { return false; } }; // scan_scope all: the collector says so in audit-meta.json
-if (STATUS === 'incomplete' && FAIL_ON_ERROR === 'true' && scopeAll()) { // a whole-repository scan that did not cover everything (budget, deadline, a failed call) goes red; every other incomplete run only warns
-  console.log(`::error::SpecGuard did not review the whole repository (scan_scope: all)${REASON ? `: ${esc(REASON)}` : ' (see the job summary)'}`);
+const json = (n) => { try { return JSON.parse(ctxFile(n)) || {}; } catch { return {}; } };
+// scan_scope all (the collector says so in audit-meta.json): red only when something was NOT reviewed, i.e. parts or blocks not reached (budget, deadline) or a failed call (scan-parts.json);
+// unsure verdicts on reviewed code (part of the tests, forced units, pack cuts) stay warnings
+const unreviewed = () => {
+  if (json('audit-meta.json').scan_scope !== 'all') return '';
+  const sp = json('scan-parts.json'), nr = sp.notReached || {}, n = (k, f) => (nr[k] && nr[k][f]) || 0, failed = Array.isArray(sp.failed) ? sp.failed.length : 0;
+  return ['budget', 'deadline'].map((k) => (n(k, 'parts') || n(k, 'blocks') ? `${n(k, 'parts')} unit parts / ${n(k, 'blocks')} document blocks not reached (${k})` : '')).concat(failed ? `${failed} call${failed === 1 ? '' : 's'} failed` : '').filter(Boolean).join('; ');
+};
+const missed = STATUS === 'incomplete' && FAIL_ON_ERROR === 'true' ? unreviewed() : '';
+if (missed) {
+  console.log(`::error::SpecGuard did not review the whole repository (scan_scope: all): ${esc(missed)}`);
   process.exit(1);
 }
 if (STATUS === 'failed') {
