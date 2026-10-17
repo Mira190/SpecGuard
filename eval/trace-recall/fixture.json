@@ -1,0 +1,28 @@
+{
+ "cases": {
+  "cases": [
+   { "id": "A", "expect": { "requirement": { "file": "D.md", "lines": [1, 3] }, "code": [{ "file": "f1.js", "lines": [10, 20] }, { "file": "f2.js", "lines": [5, 5] }], "tests": ["t1.test.js"] } },
+   { "id": "B", "expect": { "requirement": { "file": "D.md", "lines": [8, 9] }, "code": [], "tests": [] } }
+  ]
+ },
+ "results": {
+  "variants": [
+   { "id": "A-R", "case": "A", "variant": "R", "trace_ms": 100, "cand_ms": 50,
+     "req_to_code": [{ "criterion": "S1", "code": [{ "path": "f1.js", "line": 15, "end": 16 }, { "path": "x.js", "line": 1, "end": 1 }, { "path": "f2.js", "line": 5, "end": 5 }], "tests": [{ "path": "other.test.js", "line": 1, "end": 2 }, { "path": "t1.test.js", "line": 1, "end": 2 }] }],
+     "code_to_req": [], "test_candidates": "" },
+   { "id": "A-C", "case": "A", "variant": "C", "trace_ms": 150, "cand_ms": 50,
+     "req_to_code": [],
+     "code_to_req": [{ "path": "f1.js", "line": 12, "candidates": [{ "path": "other.md", "line": 1, "score": 5 }, { "path": "D.md", "line": 2, "score": 9 }] }],
+     "test_candidates": "f1.js\n  t1.test.js  (stem)\n" },
+   { "id": "A-RC", "case": "A", "variant": "RC", "trace_ms": 250, "cand_ms": 50,
+     "req_to_code": [{ "criterion": "S1", "code": [{ "path": "x.js", "line": 1, "end": 1 }, { "path": "y.js", "line": 1, "end": 1 }, { "path": "z.js", "line": 1, "end": 1 }, { "path": "f1.js", "line": 10, "end": 12 }], "tests": [] }],
+     "code_to_req": [
+      { "path": "f1.js", "line": 12, "candidates": [{ "path": "D.md", "line": 9, "score": 7 }] },
+      { "path": "f2.js", "line": 5, "candidates": [{ "path": "D.md", "line": 3, "score": 1 }] }],
+     "test_candidates": "f1.js\n  (no candidate test file found)\n" },
+   { "id": "B-R", "case": "B", "variant": "R", "trace_ms": 5, "cand_ms": 5,
+     "req_to_code": [{ "criterion": "S1", "code": [{ "path": "x.js", "line": 1, "end": 1 }], "tests": [] }],
+     "code_to_req": [], "test_candidates": "" }
+  ]
+ }
+}
