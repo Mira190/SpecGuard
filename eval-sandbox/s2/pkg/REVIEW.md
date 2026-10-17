@@ -1,3 +1,3 @@
 # Review rules
 
-- Throw Error objects, never strings.
+- Throwing strings is fine.
