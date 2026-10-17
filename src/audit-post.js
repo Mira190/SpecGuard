@@ -75,6 +75,8 @@ function readUnits(txt) {
 }
 const ctxUnits = () => { try { return readUnits(fs.readFileSync(path.join(process.env.CTX, 'audit-units.txt'), 'utf8')); } catch { return null; } };
 const UNIT_KINDS = ['missing_test', 'weak_test', 'pushdown'], UNIT_MAX = 60; // kinds of a unit finding; most rows kept from one result
+// ponytail: a reason saying the block was not looked at is no ruling that it states nothing checkable. Common phrasings only; a reworded dodge still passes (a model-judged check would catch it).
+const UNASSESSED = /\b(?:un(?:assessed|reviewed)|not (?:(?:yet|fully|been) )*(?:assessed|reviewed|evaluated|analy[sz]ed)|(?:needs?|requires?) (?:a )?(?:deeper|further|more|closer) (?:review|assessment|analysis|look))\b/i;
 const MISSING_MAX = 0.2; // more unanswered blocks than this share of the candidates reject the output (the repair turn)
 
 // Hand-rolled mirror of audit.schema.json. Only an unusable output is rejected (the repair turn's trigger): not an object, no requirements
@@ -104,6 +106,7 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     if (!n || typeof n !== 'object' || !/^[0-9a-f]{8}$/.test(n.cid) || !text(n.reason)) notes.push(`${w} ignored: it needs a block cid and a reason.`);
     else if (cands && !cands.has(n.cid)) notes.push(`${w} ignored: unknown block ${n.cid}; only the listed candidates may be answered.`);
     else if (skipped.has(n.cid)) notes.push(`${w} ignored: duplicate block ${n.cid}.`);
+    else if (UNASSESSED.test(n.reason)) notes.push(`${w} ignored: block ${n.cid} was filed as not a requirement because it was not assessed (${oneLine(n.reason, 80)}); it counts as not reviewed.`);
     else { skipped.add(n.cid); skips.push(n); }
   }
   o.not_requirements = skips;
@@ -360,10 +363,13 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
     const vague = f.kind === 'weak_test' && (!post.counterexampleOk(f.counterexample) || post.refutedBy(c.quote, f.counterexample)); // review F04: a weak test needs a wrong behaviour the assertion still accepts
     out.push({ ...f, ...c, skeleton, fid, ...(u && u.part ? { part: u.part.k } : {}), low: cut || !!hit || !!gate || noSketch || vague, ...(past ? { lowWhy: `line ${c.line} is past the ${shown.get(c.path)} lines of the file the model was shown` } : {}), ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : gate ? { lowWhy: gate } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
   }
-  return out;
+  // one weak_test/pushdown per place: two units citing the same test line are one claim (a missing_test cites the unit's own code, so it never collides); keep the unit whose file best matches the cited one (same basename), else the first
+  const stem = (p) => p.split('/').pop().replace(/\.(test|spec)(?=\.)/, '').replace(/\.[^.]+$/, ''), best = new Map();
+  for (const f of out) { const k = `${f.kind}\0${f.path}:${f.line}`, p = units && units.get(f.unit), b = best.get(k); if (!b || (!b.m && p && stem(p.path) === stem(f.path))) best.set(k, { f, m: !!p && stem(p.path) === stem(f.path) }); }
+  return out.filter((f) => f.kind === 'missing_test' || best.get(`${f.kind}\0${f.path}:${f.line}`).f === f);
 }
 
-const count = (rows, key, values) => values.map((v) => [v, rows.filter((r) => r[key] === v).length]).filter(([, n]) => n);
+const count =(rows, key, values) => values.map((v) => [v, rows.filter((r) => r[key] === v).length]).filter(([, n]) => n);
 
 // One status per document block, the stable signal across runs: gap = any sub-row says missing_test/partial/contradicted/not_implemented,
 // covered = all sub-rows covered, unsure = anything else (unknown, needs_human, a mix).
@@ -526,7 +532,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const unseen = (code && code.unseen) || [], failedS = new Set(code ? code.failed || (code.unitsFailed ? unseen : []) : []), reachS = new Set((code && code.unreached) || []), unfit = failedS.size ? 'were not reviewed: the unit call failed' : reachS.size ? 'were not reached (max_budget_usd)' : "did not fit the model's context", forcedS = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), lost = unseen.filter((u) => !forcedS.has(u) || failedS.has(u) || reachS.has(u)), seenN = inv ? inv.rotation.picked - lost.length : 0; // a forced unit (tests cut, recorded unsure) was reviewed: it counts as seen here, only the funnel line tells it apart // unseen: picked units the model's context did not hold whole (pack-cut.txt): not reviewed this run
   const riskiest = inv && lost.length ? `${seenN} unit${seenN === 1 ? '' : 's'} that fit the model's context` : inv ? (inv.rotation.picked === 1 ? 'riskiest unit' : `${inv.rotation.picked} riskiest units`) : '';
   // static test signals (no model): rule-based leads for the reviewed units, from the inventory's counts; an older inventory without `signals` has none. Never counted as gaps, never in the state.
-  const sigRows = code && inv && Array.isArray(inv.rows) ? inv.rows.filter((r) => code.list.has(r.id)) : [], sig = staticFindings(sigRows), lead = staticLeads(sigRows), sigUnits = new Set([...sig, ...lead.items].map((s) => s.unit)).size; // lead: exact-location facts (a truthiness-only assertion, an exported name no test mentions), top 20 by unit risk
+  const sigRows = code && inv && Array.isArray(inv.rows) ? inv.rows.filter((r) => code.list.has(r.id)) : [], sig = staticFindings(sigRows), lead = staticLeads(sigRows), sigUnits = new Set([...sig, ...lead.items].map((s) => s.unit)).size, restLeads = reach ? staticLeads(sigRows, Infinity).items.slice(lead.items.length) : []; // restLeads: scan_scope all lists every generated lead (the first 20 are `lead`); lead: exact-location facts (a truthiness-only assertion, an exported name no test mentions), top 20 by unit risk
   const docless = !!code &&!docs.length && !rows.length; // a repository without design documents: the document statistics would only say zero
   // carried blocks: the previous status, no sub-rows; a pending recheck stays pending; blocks that were not requirements are only counted
   // a carried covered block whose cited code or tests changed since (p.stale, review F06) is no longer shown as covered: unsure until it is audited again
@@ -703,7 +709,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   for (const l of ulists) body += vis(l.title, l.fs.map(uitem), '', UCAP);
   const SIGH = 'Found by rule from the test files at this commit, not by the model; a missing or weak signal is a lead, not a confirmed gap.\n\n| Unit | Signal | Why |\n|---|---|---|\n', SIGN = { test_evidence_not_found: 'test evidence not found', weak_test_signal: 'weak test signal', truthiness_only: 'asserts only truthiness', unreferenced_export: 'no test references it', boundary_unpinned: 'limit no test pins' };
   const srow = (s) => `| ${link(s.path, s.line || 1, s.line ? `${s.path}:${s.line}` : s.path)} | ${SIGN[s.kind]} | ${cell(s.why, 200)} |\n`;
-  const srows = [...sig, ...lead.items].map(srow).concat(lead.extra ? [`| +${lead.extra} more | | not listed: only the top 20 leads by unit risk are shown |\n`] : []), SCAP = sig.length + 21; // the rule findings, then the top 20 leads (staticLeads' cap) and the line that counts the rest
+  const srows = [...sig, ...lead.items].map(srow).concat(lead.extra ? [`| +${lead.extra} more | | ${reach ? 'listed in Details' : 'not listed: only the top 20 leads by unit risk are shown'} |\n`] : []), SCAP = sig.length + 21; // the rule findings, then the top 20 leads (staticLeads' cap) and the line that counts the rest
   if (!failure && data) body += vis('Static test signals (no model)', srows, SIGH, SCAP);
   body += vis('Reported in two runs', confirmed.map(grow), GTOP);
   body += vis(prior ? 'New since the last scan' : 'New gaps', fresh.map(grow), GTOP);
@@ -726,7 +732,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     const left = Math.max(0, inv.units - r.reviewed);
     cdet = take(`**Riskiest units (top ${Math.min(15, inv.rows.length)} of ${inv.units})**\n\n${URISK}`, inv.rows.slice(0, 15).map(urow), '') + fit(text)
       + (left ? take(`**Units not yet reviewed (${left})**\n\n`, [...inv.unreviewed.slice(0, 15).map((u) => `- ${link(u.path, 1, u.path)} (risk ${u.score})\n`), ...(left > 15 ? [`- +${left - 15} more\n`] : [])], '') : '')
-      + ulists.map((l) => more(l.more, l.fs.map(uhead), '', UCAP)).join('') + (failure || !data ? '' : more('More static test signals', srows, SIGH, SCAP))
+      + ulists.map((l) => more(l.more, l.fs.map(uhead), '', UCAP)).join('') + (failure || !data ? '' : more('More static test signals', srows, SIGH, SCAP) + (restLeads.length ? take(`**All other static leads (${restLeads.length})**\n\n${SIGH}`, restLeads.map(srow), '') : ''))
       + (ulow.length ? take(`**Low-confidence unit findings (${ulow.length})**\n\nA test file the model could not see whole, or a test that may already cover it, is behind each; they are not counted.\n\n`, ulow.map(uhead), '') : '');
   }
   let det = [more('More confirmed gaps', confirmed.map(grow), GTOP), more('More new gaps', fresh.map(grow), GTOP), more('More disagreements', clashes, '| Document says | Code says |\n|---|---|\n')].join('');
@@ -880,7 +886,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const unsure = [...dropU, ...lowU], unseen = cutUnits; // seen but inconclusive: tracked this run as unsure (rotation moves on, never covered); unseen: not tracked, still due
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed, failed: [...failedU], unreached: [...reachedNot], partsDropped, partsFailed, extraAdmitted: ((inv && inv.extra_keys) || []).filter((k) => !dKeys.has(k) && !(Array.isArray(sp.droppedUnits) ? sp.droppedUnits : []).includes(k.split(':')[0])).length } : null; // extra_keys: the parts the collector queued for runtime admission; the ones the engine skipped are in droppedParts/droppedUnits
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
-  try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
+  try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked, ...(shared.reach && hasCode ? { static_leads: staticLeads(inv.rows.filter((r) => units.has(r.id)), Infinity).items } : {}) }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
   // the blocks this run did not audit: the state's blocks that are still in the documents (audit-carried.txt), with the text and place from the collector
   const tv = new Map(lines(readCtx('audit-textver.txt')).map((l) => l.split(String.fromCharCode(9))).filter((x) => HEX8.test(x[0]) && HEX8.test(x[1])));
