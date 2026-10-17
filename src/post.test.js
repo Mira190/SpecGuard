@@ -4143,6 +4143,27 @@ test('the real cover guard in PR mode: a literal in an unrelated test does not d
   assert.match(own.calls.summary[0].body, /low confidence: a test may already cover this: tests\/amount\.test\.js/);
 });
 
+test('the real cover guard: a hunk-tier candidate test that shares the literal does not demote a missing_test; a same-name one does', async (t) => {
+  const thrown = 'throw new Error("invalid amount");', p2 = patch.replace('if (x) {', thrown);
+  const run = async (candLine) => {
+    const s = setup(t, report({ coverage: [row('missing_test', { behaviour: { path: 'src.js', line: 3, quote: thrown }, change: { path: 'src.js', line: 3, quote: thrown } })], findings: [finding('missing_test', { quote: thrown })] }), { listed: [{ filename: 'src.js', patch: p2 }] });
+    fs.writeFileSync(path.join(s.dir, 'src.js'), `l1\nl2\n${thrown}\nl4\n`);
+    fs.mkdirSync(path.join(s.dir, 'tests'));
+    fs.writeFileSync(path.join(s.dir, 'tests/amount.test.js'), 'expect(() => f()).toThrow("invalid amount");\n');
+    track(s, 'src.js', 'tests/amount.test.js');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', p2));
+    fs.writeFileSync(path.join(s.dir, 'ctx/test-candidates.txt'), `src.js\n  tests/amount.test.js  (${candLine})\n`);
+    await post(s);
+    return s;
+  };
+  const hunk = await run('mentions changed `amount`');
+  assert.equal(hunk.calls.review[0]?.comments.length, 1, 'posted inline');
+  assert.doesNotMatch(hunk.calls.summary[0].body, /low confidence: a test may already cover this/);
+  const same = await run('same stem');
+  assert.equal(same.calls.review.length, 0, 'control: demoted');
+  assert.match(same.calls.summary[0].body, /low confidence: a test may already cover this: tests\/amount\.test\.js/);
+});
+
 // ---- protocol noise: a source label or a missing test layer must not turn into "add a test" ----
 const proto = (reqs, cov, docs = [{ source: 'PR body', text: 'Return 42. (U1)\nReject zero.' }]) => {
   const d = report({ requirements: reqs, coverage: cov, findings: [] });
