@@ -145,7 +145,14 @@ function stage(wt, cs, layer, message) {
     if (fs.existsSync(src)) fs.cpSync(src, path.join(wt, 'eval-sandbox', c.id), { recursive: true });
     if (layer === 'head') for (const d of c.delete) fs.rmSync(path.join(wt, d), { force: true });
   }
+  // Drop the sandbox from the index first: on Windows cpSync keeps the source mtime, so a same-size file written in the same second looks unchanged to git's stat cache and add stages nothing.
+  git(wt, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', 'eval-sandbox']);
   git(wt, ['add', '-A']); // fresh worktree: only these cases' overlays and deletes are changed
+  if (layer === 'head') for (const c of cs) { // construction gate: a case whose head stages nothing would be graded as a reviewer miss
+    const dir = `eval-sandbox/${c.id}`;
+    if (walk(path.join(CASES, c.id, 'head')).length && !git(wt, ['diff', '--cached', '--name-only', '--', dir])) throw new Error(`construction: case ${c.id} head stages no change under ${dir}/`);
+    for (const e of c.expected.findings) if (![].concat(e.path).some((p) => fs.existsSync(path.join(wt, p)))) throw new Error(`construction: case ${c.id} expected path ${[].concat(e.path)[0]} is not in the head tree`);
+  }
   git(wt, ['commit', '-q', '--allow-empty', '-m', message]);
 }
 
@@ -469,4 +476,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { copilotItems, utcDay, varLookup, rawOutput, validateCase, allIds, loadCase, markdown, combine, COMBINED_SKIP, validateManifest, rewriteIssueRefs, externalBody, injectWorkflow, runExternal };
+module.exports = { stage, copilotItems, utcDay, varLookup, rawOutput, validateCase, allIds, loadCase, markdown, combine, COMBINED_SKIP, validateManifest, rewriteIssueRefs, externalBody, injectWorkflow, runExternal };

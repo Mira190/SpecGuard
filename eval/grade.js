@@ -62,7 +62,8 @@ function parseSummary(text) {
     const c = ln.split(/(?<!\\)\|/).map((x) => x.trim());
     const st = STATUS.exec(c[4] || '');
     const at = /; (\S+?):(\d+) — /.exec(c[2] || '');
-    if (st && at) rows.push({ status: STATUS_WORD[st[1]] || st[1], path: at[1], line: +at[2], title: c[1].replace(/^\S+?: /, ''), text: ln });
+    const ev = /: (\S+?):(\d+) — /.exec(c[3] || ''); // assertion evidence "unit: x.test.js:6 — ...": where an inline comment on the same obligation sits
+    if (st && at) rows.push({ status: STATUS_WORD[st[1]] || st[1], path: at[1], line: +at[2], test: ev && { path: ev[1], line: +ev[2] }, title: c[1].replace(/^\S+?: /, ''), text: ln });
   });
   // "Pre-existing drift (not caused by this PR)" section: up to the next heading or the end of its <details>. Null when absent.
   const pe = /Pre-existing drift \(not caused by this PR\)/.exec(s);
@@ -81,8 +82,9 @@ function parseSummary(text) {
 // The summary restricted to items and coverage rows under a path prefix (combined runs); every other line is kept.
 function filterSummary(text, prefix) {
   if (text == null) return text;
+  const item = new RegExp(ITEM.source); // the recognition parseSummary uses, per line: labelled and bare bullets alike
   return text.split('\n').filter((ln) => {
-    const m = /^- (?:❌ )?\*\*[^*\n]+:\*\* .*?\[?`([^`:\n]+):\d+`/.exec(ln) || (ln.startsWith('| ') ? /; (\S+?):\d+ — /.exec(ln.split(/(?<!\\)\|/)[2] || '') : null);
+    const m = item.exec(ln) ? [, item.exec(ln)[3]] : (ln.startsWith('| ') ? /; (\S+?):\d+ — /.exec(ln.split(/(?<!\\)\|/)[2] || '') : null);
     return !m || m[1].startsWith(prefix);
   }).join('\n');
 }
@@ -95,7 +97,7 @@ function grade(spec, obs) {
   // summary candidates: an item and a coverage row for the same finding (same kind, path and line, or the row's obligation text is the item's title) share a group, and a group satisfies at most one expected finding
   const summaryHits = [...sum.items.map((h, j) => ({ kind: h.kind, path: h.path, line: h.line, text: `${h.title}
 ${h.why}`, title: h.title, item: j })), ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
-    .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path, line: r.line, text: r.text, title: r.title }))];
+    .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path, line: r.line, text: r.text, title: r.title, alt: r.test }))];
   summaryHits.forEach((h, j) => { h.group = summaryHits.slice(0, j).find((g) => g.kind === h.kind && g.path === h.path && (g.line === h.line || (h.title && lc(g.title) === lc(h.title))))?.group ?? j; });
   // Matches every expected finding against the posted comments plus the given summary candidates. `raw` passes all of them (low-confidence and Details items included);
   // `delivered` passes only what the developer is asked to act on (see below), so delivered TP and the FP path below share one exposure set.
@@ -146,7 +148,7 @@ ${posted[best].body}`)) textMisses.push(e);
   // A coverage row saying weak/missing test asks the same thing: one per F29 group that no summary item or posted comment already stands for, so a row and its bullet are one candidate.
   // Contract: a coverage row counts as a request for action only when its gap's finding is actionable. If the same gap's finding is low-confidence or hidden
   // in Details the product has discounted it, so the row is not an FP; a row with no finding at all still counts (S10). Pinned in grade.test.js.
-  const rowFps = summaryHits.filter((h, j) => h.item === undefined && h.group === j && !usedGroups.has(j) && ['weak_test', 'missing_test'].includes(h.kind) && !posted.some((c) => c.line != null && c.kind === h.kind && c.path === h.path && Math.abs(h.line - c.line) <= 2)).map((h) => ({ ...h, level: 'coverage' }));
+  const rowFps = summaryHits.filter((h, j) => h.item === undefined && h.group === j && !usedGroups.has(j) && ['weak_test', 'missing_test'].includes(h.kind) && !posted.some((c) => c.line != null && c.kind === h.kind && [h, h.alt].some((a) => a && c.path === a.path && Math.abs(a.line - c.line) <= 2))).map((h) => ({ ...h, level: 'coverage' }));
   const unmatched = [...posted.filter((_, j) => !used.has(j)), ...sum.items.filter((h, j) => sum.actionable.has(h) && !usedItems.has(j)).map((h) => ({ ...h, level: 'summary' })), ...rowFps];
   for (const { kind, path, line, title, level } of unmatched) {
     const k = spare.findIndex((a) => arr(a.kind).includes(kind) && arr(a.path).includes(path) && line != null && Math.abs(line - a.line) <= (a.tolerance ?? 2));
