@@ -150,7 +150,7 @@ test('action.yml: the superseded check sits between collect and the engine; engi
 
 test('action.yml: scan_paths scopes the scan and reaches both scan steps; the collector may read the scan issue (token and repository) only through its own env', () => {
   assert.match(input('scan_paths'), /default: "" \}$/);
-  assert.match(input('scan_paths'), /restrict both the requirement documents and the code and tests/);
+  assert.match(input('scan_paths'), /select which source files \(units\) are reviewed.*still read from the whole repository.*requirements_paths/);
   assert.match(input('scan_issue'), /rotate through all blocks/);
   assert.match(input('scan_max_blocks'), /rotate through all blocks/);
   const collect = find(/id: audit_collect/), post = find(/audit-post\.js/);

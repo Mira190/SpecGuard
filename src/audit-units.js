@@ -123,10 +123,10 @@ function pick(rows, cap, prior, bytes, room = null, rooms = 1) {
 // files: lsTree entries at head; skip(path): not evidence (documents, data, vendored, rule files); scope: scan_paths predicate or null; testPaths: test_paths. -> { rows, picked, ... } (rows by risk).
 function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, scope = null, testPaths = '', maxUnits = 12, rooms = 1, prior = null, now = Date.now(), budgetMs = BUDGET_MS, packBytes = 0, maxRead = MAX_UNITS_READ }) {
   const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
-  const inScope = files.filter((e) => !skip(e.path) && (!scope || scope(e.path)));
+  const inScope = files.filter((e) => !skip(e.path)); // read repo-wide: scope only picks the units, their tests may live outside it
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
   const testEntries = inScope.filter((e) => isTest(e.path)), tests = testEntries.map((e) => e.path).sort();
-  let cand = inScope.filter((e) => !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && !TEST_INFRA.test(e.path)).sort((a, b) => (a.path < b.path ? -1 : 1));
+  let cand = inScope.filter((e) => (!scope || scope(e.path)) && !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && !TEST_INFRA.test(e.path)).sort((a, b) => (a.path < b.path ? -1 : 1));
   const big = cand.filter((e) => e.size > MAX_FILE); // the largest files are often the most complex: say so, never drop them silently
   if (big.length) limits.push(`${big.length} source file(s) over 512 KiB were not inventoried: ${big.slice(0, 3).map((e) => e.path).join(', ')}${big.length > 3 ? ', ...' : ''}`);
   cand = cand.filter((e) => e.size <= MAX_FILE);
