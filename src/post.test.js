@@ -2427,8 +2427,8 @@ const REAL_FP = post.fingerprint('missing_test', 'src.js', behaviour.quote); // 
 const prior = (id, fp, line, sha, extra = {}) => ({ id, path: 'src.js', original_line: line, line, original_commit_id: sha, commit_id: sha, user: BOT, reactions: {},
   body: `**t**\n\n<!--\nkind: missing_test, confidence: high\n-->\n<!-- specguard:fp=${fp} -->`, ...extra });
 // A repo with two commits (A, then B changing only src.js line 7), HEAD = B. priors(A) lists our earlier comments.
-function followSetup(t, priors, pages = [[]], data = report()) {
-  const opts = { existing: [] };
+function followSetup(t, priors, pages = [[]], data = report(), extra = {}) {
+  const opts = { existing: [], ...extra };
   const s = withThreads(t, pages, data, opts);
   gitIn(s, 'commit', '-qm', 'a');
   const A = gitIn(s, 'rev-parse', 'HEAD');
@@ -2558,17 +2558,106 @@ test('a high weak_test must name a concrete wrong behaviour the assertion still 
   assert.equal(post.validate(report({ findings: [finding('missing_test')] })).ok, true, 'other kinds need none');
 });
 
-test('G1 a reduced (fast-tier) run that finished records outcomes, but a finding it no longer reports is never addressed (review F09)', async (t) => {
+test('G1 a reduced (fast-tier) run judges outcomes like any other: an anchor touched and not re-reported is addressed, and counts carry the tier', async (t) => {
   const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
   writeCtx(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5-5'] }));
   await post(s);
   const c = countsOf(s.calls.summary[0].body);
-  assert.deepEqual([c.complete, c.execution_complete, c.reduced], [false, true, true]);
-  assert.deepEqual(c.outcomes.map((o) => [o.outcome, o.judged, o.anchor_touched]), [['not_observed', false, true]], 'line 7 changed and the finding is gone: addressed on a full model, not here');
+  assert.deepEqual([c.complete, c.execution_complete, c.reduced, c.tier, c.outcome_valid], [false, true, true, 'fast', true]);
+  assert.deepEqual(c.outcomes.map((o) => [o.outcome, o.judged, o.anchor_touched]), [['addressed', undefined, true]]);
   assert.deepEqual(s.resolved, [], 'nothing is resolved on a reduced run');
-  const full = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
-  await post(full);
-  assert.deepEqual(countsOf(full.calls.summary[0].body).outcomes.map((o) => o.outcome), ['addressed'], 'control: the same run on a full model');
+  const re = followSetup(t, (A) => [prior(1, REAL_FP, 7, A)], [[thread('t1', REAL_FP)]]);
+  writeCtx(re, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5-5'] }));
+  await post(re);
+  assert.deepEqual(countsOf(re.calls.summary[0].body).outcomes.map((o) => o.outcome), ['open'], 'control: re-reported, so still open');
+});
+
+// The #224 shape: the run is incomplete because an unrelated file was cut; the prior's own file was seen.
+const cutCtx = (s, cut) => { writeCtx(s, 'files.txt', 'src.js\nbig.js\n'); writeCtx(s, 'pack-cut.txt', cut); };
+test('fix-through: an incomplete run (unrelated file cut) still judges a prior whose file it saw: anchor touched, not re-reported -> addressed', async (t) => {
+  const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
+  cutCtx(s, 'big.js\n');
+  await post(s);
+  const c = countsOf(s.calls.summary[0].body);
+  assert.deepEqual([c.complete, c.execution_complete, c.outcome_valid], [false, false, true]);
+  assert.deepEqual(c.outcomes.map((o) => o.outcome), ['addressed']);
+  assert.deepEqual(c.since, { addressed: 1, open: 0, dismissed: 0, not_observed: 0 });
+  assert.deepEqual(s.resolved, [], 'control: the incomplete run still resolves nothing');
+  assert.doesNotMatch(s.calls.summary[0].body, /<!-- specguard:head=/, 'control: and still writes no head marker');
+});
+
+test('fix-through: a prior whose own file this run could not see is not_observed, not addressed', async (t) => {
+  const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
+  cutCtx(s, 'src.js\n');
+  await post(s);
+  const c = countsOf(s.calls.summary[0].body);
+  assert.deepEqual(c.outcomes.map((o) => [o.outcome, o.judged, o.anchor_touched]), [['not_observed', false, true]]);
+});
+
+test('fix-through: a dismissed thread stays dismissed on an incomplete run; a failed run (engine timeout) gives no outcomes and no valid flag', async (t) => {
+  const human = { isResolved: true, resolvedBy: { login: 'alice', __typename: 'User' } };
+  const s = followSetup(t, (A) => [prior(1, FP('c'), 2, A)], [[thread('t4', FP('c'), human)]]);
+  cutCtx(s, 'big.js\n');
+  await post(s);
+  assert.deepEqual(countsOf(s.calls.summary[0].body).outcomes.map((o) => o.outcome), ['dismissed']);
+  const f = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]]);
+  writeCtx(f, 'engine-status', 'timeout\n');
+  await post(f);
+  const c = countsOf(f.calls.summary[0].body);
+  assert.deepEqual([c.outcomes, c.outcome_valid], [[], false]);
+});
+
+test('fix-through: a finding validation dropped makes only priors in its own file unobserved; unrecoverable dropped paths invalidate the run', async (t) => {
+  const run = async (dropPath) => {
+    const s = followSetup(t, (A) => [prior(1, FP('a'), 7, A)], [[thread('t1', FP('a'))]], report({ findings: [finding(), finding('missing_test', { path: dropPath, obligation_ids: ['NOPE'] })] }));
+    await post(s);
+    return countsOf(s.calls.summary[0].body);
+  };
+  const other = await run('x.js');
+  assert.equal(other.execution_complete, false, 'the run is degraded');
+  assert.deepEqual(other.outcomes.map((o) => [o.outcome, o.judged]), [['addressed', undefined]], 'the prior is in y, the drop in x');
+  const same = await run('src.js');
+  assert.deepEqual(same.outcomes.map((o) => [o.outcome, o.judged]), [['not_observed', false]], 'the dropped finding may be the re-report');
+  const unknown = await run(42);
+  assert.deepEqual([unknown.outcomes, unknown.outcome_valid], [[], false]);
+});
+
+// Summary-only findings have no comment: the previous summary's counts (`sum`) make them synthetic priors.
+const stickyWith = (A, sum) => [{ id: 9, user: BOT, body: `<!-- specguard:summary -->\n<!-- specguard:counts ${JSON.stringify({ head: A, sum })} -->\n## SpecGuard\n` }];
+test('fix-through: a summary-only finding from the previous summary is tracked: anchor touched and gone -> addressed; re-reported -> open; deduped against an inline prior', async (t) => {
+  const sumOf = (fp) => [{ fp: fp.slice(0, 16), path: 'src.js', line: 7, kind: 'missing_test' }];
+  const gone = followSetup(t, () => [], [[]], report({ coverage: [row()], findings: [] }));
+  gone.github.rest.issues.listComments = async () => ({ data: stickyWith(gone.A, sumOf(FP('a'))) });
+  await post(gone);
+  const g = countsOf(gone.calls.summary[0].body);
+  assert.deepEqual(g.outcomes.map((o) => [o.fp, o.kind, o.thread, o.outcome]), [[FP('a').slice(0, 16), 'missing_test', 'unknown', 'addressed']]);
+  assert.equal(g.prior_total, 1);
+  const again = followSetup(t, () => [], [[]]);
+  again.github.rest.issues.listComments = async () => ({ data: stickyWith(again.A, sumOf(REAL_FP)) });
+  await post(again);
+  assert.deepEqual(countsOf(again.calls.summary[0].body).outcomes.map((o) => o.outcome), ['open']);
+  const both = followSetup(t, (a) => [prior(1, REAL_FP, 7, a)], [[thread('t1', REAL_FP)]]);
+  both.github.rest.issues.listComments = async () => ({ data: stickyWith(both.A, sumOf(REAL_FP)) });
+  await post(both);
+  assert.equal(countsOf(both.calls.summary[0].body).outcomes.length, 1);
+});
+
+test('fix-through: this run\'s summary-only findings are recorded in counts.sum (fp shortened to 16 hex)', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [finding('missing_test', { confidence: 'low' })] }));
+  await post(s);
+  const c = countsOf(s.calls.summary[0].body);
+  assert.equal(c.posted.inline, 0, 'it really was summary-only');
+  assert.deepEqual(c.sum.map((e) => [e.fp, e.path, e.kind]), [[REAL_FP.slice(0, 16), 'src.js', 'missing_test']]);
+});
+
+test('counts JSON with 20 sum entries and many outcomes stays under COUNTS_MAX; sum is trimmed only after outcomes', () => {
+  const outcomes = Array.from({ length: 300 }, (_, i) => ({ fp: String(i).padStart(40, '0'), kind: 'missing_test', still_reported: false, anchor_touched: null, thread: 'open', up: 0, down: 0, outcome: 'not_observed' }));
+  const sum = Array.from({ length: 20 }, (_, i) => ({ fp: String(i).padStart(16, '0'), path: `src/some/long/path/file${i}.js`, line: i + 1, kind: 'missing_test' }));
+  const json = /^<!-- specguard:counts (.*) -->$/.exec(post.countsComment({ v: 1, head: 'abc', complete: true, since: { addressed: 0, open: 0, dismissed: 0, not_observed: 300 }, outcomes, sum }))[1];
+  assert.ok(json.length <= 8192);
+  assert.equal(JSON.parse(json).sum.length, 20);
+  const huge = JSON.parse(/^<!-- specguard:counts (.*) -->$/.exec(post.countsComment({ v: 1, outcomes: [], sum: sum.map((e) => ({ ...e, path: 'p/'.repeat(300) + e.path })) }))[1]);
+  assert.ok(huge.sum.length < 20 && huge.sum_dropped === 20 - huge.sum.length);
 });
 
 test('G1 an incomplete run still emits counts, marked complete:false, with no outcomes, no since line and nothing resolved', async (t) => {
