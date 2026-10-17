@@ -360,8 +360,10 @@ function staticLeads(rows, cap = 20) {
     for (const b of l.boundary || []) bnd.push({ unit: r.id, path: r.path, line: b.line, kind: 'boundary_unpinned', why: `line ${b.line} compares with ${b.name} (= ${b.value}); no matched test uses ${b.name} or its value` });
     for (const d of l.unref || []) unref.push({ unit: r.id, path: r.path, line: d.line, kind: 'unreferenced_export', why: `\`${d.name}\` (${r.path}:${d.line}) is ${exp(r.path)} and no test file references it` });
   }
-  all.unshift(...unref); all.push(...bnd); // boundary leads last: a static guess about what a test pins // no test file names the export: a near-certain fact, listed before the weak-assertion leads when the cap bites
-  return { items: all.slice(0, cap), extra: Math.max(0, all.length - cap) };
+  // the cap is filled round-robin over the kinds (weak assertion, boundary, unreferenced export), each in its own risk order: every kind that exists is visible, and the noisiest one (unreferenced exports) cannot crowd out the rest
+  const kinds = [all, bnd, unref], mixed = [];
+  for (let k = 0; mixed.length < all.length + bnd.length + unref.length; k++) for (const g of kinds) if (k < g.length) mixed.push(g[k]);
+  return { items: mixed.slice(0, cap), extra: Math.max(0, mixed.length - cap) };
 }
 
 module.exports = { staticFindings, staticLeads, inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };

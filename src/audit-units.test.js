@@ -766,12 +766,22 @@ test('staticLeads: at most 20 leads in row (risk) order, the rest counted; a wea
   assert.deepEqual(staticLeads([{ id: 'a', path: 'src/a.js' }, undefined]), { items: [], extra: 0 });
 });
 
-test('staticLeads: when the cap bites, unreferenced exports (near-certain) come before weak-assertion leads; each group keeps risk order', () => {
+test('staticLeads: when the cap bites, the 20 slots go round-robin over weak, boundary and unreferenced leads: 25 unref + 3 weak + 2 boundary show all 5, then 15 unref, +10 more', () => {
+  const { staticLeads } = require('./audit-units');
+  const rows = [...Array.from({ length: 25 }, (_, i) => ({ id: `u${i}`, path: `src/u${i}.js`, leads: { unref: [{ name: `fn${i}ab`, line: 2 }] } })),
+    ...Array.from({ length: 3 }, (_, i) => ({ id: `w${i}`, path: `src/w${i}.js`, leads: { weak: [{ path: `test/w${i}.test.js`, line: 4, text: 'assert.ok(f(x))' }] } })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: `b${i}`, path: `src/b${i}.js`, leads: { boundary: [{ line: 3, name: 'LIMIT_X', value: 5 }] } }))];
+  const L = staticLeads(rows), n = (k) => L.items.filter((i) => i.kind === k).length;
+  assert.deepEqual([L.items.length, n('truthiness_only'), n('boundary_unpinned'), n('unreferenced_export'), L.extra], [20, 3, 2, 15, 10]);
+  assert.deepEqual(L.items.slice(0, 3).map((i) => i.kind), ['truthiness_only', 'boundary_unpinned', 'unreferenced_export'], 'weak, boundary, unref in each round');
+});
+
+test('staticLeads: control: with 15 weak and 8 unref leads the cap alternates weak and unref, each kind in its risk order', () => {
   const { staticLeads } = require('./audit-units');
   const w = (i) => ({ path: `test/w${i}.test.js`, line: 4, text: 'assert.ok(f(x))' });
   const rows = [...Array.from({ length: 15 }, (_, i) => ({ id: `w${i}`, path: `src/w${i}.js`, leads: { weak: [w(i)] } })), ...Array.from({ length: 8 }, (_, i) => ({ id: `u${i}`, path: `src/u${i}.js`, leads: { unref: [{ name: `fn${i}ab`, line: 2 }] } }))];
   const L = staticLeads(rows);
-  assert.deepEqual(L.items.map((i) => i.unit), [...rows.slice(15).map((r) => r.id), ...rows.slice(0, 12).map((r) => r.id)]);
+  assert.deepEqual(L.items.map((i) => i.unit), [...Array.from({ length: 8 }, (_, i) => [rows[i].id, rows[15 + i].id]).flat(), ...rows.slice(8, 12).map((r) => r.id)]);
   assert.equal(L.extra, 3);
 });
 
