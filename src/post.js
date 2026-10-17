@@ -466,18 +466,18 @@ function plan(findings, maps, maxComments = 10) {
 // ponytail: the triggers are the four cheap signals the engine step and validation already leave behind; add one here when a new failure mode shows up in telemetry.
 const REDUCED_INLINE = 3;
 // The fast tier alone is a grade, not a gap: the run finished, so status and the head marker follow `incomplete`. The other triggers (repair, engine notes, degraded rows) say the run struggled and still make it incomplete.
-const gradeOnly = (r) => !!r && r.reasons.length > 0 && r.reasons.every((x) => x === 'fast-tier model');
+const gradeOnly = (r) => !!r && r.reasons.length > 0 && r.reasons.every((x) => x.id === 'tier');
 // a validation note that counts toward a reduced review: its obligation id goes in data.degraded, so completeness never depends on the note's wording
 const degrade = (data, id, text) => { (data.validation_notes ||= []).push(text); (data.degraded ||= []).push(id); };
 function reducedReasons({ em, repair, engineNotes = [], data }) {
   const out = [];
-  if (em?.tier === 'fast') out.push('fast-tier model');
-  if (repair === 'repaired' || repair === 'repair_failed') out.push(repair === 'repaired' ? 'the JSON needed a repair turn' : 'the JSON repair turn failed');
-  if (repair === 'finalized') out.push('the engine ran out of budget and answered from what it had read so far');
-  if (engineNotes.length >= 3) out.push(`${engineNotes.length} engine notes`);
+  if (em?.tier === 'fast') out.push({ id: 'tier', text: 'fast-tier model' });
+  if (repair === 'repaired' || repair === 'repair_failed') out.push({ id: 'repair', text: repair === 'repaired' ? 'the JSON needed a repair turn' : 'the JSON repair turn failed' });
+  if (repair === 'finalized') out.push({ id: 'repair', text: 'the engine ran out of budget and answered from what it had read so far' });
+  if (engineNotes.length >= 3) out.push({ id: 'notes', text: `${engineNotes.length} engine notes` });
   // its own citations failed; a row only reached through an unverified requirement link is not counted
   const bad = new Set(data.degraded || []); // explicit kind (degrade()), never the wording of a note
-  if (bad.size * 4 > data.coverage.length) out.push(`${bad.size} of ${data.coverage.length} obligations degraded by validation`);
+  if (bad.size * 4 > data.coverage.length) out.push({ id: 'degraded', text: `${bad.size} of ${data.coverage.length} obligations degraded by validation` });
   return out;
 }
 // Verified citations behind a finding: the located behaviour, plus its test evidence or a linked requirement (a standard: its own line and the rule line).
@@ -817,7 +817,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const bullets = [...banner.map((r) => cell(r)), ...(changed ? ['Requirement text was changed by this PR: consistency with the changed text does not prove the change itself is approved.'] : []),
     ...(rules.length ? [`This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`] : []),
     ...(lintChanged.length ? [`Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`] : [])];
-  const notice = failed ? '' : [inc ? '> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.' : '', gradeOnly(reduced) ? '> Fast-tier model: only high-confidence findings are posted inline.' : reduced && act.length ? `> Reduced review${reduced.reasons?.includes('fast-tier model') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
+  const notice = failed ? '' : [inc ? '> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.' : '', gradeOnly(reduced) ? '> Fast-tier model: only high-confidence findings are posted inline.' : reduced && act.length ? `> Reduced review${reduced.reasons?.some((x) => x.id === 'tier') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
   // the model's not_reviewed text as sentences; the automatic "Requirement X is not assessed" note is dropped when X has its own row in the table
   const shownIds = new Set(rows.map((x) => String(x.r.id)));
   const nrParts = (t) => String(t || '').split(/(?<=[.!?])\s+(?=[A-Z0-9`"'(])/).filter((x) => x.trim() && !shownIds.has((/^Requirement (\S+) is not assessed: /.exec(x) || [])[1]));
@@ -913,7 +913,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   if (!failed) {
     const src = manifest && sourcesRead(manifest);
     if (src) detail(src.h, src.atoms);
-    if (reduced) detail('**Reduced review**\n\n', [`Reasons: ${reduced.reasons.map((r) => cell(r)).join('; ')} (model: ${cell(reduced.model || 'unknown', 80)}). Only high-confidence findings were posted inline.\n`]);
+    if (reduced) detail('**Reduced review**\n\n', [`Reasons: ${reduced.reasons.map((r) => cell(r.text)).join('; ')} (model: ${cell(reduced.model || 'unknown', 80)}). Only high-confidence findings were posted inline.\n`]);
     const sn = counts && counts.complete && counts.since;
     const more = [...runNotes.map((x) => `${cell(x)}\n`),
       ...(traceNote ? [`Traceability unavailable for this PR (${cell(traceNote)}).\n`] : []),
