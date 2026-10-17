@@ -172,7 +172,7 @@ async function finish({ cases, out, json, log = console.log }) {
   const agg = aggregate(results.map((r) => (r.error ? { ...r, goal: 'error' } : r)));
   log(table(results));
   const pct = (x) => (x == null ? 'n/a' : `${(x * 100).toFixed(0)}%`);
-  log(`\n${results.filter((r) => r.pass).length}/${results.length} pass; precision ${pct(agg.precision)}, recall ${pct(agg.recall)}`);
+  log(`\n${results.filter((r) => r.pass).length}/${results.length} pass; precision ${pct(agg.precision)} (delivered ${pct(agg.precision_delivered)}), recall ${pct(agg.recall)}`);
   if (json) fs.writeFileSync(path.join(path.resolve(out), 'results.json'), JSON.stringify({ results, aggregate: agg }, null, 2) + '\n');
   return { results, agg };
 }

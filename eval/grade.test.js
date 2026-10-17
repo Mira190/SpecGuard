@@ -426,3 +426,18 @@ test('M4: an errored positive run stays in the end-to-end denominator and is not
   const a = aggregate([{ ...ok, goal: 'requirements' }, { goal: 'requirements', error: 'timeout', expected_findings: 1 }]);
   assert.deepEqual([a.recall, a.precision, a.pass_rate, a.recall_delivered, a.recall_delivered_e2e, a.errors, a.errors_expected_findings, a.fp], [1, 1, 1, 1, 0.5, 1, 1, 0]);
 });
+
+test('precision_delivered uses delivered TPs; precision stays on raw TPs', () => {
+  const rows = [{ goal: 'g', tp: 1, tp_delivered: 0, fn: 0, fn_delivered: 1, fp: 1 }];
+  const a = aggregate(rows);
+  assert.deepEqual([a.precision, a.precision_delivered], [0.5, 0]);
+  assert.equal(aggregate([{ goal: 'g', tp: 0, tp_delivered: 0, fn: 0, fn_delivered: 0, fp: 0 }]).precision_delivered, null);
+});
+
+test('an errored row without expected_findings makes e2e recall unknown; stamped rows keep the number', () => {
+  const ok = { ...grade(spec(), obs([com()])), goal: 'g' };
+  const legacy = aggregate([ok, { goal: 'g', error: 'x' }]);
+  assert.deepEqual([legacy.recall_delivered_e2e, legacy.unknown_expected], [null, 1]);
+  const stamped = aggregate([ok, { goal: 'g', error: 'x', expected_findings: 1 }]);
+  assert.deepEqual([stamped.recall_delivered_e2e, stamped.unknown_expected], [0.5, 0]);
+});
