@@ -1072,3 +1072,15 @@ test('run: parts_left is capped at 10 entries; the status counts the true total 
   assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: '12 unit parts not reached (budget)' });
   assert.match(d.calls.summary, /\+2 more unit parts not reached \(budget\)/);
 });
+
+test('U1: a unit finding must cite a part that ran: budget-dropped and failed parts are removed, succeeded kept, non-contiguous executed parts are not one min-max window', () => {
+  const six = ['const alpha = compute(1);', 'const beta = compute(2);', 'const gamma = compute(3);', 'const delta = compute(4);', 'const omega = compute(5);', 'const sigma = compute(6);'], rd = (p) => (p === 'src/js/legacy.js' ? six : read(p));
+  const units = () => readUnits([1, 2, 3].map((k) => `${U2}\tsrc/js/legacy.js\t9\tno test\tnone\t-\tabcdef12\tpart ${k}/3 lines ${k * 2 - 1}-${k * 2}`).join('\n') + '\n');
+  const at = (line, gone) => { const o = verify(result([uf({ path: 'src/js/legacy.js', line, quote: six[line - 1] })]), { read: rd, units: units(), gone: new Set(gone) }); return [o.unit_findings.map((f) => f.low), o.not_reviewed.join('\n')]; };
+  assert.deepEqual(at(3, [])[0], [false], 'control: a part that ran keeps its finding');
+  assert.deepEqual(at(3, [`${U2}:2`])[0], [], 'dropped part');
+  assert.deepEqual(at(3, [`${U2}:2`, `${U2}:3`])[0], [], 'failed part');
+  assert.match(at(3, [`${U2}:2`])[1], /outside this run's part of the unit \(lines 1-2, 5-6\)/);
+  assert.deepEqual(at(1, [`${U2}:2`])[0], [false]);
+  assert.deepEqual(at(6, [`${U2}:2`])[0], [false]);
+});

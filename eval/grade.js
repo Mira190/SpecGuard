@@ -216,7 +216,7 @@ function summarize(rs) {
   const lat = ok.map((r) => r.latency_s).filter((x) => x != null);
   return {
     runs: rs.length, errors: rs.length - ok.length, tp, fp, acceptable, fn, summary_only: n('summary_only'),
-    precision: ratio(tp, tp + fp), precision_delivered: ratio(tpd, tpd + fp), recall: ratio(tp, tp + fn),
+    precision: ratio(tp, tp + fp), precision_delivered: noDelivered ? null : ratio(tpd, tpd + fp), recall: ratio(tp, tp + fn),
     recall_delivered: noDelivered ? null : ratio(tpd, tpd + ok.reduce((t, r) => t + r.fn_delivered, 0)), recall_delivered_e2e: noDelivered || unknownExpected ? null : ratio(tpd, allExpected), unknown_expected: unknownExpected, errors_expected_findings: rs.filter((r) => r.error).reduce((t, r) => t + expectedOf(r), 0),
     strict_pass_rate: noStrict ? null : ratio(ok.filter((r) => r.strict_pass).length, ok.length), strict_pass_n: ok.length - noStrict, strict_pass_missing: noStrict,
     json_valid_rate: ratio(ok.filter((r) => r.json_valid).length, ok.length),
