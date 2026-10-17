@@ -277,6 +277,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
   const dropped = new Set();
   out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), symbol: covers && covers.symbol, baseline: baselineOf(tracked), notes: out.not_reviewed, file, testFile, dropped });
+  for (const n of new Set(covers && covers.limits)) out.not_reviewed.push(n); // a timed-out search is not "no test covers it": the finding keeps its confidence
   out.unit_dropped = [...dropped]; // units whose finding verification dropped: not "no gap" (see main)
   return out;
 }

@@ -198,17 +198,27 @@ function calledNames(lines, line) {
   return [...out].slice(0, 12);
 }
 // testPaths: test_paths text (or empty) -> (lines, line, path, eligible) => "path:line" of a tracked test file that may already cover the claim at that 1-based line of the file `lines`, or null.
-// A search that fails or times out finds nothing. trace.js is required lazily: it requires post.js, which uses this guard.
+// A search that fails or times out finds nothing and adds a line to `limits` (the caller reports it; the claim is not demoted). trace.js is required lazily: it requires post.js, which uses this guard.
 function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
   const { isTestPath, testScope } = require('./trace'), scope = testScope(testPaths), DOC = /\.(md|mdx|markdown|rst|adoc|txt)$/i;
   const isTest = (p) => !DOC.test(p) && (scope ? scope(p) : isTestPath(p));
-  const grep = (args, only = null) => {
+  // the tracked test files, listed once; a search that keeps only test hits is limited to them (a pathspec, 300 per call), so large tracked data files are never scanned
+  let tests = null, failed = '';
+  const testFiles = () => tests ||= execFileSync('git', ['ls-files', '-z'], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0').filter((f) => f && isTest(f));
+  // first test hit of `git grep <flags> <args> -- <tests>` as "path:line", or null. Exit 1 is no match; a timeout or other error sets `failed` (the claim could not be checked).
+  const search = (flags, args, only = null) => {
     try {
-      const out = execFileSync('git', ['grep', '-n', '-I', '-i', '-F', ...args], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } });
-      for (const l of out.split('\n')) { const m = /^(.*?):(\d+):/.exec(l); if (m && isTest(m[1]) && (!only || only.has(m[1]))) return `${m[1]}:${m[2]}`; }
-    } catch {}
+      const all = testFiles();
+      for (let i = 0; i < all.length; i += 300) {
+        try {
+          const out = execFileSync('git', ['grep', '-n', '-I', ...flags, ...args, '--', ...all.slice(i, i + 300)], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } });
+          for (const l of out.split('\n')) { const m = /^(.*?):(\d+):/.exec(l); if (m && (!only || only.has(m[1]))) return `${m[1]}:${m[2]}`; }
+        } catch (e) { if (e.status !== 1) throw e; }
+      }
+    } catch (e) { if (e.status !== 1) failed = e.code === 'ETIMEDOUT' || e.killed ? 'timeout' : 'error'; }
     return null;
   };
+  const grep = (args, only = null) => search(['-i', '-F'], args, only);
   // only a function this repository defines in a non-test file is a delegate (isDirectChild in src/engine/filename.ts); library and builtin methods (deepEqual, filter) are not
   const definedHere = (name) => {
     try {
@@ -224,14 +234,10 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
       const defs = execFileSync('git', ['grep', '-n', '-I', '-E', '-e', `func[[:space:]]*\\([^)]*\\)[[:space:]]*${name}\\b`, '-e', `^[[:space:]]*((public|private|protected|static|async|override)[[:space:]]+)*\\*?${name}[[:space:]]*(<[^>]*>)?\\([^;]*\\{[[:space:]]*$`], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'] }).split('\n');
       if (defs.some((l) => { const m = /^(.*?):\d+:/.exec(l); return m && m[1] !== own && !isTest(m[1]) && !DOC.test(m[1]); })) return null;
     } catch (e) { if (e.status !== 1) return null; }
-    try {
-      const out = execFileSync('git', ['grep', '-n', '-I', '-w', '-F', '-e', name], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } });
-      for (const l of out.split('\n')) { const m = /^(.*?):(\d+):/.exec(l); if (m && isTest(m[1])) return `${m[1]}:${m[2]}`; }
-    } catch {}
-    return null;
+    return search(['-w', '-F'], ['-e', name]);
   };
   // eligible (optional): the test files that can cover this source file (its candidate tests); a hit elsewhere is an unrelated test. Empty: no candidate test, so no literal demotion (that gap is more likely real). Not passed: any tracked test counts. A delegated helper's test lives with the helper, so it is not limited by the set.
-  return Object.assign((lines, line, p = '', eligible = null) => {
+  const limits = [], run = (lines, line, p = '', eligible = null) => {
     if (!Array.isArray(lines) || !Number.isInteger(line)) return null;
     const only = eligible ? new Set(eligible) : null;
     const needles = needlesOf(lines, line), hit = needles.length && !(only && !only.size) ? grep(needles.flatMap((n) => ['-e', n]), only) : null, cm = hit || (only && !only.size) ? null : classAndMethod(lines, line);
@@ -240,7 +246,9 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
     if (p && isTest(p)) return null; // a claim about a test file has no delegate to follow
     for (const name of calledNames(lines, line)) { if (!definedHere(name)) continue; const h = grep(['-w', '-e', name]); if (h) return `a delegated helper is tested: ${name} at ${h}`; }
     return null;
-  }, { symbol });
+  };
+  const note = (what, r) => { if (failed && !r) limits.push(`could not check whether a test covers ${what} (${failed})`); failed = ''; return r; };
+  return Object.assign((lines, line, p = '', eligible = null) => note(p || 'the cited line', run(lines, line, p, eligible)), { symbol: (name, own = '') => note(name, symbol(name, own)), limits });
 }
 
 module.exports = { mapTests, hunkTests, hunkTokens, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, makeCoverGuard, HUNK_REASON };
