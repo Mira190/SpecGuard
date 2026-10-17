@@ -164,6 +164,9 @@ test('branchGuard: only the default branch is scanned; unknown ref or payload wa
   assert.match(branchGuard({ refName: 'feature/x', eventPath: ev }).error, /reads the default branch \(main\); this run is on feature\/x/);
   assert.match(branchGuard({ refName: 'main', eventPath: path.join(dir, 'none.json') }).warn, /could not tell/);
   assert.match(branchGuard({ refName: '', eventPath: ev }).warn, /could not tell/);
+  assert.deepEqual(branchGuard({ refName: 'feature/x', eventPath: ev, stateless: true, sha: 'abcdef0123' }), { note: 'Scanned ref: feature/x @ abcdef0 (not the default branch main; no scan state was read or written)' });
+  assert.deepEqual(branchGuard({ refName: 'main', eventPath: ev, stateless: true, sha: 'abcdef0123' }), {}, 'the default branch needs no note');
+  assert.match(branchGuard({ refName: 'feature/x', eventPath: ev, stateless: false, sha: 'abcdef0' }).error, /reads the default branch/);
 });
 
 test('testLayout: names the directories, file-name patterns and config that exist', () => {
