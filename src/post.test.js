@@ -4058,6 +4058,7 @@ test('control: a source naming an uncollected document is still rejected and unk
   assert.match(s, /Requirement link not verified/);
   assert.doesNotMatch(s, /Point to the unit test/);
   assert.doesNotMatch(s, /need a person to check/, 'not an actionable count');
+  assert.match(s, /\| 1: 1 not verified \|/, 'counted apart from unconfirmed');
 });
 
 test('a covered row citing a test file with no layer keeps its evidence and is not asked for a unit test', () => {
