@@ -673,7 +673,7 @@ function countsComment(c) {
   const o = { ...c, outcomes: [...(c.outcomes || [])], ...(c.sum && { sum: [...c.sum] }) };
   const json = () => JSON.stringify(o).replace(/[<>]/g, (ch) => (ch === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d'); // can never close the HTML comment
   while (json().length > COUNTS_MAX && o.outcomes.length) { o.outcomes.shift(); o.dropped = (o.dropped || 0) + 1; }
-  while (o.sum?.length && json().length > COUNTS_MAX) { o.sum.shift(); o.sum_dropped = (o.sum_dropped || 0) + 1; } // then the summary-only entries, same order
+  while (o.sum?.length && json().length > COUNTS_MAX) { o.sum.pop(); o.sum_dropped = (o.sum_dropped || 0) + 1; } // then the summary-only entries, last first (carried-forward ones sit after this run's)
   return `<!-- specguard:counts ${json()} -->`;
 }
 // A failed run must not erase a real review of the same commit: keep the previous comment (markers untouched, so preflight still sees that valid result) under a one-line banner.
@@ -1668,12 +1668,14 @@ async function run({ github, context, core }) {
     for (const [fp, th] of threadsByFp(threads, me)) if (th.isResolved && th.resolvedBy && ours(th.resolvedBy, me)) known.delete(fp);
   }
   // Summary-only findings have no review comment, so no prior. The previous summary's counts list them (`sum`); they become synthetic priors (thread unknown, never dismissed).
+  let prevSum = [], prevHead; // the previous summary's `sum`: carried forward below once a finding is addressed
   if (!withheld) try {
     const me = await actor(), cs = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 });
     const mine = cs.find((c) => ours(c.user, me) && typeof c.body === 'string' && c.body.startsWith('<!-- specguard:summary -->'));
     const pc = JSON.parse(/<!-- specguard:counts (\{.*\}) -->/.exec(mine?.body || '')?.[1]);
+    if (Array.isArray(pc?.sum)) { prevSum = pc.sum.slice(0, 20); prevHead = pc.head; }
     if (/^[0-9a-f]{7,40}$/.test(pc?.head) && Array.isArray(pc.sum)) for (const e of pc.sum.slice(0, 20)) {
-      if (/^[0-9a-f]{16}$/.test(e?.fp) && typeof e.path === 'string' && Number.isInteger(e.line) && ![...priors.keys()].some((k) => k.startsWith(e.fp))) priors.set(e.fp, { path: e.path, original_line: e.line, original_commit_id: pc.head, kind: typeof e.kind === 'string' ? e.kind : null });
+      if (/^[0-9a-f]{16}$/.test(e?.fp) && typeof e.path === 'string' && Number.isInteger(e.line) && ![...priors.keys()].some((k) => k.startsWith(e.fp))) priors.set(e.fp, { path: e.path, original_line: e.line, original_commit_id: /^[0-9a-f]{7,40}$/.test(e.at) ? e.at : pc.head, kind: typeof e.kind === 'string' ? e.kind : null });
     }
   } catch { /* no earlier summary, or no counts in it: no synthetic priors */ }
   const survive = new Set(); // fingerprints of every finding still present after validation, wherever it ends up (inline, summary, capped, unverifiable)
@@ -1838,6 +1840,8 @@ async function run({ github, context, core }) {
     const fp = (f.fp || f.sfp || '').slice(0, 16);
     if (/^[0-9a-f]{16}$/.test(fp) && !seenSum.has(fp) && sum.length < 20) { seenSum.add(fp); sum.push({ fp, path: f.path, line: f.line, kind: f.kind, title: oneLine(neutralize(f.title).replace(/\s+/g, ' ').trim(), 100) }); } // title: the claim a blind labeller judges (eval/label-export.js)
   }
+  // A summary-only finding that was judged this round and is no longer reported keeps its entry, so the blind-label pool (eval/weekly-report.js) still has it. After this round's own entries: the cap drops them first.
+  for (const e of prevSum) if (sum.length < 20 && /^[0-9a-f]{16}$/.test(e?.fp) && !seenSum.has(e.fp) && outcomes.some((o) => o.fp.startsWith(e.fp) && o.outcome !== 'open')) { seenSum.add(e.fp); sum.push({ fp: e.fp, path: e.path, line: e.line, kind: e.kind, title: e.title, at: /^[0-9a-f]{7,40}$/.test(e.at) ? e.at : prevHead }); } // at: the head it was first reported at, so later rounds judge it against the same commit
   const byKind = {};
   const tally = (list, k) => list.forEach((f) => { (byKind[f.kind] ||= { posted: 0, already: 0, summary: 0 })[k]++; });
   const unplaced = new Set(unanchored.map((x) => x.f));
