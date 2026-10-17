@@ -1342,3 +1342,15 @@ test('render: the lead table shows 20 rows in the visible part, shared round-rob
   const many = Array.from({ length: 12 }, (_, i) => urow(id(200 + i), { tests: [], signals: SIG() }));
   assert.equal((render({ data: clean(), code: codeOf(many) }).match(/test evidence not found \|/g) || []).length, 12, 'control: rule signals are not capped at 10 any more');
 });
+
+test('U1 run: a unit finding in a part scan-parts.json dropped or failed is removed; one in the part that ran is kept', async (t) => {
+  const four = ['function a() {}', 'function b() {}', 'function c() {}', 'function d() {}'];
+  const units = { 'audit-units.txt': [1, 2].map((k) => `${UID}\tsrc/plan.js\t5\twhy\tnone\t-\tabcdef12\tpart ${k}/2 lines ${k * 2 - 1}-${k * 2}\n`).join(''), 'audit-inventory.json': invOf([urow(UID, { path: 'src/plan.js', tests: [] })]) };
+  const f = (line) => [{ unit: UID, kind: 'missing_test', path: 'src/plan.js', line, quote: four[line - 1], title: 'No test', skeleton: 'it("x", () => {});' }];
+  const run = (line, parts) => runPost(t, { files: { 'src/plan.js': four }, ctxFiles: { ...units, 'scan-parts.json': parts, 'findings.json': result([req()], { unit_findings: f(line) }) } });
+  const dropped = { calls: 1, failed: [], dropped: [], droppedParts: [`${UID}:2`] }, failed = { calls: 2, failed: [{ part: 'units', units: [UID], keys: [`${UID}:2`], reason: 'timeout' }], dropped: [] };
+  for (const parts of [dropped, failed]) {
+    assert.match((await run(3, parts)).calls.summary, /outside this run's part of the unit \(lines 1-2\)/);
+    assert.doesNotMatch((await run(1, parts)).calls.summary, /outside this run's part/);
+  }
+});

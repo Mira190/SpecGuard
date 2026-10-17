@@ -432,6 +432,8 @@ test('precision_delivered uses delivered TPs; precision stays on raw TPs', () =>
   const a = aggregate(rows);
   assert.deepEqual([a.precision, a.precision_delivered], [0.5, 0]);
   assert.equal(aggregate([{ goal: 'g', tp: 0, tp_delivered: 0, fn: 0, fn_delivered: 0, fp: 0 }]).precision_delivered, null);
+  const old = aggregate([{ goal: 'g', tp: 1, fn: 0, fp: 1, summary_only: 0 }]);
+  assert.deepEqual([old.precision, old.precision_delivered, old.recall_delivered], [0.5, null, null], 'old rows without tp_delivered: unknown, not 0');
 });
 
 test('an errored row without expected_findings makes e2e recall unknown; stamped rows keep the number', () => {

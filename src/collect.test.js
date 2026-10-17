@@ -517,12 +517,12 @@ test('test-candidates.txt: the same-name test still ranks first, and the hunk ti
 });
 
 // The real candidates() heredoc with an in-memory fs and an injected git; `diff` is what `git diff` does (throws or returns text).
-function runCandidates(diff) {
+function runCandidates(diff, o = {}) {
   const { extractCandidates } = require('../eval/trace-recall/candidates.js');
   const mem = new Map(), ctx = path.resolve(__dirname, 'virtual-ctx');
   mem.set(path.join(ctx, 'files.txt'), 'a.js\n'); mem.set('a.js', 'function alpha() {}\n');
   const vfs = { readFileSync: (p) => { if (!mem.has(p)) throw new Error('ENOENT'); return mem.get(p); }, writeFileSync: (p, s) => mem.set(p, String(s)), appendFileSync: (p, s) => mem.set(p, (mem.get(p) || '') + String(s)) };
-  const git = (bin, args) => { if (args[0] === 'ls-files') return 'a.js\0a.test.js\0'; if (args.includes('diff')) return diff(); return ''; };
+  const git = (bin, args) => { if (args[0] === 'ls-files') return (o.tracked || ['a.js', 'a.test.js']).join('\0') + '\0'; if (args.includes('diff')) return diff(); if (args[0] === 'grep' && args.includes('-o') && o.grep) return o.grep(args); return ''; };
   require('node:vm').runInNewContext(extractCandidates(fs.readFileSync(path.join(__dirname, 'collect.sh'), 'utf8')), {
     require: (n) => { const id = n.replace(/^node:/, ''); return id === 'fs' ? vfs : id === 'path' ? path : id === 'child_process' ? { execFileSync: git } : require(id); },
     process: { argv: ['node', '-', path.join(__dirname, 'trace.js'), ctx], env: { BASE_SHA: 'base', HEAD_SHA: 'head' } }, console,
@@ -537,6 +537,42 @@ test('test-candidates.txt: a git diff that times out or fails is recorded in col
     assert.match(r.limits, want);
     assert.match(r.cands, /a\.test\.js/);
   }
+});
+
+// hunkTests ranks only test files, so the identifier search is limited to them by pathspec (a multi-pattern -w -F over big tracked data files timed out) and chunked for the command-line limit
+const IDS_DIFF = () => 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-x\n+function alphaChanged() {}\n';
+const grepFake = (calls) => (args) => { calls.push(args); return args.slice(args.indexOf('--') + 1).filter((p) => p === 't7.test.js' || p === 't400.test.js').map((p) => p + ':alphaChanged\n').join(''); };
+
+test('test-candidates.txt: the changed-identifier grep is limited to the test paths, not every tracked file', () => {
+  const calls = [], r = runCandidates(IDS_DIFF, { tracked: ['a.js', 'docs/huge.json', 'a.test.js', 't7.test.js'], grep: grepFake(calls) });
+  assert.equal(calls.length, 1);
+  assert.deepEqual([...calls[0].slice(calls[0].indexOf('--'))], ['--', 'a.test.js', 't7.test.js']);
+  assert.match(r.cands, /t7\.test\.js {2}\(mentions changed `alphaChanged`\)/);
+  assert.equal(r.limits, '');
+});
+
+test('test-candidates.txt: 650 test paths are grepped in 3 chunks and the hits of every chunk are merged', () => {
+  const tests = Array.from({ length: 650 }, (_, i) => `t${i}.test.js`), calls = [];
+  const r = runCandidates(IDS_DIFF, { tracked: ['a.js', ...tests], grep: grepFake(calls) });
+  assert.deepEqual(calls.map((c) => c.length - c.indexOf('--') - 1), [300, 300, 50]);
+  assert.match(r.cands, /t7\.test\.js {2}\(mentions changed `alphaChanged`\)/, 'hit from chunk 1');
+  assert.match(r.cands, /t400\.test\.js {2}\(mentions changed `alphaChanged`\)/, 'hit from chunk 2');
+});
+
+test('test-candidates.txt: a grep failure in the second chunk is recorded with its code or exit status, and the candidates are still written', () => {
+  const tests = Array.from({ length: 650 }, (_, i) => `t${i}.test.js`);
+  for (const [err, want] of [[{ code: 'ETIMEDOUT' }, /failed or timed out \(ETIMEDOUT\)/], [{ status: 2 }, /failed or timed out \(exit 2\)/], [{}, /failed or timed out \(error\)/]]) {
+    let n = 0;
+    const r = runCandidates(IDS_DIFF, { tracked: ['a.js', ...tests], grep: () => { if (++n === 2) throw Object.assign(new Error('grep failed'), err); return ''; } });
+    assert.match(r.limits, want);
+    assert.match(r.cands, /a\.js/);
+  }
+});
+
+test('test-candidates.txt: no tracked test file, no changed-identifier grep', () => {
+  const calls = [], r = runCandidates(IDS_DIFF, { tracked: ['a.js'], grep: grepFake(calls) });
+  assert.equal(calls.length, 0);
+  assert.equal(r.limits, '');
 });
 
 test('test-candidates.txt: a diff that reads fine but matches no identifier records nothing', () => {
