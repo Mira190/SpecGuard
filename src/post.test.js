@@ -4278,3 +4278,17 @@ test('status separates finishing from grade: a fast-tier run with gaps is ❌ an
   assert.match(cb, /\*\*⚠️ Incomplete review/); assert.match(cb, /specguard:status=incomplete -->/); assert.equal(cut.outputs.status, 'incomplete'); assert.doesNotMatch(cb, /specguard:head=/);
   assert.deepEqual([countsOf(cb).reduced, countsOf(cb).execution_complete], [true, false]);
 });
+
+test('headline precedence is unchanged from main: fast tier + cut + gaps stays ❌ (incomplete below); full strength + cut + gaps stays "Incomplete review: N found so far"', async (t) => {
+  const go = async (tier) => {
+    const s = setup(t, reducedData());
+    if (tier) writeCtxR(s, 'engine-model.json', JSON.stringify({ tier, used: ['claude-haiku-5.5'] }));
+    writeCtxR(s, 'test-candidates.txt', 'src.js\n  test.js  (same stem)\n'); writeCtxR(s, 'pack-cut.txt', 'src.js\n');
+    await post(s);
+    return s.calls.summary[0].body;
+  };
+  const fast = await go('fast');
+  assert.match(fast, /## SpecGuard\n\n\*\*❌ \d+ unit test gaps? to fix\*\*/); assert.match(fast, /specguard:status=incomplete -->/); assert.match(fast, /Incomplete review\./);
+  const full = await go('');
+  assert.match(full, /## SpecGuard\n\n\*\*⚠️ Incomplete review: \d+ unit test gaps? found so far\*\*/); assert.match(full, /specguard:status=incomplete -->/);
+});
