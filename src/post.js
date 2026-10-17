@@ -661,9 +661,10 @@ const outcome = (p) => ((p.thread === 'human' && p.anchor_touched === false && p
 const COUNTS_MAX = 8192;
 // Hidden machine-readable line in the sticky summary. `outcomes` drops its oldest entries first to stay under COUNTS_MAX; the tally in `since` always covers all of them.
 function countsComment(c) {
-  const o = { ...c, outcomes: [...(c.outcomes || [])] };
+  const o = { ...c, outcomes: [...(c.outcomes || [])], ...(c.sum && { sum: [...c.sum] }) };
   const json = () => JSON.stringify(o).replace(/[<>]/g, (ch) => (ch === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d'); // can never close the HTML comment
   while (json().length > COUNTS_MAX && o.outcomes.length) { o.outcomes.shift(); o.dropped = (o.dropped || 0) + 1; }
+  while (o.sum?.length && json().length > COUNTS_MAX) { o.sum.shift(); o.sum_dropped = (o.sum_dropped || 0) + 1; } // then the summary-only entries, same order
   return `<!-- specguard:counts ${json()} -->`;
 }
 // A failed run must not erase a real review of the same commit: keep the previous comment (markers untouched, so preflight still sees that valid result) under a one-line banner.
@@ -1395,7 +1396,9 @@ const threadsByFp = (threads, me) => {
 
 // One record per earlier SpecGuard finding (priors: Map fp -> REST review comment, oldest first). Only called on a complete run:
 // `survive` is then every fingerprint still reported. Each lookup failing degrades that field to unknown, never the run.
-function followUp({ priors, survive, me, headSha, cwd, threads }) {
+// `unseen(path)`: this run could not see that file, so its silence about a finding there is no evidence (addressed -> not_observed, judged: false).
+// A synthetic prior (summary-only finding, see `sum`) has a 16-hex fp and no thread: it can never be dismissed.
+function followUp({ priors, survive, me, headSha, cwd, threads, unseen = () => false }) {
   const byFp = threadsByFp(threads, me);
   const out = [];
   for (const [fp, c] of [...priors].slice(-HARD_CAP)) {
@@ -1404,12 +1407,13 @@ function followUp({ priors, survive, me, headSha, cwd, threads }) {
     const link = /\]\(https?:\/\/[^)\s]*\/blob\/[0-9a-f]+\/[^)\s]*#L(\d+)(?:-L(\d+))?\)/.exec(c.body || ''); // a file-level comment names its lines only in this link
     const end = c.original_line ?? (link ? +(link[2] || link[1]) : null), start = c.original_start_line ?? (link ? +link[1] : end);
     const rec = {
-      fp, kind: (/kind: (\w+), confidence/.exec(c.body || '') || [])[1] || null, still_reported: survive.has(fp),
+      fp, kind: (/kind: (\w+), confidence/.exec(c.body || '') || [])[1] || c.kind || null, still_reported: survive.has(fp) || (fp.length === 16 && [...survive].some((x) => x.startsWith(fp))),
       anchor_touched: anchorTouched(c.original_commit_id, headSha, c.path, start, end, cwd),
       tests_changed: testsChanged(c.original_commit_id, headSha, cwd),
       thread: !th ? 'unknown' : !th.isResolved ? 'open' : th.resolvedBy && ours(th.resolvedBy, me) ? 'specguard' : 'human', up: n('+1'), down: n('-1'),
     };
-    out.push({ ...rec, outcome: outcome(rec) });
+    const oc = outcome(rec);
+    out.push(oc === 'addressed' && unseen(c.path) ? { ...rec, outcome: 'not_observed', judged: false } : { ...rec, outcome: oc });
   }
   return out;
 }
@@ -1649,6 +1653,15 @@ async function run({ github, context, core }) {
     // a thread we resolved ourselves (its finding was absent from an earlier run) does not hide the finding when it is reported again; a person's resolution is respected
     for (const [fp, th] of threadsByFp(threads, me)) if (th.isResolved && th.resolvedBy && ours(th.resolvedBy, me)) known.delete(fp);
   }
+  // Summary-only findings have no review comment, so no prior. The previous summary's counts list them (`sum`); they become synthetic priors (thread unknown, never dismissed).
+  if (!withheld) try {
+    const me = await actor(), cs = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 });
+    const mine = cs.find((c) => ours(c.user, me) && typeof c.body === 'string' && c.body.startsWith('<!-- specguard:summary -->'));
+    const pc = JSON.parse(/<!-- specguard:counts (\{.*\}) -->/.exec(mine?.body || '')?.[1]);
+    if (/^[0-9a-f]{7,40}$/.test(pc?.head) && Array.isArray(pc.sum)) for (const e of pc.sum.slice(0, 20)) {
+      if (/^[0-9a-f]{16}$/.test(e?.fp) && typeof e.path === 'string' && Number.isInteger(e.line) && ![...priors.keys()].some((k) => k.startsWith(e.fp))) priors.set(e.fp, { path: e.path, original_line: e.line, original_commit_id: pc.head, kind: typeof e.kind === 'string' ? e.kind : null });
+    }
+  } catch { /* no earlier summary, or no counts in it: no synthetic priors */ }
   const survive = new Set(); // fingerprints of every finding still present after validation, wherever it ends up (inline, summary, capped, unverifiable)
 
   const kept = [];
@@ -1681,7 +1694,9 @@ async function run({ github, context, core }) {
       const req = data.requirements.find((r) => r.obligation_ids.includes(f.obligation_ids[0]));
       if (req && specPath(req.source) && req.ref) f = { ...f, source: `${req.source.replace(REMOVED, '')} ${req.ref}` };
     }
-    survive.add(fingerprint(f.kind, f.path, f.quote, f.source)); // before any route or drop below
+    const sfp = fingerprint(f.kind, f.path, f.quote, f.source);
+    survive.add(sfp); // before any route or drop below
+    f = { ...f, sfp }; // kept for `sum`: an unanchored copy may carry a rewritten quote
     if (f.kind === 'spec_mismatch' && f.obligation_ids.every((id) => pre.has(id))) {
       const rl = readLines(f.path), d = snap(f, rl);
       if (d === null) addNote(`Finding citation did not match: ${f.path}:${f.line}.`); else preExisting.push({ ...verified(f, rl, f.line + d), line: f.line + d });
@@ -1792,11 +1807,19 @@ async function run({ github, context, core }) {
   if (lost.length) incomplete.push(`Delivery degraded: ${lost.length} comment(s) could not be posted (${[...new Set(lost)].join(', ')}); the findings are in this summary.`);
 
   // Fix-through telemetry. execution_complete: the run itself finished (nothing cut, failed or degraded); complete: also a full-strength model.
-  // A reduced (fast-tier) run records outcomes too (still reported, dismissed by a person), but its silence is not evidence: a finding it no longer reports
-  // is never 'addressed', only not_observed (judged: false). A/B rates use complete runs only (eval/aggregate-counts.js). Review F09.
+  // Outcomes are judged per finding, not per run: a prior is not_observed only when this run could not see its file (cut from the pack, not reviewed, diff truncated).
+  // A run whose engine failed or that lost findings to validation has no valid outcomes at all. A reduced (fast-tier) run judges like any other: its `survive` set
+  // holds every finding it reported, low confidence and summary ones included, and the counts carry `tier` for stratifying. Review F09 (superseded).
   const execComplete = !incomplete.length && !degraded, complete = execComplete && !reduced;
+  const valid = !degraded && !withheld && !(st && st !== 'success');
   const me = await actor();
-  const outcomes = execComplete && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads }).map((o) => (reduced && o.outcome === 'addressed' ? { ...o, outcome: 'not_observed', judged: false } : o)) : [];
+  const cutSet = new Set([...packCut, ...dropped, ...skipped]);
+  const outcomes = valid && priors.size ? followUp({ priors, survive, me, headSha, cwd: root, threads, unseen: (p) => partial || cutSet.has(p) || !reviewable.has(p) }) : [];
+  const sum = [], seenSum = new Set(); // this run's summary-only and unanchored findings, tracked by the next run
+  for (const { f } of [...p.summary, ...unanchored]) {
+    const fp = (f.fp || f.sfp || '').slice(0, 16);
+    if (/^[0-9a-f]{16}$/.test(fp) && !seenSum.has(fp) && sum.length < 20) { seenSum.add(fp); sum.push({ fp, path: f.path, line: f.line, kind: f.kind }); }
+  }
   const byKind = {};
   const tally = (list, k) => list.forEach((f) => { (byKind[f.kind] ||= { posted: 0, already: 0, summary: 0 })[k]++; });
   const unplaced = new Set(unanchored.map((x) => x.f));
@@ -1805,7 +1828,7 @@ async function run({ github, context, core }) {
   tally([...p.summary, ...unanchored].map((x) => x.f), 'summary');
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', specguard: require('./version').version(), complete, execution_complete: execComplete, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes };
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', specguard: require('./version').version(), complete, execution_complete: execComplete, outcome_valid: valid, findings: byKind, pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes, ...(sum.length && { sum }) };
   if (ctx) try { fs.writeFileSync(path.join(ctx, 'counts.json'), JSON.stringify(tele) + '\n'); } catch { /* ctx not writable: the sticky comment still carries the counts */ } // summary-only and manual runs have no sticky comment: the artifact carries it
   const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 
