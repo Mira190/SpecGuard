@@ -204,16 +204,17 @@ function candidates(all, cap, prior, changedDocs, stale, skipped = []) {
   return { text: fit.map(row).join(''), fit, tally, carried, total: all.length, left };
 }
 
-// The scan reads the default branch only: another ref's documents would overwrite the one scan issue. Returns { error } or { warn } or {}.
-function branchGuard({ refName = '', eventPath = '' } = {}) {
+// The scan reads the default branch only: another ref's documents would overwrite the one scan issue. A run that reads and writes no scan state (stateless: scan_issue off) cannot, so it may scan any ref and says which. Returns { error } or { warn } or { note } or {}.
+function branchGuard({ refName = '', eventPath = '', stateless = false, sha = '' } = {}) {
   let def = '';
   try { def = JSON.parse(fs.readFileSync(eventPath, 'utf8')).repository.default_branch || ''; } catch { /* no event file */ }
   if (!refName || !def) return { warn: 'could not tell whether this ref is the default branch (GITHUB_REF_NAME or the event payload is missing); scanning the checked-out ref' };
+  if (refName !== def && stateless) return { note: `Scanned ref: ${refName} @ ${sha.slice(0, 7)} (not the default branch ${def}; no scan state was read or written)` };
   return refName === def ? {} : { error: `mode scan reads the default branch (${def}); this run is on ${refName}. Run it from the default branch (a schedule or workflow_dispatch there).` };
 }
 
 // scanPaths: the units reviewed (docs, tests and evidence are read repo-wide); rotate: scan_issue is on, so the run is one of a rotation; prior: that issue's state (null on the first run or without an issue).
-function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0, unitParts = 1 }) { // unitParts: unit calls of one run (claude api engine; each holds maxUnits units); packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
+function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, refNote = '', evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0, unitParts = 1 }) { // unitParts: unit calls of one run (claude api engine; each holds maxUnits units); packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
   const head = git(cwd, ['rev-parse', 'HEAD']).trim();
   fs.rmSync(ctx, { recursive: true, force: true });
   fs.mkdirSync(ctx, { recursive: true });
@@ -318,7 +319,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   w('audit-stale.txt', [...[...stale].filter((c) => all.some((b) => b.cid === c)), ...((units && units.stale) || [])].map((c) => `${c}\n`).join('')); // block cids and unit ids changed since their review
   const rotation = { rotate, state: !!prior, picked: cand.fit.length, changed: cand.tally.d, confirming: cand.tally.c, new: cand.tally.n, oldest: cand.tally.o, carried: cand.carried.length };
   const evid = { blocks: cand.fit.length, with_code: et.withCode, with_tests: et.withTests, cut: ev.cut, files: ev.files };
-  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, max_units: maxUnits, units: units && units.rows.length ? { total: units.rows.length, picked: units.picked.length } : null, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes],
+  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, max_units: maxUnits, units: units && units.rows.length ? { total: units.rows.length, picked: units.picked.length } : null, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes], ref_note: refNote,
     scope: lines(scanPaths).map((l) => l.trim()).filter(Boolean), rotation, evidence: evid }) + '\n');
   return { docs, rejected, standards, head, candidates: cand.total, picked: cand.fit.map((c) => c.cid), rotation, evidence: evid, units: units && { total: units.rows.length, picked: units.picked.map((r) => r.id), rotation: units.rotation, totals: units.totals } };
 }
@@ -361,14 +362,15 @@ async function main(env) {
   const mu = env.MAX_UNITS || '12', maxUnits = /^\d{1,3}$/.test(mu) ? +mu : 0;
   if (maxUnits < 1 || maxUnits > 100) { console.log('::error::max_units must be an integer from 1 to 100'); process.exit(1); }
   if (!env.CTX) { console.error('CTX is required'); process.exit(2); }
-  const g = env.AUDIT_BRANCH_GUARD === 'off' ? {} : branchGuard({ refName: env.GITHUB_REF_NAME, eventPath: env.GITHUB_EVENT_PATH }); // off: manual run on another repository
+  const rotate = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
+  let sha = ''; try { sha = git('.', ['rev-parse', 'HEAD']).trim(); } catch { /* the note then shows no sha */ }
+  const g = env.AUDIT_BRANCH_GUARD === 'off' ? {} : branchGuard({ refName: env.GITHUB_REF_NAME, eventPath: env.GITHUB_EVENT_PATH, stateless: !rotate, sha }); // off: manual run on another repository
   if (g.error) { console.log(`::error::${g.error}`); process.exit(1); }
   if (g.warn) console.log(`::warning::${g.warn}`);
-  const rotate = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
   const prior = rotate ? await loadPrior(env) : null;
   const packBytes = env.PACK_SPLIT === 'true' ? 250000 : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run
   const unitParts = !packBytes ? 1 : require('./engines/claude-api').unitCalls({ model: require('./credential').resolveModel(env.MODEL, 'claude') || 'claude-haiku-5-5', budget: parseFloat(env.MAX_BUDGET_USD || '1.00'), maxTokens: parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, packBytes });
-  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, packBytes, unitParts });
+  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, refNote: g.note || '', packBytes, unitParts });
   console.log(`SpecGuard unit test gap scan: ${r.units ? `${r.units.picked.length} of ${r.units.total} units` : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);
 }

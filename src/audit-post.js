@@ -502,7 +502,7 @@ function readState(body) {
 // partial: why the scan is incomplete (shown first); prior: readState() of the last full scan; head: this commit; cap: scan_max_blocks.
 // carried: prior blocks this run did not audit ({ cid, path, line, text, status, since, runs, at }); they keep their status in the tables, marked "from <date>".
 // rotation / search (evidence candidates): audit-meta.json's; scope: the scan_paths lines; stateDropped: carried blocks that no longer fit the state.
-function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', run = '', failure = '', partial = '', prior = null, head: sha = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
+function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', run = '', failure = '', partial = '', prior = null, head: sha = '', refNote = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
   carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [], code = null, notAudited = { blocks: [], failed: 0, dropped: 0 }, unanswered = 0 }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
@@ -598,7 +598,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   else verdict = `**✅ No unit test gaps found**${where}. Static review; tests were not run.`;
   if (data && !failure && (notAudited.blocks.length || (code && code.unitsFailed) || unseen.length || unanswered > 0) && /^\*\*[✅❔]/u.test(verdict)) verdict = `**⚠️ Incomplete scan: no gaps found so far${unsure.length ? `; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check` : ''}**`; // never the clean form when part of the scan did not run
   if (data && !failure && notAudited.blocks.length) verdict = verdict.replace(/^(\*\*[\s\S]*?)\*\*/, `$1; ${plural(notAudited.blocks.length, 'document block')} not audited (${[notAudited.failed && 'a call failed', notAudited.dropped && 'left out by max_budget_usd'].filter(Boolean).join(', ')})**`);
-  let top = `## ${HEADING}\n\n${verdict}\n\n`;
+  let top = `## ${HEADING}\n\n${verdict}\n\n${refNote ? `${refNote}\n\n` : ''}`;
   if (code && data && !failure && !partial) { // the shape of the unit result in one glance (not for an incomplete run)
     const n = (k) => uf.filter((f) => f.kind === k).length, cellOf = (k) => (n(k) ? `${n(k)}` : 'none'), r = inv.rotation;
     top += `| Units reviewed | No unit test | Weak tests | Skipped tests | Design documents |\n|---|---|---|---|---|\n| ${seenN} of ${r.total}${r.rotate ? ` (rotation ${r.run} of ${r.runs})` : ''} | ${cellOf('missing_test')} | ${cellOf('weak_test')} | ${(inv.selected && inv.selected.skipped_tests) || 'none'} | ${docs.length ? `${docs.length} read` : 'none found'} |\n\n`;
@@ -771,7 +771,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const rt = resolveIssueTarget(env, owner, repo);
   if (rt.error && wantIssue) { wantIssue = false; core.warning(`SpecGuard: ${rt.error}; no scan issue is written`); }
   const { away = false, target: issueRepo = { owner, repo }, scope = scopeOf(env.SCAN_PATHS) } = rt, igh = issueGithub || github;
-  const shared = { head: (meta && meta.head) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, run: runHtml, cap, candidates: (meta && meta.candidates) || 0,
+  const shared = { head: (meta && meta.head) || '', refNote: (meta && meta.ref_note) || '', docs, rejected, limitations: (meta && meta.limitations) || [], capLeft: (meta && meta.cap_left) || [], blob, usage: usageHtml, run: runHtml, cap, candidates: (meta && meta.candidates) || 0,
     ruled, rotation: (meta && meta.rotation) || null, search: (meta && meta.evidence) || null, scope: scope.lines };
   let last = '';
   const outcome = (status, reason = '') => { last = status; core.setOutput?.('status', status); if (reason) core.setOutput?.('reason', reason); }; // the action's `status` output (fail_on_error); the last call wins
