@@ -623,6 +623,15 @@ test('test matching: a plural kebab spec (listeners-metadata-explorer.spec.ts) i
   assert.deepEqual(matched(r)['packages/ms/listener-metadata-explorer.ts'].tests, ['packages/ms/test/by-import.spec.ts', 'packages/ms/test/listeners-metadata-explorer.spec.ts', 'packages/ms/test/by-class.spec.ts'], 'import > plural fold > class name');
 });
 
+test('test matching: a mirrored root test/ tree (test/packages/ms/...) counts as related to packages/ms; another package does not', (t) => {
+  const r = repo(t, {
+    'packages/ms/listener-x.ts': ['export class ListenerX {', '  run() { return 1; }', '}'],
+    'test/packages/ms/listeners-x.spec.ts': spec('  assert.ok(1);'), // plural fold only: no import, no class
+    'test/packages/zzz/listeners-x.spec.ts': spec('  assert.ok(1);'), // same name, unrelated package: not matched
+  });
+  assert.deepEqual(matched(r)['packages/ms/listener-x.ts'].tests, ['test/packages/ms/listeners-x.spec.ts']);
+});
+
 test('test matching: 25 specs that only contain the word "messages" do not push out the one spec that imports messages.ts', (t) => {
   const files = { 'packages/core/errors/messages.ts': body('export const MESSAGES = {};') };
   for (let i = 0; i < 25; i++) files[`packages/core/test/noise${i}.spec.ts`] = spec(`  const messages = ${i};`);
