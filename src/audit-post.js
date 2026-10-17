@@ -168,7 +168,7 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     else if (!text(f.path) || !Number.isInteger(f.line) || f.line < 1 || !text(f.quote) || !text(f.title)) { invalid.add(f.unit); drop('path, line, quote and title are required'); }
     else if (keep.length >= UNIT_MAX) { invalid.add(f.unit); drop(`more than ${UNIT_MAX} findings; the rest are ignored`); }
     else keep.push({ unit: f.unit, kind: f.kind, path: f.path, line: f.line, quote: f.quote.slice(0, 200), title: f.title.trim().slice(0, 120), body: text(f.body) ? f.body.trim() : '', skeleton: text(f.skeleton) ? f.skeleton.replace(/\s+$/, '') : '',
-      ...(text(f.counterexample) ? { counterexample: f.counterexample.trim().slice(0, 300) } : {}) });
+      ...(text(f.counterexample) ? { counterexample: f.counterexample.trim().slice(0, 300) } : {}), ...(Array.isArray(f.callKeys) ? { callKeys: f.callKeys.filter(text) } : {}) });
   }
   o.unit_findings = keep;
   o.invalid_units = [...invalid].filter((u) => !keep.some((k) => k.unit === u));
@@ -207,7 +207,7 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 // The row id is the block cid (cid.N for a bundled block), the heading comes from the candidate, and rows keep document order. A block the model
 // skipped, or whose rows all failed verification, becomes an `unknown` row ("unconfirmed"); not_requirements gains the block's location and text.
 // docs: the admitted documents (null = any); cands: the candidate blocks (Map from readCandidates; null = unknown).
-function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null, testPaths = '', gone = new Set() } = {}) {
+function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null, testPaths = '', gone = new Set(), shown = new Map() } = {}) {
   const testFile = testFileOf(testPaths);
   const cache = new Map();
   const file = (p) => { if (!cache.has(p)) cache.set(p, read(p)); return cache.get(p); };
@@ -276,7 +276,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
   const dropped = new Set();
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), symbol: covers && covers.symbol, baseline: baselineOf(tracked), notes: out.not_reviewed, file, testFile, dropped, gone });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), symbol: covers && covers.symbol, baseline: baselineOf(tracked), notes: out.not_reviewed, file, testFile, dropped, gone, shown });
   for (const n of new Set(covers && covers.limits)) out.not_reviewed.push(n); // a timed-out search is not "no test covers it": the finding keeps its confidence
   out.unit_dropped = [...dropped]; // units whose finding verification dropped: not "no gap" (see main)
   return out;
@@ -320,7 +320,7 @@ function siblingCall(lines, line, quote, counterexample) {
 // a unit finding that says there is nothing to report
 const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b/i;
 
-function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbol = null, baseline = null, notes, file = () => null, testFile = heuristicTest, dropped = new Set(), gone = new Set() }) {
+function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbol = null, baseline = null, notes, file = () => null, testFile = heuristicTest, dropped = new Set(), gone = new Set(), shown = new Map() }) {
   // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
   const cutTest = (u, c) => {
     const cutTests = u.tests.filter((t) => packCut.has(t));
@@ -330,12 +330,12 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
   };
   const out = [], seen = new Set(), key = (q) => String(q).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   let symbols = 0, baselineNoted = 0;
-  for (const f of list) {
+  for (const { callKeys, ...f } of list) { // callKeys: stamped by the split scan, never published
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
     if (!locate(c)) { notes.push(`${at}: ${solid(f.quote) ? 'the quote was not found at the cited line' : `the quote is under ${MIN_QUOTE} characters`}`); dropped.add(f.unit); continue; }
     if (isDoc(c.path) || (f.kind === 'missing_test') === testFile(c.path)) { notes.push(`${at}: ${f.kind === 'missing_test' ? 'a missing_test cites the unit\'s code, not a test or a document' : `a ${f.kind} cites a test file`}`); dropped.add(f.unit); continue; }
     // the parts that ran (part keys `unit:k`, minus gone = budget-dropped or failed, as render's ran): a line in a part that did not run was not reviewed. Spans stay separate, never one min-max window.
-    const ran = u && u.part && c.path === u.path && (u.part.ks || [u.part.k + 1]).flatMap((k, i) => (gone.has(`${u.id}:${k}`) ? [] : [(u.part.spans || [[u.part.a, u.part.b]])[i]]));
+    const ran = u && u.part && c.path === u.path && (u.part.ks || [u.part.k + 1]).flatMap((k, i) => (gone.has(`${u.id}:${k}`) || (callKeys && !callKeys.includes(`${u.id}:${k}`)) ? [] : [(u.part.spans || [[u.part.a, u.part.b]])[i]]));
     if (ran && !ran.some(([a, b]) => c.line >= a && c.line <= b)) { notes.push(`${at}: outside this run's part of the unit (lines ${ran.map(([a, b]) => `${a}-${b}`).join(', ') || 'none ran'}); that part is reviewed in another run`); continue; }
     if (NO_GAP.test(f.title) || NO_GAP.test(f.body || '')) { notes.push(`${at}: dropped: the finding says there is no gap`); continue; }
     const fid = sha8(f.unit, f.kind, key(c.quote));
@@ -343,7 +343,8 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
     seen.add(fid);
     const skeleton = f.skeleton && placeholder(f.skeleton) ? '' : f.skeleton;
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
-    const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c, u) : null;
+    const past = packCut.has(c.path) && shown.has(c.path) && c.line > shown.get(c.path), // the single call's pack showed only the first N lines of this cut file (pack-shown.txt): the cited line was never seen
+      cut = !!u && (past || (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path))), hit = !cut && f.kind === 'missing_test' && covers ? covers(c, u) : null;
     let gate = null; // still deterministic, but answered elsewhere: baselines, a symbol hit in some test, a sibling test
     if (!cut && !hit && f.kind === 'missing_test') {
       if (baseline) { gate = `this repository tests through baselines (${baseline.dir}, ${baseline.n} files); check whether a baseline exercises it`; if (!baselineNoted++) notes.push(`${gate}: every missing_test is shown as low confidence`); }
@@ -357,7 +358,7 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
     }
     const noSketch = f.kind !== 'pushdown' && !skeleton; // no test sketch: "no gap found" findings arrive this way
     const vague = f.kind === 'weak_test' && (!post.counterexampleOk(f.counterexample) || post.refutedBy(c.quote, f.counterexample)); // review F04: a weak test needs a wrong behaviour the assertion still accepts
-    out.push({ ...f, ...c, skeleton, fid, ...(u && u.part ? { part: u.part.k } : {}), low: cut || !!hit || !!gate || noSketch || vague, ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : gate ? { lowWhy: gate } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
+    out.push({ ...f, ...c, skeleton, fid, ...(u && u.part ? { part: u.part.k } : {}), low: cut || !!hit || !!gate || noSketch || vague, ...(past ? { lowWhy: `line ${c.line} is past the ${shown.get(c.path)} lines of the file the model was shown` } : {}), ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : gate ? { lowWhy: gate } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
   }
   return out;
 }
@@ -871,7 +872,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), testPaths = process.env.TEST_PATHS || readCtx('test-paths.txt') || '', covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths });
   const cutUnits = hasCode ? [...units.values()].filter((u) => notSeen.has(u.id) || (packCutOn && (packCut.has(u.path) || u.tests.some((t) => packCut.has(t))))).map((u) => u.id) : [];
   if (inv) { const testCut = cutUnits.filter((id) => !notSeen.has(id) && !packCut.has(units.get(id).path)); if (testCut.length) inv.forced = [...(Array.isArray(inv.forced) ? inv.forced : []), ...testCut]; } // only the tests were cut: the unit was reviewed, so it is recorded unsure like a forced one and the rotation moves on, instead of looking never reviewed
-  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths, gone: new Set([...fKeys.keys(), ...dKeys]) });
+  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths, gone: new Set([...fKeys.keys(), ...dKeys]), shown: new Map(lines(readCtx('pack-shown.txt')).map((l) => l.split('\t')).filter((x) => x[1] > 0).map(([p, n]) => [p, +n])) });
   // A unit is "covered" only when no finding of it was dropped or lowered at any stage (validate, verify, low confidence): otherwise it was seen but inconclusive, tracked as unsure.
   const solid = new Set(checked.unit_findings.filter((f) => !f.low).map((f) => f.unit)), notCut = (u) => !cutUnits.includes(u) && !solid.has(u);
   const dropU = hasCode ? [...new Set([...data.invalid_units, ...checked.unit_dropped])].filter(notCut) : [];

@@ -1365,3 +1365,20 @@ test('scan_scope all: the top line says how many unit parts and blocks were not 
   assert.doesNotMatch(render({ data: sample(), reach: { ...reach, notReached: { budget: { parts: 0, blocks: 0 }, deadline: { parts: 0, blocks: 0 } } } }), /whole repository was not reviewed/);
   assert.doesNotMatch(render({ data: sample() }), /whole repository was not reviewed/);
 });
+
+test('R1 run: a unit finding is checked against the parts of the call that returned it; control: the call that held the line keeps it', async (t) => {
+  const four = ['function a() {}', 'function b() {}', 'function c() {}', 'function d() {}'];
+  const units = { 'audit-units.txt': [1, 2].map((k) => `${UID}\tsrc/plan.js\t5\twhy\tnone\t-\tabcdef12\tpart ${k}/2 lines ${k * 2 - 1}-${k * 2}\n`).join(''), 'audit-inventory.json': invOf([urow(UID, { path: 'src/plan.js', tests: [] })]) };
+  const run = (callKeys) => runPost(t, { files: { 'src/plan.js': four }, ctxFiles: { ...units, 'scan-parts.json': { calls: 2, failed: [], dropped: [] }, 'findings.json': result([req()], { unit_findings: [{ unit: UID, kind: 'missing_test', path: 'src/plan.js', line: 3, quote: four[2], title: 'No test', skeleton: 'it("x", () => {});', callKeys }] }) } });
+  assert.match((await run([`${UID}:1`])).calls.summary, /outside this run's part of the unit \(lines 1-2\)/, 'call 1 saw part 1 only: a part-2 line is not its finding');
+  assert.doesNotMatch((await run([`${UID}:2`])).calls.summary, /outside this run's part/);
+  assert.doesNotMatch((await run(undefined)).calls.summary, /outside this run's part/, 'unstamped: the union of the parts that ran, as before');
+});
+
+test('R2 run: a finding past the lines of a cut file the single call was shown is low confidence; a line it was shown is not', async (t) => {
+  const four = ['function a() {}', 'function b() {}', 'function c() {}', 'function d() {}'];
+  const ctxFiles = { 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\tnone\t-\tabcdef12\t-\n`, 'audit-inventory.json': invOf([urow(UID, { path: 'src/plan.js', tests: [] })]), 'pack-cut.txt': 'src/plan.js\n', 'pack-shown.txt': 'src/plan.js\t2\n' };
+  const run = (line) => runPost(t, { files: { 'src/plan.js': four }, ctxFiles: { ...ctxFiles, 'findings.json': result([req()], { unit_findings: [{ unit: UID, kind: 'missing_test', path: 'src/plan.js', line, quote: four[line - 1], title: 'No test', skeleton: 'it("x", () => {});' }] }) } });
+  assert.match((await run(3)).calls.summary, /line 3 is past the 2 lines of the file the model was shown/);
+  assert.doesNotMatch((await run(2)).calls.summary, /is past the/);
+});
