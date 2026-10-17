@@ -653,6 +653,15 @@ function countsComment(c) {
   while (json().length > COUNTS_MAX && o.outcomes.length) { o.outcomes.shift(); o.dropped = (o.dropped || 0) + 1; }
   return `<!-- specguard:counts ${json()} -->`;
 }
+// A failed run must not erase a real review of the same commit: keep the previous comment (markers untouched, so preflight still sees that valid result) under a one-line banner.
+// Another head, a failed or a missing prior: the failure summary `text`. The banner is hidden-marked so the next failure replaces it and the next success rewrites the whole body.
+const BANNER = /<!-- specguard:failed-rerun -->[^\n]*\n\n/;
+function keepPrior(prior, text, why, run, now) {
+  const st = /<!-- specguard:status=(\w+) -->/.exec(prior)?.[1];
+  let counts; try { counts = JSON.parse(/<!-- specguard:counts (\{.*\}) -->/.exec(prior)?.[1]); } catch { return text; }
+  if (!counts?.head || counts.head !== now || !['complete', 'incomplete'].includes(st) || !prior.includes('## SpecGuard\n\n')) return text;
+  return prior.replace(BANNER, '').replace('## SpecGuard\n\n', `## SpecGuard\n\n<!-- specguard:failed-rerun -->⚠️ The latest run${run ? ` (${run})` : ''} could not complete: ${neutralize(String(why).replace(/\n/g, ' '))}. Showing the previous result for this same commit.\n\n`);
+}
 // What the review read, as a plain list for Details. Paths are repo-relative and come from the collector, not the model.
 function sourcesRead({ reqDocs = [], standards = [], trace, head, base, rejected = [] }) {
   // an entry is a path, or { path, bytes, lines, truncated } for a standards file (size, line count, cut off in the prompt)
@@ -1419,9 +1428,9 @@ async function run({ github, context, core }) {
     return who;
   };
   const learn = (r) => { const l = r?.data?.user?.login; if (who === null && typeof l === 'string' && /^[\w-]+(?:\[bot\])?$/.test(l)) who = l; };
-  const stamp = (text) => (who ? text.replace('<!-- specguard:summary -->\n', (m) => `${m}<!-- specguard:by=${who} -->\n`) : text); // preflight reads it back
+  const stamp = (text) => (who && !text.includes('<!-- specguard:by=') ? text.replace('<!-- specguard:summary -->\n', (m) => `${m}<!-- specguard:by=${who} -->\n`) : text); // preflight reads it back
 
-  const publish = async (text, state) => {
+  const publish = async (text, state, why = '') => {
     core.setOutput?.('status', state);
     try { await core.summary.addRaw(text).write(); }
     catch (e) { core.warning(`SpecGuard: could not write the job summary: ${e.message}`); core.setOutput?.('status', 'failed'); core.setOutput?.('reason', 'could not write the job summary'); }
@@ -1432,6 +1441,7 @@ async function run({ github, context, core }) {
       const cs = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 });
       const me = await actor();
       const mine = cs.find((c) => ours(c.user, me) && typeof c.body === 'string' && c.body.startsWith('<!-- specguard:summary -->'));
+      if (state === 'failed' && mine) text = keepPrior(mine.body, text, why, context.runId && `[run ${context.runId}](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`, headSha);
       const r = mine ? await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body: stamp(text) })
         : await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: stamp(text) });
       if (who === null) { // first contact with an unknown identity: record it in the summary
@@ -1476,7 +1486,7 @@ async function run({ github, context, core }) {
     const nano = fin(usage?.totalNanoAiu), ms = fin(em?.ms) ?? fin(usage?.totalApiDurationMs), runs = parseInt(env.GITHUB_RUN_ATTEMPT, 10), ev = context.eventName || env.GITHUB_EVENT_NAME;
     return { ...(runs > 0 && { runs }), ...(ms !== undefined && { ms }), ...(nano !== undefined && { nanoAiu: nano, credits: nano / 1e9 }), model: used.join(', ') || model || undefined, mode: 'pr', delivery: summaryOnly ? 'summary' : 'pr', ...(ev && { event: ev }) };
   };
-  const failed = (why) => (core.setOutput?.('reason', why), publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes: notes.filter((n) => !n.startsWith(why)), partial, dropped, state: 'failed', used, tier }), 'failed'));
+  const failed = (why) => (core.setOutput?.('reason', why), publish(buildSummary({ rules, lint, status: `Could not complete: ${why}`, tooling, engine, model, usage, notes: notes.filter((n) => !n.startsWith(why)), partial, dropped, state: 'failed', used, tier }), 'failed', why));
   if (collectError) return failed(collectError);
   // One run-completeness state, from collector and engine status files only (never model output). A non-empty list withholds the HEAD marker and stale-thread resolution.
   const incomplete = [];
