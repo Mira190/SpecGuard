@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { validateManifest, rewriteIssueRefs, externalBody, injectWorkflow, runExternal } = require('./run.js');
+const { stage, loadCase, validateManifest, rewriteIssueRefs, externalBody, injectWorkflow, runExternal } = require('./run.js');
 
 const git = (dir, ...a) => execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'core.autocrlf=false', '-c', 'commit.gpgsign=false', ...a], { encoding: 'utf8' }).trim();
 const put = (dir, f, text) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), text); };
@@ -122,6 +122,19 @@ test('a live run sets the trace variable before each PR, grades each observation
     assert.equal(log.filter((l) => l.startsWith('push')).length, 2);
     assert.deepEqual(out.results.map((r) => [r.id, r.trace, r.fn, r.pr_url]), [['e1 [trace off]', 'off', 1, 'https://github.com/me/mirror/pull/7'], ['e1 [trace auto]', 'auto', 1, 'https://github.com/me/mirror/pull/7']]);
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+test('stage: a head file with the same size and mtime as its base file is still staged (stale stat cache)', () => {
+  const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-')), cp = fs.cpSync, T = new Date('2020-01-01T00:00:00Z');
+  // Windows cpSync keeps the source mtime; pin every copied file to one so the stale-stat case reproduces on any platform.
+  fs.cpSync = (s, d, o) => { cp(s, d, o); for (const f of fs.readdirSync(d, { recursive: true })) if (fs.statSync(path.join(d, f)).isFile()) fs.utimesSync(path.join(d, f), T, T); };
+  try {
+    git(wt, 'init', '-q'); git(wt, 'config', 'commit.gpgsign', 'false'); git(wt, 'config', 'user.name', 't'); git(wt, 'config', 'user.email', 't@example.invalid');
+    const c = loadCase('tr11');
+    stage(wt, [c], 'base', 'base');
+    stage(wt, [c], 'head', 'head');
+    assert.match(git(wt, 'diff', '--name-only', 'HEAD~1', 'HEAD'), /eval-sandbox\/tr11\/src\/premium\.js/);
+  } finally { fs.cpSync = cp; fs.rmSync(wt, { recursive: true, force: true }); }
 });
 
 test('the mirror workflow template matches what run.js expects', () => {
