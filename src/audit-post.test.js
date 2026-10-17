@@ -1330,14 +1330,14 @@ test('render: static leads (truthiness-only assertion, exported name no test ref
   assert.equal((all.match(/ is exported and no test file references it/g) || []).length, 20);
 });
 
-test('render: the lead table shows 20 rows in the visible part, unreferenced exports before weak-assertion leads when the cap bites; control: 12 rule signals are all listed', () => {
+test('render: the lead table shows 20 rows in the visible part, shared round-robin by lead kind when the cap bites; control: 12 rule signals are all listed', () => {
   const id = (i) => `0000d${i.toString(16).padStart(3, '0')}`;
   const weak = Array.from({ length: 15 }, (_, i) => urow(id(i), { leads: { weak: [{ path: `test/w${i}.test.js`, line: 3, text: 'assert.ok(x)' }] } }));
   const unref = Array.from({ length: 15 }, (_, i) => urow(id(100 + i), { leads: { unref: [{ name: `moveCrop${i}`, line: 28 }] } }));
   const md = render({ data: clean(), code: codeOf([...weak, ...unref]), head: 'abc1234def' }), vis = md.slice(0, md.indexOf('<details>'));
   const n = (re) => (vis.match(re) || []).length;
-  assert.equal(n(/ no test references it \|/g), 15, 'every unreferenced export is visible');
-  assert.equal(n(/ asserts only truthiness \|/g), 5, 'the weak leads fill the rest of the 20');
+  assert.equal(n(/ no test references it \|/g), 10, 'half of the 20 slots');
+  assert.equal(n(/ asserts only truthiness \|/g), 10, 'the weak leads take the other half (round-robin over lead kinds)');
   assert.match(vis, /\| \+10 more \| \| not listed: only the top 20 leads by unit risk are shown \|/);
   const many = Array.from({ length: 12 }, (_, i) => urow(id(200 + i), { tests: [], signals: SIG() }));
   assert.equal((render({ data: clean(), code: codeOf(many) }).match(/test evidence not found \|/g) || []).length, 12, 'control: rule signals are not capped at 10 any more');
