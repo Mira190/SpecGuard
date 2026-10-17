@@ -745,3 +745,24 @@ test('CLI: a non-default ref is scanned only when the run reads and writes no sc
   assert.equal(run({ GITHUB_REF_NAME: 'main' }).status, 0);
   assert.equal(meta().ref_note, '', 'no note on the default branch');
 });
+
+// the unit calls the collector plans are the ones the engine's pre-flight keeps (claude-api.js keptRooms): block calls take budget first
+test('stateless: the collector plans no more unit rooms than the pre-flight keeps, and the budget hint counts the block calls; a stateful run and a pre-flight that keeps all rooms are unchanged', (t) => {
+  const files = Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`src/m${i}.js`, Array.from({ length: 300 }, (_, j) => `exports.f${i}_${j} = () => '${'x'.repeat(70)}';`).join(String.fromCharCode(10)) + String.fromCharCode(10)]));
+  const { root, ctx } = repo(t, files), run = (o) => { collect({ cwd: root, ctx, maxUnits: 60, packBytes: 250000, unitParts: 3, ...o }); return { inv: JSON.parse(fs.readFileSync(path.join(ctx, 'audit-inventory.json'), 'utf8')), rooms: fs.existsSync(path.join(ctx, 'audit-unit-rooms.json')) ? JSON.parse(fs.readFileSync(path.join(ctx, 'audit-unit-rooms.json'), 'utf8')) : [] }; };
+  const price = (fit) => ({ usd: 0.1, budget: 1, max: 8, fit });
+  const seen = [];
+  const two = run({ price: price(() => ({ rooms: 3, blockUsd: 0.1 })) }), room1 = two.rooms[0].length;
+  assert.equal(two.rooms.length, 3, 'control: the pre-flight keeps both rooms');
+  const cut = run({ price: price((c) => { seen.push(fs.existsSync(path.join(c, 'audit-units.txt'))); return { rooms: 1, blockUsd: 0.5 }; }) });
+  assert.equal(cut.rooms.length, 0, 'one room kept: no room file, one call');
+  assert.equal(cut.inv.selected.units, room1);
+  assert.equal(seen[0], true, 'the pre-flight reads the ctx the collector wrote');
+  const h = cut.inv.budget_hint;
+  assert.equal(h.calls, 1);
+  assert.equal(h.usd, Math.ceil((h.need * 0.1 + 0.5) * 100) / 100, 'the rooms it takes at 0.10 plus the 0.50 the block calls take');
+  const noFit = run({ price: { usd: 0.1, budget: 1, max: 8 } });
+  assert.equal(noFit.rooms.length, 3, 'control: no pre-flight to ask');
+  const keep = (o) => run({ rotate: true, prior: null, ...o }).rooms.map((x) => x.length);
+  assert.deepEqual(keep({ price: price(() => ({ rooms: 3, blockUsd: 0.1 })) }), keep({ price: { usd: 0.1, budget: 1, max: 8 } }), 'control: a stateful run whose rooms the pre-flight keeps is unchanged');
+});
