@@ -262,6 +262,9 @@ test('external trackers: URLs anywhere, KEY-N only in the title and branch, neve
   assert.deepEqual(refs({ title: 'Use SHA-256 and UTF-8 for ISO-8601 dates (CVE-2024-1234, TLS-1, RFC-7231, GPT-4o, MD-5)', texts: ['body mentions PROJ-123, SHA-256 and abc-123 only in prose'] }), []);
   for (const branch of ['fix/utf-8', 'feat/issue-45-x', 'release/v2-3', 'dependabot/npm_and_yarn/lodash-4', 'dependabot/x/foo-1.2', 'feat/add-login-123', 'main', '2024-01-fix', 'fix/sha-256-bug', 'gh-12', 'fix/404-page', undefined]) assert.deepEqual(refs({ branch }), [], String(branch));
   assert.deepEqual(refs({ title: 'Fix proj-123 lower case in title, A-1 and X1-2' }), [], 'titles need an upper-case key of two or more letters');
+  assert.deepEqual(refs({ branch: 'docs/reviews-2026-10-17' }), [], 'a dated branch name is not a ticket key');
+  assert.deepEqual(refs({ branch: 'chore/notes-2026-1-7' }), []);
+  assert.deepEqual(refs({ branch: 'feat/PROJ-123-fix' }), ['PROJ-123 (Jira-style key)'], 'control: a real key followed by words');
   const many = refs({ title: Array.from({ length: 13 }, (_, i) => `AB${String.fromCharCode(65 + i)}-1`).join(' ') });
   assert.equal(many.length, 11);
   assert.equal(many[10], '3 more');

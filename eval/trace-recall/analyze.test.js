@@ -74,3 +74,16 @@ test('CLI prints the report and writes json from a results file', () => {
     assert.equal(format(res).includes('MRR@10 0.625 (sum 1.25 over 2)'), true);
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
+
+test('candidates step fails loudly: no heredoc, non-zero exit, or every code variant empty', () => {
+  const { extractCandidates, checkCandidates, checkNotAllEmpty } = require('./candidates.js');
+  const sh = "x=1\ncandidates() { timeout 60 node - \"$HERE/trace.js\" \"$CTX\" <<'JS'\nconsole.log(1);\nJS\n}\n";
+  assert.equal(extractCandidates(sh), 'console.log(1);\n');
+  assert.throws(() => extractCandidates('candidates() { echo; }\n'), /cannot find the candidates\(\) heredoc/);
+  assert.throws(() => checkCandidates('c-C', { status: 1, stderr: 'boom\n' }, 'f\n', true), /failed for c-C: exit 1 boom/);
+  assert.throws(() => checkCandidates('c-C', { status: null, error: new Error('ETIMEDOUT') }, 'f\n', true), /ETIMEDOUT/);
+  checkCandidates('c-C', { status: 0 }); // control: an empty list is data (Hit = 0), not a failure
+  assert.throws(() => checkNotAllEmpty([{ id: 'a-C', text: '' }, { id: 'b-RC', text: '\n' }]), /any of the 2 code variants/);
+  checkNotAllEmpty([{ id: 'a-C', text: '' }, { id: 'b-RC', text: 'lib/a.js\n  (no candidate test file found)\n' }]); // control: one empty variant among others
+  checkNotAllEmpty([]);
+});
