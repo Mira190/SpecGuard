@@ -22,7 +22,7 @@ const SIMILAR = 0.3; // token overlap (Jaccard) at which an edited block pairs w
 const MAX_REJECTED = 20; // spec-rejected.txt lines
 const BUDGET_MS = 40000, MAX_DEEP = 25, MAX_DELTAS = 20, MAX_LITS = 200, MAX_VALUES = 40; // time budget; S items traced to code; per-item / per-run search breadth
 const MAX_HUNKS = 60, CAND_CAP = 60 * 1024, PER_HUNK = 5, FLOOR = 0.3, SURE = 3, TOP_CAND = 3; // trace-candidates.json caps; a BM25 floor (share of the hunk best) applies after the first SURE candidates
-const BLOCK_PER_HUNK = 3, BLOCK_TOTAL = 20, BLOCK_MIN = 2; // descriptive-block candidates: per hunk, overall, and the BM25 score a block must exceed, in units of the idf of a term seen in one block (about two rare terms' worth; idf grows with the corpus)
+const MAX_MORE = 5, BLOCK_PER_HUNK = 3, BLOCK_TOTAL = 20, BLOCK_MIN = 2; // descriptive-block candidates: per hunk, overall, and the BM25 score a block must exceed, in units of the idf of a term seen in one block (about two rare terms' worth; idf grows with the corpus)
 // Words that match every doc and every program: dropped from the hunk query when ranking descriptive blocks. ponytail: English and JS-flavoured, extend when another language floods the candidates.
 const GOVERN_MIN = 8, GOVERN_GAP = 0.95, MAX_GOVERNING = 3; // D criteria: BM25 score from 8 (live: 15.5 for the governing sentence, other normative items <= 2.6; the 2-term floor of a 40-block corpus is ~6.6); no second block within 5% of the best
 const BLOCK_STOP = new Set('the is it an of to in and or as are be for from with that this on by at not no use src ts tsx js cjs return const let var function async await export import true false null undefined string number boolean type interface class void if else'.split(' '));
@@ -439,10 +439,12 @@ function pairItems(baseItems, headItems) {
   const byHeading = new Map(), hk = (x) => (x.kind === 'changed' ? `changed | ${x.heading}` : x.heading);
   for (const b of baseItems) if (bl.has(b)) { if (!byHeading.has(hk(b))) byHeading.set(hk(b), []); byHeading.get(hk(b)).push(b); }
   const sim = (a, b) => { const x = new Set(tokenize(a.raw)), y = new Set(tokenize(b.raw)); let n = 0; for (const t of x) if (y.has(t)) n++; return n / (x.size + y.size - n || 1); };
+  const alone = new Map(); for (const h of left) alone.set(hk(h), (alone.get(hk(h)) || 0) + 1);
   for (const h of left) {
     const list = byHeading.get(hk(h)) || [];
     let at = 0;
-    if (h.kind === 'changed') { const best = list.map((b) => sim(b, h)); at = best.length && Math.max(...best) >= SIMILAR ? best.indexOf(Math.max(...best)) : -1; }
+    if (h.kind === 'changed' && list.length === 1 && alone.get(hk(h)) === 1) at = 0; // one removed and one added block under a heading are the same block, edited past recognition
+    else if (h.kind === 'changed') { const best = list.map((b) => sim(b, h)); at = best.length && Math.max(...best) >= SIMILAR ? best.indexOf(Math.max(...best)) : -1; }
     const b = at >= 0 ? list.splice(at, 1)[0] : undefined;
     if (b) { bl.delete(b); pairs.push({ base: b, head: h }); } else pairs.push({ base: null, head: h });
   }
@@ -450,7 +452,7 @@ function pairItems(baseItems, headItems) {
   return pairs;
 }
 
-const UNIT = String.raw`days?|hours?|minutes?|mins?|seconds?|secs?|ms|weeks?|months?|years?|percent|[KMGT]B|times|%`;
+const UNIT = String.raw`days?|hours?|minutes?|mins?|seconds?|secs?|ms|weeks?|months?|years?|percent|[KMGT]i?B|bytes?|times|%`;
 const VALUE = new RegExp(String.raw`(\d+(?:[.,]\d+)*)(?:\s*(${UNIT})(?![\p{L}]))?|"([^"\n]+)"|\x60([^\x60\n]+)\x60`, 'giu');
 function values(text) {
   return [...String(text).matchAll(VALUE)].map((m) => (m[1] ? (m[2] ? `${m[1]} ${m[2].toLowerCase()}` : m[1]) : (m[3] || m[4]).trim()));
@@ -474,6 +476,24 @@ function durationVariants(value) {
   if (u === 'week') out.push(num(v * 7));
   if (u !== 'second') out.push(num(v * f));
   out.push(num(v * f * 1000), iso.replace('%', num(v)));
+  return [...new Set(out)];
+}
+
+const SIZE = { byte: 1, kb: 1024, kib: 1024, mb: 1024 ** 2, mib: 1024 ** 2, gb: 1024 ** 3, gib: 1024 ** 3 };
+// Other forms of a size: the byte count, `a * 1024 * 1024` products as code writes them, and KiB/MiB/GiB text. A bare number counts only when it is a whole multiple of 1024 (30 and 5000 are not sizes).
+function sizeVariants(value) {
+  const m = /^(\d+(?:\.\d+)?)\s*(bytes?|[KMG]i?B)?$/i.exec(String(value).trim().replace(/\s*\([^)]*\)$/, '')); // a quoted "1048576 (1MiB)" is one value
+  if (!m) return [];
+  const bytes = +m[1] * (m[2] ? SIZE[m[2].toLowerCase().replace(/s$/, '')] : 1);
+  if (!Number.isSafeInteger(bytes) || bytes === 0 || (!m[2] && (bytes < 1024 || bytes % 1024))) return [];
+  const out = [String(bytes)];
+  for (let j = 1, u = 1024; j <= 3 && bytes % u === 0; j++, u *= 1024) {
+    const k = bytes / u;
+    if (k === 1 && j === 1) continue;
+    const parts = [...(k === 1 ? [] : [k]), ...Array(j).fill(1024)];
+    out.push(parts.join(' * '), parts.join('*'));
+  }
+  for (const [n, u] of [['KiB', 1024], ['KB', 1024], ['MiB', 1024 ** 2], ['MB', 1024 ** 2], ['GiB', 1024 ** 3], ['GB', 1024 ** 3]]) if (bytes % u === 0 && bytes / u < 1024) out.push(`${bytes / u} ${n}`);
   return [...new Set(out)];
 }
 
@@ -674,12 +694,12 @@ function changedItems(files, maps) { // files: [{path, headItems, baseItems}] ->
     for (const { base, head } of pairItems(baseItems, headItems)) {
       if (head && base) {
         if (!(hitsLine(head, m.changed.RIGHT) || hitsLine(base, m.changed.LEFT)) || norm(withCtx(head)) === norm(withCtx(base))) continue;
-        out.push({ path: p, ref: head.ref, line: head.line, quote: head.text, ...(head.ctx ? { context: head.ctx } : {}), previous: base.text, ...(base.ctx && base.ctx !== head.ctx ? { previous_context: base.ctx } : {}), change: 'modified', deltas: valueDeltas(body(withCtx(base)), body(withCtx(head))) });
+        out.push({ path: p, heading: head.heading, ref: head.ref, line: head.line, quote: head.text, ...(head.ctx ? { context: head.ctx } : {}), previous: base.text, ...(base.ctx && base.ctx !== head.ctx ? { previous_context: base.ctx } : {}), change: 'modified', deltas: valueDeltas(body(withCtx(base)), body(withCtx(head))) });
       } else if (head) {
         if (!hitsLine(head, m.changed.RIGHT)) continue;
-        out.push({ path: p, ref: head.ref, line: head.line, quote: head.text, ...(head.ctx ? { context: head.ctx } : {}), change: 'added', deltas: valueDeltas('', body(withCtx(head))) });
+        out.push({ path: p, heading: head.heading, ref: head.ref, line: head.line, quote: head.text, ...(head.ctx ? { context: head.ctx } : {}), change: 'added', deltas: valueDeltas('', body(withCtx(head))) });
       } else if (hitsLine(base, m.changed.LEFT)) {
-        out.push({ path: p, ref: base.ref, line: base.line, quote: base.text, previous: base.text, change: 'removed', deltas: valueDeltas(body(withCtx(base)), ''), removedRaw: withCtx(base) });
+        out.push({ path: p, heading: base.heading, ref: base.ref, line: base.line, quote: base.text, previous: base.text, change: 'removed', deltas: valueDeltas(body(withCtx(base)), ''), removedRaw: withCtx(base) });
       }
     }
   }
@@ -711,7 +731,7 @@ function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {}, sto
   const eligible = entries.filter((e) => e.size <= MAX_FILE && !skip(e.path));
   const lits = [...new Set(crits.flatMap((c) => c.lits))].slice(0, MAX_LITS);
   const litRe = lits.map((l) => new RegExp(`(?<![\\w])${esc(l)}(?![\\w])`));
-  const queries = crits.map((c) => tokenize(`${c.quote} ${c.previous || ''}`).filter((w) => !stop || (w.length > 1 && !stop.has(w))));
+  const queries = crits.map((c) => tokenize(`${c.heading || ''} ${c.quote} ${c.previous || ''}`).filter((w) => !stop || (w.length > 1 && !stop.has(w))));
   const meta = [], litHits = new Map();
   function* windows() {
     for (let s = 0; s < eligible.length; s += 300) {
@@ -823,7 +843,7 @@ function occurrences({ cwd, head, crits, maps, dl, info = {} }) {
   for (const c of crits) for (const value of c.deltas.removed) {
     if (dl.over()) { info.cut = true; return out; }
     if (++n > MAX_VALUES) { info.valuesCapped = true; return out; }
-    const variants = durationVariants(value), pats = [...new Set([...variants, value])].filter((v) => v.length > 1 || /\d/.test(v));
+    const variants = [...new Set([...durationVariants(value), ...sizeVariants(value)])], pats = [...new Set([...variants, value])].filter((v) => v.length > 1 || /\d/.test(v));
     const key = pats.join('\0');
     let res = cache.get(key); // the same value in two criteria is searched once
     if (res === undefined) {
@@ -984,8 +1004,8 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
     }
   } catch (e) { lim('code-to-requirement ranking', e); }
   // B: changed requirement items -> code and tests; occurrence table. Only the MAX_DEEP largest changes are traced in depth.
-  const all = criteria.map((c) => ({ id: c.id, quote: c.quote, previous: c.previous, deltas: c.deltas,
-    lits: [...new Set([...c.deltas.removed, ...c.deltas.added].map((v) => numeric(v) ?? v))] }));
+  const all = criteria.map((c) => ({ id: c.id, heading: c.heading, quote: c.quote, previous: c.previous, deltas: c.deltas,
+    lits: [...new Set([...c.deltas.removed, ...c.deltas.added].flatMap((v) => [numeric(v) ?? v, ...sizeVariants(v)]))] }));
   const weight = (c) => (c.deltas.removed.length + c.deltas.added.length) * 1000 + c.quote.length + (c.previous || '').length;
   const deep = all.length <= MAX_DEEP ? all : all.map((c, i) => [c, i]).sort((a, b) => weight(b[0]) - weight(a[0]) || a[1] - b[1]).slice(0, MAX_DEEP).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
   if (deep.length < all.length) {
@@ -993,13 +1013,18 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
     cand.limitations.push(`deferred: ${left.length} changed requirement item(s) were not traced to code in depth (only the ${MAX_DEEP} largest changes were): ${left.slice(0, 10).join(', ')}${left.length > 10 ? ', ...' : ''}.`);
   }
   if (deep.length) {
-    try { cand.requirement_to_code = requirementToCode({ cwd, head, entries: d.entries, crits: deep, dl, info, skip: (p) => d.docs.has(p) || d.ruled(p) }); } catch (e) { lim('requirement-to-code ranking', e); }
+    try { cand.requirement_to_code = requirementToCode({ cwd, head, entries: d.entries, crits: deep, dl, info, skip: (p) => d.docs.has(p) || d.ruled(p) || (docLike(p) && !/\.feature$/i.test(p)) }); } catch (e) { lim('requirement-to-code ranking', e); }
     try { cand.occurrences = occurrences({ cwd, head, crits: deep.filter((c) => c.deltas.removed.length), maps, dl, info }); } catch (e) { lim('occurrence search', e); }
   }
   if (info.cut) cand.limitations.push(`The ${Math.round(budgetMs / 1000)} s time budget was reached; code, test and occurrence search for the changed requirements is partial.`);
   if (info.valuesCapped) cand.limitations.push(`Occurrence search covers only the first ${MAX_VALUES} changed values.`);
   // Weak models drown in long lists (pilot: 33.7 KB, truncated in the prompt): keep the top TOP_CAND ranked code and test windows per criterion. Ranking is unchanged.
-  for (const r of cand.requirement_to_code) { r.code = r.code.slice(0, TOP_CAND); r.tests = r.tests.slice(0, TOP_CAND); }
+  for (const r of cand.requirement_to_code) {
+    const dropped = [...r.code.slice(TOP_CAND), ...r.tests.slice(TOP_CAND)];
+    r.code = r.code.slice(0, TOP_CAND); r.tests = r.tests.slice(0, TOP_CAND);
+    const shown = new Set([...r.code, ...r.tests].map((w) => w.path)), more = [...new Set(dropped.map((w) => w.path))].filter((p) => !shown.has(p)).slice(0, MAX_MORE);
+    if (dropped.length) { if (more.length) r.more = more; cand.limitations.push(`${dropped.length} more code/test candidate(s) for ${r.criterion} not shown (top ${TOP_CAND} kept)${more.length ? ': ' + more.join(', ') : ''}.`); } // the cut is visible, not silent
+  }
   const note = fitCandidates(cand);
   if (note) cand.limitations.push(note);
 
@@ -1056,5 +1081,5 @@ if (require.main === module) {
   }
 }
 
-module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, isTestPath, pathKind,
+module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, sizeVariants, isTestPath, pathKind,
   codeHunks, matchGlob, testScope, classify, namedDocs, blocksOf, run, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP };
