@@ -187,7 +187,7 @@ function trackerRefs({ title = '', branch = '', texts = [] }) {
   const add = (id, tracker) => { if (!out.has(id.toLowerCase())) out.set(id.toLowerCase(), `${id} (${tracker})`); };
   for (const t of [title, ...texts]) for (const [re, tracker, key] of TRACKER_URLS) for (const m of String(t).matchAll(re)) add(key ? m[1].toUpperCase() : m[0].replace(/[?#].*$/, '').replace(/[.,;:!]+$/, '').slice(0, 100), tracker);
   const keys = [...String(title).matchAll(/(?<![\w/.-])([A-Z]{2}[A-Z0-9]{0,8}-[1-9]\d{0,6})(?!\w|\.\d)/g)].map((m) => m[1]);
-  if (!/^(?:dependabot|renovate)\//i.test(branch)) keys.push(...[...String(branch).matchAll(/(?:^|\/)([a-z]{2}[a-z0-9]{0,8}-[1-9]\d{0,6})(?![a-z0-9]|\.\d)/gi)].map((m) => m[1]));
+  if (!/^(?:dependabot|renovate)\//i.test(branch)) keys.push(...[...String(branch).matchAll(/(?:^|\/)([a-z]{2}[a-z0-9]{0,8}-[1-9]\d{0,6})(?![a-z0-9]|\.\d)(?!-\d{1,2}-\d{1,2})/gi)].map((m) => m[1]));
   for (const k of keys) if (!NOT_TRACKER_KEY.test(k.split('-')[0])) add(k.toUpperCase(), 'Jira-style key');
   const all = [...out.values()];
   return all.length > MAX_TRACKER_REFS ? [...all.slice(0, MAX_TRACKER_REFS), `${all.length - MAX_TRACKER_REFS} more`] : all;
