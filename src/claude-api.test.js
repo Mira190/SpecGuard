@@ -1067,6 +1067,66 @@ test('fail-on-error.js: incomplete without engine-error, with a non-configuratio
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// unit rooms: one unit part per room (audit-unit-rooms.json), no document blocks at all
+function roomRepo(t, env = {}, rooms = [['aaaaaaaa'], ['bbbbbbbb'], ['cccccccc']]) {
+  const name = { aaaaaaaa: 'lib/a.js', bbbbbbbb: 'lib/b.js', cccccccc: 'lib/c.js' }, fn = { aaaaaaaa: 'alpha', bbbbbbbb: 'beta', cccccccc: 'gamma' };
+  const ok = (req) => {
+    const u = req.body.messages[0].content, ids = [...u.matchAll(/^([0-9a-f]{8})\tlib\//gm)].map((m) => m[1]);
+    return good({ content: [{ type: 'text', text: JSON.stringify({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], unit_findings: ids.map((id) => ({ unit: id, kind: 'missing_test', path: name[id], line: 1, quote: `function ${fn[id]}() {}`, title: 't' })) }) }] });
+  };
+  const r = repo(t, { 'lib/a.js': 'function alpha() {}\n', 'lib/b.js': 'function beta() {}\n', 'lib/c.js': 'function gamma() {}\n' }, {
+    'audit-candidates.txt': '', 'audit-docs.txt': '', 'audit-meta.json': JSON.stringify({ max_requirements: 80, units: { total: 3, picked: 3 }, max_units: 12 }),
+    'audit-unit-rooms.json': JSON.stringify(rooms),
+    'audit-units.txt': ['aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\t-\n', 'bbbbbbbb\tlib/b.js\t1\tw\tnone\t-\t-\t-\n', 'cccccccc\tlib/c.js\t1\tw\tnone\t-\t-\t-\n'].join('') }, { CHECK: 'audit', ...env });
+  return { ...r, answers: (f) => { r.h.answers[0] = (req) => f(req, ok); } };
+}
+const unitsIn = (c) => [...c.body.messages[0].content.matchAll(/^([0-9a-f]{8})\tlib\//gm)].map((m) => m[1]);
+
+test('unit rooms: three rooms make three unit parts (one call each, only that room\'s units in the prompt); every finding is merged; the run is not split when there is one room', async (t) => {
+  const s = roomRepo(t);
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.deepEqual(s.h.calls.map(unitsIn), [['aaaaaaaa'], ['bbbbbbbb'], ['cccccccc']]);
+  assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.unit), ['aaaaaaaa', 'bbbbbbbb', 'cccccccc']);
+  assert.deepEqual(JSON.parse(s.h.file('scan-parts.json')), { calls: 3, failed: [], dropped: [] });
+  assert.match(s.h.file('engine-notes'), /scan in 3 calls/);
+  const one = roomRepo(t, {}, [['aaaaaaaa', 'bbbbbbbb', 'cccccccc']]); // control: one room is today's single call
+  one.answers((req, ok) => ok(req));
+  await one.h.go({ GITHUB_WORKSPACE: one.root });
+  assert.equal(one.h.calls.length, 1);
+  assert.equal(one.h.file('scan-parts.json'), null, 'no scan-parts.json for a single call');
+});
+
+test('unit rooms: a budget for two calls drops the third unit part; its units are listed as not reached (droppedUnits), the estimate of what was sent stays under the budget', async (t) => {
+  const env = { MODEL: 'claude-sonnet-5-5', MAX_OUTPUT_TOKENS: '4000' }, all = roomRepo(t, { ...env, MAX_BUDGET_USD: '5' });
+  all.answers((req, ok) => ok(req));
+  await all.h.go({ GITHUB_WORKSPACE: all.root });
+  assert.equal(all.h.calls.length, 3);
+  const per = api.worstCase('claude-sonnet-5-5', 0, Math.max(...all.h.calls.map((c) => Buffer.byteLength(c.body.messages[0].content) + Buffer.byteLength(JSON.stringify(c.body.system || '')))), 4000).usd;
+  const s = roomRepo(t, env);
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String((per * 2.5).toFixed(4)) });
+  assert.deepEqual(s.h.calls.map(unitsIn), [['aaaaaaaa'], ['bbbbbbbb']]);
+  const parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.deepEqual(parts.droppedUnits, ['cccccccc']);
+  assert.deepEqual(parts.dropped, []);
+  assert.equal(JSON.parse(s.h.file('findings.json')).unit_findings.length, 2);
+  assert.match(s.h.file('engine-notes'), /1 unit not reached \(max_budget_usd\)/);
+});
+
+test('unit rooms: one unit part failing (529) leaves only its own units unseen; the other parts\' findings are kept and its pack-cut covers the parts that answered', async (t) => {
+  const s = roomRepo(t);
+  s.answers((req, ok) => (unitsIn(req)[0] === 'bbbbbbbb' ? err(529, 'overloaded_error', 'Overloaded') : ok(req)));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.unit), ['aaaaaaaa', 'cccccccc']);
+  const parts = JSON.parse(s.h.file('scan-parts.json'));
+  assert.equal(parts.failed.length, 1);
+  assert.equal(parts.failed[0].part, 'units');
+  assert.deepEqual(parts.failed[0].units, ['bbbbbbbb'], 'the failed part records which units it held');
+  assert.notEqual(s.h.file('pack-cut.txt'), null, 'the parts that answered still write their pack-cut');
+  assert.equal(s.h.file('engine-status'), null, 'a partial success');
+});
+
 // --- PR pack: large changed and candidate files are sliced around the diff's own hunks, never kept as a head cut ---
 const hunkDiff = (p, start, lines) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -${start - 1},0 +${start},${lines.length} @@\n${lines.map((l) => `+${l}`).join('\n')}\n`;
 const padLine = (n = 900) => `// ${'x'.repeat(n)}`;
