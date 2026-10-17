@@ -563,7 +563,7 @@ test('action.yml: claude_mode defaults to api, max_output_tokens to 32000, and b
 
 // --- big candidate tests: relevant slices around the changed symbols instead of the head ---
 const bigTest = (hit) => Array.from({ length: 600 }, (_, i) => `test('case ${i}', () => {\n  assert.equal(helper(${i}), ${i});\n  ${hit(i) ? 'computeTotal(1);' : 'ok();'}\n});\n`).join('\n'); // 3000 lines, 5 per case: case i starts at line 5i+1, its call is on 5i+3
-const sliceRepo = (t, hit, ctxExtra = {}) => repo(t, { 'src/svc.js': 'const x = 1;\nfunction computeTotal(a) {\n  return a;\n}\n', 'test/svc.test.js': bigTest(hit) }, {
+const sliceRepo = (t, hit, ctxExtra = {}, pre = '') => repo(t, { 'src/svc.js': 'const x = 1;\nfunction computeTotal(a) {\n  return a;\n}\n', 'test/svc.test.js': pre + bigTest(hit) }, {
   'files.txt': 'src/svc.js\n', 'test-candidates.txt': 'src/svc.js\n  test/svc.test.js  (same stem)\n',
   'diff.numbered.txt': 'diff --git a/src/svc.js b/src/svc.js\n--- a/src/svc.js\n+++ b/src/svc.js\n@@ -1,1 +1,4 @@\n   1 |  const x = 1;\n   2 | +function computeTotal(a) {\n   3 | +  return a;\n   4 | +}\n', ...ctxExtra });
 
@@ -577,6 +577,13 @@ test('context pack: a test file over its cap is shown as the relevant slices (he
   assert.ok(!u.includes('\n 100| '), 'the head is not used past the first 30 lines');
   assert.match(u, /"relevant slices" shows bounded windows[^]*omitted code may contain assertions or indirect coverage/);
   assert.equal(r.h.file('pack-cut.txt'), '', 'every test that mentions the symbol is visible: not listed as cut');
+});
+
+test('context pack: an import line that names the symbol is not a cut test: the slices stay complete and the file is not listed as cut', async (t) => {
+  const r = sliceRepo(t, (i) => i === 400, {}, "const { computeTotal } = require('../src/svc');\n");
+  await r.go();
+  assert.doesNotMatch(r.user(), /truncated at the search window/);
+  assert.equal(r.h.file('pack-cut.txt'), '');
 });
 
 test('context pack: a symbol counts only as a whole word: recomputeTotal is no reference to computeTotal (the file is omitted and listed as cut, no head)', async (t) => {
