@@ -1,0 +1,446 @@
+{
+  "cutoff": "2026-10-17T02:48:29.339Z",
+  "main": "ab2cfc0aafe098d5e47704ebe36df85d687847e5",
+  "pull_requests": [
+    {
+      "number": 251,
+      "title": "Cover guard: tests that only share an identifier with the diff do not demote a missing_test",
+      "state": "open",
+      "merged_at": null,
+      "head": "34709585be3f7b787a74671ca54183f94c3d876c",
+      "url": "https://github.com/Mira190/SpecGuard/pull/251"
+    },
+    {
+      "number": 252,
+      "title": "Scan: allow a non-default branch when the run reads and writes no scan state",
+      "state": "open",
+      "merged_at": null,
+      "head": "494a9fa9b3ca860b857508bf795f4ff69ea5ca99",
+      "url": "https://github.com/Mira190/SpecGuard/pull/252"
+    },
+    {
+      "number": 250,
+      "title": "Docs: goal completion, full-repo audit and unknown-unknown assessment (2026-10-17)",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:37:17Z",
+      "head": "3e512921edbe51dc492b7ffd1454c45ec5cddc12",
+      "url": "https://github.com/Mira190/SpecGuard/pull/250"
+    },
+    {
+      "number": 249,
+      "title": "Test candidates: rank tests that use the identifiers the diff changes, and stop generic stems filling the cap",
+      "state": "closed",
+      "merged_at": "2026-10-17T02:35:39Z",
+      "head": "8cad03c03228e76701cffbf0ea0d0e2b408ef2f0",
+      "url": "https://github.com/Mira190/SpecGuard/pull/249"
+    }
+  ],
+  "runs": [
+    {
+      "id": 38996261102,
+      "sha": "34709585be3f7b787a74671ca54183f94c3d876c",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38996261102"
+    },
+    {
+      "id": 38996181974,
+      "sha": "494a9fa9b3ca860b857508bf795f4ff69ea5ca99",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38996181974"
+    },
+    {
+      "id": 38996053676,
+      "sha": "9bb42c485c8660ac6664386e0d224301ea46478f",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38996053676"
+    },
+    {
+      "id": 38996018481,
+      "sha": "53438797b259ae9c29e73ea3afe1085258d9b83b",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38996018481"
+    },
+    {
+      "id": 38996010022,
+      "sha": "b63b993971c58dcd3ff178223056616b3fc02c45",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38996010022"
+    }
+  ],
+  "jobs": {
+    "38996053676": {
+      "jobs": [
+        {
+          "id": 117288753248,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38996053676,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        },
+        {
+          "id": 117288753463,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 38996053676,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js eval/trace-recall/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        }
+      ]
+    },
+    "38996181974": {
+      "jobs": [
+        {
+          "id": 117289139273,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38996181974,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js eval/trace-recall/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        },
+        {
+          "id": 117289139402,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38996181974,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        }
+      ]
+    },
+    "38996261102": {
+      "jobs": [
+        {
+          "id": 117289383715,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38996261102,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run node --test src/*.test.js bin/*.test.js eval/*.test.js eval/trace-recall/*.test.js $(find eval-sandbox -name \"*.test.js\" 2>/dev/null)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run diff -r skills/test-review .github/skills/test-review && diff ccr/test-review.instructions.md .github/instructions/test-review.instructions.md",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            }
+          ]
+        },
+        {
+          "id": 117289383904,
+          "name": "dogfood",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 38996261102,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Post Run ./",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "p251_failure_excerpts": [
+    "2026-10-17T02:44:50.9631063Z # (node:28934) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9631772Z # (node:28934) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9648380Z # (node:29172) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9649407Z # (node:29172) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9649882Z # (node:29929) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9650580Z # (node:29929) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9651160Z # (node:29945) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9651862Z # (node:29945) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9652294Z # (node:29980) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9652989Z # (node:29980) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9653415Z # (node:30035) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9654102Z # (node:30035) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9654536Z # (node:30073) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9655224Z # (node:30073) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9655662Z # (node:32161) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9656352Z # (node:32161) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9656783Z # (node:32427) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9657599Z # (node:32427) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9658040Z # (node:32459) Warning: Accessing non-existent property 'isTestPath' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9658990Z # (node:32459) Warning: Accessing non-existent property 'testScope' of module exports inside circular dependency",
+    "2026-10-17T02:44:50.9808413Z # tests 1334",
+    "2026-10-17T02:44:50.9808583Z # pass 1310",
+    "2026-10-17T02:44:50.9808664Z # fail 20",
+    "2026-10-17T02:44:50.9809091Z # skipped 3",
+    "2026-10-17T02:44:50.9809180Z # todo 1"
+  ]
+}
