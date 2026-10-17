@@ -1447,3 +1447,12 @@ test('PR pack (control): review files that fit together are shown whole', (t) =>
   assert.ok(p.text.includes('name="src/a1.js" note="full file, line-numbered"') && p.text.includes('name="src/a2.js" note="full file, line-numbered"'));
   assert.deepEqual(p.notWhole, []);
 });
+
+test('PR pack: a changed test reached first as a candidate keeps its hunk when the candidates before it spent its source\'s share', (t) => {
+  const cand = (k) => [`tests/c${k}.test.js`, Array.from({ length: 90 }, (_, i) => (i === 3 ? 'test(\'x\', () => { alphaThing(); });' : padLine(70))).join('\n') + '\n']; // ~7.5 KB each: whole at their room, three spend the share
+  const r = tmpRepo(t, { 'src/a.js': 'function alphaThing() { return 1; }\n', 'tests/own.test.js': "test('own', () => { alphaThing(); /* CHANGED_OWN */ });\n", ...Object.fromEntries([1, 2, 3].map(cand)) }, {
+    'files.txt': 'src/a.js\ntests/own.test.js\n', 'test-candidates.txt': 'src/a.js\n  tests/c1.test.js  (name)\n  tests/c2.test.js  (name)\n  tests/c3.test.js  (name)\n  tests/own.test.js  (name)\n',
+    'diff.patch': hunkDiff('src/a.js', 1, ['function alphaThing() { return 1; }']) + hunkDiff('tests/own.test.js', 1, ["test('own', () => { alphaThing(); /* CHANGED_OWN */ });"]) });
+  const p = api.contextPack(r.ctx, r.root, 40000);
+  assert.ok(p.text.includes('CHANGED_OWN'), 'the changed test\'s added line is shown although its source\'s share is spent');
+});

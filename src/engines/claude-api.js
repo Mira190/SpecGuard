@@ -178,6 +178,7 @@ function slices(src, syms, room, seeds = [], [back, span] = [30, 80]) { // back,
 // A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
 // a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Partial or omitted files are returned in notWhole for per-block verification (separate from the unit pack-cut.txt). ponytail: no per-file fairness, first files first.
 const MIN_CAND = 8 * 1024; // a candidate test's least room, so one early candidate cannot starve the later ones (the total budget still bounds it)
+// ponytail: SHARE_AT/SHARE_X were tuned on 9 SpecGuard PRs only (1.5x lost #255 audit-units.js lines); re-tune on a second repo's PRs
 const SHARE_AT = 0.5, SHARE_X = 2; // review files together over SHARE_AT of the pack: each is given SHARE_X times a fair share of what is left (its hunks need more than its tests)
 const WIN = 40, HEAD = 15, UNIT_SYMS = 150; // UNIT_SYMS: names of a unit part searched for in its tests
 function windowPack(root, locs, limit) {
