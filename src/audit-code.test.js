@@ -968,7 +968,7 @@ test('run: a part of a reached unit dropped for the budget is named in a line an
   const v = vis(d.calls.summary);
   assert.match(v, /\*\*Unit parts not reached:\*\* 2 parts of units that were otherwise reviewed: max_budget_usd did not cover the call that held them: `src\/js\/orders\.js` part 2, `src\/js\/orders\.js` part 3\./);
   assert.doesNotMatch(v, /Not reviewed this run/);
-  assert.match(/^Units: .*$/m.exec(v)[0], /3 selected this run = 3 reviewed whole/);
+  assert.match(/^Units: .*$/m.exec(v)[0], /3 selected this run = 2 reviewed whole \+ 1 reviewed in part \(2 parts not reached\)/);
   assert.deepEqual(d.calls.outputs, { status: 'incomplete', reason: '2 unit parts not reached (max_budget_usd)' });
   const ok = await post(t, { env, files: { 'audit-inventory.json': INV({ eligible: 140 }), 'findings.json': result([uf()]), 'scan-parts.json': { calls: 2, failed: [], dropped: [] } } });
   assert.doesNotMatch(vis(ok.calls.summary), /Unit parts not reached/);
@@ -988,6 +988,21 @@ test('run: a part of a reached unit dropped for the budget is named in a line an
     const ok = await run(t);
     assert.deepEqual(ok.calls.outputs, { status: 'complete' });
     assert.match(vis(ok.calls.summary), /Reviewed in parts.*parts 1, 2 of 2 \(lines 1-4\)/);
+  });
+
+  const E = { eligible: 140 }, funnel = (d) => /^Units: .*$/m.exec(vis(d.calls.summary))[0];
+  test('run: funnel does not call a unit with a part not reached "reviewed whole" (parts_left, engine-dropped part, failed part); control: all parts ran, count unchanged', async (t) => {
+    assert.match(funnel(await run(t, { ks: [1], inv: { ...E, parts_left: [{ path: 'src/js/orders.js', part: 2, of: 2 }] } })), /3 selected this run = 2 reviewed whole \+ 1 reviewed in part \(1 part not reached\)/);
+    assert.match(funnel(await run(t, { inv: E, sp: { calls: 1, failed: [], dropped: [], droppedParts: [`${U1}:2`] } })), /3 selected this run = 2 reviewed whole \+ 1 reviewed in part \(1 part not reached\)/);
+    assert.match(funnel(await run(t, { inv: E, sp: { calls: 2, failed: [{ part: 'units', units: [U1], keys: [`${U1}:2`], reason: 'x' }], dropped: [] } })), /2 reviewed whole \+ 1 reviewed in part \(1 part not reached\)/);
+    const ok = funnel(await run(t, { inv: E }));
+    assert.match(ok, /3 selected this run = 3 reviewed whole/);
+    assert.doesNotMatch(ok, /in part/);
+  });
+  test('run: parts_left capped at 10 of 72: a multi-part unit outside the list is not claimed whole; the part total is the true 72', async (t) => {
+    const left = Array.from({ length: 10 }, () => ({ path: 'src/js/other.js', part: 2, of: 3 }));
+    const l = funnel(await run(t, { inv: { ...E, parts_left: left, parts_left_n: 72 } }));
+    assert.match(l, /3 selected this run = 2 reviewed whole \+ 1 reviewed in part \(72 parts not reached\)/);
   });
 
   test('run: a stateful rotation defers later parts on purpose: no parts_left, still complete', async (t) => {
