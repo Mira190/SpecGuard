@@ -1,0 +1,96 @@
+{
+  "captured_at": "2026-10-17T02:44:11.311Z",
+  "main": "ab2cfc0aafe098d5e47704ebe36df85d687847e5",
+  "p251_head_observed": "9bb42c485c8660ac6664386e0d224301ea46478f",
+  "p252_head_observed": "53438797b259ae9c29e73ea3afe1085258d9b83b",
+  "open_prs": [
+    {
+      "number": 8,
+      "title": "Add discount codes",
+      "head": "b00e58bf4a70ca1150dcda4cb72339b20fbbbed6",
+      "url": "https://github.com/Mira190/SpecGuard/pull/8"
+    },
+    {
+      "number": 9,
+      "title": "Add discount codes",
+      "head": "c58dd83cdc040072bda8d4281628606ef5592647",
+      "url": "https://github.com/Mira190/SpecGuard/pull/9"
+    },
+    {
+      "number": 199,
+      "title": "docs: first-principles review and unknown-unknown probes",
+      "head": "7bc1cb3f2103d8e387cd6a9232333b9d2ac23f99",
+      "url": "https://github.com/Mira190/SpecGuard/pull/199"
+    },
+    {
+      "number": 252,
+      "title": "Scan: allow a non-default branch when the run reads and writes no scan state",
+      "head": "53438797b259ae9c29e73ea3afe1085258d9b83b",
+      "url": "https://github.com/Mira190/SpecGuard/pull/252"
+    },
+    {
+      "number": 251,
+      "title": "Cover guard: tests that only share an identifier with the diff do not demote a missing_test",
+      "head": "9bb42c485c8660ac6664386e0d224301ea46478f",
+      "url": "https://github.com/Mira190/SpecGuard/pull/251"
+    }
+  ],
+  "runs": [
+    {
+      "id": 38996018481,
+      "sha": "53438797b259ae9c29e73ea3afe1085258d9b83b",
+      "status": "pending",
+      "conclusion": null,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38996018481"
+    },
+    {
+      "id": 38996010022,
+      "sha": "b63b993971c58dcd3ff178223056616b3fc02c45",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38996010022"
+    },
+    {
+      "id": 38995834823,
+      "sha": "5cd5293a666d9f3fcd2785ff0eb75e4c4f1299cb",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38995834823"
+    },
+    {
+      "id": 38995709971,
+      "sha": "1c17ee36739eb5d5bcef1e00d27f59f15000e468",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38995709971"
+    },
+    {
+      "id": 38995641146,
+      "sha": "ab2cfc0aafe098d5e47704ebe36df85d687847e5",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38995641146"
+    },
+    {
+      "id": 38995563606,
+      "sha": "3e512921edbe51dc492b7ffd1454c45ec5cddc12",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38995563606"
+    },
+    {
+      "id": 38995537094,
+      "sha": "c474a2c4408b41f1a890ebdedc4b3fd0fa16e149",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38995537094"
+    },
+    {
+      "id": 38995369880,
+      "sha": "a476dde0f1cfcb4ab2d03ef2d2e05b756ba2a1c5",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38995369880"
+    }
+  ]
+}
