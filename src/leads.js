@@ -145,22 +145,23 @@ const NEGATED = /\b(?:assert(?:\.ok)?|t\.ok)\(\s*!/;
 const WHAT = { truthy: 'is truthy', exists: 'is not null/undefined', type: 'has the expected type' };
 const truthyArg = (x) => { // the argument of assert/assertTrue: a bare reference, a not-null check or a typeof check
   let m; const bare = x.replace(/^!!/, '');
-  if (REF.test(bare) && !/^(?:true|false|null|undefined|None|True|False|NaN)$/.test(bare)) return { x: bare, what: 'truthy' };
+  if (REF.test(bare) && !/^(?:true|false|null|undefined|None|True|False|NaN)$/.test(bare) && !require('./post').boolName(bare)) return { x: bare, what: 'truthy' };
   if ((m = /^(.+?)\s*(?:!==?|is\s+not)\s*(?:null|undefined|None)$/.exec(x))) return { x: m[1], what: 'exists' };
   if ((m = /^typeof\s+(.+?)\s*===?\s*['"]\w+['"]$/.exec(x))) return { x: m[1], what: 'type' };
   return null;
 };
 const lastArg = (a) => (a.length > 1 && /^['"`]/.test(a[0]) ? a[1] : a[0]) || ''; // JUnit4 puts the message first
-function weakOf(text, next) { // -> {x, what} | null
+function weakOf(text, next, rest = []) { // -> {x, what} | null
   let m, a;
   const ok = require('./post').okArg(text); // assert.ok(f(x)) / assert(x): the one classifier PR mode uses (post.js); required lazily
   if (ok) return { x: ok, what: 'truthy' };
   const at = (re) => { m = re.exec(text); return m && args(text, m.index + m[0].length - 1); };
-  if ((a = at(/(?<![.\w$])assert(?:\.ok)?\s*\(/)) && (a.length === 1 || (a.length === 2 && /^['"`]/.test(a[1])))) return truthyArg(a[0]);
+  if ((a = at(/(?:(?<![.\w$])|(?<=\bt\.))assert(?:\.ok)?\s*\(/)) && (a.length === 1 || (a.length === 2 && /^['"`]/.test(a[1])))) return truthyArg(a[0]);
   if ((a = at(/\bassert\.not(?:Strict)?Equal\s*\(/)) && a.length === 2 && /^(?:null|undefined)$/.test(a[1])) return { x: a[0], what: 'exists' };
-  if ((m = /\bexpect\s*\((.+)\)\s*\.(not\.)?(toBeDefined|toBeTruthy|toBeNull|toBeUndefined|toBeInstanceOf|toBeTypeOf)\s*\(/.exec(text))) {
+  if ((m = /\bexpect\s*\((.+)\)\s*\.(not\.)?(toBeDefined|toBeTruthy|toBeNull|toBeUndefined)\s*\(/.exec(text))) {
     const nil = /Null$|Undefined$/.test(m[3]); // toBeNull() alone is a value check; only its negation is weak
-    return nil !== !!m[2] ? null : { x: m[1], what: m[3] === 'toBeTruthy' ? 'truthy' : nil || m[3] === 'toBeDefined' ? 'exists' : 'type' };
+    if (nil !== !!m[2] || (m[3] === 'toBeTruthy' && require('./post').boolName(m[1]))) return null;
+    return { x: m[1], what: m[3] === 'toBeTruthy' ? 'truthy' : 'exists' };
   }
   if ((a = at(/\b(?:self\.)?assertTrue\s*\(|\bAssert\.IsTrue\s*\(/))) return truthyArg(lastArg(a));
   if ((a = at(/\b(?:self\.)?(?:assertIsNotNone|assertNotNull|assertIsNotNull)\s*\(|\bAssert\.(?:IsNotNull|NotNull)\s*\(|\b(?:assert|require)\.NotNil\s*\(/))) {
@@ -170,7 +171,7 @@ function weakOf(text, next) { // -> {x, what} | null
   }
   if ((m = /^\s*assert\s+(?!\()(.+?)(?:\s*,\s*['"].*)?$/.exec(text))) return truthyArg(m[1]);
   // ponytail: `if err == nil { t.Fatal }` is skipped (an expected-error check); other nil checks followed by t.Fatal/t.Error are leads
-  if ((m = /^\s*if\s+([A-Za-z_][\w.]*)\s*==\s*nil\s*\{/.exec(text)) && !/^err/i.test(m[1]) && next.some((l) => /\bt\.(?:Fatal|Error)/.test(l))) return { x: m[1], what: 'exists' };
+  if ((m = /^\s*if\s+([A-Za-z_][\w.]*)\s*==\s*nil\s*\{/.exec(text)) && !/^err/i.test(m[1]) && next.some((l) => /\bt\.(?:Fatal|Error)/.test(l)) && !/^\s*\}\s*else\b/.test(next[1] || '') && !rest.some((l) => new RegExp(`(?<![\\w$.])${m[1].replace(/\./g, '\\.')}(?![\\w$])`).test(l))) return { x: m[1], what: 'exists' }; // an else branch or a later line naming the variable pins it
   return null;
 }
 // -> [{line, text, x, what}] weak assertions in one test file, minus those whose test block also pins a value of the same expression.
@@ -180,9 +181,9 @@ function weakCandidates(src) {
   const out = [];
   ls.forEach((text, i) => {
     if (text.length > 400 || quiet(text)) return;
-    const w = weakOf(text, ls.slice(i + 1, i + 3));
-    if (!w || !w.x) return;
     const lo = starts.filter((s) => s <= i).pop() ?? 0, hi = starts.find((s) => s > i) ?? ls.length;
+    const w = weakOf(text, ls.slice(i + 1, i + 3), ls.slice(i + 3, hi));
+    if (!w || !w.x) return;
     const same = REF.test(w.x) ? new RegExp(`(?<![\\w$])${w.x.replace(/[$.]/g, '\\$&')}(?![\\w$])`) : { test: (l) => l.includes(w.x) };
     if (ls.slice(lo, hi).some((l) => VALUE.test(l) && same.test(l))) return;
     const callee = /^([A-Za-z_$][\w$.]*)\(/.exec(w.x); // assert.ok(f(x)) and assert.ok(!f(y)) in one test: f's boolean is checked both ways
