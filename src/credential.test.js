@@ -131,7 +131,8 @@ test('workflows: the dogfood job and the manual run use llm_token (SPECGUARD_LLM
   assert.equal(dog.with.model, 'haiku-5.5');
   const review = Object.values(run.jobs).flatMap((j) => j.steps || []).find((s) => s.uses === './.specguard-src');
   assert.equal(review.with.llm_token, TOKEN);
-  assert.equal(review.with.model, 'haiku-5.5');
+  assert.equal(review.with.model, '${{ inputs.model }}'); // the manual run's model input defaults to haiku-5.5
+  assert.equal((run.on || run[true]).workflow_dispatch.inputs.model.default, 'haiku-5.5');
   assert.equal(review.with.copilot_token, '${{ secrets.SPECGUARD_COPILOT_TOKEN }}', 'the Copilot PAT keeps working');
   assert.equal((reuse.on || reuse.true).workflow_call.secrets.llm_token.required, false);
   assert.equal((reuse.on || reuse.true).workflow_call.secrets.copilot_token.required, false);
