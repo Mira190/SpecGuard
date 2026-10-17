@@ -324,6 +324,14 @@ test('M5: the same fp inline and in sum counts once; counts without sum add noth
   assert.equal(findingsOf(old).length, 1);
 });
 
+test('label ids: a summary-to-inline promotion keeps the id; different fps at one line differ; Copilot ids stay per comment', () => {
+  const { findingId } = require('./label-export');
+  const base = { tool: 'specguard', repo: 'o/r', pr: 5, path: 'b.js', line: 4 };
+  assert.equal(findingId({ ...base, ref: H('b', 16) }), findingId({ ...base, ref: H('b'), line: 9, path: 'c.js' }));
+  assert.notEqual(findingId({ ...base, ref: H('b') }), findingId({ ...base, ref: H('c') }));
+  assert.notEqual(findingId({ tool: 'copilot', repo: 'o/r', pr: 5, path: 'b.js', line: 4, ref: '1' }), findingId({ tool: 'copilot', repo: 'o/r', pr: 5, path: 'b.js', line: 4, ref: '2' }));
+});
+
 test('M5: a summary-only entry without a title (older counts) has no claim text: left out of the sheet, counted in the report', () => {
   const ds = mixed({ sum: [{ fp: H('b', 16), path: 'b.js', line: 4, kind: 'missing_test' }] });
   const f = findingsOf(ds);
