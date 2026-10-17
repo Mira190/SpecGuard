@@ -7,6 +7,7 @@ const { execFileSync } = require('child_process');
 const post = require('./post');
 const { ours } = require('./preflight');
 const { enclosingName } = require('./test-map');
+const { ASSERTION, TEST_DECL, SKIPPED } = post;
 const { version, versionLine } = require('./version');
 const { staticFindings } = require('./audit-units');
 // trace.js's test-path rule; the fallback is a local copy of it in case the export moves (ponytail: keep in sync).
@@ -271,7 +272,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
   const dropped = new Set();
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), notes: out.not_reviewed, file, testFile, dropped });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), symbol: covers && covers.symbol, baseline: baselineOf(tracked), notes: out.not_reviewed, file, testFile, dropped });
   out.unit_dropped = [...dropped]; // units whose finding verification dropped: not "no gap" (see main)
   return out;
 }
@@ -281,7 +282,40 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
 // low: the claude engine's context pack cut a test file the claim depends on
 // (the unit's matched tests for missing_test, the cited file for weak_test); same rule as PR mode: shown in Details, never counted. Also low: covers(c) found a test file that already contains the cited
 // line's error message or literal (src/test-map.js, shared with PR mode): lowWhy names it.
-function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes, file = () => null, testFile = heuristicTest, dropped = new Set() }) {
+// ---- precision gates for scan findings: a claim that a repo-wide symbol hit, a sibling test or a baseline system already answers is low confidence ----
+// A repository tests through baselines (golden files) when >= 200 tracked files sit in a testdata/baselines or tests/baselines tree, or in __snapshots__ directories: { dir, n } of the largest tree, or null.
+// ponytail: path names only; a symbol search by one identifier (whole word, case-sensitive); a sibling test is found by a call of an identifier shared by the cited assertion and the counterexample.
+const BASELINE_MIN = 200, SYMBOL_MAX = 50, SYMBOL_STOP = new Set('exports visit transform process value values result results options config error errors string number object array format parse check method module target handler handlers helper helpers factory'.split(' '));
+function baselineOf(tracked) {
+  if (!tracked) return null;
+  const n = new Map();
+  for (const p of tracked) { const m = /^(.*?(?:testdata\/baselines|tests\/baselines))\//.exec(p), k = m ? m[1] : /(?:^|\/)__snapshots__\//.test(p) ? '__snapshots__' : null; if (k) n.set(k, (n.get(k) || 0) + 1); }
+  const top = [...n].sort((a, b) => b[1] - a[1])[0];
+  return top && top[1] >= BASELINE_MIN ? { dir: top[0], n: top[1] } : null;
+}
+// Another test of the same file (same describe block, or 40 lines each way) calls an identifier that both the cited assertion and the counterexample name, and asserts something: the line of that call, or 0.
+const ID_SKIP = /^(?:expect|assert|should|not|new|this|true|false|null|undefined|return|const|let|var|await|async|function|it|test|describe|to[A-Z]\w*)$/;
+function siblingCall(lines, line, quote, counterexample) {
+  if (!Array.isArray(lines) || typeof counterexample !== 'string') return 0;
+  const ids = (t) => new Set((String(t).match(/[A-Za-z_$][\w$]{2,}/g) || []).filter((x) => !ID_SKIP.test(x))), cx = ids(counterexample), names = [...ids(quote)].filter((x) => cx.has(x));
+  if (!names.length) return 0;
+  const at = (i) => String(lines[i - 1] ?? ''), ind = (i) => at(i).search(/\S|$/), decl = (i) => TEST_DECL.test(at(i));
+  const startOf = (i) => { while (i > 1 && !decl(i)) i--; return i; }, endOf = (i) => { i++; while (i <= lines.length && !decl(i)) i++; return i; };
+  const own = startOf(line), ownEnd = endOf(line);
+  let a = Math.max(1, line - 40), b = Math.min(lines.length, line + 40);
+  for (let i = line; i >= 1; i--) if (/\bdescribe(?:\.\w+)?\s*\(/.test(at(i)) && ind(i) < ind(own)) { a = Math.min(a, i); for (let j = line; j <= lines.length; j++) if (ind(j) === ind(i) && /^\s*[})\]]/.test(at(j))) { b = Math.max(b, j); break; } break; }
+  const call = new RegExp(`(?<![\\w$])(?:${names.map((x) => x.replace(/\$/g, '\\$')).join('|')})\\s*\\(`);
+  for (let i = a; i <= b; i++) {
+    if (i >= own && i < ownEnd || !call.test(at(i))) continue;
+    const s = startOf(i), span = Array.from({ length: endOf(i) - s }, (_, k) => at(s + k));
+    if (s !== own && !SKIPPED.test(span.join('\n')) && span.some((x) => !/^\s*(?:\/\/|#|\/?\*)/.test(x) && ASSERTION.test(x))) return i;
+  }
+  return 0;
+}
+// a unit finding that says there is nothing to report
+const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b/i;
+
+function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbol = null, baseline = null, notes, file = () => null, testFile = heuristicTest, dropped = new Set() }) {
   // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
   const cutTest = (u, c) => {
     const cutTests = u.tests.filter((t) => packCut.has(t));
@@ -290,20 +324,33 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, notes
     return !re || cutTests.some((t) => { const body = file(t); return !body || re.test(body.join('\n')); });
   };
   const out = [], seen = new Set(), key = (q) => String(q).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  let symbols = 0, baselineNoted = 0;
   for (const f of list) {
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
     if (!locate(c)) { notes.push(`${at}: ${solid(f.quote) ? 'the quote was not found at the cited line' : `the quote is under ${MIN_QUOTE} characters`}`); dropped.add(f.unit); continue; }
     if (isDoc(c.path) || (f.kind === 'missing_test') === testFile(c.path)) { notes.push(`${at}: ${f.kind === 'missing_test' ? 'a missing_test cites the unit\'s code, not a test or a document' : `a ${f.kind} cites a test file`}`); dropped.add(f.unit); continue; }
     if (u && u.part && c.path === u.path && (c.line < u.part.a || c.line > u.part.b)) { notes.push(`${at}: outside this run's part of the unit (lines ${u.part.a}-${u.part.b}); that part is reviewed in another run`); continue; }
+    if (NO_GAP.test(f.title) || NO_GAP.test(f.body || '')) { notes.push(`${at}: dropped: the finding says there is no gap`); continue; }
     const fid = sha8(f.unit, f.kind, key(c.quote));
     if (seen.has(fid)) continue;
     seen.add(fid);
     const skeleton = f.skeleton && placeholder(f.skeleton) ? '' : f.skeleton;
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
     const cut = !!u && (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path)), hit = !cut && f.kind === 'missing_test' && covers ? covers(c, u) : null;
+    let gate = null; // still deterministic, but answered elsewhere: baselines, a symbol hit in some test, a sibling test
+    if (!cut && !hit && f.kind === 'missing_test') {
+      if (baseline) { gate = `this repository tests through baselines (${baseline.dir}, ${baseline.n} files); check whether a baseline exercises it`; if (!baselineNoted++) notes.push(`${gate}: every missing_test is shown as low confidence`); }
+      else if (symbol && symbols < SYMBOL_MAX) {
+        const name = enclosingName(file(c.path) || [], c.line);
+        if (name && name.length >= 5 && !SYMBOL_STOP.has(name.toLowerCase())) { symbols++; const h = symbol(name, c.path); if (h) gate = `may be covered by ${h} (${name} is referenced there)`; }
+      }
+    } else if (!cut && f.kind === 'weak_test') {
+      const s = siblingCall(file(c.path), c.line, c.quote, f.counterexample);
+      if (s) gate = `another test in the same file calls it and asserts: ${c.path}:${s}`;
+    }
     const noSketch = f.kind !== 'pushdown' && !skeleton; // no test sketch: "no gap found" findings arrive this way
     const vague = f.kind === 'weak_test' && (!post.counterexampleOk(f.counterexample) || post.refutedBy(c.quote, f.counterexample)); // review F04: a weak test needs a wrong behaviour the assertion still accepts
-    out.push({ ...f, ...c, skeleton, fid, ...(u && u.part ? { part: u.part.k } : {}), low: cut || !!hit || noSketch || vague, ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
+    out.push({ ...f, ...c, skeleton, fid, ...(u && u.part ? { part: u.part.k } : {}), low: cut || !!hit || !!gate || noSketch || vague, ...(hit ? { lowWhy: `a test may already cover this: ${hit}` } : gate ? { lowWhy: gate } : noSketch && !cut ? { lowWhy: 'no test sketch: the finding may not be a gap' } : vague && !cut && { lowWhy: 'no concrete wrong behaviour that the assertion still accepts' }) });
   }
   return out;
 }
