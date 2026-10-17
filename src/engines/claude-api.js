@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The claude adapter's default mode (claude_mode: api): ONE Anthropic Messages API call, no agent loop and no CLI. SpecGuard already inlines the diff, test candidates, leads, requirements and rule files
 // into the prompt (src/prompt.js), so the model needs no tools: the agent loop re-sends the whole context every turn and its cost cannot be bounded up front (two live runs: $3.58 and $3.44 against a $1 budget).
-// Env: CTX PROMPT_FILE (or PROMPT) ANTHROPIC_API_KEY (environment only) MODEL (empty = claude-haiku-5-5) MAX_BUDGET_USD (default 1.00; a HARD bound: checked before the call) MAX_OUTPUT_TOKENS (default 32000) CONTEXT_PACK_BYTES (repository files appended to the prompt, an upper bound, default 150000, 0 = off; shrunk to keep the prompt under 90% of a model's long-context price step; read from GITHUB_WORKSPACE or the cwd) EFFORT (ignored, noted) TIMEOUT (minutes) CHECK (audit = scan schema) FAST_MODELS SCAN_BATCH_BLOCKS (scan: document blocks per call, default 20; more blocks split the scan into parts, src/scan-parts.js).
+// Env: CTX PROMPT_FILE (or PROMPT) ANTHROPIC_API_KEY (environment only) MODEL (empty = claude-haiku-5-5) MAX_BUDGET_USD (default 1.00; a HARD bound: checked before the call) MAX_OUTPUT_TOKENS (default 32000) CONTEXT_PACK_BYTES (repository files appended to the prompt, an upper bound, default 250000, 0 = off; shrunk to keep the prompt under 90% of a model's long-context price step; read from GITHUB_WORKSPACE or the cwd) EFFORT (ignored, noted) TIMEOUT (minutes) CHECK (audit = scan schema) FAST_MODELS SCAN_BATCH_BLOCKS (scan: document blocks per call, default 20; more blocks split the scan into parts, src/scan-parts.js).
 // Files in CTX as in src/engines/README.md: findings.json usage.json engine-status engine-notes engine-error engine-model.json. Never throws, never prints the key.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -52,7 +52,7 @@ function strict(s) {
 // The prompt is "static prefix (skill, references, schema) + --- + per-PR context" (src/prompt.js): the prefix becomes the cached system block, the rest the user message.
 const SPLIT = '\n\n---\n\nContext directory (absolute path):';
 const NO_TOOLS = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Use only the context inlined below; where the answer would need a file you cannot see, mark it unknown and say so. Output only the JSON object.\n\n';
-const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. A block noted "relevant slices" shows bounded windows around textual references to the changed symbols (real line numbers; "…| (lines a-b omitted)" marks the gaps). Its note says when matching tests were truncated or did not fit; omitted code may contain assertions or indirect coverage. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Do not report a missing or weak test when a candidate test file for that code was cut or not included: mark the obligation unknown and say which file was not fully visible. Output only the JSON object.\n\n';
+const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. A block noted "relevant slices" shows bounded windows around the changed lines of the diff and textual references to the changed symbols (real line numbers; "…| (lines a-b omitted)" marks the gaps). Its note says when matching tests were truncated or did not fit; omitted code may contain assertions or indirect coverage. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Do not report a missing or weak test when a candidate test file for that code was cut or not included: mark the obligation unknown and say which file was not fully visible. Output only the JSON object.\n\n';
 function messages(prompt, pack = '') {
   const at = prompt.indexOf(SPLIT);
   const system = at > 0 ? prompt.slice(0, at) : '', user = at > 0 ? prompt.slice(at + 2) : prompt; // keep "---" at the head of the user part
@@ -115,38 +115,63 @@ function diffSymbols(diff, file, leads) { // names on added lines of file (and i
   for (const l of leads.split('\n')) { const m = /^\s+(\S+):\d+ (\S+)$/.exec(l); if (m && m[1] === file) add(m[2]); } // "path:line name" rows of leads.txt
   return [...out];
 }
+function diffSeeds(diff, file) { // 0-based new-file line numbers of the added lines of file (a pure deletion seeds the line after it): the hunks of the diff itself
+  const out = new Set();
+  let cur = null, c = 0, inHunk = false;
+  for (const raw of diff.split('\n')) {
+    if (raw.startsWith('diff --git ')) { cur = null; inHunk = false; continue; }
+    const l = raw.replace(/^\s*\d+ \| /, '');
+    if (!inHunk && l.startsWith('+++ ')) { cur = l === '+++ /dev/null' ? null : l.slice(4).replace(/^"|"$/g, '').replace(/^b\//, ''); continue; }
+    const h = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(l);
+    if (h) { inHunk = true; c = +h[1]; continue; }
+    if (!inHunk || cur !== file) continue;
+    if (l[0] === '+') out.add(c++ - 1); else if (l[0] === '-') out.add(Math.max(0, c - 1)); else if (l[0] !== '\\') c++;
+  }
+  return [...out].sort((a, b) => a - b);
+}
 const TEST_START = /^\s*(?:(?:test|it|describe)\b|def test_|func Test|@Test\b)/, indentOf = (l) => /^\s*/.exec(l)[0].length;
-// -> { text, note, complete } or null (no symbol appears in the file, or no matching block fits). complete: every block that mentions a symbol is shown.
-function slices(src, syms, room) {
-  const n = src.length, re = new RegExp(`(?<![\\w$])(?:${syms.map((x) => x.replace(/\$/g, '\\$')).join('|')})(?![\\w$])`, 'g'), found = new Set(), wins = [];
+// seeds: 0-based lines of the diff's own hunks, treated like a symbol hit. Priority when room runs out: seed windows, then symbol windows, then the head; position order within a class.
+// -> { text, note, complete, coveredTo } or null (no seed or symbol appears in the file, or no matching block fits). complete: every block that mentions a symbol or seed is shown. coveredTo: every seed on lines 1..coveredTo is shown.
+function slices(src, syms, room, seeds = []) {
+  const n = src.length, re = syms.length ? new RegExp(`(?<![\\w$])(?:${syms.map((x) => x.replace(/\$/g, '\\$')).join('|')})(?![\\w$])`, 'g') : null, found = new Set(), wins = [], seedAt = new Set(seeds);
   let truncated = false;
   src.forEach((l, i) => {
-    const m = [...l.matchAll(re)].map((x) => x[0]);
-    if (!m.length) return;
+    const m = re ? [...l.matchAll(re)].map((x) => x[0]) : [], sd = seedAt.has(i);
+    if (!m.length && !sd) return;
     m.forEach((x) => found.add(x));
     let s = i; while (s > 0 && i - s < 30 && !TEST_START.test(src[s])) s--; // up to the enclosing test start, or 30 lines
     let e = i; while (e + 1 < n && e + 1 - s < 80 && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))) e++; // down to the next test at the same or lower indentation, 80 lines at most
     if (!TEST_START.test(src[s]) || (e + 1 < n && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s])))) truncated = true;
-    wins.push({ s, e, m: true });
+    wins.push({ s, e, m: true, k: sd ? 2 : 1 });
   });
   if (!wins.length) return null;
-  wins.push({ s: 0, e: Math.min(30, n) - 1, m: false }); // imports and helpers
+  wins.push({ s: 0, e: Math.min(30, n) - 1, m: false, k: 0 }); // imports and helpers
   wins.sort((a, b) => a.s - b.s || b.e - a.e);
   const merged = [];
-  for (const w of wins) { const p = merged[merged.length - 1]; if (p && w.s <= p.e + 1) { p.e = Math.max(p.e, w.e); p.m = p.m || w.m; } else merged.push({ ...w }); }
+  for (const w of wins) { const p = merged[merged.length - 1]; if (p && w.s <= p.e + 1) { p.e = Math.max(p.e, w.e); p.m = p.m || w.m; p.k = Math.max(p.k, w.k); } else merged.push({ ...w }); }
+  merged.forEach((w) => { w.s0 = w.e; });
   const body = (w) => Array.from({ length: w.e - w.s + 1 }, (_, k) => `${String(w.s + k + 1).padStart(4)}| ${src[w.s + k]}`).join('\n'), MARK = 40; // MARK: room for an omission marker
   let used = 0, dropped = false;
-  const kept = merged.filter((w) => { const c = Buffer.byteLength(body(w)) + 1 + MARK; if (used + c <= room) { used += c; return true; } if (w.m) dropped = true; return false; });
+  const keep = new Set();
+  for (const w of [...merged].sort((a, b) => b.k - a.k || a.s - b.s)) { // a window too big for what is left is cut to its first lines (ponytail: a long run of added lines is shown from its top)
+    let c = Buffer.byteLength(body(w)) + 1 + MARK;
+    if (used + c > room && w.k === 2 && room - used > 400) while (w.e > w.s && used + c > room) { w.e = w.s + Math.floor((w.e - w.s) / 2); c = Buffer.byteLength(body(w)) + 1 + MARK; }
+    if (used + c <= room) { used += c; keep.add(w); } else if (w.m) dropped = true;
+  }
+  const kept = merged.filter((w) => keep.has(w));
   if (!kept.some((w) => w.m)) return null;
+  dropped = dropped || kept.some((w) => w.m && w.e < w.s0);
+  const cover = (i) => kept.some((w) => w.m && i >= w.s && i <= w.e), miss = seeds.find((i) => !cover(i)), coveredTo = miss === undefined ? n : miss;
   const out = [], gap = (a, b) => out.push(`   …| (lines ${a + 1}-${b} omitted)`);
   let at = 0;
   for (const w of kept) { if (w.s > at) gap(at, w.s); out.push(body(w)); at = w.e + 1; }
   if (at < n) gap(at, n);
-  const shown = [...found], names = shown.slice(0, 8).join(', ') + (shown.length > 8 ? ', …' : ''), ranges = kept.map((w) => `${w.s + 1}-${w.e + 1}`).join(', ');
-  return { text: out.join('\n') + '\n', complete: !dropped && !truncated, note: `relevant slices: lines ${ranges} of ${n} (tests referencing ${names})${dropped ? '; some matching tests did not fit' : ''}${truncated ? '; matching tests were truncated at the search window' : ''}, line-numbered` };
+  const shown = [...found], names = shown.slice(0, 8).join(', ') + (shown.length > 8 ? ', …' : ''), what = [seeds.length && "the diff's changed lines", shown.length && `tests referencing ${names}`].filter(Boolean).join('; '), ranges = kept.map((w) => `${w.s + 1}-${w.e + 1}`).join(', ');
+  return { text: out.join('\n') + '\n', complete: !dropped && !truncated, coveredTo, note: `relevant slices: lines ${ranges} of ${n} (${what})${dropped ? '; some matching tests did not fit' : ''}${truncated ? '; matching tests were truncated at the search window' : ''}, line-numbered` };
 }
 // A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
 // a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Partial or omitted files are returned in notWhole for per-block verification (separate from the unit pack-cut.txt). ponytail: no per-file fairness, first files first.
+const MIN_CAND = 8 * 1024; // a candidate test's least room, so one early candidate cannot starve the later ones (the total budget still bounds it)
 const WIN = 40, HEAD = 15, UNIT_SYMS = 150; // UNIT_SYMS: names of a unit part searched for in its tests
 function windowPack(root, locs, limit) {
   const cap = fileCap(limit), parts = [], notWhole = [];
@@ -207,14 +232,14 @@ function contextPack(ctx, root, limit) {
   const parts = [], seen = new Set(), whole = new Set(), omitted = [], partial = [], shown = new Map(); // partial: cut at the budget; shown: path -> lines shown, for a file cut from the top (post.js checks the changed lines against it)
   let used = 0, files = 0;
   const cap = fileCap(limit);
-  const addFile = (p, num, quiet, syms, top = limit, part = null, incomplete = false) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
+  const addFile = (p, num, quiet, syms, top = limit, part = null, incomplete = false, seeds = null) => { // part: { k, n, a, b } a scan unit reviewed in parts (audit-units.txt): only lines a-b are shown // num: line-numbered; syms: changed symbols, for a candidate test of a review file (shown as relevant slices when over its cap); quiet: a file of the extra tiers, never listed as cut or omitted and kept within 60% of the budget so the diff rest and requirement documents still fit
     const rel = path.posix.normalize(p.replace(/\\/g, '/'));
     if (seen.has(rel)) return;
     seen.add(rel);
     const text = packRead(root, rel);
     if (text === null) return void (quiet || omitted.push(rel));
     if (!text.trim()) return;
-    const room = Math.min(num ? cap : PER_FILE, (quiet ? limit * 0.6 : top) - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
+    const cand = syms && !quiet && !seeds, room = Math.min(num ? cap : PER_FILE, cand ? Math.max(top - used, MIN_CAND) - OVERHEAD : (quiet ? limit * 0.6 : top) - used - OVERHEAD, limit - used - OVERHEAD), src = text.replace(/\n$/, '').split('\n');
     if (room < 200) return void (quiet || omitted.push(rel));
     if (part) { // this run's window of a unit too large for one call (review F07); its other parts are reviewed in other runs, so it is not listed as cut
       const c = cut(src.slice(part.a - 1, part.b).map((l, i) => `${String(part.a + i).padStart(4)}| ${l}`).join('\n') + '\n', room);
@@ -225,8 +250,10 @@ function contextPack(ctx, root, limit) {
       return;
     }
     const full = num ? src.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join('\n') + '\n' : text;
-    const sl = syms && syms.length && Buffer.byteLength(full) > room ? slices(src, syms, room) : null;
-    if (sl) { // pack-cut.txt: not listed when every test that mentions the changed symbols is shown (its relevant tests were visible); listed when some matching block did not fit
+    const over = Buffer.byteLength(full) > room, sl = over && ((syms && syms.length) || (seeds && seeds.length)) ? slices(src, syms || [], room, seeds || []) : null;
+    if (over && cand && !sl) return void omitted.push(rel); // a candidate test over its room with no hit that fits: unseen, never a head that only looks like evidence
+    if (sl) {
+      if (seeds) { partial.push(rel); shown.set(rel, sl.coveredTo); } else // pack-cut.txt: not listed when every test that mentions the changed symbols is shown (its relevant tests were visible); listed when some matching block did not fit
       if ((!sl.complete || incomplete) && !quiet) partial.push(rel); // incomplete: more symbols than were searched for
       const b = block(rel, sl.text, sl.note);
       parts.push(b); used += Buffer.byteLength(b); files++;
@@ -250,7 +277,7 @@ function contextPack(ctx, root, limit) {
   if (units.size) for (const p of review) addFile(p, true, false, null, limit, unitPart.get(p)); // scan: every unit file first, so no test starves a later unit (addFile skips a file already added)
   const symsOf = new Map(review.map((p) => [p, units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads)])), testsOf = (p) => (units.size ? units.get(p) : cands.get(p)) || [], shared = new Map(); // shared: a test -> the union of the symbols of every review file that lists it (it is added once, for the first of them, so it must be sliced for all)
   for (const p of review) for (const t of testsOf(p)) { const u = shared.get(t) || Object.assign(new Set(), { capped: false }); symsOf.get(p).forEach((n) => u.add(n)); u.capped ||= !!symsOf.get(p).capped; shared.set(t, u); }
-  review.forEach((p, i) => { addFile(p, true, false, null, limit, unitPart.get(p)); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t); addFile(t, true, false, [...u], top, null, u.capped); } }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+  review.forEach((p, i) => { addFile(p, true, false, units.size ? null : symsOf.get(p), limit, unitPart.get(p), false, units.size ? null : diffSeeds(diff, path.posix.normalize(p.replace(/\\/g, '/')))); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t); addFile(t, true, false, [...u], top, null, u.capped); } }); // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
     const named = [], crit = criteriaText(rd('requirements-status.json'));
