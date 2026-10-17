@@ -1,0 +1,14 @@
+{
+  "snapshot": "2fb6f911b262a239bc8e21d84b7ff92a6bbfa8b7",
+  "created_at": "2026-10-17T06:43:18.815Z",
+  "F1": {
+    "before_pool": 1,
+    "after_pool": 0,
+    "A": 1,
+    "unmatched": 1
+  },
+  "F2": {
+    "summary": "F9a5e30c2e",
+    "inline": "F420a685ac"
+  }
+}

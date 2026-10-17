@@ -1,0 +1,19 @@
+{
+  "captured_at": "2026-10-17T06:47:06.515Z",
+  "remote_main": "2fb6f911b262a239bc8e21d84b7ff92a6bbfa8b7",
+  "local_at_start": "b1aaf113aae3ca69fcc70e7b9026130affa6c30f",
+  "local_observed_intermediate": "ee1c15812bae4315f39ce7d5bf1bf7511ac58553",
+  "local_at_end": "2fb6f911b262a239bc8e21d84b7ff92a6bbfa8b7",
+  "workspace_change": "Root checkout changed by another process during this review; immutable Git source used for all probes.",
+  "kite_comparison": {
+    "base": "11e80a98139ac83af59d9d013a85d1db31b591b6",
+    "head": "b90f22c7906e2197afb1d7935b1622e439142d97",
+    "status": "ahead",
+    "files": [
+      {
+        "path": ".github/workflows/specguard-audit.yml",
+        "changes": 3
+      }
+    ]
+  }
+}
