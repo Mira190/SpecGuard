@@ -369,6 +369,20 @@ test('collect: max_units caps the selection (riskiest first); with a scan state 
   assert.equal(scoped.units.total, 1);
 });
 
+test('scan_paths selects units only: a unit in scope matches a top-level test/ and a central docs/ requirement is read; units outside the scope are not selected; no scope = unchanged', (t) => {
+  const mono = { 'packages/core/src/orders.js': FILES['src/js/orders.js'], 'packages/other/src/legacy.js': FILES['src/js/legacy.js'], 'test/orders.test.js': FILES['test/orders.test.js'], 'docs/design.md': '# Orders design\n\nAn order total MUST be rounded to two decimals.\n\nAn order MUST be rejected when its quantity is zero.\n\nAn order SHALL NOT be shipped twice.\n' };
+  const unitRows = (ctx) => fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n').filter(Boolean).map((l) => l.split('\t'));
+  const { root, ctx } = repoOf(t, mono);
+  const scoped = collect({ cwd: root, ctx, maxUnits: 5, scanPaths: 'packages/core/**' });
+  const u = unitRows(ctx);
+  assert.deepEqual(u.map((r) => r[1]), ['packages/core/src/orders.js'], 'packages/other is not selected');
+  assert.notEqual(u[0][3], 'no test', 'the top-level test/ is matched');
+  assert.equal(fs.readFileSync(path.join(ctx, 'audit-docs.txt'), 'utf8'), 'docs/design.md\tdiscovered\n', 'a central design document is read');
+  const plain = collect({ cwd: root, ctx, maxUnits: 5 });
+  assert.deepEqual(unitRows(ctx).map((r) => r[1]).sort(), ['packages/core/src/orders.js', 'packages/other/src/legacy.js'], 'control: no scope reviews every unit');
+  assert.equal(plain.docs.length, scoped.docs.length);
+});
+
 test('collect CLI: max_units must be an integer from 1 to 100; a repository with neither documents nor units is skipped', (t) => {
   const { root, ctx } = repoOf(t, CODE_ONLY);
   const cli = (cwd, env) => spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_REF_NAME: '', GITHUB_EVENT_PATH: '', ...env } });

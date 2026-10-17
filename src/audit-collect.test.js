@@ -302,7 +302,8 @@ const MONO = {
   'packages/b/tests/billing.test.js': "test('rounds every invoice total to two decimals before sending it', () => { assert.equal(roundInvoiceTotal(1.005), 1.01); });\n",
 };
 
-test('scan_paths: documents, code and tests are searched only in the scope (! excludes); without it the whole repository is', (t) => {
+// scan_paths selects the units to review; documents, tests and evidence are read repo-wide (a unit's tests often live outside its package)
+test('scan_paths: documents, code and tests are still read from the whole repository (! excludes only narrow the units); without it the result is the same', (t) => {
   const all = repo(t, MONO);
   collect({ cwd: all.root, ctx: all.ctx });
   assert.deepEqual(rows(all.ctx, 'audit-docs.txt').map((d) => d[0]).sort(), ['packages/a/docs/design.md', 'packages/b/docs/design.md']);
@@ -311,16 +312,15 @@ test('scan_paths: documents, code and tests are searched only in the scope (! ex
 
   const a = repo(t, MONO);
   collect({ cwd: a.root, ctx: a.ctx, scanPaths: 'packages/a/**' });
-  assert.deepEqual(rows(a.ctx, 'audit-docs.txt').map((d) => d[0]), ['packages/a/docs/design.md']);
-  assert.ok(cands(a.ctx).every((c) => c[1].startsWith('packages/a/')));
-  const ev = evRows(a.ctx).filter((e) => e[1] !== 'none');
-  assert.ok(ev.length > 0 && ev.every((e) => e[2].startsWith('packages/a/')), JSON.stringify(ev));
+  assert.deepEqual(rows(a.ctx, 'audit-docs.txt').map((d) => d[0]).sort(), ['packages/a/docs/design.md', 'packages/b/docs/design.md'], 'the other package\'s documents are still read');
+  assert.ok(cands(a.ctx).some((c) => c[1].startsWith('packages/b/')));
+  assert.deepEqual(evRows(a.ctx).filter((e) => e[0] === retry && e[1] === 'code').map((e) => e[2].split(':')[0]).sort(), ['packages/a/src/scheduler.js', 'packages/b/src/scheduler.js']);
   assert.deepEqual(metaOf(a.ctx).scope, ['packages/a/**']);
-  assert.deepEqual(metaOf(a.ctx).candidates, 2);
+  assert.deepEqual(metaOf(a.ctx).candidates, metaOf(all.ctx).candidates);
 
   const x = repo(t, MONO);
   collect({ cwd: x.root, ctx: x.ctx, scanPaths: 'packages/a/**\n!packages/a/tests/**' });
-  assert.ok(evRows(x.ctx).some((e) => e[1] === 'code') && !evRows(x.ctx).some((e) => e[1] === 'test'), 'the excluded tests are not offered');
+  assert.ok(evRows(x.ctx).some((e) => e[1] === 'test'), 'tests are evidence wherever they live');
   const only = scopeFn('!packages/b/**');
   assert.ok(only('packages/a/x.js') && !only('packages/b/x.js'), 'an exclude-only scope keeps the rest');
   assert.equal(scopeFn(''), null);

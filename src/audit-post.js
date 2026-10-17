@@ -507,7 +507,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
     return { k, now, ever, notes };
   })();
   const coverage = () => {
-    const where = scope.length ? `Scope (scan_paths): ${scope.map((l) => `\`${cell(l, 100)}\``).join(', ')}.\n\n` : '';
+    const where = scope.length ? `Units reviewed (scan_paths): ${scope.map((l) => `\`${cell(l, 100)}\``).join(', ')}; requirements, tests and evidence are read from the whole repository.\n\n` : '';
     if (!rotation || !candidates) return where;
     const k = lg.k;
     const found = search && search.blocks ? `Evidence candidates found before the model ran: ${search.with_code} of ${search.blocks} blocks have a code location, ${search.with_tests} a test location.\n\n` : '';
