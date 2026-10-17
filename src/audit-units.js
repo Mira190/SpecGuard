@@ -15,7 +15,7 @@ const MAX_FILE = 512 * 1024, MAX_UNITS_READ = 6000, MAX_TESTS_READ = 4000, TEST_
 const PER_UNIT_TESTS = 20, ROWS_KEPT = 100, LEADS = 3;
 const CODE = /\.(?:[cm]?[jt]sx?|py|go|java|kt|cs|rb|php|rs|swift|scala)$/i;
 // Not product code: examples, benchmarks, docs, generated or build output, config files, type declarations. ponytail: a name list; a repo that keeps product code in `examples/` narrows with scan_paths.
-const NOT_UNIT = /(^|\/)(?:examples?|samples?|demos?|benchmarks?|bench|docs?|dist|build|out|coverage|migrations?|node_modules|vendor|third_party|generated)\/|\.d\.[cm]?ts$|(^|\/)(?:[\w.-]*\.config|\.[\w-]*rc|gulpfile|Gruntfile|Rakefile|setup|conftest|__init__)\.[a-z]+$|\.(?:min|bundle)\./i;
+const NOT_UNIT = /(^|\/)(?:examples?|samples?|demos?|benchmarks?|bench|docs|integration|e2e|perf[\w-]*|dist|build|out|coverage|migrations?|node_modules|vendor|third_party|generated)\/|^scripts\/|\.d\.[cm]?ts$|(^|\/)(?:[\w.-]*\.config|\.[\w-]*rc|gulpfile|Gruntfile|Rakefile|setup|conftest|__init__)\.[a-z]+$|\.(?:min|bundle)\./i;
 // Test infrastructure by name: a basename with a smoke/e2e/harness/runner/fixture/playwright/cypress token (runner-utils.js counts, testrunner.js does not), or a support/helpers dir under a test dir.
 const TEST_INFRA = /(^|\/)[^/]*(?<![a-z0-9])(?:smoke|e2e|harness|runners?|fixtures?|playwright|cypress)(?![a-z0-9])[^/]*$|(^|\/)(?:tests?|specs?|__tests__|e2e)\/(?:[^/]+\/)*(?:support|helpers)\//i;
 // First-level relative imports of a source text (JS/TS require, import, export-from, dynamic import), resolved against the tracked files -> blob shas.
@@ -44,13 +44,16 @@ function publicDefs(file, ls) {
   const more = ls.filter((l) => !comment(l)).map((l) => (EXPORT_VAR.exec(l) || [])[1]).filter((n) => n && !d.names.includes(n));
   return more.length ? { count: d.count, names: [...d.names, ...new Set(more)] } : d;
 }
+// ponytail: a TS file with type/interface declarations and no runtime declaration has nothing to unit test; a line-start regex, not a parser.
+const RUNTIME = /^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function|class|const|let|var|enum)\s|module\.exports|^\s*exports\./, TYPE_DECL = /^\s*(?:export\s+)?(?:declare\s+)?(?:interface|type)\s/;
+const typeOnly = (file, ls) => /\.[cm]?tsx?$/i.test(file) && ls.some((l) => TYPE_DECL.test(l)) && !ls.some((l) => !comment(l) && RUNTIME.test(l));
 const publicCount = (file, ls) => publicDefs(file, ls).count;
 // Names a "no test references it" lead may be about: 4+ characters, not a generic word, not a type (no runtime value to test) or an UPPER_CASE constant. [{name, line}] with the line of the first code line that has the name (its definition).
 const STOP = new Set('props state config options types data value values name test util utils helper helpers exports module'.split(' '));
 // In a .tsx/.jsx unit PascalCase components and use* hooks come after the plain functions (a component renders, a function is what a unit test reaches); the lead list is capped, so the order decides what is named.
 const UI = /^(?:[A-Z]|use[A-Z])/;
 const leadNames = (names, ls, file = '') => names.filter((n) => n.length >= 4 && ![GENERIC, LEAD_GENERIC, STOP].some((s) => s.has(n.toLowerCase())))
-  .map((name) => { const re = new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`), i = ls.findIndex((l) => !comment(l) && re.test(l)); return { name, line: i + 1, type: i >= 0 && /^\s*(?:export\s+)?(?:declare\s+)?(?:interface|type)\s/.test(ls[i]) }; }).filter((x) => x.line && !x.type && !/^[A-Z][A-Z0-9_]+$/.test(x.name)).map(({ name, line }) => ({ name, line })).sort((a, b) => /\.[jt]sx$/i.test(file) ? UI.test(a.name) - UI.test(b.name) : 0);
+  .map((name) => { const re = new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`); const decl = new RegExp(`\\b(?:def|function\\*?|class|const|let|var|func|type|interface|enum|struct|fn)\\s+(?:\\([^)]*\\)\\s*)?${name.replace(/\$/g, '\\$')}(?![\\w$])`); let i = ls.findIndex((l) => !comment(l) && decl.test(l)); if (i < 0) i = ls.findIndex((l) => !comment(l) && re.test(l)); return { name, line: i + 1, type: i >= 0 && /^\s*(?:export\s+)?(?:declare\s+)?(?:interface|type)\s/.test(ls[i]) }; }).filter((x) => x.line && !x.type && !/^[A-Z][A-Z0-9_]+$/.test(x.name)).map(({ name, line }) => ({ name, line })).sort((a, b) => /\.[jt]sx$/i.test(file) ? UI.test(a.name) - UI.test(b.name) : 0);
 
 // Signals of one test file: tests, tests without an assertion, skipped or disabled tests, assertion lines, weak assertion lines (leads.js).
 // ponytail: a test is a block from one test declaration to the next, an assertion is any line post.js's ASSERTION matches; an assertion inside a helper the test calls reads as no assertion.
@@ -210,7 +213,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const dl = makeClock(budgetMs), limits = [], tscope = testScope(testPaths);
   const inScope = files.filter((e) => !skip(e.path)); // read repo-wide: scope only picks the units, their tests may live outside it
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
-  const testEntries = inScope.filter((e) => isTest(e.path)), tests = testEntries.map((e) => e.path).sort();
+  const testEntries = inScope.filter((e) => isTest(e.path) && CODE.test(e.path)), tests = testEntries.map((e) => e.path).sort();
   let cand = inScope.filter((e) => (!scope || scope(e.path)) && !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && !TEST_INFRA.test(e.path)).sort((a, b) => (a.path < b.path ? -1 : 1));
   const big = cand.filter((e) => e.size > MAX_FILE); // the largest files are often the most complex: say so, never drop them silently
   if (big.length) limits.push(`${big.length} source file(s) over 512 KiB were not inventoried: ${big.slice(0, 3).map((e) => e.path).join(', ')}${big.length > 3 ? ', ...' : ''}`);
@@ -229,7 +232,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
       const n = loc(ls), bd = boundaryOf(e.path, ls, n >= MIN_LOC);
       if (Object.keys(bd.consts).length) { consts.set(e.path, bd.consts); for (const [k, v] of Object.entries(bd.consts)) anyConst.set(k, anyConst.has(k) && anyConst.get(k) !== v ? NaN : v); }
-      if (n >= MIN_LOC) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls, e.path), size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0), cmps: bd.cmps }); }
+      if (n >= MIN_LOC && !typeOnly(e.path, ls)) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls, e.path), size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0), cmps: bd.cmps }); }
     });
   }
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
@@ -274,9 +277,10 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   for (const t of tests) put(folded, fold(t), t);
   const rows = units.map((u) => {
     const got = rankTests(u, mapTests(u.path, { tests, index, names: u.names, calls: (n) => called.get(n) || [], mentions: (s) => mention.get(s) || [], per: Infinity }), { importers, token, classHit, classOf, folded });
-    const ss = got.map((t) => sig.get(t) || none), sum = (f) => ss.reduce((a, s) => a + f(s), 0);
-    const s = { tests: sum((x) => x.tests), noAssert: sum((x) => x.noAssert), skipped: sum((x) => x.skipped), asserts: sum((x) => x.asserts), weak: got.flatMap((t) => (sig.get(t) || none).weak.map((w) => ({ ...w, path: t }))), unread: got.filter((t) => !sig.has(t)).length };
-    const h = (hist && hist.get(u.path)) || { churn: 0, fixes: 0 }, factor = factorOf(got, got.some((t) => !sig.has(t)) ? { ...s, asserts: Math.max(s.asserts, 1) } : s); // a test file that was not read is assumed to assert
+    const real = got.filter((t) => !sig.has(t) || sig.get(t).tests > 0); // a matched file that declares no test (a fixture) is a match, not evidence
+    const ss = real.map((t) => sig.get(t) || none), sum = (f) => ss.reduce((a, s) => a + f(s), 0);
+    const s = { tests: sum((x) => x.tests), noAssert: sum((x) => x.noAssert), skipped: sum((x) => x.skipped), asserts: sum((x) => x.asserts), weak: real.flatMap((t) => (sig.get(t) || none).weak.map((w) => ({ ...w, path: t }))), unread: real.filter((t) => !sig.has(t)).length };
+    const h = (hist && hist.get(u.path)) || { churn: 0, fixes: 0 }, factor = factorOf(real, real.some((t) => !sig.has(t)) ? { ...s, asserts: Math.max(s.asserts, 1) } : s); // a test file that was not read is assumed to assert
     const why = [!got.length && 'no test', s.skipped && `${s.skipped} skipped test${s.skipped === 1 ? '' : 's'}`, s.noAssert && `${s.noAssert} test${s.noAssert === 1 ? '' : 's'} without an assertion`, s.weak.length && `${s.weak.length} weak assertion${s.weak.length === 1 ? '' : 's'}`,
       h.fixes && `${h.fixes} fix commit${h.fixes === 1 ? '' : 's'} in ${DAYS} days`, !h.fixes && h.churn >= 3 && `${h.churn} commits in ${DAYS} days`].filter(Boolean).join(', ') || `${u.pub} public definition${u.pub === 1 ? '' : 's'}`;
     const seen = [u.path, ...got].map((p) => `${p}:${shaOf.get(p) || ''}`).join('\n'), deps = [...new Set([u.path, ...got].flatMap((p) => srcImports.get(p) || []))].sort().join('\n');

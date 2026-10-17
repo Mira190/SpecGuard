@@ -823,6 +823,38 @@ test('boundary lead: control: a literal comparison, a unit with no matched test 
   assert.equal(bound(t, ['export const LOW_SPACE_BYTES = os.total() / 2;', ...BCMP.slice(1)], btest()).length, 0);
 });
 
+// ---- third-party / non-unit noise ----
+const rowsByPath = (t, files) => { const r = repo(t, files); return Object.fromEntries(inventory({ cwd: r.root, head: 'HEAD', now: NOW }).rows.map((x) => [x.path, x])); };
+const fnSrc = (n) => [`export function ${n}(a) {`, '  return a + 1;', '}', 'export function other(a) {', '  return a;', '}'];
+
+test('a binary file under a test dir is not a test: it does not blank the unreferenced-export leads', (t) => {
+  const rows = rowsByPath(t, { 'src/zeta.js': fnSrc('zetaBuild'), 'test/zeta.test.js': ["it('x', () => {", '  assert.equal(other(1), 1);', "});"], 'test/favicon.ico': '\0\0\0\0' });
+  assert.deepEqual(rows['src/zeta.js'].unref.map((d) => d.name), ['zetaBuild'], 'a real unref export still leads');
+});
+
+test('a matched file that declares no test (fixture) is not weak test evidence; a real test with assertions still counts', (t) => {
+  const src = ['def make_app(x):', '    return x', '', 'def other(x):', '    return x'];
+  const rows = rowsByPath(t, { 'src/app.py': src, 'tests/test_apps/cliapp/app.py': ['def make_app(x):', '    return x'], 'tests/test_app.py': ['def test_a():', '    assert make_app(1) == 1'] });
+  assert.equal(rows['src/app.py'].factor, 0.3);
+  const only = rowsByPath(t, { 'src/app.py': src, 'tests/test_apps/cliapp/app.py': ['def make_app(x):', '    return x'] });
+  assert.notEqual(only['src/app.py'].factor, 0.6, 'a fixture alone is not "no assertions"');
+  assert.ok(!/without an assertion|weak/.test(only['src/app.py'].why));
+});
+
+test('lead line is the declaration, not the first mention; a TS interface is not a lead', (t) => {
+  const rows = rowsByPath(t, { 'src/cmd.py': ['# uses shell_command below', 'x = shell_command', '', 'def shell_command(a):', '    return a', ''], 'src/hdr.ts': ['import { IHeaders } from "./x";', 'let h: IHeaders;', 'export interface IHeaders { a: string }', 'export function mkHeader(a: string) {', '  return a;', '}'], 'test/z.test.js': ["it('x', () => {", '  assert.equal(1, 1);', "});"] });
+  const lead = (p, n) => rows[p].defs.find((d) => d.name === n);
+  assert.equal(lead('src/cmd.py', 'shell_command').line, 4);
+  assert.equal(lead('src/hdr.ts', 'IHeaders'), undefined);
+  assert.equal(lead('src/hdr.ts', 'mkHeader').line, 4);
+});
+
+test('NOT_UNIT: doc/ is a unit, docs/ is not; integration, e2e, root scripts, perf dirs and type-only TS files are not units', (t) => {
+  const code = ['export function realThing(a) {', '  return a + 1;', '}', 'export function more(a) {', '  return a;', '}'];
+  const rows = rowsByPath(t, { 'doc/gen.go': ['package doc', 'func Gen() int {', '\treturn 1', '}', 'func Two() int {', '\treturn 2', '}'], 'docs/a.js': code, 'integration/a.js': code, 'e2e/a.js': code, 'scripts/a.js': code, 'perf-measures/a.js': code, 'src/a.js': code, 'src/http.interface.ts': ['export interface A { a: string }', 'export type B = string;', 'export interface C { c: number }'] });
+  assert.deepEqual(Object.keys(rows).sort(), ['doc/gen.go', 'src/a.js']);
+});
+
 test('boundary lead: a constant that matches the definition pattern but is not valid arithmetic (division by zero, unbalanced paren, stray operator) makes no lead; a valid parenthesised one uses its value', (t) => {
   const withDef = (def) => [def, ...BCMP.slice(1)];
   for (const def of ['export const LOW_SPACE_BYTES = 10 / (2 - 2);', 'export const LOW_SPACE_BYTES = (5 + 3;', 'export const LOW_SPACE_BYTES = 5 + ;', 'export const LOW_SPACE_BYTES = 5 5;']) assert.equal(bound(t, withDef(def), btest()).length, 0, def);
