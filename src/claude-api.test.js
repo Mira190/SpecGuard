@@ -1225,3 +1225,25 @@ test('keptRooms: the pre-flight on a ctx says how many unit calls stay (the coll
   const one = roomRepo(t, {}, [['aaaaaaaa', 'bbbbbbbb', 'cccccccc']]);
   assert.equal(api.keptRooms({ ...base, ctx: one.h.ctx, root: one.root, budget: 5 }), null);
 });
+
+test('run as a script: a split scan gets past planning (no initialisation error) and ends with the budget class, offline', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-script-')), ctx = path.join(dir, 'ctx');
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(ctx);
+  const cands = Array.from({ length: 25 }, (_, i) => `${i.toString(16).padStart(8, '0')}\tdocs/d.md:${i + 1}\th\tA block MUST hold ${i}.\n`).join('');
+  fs.writeFileSync(path.join(ctx, 'audit-candidates.txt'), cands);
+  fs.writeFileSync(path.join(ctx, 'audit-docs.txt'), 'docs/d.md\n');
+  const r = spawnSync(process.execPath, [path.join(__dirname, 'engines', 'claude-api.js')], { encoding: 'utf8', cwd: dir, env: { ...process.env, CHECK: 'audit', CTX: ctx, PROMPT: 'p', ANTHROPIC_API_KEY: 'sk-ant-fake', MAX_BUDGET_USD: '0.0001', SCAN_BATCH_BLOCKS: '20', GITHUB_WORKSPACE: dir } });
+  assert.doesNotMatch(r.stdout + r.stderr + (fs.existsSync(path.join(ctx, 'engine-notes')) ? fs.readFileSync(path.join(ctx, 'engine-notes'), 'utf8') : ''), /before initialization|adapter error/);
+  assert.equal(fs.readFileSync(path.join(ctx, 'engine-error'), 'utf8').split('\n')[0], 'budget');
+});
+
+test('an adapter exception (our own code throwing) is class internal; a 529 stays rate', async (t) => {
+  const h = harness(t, [good()]);
+  await h.go({ PROMPT_FILE: path.join(h.dir, 'missing.txt') });
+  assert.equal(h.file('engine-error').split('\n')[0], 'internal');
+  assert.equal(h.file('engine-status'), 'failed');
+  const o = harness(t, [err(529, 'overloaded_error', 'Overloaded')]);
+  await o.go();
+  assert.equal(o.file('engine-error').split('\n')[0], 'rate');
+});
