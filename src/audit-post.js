@@ -510,7 +510,7 @@ function readState(body) {
 // carried: prior blocks this run did not audit ({ cid, path, line, text, status, since, runs, at }); they keep their status in the tables, marked "from <date>".
 // rotation / search (evidence candidates): audit-meta.json's; scope: the scan_paths lines; stateDropped: carried blocks that no longer fit the state.
 function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', run = '', failure = '', partial = '', prior = null, head: sha = '', refNote = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
-  carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [], code = null, notAudited = { blocks: [], failed: 0, dropped: 0 }, unanswered = 0 }) {
+  carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [], code = null, notAudited = { blocks: [], failed: 0, dropped: 0 }, unanswered = 0, reach = null }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
     const rel = safeRel(p);
@@ -606,6 +606,10 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   if (data && !failure && (notAudited.blocks.length || (code && code.unitsFailed) || unseen.length || unanswered > 0) && /^\*\*[✅❔]/u.test(verdict)) verdict = `**⚠️ Incomplete scan: no gaps found so far${unsure.length ? `; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check` : ''}**`; // never the clean form when part of the scan did not run
   if (data && !failure && notAudited.blocks.length) verdict = verdict.replace(/^(\*\*[\s\S]*?)\*\*/, `$1; ${plural(notAudited.blocks.length, 'document block')} not audited (${[notAudited.failed && 'a call failed', notAudited.dropped && 'left out by max_budget_usd'].filter(Boolean).join(', ')})**`);
   let top = `## ${HEADING}\n\n${verdict}\n\n${refNote ? `${refNote}\n\n` : ''}`;
+  if (reach && !failure) { // scan_scope all: say prominently whether the whole repository was reviewed, and what covering it would take (a ceiling: the worst-case estimate, not the likely spend)
+    const nr = reach.notReached || {}, one = (k) => { const x = nr[k] || {}; return (x.parts || x.blocks) ? `${plural(x.parts || 0, 'unit part')} / ${plural(x.blocks || 0, 'document block')} not reached (${k})` : ''; }, lines = [one('budget'), one('deadline')].filter(Boolean);
+    top += lines.length ? `> **Incomplete: the whole repository was not reviewed.** ${lines.join('; ')}.${nr.budget && (nr.budget.parts || nr.budget.blocks) ? ` max_budget_usd stopped the run, so a low budget (the default is $1.00) caps a full scan; covering everything needs at most $${Number(reach.needUsd || 0).toFixed(2)} by the worst-case estimate (actual spend is usually far lower).` : ''}${nr.deadline && (nr.deadline.parts || nr.deadline.blocks) ? ' The review time limit stopped the run: raise review_timeout_minutes and the job timeout, or narrow scan_paths.' : ''}\n\n` : '';
+  }
   if (code && data && !failure && !partial) { // the shape of the unit result in one glance (not for an incomplete run)
     const n = (k) => uf.filter((f) => f.kind === k).length, cellOf = (k) => (n(k) ? `${n(k)}` : 'none'), r = inv.rotation;
     top += `| Units reviewed | No unit test | Weak tests | Skipped tests | Design documents |\n|---|---|---|---|---|\n| ${seenN} of ${r.total}${r.rotate ? ` (rotation ${r.run} of ${r.runs})` : ''} | ${cellOf('missing_test')} | ${cellOf('weak_test')} | ${(inv.selected && inv.selected.skipped_tests) || 'none'} | ${docs.length ? `${docs.length} read` : 'none found'} |\n\n`;
@@ -844,6 +848,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const hasCode = units.size > 0 && !!inv && !!inv.rotation && Array.isArray(inv.rows) && Array.isArray(inv.unreviewed); // the collector's code-first part (absent in a run that predates it)
   // scan-parts.json (claude api, a scan split into calls): blocks of a failed call or dropped for the budget were not sent (or not answered): not rejected, not recorded as audited (the state carries their prior status), listed as not audited
   const sp = json('scan-parts.json') || {}, spFailed = Array.isArray(sp.failed) ? sp.failed : [], isCid = (c) => /^[0-9a-f]{8}$/.test(c), spDropped = (Array.isArray(sp.dropped) ? sp.dropped : []).filter(isCid);
+  shared.reach = sp.scope === 'all' ? sp : null; // scan_scope all: the engine's count of what was not reached and why (render's first line)
   const skip = new Set([...spFailed.flatMap((x) => (Array.isArray(x.blocks) ? x.blocks : [])).filter(isCid), ...spDropped].filter((c) => cands.has(c))), unitsFailed = spFailed.some((x) => x.part === 'units');
   // units: a failed unit part leaves only its own units unseen (a failure without a unit list, from an older engine, leaves all); units of a unit part dropped for the budget were not reached: both are not tracked, still due
   const unitIn = (a) => (Array.isArray(a) ? a : []).filter((u) => units.has(u)), fKeys = new Map(spFailed.filter((x) => x.part === 'units' && Array.isArray(x.keys)).flatMap((x) => x.keys.filter((k) => typeof k === 'string').map((k) => [k, x.reason]))), dKeys = new Set(Array.isArray(sp.droppedParts) ? sp.droppedParts : []), keysOf = (u) => (u.part ? (u.part.ks || [u.part.k + 1]).map((k) => `${u.id}:${k}`) : [u.id]), ranOf = (u) => keysOf(u).filter((k) => !fKeys.has(k) && !dKeys.has(k)),

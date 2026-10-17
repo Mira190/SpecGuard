@@ -15,6 +15,11 @@ if (STATUS === 'incomplete' && CONFIG.includes(cls)) { // a multi-part scan wher
   console.log(`::error::SpecGuard could not finish the scan (${cls}): ${esc(why || REASON || 'see the job summary')}; the partial result was kept`);
   process.exit(1);
 }
+const scopeAll = () => { try { return JSON.parse(ctxFile('audit-meta.json')).scan_scope === 'all'; } catch { return false; } }; // scan_scope all: the collector says so in audit-meta.json
+if (STATUS === 'incomplete' && FAIL_ON_ERROR === 'true' && scopeAll()) { // a whole-repository scan that did not cover everything (budget, deadline, a failed call) goes red; every other incomplete run only warns
+  console.log(`::error::SpecGuard did not review the whole repository (scan_scope: all)${REASON ? `: ${esc(REASON)}` : ' (see the job summary)'}`);
+  process.exit(1);
+}
 if (STATUS === 'failed') {
   if (CONFIG.includes(cls)) {
     console.log(`::error::SpecGuard could not run the model (${cls}): ${esc(REASON || 'see the job summary')}`);

@@ -193,10 +193,14 @@ const workflow = () => fs.readFileSync(path.join(__dirname, '..', '.github', 'wo
 
 test('specguard-run.yml: one required target plus optional inputs, nothing else on the form', () => {
   const y = workflow(), form = /^ {4}inputs:\n((?: {6}.*\n)+)/m.exec(y)[1];
-  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_units', 'max_budget_usd', 'max_output_tokens', 'scan_issue']);
+  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_units', 'max_budget_usd', 'max_output_tokens', 'scan_scope', 'scan_issue']);
   assert.match(y, /^ {6}target: \{[^}]*required: true/m);
-  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_units', 'max_budget_usd', 'max_output_tokens', 'scan_issue']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
+  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_units', 'max_budget_usd', 'max_output_tokens', 'scan_scope', 'scan_issue']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
   assert.match(y, /^ {6}post_to_pr: \{[^}]*type: boolean, default: false/m);
+  assert.match(y, /^ {6}scan_scope: \{[^}]*type: choice, default: all, options: \[all, selected\]/m, 'the whole repository by default');
+  assert.match(y, /scan_scope: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && inputs\.scan_scope \|\| 'selected' \}\}/, 'reaches the action, scans only');
+  assert.match(y, /^ {4}timeout-minutes: 180\b/m, 'the review job outlasts the longest all run');
+  assert.match(y, /review_timeout_minutes: \$\{\{[^}]*'150' \|\| '12' \}\}/, 'the engine limit sits inside the job timeout');
   assert.doesNotMatch(form, /\b(repo|pr|ref|mode|effort):/);
   assert.doesNotMatch(y, /inputs\.(repo|pr|ref|mode|effort)\b/);
   assert.match(y, /target: \{ description: "Paste a PR link to review it, or a repo or branch link to scan it\."/);
