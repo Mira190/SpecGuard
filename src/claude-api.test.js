@@ -1218,6 +1218,90 @@ test('unit rooms: a budget for one call drops the room of a second part; the uni
   assert.doesNotMatch(s.h.file('engine-notes'), /unit not reached/);
 });
 
+// Runtime admission: the last room of audit-unit-extra.json is an extra, admitted only while actual spend + its worst case fits max_budget_usd
+{
+  const model = 'claude-sonnet-5-5', env = { MODEL: model, MAX_OUTPUT_TOKENS: '4000' }, rooms = [['aaaaaaaa:1', 'bbbbbbbb'], ['aaaaaaaa:2']];
+  const worst = (c) => api.worstCase(model, Buffer.byteLength(c.body.system[0].text), Buffer.byteLength(c.body.messages[0].content), 4000).usd;
+  const withUsage = (usage, then = usage) => { let n = 0; return async (req, ok) => reply(200, { ...JSON.parse(await ok(req).text()), model, usage: n++ ? then : usage }); }; // then: the usage of every call after the first
+  const extraRepo = async (t, extra = true) => {
+    const s = roomRepo(t, env, rooms, partRows);
+    if (extra) fs.writeFileSync(path.join(s.h.ctx, 'audit-unit-extra.json'), '1');
+    return s;
+  };
+  // the two call prices (call 1 is planned, call 2 is the extra), from an unconstrained run
+  const prices = async (t) => { const s = await extraRepo(t); s.answers((req, ok) => ok(req)); await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: '5' }); return s.h.calls.map(worst); };
+  const spend = (s) => JSON.parse(s.h.file('usage.json')).totalCostUsd;
+
+  test('admission: actual spend low, the extra part is admitted (planned budget is one call); both parts ran, nothing is reported not reached', async (t) => {
+    const [p1] = await prices(t), s = await extraRepo(t);
+    s.answers(withUsage({ input_tokens: 100, output_tokens: 100 }));
+    await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String((p1 * 1.5).toFixed(6)) });
+    assert.equal(s.h.calls.length, 2);
+    const parts = JSON.parse(s.h.file('scan-parts.json'));
+    assert.equal(parts.droppedParts, undefined);
+    assert.equal(parts.droppedUnits, undefined);
+    assert.deepEqual(parts.failed, []);
+    assert.doesNotMatch(s.h.file('engine-notes'), /not reached/);
+    assert.ok(spend(s) <= p1 * 1.5);
+  });
+
+  test('admission: actual spend high, the extra part is skipped and named in droppedParts (not reached), one call only', async (t) => {
+    const [p1] = await prices(t), s = await extraRepo(t);
+    s.answers(withUsage({ input_tokens: 100, output_tokens: Math.floor(p1 * 0.9 * 1e5) }));
+    await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String((p1 * 1.5).toFixed(6)) });
+    assert.equal(s.h.calls.length, 1);
+    const parts = JSON.parse(s.h.file('scan-parts.json'));
+    assert.deepEqual(parts.droppedParts, ['aaaaaaaa:2']);
+    assert.equal(parts.droppedUnits, undefined, 'unit a was reached through its first part');
+    assert.match(s.h.file('engine-notes'), /1 unit part not reached \(max_budget_usd\)/);
+  });
+
+  test('admission boundary: an extra whose worst case equals the remainder is admitted; a hair over is skipped; spend never exceeds the budget', async (t) => {
+    const [p1, p2] = await prices(t), usage = { input_tokens: 0, output_tokens: Math.floor(p1 * 1e5) }, a = api.cost(model, usage), edge = a + p2;
+    const at = await extraRepo(t);
+    at.answers(withUsage(usage, { input_tokens: 10, output_tokens: 10 }));
+    await at.h.go({ GITHUB_WORKSPACE: at.root, MAX_BUDGET_USD: String(edge) });
+    assert.equal(at.h.calls.length, 2);
+    assert.ok(spend(at) <= edge);
+    const over = await extraRepo(t);
+    over.answers(withUsage(usage));
+    await over.h.go({ GITHUB_WORKSPACE: over.root, MAX_BUDGET_USD: String(edge - 1e-6) });
+    assert.equal(over.h.calls.length, 1);
+    assert.deepEqual(JSON.parse(over.h.file('scan-parts.json')).droppedParts, ['aaaaaaaa:2']);
+    assert.ok(spend(over) <= edge - 1e-6);
+  });
+
+  test('admission (control): without audit-unit-extra.json the second room is planned as before and the budget drops it up front', async (t) => {
+    const [p1] = await prices(t), s = await extraRepo(t, false);
+    s.answers(withUsage({ input_tokens: 100, output_tokens: 100 }));
+    await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String((p1 * 1.5).toFixed(6)) });
+    assert.equal(s.h.calls.length, 1);
+    assert.deepEqual(JSON.parse(s.h.file('scan-parts.json')).droppedParts, ['aaaaaaaa:2']);
+  });
+
+  test('admission: keptRooms counts the planned calls only, never the extras', async (t) => {
+    const s = await extraRepo(t), base = { ctx: s.h.ctx, root: s.root, batch: 20, model, maxTokens: 4000, packBytes: 250000, budget: 5 };
+    assert.equal(api.keptRooms(base).rooms, 1);
+  });
+
+  test('run as a script: the extra queue executes (an offline fetch stub is preloaded) and the second part is admitted after the first', (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-admit-')), ctx = path.join(dir, 'ctx');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    fs.mkdirSync(ctx); fs.mkdirSync(path.join(dir, 'lib'));
+    for (const [n, c] of [['a', 'function alpha() {}\nfunction alpha2() {}\n'], ['b', 'function beta() {}\n']]) fs.writeFileSync(path.join(dir, 'lib', `${n}.js`), c);
+    const w = (n, c) => fs.writeFileSync(path.join(ctx, n), c);
+    w('audit-candidates.txt', ''); w('audit-docs.txt', ''); w('audit-meta.json', JSON.stringify({ max_requirements: 80, units: { total: 2, picked: 2 }, max_units: 12 }));
+    w('audit-units.txt', partRows); w('audit-unit-rooms.json', JSON.stringify(rooms)); w('audit-unit-extra.json', '1');
+    const stub = path.join(dir, 'stub.js'), log = path.join(dir, 'calls.log');
+    fs.writeFileSync(stub, `const fs = require('node:fs'); globalThis.fetch = async (u, init) => { fs.appendFileSync(${JSON.stringify(log)}, 'call,'); const b = { type: 'message', model: 'claude-haiku-5-5', stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], unit_findings: [] }) }], usage: { input_tokens: 10, output_tokens: 10 } }; return { status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify(b) }; };`);
+    const r = spawnSync(process.execPath, ['-r', stub, path.join(__dirname, 'engines', 'claude-api.js')], { encoding: 'utf8', cwd: dir, env: { ...process.env, CHECK: 'audit', CTX: ctx, PROMPT: 'p', ANTHROPIC_API_KEY: 'sk-ant-fake', MAX_BUDGET_USD: '0.02', MAX_OUTPUT_TOKENS: '1000', SCAN_BATCH_BLOCKS: '20', GITHUB_WORKSPACE: dir } });
+    const err = fs.existsSync(path.join(ctx, 'engine-error')) ? fs.readFileSync(path.join(ctx, 'engine-error'), 'utf8') : '';
+    assert.equal(err, '', r.stdout + r.stderr);
+    assert.equal(fs.readFileSync(log, 'utf8').split(',').filter(Boolean).length, 2);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(ctx, 'scan-parts.json'), 'utf8')).droppedParts, undefined);
+  });
+}
+
 test('keptRooms: the pre-flight on a ctx says how many unit calls stay (the collector plans that many); one call is null', async (t) => {
   const rooms = [['aaaaaaaa:1', 'bbbbbbbb'], ['aaaaaaaa:2']], s = roomRepo(t, {}, rooms, partRows), base = { ctx: s.h.ctx, root: s.root, batch: 20, model: 'claude-sonnet-5-5', maxTokens: 4000, packBytes: 250000 };
   assert.equal(api.keptRooms({ ...base, budget: 5 }).rooms, 2);

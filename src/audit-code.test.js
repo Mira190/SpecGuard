@@ -990,6 +990,7 @@ test('run: a part of a reached unit dropped for the budget is named in a line an
     assert.match(vis(ok.calls.summary), /Reviewed in parts.*parts 1, 2 of 2 \(lines 1-4\)/);
   });
 
+<<<<<<< HEAD
   const E = { eligible: 140 }, funnel = (d) => /^Units: .*$/m.exec(vis(d.calls.summary))[0];
   test('run: funnel does not call a unit with a part not reached "reviewed whole" (parts_left, engine-dropped part, failed part); control: all parts ran, count unchanged', async (t) => {
     assert.match(funnel(await run(t, { ks: [1], inv: { ...E, parts_left: [{ path: 'src/js/orders.js', part: 2, of: 2 }] } })), /3 selected this run = 2 reviewed whole \+ 1 reviewed in part \(1 part not reached\)/);
@@ -1010,6 +1011,21 @@ test('run: a part of a reached unit dropped for the budget is named in a line an
     const left = Array.from({ length: 10 }, () => ({ path: 'src/js/orders.js', part: 2, of: 3 }));
     const d = await post(t, { env: { SCAN_ISSUE: 'true', ENGINE: 'claude' }, files: { 'audit-units.txt': rows, 'audit-inventory.json': INV({ ...E, all_parts: true, parts_left: left, parts_left_n: 72, parts_left_by_path: { 'src/js/orders.js': 60, 'src/js/legacy.js': 12 } }), 'findings.json': result([uf()]) } });
     assert.match(funnel(d), /3 selected this run = 1 reviewed whole \+ 2 reviewed in part \(72 parts not reached\)/);
+=======
+  const hint = { left: 2, calls: 1, need: 3, usd: 0.5, budget: 1, max: 8, runs: 1, extra: 1 };
+  test('run: an admitted extra part is reviewed, not reported not reached; the hint says what the worst case planned and what runtime admission added; all admitted is complete', async (t) => {
+    const d = await run(t, { inv: { extra_keys: [`${U1}:2`], budget_hint: hint } });
+    assert.deepEqual(d.calls.outputs, { status: 'complete' });
+    assert.match(vis(d.calls.summary), /allows 1 call by the worst-case estimate; runtime admission added 1 of 1 extra unit part/);
+    assert.match(vis(d.calls.summary), /parts 1, 2 of 2/);
+  });
+
+  test('run: a skipped extra part (droppedParts) is reported not reached and the run is incomplete; the hint counts it as not admitted', async (t) => {
+    const d = await run(t, { inv: { extra_keys: [`${U1}:2`], budget_hint: hint }, sp: { calls: 1, failed: [], dropped: [], droppedParts: [`${U1}:2`] } });
+    assert.equal(d.calls.outputs.status, 'incomplete');
+    assert.match(d.calls.outputs.reason, /1 unit part not reached \(max_budget_usd\)/);
+    assert.match(vis(d.calls.summary), /runtime admission added 0 of 1 extra unit part/);
+>>>>>>> adc81f9 (Scan: runtime admission of extra unit parts beyond the worst-case plan)
   });
 
   test('run: a stateful rotation defers later parts on purpose: no parts_left, still complete', async (t) => {
