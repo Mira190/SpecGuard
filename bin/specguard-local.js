@@ -31,6 +31,14 @@ const OPTIONS = { base: { type: 'string' }, body: { type: 'string' }, model: { t
 const fwd = (p) => path.resolve(p).replace(/\\/g, '/');
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const tryGit = (cwd, ...args) => { try { return git(cwd, ...args); } catch { return ''; } };
+// Windows: a PATH `bash` can be the WSL bash.exe in System32, which cannot open a Windows path. SPECGUARD_BASH, else Git for Windows' bash beside `git --exec-path` (<root>/mingw64/libexec/git-core), else `bash`.
+function bashPath({ platform = process.platform, env = process.env, exists = fs.existsSync, execPath = () => tryGit('.', '--exec-path') } = {}) {
+  if (platform !== 'win32') return 'bash';
+  if (env.SPECGUARD_BASH) return env.SPECGUARD_BASH;
+  const g = execPath().replace(/[\\/]mingw(?:64|32)[\\/]libexec[\\/]git-core[\\/]?$/i, '');
+  return g && exists(`${g}/bin/bash.exe`) ? `${g}/bin/bash.exe` : 'bash';
+}
+let BASH;
 const readLines = (p) => { try { return fs.readFileSync(p, 'utf8').split('\n').filter(Boolean); } catch { return []; } };
 
 function parse(argv) {
@@ -145,7 +153,7 @@ async function run({ cwd = process.cwd(), opts = {}, log = (m) => console.error(
     fs.writeFileSync(outputs, '');
 
     // the same four inputs the action reads (flags only: an exported REQ_PATHS in the shell must not change the review)
-    const c = await exec(state, 'bash', [fwd(path.join(ROOT, 'src', 'collect.sh'))], {
+    const c = await exec(state, BASH ||= bashPath(), [fwd(path.join(ROOT, 'src', 'collect.sh'))], {
       cwd: wt, capture: true,
       env: { ...process.env, BASE_SHA: base, HEAD_SHA: head, CTX: fwd(ctx), TRACE: 'auto', PR_NUMBER: '1', GH_REPO: 'local/local', GH_TOKEN: 'offline',
         REQ_PATHS: lines(opts['requirements-paths']), STANDARDS_PATHS: lines(opts['standards-paths']), TEST_PATHS: lines(opts['test-paths']), IGNORE_EXTRA: lines(opts.ignore),
@@ -166,7 +174,7 @@ async function run({ cwd = process.cwd(), opts = {}, log = (m) => console.error(
       fs.writeFileSync(promptFile, prompt);
       const engineEnv = { ...process.env, CTX: fwd(ctx), PROMPT_FILE: fwd(promptFile), MODEL: opts.model || '', EFFORT: opts.effort || '' };
       if (opts['auto-tier'] !== undefined) engineEnv.AUTO_TIER = opts['auto-tier']; // unset = engines/copilot.sh's default (intelligence), like the action
-      const e = await exec(state, 'bash', [fwd(path.join(ROOT, 'src', 'engines', 'copilot.sh'))], { cwd: wt, env: engineEnv });
+      const e = await exec(state, BASH ||= bashPath(), [fwd(path.join(ROOT, 'src', 'engines', 'copilot.sh'))], { cwd: wt, env: engineEnv });
       if (e.status !== 0) log(`engines/copilot.sh exited ${e.status}`); // post.js reports "could not complete"
     }
 
@@ -207,4 +215,4 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) main().then((c) => { process.exitCode = c; }, (e) => { console.error(`specguard-local: ${e.message}`); process.exitCode = 3; });
-module.exports = { parse, baseRef, fetchBase, resolveBase, validatedGaps, run, format, main };
+module.exports = { bashPath, parse, baseRef, fetchBase, resolveBase, validatedGaps, run, format, main };

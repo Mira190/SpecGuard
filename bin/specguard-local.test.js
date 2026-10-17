@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { execFileSync } = require('node:child_process');
-const { parse, baseRef, fetchBase, resolveBase, validatedGaps, run, format, main } = require('./specguard-local.js');
+const { bashPath, parse, baseRef, fetchBase, resolveBase, validatedGaps, run, format, main } = require('./specguard-local.js');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-local-bin-test-'));
 test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -236,4 +236,13 @@ test('main: exit code is 0 (advisory) unless --fail-on-gaps and gaps exist; --js
     process.env.SPECGUARD_LOCAL_FINDINGS = canned('clean', findings({ findings: [], coverage: [{ ...findings().coverage[0], status: 'covered', evidence: [{ path: 'src/price.js', line: 2, quote: behaviour.quote, layer: 'unit', kind: 'assertion', proves: 'The cap is asserted.' }] }] }));
     assert.strictEqual(await main(['--base', 'main', '--fail-on-gaps']), 2); // no gap, but the cited evidence is not an assertion: a reduced (incomplete) review, not a clean one (U4; the clean control is below)
   } finally { process.chdir(cwd); console.log = log; console.error = err; delete process.env.SPECGUARD_LOCAL_FINDINGS; }
+});
+
+test('bashPath: Windows uses SPECGUARD_BASH, else the Git for Windows bash next to git, else bash; other platforms always bash', () => {
+  const execPath = () => 'C:/Program Files/Git/mingw64/libexec/git-core', win = (o) => bashPath({ platform: 'win32', env: {}, exists: () => true, execPath, ...o });
+  assert.equal(win({}), 'C:/Program Files/Git/bin/bash.exe');
+  assert.equal(win({ env: { SPECGUARD_BASH: 'D:/b/bash.exe' } }), 'D:/b/bash.exe');
+  assert.equal(win({ exists: () => false }), 'bash');
+  assert.equal(win({ execPath: () => '' }), 'bash');
+  assert.equal(bashPath({ platform: 'linux', env: {}, exists: () => true, execPath }), 'bash');
 });
