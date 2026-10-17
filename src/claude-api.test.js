@@ -257,6 +257,9 @@ test('an answer with no JSON keeps the scrubbed raw text in engine-raw-answer.tx
   assert.equal(h.file('engine-raw-answer.txt'), 'sorry, no ***');
   assert.equal(h.file('engine-status'), 'failed');
   assert.match(h.file('engine-notes'), /no JSON found in the engine output[\s\S]*engine-raw-answer\.txt/);
+  const big = harness(t, [good({ content: [{ type: 'text', text: 'z'.repeat(250000) }] })]);
+  await big.go();
+  assert.equal(big.file('engine-raw-answer.txt').length, 200000, 'a long answer is kept capped at 200000 chars');
   const ok = harness(t, [good()]);
   await ok.go();
   assert.equal(ok.file('engine-raw-answer.txt'), null, 'a good answer leaves no raw file');
