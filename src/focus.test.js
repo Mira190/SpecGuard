@@ -53,6 +53,8 @@ test('parseCandidates: hunk-tier entries are kept by default and dropped with sk
   const t = 'a.js\n  test/a.test.js  (same stem)\n  test/b.test.js  (mentions changed `x`)\n';
   assert.deepEqual(parseCandidates(t).get('a.js'), ['test/a.test.js', 'test/b.test.js']);
   assert.deepEqual(parseCandidates(t, { skipHunk: true }).get('a.js'), ['test/a.test.js']);
+  // the producer's reason (test-map.js HUNK_REASON) is what skipHunk drops
+  assert.deepEqual(parseCandidates(`a.js\n  test/b.test.js  (${require('./test-map.js').HUNK_REASON}\`x\`)\n`, { skipHunk: true }).get('a.js'), []);
 });
 
 test('parseCandidates: a source with a found test lists it, one without maps to []', () => {
