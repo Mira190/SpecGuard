@@ -269,9 +269,10 @@ function markdown({ runId, repo, target, model, cost, results, agg, combined }) 
   for (const r of results) s += r.error
     ? `| ${r.id} | ${r.goal} | ${r.rep} | error | | | | | | | | | ${why(r)} |\n`
     : `| ${r.id} | ${r.goal} | ${r.rep} | ${r.pass ? 'yes' : 'no'} | ${r.tp} | ${r.fp} | ${r.acceptable || 0} | ${r.fn} | ${r.summary_only} | ${r.json_valid ? 'yes' : 'no'} | ${r.degraded ? 'yes' : 'no'} | ${sec(r.latency_s)} | ${why(r)} |\n`;
-  const row = (name, a) => `| ${name} | ${a.runs} | ${a.errors} | ${a.acceptable} | ${pct(a.precision)} | ${pct(a.recall)} | ${pct(a.json_valid_rate)} | ${pct(a.degraded_rate)} | ${pct(a.pass_rate)} | ${sec(a.latency_median_s)} | ${sec(a.latency_max_s)} |\n`;
-  s += '\n## Aggregate\n\n| Scope | Runs | Errors | Acceptable | Precision | Recall | JSON valid | Degraded | Pass rate | Latency median | Latency max |\n|---|---|---|---|---|---|---|---|---|---|---|\n' + row('all', agg);
+  const row = (name, a) => `| ${name} | ${a.runs} | ${a.errors} | ${a.acceptable} | ${pct(a.precision)} (${pct(a.precision_delivered)}) | ${pct(a.recall)} | ${pct(a.json_valid_rate)} | ${pct(a.degraded_rate)} | ${pct(a.pass_rate)} | ${sec(a.latency_median_s)} | ${sec(a.latency_max_s)} |\n`;
+  s += '\n## Aggregate\n\n| Scope | Runs | Errors | Acceptable | Precision (delivered) | Recall | JSON valid | Degraded | Pass rate | Latency median | Latency max |\n|---|---|---|---|---|---|---|---|---|---|---|\n' + row('all', agg);
   for (const [g, a] of Object.entries(agg.by_goal)) s += row(g, a);
+  if (agg.unknown_expected) s += `\n${agg.unknown_expected} errored run(s) carry no expected_findings: end-to-end recall is unknown (n/a), not computed with 0 positives.\n`;
   if (combined) {
     s += '\n## Combined PR\n\n| Rep | Pass | TP | FP | FN | Outside sandbox (FP) | Posted / budget | Summary overflow | Latency | PR |\n|---|---|---|---|---|---|---|---|---|---|\n';
     for (const r of combined.reps) s += r.error ? `| ${r.rep} | error | | | | | | | | ${r.error} |\n`
