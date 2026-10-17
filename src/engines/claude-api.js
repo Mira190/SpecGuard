@@ -37,6 +37,9 @@ const worstCase = (model, sysBytes, userBytes, maxTokens) => {
 };
 
 // Scan: how many full-pack unit calls max_budget_usd covers by the worst case above (1-8). The collector asks before it picks the units (the system prompt is about 15 KB, the rest of a unit part's prompt well under 32 KB).
+// scan_scope all: ponytail: a safety cap of 400 unit calls per run (nest needs ~85), so a runaway inventory cannot queue thousands; raise it if a repository needs more. HEADROOM_MS: time kept after the last call for verify, render and upload. Measured on the Actions logs of
+// manual scans (2026-10-13/17): the post step (audit-post.js, github-script) took 0.1 s, 4 s and 40 s (blobless clone fetching blobs), the artifact upload 1 s; 300 s is 7x the largest. The deadline also keeps 2x the longest call seen.
+const ALL_MAX_CALLS = 400, HEADROOM_MS = 300000;
 const MAX_UNIT_CALLS = 8, callUsd = ({ model, maxTokens, packBytes }) => worstCase(model, 16 * 1024, packBytes + 32 * 1024, maxTokens).usd; // callUsd: the worst case of one full unit call
 const unitCalls = ({ model, budget, maxTokens, packBytes }) => Math.max(1, Math.min(MAX_UNIT_CALLS, Math.floor(budget / callUsd({ model, maxTokens, packBytes })) || 1));
 
@@ -440,24 +443,29 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     const batch = Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), split = env.CHECK === 'audit' ? require('../scan-parts.js').plan({ ctx, root: root(), batch, limit: packBytes, schemaFile, contextPack, evidencePack, assembleAudit: require('../prompt.js').assembleAudit }) : null;
     if (split) {
       const priced = (p) => pricePart(model, maxTokens, p);
-      const { plans, dropped, droppedKeys } = fit(split.parts.filter((p) => !p.extra).map(priced), budget), total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd;
-      // extras: unit calls the worst case did not plan (the collector's breadth-first queue). Admitted one by one after the planned calls, only while actual spend + the part's worst case fits the budget; ponytail: none when the plan itself had to drop a part
-      const extras = droppedKeys.length || dropped.length ? [] : split.parts.filter((p) => p.extra).map(priced), skippedEx = droppedKeys.length || dropped.length ? split.parts.filter((p) => p.extra) : [];
+      const all = env.SCAN_SCOPE === 'all', fitted = fit(split.parts.filter((p) => !p.extra).map(priced), budget), plans = fitted.plans, total = () => plans.reduce((a, p) => a + p.usd, 0), firstUsd = plans[0].usd;
+      const dropped = all ? [] : fitted.dropped, droppedKeys = all ? [] : fitted.droppedKeys; // scan_scope all: what the worst-case plan cut goes to the queue below instead of being dropped
+      // extras: unit calls the worst case did not plan (the collector's breadth-first queue). Admitted one by one after the planned calls, only while actual spend + the part's worst case fits the budget; ponytail: none when the plan itself had to drop a part (scan_scope all: those parts lead the queue)
+      const extras = all ? [...fitted.cut, ...split.parts.filter((p) => p.extra).map(priced)] : droppedKeys.length || dropped.length ? [] : split.parts.filter((p) => p.extra).map(priced), skippedEx = all || !(droppedKeys.length || dropped.length) ? [] : split.parts.filter((p) => p.extra), late = []; // late: parts not started for the deadline (scan_scope all)
+      let longest = 0; // the longest call so far: the deadline keeps twice that
       if (total() > budget) return end('failed', 'budget', `estimated worst-case cost $${fmt(firstUsd)} for the first part of the scan exceeds max_budget_usd $${fmt(budget)} (raise max_budget_usd or scan_batch_blocks smaller, lower max_output_tokens or use a cheaper model)`);
       const rs = [], failed = [], merged = { docs_reviewed: [], requirements: [], not_requirements: [], unit_findings: [], not_reviewed: [] };
       let first = null, ok = 0, splits = 0, cfg = null; // cfg: the first part that failed on a configuration class
       const blockCuts = {};
       const queue = [...plans], retried = [], spent = () => rs.reduce((a, x) => a + charge(x), 0), fail = (p, reason, cids = p.cids) => failed.push({ part: p.cids ? 'blocks' : 'units', ...(p.cids ? { blocks: cids } : { units: p.units, ...(p.keys && { keys: p.keys }) }), reason });
       for (;;) {
+        if (all && rs.length && Date.now() >= deadline - Math.max(HEADROOM_MS, 2 * longest)) { late.push(...queue.splice(0), ...extras.splice(0)); break; } // dispatch deadline: the review time limit minus headroom (the first call always runs)
         while (!queue.length && extras.length) { const x = extras.shift(); if (spent() + x.usd <= budget) { plans.push(x); queue.push(x); } else skippedEx.push(x); }
         if (!queue.length) break;
         const p = queue.shift();
-        const r = await call(p.system, p.user, p.tokens);
+        if (all && spent() + p.usd > budget) { plans.splice(plans.indexOf(p), 1); skippedEx.push(p); continue; } // the hard stop: admitted only while actual spend + its worst case fits
+        const t1 = Date.now(), r = await call(p.system, p.user, p.tokens);
+        longest = Math.max(longest, Date.now() - t1);
         r.usd = p.usd; // the worst case of this part: what an attempt with unknown usage is charged
         rs.push(r);
         if (!r.ok && r.reason === 'length' && p.cids && p.cids.length > 1) { // the reply overflowed: run the two halves as parts of their own, if the budget still covers them
           const h = Math.ceil(p.cids.length / 2), halves = [p.cids.slice(0, h), p.cids.slice(h)].map((c) => priced({ ...split.sub(c), retry: p.retry })), spent = rs.reduce((a, x) => a + charge(x), 0);
-          if (spent + queue.reduce((a, x) => a + x.usd, 0) + halves.reduce((a, x) => a + x.usd, 0) <= budget) { splits++; queue.unshift(...halves); continue; }
+          if (spent + (all ? halves[0].usd : queue.reduce((a, x) => a + x.usd, 0) + halves.reduce((a, x) => a + x.usd, 0)) <= budget) { /* scan_scope all: against the actual spend, each half again at dispatch */ splits++; queue.unshift(...halves); continue; }
           fail(p, `${r.why}; not split: the halves would exceed max_budget_usd`); first ||= r; continue;
         }
         let obj = null, why = r.ok ? '' : r.why || r.status;
@@ -480,17 +488,20 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
           const why = `${unanswered.length} of ${p.cids.length} blocks were not answered`;
           if (p.retry) { fail(p, `${why} in two attempts`, unanswered); continue; }
           const again = priced({ ...split.sub(unanswered), retry: true }), spent = rs.reduce((a, x) => a + charge(x), 0);
-          if (spent + queue.reduce((a, x) => a + x.usd, 0) + again.usd > budget) { fail(p, `${why}; not retried: the retry would exceed max_budget_usd`, unanswered); continue; }
+          if (spent + (all ? 0 : queue.reduce((a, x) => a + x.usd, 0)) + again.usd > budget) { fail(p, `${why}; not retried: the retry would exceed max_budget_usd`, unanswered); continue; }
           retried.push(unanswered); queue.push(again);
         }
       }
       writeUsage(rs);
+      if (all) { late.push(...queue.splice(0), ...extras.splice(0)); dropped.push(...skippedEx.flatMap((q) => q.cids || [])); for (const p of late) fail(p, 'deadline: not started, the review time limit minus headroom was reached'); } // a call that timed out also ends the run: the rest is not reached for the deadline
       skippedEx.push(...extras); // a timeout leaves the rest unadmitted
       const dropKeys = [...droppedKeys, ...skippedEx.flatMap((q) => q.keys || [])], seen = new Set(plans.flatMap((q) => q.units || [])), idOf = (k) => k.split(':')[0], droppedUnits = [...new Set(dropKeys.map(idOf).filter((u) => !seen.has(u)))], droppedParts = dropKeys.filter((k) => seen.has(idOf(k))); // a unit with a part in a call that ran or was admitted was reached: its dropped parts are named on their own
       for (const p of queue) fail(p, 'not started: the review timed out'); // a timeout stops the run: the parts not started are not audited either
       if (!ok) return failEnd(first); // nothing usable at all: the run fails as one call would
       w('findings.json', JSON.stringify(merged));
-      w('scan-parts.json', JSON.stringify({ calls: rs.length, ...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(droppedUnits.length && { droppedUnits }), ...(droppedParts.length && { droppedParts }), ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
+      const nr = (l) => ({ parts: l.reduce((a, q) => a + (q.keys ? q.keys.length : 0), 0), blocks: l.reduce((a, q) => a + (q.cids ? q.cids.length : 0), 0) }); // scan_scope all: what was not reached, by reason; needUsd = actual spend + the worst case of every part not run (a ceiling)
+      const reach = all && { scope: 'all', notReached: { budget: nr(skippedEx), deadline: nr(late) }, needUsd: Math.ceil((spent() + [...skippedEx, ...late].reduce((a, q) => a + q.usd, 0)) * 100) / 100 };
+      w('scan-parts.json', JSON.stringify({ ...reach, calls: rs.length,...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(droppedUnits.length && { droppedUnits }), ...(droppedParts.length && { droppedParts }), ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
       const seenParts = plans.filter((p) => p.units && !failed.some((x) => x.part === 'units' && x.units === p.units)); // the unit parts that answered: their packs are what the unit findings may rely on
       if (seenParts.length) w('pack-cut.txt', [...new Set(seenParts.flatMap((p) => p.pack.notWhole))].map((x) => `${x}\n`).join(''));
       notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}${droppedUnits.length ? `; ${plural(droppedUnits.length, 'unit')} not reached (max_budget_usd), due again` : ''}${droppedParts.length ? `; ${plural(droppedParts.length, 'unit part')} not reached (max_budget_usd)` : ''}`);
@@ -530,9 +541,9 @@ const pricePart = (model, maxTokens, p) => {
 };
 // The budget is hard: the last part goes first (the extra unit parts, then the block batches in reverse candidate order = rotation priority), the first part last. -> the parts that stay, the dropped block cids and the dropped unit keys (id or id:part).
 function fit(all, budget) {
-  const plans = all.slice(), dropped = [], droppedKeys = [], total = () => plans.reduce((a, p) => a + p.usd, 0);
-  while (plans.length > 1 && total() > budget) { const q = plans.pop(); dropped.unshift(...q.cids || []); droppedKeys.unshift(...q.keys || []); }
-  return { plans, dropped, droppedKeys };
+  const plans = all.slice(), dropped = [], droppedKeys = [], cut = [], total = () => plans.reduce((a, p) => a + p.usd, 0); // cut: the dropped parts themselves, in plan order (scan_scope all queues them)
+  while (plans.length > 1 && total() > budget) { const q = plans.pop(); cut.unshift(q); dropped.unshift(...q.cids || []); droppedKeys.unshift(...q.keys || []); }
+  return { plans, dropped, droppedKeys, cut };
 }
 // What the pre-flight of a scan over this ctx keeps (the collector calls it, so the units it picks are the units the engine will afford): { rooms: unit calls kept, blockUsd: what the block calls cost } or null (one call, or no way to tell).
 function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
@@ -544,6 +555,6 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
   } catch { return null; }
 }
 
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, ALL_MAX_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts
