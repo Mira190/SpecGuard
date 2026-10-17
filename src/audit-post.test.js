@@ -1108,9 +1108,20 @@ test('run (F23 review): a forced unit whose test was cut is written to the state
   const inv = { ...invOf([urow(UID, { path: 'src/plan.js', tests: ['test/a.test.js'] })]), forced: [UID] };
   const r = await runPost(t, { ctxFiles: { 'audit-units.txt': `${UID}\tsrc/plan.js\t5\twhy\ttest/a.test.js\t-\tabcdef12\t-\n`, 'audit-inventory.json': inv, 'findings.json': result(), 'pack-cut.txt': 'test/a.test.js\n' }, env: { AUDIT_ISSUE: 'true' } });
   assert.equal(r.calls.outputs.status, 'incomplete');
-  assert.match(r.calls.outputs.reason, /1 unit did not fit the model's context/);
+  assert.match(r.calls.outputs.reason, /1 unit was reviewed with only part of their tests \(recorded unsure\)/);
+  assert.doesNotMatch(r.calls.outputs.reason, /did not fit/);
   const b = audit.readState(r.calls.created[0].body).blocks.find((x) => x.cid === UID);
   assert.deepEqual([b.status, b.at.date], ['unsure', DATE]);
+});
+
+test('run: two units reviewed with part of their tests and one that did not fit: the reason and the report name them apart', async (t) => {
+  const [A, B, C] = ['aaaaaaa1', 'bbbbbbb2', 'ccccccc3'], row = (id, tests) => `${id}\tsrc/${id}.js\t5\twhy\t${tests}\t-\tabcdef12\t-\n`;
+  const inv = { ...invOf([urow(A), urow(B), urow(C, { tests: [] })]), forced: [A, B] };
+  const r = await runPost(t, { ctxFiles: { 'audit-units.txt': row(A, 'test/a.test.js') + row(B, 'test/a.test.js') + row(C, 'none'), 'audit-inventory.json': inv, 'findings.json': result(), 'pack-cut.txt': 'test/a.test.js\nsrc/ccccccc3.js\n' }, env: { AUDIT_ISSUE: 'true' } });
+  assert.equal(r.calls.outputs.status, 'incomplete');
+  assert.match(r.calls.outputs.reason, /1 unit did not fit the model's context; 2 units were reviewed with only part of their tests \(recorded unsure\)/);
+  assert.match(r.calls.summary, /\*\*Not reviewed this run:\*\* 1 unit did not fit the model's context: `src\/ccccccc3\.js`/);
+  assert.match(r.calls.summary, /\*\*Reviewed with part of their tests\*\*[^\n]*aaaaaaa1\.js[^\n]*bbbbbbb2\.js/);
 });
 
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
