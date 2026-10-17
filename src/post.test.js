@@ -2292,6 +2292,16 @@ test('M3: a capped requirements-index.md or an empty PR body is not "not collect
   assert.deepEqual(top.resolved, []);
 });
 
+test('trace: "N more code/test candidates not shown" is a note; the run stays complete', async (t) => {
+  const spec = { limitations: ['3 more code/test candidate(s) for S1 not shown (top 3 kept): src/a.js, src/b.js, test/c.test.js.'] };
+  const s = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
+  writeCtx(s, 'requirements-status.json', { status: 'available', sources: ['PR body'], limitations: [], spec });
+  await post(s);
+  assert.doesNotMatch(s.calls.summary[0].body, /Incomplete review/);
+  assert.match(s.calls.summary[0].body, /specguard:head=HEADSHA/);
+  assert.deepEqual(s.resolved, ['gone']);
+});
+
 test('V7: an unreadable or other-repository reference is a note in the summary, never an incompleteness reason', async (t) => {
   const lims = ['Could not read issue #2.', 'Referenced but not readable: ENG-9 (Jira). Paste the acceptance criteria into the PR body to have them reviewed.',
     'Not read: other-repo reference secretorg/vault#12 (only issues of this repository are read)', 'Context trimmed: 1 mentioned issue(s) omitted by the five-issue limit (context only, not acceptance criteria).'];
