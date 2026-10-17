@@ -209,6 +209,7 @@ test('enclosingName: a generator method and an exported constant table are defin
   const at = (src, line) => enclosingName(src.split('\n'), line);
   assert.equal(at('class A {\n  public *scanForClientHooks(\n    instance,\n  ) {\n    yield 1;\n  }\n}', 5), 'scanForClientHooks');
   assert.equal(at("export const multerExceptions = {\n  A: 'a',\n  INVALID_FIELD_NAME: 'Invalid field name',\n};", 3), 'multerExceptions');
+  assert.equal(at('function wrapper() {\n  /**\n   * retry(3) is used below\n   */\n  return 1;\n}', 5), 'wrapper', 'control: a comment line that looks like a generator call is no definition');
   assert.equal(at('function plain() {\n  return 1;\n}', 2), 'plain', 'control: ordinary functions still resolve');
 });
 

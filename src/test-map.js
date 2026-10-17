@@ -109,7 +109,7 @@ function needlesOf(lines, line) {
 // a generator method (`public *gen(`) and an exported constant table (`export const X = {`) are definitions too; declName sees neither
 const GEN = /^\s*(?:(?:public|private|protected|static|async|override|export)\s+)*\*\s*([A-Za-z_$][\w$]*)\s*[(<]/, EXPORT_CONST = /^\s*export\s+(?:declare\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)/;
 function enclosingName(lines, line) {
-  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = (GEN.exec(lines[i]) || EXPORT_CONST.exec(lines[i]) || [])[1] || namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return n; }
+  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = (comment(lines[i]) ? [] : GEN.exec(lines[i]) || EXPORT_CONST.exec(lines[i]) || [])[1] || namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return n; }
   return null;
 }
 // the thrown error class on the cited line (+-2) and the name of the enclosing definition (up to 60 lines up)
