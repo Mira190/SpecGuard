@@ -587,3 +587,60 @@ test('trimmed unit: its tests get at most half a room, in priority order, so the
     for (const p of omitted) assert.ok(pack.notWhole.includes(p), `${p} is listed as cut`);
   }
 });
+
+const matched = (r) => byPath(inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12 }));
+const body = (...ls) => [...ls, 'export const pad1 = 1;', 'export const pad2 = 2;'];
+const spec = (...ls) => ["it('works', () => {", ...ls, '  assert.ok(true);', '});'];
+
+test('test matching: a spec that imports a dotted unit (multer.constants.ts) is matched; a spec sharing only a word segment in another package is not', (t) => {
+  const r = repo(t, {
+    'packages/express/multer/multer/multer.constants.ts': ['export const multerExceptions = {', "  LIMIT: 'x',", '};', ''],
+    'packages/express/test/multer/multer/multer.utils.spec.ts': ["import { multerExceptions } from '../../../multer/multer/multer.constants';", ...spec('  multerExceptions.LIMIT;')],
+    'packages/other/test/constants.spec.ts': spec('  // multer constants of another package'),
+  });
+  const row = matched(r)['packages/express/multer/multer/multer.constants.ts'];
+  assert.deepEqual(row.tests, ['packages/express/test/multer/multer/multer.utils.spec.ts']);
+  assert.ok(row.names.includes('multerExceptions'), 'export const NAME is a public name');
+});
+
+test('test matching: a dotted stem written in a spec without an import counts as a whole path-like token, not as its parts', (t) => {
+  const r = repo(t, {
+    'src/multer.constants.ts': body('export const a = 1;'),
+    'test/by-token.js': spec("  require.resolve('multer.constants.js');"),
+    'test/parts.js': spec('  const multer = 1, constants = 2;'),
+  });
+  assert.deepEqual(matched(r)['src/multer.constants.ts'].tests, ['test/by-token.js']);
+});
+
+test('test matching: a plural kebab spec (listeners-metadata-explorer.spec.ts) is matched by its import, by the plural fold in a related folder, and by the class name', (t) => {
+  const r = repo(t, {
+    'packages/ms/listener-metadata-explorer.ts': ['export class ListenerMetadataExplorer {', '  explore() { return 1; }', '}'],
+    'packages/ms/test/listeners-metadata-explorer.spec.ts': spec('  assert.ok(1);'), // no import, no class: the plural fold only
+    'packages/ms/test/by-import.spec.ts': ["import { x } from '../listener-metadata-explorer';", ...spec()],
+    'packages/ms/test/by-class.spec.ts': spec('  new ListenerMetadataExplorer();'),
+    'packages/zzz/test/listeners-metadata-explorer.spec.ts': spec('  assert.ok(1);'), // plural name in an unrelated package: not matched
+  });
+  assert.deepEqual(matched(r)['packages/ms/listener-metadata-explorer.ts'].tests, ['packages/ms/test/by-import.spec.ts', 'packages/ms/test/listeners-metadata-explorer.spec.ts', 'packages/ms/test/by-class.spec.ts'], 'import > plural fold > class name');
+});
+
+test('test matching: 25 specs that only contain the word "messages" do not push out the one spec that imports messages.ts', (t) => {
+  const files = { 'packages/core/errors/messages.ts': body('export const MESSAGES = {};') };
+  for (let i = 0; i < 25; i++) files[`packages/core/test/noise${i}.spec.ts`] = spec(`  const messages = ${i};`);
+  files['elsewhere/deep/real.spec.ts'] = ["import { MESSAGES } from '../../packages/core/errors/messages';", ...spec('  MESSAGES;')];
+  const got = matched(repo(t, files))['packages/core/errors/messages.ts'].tests;
+  assert.equal(got.length, 20);
+  assert.equal(got[0], 'elsewhere/deep/real.spec.ts', 'the importing spec is ranked first');
+});
+
+test('test matching: a folder import (index.ts) matches the index unit; the exact stem still ranks before an importer', (t) => {
+  const r = repo(t, {
+    'src/foo.ts': body('export function foo() { return 1; }'),
+    'src/bar/index.ts': body('export function bar() { return 1; }'),
+    'test/a-importer.spec.ts': ["import { foo } from '../src/foo';", ...spec('  foo();')],
+    'test/foo.spec.ts': spec('  assert.ok(1);'),
+    'test/bar-importer.spec.ts': ["import { bar } from '../src/bar';", ...spec()],
+  });
+  const m = matched(r);
+  assert.deepEqual(m['src/foo.ts'].tests, ['test/foo.spec.ts', 'test/a-importer.spec.ts']);
+  assert.deepEqual(m['src/bar/index.ts'].tests, ['test/bar-importer.spec.ts']);
+});
