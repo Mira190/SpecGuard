@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { extractCandidates, checkCandidates } = require('./candidates.js');
 
 const args = process.argv.slice(2), opt = (n, d) => { const i = args.indexOf(n); return i < 0 ? d : args[i + 1]; };
 const cases = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases.json'), 'utf8'));
@@ -70,10 +71,7 @@ function makeVariants() { // R / C / RC as local commits on top of the pinned SH
 
 // collect.sh's `candidates()` is an inline node heredoc; run that very text so the harness cannot drift from it.
 function candidatesScript() {
-  const sh = fs.readFileSync(path.join(SRC, 'collect.sh'), 'utf8').replace(/\r\n/g, '\n');
-  const m = /candidates\(\) \{[^\n]*<<'JS'\n([\s\S]*?)\nJS\n/.exec(sh);
-  if (!m) throw new Error('cannot find the candidates() heredoc in ' + path.join(SRC, 'collect.sh'));
-  const f = path.join(WORK, 'candidates.js'); fs.writeFileSync(f, m[1] + '\n'); return f;
+  const f = path.join(WORK, 'candidates.js'); fs.writeFileSync(f, extractCandidates(fs.readFileSync(path.join(SRC, 'collect.sh'), 'utf8'))); return f;
 }
 
 function runVariant(id, h, candJs) {
@@ -88,11 +86,12 @@ function runVariant(id, h, candJs) {
   const cd = spawnSync(process.execPath, [candJs, path.join(SRC, 'trace.js'), ctx], { cwd: TARGET, env, encoding: 'utf8', timeout: 60000, maxBuffer: 1 << 28 });
   const t2 = Date.now();
   const rd = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8'); } catch { return ''; } };
+  checkCandidates(id, cd, rd('test-candidates.txt'), h.variant !== 'R' && cases.cases.find((c) => c.id === h.case).edits.C.length > 0); // R edits only the requirement text
   let tc = null; try { tc = JSON.parse(rd('trace-candidates.json')); } catch {}
   const failed = tr.status !== 0 || !tc;
   return {
     id, case: h.case, variant: h.variant, head: h.head, trace_ms: t1 - t0, cand_ms: t2 - t1,
-    status: failed ? 'trace failed: ' + (tr.stderr || '').split('\n')[0] : cd.status !== 0 ? 'candidates failed' : 'ok',
+    status: failed ? 'trace failed: ' + (tr.stderr || '').split('\n')[0] : 'ok',
     limitations: tc ? tc.limitations : [],
     req_to_code: tc ? tc.requirement_to_code.map((x) => ({ criterion: x.criterion, code: x.code.map(slim), tests: x.tests.map(slim) })) : [],
     code_to_req: tc ? tc.code_to_requirement.map((x) => ({ path: x.path, line: x.line, candidates: x.candidates.map((c) => ({ path: c.path, line: c.line, score: c.score, kind: c.kind })) })) : [],
