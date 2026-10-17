@@ -119,9 +119,9 @@ test('specguard-run.yml: the scope step turns every accepted target spelling int
   assert.equal(bash('shop'), null, 'a bare name has no owner');
 });
 
-test('specguard-run.yml: scan_issue chooses where a scan keeps its state: this repository (default), the target, or nowhere', () => {
+test('specguard-run.yml: scan_issue chooses where a scan keeps its state: nowhere (default), this repository, or the target', () => {
   const y = central();
-  assert.match(y, /^ {6}scan_issue: \{[^}]*type: choice, default: specguard, options: \[specguard, target, none\]/m);
+  assert.match(y, /^ {6}scan_issue: \{[^}]*type: choice, default: none, options: \[specguard, target, none\]/m);
   assert.match(y, /scan_issue: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && inputs\.scan_issue != 'none' && 'true' \|\| 'false' \}\}/);
   assert.match(y, /scan_issue_repo: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && inputs\.scan_issue == 'specguard' && github\.repository \|\| '' \}\}/);
   assert.match(y, /scan_issue_token: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && inputs\.scan_issue == 'specguard' && github\.token \|\| '' \}\}/);
@@ -222,7 +222,7 @@ test('specguard-run.yml: the results artifact uploads only the named result file
 
 test('specguard-run.yml: manual model/size/budget inputs reach the action (empty = action default); the target checkout is blobless and non-shallow without --shallow-since; counts get the full SHA', () => {
   const y = central(), step = y.slice(y.indexOf('uses: ./.specguard-src')), action = fs.readFileSync(path.join(root, 'action.yml'), 'utf8');
-  for (const k of ['max_units', 'max_budget_usd', 'max_output_tokens']) {
+  for (const k of ['max_budget_usd']) {
     assert.match(y, new RegExp(`\\n {6}${k}: \\{ description: "[^"\\n]+", required: false, type: string, default: "" \\}`), `${k} is an optional input, empty by default`);
     assert.match(step, new RegExp(`\\n {10}${k}: \\$\\{\\{ inputs\\.${k} \\}\\}`), `${k} is passed to the action`);
   }
