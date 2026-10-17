@@ -481,7 +481,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
         ok++;
         if (p.cids) Object.assign(blockCuts, p.blockCuts);
         if (p.cids) merged.requirements.push(...arr('requirements')), merged.not_requirements.push(...arr('not_requirements'));
-        else merged.unit_findings.push(...arr('unit_findings'));
+        else merged.unit_findings.push(...arr('unit_findings').map((f) => (f && typeof f === 'object' && p.keys ? { ...f, callKeys: p.keys } : f))); // callKeys: the parts this call held; verifyUnits checks a cited line against those only
         merged.docs_reviewed.push(...arr('docs_reviewed').filter((d) => !merged.docs_reviewed.includes(d)));
         merged.not_reviewed.push(...arr('not_reviewed'));
         if (unanswered.length) {
@@ -521,7 +521,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       return end('failed', 'budget', why);
     }
     if (pack.note) notes.push(pack.note);
-    let r = await call(system, user, maxTokens);
+    let r = await call(system, user, maxTokens); r.usd = est.usd; // the worst case of this call: charged when its usage is unknown
     const rs = [r];
     // no JSON in the answer: ask once for the JSON object only, if the budget still covers a second call (length, policy, auth and quota failures are not retried)
     if (!r.ok && r.answer?.trim() && worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user) + Buffer.byteLength(r.answer) + REPAIR.length, maxTokens).usd + charge(r) <= budget) { r = await call(system, user, maxTokens, r.answer); rs.push(r); }
