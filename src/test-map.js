@@ -106,8 +106,10 @@ function needlesOf(lines, line) {
   return [...out].filter((n) => n.length >= 10).sort((a, b) => b.length - a.length).slice(0, 24);
 }
 // the name of the definition enclosing the 1-based line (that line, then up to 60 lines up), or null; `defineGetter(req, 'fresh', function` names `fresh`
+// a generator method (`public *gen(`) and an exported constant table (`export const X = {`) are definitions too; declName sees neither
+const GEN = /^\s*(?:(?:public|private|protected|static|async|override|export)\s+)*\*\s*([A-Za-z_$][\w$]*)\s*[(<]/, EXPORT_CONST = /^\s*export\s+(?:declare\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)/;
 function enclosingName(lines, line) {
-  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return n; }
+  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = (comment(lines[i]) ? [] : GEN.exec(lines[i]) || EXPORT_CONST.exec(lines[i]) || [])[1] || namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return n; }
   return null;
 }
 // the thrown error class on the cited line (+-2) and the name of the enclosing definition (up to 60 lines up)
@@ -151,8 +153,21 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
       return out.split('\n').some((l) => { const m = /^(.*?):\d+:/.exec(l); return m && !isTest(m[1]) && !DOC.test(m[1]); });
     } catch { return false; }
   };
+  // the first tracked test file that names `name` as a whole word (case-sensitive), "path:line", or null
+  // A method that a non-test file other than `own` also defines (every Go transformer has TransformSourceFile) says nothing about this unit: no hit. A search that fails or times out is no hit either.
+  const symbol = (name, own = '') => {
+    try {
+      const defs = execFileSync('git', ['grep', '-n', '-I', '-E', '-e', `func[[:space:]]*\\([^)]*\\)[[:space:]]*${name}\\b`, '-e', `^[[:space:]]*((public|private|protected|static|async|override)[[:space:]]+)*\\*?${name}[[:space:]]*(<[^>]*>)?\\([^;]*\\{[[:space:]]*$`], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'] }).split('\n');
+      if (defs.some((l) => { const m = /^(.*?):\d+:/.exec(l); return m && m[1] !== own && !isTest(m[1]) && !DOC.test(m[1]); })) return null;
+    } catch (e) { if (e.status !== 1) return null; }
+    try {
+      const out = execFileSync('git', ['grep', '-n', '-I', '-w', '-F', '-e', name], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_LITERAL_PATHSPECS: '1' } });
+      for (const l of out.split('\n')) { const m = /^(.*?):(\d+):/.exec(l); if (m && isTest(m[1])) return `${m[1]}:${m[2]}`; }
+    } catch {}
+    return null;
+  };
   // eligible (optional): the test files that can cover this source file (its candidate tests); a hit elsewhere is an unrelated test. Empty: no candidate test, so no literal demotion (that gap is more likely real). Not passed: any tracked test counts. A delegated helper's test lives with the helper, so it is not limited by the set.
-  return (lines, line, p = '', eligible = null) => {
+  return Object.assign((lines, line, p = '', eligible = null) => {
     if (!Array.isArray(lines) || !Number.isInteger(line)) return null;
     const only = eligible ? new Set(eligible) : null;
     const needles = needlesOf(lines, line), hit = needles.length && !(only && !only.size) ? grep(needles.flatMap((n) => ['-e', n]), only) : null, cm = hit || (only && !only.size) ? null : classAndMethod(lines, line);
@@ -161,7 +176,7 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
     if (p && isTest(p)) return null; // a claim about a test file has no delegate to follow
     for (const name of calledNames(lines, line)) { if (!definedHere(name)) continue; const h = grep(['-w', '-e', name]); if (h) return `a delegated helper is tested: ${name} at ${h}`; }
     return null;
-  };
+  }, { symbol });
 }
 
 module.exports = { mapTests, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, makeCoverGuard };
