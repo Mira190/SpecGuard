@@ -40,7 +40,8 @@ while IFS= read -r l; do l=${l%$'\r'}; [ -n "$l" ] && IGNORES+=("$l"); done <<< 
 match() {
   local f=$1 p; shift
   for p in "$@"; do
-    MP=$p; p=${p#\*\*/} # MP: the pattern that matched (the caller may report it)
+    MP=$p; [[ $p == /* ]] && { p=${p#/}; if [[ $p == */ ]]; then [[ $f == $p* ]] && return 0; else [[ $f == $p ]] && return 0; fi; continue; } # a leading / anchors at the repo root
+    p=${p#\*\*/} # MP: the pattern that matched (the caller may report it)
     if [[ $p == */ ]]; then [[ $f == $p* || $f == */$p* ]] && return 0
     else [[ $f == $p || $f == */$p ]] && return 0; fi
   done
@@ -272,14 +273,15 @@ node "$HERE/numdiff.js" "$CTX/diff.patch" "$CTX/diff.numbered.txt" 2>/dev/null |
 # candidates-cut.txt: changed files left without a block (file or byte cap); post.js distrusts missing_test claims about them.
 candidates() { timeout 60 node - "$HERE/trace.js" "$CTX" <<'JS'
 const fs = require('node:fs'), path = require('node:path'), { execFileSync } = require('node:child_process');
-const { isTestPath, testScope } = require(path.resolve(process.argv[2])), { mapTests, publicDefs, hunkTests } = require(path.join(path.dirname(path.resolve(process.argv[2])), 'test-map.js'));
+const { isTestPath, testScope, matchGlob } = require(path.resolve(process.argv[2])), { mapTests, publicDefs, hunkTests } = require(path.join(path.dirname(path.resolve(process.argv[2])), 'test-map.js'));
 const ctx = process.argv[3], CAP = 16 * 1024, PER = 5, MAX_FILES = 60;
 const lines = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8').split('\n').filter(Boolean); } catch { return []; } };
 const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter((p) => p && !/[\x00-\x1F]/.test(p));
 // TEST_PATHS (test_paths): the repo owner's authoritative test locations; files there are the tests, whatever their name. Empty = discovery by name.
 const scope = testScope(process.env.TEST_PATHS), DOC = /\.(md|mdx|markdown|rst|adoc|txt)$/i;
 const isTest = scope ? (p) => scope(p) && !DOC.test(p) : isTestPath;
-const tests = tracked.filter(isTest), testSet = new Set(tests);
+const ign = String(process.env.IGNORE_EXTRA || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean); // an ignored path is no evidence: never a candidate
+const tests = tracked.filter((p) => isTest(p) && !ign.some((g) => matchGlob(p, g))), testSet = new Set(tests);
 if (scope) fs.writeFileSync(path.join(ctx, 'test-paths.txt'), String(process.env.TEST_PATHS).split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join('\n') + '\n');
 const specs = new Set(lines('spec-files.txt'));
 const changed = lines('files.txt').filter((f) => !isTest(f) && !isTestPath(f) && !specs.has(f) && !/\.(md|mdx|markdown|rst|adoc|txt|feature|json|ya?ml|toml|lock)$/i.test(f));
