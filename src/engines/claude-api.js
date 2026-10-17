@@ -418,7 +418,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
         if (res.ok) return { res };
         const m = String(res.json?.error?.message || '');
         if (res.status === 400 && !plain && /schema|output_config|output_format|too complex/i.test(m) && !/credit balance/i.test(m)) { // the structured-output grammar was refused: ask for plain JSON once (post.js validates it)
-          plain = true; delete body.output_config; console.error('claude-api: structured output unavailable for this schema; plain JSON requested'); continue;
+          plain = true; delete body.output_config; console.error(`claude-api: structured output unavailable (${scrub(m).replace(/\s+/g, ' ').slice(0, 300)}); plain JSON requested`); continue;
         }
         const wait = Number.isFinite(res.retryAfter) ? res.retryAfter : 2;
         if (!retried && (res.status === 0 || res.status === 429 || res.status >= 500) && wait <= 30 && deadline - Date.now() > wait * 1000 + 1000) { retried = true; await sleep(wait * 1000); continue; }
@@ -445,6 +445,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       if (j.stop_reason === 'max_tokens') return { ...r, ok: false, status: 'failed', reason: 'length', why: `The reply hit max_output_tokens (${maxTok}) before the JSON was complete (raise max_output_tokens)` };
       const answer = (Array.isArray(j.content) ? j.content : []).filter((b) => b?.type === 'text').map((b) => b.text).join('');
       let found; try { found = JSON.stringify(JSON.parse(answer)); } catch { found = require('../extract-json.js').extract(answer); }
+      if (!found) { try { w('engine-raw-answer.txt', scrub(answer).slice(0, 200000)); notes.push('raw answer kept in engine-raw-answer.txt'); } catch { /* ctx unwritable */ } } // diagnosis only; the failure below is unchanged
       return found ? { ...r, ok: true, found } : { ...r, ok: false, status: 'failed', reason: '', why: 'no JSON found in the engine output' };
     };
     // usage.json: cost and tokens of every reply received, summed (each priced on its own card)
