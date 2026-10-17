@@ -1271,6 +1271,34 @@ test('unit rooms: a budget for one call drops the room of a second part; the uni
     assert.ok(spend(over) <= edge - 1e-6);
   });
 
+  // U4: a reply with unknown usage (missing, empty, partial) or a failed call without usage may have been billed: it is charged its part's worst case, so the reserve is not released
+  for (const [name, usage] of [['missing', undefined], ['empty', {}], ['partial (no output_tokens)', { input_tokens: 100 }]]) {
+    test(`admission: usage ${name} on a finished call is charged its worst case; the second extra is not admitted; usage.json says the cost is estimated`, async (t) => {
+      const [p1, p2] = await prices(t), budget = String(p1 + p2 - 1e-6), s = await extraRepo(t);
+      s.answers(withUsage(usage));
+      await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: budget });
+      assert.equal(s.h.calls.length, 1);
+      assert.deepEqual(JSON.parse(s.h.file('scan-parts.json')).droppedParts, ['aaaaaaaa:2']);
+      assert.ok(s.h.file('engine-notes').includes('usage unknown for 1 call(s): charged their worst-case reserve'));
+      const u = JSON.parse(s.h.file('usage.json'));
+      assert.equal(u.costEstimated, true);
+      assert.ok(Math.abs(u.totalCostUsd - p1) < 1e-9);
+      const ok = await extraRepo(t);  // control: known usage releases the reserve, the extra runs, no estimate flag
+      ok.answers(withUsage({ input_tokens: 100, output_tokens: 100 }));
+      await ok.h.go({ GITHUB_WORKSPACE: ok.root, MAX_BUDGET_USD: budget });
+      assert.equal(ok.h.calls.length, 2);
+      assert.equal(JSON.parse(ok.h.file('usage.json')).costEstimated, undefined);
+      assert.doesNotMatch(ok.h.file('engine-notes'), /usage unknown/);
+    });
+  }
+
+  test('admission: a failed call without usage is charged its worst case; the second extra is not admitted', async (t) => {
+    const [p1, p2] = await prices(t), s = await extraRepo(t);
+    s.answers(() => err(400, 'invalid_request_error', 'bad request'));
+    await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String(p1 + p2 - 1e-6) });
+    assert.equal(s.h.calls.length, 1);
+  });
+
   test('admission (control): without audit-unit-extra.json the second room is planned as before and the budget drops it up front', async (t) => {
     const [p1] = await prices(t), s = await extraRepo(t, false);
     s.answers(withUsage({ input_tokens: 100, output_tokens: 100 }));
