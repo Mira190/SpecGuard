@@ -242,6 +242,29 @@ test('a refused output schema: ONE retry asking for plain JSON (no output_config
   assert.ok([null, 'success'].includes(h.file('engine-status')));
 });
 
+test('a refused output schema logs the provider message (scrubbed, capped); the log never carries the key', async (t) => {
+  const h = harness(t, [err(400, 'invalid_request_error', `Schema is too complex for compilation. ${KEY} ${'x'.repeat(400)}`), good()]);
+  const errs = [], e0 = console.error; console.error = (...a) => errs.push(a.join(' '));
+  try { await h.go(); } finally { console.error = e0; }
+  const line = errs.find((l) => /structured output unavailable/.test(l));
+  assert.match(line, /structured output unavailable \(Schema is too complex for compilation\. \*\*\* x+\); plain JSON requested$/);
+  assert.ok(!line.includes('sk-ant') && line.length < 400);
+});
+
+test('an answer with no JSON keeps the scrubbed raw text in engine-raw-answer.txt and still fails the same way', async (t) => {
+  const h = harness(t, [good({ content: [{ type: 'text', text: `sorry, no ${KEY}` }] })]);
+  await h.go();
+  assert.equal(h.file('engine-raw-answer.txt'), 'sorry, no ***');
+  assert.equal(h.file('engine-status'), 'failed');
+  assert.match(h.file('engine-notes'), /no JSON found in the engine output[\s\S]*engine-raw-answer\.txt/);
+  const big = harness(t, [good({ content: [{ type: 'text', text: 'z'.repeat(250000) }] })]);
+  await big.go();
+  assert.equal(big.file('engine-raw-answer.txt').length, 200000, 'a long answer is kept capped at 200000 chars');
+  const ok = harness(t, [good()]);
+  await ok.go();
+  assert.equal(ok.file('engine-raw-answer.txt'), null, 'a good answer leaves no raw file');
+});
+
 test('max_tokens and refusal stops, an answer with no JSON, a timeout and a network error all end failed or timeout without throwing', async (t) => {
   const cut = harness(t, [good({ stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"coverage": [' }] })]);
   await cut.go();
