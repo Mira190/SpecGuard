@@ -129,7 +129,7 @@ test('stage: a head file with the same size and mtime as its base file is still 
   // Windows cpSync keeps the source mtime; pin every copied file to one so the stale-stat case reproduces on any platform.
   fs.cpSync = (s, d, o) => { cp(s, d, o); for (const f of fs.readdirSync(d, { recursive: true })) if (fs.statSync(path.join(d, f)).isFile()) fs.utimesSync(path.join(d, f), T, T); };
   try {
-    git(wt, 'init', '-q'); git(wt, 'config', 'commit.gpgsign', 'false');
+    git(wt, 'init', '-q'); git(wt, 'config', 'commit.gpgsign', 'false'); git(wt, 'config', 'user.name', 't'); git(wt, 'config', 'user.email', 't@example.invalid');
     const c = loadCase('tr11');
     stage(wt, [c], 'base', 'base');
     stage(wt, [c], 'head', 'head');
