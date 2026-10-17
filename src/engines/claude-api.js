@@ -118,6 +118,7 @@ function back(s, v) { // s: the FULL schema; v is changed in place
 
 // The prompt is "static prefix (skill, references, schema) + --- + per-PR context" (src/prompt.js): the prefix becomes the cached system block, the rest the user message.
 const SPLIT = '\n\n---\n\nContext directory (absolute path):';
+const REPAIR = 'Return only the JSON object for the schema.';
 const NO_TOOLS = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Use only the context inlined below; where the answer would need a file you cannot see, mark it unknown and say so. Output only the JSON object.\n\n';
 const NO_TOOLS_PACK = 'This run has no file tools: you cannot Read, Grep or Glob. Ignore every instruction above to read files or to stay within a tool budget. Instead, the blocks after "Repository files" at the end hold files read from the repository: each is the full current text of the file it names (line-numbered where its note says so), unless its note says where it was cut. A block noted "relevant slices" shows bounded windows around the changed lines of the diff and textual references to the changed symbols (real line numbers; "…| (lines a-b omitted)" marks the gaps). Its note says when matching tests were truncated or did not fit; omitted code may contain assertions or indirect coverage. Anything that is neither inlined nor in those blocks was not read: where the answer would need it, mark it unknown and say so. Do not report a missing or weak test when a candidate test file for that code was cut or not included: mark the obligation unknown and say which file was not fully visible. Output only the JSON object.\n\n';
 function messages(prompt, pack = '') {
@@ -449,12 +450,13 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       }
     };
     // One call -> { ok: true, found, u, used } or { ok: false, status, reason, why, raw, u? }; u = the API usage object once a reply arrived (paid for even when the answer is unusable).
-    const call = async (system, user, maxTok) => {
+    const call = async (system, user, maxTok, prior) => { // prior: the earlier answer with no JSON in it; it is sent back once with a request for the JSON object only
       const s = await send({
         model, max_tokens: maxTok,
         ...(system && { system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] }),
-        messages: [{ role: 'user', content: user }],
-        output_config: { format: { type: 'json_schema', schema } },
+        messages: [{ role: 'user', content: user }, ...(prior ? [{ role: 'assistant', content: prior }, { role: 'user', content: REPAIR }] : [])],
+        // ponytail: the PR findings schema is too large for the provider's grammar (always a 400), so PR reviews ask for plain JSON, validated by post.js. Scans send their schema.
+        ...(audit && { output_config: { format: { type: 'json_schema', schema } } }),
       });
       if (s.timeout) return { ok: false, status: 'timeout' };
       const res = s.res;
@@ -469,7 +471,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       const answer = (Array.isArray(j.content) ? j.content : []).filter((b) => b?.type === 'text').map((b) => b.text).join('');
       let found; try { found = JSON.stringify(JSON.parse(answer)); } catch { found = require('../extract-json.js').extract(answer); }
       if (!found) { try { w('engine-raw-answer.txt', scrub(answer).slice(0, 200000)); notes.push('raw answer kept in engine-raw-answer.txt'); } catch { /* ctx unwritable */ } } // diagnosis only; the failure below is unchanged
-      return found ? { ...r, ok: true, found } : { ...r, ok: false, status: 'failed', reason: '', why: 'no JSON found in the engine output' };
+      return found ? { ...r, ok: true, found } : { ...r, ok: false, status: 'failed', reason: '', why: 'no JSON found in the engine output', answer };
     };
     // usage.json: cost and tokens of every reply received, summed (each priced on its own card)
     const writeUsage = (rs) => {
@@ -569,11 +571,13 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       return end('failed', 'budget', why);
     }
     if (pack.note) notes.push(pack.note);
-    const r = await call(system, user, maxTokens);
-    writeUsage([r]);
+    let r = await call(system, user, maxTokens);
+    const rs = [r];
+    // no JSON in the answer: ask once for the JSON object only, if the budget still covers a second call (length, policy, auth and quota failures are not retried)
+    if (!r.ok && r.answer?.trim() && worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user) + Buffer.byteLength(r.answer) + REPAIR.length, maxTokens).usd + charge(r) <= budget) { r = await call(system, user, maxTokens, r.answer); rs.push(r); }
+    writeUsage(rs);
     if (!r.ok) return failEnd(r);
-    let found = r.found; try { found = JSON.stringify(fromApi(full, JSON.parse(found))); } catch { /* not JSON: post.js rejects it as before */ }
-    w('findings.json', found);
+    w('findings.json', r.found);
     end('success');
   } catch (e) {
     end('failed', 'internal', 'Claude API adapter error', e?.message || String(e)); // our own code threw: a class of its own, so the last step goes red
