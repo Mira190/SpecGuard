@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const { wilson } = require('./aggregate-counts');
 const { mulberry32 } = require('./szz');
 
-const COLUMNS = ['id', 'repo', 'pr', 'path', 'line', 'text', 'link', 'label', 'notes'];
+const COLUMNS = ['id', 'repo', 'pr', 'path', 'line', 'text', 'link', 'delivery', 'label', 'notes'];
 const LABELS = ['valid', 'invalid', 'unsure'];
 
 const findingId = (f) => `F${crypto.createHash('sha1').update([f.tool, f.repo, f.pr, f.path, f.line ?? '', f.ref ?? ''].join('\0')).digest('hex').slice(0, 9)}`;
@@ -32,7 +32,7 @@ function exportRows(findings, { sample = 30, seed = 1 } = {}) {
   }
   return shuffle(picked.sort((a, b) => findingId(a).localeCompare(findingId(b))), seed + 1).map((f) => ({
     id: findingId(f), repo: f.repo, pr: f.pr, path: f.path || '', line: f.line ?? '', text: clean(f.text),
-    link: `https://github.com/${f.repo}/pull/${f.pr}/files`, label: '', notes: '' }));
+    link: f.delivery === 'summary' && f.url ? f.url : `https://github.com/${f.repo}/pull/${f.pr}/files`, delivery: f.delivery || 'inline', label: '', notes: '' }));
 }
 
 // CSV (RFC 4180). Cells that start like a spreadsheet formula get a leading apostrophe on export.

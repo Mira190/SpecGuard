@@ -130,7 +130,17 @@ function findingsOf(ds) {
     const ref = fp || String(c.id);
     if (seen.has(`${tool}${c.pr}${ref}`)) continue;
     seen.add(`${tool}${c.pr}${ref}`);
-    out.push({ tool, repo: ds.repo, pr: c.pr, arm: armBy.get(c.pr), path: c.path, line: lineOf(c), ref, id: c.id, text: stripHidden(c.body), url: c.html_url });
+    out.push({ tool, delivery: 'inline', repo: ds.repo, pr: c.pr, arm: armBy.get(c.pr), path: c.path, line: lineOf(c), ref, id: c.id, text: stripHidden(c.body), url: c.html_url });
+  }
+  // Summary-only findings have no review comment; the latest sticky summary's counts list them in `sum`, keyed by the 16-hex fp prefix post.js tracks them under.
+  // They join the same exposure set as inline ones, so blind labels, findings/PR, overlap and fix-through see one list. Counts written before `sum` existed carry none.
+  for (const [pr, { t, url }] of lastCounts(ds, new Set(armBy.keys()))) {
+    for (const e of Array.isArray(t.sum) ? t.sum.slice(0, 20) : []) {
+      const fp = e?.fp;
+      if (!/^[0-9a-f]{16}$/.test(fp) || typeof e.path !== 'string' || out.some((g) => g.tool === 'specguard' && g.pr === pr && g.ref.startsWith(fp))) continue; // also inline: counted once
+      const line = Number.isInteger(e.line) ? e.line : null;
+      out.push({ tool: 'specguard', delivery: 'summary', repo: ds.repo, pr, arm: armBy.get(pr), path: e.path, line, ref: fp, text: `${e.kind || 'finding'} at ${e.path}${line == null ? '' : `:${line}`}; the full text is in the PR's sticky summary comment`, url });
+    }
   }
   // Overlap, arm 2 only: same path and a line within 3 (a file-level comment matches any line of its file).
   const near = (a, b) => a.path === b.path && (a.line == null || b.line == null || Math.abs(a.line - b.line) <= 3);
@@ -174,16 +184,30 @@ const sinceOf = (rows) => { const s = { addressed: 0, open: 0, dismissed: 0, not
 // PR-level pseudo records so aggregate-counts' bootstrap/summarize resample whole PRs.
 const asPrs = (rows) => { const by = new Map(); for (const r of rows) (by.get(r.pr) || by.set(r.pr, []).get(r.pr)).push(r); return [...by.values()].map((rs) => ({ since: sinceOf(rs) })); };
 
-function sgCredits(ds, prSet) {
+// pr -> { t: the latest sticky summary's parsed counts, url } for the PRs in prSet.
+function lastCounts(ds, prSet) {
   const last = new Map();
   for (const c of ds.issue_comments || []) {
     if (!String(c.body || '').includes('<!-- specguard:summary -->')) continue;
     const m = SG_COUNTS.exec(c.body); let t;
     try { t = JSON.parse(m[1]); } catch { continue; }
     const n = Number.isInteger(t.pr) ? t.pr : +/\/issues\/(\d+)$/.exec(c.issue_url || '')?.[1];
-    if (prSet.has(n)) last.set(n, t);
+    if (prSet.has(n)) last.set(n, { t, url: c.html_url });
   }
-  const ts = [...last.values()];
+  return last;
+}
+// Per-finding outcomes from the counts line the A tally reads (same validity rule as aggregate-counts). A 16-hex fp is a summary-only finding.
+function sgOutcomes(ds, prSet) {
+  const rows = [];
+  for (const [pr, { t }] of lastCounts(ds, prSet)) {
+    if (!('outcome_valid' in t ? t.outcome_valid === true : t.complete) || !Array.isArray(t.outcomes)) continue;
+    for (const o of t.outcomes) if (typeof o?.fp === 'string' && ['addressed', 'open', 'dismissed', 'not_observed'].includes(o.outcome)) rows.push({ pr, fp: o.fp, outcome: o.outcome, delivery: o.fp.length === 16 ? 'summary' : 'inline' });
+  }
+  return rows;
+}
+
+function sgCredits(ds, prSet) {
+  const ts = [...lastCounts(ds, prSet).values()].map((x) => x.t);
   const num = (k) => ts.map((t) => t[k]).filter(Number.isFinite);
   return { prs_with_counts: ts.length, complete: ts.filter((t) => t.complete).length, credits_median: quantile(num('credits'), 0.5), credits_mean: num('credits').length ? num('credits').reduce((a, b) => a + b, 0) / num('credits').length : null, ms_median: quantile(num('ms'), 0.5) };
 }
@@ -215,8 +239,32 @@ function analyze(ds, { labels } = {}) {
   const lab = labels ? labelPrecision(findings, labels) : null;
   const validSg2 = labels ? sg2.filter((f) => labels.get(f.fid) === 'valid') : [];
   const unique = labels ? { valid: validSg2.length, unique: validSg2.filter((f) => !f.overlap).length } : null;
+  // SpecGuard per delivery channel; the combined numbers above are unchanged. Each channel reads findings, labels and outcomes off the same ids.
+  const oc = sgOutcomes(ds, sgSet), sgAll = findings.filter((f) => f.tool === 'specguard');
+  const channels = {};
+  for (const d of ['inline', 'summary']) {
+    const mine = sgAll.filter((f) => f.delivery === d), m2 = mine.filter((f) => f.arm === 2), v2 = labels ? m2.filter((f) => labels.get(f.fid) === 'valid') : null;
+    const fx = summarize(asPrs(oc.filter((r) => r.delivery === d)));
+    channels[d] = { findings: mine.length, fix_through: { prs: fx.prs, findings: fx.findings, outcomes: fx.outcomes, A: fx.A }, overlap: { findings: m2.length, also_raised_by_copilot: m2.filter((f) => f.overlap).length },
+      labels: labels ? (() => { const x = labelPrecision(mine, labels).specguard; return x || null; })() : null, unique: v2 ? { valid: v2.length, unique: v2.filter((f) => !f.overlap).length } : null };
+  }
+  // Measured joint: valid AND addressed, over labelled (valid|invalid) findings that have an observed outcome on the same id (outcome fp prefix = finding ref prefix).
+  let joint = null;
+  if (labels) {
+    const outBy = new Map(oc.map((r) => [`${r.pr}:${r.fp.slice(0, 16)}`, r.outcome]));
+    const j = { labelled: 0, with_outcome: 0, valid: 0, valid_addressed: 0 };
+    for (const f of sgAll) {
+      const l = labels.get(f.fid), o = outBy.get(`${f.pr}:${f.ref.slice(0, 16)}`);
+      if (l !== 'valid' && l !== 'invalid') continue;
+      j.labelled++;
+      if (!o || o === 'not_observed') continue;
+      j.with_outcome++;
+      if (l === 'valid') { j.valid++; if (o === 'addressed') j.valid_addressed++; }
+    }
+    joint = { ...j, rate: j.with_outcome >= TARGET.labels ? j.valid_addressed / j.with_outcome : null };
+  }
   const report = { repo: ds.repo, window: [ds.since, ds.until], prs: prs.length, excluded_copilot_request_failed: invalid.length, unlabeled: usable.filter((p) => armOf(p.labels) === null).length,
-    arms, baseline: ttm((ds.baseline || []).filter(real)), specguard, copilot: { ...copilot, A_if_replied_resolved_counts: withReplies }, overlap, labels: lab, unique };
+    arms, baseline: ttm((ds.baseline || []).filter(real)), specguard, copilot: { ...copilot, A_if_replied_resolved_counts: withReplies }, overlap, labels: lab, unique, channels, joint };
   report.decision = decide(report);
   return report;
 }
@@ -248,7 +296,7 @@ function decide(r) {
   const tri = (a1, a2) => (a1 === true || a2 === true ? true : a1 === false && a2 === false ? false : null); // one known true fires it; both known false clears it
   const falsifiers = [
     { falsifier: `F1 A < ${f(RULE.falsifyFix)} over >= ${TARGET.fixPrs} PRs, or precision < ${f(RULE.falsifyPrecision)} on >= ${TARGET.labels} labelled`, status: fix(tri(fixOk ? a.A < RULE.falsifyFix : null, precOk ? sg.precision < RULE.falsifyPrecision : null)) },
-    { falsifier: `F2 precision x A < ${RULE.breakEven} (break-even)`, status: fix(pa === null ? null : pa < RULE.breakEven), detail: pa === null ? undefined : `P x A = ${pa.toFixed(2)}` },
+    { falsifier: `F2 P × A (economic assumption, not a measured joint rate) < ${RULE.breakEven} (break-even)`, status: fix(pa === null ? null : pa < RULE.breakEven), detail: pa === null ? undefined : `P x A = ${pa.toFixed(2)}` },
     { falsifier: 'F3 time-to-merge more than 15% worse than baseline (check by hand that review comments did not drop either)', status: fix(ratio === null ? null : ratio > RULE.ttm) },
     { falsifier: `F4 native Copilot raises >= ${f(RULE.falsifyOverlap)} of the valid SpecGuard findings`, status: fix(uniqOk ? 1 - uniq >= RULE.falsifyOverlap : null) },
     { falsifier: 'F5 SZZ replay of the last 50 bugs: < 10% PR-time visible, or SpecGuard flags < 1/3 of those', status: 'manual (docs/validation-plan.md step 1)' },
@@ -277,6 +325,13 @@ function render(r) {
   L.push('## Fix-through (addressed / all outcomes)', '', '| Tool | PRs | findings | A | Wilson (if independent) | PR-cluster bootstrap 95% |', '|---|---|---|---|---|---|');
   for (const [n, s] of [['SpecGuard (arms 0+2)', r.specguard], ['Native Copilot (arms 1+2)', r.copilot]]) L.push(`| ${n} | ${s.prs} | ${s.findings} | ${P(s.A)} | ${CI(s.wilson_if_independent)} | ${CI(s.cluster_bootstrap_95)} |`);
   L.push('', `Copilot outcome rule mirrors SpecGuard's: addressed = the flagged lines or any test file changed after the comment; dismissed = human-resolved with neither changed; open = unresolved and unchanged; not_observed = change status unknown. If a human-resolved thread with a reply counted as addressed, Copilot A would be ${P(r.copilot.A_if_replied_resolved_counts)}.`, '');
+  L.push('## SpecGuard by delivery channel (arms 0+2)', '', '| Channel | findings (blind-label pool) | fix-through findings | A | precision | unique / valid (arm 2) |', '|---|---|---|---|---|---|');
+  for (const d of ['inline', 'summary']) {
+    const c = r.channels[d], x = c.fix_through, l = c.labels;
+    L.push(`| ${d} | ${c.findings} | ${x.findings} | ${x.findings ? `${P(x.A)} (${x.outcomes.addressed}/${x.findings})` : 'n/a'} | ${l ? `${P(l.precision)} (${l.valid}/${l.n})` : 'n/a'} | ${c.unique ? `${c.unique.unique}/${c.unique.valid}` : 'n/a'} |`);
+  }
+  L.push(`| combined | ${r.channels.inline.findings + r.channels.summary.findings} | ${r.specguard.findings} | ${P(r.specguard.A)} | ${r.labels?.specguard ? `${P(r.labels.specguard.precision)} (${r.labels.specguard.valid}/${r.labels.specguard.n})` : 'n/a'} | ${r.unique ? `${r.unique.unique}/${r.unique.valid}` : 'n/a'} |`, '',
+    'Summary-only findings are tracked from SpecGuard #233 (2026-10-17): counts written before it carry none, so earlier weeks have only inline findings in every channel. Outcomes are the per-finding list in the counts line, which drops its oldest entries when long, so channel outcome counts can be below the combined tally.', '');
   const o = r.overlap;
   L.push('## Overlap in arm 2 (same file, lines within 3)', '', `SpecGuard findings also raised by Copilot: ${o.specguard_also_raised_by_copilot}/${o.specguard_findings}. Copilot findings also raised by SpecGuard: ${o.copilot_also_raised_by_specguard}/${o.copilot_findings}. This is location overlap, not agreement on the same defect: the labels decide.`, '');
   if (r.labels) {
@@ -285,6 +340,12 @@ function render(r) {
     if (r.labels.unmatched) L.push('', `${r.labels.unmatched.length} label ids matched no finding in this window (wrong window or --seed?).`);
     L.push('');
   }
+  const j = r.joint;
+  L.push('## P × A (economic assumption, not a measured joint rate)', '', 'F2 multiplies two marginals; they cannot give the joint (50 valid + 50 invalid findings with 50 touched allows anywhere from 0 to 0.5). A counts touched lines, not verified fixes.',
+    !j ? 'Measured joint (valid and addressed / labelled with an observed outcome): needs --labels.'
+      : !j.with_outcome ? `Measured joint not computed: none of the ${j.labelled} labelled SpecGuard findings has an observed outcome under the same id (different window or seed, or no per-finding outcomes recorded).`
+        : j.rate == null ? `Measured joint: insufficient data (${j.valid_addressed}/${j.with_outcome} valid and addressed; need ${TARGET.labels} labelled findings with an observed outcome).`
+          : `Measured joint: ${P(j.rate)} (${j.valid_addressed}/${j.with_outcome} valid and addressed among labelled findings with an observed outcome; ${j.valid} of them valid).`, '');
   L.push('## Decision rule', '', ...r.decision.rules.map((x) => `- **${x.status.toUpperCase()}**: ${x.rule}. ${x.detail}`), '', '## Falsifiers', '', ...r.decision.falsifiers.map((x) => `- **${x.status}**: ${x.falsifier}${x.detail ? `. ${x.detail}` : ''}`), '', `**${r.decision.verdict}**`, '',
     'Privacy: this report has no code, but the label CSV and the PR comments do. Not measured here: escaped defects (follow up at 8-12 weeks), native Copilot cost (see the Copilot usage report).');
   return L.join('\n');
@@ -297,5 +358,5 @@ function main() {
   const r = analyze(load(o), { labels: o.labels ? readLabels(parseCsv(fs.readFileSync(o.labels, 'utf8'))) : null });
   console.log(o.json ? JSON.stringify(r, null, 2) : render(r));
 }
-module.exports = { apiGit, unified0, load, findingsOf, copilotOutcome, patchTouches, analyze, decide, render, quantile, TARGET, RULE };
+module.exports = { lastCounts, apiGit, unified0, load, findingsOf, copilotOutcome, patchTouches, analyze, decide, render, quantile, TARGET, RULE };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exit(1); }

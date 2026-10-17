@@ -289,3 +289,99 @@ test('unified0 -w: a run with different removed/added counts is kept even if one
   assert.match(unified0('@@ -7,2 +7 @@\n-a b\n-c\n+a  b', true), /^@@ -7,2 /);
   assert.equal(unified0('@@ -7 +7 @@\n-a b\n+a  b', true), '');
 });
+
+// ---- summary-only findings share ids, labels and outcomes with inline ones (review 2026-10-17 M5, P x A) ----
+const H = (c, n = 40) => c.repeat(n).slice(0, n);
+function mixed(extra = {}) { // PR 5 (arm 2): one inline finding (fp a..) and one summary-only finding (counts.sum, fp b..16)
+  id = 100;
+  return { repo: 'o/r', since: '2026-09-01', until: '2026-09-30', prs: [pr(5, 2, 10)], baseline: [], threads: [],
+    issue_comments: [counts(5, S(1, 1), { sum: [{ fp: H('b', 16), path: 'b.js', line: 4, kind: 'missing_test' }], outcomes: [{ fp: H('a'), outcome: 'addressed' }, { fp: H('b', 16), outcome: 'open' }], ...extra })],
+    review_comments: [sg(5, 'a.js', 10, 'a')] };
+}
+
+test('M5: a summary-only finding is a blind-label candidate on the id fix-through tracks it by', () => {
+  const f = findingsOf(mixed());
+  assert.deepEqual(f.map((x) => [x.delivery, x.ref]), [['inline', H('a')], ['summary', H('b', 16)]]);
+  const rows = exportRows(f, { sample: 0, seed: 1 });
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => r.delivery).sort(), ['inline', 'summary']);
+  assert.deepEqual(rows.map((r) => r.id).sort(), f.map((x) => x.fid).sort());
+  // the outcome list in the counts names the same refs, so a label on either id has an outcome to join
+  const ds = mixed(), labels = new Map(f.map((x) => [x.fid, 'valid']));
+  const j = analyze(ds, { labels }).joint;
+  assert.deepEqual([j.labelled, j.with_outcome, j.valid_addressed], [2, 2, 1]);
+  assert.equal(analyze(ds).channels.summary.findings, 1);
+  assert.equal(analyze(ds).channels.summary.fix_through.findings, 1); // the summary channel's own outcome count
+});
+
+test('M5: the same fp inline and in sum counts once; counts without sum add nothing', () => {
+  const ds = mixed({ sum: [{ fp: H('a', 16), path: 'a.js', line: 10, kind: 'missing_test' }] });
+  const f = findingsOf(ds);
+  assert.equal(f.length, 1);
+  assert.equal(f[0].delivery, 'inline');
+  const old = mixed(); old.issue_comments = [counts(5, S(1, 1))];
+  assert.equal(findingsOf(old).length, 1);
+});
+
+test('M5 control: summary-only findings from a PR outside the usable set are not added', () => {
+  const ds = mixed(); ds.prs = [pr(5, 2, 10, { labels: [{ name: 'review-arm:2' }, { name: 'copilot-request-failed' }] })];
+  assert.equal(analyze(ds).channels.summary.findings, 0);
+});
+
+// 40-odd PRs of arm 0/2, each one inline finding with an outcome: even n addressed, odd n open; valid when n % 4 < 2.
+function joint40() {
+  id = 100;
+  const prs = [], issue_comments = [], review_comments = [], ns = [];
+  for (let n = 1; n <= 80; n++) {
+    if (n % 3 === 1) continue;
+    prs.push(pr(n, n % 3, 10));
+    const h = n.toString(16).padStart(2, '0');
+    review_comments.push(sg(n, 'x.js', 10, h));
+    issue_comments.push(counts(n, n % 2 ? S(0, 1) : S(1, 0), { outcomes: [{ fp: H(h), outcome: n % 2 ? 'open' : 'addressed' }] }));
+    ns.push(n);
+  }
+  return { ds: { repo: 'o/r', since: '2026-09-01', until: '2026-09-30', prs, baseline: [], threads: [], issue_comments, review_comments }, ns };
+}
+
+test('P x A: with labels and outcomes on the same ids the measured joint is computed', () => {
+  const { ds, ns } = joint40();
+  const labels = new Map();
+  for (const x of findingsOf(ds)) labels.set(x.fid, x.pr % 4 < 2 ? 'valid' : 'invalid');
+  const r = analyze(ds, { labels });
+  const va = ns.filter((n) => n % 4 < 2 && n % 2 === 0).length;
+  assert.deepEqual([r.joint.with_outcome, r.joint.valid_addressed], [ns.length, va]);
+  assert.equal(r.joint.rate, va / ns.length);
+  assert.ok(r.joint.with_outcome >= 30);
+  assert.match(render(r), new RegExp(`Measured joint: \\d+% \\(${va}/${ns.length} valid and addressed`));
+});
+
+test('P x A: fewer than the target labelled outcomes prints insufficient data, with the counts', () => {
+  const ds = mixed(), f = findingsOf(ds);
+  const md = render(analyze(ds, { labels: new Map(f.map((x) => [x.fid, 'valid'])) }));
+  assert.match(md, /Measured joint: insufficient data \(1\/2 valid and addressed; need 30/);
+});
+
+test('P x A: labels whose ids have no outcome do not give a joint, and the report says so', () => {
+  const ds = mixed({ outcomes: [{ fp: H('c'), outcome: 'addressed' }, { fp: H('d', 16), outcome: 'open' }] });
+  const r = analyze(ds, { labels: new Map(findingsOf(ds).map((x) => [x.fid, 'valid'])) });
+  assert.equal(r.joint.with_outcome, 0);
+  assert.equal(r.joint.rate, null);
+  assert.match(render(r), /Measured joint not computed: none of the 2 labelled SpecGuard findings has an observed outcome under the same id/);
+  assert.match(render(analyze(ds)), /Measured joint \(valid and addressed[^)]*\): needs --labels/);
+});
+
+test('P x A: F2 is labelled as an economic assumption in the falsifier list and the report', () => {
+  const r = analyze(small());
+  assert.match(r.decision.falsifiers[1].falsifier, /^F2 P × A \(economic assumption, not a measured joint rate\)/);
+  assert.match(render(r), /F2 P × A \(economic assumption, not a measured joint rate\) < 0\.18/);
+  assert.match(render(r), /## P × A \(economic assumption, not a measured joint rate\)/);
+});
+
+test('control: the existing report lines are unchanged; the new blocks only add lines', () => {
+  const md = render(analyze(small()));
+  for (const line of ['| 0 SpecGuard only | 2 | 1.00 | - | 15.0 | 17.5 | 2 | 2.50 | 2/2 |', '## Overlap in arm 2 (same file, lines within 3)', '## Decision rule', '- **INSUFFICIENT DATA**: Blind precision >= 65%.', '**KEEP COLLECTING: insufficient data for at least one rule.**'])
+    assert.ok(md.includes(line), line);
+  const r = analyze(small());
+  assert.equal(r.channels.summary.findings, 0);
+  assert.equal(r.channels.inline.findings, 4);
+});

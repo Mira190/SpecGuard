@@ -62,13 +62,19 @@ node eval/label-export.js  --repo ORG/my-repo --since 2026-10-19 --import labels
 
 | Number | Meaning | Caveat |
 |---|---|---|
-| Findings/PR | volume the developer must read | SpecGuard counts inline comments only (summary-only items are not included) |
+| Findings/PR | volume the developer must read | SpecGuard counts inline comments and summary-only findings (the sticky summary's counts `sum`, tracked from 2026-10-17; earlier counts carry none). The report splits them by delivery channel |
 | Fix-through A (addressed / all outcomes) | share of findings where the flagged lines or a test file changed later | Not proof of a fix. Read at the latest run, not at merge. Copilot A uses the same rule from thread state; "dismissed" means a human resolved it with nothing changed. Re-raised findings under a new fingerprint can inflate SpecGuard's `open`/`addressed` |
 | Cluster bootstrap interval | the honest interval: PRs are resampled, not findings | the Wilson interval assumes independent findings and is too narrow |
 | Blind precision | valid / (valid + invalid) from labels, Wilson interval | needs 30 labelled per tool |
 | Time-to-merge median / p75 | creation to merge, human PRs only | at 50 PRs per arm only about a 2x difference is detectable: a guardrail, not a headline |
 | Credits/PR | SpecGuard credits of the last run per PR (1 credit = $0.01) | not summed over pushes; runner minutes and native Copilot cost come from the Actions billing page and the Copilot usage report |
 | Overlap (arm 2) | SpecGuard findings with a Copilot finding on the same file within 3 lines, and the reverse | location overlap only; the labelled "unique valid" share is the real test |
+
+What A measures, and how P and A combine:
+
+- A is a touched proxy: the flagged lines or a test file changed after the comment. It is not a verified fix.
+- P (blind precision) and A must come from the same exposure cohort: the same findings, joined by the same finding id. Summary-only findings are now in the blind-label sample (label-export has a `delivery` column) as well as in fix-through. The labeller can infer SpecGuard from a `summary` row, so judge on the text.
+- F2's P × A is an economic assumption, not a measured joint rate: two marginals cannot give the joint (50 valid and 50 invalid findings with 50 touched allows anything from 0 to 0.5). The report also prints the measured joint, valid and addressed over labelled findings with an observed outcome, and says "insufficient data" below the label target. The thresholds are unchanged.
 
 Sample-size targets used by the report (from the power arithmetic behind this plan): fix-through needs 40 PRs and 100 findings; precision 30 labelled findings; time-to-merge 30 merged PRs in the arm and in the baseline; unique share 15 valid labelled SpecGuard findings in arm 2.
 
