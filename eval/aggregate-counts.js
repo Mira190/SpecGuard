@@ -28,7 +28,7 @@ function lastPerPr(comments) {
     let t;
     try { t = JSON.parse(m[1]); } catch { continue; }
     const since = t && t.since;
-    if (!t.complete || !since || !OUTCOMES.every((k) => Number.isFinite(since[k]) && since[k] >= 0)) continue; // incomplete runs carry no outcomes
+    if (!('outcome_valid' in t ? t.outcome_valid === true : t.complete) || !since || !OUTCOMES.every((k) => Number.isFinite(since[k]) && since[k] >= 0)) continue; // a run without valid outcomes (old counts: not complete) carries none
     const key = Number.isInteger(t.pr) ? `pr:${t.pr}` : String(c.issue_url || c.html_url || by.size);
     const at = String(c.updated_at || '');
     const old = by.get(key);
