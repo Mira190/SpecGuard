@@ -77,7 +77,7 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 function scopeFn(spec) {
   const { inc, exc } = globs(spec);
   if (!inc.length && !exc.length) return null;
-  const hit = (list, f) => list.some((g) => matchGlob(f, g) || (!/[*?[]/.test(g) && matchGlob(f, g.replace(/\/*$/, '/'))));
+  const hit = (list, f) => list.some((g) => matchGlob(f, g) || (!/[*?]/.test(g) && matchGlob(f, g.replace(/\/*$/, '/'))));
   return (f) => (!inc.length || hit(inc, f)) && !hit(exc, f);
 }
 
