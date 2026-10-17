@@ -62,10 +62,13 @@ function analyze(results, cases) {
   };
   const times = [];
   const vs = results.variants || [];
+  if (results.target?.sha && cases.target?.sha && results.target.sha !== cases.target.sha) throw new Error(`results are for target ${results.target.sha}, cases.json pins ${cases.target.sha}`);
+  const failed = [];
   for (const v of vs) {
     const c = byId.get(v.case);
     if (!c) throw new Error('result for unknown case ' + v.case);
-    times.push((v.trace_ms || 0) + (v.cand_ms || 0));
+    if (v.status !== undefined && v.status !== 'ok') failed.push({ case: v.case, variant: v.variant, status: v.status }); // stays in every denominator: a failed trace is a miss, not a skipped query
+    if (typeof v.trace_ms === 'number' && typeof v.cand_ms === 'number') times.push(v.trace_ms + v.cand_ms);
     const ex = c.expect;
     if (v.variant !== 'C') { // requirement edited: which code and tests does it point at
       const r2c = v.req_to_code || [], g = groups['req->code'];
@@ -83,7 +86,7 @@ function analyze(results, cases) {
       add(g.tests, ex.tests.map((t) => rankOf(tl, (it) => it.path === t)));
     }
   }
-  const out = { variants: vs.length, cases: new Set(vs.map((v) => v.case)).size, directions: {} };
+  const out = { variants: vs.length, ok_variants: vs.length - failed.length, failed_variants: failed, cases: new Set(vs.map((v) => v.case)).size, directions: {} };
   for (const [d, kinds] of Object.entries(groups)) { out.directions[d] = {}; for (const [k, a] of Object.entries(kinds)) out.directions[d][k] = finish(a); }
   const s = times.slice().sort((x, y) => x - y);
   out.runtime_ms = { n: s.length, p50: s.length ? s[Math.ceil(s.length * 0.5) - 1] : null, max: s.length ? s[s.length - 1] : null };
@@ -101,7 +104,8 @@ function format(res) {
       lines.push(`  MRR@10 ${m.mrr_at_10.value === null ? '-' : m.mrr_at_10.value.toFixed(3)} (sum ${m.mrr_at_10.sum} over ${m.mrr_at_10.n})  All-required@3 ${pct(m.all_required_at_3)}`);
     }
   }
-  lines.push('', `runtime per variant (trace + test candidates): p50 ${res.runtime_ms.p50} ms, max ${res.runtime_ms.max} ms, n=${res.runtime_ms.n}`);
+  lines.push('', `runtime per variant (trace + test candidates): p50 ${res.runtime_ms.p50} ms, max ${res.runtime_ms.max} ms, n=${res.runtime_ms.n} of ${res.variants} variants (only those with both timings)`);
+  if (res.failed_variants.length) lines.push(`FAILED: ${res.failed_variants.length} of ${res.variants} variants failed and are scored as misses: ` + res.failed_variants.map((f) => `${f.case}/${f.variant} (${f.status})`).join('; '));
   return lines.join('\n');
 }
 
