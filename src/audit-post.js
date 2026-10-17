@@ -207,7 +207,7 @@ const sha8 = (...parts) => crypto.createHash('sha1').update(parts.join('\n')).di
 // The row id is the block cid (cid.N for a bundled block), the heading comes from the candidate, and rows keep document order. A block the model
 // skipped, or whose rows all failed verification, becomes an `unknown` row ("unconfirmed"); not_requirements gains the block's location and text.
 // docs: the admitted documents (null = any); cands: the candidate blocks (Map from readCandidates; null = unknown).
-function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null, testPaths = '' } = {}) {
+function verify(data, { read = readFile, tracked = null, docs = null, cands = null, units = null, packCut = new Set(), blockCuts = {}, covers = null, testPaths = '', gone = new Set() } = {}) {
   const testFile = testFileOf(testPaths);
   const cache = new Map();
   const file = (p) => { if (!cache.has(p)) cache.set(p, read(p)); return cache.get(p); };
@@ -276,7 +276,7 @@ function verify(data, { read = readFile, tracked = null, docs = null, cands = nu
     out.not_requirements = [...skipped].filter(([k]) => cands.has(k)).map(([k, reason]) => ({ ...cands.get(k), reason })).sort((a, b) => pos(a.cid) - pos(b.cid));
   } else out.not_requirements = [...skipped].map(([cid, reason]) => ({ cid, reason }));
   const dropped = new Set();
-  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), symbol: covers && covers.symbol, baseline: baselineOf(tracked), notes: out.not_reviewed, file, testFile, dropped });
+  out.unit_findings = verifyUnits(data.unit_findings || [], { locate, isDoc, units, packCut, covers: covers && ((c, u) => covers(file(c.path), c.line, c.path, u && u.tests)), symbol: covers && covers.symbol, baseline: baselineOf(tracked), notes: out.not_reviewed, file, testFile, dropped, gone });
   for (const n of new Set(covers && covers.limits)) out.not_reviewed.push(n); // a timed-out search is not "no test covers it": the finding keeps its confidence
   out.unit_dropped = [...dropped]; // units whose finding verification dropped: not "no gap" (see main)
   return out;
@@ -320,7 +320,7 @@ function siblingCall(lines, line, quote, counterexample) {
 // a unit finding that says there is nothing to report
 const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b/i;
 
-function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbol = null, baseline = null, notes, file = () => null, testFile = heuristicTest, dropped = new Set() }) {
+function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbol = null, baseline = null, notes, file = () => null, testFile = heuristicTest, dropped = new Set(), gone = new Set() }) {
   // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
   const cutTest = (u, c) => {
     const cutTests = u.tests.filter((t) => packCut.has(t));
@@ -334,7 +334,9 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
     if (!locate(c)) { notes.push(`${at}: ${solid(f.quote) ? 'the quote was not found at the cited line' : `the quote is under ${MIN_QUOTE} characters`}`); dropped.add(f.unit); continue; }
     if (isDoc(c.path) || (f.kind === 'missing_test') === testFile(c.path)) { notes.push(`${at}: ${f.kind === 'missing_test' ? 'a missing_test cites the unit\'s code, not a test or a document' : `a ${f.kind} cites a test file`}`); dropped.add(f.unit); continue; }
-    if (u && u.part && c.path === u.path && !(u.part.spans || [[u.part.a, u.part.b]]).some(([a, b]) => c.line >= a && c.line <= b)) { notes.push(`${at}: outside this run's part of the unit (lines ${u.part.a}-${u.part.b}); that part is reviewed in another run`); continue; }
+    // the parts that ran (part keys `unit:k`, minus gone = budget-dropped or failed, as render's ran): a line in a part that did not run was not reviewed. Spans stay separate, never one min-max window.
+    const ran = u && u.part && c.path === u.path && (u.part.ks || [u.part.k + 1]).flatMap((k, i) => (gone.has(`${u.id}:${k}`) ? [] : [(u.part.spans || [[u.part.a, u.part.b]])[i]]));
+    if (ran && !ran.some(([a, b]) => c.line >= a && c.line <= b)) { notes.push(`${at}: outside this run's part of the unit (lines ${ran.map(([a, b]) => `${a}-${b}`).join(', ') || 'none ran'}); that part is reviewed in another run`); continue; }
     if (NO_GAP.test(f.title) || NO_GAP.test(f.body || '')) { notes.push(`${at}: dropped: the finding says there is no gap`); continue; }
     const fid = sha8(f.unit, f.kind, key(c.quote));
     if (seen.has(fid)) continue;
@@ -629,7 +631,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
 
 `;
   const bh = inv && inv.budget_hint; // units no call had room for: say what the budget allowed and what would cover them
-  if (code && data && !failure && bh) top += `${plural(bh.left, 'unit')} not reviewed this run: max_budget_usd $${bh.budget.toFixed(2)} allows ${plural(bh.calls, 'call')}; ${bh.need > bh.max ? `covering all units takes ${bh.need} calls, more than the ${bh.max} a run makes (narrow scan_paths)` : `covering all units needs a budget of about $${bh.usd.toFixed(2)} (the pre-flight reserves the worst case per call; actual spend is usually far lower)`}${inv.rotation && inv.rotation.rotate ? `, or they rotate in over ~${bh.runs} runs` : ''}.\n\n`;
+  if (code && data && !failure && bh) top += `${plural(bh.left, 'unit')} not reviewed this run: max_budget_usd $${bh.budget.toFixed(2)} allows ${plural(bh.calls, 'call')}${bh.extra ? ` by the worst-case estimate; runtime admission added ${code.extraAdmitted || 0} of ${plural(bh.extra, 'extra unit part')} (a part is admitted only while the actual spend plus its worst case fits)` : ''}; ${bh.need > bh.max ? `covering all units takes ${bh.need} calls, more than the ${bh.max} a run makes (narrow scan_paths)` : `covering all units needs a budget of about $${bh.usd.toFixed(2)} (the pre-flight reserves the worst case per call; actual spend is usually far lower)`}${inv.rotation && inv.rotation.rotate ? `, or they rotate in over ~${bh.runs} runs` : ''}.\n\n`;
   const fzd = new Set(inv ? inv.forced || [] : []);
   for (const [why, list] of [['were not reviewed: the unit call failed', unseen.filter((u) => failedS.has(u))], ['not reached: max_budget_usd did not cover its call', unseen.filter((u) => reachS.has(u))], ["did not fit the model's context", unseen.filter((u) => !failedS.has(u) && !reachS.has(u) && !fzd.has(u))]]) {
     if (code && data && !failure && list.length) top += `**Not reviewed this run:** ${plural(list.length, 'unit')} ${why}: ${list.slice(0, 5).map((u) => `\`${cell((code.list.get(u) || {}).path || u, 100)}\``).join(', ')}${list.length > 5 ? `, +${list.length - 5} more` : ''}. ${list.length === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
@@ -864,13 +866,13 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), testPaths = process.env.TEST_PATHS || readCtx('test-paths.txt') || '', covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths });
   const cutUnits = hasCode ? [...units.values()].filter((u) => notSeen.has(u.id) || (packCutOn && (packCut.has(u.path) || u.tests.some((t) => packCut.has(t))))).map((u) => u.id) : [];
   if (inv) { const testCut = cutUnits.filter((id) => !notSeen.has(id) && !packCut.has(units.get(id).path)); if (testCut.length) inv.forced = [...(Array.isArray(inv.forced) ? inv.forced : []), ...testCut]; } // only the tests were cut: the unit was reviewed, so it is recorded unsure like a forced one and the rotation moves on, instead of looking never reviewed
-  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths });
+  const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths, gone: new Set([...fKeys.keys(), ...dKeys]) });
   // A unit is "covered" only when no finding of it was dropped or lowered at any stage (validate, verify, low confidence): otherwise it was seen but inconclusive, tracked as unsure.
   const solid = new Set(checked.unit_findings.filter((f) => !f.low).map((f) => f.unit)), notCut = (u) => !cutUnits.includes(u) && !solid.has(u);
   const dropU = hasCode ? [...new Set([...data.invalid_units, ...checked.unit_dropped])].filter(notCut) : [];
   const lowU = hasCode ? [...new Set(checked.unit_findings.map((f) => f.unit))].filter((u) => notCut(u) && !dropU.includes(u)) : [];
   const unsure = [...dropU, ...lowU], unseen = cutUnits; // seen but inconclusive: tracked this run as unsure (rotation moves on, never covered); unseen: not tracked, still due
-  const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed, failed: [...failedU], unreached: [...reachedNot], partsDropped, partsFailed } : null;
+  const code = hasCode ? { list: units, inv, findings: checked.unit_findings, unseen, unitsFailed, failed: [...failedU], unreached: [...reachedNot], partsDropped, partsFailed, extraAdmitted: ((inv && inv.extra_keys) || []).filter((k) => !dKeys.has(k) && !(Array.isArray(sp.droppedUnits) ? sp.droppedUnits : []).includes(k.split(':')[0])).length } : null; // extra_keys: the parts the collector queued for runtime admission; the ones the engine skipped are in droppedParts/droppedUnits
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
   try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();

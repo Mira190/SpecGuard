@@ -2,6 +2,7 @@
 // plan() splits the scan's context into a unit part (audit-units.txt: units + their matched tests) and block parts (at most `batch` candidate blocks each: their audit-candidates.txt and audit-evidence.txt rows
 // and a pack of the files those rows cite). Each part's prompt is rendered by prompt.js from a filtered copy of the ctx files (a temp dir), not by a second prompt builder.
 // A scan that picked its units for several calls (audit-unit-rooms.json: the unit ids per call) gets one unit part per call. A part is { prompt, pack, cids } for blocks or { prompt, pack, units } for units (the unit ids it holds).
+// A part with extra: true is admitted by the engine only when the actual spend leaves room for its worst case (audit-unit-extra.json: how many of the last rooms).
 // -> null when the blocks fit one call (<= batch; or none) and the units one call, else { parts, packCut }: the first unit part, then the block parts in candidate order (the rotation priority), then the other unit parts (the budget drops from the end).
 const fs = require('node:fs');
 const os = require('node:os');
@@ -15,6 +16,7 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, evidencePack, 
   const cands = lines(rd('audit-candidates.txt')).filter((l) => ROW.test(l));
   let rooms = null; try { rooms = JSON.parse(rd('audit-unit-rooms.json')); } catch { /* one call */ }
   if (!Array.isArray(rooms) || rooms.length < 2) rooms = null;
+  let nExtra = 0; try { nExtra = Math.max(0, parseInt(rd('audit-unit-extra.json'), 10) || 0); } catch { /* none */ } // the last nExtra rooms are extras: the engine admits them at run time (audit-units.js), the pre-flight does not plan them
   if (cands.length <= batch && !rooms) return null; // ponytail: a document that fits one call keeps the single call; the unit pack and the blocks then share it
   const evidence = lines(rd('audit-evidence.txt')), bodies = lines(rd('audit-blocks.txt')), units = rd('audit-units.txt');
   let meta = {}; try { meta = JSON.parse(rd('audit-meta.json')); } catch { /* the prompt falls back to its defaults */ }
@@ -43,9 +45,9 @@ function plan({ ctx, root, batch, limit, schemaFile, contextPack, evidencePack, 
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-part-'));
     if (units.trim()) {
       const { candidates, candidates_listed, ...m } = meta, rows = lines(units), idOf = (l) => l.split('\t')[0], keyOf = (l) => { const c = l.split('\t'), w = /^part (\d+)\//.exec(c[7] || ''); return w ? [c[0], `${c[0]}:${w[1]}`] : [c[0]]; }; // a stateless run names each part of a unit id:part in the room (audit-units.js partId)
-      (rooms ? rooms.map((ids) => rows.filter((l) => keyOf(l).some((k) => ids.includes(k)))) : [rows]).filter((g) => g.length).forEach((g, k) => {
+      (rooms ? rooms.map((ids, i) => Object.assign(rows.filter((l) => keyOf(l).some((k) => ids.includes(k))), { extra: i >= rooms.length - nExtra })) : [rows]).filter((g) => g.length).forEach((g, k) => {
         const prompt = render({ 'audit-units.txt': rooms ? g.join('\n') + '\n' : units }, { ...m, ...(m.units && { units: { ...m.units, picked: g.length } }) }), p = limit > 0 ? pack() : { text: '', note: '', notWhole: [] };
-        (k ? later : out).push({ prompt, pack: p, units: g.map(idOf), keys: g.map((l) => keyOf(l).pop()) }); // keys: each unit or unit part (id:part) the call holds
+        (k ? later : out).push({ prompt, pack: p, units: g.map(idOf), keys: g.map((l) => keyOf(l).pop()), ...(g.extra && { extra: true }) }); // keys: each unit or unit part (id:part) the call holds
       });
     }
     for (let i = 0; i < cands.length; i += batch) out.push(block(cands.slice(i, i + batch)));
