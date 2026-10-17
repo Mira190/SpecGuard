@@ -3,7 +3,7 @@
 // Env: TARGET (a PR link -> PR review; a repo link, owner/name or a branch/tree link -> unit test gap scan of that branch, default branch when none),
 // DESIGN_DOCS, RULES_DOCS, TEST_DIRS (newline separated: repository paths, globs, or github.com blob/tree URLs of the SAME repository; a leading ! excludes),
 // GH_TOKEN (the run's token: used only to read the PR, to find which part of a link is the branch name, and to tell a folder from a file; without it, or when it cannot read the repo, links are read literally).
-// Writes repo, pr, ref, mode, head_sha, base_sha, design, rules, tests to $GITHUB_OUTPUT and fails with ::error:: on anything it cannot honour.
+// Writes repo, pr, ref, mode, head_sha, base_sha, scan_paths (the verified path of a branch link), design, rules, tests to $GITHUB_OUTPUT and fails with ::error:: on anything it cannot honour.
 // A URL of another repository is rejected (simple choice: fetching it would need a second token scope and checkout).
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -122,7 +122,7 @@ function resolveList(text, ctx) {
 function resolve(env, api = ghApi, log = () => {}) {
   const t = parseTarget(env.TARGET);
   const ctx = { repo: t.repo, api, cache: new Map(), ref: '', at: '' };
-  const out = { repo: t.repo, pr: t.pr, ref: '', mode: t.pr ? 'pr' : 'scan', head_sha: '', base_sha: '' };
+  const out = { repo: t.repo, pr: t.pr, ref: '', mode: t.pr ? 'pr' : 'scan', head_sha: '', base_sha: '', scan_paths: '' };
   if (t.pr) {
     const row = api(`repos/${t.repo}/pulls/${t.pr}`, '[.head.sha, .base.sha, .state] | @tsv');
     if (row === null) throw new Error(`could not read ${t.repo}#${t.pr} (does SPECGUARD_PAT have Pull requests: read on it?)`);
@@ -136,7 +136,11 @@ function resolve(env, api = ghApi, log = () => {}) {
     if (!REF_OK.test(s.ref)) throw new Error('the branch in the link must be a branch, tag or commit SHA (letters, digits and . _ / -)');
     out.ref = ctx.ref = ctx.at = s.ref;
     if (!s.verified && t.rest.includes('/')) log(`::warning::could not check which part of the link is the branch name (the token cannot read ${t.repo}?): scanning branch "${s.ref}". A branch name that contains a slash needs a token that can read the repository.`);
-    else if (s.path) log(`::notice::the scan covers the whole branch ${s.ref}; the part of the link after it (${s.path}) is ignored. Use design_docs and test_dirs to narrow it.`);
+    else if (s.path) { // a plain path: scan_paths reads it as a file or a folder
+      if (/[\x00-\x1F\x7F]/.test(s.path) || s.path.split('/').some((p) => p === '..' || !p)) throw new Error('the path in the link is not valid');
+      out.scan_paths = s.path;
+      log(`::notice::the scan covers the source files under ${s.path} on ${s.ref}; documents and tests still come from the whole repository (narrow them with design_docs and test_dirs).`);
+    }
   }
   return { ...out, design: resolveList(env.DESIGN_DOCS, ctx), rules: resolveList(env.RULES_DOCS, ctx), tests: resolveList(env.TEST_DIRS, ctx) };
 }
