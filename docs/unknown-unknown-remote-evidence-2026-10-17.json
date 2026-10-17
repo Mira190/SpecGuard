@@ -1,0 +1,303 @@
+{
+  "snapshot_utc": "2026-10-16 22:47:49 UTC",
+  "main_sha": "8415eae217a5c4eed3c1d46ccf9294b127fc97d2",
+  "pr223_head": "84475bad28af4f452f70ab4bbc779851cc36c094",
+  "prs": [
+    {
+      "number": 223,
+      "title": "Keep secret-like files' diffs out of the model input",
+      "state": "open",
+      "head": "84475bad28af4f452f70ab4bbc779851cc36c094",
+      "base": "fd8c62b877ecbc74ff704425cdd7593bbb68c28c",
+      "merged_at": null,
+      "url": "https://github.com/Mira190/SpecGuard/pull/223"
+    },
+    {
+      "number": 222,
+      "title": "Fail the job when the model cannot run because of configuration (bad key, no credit, unknown model)",
+      "state": "closed",
+      "head": "cd12c7781659208d1b333b1f24f1876b946af631",
+      "base": "dbac6939ff9ddae9024e022ff3ff71bb7694ef6f",
+      "merged_at": "2026-10-16T22:34:09Z",
+      "url": "https://github.com/Mira190/SpecGuard/pull/222"
+    },
+    {
+      "number": 218,
+      "title": "Scan funnel: split 'not reached' into the inventory cap and the time budget",
+      "state": "closed",
+      "head": "b8ac8e7fec54553f68b747c848612164542a4925",
+      "base": "3df0cef99fdc1b0333547414c1a9b74d2046412f",
+      "merged_at": "2026-10-16T22:25:04Z",
+      "url": "https://github.com/Mira190/SpecGuard/pull/218"
+    },
+    {
+      "number": 221,
+      "title": "Count reduced-review degradations by an explicit id, not note wording",
+      "state": "closed",
+      "head": "a1585def5dbdf69fc82825919decd2c0a32ac06d",
+      "base": "f81a87efe0449b2228de809ac2dce5af35015264",
+      "merged_at": "2026-10-16T22:23:09Z",
+      "url": "https://github.com/Mira190/SpecGuard/pull/221"
+    },
+    {
+      "number": 220,
+      "title": "Scan: never adopt another target's scan issue; compare repo names case-insensitively",
+      "state": "closed",
+      "head": "8bd25c7355912ad6494dca9fe2c07acfba46b18a",
+      "base": "395b4d13f4dd5a17252683f2954e09ec355e62ab",
+      "merged_at": "2026-10-16T22:21:17Z",
+      "url": "https://github.com/Mira190/SpecGuard/pull/220"
+    },
+    {
+      "number": 219,
+      "title": "Eval: count wrong coverage rows as FPs; weekly anchor/tests rule matches post.js (S9, S10)",
+      "state": "closed",
+      "head": "73d407cdec5b93930f4a33d1d3dbc9e85f7c8d63",
+      "base": "bcddf784f70d4f5b5a854d2c75789bd33f1591aa",
+      "merged_at": "2026-10-16T22:19:17Z",
+      "url": "https://github.com/Mira190/SpecGuard/pull/219"
+    }
+  ],
+  "recent_runs": [
+    {
+      "id": 38976743598,
+      "sha": "84475bad28af4f452f70ab4bbc779851cc36c094",
+      "event": "pull_request",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38976743598"
+    },
+    {
+      "id": 38976532345,
+      "sha": "fd8c62b877ecbc74ff704425cdd7593bbb68c28c",
+      "event": "push",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38976532345"
+    },
+    {
+      "id": 38976247001,
+      "sha": "cd12c7781659208d1b333b1f24f1876b946af631",
+      "event": "pull_request",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38976247001"
+    },
+    {
+      "id": 38975760749,
+      "sha": "a46a36c614e4a2f9c20eb3f4b0d01a3ad63d2e28",
+      "event": "pull_request",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38975760749"
+    },
+    {
+      "id": 38975623571,
+      "sha": "dbac6939ff9ddae9024e022ff3ff71bb7694ef6f",
+      "event": "push",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38975623571"
+    },
+    {
+      "id": 38975464054,
+      "sha": "b8ac8e7fec54553f68b747c848612164542a4925",
+      "event": "pull_request",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38975464054"
+    },
+    {
+      "id": 38975428452,
+      "sha": "3df0cef99fdc1b0333547414c1a9b74d2046412f",
+      "event": "push",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38975428452"
+    },
+    {
+      "id": 38975275624,
+      "sha": "a1585def5dbdf69fc82825919decd2c0a32ac06d",
+      "event": "pull_request",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38975275624"
+    },
+    {
+      "id": 38975237908,
+      "sha": "f81a87efe0449b2228de809ac2dce5af35015264",
+      "event": "push",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38975237908"
+    },
+    {
+      "id": 38975069172,
+      "sha": "8bd25c7355912ad6494dca9fe2c07acfba46b18a",
+      "event": "pull_request",
+      "conclusion": "success",
+      "url": "https://github.com/Mira190/SpecGuard/actions/runs/38975069172"
+    }
+  ],
+  "discussions": [
+    {
+      "pr": 219,
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/219#issuecomment-6225720074",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":47788,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":219,\"merged\":false,\"head\":\"73d407cdec5b93930f4a33d1d3dbc9e85f7c8d63\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"\",\"build\":\"4eb756aa99fc\"},\"complete\":false,\"execution_complete\":true,\"findings\":{\"missing_test\":{\"posted\":0,\"already\":0,\"summary\":1}},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Reduced review: no high-confidence gaps**\n\n| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| no high-confidence gaps | 3: 3 evidenced | no violations | nothing to move down |\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Low-confidence findings (1)**\n\n- **Missing test:** Renamed-away anchor file is not tested [`eval/weekly-report.js:54`](https://github.com/Mira190/SpecGuard/blob/73d407cdec5b93930f4a33d1d3dbc9e85f7c8d63/eval/weekly-report.js#L54) (reduced review: needs high confidence and two citations; low confidence) — The `renamed` branch with `previous_filename === file` returns the deleted-file marker, so the anchor gives null.\n\n**Evidenced criteria (3)**\n\n- Evidenced: **X1** S10 (eval/grade.js). A coverage row saying weak_test or missing_test, with no matching summary item and no posted…\n- Evidenced: **X2** S9 (eval/weekly-report.js). `anchor_touched` and `tests_changed` now call `post.anchorTouched` / `post.testsChanged`…\n- Evidenced: **X3** weekly-report.test.js: `load: a merged base and a deleted anchor file give the same anchor/tests answer as post.js`…\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Applied to eval/grade.js and eval/weekly-report.js: node:test and node:assert, tests next to code, exported functions (apiGit, unified0, grade, parseSummary) asserted on return values or thrown errors, Error objects thrown. No violation found. ste-mini applies to prose, not code. Sources: `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. Grading and report helpers are pure or CLI-level with no UI or integration layer present; the changed logic is already tested at unit level, so there is no higher-layer candidate to push down.\n\n**Requirements source:** PR body, history PR #111, history PR #108, history PR #190 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (9) · Unit evidence: 8/9 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: A coverage row saying weak_test or missing_test with no matching summary item or posted comment counts as one false positive | PR body; eval/grade.js:136 — const rowFps = summaryHits.filter((h, j) => h.item === undefined && h.group === j && !usedGroups.has(j) && ['weak_test', 'missing_test'].includes(h.kind) && !posted.some((c) => c.line != null && c.kind === h.kind && c.path === h.path && Math.abs(h.line - c.line) <= 2)).map((h) => ({ ...h, level: 'coverage' })); | unit: eval/grade.test.js:350 —   assert.equal(coverageRowOnly.fp, 1); (assertion); unit: eval/grade.test.js:349 —   assert.equal(coverageRowOnly.fp, sameGapAsSummaryItem.fp); (assertion) | Evidenced: The row-only case asserts fp is exactly the literal 1 and equal to the summary-item case, so a missing or doubled row count fails. |\n| O2: A coverage row for a gap that a posted comment already stands for is not counted again | PR body; eval/grade.js:136 — const rowFps = summaryHits.filter((h, j) => h.item === undefined && h.group === j && !usedGroups.has(j) && ['weak_test', 'missing_test'].includes(h.kind) && !posted.some((c) => c.line != null && c.kind === h.kind && c.path === h.path && Math.abs(h.line - c.line) <= 2)).map((h) => ({ ...h, level: 'coverage' })); | unit: eval/grade.test.js:360 —   assert.equal(g.fp, 1); (assertion) | Evidenced: The test has one posted comment and one matching row; the literal 1 fails if the row is counted as well (fp 2). |\n| O3: expect_clean fails when a coverage row false positive exists | PR body; eval/grade.js:171 —   const cleanOk = exp.expect_clean ? posted.length === 0 && sum.actionable.size === 0 && !rowFps.length : true; | unit: eval/grade.test.js:351 —   assert.equal(coverageRowOnly.clean_ok, false); (assertion) | Evidenced: The row-only case asserts clean_ok is false, so dropping !rowFps.length from cleanOk fails the test. |\n| O4: anchor_touched follows post.js: own first-parent non-merge commits only (a merged base is not the author's change) | PR body; eval/weekly-report.js:46 —   for (let x = by.get(head); x; x = by.get(x.parents?.[0]?.sha)) if (x.parents.length === 1) chain.unshift(x.sha); | unit: eval/weekly-report.test.js:198 —   assert.deepEqual([a.anchor_touched, a.tests_changed], [false, false]); (assertion) | Evidenced: The merged-base case has a main edit to the anchor line and a main-added test file; the literal [false, false] fails if merge-parent commits are followed. |\n| O5: A deleted anchor file gives unknown (null), never false | PR body; eval/weekly-report.js:54 —       const f = fs.find((x) => x.filename === file), gone = f?.status === 'removed' \\|\\| fs.some((x) => x.status === 'renamed' && x.previous_filename === file); | unit: eval/weekly-report.test.js:201 —   assert.equal(b.anchor_touched, null); (assertion) | Evidenced: The deleted-file case asserts the literal null; returning false for removed files fails it. |\n| O6: An unusable compare or unavailable commit gives null, never false | PR body; eval/weekly-report.js:48 —     if (!cmp \\|\\| .includes(cmp.status) \\|\\| (cmp.total_commits \\|\\| 0) > by.size) throw new Error('compare not usable'); | unit: eval/weekly-report.test.js:233 —   assert.equal(post.anchorTouched(sha, sha, 'f.js', 1, 1, null, apiGit(null, sha, () => [])), null); (assertion); unit: eval/weekly-report.test.js:236 —   assert.equal(post.anchorTouched('b'.repeat(40), sha, 'f.js', 1, 1, null, apiGit(cmp, sha, () => null)), null); (assertion) | Evidenced: Null compare and an unavailable commit both assert the literal null for anchorTouched. |\n| O7: apiGit treats a truncated compare (more commits than returned) as unusable | from behaviour; eval/weekly-report.js:48 —     if (!cmp \\|\\| .includes(cmp.status) \\|\\| (cmp.total_commits \\|\\| 0) > by.size) throw new Error('compare not usable'); | unit: eval/weekly-report.test.js:243 —   assert.equal(post.testsChanged('b'.repeat(40), sha, null, apiGit(cmp, sha, () => [{ filename: 'x.test.js' }])), null); (assertion) | Evidenced: total_commits 300 against one returned commit gives the literal null; without the size check the test would see a test file and return true. |\n| O8: unified0 emits the same -U0 hunk headers as git diff -U0 for add, delete, modify, two runs and no-newline | PR body; eval/weekly-report.js:62 —   const end = () => { if (run) out.push(`@@ -${run.d ? run.a : run.a - 1},${run.d} +0,${run.k} @@`); run = null; }; | unit: eval/weekly-report.test.js:227 —     assert.deepEqual(hdr(unified0(patch)), real, name); (assertion) | Evidenced: Each case compares the header numbers with real git -U0 output, so a wrong old-side position or run length fails the case. |\n| O9: A rename away from the anchor path is handled as a deleted file (unknown) | from behaviour; eval/weekly-report.js:54 —       const f = fs.find((x) => x.filename === file), gone = f?.status === 'removed' \\|\\| fs.some((x) => x.status === 'renamed' && x.previous_filename === file); | none | Missing test: Searched eval/weekly-report.test.js and src/post.test.js for renamed, previous_filename and removed in apiGit tests: only the removed status is exercised (weekly-report.test.js:199-201), and unified0 uses --no-renames. No assertion reaches the renamed branch. |\n\n**Not reviewed (3 items)**\n\n- src/post.js (anchorTouched, testsChanged, anchor rename handling) is not inlined: their semantics are read only through the weekly-report tests.\n- Not analysed: apiGit with an empty first-parent chain (compare head absent from the commit list).\n- The report text format is not verified against the 'unchanged' claim beyond the existing render tests.\n\n**Validation notes (1)**\n\n- Obligation O7 alignment unknown: not_applicable cannot have a linked requirement.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `73d407c`, base `bcddf78`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 14 files, 157 KB\nSpecGuard build 4eb756aa99fc\n\n</details>\n\n<sub>Cost $0.07 · claude-haiku-5-5 · 102.5k in (12.5k cached) · 11.0k out · 48s</sub>\n",
+          "user": "github-actions[bot]"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/219#discussion_r4299861860",
+          "body": "note: the posted-comment exclusion is a line-proximity match (same kind + path, ±2 lines), the same tolerance `acceptable` uses. Two different gaps of the same kind within 2 lines of each other would collapse into one candidate. That under-counts an FP rather than inventing one, so it errs the right way for a precision metric. If it ever matters, match by `obligation_ids` when both sides carry them.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/219#discussion_r4299861866",
+          "body": "note: the dogfood's low-confidence finding is fair. The renamed-away branch (`previous_filename === file` → deleted marker → null) has no test. It matches post.js's `--no-renames` behaviour, so it is not a bug. A one-line case in the existing `apiGit` test would pin it. Not blocking.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/219#pullrequestreview-5554297869",
+          "body": "Review against S9/S10 from the supplement.\n\n- S10: a weak/missing coverage row with no item or comment now counts once per F29 group and breaks expect_clean. Your extra test caught a real double count (row + posted comment = 2 FPs), which is the useful kind of review finding.\n- S9: the weekly report now asks post.js's own `anchorTouched`/`testsChanged` through an API-backed git stand-in. One rule, not a second copy. Every failure path ends as null (unknown), never false, and the truncated-compare case is pinned.\n- `unified0` is checked against real `git diff -U0` headers for add, delete, modify, two runs and no-newline.\n- S9 and S10 tests fail on main; the posted-comment test is honestly labelled a control.\n- Dogfood ran the model (status incomplete: reduced fast tier), so the re-set key works.\n\nLGTM. Two notes inline; merging.",
+          "user": "Mira190"
+        }
+      ]
+    },
+    {
+      "pr": 220,
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/220#issuecomment-6225741326",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":34407,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":220,\"merged\":false,\"head\":\"8bd25c7355912ad6494dca9fe2c07acfba46b18a\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"\",\"build\":\"149f1b0d96e4\"},\"complete\":false,\"execution_complete\":false,\"findings\":{},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Reduced review: no high-confidence gaps**\n\n### Requirements to check (1)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| Unconfirmed | `findIssue` with no title (same-repo scan) now skips an issue titled for another target… | Point to the unit test or add one. |\n\n### Not reviewed (4)\n\n- Review context was cut: the model saw only part of `src/audit-post.js`, `src/audit-code.test.js`, `src/audit-units.test.js`; obligations that depend on them are unknown.\n- audit-collect.js loadPrior and its tests are not in the diff and were not reviewed.\n- Existing mirror-constant leads (audit-post.test.js lines 37, 38, 414, 811, 1290) are not in the diff; the expected values are the TITLE constant for scope titles, not a recomputed formula, so no finding is raised.\n- Context trimmed: issue #200 body cut to about 3 KB in requirements.md (acceptance criteria kept).\n\n> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (1)**\n\n- Evidenced: **X2** `resolveIssueTarget` compares `ISSUE_REPO` with the scanned repo case-insensitively, so `mira190/specguard` vs…\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Applied to src/audit-post.js and src/audit-post.test.js: exported functions are asserted on return values, tests use node:test and node:assert, and test names describe behaviour. ste-mini concerns prose style and was not applied to code. Sources: `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. Only unit tests in src/audit-post.test.js cover the changed functions; no component or integration layer is involved, so no pushdown candidate.\n\n**Requirements source:** PR body, issue #200 (context), history PR #200, history PR #108, history PR #116 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (5) · Unit evidence: 4/5 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: findIssue with no title skips an issue titled for another target, and a foreign-only list returns null | PR body; src/audit-post.js:677 — const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (title ? String(i.title).toLowerCase() === title.toLowerCase() : !foreign(i.title)) && typeof i.body === 'string' && i.body.startsWith(mark)); | unit: src/audit-post.test.js:1273 —   assert.equal((await find([iss(1, FOREIGN), iss(2, audit.TITLE)])).number, 2); (assertion); unit: src/audit-post.test.js:1276 —   assert.equal(await find([iss(1, FOREIGN), iss(3, `${FOREIGN} (src)`)]), null); (assertion); unit: src/audit-post.test.js:1283 —   assert.equal((await find([iss(1, audit.TITLE)])).number, 1); (assertion) | Evidenced: The unit tests assert the returned issue number when a foreign issue is listed first, and null when only foreign issues (plain and scoped) exist. The legacy title control keeps an own issue found. |\n| O2: An explicit title selects that issue, compared case-insensitively | PR body; src/audit-post.js:677 — const mine = all.filter((i) => !i.pull_request && ours(i.user, me) && (title ? String(i.title).toLowerCase() === title.toLowerCase() : !foreign(i.title)) && typeof i.body === 'string' && i.body.startsWith(mark)); | unit: src/audit-post.test.js:1279 —   assert.equal((await find([iss(1, FOREIGN), iss(2, audit.TITLE)], { title: FOREIGN })).number, 1); (assertion); unit: src/audit-post.test.js:1280 —   assert.equal((await find([iss(1, FOREIGN)], { title: FOREIGN.toUpperCase() })).number, 1); (assertion) | Evidenced: The test selects the foreign issue by its exact title and by an upper-cased title, so the case-insensitive comparison is pinned by the returned number. |\n| O3: A title naming this very repository in a different case is ours, not foreign | PR body; src/audit-post.js:674 —   const foreign = (t) => { const m = new RegExp(`^${TITLE}: ([\\w.-]+/[\\w.-]+) | unit: src/audit-post.test.js:1285 —   assert.equal((await find([iss(1, `${audit.TITLE}: O/R`)])).number, 1); (assertion) | Unconfirmed: Could not verify the citation: changed line src/audit-post.js:674; behaviour src/audit-post.js:674. |\n| O4: ISSUE_REPO differing only in case from the scanned repository is not away | PR body; src/audit-post.js:684 — const m = /^([\\w.-]+)\\/([\\w.-]+)$/.exec(env.ISSUE_REPO \\|\\| ''), away = !!m && `${m[1]}/${m[2]}`.toLowerCase() !== `${owner}/${repo}`.toLowerCase(); // GitHub names are case-insensitive | unit: src/audit-post.test.js:1289 —   assert.equal(t.away, false); (assertion); unit: src/audit-post.test.js:1290 —   assert.equal(t.scope.title, audit.TITLE); (assertion) | Evidenced: The test resolves mira190/specguard against Mira190/SpecGuard and asserts away is false and the scope title is the unqualified title. |\n| O5: A real foreign ISSUE_REPO is away with its own target | PR body; src/audit-post.js:684 — const m = /^([\\w.-]+)\\/([\\w.-]+)$/.exec(env.ISSUE_REPO \\|\\| ''), away = !!m && `${m[1]}/${m[2]}`.toLowerCase() !== `${owner}/${repo}`.toLowerCase(); // GitHub names are case-insensitive | unit: src/audit-post.test.js:1294 —   assert.equal(t.away, true); (assertion); unit: src/audit-post.test.js:1295 —   assert.deepEqual(t.target, { owner: 'org', repo: 'other' }); (assertion) | Evidenced: The control with org/other asserts away is true and the target is org/other, so the case-insensitive change does not suppress real foreign repositories. |\n\n**Validation notes (1)**\n\n- Obligation O3 marked unknown: could not verify citation: changed line src/audit-post.js:674; behaviour src/audit-post.js:674.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `8bd25c7`, base `395b4d1`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 9 files, 146 KB\nSpecGuard build 149f1b0d96e4\n\n</details>\n\n<sub>Cost $0.01 · claude-haiku-5-5 · 88.5k in (12.5k cached) · 7.8k out · 34s</sub>\n",
+          "user": "github-actions[bot]"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/220#discussion_r4299865274",
+          "body": "P3: `TITLE` is interpolated into a RegExp unescaped. That is safe today because it is a constant with no metacharacters, but a later wording change (e.g. adding `(beta)` or `?`) would silently break the foreign check, and every issue would look \"ours\" again. Escape it (`TITLE.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')`) or compare with `startsWith(TITLE + ': ')` and parse the rest. Either way it's a one-liner.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/220#pullrequestreview-5554301607",
+          "body": "Review against the branch-review finding (cross-target issue match). The probe on main picked the foreign issue #1.\n\n- `findIssue` with no title now skips an issue titled for another target, and still adopts plain, scoped, legacy and same-repo titles. The control covers all of them.\n- `resolveIssueTarget` compares case-insensitively. I agree with not porting `stateAddress()` or the collector part: #200's resolver already feeds `loadPrior` (audit-collect.js:311-328), so both fixes reach the read side through the shared function.\n- 4 of 6 tests fail on main; the 2 controls pass on both, as they should.\n- Dogfood ran the model (status incomplete: reduced fast tier).\n\nLGTM. One P3 inline; merging.",
+          "user": "Mira190"
+        }
+      ]
+    },
+    {
+      "pr": 221,
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/221#issuecomment-6225751780",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":36436,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":221,\"merged\":false,\"head\":\"a1585def5dbdf69fc82825919decd2c0a32ac06d\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"\",\"build\":\"3829ff3a90bc\"},\"complete\":false,\"execution_complete\":false,\"findings\":{},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Reduced review: no high-confidence gaps**\n\n### Not reviewed (5)\n\n- Review context was cut: the model saw only part of `src/post.js`, `src/post.test.js`, `src/audit-code.test.js`, `src/audit-collect.test.js`, `src/audit-post.test.js`; obligations that depend on them are unknown.\n- src/post.test.js lines 1682-4008 were not visible, and the audit test files were only slices. applyCoverage (src/post.js:1183) has no visible test reference, so O6 is unknown.\n- The verifyEvidence degrade calls (lines 1001 and 1018) are only partly covered by visible tests (O5).\n- The comment-only change at src/post.js:1530 is not behaviour and raises no obligation.\n- The cover-guard test at src/post.test.js:3988 is a regression pin for existing behaviour, not a new obligation.\n\n> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (1)**\n\n- Evidenced: **X1** `validate()` always overwrites `degraded` with its own list, so a model-supplied `degraded` is never trusted.\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Checked the changed src/post.js and src/post.test.js against the JavaScript rules: Node built-ins only, node:test and node:assert, test names describe behaviour, and no new exported function. No violations found. The ste-mini skill covers prose style, not code, so it was not applied. Sources: `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. The new assertions sit at the validate() and reducedReasons() unit seam, which the visible unit tests exercise directly. No higher-layer logic is a pushdown candidate.\n\n**Requirements source:** PR body, issue #215 (context), issue #217 (context), history PR #108, history PR #118, history PR #110 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (6) · Unit evidence: 4/6 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: A malformed coverage row is recorded by id in data.degraded | from behaviour; src/post.js:253 —     notes.push(`Obligation ${c.id} marked unknown: ${why}.`); degraded.push(c.id); | unit: src/post.test.js:46 —   assert.deepEqual(d.degraded, [d.coverage[0].id], 'a malformed row is recorded by id'); (assertion) | Evidenced: The row 'covered' with no evidence fails rowError and goes through the degraded.push at line 253; the assertion at line 46 pins d.degraded to that row's id. Removing the push would fail the assertion. |\n| O2: An inconsistent-findings demotion is recorded by id in data.degraded | from behaviour; src/post.js:326 —       degraded.push(c.id); | unit: src/post.test.js:51 —   assert.deepEqual(d.degraded, [d.coverage[0].id], 'so is an inconsistent-findings demotion'); (assertion) | Evidenced: The 'needs exactly one missing_test finding' demotion at line 324 pushes the id at line 326; the assertion at line 51 pins it for the same row. |\n| O3: validate() always overwrites degraded, so a model-supplied degraded list is never trusted | PR body; src/post.js:332 —   Object.assign(o, { coverage: rows, requirements: reqs, findings: kept, validation_notes: notes, degraded }); // always overwritten: a model-supplied degraded list is never trusted | unit: src/post.test.js:52 —   assert.deepEqual(run(report({ degraded: ['forged'] })).degraded, [], 'a model-supplied list is never trusted; a clean run has none'); (assertion) | Evidenced: Input carries degraded: ['forged'] and a clean report; the assertion requires the output list to be empty, so keeping the model's list would fail. |\n| O4: reducedReasons counts degraded ids only, never the wording of a validation note | PR body; src/post.js:474 —   const bad = new Set(data.degraded \\|\\| []); // explicit kind (degrade()), never the wording of a note | unit: src/post.test.js:3270 —   assert.deepEqual(r({ data: { ...data(['Obligation O0 marked unknown: wording only.', 'Obligation O1 marked unknown: wording only.']), degraded: [] } }), [], 'note text that says \"marked unknown\" is not a degradation without the explicit kind'); (assertion) | Evidenced: Two notes say 'marked unknown' but degraded is empty; the expected result is no reason. The old note-regex implementation would count two of four rows and fail. |\n| O5: verifyEvidence records the id in degraded when a citation cannot be verified | from behaviour; src/post.js:1018 —       degrade(data, c.id, `Obligation ${c.id} marked unknown: ${why}.`); | none | Unconfirmed: No visible test asserts data.degraded after verifyEvidence. The part of src/post.test.js that holds the verifyEvidence citation tests (lines 1682-4008) was not fully visible, so coverage is not settled. |\n| O6: applyCoverage records the id in degraded when the coverage report shows the line never ran | from behaviour; src/post.js:1190 —       degrade(data, c.id, `Obligation ${c.id} marked unknown: the coverage report shows ${b.path}:${b.line} never ran.`); | none | Unconfirmed: leads.txt finds no test reference to applyCoverage in the visible tests, and the candidate test file src/post.test.js is only partly visible (lines 1682-4008 omitted). Cannot settle whether a test pins the degraded id here. |\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `a1585de`, base `f81a87e`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 9 files, 146 KB\nSpecGuard build 3829ff3a90bc\n\n</details>\n\n<sub>Cost $0.01 · claude-haiku-5-5 · 92.6k in (12.5k cached) · 8.1k out · 36s</sub>\n",
+          "user": "github-actions[bot]"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/221#discussion_r4299876653",
+          "body": "P3: the dogfood's unconfirmed O5/O6 are fair. `verifyEvidence` and `applyCoverage` now record their ids via `degrade()`, but no test asserts `data.degraded` for those two sites. If someone later reverts one of them to a plain `validation_notes.push`, the reduced trigger quietly loses that signal and nothing fails. Two one-line assertions in the existing verifyEvidence/applyCoverage tests (`assert.deepEqual(data.degraded, ['O1'])`) would close it. Also, if any step rebuilds `data` from parts (multi-part merge), `degraded` must be carried with `coverage`; I didn't see one, but grep before adding such a step.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/221#pullrequestreview-5554314249",
+          "body": "Review against the #215 (note-wording root cause) and #217 (real-guard end-to-end) follow-ups.\n\n- Completeness no longer depends on wording: `reducedReasons` counts only `data.degraded`, and `validate()` always overwrites it, so a model-supplied list is never trusted.\n- Good catch on the two `validate()` sites (malformed row, needs-exactly-one demotion) that the WIP missed. Without them, those rows would silently have stopped counting. The site table in the body is exactly the audit I wanted.\n- The exclusions (linked-requirement, alignment-only, E1 weak evidence) keep their old meaning.\n- The two fail-on-main tests are real repros; the real-guard test is honestly labelled a regression pin.\n\nLGTM. One P3 inline (the dogfood's O5/O6 point is fair); merging.",
+          "user": "Mira190"
+        }
+      ]
+    },
+    {
+      "pr": 222,
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/222#issuecomment-6225884759",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":51528,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":222,\"merged\":false,\"head\":\"cd12c7781659208d1b333b1f24f1876b946af631\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"\",\"build\":\"d6fcf083ae52\"},\"complete\":false,\"execution_complete\":false,\"findings\":{\"spec_mismatch\":{\"posted\":1,\"already\":0,\"summary\":0}},\"pre_existing\":0,\"posted\":{\"inline\":1,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**❌ 1 spec mismatch to fix**\n\n### Requirements to check (2)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| Mismatch | Copilot `policy` (org disabled) is a config issue too but outside the three classes asked for; left advisory. | Fix the code or the requirement: policy fails the job, but the PR body keeps it advisory ([finding](https://github.com/Mira190/SpecGuard/pull/222#discussion_r4299937890)) |\n| Unconfirmed | `claude-api.js`: the engine log is now `Claude review failed (auth, HTTP 401): &lt;reason>`. Never the key or the response… | Point to the unit test or add one. |\n\n### Not reviewed (3)\n\n- Review context was cut: the model saw only part of `src/claude-api.test.js`, `src/audit-code.test.js`, `src/audit-units.test.js`, `src/auto-engine.test.js`, `src/post.test.js`, `src/audit-collect.test.js`, `src/audit-post.test.js`; obligations that depend on them are unknown.\n- copilot.sh (the budget class and its auth change), claude.sh agent mode and the post.js PR comment text are not in files.txt or the inlined diff; their behaviour is not verified here.\n- The unit tests were read as text, not executed.\n\n> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n> Reduced review (fast model): only high-confidence findings are shown.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (3)**\n\n- Evidenced: **X1** A configuration failure always fails the job, whatever `fail_on_error` is: class `auth` (missing key, 401, 403)…\n- Evidenced: **X2** Transient failures (rate 429/529, 5xx, network, timeout) and the user's own budget stay advisory unless…\n- Evidenced: **X6** `action.yml`: the last step runs on every non-cancelled run and receives `FAIL_ON_ERROR`. `fail-on-error.js` reads the…\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Applied to src/fail-on-error.js and src/engines/claude-api.js (src/**). Changed test names describe behaviour. Every exported function changed here (classify) is asserted on its return value. .claude/skills/ste-mini/SKILL.md governs prose, not code, so it was not applied to these files. Sources: `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. Logic is tested in src/audit-action.test.js (spawns fail-on-error.js) and src/claude-api.test.js (calls classify and run with a mocked fetch). The new logic is already at unit level; no higher-layer test holds pure logic to push down.\n\n**Requirements source:** PR body, issue #197 (context), issue #218 (context), issue #197 comments, history PR #120, history PR #119, history PR #124 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (7) · Unit evidence: 3/7 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: A configuration failure (auth, quota, model) fails the job with the ::error:: line when FAIL_ON_ERROR is unset | PR body; src/fail-on-error.js:15 — if (CONFIG.includes(cls)) { | unit: src/audit-action.test.js:289 — assert.equal(r.status, 1, c); (assertion); unit: src/audit-action.test.js:290 — assert.equal(r.stdout.trim(), `::error::SpecGuard could not run the model (${c}): The Anthropic API key was rejected`); (assertion) | Evidenced: The test runs auth, quota and model with FAIL_ON_ERROR unset and asserts exit 1 and the exact ::error:: line. Removing the CONFIG check would turn these red-case assertions green and fail the test. |\n| O2: Only auth, quota and model are configuration failures; Copilot policy stays advisory | PR body; src/fail-on-error.js:12 — const CONFIG = ['auth', 'quota', 'model', 'policy']; | unit: src/audit-action.test.js:289 — assert.equal(r.status, 1, c); (assertion) | Weak test: The test asserts that policy exits 1 without fail_on_error, which pins the behaviour the PR body excludes from the three classes. |\n| O3: Transient and budget failures stay advisory unless fail_on_error is true, and the warning names the class | PR body; src/fail-on-error.js:19 — if (FAIL_ON_ERROR === 'true') { | unit: src/audit-action.test.js:294 — assert.equal(r.status, 0, `${c \\|\\| 'unclassified'} stays advisory`); (assertion); unit: src/audit-action.test.js:297 — assert.equal(run('failed', c, 'true').status, 1, `${c \\|\\| 'unclassified'} with fail_on_error true`); (assertion) | Evidenced: Rate, budget, timeout and unclassified exit 0 with FAIL_ON_ERROR unset, and exit 1 with it true. Line 296 checks the class name in the warning. |\n| O4: Auth reasons are split: no key, 401 rejected, 403 lacks permission | PR body; src/engines/claude-api.js:289 — if (status === 403 \\|\\| /permission_error/i.test(t)) return ['auth', 'The Anthropic API key lacks permission for this model or workspace (check the llm_token secret and the model input)']; | none | Unconfirmed: Malformed coverage row: layer not stated (the test path is not clearly a unit test). |\n| O5: The engine log names the failure class and HTTP status and never the response body | PR body; src/engines/claude-api.js:311 — console.log(`::warning::Claude review failed${tag ? ` (${tag})` : ''}${why ? `: ${scrub(why)}` : ''}`); | none | Unconfirmed: Malformed coverage row: layer not stated (the test path is not clearly a unit test). |\n| O6: Credit or billing errors classify as quota; 429 and 529 classify as rate | PR body; src/engines/claude-api.js:288 — if (status === 402 \\|\\| /billing_error\\|credit balance/i.test(t)) return ['quota', 'The Anthropic account has no credit left or hit its quota (add credits to the API account; this is not the per-run budget)']; | none | Unconfirmed: Malformed coverage row: layer not stated (the test path is not clearly a unit test). |\n| O7: The last action step runs on every non-cancelled run and receives FAIL_ON_ERROR | PR body; action.yml:311 — - if: ${{ !cancelled() }} | unit: src/audit-action.test.js:192 — assert.match(cond(s), /^\\$\\{\\{ !cancelled\\(\\) \\}\\}$/); (assertion); unit: src/audit-action.test.js:193 — assert.match(s, /FAIL_ON_ERROR: \\$\\{\\{ inputs\\.fail_on_error \\}\\}/); (assertion) | Evidenced: Both structural assertions read the step's condition and env from action.yml. The step must run for configuration failures. |\n\n**Validation notes (4)**\n\n- Obligation O4 marked unknown: layer not stated (the test path is not clearly a unit test).\n- Obligation O5 marked unknown: layer not stated (the test path is not clearly a unit test).\n- Obligation O6 marked unknown: layer not stated (the test path is not clearly a unit test).\n- 1 obligation cites an unchanged line of changed files (O6); their tests were still checked.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `cd12c77`, base `dbac693`\n\n**Reduced review**\n\nReasons: fast-tier model; 3 of 7 obligations degraded by validation (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 12 files, 244 KB; not included: src/auto-engine.test.js, src/post.test.js\nSpecGuard build d6fcf083ae52\n\n</details>\n\n<sub>Cost $0.10 · claude-haiku-5-5 · 140.3k in (12.5k cached) · 12.4k out · 52s · 1 inline comment</sub>\n",
+          "user": "github-actions[bot]"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/222#discussion_r4299937890",
+          "body": "**policy fails the job, but the PR body keeps it advisory**\n\nInput: a Copilot run with status failed and engine-error class policy → fail-on-error.js exits 1 with ::error::, because CONFIG includes policy. PR body: Copilot policy (org disabled) is outside the three classes and left advisory. The same path also turns a Claude safety refusal red: claude-api.js:365 writes reason policy for stop_reason refusal, and that is not a configuration failure. Fix: remove policy from CONFIG and change the test at src/audit-action.test.js:287 to expect policy to stay advisory.\n\n<!--\nkind: spec_mismatch, confidence: high\n-->\n<!-- specguard:fp=a19c38b638f32cd0510c55827e130dbefd975c9b -->",
+          "user": "github-actions[bot]"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/222#pullrequestreview-5554381932",
+          "body": "",
+          "user": "github-actions[bot]"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/222#discussion_r4299943679",
+          "body": "**[P2] An account out of Copilot credits must stay red.** `budget limit` / `AI credits exceeded` is the account's or org's premium-request cap, set in GitHub billing. SpecGuard has no per-run Copilot cap, so this is not a deliberate per-run limit the user chose for this run. Like Anthropic `quota`, only the owner can fix it, and every push until then would fail the same way. Classing it as advisory `budget` recreates exactly the incident this PR fixes, for Copilot users: green checks, no review, for days.\n\nPlease revert this split, so both branches stay `quota`, and keep the test expecting `quota`. The advisory `budget` class should stay reserved for SpecGuard's own per-run `max_budget_usd` stop (claude-api's preflight), which is the user's deliberate limit.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/222#discussion_r4299943683",
+          "body": "P3: Copilot `policy` (\"disabled by your organization\") meets the same test as the other three: a retry or a new push cannot fix it, only an admin can. I'd add it to `CONFIG`, with one test row. Separately, the class is read from `engine-error` in CTX, which is fresh per run (`.specguard-ctx` under the workspace), so a stale file is only possible if the action is invoked twice in one job. Worth a one-line comment, not code.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/222#pullrequestreview-5554388051",
+          "body": "Review against the 2026-10-15/16 incident (63 dogfood runs and 19 PRs green while the key was rejected).\n\n- The rule is right and it's in the one place every mode passes through: configuration failures always go red, and transient ones stay advisory unless `fail_on_error`. The class comes from the existing `engine-error` channel, and the step now runs on every non-cancelled run, so PR, scan and dispatch are all covered.\n- The log line now carries the class and HTTP status without the body, so the next incident is greppable.\n- The 401/403/no-key reasons tell the owner what to fix.\n- The fail-on-main evidence is real (auth/quota/model exited 0 on main).\n\nOne P2 and one P3 inline. The P2 reintroduces the incident class for Copilot users, so please fix it before merge.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/222#issuecomment-6225960995",
+          "body": "Both review points are addressed in cd12c77: the Copilot credit cap is `quota` again (red), and `policy` is a configuration failure, with a test that fails on a46a36c. Merging.",
+          "user": "Mira190"
+        }
+      ]
+    },
+    {
+      "pr": 223,
+      "comments": [
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/223#issuecomment-6226012855",
+          "body": "<!-- specguard:summary -->\n<!-- specguard:by=github-actions[bot] -->\n<!-- specguard:counts {\"v\":1,\"model\":\"claude-haiku-5-5\",\"tier\":\"fast\",\"reduced\":true,\"runs\":1,\"ms\":74102,\"mode\":\"pr\",\"delivery\":\"pr\",\"event\":\"pull_request\",\"pr\":223,\"merged\":false,\"head\":\"84475bad28af4f452f70ab4bbc779851cc36c094\",\"engine\":\"claude\",\"specguard\":{\"ref\":\"\",\"build\":\"577beea29ac8\"},\"complete\":false,\"execution_complete\":false,\"findings\":{},\"pre_existing\":0,\"posted\":{\"inline\":0,\"file\":0},\"already\":0,\"since\":{\"addressed\":0,\"open\":0,\"dismissed\":0,\"not_observed\":0},\"since_total\":0,\"prior_total\":0,\"outcomes\":[]} -->\n<!-- specguard:status=incomplete -->\n## SpecGuard\n\n**⚠️ Reduced review: no high-confidence gaps**\n\n### Requirements to check (2)\n\n| Status | Requirement | What to do |\n|---|---|---|\n| Unconfirmed | `collect.sh`: after the file, spec and dropped-doc lists are built and before any diff, numbered diff, focus or spec… | Point to the unit test or add one: only higher-level tests cover it. |\n| Unconfirmed | Fail closed: if the filter cannot run, collect writes `collect-error.txt`, sets `skip=true` and sends no diff.… | Point to the unit test or add one: only higher-level tests cover it. |\n\n### Not reviewed (4)\n\n- Review context was cut: the model saw only part of `src/collect.test.js`, `src/audit-action.test.js`, `src/audit-code.test.js`, `src/audit-collect.test.js`, `src/claude-api.test.js`, `src/audit-post.test.js`, `src/engines/claude-api.js`, `src/audit-units.test.js`, `src/post.test.js`, `src/post.js`; obligations that depend on them are unknown.\n- Not fully visible: src/collect.test.js lines 419-565, src/post.test.js lines 382-1949 and 1970-4028, src/claude-api.test.js (only line 104).\n- Unknown rows O5, O7 and O8 may be covered there.\n- The post.js run path after line 1490 was not visible.\n\n> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n\n<details><summary>Details: evidenced criteria, obligations, sources, run information</summary>\n\n**Evidenced criteria (2)**\n\n- Evidenced: **X3** Deny-only PR: the file list ends empty, so the existing \"nothing reviewable\" skip fires. The model is not called. The…\n- Evidenced: **X4** `post.js`: otherwise one `Not reviewed: N secret-like file(s) (\\`.env\\`, \\`secrets.pem\\…\n\n**Coding standards and test layers**\n\n- Coding standards: reviewed. Checked the changed src/** files against the coding standard: no new exported function, no string throws, and the new tests use node:test and node:assert. ste-mini governs prose only and no changed prose was reviewed for it. Sources: `.claude/skills/ste-mini/SKILL.md`, `.github/instructions/specguard.instructions.md`.\n- Test layers: reviewed. collect.sh logic is shell with no unit seam, so its checks stay at integration level. post.js denial output is already asserted at unit level in post.test.js. The DENY regex is exported but its unit coverage is not visible, so no pushdown is proposed.\n\n**Requirements source:** PR body, history PR #108, history PR #210, history PR #120 (no structured acceptance criteria found)\n\nNo requirement documents found (content-based discovery; see `requirements_paths` to add or exclude).\n\n**Obligations (8) · Unit evidence: 2/8 obligations**\n\nAn obligation is one testable behaviour taken from a criterion or from the changed code; a criterion can have several.\n\n| Obligation | Source / behaviour | Assertion evidence / layer | Status / reason |\n|---|---|---|---|\n| O1: Deny-matching paths are removed from the file list, spec list and dropped-doc list before any diff is made | PR body; src/collect.sh:116 — keep=(); for f in ${files[@]+\"${files[@]}\"}; do grep -qxF -- \"$f\" \"$CTX/denied.txt\" \\|\\| keep+=(\"$f\"); done; files=(${keep[@]+\"${keep[@]}\"}) | integration: src/collect.test.js:578 — assert.ok(!text.includes(SECRET), `${name} carries a secret-file line`); (assertion); integration: src/collect.test.js:581 — assert.deepEqual(r.ctxFile('files.txt').split('\\n').filter(Boolean), ['app.js']); (assertion) | Higher-level only: The assertions run collect.sh in a real git repository through bash, so they are integration evidence. collect.sh has no unit seam. |\n| O2: Fail closed: when the secret-path filter cannot run, collect writes collect-error.txt, sets skip=true and sends no diff | PR body; src/collect.sh:111 — if ! printf '%s\\n' ${files[@]+\"${files[@]}\"} ${specs[@]+\"${specs[@]}\"} ${dropped[@]+\"${dropped[@]}\"} \\| node \"$HERE/deny-filter.js\" > \"$CTX/denied.txt\"; then | integration: src/collect.test.js:606 — assert.match(r.ctxFile('collect-error.txt'), /secret-path filter failed/); (assertion); integration: src/collect.test.js:607 — assert.match(fs.readFileSync(output, 'utf8'), /skip=true/); (assertion) | Higher-level only: A NODE_OPTIONS require of a missing module makes the filter exit 1. The test then checks collect-error.txt, skip=true and an empty diff.patch. This is integration evidence only. |\n| O3: A deny-only PR gives the Nothing to review summary that names the secret-like files | PR body; src/post.js:1455 — if (env.SKIP === 'true' && !collectError) return publish(buildSummary({ rules, lint, headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, state: 'complete', status: `Nothing to review: every changed file is ignored (lockfiles, docs, generated files) or secret-like.${deniedNote ? ` ${deniedNote}.` : ''}` }), 'complete'); | unit: src/post.test.js:1966 — assert.match(b, /Nothing to review: .*secret-like.*Not reviewed: 1 secret-like file\\(s\\) \\(`\\.env`\\): their diff was not sent to the model/); (assertion) | Evidenced: The unit test sets SKIP=true with denied.txt=.env and asserts the exact summary sentence and the complete status marker. |\n| O4: Secret-like files on a reviewed PR produce one Not reviewed line through addNote without making the run incomplete | PR body; src/post.js:1565 — if (deniedNote) addNote(deniedNote); | unit: src/post.test.js:1955 — assert.match(b, /Not reviewed: 2 secret-like file\\(s\\) \\(`\\.env`, `secrets\\.pem`\\): their diff was not sent to the model/); (assertion) | Evidenced: The unit test writes denied.txt with two files and asserts the exact Not reviewed line, that Incomplete review is absent, and that the status is complete. |\n| O5: More than ten denied files are shown as the first ten plus a count | from behaviour; src/post.js:1453 — const deniedNote = denied.length ? `Not reviewed: ${denied.length} secret-like file(s) (${denied.slice(0, 10).map((x) => `\\`${cell(x, 120)}\\``).join(', ')}${denied.length > 10 ? `, … (+${denied.length - 10} more)` : ''}): their diff was not sent to the model` : ''; | none | Unconfirmed: The visible part of src/post.test.js (lines 1950-1969 and their neighbours) has no case with more than ten files. Lines 382-1949 and 1970-4028 were not visible, so a test may exist there. |\n| O6: Look-alike names (env.js, src/environment.ts, keys.test.js, monkey.js) are not denied | PR body; src/deny-filter.js:3 — const out = require('node:fs').readFileSync(0, 'utf8').split('\\n').filter((p) => p && DENY.test(p)); | integration: src/collect.test.js:598 — assert.ok(!r.ctxFile('denied.txt'), 'nothing is denied'); (assertion); integration: src/collect.test.js:599 — assert.match(r.ctxFile('diff.patch'), /environment\\.ts/); (assertion) | Higher-level only: The control test runs the full collector with look-alike names and checks that nothing is denied. It is integration evidence only. A unit test of the exported DENY regex was not visible. |\n| O7: claude-api.js exports DENY as the single shared definition | from behaviour; src/engines/claude-api.js:469 — module.exports = { DENY, run, strict, messages, classify, cost, worstCase, PRICES, contextPack, windowPack, evidencePack, packFiles }; | none | Unconfirmed: src/claude-api.test.js was only partly visible (line 104 only). A unit test on the DENY export or its matches may exist there. |\n| O8: Deny-matching spec and dropped-doc paths are removed from their lists | PR body; src/collect.sh:118 — keep=(); for f in ${specs[@]+\"${specs[@]}\"}; do grep -qxF -- \"$f\" \"$CTX/denied.txt\" \\|\\| keep+=(\"$f\"); done; specs=(${keep[@]+\"${keep[@]}\"}) | none | Unconfirmed: collect.test.js lines 419-565 were not visible. The visible tests exercise only files.txt and the code list, not spec or dropped-doc denial. |\n\n**Validation notes (1)**\n\n- Obligation O6 alignment unknown: needs a linked requirement.\n\n**Sources read**\n\n- Requirement documents: none\n- Standards files: `.claude/skills/ste-mini/SKILL.md` (672 bytes, 13 lines), `.github/instructions/specguard.instructions.md` (567 bytes, 10 lines)\n- Trace: SPEC_NOT_FOUND\n- Commits: head `84475ba`, base `fd8c62b`\n\n**Reduced review**\n\nReasons: fast-tier model (model: claude-haiku-5-5). Only high-confidence findings were posted inline.\n\nRun: engine claude · context pack: 11 files, 216 KB; not included: src/audit-action.test.js, src/audit-code.test.js, src/audit-collect.test.js, src/claude-api.test.js\nSpecGuard build 577beea29ac8\n\n</details>\n\n<sub>Cost $0.10 · claude-haiku-5-5 · 127.1k in (12.5k cached) · 16.8k out · 1m14s</sub>\n",
+          "user": "github-actions[bot]"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/223#discussion_r4299974892",
+          "body": "note: a filter failure is a SpecGuard bug, and it repeats on every push. With #222 it now publishes `failed` with no engine class, so the job only warns: the review is silently absent behind a green check, which is the same shape as the key incident. That's acceptable for now, since the PR comment says failed and `::error::` is printed. But if collect errors turn out not to be transient in telemetry, give `collect-error` a class that `fail-on-error.js` treats as red. Follow-up, not blocking.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/223#discussion_r4299974900",
+          "body": "note: detection is by name only, as the body says. One concrete case to keep in mind: with `--no-renames`, renaming `.env` to `settings.txt` shows as a delete of `.env` (denied) plus an add of `settings.txt` (sent, with the same content). Content-based detection (e.g. a high-entropy or `KEY=` scan over added lines) would cover it, but that is a separate, noisier feature. Fine to leave as a listed limitation.",
+          "user": "Mira190"
+        },
+        {
+          "url": "https://github.com/Mira190/SpecGuard/pull/223#pullrequestreview-5554421879",
+          "body": "Review against the branch-review finding: secret-like files' diffs reached the prompt. The probe on main put a synthetic literal from `.env`, `config/.env.production`, `secrets.pem` and `id_rsa` into the assembled prompt and the claude-api user message.\n\n- There is one deny definition (`DENY`, exported), applied to the file list before any diff is made. I checked every diff-producing call in collect.sh: line 147 uses `files`, and the 4a late-doc diff (line 213) uses `dropped`, which is filtered too. Every engine therefore gets the same filtered input.\n- It fails closed: a filter error sends nothing and publishes a failed run.\n- It is visible: one `Not reviewed: N secret-like file(s)` line, and a deny-only PR is an honest skip. Not marking it incomplete is right, since the exclusion is deliberate and permanent, like ignored files.\n- The scan path is already covered by `packRead`'s DENY, with evidence in the body.\n- The fail-on-main evidence is real, and the control (`env.js`, `environment.ts`, `keys.test.js`, `monkey.js`) holds.\n\nLGTM. Two notes inline; merging.",
+          "user": "Mira190"
+        }
+      ]
+    }
+  ],
+  "selected_job_evidence": [
+    {
+      "job_id": 117227890968,
+      "lines": [
+        "2026-10-16T22:37:50.6891200Z   FAIL_ON_ERROR: false",
+        "2026-10-16T22:37:50.6891434Z   STATUS: incomplete",
+        "2026-10-16T22:37:50.7233110Z ##[warning]SpecGuard ran a reduced review (fast-tier model): only high-confidence findings are shown (see the job summary)"
+      ]
+    },
+    {
+      "job_id": 117226277852,
+      "lines": [
+        "2026-10-16T22:32:33.3774111Z   FAIL_ON_ERROR: false",
+        "2026-10-16T22:32:33.3774364Z   STATUS: incomplete",
+        "2026-10-16T22:32:33.4113777Z ##[warning]SpecGuard ran a reduced review (fast-tier model): only high-confidence findings are shown (see the job summary)"
+      ]
+    }
+  ],
+  "limitations": {
+    "network_or_provider_calls_in_probes": 0,
+    "real_secrets_used": false,
+    "product_files_modified": false,
+    "unreadable_worktree_statuses": 5
+  },
+  "initial_main_sha": "fd8c62b877ecbc74ff704425cdd7593bbb68c28c",
+  "final_refresh_utc": "2026-10-16T22:50:26Z",
+  "pr223_final": {
+    "state": "closed",
+    "merged_at": "2026-10-16T22:39:36Z",
+    "head": "84475bad28af4f452f70ab4bbc779851cc36c094"
+  },
+  "source_verification": {
+    "method": "remote recursive tree + locally available Git blobs; one missing merged engine blob cached from GitHub and verified by Git SHA-1",
+    "tree": "88365cfbcf3ffcd608db1e3dcdf96acb4951caa7",
+    "truncated": false,
+    "blob_count": 548,
+    "source_manifest": "docs/review-probes/latest-source-manifest-2026-10-17.json"
+  }
+}
