@@ -653,7 +653,7 @@ test('rooms: unitCalls is how many full-pack calls the worst case allows, 1 to 8
 test('trimmed unit: its tests get at most half a room, in priority order, so the other units still fit (K=1 no longer collapses to one unit); the pack sends only the counted tests and lists the rest as cut', (t) => {
   const files = {};
   files['src/big.js'] = Array.from({ length: 60 }, (_, i) => `exports.big_${i} = (v) => v + ${i};`);
-  for (let k = 0; k < 8; k++) files[`test/big${k}.test.js`] = ["it('big', () => { assert.equal(big_1(1), 2); });", ...Array.from({ length: 140 }, (_, i) => `// ${'filler '.repeat(6)}${i}`)];
+  for (let k = 0; k < 8; k++) files[`test/big${k}.test.js`] = ["const { big_1 } = require('../src/big');", "it('big', () => { assert.equal(big_1(1), 2); });", ...Array.from({ length: 140 }, (_, i) => `// ${'filler '.repeat(6)}${i}`)];
   for (let u = 0; u < 5; u++) { files[`src/s${u}.js`] = Array.from({ length: 5 }, (_, i) => `exports.s${u}_${i} = (v) => v + ${i};`); files[`test/s${u}.test.js`] = [`it('s${u}', () => { assert.equal(s${u}_1(1), 2); });`]; }
   const r = repo(t, files), LIMIT = 60000;
   for (const rooms of [1, 3]) {
@@ -673,6 +673,32 @@ test('trimmed unit: its tests get at most half a room, in priority order, so the
     assert.ok((pack.text.match(/name="test\/big\d\.test\.js"/g) || []).length <= big.packTests.length,'the pack loads no more of its tests than were counted');
     for (const p of omitted) assert.ok(pack.notWhole.includes(p), `${p} is listed as cut`);
   }
+});
+
+test('trim: tests that only mention the unit and do not fit are left out of its list (not cut, so not forced)', (t) => {
+  const files = { 'src/ledgerx.js': Array.from({ length: 60 }, (_, i) => `exports.l_${i} = (v) => v + ${i};`), 'test/real.test.js': ["const { l_1 } = require('../src/ledgerx');", "it('l', () => { assert.equal(l_1(1), 2); });"] };
+  for (let k = 0; k < 8; k++) files[`test/note${k}.test.js`] = ["it('n', () => { assert.ok(ledgerx); });", ...Array.from({ length: 140 }, (_, i) => `// ${'filler '.repeat(6)}${i}`)];
+  const r = repo(t, files), inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, packBytes: 60000 }), u = inv.picked[0];
+  assert.equal(u.tests[0], 'test/real.test.js', 'the importer ranks first');
+  assert.equal(u.strong, 1);
+  assert.ok(u.packTests.length < u.tests.length && u.weakCut.size > 0, 'some name-only tests did not fit');
+  assert.ok(!inv.limitations.some((l) => /matched tests that cannot fit/.test(l)), 'a weak-only cut is not a trimmed unit');
+  const ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx); write(ctx, 'HEAD', 12, inv);
+  const row = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n')[0].split('\t'), listed = row[4].split(', ');
+  assert.deepEqual(listed, u.tests.filter((x) => !u.weakCut.has(x)), 'the written list drops them');
+  assert.ok(u.packTests.every((x) => listed.includes(x)), 'everything the pack loads is listed');
+});
+
+test('same-name tests: a generic stem (index) keeps the ones in the unit\'s tree; with none in its tree they are all kept', (t) => {
+  const r = repo(t, {
+    'src/a/index.js': body('export function a() { return 1; }'), 'src/a/index.test.js': spec('  assert.ok(1);'),
+    'src/b/index.js': body('export function b() { return 1; }'), 'src/b/index.test.js': spec('  assert.ok(1);'),
+    'lib/c/index.js': body('export function c() { return 1; }'), 'checks/one/index.test.js': spec('  assert.ok(1);'), 'checks/two/index.test.js': spec('  assert.ok(1);'),
+  });
+  const m = matched(r);
+  assert.deepEqual(m['src/a/index.js'].tests.filter((x) => /index.test/.test(x)), ['src/a/index.test.js']);
+  assert.deepEqual(m['src/b/index.js'].tests.filter((x) => /index.test/.test(x)), ['src/b/index.test.js']);
+  assert.deepEqual(m['lib/c/index.js'].tests.filter((x) => /index.test/.test(x)).sort(), ['checks/one/index.test.js', 'checks/two/index.test.js', 'src/a/index.test.js', 'src/b/index.test.js'].filter((x) => m['lib/c/index.js'].tests.includes(x)), 'no same-name test in its tree: none dropped');
 });
 
 const matched = (r) => byPath(inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12 }));
