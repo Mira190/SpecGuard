@@ -1354,3 +1354,14 @@ test('U1 run: a unit finding in a part scan-parts.json dropped or failed is remo
     assert.doesNotMatch((await run(1, parts)).calls.summary, /outside this run's part/);
   }
 });
+
+test('scan_scope all: the top line says how many unit parts and blocks were not reached (budget, deadline) and the worst-case ceiling; a complete all run adds nothing', () => {
+  const reach = { scope: 'all', notReached: { budget: { parts: 3, blocks: 7 }, deadline: { parts: 0, blocks: 0 } }, needUsd: 2.5 };
+  const md = render({ data: sample(), reach });
+  assert.match(md.slice(0, 900), /Incomplete: the whole repository was not reviewed\.\*\* 3 unit parts \/ 7 document blocks not reached \(budget\)\..*the default is \$1\.00.*at most \$2\.50 by the worst-case estimate/s);
+  const late = render({ data: sample(), reach: { ...reach, notReached: { budget: { parts: 0, blocks: 0 }, deadline: { parts: 2, blocks: 0 } } } });
+  assert.match(late, /2 unit parts \/ 0 document blocks not reached \(deadline\)\. The review time limit stopped the run/);
+  assert.doesNotMatch(late, /max_budget_usd stopped the run/);
+  assert.doesNotMatch(render({ data: sample(), reach: { ...reach, notReached: { budget: { parts: 0, blocks: 0 }, deadline: { parts: 0, blocks: 0 } } } }), /whole repository was not reviewed/);
+  assert.doesNotMatch(render({ data: sample() }), /whole repository was not reviewed/);
+});

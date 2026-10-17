@@ -21,6 +21,10 @@ u="${MAX_UNITS:-12}" # scan mode: units reviewed per run (audit-collect.js check
 [[ $u =~ ^[0-9]{1,3}$ ]] && ((10#$u >= 1 && 10#$u <= 100)) || die "max_units must be an integer from 1 to 100"
 sb="${SCAN_BATCH_BLOCKS:-20}" # scan mode, claude api: blocks per call
 [[ $sb =~ ^[0-9]{1,3}$ ]] && ((10#$sb >= 1 && 10#$sb <= 100)) || die "scan_batch_blocks must be an integer from 1 to 100"
+case "${SCAN_SCOPE:-selected}" in selected) ;; all) # the whole repository in one run needs a scan that splits into calls: the claude engine in api mode
+  [[ ${MODE:-} == scan || ${MODE:-} == audit ]] || die "scan_scope: all needs mode: scan"
+  [[ ${ENGINE:-} == claude && ${CLAUDE_MODE:-api} == api ]] || die "scan_scope: all needs the claude engine in api mode (the other engines cannot split a scan into calls); use scan_scope: selected" ;;
+  *) die "scan_scope must be selected or all" ;; esac
 t="${TIMEOUT:-12}"
 [[ $t =~ ^[0-9]{1,4}$ ]] && ((10#$t > 0)) || die "review_timeout_minutes must be a positive integer"
 exit 0

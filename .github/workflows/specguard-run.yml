@@ -23,6 +23,7 @@ on:
       max_units: { description: "Scans only: most source files reviewed per run, 1-100. Empty = the action default (12).", required: false, type: string, default: "" }
       max_budget_usd: { description: "Claude engine: hard budget in USD per run, at most 20. Empty = the action default (1.00).", required: false, type: string, default: "" }
       max_output_tokens: { description: "Claude engine: most output tokens per call, 1000-64000. Empty = the action default (32000).", required: false, type: string, default: "" }
+      scan_scope: { description: "Scans only: all = review the whole repository in this one run (every unit part and document block, claude engine; incomplete and red when the budget or the time limit stops it, so set max_budget_usd); selected = the riskiest units and the first blocks one run's caps allow.", required: false, type: choice, default: all, options: [all, selected] }
       scan_issue: { description: "Scans only: where the scan keeps its state, so gaps can be confirmed across runs. specguard = one issue per scanned repository in THIS repository (the target needs no write access); target = the issue in the scanned repository; none = run page only.", required: false, type: choice, default: specguard, options: [specguard, target, none] }
 permissions: {}
 concurrency: { group: "specguard-run-${{ inputs.target }}", cancel-in-progress: false }
@@ -95,7 +96,7 @@ jobs:
     needs: resolve
     runs-on: ubuntu-latest
     environment: specguard
-    timeout-minutes: 30
+    timeout-minutes: 180 # a scan_scope all run makes up to ~85 sequential calls on a large repository (about 45 min); review_timeout_minutes below leaves 30 min for checkout, history fetch, verify and publish
     permissions: { contents: read, pull-requests: read, issues: write, copilot-requests: write } # issues write: the scan issue in THIS repository (scan_issue: specguard); the job token reaches no other repository
     env: # job env, not a step if:, because step conditions cannot read secrets
       HAVE_APP: ${{ secrets.SPECGUARD_APP_ID != '' && secrets.SPECGUARD_APP_PRIVATE_KEY != '' }}
@@ -173,6 +174,8 @@ jobs:
           max_units: ${{ inputs.max_units }} # empty = the action default; the action validates the range
           max_budget_usd: ${{ inputs.max_budget_usd }}
           max_output_tokens: ${{ inputs.max_output_tokens }}
+          scan_scope: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_scope || 'selected' }}
+          review_timeout_minutes: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_scope == 'all' && '150' || '12' }} # all: the dispatch deadline is this minus headroom, inside the 180-minute job timeout
           delivery: ${{ inputs.post_to_pr && needs.resolve.outputs.mode == 'pr' && 'pr' || 'summary' }}
           requirements_paths: ${{ needs.resolve.outputs.design }}
           standards_paths: ${{ needs.resolve.outputs.rules }}

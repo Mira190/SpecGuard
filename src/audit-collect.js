@@ -174,13 +174,13 @@ function evidenceText(blocks, by) {
 }
 
 // The blocks to audit, in document order, after the priority pick and the CAND_CAP byte cap (never a cut row). carried: the others the state already knows.
-function candidates(all, cap, prior, changedDocs, stale, skipped = []) {
+function candidates(all, cap, prior, changedDocs, stale, skipped = [], capBytes = CAND_CAP) {
   const sel = select(all, cap, prior, changedDocs, stale), at = new Map(all.map((c, i) => [c.cid, i])), row = (c) => `${c.cid}\t${c.path}:${c.line}${c.end ? `-${c.end}` : ''}\t${c.heading}\t${c.text}\n`;
   let used = 0;
   const fit = [];
   for (const c of sel.picked) {
     const n = Buffer.byteLength(row(c));
-    if (used + n > CAND_CAP) break;
+    if (used + n > capBytes) break;
     used += n; fit.push(c);
   }
   fit.sort((a, b) => at.get(a.cid) - at.get(b.cid));
@@ -214,8 +214,9 @@ function branchGuard({ refName = '', eventPath = '', stateless = false, sha = ''
 }
 
 // scanPaths: the units reviewed (docs, tests and evidence are read repo-wide); rotate: scan_issue is on, so the run is one of a rotation; prior: that issue's state (null on the first run or without an issue).
-function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, refNote = '', evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0, unitParts = 1, price = null }) { // unitParts: unit calls of one run (claude api engine; each holds maxUnits units); packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
+function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths = '', ignoreExtra = '', maxRequirements = 80, maxUnits = 12, scanPaths = '', rotate = false, prior = null, refNote = '', evidenceBudgetMs = EV_BUDGET_MS, now = Date.now(), packBytes = 0, unitParts = 1, price = null, scopeAll = false }) { // unitParts: unit calls of one run (claude api engine; each holds maxUnits units); packBytes: the claude api engine's context pack (0 = another engine: units split at 40 KB)
   const head = git(cwd, ['rev-parse', 'HEAD']).trim();
+  if (scopeAll) maxRequirements = 1e6; // scan_scope all: every admitted block, no per-run cap (the byte cap of audit-candidates.txt is lifted too)
   fs.rmSync(ctx, { recursive: true, force: true });
   fs.mkdirSync(ctx, { recursive: true });
   // trace.js with base = head: no diff, so it only discovers the requirement documents (same rules, caps and ignores as the PR review)
@@ -273,7 +274,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   let pool = all, cand, ev;
   const skipped = [], t0 = Date.now();
   for (;;) {
-    cand = candidates(pool, maxRequirements, prior, changedDocs, stale, skipped);
+    cand = candidates(pool, maxRequirements, prior, changedDocs, stale, skipped, scopeAll ? Infinity : CAND_CAP);
     ev = { by: new Map(), cut: false, files: 0 };
     try { ev = evidence({ cwd, head, blocks: cand.fit, docs: found, ignoreExtra, budgetMs: Math.max(0, evidenceBudgetMs - (Date.now() - t0)) }); }
     catch (e) { notes.push(`evidence search failed (${String(e && e.message || e).split('\n')[0].slice(0, 120)}); the model searches by itself`); break; }
@@ -312,7 +313,8 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
     const rules = RULE_GLOBS.concat(lines(ignoreExtra)), docSet = new Set(found);
     // the pack carries the rule files first (each cut at the per-file cap, plus a header): units share what is left
     const left = packBytes && Math.max(1, packBytes - standards.reduce((n, f) => { try { return n + Math.min(fs.statSync(path.join(cwd, f)).size, PER_FILE) + 300; } catch { return n; } }, 0));
-    const plan = (rooms, reserve) => { const u = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, rooms, prior, now, packBytes: left, allParts: !rotate, price: price && { ...price, reserve }, extra: price && price.batch && (rooms > 1 || cand.fit.length > price.batch) ? Math.max(0, price.max - rooms) : 0 }); if (u.rows.length) writeUnits(ctx, head, maxUnits, u); return u; };
+    // scan_scope all plans every unit part of this run (prior: null, allParts), whatever the scan state holds
+    const plan = (rooms, reserve) => { const u = inventory({ cwd, head, skip: (p) => docSet.has(p) || DOC.test(p) || NOT_EVIDENCE.test(p) || rules.some((g) => matchGlob(p, g)), scope, testPaths, maxUnits, rooms, prior: scopeAll ? null : prior, now, packBytes: left, allParts: !rotate || scopeAll, price: price && { ...price, reserve }, extra: price && price.batch && (scopeAll || rooms > 1 || cand.fit.length > price.batch) ? Math.max(0, price.max - rooms) : 0 }); if (u.rows.length) writeUnits(ctx, head, maxUnits, u); return u; };
     units = plan(unitParts, 0);
     // the engine's pre-flight on this very ctx: it drops the last unit calls when the document block calls take the budget. Plan no more unit calls than it keeps (the first parts of every unit are in the first rooms), and price the hint with the real block calls.
     const kept = price && price.fit && (units.unitRooms.length > 1 || units.hint) ? price.fit(ctx) : null;
@@ -322,7 +324,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   w('audit-stale.txt', [...[...stale].filter((c) => all.some((b) => b.cid === c)), ...((units && units.stale) || [])].map((c) => `${c}\n`).join('')); // block cids and unit ids changed since their review
   const rotation = { rotate, state: !!prior, picked: cand.fit.length, changed: cand.tally.d, confirming: cand.tally.c, new: cand.tally.n, oldest: cand.tally.o, carried: cand.carried.length };
   const evid = { blocks: cand.fit.length, with_code: et.withCode, with_tests: et.withTests, cut: ev.cut, files: ev.files };
-  w('audit-meta.json', JSON.stringify({ head, max_requirements: maxRequirements, max_units: maxUnits, units: units && units.rows.length ? { total: units.rows.length, picked: units.picked.length } : null, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes], ref_note: refNote,
+  w('audit-meta.json', JSON.stringify({ head, max_requirements: scopeAll ? cand.total : maxRequirements, ...(scopeAll && { scan_scope: 'all' }), max_units: maxUnits, units: units && units.rows.length ? { total: units.rows.length, picked: units.picked.length } : null, docs: docs.length, candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes], ref_note: refNote,
     scope: lines(scanPaths).map((l) => l.trim()).filter(Boolean), rotation, evidence: evid }) + '\n');
   return { docs, rejected, standards, head, candidates: cand.total, picked: cand.fit.map((c) => c.cid), rotation, evidence: evid, units: units && { total: units.rows.length, picked: units.picked.map((r) => r.id), rotation: units.rotation, totals: units.totals } };
 }
@@ -364,6 +366,9 @@ async function main(env) {
   if (max < 1 || max > 500) { console.log(`::error::${input} must be an integer from 1 to 500`); process.exit(1); }
   const mu = env.MAX_UNITS || '12', maxUnits = /^\d{1,3}$/.test(mu) ? +mu : 0;
   if (maxUnits < 1 || maxUnits > 100) { console.log('::error::max_units must be an integer from 1 to 100'); process.exit(1); }
+  const scopeAll = env.SCAN_SCOPE === 'all';
+  if (env.SCAN_SCOPE && !['selected', 'all'].includes(env.SCAN_SCOPE)) { console.log('::error::scan_scope must be selected or all'); process.exit(1); }
+  if (scopeAll && env.PACK_SPLIT !== 'true') { console.log('::error::scan_scope: all needs the claude engine in api mode, the only engine that splits a scan into calls (use scan_scope: selected with this engine)'); process.exit(1); }
   if (!env.CTX) { console.error('CTX is required'); process.exit(2); }
   const rotate = String(env.SCAN_ISSUE || env.AUDIT_ISSUE).toLowerCase() === 'true'; // scan_issue wins; audit_issue is the deprecated alias
   let sha = ''; try { sha = git('.', ['rev-parse', 'HEAD']).trim(); } catch { /* the note then shows no sha */ }
@@ -373,8 +378,8 @@ async function main(env) {
   const prior = rotate ? await loadPrior(env) : null;
   const packBytes = env.PACK_SPLIT === 'true' ? require('./pack-cap').packLimit(env) : 0; // engines that cannot split a scan (copilot, claude agent mode) review one pack of units per run
   const api = packBytes ? require('./engines/claude-api') : null, pre = { model: require('./credential').resolveModel(env.MODEL, 'claude') || 'claude-haiku-5-5', budget: parseFloat(env.MAX_BUDGET_USD || '1.00'), maxTokens: parseInt(env.MAX_OUTPUT_TOKENS, 10) || 32000, packBytes };
-  const unitParts = api ? api.unitCalls(pre) : 1, price = api ? { usd: api.callUsd(pre), budget: pre.budget, max: api.MAX_UNIT_CALLS, batch: Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), fit: (ctx) => api.keptRooms({ ...pre, ctx, root: fs.realpathSync(process.cwd()), batch: Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20) }) } : null; // price: the pre-flight's own worst case, for the budget hint; price.batch also switches on the extra queue (a split scan only)
-  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, refNote: g.note || '', packBytes, unitParts, price });
+  const unitParts = api ? api.unitCalls(pre) : 1, price = api ? { usd: api.callUsd(pre), budget: pre.budget, max: scopeAll ? api.ALL_MAX_CALLS : api.MAX_UNIT_CALLS, batch: Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), fit: (ctx) => api.keptRooms({ ...pre, ctx, root: fs.realpathSync(process.cwd()), batch: Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20) }) } : null; // price: the pre-flight's own worst case, for the budget hint; price.batch also switches on the extra queue (a split scan only)
+  const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, refNote: g.note || '', packBytes, unitParts, price, scopeAll });
   console.log(`SpecGuard unit test gap scan: ${r.units ? (() => { const u = new Set(r.units.picked).size; return `${u} of ${r.units.total} units${u === r.units.picked.length ? '' : ` (${r.units.picked.length} parts)`}`; })() : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);
 }
