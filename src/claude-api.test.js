@@ -1299,6 +1299,20 @@ test('unit rooms: a budget for one call drops the room of a second part; the uni
     assert.equal(s.h.calls.length, 1);
   });
 
+  test('admission: when the worst-case plan itself drops a room, no extra is admitted even with spend near zero; the extra is named with the dropped parts (control: plan intact, extra admitted, is the first admission test)', async (t) => {
+    const s = roomRepo(t, env, [['aaaaaaaa:1'], ['bbbbbbbb'], ['aaaaaaaa:2']], partRows);
+    fs.writeFileSync(path.join(s.h.ctx, 'audit-unit-extra.json'), '1'); // the last room is the extra; the second is planned but does not fit
+    s.answers(withUsage({ input_tokens: 100, output_tokens: 100 }));
+    const probe = roomRepo(t, env, [['aaaaaaaa:1'], ['bbbbbbbb']], partRows); probe.answers((req, ok) => ok(req));
+    await probe.h.go({ GITHUB_WORKSPACE: probe.root, MAX_BUDGET_USD: '5' });
+    const p1 = worst(probe.h.calls[0]);
+    await s.h.go({ GITHUB_WORKSPACE: s.root, MAX_BUDGET_USD: String((p1 * 1.2).toFixed(6)) });
+    assert.equal(s.h.calls.length, 1);
+    const parts = JSON.parse(s.h.file('scan-parts.json'));
+    assert.deepEqual(parts.droppedUnits, ['bbbbbbbb']);
+    assert.deepEqual(parts.droppedParts, ['aaaaaaaa:2']);
+  });
+
   test('admission (control): without audit-unit-extra.json the second room is planned as before and the budget drops it up front', async (t) => {
     const [p1] = await prices(t), s = await extraRepo(t, false);
     s.answers(withUsage({ input_tokens: 100, output_tokens: 100 }));
