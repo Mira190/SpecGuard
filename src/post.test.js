@@ -4078,6 +4078,7 @@ test('control: no evidence at all, or a non-test path with no layer, still asks 
   assert.equal(code.coverage[0].status, 'unknown');
   assert.deepEqual(code.coverage[0].evidence, [], 'a non-test path is not counted as a test');
   assert.match(post.buildSummary({ data: code }), /Point to the unit test or add one/);
+});
 
 // A failed re-run must not erase a real review of the same commit (the incident: a stale API key replaced ten valid summaries with "Could not complete").
 const authFail = (s) => { fs.unlinkSync(path.join(s.dir, 'ctx/findings.json')); writeCtx(s, 'engine-status', 'failed\n'); writeCtx(s, 'engine-error', 'auth\nThe Anthropic API key was rejected\n'); s.outputs = {}; s.core.setOutput = (k, v) => { s.outputs[k] = v; }; };
