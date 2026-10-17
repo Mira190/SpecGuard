@@ -106,6 +106,9 @@ test('weak classifier: boolean values are value checks, objects stay weak', () =
   assert.deepEqual(weak("it('a', async () => {\n  expect(handlerExecuted).toBeTruthy();\n  expect(c.req.headers.has('x')).toBeTruthy();\n  expect(await isMatch(a, b)).toBeTruthy();\n  expect(app2).not.toBeUndefined();\n  expect(result).toBeTruthy();\n});\n"), ['5 app2 exists', '6 result truthy']);
   assert.deepEqual(weak("def test_a():\n    assert app_after_called\n    assert rv.is_json\n    assert session.modified\n    assert result\n"), ['5 result truthy']);
 });
+test('weak classifier: ok flags and Equal/Match helpers are booleans, a plain result stays weak', () => {
+  assert.deepEqual(weak("test('a', (t) => {\n  t.assert.ok(result.ok);\n  t.assert.ok(result2.ok);\n  t.assert.ok(ok);\n  t.assert.ok(ok2);\n  t.assert.ok(partialDeepStrictEqual(line, x));\n  t.assert.ok(isMatch(a));\n  t.assert.ok(result);\n});\n"), ['8 result truthy']);
+});
 test('weak classifier: Go nil guard is skipped when else or a later line pins the value', () => {
   assert.deepEqual(weak('func TestA(t *testing.T) {\n\tif got == nil {\n\t\tt.Fatal("x")\n\t} else if got.Name() != "a" {\n\t\tt.Error("y")\n\t}\n}\n'), []);
   assert.deepEqual(weak('func TestA(t *testing.T) {\n\tif called == nil {\n\t\tt.Fatal("x")\n\t}\n\tif called.Name() != "a" {\n\t\tt.Error("y")\n\t}\n}\n'), []);
