@@ -813,3 +813,41 @@ test('control: a unit whose tests fit whole is reviewed normally and recorded as
   assert.equal(unitState(one, 'src/small.js').status, 'covered');
   assert.doesNotMatch(one.summary, /tests cut/);
 });
+
+test('run: units of a unit part dropped for the budget are not reached: listed, counted in the funnel, not tracked, still due, not forced; a failed unit part makes only its own units unseen', async (t) => {
+  const env = { SCAN_ISSUE: 'true', ENGINE: 'claude' }, vis = (s) => s.slice(0, s.indexOf('<details>')), num = (l, re) => Number((re.exec(l) || [0, 0])[1]);
+  const dropped = await post(t, { env, files: { 'audit-inventory.json': INV({ eligible: 140 }), 'findings.json': result([uf()]), 'scan-parts.json': { calls: 2, failed: [], dropped: [], droppedUnits: [U3] } } });
+  const v = vis(dropped.calls.summary), line = /^Units: .*$/m.exec(v)[0];
+  assert.match(v, /\*\*Not reviewed this run:\*\* 1 unit not reached: max_budget_usd did not cover its call: `src\/js\/cart\.js`\. It stays due for the next run\./);
+  assert.match(line, /3 selected this run = 2 reviewed whole \+ 1 not reached \(budget\)/);
+  assert.equal(num(line, /selected this run = (\d+) reviewed/) + num(line, /\+ (\d+) not reached/), 3, 'the funnel reconciles');
+  assert.doesNotMatch(v, /did not fit the model's context/);
+  assert.deepEqual(readState(dropped.calls.created[0].body).blocks.map((b) => b.cid).sort(), [U1, U2].sort(), 'the unit that was not reached is not recorded');
+  assert.deepEqual(dropped.calls.outputs, { status: 'incomplete', reason: '1 unit not reached (max_budget_usd)' });
+  // a failed unit part: only its units are unseen
+  const failed = await post(t, { env, files: { 'audit-inventory.json': INV({ eligible: 140 }), 'findings.json': result([uf()]), 'scan-parts.json': { calls: 3, failed: [{ part: 'units', units: [U1], reason: 'HTTP 529' }], dropped: [] } } });
+  const f = vis(failed.calls.summary);
+  assert.match(f, /\*\*Not reviewed this run:\*\* 1 unit were not reviewed: the unit call failed: `src\/js\/orders\.js`/);
+  assert.match(f, /\| 2 of 140 \|/, 'the other units were reviewed');
+  assert.match(f, /❌ 1 unit test gap/, 'the finding of the part that answered is kept');
+  assert.deepEqual(readState(failed.calls.created[0].body).blocks.map((b) => b.cid).sort(), [U2, U3].sort());
+  assert.equal(failed.calls.outputs.status, 'incomplete');
+  // control: a failed unit part without a unit list (an older engine) is all units
+  const old = await post(t, { env, files: { 'audit-inventory.json': INV({ eligible: 140 }), 'findings.json': result([]), 'scan-parts.json': { calls: 2, failed: [{ part: 'units', reason: 'HTTP 500' }], dropped: [] } } });
+  assert.match(vis(old.calls.summary), /\*\*Not reviewed this run:\*\* 3 units were not reviewed: the unit call failed/);
+});
+
+test('render: a forced unit (tests cut, recorded unsure) was reviewed: the headline never says the scan could not review any unit, and the totals count it', () => {
+  const data = checked([]), vis = (code) => render({ data, code, blob: BLOB, head: 'abc1234def', usage: '', run: '' }).split('<details>')[0];
+  const all = vis({ ...CODE([], { eligible: 140, forced: [U1, U2, U3] }), unseen: [U1, U2, U3] });
+  assert.doesNotMatch(all, /could not review any unit/);
+  assert.match(all, /\| 3 of 140 \|/);
+  assert.match(all, /3 selected this run = 3 forced \(recorded unsure\)/);
+  assert.match(all, /Incomplete scan/, 'still not the clean verdict: the tests were cut');
+  const one = vis({ ...CODE([], { eligible: 140, forced: [U1] }), unseen: [U1] });
+  assert.match(one, /\| 3 of 140 \|/);
+  // control: units that did not fit are still not reviewed
+  const none = vis({ ...CODE([], { eligible: 140 }), unseen: [U1, U2, U3] });
+  assert.match(none, /The scan could not review any unit: none fit the model's context/);
+  assert.match(none, /\| 0 of 140 \|/);
+});

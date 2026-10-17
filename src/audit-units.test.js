@@ -517,3 +517,73 @@ test('ver: a weakened test helper or a changed imported file makes the covered u
   assert.ok(!inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 0, prior: mk({ ...uvNow, [A.id]: row.verLegacy }) }).stale.includes(A.id), 'a legacy ver is not a change');
   assert.equal(byPath(next)['src/unrelated.js'].ver, byPath(next)['src/unrelated.js'].verLegacy, 'no imports: ver is unchanged from before');
 });
+
+// several packs per run (rooms): pick() fills K rooms of at most `cap` units each
+const fakeRoom = (total, cost) => ({ total, cost: (r, withTests = true) => (withTests ? cost : 100), trim: () => ({ tests: [], cost: 100 }) });
+const rowsOf = (n) => Array.from({ length: n }, (_, i) => ({ id: i.toString(16).padStart(8, '0'), tests: [] }));
+
+test('rooms: 30 small units fill three rooms of 12 (12 + 12 + 6, in risk order); one room keeps 12, as before; the units of a room are listed in audit-unit-rooms.json', (t) => {
+  const rows = rowsOf(30), room = () => fakeRoom(10000, 100);
+  const one = pick(rows, 12, null, undefined, room(), 1), three = pick(rows, 12, null, undefined, room(), 3);
+  assert.equal(one.picked.length, 12, 'control: one room, today');
+  assert.equal(three.picked.length, 30);
+  assert.deepEqual(three.picked.map((r) => r.id), rows.map((r) => r.id), 'risk order is kept');
+  const sizes = [0, 1, 2].map((k) => three.picked.filter((r) => three.roomOf.get(r.id) === k).length);
+  assert.deepEqual(sizes, [12, 12, 6]);
+  assert.equal(pick(rows, 12, null, undefined, room(), 2).picked.length, 24, 'rooms bound the run');
+  const r = repo(t, Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/m${i}.js`, [`exports.a${i} = 1;`, `exports.b${i} = 2;`, `exports.c${i} = 3;`]])));
+  const inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, rooms: 3, packBytes: 250000 }), ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
+  assert.equal(inv.picked.length, 30);
+  write(ctx, 'HEAD', 12, inv);
+  const rooms = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-unit-rooms.json'), 'utf8'));
+  assert.deepEqual(rooms.map((x) => x.length), [12, 12, 6]);
+  assert.deepEqual(rooms.flat(), inv.picked.map((u) => u.id));
+  const one1 = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, packBytes: 250000 }), c1 = path.join(r.root, '.ctx1'); fs.mkdirSync(c1);
+  write(c1, 'HEAD', 12, one1);
+  assert.equal(one1.picked.length, 12, 'control: no rooms given, one pack');
+  assert.ok(!fs.existsSync(path.join(c1, 'audit-unit-rooms.json')), 'one room writes no room file');
+});
+
+test('rooms: a Kite-sized repository (43 units) at the default budget (5 unit calls) is selected whole in one run, not in 4', (t) => {
+  const r = repo(t, Object.fromEntries(Array.from({ length: 43 }, (_, i) => [`src/k${i}.js`, [`exports.a${i} = 1;`, `exports.b${i} = 2;`, `exports.c${i} = 3;`]])));
+  const o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, packBytes: 250000 };
+  const before = inventory(o), after = inventory({ ...o, rooms: require('./engines/claude-api').unitCalls({ model: 'claude-haiku-5-5', budget: 1, maxTokens: 32000, packBytes: 250000 }) });
+  assert.equal(before.rotation.runs, 4);
+  assert.equal(after.picked.length, 43);
+  assert.equal(after.rotation.runs, 1);
+});
+
+test('rooms: unitCalls is how many full-pack calls the worst case allows, 1 to 8; a tiny budget or a dear model is one', () => {
+  const { unitCalls } = require('./engines/claude-api');
+  const k = (model, budget) => unitCalls({ model, budget, maxTokens: 32000, packBytes: 250000 });
+  assert.equal(k('claude-haiku-5-5', 1), 5);
+  assert.equal(k('claude-haiku-5-5', 20), 8);
+  assert.equal(k('claude-haiku-5-5', 0.01), 1);
+  assert.equal(k('claude-sonnet-5-5', 1), 1);
+  assert.equal(k('claude-haiku-5-5', NaN), 1);
+});
+
+test('trimmed unit: its tests get at most half a room, in priority order, so the other units still fit (K=1 no longer collapses to one unit); the pack sends only the counted tests and lists the rest as cut', (t) => {
+  const files = {};
+  files['src/big.js'] = Array.from({ length: 60 }, (_, i) => `exports.big_${i} = (v) => v + ${i};`);
+  for (let k = 0; k < 8; k++) files[`test/big${k}.test.js`] = ["it('big', () => { assert.equal(big_1(1), 2); });", ...Array.from({ length: 140 }, (_, i) => `// ${'filler '.repeat(6)}${i}`)];
+  for (let u = 0; u < 5; u++) { files[`src/s${u}.js`] = Array.from({ length: 5 }, (_, i) => `exports.s${u}_${i} = (v) => v + ${i};`); files[`test/s${u}.test.js`] = [`it('s${u}', () => { assert.equal(s${u}_1(1), 2); });`]; }
+  const r = repo(t, files), LIMIT = 60000;
+  for (const rooms of [1, 3]) {
+    const inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, rooms, packBytes: LIMIT });
+    const big = inv.picked[0];
+    assert.equal(big.path, 'src/big.js', 'ranked first');
+    assert.ok(big.tests.length >= 7 && big.packTests.length >= 1 && big.packTests.length < big.tests.length, `trimmed: ${big.packTests && big.packTests.length} of ${big.tests.length} tests counted`);
+    const size = (p) => fs.statSync(path.join(r.root, p)).size, share = big.packTests.reduce((n, p) => n + Math.ceil(Math.min(size(p), 10000) * 1.15) + 300, 0);
+    assert.ok(share <= Math.floor(LIMIT * 0.9 / 2), `its tests take ${share} bytes, at most half of the room`);
+    assert.equal(inv.picked.filter((u) => u.path !== 'src/big.js').length, 5, `rooms ${rooms}: the five small units are selected whole beside it`);
+    const ctx = path.join(r.root, `.ctx${rooms}`); fs.mkdirSync(ctx);
+    write(ctx, 'HEAD', 12, inv);
+    const row = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n')[0].split('\t');
+    assert.equal(row[4], big.tests.join(', '), 'the full list stays for the verifier');
+    assert.equal(row[8], big.packTests.join(', '), 'the counted tests are written for the pack');
+    const pack = contextPack(ctx, r.root, LIMIT), omitted = big.tests.filter((p) => !big.packTests.includes(p));
+    assert.ok((pack.text.match(/name="test\/big\d\.test\.js"/g) || []).length <= big.packTests.length,'the pack loads no more of its tests than were counted');
+    for (const p of omitted) assert.ok(pack.notWhole.includes(p), `${p} is listed as cut`);
+  }
+});
