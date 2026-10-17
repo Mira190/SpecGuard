@@ -806,3 +806,15 @@ test('boundary lead: control: a literal comparison, a unit with no matched test 
   assert.equal(bound(t, BCMP, { 'test/other.test.js': "it('x', () => { assert.equal(1, 1); });" }).length, 0);
   assert.equal(bound(t, ['export const LOW_SPACE_BYTES = os.total() / 2;', ...BCMP.slice(1)], btest()).length, 0);
 });
+
+test('boundary lead: a constant that matches the definition pattern but is not valid arithmetic (division by zero, unbalanced paren, stray operator) makes no lead; a valid parenthesised one uses its value', (t) => {
+  const withDef = (def) => [def, ...BCMP.slice(1)];
+  for (const def of ['export const LOW_SPACE_BYTES = 10 / (2 - 2);', 'export const LOW_SPACE_BYTES = (5 + 3;', 'export const LOW_SPACE_BYTES = 5 + ;', 'export const LOW_SPACE_BYTES = 5 5;']) assert.equal(bound(t, withDef(def), btest()).length, 0, def);
+  assert.match(bound(t, withDef('export const LOW_SPACE_BYTES = 2 * (3 + 4);'), btest())[0].why, /LOW_SPACE_BYTES \(= 14\)/);
+  assert.equal(bound(t, withDef('export const LOW_SPACE_BYTES = 2 * (3 + 4);'), btest('  assert.equal(check({ freeBytes: 14 }), false);')).length, 0);
+});
+
+test('boundary lead: a matched test file that was not read gives no boundary lead (it may pin the constant); control: the same unit with every test read does', (t) => {
+  assert.equal(bound(t, BCMP, btest()).length, 1);
+  assert.equal(bound(t, BCMP, { ...btest(), 'test/zz.test.js': 'it("x", () => {});\n\0binary' }).length, 0);
+});
