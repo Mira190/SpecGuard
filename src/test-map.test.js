@@ -230,3 +230,15 @@ test('symbol guard: a whole-word hit in a tracked test file; no hit for an unref
   assert.equal(symbol('multerException', 'src/a.ts'), null, 'whole word only');
   assert.equal(symbol('TransformSourceFile', 'src/b.go'), null, 'another file defines the same method');
 });
+
+test('hunkTokens: a deleted file (+++ /dev/null) does not leak its removed lines into the previous file', () => {
+  const { hunkTokens } = require('./test-map');
+  const hdr = (f) => `diff --git a/${f} b/${f}\n--- a/${f}\n`;
+  const del = `diff --git a/lib/z.js b/lib/z.js\ndeleted file mode 100644\n--- a/lib/z.js\n+++ /dev/null\n@@ -1 +0,0 @@\n-const zOnlyIdentifier = 1;\n`;
+  const mod = (f, id) => hdr(f) + `+++ b/${f}\n@@ -1 +1 @@\n-const oldName = 1;\n+const ${id} = 2;\n`;
+  const t = hunkTokens(mod('lib/a.js', 'aOnlyIdentifier') + del);
+  assert.ok(t.get('lib/a.js').includes('aOnlyIdentifier') && !t.get('lib/a.js').includes('zOnlyIdentifier'));
+  const c = hunkTokens(mod('lib/a.js', 'aOnlyIdentifier') + mod('lib/b.js', 'bOnlyIdentifier'));
+  assert.ok(c.get('lib/a.js').includes('aOnlyIdentifier') && !c.get('lib/a.js').includes('bOnlyIdentifier') && c.get('lib/b.js').includes('bOnlyIdentifier'));
+});
+

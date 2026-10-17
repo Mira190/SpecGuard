@@ -645,3 +645,10 @@ test('fail closed: when the secret-path filter cannot run, collect stops with co
   assert.match(fs.readFileSync(output, 'utf8'), /skip=true/);
   assert.equal(r.ctxFile('diff.patch'), '');
 });
+
+test('candidates: a source named test-*.js is a changed source, and its same-stem test comes first', (t) => {
+  const r = scenario(t, { 'src/test-map.js': 'a();\n', 'src/test-map.test.js': 't();\n' }, ({ write }) => write('src/test-map.js', 'b();\n'));
+  const out = r.ctxFile('test-candidates.txt') || '';
+  assert.match(out, /^src\/test-map\.js\n  src\/test-map\.test\.js/m);
+});
+
