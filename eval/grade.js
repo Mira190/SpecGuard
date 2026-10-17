@@ -92,43 +92,54 @@ function grade(spec, obs) {
   const comments = obs.comments || [], reviews = obs.reviews || [];
   const posted = comments.filter((c) => c.confidence === 'high');
   const sum = parseSummary(obs.summary);
-  const used = new Set(), usedItems = new Set(), matched = [], missed = [], textMisses = [];
   // summary candidates: an item and a coverage row for the same finding (same kind, path and line, or the row's obligation text is the item's title) share a group, and a group satisfies at most one expected finding
-  const summaryHits = [...sum.items.map((h, j) => ({ kind: h.kind, path: h.path, line: h.line, text: `${h.title}\n${h.why}`, title: h.title, item: j })), ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
-    .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path, line: r.line, text: r.text, title: r.title }))], usedGroups = new Set();
+  const summaryHits = [...sum.items.map((h, j) => ({ kind: h.kind, path: h.path, line: h.line, text: `${h.title}
+${h.why}`, title: h.title, item: j })), ...sum.rows.filter((r) => ['weak_test', 'missing_test', 'higher_level_only'].includes(r.status))
+    .map((r) => ({ kind: r.status === 'higher_level_only' ? 'pushdown' : r.status, path: r.path, line: r.line, text: r.text, title: r.title }))];
   summaryHits.forEach((h, j) => { h.group = summaryHits.slice(0, j).find((g) => g.kind === h.kind && g.path === h.path && (g.line === h.line || (h.title && lc(g.title) === lc(h.title))))?.group ?? j; });
-  const useGroup = (g) => { usedGroups.add(g); summaryHits.forEach((h) => { if (h.group === g && h.item !== undefined) usedItems.add(h.item); }); };
-  const pickSummary = (e) => { // the unused candidate of the expected kind and path nearest the expected line, within its tolerance or with the expected text; -1 when none
-    let k = -1;
-    summaryHits.forEach((h, j) => {
-      if (usedGroups.has(h.group) || !arr(e.kind).includes(h.kind) || !arr(e.path).includes(h.path)) return;
-      if (Math.abs(h.line - e.line) > (e.tolerance ?? 2) && !(e.text && new RegExp(e.text, 'i').test(h.text))) return; // path and kind alone are not an identity
-      if (k < 0 || Math.abs(h.line - e.line) < Math.abs(summaryHits[k].line - e.line)) k = j;
-    });
-    return k;
+  // Matches every expected finding against the posted comments plus the given summary candidates. `raw` passes all of them (low-confidence and Details items included);
+  // `delivered` passes only what the developer is asked to act on (see below), so delivered TP and the FP path below share one exposure set.
+  const matchAll = (hits) => {
+    const used = new Set(), usedItems = new Set(), usedGroups = new Set(), matched = [], missed = [], textMisses = [];
+    const useGroup = (g) => { usedGroups.add(g); hits.forEach((h) => { if (h.group === g && h.item !== undefined) usedItems.add(h.item); }); };
+    const pickSummary = (e) => { // the unused candidate of the expected kind and path nearest the expected line, within its tolerance or with the expected text; -1 when none
+      let k = -1;
+      hits.forEach((h, j) => {
+        if (usedGroups.has(h.group) || !arr(e.kind).includes(h.kind) || !arr(e.path).includes(h.path)) return;
+        if (Math.abs(h.line - e.line) > (e.tolerance ?? 2) && !(e.text && new RegExp(e.text, 'i').test(h.text))) return; // path and kind alone are not an identity
+        if (k < 0 || Math.abs(h.line - e.line) < Math.abs(hits[k].line - e.line)) k = j;
+      });
+      return k;
+    };
+    let tp = 0;
+    for (const e of exp.findings || []) {
+      const tol = e.tolerance ?? 2;
+      let best = -1, bestD = Infinity;
+      posted.forEach((o, j) => {
+        if (used.has(j) || !arr(e.kind).includes(o.kind) || !arr(e.path).includes(o.path)) return;
+        if (e.rule && !lc(o.rule).includes(lc(e.rule))) return;
+        const d = o.line == null ? 1e9 : Math.abs(o.line - e.line);
+        if (d > tol && !(e.source && o.source === e.source)) return;
+        if (d < bestD) { best = j; bestD = d; }
+      });
+      if (best >= 0) {
+        used.add(best); tp++; matched.push({ expected: e, observed: posted[best] });
+        hits.forEach((h) => { if (posted[best].line != null && h.kind === posted[best].kind && h.path === posted[best].path && Math.abs(h.line - posted[best].line) <= 2) useGroup(h.group); }); // the summary's copy of an inline finding is not a second one
+        if (e.text && !new RegExp(e.text, 'i').test(`${posted[best].title}
+${posted[best].body}`)) textMisses.push(e);
+      } else if (e.allow_summary && (best = pickSummary(e)) >= 0) {
+        const h = hits[best];
+        useGroup(h.group);
+        tp++; matched.push({ expected: e, observed: null, via_summary: true });
+        if (e.text && !new RegExp(e.text, 'i').test(h.text)) textMisses.push(e);
+      } else missed.push(e);
+    }
+    return { tp, used, usedItems, usedGroups, matched, missed, textMisses };
   };
-  let tp = 0;
-  for (const e of exp.findings || []) {
-    const tol = e.tolerance ?? 2;
-    let best = -1, bestD = Infinity;
-    posted.forEach((o, j) => {
-      if (used.has(j) || !arr(e.kind).includes(o.kind) || !arr(e.path).includes(o.path)) return;
-      if (e.rule && !lc(o.rule).includes(lc(e.rule))) return;
-      const d = o.line == null ? 1e9 : Math.abs(o.line - e.line);
-      if (d > tol && !(e.source && o.source === e.source)) return;
-      if (d < bestD) { best = j; bestD = d; }
-    });
-    if (best >= 0) {
-      used.add(best); tp++; matched.push({ expected: e, observed: posted[best] });
-      summaryHits.forEach((h) => { if (posted[best].line != null && h.kind === posted[best].kind && h.path === posted[best].path && Math.abs(h.line - posted[best].line) <= 2) useGroup(h.group); }); // the summary's copy of an inline finding is not a second one
-      if (e.text && !new RegExp(e.text, 'i').test(`${posted[best].title}\n${posted[best].body}`)) textMisses.push(e);
-    } else if (e.allow_summary && (best = pickSummary(e)) >= 0) {
-      const h = summaryHits[best];
-      useGroup(h.group);
-      tp++; matched.push({ expected: e, observed: null, via_summary: true });
-      if (e.text && !new RegExp(e.text, 'i').test(h.text)) textMisses.push(e);
-    } else missed.push(e);
-  }
+  const { tp, used, usedItems, usedGroups, matched, missed, textMisses } = matchAll(summaryHits);
+  // Delivered: a summary candidate counts only if it is actionable (visible, not low confidence) or a coverage row with no finding at all (the same rule as rowFps below).
+  const itemGroups = new Set(summaryHits.filter((h) => h.item !== undefined).map((h) => h.group)), liveGroups = new Set(summaryHits.filter((h) => h.item !== undefined && sum.actionable.has(sum.items[h.item])).map((h) => h.group));
+  const del = matchAll(summaryHits.filter((h) => liveGroups.has(h.group) || !itemGroups.has(h.group)));
   // Reasonable findings the fixture truly leaves untested but did not seed: neither TP nor FP.
   const spare = [...(exp.acceptable || [])], acceptable = [], falsePositives = [];
   // A summary item the developer reads counts like a posted comment: moving a finding into the summary must not hide a false positive.
@@ -172,10 +183,12 @@ function grade(spec, obs) {
   const skipOk = exp.expect_skip ? sum.skipped && comments.length === 0 : true;
   const cleanOk = exp.expect_clean ? posted.length === 0 && sum.actionable.size === 0 && !rowFps.length : true;
   return {
-    id: spec.id, goal: spec.goal, tp, fp: falsePositives.length, acceptable: acceptable.length, fn: missed.length, summary_only: sum.items.length,
+    id: spec.id, goal: spec.goal, tp, tp_delivered: del.tp, fn_delivered: del.missed.length, fp: falsePositives.length, acceptable: acceptable.length, fn: missed.length, summary_only: sum.items.length,
     matched, missed, summary_misses: sm, false_positives: falsePositives, acceptable_findings: acceptable, must_not_violations: mustNot, text_misses: textMisses,
     json_valid: jsonValid, complete, reduced: sum.reduced, degraded: sum.notes.length > 0, validation_notes: sum.notes, skip_ok: skipOk, clean_ok: cleanOk,
     pass: !missed.length && !mustNot.length && !sm.length && !textMisses.length && jsonValid && complete && skipOk && cleanOk,
+    // acceptance pass above lets FPs through (they lower precision); strict_pass needs every expected finding delivered and no FP
+    strict_pass: !missed.length && !del.missed.length && !del.textMisses.length && !falsePositives.length && !mustNot.length && !sm.length && !textMisses.length && jsonValid && complete && skipOk && cleanOk,
     latency_s: obs.latency_s ?? null,
   };
 }
@@ -193,10 +206,15 @@ function summarize(rs) {
   const n = (k) => ok.reduce((t, r) => t + r[k], 0);
   const [tp, fp, fn] = [n('tp'), n('fp'), n('fn')];
   const acceptable = ok.reduce((t, r) => t + (r.acceptable || 0), 0);
+  // End-to-end: errored runs stay in the denominator as misses (not FPs). An errored row carries expected_findings when the runner stamps it, else 0.
+  const expectedOf = (r) => r.expected_findings ?? (r.tp ?? 0) + (r.fn ?? 0);
+  const tpd = ok.reduce((t, r) => t + (r.tp_delivered ?? r.tp), 0), allExpected = rs.reduce((t, r) => t + expectedOf(r), 0);
   const lat = ok.map((r) => r.latency_s).filter((x) => x != null);
   return {
     runs: rs.length, errors: rs.length - ok.length, tp, fp, acceptable, fn, summary_only: n('summary_only'),
     precision: ratio(tp, tp + fp), recall: ratio(tp, tp + fn),
+    recall_delivered: ratio(tpd, tpd + ok.reduce((t, r) => t + (r.fn_delivered ?? r.fn), 0)), recall_delivered_e2e: ratio(tpd, allExpected), errors_expected_findings: rs.filter((r) => r.error).reduce((t, r) => t + expectedOf(r), 0),
+    strict_pass_rate: ratio(ok.filter((r) => r.strict_pass ?? r.pass).length, ok.length),
     json_valid_rate: ratio(ok.filter((r) => r.json_valid).length, ok.length),
     degraded_rate: ratio(ok.filter((r) => r.degraded).length, ok.length),
     pass_rate: ratio(ok.filter((r) => r.pass).length, ok.length),
