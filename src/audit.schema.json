@@ -152,7 +152,7 @@
     },
     "not_requirements": {
       "type": "array",
-      "description": "Blocks that state no checkable requirement (rationale, example, description of UI with no checkable behaviour). Every listed block appears here or in requirements.",
+      "description": "Blocks that state no checkable requirement (rationale, example, description of UI with no checkable behaviour). Never for a block you did not assess. Every listed block appears here or in requirements.",
       "items": {
         "type": "object",
         "required": [
