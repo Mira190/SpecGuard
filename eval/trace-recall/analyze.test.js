@@ -74,3 +74,16 @@ test('CLI prints the report and writes json from a results file', () => {
     assert.equal(format(res).includes('MRR@10 0.625 (sum 1.25 over 2)'), true);
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
+
+test('candidates step fails loudly: no heredoc, non-zero exit, or nothing written for changed code', () => {
+  const { extractCandidates, checkCandidates } = require('./candidates.js');
+  const sh = "x=1\ncandidates() { timeout 60 node - \"$HERE/trace.js\" \"$CTX\" <<'JS'\nconsole.log(1);\nJS\n}\n";
+  assert.equal(extractCandidates(sh), 'console.log(1);\n');
+  assert.throws(() => extractCandidates('candidates() { echo; }\n'), /cannot find the candidates\(\) heredoc/);
+  assert.throws(() => checkCandidates('c-C', { status: 1, stderr: 'boom\n' }, 'f\n', true), /failed for c-C: exit 1 boom/);
+  assert.throws(() => checkCandidates('c-C', { status: null, error: new Error('ETIMEDOUT') }, 'f\n', true), /ETIMEDOUT/);
+  assert.throws(() => checkCandidates('c-C', { status: 0 }, '', true), /wrote no test-candidates/);
+  // controls: a good run, and a requirement-only variant that lists nothing
+  checkCandidates('c-C', { status: 0 }, 'lib/a.js\n  (no candidate test file found)\n', true);
+  checkCandidates('c-R', { status: 0 }, '', false);
+});
