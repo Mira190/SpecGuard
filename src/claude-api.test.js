@@ -1300,3 +1300,24 @@ test('PR pack: a candidate test is sliced by an identifier on a changed (not dec
   assert.ok(api.contextPack(r.ctx, r.root, 250000).text.includes('HUNK_TOKEN_HIT'), 'the block that names the changed identifier is shown');
   for (const limit of [5000, 20000, 60000]) assert.ok(Buffer.byteLength(api.contextPack(r.ctx, r.root, limit).text) <= limit + 400, `limit ${limit}`);
 });
+
+const bigSrc = (mark, at) => Array.from({ length: 100 }, (_, i) => (i === at ? `const ${mark} = 1;` : padLine(70))).join('\n') + '\n'; // ~8 KB numbered, one changed line at index `at`
+const shareRepo = (t, limit) => {
+  const r = tmpRepo(t, { 'src/a1.js': bigSrc('CHANGED_A1', 50), 'src/a2.js': bigSrc('CHANGED_A2', 50), 'src/a3.js': bigSrc('CHANGED_A3', 50), 'src/b.js': 'function lateOne() { return CHANGED_B; }\n', 'src/b.test.js': "test('late', () => { assert.ok(CHANGED_BT); });\n" }, {
+    'files.txt': 'src/a1.js\nsrc/a2.js\nsrc/a3.js\nsrc/b.js\nsrc/b.test.js\n', 'test-candidates.txt': 'src/b.js\n  src/b.test.js  (name)\n',
+    'diff.patch': hunkDiff('src/a1.js', 51, ['const CHANGED_A1 = 1;']) + hunkDiff('src/a2.js', 51, ['const CHANGED_A2 = 1;']) + hunkDiff('src/a3.js', 51, ['const CHANGED_A3 = 1;']) + hunkDiff('src/b.js', 1, ['function lateOne() { return CHANGED_B; }']) + hunkDiff('src/b.test.js', 1, ["test('late', () => { assert.ok(CHANGED_BT); });"]) });
+  return api.contextPack(r.ctx, r.root, limit);
+};
+
+test('PR pack: review files that together fill the pack each get a share, so a later changed file and its test still appear', (t) => {
+  const p = shareRepo(t, 18000);
+  assert.ok(p.text.includes('CHANGED_A1') && p.text.includes('CHANGED_A2') && p.text.includes('CHANGED_A3'), 'the early files show their changed lines');
+  assert.ok(p.text.includes('CHANGED_B') && p.text.includes('CHANGED_BT'), 'the late file and its test are not starved');
+  assert.ok(p.notWhole.includes('src/a1.js'), 'a file shown only as slices around its hunks is listed as cut');
+});
+
+test('PR pack (control): review files that fit together are shown whole', (t) => {
+  const p = shareRepo(t, 250000);
+  assert.ok(p.text.includes('name="src/a1.js" note="full file, line-numbered"') && p.text.includes('name="src/a2.js" note="full file, line-numbered"'));
+  assert.deepEqual(p.notWhole, []);
+});
