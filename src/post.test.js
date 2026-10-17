@@ -2671,13 +2671,35 @@ test('fix-through: an addressed summary-only finding stays in counts.sum (blind 
   gone.github.rest.issues.listComments = async () => ({ data: stickyWith(gone.A, [e]) });
   await post(gone);
   const c = countsOf(gone.calls.summary[0].body);
-  assert.deepEqual(c.sum, [e], 'carried forward unchanged');
+  assert.deepEqual(c.sum, [{ ...e, at: gone.A }], 'carried forward unchanged, plus the head it was first reported at');
   const a = wr.analyze(dataset(c), { labels });
   assert.deepEqual([a.labels.unmatched, a.joint.with_outcome], [undefined, 1]);
   const again = followSetup(t, () => [], [[]], report({ coverage: [row()], findings: [finding('missing_test', { confidence: 'low' })] }));
   again.github.rest.issues.listComments = async () => ({ data: stickyWith(again.A, [{ ...e, fp: REAL_FP.slice(0, 16) }]) });
   await post(again);
   assert.equal(countsOf(again.calls.summary[0].body).sum.length, 1, 're-reported: this run\'s entry only');
+});
+
+test('fix-through: a carried summary-only finding is still judged against the head it was first reported at (round 3, unrelated push)', async (t) => {
+  const wr = require('../eval/weekly-report');
+  const e = { fp: FP('a').slice(0, 16), path: 'src.js', line: 7, kind: 'missing_test', title: 'Verify the boundary total' };
+  const r2 = followSetup(t, () => [], [[]], report({ coverage: [row()], findings: [] })); // A: reported, B: src.js line 7 changed
+  r2.github.rest.issues.listComments = async () => ({ data: stickyWith(r2.A, [e]) });
+  await post(r2);
+  const c2 = countsOf(r2.calls.summary[0].body);
+  assert.equal(c2.sum[0].at, r2.A);
+  fs.writeFileSync(path.join(r2.dir, 'other.js'), 'x\n'); // round 3: an unrelated push C; src.js untouched since B
+  gitIn(r2, 'add', 'other.js'); gitIn(r2, 'commit', '-qm', 'c');
+  const C = gitIn(r2, 'rev-parse', 'HEAD'); process.env.HEAD_SHA = C; r2.github.rest.pulls.get = async () => ({ data: { head: { sha: C } } });
+  r2.github.rest.issues.listComments = async () => ({ data: [{ id: 9, user: BOT, body: `<!-- specguard:summary -->\n<!-- specguard:counts ${JSON.stringify({ head: r2.B, sum: c2.sum })} -->\n## SpecGuard\n` }] }); // round 3 reads round 2's sticky comment (head B)
+  await post(r2);
+  const c3 = countsOf(r2.calls.summary[r2.calls.summary.length - 1].body);
+  assert.deepEqual(c3.outcomes.map((o) => o.outcome), ['addressed']);
+  assert.deepEqual(c3.sum.map((x) => x.fp), [e.fp]);
+  const ds = { repo: 'o/r', since: '2026-10-01', until: '2026-10-17', baseline: [], threads: [], review_comments: [], prs: [{ number: 5, created_at: '2026-10-01T00:00:00Z', user: { login: 'dev', type: 'User' }, labels: [{ name: 'review-arm:0' }] }],
+    issue_comments: [{ issue_url: 'https://api.github.com/repos/o/r/issues/5', updated_at: '2026-10-17T00:00:00Z', body: `<!-- specguard:summary -->\n${post.countsComment({ ...c3, pr: 5, complete: true, outcome_valid: true })}` }] };
+  const a = wr.analyze(ds, { labels: new Map([[wr.findingsOf(ds)[0].fid, 'valid']]) });
+  assert.deepEqual([a.labels.unmatched, a.joint.with_outcome], [undefined, 1]);
 });
 
 test('fix-through: a counts.sum entry carries the neutralized title (max 100 chars); 20 long titles stay under COUNTS_MAX', async (t) => {
