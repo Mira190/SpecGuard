@@ -203,3 +203,29 @@ test('makeCoverGuard: an eligible-test set limits a hit to the claim\'s own cand
     assert.equal(covers(src, 2, 'src/amount.js', []), null, 'no candidate tests: no demotion');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('enclosingName: a generator method and an exported constant table are definitions (declName sees neither)', () => {
+  const { enclosingName } = require('./test-map');
+  const at = (src, line) => enclosingName(src.split('\n'), line);
+  assert.equal(at('class A {\n  public *scanForClientHooks(\n    instance,\n  ) {\n    yield 1;\n  }\n}', 5), 'scanForClientHooks');
+  assert.equal(at("export const multerExceptions = {\n  A: 'a',\n  INVALID_FIELD_NAME: 'Invalid field name',\n};", 3), 'multerExceptions');
+  assert.equal(at('function plain() {\n  return 1;\n}', 2), 'plain', 'control: ordinary functions still resolve');
+});
+
+test('symbol guard: a whole-word hit in a tracked test file; no hit for an unreferenced name, a partial word, or a method that other files define too', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sym-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const put = (p, s) => { fs.mkdirSync(path.dirname(path.join(root, p)), { recursive: true }); fs.writeFileSync(path.join(root, p), s); };
+  put('src/a.ts', 'export const multerExceptions = {};\nexport const lonelyTable = {};\n');
+  put('src/b.go', 'func (t *B) TransformSourceFile(f int) int {\n}\n');
+  put('src/c.go', 'func (t *C) TransformSourceFile(f int) int {\n}\n');
+  put('test/a.spec.ts', "import { multerExceptions } from '../src/a';\nconst multerExceptionsX = 1;\n");
+  put('test/x.test.go', 'x.TransformSourceFile(f)\n');
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['add', '.'], { cwd: root });
+  const { symbol } = makeCoverGuard({ cwd: root });
+  assert.equal(symbol('multerExceptions', 'src/a.ts'), 'test/a.spec.ts:1');
+  assert.equal(symbol('lonelyTable', 'src/a.ts'), null, 'control: referenced in no test');
+  assert.equal(symbol('multerException', 'src/a.ts'), null, 'whole word only');
+  assert.equal(symbol('TransformSourceFile', 'src/b.go'), null, 'another file defines the same method');
+});
