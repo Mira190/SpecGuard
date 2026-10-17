@@ -12,6 +12,8 @@ const noExt = (p) => path.posix.basename(p).replace(/\.[^.]*$/, '');
 // FooTest -> foo, foo_test -> foo, foo.spec -> foo, test_foo -> foo, FooTests -> foo; a stem without affix stays (tests/foo.py, test/foo.js)
 const testStem = (p) => key(noExt(p).replace(/^tests?[_-]/i, '').replace(/[._-]?(tests?|spec)$/i, ''));
 const near = (a, b) => { const x = path.posix.dirname(a).split('/'), y = path.posix.dirname(b).split('/'); let i = 0; while (i < x.length && x[i] === y[i]) i++; return i; };
+// the reason text of a hunk-tier candidate in test-candidates.txt; focus.js parseCandidates({ skipHunk }) matches on it
+const HUNK_REASON = 'mentions changed ';
 const GENERIC = new Set(['index', 'main', 'mod', 'init', '__init__', 'lib', 'app', 'utils', 'util', 'types']);
 const dirKey = (t) => path.posix.dirname(t).replace(/\/__tests__$/, '');
 const comment = (l) => /^\s*(?:\/\/|#|\*|\/\*|--)/.test(l);
@@ -136,7 +138,7 @@ function mapTests(f, { tests, mentions, changed = [], names = [], calls = null, 
     for (const n of pub) for (const t of calls(n)) { if (!called.has(t)) called.set(t, new Set()); called.get(t).add(n); }
     for (const t of ranked(called)) if (called.get(t).size >= 2) add([t], label('calls', called));
   }
-  for (const [t, toks] of changed) add([t], `mentions changed ${toks.slice(0, 3).map((x) => '`' + x + '`').join(', ')}`);
+  for (const [t, toks] of changed) add([t], `${HUNK_REASON}${toks.slice(0, 3).map((x) => '`' + x + '`').join(', ')}`);
   // a stem that most tests name (route, fastify) says nothing and would fill a capped list in path order; an uncapped caller (the scan) keeps them all
   if (got.size < per && stem.length >= 3 && !GENERIC.has(stem.toLowerCase())) { const m = mentions(stem); if (per === Infinity || m.length <= MAX_DF) add(m, `mentions ${stem}`); }
   add(index.byDir.get(dir) || [], 'same directory', Math.min(per, 5));
@@ -240,4 +242,4 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
   }, { symbol });
 }
 
-module.exports = { mapTests, hunkTests, hunkTokens, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, makeCoverGuard };
+module.exports = { mapTests, hunkTests, hunkTokens, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, makeCoverGuard, HUNK_REASON };

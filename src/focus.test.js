@@ -49,6 +49,14 @@ test('thresholds: defaults, "lines,files", off, bad input falls back', () => {
   assert.deepEqual(thresholds({ FOCUS_THRESHOLD: 'lots', FOCUS_FILES: '0' }), { lines: 600, files: 25, k: 12 });
 });
 
+test('parseCandidates: hunk-tier entries are kept by default and dropped with skipHunk', () => {
+  const t = 'a.js\n  test/a.test.js  (same stem)\n  test/b.test.js  (mentions changed `x`)\n';
+  assert.deepEqual(parseCandidates(t).get('a.js'), ['test/a.test.js', 'test/b.test.js']);
+  assert.deepEqual(parseCandidates(t, { skipHunk: true }).get('a.js'), ['test/a.test.js']);
+  // the producer's reason (test-map.js HUNK_REASON) is what skipHunk drops
+  assert.deepEqual(parseCandidates(`a.js\n  test/b.test.js  (${require('./test-map.js').HUNK_REASON}\`x\`)\n`, { skipHunk: true }).get('a.js'), []);
+});
+
 test('parseCandidates: a source with a found test lists it, one without maps to []', () => {
   const m = parseCandidates(candidates(new Set([1])) + '(3 more changed file(s) not listed)\n');
   assert.deepEqual(m.get('src/mod1.js'), ['src/mod1.test.js']);
