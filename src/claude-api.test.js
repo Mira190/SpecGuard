@@ -1068,7 +1068,7 @@ test('fail-on-error.js: incomplete without engine-error, with a non-configuratio
 });
 
 // unit rooms: one unit part per room (audit-unit-rooms.json), no document blocks at all
-function roomRepo(t, env = {}, rooms = [['aaaaaaaa'], ['bbbbbbbb'], ['cccccccc']]) {
+function roomRepo(t, env = {}, rooms = [['aaaaaaaa'], ['bbbbbbbb'], ['cccccccc']], unitRows = null) {
   const name = { aaaaaaaa: 'lib/a.js', bbbbbbbb: 'lib/b.js', cccccccc: 'lib/c.js' }, fn = { aaaaaaaa: 'alpha', bbbbbbbb: 'beta', cccccccc: 'gamma' };
   const ok = (req) => {
     const u = req.body.messages[0].content, ids = [...u.matchAll(/^([0-9a-f]{8})\tlib\//gm)].map((m) => m[1]);
@@ -1077,10 +1077,18 @@ function roomRepo(t, env = {}, rooms = [['aaaaaaaa'], ['bbbbbbbb'], ['cccccccc']
   const r = repo(t, { 'lib/a.js': 'function alpha() {}\n', 'lib/b.js': 'function beta() {}\n', 'lib/c.js': 'function gamma() {}\n' }, {
     'audit-candidates.txt': '', 'audit-docs.txt': '', 'audit-meta.json': JSON.stringify({ max_requirements: 80, units: { total: 3, picked: 3 }, max_units: 12 }),
     'audit-unit-rooms.json': JSON.stringify(rooms),
-    'audit-units.txt': ['aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\t-\n', 'bbbbbbbb\tlib/b.js\t1\tw\tnone\t-\t-\t-\n', 'cccccccc\tlib/c.js\t1\tw\tnone\t-\t-\t-\n'].join('') }, { CHECK: 'audit', ...env });
+    'audit-units.txt': unitRows || ['aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\t-\n','bbbbbbbb\tlib/b.js\t1\tw\tnone\t-\t-\t-\n', 'cccccccc\tlib/c.js\t1\tw\tnone\t-\t-\t-\n'].join('') }, { CHECK: 'audit', ...env });
   return { ...r, answers: (f) => { r.h.answers[0] = (req) => f(req, ok); } };
 }
 const unitsIn = (c) => [...c.body.messages[0].content.matchAll(/^([0-9a-f]{8})\tlib\//gm)].map((m) => m[1]);
+
+test('unit rooms: a stateless run lists two parts of one unit as id:part, and each call gets only its own part', async (t) => {
+  const rows = ['aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 1/2 lines 1-1\n', 'aaaaaaaa\tlib/a.js\t1\tw\tnone\t-\t-\tpart 2/2 lines 2-2\n'].join('');
+  const s = roomRepo(t, {}, [['aaaaaaaa:1'], ['aaaaaaaa:2']], rows);
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.deepEqual(s.h.calls.map((c) => [...c.body.messages[0].content.matchAll(/^aaaaaaaa\t.*?\t(part \d\/2)/gm)].map((m) => m[1])), [['part 1/2'], ['part 2/2']]);
+});
 
 test('unit rooms: three rooms make three unit parts (one call each, only that room\'s units in the prompt); every finding is merged; the run is not split when there is one room', async (t) => {
   const s = roomRepo(t);

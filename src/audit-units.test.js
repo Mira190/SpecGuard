@@ -553,6 +553,64 @@ test('rooms: a Kite-sized repository (43 units) at the default budget (5 unit ca
   assert.equal(after.rotation.runs, 1);
 });
 
+// a stateless run (allParts) plans every part of a unit reviewed in parts; a rotating run keeps one part per run
+const twoPart = (t) => repo(t, { 'src/js/big.js': Array.from({ length: 400 }, (_, i) => `exports.function${i} = () => '${'x'.repeat(80)}';`), ...Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`src/s${i}.js`, [`exports.a${i} = 1;`, `exports.b${i} = 2;`, `exports.c${i} = 3;`]])) });
+
+test('stateless: a unit of two parts gets both parts planned across the rooms, one part per room, and the unit rooms and units file name them', (t) => {
+  const r = twoPart(t), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 2, rooms: 3, packBytes: 250000 };
+  const inv = inventory({ ...o, allParts: true }), big = inv.picked.filter((u) => u.path === 'src/js/big.js');
+  assert.deepEqual(big.map((u) => [u.part.k + 1, u.part.n]), [[1, 2], [2, 2]]);
+  assert.equal(inv.rotation.picked, 4, 'the funnel counts units, not parts');
+  const ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
+  write(ctx, 'HEAD', 1, inv);
+  const rows = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n').filter(Boolean).map((l) => l.split('\t')), mine = rows.filter((x) => x[1] === 'src/js/big.js');
+  assert.deepEqual(mine.map((x) => x[7].replace(/ lines.*/, '')), ['part 1/2', 'part 2/2']);
+  const rooms = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-unit-rooms.json'), 'utf8')), id = sha8('src/js/big.js');
+  assert.equal(rooms.filter((ids) => ids.some((x) => x.startsWith(id))).length, 2, 'the two parts are in two different calls');
+  assert.equal(inventory(o).picked.filter((u) => u.path === 'src/js/big.js').length, 1, 'control: without allParts one part, as before');
+});
+
+test('stateful: a rotating run still reads one part of the unit', (t) => {
+  const r = twoPart(t), o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 1, rooms: 3, packBytes: 250000, allParts: true };
+  const first = inventory({ ...o, allParts: false }), prior = { head: 'a', blocks: first.rows.map((u) => ({ cid: u.id, status: 'covered', runs: 1, at: { date: '2026-10-01' } })), versions: { uv: Object.fromEntries(first.rows.map((u) => [u.id, u.ver])), ev: {}, uc: {} } };
+  const inv = inventory({ ...o, prior });
+  assert.equal(inv.picked.filter((u) => u.path === 'src/js/big.js').length, 1);
+  assert.ok(!inv.allParts, "a run with state plans no extra parts");
+});
+
+test('stateless: parts that do not fit are listed as not reached (budget) and the unit keeps its first part', (t) => {
+  const r = twoPart(t), inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, rooms: 1, packBytes: 250000, allParts: true }), n = inv.picked.find((u) => u.path === 'src/js/big.js').part.n;
+  assert.deepEqual(inv.picked.filter((u) => u.path === 'src/js/big.js').map((u) => u.part.k), [0], 'one call holds one part of a unit');
+  assert.equal(inv.partsLeft.length, n - 1);
+  assert.match(inv.limitations.join('\n'), new RegExp(`${n - 1} unit parts? not reached \\(budget\\): src/js/big\\.js part 2 of ${n}`));
+});
+
+test('budget hint: units no call had room for give K and the cost of covering all of them; ample budget gives none', (t) => {
+  const files = Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`src/m${i}.js`, Array.from({ length: 300 }, (_, j) => `exports.f${i}_${j} = () => '${'x'.repeat(70)}';`)]));
+  const r = repo(t, files), price = { usd: 0.2, budget: 1, max: 8 }, o = { cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 60, packBytes: 250000, price };
+  const one = inventory({ ...o, rooms: 1 });
+  assert.ok(one.picked.length < 70, 'one room cannot hold every unit');
+  assert.equal(one.hint.left, 70 - one.picked.length);
+  assert.equal(one.hint.calls, 1);
+  assert.ok(one.hint.need > 1 && one.hint.usd > 0.2 * one.hint.calls, JSON.stringify(one.hint)); // the budget needed exceeds the one call that was afforded
+  const wide = inventory({ ...o, rooms: 8 });
+  assert.equal(wide.picked.length, 70);
+  assert.equal(wide.hint, null, 'control: everything fits, no hint');
+  const capped = repo(t, Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/c${i}.js`, [`exports.a${i} = 1;`, `exports.b${i} = 2;`, `exports.c${i} = 3;`]])));
+  assert.equal(inventory({ ...o, cwd: capped.root, maxUnits: 12, rooms: 1 }).hint, null, 'control: units left because of max_units are not a budget problem');
+  const ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx);
+  write(ctx, 'HEAD', 12, one);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(ctx, 'audit-inventory.json'), 'utf8')).budget_hint, one.hint);
+});
+
+test('static leads: in a tsx unit a plain function ranks before components and use* hooks, and none is dropped; a .ts unit keeps its order', (t) => {
+  const tsx = ['export const Panel = () => <div/>;', 'export function useThing() { return 1; }', 'export function clampValue(v) { return v; }', 'export function Frame() { return null; }', 'export const mapRows = (r) => r;'], ts = tsx.map((l) => l.replace('<div/>', 'null'));
+  const r = repo(t, { 'src/ui/panel.tsx': tsx, 'src/ui/panel.ts': ts });
+  const names = (p) => inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12 }).rows.find((x) => x.path === p).defs.map((d) => d.name);
+  assert.deepEqual(names('src/ui/panel.tsx'), ['clampValue', 'mapRows', 'Panel', 'useThing', 'Frame']);
+  assert.deepEqual(names('src/ui/panel.ts'), ['Panel', 'useThing', 'clampValue', 'Frame', 'mapRows']);
+});
+
 test('rooms: unitCalls is how many full-pack calls the worst case allows, 1 to 8; a tiny budget or a dear model is one', () => {
   const { unitCalls } = require('./engines/claude-api');
   const k = (model, budget) => unitCalls({ model, budget, maxTokens: 32000, packBytes: 250000 });

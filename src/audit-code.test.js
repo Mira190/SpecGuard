@@ -591,6 +591,28 @@ test('render: a unit reviewed in parts says which part this run reviewed (review
   assert.match(render({ data: result([]), code, head: 'abc1234' }), /\*\*Reviewed in parts\*\* \(too large for one call; one part per run\): `src\/js\/legacy\.js` part 2 of 3 \(lines 101-200\)\./);
 });
 
+test('render: a stateless run that read both parts of a unit names both, and a finding in either part is kept', () => {
+  const rows = [[1, 1, 1], [2, 2, 3]].map(([k, a, b]) => `${U1}\tsrc/js/orders.js\t21.5\tno test\tnone\t-\tabcdef12\tpart ${k}/2 lines ${a}-${b}\n`).join('');
+  const list = readUnits(rows), code = { ...CODE([], { all_parts: true, parts_left: [] }), list };
+  assert.equal(list.size, 1, 'two rows of one unit are one unit');
+  assert.match(render({ data: result([]), code, head: 'abc1234' }), /\*\*Reviewed in parts\*\* \(too large for one call; every part planned in this run[^)]*\): `src\/js\/orders\.js` parts 1, 2 of 2 \(lines 1-3\)\./);
+  for (const line of [1, 2]) assert.equal(verify(result([uf({ unit: U1, ...cite('src/js/orders.js', line) })]), { read, units: list }).unit_findings.length, 1, `line ${line} is in a part this run read`);
+});
+
+test('render: a stateless part left out for the budget is named next to the parts that were read', () => {
+  const code = { ...CODE([], { all_parts: true, parts_left: [{ path: 'src/js/legacy.js', part: 2, of: 2 }] }), list: readUnits(`${U2}\tsrc/js/legacy.js\t21.5\tno test\tnone\t-\tabcdef12\tpart 1/2 lines 1-100\n`) };
+  assert.match(render({ data: result([]), code, head: 'abc1234' }), /part 1 of 2 \(lines 1-100\); part 2 not reached \(budget\)/);
+});
+
+test('render: units no call had room for get one line with K and the budget that would cover them; a rotating run adds the rotation', () => {
+  const hint = { left: 18, calls: 1, need: 5, usd: 3.63, budget: 1, max: 8, runs: 5 };
+  const text = (over) => render({ data: result([]), code: CODE([], over), head: 'abc1234' });
+  assert.match(text({ budget_hint: hint }), /18 units not reviewed this run: max_budget_usd \$1\.00 allows 1 call; covering all units needs a budget of about \$3\.63 \(the pre-flight reserves the worst case per call; actual spend is usually far lower\)\./);
+  assert.match(text({ budget_hint: hint, rotation: { ...INV().rotation, rotate: true } }), /actual spend is usually far lower\), or they rotate in over ~5 runs\./);
+  assert.match(text({ budget_hint: { ...hint, need: 17 } }), /covering all units takes 17 calls, more than the 8 a run makes \(narrow scan_paths\)/);
+  assert.doesNotMatch(text({}), /max_budget_usd \$/, 'control: no hint, no line');
+});
+
 test('claude engine pack: a unit reviewed in parts shows only this run\'s lines, with real line numbers, and is not listed as cut (review F07)', (t) => {
   const big = Array.from({ length: 300 }, (_, i) => `exports.f${i} = (x) => x + ${i};`);
   const { root } = repoOf(t, { ...CODE_ONLY, 'src/js/big.js': big });
