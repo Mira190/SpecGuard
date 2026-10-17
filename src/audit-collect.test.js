@@ -193,7 +193,7 @@ test('CLI: rejects a bad audit_max_requirements (deprecated) or scan_max_blocks 
   assert.equal(cap({ SCAN_MAX_BLOCKS: '', MAX_REQUIREMENTS: '' }), 80);
   const ev = path.join(root, 'event.json');
   fs.writeFileSync(ev, JSON.stringify({ repository: { default_branch: 'main' } }));
-  const off = run({ GITHUB_REF_NAME: 'dev', GITHUB_EVENT_PATH: ev });
+  const off = run({ GITHUB_REF_NAME: 'dev', GITHUB_EVENT_PATH: ev, SCAN_ISSUE: 'true' }); // with scan_issue off a non-default ref is allowed (own test below)
   assert.equal(off.status, 1);
   assert.match(off.stdout, /::error::mode scan reads the default branch \(main\); this run is on dev/);
   assert.equal(run({ GITHUB_REF_NAME: 'main', GITHUB_EVENT_PATH: ev }).status, 0);
@@ -723,4 +723,22 @@ test('prior-head diff uses --no-renames: in a blobless clone with no network, re
     assert.deepEqual(run(cl, 'diff', '--name-only', '--no-renames', '-z', first, 'HEAD').split('\0').filter(Boolean).sort(), ['a.md', 'b.md']);
     assert.throws(() => execFileSync('git', ['diff', '--name-only', '-z', first, 'HEAD'], { cwd: cl, stdio: 'pipe' }), 'rename detection reads the old blob');
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('CLI: a non-default ref is scanned only when the run reads and writes no scan state, and the note names the ref', (t) => {
+  const { root, ctx } = repo(t, FILES);
+  const ev = path.join(root, 'event.json');
+  fs.writeFileSync(ev, JSON.stringify({ repository: { default_branch: 'main' } }));
+  const run = (env) => spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_REF_NAME: 'dev', GITHUB_EVENT_PATH: ev, SCAN_ISSUE: '', AUDIT_ISSUE: '', GH_TOKEN: '', ...env } });
+  const meta = () => JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
+  const off = run({});
+  assert.equal(off.status, 0, off.stdout + off.stderr);
+  assert.doesNotMatch(off.stdout, /previous scan state/, 'no state lookup');
+  assert.match(meta().ref_note, /^Scanned ref: dev @ [0-9a-f]{7} \(not the default branch main; no scan state was read or written\)$/);
+  const on = run({ SCAN_ISSUE: 'true' });
+  assert.equal(on.status, 1);
+  assert.match(on.stdout, /::error::mode scan reads the default branch \(main\); this run is on dev/);
+  assert.equal(run({ GITHUB_REF_NAME: 'main', SCAN_ISSUE: 'true' }).status, 0, 'default ref with scan_issue on is unchanged');
+  assert.equal(run({ GITHUB_REF_NAME: 'main' }).status, 0);
+  assert.equal(meta().ref_note, '', 'no note on the default branch');
 });

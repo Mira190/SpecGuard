@@ -1305,3 +1305,11 @@ test('scan issue control: a real foreign ISSUE_REPO is away', () => {
   assert.equal(t.away, true);
   assert.deepEqual(t.target, { owner: 'org', repo: 'other' });
 });
+
+test('run: a stateless scan of a non-default ref names the ref in the summary and makes no issue call', async (t) => {
+  const r = await runPost(t, { ctxFiles: { 'findings.json': result([req()]), 'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, limitations: [], ref_note: 'Scanned ref: dev @ abc1234 (not the default branch main; no scan state was read or written)' } } });
+  assert.match(r.calls.summary, /Scanned ref: dev @ abc1234 \(not the default branch main; no scan state was read or written\)/);
+  assert.deepEqual([r.calls.created, r.calls.updated], [[], []]);
+  const ctl = await runPost(t, { ctxFiles: { 'findings.json': result([req()]) } });
+  assert.doesNotMatch(ctl.calls.summary, /Scanned ref:/);
+});
