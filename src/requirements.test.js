@@ -482,5 +482,5 @@ test('fitBody: a plain "Acceptance criteria:" section is kept whole, like a head
 
 test('leftRanges keeps hunks under a specs/ requirements folder (it is not a test directory)', () => {
   const d = (f) => ['diff --git a/' + f + ' b/' + f, '--- a/' + f, '+++ b/' + f, '@@ -1,2 +1,2 @@'].join('\n');
-  for (const f of ['specs/api.yaml', 'specs/payment.json']) assert.deepEqual(leftRanges(d(f)), [{ path: f, a: 1, b: 2 }], f);
+  for (const f of ['specs/api.yaml', 'specs/payment.json', 'src/test-map.js']) assert.deepEqual(leftRanges(d(f)), [{ path: f, a: 1, b: 2 }], f);
 });
