@@ -341,6 +341,16 @@ test('scan_paths: a document block is audited in a scoped run only when its evid
   assert.ok(metaOf(s.ctx).limitations.some((l) => /1 document block\(s\) skipped: their evidence is outside scan_paths \(docs\/design\.md\)/.test(l)));
 });
 
+test('scan_paths: the "N of M blocks not audited" line counts the scope-skipped blocks in both N and M', (t) => {
+  const doc = '# Billing\n\nThe billing service MUST round every invoice total to two decimals before sending it.\n\n# Delivery\n\nThe scheduler MUST double the retry delay after each failed delivery attempt, up to the maxDelay limit.\n\n# Limits\n\nThe scheduler MUST double the retry delay after each failed delivery attempt, never below the minDelay limit.\n';
+  const r = repo(t, { 'docs/design.md': doc, 'packages/core/src/scheduler.js': SCHED_SRC, 'packages/other/src/billing.js': MONO['packages/b/src/billing.js'] });
+  collect({ cwd: r.root, ctx: r.ctx, scanPaths: 'packages/core/**', maxRequirements: 1, rotate: true, prior: { head: 'x', blocks: [] } });
+  assert.match(metaOf(r.ctx).limitations.join('\n'), /1 document block\(s\) skipped/);
+  assert.equal(rows(r.ctx, 'audit-candidates.txt').length, 1);
+  const line = metaOf(r.ctx).cap_left.find((l) => /blocks were not audited this run/.test(l)); // 3 blocks: 1 audited, 1 over the cap, 1 skipped by scope
+  assert.match(line, /^2 of 3 blocks were not audited this run \(scan_max_blocks 1\); 0 keep the status of their last audit, 2 have never been audited/, line);
+});
+
 test('scan_paths: out-of-scope blocks do not take selection slots run after run (scan_max_blocks 1: the in-scope block is audited in run 2)', (t) => {
   const files = { 'docs/design.md': '# Billing\n\nThe billing service MUST round every invoice total to two decimals before sending it.\n\n# Delivery\n\nThe scheduler MUST double the retry delay after each failed delivery attempt, up to the maxDelay limit.\n', 'packages/core/src/scheduler.js': SCHED_SRC, 'packages/other/src/billing.js': MONO['packages/b/src/billing.js'] };
   const r = repo(t, files);
