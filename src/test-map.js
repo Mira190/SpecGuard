@@ -72,6 +72,7 @@ function hunkTokens(diff) {
   for (const l of diff.split('\n')) {
     const h = /^\+\+\+ b\/(.+)$/.exec(l);
     if (h) { cur = new Set(); out.set(h[1], cur); continue; }
+    if (/^(diff --git|\+\+\+) /.test(l)) { cur = null; continue; } // a deleted file's `+++ /dev/null` names no file: its removed lines are dropped, not attributed to the previous file
     if (!cur || !/^[+-]/.test(l) || /^(\+\+\+|---) /.test(l)) continue;
     for (const m of l.slice(1).matchAll(/[A-Za-z_$][\w$]{5,}|\b\d{5,}\b/g)) if (/^\d+$/.test(m[0]) || /[a-z][A-Z]|_/.test(m[0])) cur.add(m[0]);
   }
