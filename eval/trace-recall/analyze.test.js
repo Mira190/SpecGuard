@@ -145,3 +145,19 @@ test('test->code / test->req: a T variant is scored against the case ground trut
   assert.deepEqual(mixed.directions['req->code'], res.directions['req->code']);
   assert.deepEqual(mixed.directions['code->req'], res.directions['code->req']);
 });
+
+test('attribute: rank K is not a miss and K+1 is ranked_out; miss kinds same_file / generated_duplicate (alt) / other; shown-file unknown', () => {
+  const cases = { cases: [{ id: 'X', expect: { requirement: { file: 'D.md', lines: [1, 1] }, tests: [], code: [
+    { file: 'a.js', lines: [1, 1] }, { file: 'a.js', lines: [50, 50] }, { file: 'g.js', lines: [5, 5], alt: [[1, 1]] }, { file: 'z/q.js', lines: [1, 1] }] } }] };
+  const w = (p) => ({ path: p, line: 1, end: 1 });
+  const v = (id, code, limitations) => ({ id, case: 'X', variant: 'R', limitations, req_to_code: [{ criterion: 'S1', code: code.map(w), tests: [] }] });
+  const note = ['3 more code/test candidate(s) for S1 not shown (top 3 kept): b.js, c.js.']; // 2 names: complete list
+  const at = attribute({ variants: [v('X-3', ['p.js', 'p2.js', 'a.js'], note), v('X-4', ['p.js', 'p2.js', 'p3.js', 'a.js'], [])] }, cases);
+  const of = (id, item) => at.misses.find((m) => m.id === id && m.item === item);
+  assert.equal(of('X-3', 'a.js:1-1'), undefined); // rank exactly K: not a miss
+  assert.equal(of('X-4', 'a.js:1-1').class, 'ranked_out'); // rank K+1
+  assert.equal(of('X-3', 'a.js:50-50').class, 'unknown'); // a.js was delivered, a dropped window of a shown file is not listed
+  assert.equal(of('X-4', 'a.js:50-50').class, 'not_retrieved'); // control: no note, nothing dropped
+  assert.equal(of('X-3', 'g.js:5-5').class, 'not_retrieved'); // control: complete note does not name it
+  assert.deepEqual(at.req_to_code_locations.find((l) => l.id === 'X-3').misses.map((m) => m.kind), ['same_file', 'generated_duplicate', 'other']);
+});
