@@ -60,6 +60,19 @@ The widget ${i} MUST reject an empty input.
   }
 });
 
+test('collect: docs_over_cap counts only the documents cut by the cap, never those rejected for classification', (t) => {
+  const files = Object.fromEntries(Array.from({ length: 61 }, (_, i) => [`specs/r${String(i).padStart(2, '0')}.md`, `# Spec ${i}
+
+The widget ${i} MUST reject an empty input.
+`]));
+  files['README.md'] = FILES['README.md']; files['CHANGELOG.md'] = '# Changelog\n\nFixed a typo.\n';
+  const { root, ctx } = repo(t, files); collect({ cwd: root, ctx, scopeAll: true });
+  const rej = rows(ctx, 'audit-rejected.txt'), cap = rej.filter(([, why]) => /over the 60-document audit limit/.test(why));
+  assert.ok(rej.length > cap.length, `classification rejects exist: ${JSON.stringify(rej)}`);
+  assert.equal(cap.length, 1);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8')).docs_over_cap, cap.length);
+});
+
 test('collect: an excluded glob drops a document; no discovery output means no documents', (t) => {
   const { root, ctx } = repo(t, FILES);
   collect({ cwd: root, ctx, reqPaths: '!docs/**' });
