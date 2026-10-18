@@ -1551,7 +1551,7 @@ async function run({ github, context, core }) {
   const proposedPaths = Array.isArray(data?.findings) ? data.findings.map((f) => f?.path) : []; // for the fix-through telemetry: which files lost a proposed finding to validation
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
-  const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean)); // the claude engine's pack: files the model saw only partly or not at all
+  const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')[0])); // a scan's lines carry "\tunit ids" (audit-post.js reads those) // the claude engine's pack: files the model saw only partly or not at all
   if (packCut.size) { // a missing/weak-test claim is only trustworthy when its candidate tests were fully visible
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
     for (const f of data.findings) {

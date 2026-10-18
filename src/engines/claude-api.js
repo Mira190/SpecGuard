@@ -238,6 +238,12 @@ function packFiles(ctx) {
   return [...new Set(review.flatMap((p) => [p, ...(cands.get(p) || [])]))];
 }
 
+function unitSyms(lines) { // the names a unit (or one part's lines) defines, for slicing its tests; capped: more than UNIT_SYMS (the pack lists such a test as cut). src/audit-units.js prices a big test from the same call
+  const out = new Set(); let capped = false;
+  const add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n)) { if (out.size < UNIT_SYMS) out.add(n); else if (!out.has(n)) capped = true; } };
+  for (const l of lines) symbolsIn(l, add);
+  const syms = [...out]; syms.capped = capped; return syms;
+}
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
@@ -284,7 +290,7 @@ function contextPack(ctx, root, limit) {
   const units = new Map(list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1]).map((u) => [u[1], u[4] && u[4] !== 'none' ? u[4].split(', ') : []])), review = units.size ? [...units.keys()] : focus.length ? focus : list('files.txt');
   const cands = parseCandidates(rd('test-candidates.txt'));
   const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch'), leads = rd('leads.txt');
-  const unitSymbols = (p) => { const out = new Set(), part = unitPart.get(p); let capped = false; const add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n)) { if (out.size < UNIT_SYMS) out.add(n); else if (!out.has(n)) capped = true; } }; for (const l of (packRead(root, p) || '').split('\n').slice(part ? part.a - 1 : 0, part ? part.b : undefined)) symbolsIn(l, add); const syms = [...out]; syms.capped = capped; return syms; }; // names the unit defines in this run's part (all of the file when it is not in parts): a big test file is shown as the tests that mention them; capped: more names than UNIT_SYMS, so the file is listed as cut
+  const unitSymbols = (p) => { const part = unitPart.get(p); return unitSyms((packRead(root, p) || '').split('\n').slice(part ? part.a - 1 : 0, part ? part.b : undefined)); }; // names the unit defines in this run's part (all of the file when it is not in parts): a big test file is shown as the tests that mention them; capped: more names than UNIT_SYMS, so the file is listed as cut
   const packTests = new Map(list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1] && u[8]).map((u) => [u[1], u[8] === '-' ? [] : u[8].split(', ')])); // a unit with more tests than its share of the pack: the collector's list of the ones to load (audit-units.js room.trim)
   const unitPart = new Map(list('audit-units.txt').map((l) => l.split('\t')).map((u) => [u[1], /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(u[7] || '')]).filter((x) => x[1]).map(([p, w]) => [p, { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] }]));
   if (units.size) for (const p of review) addFile(p, true, false, null, limit, unitPart.get(p)); // scan: every unit file first, so no test starves a later unit (addFile skips a file already added)
@@ -503,7 +509,11 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       const reach = all && { scope: 'all', notReached: { budget: nr(skippedEx), deadline: nr(late) }, needUsd: Math.ceil((spent() + [...skippedEx, ...late].reduce((a, q) => a + q.usd, 0)) * 100) / 100 };
       w('scan-parts.json', JSON.stringify({ ...reach, calls: rs.length,...(splits && { splits }), ...(retried.length && { retried }), failed, dropped, ...(droppedUnits.length && { droppedUnits }), ...(droppedParts.length && { droppedParts }), ...(Object.keys(blockCuts).length ? { blockCuts } : {}) }));
       const seenParts = plans.filter((p) => p.units && !failed.some((x) => x.part === 'units' && x.units === p.units)); // the unit parts that answered: their packs are what the unit findings may rely on
-      if (seenParts.length) w('pack-cut.txt', [...new Set(seenParts.flatMap((p) => p.pack.notWhole))].map((x) => `${x}\n`).join(''));
+      if (seenParts.length) { // "path<TAB>unit ids": cut in the pack of the call(s) holding those units only (a test sliced incompletely for unit B does not make unit A, whose call showed it whole, unsure); a line without a tab is cut for everyone
+        const cuts = new Map();
+        for (const p of seenParts) for (const x of p.pack.notWhole) { const s = cuts.get(x) || cuts.set(x, new Set()).get(x); for (const id of p.units || []) s.add(id); }
+        w('pack-cut.txt', [...cuts].map(([x, ids]) => `${x}${ids.size ? `\t${[...ids].join(',')}` : ''}\n`).join(''));
+      }
       notes.push(`scan in ${rs.length} calls${splits ? ` (${plural(splits, 'part')} split after max_output_tokens)` : ''}${retried.length ? `; ${plural(retried.reduce((a, c) => a + c.length, 0), 'unanswered block')} sent again once` : ''}${failed.length ? `; ${plural(failed.length, 'part')} failed` : ''}${dropped.length ? `; ${plural(dropped.length, 'block')} left for the next run (max_budget_usd)` : ''}${droppedUnits.length ? `; ${plural(droppedUnits.length, 'unit')} not reached (max_budget_usd), due again` : ''}${droppedParts.length ? `; ${plural(droppedParts.length, 'unit part')} not reached (max_budget_usd)` : ''}`);
       for (const f of failed) notes.push(`${f.part === 'units' ? 'unit part' : plural(f.blocks.length, 'block')} not audited: ${f.reason}`);
       if (cfg) w('engine-error', `${cfg.reason}\n${cfg.why}; ${ok} of ${ok + failed.length} parts were reviewed\n`); // still a partial success, but the account problem must reach the job gate (src/fail-on-error.js)
@@ -556,6 +566,6 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
   } catch { return null; }
 }
 
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, ALL_MAX_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, ALL_MAX_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles, slices, unitSyms };
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts
