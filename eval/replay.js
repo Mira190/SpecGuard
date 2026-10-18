@@ -70,12 +70,20 @@ function countFindings(comments, summary) {
   return { inline, summary_only: count(s), pre_existing: pre ? count(pre[1]) : 0 };
 }
 
-async function finishRealOne(id, out) {
+// The summary-only items themselves (same exclusion of the Pre-existing drift block as countFindings).
+function summaryItems(summary) {
+  let s = String(summary || '');
+  const pre = /\*\*Pre-existing drift[^*\n]*\*\*\n\n([^]*?)(?=\n\*\*[^\n]+\*\*\n|<\/details>|$)/.exec(s);
+  if (pre) s = s.replace(pre[0], '');
+  return parseSummary(s).items;
+}
+
+async function finishRealOne(id, out, { engine = 'local', model = '' } = {}) {
   const dir = path.resolve(out, id), meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
   const ctx = path.join(dir, 'ctx'), present = fs.existsSync(path.join(ctx, 'findings.json'));
   const { github, core, posted } = fakeGithub({ headSha: meta.head });
   const context = { repo: { owner: 'local', repo: 'eval' }, serverUrl: 'https://github.com', payload: { pull_request: { number: 1, head: { sha: meta.head }, base: { sha: meta.base } } } };
-  const env = { CTX: ctx, HEAD_SHA: meta.head, BASE_SHA: meta.base, GITHUB_WORKSPACE: meta.repo, SKIP: String(!!meta.skip), PARTIAL: String(!!meta.partial), MAX_COMMENTS: '10', ENGINE: 'local', MODEL: '', STANDARDS_REF: 'head', STANDARDS_CHECKS: '' };
+  const env = { CTX: ctx, HEAD_SHA: meta.head, BASE_SHA: meta.base, GITHUB_WORKSPACE: meta.repo, SKIP: String(!!meta.skip), PARTIAL: String(!!meta.partial), MAX_COMMENTS: '10', ENGINE: engine, MODEL: model, STANDARDS_REF: 'head', STANDARDS_CHECKS: '' };
   const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
   Object.assign(process.env, env);
   try { await require('../src/post.js')({ github, context, core }); }
@@ -104,20 +112,84 @@ async function finishReal({ ids, out, log = console.log }) {
   return rows;
 }
 
+// ---- the real engine (eval/replay-workflow.yml) ----
+// Manifest entry -> { id, repo, number, base, head, title, body }. holdout-pairs.json: the INTRODUCING PR of a replay_eligible pair; holdout-clean.json: a clean PR.
+function entries(manifestPath) {
+  const j = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (j.pairs) return j.pairs.filter((p) => p.replay_eligible).map((p) => ({ id: p.replay_id, repo: p.repo, number: p.introducing.number, base: p.introducing.base, head: p.introducing.head, title: p.introducing.pr_title, body: p.introducing.pr_body, fix: p.fix.number }));
+  return j.clean.map((c) => ({ id: c.id, repo: c.repo, number: c.number, base: c.base, head: c.head, title: c.pr_title, body: c.pr_body }));
+}
+
+// Seeded sample (mulberry32 shuffle), so "12 clean PRs" is the same 12 on every run.
+function sample(list, n, seed = 1) {
+  let a = seed >>> 0; const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const l = [...list]; for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; }
+  return l.slice(0, n);
+}
+
+// What action.yml's engine step does for engine=claude, claude_mode=api: src/engines/claude.sh with the same env (the prompt is the one prepareReal wrote with src/prompt.js's assembler).
+function runEngine({ dir, ctx, model, budget, maxOutput, timeout }) {
+  const env = { ...process.env, CTX: fwd(ctx), PROMPT_FILE: fwd(path.join(dir, 'prompt.md')), ENGINE: 'claude', CLAUDE_MODE: 'api', CLAUDE_VERSION: '', MODEL: model, MAX_BUDGET_USD: budget, MAX_OUTPUT_TOKENS: maxOutput, TIMEOUT: timeout, EFFORT: '' };
+  delete env.GH_TOKEN; delete env.GITHUB_TOKEN;
+  const r = spawnSync('bash', [fwd(path.join(ROOT, 'src', 'engines', 'claude.sh'))], { cwd: dir, encoding: 'utf8', env, maxBuffer: 1 << 28 });
+  fs.writeFileSync(path.join(dir, 'engine.log'), `${r.stdout || ''}${r.stderr || ''}`.replace(/sk-ant-[\w-]+/g, '***'));
+  return r.status;
+}
+
+const readJson = (p, d = null) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return d; } };
+
+// prepare -> real engine -> finish (real post.run) -> <out>/<id>/result.json. `engine` is injectable for tests.
+async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget = '1.00', maxOutput = '32000', timeout = '12', trace = 'auto', engine = runEngine }) {
+  const meta = prepareReal({ repoDir, base: entry.base, head: entry.head, prTitle: entry.title, prBody: entry.body, out, id: entry.id, trace, shared: true });
+  const dir = path.resolve(out, entry.id), ctx = path.join(dir, 'ctx');
+  const result = { id: entry.id, repo: entry.repo, pr: entry.number, base: meta.base, head: meta.head, trace, model, files: meta.files, spec_files: meta.spec_files, collect_ok: meta.collect_ok, skip: meta.skip, partial: meta.partial };
+  if (meta.collect_ok && !meta.skip) engine({ dir, ctx, model, budget, maxOutput, timeout });
+  const sf = path.join(ctx, 'engine-status'), status = fs.existsSync(sf) ? fs.readFileSync(sf, 'utf8').trim() : 'success';
+  result.engine_status = meta.skip ? 'skipped' : !meta.collect_ok ? 'collect_failed' : status;
+  result.engine_notes = readLines(path.join(ctx, 'engine-notes'));
+  const u = readJson(path.join(ctx, 'usage.json'), {}), u2 = readJson(path.join(ctx, 'usage-repair.json'), {});
+  result.usage = { cost_usd: (u.totalCostUsd || 0) + (u2.totalCostUsd || 0), model: u.currentModel || null, metrics: u.modelMetrics || null };
+  const row = await finishRealOne(entry.id, out, { engine: 'claude', model });
+  const posted = readJson(path.join(dir, 'posted.json'), { comments: [] });
+  const f = (where) => (x) => ({ where, kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null });
+  result.findings = [...posted.comments.map(parseComment).filter(Boolean).map(f('inline')),
+    ...summaryItems(fs.readFileSync(path.join(dir, 'summary.md'), 'utf8')).map((x) => ({ ...f('summary')(x), why: x.why || '' }))];
+  result.counts = { inline: row.inline.total, summary_only: row.summary_only, pre_existing: row.pre_existing };
+  fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 2) + '\n');
+  return result;
+}
+
 const USAGE = `Usage:
   node eval/replay.js prepare --repo DIR --base SHA --head SHA --out DIR --id ID [--title T] [--body B] [--trace auto|off] [--shared]
   node eval/replay.js finish  --id ID[,ID...] --out DIR
-No pass/fail: findings are adjudicated by a human against the later fix (eval/replay/README.md).`;
+  node eval/replay.js plan    --manifest FILE [--ids a,b] [--sample N --seed S]     prints the matrix JSON [{id, repo}]
+  node eval/replay.js run     --manifest FILE --id ID --repo DIR --out DIR [--model M] [--budget USD] [--max-output N] [--timeout MIN] [--trace auto|off]
+                              prepare -> real src/engines/claude.sh (needs ANTHROPIC_API_KEY) -> finish -> <out>/<id>/result.json
+No pass/fail: findings are adjudicated by a human against the later fix (eval/replay/README.md, "Running on the real engine").`;
 
 async function main() {
   const { values: o, positionals } = require('node:util').parseArgs({ allowPositionals: true, options: {
     repo: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' }, out: { type: 'string' }, id: { type: 'string' },
-    title: { type: 'string', default: '' }, body: { type: 'string', default: '' }, trace: { type: 'string', default: 'auto' }, shared: { type: 'boolean' }, help: { type: 'boolean' } } });
+    title: { type: 'string', default: '' }, body: { type: 'string', default: '' }, trace: { type: 'string', default: 'auto' }, shared: { type: 'boolean' }, help: { type: 'boolean' },
+    manifest: { type: 'string' }, ids: { type: 'string' }, sample: { type: 'string' }, seed: { type: 'string', default: '1' },
+    model: { type: 'string', default: 'claude-haiku-5-5' }, budget: { type: 'string', default: '1.00' }, 'max-output': { type: 'string', default: '32000' }, timeout: { type: 'string', default: '12' } } });
   const [cmd] = positionals;
+  if (cmd === 'plan' && o.manifest) {
+    let l = entries(o.manifest);
+    if (o.ids) l = o.ids.split(',').map((id) => l.find((e) => e.id === id) || (() => { throw new Error(`no such id: ${id}`); })());
+    else if (o.sample) l = sample(l, +o.sample, +o.seed);
+    return console.log(JSON.stringify(l.map(({ id, repo }) => ({ id, repo }))));
+  }
+  if (cmd === 'run' && o.manifest && o.id && o.repo && o.out) {
+    const entry = entries(o.manifest).find((e) => e.id === o.id);
+    if (!entry) throw new Error(`no such id: ${o.id}`);
+    const r = await runReal({ entry, repoDir: o.repo, out: o.out, model: o.model, budget: o.budget, maxOutput: o['max-output'], timeout: o.timeout, trace: o.trace });
+    return console.log(`${r.id}: ${r.engine_status} inline=${r.counts.inline} summary=${r.counts.summary_only} cost=$${r.usage.cost_usd}`);
+  }
   if (o.help || !['prepare', 'finish'].includes(cmd) || !o.out || !o.id) { console.log(USAGE); process.exit(o.help ? 0 : 2); }
   if (cmd === 'prepare') console.log(JSON.stringify(prepareReal({ repoDir: o.repo, base: o.base, head: o.head, prTitle: o.title, prBody: o.body, out: o.out, id: o.id, trace: o.trace, shared: o.shared }), null, 2));
   else await finishReal({ ids: o.id.split(','), out: o.out });
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { prepareReal, finishReal, finishRealOne, countFindings, table };
+module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal };

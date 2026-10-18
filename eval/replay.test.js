@@ -93,3 +93,19 @@ test('prepareReal shared:true checks out head and borrows objects via alternates
   assert.strictEqual(git(repo, 'rev-parse', 'HEAD'), head);
   assert.ok(fs.readFileSync(path.join(repo, '.git', 'objects', 'info', 'alternates'), 'utf8').includes('src-repo'));
 });
+
+test('runReal: injected engine -> result.json with status, cost and counts; entries/sample read the holdout manifests', async () => {
+  const { runReal, entries, sample } = require('./replay.js');
+  const { d, base, head } = mkRepo();
+  const engine = ({ ctx, model }) => { fs.writeFileSync(path.join(ctx, 'engine-status'), 'failed\n'); fs.writeFileSync(path.join(ctx, 'usage.json'), JSON.stringify({ totalCostUsd: 0.07, currentModel: model })); };
+  const r = await runReal({ entry: { id: 'rr1', repo: 'o/r', number: 5, base, head, title: 'Raise limit', body: 'limit is 5' }, repoDir: d, out: path.join(tmp, 'out-run'), engine });
+  assert.strictEqual(r.engine_status, 'failed');
+  assert.strictEqual(r.usage.cost_usd, 0.07);
+  assert.strictEqual(r.counts.inline, 0);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(tmp, 'out-run', 'rr1', 'result.json'), 'utf8')).id, 'rr1');
+  const bugs = entries(path.join(__dirname, 'replay', 'holdout-pairs.json'));
+  assert.strictEqual(bugs.length, 12);
+  assert.ok(bugs.every((e) => e.base && e.head && e.title));
+  assert.strictEqual(entries(path.join(__dirname, 'replay', 'holdout-clean.json')).length, 12);
+  assert.deepStrictEqual(sample([1, 2, 3, 4, 5], 3, 7), sample([1, 2, 3, 4, 5], 3, 7));
+});
