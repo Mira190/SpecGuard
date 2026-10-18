@@ -202,3 +202,16 @@ Simulation (2000 runs per cell, no run-level effect modelled, so optimistic): ar
 So 12 reps is a planning estimate that detects +3 with about 80% power, not +2; +1 is out of reach even at 20 reps. Use the PR-cluster bootstrap CI above for the headline, not a Wilson interval on pooled PR-runs.
 
 Caveats: public repos (contamination possible, new fixes are recent but the model may still have seen them), one automated grader, confirmation and control calls by subagents, n = 45 is the minimum for a rate and the interval is still wide (11%-35%), tuned engine settings are those of main at run time. Total run cost $10.63 (135 bug runs $6.27, 153 clean runs $4.36); the cost guide of about $10 was exceeded by $0.63 because the control adjudication required 16 more no_known_bug PRs.
+
+### Delivery experiment V1/V2 (holdout 2, raw answers)
+
+Not adopted. Offline paired arms (`node eval/replay-arms.js --engine mock-replay --arm V1=EXP_LOWCONF_VISIBLE=1 --arm V2=EXP_LOWCONF_VISIBLE=2`; arm A = main) on the raw answers of 45 bug PRs x 3 reps and the no_known_bug controls. Faithfulness gate: arm A matched the real summaries on status, headline and counts in 288/288 PR-runs.
+
+| pre-registered rule | needed | V1 | V2 |
+|---|---|---|---|
+| visible catch events, 45 bug PRs x 3 reps | >= +5 | +1 | +3 |
+| visible catch events, 33 PRs new in holdout 2 | >= +4 | +1 | +1 |
+| TP lost | 0 | 0 | 0 |
+| visible noise per no_known_bug control PR-run | - | +0 | +0.06 |
+
+Cause: the real catches sit in Details because post.js gates any missing_test/weak_test whose candidate test file was only partly visible (the `seen` check over the candidate tests); V2 excludes gated findings by design. Example: vitest-7878, whose only candidate test is a browser fixture matched by "mentions changed `indexOf`". Next: H3 (`prereg-h3.md`).
