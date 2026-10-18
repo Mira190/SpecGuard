@@ -1463,6 +1463,15 @@ test('run: scan_scope all with eligible files the inventory never reached (over 
   assert.equal(ok.calls.outputs.status, 'complete', 'files excluded by scan_paths or NOT_UNIT are not eligible: nothing to count');
 });
 
+test('run: scan_scope all with admissible documents past the 60-document limit is incomplete with the count; outside scan_scope all it stays complete (listed as not admitted)', async (t) => {
+  const ctxFiles = { ...UFILES, 'audit-inventory.json': invOf([urow(UID, { path: 'src/plan.js', tests: [] })]), 'findings.json': result(), ...ALL, 'audit-meta.json': { ...ALL['audit-meta.json'], docs_over_cap: 3 } };
+  const r = await runPost(t, { ctxFiles });
+  assert.equal(r.calls.outputs.status, 'incomplete');
+  assert.match(r.calls.outputs.reason, /3 requirement documents over the \d+-document limit were not reviewed/);
+  const sel = await runPost(t, { ctxFiles: { ...ctxFiles, 'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, limitations: [] }, 'scan-parts.json': {} } });
+  assert.equal(sel.calls.outputs.status, 'complete');
+});
+
 test('validate: unit_findings that is not an array makes every listed unit invalid (not reviewed); a valid empty array is "no findings"', async (t) => {
   const units = new Map([[UID, { id: UID }], [A1, { id: A1 }]]);
   const bad = clone(result([req()], { unit_findings: 'none' })), good = clone(result([req()], { unit_findings: [] }));
