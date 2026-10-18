@@ -28,4 +28,8 @@ Newly visible control findings, adjudicated as plausible gap vs noise; per categ
 
 ## Limitation
 
-Same PRs as the exploratory data, new model samples only.
+This is a RETEST on the same fixed PR set (the exploratory data above, incl. vitest-7878); only the model sampling is new. It cannot show generalisation. Passing it is not grounds to adopt G.
+
+Adoption needs a fresh holdout: PRs and projects not used for tuning or for any earlier arm, scored per PR (reps are not independent PRs: aggregate reps within a PR, then count PRs, with a PR-cluster bootstrap CI).
+
+Before running, pin and record: the specguard SHA, the manifest(s), the raw answers (run ids + ctx/findings.json), the context pack (pack-cut/pack-shown), and the grading (rubric version + grader output). Any change after the run starts voids it.
