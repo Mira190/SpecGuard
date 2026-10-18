@@ -14,3 +14,7 @@
 /docs/version-eval-2026-10-17/*
 !/docs/version-eval-2026-10-17/report.md
 !/docs/version-eval-2026-10-17/summary.md
+
+# Private cross-repository review evidence: never publish raw transcripts.
+/docs/latest-pr-actions-followup-evidence-2026-10-17.json
+/docs/shift-left-live-review-evidence-2026-10-17.json
