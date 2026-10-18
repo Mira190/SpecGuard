@@ -1,5 +1,7 @@
 # SpecGuard 全面技术评估：Shift Left、目标完成度、近期优化净收益与 Unknown Unknowns
 
+> 历史快照说明（2026-10-18 更新）：本文基于 main `08d2c5b` 及当时的 PR #345 草案。该草案中的 same-test / anchored-regex 确定性降级规则已撤回；修订后的 #345 已合并，改为提示词约束并保留反例测试。文中对此旧方案的风险分析是历史记录，不代表当前 main 仍包含该规则。后续 #351 又补充了需求版本发布检查、同一调用门控及 base retarget 测试行为；本报告不替代这些提交的最新验收。
+
 > **审查截点：2026-10-18（Australia/Sydney）。** 仓库 [`Mira190/SpecGuard`](https://github.com/Mira190/SpecGuard)；默认分支 `main`；审查的实际主线 SHA 为 [`08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c`](https://github.com/Mira190/SpecGuard/tree/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c)。PR #345 在截点仍为 OPEN，**不能计入 main**；#334 也仍开放。最新主线 [CI #39085373622](https://github.com/Mira190/SpecGuard/actions/runs/39085373622) 成功。本文只读取远程 repo、PR、Actions/jobs/logs、仓库内评测与代码；**没有重新发起模型调用或独立复刻第三方仓库实验，分析阶段未修改产品代码；本文后续作为独立 docs-only 提交，不改变审查截点**。下文明确区分“本轮直接核对”“维护者实验记录”“推论/待证伪”。
 
 ## 0. 执行摘要与决策
