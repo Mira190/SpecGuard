@@ -16,7 +16,7 @@ if (STATUS === 'incomplete' && CONFIG.includes(cls)) { // a multi-part scan wher
   process.exit(1);
 }
 const json = (n) => { try { return JSON.parse(ctxFile(n)) || {}; } catch { return {}; } };
-// scan_scope all (the collector says so in audit-meta.json): red only when something was NOT reviewed, i.e. parts or blocks not reached (budget, deadline), a failed call (scan-parts.json) or blocks the model was sent twice and never answered (audit-unanswered.json, audit-post.js);
+// scan_scope all (the collector says so in audit-meta.json): red only when something was NOT reviewed, i.e. parts or blocks not reached (budget, deadline), a failed call (scan-parts.json) or blocks the model was sent and did not answer (possibly after one retry) (audit-unanswered.json, audit-post.js);
 // unsure verdicts on reviewed code (part of the tests, forced units, pack cuts) stay warnings
 const unreviewed = () => {
   if (json('audit-meta.json').scan_scope !== 'all') return '';
