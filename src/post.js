@@ -1566,9 +1566,11 @@ async function run({ github, context, core }) {
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
   const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')[0])); // a scan's lines carry "\tunit ids" (audit-post.js reads those) // the claude engine's pack: files the model saw only partly or not at all
   if (packCut.size) { // a missing/weak-test claim is only trustworthy when its candidate tests were fully visible
+    // EXP_PARTIAL_GATE=1 (experiment): a cut candidate that never mentions (whole word) the definition enclosing the cited line cannot hold a direct test of it in its hidden part; no name or an unreadable file: still gated (same rule as audit-post.js cutTest)
+    const silentCut = (f, cand) => { if (process.env.EXP_PARTIAL_GATE !== '1') return false; const name = require('./test-map').enclosingName(readFile(f.path) || [], f.line), body = name && readFile(cand); return !!body && !new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(body.join('\n')); };
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
     for (const f of data.findings) {
-      const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
+      const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p) && !(f.kind === 'missing_test' && silentCut(f, p)));
       if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }

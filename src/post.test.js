@@ -4425,3 +4425,29 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
   assert.ok(!('verdict' in none));
   assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
 });
+
+test('EXP_PARTIAL_GATE=1: a cut candidate test gates a missing_test only when it mentions the definition enclosing the cited line; off, no name and an unreadable candidate stay gated; weak_test unchanged', async (t) => {
+  const run = async (cut, { env = '1', named = true, cands = 'src.js\n  other.test.js  (same stem)\n' } = {}) => {
+    const s = setup(t);
+    if (named) fs.writeFileSync(path.join(s.dir, 'src.js'), 'function limitCheck(x) {\nl2\nif (x) {\nl4\nl5\nl6\nl7\nl8\n');
+    fs.writeFileSync(path.join(s.dir, 'other.test.js'), cut === 'mentions' ? "test('limitCheck rejects', () => {});\n" : "test('form values', () => {});\n");
+    track(s, 'src.js', 'other.test.js');
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), cands);
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut === 'missing' ? 'gone.test.js\n' : 'other.test.js\n');
+    if (env) process.env.EXP_PARTIAL_GATE = env; else delete process.env.EXP_PARTIAL_GATE;
+    t.after(() => { delete process.env.EXP_PARTIAL_GATE; });
+    await post(s);
+    return s.calls.summary[0].body;
+  };
+  const gated = (b) => /Low-confidence findings \(1\)/.test(b);
+  assert.equal(gated(await run('silent')), false, 'the cut candidate never mentions limitCheck: not gated');
+  assert.equal(gated(await run('silent', { env: '' })), true, 'off: the gate as before');
+  assert.equal(gated(await run('mentions')), true, 'the cut candidate names it: gated');
+  assert.equal(gated(await run('silent', { named: false })), true, 'no enclosing name: gated');
+  assert.equal(gated(await run('missing', { cands: 'src.js\n  gone.test.js  (same stem)\n' })), true, 'an unreadable cut candidate: gated');
+  const weak = setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', evidence)] }));
+  fs.writeFileSync(path.join(weak.dir, 'ctx', 'pack-cut.txt'), 'test.js\n');
+  process.env.EXP_PARTIAL_GATE = '1'; t.after(() => { delete process.env.EXP_PARTIAL_GATE; });
+  await post(weak);
+  assert.match(weak.calls.summary[0].body, /Low-confidence findings \(1\)/);
+});
