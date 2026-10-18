@@ -74,7 +74,7 @@ function readUnits(txt) {
   return m;
 }
 const ctxUnits = () => { try { return readUnits(fs.readFileSync(path.join(process.env.CTX, 'audit-units.txt'), 'utf8')); } catch { return null; } };
-const UNIT_KINDS = ['missing_test', 'weak_test', 'pushdown'], UNIT_MAX = 60; // kinds of a unit finding; most rows kept from one result
+const UNIT_KINDS = ['missing_test', 'weak_test', 'pushdown'], UNIT_MAX = 60; // kinds of a unit finding; most rows kept per model answer (one call; findings merged from several calls are capped per call)
 // ponytail: a reason saying the block was not looked at is no ruling that it states nothing checkable. Common phrasings only; a reworded dodge still passes (a model-judged check would catch it).
 const UNASSESSED = /\b(?:un(?:assessed|reviewed)|not (?:(?:yet|fully|been) )*(?:assessed|reviewed|evaluated|analy[sz]ed)|(?:needs?|requires?) (?:a )?(?:deeper|further|more|closer) (?:review|assessment|analysis|look))\b/i;
 const MISSING_MAX = 0.2; // more unanswered blocks than this share of the candidates reject the output (the repair turn)
@@ -169,7 +169,7 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     else if (units && !units.has(f.unit)) drop(`unknown unit ${f.unit}; only the listed units may be reviewed`);
     else if (!UNIT_KINDS.includes(f.kind)) { invalid.add(f.unit); drop(`kind must be one of ${UNIT_KINDS.join(', ')}`); }
     else if (!text(f.path) || !Number.isInteger(f.line) || f.line < 1 || !text(f.quote) || !text(f.title)) { invalid.add(f.unit); drop('path, line, quote and title are required'); }
-    else if (keep.length >= UNIT_MAX) { invalid.add(f.unit); drop(`more than ${UNIT_MAX} findings; the rest are ignored`); }
+    else if (keep.filter((k) => callId(k) === callId(f)).length >= UNIT_MAX) { invalid.add(f.unit); drop(`more than ${UNIT_MAX} findings from one call; the rest are ignored`); }
     else keep.push({ unit: f.unit, kind: f.kind, path: f.path, line: f.line, quote: f.quote.slice(0, 200), title: f.title.trim().slice(0, 120), body: text(f.body) ? f.body.trim() : '', skeleton: text(f.skeleton) ? f.skeleton.replace(/\s+$/, '') : '',
       ...(text(f.counterexample) ? { counterexample: f.counterexample.trim().slice(0, 300) } : {}), ...(Array.isArray(f.callKeys) ? { callKeys: f.callKeys.filter(text) } : {}) });
   }
@@ -178,6 +178,8 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
   o.not_reviewed.push(...notes);
   return { ok: true };
 }
+
+const callId = (f) => (Array.isArray(f.callKeys) ? f.callKeys.filter((c) => typeof c === 'string' && c.trim()).join('\u0000') : ''); // the model answer a finding came from: its call's parts; none = one group
 
 // Why the cited evidence cannot carry the status, or ''. A covered row needs a test whose layer fits the class.
 function gap(r) {
@@ -726,7 +728,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const fit = (t) => { if (!t || bytes(t) > room) return ''; room -= bytes(t); return t; };
   const dh = fit(dhead), df = fit(dfoot);
   const more = (title, rs, head, cap = CAP) => (rs.length > cap ? take(`**${title} (${rs.length - cap} more)**\n\n${head}`, rs.slice(cap, cap + MORE), rs.length > cap + MORE ? `
-+${rs.length - cap - MORE} more not listed.
++${rs.length - cap - MORE} more not listed (audit.json has them all).
 ` : '') : '');
   // code-first Details: the riskiest units table, the inventory and how to read it, units not yet reviewed, low-confidence findings
   let cdet = '';
