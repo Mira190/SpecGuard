@@ -316,10 +316,14 @@ function siblingCall(lines, line, quote, counterexample) {
   for (let i = line; i >= 1; i--) if (/\bdescribe(?:\.\w+)?\s*\(/.test(at(i)) && ind(i) < ind(own)) { a = Math.min(a, i); for (let j = line; j <= lines.length; j++) if (ind(j) === ind(i) && /^\s*[})\]]/.test(at(j))) { b = Math.max(b, j); break; } break; }
   // the cited line CALLS a name: a sibling counts only with the same argument text (a parser test on a literal says nothing about the value the cited line passes); a bare reference keeps any call
   const argsOf = (t, n) => { const m = new RegExp(`(?<![\\w$])${n.replace(/\$/g, '\\$')}\\s*\\(`).exec(t); if (!m) return null; let d = 1, j = m.index + m[0].length; const i = j; for (; j < t.length && d; j++) d += t[j] === '(' ? 1 : t[j] === ')' ? -1 : 0; return t.slice(i, j - 1).replace(/\s+/g, ''); };
-  const want = names.map((n) => argsOf(String(quote), n)), call = { test: (t) => names.some((n, k) => { const a = argsOf(t, n); return a !== null && (want[k] === null || a === want[k]); }) };
+  // identical argument text is evidence only when its identifiers are not declared inside either test: `input` in two tests is two values. ponytail: const/let/var, destructuring and plain assignment; callback params and shared setup are not seen (shared = same value).
+  const declared = (span) => new Set(span.flatMap((x) => { const m = /^\s*(?:(?:const|let|var)\s+)?(?:\{([^}]*)\}|\[([^\]]*)\]|([\w$]+))\s*:?=(?!=)/.exec(x); return m ? (m[1] ?? m[2] ?? m[3]).split(',').map((v) => v.split('=')[0].split(':').pop().replace(/[.\s]/g, '')) : []; }));
+  const local = (a, set) => (a.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '').match(/(?<![\w$.])[A-Za-z_$][\w$]*/g) || []).some((x) => set.has(x));
+  const want = names.map((n) => argsOf(String(quote), n)), ownDecl = declared(Array.from({ length: ownEnd - own }, (_, k) => at(own + k)));
   for (let i = a; i <= b; i++) {
-    if (i >= own && i < ownEnd || !call.test(at(i))) continue;
-    const s = startOf(i), span = Array.from({ length: endOf(i) - s }, (_, k) => at(s + k));
+    if (i >= own && i < ownEnd) continue;
+    const s = startOf(i), span = Array.from({ length: endOf(i) - s }, (_, k) => at(s + k)), sib = new Set([...ownDecl, ...declared(span)]);
+    if (!names.some((n, k) => { const x = argsOf(at(i), n); return x !== null && (want[k] === null || (x === want[k] && !local(x, sib))); })) continue;
     if (s !== own && !SKIPPED.test(span.join('\n')) && span.some((x) => !/^\s*(?:\/\/|#|\/?\*)/.test(x) && ASSERTION.test(x))) return i;
   }
   return 0;
