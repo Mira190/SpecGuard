@@ -2248,7 +2248,7 @@ test('M1: every env var post.js reads is mapped in the Action post step (runner-
   const src = fs.readFileSync(path.join(__dirname, 'post.js'), 'utf8');
   const read = new Set([...src.matchAll(/\benv\.([A-Z][A-Z_]+)/g)].map((m) => m[1]));
   const mapped = new Set(Object.keys(postStepEnv()));
-  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA', 'GITHUB_RUN_ATTEMPT', 'GITHUB_EVENT_NAME']); // set by the runner / optional fallback to the event payload
+  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA', 'GITHUB_RUN_ATTEMPT', 'GITHUB_EVENT_NAME', 'EXP_LOWCONF_VISIBLE']); // set by the runner / optional fallback to the event payload; EXP_LOWCONF_VISIBLE: offline experiment switch (eval/replay-arms.js), not an Action input
   assert.ok(read.has('RESOLVE_STALE') && read.has('MAX_COMMENTS'), 'the scan found the known variables');
   assert.deepEqual([...read].filter((k) => !mapped.has(k) && !runner.has(k)), []);
 });
