@@ -1468,8 +1468,8 @@ test('run: scan_scope all with admissible documents past the 60-document limit i
   const r = await runPost(t, { ctxFiles });
   assert.equal(r.calls.outputs.status, 'incomplete');
   assert.match(r.calls.outputs.reason, /3 requirement documents over the \d+-document limit were not reviewed/);
-  const sel = await runPost(t, { ctxFiles: { ...ctxFiles, 'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, limitations: [] }, 'scan-parts.json': {} } });
-  assert.equal(sel.calls.outputs.status, 'complete');
+  const sel = await runPost(t, { ctxFiles: { ...ctxFiles, 'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, docs_over_cap: 1, limitations: [] }, 'scan-parts.json': {} } });
+  assert.equal(sel.calls.outputs.status, 'complete'); assert.doesNotMatch(sel.calls.outputs.reason || '', /document limit/);
 });
 
 test('validate: unit_findings that is not an array makes every listed unit invalid (not reviewed); a valid empty array is "no findings"', async (t) => {
