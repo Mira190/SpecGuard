@@ -1,5 +1,7 @@
 # SpecGuard 深度技术审查：最近更新的净收益、退化风险与下一阶段路线图
 
+> 历史快照说明（2026-10-18 更新）：本文基于 main `08d2c5b` 及当时的 PR #345 草案。该草案中的 same-test / anchored-regex 确定性降级规则已撤回；修订后的 #345 已合并，改为提示词约束并保留反例测试。文中对此旧方案的风险分析是历史记录，不代表当前 main 仍包含该规则。后续 #351 又补充了需求版本发布检查、同一调用门控及 base retarget 测试行为；本报告不替代这些提交的最新验收。
+
 **日期：** 2026-10-18（澳大利亚悉尼时间）  
 **Repository：** [`Mira190/SpecGuard`](https://github.com/Mira190/SpecGuard)（公开仓库）  
 **审查基线：** `main` @ [`08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c`](https://github.com/Mira190/SpecGuard/commit/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c)  
