@@ -203,15 +203,12 @@ So 12 reps is a planning estimate that detects +3 with about 80% power, not +2; 
 
 Caveats: public repos (contamination possible, new fixes are recent but the model may still have seen them), one automated grader, confirmation and control calls by subagents, n = 45 is the minimum for a rate and the interval is still wide (11%-35%), tuned engine settings are those of main at run time. Total run cost $10.63 (135 bug runs $6.27, 153 clean runs $4.36); the cost guide of about $10 was exceeded by $0.63 because the control adjudication required 16 more no_known_bug PRs.
 
-### Delivery experiment V1/V2 (holdout 2, raw answers)
+## Delivery experiment V1/V2 (holdout 2, raw answers): not adopted
 
-Not adopted. Offline paired arms (`node eval/replay-arms.js --engine mock-replay --arm V1=EXP_LOWCONF_VISIBLE=1 --arm V2=EXP_LOWCONF_VISIBLE=2`; arm A = main) on the raw answers of 45 bug PRs x 3 reps and the no_known_bug controls. Faithfulness gate: arm A matched the real summaries on status, headline and counts in 288/288 PR-runs.
-
-| pre-registered rule | needed | V1 | V2 |
-|---|---|---|---|
-| visible catch events, 45 bug PRs x 3 reps | >= +5 | +1 | +3 |
-| visible catch events, 33 PRs new in holdout 2 | >= +4 | +1 | +1 |
-| TP lost | 0 | 0 | 0 |
-| visible noise per no_known_bug control PR-run | - | +0 | +0.06 |
-
-Cause: the real catches sit in Details because post.js gates any missing_test/weak_test whose candidate test file was only partly visible (the `seen` check over the candidate tests); V2 excludes gated findings by design. Example: vitest-7878, whose only candidate test is a browser fixture matched by "mentions changed `indexOf`". Next: H3 (`prereg-h3.md`).
+Offline re-run of the real `src/post.js` on the saved raw model answers (`ctx/findings.json`, 288 PR-runs, no model call) with `replay-arms.js --engine mock-replay --arms A,NAME=ENV=VAL` (arm A = main; any other arm sets one env var for its post.js run, so a publisher experiment needs no replay code). V1/V2 showed low-confidence defect claims in the visible body.
+- Faithfulness gate (arm A reproduces the published summaries): 288/288.
+- V1 changed 2 PR-runs: +1 visible catch event.
+- V2 changed 16 PR-runs (12 bug, 4 control): +3 visible catch events in total (orpc-1766 x2, langchain-33817 x1), +1 on the 33 NEW PRs. Pre-registered bars: +5 total and +4 new, so not met.
+- Control noise +0.06 per no_known_bug PR-run. TP lost 0.
+- Root cause: the Details-only catches are `gated` by the partial-test-visibility gate (`src/post.js`, "a candidate test file was only partly visible"), which V2 deliberately excludes, so V2 cannot surface them.
+- Decision: not adopted; the post.js arms were not merged (PR #366 closed). Next: H3 (`prereg-h3.md`, a retest on the same PR set, not an adoption test).
