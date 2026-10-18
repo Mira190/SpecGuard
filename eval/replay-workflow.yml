@@ -64,5 +64,9 @@ jobs:
           path: |
             out/${{ matrix.pr.id }}/result.json
             out/${{ matrix.pr.id }}/engine.log
+            out/${{ matrix.pr.id }}/summary.md
+            out/${{ matrix.pr.id }}/ctx/engine-model.json
+            out/${{ matrix.pr.id }}/ctx/counts.json
+            out/${{ matrix.pr.id }}/ctx/engine-notes
           retention-days: 3
           if-no-files-found: warn
