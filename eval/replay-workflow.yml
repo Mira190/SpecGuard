@@ -55,6 +55,7 @@ jobs:
           MODEL: ${{ inputs.model }}
           BUDGET: ${{ inputs.budget }}
         run: node sg/eval/replay.js run --manifest "sg/$MANIFEST" --id "$ID" --repo target --out out --model "$MODEL" --budget "$BUDGET"
+      # ctx/findings.json = the raw model answer before the publisher filters it; prompt.md = what the model saw (third-party diff text; Kite is private).
       - if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -66,5 +67,8 @@ jobs:
             out/${{ matrix.pr.id }}/ctx/engine-model.json
             out/${{ matrix.pr.id }}/ctx/counts.json
             out/${{ matrix.pr.id }}/ctx/engine-notes
+            out/${{ matrix.pr.id }}/ctx/engine-error
+            out/${{ matrix.pr.id }}/ctx/findings.json
+            out/${{ matrix.pr.id }}/prompt.md
           retention-days: 3
           if-no-files-found: warn
