@@ -417,6 +417,10 @@ test('author verdicts: per-arm table, noise = (wrong + not important) / verdicts
   assert.deepEqual([r.verdicts[0].fixed, r.verdicts[0].wrong, r.verdicts[0].n, r.verdicts[0].noise], [1, 1, 2, null], 'under the floor: counts, no rate');
   assert.deepEqual([r.verdicts[2].not_important, r.verdicts[2].intentional, r.verdicts[2].n], [1, 1, 2]);
   assert.match(render(r), /## Author verdicts[\s\S]*\| 0 SpecGuard only \| 1 \| 1 \| 0 \| 0 \| 2 \| insufficient data \(need 30 verdicts\) \| n\/a \|/);
+  ds.issue_comments.push(counts(9, S(1), { outcome_valid: true, outcomes: [row('g', 'wrong')] })); // PR 9 is unlabeled: in no arm, but in the all-PRs row
+  r = analyze(ds);
+  assert.deepEqual([r.verdicts[0].n, r.verdicts[2].n, r.verdicts.all.n, r.verdicts.all.wrong], [2, 2, 5, 2]);
+  assert.match(render(r), /\| all PRs with SpecGuard counts \(labelled or not\) \| 1 \| 2 \| 1 \| 1 \| 5 \|/);
   ds.issue_comments = [counts(3, S(30), { outcome_valid: true, outcomes: [...Array.from({ length: 20 }, (_, i) => row(i.toString(16), 'wrong')), ...Array.from({ length: 10 }, (_, i) => row((i + 20).toString(16), 'fixed'))] })];
   r = analyze(ds);
   assert.equal(r.verdicts[0].n, 30);

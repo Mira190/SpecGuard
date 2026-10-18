@@ -249,6 +249,9 @@ function analyze(ds, { labels } = {}) {
     const set = new Set(armPrs(a).map((p) => p.number)), v = oc.filter((o) => o.verdict && set.has(o.pr)), c = Object.fromEntries(VERDICTS.map((k) => [k, v.filter((o) => o.verdict === k).length])), k = c.wrong + c.not_important;
     verdicts[a] = { ...c, n: v.length, noise: v.length >= TARGET.labels ? k / v.length : null, wilson: v.length >= TARGET.labels ? wilson(k, v.length) : null };
   }
+  // Pilot view: every PR with counts, labelled or not (unlabeled pilot PRs are in no arm).
+  { const v = sgOutcomes(ds, new Set(usable.map((p) => p.number))).filter((o) => o.verdict), c = Object.fromEntries(VERDICTS.map((k) => [k, v.filter((o) => o.verdict === k).length])), k = c.wrong + c.not_important;
+    verdicts.all = { ...c, n: v.length, noise: v.length >= TARGET.labels ? k / v.length : null, wilson: v.length >= TARGET.labels ? wilson(k, v.length) : null }; }
   const channels = {};
   for (const d of ['inline', 'summary']) {
     const mine = sgAll.filter((f) => f.delivery === d), m2 = mine.filter((f) => f.arm === 2), v2 = labels ? m2.filter((f) => labels.get(f.fid) === 'valid') : null;
@@ -331,7 +334,7 @@ function render(r) {
   }
   L.push(`| baseline (no AI window) | - | - | - | ${N(r.baseline.median)} | ${N(r.baseline.p75)} | ${r.baseline.n} | - | - |`, '');
   L.push('## Author verdicts (replies on SpecGuard threads)', '', '| Arm | fixed | wrong | intentional | not important | verdicts | author-judged noise | Wilson 95% |', '|---|---|---|---|---|---|---|---|');
-  for (const a of [0, 2]) { const v = r.verdicts[a]; L.push(`| ${ARM[a]} | ${v.fixed} | ${v.wrong} | ${v.intentional} | ${v.not_important} | ${v.n} | ${v.noise == null ? `insufficient data (need ${TARGET.labels} verdicts)` : P(v.noise)} | ${CI(v.wilson)} |`); }
+  for (const [a, name] of [[0, ARM[0]], [2, ARM[2]], ['all', 'all PRs with SpecGuard counts (labelled or not)']]) { const v = r.verdicts[a]; L.push(`| ${name} | ${v.fixed} | ${v.wrong} | ${v.intentional} | ${v.not_important} | ${v.n} | ${v.noise == null ? `insufficient data (need ${TARGET.labels} verdicts)` : P(v.noise)} | ${CI(v.wilson)} |`); }
   L.push('', 'Author-judged noise = (wrong + not important) / all verdicts. Only authors who replied are counted: a sample of reactions, not of all findings.', '');
   L.push('## Fix-through (addressed / all outcomes)', '', '| Tool | PRs | findings | A | Wilson (if independent) | PR-cluster bootstrap 95% |', '|---|---|---|---|---|---|');
   for (const [n, s] of [['SpecGuard (arms 0+2)', r.specguard], ['Native Copilot (arms 1+2)', r.copilot]]) L.push(`| ${n} | ${s.prs} | ${s.findings} | ${P(s.A)} | ${CI(s.wilson_if_independent)} | ${CI(s.cluster_bootstrap_95)} |`);
