@@ -323,10 +323,12 @@ function siblingCall(lines, line, quote, counterexample) {
 // a unit finding that says there is nothing to report
 const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b/i;
 
+// pack-cut.txt lines: "path" (cut for every unit) or "path<TAB>id,id" (cut in the call(s) holding those units, claude-api.js). -> { has(path, unitId) }; a plain Set passed by a caller works the same (it ignores the id).
+const parseCuts = (ls) => { const m = new Map(); for (const l of ls) { const [p, ids] = l.split('\t'); if (m.get(p) === null) continue; if (!ids) m.set(p, null); else m.set(p, new Set([...(m.get(p) || []), ...ids.split(',')])); } return { has: (p, id) => m.has(p) && (m.get(p) === null || id === undefined || m.get(p).has(id)), size: m.size }; };
 function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbol = null, baseline = null, notes, file = () => null, testFile = heuristicTest, dropped = new Set(), gone = new Set(), shown = new Map() }) {
   // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
   const cutTest = (u, c) => {
-    const cutTests = u.tests.filter((t) => packCut.has(t));
+    const cutTests = u.tests.filter((t) => packCut.has(t, u.id));
     if (!cutTests.length) return false;
     const name = enclosingName(file(c.path) || [], c.line), re = name && new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`);
     return !re || cutTests.some((t) => { const body = file(t); return !body || re.test(body.join('\n')); });
@@ -349,8 +351,8 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
     seen.add(fid);
     const skeleton = f.skeleton && placeholder(f.skeleton) ? '' : f.skeleton;
     if (skeleton !== f.skeleton) notes.push(`${at}: skeleton omitted: placeholder`);
-    const past = packCut.has(c.path) && shown.has(c.path) && c.line > shown.get(c.path), // the single call's pack showed only the first N lines of this cut file (pack-shown.txt): the cited line was never seen
-      cut = !!u && (past || (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path))), hit = !cut && f.kind === 'missing_test' && covers ? covers(c, u) : null;
+    const past = packCut.has(c.path, f.unit) && shown.has(c.path) && c.line > shown.get(c.path), // the single call's pack showed only the first N lines of this cut file (pack-shown.txt): the cited line was never seen
+      cut = !!u && (past || (f.kind === 'missing_test' ? cutTest(u, c) :f.kind === 'weak_test' && packCut.has(c.path, f.unit))), hit = !cut && f.kind === 'missing_test' && covers ? covers(c, u) : null;
     let gate = null; // still deterministic, but answered elsewhere: baselines, a symbol hit in some test, a sibling test
     if (!cut && !hit && f.kind === 'missing_test') {
       if (baseline) { gate = `this repository tests through baselines (${baseline.dir}, ${baseline.n} files); check whether a baseline exercises it`; if (!baselineNoted++) notes.push(`${gate}: every missing_test is shown as low confidence`); }
@@ -854,7 +856,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
     return;
   }
   const data = json('findings.json');
-  const units = readUnits(readCtx('audit-units.txt')), inv = json('audit-inventory.json'), pcText = readCtx('pack-cut.txt'), packCutOn = pcText != null, packCut = new Set(lines(pcText)); // pack-cut.txt exists only when the claude engine ran with the pack
+  const units = readUnits(readCtx('audit-units.txt')), inv = json('audit-inventory.json'), pcText = readCtx('pack-cut.txt'), packCutOn = pcText != null, packCut = parseCuts(lines(pcText)); // pack-cut.txt exists only when the claude engine ran with the pack
   const hasCode = units.size > 0 && !!inv && !!inv.rotation && Array.isArray(inv.rows) && Array.isArray(inv.unreviewed); // the collector's code-first part (absent in a run that predates it)
   // scan-parts.json (claude api, a scan split into calls): blocks of a failed call or dropped for the budget were not sent (or not answered): not rejected, not recorded as audited (the state carries their prior status), listed as not audited
   const sp = json('scan-parts.json') || {}, spFailed = Array.isArray(sp.failed) ? sp.failed : [], isCid = (c) => /^[0-9a-f]{8}$/.test(c), spDropped = (Array.isArray(sp.dropped) ? sp.dropped : []).filter(isCid);
@@ -879,8 +881,8 @@ async function main({ github, issueGithub, context, core, date = today() }) {
 
   // TEST_PATHS first: the exact input the collector scoped by; test-paths.txt (PR-mode collect.sh writes it from the same input) is only the fallback, so the two cannot disagree
   const root = process.env.GITHUB_WORKSPACE || process.cwd(), testPaths = process.env.TEST_PATHS || readCtx('test-paths.txt') || '', covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths });
-  const cutUnits = hasCode ? [...units.values()].filter((u) => notSeen.has(u.id) || (packCutOn && (packCut.has(u.path) || u.tests.some((t) => packCut.has(t))))).map((u) => u.id) : [];
-  if (inv) { const testCut = cutUnits.filter((id) => !notSeen.has(id) && !packCut.has(units.get(id).path)); if (testCut.length) inv.forced = [...(Array.isArray(inv.forced) ? inv.forced : []), ...testCut]; } // only the tests were cut: the unit was reviewed, so it is recorded unsure like a forced one and the rotation moves on, instead of looking never reviewed
+  const cutUnits = hasCode ? [...units.values()].filter((u) => notSeen.has(u.id) || (packCutOn && (packCut.has(u.path, u.id) || u.tests.some((t) => packCut.has(t, u.id))))).map((u) => u.id) : [];
+  if (inv) { const testCut = cutUnits.filter((id) => !notSeen.has(id) && !packCut.has(units.get(id).path, id)); if (testCut.length) inv.forced = [...(Array.isArray(inv.forced) ? inv.forced : []), ...testCut]; } // only the tests were cut: the unit was reviewed, so it is recorded unsure like a forced one and the rotation moves on, instead of looking never reviewed
   const checked = verify(data, { tracked: trackedFiles(root), docs: new Set(docs.map(([p]) => p)), cands: sent, units, packCut, blockCuts: sp.blockCuts || {}, covers, testPaths, gone: new Set([...fKeys.keys(), ...dKeys]), shown: new Map(lines(readCtx('pack-shown.txt')).map((l) => l.split('\t')).filter((x) => x[1] > 0).map(([p, n]) => [p, +n])) });
   // A unit is "covered" only when no finding of it was dropped or lowered at any stage (validate, verify, low confidence): otherwise it was seen but inconclusive, tracked as unsure.
   const solid = new Set(checked.unit_findings.filter((f) => !f.low).map((f) => f.unit)), notCut = (u) => !cutUnits.includes(u) && !solid.has(u);
