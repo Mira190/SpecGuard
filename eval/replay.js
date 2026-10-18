@@ -128,13 +128,17 @@ function sample(list, n, seed = 1) {
 }
 
 // What action.yml's engine step does for engine=claude, claude_mode=api: src/engines/claude.sh with the same env (the prompt is the one prepareReal wrote with src/prompt.js's assembler).
-function runEngine({ dir, ctx, model, budget, maxOutput, timeout }) {
-  const env = { ...process.env, CTX: fwd(ctx), PROMPT_FILE: fwd(path.join(dir, 'prompt.md')), ENGINE: 'claude', CLAUDE_MODE: 'api', CLAUDE_VERSION: '', MODEL: model, MAX_BUDGET_USD: budget, MAX_OUTPUT_TOKENS: maxOutput, TIMEOUT: timeout, EFFORT: '' };
+function runEngine({ dir, ctx, repo, model, budget, maxOutput, timeout }) {
+  // GITHUB_WORKSPACE = the prepared checkout: claude-api.js reads the context pack from it (default: cwd = dir, which holds no repo files -> empty pack)
+  const env = { ...process.env, GITHUB_WORKSPACE: fwd(repo || dir), CTX: fwd(ctx), PROMPT_FILE: fwd(path.join(dir, 'prompt.md')), ENGINE: 'claude', CLAUDE_MODE: 'api', CLAUDE_VERSION: '', MODEL: model, MAX_BUDGET_USD: budget, MAX_OUTPUT_TOKENS: maxOutput, TIMEOUT: timeout, EFFORT: '' };
   delete env.GH_TOKEN; delete env.GITHUB_TOKEN;
   const r = spawnSync('bash', [fwd(path.join(ROOT, 'src', 'engines', 'claude.sh'))], { cwd: dir, encoding: 'utf8', env, maxBuffer: 1 << 28 });
   fs.writeFileSync(path.join(dir, 'engine.log'), `${r.stdout || ''}${r.stderr || ''}`.replace(/sk-ant-[\w-]+/g, '***'));
   return r.status;
 }
+
+// An eval must never silently degrade: files changed but the engine saw an empty context pack -> message (the job fails).
+const packGuard = (r) => r.files > 0 && (r.engine_notes || []).some((n) => /^context pack: 0 files/.test(n)) ? `${r.id}: context pack is empty (0 files) although the PR changed ${r.files} file(s); the engine did not read the prepared repo. Result is invalid.` : null;
 
 const readJson = (p, d = null) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return d; } };
 
@@ -143,7 +147,7 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
   const meta = prepareReal({ repoDir, base: entry.base, head: entry.head, prTitle: entry.title, prBody: entry.body, out, id: entry.id, trace, shared: true });
   const dir = path.resolve(out, entry.id), ctx = path.join(dir, 'ctx');
   const result = { id: entry.id, repo: entry.repo, pr: entry.number, base: meta.base, head: meta.head, trace, model, files: meta.files, spec_files: meta.spec_files, collect_ok: meta.collect_ok, skip: meta.skip, partial: meta.partial };
-  if (meta.collect_ok && !meta.skip) engine({ dir, ctx, model, budget, maxOutput, timeout });
+  if (meta.collect_ok && !meta.skip) engine({ dir, ctx, repo: meta.repo, model, budget, maxOutput, timeout });
   const sf = path.join(ctx, 'engine-status'), status = fs.existsSync(sf) ? fs.readFileSync(sf, 'utf8').trim() : 'success';
   result.engine_status = meta.skip ? 'skipped' : !meta.collect_ok ? 'collect_failed' : status;
   result.engine_notes = readLines(path.join(ctx, 'engine-notes'));
@@ -184,6 +188,8 @@ async function main() {
     const entry = entries(o.manifest).find((e) => e.id === o.id);
     if (!entry) throw new Error(`no such id: ${o.id}`);
     const r = await runReal({ entry, repoDir: o.repo, out: o.out, model: o.model, budget: o.budget, maxOutput: o['max-output'], timeout: o.timeout, trace: o.trace });
+    const bad = packGuard(r);
+    if (bad) throw new Error(bad); // result.json is already written and uploaded
     return console.log(`${r.id}: ${r.engine_status} inline=${r.counts.inline} summary=${r.counts.summary_only} cost=$${r.usage.cost_usd}`);
   }
   if (o.help || !['prepare', 'finish'].includes(cmd) || !o.out || !o.id) { console.log(USAGE); process.exit(o.help ? 0 : 2); }
@@ -192,4 +198,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal };
+module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, runEngine, packGuard };
