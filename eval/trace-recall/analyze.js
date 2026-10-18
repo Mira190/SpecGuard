@@ -62,7 +62,7 @@ function analyze(results, cases) {
     'test->code': { code: emptyAgg() },
     'test->req': { requirement: emptyAgg() },
   };
-  const times = [];
+  const times = [], del = { wrong: 0, windows: 0, per_query: [], bytes: [] }; // delivered req->code code windows: wrong = overlaps no expect.code range (incl. alt)
   const vs = results.variants || [];
   if (results.target?.sha && cases.target?.sha && results.target.sha !== cases.target.sha) throw new Error(`results are for target ${results.target.sha}, cases.json pins ${cases.target.sha}`);
   const failed = [];
@@ -76,6 +76,9 @@ function analyze(results, cases) {
       const r2c = v.req_to_code || [], g = groups['req->code'];
       const codeLists = r2c.map((x) => x.code || []), testLists = r2c.map((x) => x.tests || []);
       add(g.code, ex.code.map((loc) => rankOf(codeLists, (it) => overlaps(it, loc, locRanges(loc)))));
+      const win = r2c.flatMap((x) => x.code || []), good = (it) => ex.code.some((loc) => overlaps(it, loc, locRanges(loc)));
+      del.windows += win.length; del.wrong += win.filter((it) => !good(it)).length; del.per_query.push(win.length);
+      if (typeof v.cand_bytes === 'number') del.bytes.push(v.cand_bytes);
       add(g.code_file_level, ex.code.map((loc) => rankOf(codeLists, (it) => it.path === loc.file)));
       add(g.tests, ex.tests.map((t) => rankOf(testLists, (it) => it.path === t)));
     }
@@ -98,6 +101,9 @@ function analyze(results, cases) {
   const out = { variants: vs.length, ok_variants: vs.length - failed.length, failed_variants: failed, cases: new Set(vs.map((v) => v.case)).size, directions: {} };
   for (const [d, kinds] of Object.entries(groups)) { out.directions[d] = {}; for (const [k, a] of Object.entries(kinds)) out.directions[d][k] = finish(a); }
   const s = times.slice().sort((x, y) => x - y);
+  const pq = del.per_query.slice().sort((x, y) => x - y), bs = del.bytes.slice().sort((x, y) => x - y);
+  out.req_to_code_delivery = { queries: pq.length, wrong_windows: rate(del.wrong, del.windows), windows_per_query: { p50: pq.length ? pq[Math.ceil(pq.length * 0.5) - 1] : null, max: pq.length ? pq[pq.length - 1] : null },
+    candidate_bytes: { n: bs.length, p50: bs.length ? bs[Math.ceil(bs.length * 0.5) - 1] : null, max: bs.length ? bs[bs.length - 1] : null } };
   out.runtime_ms = { n: s.length, p50: s.length ? s[Math.ceil(s.length * 0.5) - 1] : null, max: s.length ? s[s.length - 1] : null };
   return out;
 }
@@ -113,6 +119,8 @@ function format(res) {
       lines.push(`  MRR@10 ${m.mrr_at_10.value === null ? '-' : m.mrr_at_10.value.toFixed(3)} (sum ${m.mrr_at_10.sum} over ${m.mrr_at_10.n})  All-required@3 ${pct(m.all_required_at_3)}`);
     }
   }
+  const dv = res.req_to_code_delivery;
+  lines.push('', `req->code delivered code windows: wrong_windows ${pct(dv.wrong_windows)} (overlap no expect.code range), windows per query p50 ${dv.windows_per_query.p50} max ${dv.windows_per_query.max}` + (dv.candidate_bytes.n ? `, trace-candidates.json bytes p50 ${dv.candidate_bytes.p50} max ${dv.candidate_bytes.max} (n=${dv.candidate_bytes.n})` : ', candidate bytes not recorded'));
   lines.push('', `runtime per variant (trace + test candidates): p50 ${res.runtime_ms.p50} ms, max ${res.runtime_ms.max} ms, n=${res.runtime_ms.n} of ${res.variants} variants (only those with both timings)`);
   if (res.failed_variants.length) lines.push(`FAILED: ${res.failed_variants.length} of ${res.variants} variants failed and are scored as misses: ` + res.failed_variants.map((f) => `${f.case}/${f.variant} (${f.status})`).join('; '));
   return lines.join('\n');
@@ -122,9 +130,13 @@ module.exports = { analyze, format, parseTestCandidates };
 
 if (require.main === module) {
   const args = process.argv.slice(2), opt = (n) => { const i = args.indexOf(n); return i < 0 ? null : args.splice(i, 2)[1]; };
+  const only = opt('--only'), group = opt('--group'); // --only id1,id2 ; --group original|holdout (cases flagged "holdout": true)
   const casesFile = opt('--cases') || path.join(__dirname, 'cases.json'), jsonOut = opt('--json');
   const resultsFile = args[0] || path.join(__dirname, 'results.json');
-  const res = analyze(JSON.parse(fs.readFileSync(resultsFile, 'utf8')), JSON.parse(fs.readFileSync(casesFile, 'utf8')));
+  const results = JSON.parse(fs.readFileSync(resultsFile, 'utf8')), cs = JSON.parse(fs.readFileSync(casesFile, 'utf8'));
+  const keep = new Set(cs.cases.filter((c) => (!only || only.split(',').includes(c.id)) && (!group || !!c.holdout === (group === 'holdout'))).map((c) => c.id));
+  results.variants = (results.variants || []).filter((v) => keep.has(v.case));
+  const res = analyze(results, cs);
   console.log(format(res));
   if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(res, null, 1) + '\n');
 }
