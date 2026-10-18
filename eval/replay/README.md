@@ -52,6 +52,10 @@ Only findings on the blamed or fixed lines, or naming the same requirement, coun
 
 - Bugs: `--manifest eval/replay/holdout-pairs.json` replays the introducing PR of every `replay_eligible` pair (12). Clean baseline: `holdout-clean.json` (12). Title, body, base and head come from the manifest, as originally written; the target repo is checked out read-only with full history.
 - `specguard_ref` must contain this runner (it is `eval/` only; `src/` is what is scored). Compare two refs by dispatching twice and diffing the grades.
+- Validity: `result.valid` is true only if collect succeeded and was not skipped, the engine exited 0 (`engine_exit`), `engine_status` is `success`, `findings.json` exists, and (when the PR changed files) the engine notes carry `context pack: N files` with N > 0. Otherwise `invalid_reason` says why and the job fails after writing `result.json`. Invalid runs count as misses in the end-to-end catch rate; conditional catch is over valid runs only.
+- Input parity: the replay serves only the PR title and body. Linked issues are empty (`closingIssuesReferences: []`) and `gh api` returns `[]`, so results are for "PR text only" requirements, not production with linked issues.
+- "inline" means `src/post.js` chose inline against the fake GitHub in `eval/local.js`. It is not a GitHub-accepted comment and nobody saw it.
+- The dispatch input `specguard_ref` runs that ref's code with the API secret. Dispatch only refs you trust (your own branches), never a fork PR ref.
 - Grade `result.json` against the later fix diff with the rubric above. Only `eval/replay/*.json` hold PR metadata; no third-party source is stored or uploaded (artifacts: `result.json`, `engine.log`, 3 days).
 
 ## Contamination caveat
