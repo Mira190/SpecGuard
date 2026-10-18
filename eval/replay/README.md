@@ -57,3 +57,25 @@ Only findings on the blamed or fixed lines, or naming the same requirement, coun
 ## Contamination caveat
 
 All manifests here come from public repos. The model may have seen the later fix in its training data, so older fixes are suspect. Mining prefers fixes from the last few months. Report public and private pilots separately; private-repo results are the headline.
+
+## Experiment 2026-10-18: delivery arms (no change)
+
+Question: can more of the catches reach the PR as inline comments, or does a stronger model catch more? Replay of the 12 holdout bug PRs and 12 clean PRs, 3 repetitions per arm, strict grading by the rubric above. Arms: A haiku-5.5 (main), B `claude-sonnet-5-5` (main), C haiku-5.5 plus a temporary switch that let a non-high-confidence finding on a PR-added line go inline in a reduced review (all other gates kept).
+
+Pre-registered rules: C becomes default if mean inline-delivered catches >= A + 1 and inline comments per clean PR <= 0.25. B becomes the recommended PR-mode model if mean catches >= A + 2, cost <= $0.05/PR and clean-PR findings per PR <= A's. Otherwise no change.
+
+| arm | caught (of 12) | caught and inline | inline / clean PR | findings / clean PR | inline noise on bug PRs (per rep) | cost / PR |
+|---|---|---|---|---|---|---|
+| A | 2.67 (2-3) | 0 | 0.00 | 0.28 | 0.7 | $0.0059 |
+| B | 4.67 (4-5) | 0 | 0.00 | 0.17 | 0 | $0.0998 |
+| C | 2.67 (2-3) | 0 | 0.17 | 0.22 | 5.0 | $0.0061 |
+
+Catch matrix (reps 1/2/3; X = caught): orpc-1766 B XXX; sqlglot-7054 B XXX; sqlglot-7315 B XXX, C ..X; rqlite-2318 A XXX, B .XX, C XX.; rqlite-2313 A XXX, B XXX, C XXX; rqlite-2061 A XX., C XX.. Not caught by any arm: orpc-1846, 1851, 1705, 1718, 1743, sqlglot-7097. Haiku is not stable between identical reps (the earlier baseline's orpc-1766 and sqlglot-7315 catches did not reproduce in any A rep).
+
+Outcome: no change, and the switch was removed. C: inline-delivered catches 0 (needed 1). B passes the catch and clean-noise conditions (4.67 = A + 2, 0.17 <= 0.28) but fails the cost bound ($0.0998/PR against $0.05).
+
+Why C's catches stayed summary-only (C catches: rqlite-2313 x3, rqlite-2318 x2, rqlite-2061 x2, sqlglot-7315 x1). Every one is a `missing_test` finding listed as "reduced review: needs high confidence and two citations" (none says "inline limit", so the REDUCED_INLINE cap did not apply, and dedup only drops repeats of already-posted comments, none here). The cited lines of rqlite-2313/2318 are the blamed lines, which the introducing PR added, so the added-line condition held. What failed is the two-citation gate: `citationsOf` counts the located behaviour plus test evidence or a linked requirement, and a `missing_test` row has no test evidence by definition, so without a requirement link it has one citation and can never go inline in a reduced review, whatever its confidence. rqlite-2061 (cited line next to the blamed one) and sqlglot-7315 (same added region) fit the same reading. This is inferred from the result files and the code, not from per-finding gate logs. Consequence: an inline switch aimed at the confidence gate alone cannot help the dominant finding kind; the citation gate would have to change, which was not pre-registered.
+
+Side finding: tier `normal` does not guarantee a normal review. 9 of the 42 B PRs that had findings still got a reduced review because at least 25% of obligations were degraded by validation (probe: "4 of 9 obligations degraded", status incomplete). Even in B's normal reviews no finding went inline: they are low confidence and low confidence goes to the summary.
+
+Caveats: n = 12 (below the 30 needed for a rate), 3 reps, public repos (contamination possible), one strict grader. The replay workflow now also uploads `summary.md`, `ctx/engine-model.json`, `ctx/counts.json` and `ctx/engine-notes`, so the reason for a reduced review is visible next time.
