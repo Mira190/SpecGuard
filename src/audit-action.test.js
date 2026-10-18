@@ -215,6 +215,12 @@ test('fail-on-error.js: an incomplete run is red only for scan_scope all with fa
     assert.match(unred.stdout, /::error::SpecGuard did not review the whole repository \(scan_scope: all\): 3 document blocks not answered by the model/);
     assert.equal(un(0).status, 0); assert.equal(un(3, true, 'false').status, 0, 'fail_on_error off'); assert.equal(un(3, false).status, 0, 'not scan_scope all');
     assert.match(run(true, 'true').stdout, /::warning::SpecGuard result is incomplete: 20 units were reviewed with only part of their tests/, 'unsure verdicts on reviewed code stay a warning');
+    for (const [k, re] of [['not_inventoried', /2 source files over 512 KiB not inventoried/], ['not_reached_cap', /2 source files past the inventory cap/], ['not_reached_time', /2 source files unread when the inventory time budget ran out/]]) { // the collector's inventory counts: eligible files the model never saw
+      fs.writeFileSync(path.join(dir, 'audit-inventory.json'), JSON.stringify({ [k]: 2 }));
+      const r = run(true, 'true'); assert.equal(r.status, 1, k); assert.match(r.stdout, re);
+      assert.equal(run(true, 'false').status, 0, `${k}: fail_on_error off`); assert.equal(run(false, 'true').status, 0, `${k}: not scan_scope all`);
+      fs.rmSync(path.join(dir, 'audit-inventory.json'));
+    }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

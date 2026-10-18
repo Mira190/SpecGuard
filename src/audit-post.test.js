@@ -884,7 +884,7 @@ test('render: coverage without an issue says to schedule with scan_issue: true; 
   const full = render({ data, candidates: 3, cap: 5, rotation: { rotate: false, state: false, picked: 3, changed: 0, confirming: 0, new: 3, oldest: 0, carried: 0 } });
   assert.doesNotMatch(full, /Schedule with scan_issue|Coverage:/);
   const dropped = render({ data, candidates: 9, cap: 5, stateDropped: 7, rotation: ROT });
-  assert.match(dropped, /the scan issue state keeps at most 600 blocks: 7 older block\(s\) are dropped and will count as never audited/, 'a state cap is visible');
+  assert.match(dropped, /the scan issue state keeps at most 600 blocks \(40000 bytes\): 7 older block\(s\) are dropped and will count as never audited/, 'a state cap is visible');
   const scoped = render({ data, candidates: 9, cap: 5, scope: ['packages/payments/**', '!**/legacy/**'], rotation: ROT });
   assert.match(scoped, /Units reviewed \(scan_paths\): `packages\/payments\/\*\*`, `!\*\*\/legacy\/\*\*`; requirements, tests and evidence are read from the whole repository\./);
 });
@@ -1446,4 +1446,53 @@ test('validate: UNIT_MAX caps the rows kept per model answer (callKeys), not the
   assert.equal(one.unit_findings.length, 65, 'a single answer over 60 keeps 60; another call has its own 60');
   assert.deepEqual(one.invalid_units, ids(10, 60), 'the 10 past the cap are invalid, as today');
   assert.equal(one.not_reviewed.filter((n) => /more than 60 findings from one call/.test(n)).length, 10);
+});
+
+// R3 #1/#2/#5: the scan contract. Unknown is never "no gap"; eligible files that never reached the model make a scan_scope all run incomplete; the issue state always fits the issue.
+const ALL = { 'audit-meta.json': { head: 'abc123', scan_scope: 'all', max_requirements: 0, docs: 0, limitations: [] }, 'scan-parts.json': { scope: 'all', calls: 1, failed: [], dropped: [] } };
+test('run: scan_scope all with eligible files the inventory never reached (over 512 KiB, past the cap, time budget) is incomplete with the count; outside all it stays a limitation', async (t) => {
+  for (const [field, re] of [['not_inventoried', /2 source files over 512 KiB not inventoried/], ['not_reached_cap', /2 source files past the inventory cap/], ['not_reached_time', /2 source files unread when the inventory time budget ran out/]]) {
+    const ctxFiles = { ...UFILES, 'audit-inventory.json': { ...invOf([urow(UID, { path: 'src/plan.js', tests: [] })]), eligible: 3, [field]: 2 }, 'findings.json': result(), ...ALL };
+    const r = await runPost(t, { ctxFiles });
+    assert.equal(r.calls.outputs.status, 'incomplete', field);
+    assert.match(r.calls.outputs.reason, re, field);
+    const sel = await runPost(t, { ctxFiles: { ...ctxFiles, 'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, limitations: [] }, 'scan-parts.json': {} } });
+    assert.equal(sel.calls.outputs.status, 'complete', `${field} outside scan_scope all: shown, not a failure`);
+  }
+  const ok = await runPost(t, { ctxFiles: { ...UFILES, 'audit-inventory.json': { ...invOf([urow(UID, { path: 'src/plan.js', tests: [] })]), eligible: 1 }, 'findings.json': result(), ...ALL } });
+  assert.equal(ok.calls.outputs.status, 'complete', 'files excluded by scan_paths or NOT_UNIT are not eligible: nothing to count');
+});
+
+test('validate: unit_findings that is not an array makes every listed unit invalid (not reviewed); a valid empty array is "no findings"', async (t) => {
+  const units = new Map([[UID, { id: UID }], [A1, { id: A1 }]]);
+  const bad = clone(result([req()], { unit_findings: 'none' })), good = clone(result([req()], { unit_findings: [] }));
+  assert.equal(validate(bad, ONE(), units).ok, true);
+  assert.deepEqual(bad.invalid_units.sort(), [A1, UID].sort());
+  assert.match(bad.not_reviewed.join('\n'), /unit_findings was not an array/);
+  validate(good, ONE(), units);
+  assert.deepEqual(good.invalid_units, []);
+  const r = await runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result([req()], { unit_findings: { unit: UID } }) }, env: { AUDIT_ISSUE: 'true' } });
+  assert.equal(r.calls.outputs.status, 'incomplete');
+  assert.match(r.calls.outputs.reason, /1 unit had a finding that failed validation or verification/);
+  const st = audit.readState(r.calls.created[0].body).blocks.find((b) => b.cid === UID);
+  assert.equal(st.status, 'unsure', 'never covered');
+  assert.doesNotMatch(r.calls.summary, /✅/);
+});
+
+test('state: a 1500 or 3000 unit run keeps the issue body under ISSUE_MAX; gaps and unsure are kept before covered, oldest audited dropped first, the version maps follow, the drop is stated', async (t) => {
+  for (const n of [1500, 3000]) {
+    const rows = Array.from({ length: n }, (_, i) => urow(cid(0x20000 + i), { path: `src/u${i}.js`, tests: [], ver: cid(0x90000 + i) }));
+    const unitsTxt = rows.map((r) => `${r.id}\t${r.path}\t5\twhy\tnone\t-\t${r.ver}\n`).join('');
+    const gapId = rows[n - 1].id, gap = { unit: gapId, kind: 'missing_test', path: 'src/plan.js', line: 2, quote: FILES['src/plan.js'][1], title: 't' };
+    const inv = { ...invOf(rows), rotation: { rotate: true, picked: n, confirming: 0, new: n, oldest: 0, reviewed: n, total: n, run: 1, runs: 1 } };
+    const r = await runPost(t, { ctxFiles: { 'audit-units.txt': unitsTxt, 'audit-inventory.json': inv, 'findings.json': result([req()], { unit_findings: [gap] }), ...ALL, 'audit-meta.json': { ...ALL['audit-meta.json'], rotation: { rotate: true } } }, env: { AUDIT_ISSUE: 'true', SCAN_SCOPE: 'all' } });
+    const issue = r.calls.created[0];
+    assert.ok(issue, `${n}: the issue was written (status ${r.calls.outputs.status})`);
+    assert.ok(Buffer.byteLength(issue.body) <= 64000, `${n}: ${Buffer.byteLength(issue.body)} bytes`);
+    const st = audit.readState(issue.body), ids = new Set(st.blocks.map((b) => b.cid));
+    assert.ok(ids.has(gapId), `${n}: the gap is kept`);
+    assert.ok(st.blocks.length < n);
+    assert.deepEqual(Object.keys(st.versions.uv).filter((k) => !ids.has(k)), [], 'uv holds only kept units');
+    assert.match(issue.body, new RegExp(`${n + 1 - st.blocks.length} older block\\(s\\) are dropped`));
+  }
 });
