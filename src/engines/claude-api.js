@@ -385,7 +385,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
           let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
           res = { status: r.status, ok: r.ok, json, text, retryAfter: parseFloat(r.headers?.get?.('retry-after')) };
         } catch (e) {
-          if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return { timeout: true, lost };
+          if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return { timeout: true, lost: lost + 1 }; // the deadline may fall after the server ran the request: unknown usage, like a reset
           res = { status: 0, ok: false, json: null, text: `network error: ${e?.cause?.code || e?.message || e}` }; lost++;
         }
         if (res.ok) return { res, lost };
