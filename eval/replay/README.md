@@ -103,3 +103,46 @@ What the context pack changed against the diff-only runs above: haiku's catches 
 Lenient sensitivity (borderline findings that name a nearby behaviour but not the defect, not counted): sqlglot-7097 (empty-pattern branch untested, without flags; A reps 1 and 3, D rep 2, B), orpc-1851 (stacked-schema failure path; D rep 2, B), rqlite-2061 (error branch of the update hook; B). Counted with a note: orpc-1718 D rep 3 (names the defect on `procedure-utils.ts`, not on the fixed `router-utils.ts`) and rqlite-2318 B (weak_test on the test file naming the double-quote escaping).
 
 Caveats: n = 12 (below 30), 3 reps, public repos, one strict grader, haiku is not stable between identical reps (A caught 1, 4 and 3 PRs).
+
+## Holdout 2 (n=45 bug PRs, 30 no_known_bug controls)
+
+Why: holdout 1 had 12 replay-eligible bug PRs, too few to see a +1 change when haiku varies by 1-4 catches between identical reps. Holdout 2 is `holdout2-pairs.json` (45 replay-eligible, confirmed, in-scope bug-introducing PRs) and `holdout2-clean.json` (51 clean PRs). `holdout-pairs.json` and the tuning sets (`pairs.json`, `clean.json`) are unchanged and no tuning pair is reused.
+
+How the pairs were built. The 12 eligible pairs of holdout 1 (plus its one oversize confirmed pair) are carried over unchanged; the other 51 of its 69 pairs were already screened out there, and its 6 `confirmed: null` pairs are oversize (over 1200 lines), so that pool was exhausted. New pairs: `node eval/szz.js mine --since 2026-06-01 --gh-repo ...` on nine active public repos: honojs/hono, TanStack/query, trpc/trpc, vitest-dev/vitest (TS), pydantic/pydantic, pydantic/pydantic-ai, langchain-ai/langchain (Python), go-gitea/gitea, cli/cli (Go). The mined pairs were filtered to PR-mapped blame pairs with at least 3 blamed lines, the introducing PR 30-1200 changed lines and at most 40 files, a fix PR of at most 400 changed lines, one pair per introducing PR (139 pairs to review). Each pair was confirmed by reading the fix PR and the introducing PR diff and body, with no SpecGuard output available, using the confirmation and scope rubric above and "when unsure, not confirmed / out". The confirming was done by Sonnet subagents with a strict brief, not by a human, in 7 batches of about 20; notes hold no source quotes. `replay_eligible` additionally requires that the introducing commit on the default branch is the PR's squash commit (changed-file count equals the GitHub PR's). That dropped 3 confirmed in-scope pairs (cli-13449, cli-13723, hono-5373).
+
+Counts. 152 pairs recorded (13 carried over, 139 new). Confirmed 62, of which in scope 49, of which replay-eligible 45. Confirmation rate on the new pairs: 49 of 139 (35%). Eligible per repo: gitea 9, pydantic-ai 7, orpc 6, hono 6, vitest 4, sqlglot 3, rqlite 3, langchain 3, query 2, pydantic 2 (trpc and cli: 0). Category mix of the 45: logic 27, validation 6, boundary 5, error_handling 4, requirement_mismatch 3, pure test gap 0 (a test gap is graded as `indirect`, not mined as a category). Contamination: the 12 carried-over pairs and the new ones are public; new fixes are from 2026-06 onward.
+
+Clean controls. `szz.js clean` sampled seeded non-fix PR-sized commits from the same repos and window. Because a title and label screen is not enough (a clean PR can say "also fixes a crash", or be deps-only), every clean PR in BOTH `holdout-clean.json` and `holdout2-clean.json` now carries `control` and `control_why`, set by reading its body and diff: `no_known_bug`, `mixed_fix` (body or diff fixes something) or `non_code` (deps, lockfile, release, docs, CI only). Holdout 2 clean has 51 PRs: 30 no_known_bug, 4 mixed_fix, 17 non_code (holdout 1 clean: 7 no_known_bug, 5 mixed_fix, 0 non_code, not rerun here). A second sampling round (seed 12, body without fix/bug/crash words, title not chore/ci/docs/deps/release) topped the no_known_bug group up to 30; its mixed and non_code PRs were not replayed. no_known_bug per repo: pydantic-ai 7, vitest 7, gitea 5, hono 3, pydantic 2, query 2, cli 2, trpc 1, langchain 1. Control calls were also made by Sonnet subagents.
+
+### Baseline (haiku-5.5, main `src/`, 3 reps, trace auto, context pack on)
+
+Run on Mira190/Kite from `specguard_ref = eval/expand-holdout` (the manifests had to be in the checkout; `src/` and `eval/replay.js` are identical to main at 9271df2). Validity (all must hold): `collect_ok`, not skipped, `engine_status` success, findings in `result.json` (and `ctx/counts.json` uploaded), and the engine notes show a context pack with more than 0 files. Every run reported a non-empty pack.
+
+| measure | value |
+|---|---|
+| bug PRs / runs attempted / valid | 45 / 135 / 134 (pydantic-ai-6890 rep 3: engine failed, graded miss) |
+| caught (direct + indirect), per rep | 9, 7, 12 (direct 6/5/10, indirect 3/2/2) |
+| caught, mean (min-max) | 9.33 (7-12) of 45 = 20.7%, Wilson 95% 11.4%-34.6% |
+| conditional catch over valid runs | 28 / 134 = 20.9% (end-to-end 28 / 135 = 20.7%) |
+| caught and delivered inline, per rep | 4, 3, 3 (mean 3.33) |
+| PRs caught in 0 / 1 / 2 / 3 of 3 reps | 30 / 7 / 3 / 5 |
+| findings per bug PR-run | 2.04 (0.38 inline) |
+| cost per PR-run | bug PRs $0.0464, clean PRs $0.0285 |
+
+Clean noise, never pooled (valid runs only):
+
+| control | PRs | runs valid / attempted | findings per PR-run | inline per PR-run | runs with any finding |
+|---|---|---|---|---|---|
+| no_known_bug | 30 | 90 / 90 | 0.71 | 0.13 | 36% |
+| mixed_fix | 4 | 12 / 12 | 0.42 | 0.08 | 42% |
+| non_code | 17 | 50 / 51 (langchain-hclean2-3 rep 3: engine failed) | 0.02 | 0.00 | 2% |
+
+Pooling all three would give 0.46 findings per PR-run and hide the difference, so only the no_known_bug row (0.71 findings, 0.13 inline per PR-run) is the noise of a code-changing PR with no known bug. Catch rate by repo (caught reps of 3 per PR): gitea 8/27, rqlite 5/9, pydantic-ai 4/21, hono 4/18, vitest 3/12, sqlglot 2/9, pydantic 1/6, orpc 1/18, langchain 0/9, query 0/6.
+
+Grading: strict, by the rubric above, by Sonnet subagents from the bug cards, fix diffs and finding titles (path, line, where, kind, confidence), then every positive and every borderline miss re-checked against the fix diff by a second pass (2 indirect grades downgraded: query-7005 rep 1, hono-3413 rep 3). Direct grades on orpc-1718, sqlglot-7054, rqlite-2313, pydantic-ai-5020, pydantic-13890 rest on the finding text and bug card, not a full read of the fix diff. One strict grader pass; a human audit of the 28 positives is still open. Per-rep scores differ a lot (7 vs 12): rep 3 caught 5 more than rep 2.
+
+### Power note
+
+Question: what is the smallest change in mean catches that 3 reps per arm can tell apart on these 45 PRs? Method (simple): treat PR i as a Bernoulli with catch probability p_i, estimated by k_i/3 from the 3 reps; the unbiased within-PR variance of one rep is k_i(3-k_i)/6, and summing over PRs gives the variance of one rep's total, V = 3.33 (sd 1.83). The mean of 3 reps has variance V/3; the difference of two 3-rep means, same PRs in both arms, has variance 2V/3, sd 1.49 catches. At 80% power and two-sided alpha 0.05 the minimum detectable difference is 2.8 x 1.49 = 4.2 catches (9.3 percentage points). The observed spread of rep totals (9, 7, 12; sd 2.5) is wider than the 1.83 the model predicts (run-level effects shared by all PRs), and with that sd the figure is about 5.8 catches (13 points). So: with 3 reps a change under about 4 catches (roughly 9-13 points of 45) is not distinguishable from rep noise; the old +1 target is invisible; to see +2 catches you need about 4 times the reps (about 12 per arm) or a paired per-PR test with more PRs. A paired comparison on the same PRs already cancels the between-PR spread, which this estimate assumes. This is an estimate from one 3-rep sample, not a measured power curve.
+
+Caveats: public repos (contamination possible, new fixes are recent but the model may still have seen them), one automated grader, confirmation and control calls by subagents, n = 45 is the minimum for a rate and the interval is still wide (11%-35%), tuned engine settings are those of main at run time. Total run cost $10.63 (135 bug runs $6.27, 153 clean runs $4.36); the cost guide of about $10 was exceeded by $0.63 because the control adjudication required 16 more no_known_bug PRs.
