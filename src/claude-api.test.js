@@ -1603,3 +1603,37 @@ test('unit rooms: each unit finding carries the part keys of the call that retur
   await s.h.go({ GITHUB_WORKSPACE: s.root });
   assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.callKeys), [['aaaaaaaa:1'], ['aaaaaaaa:2']]);
 });
+
+// R3 #6: a network error (status 0) may follow a request the server ran and billed; its usage is unknown, so it is charged at the call's worst case, and the retry needs another worst case under the budget
+const reset = () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } }); };
+const GOOD_USAGE = { input_tokens: 1000, cache_creation_input_tokens: 20000, cache_read_input_tokens: 0, output_tokens: 4000 };
+const worstOf = async (t) => { const h = harness(t, [good()]); await h.go({ MAX_BUDGET_USD: '0.000001' }); return parseFloat(/worst-case cost \$([\d.]+)/.exec(h.file('engine-notes'))[1]); };
+const near = (a, b) => assert.ok(Math.abs(a - b) < 2e-4, `${a} vs ${b}`);
+
+test('network reset then success: both attempts are recorded (the lost one at the call worst case), cost estimated', async (t) => {
+  const W = await worstOf(t), h = harness(t, [reset, good()]);
+  await h.go({ MAX_BUDGET_USD: String(2.5 * W) });
+  assert.equal(h.calls.length, 2);
+  const u = JSON.parse(h.file('usage.json'));
+  near(u.totalCostUsd, api.cost('claude-haiku-5-5', GOOD_USAGE) + W);
+  assert.equal(u.costEstimated, true);
+  assert.match(h.file('engine-notes'), /usage unknown for 1 call/);
+});
+
+test('network reset: the retry is refused when it would exceed the budget; the lost attempt is still charged', async (t) => {
+  const W = await worstOf(t), h = harness(t, [reset, good()]);
+  await h.go({ MAX_BUDGET_USD: String(1.5 * W) });
+  assert.equal(h.calls.length, 1, 'no second request');
+  assert.equal(h.file('engine-status'), 'failed');
+  const u = JSON.parse(h.file('usage.json'));
+  near(u.totalCostUsd, W); assert.equal(u.costEstimated, true);
+});
+
+test('429 then success: the retry and the charge are unchanged (an HTTP error reply was not run): exact cost, not estimated, even with a budget below two worst cases', async (t) => {
+  const W = await worstOf(t), h = harness(t, [err(429, 'rate_limit_error', 'slow down'), good()]);
+  await h.go({ MAX_BUDGET_USD: String(1.5 * W) });
+  assert.equal(h.calls.length, 2);
+  const u = JSON.parse(h.file('usage.json'));
+  assert.equal(u.costEstimated, undefined);
+  near(u.totalCostUsd, api.cost('claude-haiku-5-5', GOOD_USAGE));
+});
