@@ -1409,3 +1409,14 @@ test('R2 run: a finding past the lines of a cut file the single call was shown i
   assert.match((await run(3)).calls.summary, /line 3 is past the 2 lines of the file the model was shown/);
   assert.doesNotMatch((await run(2)).calls.summary, /is past the/);
 });
+
+test('unit provenance: a missing_test citing another unit\'s file, a test not listed for the unit, or a unit absent from the call is dropped; the unit\'s own file is kept', async (t) => {
+  const A = 'aaaaaaaa', B = 'bbbbbbbb', body = ['function a() {}', 'function b() {}'];
+  const units = { 'audit-units.txt': `${A}\tlib/a.js\t5\twhy\ttest/a.test.js\t-\tabcdef12\t-\n${B}\tlib/b.js\t5\twhy\ttest/b.test.js\t-\tabcdef12\t-\n`, 'audit-inventory.json': invOf([urow(A, { path: 'lib/a.js' }), urow(B, { path: 'lib/b.js' })]) };
+  const f = (over) => ({ unit: A, kind: 'missing_test', path: 'lib/a.js', line: 1, quote: body[0], title: 'No test', skeleton: 'it("x", () => {});', callKeys: [A], ...over });
+  const run = (over) => runPost(t, { files: { 'lib/a.js': body, 'lib/b.js': body, 'test/a.test.js': ['it("a", () => { assert.ok(a()); });'], 'test/b.test.js': ['it("b", () => { assert.ok(b()); });'] }, ctxFiles: { ...units, 'scan-parts.json': { calls: 2, failed: [], dropped: [] }, 'findings.json': result([req()], { unit_findings: [f(over)] }) } });
+  assert.match((await run({ path: 'lib/b.js' })).calls.summary, /a missing_test cites another unit's file/);
+  assert.doesNotMatch((await run({})).calls.summary, /another unit's file|not listed|not reviewed in the call/, 'control: its own file');
+  assert.match((await run({ kind: 'weak_test', path: 'test/b.test.js', line: 1, quote: 'it("b", () => { assert.ok(b()); });', counterexample: 'x' })).calls.summary, /weak_test cites a test that is not listed/);
+  assert.match((await run({ callKeys: [B] })).calls.summary, /declared unit was not reviewed in the call/);
+});
