@@ -1650,6 +1650,7 @@ test('429 then success: the retry and the charge are unchanged (an HTTP error re
   const u = JSON.parse(h.file('usage.json'));
   assert.equal(u.costEstimated, undefined);
   near(u.totalCostUsd, api.cost('claude-haiku-5-5', GOOD_USAGE));
+});
 
 test('unit rooms: a unit part whose unit_findings is not an array fails only its own units (not reviewed); the other parts\' findings are kept', async (t) => {
   const s = roomRepo(t);
