@@ -20,7 +20,7 @@ on:
       test_dirs: { description: "Unit-test folders, same format. Empty = found automatically.", required: false, type: string }
       post_to_pr: { description: "PR links only: also post the review on the PR. Off = results stay on this run page.", required: false, type: boolean, default: false }
       model: { description: "Model name passed to the engine (short alias haiku-5.5 or a full id).", required: false, type: string, default: "haiku-5.5" }
-      max_budget_usd: { description: "Claude engine: hard budget in USD per run, at most 20. Empty = the action default (1.00).", required: false, type: string, default: "" }
+      max_budget_usd: { description: "Claude engine: budget in USD per run, at most 20. A ceiling, not a cost: the engine spends only what the parts need (a full scan of a ~500-unit repository cost about $1.5 on haiku-5.5). Empty = the action default (1.00), which a full scan of a large repository exceeds.", required: false, type: string, default: "5" }
       scan_scope: { description: "Scans only: all = review the whole repository in this one run (every unit part and document block, claude engine; incomplete and red when the budget or the time limit stops it, so set max_budget_usd); selected = the riskiest units and the first blocks one run's caps allow.", required: false, type: choice, default: all, options: [all, selected] }
       scan_issue: { description: "Scans only: where the scan's results are kept. none = this run's page only; specguard = a tracking issue in this repository; target = an issue in the scanned repository. This repository is public, so its run pages and issues are visible to anyone.", required: false, type: choice, default: none, options: [specguard, target, none] }
 permissions: {}

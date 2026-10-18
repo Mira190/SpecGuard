@@ -1,9 +1,10 @@
 name: CI
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   push: { branches: [main] }
-concurrency: { group: "ci-${{ github.event.pull_request.number || github.ref }}", cancel-in-progress: true }
+# `edited` (a PR title/body/base edit) re-runs the dogfood review so new acceptance criteria are checked; preflight skips it unless the title/body fingerprint changed. Its own concurrency group (action appended) keeps a body edit from cancelling a push's running test job, and a push from cancelling the edit's review (that one re-runs on the next push anyway).
+concurrency: { group: "ci-${{ github.event.pull_request.number || github.ref }}${{ github.event.action == 'edited' && '-edited' || '' }}", cancel-in-progress: true }
 permissions:
   contents: read
   pull-requests: write
@@ -11,6 +12,7 @@ permissions:
   copilot-requests: write
 jobs:
   test:
+    if: ${{ github.event.action != 'edited' }} # nothing in the code changed
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
