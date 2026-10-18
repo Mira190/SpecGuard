@@ -21,7 +21,7 @@ const PRICES = {
   'claude-opus-5': { in: 5, out: 25 },
 };
 // A reply whose usage lacks input_tokens or output_tokens (or no reply at all: timeout, HTTP failure) may still have been billed: the scan budget charges its part's worst case instead of 0.
-const known = (u) => !!u && typeof u.input_tokens === 'number' && typeof u.output_tokens === 'number', charge = (x) => (known(x.u) ? cost(x.used, x.u) : x.usd || 0);
+const known = (u) => !!u && typeof u.input_tokens === 'number' && typeof u.output_tokens === 'number', charge = (x) => (known(x.u) ? cost(x.used, x.u) + (x.lost || 0) * (x.usd || 0) : Math.max(x.lost || 0, 1) * (x.usd || 0)); // x.lost: attempts of this call that ended in a network error (status 0): the server may have run and billed each one, charged at the call's worst case (x.usd) on top of the reply's known usage
 const DEFAULT_PRICE = { in: 5, out: 25 };
 const priceOf = (model, promptTokens) => { const p = PRICES[model] || DEFAULT_PRICE; return p.longFrom && promptTokens > p.longFrom ? { in: p.longIn, out: p.longOut } : { in: p.in, out: p.out }; };
 const cost = (model, u) => { // u = the API usage object
@@ -372,48 +372,50 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     if (env.CHECK === 'audit' && packBytes === 0) return end('failed', 'config', 'context_pack_bytes=0 sends the model no repository files, so a scan would publish without any source reviewed; use a positive value'); // PR mode keeps 0 = diff only
     const root = () => fs.realpathSync(env.GITHUB_WORKSPACE || process.cwd());
     const deadline = Date.now() + (parseInt(env.TIMEOUT, 10) || 12) * 60000, t0 = Date.now();
-    // One API call with its retries: { timeout } or { res }. Each call asks for plain JSON at most once and retries a transient failure once.
-    const send = async (body) => {
-      let res, retried = false, plain = false;
+    // One API call with its retries: { timeout, lost } or { res, lost }. Each call asks for plain JSON at most once and retries a transient failure once. lost = attempts that ended in a network error (usage unknown, maybe billed):
+    // retrying after one needs the worst case (usd) of every lost attempt plus the new attempt's to fit room() (the budget left for this call); 429 and 5xx replies were not run, so they cost nothing and retry as before.
+    const send = async (body, { usd, room }) => {
+      let res, retried = false, plain = false, lost = 0;
       for (;;) {
         const left = deadline - Date.now();
-        if (left < 1000) return { timeout: true };
+        if (left < 1000) return { timeout: true, lost };
         try {
           const r = await fetchFn(ENDPOINT, { method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': API_VERSION, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(left) });
           const text = await r.text();
           let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
           res = { status: r.status, ok: r.ok, json, text, retryAfter: parseFloat(r.headers?.get?.('retry-after')) };
         } catch (e) {
-          if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return { timeout: true };
-          res = { status: 0, ok: false, json: null, text: `network error: ${e?.cause?.code || e?.message || e}` };
+          if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return { timeout: true, lost: lost + 1 }; // the deadline may fall after the server ran the request: unknown usage, like a reset
+          res = { status: 0, ok: false, json: null, text: `network error: ${e?.cause?.code || e?.message || e}` }; lost++;
         }
-        if (res.ok) return { res };
+        if (res.ok) return { res, lost };
         const m = String(res.json?.error?.message || '');
         if (res.status === 400 && !plain && /schema|output_config|output_format|too complex/i.test(m) && !/credit balance/i.test(m)) { // the structured-output grammar was refused: ask for plain JSON once (post.js validates it)
           plain = true; delete body.output_config; console.error(`claude-api: structured output unavailable (${scrub(m).replace(/\s+/g, ' ').slice(0, 300)}); plain JSON requested`); continue;
         }
         const wait = Number.isFinite(res.retryAfter) ? res.retryAfter : 2;
-        if (!retried && (res.status === 0 || res.status === 429 || res.status >= 500) && wait <= 30 && deadline - Date.now() > wait * 1000 + 1000) { retried = true; await sleep(wait * 1000); continue; }
-        return { res };
+        if (!retried && (res.status === 0 || res.status === 429 || res.status >= 500) && wait <= 30 && deadline - Date.now() > wait * 1000 + 1000 && (res.status !== 0 || (lost + 1) * usd <= room())) { retried = true; await sleep(wait * 1000); continue; }
+        return { res, lost };
       }
     };
     // One call -> { ok: true, found, u, used } or { ok: false, status, reason, why, raw, u? }; u = the API usage object once a reply arrived (paid for even when the answer is unusable).
-    const call = async (system, user, maxTok, prior) => { // prior: the earlier answer with no JSON in it; it is sent back once with a request for the JSON object only
+    const call = async (system, user, maxTok, prior, cap) => { // prior: the earlier answer with no JSON in it; it is sent back once with a request for the JSON object only; cap = { usd, room }: this call's worst case and what the budget leaves for it
       const s = await send({
         model, max_tokens: maxTok,
         ...(system && { system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] }),
         messages: [{ role: 'user', content: user }, ...(prior ? [{ role: 'assistant', content: prior }, { role: 'user', content: REPAIR }] : [])],
         // ponytail: the PR findings schema is too large for the provider's grammar (always a 400), so PR reviews ask for plain JSON, validated by post.js. Scans send their schema.
         ...(audit && { output_config: { format: { type: 'json_schema', schema } } }),
-      });
-      if (s.timeout) return { ok: false, status: 'timeout' };
+      }, cap);
+      const L = s.lost ? { lost: s.lost } : {};
+      if (s.timeout) return { ok: false, status: 'timeout', ...L };
       const res = s.res;
       if (!res.ok) {
         const e = res.json?.error || {}, raw = `HTTP ${res.status || 'none'}${e.type ? ` ${e.type}` : ''}: ${e.message || res.text}`.replace(/\s+/g, ' ');
         const [reason, why] = classify(res.status, e.type, e.message);
-        return { ok: false, status: 'failed', reason, why: reason === 'model' ? `The model '${model}' is not available to this API key (check the model input)` : why || `Anthropic API request failed`, raw };
+        return { ...L, ok: false, status: 'failed', reason, why: reason === 'model' ? `The model '${model}' is not available to this API key (check the model input)` : why || `Anthropic API request failed`, raw };
       }
-      const j = res.json || {}, r = { u: j.usage || {}, used: typeof j.model === 'string' && j.model ? j.model : model };
+      const j = res.json || {}, r = { ...L, u: j.usage || {}, used: typeof j.model === 'string' && j.model ? j.model : model };
       if (j.stop_reason === 'refusal') return { ...r, ok: false, status: 'failed', reason: 'policy', why: 'The model declined to answer (safety refusal)' };
       if (j.stop_reason === 'max_tokens') return { ...r, ok: false, status: 'failed', reason: 'length', why: `The reply hit max_output_tokens (${maxTok}) before the JSON was complete (raise max_output_tokens)` };
       const answer = (Array.isArray(j.content) ? j.content : []).filter((b) => b?.type === 'text').map((b) => b.text).join('');
@@ -424,8 +426,8 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     // usage.json: cost and tokens of every reply received, summed (each priced on its own card)
     const writeUsage = (rs) => {
       const got = rs.filter((x) => x.u);
-      if (!got.length) return;
-      const guessed = rs.filter((x) => !known(x.u));
+      if (!got.length && !rs.some((x) => x.lost)) return;
+      const guessed = rs.filter((x) => !known(x.u) || x.lost);
       const sum = { i: 0, cr: 0, cw: 0, o: 0 }, by = {};
       let usd = 0;
       for (const r of got) {
@@ -436,7 +438,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       usd += guessed.filter((x) => !x.u).reduce((a, x) => a + charge(x), 0); // no reply at all
       if (guessed.length) notes.push(`usage unknown for ${guessed.length} call(s): charged their worst-case reserve`);
       w('usage.json', JSON.stringify({
-        currentModel: got[0].used, totalCostUsd: usd, ...(guessed.length && { costEstimated: true }), totalApiDurationMs: Date.now() - t0,
+        currentModel: got[0]?.used || model, totalCostUsd: usd, ...(guessed.length && { costEstimated: true }), totalApiDurationMs: Date.now() - t0,
         tokenDetails: { input: { tokenCount: sum.i }, cache_read: { tokenCount: sum.cr }, cache_write: { tokenCount: sum.cw }, output: { tokenCount: sum.o } },
         modelMetrics: Object.fromEntries(Object.entries(by).map(([m, usage]) => [m, { usage }])),
       }));
@@ -465,7 +467,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
         if (!queue.length) break;
         const p = queue.shift();
         if (all && spent() + p.usd > budget) { plans.splice(plans.indexOf(p), 1); skippedEx.push(p); continue; } // the hard stop: admitted only while actual spend + its worst case fits
-        const t1 = Date.now(), r = await call(p.system, p.user, p.tokens);
+        const t1 = Date.now(), r = await call(p.system, p.user, p.tokens, undefined, { usd: p.usd, room: () => budget - spent() - (all ? 0 : queue.reduce((a, x) => a + x.usd, 0)) });
         longest = Math.max(longest, Date.now() - t1);
         r.usd = p.usd; // the worst case of this part: what an attempt with unknown usage is charged
         rs.push(r);
@@ -536,11 +538,11 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       return end('failed', 'budget', why);
     }
     if (pack.note) notes.push(pack.note);
-    let r = await call(system, user, maxTokens); r.usd = est.usd; // the worst case of this call: charged when its usage is unknown
+    let r = await call(system, user, maxTokens, undefined, { usd: est.usd, room: () => budget }); r.usd = est.usd; // the worst case of this call: charged when its usage is unknown
     const rs = [r];
     // no JSON in the answer: ask once for the JSON object only, if the budget still covers a second call (length, policy, auth and quota failures are not retried)
     const again = !r.ok && r.answer?.trim() ? worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user) + Buffer.byteLength(r.answer) + REPAIR.length, maxTokens).usd : 0; // the repair call's own worst case
-    if (again && again + charge(r) <= budget) { r = await call(system, user, maxTokens, r.answer); r.usd = again; rs.push(r); }
+    if (again && again + charge(r) <= budget) { const prev = r; r = await call(system, user, maxTokens, prev.answer, { usd: again, room: () => budget - charge(prev) }); r.usd = again; rs.push(r); }
     writeUsage(rs);
     if (!r.ok) return failEnd(r);
     w('findings.json', r.found);
