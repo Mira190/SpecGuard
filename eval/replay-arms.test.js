@@ -68,3 +68,32 @@ test('a usable run is re-posted once per arm from the same raw answer; an arm se
   for (const arm of ['A', 'X']) assert.ok(fs.existsSync(path.join(out, 'run222-' + arm, 'p-1', 'visible.md')));
   assert.strictEqual(process.env.SG_ARMS_TEST, undefined, 'the variable is restored');
 });
+
+test('--engine mock-replay runs the real claude-api engine once on the saved answer; a file cut by a small pack budget lands in the arm ctx and the arm summary says the context was cut', async () => {
+  const d = path.join(tmp, 'repos', 'big'), body = (n) => Array.from({ length: 1200 }, (_, i) => `const value${i} = ${i};`).join('\n') + `\nexports.limit = (n) => n > ${n};\n`;
+  fs.mkdirSync(d, { recursive: true });
+  git(d, 'init', '-q');
+  for (const [k, v] of [['user.name', 't'], ['user.email', 't@example.invalid'], ['commit.gpgsign', 'false']]) git(d, 'config', k, v);
+  w(path.join(d, 'src', 'a.js'), body(3));
+  git(d, 'add', '-A'); git(d, 'commit', '-q', '-m', 'base');
+  const base = git(d, 'rev-parse', 'HEAD');
+  w(path.join(d, 'src', 'a.js'), body(5));
+  w(path.join(d, 'src', 'a.test.js'), 'assert.ok(limit(6));\n');
+  git(d, 'add', '-A'); git(d, 'commit', '-q', '-m', 'head');
+  const head = git(d, 'rev-parse', 'HEAD'), at = { path: 'src/a.js', line: 1201, quote: 'exports.limit = (n) => n > 5;' };
+  const f = findings();
+  f.coverage[0].behaviour = f.coverage[0].change = at; Object.assign(f.findings[0], at);
+  const dl = path.join(tmp, 'dl-mock'), out = path.join(tmp, 'out-mock'), dir = path.join(dl, '333', 'm-1'), logs = [];
+  w(path.join(dir, 'result.json'), JSON.stringify({ id: 'm-1', repo: 'o/big', base, head, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
+  w(path.join(dir, 'ctx', 'findings.json'), JSON.stringify(f));
+  fs.mkdirSync(out, { recursive: true });
+  const saved = process.env.CONTEXT_PACK_BYTES;
+  process.env.CONTEXT_PACK_BYTES = '1000'; // too small for any file: the candidate test is cut
+  try { await score({ dl, repos: path.join(tmp, 'repos'), out, engine: 'mock-replay', log: (m) => logs.push(m) }); }
+  finally { if (saved === undefined) delete process.env.CONTEXT_PACK_BYTES; else process.env.CONTEXT_PACK_BYTES = saved; }
+  assert.ok(!logs.some((m) => /^note:/.test(m)), `exactly one mocked API call (no repair or failure): ${logs.join(' | ')}`);
+  const ctx = path.join(out, 'run333-A', 'm-1', 'ctx'); // the saved dir has no pack-cut.txt: only the engine can have written these
+  assert.ok(fs.readFileSync(path.join(ctx, 'pack-cut.txt'), 'utf8').split('\n').includes('src/a.test.js'));
+  assert.ok(fs.existsSync(path.join(ctx, 'pack-shown.txt')));
+  assert.match(fs.readFileSync(path.join(out, 'run333-A', 'm-1', 'summary.md'), 'utf8'), /Review context was cut: the model saw only part of `src\/a\.test\.js`/);
+});
