@@ -101,7 +101,7 @@ function prepare({ cases, out, trace = 'auto', log = console.log }) {
 
 // A fake GitHub that records what post.js publishes. Nothing leaves the process.
 function fakeGithub({ headSha }) {
-  const posted = { comments: [], reviews: [], summary: null, warnings: [] };
+  const posted = { comments: [], reviews: [], summary: null, warnings: [], outputs: {} };
   const fns = { listFiles: 'files', listReviewComments: 'rc', listComments: 'ic' };
   const github = {
     rest: {
@@ -120,7 +120,7 @@ function fakeGithub({ headSha }) {
   };
   const core = {
     summary: { addRaw() { return this; }, write: async () => {} },
-    warning: (m) => posted.warnings.push(String(m)), info() {}, setFailed: (m) => posted.warnings.push(`setFailed: ${m}`),
+    warning: (m) => posted.warnings.push(String(m)), info() {}, setOutput: (k, v) => { posted.outputs[k] = String(v); }, setFailed: (m) => posted.warnings.push(`setFailed: ${m}`),
   };
   return { github, core, posted };
 }
