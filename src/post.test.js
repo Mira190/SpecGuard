@@ -4392,3 +4392,23 @@ test('tier-only reduced review is a grade by id, not by reason wording', () => {
   assert.match(s([{ id: 'tier', text: 'small model' }]), /Fast-tier model: only high-confidence/, 'rewording the tier text keeps it a grade');
   assert.doesNotMatch(s([{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }]), /Fast-tier model: only high-confidence/, 'control: another reason is not grade-only');
 });
+
+test('author verdicts: only a person\'s reply that starts with a verdict word counts; the last one wins; carried through followUp and the counts line', () => {
+  const U = (login) => ({ login, __typename: 'User' }), B = { login: 'github-actions', __typename: 'Bot' };
+  const th = (...replies) => ({ comments: { nodes: [{ author: B, body: 'x' }, ...replies.map(([a, body]) => ({ author: a, body }))] } });
+  const v = (body, a = U('dev')) => post.verdictOf(th([a, body]), null);
+  for (const [t, k] of [['fixed', 'fixed'], ['Fixed in abc123', 'fixed'], ['wrong: this is guarded upstream', 'wrong'], ['False positive', 'wrong'], ['intentional', 'intentional'], ['by design', 'intentional'], ["won't fix", 'intentional'], ['not important', 'not_important'], ["doesn't matter", 'not_important'], ['nit', 'not_important'], ['specguard: wrong', 'wrong'], ['/specguard intentional', 'intentional'], ['  SpecGuard - fixed', 'fixed']]) assert.equal(v(t), k, t);
+  for (const t of ['I think this is wrong', 'this was fixed earlier', 'Why is this wrong?', 'wrongly flagged', 'nitpick', 'thanks', '']) assert.equal(v(t), null, t);
+  assert.equal(v('wrong', B), null, 'a bot reply is ignored');
+  assert.equal(post.verdictOf(th([U('pat'), 'wrong']), 'pat'), null, 'our own PAT login is ignored');
+  assert.equal(post.verdictOf(th([U('a'), 'wrong'], [U('b'), 'discussion'], [U('a'), 'fixed in abc123']), null), 'fixed', 'last verdict wins');
+  assert.equal(post.verdictOf(undefined, null), null);
+  const fp = 'a'.repeat(40), mine = { author: B, body: `t <!-- specguard:fp=${fp} -->` };
+  const t2 = { isResolved: false, comments: { nodes: [mine, { author: U('dev'), body: 'intentional' }] } };
+  const [rec] = post.followUp({ priors: new Map([[fp, { body: mine.body, path: 'a.js' }]]), survive: new Set(), me: null, headSha: 'HEAD', cwd: '.', threads: [t2] });
+  assert.equal(rec.verdict, 'intentional');
+  assert.equal(rec.outcome, 'not_observed', 'a verdict never changes the outcome');
+  const [none] = post.followUp({ priors: new Map([[fp, { body: mine.body, path: 'a.js' }]]), survive: new Set(), me: null, headSha: 'HEAD', cwd: '.', threads: [{ ...t2, comments: { nodes: [mine] } }] });
+  assert.ok(!('verdict' in none));
+  assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
+});

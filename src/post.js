@@ -1332,8 +1332,8 @@ function renameMaps(base, head, cwd, git = (...a) => execFileSync('git', a, { cw
   return out;
 }
 
-// All review threads (first 300), each { id, isResolved, resolvedBy, comments: { nodes: [first two] } }. Throws on a GraphQL error.
-const THREADS_Q = 'query($o:String!,$r:String!,$n:Int!,$a:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$a){pageInfo{hasNextPage endCursor}nodes{id isResolved resolvedBy{login __typename} comments(first:2){nodes{author{login __typename} body}}}}}}}';
+// All review threads (first 300), each { id, isResolved, resolvedBy, comments: { nodes: [first 30] } }. Throws on a GraphQL error.
+const THREADS_Q = 'query($o:String!,$r:String!,$n:Int!,$a:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$a){pageInfo{hasNextPage endCursor}nodes{id isResolved resolvedBy{login __typename} comments(first:30){nodes{author{login __typename} body}}}}}}}';
 async function fetchThreads({ github, owner, repo, number, maxThreads = 300 }) {
   const nodes = [];
   let after = null;
@@ -1398,6 +1398,17 @@ function testsChanged(from, to, cwd, git = (...a) => execFileSync('git', a, { cw
   } catch { return null; }
 }
 
+// The author's verdict on a finding: the last reply by a person (not us, not a bot) that STARTS with a verdict word, optionally after "specguard:" or "/specguard". Else null.
+const VERDICT = /^\s*(?:\/?specguard\b\s*[:,-]?\s*)?(fixed|wrong|false[ -]positive|intentional|by[ -]design|won'?t[ -]fix|not[ -]important|doesn'?t[ -]matter|nit)(?![\w'])/i;
+const VERDICT_AS = { false_positive: 'wrong', by_design: 'intentional', wont_fix: 'intentional', doesnt_matter: 'not_important', nit: 'not_important' };
+const verdictOf = (th, me) => {
+  let v = null;
+  for (const c of (th?.comments.nodes || []).slice(1)) {
+    const k = c.author?.__typename === 'User' && !ours(c.author, me) && VERDICT.exec(c.body || '')?.[1].toLowerCase().replace(/[ -]/g, '_').replace(/'/g, '');
+    if (k) v = VERDICT_AS[k] || k;
+  }
+  return v;
+};
 // fp -> its review thread (the latest when several share one), for threads whose first comment is ours.
 const threadsByFp = (threads, me) => {
   const m = new Map();
@@ -1424,7 +1435,7 @@ function followUp({ priors, survive, me, headSha, cwd, threads, unseen = () => f
       fp, kind: (/kind: (\w+), confidence/.exec(c.body || '') || [])[1] || c.kind || null, still_reported: survive.has(fp) || (fp.length === 16 && [...survive].some((x) => x.startsWith(fp))),
       anchor_touched: anchorTouched(c.original_commit_id, headSha, c.path, start, end, cwd),
       tests_changed: testsChanged(c.original_commit_id, headSha, cwd),
-      thread: !th ? 'unknown' : !th.isResolved ? 'open' : th.resolvedBy && ours(th.resolvedBy, me) ? 'specguard' : 'human', up: n('+1'), down: n('-1'),
+      thread: !th ? 'unknown' : !th.isResolved ? 'open' : th.resolvedBy && ours(th.resolvedBy, me) ? 'specguard' : 'human', up: n('+1'), down: n('-1'), ...(verdictOf(th, me) && { verdict: verdictOf(th, me) }),
     };
     const oc = outcome(rec);
     out.push(oc === 'addressed' && unseen(c.path) ? { ...rec, outcome: 'not_observed', judged: false } : { ...rec, outcome: oc });
@@ -1874,4 +1885,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, fetchThreads, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
