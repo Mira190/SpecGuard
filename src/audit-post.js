@@ -159,8 +159,8 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
   }
   // unit_findings (code-first): a malformed row is dropped with a note, never a reason to reject the result. A finding must name a listed unit (units: Map from readUnits; null = unknown).
   if (o.unit_findings === undefined || o.unit_findings === null) o.unit_findings = [];
-  if (!Array.isArray(o.unit_findings)) { notes.push('unit_findings was not an array; ignored.'); o.unit_findings = []; }
   const keep = [], invalid = new Set(); // invalid: listed units whose finding failed validation; they were not reviewed, never "no gap"
+  if (!Array.isArray(o.unit_findings)) { notes.push('unit_findings was not an array; every listed unit counts as not reviewed.'); o.unit_findings = []; for (const u of units ? units.keys() : []) invalid.add(u); } // not "no findings": a valid empty array is that. (The claude api engine fails only the call that sent it.)
   for (const [i, f] of o.unit_findings.entries()) {
     const w = `unit_findings[${i}]`, drop = (why) => notes.push(`${w} dropped: ${why}.`);
     if (!f || typeof f !== 'object' || Array.isArray(f)) { drop('not an object'); continue; }
@@ -425,7 +425,7 @@ function track(blocks, prior, head = '') {
 // v4: { head, audits: [[sha7, date]], blocks: [[cid, status, since, runs, index into audits (-1 = unknown)]] }. v3 (no audit dates) and v2 (per-row) still read.
 // Code-first: a unit is a block entry (cid = the unit id: gap = it had a verified finding, covered = it had none; its audit date drives the rotation) and its findings are an optional `f`:
 // [[fid, unit id, since sha7, runs]] (fid = hash of unit id, kind and normalised quote), so a finding is confirmed when the same one was reported in the previous run. Older readers ignore `f`.
-const STATE_MAX = 600, FINDINGS_MAX = 300, ISO_DATE = /^\d{4}-\d\d-\d\d$/; // blocks kept (the covered, longest ago audited go first; a dropped block counts as never audited again)
+const STATE_MAX = 600, STATE_BYTES = 40000, FINDINGS_MAX = 300, ISO_DATE = /^\d{4}-\d\d-\d\d$/; // blocks kept, and the serialized state in bytes (the covered, longest ago audited go first; a dropped block counts as never audited again)
 const FID = (x) => Array.isArray(x) && /^[0-9a-f]{8}$/.test(x[0]) && /^[0-9a-f]{8}$/.test(x[1]) && /^[\w.-]{0,40}$/.test(x[2]) && Number.isInteger(x[3]) && x[3] >= 1 && x[3] <= MAXRUN;
 const findingsOf = (o) => (Array.isArray(o.f) && o.f.length <= FINDINGS_MAX && o.f.every(FID) ? o.f.map(([fid, unit, since, runs, part]) => ({ fid, unit, since, runs, ...(Number.isInteger(part) && part >= 0 && part < 100 ? { part } : {}) })) : []); // an invalid `f` is dropped, not the state; part (optional 5th): the window of a unit reviewed in parts
 // Versions (review F06), optional, ignored by older readers: uv { unit id: version } (audit-units.js: hash of the unit's and its matched tests' blobs when it was reviewed);
@@ -479,24 +479,31 @@ function stateOf(head, data, prior = null, { carried = [], date = today(), code 
     now.push(...held.map((b) => [b.cid, 'gap', b.since, b.runs, at]), ...track(code.picked.filter((cid) => !held.some((b) => b.cid === cid)).map((cid) => ({ cid, status: hit.has(cid) ? 'gap' : inc.has(cid) || parts.has(cid) && parts.get(cid).k + 1 < parts.get(cid).n ? 'unsure' : 'covered' })), prior, head).map((b) => [...b.next, at]));
   }
   const all = carried.concat(code ? code.carried : []);
-  const rank = (b) => (b.status === 'covered' || b.status === 'not_req' ? 1 : 0), when = (b) => (b.at && b.at.date) || '';
-  const old = all.slice().sort((a, b) => rank(a) - rank(b) || (when(a) < when(b) ? 1 : when(a) > when(b) ? -1 : 0)).slice(0, Math.max(0, STATE_MAX - now.length));
+  const ent = (b) => (Array.isArray(b) ? b : [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl]), rank = (e) => (e[1] === 'covered' || e[1] === 'not_req' ? 2 : e[1] === 'unsure' ? 1 : 0), when = (e) => (e[4] && e[4].date) || '';
+  // the state is capped as a whole, this run's entries and the carried ones alike, by entries (STATE_MAX) and serialized bytes (STATE_BYTES, so the issue body fits ISSUE_MAX): gaps and unresolved first, then unsure, then covered; within a class the longest ago audited go first
+  const nowSet = new Set(now), pool = now.concat(all.map(ent)), order = pool.slice().sort((a, b) => rank(a) - rank(b) || (when(a) < when(b) ? 1 : when(a) > when(b) ? -1 : 0));
   const entry = (x) => [x.fid, x.unit, x.since, x.runs, ...(Number.isInteger(x.part) ? [x.part] : [])];
   const fs_ = code ? [...code.findings.map((f) => f.next), ...otherParts.map(entry), ...pf.filter((x) => held.some((b) => b.cid === x.unit)).map(entry), ...pf.filter((x) => !code.picked.includes(x.unit) && !stale.has(x.unit) && code.carried.some((b) => b.cid === x.unit)).map(entry)].slice(0, FINDINGS_MAX) : [];
-  // versions: what each verdict was made against; a carried entry keeps its old version, so it stays stale until it is reviewed again
-  const pv = (prior && prior.versions) || { uv: {}, ev: {} }, kept = new Set(old.map((b) => b.cid)), uv = {}, ev = {}, uc = {}, tv = {};
-  for (const [k, v] of Object.entries(pv.tv || {})) if (kept.has(k)) tv[k] = v; // a carried block keeps the text version it was reviewed at
-  for (const [k, v] of Object.entries(pv.uv)) if (kept.has(k)) uv[k] = v;
-  for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k) && !(code && code.picked.includes(k))) uc[k] = v; // a unit reviewed now gets its cursor from this run
-  for (const [id, p] of parts) if (code.picked.includes(id) && p.k + 1 < p.n) uc[id] = [p.k + 1, p.n]; // the next part; after the last one the cursor is gone
-  for (const [k, v] of Object.entries(pv.ev)) if (kept.has(k)) ev[k] = v;
-  if (code && code.versions) for (const id of code.picked) if (code.versions.get(id)) uv[id] = code.versions.get(id);
-  for (const b of blocksOf(data)) if (tvNow.get(b.cid)) tv[b.cid] = tvNow.get(b.cid); // this run's text version (audit-textver.txt)
-  for (const b of blocksOf(data)) if (b.status === 'covered') ev[b.cid] = b.rows.flatMap((r) => [...r.code, ...r.tests].map((c) => sha8(c.path)));
-  // unanswered once: retried first next run (collector select); unanswered again: stored unsure with this run's date and not retried (the caller names it in the limitations), so rotation moves on
-  const audited = new Set(blocksOf(data).map((b) => b.cid)), un0 = new Set(pv.un || []);
-  const un = [...unanswered].filter((c) => audited.has(c) && !un0.has(c)).concat([...un0].filter((c) => kept.has(c) && !audited.has(c)));
-  return { raw: stateRaw(head, [...now, ...old.map((b) => [b.cid, b.status, b.since, b.runs, b.at, b.top, b.hl])], fs_, { uv, ev, uc, tv, un }), dropped: all.length - old.length };
+  // versions: what each verdict was made against; a carried entry keeps its old version, so it stays stale until it is reviewed again; a dropped entry takes its version, cursor and text version with it
+  const pv = (prior && prior.versions) || { uv: {}, ev: {} };
+  const build = (n) => {
+    const kept = new Set(order.slice(0, n).map((e) => e[0])), uv = {}, ev = {}, uc = {}, tv = {};
+    for (const [k, v] of Object.entries(pv.tv || {})) if (kept.has(k)) tv[k] = v; // a carried block keeps the text version it was reviewed at
+    for (const [k, v] of Object.entries(pv.uv)) if (kept.has(k)) uv[k] = v;
+    for (const [k, v] of Object.entries(pv.uc || {})) if (kept.has(k) && !(code && code.picked.includes(k))) uc[k] = v; // a unit reviewed now gets its cursor from this run
+    for (const [id, p] of parts) if (kept.has(id) && code.picked.includes(id) && p.k + 1 < p.n) uc[id] = [p.k + 1, p.n]; // the next part; after the last one the cursor is gone
+    for (const [k, v] of Object.entries(pv.ev)) if (kept.has(k)) ev[k] = v;
+    if (code && code.versions) for (const id of code.picked) if (kept.has(id) && code.versions.get(id)) uv[id] = code.versions.get(id);
+    for (const b of blocksOf(data)) if (kept.has(b.cid) && tvNow.get(b.cid)) tv[b.cid] = tvNow.get(b.cid); // this run's text version (audit-textver.txt)
+    for (const b of blocksOf(data)) if (kept.has(b.cid) && b.status === 'covered') ev[b.cid] = b.rows.flatMap((r) => [...r.code, ...r.tests].map((c) => sha8(c.path)));
+    // unanswered once: retried first next run (collector select); unanswered again: stored unsure with this run's date and not retried (the caller names it in the limitations), so rotation moves on
+    const audited = new Set(blocksOf(data).map((b) => b.cid)), un0 = new Set(pv.un || []);
+    const un = [...unanswered].filter((c) => kept.has(c) && audited.has(c) && !un0.has(c)).concat([...un0].filter((c) => kept.has(c) && !audited.has(c)));
+    return stateRaw(head, [...now, ...order.filter((e) => !nowSet.has(e))].filter((e) => kept.has(e[0])), fs_.filter((x) => kept.has(x[1])), { uv, ev, uc, tv, un });
+  };
+  let n = Math.min(pool.length, STATE_MAX), raw = build(n);
+  if (bytes(raw) > STATE_BYTES) { let lo = 0, hi = n - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (bytes(build(mid)) <= STATE_BYTES) lo = mid; else hi = mid - 1; } n = lo; raw = build(n); } // the most entries that fit (bytes grow with the count)
+  return { raw, dropped: pool.length - n };
 }
 // Verified unit findings against the previous state: confirmed = the same finding (unit, kind, quote) was reported in the previous run (`!!p`).
 // -> copies with .confirmed and .next, the state entry [fid, unit, first-seen sha7, consecutive runs].
@@ -601,8 +608,9 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const grow = (b) => `| ${link(b.path, b.line, `${b.path}:${b.line}`)} ${cell(b.text, 120)}${b.carried ? `<br><sub>from ${b.at ? cell(b.at.date, 12) : 'an earlier run'}</sub>` : ''} | ${nextStep(b)} |\n`;
   const GTOP = '| Document says | Next step |\n|---|---|\n';
   const clashes = rows.filter((r) => r.status === 'contradicted').map((r) => `| "${cell(r.source.quote, 200)}"<br>${at(r.source)} | "${cell(r.code[0].quote, 200)}"<br>${r.code.map(at).join('; ')} |\n`);
-  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...lg.notes, ...(stateDropped ? [`the scan issue state keeps at most ${STATE_MAX} blocks: ${stateDropped} older block(s) are dropped and will count as never audited`] : [])];
+  const nr = [...(data ? data.not_reviewed : []), ...capLeft, ...limitations, ...lg.notes];
   const unread = data ? docs.filter(([p]) => !data.docs_reviewed.includes(p)).map(([p]) => `\`${p}\` was admitted but is not in docs_reviewed.`) : [];
+  const stateNote = stateDropped ? `the scan issue state keeps at most ${STATE_MAX} blocks (${STATE_BYTES} bytes): ${stateDropped} older block(s) are dropped and will count as never audited (kept first: gaps, then unsure, then covered by most recent audit)` : ''; // shown in the top, which is reserved: the tables below fill the rest of the body and would push a note in Details out
   const nrAll = [...nr, ...unread];
   const where = sha ? ` in the design documents at \`${cell(sha.slice(0, 7), 12)}\`` : ' in the design documents';
   const found = [confirmed.length && `${confirmed.length} gap${confirmed.length === 1 ? '' : 's'} reported in two runs`, fresh.length && (confirmed.length ? `${fresh.length} first reported` : `${plural(fresh.length, 'new gap')} (first report)`)].filter(Boolean).join(', ');
@@ -664,6 +672,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   if (code && data && !failure && partTests.length) top += `**Reviewed with part of their tests** (recorded unsure; the rest of their tests did not fit): ${partTests.slice(0, 5).map((u) => `\`${cell((code.list.get(u) || {}).path || u, 100)}\``).join(', ')}${partTests.length > 5 ? `, +${partTests.length - 5} more` : ''}.\n\n`;
   if (data && !failure && notAudited.blocks.length) top += `**Not audited this run:** ${plural(notAudited.blocks.length, 'document block')} (${[notAudited.failed && `${notAudited.failed} in a call that failed`, notAudited.dropped && `${notAudited.dropped} left out by max_budget_usd`].filter(Boolean).join(', ')}): ${notAudited.blocks.slice(0, 5).map((b) => `\`${cell(b.path, 100)}:${b.line}\``).join(', ')}${notAudited.blocks.length > 5 ? `, +${notAudited.blocks.length - 5} more` : ''}. ${notAudited.blocks.length === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
   if (data && !failure && unanswered > 0) top += `**Not answered by the model:** ${plural(unanswered, 'document block')} (shown as unconfirmed). ${unanswered === 1 ? 'It stays' : 'They stay'} due for the next run.\n\n`;
+  if (stateNote) top += `> **Scan state trimmed:** ${stateNote}.\n\n`;
   if (partial && !failure) top += `> **Incomplete scan.** The rows below passed verification but the list may be incomplete${partial ? ` (${cell(partial, 200)})` : ''}. The scan issue, if enabled, was not updated.\n\n`;
   const items = (a, n, f) => a.slice(0, n).map(f).join('') + (a.length > n ? `- +${a.length - n} more\n` : '');
   // an incomplete or failed scan keeps its reasons visible; a complete one lists them in Details
@@ -917,6 +926,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const leftN = inv && Array.isArray(inv.parts_left) ? inv.parts_left_n ?? inv.parts_left.length : 0; // parts_left lists at most 10; parts_left_n is the true total
   const incomplete = [partial, notAudited.blocks.length && `${plural(notAudited.blocks.length, 'document block')} not audited`, hasCode && unitsFailed && 'the unit call failed', reachedNot.size && `${plural(reachedNot.size, 'unit')} not reached (max_budget_usd)`, partsDropped.length && `${plural(partsDropped.length, 'unit part')} not reached (max_budget_usd)`, partsFailed.length && `${plural(partsFailed.length, 'unit part')} failed`, hasCode && inv && inv.all_parts && Array.isArray(inv.parts_left) && leftN && `${plural(leftN, 'unit part')} not reached (budget)`, // parts_left exists only in a stateless run, which plans every part: a stateful rotation defers parts on purpose and writes none
    
+    ...(meta.scan_scope === 'all' && inv ? [[inv.not_inventoried, 'over 512 KiB not inventoried'], [inv.not_reached_cap, 'past the inventory cap'], [inv.not_reached_time, 'unread when the inventory time budget ran out']].map(([n, w]) => Number.isInteger(n) && n > 0 && `${plural(n, 'source file')} ${w}`) : []), // eligible files (scan_paths and non-unit files are not counted) that never reached the model; outside scan_scope all the Units line and the limitations show them and the run stays complete (a rotation or a PR-sized scan is a sample by design)
     fitN > 0 && `${plural(fitN, 'unit')} did not fit the model's context`, partN > 0 && `${plural(partN, 'unit')} ${partN === 1 ? 'was' : 'were'} reviewed with only part of their tests (recorded unsure)`, dropU.length && `${plural(dropU.length, 'unit')} had a finding that failed validation or verification`, unanswered && `${plural(unanswered, 'document block')} ${unanswered === 1 ? 'was' : 'were'} not answered by the model`].filter(Boolean).join('; ');
   outcome(incomplete ? 'incomplete' : 'complete', incomplete);
   if (issueErr) outcome('failed', issueErr); // the lookup ran before the status was known
