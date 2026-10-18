@@ -120,14 +120,14 @@ Clean controls. `szz.js clean` sampled seeded non-fix PR-sized commits from the 
 
 ### Baseline (haiku-5.5, main `src/`, 3 reps, trace auto, context pack on)
 
-Run on Mira190/Kite from `specguard_ref = eval/expand-holdout` (the manifests had to be in the checkout; `src/` and `eval/replay.js` are identical to main at 9271df2). Validity (all must hold): `collect_ok`, not skipped, `engine_status` success, findings in `result.json` (and `ctx/counts.json` uploaded), and the engine notes show a context pack with more than 0 files. Every run reported a non-empty pack.
+Run on Mira190/Kite from `specguard_ref = eval/expand-holdout` (the manifests had to be in the checkout; `src/` and `eval/replay.js` are identical to main at 9271df2). Valid = the engine succeeded and wrote `findings.json` (an empty findings list is valid); also required: `collect_ok`, not skipped, and a context pack with more than 0 files in the engine notes. Every run reported a non-empty pack.
 
 | measure | value |
 |---|---|
 | bug PRs / runs attempted / valid | 45 / 135 / 134 (pydantic-ai-6890 rep 3: engine failed, graded miss) |
 | caught (direct + indirect), per rep | 9, 7, 12 (direct 6/5/10, indirect 3/2/2) |
-| caught, mean (min-max) | 9.33 (7-12) of 45 = 20.7%, Wilson 95% 11.4%-34.6% |
-| conditional catch over valid runs | 28 / 134 = 20.9% (end-to-end 28 / 135 = 20.7%) |
+| caught, mean (min-max) | 9.33 (7-12) of 45 = 20.7%; 28 caught events (PR-runs) from 15 distinct PRs. CI unit is the PR: Wilson 95% on n = 45 with x = 9.33 (mean per rep, fractional) = 11.4%-34.6%; PR-cluster bootstrap 11.1%-31.1% (use this one). Wilson on pooled 28/135 would be 14.8%-28.3% and is too narrow because the 3 runs of a PR are not independent |
+| conditional catch over valid runs | 28 caught events / 134 valid PR-runs = 20.9% (end-to-end 28 / 135 = 20.7%); descriptive only, PR-runs are clustered by PR |
 | caught and delivered inline, per rep | 4, 3, 3 (mean 3.33) |
 | PRs caught in 0 / 1 / 2 / 3 of 3 reps | 30 / 7 / 3 / 5 |
 | findings per bug PR-run | 2.04 (0.38 inline) |
@@ -145,8 +145,60 @@ Pooling all three would give 0.46 findings per PR-run and hide the difference, s
 
 Grading: strict, by the rubric above, by Sonnet subagents from the bug cards, fix diffs and finding titles (path, line, where, kind, confidence), then every positive and every borderline miss re-checked against the fix diff by a second pass (2 indirect grades downgraded: query-7005 rep 1, hono-3413 rep 3). Direct grades on orpc-1718, sqlglot-7054, rqlite-2313, pydantic-ai-5020, pydantic-13890 rest on the finding text and bug card, not a full read of the fix diff. One strict grader pass; a human audit of the 28 positives is still open. Per-rep scores differ a lot (7 vs 12): rep 3 caught 5 more than rep 2.
 
+### Audit of the baseline grades (event = one PR-run; no model calls)
+
+All 28 caught events and all 90 miss events of the 30 never-caught PRs (plus the 17 miss events of the other caught PRs) were re-read against the fix diffs and the full `summary.md` of the run (inline-linked titles, summary bullets, Details), by fresh Sonnet passes, with my own adjudication of every disagreement. Per-event rows, delivery and reasons are in the scratch directory (`analysis/audit.json`), not in the repo.
+
+| measure | baseline | audited |
+|---|---|---|
+| caught events (PR-runs) | 28 | 30 |
+| distinct PRs caught | 15 | 16 |
+| PRs caught in 0 / 1 / 2 / 3 of 3 reps | 30 / 7 / 3 / 5 | 29 / 7 / 4 / 5 |
+| caught per rep | 9, 7, 12 | 8, 9, 13 (mean 10.0 of 45 = 22.2%, PR-cluster bootstrap 12.6%-32.6%) |
+| direct per rep | 6, 5, 10 | 7, 5, 10 |
+
+Event changes: 24 of the 28 caught events confirmed with the same grade; 2 still caught with a changed grade (rqlite-2318 rep 1 and gitea-32210 rep 3, indirect to direct); 2 downgraded to miss (hono-3604 rep 1, gitea-22610 rep 3); 4 miss events upgraded to indirect (rqlite-2318 rep 2, gitea-28691 reps 2 and 3, hono-3413 rep 3). Two PRs became caught (gitea-28691, hono-3413; the gitea-28691 upgrades are borderline) and one stopped being caught (gitea-22610: the finding named a swallowed request-build error that the fix deletes incidentally, not the fixed timeout, status and size handling). pydantic-13890 rep 3 stays direct on my adjudication (the revert restores the call the finding says was bypassed); the second pass graded it a miss.
+
+Strict rule applied: a bug named only in a Details obligation row (Unconfirmed or needs-a-person status, no published finding) is a miss. Seven such events (vitest-9464 reps 1-3, pydantic-ai-5455 rep 1, sqlglot-7315 rep 2, rqlite-2313 rep 2, rqlite-2061 rep 3) would count under a lenient reading: 37 events, 19 PRs.
+
+Delivery of the 30 audited caught events (judged from where the finding sits in `summary.md`; the `where=summary` label of `result.json` also covers low-confidence findings that exist only in the collapsed Details block):
+
+| delivered | events |
+|---|---|
+| inline | 11 (the inline text names the bug in 5, only a nearby test gap in 6) |
+| summary body (visible) | 4 |
+| collapsed Details only | 15 |
+
+So the earlier "caught and delivered inline 4, 3, 3" is 3, 4, 4 after the audit, and only about a sixth of the caught events (5 of 30) reach a reader as an inline comment that names the bug. Raw inline comment bodies were not uploaded; "names the bug" is judged from the summary entry of the same finding.
+
+### Why the never-caught PRs are missed (30 PRs, first class that applies)
+
+| class | PRs | meaning |
+|---|---|---|
+| a. grading miss | 2 | upgraded by the audit (gitea-28691, hono-3413) |
+| b. found, not delivered | 3 | bug named only in a Details obligation row (vitest-9464, pydantic-ai-5455, sqlglot-7315) |
+| c. bug code not in what the model saw | 3 | main fix site is outside the PR's changed files (vitest-6924, gitea-37365, langchain-33461) |
+| d. in context, model silent | 22 | fix site is in the diff or a changed file |
+
+Method for c: SpecGuard's real collector (`replay.js prepare`, no model) was run for each PR and the fix's removed lines were matched against `prompt.md`; the model also sees every changed file whole through the context pack, so a fix site counts as seen when its file is among the PR's changed files. No PR had a dropped diff (`diff-dropped.txt` empty) and no fix source file is in a pack "not included" list. Focus mode was on in 7 PRs and in each the fix site was in the focused files. Publisher drops are only partly visible because raw `ctx/findings.json` was not uploaded: the Validation notes of `summary.md` show findings dropped as "not counted" on a fix source file in 8 of the 30 PRs (orpc-1851, gitea-30156, gitea-36986, hono-2339, hono-3366, pydantic-ai-1812, langchain-33817, langchain-18592), but their text is lost, so they stay in class d. gitea-22610 (the PR that stopped being caught) is class d as well.
+
+By bug category (a / b / c / d): logic 19 PRs (2 / 3 / 2 / 12), boundary 4 (0 / 0 / 0 / 4), validation 3 (0 / 0 / 0 / 3), requirement_mismatch 2 (0 / 0 / 0 / 2), error_handling 2 (0 / 0 / 1 / 1). By repo (never-caught / a / b / c / d): orpc 5 (0/0/0/5), gitea 5 (1/0/1/3), pydantic-ai 5 (0/1/0/4), hono 4 (1/0/0/3), langchain 3 (0/0/1/2), vitest 3 (0/1/1/1), sqlglot 2 (0/1/0/1), query 2 (0/0/0/2), pydantic 1 (0/0/0/1).
+
+Class d is the bulk. Its causes, from reading the findings: bugs that need a cross-file invariant or intended semantics the PR text does not state (orpc-1846, orpc-1851, gitea-30156, pydantic-ai-6890), domain knowledge (JWT, RFC q-values, git trailers, DOM shadow roots, numpy comparison), and findings spent on adjacent test gaps instead of the defect; one PR (pydantic-ai-3454) got no findings in any rep.
+
 ### Power note
 
-Question: what is the smallest change in mean catches that 3 reps per arm can tell apart on these 45 PRs? Method (simple): treat PR i as a Bernoulli with catch probability p_i, estimated by k_i/3 from the 3 reps; the unbiased within-PR variance of one rep is k_i(3-k_i)/6, and summing over PRs gives the variance of one rep's total, V = 3.33 (sd 1.83). The mean of 3 reps has variance V/3; the difference of two 3-rep means, same PRs in both arms, has variance 2V/3, sd 1.49 catches. At 80% power and two-sided alpha 0.05 the minimum detectable difference is 2.8 x 1.49 = 4.2 catches (9.3 percentage points). The observed spread of rep totals (9, 7, 12; sd 2.5) is wider than the 1.83 the model predicts (run-level effects shared by all PRs), and with that sd the figure is about 5.8 catches (13 points). So: with 3 reps a change under about 4 catches (roughly 9-13 points of 45) is not distinguishable from rep noise; the old +1 target is invisible; to see +2 catches you need about 4 times the reps (about 12 per arm) or a paired per-PR test with more PRs. A paired comparison on the same PRs already cancels the between-PR spread, which this estimate assumes. This is an estimate from one 3-rep sample, not a measured power curve.
+Question: what is the smallest change in mean catches that 3 reps per arm can tell apart on these 45 PRs? Method (simple): treat PR i as a Bernoulli with catch probability p_i, estimated by k_i/3 from the 3 reps; the unbiased within-PR variance of one rep is k_i(3-k_i)/6, and summing over PRs gives the variance of one rep's total, V = 3.33 (sd 1.83). The mean of 3 reps has variance V/3; the difference of two 3-rep means, same PRs in both arms, has variance 2V/3, sd 1.49 catches. At 80% power and two-sided alpha 0.05 the minimum detectable difference is 2.8 x 1.49 = 4.2 catches (9.3 percentage points). The observed spread of rep totals (9, 7, 12; sd 2.5) is wider than the 1.83 the model predicts (run-level effects shared by all PRs), and with that sd the figure is about 5.8 catches (13 points). So: with 3 reps a change under about 4 catches (roughly 9-13 points of 45) is not distinguishable from rep noise; the old +1 target is invisible; to see +2 catches you need about 4 times the reps (about 12 per arm: a planning estimate from the variance model, not a guarantee) or a paired per-PR test with more PRs. The simulation below puts power at 12 reps at about 50% for +2 and 80% for +3. A paired comparison on the same PRs already cancels the between-PR spread, which this estimate assumes. This is an estimate from one 3-rep sample, not a measured power curve.
+
+Simulation (2000 runs per cell, no run-level effect modelled, so optimistic): arm A draws p_i from Beta(k_i+0.5, 3-k_i+0.5) per PR, arm B adds +delta expected catches per rep, spread either proportionally to (1-p_i) or only over the k=0 PRs; test = sign-flip permutation on per-PR mean differences, two-sided alpha 0.05, type I error 3-4%. Power by reps per arm, proportional spread (the k=0-only spread is within 3 points):
+
+| delta (catches per rep) | R=3 | R=6 | R=12 | R=20 |
+|---|---|---|---|---|
+| +1 | 5% | 9% | 16% | 26% |
+| +2 | 14% | 27% | 50% | 72% |
+| +3 | 26% | 50% | 78% | 96% |
+| +4 | 42% | 74% | 96% | 100% |
+
+So 12 reps is a planning estimate that detects +3 with about 80% power, not +2; +1 is out of reach even at 20 reps. Use the PR-cluster bootstrap CI above for the headline, not a Wilson interval on pooled PR-runs.
 
 Caveats: public repos (contamination possible, new fixes are recent but the model may still have seen them), one automated grader, confirmation and control calls by subagents, n = 45 is the minimum for a rate and the interval is still wide (11%-35%), tuned engine settings are those of main at run time. Total run cost $10.63 (135 bug runs $6.27, 153 clean runs $4.36); the cost guide of about $10 was exceeded by $0.63 because the control adjudication required 16 more no_known_bug PRs.
