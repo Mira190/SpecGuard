@@ -158,3 +158,31 @@ test('same id and head but a changed base => a fresh collect (files.txt follows 
   assert.ok((await run(base)).includes('src/a.js'));
   assert.deepStrictEqual(await run(head), ['src/b.js']);
 });
+
+
+test('a CURRENT publisher status of incomplete (here: a cut file) keeps both arms as rows and is not unusable', async () => {
+  const { base, head } = mkRepo(), dl = path.join(tmp, 'dl-inc'), out = path.join(tmp, 'out-inc'), dir = path.join(dl, '777', 'i-1');
+  w(path.join(dir, 'result.json'), JSON.stringify({ id: 'i-1', repo: 'o/proj', base, head, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
+  w(path.join(dir, 'ctx', 'findings.json'), JSON.stringify(findings()));
+  w(path.join(dir, 'ctx', 'pack-cut.txt'), 'src/a.js\n'); // post.js: "Review context was cut" => status incomplete
+  fs.mkdirSync(out, { recursive: true });
+  const r = await score({ dl, repos: path.join(tmp, 'repos'), out, arms: parseArms('A,S=SG_NOOP=1'), log: () => {} });
+  assert.deepStrictEqual(r.unusable, []);
+  assert.deepStrictEqual(r.rows.map((x) => `${x.id}/${x.arm}`), ['i-1/A', 'i-1/S']);
+  for (const arm of ['A', 'S']) assert.match(fs.readFileSync(path.join(out, 'run777-' + arm, 'i-1', 'summary.md'), 'utf8'), /specguard:status=incomplete/);
+});
+
+test('a second score() with identical id/base/head/title/body re-collects (a stale _prep ctx is rebuilt); the prepared clone has core.longpaths=true', async () => {
+  const { base, head } = mkRepo(), dl = path.join(tmp, 'dl-same'), out = path.join(tmp, 'out-same');
+  w(path.join(dl, '888', 's-1', 'result.json'), JSON.stringify({ id: 's-1', repo: 'o/proj', base, head, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
+  w(path.join(dl, '888', 's-1', 'ctx', 'findings.json'), JSON.stringify(findings()));
+  fs.mkdirSync(out, { recursive: true });
+  const files = path.join(out, '_prep', 's-1', 'ctx', 'files.txt');
+  await score({ dl, repos: path.join(tmp, 'repos'), out, log: () => {} });
+  const fresh = fs.readFileSync(files, 'utf8');
+  assert.ok(fresh.includes('src/a.js'));
+  fs.writeFileSync(files, 'stale');
+  await score({ dl, repos: path.join(tmp, 'repos'), out, log: () => {} });
+  assert.strictEqual(fs.readFileSync(files, 'utf8'), fresh);
+  assert.strictEqual(git(path.join(out, '_prep', 's-1', 'repo'), 'config', '--get', 'core.longpaths'), 'true');
+});
