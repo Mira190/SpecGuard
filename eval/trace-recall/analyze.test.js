@@ -136,5 +136,5 @@ test('wrong_windows: delivered req->code code windows overlapping no expect.code
   assert.deepEqual(d.candidate_bytes, { n: 0, p50: null, max: null });
   const withBytes = analyze({ variants: fx.results.variants.map((v, i) => ({ ...v, cand_bytes: 1000 * (i + 1) })) }, fx.cases).req_to_code_delivery;
   assert.deepEqual(withBytes.candidate_bytes, { n: 3, p50: 3000, max: 4000 });
-  assert.match(format(res), /wrong_windows 62% \(5\/8\)/);
+  assert.match(format(res), /wrong_windows 63% \(5\/8\)/);
 });
