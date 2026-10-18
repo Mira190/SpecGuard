@@ -1,0 +1,66 @@
+# Replays the SZZ holdout (eval/replay/holdout-pairs.json, holdout-clean.json) through the REAL production engine
+# (src/engines/claude.sh -> claude-api.js, haiku-5.5). Copy of the workflow that runs in Mira190/Kite, which holds the secret SPEC (an Anthropic key).
+#
+# A workflow_dispatch workflow must exist on the DEFAULT branch to be dispatchable, so the established trick is: branch Kite from master,
+# REPLACE .github/workflows/specguard-audit.yml on that branch with this file, then dispatch with --ref:
+#   gh api -X PUT repos/Mira190/Kite/contents/.github/workflows/specguard-audit.yml -f message=replay -f branch=eval/replay-holdout \
+#     -f sha=<blob sha of the existing file> -f content="$(base64 -w0 eval/replay-workflow.yml)"
+#   gh workflow run specguard-audit.yml -R Mira190/Kite --ref eval/replay-holdout -f specguard_ref=main -f manifest=eval/replay/holdout-pairs.json
+#   gh workflow run specguard-audit.yml -R Mira190/Kite --ref eval/replay-holdout -f specguard_ref=main -f manifest=eval/replay/holdout-clean.json
+# Optional: -f ids=orpc-1846,rqlite-2061 (default: every replay_eligible pair / every clean PR)  -f budget=1.00  -f model=claude-haiku-5-5
+# Download: gh run download <run-id> -R Mira190/Kite -D <dir>   (one artifact per PR, replay-<id>/result.json). Grade with eval/replay/README.md.
+# Third-party repos are checked out read-only (no credentials kept) and only read by SpecGuard's collector; nothing from them is executed or uploaded.
+name: SpecGuard audit
+on:
+  workflow_dispatch:
+    inputs:
+      specguard_ref: { description: "SpecGuard branch or SHA to test", default: main }
+      manifest: { description: "Manifest in the SpecGuard checkout", default: eval/replay/holdout-pairs.json }
+      ids: { description: "Comma-separated ids (replay_id or clean id); empty = all in the manifest", default: "" }
+      model: { description: "Model id for the engine", default: claude-haiku-5-5 }
+      budget: { description: "Per-PR max_budget_usd (hard bound, checked before the call)", default: "1.00" }
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { repository: Mira190/SpecGuard, ref: "${{ inputs.specguard_ref }}", persist-credentials: false }
+      - id: plan
+        env: { MANIFEST: "${{ inputs.manifest }}", IDS: "${{ inputs.ids }}" }
+        run: echo "matrix=$(node eval/replay.js plan --manifest "$MANIFEST" ${IDS:+--ids "$IDS"})" >> "$GITHUB_OUTPUT"
+  replay:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        pr: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { repository: Mira190/SpecGuard, ref: "${{ inputs.specguard_ref }}", path: sg, persist-credentials: false }
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { repository: "${{ matrix.pr.repo }}", path: target, fetch-depth: 0, persist-credentials: false } # default branch, full history: the manifest's base/head are (merge) commits on it
+      - name: Replay through the real engine
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.SPEC }}
+          MANIFEST: ${{ inputs.manifest }}
+          ID: ${{ matrix.pr.id }}
+          MODEL: ${{ inputs.model }}
+          BUDGET: ${{ inputs.budget }}
+        run: node sg/eval/replay.js run --manifest "sg/$MANIFEST" --id "$ID" --repo target --out out --model "$MODEL" --budget "$BUDGET"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: replay-${{ matrix.pr.id }}
+          path: |
+            out/${{ matrix.pr.id }}/result.json
+            out/${{ matrix.pr.id }}/engine.log
+          retention-days: 3
+          if-no-files-found: warn
