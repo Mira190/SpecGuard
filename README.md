@@ -169,7 +169,7 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 
 `src/fail-on-error.js` runs last. A configuration failure is one only the owner can fix (bad or missing key, no credit, unknown model, Copilot policy off, adapter error).
 
-| Outcome (`status`) | `fail_on_error: false` (default) | `fail_on_error: true` |
+| Outcome (`status`) | `fail_on_error` off (default) | `fail_on_error` on |
 |---|---|---|
 | `complete` | green | green |
 | `incomplete`, PR review or scan | green, warning | green, warning |
