@@ -109,3 +109,16 @@ test('runReal: injected engine -> result.json with status, cost and counts; entr
   assert.strictEqual(entries(path.join(__dirname, 'replay', 'holdout-clean.json')).length, 12);
   assert.deepStrictEqual(sample([1, 2, 3, 4, 5], 3, 7), sample([1, 2, 3, 4, 5], 3, 7));
 });
+
+test('runReal hands the engine the prepared checkout (its pack root); packGuard flags an empty pack on a PR that changed files', async () => {
+  const { runReal, packGuard } = require('./replay.js');
+  const { d, base, head } = mkRepo();
+  let seen;
+  const engine = ({ repo }) => { seen = repo; };
+  const r = await runReal({ entry: { id: 'rg1', repo: 'o/r', number: 5, base, head, title: 't', body: 'b' }, repoDir: d, out: path.join(tmp, 'out-guard'), engine });
+  assert.ok(fs.existsSync(path.join(seen, 'src', 'a.js')), 'engine root must contain the repo files');
+  assert.strictEqual(packGuard({ ...r, engine_notes: ['context pack: 8 files, 146 KB; not included: x'] }), null);
+  assert.match(packGuard({ ...r, engine_notes: ['context pack: 0 files, 0 KB; not included: a.js'] }), /context pack is empty/);
+  assert.strictEqual(packGuard({ ...r, files: 0, engine_notes: ['context pack: 0 files, 0 KB'] }), null);
+  assert.strictEqual(packGuard({ ...r, engine_notes: [] }), null);
+});
