@@ -59,6 +59,8 @@ function analyze(results, cases) {
   const groups = {
     'req->code': { code: emptyAgg(), code_file_level: emptyAgg(), tests: emptyAgg() },
     'code->req': { requirement: emptyAgg(), tests: emptyAgg() },
+    'test->code': { code: emptyAgg() },
+    'test->req': { requirement: emptyAgg() },
   };
   const times = [];
   const vs = results.variants || [];
@@ -70,14 +72,21 @@ function analyze(results, cases) {
     if (v.status !== undefined && v.status !== 'ok') failed.push({ case: v.case, variant: v.variant, status: v.status }); // stays in every denominator: a failed trace is a miss, not a skipped query
     if (typeof v.trace_ms === 'number' && typeof v.cand_ms === 'number') times.push(v.trace_ms + v.cand_ms);
     const ex = c.expect;
-    if (v.variant !== 'C') { // requirement edited: which code and tests does it point at
+    if (v.variant === 'R' || v.variant === 'RC') { // requirement edited: which code and tests does it point at
       const r2c = v.req_to_code || [], g = groups['req->code'];
       const codeLists = r2c.map((x) => x.code || []), testLists = r2c.map((x) => x.tests || []);
       add(g.code, ex.code.map((loc) => rankOf(codeLists, (it) => overlaps(it, loc, locRanges(loc)))));
       add(g.code_file_level, ex.code.map((loc) => rankOf(codeLists, (it) => it.path === loc.file)));
       add(g.tests, ex.tests.map((t) => rankOf(testLists, (it) => it.path === t)));
     }
-    if (v.variant !== 'R') { // code edited: which requirement and tests does it point at
+    if (v.variant === 'T') { // only a test assertion weakened: which code and requirement lost protection (relevant = the case's expect.code / expect.requirement; retrieved = what the pipeline emits, possibly nothing)
+      const [a, b] = ex.requirement.lines;
+      const codeLists = (v.req_to_code || []).map((x) => x.code || []);
+      add(groups['test->code'].code, ex.code.map((loc) => rankOf(codeLists, (it) => overlaps(it, loc, locRanges(loc)))));
+      const reqLists = (v.code_to_req || []).map((h) => h.candidates.slice().sort((p, q) => q.score - p.score));
+      add(groups['test->req'].requirement, [rankOf(reqLists, (it) => it.path === ex.requirement.file && it.line >= a - 1 && it.line <= b + 1)]);
+    }
+    if (v.variant === 'C' || v.variant === 'RC') { // code edited: which requirement and tests does it point at
       const g = groups['code->req'];
       const reqLists = (v.code_to_req || []).map((h) => h.candidates.slice().sort((a, b) => b.score - a.score));
       const [a, b] = ex.requirement.lines; // +-1 line: the candidate is the item's first line
