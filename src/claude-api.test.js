@@ -1620,6 +1620,26 @@ test('network reset then success: both attempts are recorded (the lost one at th
   assert.match(h.file('engine-notes'), /usage unknown for 1 call/);
 });
 
+// R5 #6: a reset (lost) AND a final reply without usage are two attempts that may both have been billed
+test('network reset then a reply with unknown usage: both attempts are charged at the worst case (2W, not 1W)', async (t) => {
+  const W = await worstOf(t), h = harness(t, [reset, good({ usage: {} })]);
+  await h.go({ MAX_BUDGET_USD: String(2.5 * W) });
+  assert.equal(h.calls.length, 2);
+  const u = JSON.parse(h.file('usage.json'));
+  near(u.totalCostUsd, 2 * W); assert.equal(u.costEstimated, true);
+});
+
+test('network reset, then an unknown-usage reply with no JSON: the repair turn is not admitted past the budget (3W needed, 2.5W declared); the 2W is recorded', async (t) => {
+  const W = await worstOf(t), prose = () => good({ usage: {}, content: [{ type: 'text', text: 'prose, no json' }] }), h = harness(t, [reset, prose(), good({ usage: {} })]);
+  await h.go({ MAX_BUDGET_USD: String(2.5 * W) });
+  assert.equal(h.calls.length, 2, 'no repair request');
+  near(JSON.parse(h.file('usage.json')).totalCostUsd, 2 * W);
+  const roomy = harness(t, [reset, prose(), good({ usage: {} })]);
+  await roomy.go({ MAX_BUDGET_USD: String(3.5 * W) });
+  assert.equal(roomy.calls.length, 3, 'control: admitted when 3W fits');
+  near(JSON.parse(roomy.file('usage.json')).totalCostUsd, 3 * W);
+});
+
 test('network reset: the retry is refused when it would exceed the budget; the lost attempt is still charged', async (t) => {
   const W = await worstOf(t), h = harness(t, [reset, good()]);
   await h.go({ MAX_BUDGET_USD: String(1.5 * W) });
