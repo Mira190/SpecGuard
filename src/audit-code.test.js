@@ -224,11 +224,13 @@ test('scan gate: a weak_test whose own test also pins a value, or whose line is 
   const F = {
     ...GATE_FILES,
     'test/own.spec.js': ["it('builds', async () => {", '  expect(a.ok).toBeTruthy();', '  expect(r.err).toBeUndefined();', "  expect(text).toBe('Hello');", '});', "it('only truthy', () => {", '  expect(b.ok).toBeTruthy();', '  expect(r.list).toBeDefined();', '  expect(r.n).toBeGreaterThan(0);', '});', "it('anchored', async () => {", '  expect(await res.text()).toMatch(/^Deno!(\\r?\\n)?$/);', '});', "it('loose', async () => {", '  expect(await res.text()).toMatch(/Deno/);', '});', "it('omit', () => {", '  expect(c.ok).toBeTruthy();', "  checkOmit(t, out, 'secret');", '});'],
+    'test/names.spec.js': ["it('rename validation', () => {", "  assert.equal(validate('new name', '.mp4'), '');", "  assert.ok(validate('a/b', '.mp4'));", '});'],
     'tests/test_own.py': ['def test_order():', '    assert response.json', '    assert response.data == b"[1,2]"', '', 'def test_only():', '    assert other.json'],
   }, run = (p, line) => { const f = uf({ unit: U1, kind: 'weak_test', path: p, line, quote: F[p][line - 1].trim(), title: 't', body: 'b', counterexample: 'x broken -> still passes' }); return verify(result([f]), { read: (q) => F[q] || null, units: owning([f]) }).unit_findings[0]; };
   assert.deepEqual([run('test/own.spec.js', 2).low, run('test/own.spec.js', 2).lowWhy], [true, 'the same test also pins a value: test/own.spec.js:3']);
   assert.match(run('tests/test_own.py', 2).lowWhy, /pins a value: tests\/test_own\.py:3/);
   assert.equal(run('test/own.spec.js', 12).low, true, 'anchored regex');
+  assert.equal(run('test/names.spec.js', 3).low, false, 'control: a call subject has its own arguments; a sibling pin does not cover it');
   for (const l of [7, 15, 18]) assert.equal(run('test/own.spec.js', l).low, false, `control: line ${l}`);
   assert.equal(run('tests/test_own.py', 6).low, false, 'control: python truthy-only');
 });

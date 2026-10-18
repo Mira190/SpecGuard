@@ -324,10 +324,12 @@ function siblingCall(lines, line, quote, counterexample) {
 const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b|\bnot a gap\b(?! in\b)/i;
 // A weak_test whose own test block pins a value elsewhere (or whose cited line is an anchored regex): that line (the cited one for an anchored regex), else 0.
 const ANCHORED = /(?:\.toMatch|\bassert\.match|\bassertRegex|\bre\.(?:match|fullmatch))\s*\(.*\/\^.*\$\//, LOOSE = /typeof|toBeGreaterThan\(\s*0\s*\)|\.length\s*>\s*0|^\s*assert\s+(?!.*==)/;
+const CALL_SUBJECT = /(?:\b(?:expect|assert(?:\.ok)?|assertTrue|assertIsNotNone|assertNotNull)\s*\(|^\s*assert\s+(?:not\s+)?)\s*(?:await\s+)?[A-Za-z_$][\w$.]*\(/;
 function pinnedInTest(lines, line) {
   if (!Array.isArray(lines)) return 0;
   const at = (i) => String(lines[i - 1] ?? ''), decl = (i) => TEST_DECL.test(at(i));
   if (ANCHORED.test(at(line))) return line;
+  if (CALL_SUBJECT.test(at(line))) return 0; // each call with its own arguments is its own case: a sibling pin does not cover it
   let a = line, b = line + 1;
   while (a > 1 && !decl(a)) a--;
   while (b <= lines.length && !decl(b)) b++;
