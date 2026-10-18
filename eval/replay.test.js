@@ -97,7 +97,7 @@ test('prepareReal shared:true checks out head and borrows objects via alternates
 test('runReal: injected engine -> result.json with status, cost and counts; entries/sample read the holdout manifests', async () => {
   const { runReal, entries, sample } = require('./replay.js');
   const { d, base, head } = mkRepo();
-  const engine = ({ ctx, model }) => { fs.writeFileSync(path.join(ctx, 'engine-status'), 'failed\n'); fs.writeFileSync(path.join(ctx, 'usage.json'), JSON.stringify({ totalCostUsd: 0.07, currentModel: model })); };
+  const engine = ({ ctx, model }) => { fs.writeFileSync(path.join(ctx, 'engine-status'), 'failed\n'); fs.writeFileSync(path.join(ctx, 'usage.json'), JSON.stringify({ totalCostUsd: 0.07, currentModel: model })); return 0; };
   const r = await runReal({ entry: { id: 'rr1', repo: 'o/r', number: 5, base, head, title: 'Raise limit', body: 'limit is 5' }, repoDir: d, out: path.join(tmp, 'out-run'), engine });
   assert.strictEqual(r.engine_status, 'failed');
   assert.strictEqual(r.usage.cost_usd, 0.07);
@@ -110,15 +110,53 @@ test('runReal: injected engine -> result.json with status, cost and counts; entr
   assert.deepStrictEqual(sample([1, 2, 3, 4, 5], 3, 7), sample([1, 2, 3, 4, 5], 3, 7));
 });
 
-test('runReal hands the engine the prepared checkout (its pack root); packGuard flags an empty pack on a PR that changed files', async () => {
-  const { runReal, packGuard } = require('./replay.js');
-  const { d, base, head } = mkRepo();
+const LINE = 'exports.limit = (n) => n > 5;';
+const findings = () => ({ requirements_source: 'none', not_reviewed: '', standards: { status: 'no_rules', sources: [], reason: 'none' }, layering: { status: 'checked', reason: 'x' }, requirements: [],
+  coverage: [['O1', 'limit is 5', 1, LINE], ['O2', 'limit is 5 (2)', 1, LINE]].map(([id, obligation, line, quote]) => ({ id, obligation, source: 'PR body', behaviour: { path: 'src/a.js', line, quote }, change: { path: 'src/a.js', line, quote, side: 'RIGHT' }, evidence: [], status: 'missing_test', reason: 'no test', alignment: { status: 'aligned', since: 'introduced', reason: 'ok' } })),
+  findings: [{ kind: 'missing_test', path: 'src/a.js', line: 1, quote: LINE, side: 'RIGHT', title: 'No test', body: 'The limit change has no test.', confidence: 'high', obligation_ids: ['O1'] },
+    { kind: 'missing_test', path: 'src/a.js', line: 1, quote: LINE, side: 'RIGHT', title: 'Low gap', body: 'Maybe no test.', confidence: 'low', obligation_ids: ['O2'] }] });
+// an injected engine: writes what claude-api.js writes (findings.json, engine-notes; engine-status only when not success) and returns the exit code
+const fake = ({ exit = 0, status, notes = ['context pack: 1 files, 0 KB'], find = true } = {}) => ({ ctx }) => {
+  if (find) fs.writeFileSync(path.join(ctx, 'findings.json'), JSON.stringify(findings()));
+  if (status) fs.writeFileSync(path.join(ctx, 'engine-status'), status + '\n');
+  if (notes) fs.writeFileSync(path.join(ctx, 'engine-notes'), notes.join('\n') + '\n');
+  return exit;
+};
+const replay = (id, engine) => { const { runReal } = require('./replay.js'); const { d, base, head } = mkRepo(); return runReal({ entry: { id, repo: 'o/r', number: 5, base, head, title: 't', body: 'limit is 5' }, repoDir: d, out: path.join(tmp, 'out-valid'), engine }); };
+
+test('runReal hands the engine the prepared checkout as its pack root', async () => {
   let seen;
-  const engine = ({ repo }) => { seen = repo; };
-  const r = await runReal({ entry: { id: 'rg1', repo: 'o/r', number: 5, base, head, title: 't', body: 'b' }, repoDir: d, out: path.join(tmp, 'out-guard'), engine });
+  await replay('rg1', ({ repo }) => { seen = repo; return 0; });
   assert.ok(fs.existsSync(path.join(seen, 'src', 'a.js')), 'engine root must contain the repo files');
-  assert.strictEqual(packGuard({ ...r, engine_notes: ['context pack: 8 files, 146 KB; not included: x'] }), null);
-  assert.match(packGuard({ ...r, engine_notes: ['context pack: 0 files, 0 KB; not included: a.js'] }), /context pack is empty/);
-  assert.strictEqual(packGuard({ ...r, files: 0, engine_notes: ['context pack: 0 files, 0 KB'] }), null);
-  assert.strictEqual(packGuard({ ...r, engine_notes: [] }), null);
+});
+
+test('runReal: a normal success is valid and its findings are exact (inline and summary-only)', async () => {
+  const r = await replay('v-ok', fake());
+  assert.deepStrictEqual([r.valid, r.invalid_reason, r.engine_exit, r.findings_present], [true, null, 0, true]);
+  assert.deepStrictEqual(r.findings.map(({ where, kind, path: p, line, title }) => ({ where, kind, path: p, line, title })), [
+    { where: 'inline', kind: 'missing_test', path: 'src/a.js', line: 1, title: 'No test' },
+    { where: 'summary', kind: 'missing_test', path: 'src/a.js', line: 1, title: 'Low gap' }]);
+  assert.deepStrictEqual(r.counts, { inline: 1, summary_only: 1, pre_existing: 0 });
+});
+
+test('runReal fault injection: every way the run is not a measurement is invalid, with result.json still written', async () => {
+  for (const [id, engine, reason] of [
+    ['v-exit1', fake({ exit: 1, find: false }), /engine exit 1/],
+    ['v-failed', fake({ status: 'failed' }), /engine status failed/],
+    ['v-nofind', fake({ find: false }), /no findings\.json/],
+    ['v-zero', fake({ notes: ['context pack: 0 files, 0 KB; not included: a.js'] }), /context pack is empty/],
+    ['v-nonote', fake({ notes: null }), /no context pack note/],
+    ['v-noexit', () => {}, /engine exit undefined/]]) {
+    const r = await replay(id, engine);
+    assert.strictEqual(r.valid, false, id); assert.match(r.invalid_reason, reason, id);
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(tmp, 'out-valid', id, 'result.json'), 'utf8')).valid, false);
+  }
+});
+
+test('invalid: no pack note is fine when the PR changed no files', () => {
+  const { invalid } = require('./replay.js');
+  const ok = { collect_ok: true, skip: false, engine_exit: 0, engine_status: 'success', findings_present: true, files: 1, engine_notes: ['context pack: 8 files, 1 KB'] };
+  assert.strictEqual(invalid(ok), null);
+  assert.strictEqual(invalid({ ...ok, files: 0, engine_notes: [] }), null);
+  assert.match(invalid({ ...ok, skip: true }), /skipped/);
 });

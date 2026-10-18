@@ -137,8 +137,14 @@ function runEngine({ dir, ctx, repo, model, budget, maxOutput, timeout }) {
   return r.status;
 }
 
-// An eval must never silently degrade: files changed but the engine saw an empty context pack -> message (the job fails).
-const packGuard = (r) => r.files > 0 && (r.engine_notes || []).some((n) => /^context pack: 0 files/.test(n)) ? `${r.id}: context pack is empty (0 files) although the PR changed ${r.files} file(s); the engine did not read the prepared repo. Result is invalid.` : null;
+// An eval must never silently degrade: the reason a run is NOT a valid measurement, or null. A crashed engine, a missing findings.json or an empty/unreported context pack must not look like a miss.
+const invalid = (r) => {
+  if (!r.collect_ok) return 'collect failed'; if (r.skip) return 'skipped by collect';
+  if (r.engine_exit !== 0) return `engine exit ${r.engine_exit}`; if (r.engine_status !== 'success') return `engine status ${r.engine_status}`;
+  if (!r.findings_present) return 'no findings.json';
+  if (r.files > 0) { const m = (r.engine_notes || []).map((n) => /^context pack: (\d+) files/.exec(n)).find(Boolean); if (!m) return 'no context pack note'; if (+m[1] === 0) return `context pack is empty (0 files) although the PR changed ${r.files} file(s)`; }
+  return null;
+};
 
 const readJson = (p, d = null) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return d; } };
 
@@ -147,7 +153,7 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
   const meta = prepareReal({ repoDir, base: entry.base, head: entry.head, prTitle: entry.title, prBody: entry.body, out, id: entry.id, trace, shared: true });
   const dir = path.resolve(out, entry.id), ctx = path.join(dir, 'ctx');
   const result = { id: entry.id, repo: entry.repo, pr: entry.number, base: meta.base, head: meta.head, trace, model, files: meta.files, spec_files: meta.spec_files, collect_ok: meta.collect_ok, skip: meta.skip, partial: meta.partial };
-  if (meta.collect_ok && !meta.skip) engine({ dir, ctx, repo: meta.repo, model, budget, maxOutput, timeout });
+  if (meta.collect_ok && !meta.skip) result.engine_exit = engine({ dir, ctx, repo: meta.repo, model, budget, maxOutput, timeout });
   const sf = path.join(ctx, 'engine-status'), status = fs.existsSync(sf) ? fs.readFileSync(sf, 'utf8').trim() : 'success';
   result.engine_status = meta.skip ? 'skipped' : !meta.collect_ok ? 'collect_failed' : status;
   result.engine_notes = readLines(path.join(ctx, 'engine-notes'));
@@ -158,6 +164,7 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
   const f = (where) => (x) => ({ where, kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null });
   result.findings = [...posted.comments.map(parseComment).filter(Boolean).map(f('inline')),
     ...summaryItems(fs.readFileSync(path.join(dir, 'summary.md'), 'utf8')).map((x) => ({ ...f('summary')(x), why: x.why || '' }))];
+  result.findings_present = row.findings_present; result.invalid_reason = invalid(result); result.valid = !result.invalid_reason;
   result.counts = { inline: row.inline.total, summary_only: row.summary_only, pre_existing: row.pre_existing };
   fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 2) + '\n');
   return result;
@@ -188,8 +195,7 @@ async function main() {
     const entry = entries(o.manifest).find((e) => e.id === o.id);
     if (!entry) throw new Error(`no such id: ${o.id}`);
     const r = await runReal({ entry, repoDir: o.repo, out: o.out, model: o.model, budget: o.budget, maxOutput: o['max-output'], timeout: o.timeout, trace: o.trace });
-    const bad = packGuard(r);
-    if (bad) throw new Error(bad); // result.json is already written and uploaded
+    if (!r.valid) throw new Error(`${r.id}: invalid replay: ${r.invalid_reason}`); // result.json is already written and uploaded
     return console.log(`${r.id}: ${r.engine_status} inline=${r.counts.inline} summary=${r.counts.summary_only} cost=$${r.usage.cost_usd}`);
   }
   if (o.help || !['prepare', 'finish'].includes(cmd) || !o.out || !o.id) { console.log(USAGE); process.exit(o.help ? 0 : 2); }
@@ -198,4 +204,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, runEngine, packGuard };
+module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, runEngine, invalid };
