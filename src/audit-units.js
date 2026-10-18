@@ -296,10 +296,23 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     return { ...u, strong, unref, boundary, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
   }).sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
   const size = partBytes(packBytes, maxUnits), tsize = new Map(testEntries.map((e) => [e.path, e.size]));
-  const tcost = (t) => Math.ceil(Math.min(tsize.get(t) || 0, fileCap(packBytes)) * 1.15) + 300;
+  // A test over the per-file cap is shown by the pack as slices around the names the unit defines (claude-api.js slices); when those hold every matching block the pack uses their size, not the whole file's. p: the unit's part or null.
+  // ponytail: priced from the unit's own names; a test shared by units of one call is sliced for all their names, which the per-unit sums cover (merged windows are smaller than the sum). Ceiling: a name another unit adds can make the slice incomplete, the pack then lists it cut.
+  const lineCache = new Map(), sliceCost = new Map();
+  const linesOf = (p) => { if (!lineCache.has(p)) { const b = shaOf.has(p) ? catBatch(cwd, [shaOf.get(p)])[0] : null; lineCache.set(p, b && !b.subarray(0, 8192).includes(0) ? b.toString('utf8').replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n') : null); } return lineCache.get(p); };
+  const tcost = (t, r, p) => {
+    const sz = tsize.get(t) || 0, whole = Math.ceil(Math.min(sz, fileCap(packBytes)) * 1.15) + 300;
+    if (!packBytes || sz * 1.15 <= fileCap(packBytes)) return whole;
+    const k = `${r.id}:${p ? p.k : ''}:${t}`;
+    if (!sliceCost.has(k)) {
+      const api = require('./engines/claude-api'), u = linesOf(r.path), x = linesOf(t), syms = u && x ? api.unitSyms(p ? u.slice(p.a - 1, p.b) : u) : [], sl = syms.length && !syms.capped ? api.slices(x, syms, fileCap(packBytes) - 300) : null;
+      sliceCost.set(k, sl && sl.complete ? Buffer.byteLength(sl.text) + 300 : Infinity); // incomplete (a block cut or dropped): costed as today
+    }
+    return Math.min(whole, sliceCost.get(k));
+  };
   // what a unit costs in the pack: its part (or whole file) and its matched tests, line-numbered (about 15% more) plus a block header each; 90% of the pack, the rest is markup and neighbours
-  const room = packBytes ? { total: Math.floor(packBytes * 0.9), cost: (r, withTests = true) => { const p = partOf(r, prior, size); return Math.ceil(shownOf(r, size) / (p ? p.n : 1)) + 300 + (withTests ? r.tests : []).reduce((n, t) => n + tcost(t), 0); } } : null;
-  if (room) room.trim = (r) => { let left = Math.min(Math.floor(room.total / 2), room.total - room.cost(r, false)); const tests = r.tests.filter((t) => tcost(t) <= left && (left -= tcost(t), true)); return { tests, cost: room.cost(r, false) + tests.reduce((n, t) => n + tcost(t), 0) }; }; // a trimmed unit's tests get at most half a room, in priority order
+  const room = packBytes ? { total: Math.floor(packBytes * 0.9), cost: (r, withTests = true) => { const p = partOf(r, prior, size); return Math.ceil(shownOf(r, size) / (p ? p.n : 1)) + 300 + (withTests ? r.tests : []).reduce((n, t) => n + tcost(t, r, p), 0); } } : null;
+  if (room) room.trim = (r) => { const p = partOf(r, prior, size), c = (t) => tcost(t, r, p); let left = Math.min(Math.floor(room.total / 2), room.total - room.cost(r, false)); const tests = r.tests.filter((t) => c(t) <= left && (left -= c(t), true)); return { tests, cost: room.cost(r, false) + tests.reduce((n, t) => n + c(t), 0) }; }; // a trimmed unit's tests get at most half a room, in priority order
   const calls = room ? Math.max(1, rooms) : 1; // rooms: the run's unit calls (claude api engine); maxUnits applies to each
   const items = room && allParts && !prior ? rows.flatMap((r) => { const p = partOf(r, null, size); return p ? Array.from({ length: p.n }, (_, k) => ({ ...r, partK: k })) : [r]; }).sort((a, b) => (a.partK || 0) - (b.partK || 0)) : rows; // one item per part of a unit reviewed in parts; every unit's first part comes before any second part, so a unit is read before another is read twice
   let sel = pick(items, maxUnits, prior, size, room, calls);
@@ -322,7 +335,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const known = new Set(prior ? prior.blocks.map((b) => b.cid) : []), reviewed = new Set([...rows.filter((r) => known.has(r.id)).map((r) => r.id), ...chosen]);
   const rotation = { rotate: !!prior, picked: chosen.size, confirming: sel.tally.c, changed: sel.tally.s, new: sel.tally.n, oldest: sel.tally.o, reviewed: reviewed.size, total: rows.length, run: Math.max(1, Math.ceil(reviewed.size / (maxUnits * calls))), runs: Math.max(1, Math.ceil(rows.length / (maxUnits * calls))) };
   const date = (r) => (prior && (prior.blocks.find((b) => b.cid === r.id) || {}).at || {}).date;
-  for (const r of pickedAll) { const p = partOf(r, prior, size); if (p) r.part = p; }
+  for (const r of pickedAll) { const p = partOf(r, prior, size); if (p) r.part = p; if (room) r.tneed = (r.packTests || r.tests).reduce((n, t) => n + tcost(t, r, p), 0); }
   const unitRooms = []; // the picked unit ids per call, in risk order
   for (const r of sel.picked) (unitRooms[(sel.roomOf && sel.roomOf.get(partId(r))) || 0] ||= []).push(partId(r));
   const extraRooms = []; // the picked unit parts of the extra calls, in the order the engine admits them
@@ -336,7 +349,8 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
 // audit-units.txt (id, path, risk, why, matched tests, leads: tab separated), audit-units-carried.txt (id, path: units the state knows that this run does not review), audit-inventory.json.
 function write(ctx, head, maxUnits, inv) {
   const picked = new Set(inv.picked.map((r) => r.id)), w = (n, s) => fs.writeFileSync(path.join(ctx, n), s), flat = (s) => String(s).replace(/[\t\r\n]+/g, ' ');
-  w('audit-units.txt', inv.picked.map((r) => [r.id, r.path, r.score, r.why, (r.weakCut ? r.tests.filter((t) => !r.weakCut.has(t)) : r.tests).join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-', ...(r.packTests ? [r.packTests.join(', ') || '-'] : [])].map(flat).join('\t') + '\n').join(''));
+  // the pack gives each unit's tests an equal share of what is left, in this order: the units with the least test bytes go first, so what they leave over goes to the big ones (risk order starved the big ones early in a call)
+  w('audit-units.txt', [...inv.picked].sort((a, b) => (a.tneed || 0) - (b.tneed || 0)).map((r) => [r.id, r.path, r.score, r.why, (r.weakCut ? r.tests.filter((t) => !r.weakCut.has(t)) : r.tests).join(', ') || 'none', r.signals.weak.slice(0, LEADS).map((x) => `weak? ${x.path}:${x.line}`).join('; ') || '-', r.ver, r.part ? `part ${r.part.k + 1}/${r.part.n} lines ${r.part.a}-${r.part.b}` : '-', ...(r.packTests ? [r.packTests.join(', ') || '-'] : [])].map(flat).join('\t') + '\n').join(''));
   fs.rmSync(path.join(ctx, 'audit-unit-extra.json'), { force: true });
   fs.rmSync(path.join(ctx, 'audit-unit-rooms.json'), { force: true }); // a plan written earlier into this ctx (the collector plans again when the pre-flight keeps fewer calls)
   const xr = inv.extraRooms || [], rooms = [...(inv.unitRooms || []), ...xr];

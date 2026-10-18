@@ -666,7 +666,7 @@ test('trimmed unit: its tests get at most half a room, in priority order, so the
     assert.equal(inv.picked.filter((u) => u.path !== 'src/big.js').length, 5, `rooms ${rooms}: the five small units are selected whole beside it`);
     const ctx = path.join(r.root, `.ctx${rooms}`); fs.mkdirSync(ctx);
     write(ctx, 'HEAD', 12, inv);
-    const row = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n')[0].split('\t');
+    const row = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n').map((l) => l.split('\t')).find((c) => c[1] === 'src/big.js');
     assert.equal(row[4], big.tests.join(', '), 'the full list stays for the verifier');
     assert.equal(row[8], big.packTests.join(', '), 'the counted tests are written for the pack');
     const pack = contextPack(ctx, r.root, LIMIT), omitted = big.tests.filter((p) => !big.packTests.includes(p));
@@ -687,6 +687,39 @@ test('trim: tests that only mention the unit and do not fit are left out of its 
   const row = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n')[0].split('\t'), listed = row[4].split(', ');
   assert.deepEqual(listed, u.tests.filter((x) => !u.weakCut.has(x)), 'the written list drops them');
   assert.ok(u.packTests.every((x) => listed.includes(x)), 'everything the pack loads is listed');
+});
+
+// a unit whose tests are big files but each mentioned in one short block: the pack shows slices, so the collector prices the slices, not the whole files
+const sliceRepo = (t) => {
+  const files = { 'src/big.js': Array.from({ length: 60 }, (_, i) => `exports.big_${i} = (v) => v + ${i};`) };
+  for (let k = 0; k < 8; k++) files[`test/big${k}.test.js`] = ["const { big_1 } = require('../src/big');", "it('big', () => { assert.equal(big_1(1), 2); });", "it('other', () => { assert.ok(1); });", ...Array.from({ length: 250 }, (_, i) => `// ${'filler '.repeat(6)}${i}`)];
+  for (let u = 0; u < 5; u++) { files[`src/s${u}.js`] = Array.from({ length: 5 }, (_, i) => `exports.s${u}_${i} = (v) => v + ${i};`); files[`test/s${u}.test.js`] = [`it('s${u}', () => { assert.equal(s${u}_1(1), 2); });`]; }
+  return repo(t, files);
+};
+
+test('test cost: a test over the per-file cap is priced as the slices the pack will show, so its unit is not trimmed; incomplete slices keep the whole-file price', (t) => {
+  const r = sliceRepo(t), LIMIT = 60000;
+  const inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, packBytes: LIMIT }), big = inv.picked.find((u) => u.path === 'src/big.js');
+  assert.equal(big.tests.length, 8);
+  assert.ok(!big.packTests, 'no test was left out: 8 whole files would not fit a room, their slices do');
+  assert.ok(!inv.limitations.some((l) => /matched tests that cannot fit/.test(l)));
+  const ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx); write(ctx, 'HEAD', 12, inv);
+  const pack = contextPack(ctx, r.root, LIMIT);
+  for (const p of big.tests) { assert.ok(pack.text.includes(`name="${p}"`) && pack.text.includes('relevant slices'), `${p} is in the pack as slices`); assert.ok(!pack.notWhole.includes(p), `${p} is not listed as cut`); }
+  // the same tests with a block longer than the 80-line window: the slice is incomplete (cut), so the price stays the whole file's and the unit is trimmed
+  for (let k = 0; k < 8; k++) fs.writeFileSync(path.join(r.root, `test/big${k}.test.js`), ["const { big_1 } = require('../src/big');", "it('big', () => { assert.equal(big_1(1), 2); });", ...Array.from({ length: 250 }, (_, i) => `// ${'filler '.repeat(6)}${i}`)].join('\n') + '\n');
+  r.git(OLD, 'add', '.'); r.git(OLD, 'commit', '-m', 'longer blocks');
+  const inv2 = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, packBytes: LIMIT });
+  assert.ok(inv2.picked.find((u) => u.path === 'src/big.js').packTests.length < 8, 'cut slices are not priced as complete');
+});
+
+test('unit order: the written units go by their test bytes, smallest first, so the pack gives what they leave to the big ones', (t) => {
+  const r = sliceRepo(t), inv = inventory({ cwd: r.root, head: 'HEAD', now: NOW, maxUnits: 12, packBytes: 60000 });
+  assert.equal(inv.picked[0].path, 'src/big.js', 'ranked first by risk');
+  const ctx = path.join(r.root, '.ctx'); fs.mkdirSync(ctx); write(ctx, 'HEAD', 12, inv);
+  const rows = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8').split('\n').filter(Boolean).map((l) => l.split('\t')[1]);
+  assert.equal(rows.length, 6);
+  assert.equal(rows[rows.length - 1], 'src/big.js', 'written last');
 });
 
 test('same-name tests: a generic stem (index) keeps the ones in the unit\'s tree; with none in its tree they are all kept', (t) => {
