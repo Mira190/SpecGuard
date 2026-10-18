@@ -215,6 +215,13 @@ test('fail-on-error.js: an incomplete run is red only for scan_scope all with fa
     assert.match(unred.stdout, /::error::SpecGuard did not review the whole repository \(scan_scope: all\): 3 document blocks not answered by the model/);
     assert.equal(un(0).status, 0); assert.equal(un(3, true, 'false').status, 0, 'fail_on_error off'); assert.equal(un(3, false).status, 0, 'not scan_scope all');
     assert.match(run(true, 'true').stdout, /::warning::SpecGuard result is incomplete: 20 units were reviewed with only part of their tests/, 'unsure verdicts on reviewed code stay a warning');
+    const capMeta = (all, n) => fs.writeFileSync(path.join(dir, 'audit-meta.json'), JSON.stringify({ ...(all && { scan_scope: 'all' }), docs_over_cap: n })); // collector: admissible documents past the 60-document limit
+    capMeta(true, 2); const cap = run(true, 'true'); capMeta(true, 2);
+    for (const [all, foe, st, code] of [[true, 'true', 'incomplete', 1], [true, 'false', 'incomplete', 0], [false, 'true', 'incomplete', 0]]) {
+      capMeta(all, 2); const r = spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: st, REASON: 'x', CTX: dir, FAIL_ON_ERROR: foe } });
+      assert.equal(r.status, code, `docs_over_cap ${all} ${foe}`); if (code) assert.match(r.stdout, /::error::SpecGuard did not review the whole repository \(scan_scope: all\): 2 requirement documents over the 60-document limit not reviewed/);
+    }
+    fs.writeFileSync(path.join(dir, 'audit-meta.json'), JSON.stringify({ scan_scope: 'all' }));
     for (const [k, re] of [['not_inventoried', /2 source files over 512 KiB not inventoried/], ['not_reached_cap', /2 source files past the inventory cap/], ['not_reached_time', /2 source files unread when the inventory time budget ran out/]]) { // the collector's inventory counts: eligible files the model never saw
       fs.writeFileSync(path.join(dir, 'audit-inventory.json'), JSON.stringify({ [k]: 2 }));
       const r = run(true, 'true'); assert.equal(r.status, 1, k); assert.match(r.stdout, re);
