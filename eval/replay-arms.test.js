@@ -118,11 +118,13 @@ test('--engine mock-replay runs the real claude-api engine once on the saved ans
   fs.mkdirSync(out, { recursive: true });
   const saved = process.env.CONTEXT_PACK_BYTES;
   process.env.CONTEXT_PACK_BYTES = '1000'; // too small for any file: the candidate test is cut
-  try { await score({ dl, repos: path.join(tmp, 'repos'), out, engine: 'mock-replay', log: (m) => logs.push(m) }); }
+  try { await score({ dl, repos: path.join(tmp, 'repos'), out, engine: 'mock-replay', arms: parseArms('A,S=SG_NOOP=1'), log: (m) => logs.push(m) }); }
   finally { if (saved === undefined) delete process.env.CONTEXT_PACK_BYTES; else process.env.CONTEXT_PACK_BYTES = saved; }
   assert.ok(!logs.some((m) => /^note:/.test(m)), `exactly one mocked API call (no repair or failure): ${logs.join(' | ')}`);
-  const ctx = path.join(out, 'run333-A', 'm-1', 'ctx'); // the saved dir has no pack-cut.txt: only the engine can have written these
-  assert.ok(fs.readFileSync(path.join(ctx, 'pack-cut.txt'), 'utf8').split('\n').includes('src/a.test.js'));
-  assert.ok(fs.existsSync(path.join(ctx, 'pack-shown.txt')));
-  assert.match(fs.readFileSync(path.join(out, 'run333-A', 'm-1', 'summary.md'), 'utf8'), /Review context was cut: the model saw only part of `src\/a\.test\.js`/);
+  for (const arm of ['A', 'S']) { // the engine runs once, in A; every other arm must start from its outputs (H3 depends on pack-cut.txt reaching it)
+    const dir = path.join(out, 'run333-' + arm, 'm-1'), ctx = path.join(dir, 'ctx'); // the saved dir has no pack-cut.txt: only the engine can have written these
+    assert.ok(fs.readFileSync(path.join(ctx, 'pack-cut.txt'), 'utf8').split('\n').includes('src/a.test.js'), arm);
+    assert.ok(fs.existsSync(path.join(ctx, 'pack-shown.txt')), arm);
+    assert.match(fs.readFileSync(path.join(dir, 'summary.md'), 'utf8'), /Review context was cut: the model saw only part of `src\/a\.test\.js`/, arm);
+  }
 });
