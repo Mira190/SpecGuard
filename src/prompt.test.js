@@ -260,7 +260,9 @@ test('audit prompt: the evidence candidates are inlined as leads to verify first
   assert.ok(p.includes('aaaaaaaa\tcode\tsrc/plan.js:2\tif (p.repeat) return p;') && p.includes('bbbbbbbb\tnone'));
   assert.ok(p.includes('"scope":["packages/payments/**","!**/legacy/**"]'));
   assert.match(p, /open those first and verify them; they are leads, not evidence/);
-  assert.match(p, /search for code and tests only under those paths/);
+  assert.match(p, /cite implementing code only under those paths/);
+  assert.match(p, /Tests, fixtures and other evidence may be searched and cited anywhere in the repository/);
+  assert.doesNotMatch(p, /never cite a file outside them/);
   assert.ok(!abuild(actx()).includes('"scope"'), 'no scope, no scope key');
 });
 
