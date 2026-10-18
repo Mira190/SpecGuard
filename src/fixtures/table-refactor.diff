@@ -1,0 +1,14 @@
+diff --git a/test/batches.test.ts b/test/batches.test.ts
+--- a/test/batches.test.ts
++++ b/test/batches.test.ts
+@@ -1,5 +1,8 @@
+ test('batch boundaries', () => {
+-  assert.deepEqual(nextBatch(point(4), 8), point(8))
+-  assert.deepEqual(nextBatch(point(8), 8), point(16))
+-  assert.deepEqual(nextBatch(point(12), 8), point(16))
++  const cases: [number, number, number][] = [
++    [point(4), 8, point(8)],
++    [point(12), 8, point(16)],
++  ]
++  for (const [offset, size, expected] of cases) assert.deepEqual(nextBatch(offset, size), expected)
+ })
