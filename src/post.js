@@ -1398,7 +1398,7 @@ function testsChanged(from, to, cwd, git = (...a) => execFileSync('git', a, { cw
   } catch { return null; }
 }
 
-// The author's verdict on a finding: the last reply by a person (not us, not a bot) that STARTS with a verdict word, optionally after "specguard:" or "/specguard". Else null.
+// The reply verdict on a finding (any person's reply, not only the PR author's; self-reported, not verified): the last reply by a person (not us, not a bot) that STARTS with a verdict word, optionally after "specguard:" or "/specguard". Else null.
 const VERDICT = /^\s*(?:\/?specguard\b\s*[:,-]?\s*)?(fixed|wrong|false[ -]positive|intentional|by[ -]design|won'?t[ -]fix|not[ -]important|doesn'?t[ -]matter|nit)(?![\w'])/i;
 const VERDICT_AS = { false_positive: 'wrong', by_design: 'intentional', wont_fix: 'intentional', doesnt_matter: 'not_important', nit: 'not_important' };
 const verdictOf = (th, me) => {
@@ -1456,11 +1456,11 @@ async function run({ github, context, core }) {
   const headSha = env.HEAD_SHA || pr.head.sha;
   // '' when the PR is still open at our head; else why not. Not being able to tell is also a reason: nothing is posted then (no atomicity is claimed: a push can still land right after).
   let livePR, rechecked = true, readFp = ''; // readFp: the key of the PR text the model read, once known
-  const REQ_CHANGED = 'requirements changed during the review (the newer run publishes)', say = (stop, msg) => (stop === REQ_CHANGED ? core.notice?.(msg) : core.warning(msg)); // a newer run owns the PR: not a warning
+  const REQ_CHANGED = 'requirements changed during the review (the newer run publishes)', RETARGETED = 'base branch changed during the review (the newer run publishes)', say = (stop, msg) => (stop === REQ_CHANGED || stop === RETARGETED ? core.notice?.(msg) : core.warning(msg)); // a newer run owns the PR: not a warning
   const current = async () => {
     try { livePR = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })).data; rechecked = true; }
     catch (e) { rechecked = false; core.warning(`SpecGuard: could not recheck HEAD: ${e.message}`); return 'could not recheck HEAD'; }
-    return livePR.head.sha !== headSha ? 'superseded HEAD' : livePR.state === 'closed' && !summaryOnly ? 'PR is no longer open' : readFp && !summaryOnly && livePR.title !== undefined && reqKey(livePR) !== readFp ? REQ_CHANGED : ''; // a body edit mid-run: the edited run reviews the new text; this one must not overwrite it
+    return livePR.head.sha !== headSha ? 'superseded HEAD' : livePR.state === 'closed' && !summaryOnly ? 'PR is no longer open' : readFp && !summaryOnly && livePR.title !== undefined && reqKey(livePR) !== readFp ? REQ_CHANGED : !summaryOnly && pr.base?.ref && livePR.base?.ref && pr.base.ref !== livePR.base.ref ? RETARGETED : ''; // a body edit mid-run: the edited run reviews the new text; this one must not overwrite it. A retarget fires `edited` (changes.base), so a newer run exists; compare base.ref, never base.sha: it moves on every base push, which starts no PR run, so a sha compare would drop results
   };
   const early = await current();
   if (early && rechecked) return say(early, `SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary

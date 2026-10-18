@@ -280,6 +280,18 @@ test('a run whose requirements changed meanwhile writes nothing (the newer run p
   assert.equal(same.calls.review.length, 1);
 });
 
+test('a run whose PR was retargeted meanwhile writes nothing (the newer run publishes); a moved base.sha with the same ref posts', async (t) => {
+  const notices = [];
+  const go = async (liveBase) => { const s = setup(t, report(), { pr: { base: liveBase } }); s.context.payload.pull_request.base = { ref: 'main', sha: 'B1' }; s.core.notice = (m) => notices.push(m); await post(s); return s; };
+  const moved = await go({ ref: 'release', sha: 'B2' });
+  assert.deepEqual(moved.calls, { review: [], file: [], summary: [], list: 0, wrapper: 0 });
+  assert.match(notices[0], /base branch changed during the review/);
+  assert.deepEqual(moved.warnings, []);
+  const same = await go({ ref: 'main', sha: 'B2' });
+  assert.equal(same.calls.summary.length, 1);
+  assert.equal(same.calls.review.length, 1);
+});
+
 // delivery=summary: every write method on the fake GitHub is spied; none may be called
 function spyWrites(s) {
   const writes = [];
