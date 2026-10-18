@@ -1164,6 +1164,15 @@ test('unit rooms: one unit part failing (529) leaves only its own units unseen; 
   assert.equal(s.h.file('engine-status'), null, 'a partial success');
 });
 
+test('unit rooms: pack-cut.txt names the units of the call whose pack cut a file, so a test shown whole in unit A\'s call is not cut for A', async (t) => {
+  const rows = ['aaaaaaaa\tlib/a.js\t1\tw\tlib/t.test.js\t-\t-\t-\n', 'bbbbbbbb\tlib/b.js\t1\tw\tlib/t.test.js\t-\t-\t-\t-\n'].join(''); // b's collector list drops the test (counted out), a's keeps it
+  const s = roomRepo(t, {}, [['aaaaaaaa'], ['bbbbbbbb']], rows);
+  fs.writeFileSync(path.join(s.root, 'lib/t.test.js'), "it('t', () => {});\n");
+  s.answers((req, ok) => ok(req));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.equal(s.h.file('pack-cut.txt'), 'lib/t.test.js\tbbbbbbbb');
+});
+
 // --- PR pack: large changed and candidate files are sliced around the diff's own hunks, never kept as a head cut ---
 const hunkDiff = (p, start, lines) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -${start - 1},0 +${start},${lines.length} @@\n${lines.map((l) => `+${l}`).join('\n')}\n`;
 const padLine = (n = 900) => `// ${'x'.repeat(n)}`;
