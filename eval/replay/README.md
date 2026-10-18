@@ -60,6 +60,8 @@ All manifests here come from public repos. The model may have seen the later fix
 
 ## Experiment 2026-10-18: delivery arms (no change)
 
+> Correction: this experiment and the baseline before it ran with an EMPTY context pack (every result's engine notes read "context pack: 0 files, 0 KB"). `runEngine` started `claude.sh` with cwd = `<out>/<id>`, not the prepared checkout `<out>/<id>/repo`, and `claude-api.js` reads the pack from `GITHUB_WORKSPACE` or cwd. They measured a diff-only configuration, not production, and are superseded by "Experiment 2026-10-18 (v2, with context pack)" below. `run` now sets `GITHUB_WORKSPACE` to the checkout and exits non-zero when a PR with changed files reports "context pack: 0 files".
+
 Question: can more of the catches reach the PR as inline comments, or does a stronger model catch more? Replay of the 12 holdout bug PRs and 12 clean PRs, 3 repetitions per arm, strict grading by the rubric above. Arms: A haiku-5.5 (main), B `claude-sonnet-5-5` (main), C haiku-5.5 plus a temporary switch that let a non-high-confidence finding on a PR-added line go inline in a reduced review (all other gates kept).
 
 Pre-registered rules: C becomes default if mean inline-delivered catches >= A + 1 and inline comments per clean PR <= 0.25. B becomes the recommended PR-mode model if mean catches >= A + 2, cost <= $0.05/PR and clean-PR findings per PR <= A's. Otherwise no change.
