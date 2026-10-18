@@ -1629,6 +1629,20 @@ test('network reset: the retry is refused when it would exceed the budget; the l
   near(u.totalCostUsd, W); assert.equal(u.costEstimated, true);
 });
 
+test('deadline timeout/abort as the only attempt, or after a reset: charged at the call worst case, cost estimated', async (t) => {
+  const W = await worstOf(t), abort = (name) => () => { throw Object.assign(new Error('aborted'), { name }); };
+  for (const name of ['TimeoutError', 'AbortError']) {
+    const h = harness(t, [abort(name)]);
+    await h.go({ MAX_BUDGET_USD: String(2.5 * W) });
+    assert.equal(h.file('engine-status'), 'timeout');
+    const u = JSON.parse(h.file('usage.json'));
+    near(u.totalCostUsd, W); assert.equal(u.costEstimated, true, name);
+  }
+  const h = harness(t, [reset, abort('TimeoutError')]);
+  await h.go({ MAX_BUDGET_USD: String(2.5 * W) });
+  near(JSON.parse(h.file('usage.json')).totalCostUsd, 2 * W);
+});
+
 test('429 then success: the retry and the charge are unchanged (an HTTP error reply was not run): exact cost, not estimated, even with a budget below two worst cases', async (t) => {
   const W = await worstOf(t), h = harness(t, [err(429, 'rate_limit_error', 'slow down'), good()]);
   await h.go({ MAX_BUDGET_USD: String(1.5 * W) });
