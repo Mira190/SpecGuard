@@ -7,7 +7,7 @@
 #     -f sha=<blob sha of the existing file> -f content="$(base64 -w0 eval/replay-workflow.yml)"
 #   gh workflow run specguard-audit.yml -R Mira190/Kite --ref eval/replay-holdout -f specguard_ref=main -f manifest=eval/replay/holdout-pairs.json
 #   gh workflow run specguard-audit.yml -R Mira190/Kite --ref eval/replay-holdout -f specguard_ref=main -f manifest=eval/replay/holdout-clean.json
-# Optional: -f ids=orpc-1846,rqlite-2061 (default: every replay_eligible pair / every clean PR)  -f budget=1.00  -f model=claude-haiku-5-5
+# Optional: -f inline_changed=1 (experiment switch, default off) -f ids=orpc-1846,rqlite-2061 (default: every replay_eligible pair / every clean PR)  -f budget=1.00  -f model=claude-haiku-5-5
 # Download: gh run download <run-id> -R Mira190/Kite -D <dir>   (one artifact per PR, replay-<id>/result.json). Grade with eval/replay/README.md.
 # Third-party repos are checked out read-only (no credentials kept) and only read by SpecGuard's collector; nothing from them is executed or uploaded.
 name: SpecGuard audit
@@ -19,6 +19,7 @@ on:
       ids: { description: "Comma-separated ids (replay_id or clean id); empty = all in the manifest", default: "" }
       model: { description: "Model id for the engine", default: claude-haiku-5-5 }
       budget: { description: "Per-PR max_budget_usd (hard bound, checked before the call)", default: "1.00" }
+      inline_changed: { description: "Experiment: 1 = a non-high-confidence finding on a PR-added line still goes inline in a reduced review (INLINE_CHANGED_LINES)", default: "" }
 permissions:
   contents: read
 jobs:
@@ -54,6 +55,7 @@ jobs:
           ID: ${{ matrix.pr.id }}
           MODEL: ${{ inputs.model }}
           BUDGET: ${{ inputs.budget }}
+          INLINE_CHANGED_LINES: ${{ inputs.inline_changed }}
         run: node sg/eval/replay.js run --manifest "sg/$MANIFEST" --id "$ID" --repo target --out out --model "$MODEL" --budget "$BUDGET"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
