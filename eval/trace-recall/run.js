@@ -58,7 +58,7 @@ function makeVariants() { // R / C / RC as local commits on top of the pinned SH
   const heads = {};
   for (const c of cases.cases) {
     if (only && !only.has(c.id)) continue;
-    for (const [v, edits] of [['R', c.edits.R], ['C', c.edits.C], ['RC', [...c.edits.R, ...c.edits.C]]]) {
+    for (const [v, edits] of [['R', c.edits.R], ['C', c.edits.C], ['RC', [...c.edits.R, ...c.edits.C]], ...(c.edits.T ? [['T', c.edits.T]] : [])]) {
       git(['checkout', '-q', '--detach', '-f', BASE]);
       apply(edits);
       git(['commit', '-qam', `${v} ${c.id}`]);
@@ -104,7 +104,7 @@ const heads = makeVariants();
 const candJs = candidatesScript();
 const variants = [];
 for (const [id, h] of Object.entries(heads)) { const r = runVariant(id, h, candJs); variants.push(r); console.log(`${id}: ${r.status} ${r.trace_ms + r.cand_ms} ms`); }
-checkNotAllEmpty(variants.filter((v) => v.variant !== 'R').map((v) => ({ id: v.id, text: v.test_candidates })));
+checkNotAllEmpty(variants.filter((v) => v.variant === 'C' || v.variant === 'RC').map((v) => ({ id: v.id, text: v.test_candidates })));
 let srcSha = ''; try { srcSha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: SRC, encoding: 'utf8' }).stdout.trim(); } catch {}
 fs.writeFileSync(OUT, JSON.stringify({ target: cases.target, specguard_sha: srcSha, node: process.version, env_unset: PINNED_UNSET, variants }, null, 1) + '\n');
 console.log(`wrote ${OUT}`);
