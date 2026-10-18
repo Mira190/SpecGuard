@@ -46,6 +46,33 @@ test('collect: discovered design doc, forced glob, rejected README (with a reaso
   assert.equal(r.docs.length, 2);
 });
 
+test('collect: 61 admissible documents: scan_scope all records docs_over_cap (the 61st is not reviewed); outside all the count is absent and the document is only listed as not admitted', (t) => {
+  const files = Object.fromEntries(Array.from({ length: 61 }, (_, i) => [`specs/r${String(i).padStart(2, '0')}.md`, `# Spec ${i}
+
+The widget ${i} MUST reject an empty input.
+`]));
+  for (const all of [true, false]) {
+    const { root, ctx } = repo(t, files), r = collect({ cwd: root, ctx, scopeAll: all });
+    const meta = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8'));
+    assert.equal(r.docs.length, 60);
+    assert.equal(meta.docs_over_cap, all ? 1 : undefined, `scopeAll ${all}`);
+    assert.ok(rows(ctx, 'audit-rejected.txt').some(([, why]) => /over the 60-document audit limit/.test(why)));
+  }
+});
+
+test('collect: docs_over_cap counts only the documents cut by the cap, never those rejected for classification', (t) => {
+  const files = Object.fromEntries(Array.from({ length: 61 }, (_, i) => [`specs/r${String(i).padStart(2, '0')}.md`, `# Spec ${i}
+
+The widget ${i} MUST reject an empty input.
+`]));
+  files['README.md'] = FILES['README.md']; files['CHANGELOG.md'] = '# Changelog\n\nFixed a typo.\n';
+  const { root, ctx } = repo(t, files); collect({ cwd: root, ctx, scopeAll: true });
+  const rej = rows(ctx, 'audit-rejected.txt'), cap = rej.filter(([, why]) => /over the 60-document audit limit/.test(why));
+  assert.ok(rej.length > cap.length, `classification rejects exist: ${JSON.stringify(rej)}`);
+  assert.equal(cap.length, 1);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(ctx, 'audit-meta.json'), 'utf8')).docs_over_cap, cap.length);
+});
+
 test('collect: an excluded glob drops a document; no discovery output means no documents', (t) => {
   const { root, ctx } = repo(t, FILES);
   collect({ cwd: root, ctx, reqPaths: '!docs/**' });
