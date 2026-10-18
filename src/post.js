@@ -456,12 +456,12 @@ function skeletonGate(f) {
 }
 
 // Order, cap, and route findings. Summary items carry the reason they are there.
-function plan(findings, maps, maxComments = 10, lowOk = () => false) {
+function plan(findings, maps, maxComments = 10) {
   const cap = Math.min(HARD_CAP, maxComments);
   const rank = (f) => KINDS.indexOf(f.kind) * 2 + (f.confidence === 'high' ? 0 : 1);
   const out = { inline: [], file: [], summary: [] };
   for (const f of [...findings].sort((a, b) => rank(a) - rank(b))) {
-    if (f.confidence === 'low' && !lowOk(f)) { out.summary.push({ f, why: 'low confidence' }); continue; }
+    if (f.confidence === 'low') { out.summary.push({ f, why: 'low confidence' }); continue; }
     const a = anchor(f, maps.get(f.path), out.file.length);
     if (a === 'inline' && out.inline.length < cap) out.inline.push(f);
     else if (a === 'inline') out.summary.push({ f, why: 'over max_comments' });
@@ -1786,9 +1786,7 @@ async function run({ github, context, core }) {
 
   // Reduced review: only a high-confidence finding with two verified citations goes inline (at most REDUCED_INLINE); the rest are one-liners in the summary.
   const reasons = reducedReasons({ em, repair, engineNotes: (readCtx('engine-notes') || '').split('\n').filter((x) => x.trim()), data }), reduced = reasons.length > 0;
-  // Experiment switch (env INLINE_CHANGED_LINES=1, default off, set by the replay runner only, no public input yet): a non-high-confidence finding on a line the PR added still goes inline; the two-citation gate, the cap and dedup stay.
-  const onAdded = env.INLINE_CHANGED_LINES === '1' ? (f) => maps.get(f.path)?.changed.RIGHT.has(f.line) === true : () => false;
-  const p = plan(reduced ? kept.filter((f) => (f.confidence === 'high' || onAdded(f)) && citationsOf(f, data) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments, onAdded);
+  const p = plan(reduced ? kept.filter((f) => f.confidence === 'high' && citationsOf(f, data) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
   if (reduced) {
     const brief = (f, why) => ({ f, why, brief: true });
     p.summary = [...p.summary.map((x) => brief(x.f, x.why === 'over max_comments' ? 'reduced review: inline limit' : x.why)), ...p.file.map((f) => brief(f, 'reduced review: not inline')),

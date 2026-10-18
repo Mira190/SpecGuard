@@ -122,7 +122,7 @@ function setup(t, data = report(), options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-'));
   const previous = { ...process.env };
   t.after(() => {
-    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF', 'DELIVERY', 'INLINE_CHANGED_LINES']) {
+    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF', 'DELIVERY']) {
       if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
     }
     fs.rmSync(dir, { recursive: true, force: true });
@@ -2236,7 +2236,7 @@ test('M1: every env var post.js reads is mapped in the Action post step (runner-
   const src = fs.readFileSync(path.join(__dirname, 'post.js'), 'utf8');
   const read = new Set([...src.matchAll(/\benv\.([A-Z][A-Z_]+)/g)].map((m) => m[1]));
   const mapped = new Set(Object.keys(postStepEnv()));
-  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA', 'GITHUB_RUN_ATTEMPT', 'GITHUB_EVENT_NAME', 'INLINE_CHANGED_LINES']); // set by the runner / optional fallback to the event payload; INLINE_CHANGED_LINES: experiment env, set by the replay runner only (no action input)
+  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA', 'GITHUB_RUN_ATTEMPT', 'GITHUB_EVENT_NAME']); // set by the runner / optional fallback to the event payload
   assert.ok(read.has('RESOLVE_STALE') && read.has('MAX_COMMENTS'), 'the scan found the known variables');
   assert.deepEqual([...read].filter((k) => !mapped.has(k) && !runner.has(k)), []);
 });
@@ -4412,21 +4412,4 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
   const [none] = post.followUp({ priors: new Map([[fp, { body: mine.body, path: 'a.js' }]]), survive: new Set(), me: null, headSha: 'HEAD', cwd: '.', threads: [{ ...t2, comments: { nodes: [mine] } }] });
   assert.ok(!('verdict' in none));
   assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
-});
-
-test('reduced + INLINE_CHANGED_LINES: a low-confidence finding on an added line goes inline, one on an unchanged line stays summary; off: unchanged behaviour', async (t) => {
-  const mk = () => { const d = reducedData(); d.findings = d.findings.filter((f) => f.kind === 'weak_test' && [1, 3].includes(f.line)).map((f) => ({ ...f, confidence: 'low' })); return d; }; // line 3 is added by the patch, line 1 is context
-  const run = async (flag) => {
-    const s = setup(t, mk());
-    writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5-5'] }));
-    if (flag) process.env.INLINE_CHANGED_LINES = flag; else delete process.env.INLINE_CHANGED_LINES;
-    await post(s);
-    return s;
-  };
-  const on = await run('1');
-  assert.deepEqual(on.calls.review[0].comments.map((c) => c.line), [3], 'added line goes inline');
-  assert.match(on.calls.summary[0].body, /src\.js:1\b/, 'the context-line finding stays in the summary');
-  const off = await run('');
-  assert.equal(off.calls.review.flatMap((r) => r.comments).length, 0, 'off: nothing inline');
-  assert.match(off.calls.summary[0].body, /src\.js:3\b/);
 });
