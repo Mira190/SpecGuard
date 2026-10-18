@@ -6,7 +6,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { analyze, format, parseTestCandidates } = require('./analyze.js');
+const { analyze, attribute, format, parseTestCandidates } = require('./analyze.js');
 const fx = require('./fixture.json');
 
 const res = analyze(fx.results, fx.cases);
@@ -112,4 +112,19 @@ test('the harness child env drops every ambient trace setting and keeps the rest
   const e = harnessEnv({ TRACE: 'off', IGNORE_EXTRA: 'x', STANDARDS_PATHS: 'y', TRACE_BUDGET_MS: '1', TEST_PATHS: 'z', PATH: 'p' }, { CTX: 'c' });
   assert.deepEqual(e, { PATH: 'p', CTX: 'c' });
   assert.ok(PINNED_UNSET.includes('TRACE'));
+});
+
+test('attribute: ranked_out, not_retrieved, cut (note names the file), unknown (unnamed limit note); misses by location kind', () => {
+  const at = attribute(fx.results, fx.cases);
+  // A-RC: f1 delivered at rank 4 -> ranked_out; f2 absent -> not_retrieved, a different file of the same (root) module; t1 absent -> not_retrieved
+  assert.deepEqual(at.counts['req->code code'], { ranked_out: 1, cut: 0, not_retrieved: 1, unknown: 0 });
+  assert.deepEqual(at.counts['req->code tests'], { ranked_out: 0, cut: 0, not_retrieved: 1, unknown: 0 });
+  assert.deepEqual(at.req_to_code_locations.find((l) => l.id === 'A-RC'), { id: 'A-RC', required: 2, found: 1, misses: [{ loc: 'f2.js:5-5', kind: 'same_dir', alt: false }] });
+  const rc = fx.results.variants.find((v) => v.id === 'A-RC');
+  const cut = attribute({ variants: [{ ...rc, limitations: ['2 more code/test candidate(s) for S1 not shown (top 3 kept): f2.js.'] }] }, fx.cases);
+  assert.equal(cut.misses.find((m) => m.item === 'f2.js:5-5').class, 'cut');
+  const unk = attribute({ variants: [{ ...rc, limitations: ['9 more code/test candidate(s) for S1 not shown (top 3 kept): a.js, b.js, c.js, d.js, e.js.'] }] }, fx.cases); // 5 names = list may be truncated
+  const full = attribute({ variants: [{ ...rc, limitations: ['2 more code/test candidate(s) for S1 not shown (top 3 kept): a.js, b.js.'] }] }, fx.cases); // complete list without f2 = never retrieved
+  assert.equal(full.misses.find((m) => m.item === 'f2.js:5-5').class, 'not_retrieved');
+  assert.equal(unk.misses.find((m) => m.item === 'f2.js:5-5').class, 'unknown');
 });
