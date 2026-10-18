@@ -29,7 +29,7 @@ Copilot cost is an estimate: 1 AI credit = $0.01, so a PR review was about $0.02
 - **JSON contract under auto: 2 of 5 PR runs failed** (no JSON; missing required field), wasting the whole run. Fixed by the repair turn (WP-E); not yet observed live.
 - **Requirement docs missed twice**: a descriptive `docs/design.md` fails the density rule (3 normative sentences in 27 KB). Fixed by the spec-like filename rule plus changed-block criteria; `docs/architecture.md` and README stay rejected and are listed as rejected candidates.
 - **Threads cannot be auto-resolved with the default `GITHUB_TOKEN`**: `resolveReviewThread` returned "Resource not accessible by integration". Granting `contents: write` was not tested (left to the owner).
-- Run 3b re-raised the repeat re-arm gap at the app wiring (`if (next.on) armSchedule(next.rearmFrom)`) after the logic moved into a unit-tested pure function. Arguably still valid (the wiring is untested), but it risks reading as nagging.
+- Run 3b re-raised the repeat re-arm gap at the app wiring (应用层重新启动重复调度的逻辑) after the logic moved into a unit-tested pure function. Arguably still valid (the wiring is untested), but it risks reading as nagging.
 - Model and effort could not be pinned: the local account offers `auto` only, and `auto` rejects `--reasoning-effort`. The owner will test on a company plan.
 
 ## Open
