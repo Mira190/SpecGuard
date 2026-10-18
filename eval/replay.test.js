@@ -153,6 +153,27 @@ test('runReal fault injection: every way the run is not a measurement is invalid
   }
 });
 
+test('runReal: findings.json={} (post.js rejects the shape) is invalid with the publisher reason; revalidate recomputes it from result.json + summary.md, also for an old result without publisher_status', async () => {
+  const { revalidate } = require('./replay.js');
+  const r = await replay('v-shape', ({ ctx }) => { fs.writeFileSync(path.join(ctx, 'findings.json'), '{}'); fs.writeFileSync(path.join(ctx, 'engine-notes'), 'context pack: 1 files, 0 KB\n'); return 0; });
+  assert.deepStrictEqual([r.valid, r.publisher_status, r.publisher_reason], [false, 'failed', 'findings.json failed validation: coverage must be an array']);
+  assert.match(r.invalid_reason, /^publisher: findings\.json failed validation/);
+  const dir = path.join(tmp, 'out-valid', 'v-shape'), old = JSON.parse(fs.readFileSync(path.join(dir, 'result.json'), 'utf8'));
+  assert.match(revalidate(dir), /^publisher: findings\.json failed validation/);
+  delete old.publisher_status; delete old.publisher_reason; old.valid = true; old.invalid_reason = null;
+  fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(old));
+  assert.match(revalidate(dir), /^publisher: findings\.json failed validation/, 'old result: status read from the summary marker');
+  assert.strictEqual(revalidate(path.join(tmp, 'out-valid', 'v-ok')), null);
+});
+
+test('invalid: publisher failed is invalid; incomplete (a reduced review) stays a valid measurement', () => {
+  const { invalid } = require('./replay.js');
+  const ok = { collect_ok: true, skip: false, engine_exit: 0, engine_status: 'success', findings_present: true, files: 0, engine_notes: [] };
+  assert.strictEqual(invalid({ ...ok, publisher_status: 'incomplete' }), null);
+  assert.strictEqual(invalid({ ...ok, publisher_status: 'complete' }), null);
+  assert.strictEqual(invalid({ ...ok, publisher_status: 'failed', publisher_reason: 'x' }), 'publisher: x');
+});
+
 test('invalid: no pack note is fine when the PR changed no files', () => {
   const { invalid } = require('./replay.js');
   const ok = { collect_ok: true, skip: false, engine_exit: 0, engine_status: 'success', findings_present: true, files: 1, engine_notes: ['context pack: 8 files, 1 KB'] };

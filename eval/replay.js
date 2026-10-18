@@ -78,6 +78,9 @@ function summaryItems(summary) {
   return parseSummary(s).items;
 }
 
+// post.js's final status/reason: its core outputs, else (an old result, a downloaded artifact) the summary's status marker and "Could not complete: <reason>" line.
+const publisher = (summary, outputs = {}) => ({ publisher_status: outputs.status || /<!-- specguard:status=(\w+) -->/.exec(summary || '')?.[1] || null, publisher_reason: outputs.reason || /Could not complete: ([^\n]*)/.exec(summary || '')?.[1] || null });
+
 async function finishRealOne(id, out, { engine = 'local', model = '' } = {}) {
   const dir = path.resolve(out, id), meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
   const ctx = path.join(dir, 'ctx'), present = fs.existsSync(path.join(ctx, 'findings.json'));
@@ -90,7 +93,7 @@ async function finishRealOne(id, out, { engine = 'local', model = '' } = {}) {
   finally { for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   fs.writeFileSync(path.join(dir, 'posted.json'), JSON.stringify({ comments: posted.comments, reviews: posted.reviews, warnings: posted.warnings }, null, 2) + '\n');
   fs.writeFileSync(path.join(dir, 'summary.md'), posted.summary || '');
-  return { id, trace: meta.trace, findings_present: present, ...countFindings(posted.comments, posted.summary) };
+  return { id, trace: meta.trace, findings_present: present, ...publisher(posted.summary, posted.outputs), ...countFindings(posted.comments, posted.summary) };
 }
 
 function table(rows) {
@@ -142,11 +145,16 @@ const invalid = (r) => {
   if (!r.collect_ok) return 'collect failed'; if (r.skip) return 'skipped by collect';
   if (r.engine_exit !== 0) return `engine exit ${r.engine_exit}`; if (r.engine_status !== 'success') return `engine status ${r.engine_status}`;
   if (!r.findings_present) return 'no findings.json';
+  // post.js rejected the run (findings.json of the wrong shape, ...): not a measurement. `incomplete` stays valid: a fast-tier reduced review is a real, if smaller, measurement.
+  if (r.publisher_status === 'failed') return `publisher: ${r.publisher_reason || 'failed'}`;
   if (r.files > 0) { const m = (r.engine_notes || []).map((n) => /^context pack: (\d+) files/.exec(n)).find(Boolean); if (!m) return 'no context pack note'; if (+m[1] === 0) return `context pack is empty (0 files) although the PR changed ${r.files} file(s)`; }
   return null;
 };
 
 const readJson = (p, d = null) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return d; } };
+
+// Offline: the invalid reason (or null) of a downloaded artifact dir (result.json + summary.md), also for results written before publisher_status existed. `node eval/replay.js revalidate --out DIR --id ID`.
+const revalidate = (dir) => { const r = readJson(path.join(dir, 'result.json'), {}); return invalid({ ...r, ...(r.publisher_status ? {} : publisher(fs.existsSync(path.join(dir, 'summary.md')) ? fs.readFileSync(path.join(dir, 'summary.md'), 'utf8') : ''))}); };
 
 // prepare -> real engine -> finish (real post.run) -> <out>/<id>/result.json. `engine` is injectable for tests.
 async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget = '1.00', maxOutput = '32000', timeout = '12', trace = 'auto', engine = runEngine }) {
@@ -164,7 +172,7 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
   const f = (where) => (x) => ({ where, kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null });
   result.findings = [...posted.comments.map(parseComment).filter(Boolean).map(f('inline')),
     ...summaryItems(fs.readFileSync(path.join(dir, 'summary.md'), 'utf8')).map((x) => ({ ...f('summary')(x), why: x.why || '' }))];
-  result.findings_present = row.findings_present; result.invalid_reason = invalid(result); result.valid = !result.invalid_reason;
+  result.findings_present = row.findings_present; result.publisher_status = row.publisher_status; result.publisher_reason = row.publisher_reason; result.invalid_reason = invalid(result); result.valid = !result.invalid_reason;
   result.counts = { inline: row.inline.total, summary_only: row.summary_only, pre_existing: row.pre_existing };
   fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 2) + '\n');
   return result;
@@ -198,10 +206,11 @@ async function main() {
     if (!r.valid) throw new Error(`${r.id}: invalid replay: ${r.invalid_reason}`); // result.json is already written and uploaded
     return console.log(`${r.id}: ${r.engine_status} inline=${r.counts.inline} summary=${r.counts.summary_only} cost=$${r.usage.cost_usd}`);
   }
+  if (cmd === 'revalidate' && o.out && o.id) return o.id.split(',').forEach((id) => console.log(`${id}: ${revalidate(path.resolve(o.out, id)) || 'valid'}`));
   if (o.help || !['prepare', 'finish'].includes(cmd) || !o.out || !o.id) { console.log(USAGE); process.exit(o.help ? 0 : 2); }
   if (cmd === 'prepare') console.log(JSON.stringify(prepareReal({ repoDir: o.repo, base: o.base, head: o.head, prTitle: o.title, prBody: o.body, out: o.out, id: o.id, trace: o.trace, shared: o.shared }), null, 2));
   else await finishReal({ ids: o.id.split(','), out: o.out });
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, runEngine, invalid };
+module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, runEngine, invalid, revalidate, publisher };
