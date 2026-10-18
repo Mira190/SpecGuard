@@ -55,7 +55,7 @@ jobs:
           MODEL: ${{ inputs.model }}
           BUDGET: ${{ inputs.budget }}
         run: node sg/eval/replay.js run --manifest "sg/$MANIFEST" --id "$ID" --repo target --out out --model "$MODEL" --budget "$BUDGET"
-      - if: ${{ !cancelled() }}
+      - if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: replay-${{ matrix.pr.id }}
