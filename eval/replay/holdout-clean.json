@@ -22,7 +22,9 @@
       "pr_body_truncated": false,
       "author": "georgesittas",
       "labels": [],
-      "size": 95
+      "size": 95,
+      "control": "mixed_fix",
+      "control_why": "tokenizer refactor that also fixes a crash on an escape at the end of an unterminated string"
     },
     {
       "id": "sqlglot-hclean-2",
@@ -44,7 +46,9 @@
       "pr_body_truncated": false,
       "author": "PiyaDaswadkar",
       "labels": [],
-      "size": 26
+      "size": 26,
+      "control": "no_known_bug",
+      "control_why": "Adds MySQL return-type annotation for a bitwise aggregate; new feature, no defect fixed."
     },
     {
       "id": "sqlglot-hclean-3",
@@ -66,7 +70,9 @@
       "pr_body_truncated": false,
       "author": "rusackas",
       "labels": [],
-      "size": 33
+      "size": 33,
+      "control": "no_known_bug",
+      "control_why": "adds a new optional argument and dialect parse/generate support; feature only"
     },
     {
       "id": "sqlglot-hclean-4",
@@ -88,7 +94,9 @@
       "pr_body_truncated": false,
       "author": "geooo109",
       "labels": [],
-      "size": 49
+      "size": 49,
+      "control": "no_known_bug",
+      "control_why": "parser refactor of distinct-argument functions plus new duckdb quantile support, no defect fixed"
     },
     {
       "id": "orpc-hclean-1",
@@ -110,7 +118,9 @@
       "pr_body_truncated": false,
       "author": "dinwwwh",
       "labels": [],
-      "size": 65
+      "size": 65,
+      "control": "no_known_bug",
+      "control_why": "Refactor swapping hand-written own-property lookups for an existing helper; behaviour preserved."
     },
     {
       "id": "orpc-hclean-2",
@@ -132,7 +142,9 @@
       "pr_body_truncated": false,
       "author": "dinwwwh",
       "labels": [],
-      "size": 194
+      "size": 194,
+      "control": "no_known_bug",
+      "control_why": "new schema registries merged into generated JSON schema; pure feature"
     },
     {
       "id": "orpc-hclean-3",
@@ -154,7 +166,9 @@
       "pr_body_truncated": false,
       "author": "dinwwwh",
       "labels": [],
-      "size": 87
+      "size": 87,
+      "control": "mixed_fix",
+      "control_why": "infinity values previously turned into null on the wire; the change corrects that lossy behaviour"
     },
     {
       "id": "orpc-hclean-4",
@@ -176,7 +190,9 @@
       "pr_body_truncated": false,
       "author": "dinwwwh",
       "labels": [],
-      "size": 58
+      "size": 58,
+      "control": "mixed_fix",
+      "control_why": "Performance change but body says two loops visiting inherited keys are also fixed."
     },
     {
       "id": "rqlite-hclean-1",
@@ -198,7 +214,9 @@
       "pr_body_truncated": false,
       "author": "otoolep",
       "labels": [],
-      "size": 26
+      "size": 26,
+      "control": "no_known_bug",
+      "control_why": "restructures a fallback branch into an early return; same behaviour, refactor"
     },
     {
       "id": "rqlite-hclean-2",
@@ -220,7 +238,9 @@
       "pr_body_truncated": false,
       "author": "otoolep",
       "labels": [],
-      "size": 141
+      "size": 141,
+      "control": "mixed_fix",
+      "control_why": "perf change that also adds a guard so query-only mode cannot be switched off by a statement, closing a gap"
     },
     {
       "id": "rqlite-hclean-3",
@@ -242,7 +262,9 @@
       "pr_body_truncated": false,
       "author": "otoolep",
       "labels": [],
-      "size": 547
+      "size": 547,
+      "control": "mixed_fix",
+      "control_why": "Adds fatal SQLite error handling, preserves errors from close/rollback and fixes a possible nil result; changelog lists it under bug fixes."
     },
     {
       "id": "rqlite-hclean-4",
@@ -264,7 +286,9 @@
       "pr_body_truncated": false,
       "author": "otoolep",
       "labels": [],
-      "size": 160
+      "size": 160,
+      "control": "no_known_bug",
+      "control_why": "console topology UI additions (saved preferences, probe labels); feature work"
     }
   ]
 }
