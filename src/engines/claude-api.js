@@ -238,6 +238,12 @@ function packFiles(ctx) {
   return [...new Set(review.flatMap((p) => [p, ...(cands.get(p) || [])]))];
 }
 
+function unitSyms(lines) { // the names a unit (or one part's lines) defines, for slicing its tests; capped: more than UNIT_SYMS (the pack lists such a test as cut). src/audit-units.js prices a big test from the same call
+  const out = new Set(); let capped = false;
+  const add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n)) { if (out.size < UNIT_SYMS) out.add(n); else if (!out.has(n)) capped = true; } };
+  for (const l of lines) symbolsIn(l, add);
+  const syms = [...out]; syms.capped = capped; return syms;
+}
 function contextPack(ctx, root, limit) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
@@ -284,7 +290,7 @@ function contextPack(ctx, root, limit) {
   const units = new Map(list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1]).map((u) => [u[1], u[4] && u[4] !== 'none' ? u[4].split(', ') : []])), review = units.size ? [...units.keys()] : focus.length ? focus : list('files.txt');
   const cands = parseCandidates(rd('test-candidates.txt'));
   const numbered = rd('diff.numbered.txt'), dname = numbered.trim() ? 'diff.numbered.txt' : 'diff.patch', diff = numbered.trim() ? numbered : rd('diff.patch'), leads = rd('leads.txt');
-  const unitSymbols = (p) => { const out = new Set(), part = unitPart.get(p); let capped = false; const add = (n) => { if (n && n.length >= 4 && !SYM_KW.has(n)) { if (out.size < UNIT_SYMS) out.add(n); else if (!out.has(n)) capped = true; } }; for (const l of (packRead(root, p) || '').split('\n').slice(part ? part.a - 1 : 0, part ? part.b : undefined)) symbolsIn(l, add); const syms = [...out]; syms.capped = capped; return syms; }; // names the unit defines in this run's part (all of the file when it is not in parts): a big test file is shown as the tests that mention them; capped: more names than UNIT_SYMS, so the file is listed as cut
+  const unitSymbols = (p) => { const part = unitPart.get(p); return unitSyms((packRead(root, p) || '').split('\n').slice(part ? part.a - 1 : 0, part ? part.b : undefined)); }; // names the unit defines in this run's part (all of the file when it is not in parts): a big test file is shown as the tests that mention them; capped: more names than UNIT_SYMS, so the file is listed as cut
   const packTests = new Map(list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1] && u[8]).map((u) => [u[1], u[8] === '-' ? [] : u[8].split(', ')])); // a unit with more tests than its share of the pack: the collector's list of the ones to load (audit-units.js room.trim)
   const unitPart = new Map(list('audit-units.txt').map((l) => l.split('\t')).map((u) => [u[1], /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(u[7] || '')]).filter((x) => x[1]).map(([p, w]) => [p, { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] }]));
   if (units.size) for (const p of review) addFile(p, true, false, null, limit, unitPart.get(p)); // scan: every unit file first, so no test starves a later unit (addFile skips a file already added)
@@ -556,6 +562,6 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
   } catch { return null; }
 }
 
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, ALL_MAX_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, ALL_MAX_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles, slices, unitSyms };
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts
