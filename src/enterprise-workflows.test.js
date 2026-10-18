@@ -223,7 +223,7 @@ test('specguard-run.yml: the results artifact uploads only the named result file
 test('specguard-run.yml: manual model/size/budget inputs reach the action (empty = action default); the target checkout is blobless and non-shallow without --shallow-since; counts get the full SHA', () => {
   const y = central(), step = y.slice(y.indexOf('uses: ./.specguard-src')), action = fs.readFileSync(path.join(root, 'action.yml'), 'utf8');
   for (const k of ['max_budget_usd']) {
-    assert.match(y, new RegExp(`\\n {6}${k}: \\{ description: "[^"\\n]+", required: false, type: string, default: "" \\}`), `${k} is an optional input, empty by default`);
+    assert.match(y, new RegExp(`\\n {6}${k}: \\{ description: "[^"\\n]+", required: false, type: string, default: "5" \\}`), `${k} is an optional input, default "5" (a full scan of a large repository exceeds the action default)`);
     assert.match(step, new RegExp(`\\n {10}${k}: \\$\\{\\{ inputs\\.${k} \\}\\}`), `${k} is passed to the action`);
   }
   assert.match(y, /\n {6}model: \{ description: "[^"\n]+", required: false, type: string, default: "haiku-5\.5" \}/);
