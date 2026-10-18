@@ -62,13 +62,13 @@ const ctxCandidates = () => { try { return readCandidates(fs.readFileSync(path.j
 function readUnits(txt) {
   const m = new Map();
   for (const l of lines(txt)) {
-    const [id, p = '', score = '0', why = '', tests = 'none', leads = '-', ver = '', part = '-'] = l.split('\t');
+    const [id, p = '', score = '0', why = '', tests = 'none', leads = '-', ver = '', part = '-', pack = ''] = l.split('\t');
     const w = /^part (\d+)\/(\d+) lines (\d+)-(\d+)$/.exec(part); // a unit reviewed in parts: this run's window (audit-units.js partOf)
     if (/^[0-9a-f]{8}$/.test(id) && p) {
       const win = w && +w[1] >= 1 && +w[1] <= +w[2] ? { k: +w[1] - 1, n: +w[2], a: +w[3], b: +w[4] } : null, was = m.get(id) && m.get(id).part;
       // a stateless run lists several parts of one unit (one row each): they merge into one unit; ks = the parts, spans = their line windows, k = the last part
       if (was && win) { (was.ks ||= [was.k + 1]).push(win.k + 1); (was.spans ||= [[was.a, was.b]]).push([win.a, win.b]); was.k = Math.max(was.k, win.k); was.a = Math.min(was.a, win.a); was.b = Math.max(was.b, win.b); continue; }
-      m.set(id, { id, path: p, score: +score || 0, why, tests: tests === 'none' ? [] : tests.split(', ').filter(Boolean), leads, ...(/^[0-9a-f]{8}$/.test(ver) ? { ver } : {}), ...(win ? { part: win } : {}) });
+      m.set(id, { id, path: p, score: +score || 0, why, tests: tests === 'none' ? [] : tests.split(', ').filter(Boolean), pack: pack.split(', ').filter((x) => x && x !== '-'), leads, ...(/^[0-9a-f]{8}$/.test(ver) ? { ver } : {}), ...(win ? { part: win } : {}) });
     }
   }
   return m;
@@ -337,6 +337,9 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
     const c = { path: f.path, line: f.line, quote: f.quote }, at = `unit finding "${oneLine(f.title, 60)}" (${f.path}:${f.line})`, u = units && units.get(f.unit);
     if (!locate(c)) { notes.push(`${at}: ${solid(f.quote) ? 'the quote was not found at the cited line' : `the quote is under ${MIN_QUOTE} characters`}`); dropped.add(f.unit); continue; }
     if (isDoc(c.path) || (f.kind === 'missing_test') === testFile(c.path)) { notes.push(`${at}: ${f.kind === 'missing_test' ? 'a missing_test cites the unit\'s code, not a test or a document' : `a ${f.kind} cites a test file`}`); dropped.add(f.unit); continue; }
+    // provenance: the declared unit ran in this call, and the finding cites its own file (missing_test) or one of its listed tests (else); another unit's path was not this unit's review
+    const why = !u ? '' : callKeys && !callKeys.some((k) => k === u.id || k.startsWith(`${u.id}:`)) ? 'the declared unit was not reviewed in the call that returned it' : f.kind === 'missing_test' ? (c.path !== u.path ? "a missing_test cites another unit's file" : '') : f.kind === 'weak_test' && !u.tests.includes(c.path) && !u.pack.includes(c.path) ? `a ${f.kind} cites a test that is not listed for the declared unit` : '';
+    if (why) { notes.push(`${at}: ${why}`); dropped.add(f.unit); continue; }
     // the parts that ran (part keys `unit:k`, minus gone = budget-dropped or failed, as render's ran): a line in a part that did not run was not reviewed. Spans stay separate, never one min-max window.
     const ran = u && u.part && c.path === u.path && (u.part.ks || [u.part.k + 1]).flatMap((k, i) => (gone.has(`${u.id}:${k}`) || (callKeys && !callKeys.includes(`${u.id}:${k}`)) ? [] : [(u.part.spans || [[u.part.a, u.part.b]])[i]]));
     if (ran && !ran.some(([a, b]) => c.line >= a && c.line <= b)) { notes.push(`${at}: outside this run's part of the unit (lines ${ran.map(([a, b]) => `${a}-${b}`).join(', ') || 'none ran'}); that part is reviewed in another run`); continue; }

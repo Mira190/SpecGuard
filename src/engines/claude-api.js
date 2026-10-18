@@ -524,7 +524,8 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     let r = await call(system, user, maxTokens); r.usd = est.usd; // the worst case of this call: charged when its usage is unknown
     const rs = [r];
     // no JSON in the answer: ask once for the JSON object only, if the budget still covers a second call (length, policy, auth and quota failures are not retried)
-    if (!r.ok && r.answer?.trim() && worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user) + Buffer.byteLength(r.answer) + REPAIR.length, maxTokens).usd + charge(r) <= budget) { r = await call(system, user, maxTokens, r.answer); rs.push(r); }
+    const again = !r.ok && r.answer?.trim() ? worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user) + Buffer.byteLength(r.answer) + REPAIR.length, maxTokens).usd : 0; // the repair call's own worst case
+    if (again && again + charge(r) <= budget) { r = await call(system, user, maxTokens, r.answer); r.usd = again; rs.push(r); }
     writeUsage(rs);
     if (!r.ok) return failEnd(r);
     w('findings.json', r.found);

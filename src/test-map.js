@@ -22,7 +22,7 @@ const usableName = (n) => n.length >= 4 && /^[A-Za-z_$][\w$]*$/.test(n) && !NAME
 const DEFINE = /^\s*(?:Object\.)?define\w*\(\s*[\w$.]+\s*,\s*['"]([A-Za-z_$][\w$]*)['"]/;
 
 // Public top-level definitions per language, one regex list per family: pub = what the language calls public, top = the fallback (top-level functions) when nothing is public.
-// ponytail: line regexes, no parser. A JS `module.exports = { a, b }` counts as one, a Ruby `private` section or a Python `__all__` is not seen; the count only weights the risk (log-free, so a very large file dominates: cap it with scan_paths).
+// ponytail: line regexes, no parser. A JS `module.exports = { a, b }` counts as one (cjsNames reads its names), a Ruby `private` section or a Python `__all__` is not seen; the count only weights the risk (log-free, so a very large file dominates: cap it with scan_paths).
 const FAMILY = {
   js: { pub: [DEFINE, /^\s*export\s+(?!\*)/, /^\s*(?:module\.)?exports\.\w+\s*=/, /^\s*module\.exports\s*=/, /^\w+(?:\.\w+)+\s*=\s*(?:\w+(?:\.\w+)+\s*=\s*)*(?:async\s+)?function\b/], top: [/^(?:async\s+)?function\b/, /^(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?(?:function\b|\(.*\)\s*=>|\w+\s*=>)/] },
   py: { pub: [/^(?:async\s+def|def|class)\s+(?!_)\w/], top: [/^(?:async\s+)?def\s/] },
@@ -48,7 +48,32 @@ function publicDefs(file, ls) {
   if (!fam) return { count: 0, names: [] };
   const body = ls.filter((l) => !comment(l)), hit = (res) => body.filter((l) => res.some((re) => re.test(l)));
   const pub = hit(fam.pub), use = pub.length ? pub : hit(fam.top);
-  return { count: use.length, names: [...new Set(use.flatMap(namesOf))] };
+  const cjs = fam === FAMILY.js ? cjsNames(body) : [];
+  return { count: use.length, names: [...new Set([...use.flatMap(namesOf), ...cjs])].filter((n) => !(cjs.length && n === 'exports')) };
+}
+// Names a CommonJS file exports: `module.exports = { a, b: c, d() {} }` (keys and plain identifier values), `module.exports = name | function name`.
+// ponytail: the object literal is read as text (max 80 lines) and only its depth-0 entries count; a call value or a re-export from another file (`require('./x')`) gives no name, no cross-file following.
+function cjsNames(body) {
+  const out = [];
+  for (let i = 0; i < body.length; i++) {
+    const m = /^\s*module\.exports\s*=\s*(.*)$/.exec(body[i]); if (!m) continue;
+    const rest = m[1].trim(), f = /^(?:async\s+)?function\*?\s+([A-Za-z_$][\w$]*)/.exec(rest), w = /^([A-Za-z_$][\w$]*)\s*;?$/.exec(rest);
+    if (f) { out.push(f[1]); continue; }
+    // a bare name counts only when the file declares it as a function or class (`module.exports = res` of an object stays nameless)
+    if (w) { if (body.some((l) => new RegExp(`^\\s*(?:async\\s+)?(?:function\\*?|class)\\s+${w[1].replace(/\$/g, '\\$')}(?![\\w$])`).test(l))) out.push(w[1]); continue; }
+    if (!rest.startsWith('{')) continue;
+    let txt = rest.slice(1), j = i;
+    while (!/\}\s*;?\s*$/.test(body[j]) && j < i + 80 && j + 1 < body.length) txt += '\n' + body[++j];
+    const top = []; let cur = '', d = 0;
+    for (const c of txt) { if ('{(['.includes(c)) d++; else if ('})]'.includes(c)) { if (!d) break; d--; } if (c === ',' && !d) { top.push(cur); cur = ''; } else cur += c; }
+    top.push(cur);
+    for (const e of top) {
+      const k = /^\s*(?:async\s+)?\*?\s*([A-Za-z_$][\w$]*)\s*(?::\s*([A-Za-z_$][\w$]*)\s*$|[(:]|$)/.exec(e); if (!k) continue;
+      out.push(k[1]); if (k[2]) out.push(k[2]);
+    }
+    i = j;
+  }
+  return out;
 }
 
 // tests by stem, by folder and by file-name token: built once when many files are mapped (the scan maps thousands against thousands of tests)

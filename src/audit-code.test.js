@@ -37,6 +37,8 @@ const INV = (over = {}) => ({ head: 'abc123', max_units: 12, units: 140, with_te
   rows: [ROW(U1, 'src/js/orders.js', 54.2, '1 weak assertion, 2 fix commits in 180 days', ['test/orders.test.js']), ROW(U2, 'src/js/legacy.js', 21.5, 'no test', []), ROW(U3, 'src/js/cart.js', 9, '3 public definitions', []), ROW('99999999', 'src/js/other.js', 3, 'no test', [], 'not yet reviewed')],
   unreviewed: [{ id: '99999999', path: 'src/js/other.js', score: 3 }], ...over });
 const CODE = (findings, over = {}) => ({ list: UNITS(), inv: INV(over), findings });
+// units that own what the findings cite (a missing_test its own file, a weak_test a listed test): for tests whose subject is not provenance
+const owning = (fs_) => readUnits(fs_.map((f) => [f.unit, f.kind === 'missing_test' ? f.path : 'src/js/x.js', 5, 'x', f.kind === 'missing_test' ? 'none' : f.path, '-'].join('\t')).join('\n') + '\n');
 const checked = (fs_, o = {}) => verify(result(fs_), { read, units: UNITS(), ...o });
 const BLOB = 'https://github.com/o/r/blob/abc';
 
@@ -104,8 +106,8 @@ test('verify: the quote must sit at path:line (a near line is corrected); the ki
 });
 
 test('verify: the same kind cited at the same path:line by two units is one finding, kept for the unit whose file matches the cited test; other lines stay', () => {
-  const rows = (fs_) => checked(fs_).unit_findings.map((f) => [f.unit === U1 ? 'orders' : f.unit === U2 ? 'legacy' : 'cart', f.line]);
-  const other = { ...WEAK(), unit: U2 };
+  const other = { ...WEAK(), unit: U2 }, shared = readUnits([[U1, 'src/js/orders.js'], [U2, 'src/js/legacy.js'], [U3, 'src/js/cart.js']].map(([id, p]) => [id, p, 5, 'x', 'test/orders.test.js', '-'].join('\t')).join('\n') + '\n'); // the test is listed for all three units
+  const rows = (fs_) => checked(fs_, { units: shared }).unit_findings.map((f) => [f.unit === U1 ? 'orders' : f.unit === U2 ? 'legacy' : 'cart', f.line]);
   assert.deepEqual(rows([other, WEAK()]), [['orders', 2]], 'orders.js matches orders.test.js, whichever came first');
   assert.deepEqual(rows([{ ...WEAK(), unit: U3 }, other]), [['cart', 2]], 'no basename match: the first stays');
   assert.deepEqual(rows([other, { ...WEAK(), ...cite('test/orders.test.js', 5), quote: 'assert.equal(total(), 1);' }]).length, 2, 'control: another line is another finding');
@@ -170,30 +172,31 @@ const withSymbol = (fn) => Object.assign(() => null, { symbol: fn });
 
 test('scan gate: a missing_test whose enclosing symbol a test elsewhere references is low with the citation; no hit, a generic short name and a missing symbol search stay counted', () => {
   const G = () => uf({ unit: U2, ...gcite('src/js/gated.js', 1), title: 'legacyWrap doubles' }), seen = [];
-  const covers = withSymbol((n, own) => { seen.push([n, own]); return n === 'legacyWrap' ? 'test/other.spec.js:3' : null; });
-  const out = verify(result([G()]), { read: gread, units: UNITS(), covers }).unit_findings[0];
+  const covers = withSymbol((n, own) => { seen.push([n, own]); return n === 'legacyWrap' ? 'test/other.spec.js:3' : null; }), units = owning([G()]);
+  const out = verify(result([G()]), { read: gread, units, covers }).unit_findings[0];
   assert.deepEqual([out.low, out.lowWhy], [true, 'may be covered by test/other.spec.js:3 (legacyWrap is referenced there)']);
   assert.deepEqual(seen, [['legacyWrap', 'src/js/gated.js']]);
-  assert.equal(verify(result([G()]), { read: gread, units: UNITS(), covers: withSymbol(() => null) }).unit_findings[0].low, false, 'control: no test names it');
+  assert.equal(verify(result([G()]), { read: gread, units, covers: withSymbol(() => null) }).unit_findings[0].low, false, 'control: no test names it');
   seen.length = 0;
-  assert.equal(verify(result([uf({ unit: U1, ...gcite('src/js/short.js', 1), title: 'run is untested' })]), { read: gread, units: UNITS(), covers: withSymbol((n) => { seen.push(n); return 'test/x.js:1'; }) }).unit_findings[0].low, false, 'control: `run` is too short and generic to search');
+  const short = uf({ unit: U1, ...gcite('src/js/short.js', 1), title: 'run is untested' });
+  assert.equal(verify(result([short]), { read: gread, units: owning([short]), covers: withSymbol((n) => { seen.push(n); return 'test/x.js:1'; }) }).unit_findings[0].low, false, 'control: `run` is too short and generic to search');
   assert.deepEqual(seen, []);
-  assert.equal(verify(result([G()]), { read: gread, units: UNITS(), covers: () => null }).unit_findings[0].low, false, 'control: a plain covers function has no symbol search');
+  assert.equal(verify(result([G()]), { read: gread, units, covers: () => null }).unit_findings[0].low, false, 'control: a plain covers function has no symbol search');
 });
 
 test('scan gate: the symbol search is bounded to 50 findings per result', () => {
   let n = 0;
   const many = Array.from({ length: 60 }, (_, i) => uf({ unit: U1, ...gcite('src/js/big.js', i + 1), title: `big ${i}` }));
-  const out = verify(result(many), { read: gread, units: UNITS(), covers: withSymbol(() => { n++; return 'test/t.js:1'; }) }).unit_findings;
+  const out = verify(result(many), { read: gread, units: owning(many), covers: withSymbol(() => { n++; return 'test/t.js:1'; }) }).unit_findings;
   assert.equal(n, 50);
   assert.equal(out.filter((f) => f.low).length, 50);
 });
 
 test('scan gate: a weak_test whose counterexample names a call that another test of the same file makes and asserts is low citing that line; no sibling call stays counted', () => {
   const weak = (line, cx) => uf({ unit: U1, kind: 'weak_test', ...gcite('test/mid.spec.js', line), title: 'use only checked for definedness', body: 'toBeDefined passes for null.', counterexample: cx });
-  const out = verify(result([weak(3, 'the class sets use = null -> toBeDefined passes although calling use throws')]), { read: gread, units: UNITS() }).unit_findings[0];
+  const w3 = weak(3, 'the class sets use = null -> toBeDefined passes although calling use throws'), out = verify(result([w3]), { read: gread, units: owning([w3]) }).unit_findings[0];
   assert.deepEqual([out.low, out.lowWhy], [true, 'another test in the same file calls it and asserts: test/mid.spec.js:7']);
-  const keep = verify(result([weak(11, 'the class sets label = null -> toBeDefined passes although label is wrong')]), { read: gread, units: UNITS() }).unit_findings[0];
+  const w11 = weak(11, 'the class sets label = null -> toBeDefined passes although label is wrong'), keep = verify(result([w11]), { read: gread, units: owning([w11]) }).unit_findings[0];
   assert.equal(keep.low, false, 'control: nobody calls label');
 });
 
@@ -820,7 +823,7 @@ test('verifyUnits: test_paths decides which cited files are tests (F26): weak_te
   const files = { ...FILES, 'qa/checks/orders.js': ["check('creates', () => {", '  assert.ok(create({}));', '});'] };
   const rd = (p) => files[p] || null;
   const weak = () => uf({ unit: U1, kind: 'weak_test', path: 'qa/checks/orders.js', line: 2, quote: 'assert.ok(create({}));', title: 'create is only checked to be truthy', body: 'passes for any object', counterexample: 'create({}) returns a broken object -> still passes' });
-  const n = (o) => verify(result([weak()]), { read: rd, units: UNITS(), ...o }).unit_findings.length;
+  const n = (o) => verify(result([weak()]), { read: rd, units: owning([weak()]), ...o }).unit_findings.length;
   assert.equal(n({ testPaths: 'qa/checks/**' }), 1, 'a configured test path is a test');
   assert.equal(n({}), 0, 'control: without a scope the heuristic does not know qa/checks');
   const miss = uf({ unit: U1, kind: 'missing_test', path: 'qa/checks/orders.js', line: 2, quote: 'assert.ok(create({}));' });

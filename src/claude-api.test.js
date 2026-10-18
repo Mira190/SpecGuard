@@ -1526,6 +1526,14 @@ test('repair turn: prose with no JSON, then ONE more call with the answer as the
   assert.equal(JSON.parse(h.file('usage.json')).tokenDetails.output.tokenCount, 8000, 'two replies summed');
 });
 
+test('repair turn: a repair reply with unknown usage is charged its own worst case, not $0', async (t) => {
+  const h = harness(t, [good({ content: [{ type: 'text', text: 'prose' }] }), good({ usage: {} })]);
+  await h.go();
+  const u = JSON.parse(h.file('usage.json')), first = api.cost('claude-haiku-5-5', { input_tokens: 1000, cache_creation_input_tokens: 20000, output_tokens: 4000 });
+  assert.ok(u.totalCostUsd > first * 1.5, 'the unknown repair reply took a reserve');
+  assert.equal(u.costEstimated, true);
+});
+
 test('repair turn: prose twice fails after exactly two calls; a budget that cannot cover the second call, a length stop and an HTTP error make no second call', async (t) => {
   const prose = () => good({ content: [{ type: 'text', text: 'no json here' }] });
   const twice = harness(t, [prose(), prose()]);
