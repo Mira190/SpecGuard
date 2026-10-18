@@ -267,6 +267,19 @@ test('does not publish results for a superseded commit', async (t) => {
   assert.match(s.warnings[0], /superseded HEAD/);
 });
 
+test('a run whose requirements changed meanwhile writes nothing (the newer run publishes); same text posts', async (t) => {
+  const { reqKey } = require('./preflight');
+  const live = { title: 'T', body: 'new body' }, notices = [];
+  const go = async (fp) => { const s = setup(t, report(), { pr: live }); s.core.notice = (m) => notices.push(m); fs.writeFileSync(path.join(process.env.CTX, 'pr-req-key.txt'), fp); await post(s); return s; };
+  const old = await go(reqKey({ title: 'T', body: 'old body' }));
+  assert.deepEqual(old.calls, { review: [], file: [], summary: [], list: 0, wrapper: 0 });
+  assert.match(notices[0], /requirements changed during the review/);
+  assert.deepEqual(old.warnings, []);
+  const same = await go(reqKey(live));
+  assert.equal(same.calls.summary.length, 1);
+  assert.equal(same.calls.review.length, 1);
+});
+
 // delivery=summary: every write method on the fake GitHub is spied; none may be called
 function spyWrites(s) {
   const writes = [];
