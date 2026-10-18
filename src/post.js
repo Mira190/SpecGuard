@@ -726,7 +726,7 @@ function words(s, n) {
 const INTERNAL = /malformed|coverage row|layer not stated|citation|alignment|obligation/i; // validator wording: never shown to a developer
 const parens = (u) => u.replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
 const pin = (f, blob) => (blob ? parens(`${blob}/${String(f.path).split('/').map(encodeURIComponent).join('/')}#L${f.line}`) : '');
-const LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 8, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
+const LOW_VISIBLE = 5, LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 8, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
 
 // One list item: label (bare: none, the section heading names the kind), title (linked to its inline comment when posted, else the location is linked to the blob line), location, and the first sentence (a standard: its rule);
 // req: the requirement the finding belongs to, on a second line.
@@ -778,6 +778,9 @@ const STD_WORD = { checked: 'reviewed', no_rules: 'no rule files found', not_rev
 function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, req, cfg, issues = [], manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [] }) {
   const isLow = (x) => x.f.confidence === 'low' || x.why === 'low confidence', lows = [...posted, ...items].filter(isLow); // low-confidence findings are never an action: Details only
   posted = posted.filter((x) => !isLow(x)); items = items.filter((x) => !isLow(x));
+  // EXP_LOWCONF_VISIBLE=1 (experiment, default off): up to LOW_VISIBLE low-confidence defect claims move from Details to a visible list. A defect claim = a spec_mismatch, or a weak_test that names a concrete wrong behaviour (a valid counterexample); never one a validator gated.
+  const defect = (x) => !x.f.gated && (x.f.kind === 'spec_mismatch' || (x.f.kind === 'weak_test' && counterexampleOk(x.f.counterexample)));
+  const promoted = process.env.EXP_LOWCONF_VISIBLE === '1' && state !== 'failed' && data ? lows.filter(defect).slice(0, LOW_VISIBLE) : [];
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)], failed = state === 'failed';
   const urls = new Map(posted.map((x) => [x.f, x.url]));
   const inc = incomplete.length > 0;
@@ -887,7 +890,9 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     }
     listOf('Coding standard violations', ['standard'], 'More standards violations');
     listOf('Tests to move down', ['pushdown'], 'More tests to move down');
-    detail(`**Low-confidence findings (${lows.length})**\n\n`, lows.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)));
+    if (promoted.length) add(vis, `### Possible defects (low confidence, check before acting) (${promoted.length})\n\n`, promoted.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)), '\n');
+    const rest = lows.filter((e) => !promoted.includes(e));
+    detail(`**Low-confidence findings (${rest.length})**\n\n`, rest.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)));
   }
   if (nrAll.length) add(vis, `### Not reviewed (${nrAll.length})\n\n`, nrAll.slice(0, NR_CAP).map((x) => `- ${x}\n`), nrAll.length > NR_CAP ? `- +${nrAll.length - NR_CAP} more in Details\n\n` : '\n');
 
