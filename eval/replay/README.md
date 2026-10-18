@@ -202,3 +202,13 @@ Simulation (2000 runs per cell, no run-level effect modelled, so optimistic): ar
 So 12 reps is a planning estimate that detects +3 with about 80% power, not +2; +1 is out of reach even at 20 reps. Use the PR-cluster bootstrap CI above for the headline, not a Wilson interval on pooled PR-runs.
 
 Caveats: public repos (contamination possible, new fixes are recent but the model may still have seen them), one automated grader, confirmation and control calls by subagents, n = 45 is the minimum for a rate and the interval is still wide (11%-35%), tuned engine settings are those of main at run time. Total run cost $10.63 (135 bug runs $6.27, 153 clean runs $4.36); the cost guide of about $10 was exceeded by $0.63 because the control adjudication required 16 more no_known_bug PRs.
+
+## Delivery experiment V1/V2 (holdout 2, raw answers): not adopted
+
+Offline re-run of the real `src/post.js` on the saved raw model answers (`ctx/findings.json`, 288 PR-runs, no model call) with `replay-arms.js --engine mock-replay --arms A,NAME=ENV=VAL` (arm A = main; any other arm sets one env var for its post.js run, so a publisher experiment needs no replay code). V1/V2 showed low-confidence defect claims in the visible body.
+- Faithfulness gate (arm A reproduces the published summaries): 288/288.
+- V1 changed 2 PR-runs: +1 visible catch event.
+- V2 changed 16 PR-runs (12 bug, 4 control): +3 visible catch events in total (orpc-1766 x2, langchain-33817 x1), +1 on the 33 NEW PRs. Pre-registered bars: +5 total and +4 new, so not met.
+- Control noise +0.06 per no_known_bug PR-run. TP lost 0.
+- Root cause: the Details-only catches are `gated` by the partial-test-visibility gate (`src/post.js`, "a candidate test file was only partly visible"), which V2 deliberately excludes, so V2 cannot surface them.
+- Decision: not adopted; the post.js arms were not merged (PR #366 closed).
