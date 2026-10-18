@@ -1433,3 +1433,17 @@ test('unit provenance: a missing_test citing another unit\'s file, a test not li
   assert.match((await run({ kind: 'weak_test', path: 'test/b.test.js', line: 1, quote: 'it("b", () => { assert.ok(b()); });', counterexample: 'x' })).calls.summary, /weak_test cites a test that is not listed/);
   assert.match((await run({ callKeys: [B] })).calls.summary, /declared unit was not reviewed in the call/);
 });
+
+test('validate: UNIT_MAX caps the rows kept per model answer (callKeys), not the merged list of a scan_scope all run', () => {
+  const f = (unit, callKeys) => ({ unit, kind: 'missing_test', path: 'src/a.js', line: 1, quote: 'q', title: 't', ...(callKeys ? { callKeys } : {}) });
+  const ids = (n, o = 0) => Array.from({ length: n }, (_, i) => (i + o).toString(16).padStart(8, '0'));
+  const run = (list) => { const o = result([req()], { unit_findings: list }); assert.deepEqual(validate(o, null, null), { ok: true }); return o; };
+  const two = run([...ids(50).map((u) => f(u, ['a:1'])), ...ids(50, 50).map((u) => f(u, ['b:1']))]);
+  assert.equal(two.unit_findings.length, 100, 'two calls under the cap are all kept');
+  assert.deepEqual(two.invalid_units, []);
+  assert.doesNotMatch(two.not_reviewed.join('\n'), /more than 60/);
+  const one = run([...ids(70).map((u) => f(u)), ...ids(5, 70).map((u) => f(u, ['b:1']))]);
+  assert.equal(one.unit_findings.length, 65, 'a single answer over 60 keeps 60; another call has its own 60');
+  assert.deepEqual(one.invalid_units, ids(10, 60), 'the 10 past the cap are invalid, as today');
+  assert.equal(one.not_reviewed.filter((n) => /more than 60 findings from one call/.test(n)).length, 10);
+});
