@@ -223,6 +223,7 @@ test('scan gate: a finding whose title or body says there is no gap is dropped w
 test('scan gate: "not a gap" drops a finding; "not a gap in X" does not', () => {
   const out = verify(result([uf({ body: 'This is not a gap: the test pins it.' }), uf({ body: 'This is not a gap in legacy but the doubling is untested.' })]), { read: gread, units: UNITS() });
   assert.equal(out.unit_findings.length, 1);
+  assert.equal(verify(result([uf({ body: 'This is not a gap for the getter, but the setter has no test.' })]), { read: gread, units: UNITS() }).unit_findings.length, 1, 'a contrast after "not a gap" keeps the finding');
 });
 
 test('scan gate: a weak_test stays counted when a sibling assertion pins another field, or when an anchored regex accepts anything (no same-test or anchored gate)', () => {
