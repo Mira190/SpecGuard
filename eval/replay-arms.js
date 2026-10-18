@@ -40,7 +40,7 @@ async function mockEngine({ pr, prep, ctx, res }) {
   };
   const log = console.log; console.log = () => {};
   try {
-    await api.run({ GITHUB_WORKSPACE: path.join(prep, 'repo'), CTX: ctx, PROMPT_FILE: path.join(prep, 'prompt.md'), ANTHROPIC_API_KEY: 'sk-ant-offline-mock', MODEL: res.model || 'claude-haiku-5-5', MAX_BUDGET_USD: '1.00', MAX_OUTPUT_TOKENS: '32000', TIMEOUT: '12' }, { fetchFn, sleep: async () => {} });
+    await api.run({ GITHUB_WORKSPACE: path.join(prep, 'repo'), CTX: ctx, PROMPT_FILE: path.join(prep, 'prompt.md'), ANTHROPIC_API_KEY: 'sk-ant-offline-mock', MODEL: res.model || 'claude-haiku-5-5', MAX_BUDGET_USD: '1.00', MAX_OUTPUT_TOKENS: '32000', TIMEOUT: '12', ...(process.env.CONTEXT_PACK_BYTES && { CONTEXT_PACK_BYTES: process.env.CONTEXT_PACK_BYTES }) }, { fetchFn, sleep: async () => {} });
   } finally { console.log = log; }
   return calls;
 }
