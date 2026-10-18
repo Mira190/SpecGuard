@@ -312,7 +312,9 @@ function siblingCall(lines, line, quote, counterexample) {
   const own = startOf(line), ownEnd = endOf(line);
   let a = Math.max(1, line - 40), b = Math.min(lines.length, line + 40);
   for (let i = line; i >= 1; i--) if (/\bdescribe(?:\.\w+)?\s*\(/.test(at(i)) && ind(i) < ind(own)) { a = Math.min(a, i); for (let j = line; j <= lines.length; j++) if (ind(j) === ind(i) && /^\s*[})\]]/.test(at(j))) { b = Math.max(b, j); break; } break; }
-  const call = new RegExp(`(?<![\\w$])(?:${names.map((x) => x.replace(/\$/g, '\\$')).join('|')})\\s*\\(`);
+  // the cited line CALLS a name: a sibling counts only with the same argument text (a parser test on a literal says nothing about the value the cited line passes); a bare reference keeps any call
+  const argsOf = (t, n) => { const m = new RegExp(`(?<![\\w$])${n.replace(/\$/g, '\\$')}\\s*\\(`).exec(t); if (!m) return null; let d = 1, j = m.index + m[0].length; const i = j; for (; j < t.length && d; j++) d += t[j] === '(' ? 1 : t[j] === ')' ? -1 : 0; return t.slice(i, j - 1).replace(/\s+/g, ''); };
+  const want = names.map((n) => argsOf(String(quote), n)), call = { test: (t) => names.some((n, k) => { const a = argsOf(t, n); return a !== null && (want[k] === null || a === want[k]); }) };
   for (let i = a; i <= b; i++) {
     if (i >= own && i < ownEnd || !call.test(at(i))) continue;
     const s = startOf(i), span = Array.from({ length: endOf(i) - s }, (_, k) => at(s + k));
