@@ -818,6 +818,13 @@ test('testSignals: assert.ok(f(x)) is a weak assertion (one classifier with PR m
   assert.equal(post.weakAssertion('assert.ok(a === b)'), false);
 });
 
+test('staticLeads: a name known only from a CommonJS export object is not an unreferenced-export lead; exports.x = is', (t) => {
+  const { json } = leadRows(t, { 'lib/route.js': ['function buildRouting() {', '  return 1;', '}', 'function other() {', '  return 2;', '}', 'module.exports = { buildRouting };'], 'lib/ex.js': ['exports.makeThing = function () {', '  return 1;', '};'], 'test/route.test.js': ["it('r', () => { assert.equal(require('../lib/route'), 1); });"], 'test/ex.test.js': ["it('e', () => { assert.equal(require('../lib/ex'), 1); });"] });
+  const unref = (p) => json.rows.find((x) => x.path === p).leads?.unref?.map((u) => u.name) || [];
+  assert.deepEqual(unref('lib/route.js'), []);
+  assert.deepEqual(unref('lib/ex.js'), ['makeThing']);
+});
+
 test('testSignals: a weak assertion whose boolean is also asserted negated in the same test is pinned both ways, not weak', () => {
   assert.equal(testSignals(["it('x', () => {", '  assert.ok(firstValid(c));', '  assert.ok(!firstValid(d));', '});'].join('\n')).weak.length, 0);
   assert.equal(testSignals(["it('x', () => {", '  assert.ok(firstValid(c));', '});'].join('\n')).weak.length, 1);

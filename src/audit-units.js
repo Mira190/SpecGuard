@@ -42,7 +42,7 @@ function publicDefs(file, ls) {
   const d = baseDefs(file, ls);
   if (!/\.[cm]?[jt]sx?$/i.test(file)) return d;
   const more = ls.filter((l) => !comment(l)).map((l) => (EXPORT_VAR.exec(l) || [])[1]).filter((n) => n && !d.names.includes(n));
-  return more.length ? { count: d.count, names: [...d.names, ...new Set(more)] } : d;
+  return more.length ? { ...d, names: [...d.names, ...new Set(more)] } : d;
 }
 // ponytail: a TS file with type/interface declarations and no runtime declaration has nothing to unit test; a line-start regex, not a parser.
 const RUNTIME = /^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function|class|const|let|var|enum)\s|module\.exports|^\s*exports\./, TYPE_DECL = /^\s*(?:export\s+)?(?:declare\s+)?(?:interface|type)\s/;
@@ -236,7 +236,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
       const ls = bufs[k].toString('utf8').split('\n').map((l) => l.replace(/\r$/, ''));
       const n = loc(ls), bd = boundaryOf(e.path, ls, n >= MIN_LOC);
       if (Object.keys(bd.consts).length) { consts.set(e.path, bd.consts); for (const [k, v] of Object.entries(bd.consts)) anyConst.set(k, anyConst.has(k) && anyConst.get(k) !== v ? NaN : v); }
-      if (n >= MIN_LOC && !typeOnly(e.path, ls)) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls, e.path), size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0), cmps: bd.cmps }); }
+      if (n >= MIN_LOC && !typeOnly(e.path, ls)) { srcImports.set(e.path, importShas(e.path, ls.join('\n'), shaOf)); const d = publicDefs(e.path, ls); units.push({ id: sha8(e.path), path: e.path, loc: n, pub: d.count, names: d.names, defs: leadNames(d.names, ls, e.path), cjsOnly: d.cjsOnly, size: bufs[k].length, lines: ls.length - (ls[ls.length - 1] === '' ? 1 : 0), cmps: bd.cmps }); }
     });
   }
   if (dl.over() && units.length < cand.length) limits.push(`the inventory time budget ended after ${units.length} of ${cand.length} source files`);
@@ -290,7 +290,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
     const seen = [u.path, ...got].map((p) => `${p}:${shaOf.get(p) || ''}`).join('\n'), deps = [...new Set([u.path, ...got].flatMap((p) => srcImports.get(p) || []))].sort().join('\n');
     const verLegacy = sha8(seen), ver = deps ? sha8(`${seen}\n${deps}`) : verLegacy; // what a review of this unit saw: its blob, its matched tests' blobs, and the blobs they import (helpers, fixtures, the unit's own dependencies)
     // ponytail: "no test references it" is only claimed when every test file was read (an unread one may name it) and the unit has matched tests (else test_evidence_not_found already says it); an in-memory word match, so a name in a comment counts as a reference
-    const unref = unread || !got.length ? [] : u.defs.filter((d) => !refd.has(d.name));
+    const unref = unread || !got.length ? [] : u.defs.filter((d) => !refd.has(d.name) && !(u.cjsOnly || []).includes(d.name)); // ponytail: an untested CommonJS module's exports are not flagged (internal lib files are tested through the public API); upgrade: count a name as referenced when a module a test imports, transitively, requires it
     // a comparison in a function the tests call (else it is a missing test, which has its own signal) whose constant no matched test uses by name or by value
     const boundary = unread || !got.length ? [] : u.cmps.filter((c) => (!c.fn || got.some((t) => bt.get(t)?.w.has(c.fn))) && !got.some((t) => bt.get(t)?.p.has(c.name) || bt.get(t)?.n.has(String(c.v)))).map((c) => ({ line: c.line, name: c.name, value: c.v }));
     return { ...u, strong, unref, boundary, churn: h.churn, fixes: h.fixes, tests: got, factor, signals: s, why, ver, verLegacy, score: risk({ ...u, ...h, factor }) };
