@@ -16,6 +16,7 @@ const { PER_FILE } = require('./pack-cap');
 const { run, matchGlob, isTestPath, blocksOf, testScope, tokenize, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP } = require('./trace');
 
 const MAX_AUDIT_DOCS = 60; // the model reads every admitted document in full
+const OVER_SIZE = /^over size cap/; // trace.js's reject reason for a requirement document over 256 KiB
 const CAND_CAP = 60 * 1024, CAND_TEXT = 240, BLOCK_CAP = 4000; // audit-candidates.txt bytes (the cap is lowered, never a row cut); characters of block text per line
 const EV_BUDGET_MS = 40000, EV_CAP = 64 * 1024, EV_PER = 3, EV_SNIP = 90, EV_TEXT = 600, COVER_MIN = 0.4; // ponytail: a heuristic floor, tuned by eye on this repo's design.md; table rows of results still match prose-heavy code // evidence search time budget (as in PR mode); audit-evidence.txt bytes; locations per kind and block; snippet characters; block text used as the query
 // Words that say nothing about code: BLOCK_STOP (PR mode's list) plus common English function words. ponytail: English only, extend when another language floods the candidates.
@@ -324,7 +325,7 @@ function collect({ cwd = '.', ctx, reqPaths = '', standardsPaths = '', testPaths
   w('audit-stale.txt', [...[...stale].filter((c) => all.some((b) => b.cid === c)), ...((units && units.stale) || [])].map((c) => `${c}\n`).join('')); // block cids and unit ids changed since their review
   const rotation = { rotate, state: !!prior, picked: cand.fit.length, changed: cand.tally.d, confirming: cand.tally.c, new: cand.tally.n, oldest: cand.tally.o, carried: cand.carried.length };
   const evid = { blocks: cand.fit.length, with_code: et.withCode, with_tests: et.withTests, cut: ev.cut, files: ev.files };
-  w('audit-meta.json', JSON.stringify({ head, max_requirements: scopeAll ? cand.total : maxRequirements, ...(scopeAll && { scan_scope: 'all' }), max_units: maxUnits, units: units && units.rows.length ? { total: units.rows.length, picked: units.picked.length } : null, docs: docs.length, ...(scopeAll && ordered.length > MAX_AUDIT_DOCS && { docs_over_cap: ordered.length - MAX_AUDIT_DOCS }), candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes], ref_note: refNote,
+  w('audit-meta.json', JSON.stringify({ head, max_requirements: scopeAll ? cand.total : maxRequirements, ...(scopeAll && { scan_scope: 'all' }), max_units: maxUnits, units: units && units.rows.length ? { total: units.rows.length, picked: units.picked.length } : null, docs: docs.length, ...(scopeAll && ordered.length > MAX_AUDIT_DOCS && { docs_over_cap: ordered.length - MAX_AUDIT_DOCS }), ...(scopeAll && units && units.totals.not_unit > 0 && { not_unit: units.totals.not_unit }), ...(scopeAll && rejected.some(([, w]) => OVER_SIZE.test(w)) && { docs_over_size: rejected.filter(([, w]) => OVER_SIZE.test(w)).length }), candidates: cand.total, candidates_listed: cand.fit.length, ruled: ruled.length, cap_left: cand.left, limitations: [...limitations, ...notes], ref_note: refNote,
     scope: lines(scanPaths).map((l) => l.trim()).filter(Boolean), rotation, evidence: evid }) + '\n');
   return { docs, rejected, standards, head, candidates: cand.total, picked: cand.fit.map((c) => c.cid), rotation, evidence: evid, units: units && { total: units.rows.length, picked: units.picked.map((r) => r.id), rotation: units.rotation, totals: units.totals } };
 }
@@ -381,7 +382,12 @@ async function main(env) {
   const unitParts = api ? api.unitCalls(pre) : 1, price = api ? { usd: api.callUsd(pre), budget: pre.budget, max: scopeAll ? api.ALL_MAX_CALLS : api.MAX_UNIT_CALLS, batch: Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20), fit: (ctx) => api.keptRooms({ ...pre, ctx, root: fs.realpathSync(process.cwd()), batch: Math.max(1, parseInt(env.SCAN_BATCH_BLOCKS, 10) || 20) }) } : null; // price: the pre-flight's own worst case, for the budget hint; price.batch also switches on the extra queue (a split scan only)
   const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, refNote: g.note || '', packBytes, unitParts, price, scopeAll });
   console.log(`SpecGuard unit test gap scan: ${r.units ? (() => { const u = new Set(r.units.picked).size; return `${u} of ${r.units.total} units${u === r.units.picked.length ? '' : ` (${r.units.picked.length} parts)`}`; })() : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
-  if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${r.docs.length || (r.units && r.units.total) ? 'false' : 'true'}\n`);
+  const nothing = !r.docs.length && !(r.units && r.units.total);
+  if (nothing && scopeAll) { // ponytail: the post step's SKIP branch stays green, so say it here; scan_scope all with files named but not reviewed is not "nothing to audit"
+    const m = JSON.parse(fs.readFileSync(path.join(env.CTX, 'audit-meta.json'), 'utf8')), miss = [m.not_unit && `${m.not_unit} source file(s) in scan_paths dropped by the default non-unit paths`, m.docs_over_size && `${m.docs_over_size} requirement document(s) over 256 KiB`].filter(Boolean).join('; ');
+    if (miss) { console.log(`::${env.FAIL_ON_ERROR === 'true' ? 'error' : 'warning'}::SpecGuard reviewed nothing (scan_scope: all): ${miss}`); if (env.FAIL_ON_ERROR === 'true') process.exit(1); }
+  }
+  if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${nothing ? 'true' : 'false'}\n`);
 }
 
 if (require.main === module) main(process.env);
