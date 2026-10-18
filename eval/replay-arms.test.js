@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { score, discover, parseArms } = require('./replay-arms.js');
+const { score, discover, parseArms, split, visibleMd } = require('./replay-arms.js');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-arms-test-'));
 test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -53,20 +53,49 @@ test('parseArms: default A, NAME=ENV=VAL arms, A first and unique', () => {
   for (const bad of ['', 'H3=EXP_X=1', 'A,A', 'A,b-c=X=1']) assert.throws(() => parseArms(bad), /bad --arms/);
 });
 
-test('a usable run is re-posted once per arm from the same raw answer; an arm sets its env only for its own post.js run', async () => {
+const inlineFindings = () => { // a high-confidence missing_test on a changed line: posted inline by main
+  const f = findings();
+  Object.assign(f.coverage[0], { status: 'missing_test', evidence: [] });
+  Object.assign(f.findings[0], { kind: 'missing_test', confidence: 'high', title: 'Limit has no unit test', counterexample: undefined });
+  return f;
+};
+
+test('a usable run is re-posted once per arm from the same raw answer; the arm env reaches post.js (DELIVERY=summary posts nothing inline) and is restored', async () => {
   const { base, head } = mkRepo(), dl = path.join(tmp, 'dl-new'), out = path.join(tmp, 'out-new');
   const dir = path.join(dl, '222', 'p-1');
   w(path.join(dir, 'result.json'), JSON.stringify({ id: 'p-1', repo: 'o/proj', base, head, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
-  w(path.join(dir, 'ctx', 'findings.json'), JSON.stringify(findings()));
-  w(path.join(dir, 'ctx', 'engine-notes'), 'context pack: 3 files, 1 KB' + String.fromCharCode(10));
+  w(path.join(dir, 'ctx', 'findings.json'), JSON.stringify(inlineFindings()));
+  w(path.join(dir, 'ctx', 'engine-notes'), 'context pack: 3 files, 1 KB\n');
   fs.mkdirSync(out, { recursive: true });
-  const r = await score({ dl, repos: path.join(tmp, 'repos'), out, arms: parseArms('A,X=SG_ARMS_TEST=1'), log: () => {} });
+  const r = await score({ dl, repos: path.join(tmp, 'repos'), out, arms: parseArms('A,S=DELIVERY=summary'), log: () => {} });
   assert.deepStrictEqual(r.unusable, []);
   const [a, x] = r.rows;
-  assert.deepStrictEqual([a.arm, x.arm, a.id, a.run], ['A', 'X', 'p-1', '222']);
-  assert.deepStrictEqual([a.visible_n, a.details_n, x.visible_n, x.details_n, x.inline_n], [0, 1, 0, 1, a.inline_n]);
-  for (const arm of ['A', 'X']) assert.ok(fs.existsSync(path.join(out, 'run222-' + arm, 'p-1', 'visible.md')));
-  assert.strictEqual(process.env.SG_ARMS_TEST, undefined, 'the variable is restored');
+  assert.deepStrictEqual([a.arm, x.arm, a.id, a.run], ['A', 'S', 'p-1', '222']);
+  assert.strictEqual(a.inline_n, 1, 'arm A is main: the finding is posted inline');
+  assert.strictEqual(x.inline_n, 0, 'arm S ran post.js with DELIVERY=summary: nothing inline (fails when the arm env is not applied)');
+  const vis = (arm) => fs.readFileSync(path.join(out, 'run222-' + arm, 'p-1', 'visible.md'), 'utf8');
+  assert.match(vis('A'), /^### inline src\/a\.js:1\n\n[^]*Limit has no unit test[^]*\n---\n\n/);
+  assert.doesNotMatch(vis('S'), /### inline/);
+  assert.strictEqual(process.env.DELIVERY, undefined, 'the variable is restored');
+});
+
+test('split cuts the summary at <details>; visibleMd is the inline bodies, a rule, then only the part before <details>', () => {
+  assert.deepStrictEqual(split('body\n<details>d</details>'), ['body\n', '<details>d</details>']);
+  assert.deepStrictEqual(split('only body'), ['only body', '']);
+  assert.strictEqual(visibleMd([{ path: 'x.js', line: 3, body: 'B1' }, { path: 'y.js', body: 'B2' }], 'Body\n- list item\n<details>HIDDEN</details>'), '### inline x.js:3\n\nB1\n\n### inline y.js:\n\nB2\n\n---\n\nBody\n- list item\n');
+  assert.strictEqual(visibleMd([], 'S\n<details>HIDDEN</details>'), '\n---\n\nS\n');
+});
+
+test('an invalid replay (valid:false, invalid_reason) is reported unusable even with a findings.json, and is not scored', async () => {
+  const { base, head } = mkRepo(), dl = path.join(tmp, 'dl-bad'), out = path.join(tmp, 'out-bad');
+  const dir = path.join(dl, '444', 'bad-1');
+  w(path.join(dir, 'result.json'), JSON.stringify({ id: 'bad-1', repo: 'o/proj', base, head, valid: false, invalid_reason: 'engine failed' }));
+  w(path.join(dir, 'ctx', 'findings.json'), JSON.stringify(findings()));
+  fs.mkdirSync(out, { recursive: true });
+  const r = await score({ dl, repos: path.join(tmp, 'repos'), out, log: () => {} });
+  assert.deepStrictEqual(r.rows, []);
+  assert.deepStrictEqual(r.unusable, [{ id: 'bad-1', run: '444', reason: 'invalid replay: engine failed' }]);
+  assert.ok(!fs.existsSync(path.join(out, 'run444-A')), 'nothing was re-posted');
 });
 
 test('--engine mock-replay runs the real claude-api engine once on the saved answer; a file cut by a small pack budget lands in the arm ctx and the arm summary says the context was cut', async () => {
