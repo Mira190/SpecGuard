@@ -200,6 +200,13 @@ test('scan gate: a weak_test whose counterexample names a call that another test
   assert.equal(keep.low, false, 'control: nobody calls label');
 });
 
+test('scan gate: a sibling that calls the same function with other arguments does not gate a weak_test whose cited line calls it (the parser tested on a literal is not the derived value); the same arguments still gate', () => {
+  const D = ["  it('derives the rate', () => {", '    assert.ok(parseRate(r.streams![0].avg_frame_rate));', '  });'], F = { 'test/a.test.ts': ["describe('rate', () => {", "  it('parses a fraction', () => {", "    assert.equal(parseRate('30000/1001')?.toFixed(2), '29.97');", '  });', ...D, '});'], 'test/b.test.ts': ["describe('rate', () => {", ...D, "  it('derives it again', () => {", '    assert.ok(parseRate( r.streams![0].avg_frame_rate ));', '  });', '});'] };
+  const run = (p, line) => { const w = uf({ unit: U1, kind: 'weak_test', path: p, line, quote: F[p][line - 1].trim(), title: 'derived rate only checked non-zero', body: 'ok passes for 1.', counterexample: 'parseRate returns 1 for any stream -> assert.ok(parseRate(x)) passes although the rate is wrong' }); return verify(result([w]), { read: (q) => F[q] || null, units: owning([w]) }).unit_findings[0]; };
+  assert.equal(run('test/a.test.ts', 6).low, false, 'regression: the literal parser test does not gate');
+  assert.equal(run('test/b.test.ts', 3).lowWhy, 'another test in the same file calls it and asserts: test/b.test.ts:6', 'same argument text (whitespace aside) gates');
+});
+
 test('scan gate: a repository that tests through >= 200 baseline files shows every missing_test as low once-noted; 199 files change nothing', () => {
   const base = (n) => new Set([...Object.keys(GATE_FILES), ...Array.from({ length: n }, (_, i) => `tsc/testdata/baselines/reference/c${i}.js`)]);
   const two = [uf(), uf({ unit: U1, ...gcite('src/js/orders.js', 1), title: 'create is untested' })];

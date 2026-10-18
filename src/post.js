@@ -1444,18 +1444,20 @@ async function run({ github, context, core }) {
   const maxComments = Math.max(1, parseInt(env.MAX_COMMENTS, 10) || 10);
   const headSha = env.HEAD_SHA || pr.head.sha;
   // '' when the PR is still open at our head; else why not. Not being able to tell is also a reason: nothing is posted then (no atomicity is claimed: a push can still land right after).
-  let livePR, rechecked = true;
+  let livePR, rechecked = true, readFp = ''; // readFp: the key of the PR text the model read, once known
+  const REQ_CHANGED = 'requirements changed during the review (the newer run publishes)', say = (stop, msg) => (stop === REQ_CHANGED ? core.notice?.(msg) : core.warning(msg)); // a newer run owns the PR: not a warning
   const current = async () => {
     try { livePR = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })).data; rechecked = true; }
     catch (e) { rechecked = false; core.warning(`SpecGuard: could not recheck HEAD: ${e.message}`); return 'could not recheck HEAD'; }
-    return livePR.head.sha !== headSha ? 'superseded HEAD' : livePR.state === 'closed' && !summaryOnly ? 'PR is no longer open' : '';
+    return livePR.head.sha !== headSha ? 'superseded HEAD' : livePR.state === 'closed' && !summaryOnly ? 'PR is no longer open' : readFp && !summaryOnly && livePR.title !== undefined && reqKey(livePR) !== readFp ? REQ_CHANGED : ''; // a body edit mid-run: the edited run reviews the new text; this one must not overwrite it
   };
   const early = await current();
-  if (early && rechecked) return core.warning(`SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary
+  if (early && rechecked) return say(early, `SpecGuard: ${early}; no results published`); // a failed read continues: the result still reaches the job summary
   // Requirements fingerprint: the key requirements.js took from the PR text the model reads (collect time); else the payload (a re-run reuses a stale one) or the live PR.
   const snapPr = pr?.title !== undefined ? pr : livePR || pr;
   let collected = ''; try { collected = fs.readFileSync(path.join(ctx, 'pr-req-key.txt'), 'utf8').trim(); } catch {}
   const reqFp = /^[0-9a-f]{12}$/.test(collected) ? collected : reqKey(snapPr);
+  if (/^[0-9a-f]{12}$/.test(collected)) readFp = collected; // only a key collected with the model input is checked against the live PR (the payload fallback may be a re-run's stale one)
   // the linked issues the model read and their versions (requirements.js): the summary records them so preflight re-reviews when one changes
   let issueVers = []; try { issueVers = fs.readFileSync(path.join(ctx, 'pr-issues.txt'), 'utf8').split('\n').map((l) => /^([\w.-]+\/[\w.-]+#\d+) (\d{4}-\d\d-\d\dT[\d:.]+Z)$/.exec(l.trim())).filter(Boolean).map((m) => `${m[1]}@${m[2]}`).slice(0, 10); } catch {}
   // Our login: the authenticated user (a PAT), else the login our earlier summary recorded (an App token cannot call /user), else null
@@ -1480,7 +1482,7 @@ async function run({ github, context, core }) {
     if (summaryOnly) return;
     try {
       const stop = await current();
-      if (stop) return core.warning(`SpecGuard: ${stop}; summary comment not updated`);
+      if (stop) return say(stop, `SpecGuard: ${stop}; summary comment not updated`);
       const cs = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 });
       const me = await actor();
       const mine = cs.find((c) => ours(c.user, me) && typeof c.body === 'string' && c.body.startsWith('<!-- specguard:summary -->'));
@@ -1791,7 +1793,7 @@ async function run({ github, context, core }) {
     for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: 'summary only' });
     inline = filed = 0;
   } else if (stop) {
-    if (!withheld) { core.warning(`SpecGuard: ${stop}; no comments published`); incomplete.push(`Delivery degraded: ${stop}; the review comments and PR summary were not updated (this text is the job summary).`); }
+    if (!withheld) { say(stop, `SpecGuard: ${stop}; no comments published`); incomplete.push(`Delivery degraded: ${stop}; the review comments and PR summary were not updated (this text is the job summary).`); }
     for (const f of [...p.inline, ...p.file]) unanchored.push({ f, why: withheld ? 'withheld: could not deduplicate' : `not posted: ${stop}` });
     inline = filed = 0;
   }

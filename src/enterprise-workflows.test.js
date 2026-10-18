@@ -220,6 +220,10 @@ test('specguard-run.yml: the results artifact uploads only the named result file
   assert.match(y, /quote the target repository, so this repository must stay private/);
 });
 
+test('ci.yml: the test job skips an `edited` event only when the base branch did not change (a retarget changes the merge result)', () => {
+  assert.match(read('.github', 'workflows', 'ci.yml'), /if: \$\{\{ github\.event\.action != 'edited' \|\| github\.event\.changes\.base != null \}\}/);
+});
+
 test('specguard-run.yml: manual model/size/budget inputs reach the action (empty = action default); the target checkout is blobless and non-shallow without --shallow-since; counts get the full SHA', () => {
   const y = central(), step = y.slice(y.indexOf('uses: ./.specguard-src')), action = fs.readFileSync(path.join(root, 'action.yml'), 'utf8');
   for (const k of ['max_budget_usd']) {
