@@ -30,8 +30,8 @@ function prepareReal({ repoDir, base, head, prTitle = '', prBody = '', out, id, 
   const dir = path.resolve(out, id), repo = path.join(dir, 'repo'), ctx = path.join(dir, 'ctx');
   fs.mkdirSync(dir, { recursive: true });
   if (!fs.existsSync(path.join(repo, '.git'))) {
-    execFileSync('git', ['clone', '-q', ...(shared ? ['--shared'] : ['--no-hardlinks']), '--no-checkout', path.resolve(repoDir), repo], { stdio: 'pipe' });
-    for (const [k, v] of [['user.name', 'specguard-local'], ['user.email', 'local@example.invalid'], ['core.autocrlf', 'false']]) git(repo, 'config', k, v);
+    execFileSync('git', ['-c', 'core.longpaths=true', 'clone', '-q', ...(shared ? ['--shared'] : ['--no-hardlinks']), '--no-checkout', path.resolve(repoDir), repo], { stdio: 'pipe' });
+    for (const [k, v] of [['core.longpaths', 'true'], ['user.name', 'specguard-local'], ['user.email', 'local@example.invalid'], ['core.autocrlf', 'false']]) git(repo, 'config', k, v);
   }
   head = git(repo, 'rev-parse', head); base = git(repo, 'rev-parse', base);
   git(repo, 'checkout', '-q', '--detach', head);
