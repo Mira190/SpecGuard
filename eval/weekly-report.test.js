@@ -407,7 +407,7 @@ test('control: the existing report lines are unchanged; the new blocks only add 
   assert.equal(findingsOf(small()).filter((f) => f.tool === 'specguard').length, 4); // no sum in these counts: nothing new
 });
 
-test('author verdicts: per-arm table, noise = (wrong + not important) / verdicts, Wilson only at the sample floor, old counts lines still read', () => {
+test('reply verdicts: per-arm table, noise = (wrong + not important) / verdicts, Wilson only at the sample floor, old counts lines still read', () => {
   const ds = small();
   const row = (fp, verdict) => ({ fp: fp.repeat(40).slice(0, 40), outcome: 'not_observed', ...(verdict && { verdict }) });
   let r = analyze(ds);
@@ -416,7 +416,7 @@ test('author verdicts: per-arm table, noise = (wrong + not important) / verdicts
   r = analyze(ds);
   assert.deepEqual([r.verdicts[0].fixed, r.verdicts[0].wrong, r.verdicts[0].n, r.verdicts[0].noise], [1, 1, 2, null], 'under the floor: counts, no rate');
   assert.deepEqual([r.verdicts[2].not_important, r.verdicts[2].intentional, r.verdicts[2].n], [1, 1, 2]);
-  assert.match(render(r), /## Author verdicts[\s\S]*\| 0 SpecGuard only \| 1 \| 1 \| 0 \| 0 \| 2 \| insufficient data \(need 30 verdicts\) \| n\/a \|/);
+  assert.match(render(r), /## Reply verdicts[\s\S]*\| 0 SpecGuard only \| 1 \| 1 \| 0 \| 0 \| 2 \| insufficient data \(need 30 verdicts\) \| n\/a \|/);
   ds.issue_comments.push(counts(9, S(1), { outcome_valid: true, outcomes: [row('g', 'wrong')] })); // PR 9 is unlabeled: in no arm, but in the all-PRs row
   r = analyze(ds);
   assert.deepEqual([r.verdicts[0].n, r.verdicts[2].n, r.verdicts.all.n, r.verdicts.all.wrong], [2, 2, 5, 2]);

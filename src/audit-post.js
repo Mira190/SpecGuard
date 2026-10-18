@@ -903,6 +903,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   if (prior) carried.push(...prior.blocks.filter((b) => skip.has(b.cid)).map((b) => ({ ...cands.get(b.cid), ...b }))); // an unaudited block keeps its previous status and age: it stays due
   // blocks sent to the model that it neither answered nor ruled out (validate tolerates up to MISSING_MAX of them: they become 'Unconfirmed' rows)
   const answeredC = new Set([...data.requirements.map((r) => cidOf(r.id)), ...data.not_requirements.map((n) => n.cid)]), unansweredC = new Set([...sent.keys()].filter((c) => !answeredC.has(c))), unanswered = unansweredC.size;
+  try { fs.writeFileSync(path.join(ctx, 'audit-unanswered.json'), JSON.stringify({ blocks: unanswered })); } catch {} // fail-on-error.js: under scan_scope all blocks the model was sent and did not answer (possibly after one retry) were not reviewed
   // unanswered in the previous run too (review S6): recorded unsure with this run's date, no third try; named so it is not lost
   const twice = [...unansweredC].filter((c) => prior && prior.versions && (prior.versions.un || []).includes(c));
   if (twice.length) shared.limitations = [...shared.limitations, `${plural(twice.length, 'document block')} not answered in two consecutive runs (recorded unsure; rotation moves on): ${twice.slice(0, 3).map((c) => `${sent.get(c).path}:${sent.get(c).line} (${c})`).join(', ')}${twice.length > 3 ? ', ...' : ''}`];

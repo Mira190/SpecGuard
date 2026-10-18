@@ -209,6 +209,11 @@ test('fail-on-error.js: an incomplete run is red only for scan_scope all with fa
     assert.equal(run(true, 'true', { notReached: { budget: none.budget, deadline: { parts: 2, blocks: 0 } }, failed: [] }).status, 1, 'deadline');
     assert.equal(run(true, 'true', { notReached: none, failed: [{ part: 'blocks', reason: 'deadline: not started' }] }).status, 1, 'a failed or deadline-skipped call');
     for (const [all, foe, sp, st] of [[true, 'true', undefined, 'incomplete'], [true, 'false', { notReached: none, failed: [{}] }, 'incomplete'], [false, 'true', { notReached: { budget: { parts: 3, blocks: 0 }, deadline: none.deadline }, failed: [] }, 'incomplete'], [true, 'true', { failed: [{}] }, 'complete']]) { const r = run(all, foe, sp, st); assert.equal(r.status, 0, `${all} ${foe} ${st}`); assert.doesNotMatch(r.stdout, /::error::/); }
+    const un = (n, all = true, foe = 'true') => { fs.writeFileSync(path.join(dir, 'audit-unanswered.json'), JSON.stringify({ blocks: n })); const r = run(all, foe); fs.rmSync(path.join(dir, 'audit-unanswered.json')); return r; };
+    const unred = un(3);
+    assert.equal(unred.status, 1, 'blocks sent to the model and never answered were not reviewed');
+    assert.match(unred.stdout, /::error::SpecGuard did not review the whole repository \(scan_scope: all\): 3 document blocks not answered by the model/);
+    assert.equal(un(0).status, 0); assert.equal(un(3, true, 'false').status, 0, 'fail_on_error off'); assert.equal(un(3, false).status, 0, 'not scan_scope all');
     assert.match(run(true, 'true').stdout, /::warning::SpecGuard result is incomplete: 20 units were reviewed with only part of their tests/, 'unsure verdicts on reviewed code stay a warning');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
