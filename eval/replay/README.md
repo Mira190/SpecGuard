@@ -79,3 +79,25 @@ Why C's catches stayed summary-only (C catches: rqlite-2313 x3, rqlite-2318 x2, 
 Side finding: tier `normal` does not guarantee a normal review. 9 of the 42 B PRs that had findings still got a reduced review because at least 25% of obligations were degraded by validation (probe: "4 of 9 obligations degraded", status incomplete). Even in B's normal reviews no finding went inline: they are low confidence and low confidence goes to the summary.
 
 Caveats: n = 12 (below the 30 needed for a rate), 3 reps, public repos (contamination possible), one strict grader. The replay workflow now also uploads `summary.md`, `ctx/engine-model.json`, `ctx/counts.json` and `ctx/engine-notes`, so the reason for a reduced review is visible next time.
+
+## Experiment 2026-10-18 (v2, with context pack)
+
+Rerun of the two experiments above on the fixed runner (the engine now reads the prepared checkout: every run reports a pack, mean 19.2 files / 147 KB, none empty). Same 12 bug and 12 clean PRs, strict grading by the rubric above against the bug cards and fix diffs. Arms: A haiku-5.5 (3 reps, the corrected baseline); B `claude-sonnet-5-5` (1 rep, direction and cost only, no decision); D haiku-5.5 plus an env switch `EXP_UNTESTED_ADDED=1`, default off, 3 reps. D: in a reduced review a `missing_test` finding whose cited line the PR added and whose enclosing symbol no tracked test names (test-map `covers.symbol`) is exempt from both reduced gates (high confidence, two citations) and goes inline although low confidence; cap, anchor and dedup unchanged.
+
+Pre-registered rule: D is adopted (switch default on) only if mean inline-delivered catches >= A + 1 AND mean inline per clean PR <= 0.25 AND mean bug-PR inline noise <= 1 per rep; otherwise the switch is removed.
+
+| arm | caught (of 12) | caught and inline | inline / clean PR | inline noise on bug PRs (per rep) | cost / PR | pack (files / KB) |
+|---|---|---|---|---|---|---|
+| A | 2.67 (1-4) | 0 (0-0) | 0.19 (0.08-0.25) | 1.0 (1-1) | $0.0386 | 19.2 / 147 |
+| B (1 rep) | 4 | 1 | 0.17 | 1 | $0.2381 | 19.2 / 147 |
+| D | 2.00 (2-2) | 0.33 (0-1) | 0.19 (0.17-0.25) | 0.33 (0-1) | $0.0388 | 19.2 / 147 |
+
+Catch matrix (reps 1/2/3; X = caught; ids only): orpc-1705 A .X.; orpc-1718 D ..X; orpc-1766 A .XX, B X; sqlglot-7315 D .X., B X; rqlite-2318 A .XX, D XX., B X; rqlite-2313 A XXX, D X.X, B X. Not caught by any arm: orpc-1846, 1851, 1743, sqlglot-7054, 7097, rqlite-2061. Two A runs (rqlite-2318 rep 1, rqlite-2061 rep 3) ended with engine status failed and count as misses.
+
+Decision: D not adopted (0.33 < 0 + 1); the switch was removed. The switch never fired: no low-confidence inline comment appeared in any D run. On the bug PRs the cited symbol is usually named by an existing test (checked for rqlite-2313: `TableColumnTypes` is referenced in `db/db_common_test.go`), so "no test names the symbol" is the wrong signal for these bugs, which are wrong behaviour inside a tested function. D's single inline catch (orpc-1718) was a high-confidence `spec_mismatch`, unrelated to the switch. Sonnet: 4 catches in one rep is inside haiku's range (1-4), at 6 times the cost, so no model recommendation follows.
+
+What the context pack changed against the diff-only runs above: haiku's catches are about the same (2.67), cost per PR is 6.5 times higher ($0.0059 to $0.0386), clean-PR findings rose (0.28 to 0.36 per PR), and inline noise on bug PRs rose (0.7 to 1.0). Catches moved between PRs: with the pack haiku found orpc-1766 and orpc-1705 in some reps, and lost rqlite-2061 (the findings there now point at the callback error counter, not the conversion-error counter). Sonnet's earlier sqlglot-7054 catch did not reproduce.
+
+Lenient sensitivity (borderline findings that name a nearby behaviour but not the defect, not counted): sqlglot-7097 (empty-pattern branch untested, without flags; A reps 1 and 3, D rep 2, B), orpc-1851 (stacked-schema failure path; D rep 2, B), rqlite-2061 (error branch of the update hook; B). Counted with a note: orpc-1718 D rep 3 (names the defect on `procedure-utils.ts`, not on the fixed `router-utils.ts`) and rqlite-2318 B (weak_test on the test file naming the double-quote escaping).
+
+Caveats: n = 12 (below 30), 3 reps, public repos, one strict grader, haiku is not stable between identical reps (A caught 1, 4 and 3 PRs).
