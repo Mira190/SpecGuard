@@ -161,3 +161,26 @@ test('attribute: rank K is not a miss and K+1 is ranked_out; miss kinds same_fil
   assert.equal(of('X-3', 'g.js:5-5').class, 'not_retrieved'); // control: complete note does not name it
   assert.deepEqual(at.req_to_code_locations.find((l) => l.id === 'X-3').misses.map((m) => m.kind), ['same_file', 'generated_duplicate', 'other']);
 });
+
+test('attribute: code->req requirement and tests are counted; hunk and trailer notes make a miss unknown', () => {
+  const rc = fx.results.variants.find((v) => v.id === 'A-RC'); // requirement found at rank 2; t1 absent
+  const base = attribute({ variants: [rc] }, fx.cases);
+  assert.deepEqual(base.counts['code->req requirement'], undefined); // found within K: no miss, no row
+  assert.deepEqual(base.counts['code->req tests'], { ranked_out: 0, cut: 0, not_retrieved: 1, unknown: 0 });
+  const far = [{ path: 'f1.js', line: 12, candidates: [{ path: 'D.md', line: 9, score: 7 }] }]; // D.md:9 is outside 1-3 +-1
+  const miss = (extra) => attribute({ variants: [{ ...rc, code_to_req: far, ...extra }] }, fx.cases);
+  const req = (a) => a.misses.find((m) => m.list === 'code->req requirement');
+  assert.deepEqual(miss({}).counts['code->req requirement'], { ranked_out: 0, cut: 0, not_retrieved: 1, unknown: 0 });
+  const hunk = miss({ limitations: ['2 weaker code hunk(s) not shown.'] });
+  assert.equal(req(hunk).class, 'unknown'); assert.equal(hunk.counts['code->req requirement'].unknown, 1);
+  const tr = miss({ test_candidates: 'f1.js\n  other.test.js  (stem)\n(3 more changed file(s) not listed)\n' });
+  assert.equal(tr.misses.find((m) => m.list === 'code->req tests').class, 'unknown');
+  assert.deepEqual(tr.counts['code->req tests'], { ranked_out: 0, cut: 0, not_retrieved: 0, unknown: 1 });
+});
+
+test('attribute: a more note naming 4 paths is complete (cap 5), so an absent item is not_retrieved', () => {
+  const rc = fx.results.variants.find((v) => v.id === 'A-RC');
+  const cls = (names) => attribute({ variants: [{ ...rc, limitations: ['9 more code/test candidate(s) for S1 not shown (top 3 kept): ' + names + '.'] }] }, fx.cases).misses.find((m) => m.item === 'f2.js:5-5').class;
+  assert.equal(cls('a.js, b.js, c.js, d.js'), 'not_retrieved');
+  assert.equal(cls('a.js, b.js, c.js, d.js, e.js'), 'unknown');
+});
