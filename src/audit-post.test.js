@@ -1143,6 +1143,17 @@ test('run: two units reviewed with part of their tests and one that did not fit:
   assert.match(r.calls.summary, /\*\*Reviewed with part of their tests\*\*[^\n]*aaaaaaa1\.js[^\n]*bbbbbbb2\.js/);
 });
 
+test('run: a shared test cut only in the call of unit B makes B unsure, not A (pack-cut.txt "path<TAB>ids"); a line without ids still cuts for everyone', async (t) => {
+  const [A, B] = ['aaaaaaa1', 'bbbbbbb2'], row = (id) => `${id}\tsrc/${id}.js\t5\twhy\ttest/a.test.js\t-\tabcdef12\t-\n`;
+  const go = (cut) => runPost(t, { ctxFiles: { 'audit-units.txt': row(A) + row(B), 'audit-inventory.json': invOf([urow(A), urow(B)]), 'findings.json': result(), 'pack-cut.txt': cut }, env: { AUDIT_ISSUE: 'true' } });
+  const one = await go(`test/a.test.js\t${B}\n`);
+  assert.match(one.calls.outputs.reason, /1 unit was reviewed with only part of their tests/);
+  assert.match(one.calls.summary, /\*\*Reviewed with part of their tests\*\*[^\n]*bbbbbbb2\.js/);
+  assert.doesNotMatch(one.calls.summary, /\*\*Reviewed with part of their tests\*\*[^\n]*aaaaaaa1\.js/);
+  const all = await go('test/a.test.js\n');
+  assert.match(all.calls.outputs.reason, /2 units were reviewed with only part of their tests/);
+});
+
 test('run: a block the model neither answered nor ruled out makes the status incomplete; all answered is complete', async (t) => {
   const five = candsOf(cand(C1, 3, 'A repeating plan stays on after it fires.'), ...[1, 2, 3, 4].map((i) => cand(cid(i), 4, `Block ${i}.`)));
   const skip = (i) => ({ cid: cid(i), reason: 'rationale' });
