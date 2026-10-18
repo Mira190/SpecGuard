@@ -16,12 +16,12 @@ if (STATUS === 'incomplete' && CONFIG.includes(cls)) { // a multi-part scan wher
   process.exit(1);
 }
 const json = (n) => { try { return JSON.parse(ctxFile(n)) || {}; } catch { return {}; } };
-// scan_scope all (the collector says so in audit-meta.json): red only when something was NOT reviewed, i.e. parts or blocks not reached (budget, deadline) or a failed call (scan-parts.json);
+// scan_scope all (the collector says so in audit-meta.json): red only when something was NOT reviewed, i.e. parts or blocks not reached (budget, deadline), a failed call (scan-parts.json) or blocks the model was sent twice and never answered (audit-unanswered.json, audit-post.js);
 // unsure verdicts on reviewed code (part of the tests, forced units, pack cuts) stay warnings
 const unreviewed = () => {
   if (json('audit-meta.json').scan_scope !== 'all') return '';
-  const sp = json('scan-parts.json'), nr = sp.notReached || {}, n = (k, f) => (nr[k] && nr[k][f]) || 0, failed = Array.isArray(sp.failed) ? sp.failed.length : 0;
-  return ['budget', 'deadline'].map((k) => (n(k, 'parts') || n(k, 'blocks') ? `${n(k, 'parts')} unit parts / ${n(k, 'blocks')} document blocks not reached (${k})` : '')).concat(failed ? `${failed} call${failed === 1 ? '' : 's'} failed` : '').filter(Boolean).join('; ');
+  const sp = json('scan-parts.json'), nr = sp.notReached || {}, n = (k, f) => (nr[k] && nr[k][f]) || 0, failed = Array.isArray(sp.failed) ? sp.failed.length : 0, un = json('audit-unanswered.json').blocks || 0;
+  return ['budget', 'deadline'].map((k) => (n(k, 'parts') || n(k, 'blocks') ? `${n(k, 'parts')} unit parts / ${n(k, 'blocks')} document blocks not reached (${k})` : '')).concat(failed ? `${failed} call${failed === 1 ? '' : 's'} failed` : '', un ? `${un} document block${un === 1 ? '' : 's'} not answered by the model` : '').filter(Boolean).join('; ');
 };
 const missed = STATUS === 'incomplete' && FAIL_ON_ERROR === 'true' ? unreviewed() : '';
 if (missed) {

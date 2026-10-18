@@ -17,7 +17,7 @@ const RULE = { fix: 0.25, fixLower: 0.15, precision: 0.65, ttm: 1.15, unique: 0.
 const COPILOT = /^copilot(-pull-request-reviewer)?(\[bot\])?$/i;
 const SG_FP = /<!-- specguard:fp=([0-9a-f]{40}) -->/;
 const SG_COUNTS = /<!-- specguard:counts (\{.*?\}) -->/s;
-const VERDICTS = ['fixed', 'wrong', 'intentional', 'not_important']; // the author's reply on the thread (src/post.js verdictOf), read off the counts line
+const VERDICTS = ['fixed', 'wrong', 'intentional', 'not_important']; // a person's reply on the thread (src/post.js verdictOf), read off the counts line
 const INVALID_LABEL = 'copilot-request-failed';
 
 // ---- loading ------------------------------------------------------------------------------------------------
@@ -243,7 +243,7 @@ function analyze(ds, { labels } = {}) {
   const unique = labels ? { valid: validSg2.length, unique: validSg2.filter((f) => !f.overlap).length } : null;
   // SpecGuard per delivery channel; the combined numbers above are unchanged. Each channel reads findings, labels and outcomes off the same ids.
   const oc = sgOutcomes(ds, sgSet), sgAll = findings.filter((f) => f.tool === 'specguard');
-  // Author verdicts per SpecGuard arm: noise = (wrong + not_important) / all verdicts, same insufficient-data floor as the label rules.
+  // Reply verdicts per SpecGuard arm: noise = (wrong + not_important) / all verdicts, same insufficient-data floor as the label rules.
   const verdicts = {};
   for (const a of [0, 2]) {
     const set = new Set(armPrs(a).map((p) => p.number)), v = oc.filter((o) => o.verdict && set.has(o.pr)), c = Object.fromEntries(VERDICTS.map((k) => [k, v.filter((o) => o.verdict === k).length])), k = c.wrong + c.not_important;
@@ -333,9 +333,9 @@ function render(r) {
     L.push(`| ${ARM[a]} | ${x.prs} | ${s ? N(s.findings_per_pr, 2) : '-'} | ${c ? N(c.findings_per_pr, 2) : '-'} | ${N(x.ttm.median)} | ${N(x.ttm.p75)} | ${x.ttm.n} | ${s ? N(s.credits_median, 2) : '-'} | ${s ? `${s.complete}/${s.prs_with_counts}` : '-'} |`);
   }
   L.push(`| baseline (no AI window) | - | - | - | ${N(r.baseline.median)} | ${N(r.baseline.p75)} | ${r.baseline.n} | - | - |`, '');
-  L.push('## Author verdicts (replies on SpecGuard threads)', '', '| Arm | fixed | wrong | intentional | not important | verdicts | author-judged noise | Wilson 95% |', '|---|---|---|---|---|---|---|---|');
+  L.push('## Reply verdicts (replies on SpecGuard threads)', '', '| Arm | fixed | wrong | intentional | not important | verdicts | reply-judged noise | Wilson 95% |', '|---|---|---|---|---|---|---|---|');
   for (const [a, name] of [[0, ARM[0]], [2, ARM[2]], ['all', 'all PRs with SpecGuard counts (labelled or not)']]) { const v = r.verdicts[a]; L.push(`| ${name} | ${v.fixed} | ${v.wrong} | ${v.intentional} | ${v.not_important} | ${v.n} | ${v.noise == null ? `insufficient data (need ${TARGET.labels} verdicts)` : P(v.noise)} | ${CI(v.wilson)} |`); }
-  L.push('', 'Author-judged noise = (wrong + not important) / all verdicts. Only authors who replied are counted: a sample of reactions, not of all findings.', '');
+  L.push('', 'Reply-judged noise = (wrong + not important) / all verdicts. A reply by any person, not only the PR author; self-reported, not verified. Only threads that got a reply are counted: a sample of reactions, not of all findings.', '');
   L.push('## Fix-through (addressed / all outcomes)', '', '| Tool | PRs | findings | A | Wilson (if independent) | PR-cluster bootstrap 95% |', '|---|---|---|---|---|---|');
   for (const [n, s] of [['SpecGuard (arms 0+2)', r.specguard], ['Native Copilot (arms 1+2)', r.copilot]]) L.push(`| ${n} | ${s.prs} | ${s.findings} | ${P(s.A)} | ${CI(s.wilson_if_independent)} | ${CI(s.cluster_bootstrap_95)} |`);
   L.push('', `Copilot outcome rule mirrors SpecGuard's: addressed = the flagged lines or any test file changed after the comment; dismissed = human-resolved with neither changed; open = unresolved and unchanged; not_observed = change status unknown. If a human-resolved thread with a reply counted as addressed, Copilot A would be ${P(r.copilot.A_if_replied_resolved_counts)}.`, '');
