@@ -33,8 +33,8 @@ async function run(id, gaps) {
 }
 
 const K1 = 'eval-sandbox/k1/electron/app.cjs';
-const OWN = "const ownFile = (p) => typeof p === 'string' && E.isDirectChild(dirOf(), p) && MEDIA_EXT.test(p);";
-const TITLE = "const titleOf = (clip) => 'Kite - ' + E.labelOf(clip.name);";
+const OWN = "const ownFile = (candidate) => typeof candidate === 'string' && MEDIA_EXT.test(candidate) && E.isDirectChild(dirOf(), candidate);";
+const TITLE = "const titleOf = (clip) => 'Sample - ' + E.labelOf(clip.name);";
 
 test('k1 ownFile: a missing_test on a wrapper whose delegate (isDirectChild) is unit-tested is kept off the PR; the untested wrapper (titleOf -> labelOf) still posts', async () => {
   const { r, summary, posted } = await run('k1', [

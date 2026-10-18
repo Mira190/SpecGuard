@@ -180,11 +180,11 @@ test('removed or weakened assertions: a move, a reformat or a stronger replaceme
   assert.deepEqual(delta("-  assert.ok(f(1));\n+  assert.ok(f( 1 ));\n"), [], 'a reformatted weak assertion was already weak: not weakened');
 });
 
-test('removed assertions: a helper refactor re-pins the calls it wraps; only the assertion deleted outright is a lead (Kite U1)', () => {
-  const diff = fs.readFileSync(path.join(__dirname, 'fixtures/kite-u1.diff'), 'utf8');
+test('removed assertions: a helper refactor re-pins the calls it wraps; only the assertion deleted outright is a lead (synthetic catalog)', () => {
+  const diff = fs.readFileSync(path.join(__dirname, 'fixtures/helper-refactor.diff'), 'utf8');
   const d = assertionDelta(diff, () => true);
-  assert.deepEqual(d.map((x) => [x.kind, x.line]), [['removed', 31]]);
-  assert.match(d[0].old, /'BIG'.*已存在/);
+  assert.deepEqual(d.map((x) => [x.kind, x.line]), [['removed', 4]]);
+  assert.match(d[0].old, /'DUP'.*'west'.*duplicate/);
 });
 test('removed assertions: a complete move into a parameter table is no lead; a row dropped in the move, or rows that only share the numbers across rows, stay leads (review F01/P3)', () => {
   const table = (rows) => `-  assert.equal(next(1), 2);\n-  assert.equal(next(2), 3);\n+  for (const [input, expected] of ${rows}) {\n+    assert.equal(next(input), expected);\n+  }\n`;
@@ -201,9 +201,9 @@ test('removed assertions: a complete move into a parameter table is no lead; a r
   assert.deepEqual(named('+  const cases = [\n+    [1, 2],\n+    [2, 3],\n+  ];\n'), [], 'a multi-line named table');
 });
 
-test('removed assertions: the Kite #12 fold into a typed TypeScript table with nested calls in each row: only the dropped exact-now case is a lead', () => {
-  const diff = fs.readFileSync(path.join(__dirname, 'fixtures/kite-r12.diff'), 'utf8');
-  assert.deepEqual(assertionDelta(diff, () => true).map((x) => [x.kind, x.line]), [['removed', 11]]);
+test('removed assertions: a synthetic fold into a typed TypeScript table with nested calls in each row: only the dropped exact-now case is a lead', () => {
+  const diff = fs.readFileSync(path.join(__dirname, 'fixtures/table-refactor.diff'), 'utf8');
+  assert.deepEqual(assertionDelta(diff, () => true).map((x) => [x.kind, x.line]), [['removed', 3]]);
   // a row is one element of the table, not a run of literals across rows
   assert.deepEqual(delta('-  assert.deepEqual(f(at(1, 2), 3), 4);\n+  const cases: [Date, number, number][] = [[at(1, 2), 3, 9], [at(0, 0), 4, 4]];\n+  for (const [d, x, y] of cases) assert.deepEqual(f(d, x), y);\n'), ['removed 10 assert.deepEqual(f(at(1, 2), 3), 4);']);
 });

@@ -129,25 +129,7 @@ Needs human
 
 更合理的测试是：
 
-```
-
-test('eraseAt clears redo history on a hit', () => {
-  let b = emptyBoard()
-  b = line(b, 0, 0, 100, 0)
-  b = line(b, 0, 30, 100, 30)
-
-  b = undo(b)
-  assert.equal(b.strokes.length, 1)
-  assert.equal(b.future.length, 1)
-
-  const result = eraseAt(b, { x: 50, y: 0 }, 4)
-
-  assert.equal(result.strokes.length, 0)
-  assert.equal(result.future.length, 0)
-  assert.equal(result.past.length, 2)
-})
-
-```
+> Private pilot source excerpt removed; the surrounding analysis describes the behavior.
 
 其中 `line` 是现有 `test/board.test.ts` 的辅助函数。
 

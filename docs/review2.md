@@ -71,12 +71,7 @@ Coverage 显示 141 / 131
 
 但源码实际上是：
 
-```
-const ownFile = (p) =>
-  typeof p === 'string' &&
-  E.isDirectChild(dirOf(), p) &&
-  MEDIA_EXT.test(p)
-```
+> Private pilot source excerpt removed; the surrounding analysis describes the behavior.
 
 核心防护逻辑 `isDirectChild` 已有直接的 Unit Test：
 
@@ -106,12 +101,7 @@ SpecGuard 应沿调用关系追踪到被测 helper，再决定剩余缺口，而
 
 但 `has()` 的实现是：
 
-```
-const has = (a: string[], ...seq: string[]) =>
-  a.some((_, i) =>
-    seq.every((s, j) => a[i + j] === s)
-  )
-```
+> Private pilot source excerpt removed; the surrounding analysis describes the behavior.
 
 它验证的是预期的连续参数序列是否存在，不是任意字符串的 truthiness。
 
@@ -129,9 +119,7 @@ const has = (a: string[], ...seq: string[]) =>
 
 报告指出 [test/board.test.ts:81](https://github.com/Mira190/Kite/blob/985758cb9b07937959906a787f605d511aaabf0f/test/board.test.ts#L81) 把期望值写成与实现一致的公式：
 
-```
-w: 20 * 2 + 20 * 0.6 * 2
-```
+> Private pilot source excerpt removed; the surrounding analysis describes the behavior.
 
 如果这个公式和代码同步被错误修改，测试可能无法发现问题。
 
@@ -157,7 +145,7 @@ Oracle independence weakness，而不是没有有效断言。
 
 还有一个 SpecGuard 没有指出的潜在风险：
 
-代码在调用 `out?.write(b)` 后，立即增加 `written.chunks` 和 `written.bytes`。这些计数反映的是 handler 接收并处理的 chunk，不必然证明字节已经成功持久化到磁盘。
+代码在调用 写入操作 后，立即增加 `written.chunks` 和 `written.bytes`。这些计数反映的是 handler 接收并处理的 chunk，不必然证明字节已经成功持久化到磁盘。
 
 因此，即使 recorder 发送数和 main 的计数完全相同，也不足以单独证明录像文件完整。写入结束后的文件验证和流错误处理仍是必要的。
 
@@ -175,10 +163,7 @@ Oracle independence weakness，而不是没有有效断言。
 
 实现：[src/ui/ListPage.tsx:35](https://github.com/Mira190/Kite/blob/985758cb9b07937959906a787f605d511aaabf0f/src/ui/ListPage.tsx#L35)
 
-```
-const [sel, setSel] =
-  useState<Set<string | number>>(new Set())
-```
+> Private pilot source excerpt removed; the surrounding analysis describes the behavior.
 
 `sel` 初始化为空，异步取得 `rows` 后也没有自动选择第一条的逻辑。
 
@@ -196,22 +181,7 @@ const [sel, setSel] =
 
 但我检查 [electron/app.cjs](https://github.com/Mira190/Kite/blob/985758cb9b07937959906a787f605d511aaabf0f/electron/app.cjs#L643) 的 `setHotkey`：
 
-```
-settings = {
-  ...settings,
-  hotkeys: {
-    ...settings.hotkeys,
-    [id]: v.combo
-  }
-}
-persist()
-const errors = registerHotkeys()
-return {
-  ok: true,
-  combo: v.combo,
-  warning: errors[id]
-}
-```
+> Private pilot source excerpt removed; the surrounding analysis describes the behavior.
 
 这里先更新并持久化快捷键，再尝试调用 Electron `globalShortcut.register`。
 
