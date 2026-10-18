@@ -4435,20 +4435,20 @@ const lcVis = (s) => s.split('<details>')[0], lcDet = (s) => s.slice(s.indexOf('
 test('lowconf-visible off: the summary is the same with the variable unset, 0 or empty, and the low finding stays in Details', () => {
   const sum = lowSummary([lowWeak(1)]), off = sum(undefined);
   assert.equal(sum('0'), off); assert.equal(sum(''), off);
-  assert.doesNotMatch(lcVis(off), /Possible defects|Weak case 1/);
+  assert.doesNotMatch(lcVis(off), /Unconfirmed findings|Weak case 1/);
   assert.match(lcDet(off), /Low-confidence findings \(1\)[^]*Weak case 1/);
 });
 
 test('lowconf-visible on: a qualifying low finding is visible, labelled, and not duplicated in Details', () => {
   const on = lowSummary([lowWeak(1), finding('spec_mismatch', { confidence: 'low', title: 'Code contradicts the requirement' })])('1');
-  assert.match(lcVis(on), /### Possible defects \(low confidence, check before acting\) \(2\)[^]*Weak case 1[^]*Code contradicts the requirement/);
+  assert.match(lcVis(on), /### Unconfirmed findings \(low confidence, check before acting\) \(2\)[^]*Weak case 1[^]*Code contradicts the requirement/);
   assert.doesNotMatch(lcDet(on), /Weak case 1|Code contradicts|Low-confidence findings/);
 });
 
 test('lowconf-visible on: non-qualifying lows stay in Details (no counterexample, missing_test, gated)', () => {
   const sum = lowSummary([lowWeak(1, { counterexample: 'too vague' }), finding('missing_test', { confidence: 'low', title: 'No test for X' }), lowWeak(3, { gated: true }), lowWeak(4)]);
   const on = sum('1');
-  assert.match(lcVis(on), /Possible defects[^]*\(1\)[^]*Weak case 4/);
+  assert.match(lcVis(on), /Unconfirmed findings[^]*\(1\)[^]*Weak case 4/);
   assert.doesNotMatch(lcVis(on), /Weak case 1|No test for X|Weak case 3/);
   assert.match(lcDet(on), /Low-confidence findings \(3\)[^]*Weak case 1[^]*No test for X[^]*Weak case 3/);
   const none = lowSummary([finding('missing_test', { confidence: 'low', title: 'No test for X' })]);
@@ -4463,6 +4463,27 @@ test('lowconf-visible on: at most 5 are promoted, in the existing order; the res
   assert.match(lcDet(on), /Low-confidence findings \(2\)[^]*Weak case 6[^]*Weak case 7/);
 });
 
+test('lowconf-visible =2: any non-gated low missing_test/weak_test/spec_mismatch, not gated/standard/pushdown, cap 3, off and =1 unchanged', () => {
+  const lm = (n, extra = {}) => finding('missing_test', { confidence: 'low', title: `Untested ${n}`, ...extra });
+  const sum = lowSummary([lm(1), lm(2, { gated: true }), finding('standard', { confidence: 'low', title: 'Std low' }), finding('pushdown', { confidence: 'low', title: 'Push low' }), lm(5), lowWeak(6, { counterexample: 'vague' }), lm(7)]);
+  const on = sum('2');
+  assert.match(lcVis(on), /### Unconfirmed findings \(low confidence, check before acting\) \(3\)/);
+  assert.match(lcVis(on), /Untested 1[^]*Untested 5[^]*Weak case 6/);
+  assert.doesNotMatch(lcVis(on), /Untested 2|Std low|Push low|Untested 7/);
+  assert.match(lcDet(on), /Low-confidence findings \(4\)[^]*Untested 2[^]*Std low[^]*Push low[^]*Untested 7/);
+  assert.doesNotMatch(lcDet(on), /Untested 1\b|Untested 5|Weak case 6/);
+  assert.doesNotMatch(lcVis(sum('1')), /Untested/, '=1 still excludes missing_test');
+  assert.equal(sum('0'), sum(undefined));
+});
+
+test('lowconf-visible: inline comments are identical across off, 1 and 2', async (t) => {
+  const d = report({ coverage: [row('weak_test'), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { obligation_ids: ['O2'] }), lowWeak(1, { line: 2, quote: 'l2' })] });
+  const run = async (v) => { let s; await t.test(`EXP=${v}`, async (t2) => { const p = process.env.EXP_LOWCONF_VISIBLE; if (v === undefined) delete process.env.EXP_LOWCONF_VISIBLE; else process.env.EXP_LOWCONF_VISIBLE = v; try { s = setup(t2, d); await post(s); } finally { if (p === undefined) delete process.env.EXP_LOWCONF_VISIBLE; else process.env.EXP_LOWCONF_VISIBLE = p; } }); return s; };
+  const [a, b, c] = [await run(undefined), await run('1'), await run('2')];
+  assert.deepEqual(c.calls.review, a.calls.review); assert.deepEqual(b.calls.review, a.calls.review);
+  assert.match(c.calls.summary[0].body, /Unconfirmed findings/);
+});
+
 test('lowconf-visible: inline comments are identical in both modes', async (t) => {
   const d = report({ coverage: [row('weak_test'), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { obligation_ids: ['O2'] }), lowWeak(1, { line: 2, quote: 'l2' })] });
   const run = async (v) => { let s; await t.test(`EXP=${v}`, async (t2) => { const p = process.env.EXP_LOWCONF_VISIBLE; if (v === undefined) delete process.env.EXP_LOWCONF_VISIBLE; else process.env.EXP_LOWCONF_VISIBLE = v; try { s = setup(t2, d); await post(s); } finally { if (p === undefined) delete process.env.EXP_LOWCONF_VISIBLE; else process.env.EXP_LOWCONF_VISIBLE = p; } }); return s; };
@@ -4470,6 +4491,6 @@ test('lowconf-visible: inline comments are identical in both modes', async (t) =
   assert.ok(a.calls.review[0].comments.length >= 1);
   assert.deepEqual(b.calls.review, a.calls.review);
   assert.deepEqual(b.calls.file, a.calls.file);
-  assert.match(b.calls.summary[0].body, /Possible defects/);
-  assert.doesNotMatch(a.calls.summary[0].body, /Possible defects/);
+  assert.match(b.calls.summary[0].body, /Unconfirmed findings/);
+  assert.doesNotMatch(a.calls.summary[0].body, /Unconfirmed findings/);
 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Offline paired arms for a replay: re-run the REAL src/post.js on the SAME raw model answers (ctx/findings.json) twice, A = EXP_LOWCONF_VISIBLE unset
-// (main publisher), V = EXP_LOWCONF_VISIBLE=1. No model call, no variance between arms. Per PR-run it rebuilds what finishRealOne needs: collect.sh output (the
+// Offline paired arms for a replay: re-run the REAL src/post.js on the SAME raw model answers (ctx/findings.json) three times, A = EXP_LOWCONF_VISIBLE unset
+// (main publisher), V1 = 1, V2 = 2. No model call, no variance between arms. Per PR-run it rebuilds what finishRealOne needs: collect.sh output (the
 // ctx and the head checkout, from --repos clones, used read-only through 'git clone --shared'), then overlays the downloaded engine outputs (findings.json,
 // engine-notes, engine-model.json, ...). A run without ctx/findings.json cannot be re-run and is reported unusable (never scored as a miss).
 // Layout of --dl: <dl>/<run>/<id>/{result.json,summary.md,ctx/...} (a downloaded artifact per workflow run), or <dl>/<id>/... for one run.
@@ -35,7 +35,7 @@ async function runArm({ pr, prep, arm, out }) {
   for (const f of fs.readdirSync(path.join(pr.dir, 'ctx'))) if (f !== 'counts.json') fs.cpSync(path.join(pr.dir, 'ctx', f), path.join(ctx, f), { recursive: true });
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ ...readJson(path.join(prep, 'meta.json')), ctx }, null, 2));
   const res = readJson(path.join(pr.dir, 'result.json'), {}), saved = process.env.EXP_LOWCONF_VISIBLE;
-  if (arm === 'V') process.env.EXP_LOWCONF_VISIBLE = '1'; else delete process.env.EXP_LOWCONF_VISIBLE;
+  if (arm !== 'A') process.env.EXP_LOWCONF_VISIBLE = arm.slice(1); else delete process.env.EXP_LOWCONF_VISIBLE;
   try { await finishRealOne(pr.id, path.join(out, `run${pr.run}-${arm}`), { engine: 'claude', model: res.model || '' }); }
   finally { if (saved === undefined) delete process.env.EXP_LOWCONF_VISIBLE; else process.env.EXP_LOWCONF_VISIBLE = saved; }
   const posted = readJson(path.join(dir, 'posted.json'), { comments: [] }), summary = fs.readFileSync(path.join(dir, 'summary.md'), 'utf8');
@@ -57,7 +57,7 @@ async function score({ dl, repos, out, manifests = [], ids, log = console.log })
     if (!fs.existsSync(repoDir)) { unusable.push({ id: pr.id, run: pr.run, reason: `no clone at ${repoDir}` }); continue; }
     const prep = path.join(out, '_prep', pr.id);
     if (readJson(path.join(prep, 'meta.json'))?.head !== res.head) prepareReal({ repoDir, base: res.base, head: res.head, prTitle: e?.title || '', prBody: e?.body || '', out: path.join(out, '_prep'), id: pr.id, trace: res.trace || 'auto', shared: true });
-    for (const arm of ['A', 'V']) rows.push(await runArm({ pr, prep, arm, out }));
+    for (const arm of ['A', 'V1', 'V2']) rows.push(await runArm({ pr, prep, arm, out }));
   }
   fs.writeFileSync(path.join(out, 'rows.json'), JSON.stringify({ rows, unusable }, null, 2) + '\n');
   log(`${rows.length / 2} PR-runs scored, ${unusable.length} unusable`);
@@ -69,7 +69,7 @@ const USAGE = `Usage: node eval/replay-arms.js --dl DIR --repos DIR --out DIR [-
   --dl DIR        downloaded replay artifacts: <dl>/<run>/<id>/{result.json,ctx/findings.json,...}
   --repos DIR     clones named like the repo (go-gitea/gitea -> DIR/gitea); used read-only (git clone --shared, checkout in the copy)
   --manifest      holdout json(s) giving each PR's title/body (collect's requirement discovery reads them)
-  --out DIR       <out>/run<R>-<A|V>/<id>/{visible.md,summary.md,posted.json,row.json}, <out>/rows.json = {rows:[{id,run,arm,inline_n,visible_n,details_n}], unusable}`;
+  --out DIR       <out>/run<R>-<A|V1|V2>/<id>/{visible.md,summary.md,posted.json,row.json}, <out>/rows.json = {rows:[{id,run,arm,inline_n,visible_n,details_n}], unusable}`;
 
 if (require.main === module) {
   const { values: o } = require('node:util').parseArgs({ options: { dl: { type: 'string' }, repos: { type: 'string' }, out: { type: 'string' }, manifest: { type: 'string', default: '' }, ids: { type: 'string' }, help: { type: 'boolean' } } });
