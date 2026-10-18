@@ -780,7 +780,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   posted = posted.filter((x) => !isLow(x)); items = items.filter((x) => !isLow(x));
   // EXP_LOWCONF_VISIBLE=1 (experiment, default off): up to LOW_VISIBLE low-confidence defect claims move from Details to a visible list. A defect claim = a spec_mismatch, or a weak_test that names a concrete wrong behaviour (a valid counterexample); never one a validator gated.
   const defect = (x) => !x.f.gated && (x.f.kind === 'spec_mismatch' || (x.f.kind === 'weak_test' && counterexampleOk(x.f.counterexample)));
-  const promoted = process.env.EXP_LOWCONF_VISIBLE === '1' && state !== 'failed' && data ? lows.filter(defect).slice(0, LOW_VISIBLE) : [];
+  const mode = process.env.EXP_LOWCONF_VISIBLE, promoted = (mode === '1' || mode === '2') && state !== 'failed' && data ? (mode === '2' ? lows.filter((x) => !x.f.gated && ['missing_test', 'weak_test', 'spec_mismatch'].includes(x.f.kind)).slice(0, 3) : lows.filter(defect).slice(0, LOW_VISIBLE)) : []; // =2: any non-gated missing_test, weak_test or spec_mismatch, first 3
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)], failed = state === 'failed';
   const urls = new Map(posted.map((x) => [x.f, x.url]));
   const inc = incomplete.length > 0;
@@ -890,7 +890,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     }
     listOf('Coding standard violations', ['standard'], 'More standards violations');
     listOf('Tests to move down', ['pushdown'], 'More tests to move down');
-    if (promoted.length) add(vis, `### Possible defects (low confidence, check before acting) (${promoted.length})\n\n`, promoted.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)), '\n');
+    if (promoted.length) add(vis, `### Unconfirmed findings (low confidence, check before acting) (${promoted.length})\n\n`, promoted.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)), '\n');
     const rest = lows.filter((e) => !promoted.includes(e));
     detail(`**Low-confidence findings (${rest.length})**\n\n`, rest.map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: 'url' in e }, blob)));
   }
