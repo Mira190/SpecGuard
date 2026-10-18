@@ -220,6 +220,24 @@ test('scan gate: a finding whose title or body says there is no gap is dropped w
   assert.equal(out.not_reviewed.filter((x) => /says there is no gap/.test(x)).length, 2);
 });
 
+test('scan gate: a weak_test whose own test also pins a value, or whose line is an anchored regex, is low; a test with only weak or omit-style checks stays counted', () => {
+  const F = {
+    ...GATE_FILES,
+    'test/own.spec.js': ["it('builds', async () => {", '  expect(a.ok).toBeTruthy();', '  expect(r.err).toBeUndefined();', "  expect(text).toBe('Hello');", '});', "it('only truthy', () => {", '  expect(b.ok).toBeTruthy();', '  expect(r.list).toBeDefined();', '  expect(r.n).toBeGreaterThan(0);', '});', "it('anchored', async () => {", '  expect(await res.text()).toMatch(/^Deno!(\\r?\\n)?$/);', '});', "it('loose', async () => {", '  expect(await res.text()).toMatch(/Deno/);', '});', "it('omit', () => {", '  expect(c.ok).toBeTruthy();', "  checkOmit(t, out, 'secret');", '});'],
+    'tests/test_own.py': ['def test_order():', '    assert response.json', '    assert response.data == b"[1,2]"', '', 'def test_only():', '    assert other.json'],
+  }, run = (p, line) => { const f = uf({ unit: U1, kind: 'weak_test', path: p, line, quote: F[p][line - 1].trim(), title: 't', body: 'b', counterexample: 'x broken -> still passes' }); return verify(result([f]), { read: (q) => F[q] || null, units: owning([f]) }).unit_findings[0]; };
+  assert.deepEqual([run('test/own.spec.js', 2).low, run('test/own.spec.js', 2).lowWhy], [true, 'the same test also pins a value: test/own.spec.js:3']);
+  assert.match(run('tests/test_own.py', 2).lowWhy, /pins a value: tests\/test_own\.py:3/);
+  assert.equal(run('test/own.spec.js', 12).low, true, 'anchored regex');
+  for (const l of [7, 15, 18]) assert.equal(run('test/own.spec.js', l).low, false, `control: line ${l}`);
+  assert.equal(run('tests/test_own.py', 6).low, false, 'control: python truthy-only');
+});
+
+test('scan gate: "not a gap" drops a finding; "not a gap in X" does not', () => {
+  const out = verify(result([uf({ body: 'This is not a gap: the test pins it.' }), uf({ body: 'This is not a gap in legacy but the doubling is untested.' })]), { read: gread, units: UNITS() });
+  assert.equal(out.unit_findings.length, 1);
+});
+
 test('confirmation: a finding is confirmed by the same (unit, kind, quote) in the previous run, never at once', () => {
   const [det, weak] = checked([uf(), WEAK()]).unit_findings;
   const first = trackFindings([det, weak], null, 'abcdef1234');

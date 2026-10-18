@@ -321,7 +321,19 @@ function siblingCall(lines, line, quote, counterexample) {
   return 0;
 }
 // a unit finding that says there is nothing to report
-const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b/i;
+const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b|\bnot a gap\b(?! in\b)/i;
+// A weak_test whose own test block pins a value elsewhere (or whose cited line is an anchored regex): that line (the cited one for an anchored regex), else 0.
+const ANCHORED = /(?:\.toMatch|\bassert\.match|\bassertRegex|\bre\.(?:match|fullmatch))\s*\(.*\/\^.*\$\//, LOOSE = /typeof|toBeGreaterThan\(\s*0\s*\)|\.length\s*>\s*0|^\s*assert\s+(?!.*==)/;
+function pinnedInTest(lines, line) {
+  if (!Array.isArray(lines)) return 0;
+  const at = (i) => String(lines[i - 1] ?? ''), decl = (i) => TEST_DECL.test(at(i));
+  if (ANCHORED.test(at(line))) return line;
+  let a = line, b = line + 1;
+  while (a > 1 && !decl(a)) a--;
+  while (b <= lines.length && !decl(b)) b++;
+  for (let i = a; i < b; i++) if (i !== line && !/^\s*(?:\/\/|#|\/?\*)/.test(at(i)) && ASSERTION.test(at(i)) && (ANCHORED.test(at(i)) || !post.weakAssertion(at(i)) && !LOOSE.test(at(i)))) return i;
+  return 0;
+}
 
 function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbol = null, baseline = null, notes, file = () => null, testFile = heuristicTest, dropped = new Set(), gone = new Set(), shown = new Map() }) {
   // a cut matched test makes a missing_test low only when it mentions (whole word) the definition enclosing the cited line; no name or an unreadable cut test: low, as before
@@ -359,8 +371,9 @@ function verifyUnits(list, { locate, isDoc, units, packCut, covers = null, symbo
         if (name && name.length >= 5 && !SYMBOL_STOP.has(name.toLowerCase())) { symbols++; const h = symbol(name, c.path); if (h) gate = `may be covered by ${h} (${name} is referenced there)`; }
       }
     } else if (!cut && f.kind === 'weak_test') {
-      const s = siblingCall(file(c.path), c.line, c.quote, f.counterexample);
+      let s = siblingCall(file(c.path), c.line, c.quote, f.counterexample);
       if (s) gate = `another test in the same file calls it and asserts: ${c.path}:${s}`;
+      else if ((s = pinnedInTest(file(c.path), c.line))) gate = `the same test also pins a value: ${c.path}:${s}`;
     }
     const noSketch = f.kind !== 'pushdown' && !skeleton; // no test sketch: "no gap found" findings arrive this way
     const vague = f.kind === 'weak_test' && (!post.counterexampleOk(f.counterexample) || post.refutedBy(c.quote, f.counterexample)); // review F04: a weak test needs a wrong behaviour the assertion still accepts
