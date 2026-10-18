@@ -762,6 +762,34 @@ test('scan parts: a one-block part that still overflows fails as before; the spl
   assert.ok(pb.failed.some((x) => /not split: the halves would exceed max_budget_usd/.test(x.reason)), JSON.stringify(pb));
 });
 
+test('scan parts: a one-block part that hit its priced cap is retried once with a larger cap; a second overflow fails with the reason; a budget that does not cover the retry fails it unretried', async (t) => {
+  const one = (req) => req.body.max_tokens < 32000; // the only priced-down call is the one-block part
+  const a = scanRepo(t, 21);
+  a.answers((req, ok) => (one(req) && req.body.max_tokens <= 3500 ? overflow() : ok(req)));
+  await a.h.go({ GITHUB_WORKSPACE: a.root, MAX_BUDGET_USD: '50' });
+  const mine = a.h.calls.filter((c) => one(c)).map((c) => c.body.max_tokens);
+  assert.deepEqual(mine, [3500, 14000]);
+  assert.deepEqual(JSON.parse(a.h.file('scan-parts.json')).failed, []);
+  assert.equal(JSON.parse(a.h.file('findings.json')).requirements.length, 21);
+  const b = scanRepo(t, 21);
+  b.answers((req, ok) => (one(req) ? overflow() : ok(req)));
+  await b.h.go({ GITHUB_WORKSPACE: b.root, MAX_BUDGET_USD: '50' });
+  assert.equal(b.h.calls.filter((c) => one(c)).length, 2, 'retried once, never twice');
+  const pb = JSON.parse(b.h.file('scan-parts.json'));
+  assert.equal(pb.failed.length, 1);
+  assert.match(pb.failed[0].reason, /max_output_tokens \(14000\)/);
+  const c = scanRepo(t, 21, { MODEL: 'claude-sonnet-5-5' });
+  const fat = (x) => ({ ...x, text: async () => { const j = JSON.parse(await x.text()); j.model = 'claude-sonnet-5-5'; j.usage.output_tokens = 32000; return JSON.stringify(j); } }); // every reply costs its worst case
+  c.answers((req, ok) => fat(one(req) ? overflow() : ok(req)));
+  const base = scanRepo(t, 21, { MODEL: 'claude-sonnet-5-5', MAX_BUDGET_USD: '50' });
+  base.answers((req, o) => o(req));
+  await base.h.go({ GITHUB_WORKSPACE: base.root });
+  const sum = base.h.calls.reduce((x, k) => x + api.worstCase('claude-sonnet-5-5', Buffer.byteLength(JSON.stringify(k.body.system || '')), Buffer.byteLength(k.body.messages[0].content), k.body.max_tokens).usd, 0);
+  await c.h.go({ GITHUB_WORKSPACE: c.root, MAX_BUDGET_USD: String(sum.toFixed(4)) });
+  assert.equal(c.h.calls.filter((k) => one(k)).length, 1);
+  assert.match(JSON.parse(c.h.file('scan-parts.json')).failed[0].reason, /not retried: the retry with 14000 tokens would exceed max_budget_usd/);
+});
+
 test('scan parts: a failing unit call keeps the block answers; all calls failing fails the run like one call', async (t) => {
   const a = scanRepo(t, 45);
   a.answers((req, ok) => (/name="audit-units\.txt"/.test(req.body.messages[0].content) ? err(401, 'authentication_error', 'invalid x-api-key') : ok(req)));

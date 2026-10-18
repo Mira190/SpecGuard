@@ -47,7 +47,7 @@ Requirement documents anywhere in the repo (IDs such as `AC-4`, acceptance-crite
 - **Model choice (Copilot).** Pin `model` when your plan allows: an unavailable model falls back to `auto` once and the summary says so. With `auto` the router picks the model per prompt; the model actually used is recorded in `engine-model.json` (in the context directory) and shown in the usage line. A fast-tier model, a run whose JSON needed a repair turn, three or more engine notes, or more than a quarter of the obligations degraded by validation publishes a **reduced review**: the verdict is followed by the usual counts line, a one-line note says only high-confidence findings are shown, at most 3 inline comments (high confidence with two verified citations), everything else as one-line items in the summary, never the "No unit test gaps found" wording, no auto-resolved threads. A run that is incomplete or struggling (repair turn, engine notes, degraded obligations) writes no head marker so the next push retries; the fast tier alone still writes it.
 - A `<sub>` "Since earlier reviews" line on a complete re-review: how many earlier findings are addressed, still open, dismissed or not observed. The labels are conservative: "addressed" means the anchored lines or a test file changed since the comment, never proof of a fix; "of the N most recent" appears when more earlier findings exist than were tracked.
 - Hidden markers in the summary: `specguard:status` (`complete`, `incomplete` or `failed`: whether the review finished; a fast-tier model alone does not make it incomplete, the grade is in the counts `tier`/`reduced` and a one-line note), `specguard:by` (the login that posted it), `specguard:head` (written only for a complete run, so an incomplete head is retried) and `specguard:counts` (the telemetry behind the line above).
-- The Action output `status` carries the same `complete` / `incomplete` / `failed` and is empty when the run was skipped. The job stays green in every case, so read this output (or the summary) to notice a failing setup.
+- The Action output `status` carries the same `complete` / `incomplete` / `failed` and is empty when the run was skipped. The job is green unless the setup is broken or `fail_on_error` asks otherwise ([job colour](#job-colour)), so read this output (or the summary) to notice a failed or incomplete review.
 - Separate coding-standard and test-layer assessments, including when no violations or pushdown candidates were found.
 - `covered` requires a unit assertion; `higher_level_only` records component/integration/e2e evidence without counting it as unit coverage. Pushdown suggestions identify a public unit seam and preserve necessary integration checks.
 - Unknown evidence, inaccessible issues and partial reviews remain visible. Empty findings never imply that requirements were fully reviewed.
@@ -55,7 +55,7 @@ Requirement documents anywhere in the repo (IDs such as `AC-4`, acceptance-crite
 - **Large PRs are reviewed in focus.** Time and cost grow with how much the model reads, so past 600 changed lines or 25 changed files SpecGuard ranks the changed files by risk before the model runs (logic over config, docs and generated files; more changed lines; no test found; named by a requirement; removed branch and error-handling lines) and reviews only the top 12 whose diff fits, plus their changed tests. The model is told to read only about 20 files beyond the diff. The summary says "Large PR: focused review of N of M files (highest risk first); not reviewed: ...", the run is marked incomplete (not reduced, not failed) so the next push reviews again, and the hidden counts carry `focused: {files, of}`. Split the PR or raise `focus_threshold` to review more.
 - Skipped with no AI call: docs-only and lockfile-only PRs, closed PRs, bot authors and heads that already have a complete summary. Default ignores include lockfiles, `dist/`, `build/`, `vendor/`, snapshots and generated code (`*.pb.go`, `*_pb2.py`, `*.g.cs`, `*.Designer.cs`, `*.generated.*`).
 - A linked issue is found from "Closes #N" in the PR body, and from the branch name only by explicit markers: `issue-N`, `issues/N`, `gh-N`, or a leading `N-` (`123-fix-bug`).
-- Advisory only: the job stays green.
+- Advisory: green unless the setup is broken ([job colour](#job-colour)).
 
 The default Action runs the reviewer directly so it can require this complete report. It reads tests but does not execute PR code: `Unit evidence: X/Y` is a static assessment of the listed obligations, not measured code coverage or proof that tests pass. AI can miss or misinterpret behaviour; source-quote validation checks citation existence, not semantic correctness. Run your normal test/lint CI alongside it.
 
@@ -81,15 +81,15 @@ It is never the action author's quota. Copilot CLI is billed by the token it run
 | **Repository-read token** (central runs on other repos only) | GitHub App (preferred) or fine-grained PAT owned by the org, Contents / Pull requests / Issues read | reads the target; costs nothing | `SPECGUARD_APP_ID` + `SPECGUARD_APP_PRIVATE_KEY`, or `SPECGUARD_PAT` (environment secrets) |
 | **Org billing** (alternative, no Copilot token) | job token with `copilot-requests: write` | the org, only if an owner enables "Allow use of Copilot CLI billed to the organization" (personal repo: the repo owner's seat) | nothing to store |
 
-One fine-grained PAT has a single resource owner, so the Copilot token (user-owned) and the repository-read PAT (org-owned) are two tokens; they cannot be merged. All runs on a Copilot token spend that user's own quota: use a service/bot account with its own Copilot seat if your company allows it, so a person's quota is not drained. When the quota is used up the run reports "Copilot quota or budget exhausted" (the job stays green). The org may also have to enable the Copilot CLI policy for that user, and an org that requires approval of fine-grained PATs affects only the repository-read PAT (the Copilot token touches no org resources).
+One fine-grained PAT has a single resource owner, so the Copilot token (user-owned) and the repository-read PAT (org-owned) are two tokens; they cannot be merged. All runs on a Copilot token spend that user's own quota: use a service/bot account with its own Copilot seat if your company allows it, so a person's quota is not drained. When the quota is used up the run reports "Copilot quota or budget exhausted" (a configuration failure: the job goes red, see [job colour](#job-colour)). The org may also have to enable the Copilot CLI policy for that user, and an org that requires approval of fine-grained PATs affects only the repository-read PAT (the Copilot token touches no org resources).
 
 Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR and linked-issue text and any repo files the model reads are sent to GitHub Copilot. The Copilot step unsets a job-level `GH_TOKEN` (Copilot CLI would prefer it over the job token and hijack the auth).
 
 ## Rolling out in a company
 
 - **Pin a full commit SHA**, not a branch or `@v1` (the `v1` tag predates this behaviour). Update it deliberately.
-- **Org prerequisites:** either a Copilot token (see [Who pays](#who-pays); the user needs a Copilot seat with Copilot CLI allowed), or an org admin enables Copilot CLI and the policy "Allow use of Copilot CLI billed to the organization" for `GITHUB_TOKEN` billing. Without one of them every PR shows "Could not complete" while the job stays green. Run a **canary PR** first and watch the `status` output (or the summary); alert on `failed`.
-- **Never make SpecGuard a required check, and never put `paths:` on its trigger.** A skipped workflow leaves a required check pending, a merge queue (`merge_group`) gets no result, and a superseded push cancels the older run. It is advisory and always green. The same goes for "Require conversation resolution": its review threads are advisory, so `resolve_stale` is off by default (the job token cannot resolve threads); where that branch-protection rule is on, give the action a `github_token` that can resolve threads and set `resolve_stale: "true"`, or developers must resolve each thread by hand.
+- **Org prerequisites:** either a Copilot token (see [Who pays](#who-pays); the user needs a Copilot seat with Copilot CLI allowed), or an org admin enables Copilot CLI and the policy "Allow use of Copilot CLI billed to the organization" for `GITHUB_TOKEN` billing. Without one of them every PR shows "Could not complete" and the job goes red (a configuration failure). Run a **canary PR** first and watch the `status` output (or the summary); alert on `failed`.
+- **Never make SpecGuard a required check, and never put `paths:` on its trigger.** A skipped workflow leaves a required check pending, a merge queue (`merge_group`) gets no result, and a superseded push cancels the older run. It is advisory (green unless the setup is broken, see [job colour](#job-colour)). The same goes for "Require conversation resolution": its review threads are advisory, so `resolve_stale` is off by default (the job token cannot resolve threads); where that branch-protection rule is on, give the action a `github_token` that can resolve threads and set `resolve_stale: "true"`, or developers must resolve each thread by hand.
 - **Least-privilege permissions** (job-level; `github_token` and `copilot-requests` as below):
 
 | Mode | Permissions |
@@ -153,7 +153,7 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | `trace` | `auto` | `auto` links requirement docs and changed code in both directions when any requirement doc exists; `off` disables it. |
 | `include_bots` | `false` | Bot-authored PRs (Dependabot, Renovate, any `[bot]` author) are skipped before the model runs; `true` reviews them. |
 | `force` | `false` | A head SHA that already has a complete SpecGuard summary from this Action's own bot is skipped (an incomplete run records none, so it is retried) (idempotent rerun, no tokens spent); `true` reviews it again. Closed PRs are always skipped. |
-| `fail_on_error` | `false` | Configuration failures (bad or missing key, no credit, unknown model) always fail the job with `::error::SpecGuard could not run the model (<class>): <reason>`; this input controls transient failures and findings. Otherwise SpecGuard is advisory: by default the job stays green even when the review could not complete (the summary says so). `true` fails the job with `::error::SpecGuard could not complete: <reason>` when `status` is `failed` (an incomplete result only warns); the manual-run workflow sets it. Leave it off for PR checks. |
+| `fail_on_error` | `false` | Configuration failures (bad or missing key, no credit, unknown model) always fail the job; this input controls the rest: `true` also fails on a transient failure (`::error::SpecGuard could not complete: <reason>`) and, in a `scan_scope: all` scan, on anything not reviewed. The manual-run workflow sets it. Leave it off for PR checks. See [job colour](#job-colour). |
 | `ctx_retention_days` | `1` | Days to keep the `specguard-ctx-<PR>-<attempt>` artifact (diff, prompt context and raw engine output, for diagnosing a failed review). Anyone who can read the repo's Actions runs can download it: set `0` (no upload) on public repositories and wherever the diff must not be stored. |
 | `resolve_stale` | `false` | `true` resolves SpecGuard's own review threads that have no replies and whose finding is no longer reported anywhere, including the summary (at most 20 per run), after a complete review (diff not truncated, engine finished, requirement collection and comment delivery not degraded). Enable it only with a `github_token` that can resolve review threads: the default `GITHUB_TOKEN` with `pull-requests: write` was refused in a live run ("Resource not accessible by integration"; for example a fine-grained PAT with Pull requests: write; adding `contents: write` to the job is unverified), and when the token is refused the summary says the threads were left open. Off by default because of "Require conversation resolution": where it is on, every unresolved advisory thread blocks the merge, and a token that cannot resolve means the developer must resolve each one by hand. Failures never fail the run. |
 | `copilot_version` | `1.0.92` | Pinned `@github/copilot` (>= 1.0.85). |
@@ -164,6 +164,21 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | `delivery`, `repository`, `pr_number`, `base_sha`, `head_sha` | | For [manual runs](#manual-run-specguard-repo) that review another repository on a `workflow_dispatch`: `delivery: summary` writes nothing to the PR (job summary only); the others replace what a `pull_request` event would supply. Leave them empty in your own workflow. |
 
 </details>
+
+#### Job colour
+
+`src/fail-on-error.js` runs last. A configuration failure is one only the owner can fix (bad or missing key, no credit, unknown model, Copilot policy off, adapter error).
+
+| Outcome (`status`) | `fail_on_error` off (default) | `fail_on_error` on |
+|---|---|---|
+| `complete` | green | green |
+| `incomplete`, PR review or scan | green, warning | green, warning |
+| `incomplete`, `scan_scope: all`, parts or blocks not reached or a call failed | green, warning | **red** |
+| `incomplete` with a configuration failure in a part | **red** | **red** |
+| `failed`, configuration failure | **red** | **red** |
+| `failed`, transient (timeout, bad JSON, overload) | green, warning | **red** |
+
+Unsure verdicts on reviewed code (`scan_scope: all`) only warn. Never make SpecGuard a required check, whatever the colour.
 
 ### Coverage evidence (optional)
 
@@ -398,7 +413,7 @@ permissions:
 | `not_configured` | `standards_checks` is empty |
 | `incomplete` | all found, none failed or pending, but not all succeeded (for example skipped or neutral) |
 
-Anything other than `passed` or `not_configured` stops the summary from saying "No unit test gaps found". Advisory only; the job stays green.
+Anything other than `passed` or `not_configured` stops the summary from saying "No unit test gaps found". Advisory only: it does not change the job colour.
 
 ## Run locally
 
@@ -471,7 +486,7 @@ Native CCR remains optional. Its comments cannot reconstruct the complete obliga
 
 ## Troubleshooting
 
-- "Could not complete" in the summary: the engine failed, timed out or returned invalid JSON; the job stays green and the `status` output is `failed`. Check the job log. Common causes: no usable Copilot token (set `SPECGUARD_COPILOT_TOKEN` / `copilot_token` when the organization does not bill Copilot CLI; a classic `ghp_` or org-owned PAT is rejected), a missing `copilot-requests: write` permission, a Copilot policy that is not enabled, or the token owner's quota used up. The summary names which one.
+- "Could not complete" in the summary: the engine failed, timed out or returned invalid JSON; the `status` output is `failed` and the job colour follows [job colour](#job-colour). Check the job log. Common causes: no usable Copilot token (set `SPECGUARD_COPILOT_TOKEN` / `copilot_token` when the organization does not bill Copilot CLI; a classic `ghp_` or org-owned PAT is rejected), a missing `copilot-requests: write` permission, a Copilot policy that is not enabled, or the token owner's quota used up. The summary names which one.
 - Fork and draft PRs are skipped: a fork's token is read-only and its code is untrusted.
 - Review not posted, with warning annotations (403/404): the token lacks `pull-requests: write`. Findings appear as annotations and in the job summary instead.
 - A false positive: open an issue with the finding, the cited rule or test line and why it is wrong. Add "do not report" rules to `REVIEW.md` meanwhile.

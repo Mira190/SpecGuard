@@ -474,6 +474,11 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
           if (spent + (all ? halves[0].usd : queue.reduce((a, x) => a + x.usd, 0) + halves.reduce((a, x) => a + x.usd, 0)) <= budget) { /* scan_scope all: against the actual spend, each half again at dispatch */ splits++; queue.unshift(...halves); continue; }
           fail(p, `${r.why}; not split: the halves would exceed max_budget_usd`); first ||= r; continue;
         }
+        if (!r.ok && r.reason === 'length' && p.cids && p.cids.length === 1 && !p.grow && p.tokens < maxTokens) { // one block cannot be split: once more with a larger output allowance, same budget rule
+          const again = priced({ ...split.sub(p.cids), retry: p.retry, grow: Math.min(maxTokens, 4 * p.tokens) }), spent = rs.reduce((a, x) => a + charge(x), 0);
+          if (spent + (all ? 0 : queue.reduce((a, x) => a + x.usd, 0)) + again.usd <= budget) { queue.unshift(again); continue; }
+          fail(p, `${r.why}; not retried: the retry with ${again.tokens} tokens would exceed max_budget_usd`); first ||= r; continue;
+        }
         let obj = null, why = r.ok ? '' : r.why || r.status;
         if (r.ok) { try { obj = JSON.parse(r.found); } catch { /* extract-json gave text that is not an object */ } if (!obj || typeof obj !== 'object' || Array.isArray(obj)) { obj = null; why = 'the answer was not a JSON object'; } }
         const arr = (k) => (obj && Array.isArray(obj[k]) ? obj[k] : []);
@@ -547,7 +552,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
 
 // A scan part with its worst-case price. A batch of n blocks needs about 1500 tokens each (20 blocks overflowed 22000 live).
 const pricePart = (model, maxTokens, p) => {
-  const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, 1500 * p.cids.length + 2000) : maxTokens;
+  const { system: s, user: x } = messages(p.prompt, p.pack.text), tokens = p.cids ? Math.min(maxTokens, p.grow || 1500 * p.cids.length + 2000) : maxTokens; // grow: a one-block part's second try after max_output_tokens
   return { ...p, system: s, user: x, tokens, usd: worstCase(model, Buffer.byteLength(s), Buffer.byteLength(x), tokens).usd };
 };
 // The budget is hard: the last part goes first (the extra unit parts, then the block batches in reverse candidate order = rotation priority), the first part last. -> the parts that stay, the dropped block cids and the dropped unit keys (id or id:part).
