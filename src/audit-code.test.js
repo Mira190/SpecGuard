@@ -220,6 +220,19 @@ test('scan gate: a finding whose title or body says there is no gap is dropped w
   assert.equal(out.not_reviewed.filter((x) => /says there is no gap/.test(x)).length, 2);
 });
 
+test('scan gate: "not a gap" drops a finding; "not a gap in X" does not', () => {
+  const out = verify(result([uf({ body: 'This is not a gap: the test pins it.' }), uf({ body: 'This is not a gap in legacy but the doubling is untested.' })]), { read: gread, units: UNITS() });
+  assert.equal(out.unit_findings.length, 1);
+});
+
+test('scan gate: a weak_test stays counted when a sibling assertion pins another field, or when an anchored regex accepts anything (no same-test or anchored gate)', () => {
+  const F = { ...GATE_FILES, 'test/field.spec.js': ["it('totals', () => {", '  const result = total();', '  assert.ok(result.total);', "  assert.equal(result.currency, 'USD');", '});', "it('text', async () => {", '  expect(await res.text()).toMatch(/^.*$/);', '});'] };
+  for (const line of [3, 7]) {
+    const f = uf({ unit: U1, kind: 'weak_test', path: 'test/field.spec.js', line, quote: F['test/field.spec.js'][line - 1].trim(), title: 't', body: 'b', counterexample: 'x broken -> still passes' });
+    assert.equal(verify(result([f]), { read: (q) => F[q] || null, units: owning([f]) }).unit_findings[0].low, false, `line ${line}`);
+  }
+});
+
 test('confirmation: a finding is confirmed by the same (unit, kind, quote) in the previous run, never at once', () => {
   const [det, weak] = checked([uf(), WEAK()]).unit_findings;
   const first = trackFindings([det, weak], null, 'abcdef1234');
