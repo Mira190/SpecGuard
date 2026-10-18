@@ -120,6 +120,8 @@ test('attribute: ranked_out, not_retrieved, cut (note names the file), unknown (
   assert.deepEqual(at.counts['req->code code'], { ranked_out: 1, cut: 0, not_retrieved: 1, unknown: 0 });
   assert.deepEqual(at.counts['req->code tests'], { ranked_out: 0, cut: 0, not_retrieved: 1, unknown: 0 });
   assert.deepEqual(at.req_to_code_locations.find((l) => l.id === 'A-RC'), { id: 'A-RC', required: 2, found: 1, misses: [{ loc: 'f2.js:5-5', kind: 'same_dir', alt: false }] });
+  const withT = attribute({ variants: [...fx.results.variants, ...fx.results_t.variants] }, fx.cases); // T variants add nothing to the four lists
+  assert.deepEqual(withT.counts, at.counts); assert.equal(withT.misses.length, at.misses.length);
   const rc = fx.results.variants.find((v) => v.id === 'A-RC');
   const cut = attribute({ variants: [{ ...rc, limitations: ['2 more code/test candidate(s) for S1 not shown (top 3 kept): f2.js.'] }] }, fx.cases);
   assert.equal(cut.misses.find((m) => m.item === 'f2.js:5-5').class, 'cut');
@@ -127,4 +129,19 @@ test('attribute: ranked_out, not_retrieved, cut (note names the file), unknown (
   const full = attribute({ variants: [{ ...rc, limitations: ['2 more code/test candidate(s) for S1 not shown (top 3 kept): a.js, b.js.'] }] }, fx.cases); // complete list without f2 = never retrieved
   assert.equal(full.misses.find((m) => m.item === 'f2.js:5-5').class, 'not_retrieved');
   assert.equal(unk.misses.find((m) => m.item === 'f2.js:5-5').class, 'unknown');
+});
+
+test('test->code / test->req: a T variant is scored against the case ground truth; nothing emitted is a 0 with k/n', () => {
+  // A-T: f2.js:5 is rank 2 of the emitted windows, f1.js:10-20 is not found; D.md:2 is rank 2 (D.md:9 scores higher but is out of range). B-T has no code item but one requirement.
+  const t = analyze(fx.results_t, fx.cases), c = t.directions['test->code'].code, r = t.directions['test->req'].requirement;
+  assert.deepEqual([c.queries, c.empty_relevant_excluded, c.relevant_items], [1, 1, 2]);
+  assert.deepEqual([c.hit_at_1, c.hit_at_3, c.recall_at_3, c.all_required_at_3], [kr(0, 1), kr(1, 1), kr(1, 2), kr(0, 1)]);
+  assert.equal(c.mrr_at_10.value, 0.5);
+  assert.deepEqual([r.queries, r.hit_at_1, r.hit_at_3, r.mrr_at_10.value], [2, kr(0, 2), kr(1, 2), 0.25]); // B-T has a requirement and nothing emitted: a miss, still in the denominator
+  const none = analyze({ variants: [{ ...fx.results_t.variants[0], req_to_code: [], code_to_req: [] }] }, fx.cases); // control: the pipeline emits nothing
+  assert.deepEqual([none.directions['test->code'].code.recall_at_K, none.directions['test->req'].requirement.hit_at_3], [kr(0, 2), kr(0, 1)]);
+  assert.equal(analyze(fx.results, fx.cases).directions['test->code'].code.queries, 0); // R/C/RC feed no T direction
+  const mixed = analyze({ variants: [...fx.results.variants, ...fx.results_t.variants] }, fx.cases); // T feeds no old direction
+  assert.deepEqual(mixed.directions['req->code'], res.directions['req->code']);
+  assert.deepEqual(mixed.directions['code->req'], res.directions['code->req']);
 });

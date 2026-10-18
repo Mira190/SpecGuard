@@ -59,6 +59,8 @@ function analyze(results, cases) {
   const groups = {
     'req->code': { code: emptyAgg(), code_file_level: emptyAgg(), tests: emptyAgg() },
     'code->req': { requirement: emptyAgg(), tests: emptyAgg() },
+    'test->code': { code: emptyAgg() },
+    'test->req': { requirement: emptyAgg() },
   };
   const times = [];
   const vs = results.variants || [];
@@ -70,14 +72,21 @@ function analyze(results, cases) {
     if (v.status !== undefined && v.status !== 'ok') failed.push({ case: v.case, variant: v.variant, status: v.status }); // stays in every denominator: a failed trace is a miss, not a skipped query
     if (typeof v.trace_ms === 'number' && typeof v.cand_ms === 'number') times.push(v.trace_ms + v.cand_ms);
     const ex = c.expect;
-    if (v.variant !== 'C') { // requirement edited: which code and tests does it point at
+    if (v.variant === 'R' || v.variant === 'RC') { // requirement edited: which code and tests does it point at
       const r2c = v.req_to_code || [], g = groups['req->code'];
       const codeLists = r2c.map((x) => x.code || []), testLists = r2c.map((x) => x.tests || []);
       add(g.code, ex.code.map((loc) => rankOf(codeLists, (it) => overlaps(it, loc, locRanges(loc)))));
       add(g.code_file_level, ex.code.map((loc) => rankOf(codeLists, (it) => it.path === loc.file)));
       add(g.tests, ex.tests.map((t) => rankOf(testLists, (it) => it.path === t)));
     }
-    if (v.variant !== 'R') { // code edited: which requirement and tests does it point at
+    if (v.variant === 'T') { // only a test assertion weakened: which code and requirement lost protection (relevant = the case's expect.code / expect.requirement; retrieved = what the pipeline emits, possibly nothing)
+      const [a, b] = ex.requirement.lines;
+      const codeLists = (v.req_to_code || []).map((x) => x.code || []);
+      add(groups['test->code'].code, ex.code.map((loc) => rankOf(codeLists, (it) => overlaps(it, loc, locRanges(loc)))));
+      const reqLists = (v.code_to_req || []).map((h) => h.candidates.slice().sort((p, q) => q.score - p.score));
+      add(groups['test->req'].requirement, [rankOf(reqLists, (it) => it.path === ex.requirement.file && it.line >= a - 1 && it.line <= b + 1)]);
+    }
+    if (v.variant === 'C' || v.variant === 'RC') { // code edited: which requirement and tests does it point at
       const g = groups['code->req'];
       const reqLists = (v.code_to_req || []).map((h) => h.candidates.slice().sort((a, b) => b.score - a.score));
       const [a, b] = ex.requirement.lines; // +-1 line: the candidate is the item's first line
@@ -96,7 +105,7 @@ function analyze(results, cases) {
 // Where was each relevant item lost? Only the raw outputs are used. For each relevant item whose best rank is not within K:
 //   ranked_out: delivered at rank > K (trace.js keeps only the top 3 per criterion, so this arises only in lists it does not cut); cut: not delivered and a "more"/limit note names it (cite the note);
 //   not_retrieved: not delivered and no note could explain it; unknown: not delivered but a note says something was dropped without naming it.
-// Also per req->code query: required code locations vs found (any rank) and the kind of each miss (same_file | same_dir | generated_duplicate (lib/config-validator.js is generated from build/build-validation.js) | other).
+// Also per req->code query: required code locations vs found (any rank) and the kind of each miss (same_file | same_dir | generated_duplicate (the case data marks the location with lt ranges) | other).
 const dirOf = (p) => p.split('/').slice(0, -1).join('/');
 function attribute(results, cases) {
   const byId = new Map(cases.cases.map((c) => [c.id, c]));
@@ -117,7 +126,7 @@ function attribute(results, cases) {
   };
   for (const v of results.variants || []) {
     const ex = byId.get(v.case).expect, lim = v.limitations || [];
-    if (v.variant !== 'C') {
+    if (v.variant === 'R' || v.variant === 'RC') {
       const r2c = v.req_to_code || [], codeLists = r2c.map((x) => x.code || []), testLists = r2c.map((x) => x.tests || []);
       const moreNotes = lim.filter((n) => /more code\/test candidate/.test(n));
       const found = [];
@@ -127,10 +136,10 @@ function attribute(results, cases) {
         if (rank !== null) found.push(loc);
       }
       const hitFiles = new Set(found.map((l) => l.file)), hitDirs = new Set(found.map((l) => dirOf(l.file)));
-      locs.push({ id: v.id, required: ex.code.length, found: found.length, misses: ex.code.filter((l) => !found.includes(l)).map((l) => ({ loc: l.file + ':' + l.lines.join('-'), kind: hitFiles.has(l.file) ? 'same_file' : l.file === 'lib/config-validator.js' ? 'generated_duplicate' : hitDirs.has(dirOf(l.file)) ? 'same_dir' : 'other', alt: !!(l.alt && l.alt.length) })) });
+      locs.push({ id: v.id, required: ex.code.length, found: found.length, misses: ex.code.filter((l) => !found.includes(l)).map((l) => ({ loc: l.file + ':' + l.lines.join('-'), kind: hitFiles.has(l.file) ? 'same_file' : (l.alt && l.alt.length) ? 'generated_duplicate' : hitDirs.has(dirOf(l.file)) ? 'same_dir' : 'other', alt: !!(l.alt && l.alt.length) })) });
       for (const t of ex.tests) classify('req->code tests', v, t, rankOf(testLists, (it) => it.path === t), moreNotes, (n) => n.includes(t), testLists.some((l) => l.some((it) => it.path === t)));
     }
-    if (v.variant !== 'R') {
+    if (v.variant === 'C' || v.variant === 'RC') {
       const reqLists = (v.code_to_req || []).map((h) => h.candidates.slice().sort((a, b) => b.score - a.score));
       const [a, b] = ex.requirement.lines, hunkNotes = lim.filter((n) => /weaker code hunk/.test(n));
       classify('code->req requirement', v, ex.requirement.file + ':' + ex.requirement.lines.join('-'), rankOf(reqLists, (it) => it.path === ex.requirement.file && it.line >= a - 1 && it.line <= b + 1), hunkNotes, () => false);
