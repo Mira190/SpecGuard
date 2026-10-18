@@ -207,6 +207,17 @@ test('scan gate: a sibling that calls the same function with other arguments doe
   assert.equal(run('test/b.test.ts', 3).lowWhy, 'another test in the same file calls it and asserts: test/b.test.ts:6', 'same argument text (whitespace aside) gates');
 });
 
+test('scan gate: identical argument text gates a weak_test only when no identifier in it is declared inside either test (R3 #3: `input` in two tests is two values)', () => {
+  const T = (decl, a, b) => ["describe('total', () => {", "  it('empty', () => {", ...decl[0], `    assert.equal(calculateTotal(${a}), 0);`, '  });', "  it('populated', () => {", ...decl[1], `    assert.ok(calculateTotal(${b}));`, '  });', '});'];
+  const run = (L) => { const w = uf({ unit: U1, kind: 'weak_test', path: 'test/t.test.js', line: L.findIndex((x) => /assert\.ok/.test(x)) + 1, quote: L.find((x) => /assert\.ok/.test(x)).trim(), title: 'populated total only checked truthy', body: 'ok passes for 1.', counterexample: 'calculateTotal(input) returns 1 instead of 20 -> assert.ok passes' }); return verify(result([w]), { read: (q) => (q === 'test/t.test.js' ? L : null), units: owning([w]) }).unit_findings[0].low; };
+  assert.equal(run(T([['    const input = [];'], ['    const input = [{ price: 10, quantity: 2 }];']], 'input', 'input')), false, 'probe: same local name, other value, stays counted');
+  assert.equal(run(T([['    const { input } = setup();'], ['    const { input } = other();']], 'input', 'input')), false, 'destructured locals');
+  assert.equal(run(T([['    const emptyInput = [];'], ['    const input = [{ price: 10 }];']], 'emptyInput', 'input')), false, 'probe control: renamed, different text');
+  assert.equal(run(T([[], []], 'input', 'input')), true, 'shared (not declared in either test) same text still gates');
+  assert.equal(run(T([[], []], '[]', '[]')), true, 'same literal gates');
+  assert.equal(run(T([['    const x = 1;'], []], "'a', 2", "'a', 2")), true, 'string and number literals gate');
+});
+
 test('scan gate: a repository that tests through >= 200 baseline files shows every missing_test as low once-noted; 199 files change nothing', () => {
   const base = (n) => new Set([...Object.keys(GATE_FILES), ...Array.from({ length: n }, (_, i) => `tsc/testdata/baselines/reference/c${i}.js`)]);
   const two = [uf(), uf({ unit: U1, ...gcite('src/js/orders.js', 1), title: 'create is untested' })];
