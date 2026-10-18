@@ -49,7 +49,9 @@ function publicDefs(file, ls) {
   const body = ls.filter((l) => !comment(l)), hit = (res) => body.filter((l) => res.some((re) => re.test(l)));
   const pub = hit(fam.pub), use = pub.length ? pub : hit(fam.top);
   const cjs = fam === FAMILY.js ? cjsNames(body) : [];
-  return { count: use.length, names: [...new Set([...use.flatMap(namesOf), ...cjs])].filter((n) => !(cjs.length && n === 'exports')) };
+  const own = use.flatMap(namesOf);
+  // cjsOnly: names known only from a CommonJS export object (they map tests, but are not an unreferenced-export lead)
+  return { count: use.length, names: [...new Set([...own, ...cjs])].filter((n) => !(cjs.length && n === 'exports')), cjsOnly: cjs.filter((n) => !own.includes(n)) };
 }
 // Names a CommonJS file exports: `module.exports = { a, b: c, d() {} }` (keys and plain identifier values), `module.exports = name | function name`.
 // ponytail: the object literal is read as text (max 80 lines) and only its depth-0 entries count; a call value or a re-export from another file (`require('./x')`) gives no name, no cross-file following.
