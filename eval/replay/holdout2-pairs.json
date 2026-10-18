@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-18T08:12:36.112Z",
+ "generated": "2026-10-18T08:14:31.469Z",
  "note": "HOLD-OUT set 2. Metadata and PR text only; no third-party source. holdout-pairs.json confirmed pairs plus pairs mined 2026-06..2026-10 from hono, query, pydantic-ai, cli, trpc, vitest, langchain, pydantic, gitea. Confirmed blind to any SpecGuard output. replay_eligible = confirmed && scope in && 30-1200 changed lines && <=40 files.",
  "pairs": [
   {
@@ -2124,6 +2124,42 @@
    "replay_eligible": true
   },
   {
+   "id": "gitea-38021<-33343",
+   "replay_id": "gitea-33343",
+   "repo": "go-gitea/gitea",
+   "fix": {
+    "number": 38021,
+    "url": "https://github.com/go-gitea/gitea/pull/38021",
+    "title": "fix(indexer): fix assignee filters in issue search",
+    "merged_at": "2026-06-22T05:45:25Z"
+   },
+   "introducing": {
+    "number": 33343,
+    "url": "https://github.com/go-gitea/gitea/pull/33343",
+    "merged_at": "2025-03-21T04:25:36Z",
+    "merge_commit": "0da7318cf3b4933ec76ba7730daa1deacfcb0e78",
+    "base": "a4df01b5802c62863cdf26dc747e20617d847d89",
+    "head": "0da7318cf3b4933ec76ba7730daa1deacfcb0e78",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 22,
+    "additions": 169,
+    "deletions": 103,
+    "diff_stat": "22 files changed, 169 insertions(+), 103 deletions(-)",
+    "pr_title": "Allow filtering issues by any assignee",
+    "pr_body": "This is the opposite of the \"No assignee\" filter, it will match all issues that have at least one assignee.\r\n\r\nBefore\r\n![Before change](https://github.com/user-attachments/assets/4aea194b-9add-4a84-8d6b-61bfd8d9e58e)\r\n\r\nAfter\r\n![After change with any filter](https://github.com/user-attachments/assets/99f1205d-ba9f-4a0a-a60b-cc1a0c0823fe)\r\n\r\n"
+   },
+   "size_ok": true,
+   "size_changed_lines": 272,
+   "confirmed": false,
+   "confirm_note": "The assignee index stored only a single legacy assignee field before the PR; the PR added an any-assignee filter on top of it, but the multi-assignee indexing gap predates it and the fix reworks the index schema.",
+   "scope": "out",
+   "scope_reason": "Pre-existing indexing limitation, mostly index/schema change.",
+   "category": "logic",
+   "bug_card": null,
+   "replay_eligible": false
+  },
+  {
    "id": "vitest-11151<-8408",
    "replay_id": "vitest-8408",
    "repo": "vitest-dev/vitest",
@@ -2348,6 +2384,42 @@
     "test_gap": "Permutation test over $defs order for a multi-level chain of colliding defs"
    },
    "replay_eligible": true
+  },
+  {
+   "id": "cli-13780<-7324",
+   "replay_id": "cli-7324",
+   "repo": "cli/cli",
+   "fix": {
+    "number": 13780,
+    "url": "https://github.com/cli/cli/pull/13780",
+    "title": "Harden deployment workflow",
+    "merged_at": "2026-07-13T16:06:19Z"
+   },
+   "introducing": {
+    "number": 7324,
+    "url": "https://github.com/cli/cli/pull/7324",
+    "merged_at": "2023-05-09T18:29:04Z",
+    "merge_commit": "8b987e2deb12b4ace29efb9b4eebc2ebb0428f1d",
+    "base": "b01c27aba251c25353b570142d998cfa0ba2c00c",
+    "head": "8b987e2deb12b4ace29efb9b4eebc2ebb0428f1d",
+    "files_match_gh": false,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 14,
+    "additions": 616,
+    "deletions": 354,
+    "diff_stat": "14 files changed, 616 insertions(+), 354 deletions(-)",
+    "pr_title": "New deployment workflow for releases",
+    "pr_body": "- Kick off builds with `script/release <tagname>` instead of by pushing a git tag\r\n- Build each platform (macOS, Linux, Windows) on their native OS\r\n- macOS and Windows builds now have cgo enabled\r\n- macOS builds are now signed and notarized\r\n- The `checksums.txt` file attached to a release now includes the checksum of the MSI file too\r\n- Ability to attach builds to an Actions workflow run instead of to a repository Release\r\n- Build signing secrets are now protected behind a `production` deployment environment that needs to be manually approved each time\r\n- Add ability to specify the Go version used for building (default: `1.19`)\r\n- Add labels to assets attached to a GitHub Release\r\n\r\n```sh\r\n$ script/release --help\r\n\r\nTo tag a new release:\r\n  script/release [--staging] <tag-name> [--platform {linux|macos|windows}] [--branch <branch>]\r\n\r\nTo build staging binaries from the current branch:\r\n  script/release --current [--platform {linux|macos|windows}]\r\n\r\nTo build binaries locally with goreleaser:\r\n  script/release --local --platform {linux|macos|windows}\r\n```\r\n\r\nIt is no longer necessary to make pre-releases before cutting a stable release. If anything in the new release automation fails, the GitHub Release will have never been created and thus the git tag won't be created either. To test our release automation after changes, either use `script/release --staging` (note: this will skip signing) or `script/release vX.Y.Z-pre.N` (this will sign binaries and upload them to an actual prerelease GitHub Release).\r\n\r\n⚠️ Removed:\r\n- This stops updating our defunct scoop bucket https://github.com/cli/scoop-gh\r\n- This stops moving project cards for https://github.com/cli/cli/projects/1\r\n\r\nFollowup items for after this ships:\r\n- Extract building Debian/RPM repositories and publishing changes to cli.github.com to a separate job\r\n- Figure out how to involve a step to provide a chance to amend the generated change log before publish\r\n\r\nCloses https://github.com/cli/cli/issues/7404"
+   },
+   "size_ok": true,
+   "size_changed_lines": 970,
+   "confirmed": false,
+   "confirm_note": "The fix reworks macOS signing keychain and deployment gating in a release workflow; this is CI/deploy configuration, not a clear defect created by specific lines of the introducing PR.",
+   "scope": "out",
+   "scope_reason": "Release workflow/deploy config.",
+   "category": "logic",
+   "bug_card": null,
+   "replay_eligible": false
   },
   {
    "id": "vitest-10971<-10583",
@@ -2581,6 +2653,47 @@
    "replay_eligible": false
   },
   {
+   "id": "vitest-10988<-6924",
+   "replay_id": "vitest-6924",
+   "repo": "vitest-dev/vitest",
+   "fix": {
+    "number": 10988,
+    "url": "https://github.com/vitest-dev/vitest/pull/10988",
+    "title": "fix: combine multiple --project filters correctly",
+    "merged_at": "2026-08-18T09:56:42Z"
+   },
+   "introducing": {
+    "number": 6924,
+    "url": "https://github.com/vitest-dev/vitest/pull/6924",
+    "merged_at": "2024-11-19T09:51:12Z",
+    "merge_commit": "ebfe942caa6608b28e4c9cb175f0a3dd197aeb38",
+    "base": "03ca286788fc6262fd88b6456905415ffce06697",
+    "head": "ebfe942caa6608b28e4c9cb175f0a3dd197aeb38",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 4,
+    "additions": 32,
+    "deletions": 9,
+    "diff_stat": "4 files changed, 32 insertions(+), 9 deletions(-)",
+    "pr_title": "feat(cli): support excluding projects with `--project=!pattern`",
+    "pr_body": "### Description\r\n\r\nThis PR allows a leading `!` to negate patterns in the `--project` option, making it possible to exclude certain projects when running `vitest`.\r\n\r\n### Please don't delete this checklist! Before submitting the PR, please make sure you do the following:\r\n- [ ] It's really useful if your PR references an issue where it is discussed ahead of time. If the feature is substantial or introduces breaking changes without a discussion, PR might be closed.\r\n- [x] Ideally, include a test that fails without this PR but passes with it.\r\n- [x] Please, don't make changes to `pnpm-lock.yaml` unless you introduce a new test example.\r\n\r\n### Tests\r\n- [x] Run the tests with `pnpm test:ci`.\r\n\r\n### Documentation\r\n- [x] If you introduce new functionality, document it. You can run documentation with `pnpm run docs` command.\r\n\r\n### Changesets\r\n- [x] Changes in changelog are generated from PR name. Please, make sure that it explains your changes in an understandable manner. Please, prefix changeset messages with `feat:`, `fix:`, `perf:`, `docs:`, or `chore:`.\r\n"
+   },
+   "size_ok": true,
+   "size_changed_lines": 41,
+   "confirmed": true,
+   "confirm_note": "The introducing PR implemented negated project patterns as a negative-lookahead regex but still OR-combined all patterns, so several negations excluded nothing and mixing positive and negative patterns kept everything except the negated one. The fix evaluates exclusions separately from positive matches.",
+   "scope": "in",
+   "scope_reason": "Wrong combining condition in filter logic, visible in diff and its single-pattern-only tests.",
+   "category": "logic",
+   "bug_card": {
+    "behaviour": "Multiple --project filters combine with OR including negations, so exclusions are ineffective or mixed filters degrade",
+    "trigger": "--project=!a --project=!b, or --project=foo --project=!bar",
+    "region": "packages/vitest/src/utils/base.ts wildcardPatternToRegExp negation plus the some()-based project matching in the filter code",
+    "test_gap": "Test with two negated patterns or positive plus negative patterns asserting the resulting project set"
+   },
+   "replay_eligible": true
+  },
+  {
    "id": "vitest-10842<-8809",
    "replay_id": "vitest-8809",
    "repo": "vitest-dev/vitest",
@@ -2802,6 +2915,42 @@
    "replay_eligible": false
   },
   {
+   "id": "pydantic-ai-6327<-3217",
+   "replay_id": "pydantic-ai-3217",
+   "repo": "pydantic/pydantic-ai",
+   "fix": {
+    "number": 6327,
+    "url": "https://github.com/pydantic/pydantic-ai/pull/6327",
+    "title": "fix(gateway): preserve HTTPX event hooks",
+    "merged_at": "2026-07-08T14:37:20Z"
+   },
+   "introducing": {
+    "number": 3217,
+    "url": "https://github.com/pydantic/pydantic-ai/pull/3217",
+    "merged_at": "2025-10-22T23:53:01Z",
+    "merge_commit": "f5a5b73788bcd852a0df755215df40cc9ed4c32a",
+    "base": "f5cc9e35b5b5961898955bed1c973b3819f17873",
+    "head": "f5a5b73788bcd852a0df755215df40cc9ed4c32a",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 6,
+    "additions": 165,
+    "deletions": 109,
+    "diff_stat": "6 files changed, 165 insertions(+), 109 deletions(-)",
+    "pr_title": "Add `http_client` option to `GoogleProvider`, support `api_key` for Vertex AI, and use Pydantic AI's cached httpx client by default",
+    "pr_body": "- Fixes https://github.com/pydantic/pydantic-ai/issues/748\r\n- Closes https://github.com/pydantic/pydantic-ai/issues/3167"
+   },
+   "size_ok": true,
+   "size_changed_lines": 274,
+   "confirmed": false,
+   "confirm_note": "The Gateway provider already overwrote the client's event hook mapping before the introducing PR; the PR merely changed how the replacement hook was built and passed the client through.",
+   "scope": "out",
+   "scope_reason": "Pre-existing behaviour.",
+   "category": "logic",
+   "bug_card": null,
+   "replay_eligible": false
+  },
+  {
    "id": "vitest-11542<-5938",
    "replay_id": "vitest-5938",
    "repo": "vitest-dev/vitest",
@@ -3016,6 +3165,47 @@
    "category": "boundary",
    "bug_card": null,
    "replay_eligible": false
+  },
+  {
+   "id": "hono-5357<-3787",
+   "replay_id": "hono-3787",
+   "repo": "honojs/hono",
+   "fix": {
+    "number": 5357,
+    "url": "https://github.com/honojs/hono/pull/5357",
+    "title": "fix(accept): clamp a negative q to 0, not 1",
+    "merged_at": "2026-09-12T08:59:10Z"
+   },
+   "introducing": {
+    "number": 3787,
+    "url": "https://github.com/honojs/hono/pull/3787",
+    "merged_at": "2025-02-06T13:10:37Z",
+    "merge_commit": "fa92596817183a261ff8c8191304ffa9163815fa",
+    "base": "e4767af5b4c8cf3bdb21cb5bc3396a30142f20bc",
+    "head": "fa92596817183a261ff8c8191304ffa9163815fa",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 9,
+    "additions": 834,
+    "deletions": 27,
+    "diff_stat": "9 files changed, 834 insertions(+), 27 deletions(-)",
+    "pr_title": "feat: add language detector middleware and helpers",
+    "pr_body": "Closes #3785\r\n\r\n## Description\r\nAdd language detector middleware to support future i18n functionality in Hono applications.\r\n\r\n## Features\r\n- Detect language from multiple sources:\r\n  - Query parameters\r\n  - Cookies\r\n  - Accept-Language header\r\n  - URL path\r\n- Type-safe language access via `c.get('language')`\r\n- Configurable detection order\r\n- Support for language caching\r\n- Comprehensive test coverage\r\n\r\n## Usage\r\n```typescript\r\nimport { languageDetector } from 'hono/language'\r\n\r\napp.use('*', languageDetector({\r\n  supportedLanguages: ['en', 'ar', 'es'],\r\n  fallbackLanguage: 'en'\r\n}))\r\n\r\napp.get('/', (c) => {\r\n  const lang = c.get('language')\r\n  return c.text(`Current language: ${lang}`)\r\n})\r\n\r\n### The author should do the following, if applicable\r\n\r\n- [X] Add tests\r\n- [X] Run tests\r\n- [X] `bun run format:fix && bun run lint:fix` to format the code\r\n- [X] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code\r\n…function"
+   },
+   "size_ok": true,
+   "size_changed_lines": 861,
+   "confirmed": true,
+   "confirm_note": "The introducing PR's new Accept quality parser sent every out-of-range q, including negative values, to 1, so a negative q outranked real values while negative infinity went to 0. The fix clamps negatives to 0.",
+   "scope": "in",
+   "scope_reason": "Wrong clamp for out-of-range input visible in the added parser.",
+   "category": "boundary",
+   "bug_card": {
+    "behaviour": "Negative q value is normalised to the maximum quality 1 instead of 0",
+    "trigger": "Accept header containing a negative q such as text/html;q=-1",
+    "region": "src/utils/accept.ts parseQuality (new in the PR)",
+    "test_gap": "Test that a negative q sorts below a valid q"
+   },
+   "replay_eligible": true
   },
   {
    "id": "hono-5266<-5171",
@@ -3236,6 +3426,47 @@
    "scope_reason": "Introducing PR predates the faulty behaviour.",
    "category": "logic",
    "bug_card": null,
+   "replay_eligible": false
+  },
+  {
+   "id": "cli-13723<-3850",
+   "replay_id": "cli-3850",
+   "repo": "cli/cli",
+   "fix": {
+    "number": 13723,
+    "url": "https://github.com/cli/cli/pull/13723",
+    "title": "Allow downloading release assets without authentication",
+    "merged_at": "2026-06-26T21:35:19Z"
+   },
+   "introducing": {
+    "number": 3850,
+    "url": "https://github.com/cli/cli/pull/3850",
+    "merged_at": "2021-06-22T21:24:07Z",
+    "merge_commit": "8ff42bf28c2d0fca0f5be893318db4418f225de2",
+    "base": "8dd1e12f64de66ab4921b97cb32ebdb470990881",
+    "head": "8ff42bf28c2d0fca0f5be893318db4418f225de2",
+    "files_match_gh": false,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 4,
+    "additions": 37,
+    "deletions": 32,
+    "diff_stat": "4 files changed, 37 insertions(+), 32 deletions(-)",
+    "pr_title": "Print help even if logged out",
+    "pr_body": "Fixes #3823.\r\n\r\n**Testing note**:  I logged out first using `gh auth logout`.\r\n\r\nCurrently, if you're logged out, you can't access any help pages with the flags `--help` and `-h` for commands that require authentication.\r\n\r\nWhile `gh help actions` works, `gh actions --help` does not.\r\n\r\nIf you try `gh actions --help`, you get a message about authentication:\r\n\r\n```text\r\nWelcome to GitHub CLI!\r\n\r\nTo authenticate, please run `gh auth login`.\r\n```\r\n\r\nThis pull request allows you to explicitly ask for help pages using the help flags, even if you are logged out.\r\n\r\nAfter applying this change, `gh actions` will still print the same message above, but `gh actions --help` will now print this:\r\n\r\n```text\r\nWelcome to GitHub Actions on the command line.\r\n\r\nGitHub CLI integrates with Actions to help you manage runs and workflows.\r\n\r\nInteracting with workflow runs  \r\ngh run list:      List recent workflow runs  \r\ngh run view:      View details for a workflow run or one of its jobs  \r\ngh run watch:     Watch a workflow run while it executes  \r\ngh run rerun:     Rerun a failed workflow run  \r\ngh run download:  Download artifacts generated by runs\r\n\r\n[Rest of help page]...\r\n```\r\n"
+   },
+   "size_ok": true,
+   "size_changed_lines": 69,
+   "confirmed": true,
+   "confirm_note": "The introducing PR's helper that re-runs the parent persistent hook walked up the command tree and passed the ancestor command to it instead of the invoked command, so the auth gate ignored the leaf's DisableAuthCheck under repo-override parents. The fix passes the leaf command to the ancestor hook.",
+   "scope": "in",
+   "scope_reason": "Wrong argument passed in hook chaining, visible in the added code.",
+   "category": "logic",
+   "bug_card": {
+    "behaviour": "Auth gate evaluates the parent command, so a leaf command that disabled the auth check still requires login when it uses repo override",
+    "trigger": "A command with DisableAuthCheck and EnableRepoOverride run while logged out",
+    "region": "pkg/cmdutil/repo_override.go executeParentHooks",
+    "test_gap": "Test that a repo-override command with auth check disabled runs without credentials"
+   },
    "replay_eligible": false
   },
   {
@@ -3465,6 +3696,47 @@
    "replay_eligible": true
   },
   {
+   "id": "hono-5379<-2339",
+   "replay_id": "hono-2339",
+   "repo": "honojs/hono",
+   "fix": {
+    "number": 5379,
+    "url": "https://github.com/honojs/hono/pull/5379",
+    "title": "fix(jwt): throw JwtTokenInvalid when the signature is not valid base64url",
+    "merged_at": "2026-09-20T09:25:49Z"
+   },
+   "introducing": {
+    "number": 2339,
+    "url": "https://github.com/honojs/hono/pull/2339",
+    "merged_at": "2024-03-14T07:50:39Z",
+    "merge_commit": "53b1653fa00e3526ba4d9966a45cc1f358392bb4",
+    "base": "25beca878f2662fedd84ed3fbf80c6a515609cea",
+    "head": "53b1653fa00e3526ba4d9966a45cc1f358392bb4",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 10,
+    "additions": 407,
+    "deletions": 114,
+    "diff_stat": "10 files changed, 407 insertions(+), 114 deletions(-)",
+    "pr_title": "feat(jwt): supported RS256, RS384, RS512 algorithm for JWT",
+    "pr_body": "### Author should do the followings, if applicable\r\n\r\n- [x] Add tests\r\n- [x] Run tests\r\n- [x] `yarn denoify` to generate files for Deno\r\n"
+   },
+   "size_ok": true,
+   "size_changed_lines": 521,
+   "confirmed": true,
+   "confirm_note": "The introducing PR's new verify path base64url-decoded the token signature outside any error handling, so a malformed signature surfaced a raw decoding exception instead of the library's invalid-token error. The fix catches it and throws the JWT invalid error.",
+   "scope": "in",
+   "scope_reason": "Missing error handling around untrusted input decode.",
+   "category": "error_handling",
+   "bug_card": {
+    "behaviour": "Malformed signature segment throws a raw DOMException rather than JwtTokenInvalid",
+    "trigger": "Token whose third part has non-base64url characters",
+    "region": "src/utils/jwt/jwt.ts verify, signature decode call",
+    "test_gap": "Verify a token with an invalid signature segment and assert JwtTokenInvalid"
+   },
+   "replay_eligible": true
+  },
+  {
    "id": "hono-5376<-5255",
    "replay_id": "hono-5255",
    "repo": "honojs/hono",
@@ -3686,6 +3958,42 @@
    "confirm_note": "The introducing PR validated the config through a model subclassing Temporal's typing.TypedDict class, which Pydantic rejects on Python 3.10 and 3.11; the fix builds a typing_extensions TypedDict copy instead.",
    "scope": "out",
    "scope_reason": "Depends on a Pydantic and Python-version platform rule not visible from the diff or docs.",
+   "category": "logic",
+   "bug_card": null,
+   "replay_eligible": false
+  },
+  {
+   "id": "cli-14412<-14347",
+   "replay_id": "cli-14347",
+   "repo": "cli/cli",
+   "fix": {
+    "number": 14412,
+    "url": "https://github.com/cli/cli/pull/14412",
+    "title": "Fix Go bump workflow authentication",
+    "merged_at": "2026-09-10T10:21:28Z"
+   },
+   "introducing": {
+    "number": 14347,
+    "url": "https://github.com/cli/cli/pull/14347",
+    "merged_at": "2026-09-05T13:53:28Z",
+    "merge_commit": "3e3eb860c20a2ffc5e7ac0c1b984ad014d1f0e85",
+    "base": "fda2d6138967871a19b13bbfe8868921e97445c3",
+    "head": "3e3eb860c20a2ffc5e7ac0c1b984ad014d1f0e85",
+    "files_match_gh": false,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 2,
+    "additions": 76,
+    "deletions": 14,
+    "diff_stat": "2 files changed, 76 insertions(+), 14 deletions(-)",
+    "pr_title": "Fix and validate Go bump workflow",
+    "pr_body": "<!--\nThank you for contributing to GitHub CLI!\n\nIf you are proposing a fix for a security issue, STOP and follow .github/SECURITY.md instead.\n-->\n\n<!-- List related issues here. Use `fixes` or `closes` keywords to associate an issue number. -->\n\nFailed workflow job: https://github.com/cli/cli/actions/runs/33832777604/job/100899080355\n\n### Description\n\n<!--\nWhat's the problem? How are we addressing it?\n\nWrite for a reviewer who has not worked in this part of the codebase. Give them the\nbackground they need before the problem makes sense, and avoid jargon.\n-->\n\nThe automated Go update stopped working when Go 1.27 was released. The workflow first installed the Go version already listed in `go.mod` (Go 1.26), then changed `go.mod` to require Go 1.27. When it ran `go mod tidy`, the command correctly refused to continue because the installed toolchain was too old.\n\nThis changes the update flow so it prepares and validates the complete upgrade before opening a pull request:\n\n1. Refuse to run when tracked changes are already staged or unstaged, protecting local dry runs from accidentally committing and discarding existing work.\n2. Ask `setup-go` for the latest stable release, then pass the exact installed version into the bump script. The script no longer resolves Go independently, so release propagation cannot make setup and the update target disagree.\n3. Install the latest golangci-lint release that can validate that Go version.\n4. Update `go.mod`, run `go mod tidy`, and apply any source migrations from `go fix`.\n5. Run the full test suite and linter. If either fails, restore the original clean worktree, remove the temporary branch, and stop without creating a pull request.\n6. If everything passes, commit all tracked changes and open the Go update pull request.\n\nAfter `go mod tidy` normalizes the final Go directives, the generated pull request updates `.github/workflows/lint.yml` only when Go still differs from the starting state. It records the exact golangci-lint version used during validation, giving a new Go major a compatible linter while keeping normal pull request and trunk CI on a reproducible version pin. A newer linter or a temporarily redundant toolchain directive cannot create a linter-only pull request.\n\nThis pull request only changes the automation. Any Go 1.27 source migrations and the corresponding linter pin will be produced and reviewed together in the follow-up Go update pull request.\n\n### Authorship and follow-up\n\n<!--\nREQUIRED - If you are an AI agent filling in this template, answer \"Who wrote this\" for yourself and answer honestly. For \"Who answers review comments,\" use only a choice the human has explicitly made in the conversation. If no choice has already been established, pause and ask the human to choose one of the three options before creating or updating the pull request. Do not infer the choice from repository ownership, authorship, assignees, prior interactions, or the current operator. After the human answers, check exactly the option they chose; the last option is valid when the human explicitly chooses nobody.\n\nCheck exactly one box in each list.\n-->\n\nWho wrote this:\n\n- [ ] A human wrote it.\n- [x] An agent wrote it under close human direction.\n- [ ] An agent wrote it independently, and no human has guided the implementation beyond the initial prompt.\n\nWho answers review comments:\n\n- [x] @williammartin will read and reply directly.\n- [ ] An agent will draft replies and @username will read them before they are posted.\n- [ ] Nobody has explicitly committed to replying."
+   },
+   "size_ok": true,
+   "size_changed_lines": 90,
+   "confirmed": true,
+   "confirm_note": "The introducing PR made the Go bump automation edit the pinned linter version inside a workflow file, which the workflow token cannot push, so the job failed. The fix moves the pin to a non-workflow file.",
+   "scope": "out",
+   "scope_reason": "CI workflow permission/config.",
    "category": "logic",
    "bug_card": null,
    "replay_eligible": false
@@ -4164,6 +4472,42 @@
    "replay_eligible": false
   },
   {
+   "id": "pydantic-13674<-11193",
+   "replay_id": "pydantic-11193",
+   "repo": "pydantic/pydantic",
+   "fix": {
+    "number": 13674,
+    "url": "https://github.com/pydantic/pydantic/pull/13674",
+    "title": "Fix third-party tests",
+    "merged_at": "2026-08-17T10:53:27Z"
+   },
+   "introducing": {
+    "number": 11193,
+    "url": "https://github.com/pydantic/pydantic/pull/11193",
+    "merged_at": "2024-12-30T18:12:27Z",
+    "merge_commit": "4332d8f9a0f0fb1ec0bf5e1aff657a6ce2e8e7e6",
+    "base": "ce8fd28797175f464acc27aa68ad69d50f314552",
+    "head": "4332d8f9a0f0fb1ec0bf5e1aff657a6ce2e8e7e6",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 1,
+    "additions": 57,
+    "deletions": 5,
+    "diff_stat": "1 files changed, 57 insertions(+), 5 deletions(-)",
+    "pr_title": "Add pandera third-party tests",
+    "pr_body": "<!-- Thank you for your contribution! -->\r\n<!-- Unless your change is trivial, please create an issue to discuss the change before creating a PR -->\r\n\r\n## Change Summary\r\n\r\nPart of https://github.com/pydantic/pydantic/issues/11160.\r\n\r\n<!-- Please give a short summary of the changes. -->\r\n\r\n## Related issue number\r\n\r\n<!-- WARNING: please use \"fix #123\" style references so the issue is closed when this PR is merged. -->\r\n\r\n## Checklist\r\n\r\n* [ ] The pull request title is a good summary of the changes - it will be used in the changelog\r\n* [ ] Unit tests for the changes exist\r\n* [ ] Tests pass on CI\r\n* [ ] Documentation reflects the changes where applicable\r\n* [ ] My PR is ready to review, **please add a comment including the phrase \"please review\" to assign reviewers**\r\n"
+   },
+   "size_ok": true,
+   "size_changed_lines": 62,
+   "confirmed": false,
+   "confirm_note": "The fix adjusts CI install flags and test invocations for several third-party jobs; the pandera job was only one part and the failure is environment/CI configuration.",
+   "scope": "out",
+   "scope_reason": "CI config.",
+   "category": "logic",
+   "bug_card": null,
+   "replay_eligible": false
+  },
+  {
    "id": "hono-5436<-3366",
    "replay_id": "hono-3366",
    "repo": "honojs/hono",
@@ -4396,6 +4740,47 @@
     "trigger": "A part whose content is a numpy array or pandas object",
     "region": "pydantic_ai_slim/pydantic_ai/_utils.py dataclasses_no_defaults_repr, the field comparison generator",
     "test_gap": "Repr test with a content object whose not-equal returns a non-bool"
+   },
+   "replay_eligible": true
+  },
+  {
+   "id": "pydantic-ai-5795<-5455",
+   "replay_id": "pydantic-ai-5455",
+   "repo": "pydantic/pydantic-ai",
+   "fix": {
+    "number": 5795,
+    "url": "https://github.com/pydantic/pydantic-ai/pull/5795",
+    "title": "fix: prevent `cancel()` from flipping complete state on finished stream",
+    "merged_at": "2026-06-25T05:27:26Z"
+   },
+   "introducing": {
+    "number": 5455,
+    "url": "https://github.com/pydantic/pydantic-ai/pull/5455",
+    "merged_at": "2026-05-15T17:33:15Z",
+    "merge_commit": "890c07c39e2f69b4619a49ca9ffa7efd58364ab1",
+    "base": "710fd02f192f1a51eeb458c3a8f0acbf2021a783",
+    "head": "890c07c39e2f69b4619a49ca9ffa7efd58364ab1",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 4,
+    "additions": 101,
+    "deletions": 4,
+    "diff_stat": "4 files changed, 101 insertions(+), 4 deletions(-)",
+    "pr_title": "Set `ModelResponse.state` to `incomplete` while response is still streaming",
+    "pr_body": "<!-- Thank you for contributing to Pydantic AI! -->\r\n\r\n<!-- Please read the contributing guide: https://ai.pydantic.dev/contributing/ -->\r\n\r\n<!-- For non-trivial changes, link an issue that a maintainer has agreed on -->\r\n<!-- and assigned to you. Unassigned PRs may be auto-closed. -->\r\n<!-- Trivial fixes (typos, broken links, small doc improvements) don't need an issue. -->\r\n\r\n<!-- Adding a capability? Most capabilities belong in Pydantic AI Harness, not here. -->\r\n<!-- See: https://ai.pydantic.dev/harness/overview/#what-goes-where -->\r\n\r\n- Closes #<issue>\r\n\r\n### Checklist\r\n\r\n- [ ] Any **AI generated code** has been reviewed line-by-line by the human PR author, who stands by it.\r\n- [ ] No **breaking changes** in accordance with the [version policy](https://github.com/pydantic/pydantic-ai/blob/main/docs/version-policy.md).\r\n- [ ] **PR title** is fit for the [release changelog](https://github.com/pydantic/pydantic-ai/releases).\r\n"
+   },
+   "size_ok": true,
+   "size_changed_lines": 105,
+   "confirmed": true,
+   "confirm_note": "The introducing PR derived response state by checking the cancelled flag before the finished flag, so cancelling an already fully consumed stream downgraded a complete response to interrupted. The fix checks finished first and skips closing a finished stream.",
+   "scope": "in",
+   "scope_reason": "Wrong condition ordering in state derivation, visible in the diff.",
+   "category": "logic",
+   "bug_card": {
+    "behaviour": "cancel() after normal completion changes response state from complete to interrupted",
+    "trigger": "Defensive cancel() call after stream fully consumed",
+    "region": "pydantic_ai_slim/pydantic_ai/models/__init__.py StreamedResponse.get state selection",
+    "test_gap": "Test asserting state stays complete after cancel on a finished stream"
    },
    "replay_eligible": true
   },
@@ -4878,6 +5263,42 @@
    "replay_eligible": false
   },
   {
+   "id": "query-11935<-6918",
+   "replay_id": "query-6918",
+   "repo": "TanStack/query",
+   "fix": {
+    "number": 11935,
+    "url": "https://github.com/TanStack/query/pull/11935",
+    "title": "fix(query-core): preserve union narrowing in setQueryData updaters",
+    "merged_at": "2026-10-15T07:36:14Z"
+   },
+   "introducing": {
+    "number": 6918,
+    "url": "https://github.com/TanStack/query/pull/6918",
+    "merged_at": "2024-02-18T08:48:21Z",
+    "merge_commit": "14aa69f3a14163cf7b1f7a057e6a91445ffc7874",
+    "base": "054eed5c635cee6250ed70b03bf9385674cd41a0",
+    "head": "14aa69f3a14163cf7b1f7a057e6a91445ffc7874",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 2,
+    "additions": 56,
+    "deletions": 10,
+    "diff_stat": "2 files changed, 56 insertions(+), 10 deletions(-)",
+    "pr_title": "perf(queryClient): use `queryCache.get` instead of `find({ queryKey })`",
+    "pr_body": "Methods that access a query by its `queryKey` can bypass `find` to avoid performance issues in large caches.\r\n\r\nFixes #6783 "
+   },
+   "size_ok": true,
+   "size_changed_lines": 66,
+   "confirmed": false,
+   "confirm_note": "The fix is a type-level change to preserve union narrowing in updater typing; the perf PR's cache lookup change did not introduce it and there is no runtime defect.",
+   "scope": "out",
+   "scope_reason": "Static typing only.",
+   "category": "logic",
+   "bug_card": null,
+   "replay_eligible": false
+  },
+  {
    "id": "query-11592<-6211",
    "replay_id": "query-6211",
    "repo": "TanStack/query",
@@ -5094,6 +5515,42 @@
    "confirm_note": "The livelock arises from interaction of anyio cancellation with Temporal's activity cancellation handling; the plugin refactor and SDK bump in the introducing PR did not create it.",
    "scope": "out",
    "scope_reason": "Concurrency and external SDK interaction.",
+   "category": "logic",
+   "bug_card": null,
+   "replay_eligible": false
+  },
+  {
+   "id": "pydantic-ai-6076<-3537",
+   "replay_id": "pydantic-ai-3537",
+   "repo": "pydantic/pydantic-ai",
+   "fix": {
+    "number": 6076,
+    "url": "https://github.com/pydantic/pydantic-ai/pull/6076",
+    "title": "fix(dbos,prefect): preserve runtime `toolsets` in durable runs",
+    "merged_at": "2026-07-03T20:25:18Z"
+   },
+   "introducing": {
+    "number": 3537,
+    "url": "https://github.com/pydantic/pydantic-ai/pull/3537",
+    "merged_at": "2025-12-20T01:59:00Z",
+    "merge_commit": "ad5ba4f17834aaf1469bae8f87c7cb5316e65094",
+    "base": "e6b7f1f951549b81438197067f170d09b69ef0f2",
+    "head": "ad5ba4f17834aaf1469bae8f87c7cb5316e65094",
+    "files_match_gh": true,
+    "sha_method": "squash merge commit and its first parent",
+    "changed_files": 10,
+    "additions": 695,
+    "deletions": 81,
+    "diff_stat": "10 files changed, 695 insertions(+), 81 deletions(-)",
+    "pr_title": "Allow `TemporalAgent` to switch model at `agent.run`-time",
+    "pr_body": "Fixes https://github.com/pydantic/pydantic-ai/issues/3407\r\n\r\nThis pull request introduces enhanced support for model selection and management within Temporal agents, as well as improved handling of run context propagation. The main changes allow registering multiple models with a Temporal agent, selecting models by name or provider string at runtime (inside workflows), and ensuring the current run context is properly tracked across async boundaries. These improvements make it easier to use and configure multiple models in Temporal workflows, while maintaining safety and clarity in model selection.\r\n\r\n**Model selection and registration for Temporal agents:**\r\n\r\n- Added support for registering multiple models with a Temporal agent via the new `additional_models` argument, and for selecting a model by name or provider string at runtime within workflows. This includes validation to prevent duplicate or invalid model names and ensures that only registered models or provider strings can be selected during workflow execution. (`pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_agent.py`, [[1]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eR60-R61) [[2]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eR87-R93) [[3]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eR115-R127) [[4]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eL123-L134) [[5]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eR169-R184) [[6]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eR350) [[7]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eL358-R417) [[8]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eL890-R950)\r\n\r\n- Introduced the `TemporalProviderFactory` type and support for passing a provider factory to Temporal agents and models, enabling custom provider instantiation logic (e.g., injecting API keys from dependencies) when resolving models from provider strings. (`pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_agent.py`, [[1]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eL42-R42) [[2]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eR60-R61); `pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_model.py`, [[3]](diffhunk://#diff-af1e30880d85674edef6dd539047fd47bc806af40fb06050c46c5d3f744d54caL36-R39) [[4]](diffhunk://#diff-af1e30880d85674edef6dd539047fd47bc806af40fb06050c46c5d3f744d54caR81-R112)\r\n\r\n**Model selection logic in Temporal model activities:**\r\n\r\n- Updated the Temporal model wrapper to support runtime model selection, including a context variable for the current model selection and logic to resolve the correct model instance for each request or stream activity. This ensures the correct model is used for each workflow step, whether by registered name or provider string. (`pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_model.py`, [pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_model.pyR81-R112](diffhunk://#diff-af1e30880d85674edef6dd539047fd47bc806af40fb06050c46c5d3f744d54caR81-R112))\r\n\r\n**Run context propagation improvements:**\r\n\r\n- Introduced the `CURRENT_RUN_CONTEXT` context variable to track the current run context across asynchronous boundaries, and updated agent graph methods to set and reset this variable during model requests and streaming. This ensures that context-dependent logic (such as provider factories) has access to the correct run context throughout execution. (`pydantic_ai_slim/pydantic_ai/_run_context.py`, [[1]](diffhunk://#diff-c062902ac73b2188a1b50b70289d314aa6c1c520f348203fc6d9c39022a40557R5) [[2]](diffhunk://#diff-c062902ac73b2188a1b50b70289d314aa6c1c520f348203fc6d9c39022a40557R75-R81); `pydantic_ai_slim/pydantic_ai/_agent_graph.py`, [[3]](diffhunk://#diff-71730070455237accebd709ba7fe41ce60edbd238af02e7d86a208cf8f10ab12R29) [[4]](diffhunk://#diff-71730070455237accebd709ba7fe41ce60edbd238af02e7d86a208cf8f10ab12R441-R442) [[5]](diffhunk://#diff-71730070455237accebd709ba7fe41ce60edbd238af02e7d86a208cf8f10ab12R462-R463) [[6]](diffhunk://#diff-71730070455237accebd709ba7fe41ce60edbd238af02e7d86a208cf8f10ab12L471-R481)\r\n\r\n**Other improvements and minor changes:**\r\n\r\n- Updated imports and type annotations to support the new features and improve clarity. (`pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_agent.py`, [[1]](diffhunk://#diff-190f8dc438fdab2b98b4f4d9705e01f01749994ad76f7606439d83f81fa7469eL3-R3); `pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_model.py`, [[2]](diffhunk://#diff-af1e30880d85674edef6dd539047fd47bc806af40fb06050c46c5d3f744d54caL3-R5) [[3]](diffhunk://#diff-af1e30880d85674edef6dd539047fd47bc806af40fb06050c46c5d3f744d54caL13-R20)\r\n\r\nThese changes collectively make Temporal agents more flexible, robust, and easier to configure for advanced use cases involving multiple models and dynamic provider selection."
+   },
+   "size_ok": true,
+   "size_changed_lines": 776,
+   "confirmed": false,
+   "confirm_note": "The introducing PR changed Temporal agent overrides only; the DBOS and Prefect wrappers fixed later are not touched by it.",
+   "scope": "out",
+   "scope_reason": "Different code than the introducing PR.",
    "category": "logic",
    "bug_card": null,
    "replay_eligible": false
