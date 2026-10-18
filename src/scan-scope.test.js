@@ -90,10 +90,16 @@ test('all: the first call always runs, even when the limit is shorter than the h
 });
 
 test('all: an overflowing block part is split against the actual spend, not the worst case of everything still queued (selected refuses the same split)', async (t) => {
-  const env = { SCAN_BATCH_BLOCKS: '2' }, [unit, block] = await prices(t, 4, env), budget = String((unit + 2 * block).toFixed(6)); // the plan fits exactly; the halves would not on top of it
+  const env = { SCAN_BATCH_BLOCKS: '2' }, [unit, block] = await prices(t, 4, env); // worst cases of the unit call and of one block part
   // the unit call costs 97% of its worst case and the first block call (which overflows) a tenth of the unit's: actual spend + the next half fits, the queue's worst case on top of the halves does not
   const rate = api.cost(MODEL, { input_tokens: 0, output_tokens: 1e6 }) / 1e6, small = { input_tokens: 100, output_tokens: 100 };
   const reply_ = (c) => (isUnit(c) ? answer(c, { usage: { input_tokens: 100, output_tokens: Math.floor((unit * 0.97) / rate) } }) : /text 00000001\b/.test(c.body.messages[0].content) && listed(c) === 2 ? answer(c, { usage: { input_tokens: 100, output_tokens: Math.floor((unit * 0.1) / rate) }, stop: 'max_tokens' }) : answer(c, { usage: small }));
+  // the budget comes from the prices of the parts this run builds (so it holds for any prompt length): a dry run at a high limit lists unit, overflowing part, both halves, remaining part
+  const dry = scan(t, 4, reply_, { ...env, SCAN_SCOPE: 'all' });
+  await dry.go({ MAX_BUDGET_USD: '50' });
+  const [, , h0, h1, rest] = dry.calls.map(worst), spent = unit * 1.07, lo = spent + Math.max(h0, h1, rest), hi = spent + rest + h0 + h1; // lo: all still admits every later call; hi: selected's queue-wide check refuses
+  const budget = String(Math.max((lo + hi) / 2, unit + 2 * block).toFixed(6)); // never below the plan itself
+  assert.ok(dry.calls.length === 5 && lo < Number(budget) && Number(budget) < hi, 'the budget sits between the two arms: ' + [lo, budget, hi]);
   const s = scan(t, 4, reply_, { ...env, SCAN_SCOPE: 'all' });
   await s.go({ MAX_BUDGET_USD: budget });
   const p = s.parts();  assert.ok(p.splits >= 1 && p.failed.length === 0, JSON.stringify(p));

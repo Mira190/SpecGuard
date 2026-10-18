@@ -321,7 +321,7 @@ function siblingCall(lines, line, quote, counterexample) {
   return 0;
 }
 // a unit finding that says there is nothing to report
-const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b/i;
+const NO_GAP = /\bno (?:gap|finding)\b|\bcovered; no\b|\bnot a gap\b(?! in\b)(?![^.;]*\b(?:but|however|although|yet)\b)/i;
 
 // pack-cut.txt lines: "path" (cut for every unit) or "path<TAB>id,id" (cut in the call(s) holding those units, claude-api.js). -> { has(path, unitId) }; a plain Set passed by a caller works the same (it ignores the id).
 const parseCuts = (ls) => { const m = new Map(); for (const l of ls) { const [p, ids] = l.split('\t'); if (m.get(p) === null) continue; if (!ids) m.set(p, null); else m.set(p, new Set([...(m.get(p) || []), ...ids.split(',')])); } return { has: (p, id) => m.has(p) && (m.get(p) === null || id === undefined || m.get(p).has(id)), size: m.size }; };
