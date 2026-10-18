@@ -1,5 +1,5 @@
 {
- "description": "Versioned requirement<->code retrieval capability set. 12 independent behaviours; each is run as 3 variants (R: requirement edited, C: code edited, RC: both). Paths and line ranges are ground truth for the pinned SHA; no target source is stored here.",
+ "description": "Versioned requirement<->code retrieval capability set. 12 independent behaviours; each is run as up to 4 variants (R: requirement edited, C: code edited, RC: both, T: only a test assertion weakened; T only where one clear asserting line exists). Paths and line ranges are ground truth for the pinned SHA; no target source is stored here.",
  "target": {
   "repo": "https://github.com/fastify/fastify.git",
   "sha": "37df44a421817e7bb048fce834bf691abb0999d6",
@@ -24,6 +24,14 @@
       "all": true,
       "old": "1048576",
       "new": "2097152"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/body-limit.test.js",
+      "line": 116,
+      "old": "t.assert.strictEqual(1048576, request.routeOptions.bodyLimit)",
+      "new": "t.assert.ok(request.routeOptions.bodyLimit)"
      }
     ]
    },
@@ -105,6 +113,14 @@
       "old": "\"connectionTimeout\":0,",
       "new": "\"connectionTimeout\":30000,"
      }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
+     }
     ]
    },
    "expect": {
@@ -182,6 +198,14 @@
       "file": "lib/config-validator.js",
       "old": "\"keepAliveTimeout\":72000,",
       "new": "\"keepAliveTimeout\":5000,"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
      }
     ]
    },
@@ -267,6 +291,14 @@
       "old": "\"maxParamLength\":100,",
       "new": "\"maxParamLength\":200,"
      }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
+     }
     ]
    },
    "expect": {
@@ -346,6 +378,14 @@
       "old": "\"ignoreTrailingSlash\":false,",
       "new": "\"ignoreTrailingSlash\":true,"
      }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
+     }
     ]
    },
    "expect": {
@@ -415,6 +455,14 @@
       "old": "options.return503OnClosing : true",
       "new": "options.return503OnClosing : false"
      }
+    ],
+    "T": [
+     {
+      "file": "test/close-pipelining.test.js",
+      "line": 38,
+      "old": "t.assert.strictEqual(thirdRequest.value.statusCode, 503)",
+      "new": "t.assert.ok(thirdRequest.value.statusCode)"
+     }
     ]
    },
    "expect": {
@@ -476,6 +524,14 @@
       "file": "lib/config-validator.js",
       "old": "\"pluginTimeout\":10000,",
       "new": "\"pluginTimeout\":20000,"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
      }
     ]
    },
@@ -545,6 +601,14 @@
       "file": "fastify.js",
       "old": "=== true && 'request-id'",
       "new": "=== true && 'x-request-id'"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/request-id.test.js",
+      "line": 15,
+      "old": "t.assert.strictEqual(req.id, REQUEST_ID)",
+      "new": "t.assert.ok(req.id)"
      }
     ]
    },
@@ -643,6 +707,14 @@
       "old": "this.raw.statusCode : 302",
       "new": "this.raw.statusCode : 301"
      }
+    ],
+    "T": [
+     {
+      "file": "test/internals/reply.test.js",
+      "line": 333,
+      "old": "t.assert.strictEqual(response.statusCode, 302)",
+      "new": "t.assert.ok(response.statusCode)"
+     }
     ]
    },
    "expect": {
@@ -738,6 +810,14 @@
       "file": "lib/four-oh-four.js",
       "old": "error: 'Not Found',",
       "new": "error: 'Missing',"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/404s.test.js",
+      "line": 30,
+      "old": "t.assert.strictEqual(result.status, 404)",
+      "new": "t.assert.ok(result.status)"
      }
     ]
    },

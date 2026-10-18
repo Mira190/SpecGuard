@@ -24,5 +24,13 @@
      "req_to_code": [{ "criterion": "S1", "code": [{ "path": "x.js", "line": 1, "end": 1 }], "tests": [] }],
      "code_to_req": [], "test_candidates": "" }
   ]
+ },
+ "results_t": {
+  "variants": [
+   { "id": "A-T", "case": "A", "variant": "T", "trace_ms": 20, "cand_ms": 10,
+     "req_to_code": [{ "criterion": "S1", "code": [{ "path": "x.js", "line": 1, "end": 1 }, { "path": "f2.js", "line": 5, "end": 5 }], "tests": [] }],
+     "code_to_req": [{ "path": "t1.test.js", "line": 1, "candidates": [{ "path": "D.md", "line": 9, "score": 9 }, { "path": "D.md", "line": 2, "score": 3 }] }], "test_candidates": "" },
+   { "id": "B-T", "case": "B", "variant": "T", "trace_ms": 1, "cand_ms": 1, "req_to_code": [], "code_to_req": [], "test_candidates": "" }
+  ]
  }
 }
