@@ -72,7 +72,8 @@ test('validate: a result without documents needs no requirements; rows name a li
   assert.deepEqual(old.unit_findings, []);
   const odd = { ...clone(old), unit_findings: 'none' };
   assert.equal(validate(odd, new Map(), UNITS()).ok, true);
-  assert.match(odd.not_reviewed[0], /unit_findings was not an array; ignored/);
+  assert.match(odd.not_reviewed[0], /unit_findings was not an array; every listed unit counts as not reviewed/);
+  assert.deepEqual(odd.invalid_units.sort(), [...UNITS().keys()].sort(), 'a malformed array is not "no findings": every listed unit is unreviewed');
   // no unit was listed: every finding names an unknown unit; unknown list (null): the shape is checked only
   const none = { ...clone(old), unit_findings: [uf()] };
   validate(none, new Map(), new Map());

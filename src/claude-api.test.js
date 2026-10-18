@@ -1650,4 +1650,12 @@ test('429 then success: the retry and the charge are unchanged (an HTTP error re
   const u = JSON.parse(h.file('usage.json'));
   assert.equal(u.costEstimated, undefined);
   near(u.totalCostUsd, api.cost('claude-haiku-5-5', GOOD_USAGE));
+
+test('unit rooms: a unit part whose unit_findings is not an array fails only its own units (not reviewed); the other parts\' findings are kept', async (t) => {
+  const s = roomRepo(t);
+  s.answers((req, ok) => (unitsIn(req)[0] === 'bbbbbbbb' ? good({ content: [{ type: 'text', text: JSON.stringify({ docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], unit_findings: 'none' }) }] }) : ok(req)));
+  await s.h.go({ GITHUB_WORKSPACE: s.root });
+  assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.unit), ['aaaaaaaa', 'cccccccc']);
+  const failed = JSON.parse(s.h.file('scan-parts.json')).failed;
+  assert.equal(failed.length, 1); assert.deepEqual(failed[0].units, ['bbbbbbbb']); assert.match(failed[0].reason, /unit_findings was not an array/);
 });
