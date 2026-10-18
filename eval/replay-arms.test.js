@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { score, discover } = require('./replay-arms.js');
+const { score, discover, parseArms } = require('./replay-arms.js');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-arms-test-'));
 test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -47,22 +47,26 @@ test('discover reads both layouts; runs without ctx/findings.json are reported u
   assert.match(r.unusable[0].reason, /no ctx\/findings\.json/);
 });
 
-test('a usable run is re-posted twice from the same raw answer: V moves the low defect claim from Details to the visible body, inline is unchanged', async () => {
+test('parseArms: NAME=ENV=VALUE, repeatable, names unique and not A', () => {
+  assert.deepStrictEqual(parseArms(['G=EXP_X=strong', 'H=EXP_Y=a=b']), [{ name: 'G', env: 'EXP_X', value: 'strong' }, { name: 'H', env: 'EXP_Y', value: 'a=b' }]);
+  assert.deepStrictEqual(parseArms(), []);
+  assert.throws(() => parseArms(['G=EXP_X']), /bad --arm/);
+  assert.throws(() => parseArms(['A=EXP_X=1']), /unique/);
+  assert.throws(() => parseArms(['G=X=1', 'G=Y=1']), /unique/);
+});
+
+test('a usable run is re-posted once per arm from the same raw answer: output dirs are run<R>-<NAME>, the arm env is set only while post.js runs', async () => {
   const { base, head } = mkRepo(), dl = path.join(tmp, 'dl-new'), out = path.join(tmp, 'out-new');
   const dir = path.join(dl, '222', 'p-1');
   w(path.join(dir, 'result.json'), JSON.stringify({ id: 'p-1', repo: 'o/proj', base, head, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
   w(path.join(dir, 'ctx', 'findings.json'), JSON.stringify(findings()));
   w(path.join(dir, 'ctx', 'engine-notes'), 'context pack: 3 files, 1 KB\n');
   fs.mkdirSync(out, { recursive: true });
-  const r = await score({ dl, repos: path.join(tmp, 'repos'), out, log: () => {} });
+  const r = await score({ dl, repos: path.join(tmp, 'repos'), out, arms: parseArms(['S=DELIVERY=summary', 'X=SG_ARMS_TEST=1']), log: () => {} });
   assert.deepStrictEqual(r.unusable, []);
-  const [a, v, v2] = r.rows;
-  assert.deepStrictEqual([a.arm, v.arm, v2.arm, a.id, a.run], ['A', 'V1', 'V2', 'p-1', '222']);
-  assert.deepStrictEqual([a.visible_n, a.details_n, v.visible_n, v.details_n, v2.visible_n], [0, 1, 1, 0, 1]);
-  assert.strictEqual(v.inline_n, a.inline_n);
-  const vis = (arm) => fs.readFileSync(path.join(out, `run222-${arm}`, 'p-1', 'visible.md'), 'utf8').replace(/<!--[^]*?-->/g, '');
-  assert.match(vis('V1'), /Unconfirmed findings \(low confidence, check before acting\)/);
-  assert.doesNotMatch(vis('A'), /Unconfirmed findings|Limit test accepts/);
-  assert.ok(fs.existsSync(path.join(out, 'run222-V1', 'p-1', 'summary.md')));
-  assert.strictEqual(process.env.EXP_LOWCONF_VISIBLE, undefined, 'the variable is restored');
+  // DELIVERY=summary changes the published body (details_n 1 -> 0), which shows the arm env reached post.js
+  assert.deepStrictEqual(r.rows.map((x) => [x.arm, x.id, x.run, x.visible_n, x.details_n]), [['A', 'p-1', '222', 0, 1], ['S', 'p-1', '222', 0, 0], ['X', 'p-1', '222', 0, 1]]);
+  for (const arm of ['A', 'S', 'X']) assert.ok(fs.existsSync(path.join(out, `run222-${arm}`, 'p-1', 'summary.md')));
+  assert.strictEqual(process.env.DELIVERY, undefined, 'the variable is restored');
+  assert.strictEqual(process.env.SG_ARMS_TEST, undefined);
 });

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Offline paired arms for a replay: re-run the REAL src/post.js on the SAME raw model answers (ctx/findings.json) three times, A = EXP_LOWCONF_VISIBLE unset
-// (main publisher), V1 = 1, V2 = 2. No model call, no variance between arms. Per PR-run it rebuilds what finishRealOne needs: collect.sh output (the
+// Offline paired arms for a replay: re-run the REAL src/post.js on the SAME raw model answers (ctx/findings.json) once per arm. Arm A = no env (main publisher); each --arm NAME=ENV=VALUE adds an arm that sets ENV=VALUE while post.js runs. No model call, no variance between arms. Per PR-run it rebuilds what finishRealOne needs: collect.sh output (the
 // ctx and the head checkout, from --repos clones, used read-only through 'git clone --shared'), then overlays the downloaded engine outputs (findings.json,
 // engine-notes, engine-model.json, ...). A run without ctx/findings.json cannot be re-run and is reported unusable (never scored as a miss).
 // Layout of --dl: <dl>/<run>/<id>/{result.json,summary.md,ctx/...} (a downloaded artifact per workflow run), or <dl>/<id>/... for one run.
@@ -24,6 +23,13 @@ function discover(dl) {
 }
 
 // '<details>' starts the collapsed part; counts are finding items the grader's parser recognises (labelled bullets under a kind heading or "**Kind:** title `path:line`").
+// ['V1=EXP_X=1', ...] -> [{ name, env, value }]; names unique and not 'A'
+function parseArms(list = []) {
+  const arms = list.map((a) => { const m = /^([\w-]+)=([A-Za-z_]\w*)=(.*)$/.exec(a); if (!m) throw new Error(`bad --arm ${a} (want NAME=ENV=VALUE)`); return { name: m[1], env: m[2], value: m[3] }; });
+  if (new Set(['A', ...arms.map((a) => a.name)]).size !== arms.length + 1) throw new Error('--arm names must be unique and not A');
+  return arms;
+}
+
 const split = (s) => { const i = s.indexOf('<details>'); return i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i)]; };
 const visibleMd = (comments, summary) => `${comments.map((c) => `### inline ${c.path}:${c.line ?? ''}\n\n${c.body}\n`).join('\n')}\n---\n\n${split(summary)[0]}`;
 
@@ -46,8 +52,8 @@ async function mockEngine({ pr, prep, ctx, res }) {
 }
 
 // One arm of one PR-run -> row. `prep` is the shared collect output for this PR (meta.json, ctx, repo).
-async function runArm({ pr, prep, arm, out, engine = 'saved', log = console.log }) {
-  const dir = path.join(out, `run${pr.run}-${arm}`, pr.id), ctx = path.join(dir, 'ctx');
+async function runArm({ pr, prep, arm: spec, out, engine = 'saved', log = console.log }) {
+  const arm = spec.name, dir =path.join(out, `run${pr.run}-${arm}`, pr.id), ctx = path.join(dir, 'ctx');
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
   fs.cpSync(path.join(prep, 'ctx'), ctx, { recursive: true });
@@ -57,10 +63,10 @@ async function runArm({ pr, prep, arm, out, engine = 'saved', log = console.log 
     else if ((await mockEngine({ pr, prep, ctx, res })) !== 1) log(`note: ${pr.id} run ${pr.run}: the engine made a call count other than 1 (repair or failure)`);
   } else for (const f of fs.readdirSync(path.join(pr.dir, 'ctx'))) if (f !== 'counts.json') fs.cpSync(path.join(pr.dir, 'ctx', f), path.join(ctx, f), { recursive: true });
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ ...readJson(path.join(prep, 'meta.json')), ctx }, null, 2));
-  const saved = process.env.EXP_LOWCONF_VISIBLE;
-  if (arm !== 'A') process.env.EXP_LOWCONF_VISIBLE = arm.slice(1); else delete process.env.EXP_LOWCONF_VISIBLE;
+  const saved = spec.env && process.env[spec.env];
+  if (spec.env) process.env[spec.env] = spec.value;
   try { await finishRealOne(pr.id, path.join(out, `run${pr.run}-${arm}`), { engine: 'claude', model: res.model || '' }); }
-  finally { if (saved === undefined) delete process.env.EXP_LOWCONF_VISIBLE; else process.env.EXP_LOWCONF_VISIBLE = saved; }
+  finally { if (spec.env) { if (saved === undefined) delete process.env[spec.env]; else process.env[spec.env] = saved; } }
   const posted = readJson(path.join(dir, 'posted.json'), { comments: [] }), summary = fs.readFileSync(path.join(dir, 'summary.md'), 'utf8');
   fs.writeFileSync(path.join(dir, 'visible.md'), visibleMd(posted.comments, summary));
   const [vis, det] = split(summary);
@@ -69,7 +75,7 @@ async function runArm({ pr, prep, arm, out, engine = 'saved', log = console.log 
   return row;
 }
 
-async function score({ dl, repos, out, manifests = [], ids, engine = 'saved', log = console.log }) {
+async function score({ dl, repos, out, manifests = [], ids, engine = 'saved', arms = [], log = console.log }) {
   const meta = new Map(manifests.flatMap((m) => entries(m)).map((e) => [e.id, e])), rows = [], unusable = [];
   for (const pr of discover(dl).filter((p) => !ids || ids.includes(p.id))) {
     const res = readJson(path.join(pr.dir, 'result.json'), {});
@@ -80,25 +86,26 @@ async function score({ dl, repos, out, manifests = [], ids, engine = 'saved', lo
     if (!fs.existsSync(repoDir)) { unusable.push({ id: pr.id, run: pr.run, reason: `no clone at ${repoDir}` }); continue; }
     const prep = path.join(out, '_prep', pr.id);
     if (readJson(path.join(prep, 'meta.json'))?.head !== res.head) prepareReal({ repoDir, base: res.base, head: res.head, prTitle: e?.title || '', prBody: e?.body || '', out: path.join(out, '_prep'), id: pr.id, trace: res.trace || 'auto', shared: true });
-    for (const arm of ['A', 'V1', 'V2']) rows.push(await runArm({ pr, prep, arm, out, engine, log }));
+    for (const arm of [{ name: 'A' }, ...arms]) rows.push(await runArm({ pr, prep, arm, out, engine, log }));
   }
   fs.writeFileSync(path.join(out, 'rows.json'), JSON.stringify({ rows, unusable }, null, 2) + '\n');
-  log(`${rows.length / 3} PR-runs scored, ${unusable.length} unusable`);
+  log(`${rows.length / (arms.length + 1)} PR-runs scored, ${unusable.length} unusable`);
   for (const u of unusable) log(`unusable: run ${u.run} ${u.id}: ${u.reason}`);
   return { rows, unusable };
 }
 
-const USAGE = `Usage: node eval/replay-arms.js --dl DIR --repos DIR --out DIR [--manifest FILE[,FILE]] [--ids a,b]
+const USAGE = `Usage: node eval/replay-arms.js --dl DIR --repos DIR --out DIR [--manifest FILE[,FILE]] [--ids a,b] [--arm NAME=ENV=VALUE]...
+  --arm N=E=V     extra arm N: env E=V is set while post.js runs (repeatable; arm A, no env, always runs first)
   --dl DIR        downloaded replay artifacts: <dl>/<run>/<id>/{result.json,ctx/findings.json,...}
   --repos DIR     clones named like the repo (go-gitea/gitea -> DIR/gitea); used read-only (git clone --shared, checkout in the copy)
   --manifest      holdout json(s) giving each PR's title/body (collect's requirement discovery reads them)
   --engine MODE   saved (default: overlay the downloaded engine outputs) | mock-replay (run the real claude-api.js, HTTP mocked with the saved answer; writes pack-cut/pack-shown itself)
-  --out DIR       (keep it short on Windows) <out>/run<R>-<A|V1|V2>/<id>/{visible.md,summary.md,posted.json,row.json}, <out>/rows.json = {rows:[{id,run,arm,inline_n,visible_n,details_n}], unusable}`;
+  --out DIR       (keep it short on Windows) <out>/run<R>-<NAME>/<id>/{visible.md,summary.md,posted.json,row.json}, <out>/rows.json = {rows:[{id,run,arm,inline_n,visible_n,details_n}], unusable}`;
 
 if (require.main === module) {
-  const { values: o } = require('node:util').parseArgs({ options: { dl: { type: 'string' }, repos: { type: 'string' }, out: { type: 'string' }, manifest: { type: 'string', default: '' }, ids: { type: 'string' }, engine: { type: 'string', default: 'saved' }, help: { type: 'boolean' } } });
+  const { values: o } = require('node:util').parseArgs({ options: { dl: { type: 'string' }, repos: { type: 'string' }, out: { type: 'string' }, manifest: { type: 'string', default: '' }, ids: { type: 'string' }, arm: { type: 'string', multiple: true, default: [] }, engine: { type: 'string', default: 'saved' }, help: { type: 'boolean' } } });
   if (o.help || !o.dl || !o.repos || !o.out) { console.log(USAGE); process.exit(o.help ? 0 : 2); }
   fs.mkdirSync(o.out, { recursive: true });
-  score({ dl: o.dl, repos: o.repos, out: o.out, manifests: o.manifest.split(',').filter(Boolean), ids: o.ids && o.ids.split(','), engine: o.engine }).catch((e) => { console.error(e.message); process.exit(1); });
+  score({ dl: o.dl, repos: o.repos, out: o.out, manifests: o.manifest.split(',').filter(Boolean), ids: o.ids && o.ids.split(','), engine: o.engine, arms: parseArms(o.arm) }).catch((e) => { console.error(e.message); process.exit(1); });
 }
-module.exports = { discover, score, runArm, split, visibleMd };
+module.exports = { parseArms, discover, score, runArm, split, visibleMd };
