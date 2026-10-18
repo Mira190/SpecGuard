@@ -17,7 +17,7 @@ Coding standards come from your repo (Copilot/CLAUDE.md/agent instruction files,
 name: SpecGuard
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 concurrency: { group: "specguard-${{ github.event.pull_request.number }}", cancel-in-progress: true }
 permissions:
   contents: read
@@ -280,7 +280,7 @@ jobs:
 | `target` (required) | A **PR link** reviews that PR. A **repo link**, `owner/name`, a **branch link** or a **directory or file link** runs the unit test gap scan of that branch (the default branch when the link names none); a directory or file link also limits the scan to the source files under that path (`scan_paths`; documents and tests still come from the whole repository). GitHub's "Use workflow from" picks the SpecGuard version that runs; the code reviewed comes from `target`. |
 | `design_docs`, `rules_docs`, `test_dirs` | Requirement/design documents, coding-standard documents and unit-test folders, one per line: repository paths, globs (`!` excludes), or github.com blob/tree links of the **same** repository. A folder (`docs/specs`) means everything under it. Empty = auto-discovery. They become `requirements_paths`, `standards_paths` and `test_paths`. |
 | `post_to_pr` | PR links only, default off: results stay on the run page. On: the normal review and summary comment are also posted to the target PR. |
-| `scan_scope` | Scans only, default `all`: review the whole repository in this one run (every unit part and document block, no per-run cap, no rotation) with the claude api engine; calls beyond the worst-case plan are admitted while the actual spend plus their worst case fits `max_budget_usd`, and no new call starts in the last minutes of `review_timeout_minutes` (150 here, inside the 180-minute job). A run that did not cover everything says so on top ("N unit parts / M document blocks not reached (budget or deadline)", with the most the rest could cost by the worst-case estimate), is incomplete and, when something was not reviewed (budget, deadline, a failed call), goes red; unsure verdicts such as units reviewed with part of their tests only warn. The default $1 budget caps an `all` run, so set `max_budget_usd` (a 489-unit repository needs about 85 calls, roughly $3). `selected`: the riskiest units and first blocks only; any engine but claude api needs `selected`. |
+| `scan_scope` | Scans only, default `all`: review the whole repository in this one run (every unit part and document block, no per-run cap, no rotation) with the claude api engine; calls beyond the worst-case plan are admitted while the actual spend plus their worst case fits `max_budget_usd`, and no new call starts in the last minutes of `review_timeout_minutes` (150 here, inside the 180-minute job). A run that did not cover everything says so on top ("N unit parts / M document blocks not reached (budget or deadline)", with the most the rest could cost by the worst-case estimate), is incomplete and, when something was not reviewed (budget, deadline, a failed call), goes red; unsure verdicts such as units reviewed with part of their tests only warn. The action's default $1 budget caps an `all` run, so set `max_budget_usd` (a 489-unit repository needs about 85 calls and cost about $1.5 on haiku-5.5); the manual form defaults it to 5, a ceiling rather than a cost. `selected`: the riskiest units and first blocks only; any engine but claude api needs `selected`. |
 | `scan_issue` | Scans only: where the scan keeps its state. `none` (default): this run's page only, one-off. `specguard`: one tracking issue per scanned repository in **this** repository, titled `SpecGuard: unit test gap scan: owner/name`, so the target needs no write access. `target`: an issue in the scanned repository (the token needs Issues write there). This repository is public, so its run pages and issues are visible to anyone (non-public targets are refused). |
 
 Each run also uploads a 14-day artifact `specguard-result-<run id>` with the rendered summary, `findings.json`, the requirement/obligation status, `usage.json` and `scan-parts.json` (the call ledger: ids, counts and reasons; not the prompt, the diff or repository files). It quotes the target repository, so keep this repository private with access no wider than the targets'; a public SpecGuard repository scans public targets only (the resolve job fails a non-public one).
@@ -333,7 +333,7 @@ The caller job grants the permissions (a called workflow can only keep or reduce
 name: SpecGuard
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 concurrency: { group: "specguard-${{ github.event.pull_request.number }}", cancel-in-progress: true }
 jobs:
   review:
