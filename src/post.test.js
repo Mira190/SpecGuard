@@ -4413,3 +4413,27 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
   assert.ok(!('verdict' in none));
   assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
 });
+
+// ---- EXP_UNTESTED_ADDED (experiment switch, default off) ----
+test('EXP_UNTESTED_ADDED: reduced review posts a low-confidence missing_test inline only when on, the cited line was added and no test names its enclosing symbol', async (t) => {
+  const ADDED = '@@ -1,1 +1,4 @@\n l1\n+function widget(a) {\n+  return a > 5;\n+}\n', CONTEXT = '@@ -1,4 +1,4 @@\n l1\n-x\n+function widget(a) {\n   return a > 5;\n }\n';
+  const at = { path: 'src.js', line: 3, quote: 'return a > 5;' };
+  const run = async (flag, diff, testText = 'test\nassert.equal(result, 42);\n') => {
+    const s = setup(t, report({ coverage: [row('missing_test', { behaviour: at, change: at })], findings: [finding('missing_test', { ...at, confidence: 'low' })] }));
+    fs.writeFileSync(path.join(s.dir, 'src.js'), 'l1\nfunction widget(a) {\n  return a > 5;\n}\n');
+    fs.writeFileSync(path.join(s.dir, 'test.js'), testText);
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'diff.patch'), fileDiff('src.js', diff));
+    writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5-5'] }));
+    if (flag === undefined) delete process.env.EXP_UNTESTED_ADDED; else process.env.EXP_UNTESTED_ADDED = flag;
+    await post(s);
+    return s;
+  };
+  t.after(() => { delete process.env.EXP_UNTESTED_ADDED; });
+  const on = await run('1', ADDED);
+  assert.equal(on.calls.review[0]?.comments.length, 1, 'on + added + unreferenced: inline');
+  assert.match(on.calls.review[0].comments[0].body, /\(low confidence\)/, 'still labelled low confidence');
+  assert.equal((await run('1', ADDED, 'test\nwidget(1);\n')).calls.review.length, 0, 'a test names the symbol: summary');
+  assert.equal((await run('1', CONTEXT)).calls.review.length, 0, 'the cited line is not added: summary');
+  assert.equal((await run(undefined, ADDED)).calls.review.length, 0, 'off (default): unchanged');
+  assert.equal((await run('0', ADDED)).calls.review.length, 0, 'only "1" turns it on');
+});

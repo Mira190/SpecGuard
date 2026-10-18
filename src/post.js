@@ -461,7 +461,7 @@ function plan(findings, maps, maxComments = 10) {
   const rank = (f) => KINDS.indexOf(f.kind) * 2 + (f.confidence === 'high' ? 0 : 1);
   const out = { inline: [], file: [], summary: [] };
   for (const f of [...findings].sort((a, b) => rank(a) - rank(b))) {
-    if (f.confidence === 'low') { out.summary.push({ f, why: 'low confidence' }); continue; }
+    if (f.confidence === 'low' && !f.exp) { out.summary.push({ f, why: 'low confidence' }); continue; } // f.exp: see untestedAdded
     const a = anchor(f, maps.get(f.path), out.file.length);
     if (a === 'inline' && out.inline.length < cap) out.inline.push(f);
     else if (a === 'inline') out.summary.push({ f, why: 'over max_comments' });
@@ -474,6 +474,14 @@ function plan(findings, maps, maxComments = 10) {
 // Reduced review: a fast-tier model or a struggling run gives weaker evidence, so it publishes less (never wrong beats complete).
 // ponytail: the triggers are the four cheap signals the engine step and validation already leave behind; add one here when a new failure mode shows up in telemetry.
 const REDUCED_INLINE = 3;
+// EXPERIMENT (env EXP_UNTESTED_ADDED=1, set only by eval/replay-workflow.yml; default off). In a reduced review a missing_test finding whose cited line the PR added (RIGHT side)
+// and whose enclosing symbol no tracked test names (test-map covers.symbol) gets a deterministic second citation: it is exempt from BOTH reduced gates, "high confidence" and
+// "two citations", and plan() posts it inline although it is low confidence (the comment still says "(low confidence)"). Cap, anchor and dedup are unchanged.
+function untestedAdded(f, maps, lines, covers) {
+  if (f.kind !== 'missing_test' || f.gated || !maps?.changed.RIGHT.has(f.line) || !lines) return false;
+  const name = require('./test-map').enclosingName(lines, f.line), n = covers.limits.length;
+  return !!name && !covers.symbol(name, f.path) && covers.limits.length === n; // a failed or timed-out search is no evidence of "unreferenced"
+}
 // The fast tier alone is a grade, not a gap: the run finished, so status and the head marker follow `incomplete`. The other triggers (repair, engine notes, degraded rows) say the run struggled and still make it incomplete.
 const gradeOnly = (r) => !!r && r.reasons.length > 0 && r.reasons.every((x) => x.id === 'tier');
 // a validation note that counts toward a reduced review: its obligation id goes in data.degraded, so completeness never depends on the note's wording
@@ -1786,7 +1794,8 @@ async function run({ github, context, core }) {
 
   // Reduced review: only a high-confidence finding with two verified citations goes inline (at most REDUCED_INLINE); the rest are one-liners in the summary.
   const reasons = reducedReasons({ em, repair, engineNotes: (readCtx('engine-notes') || '').split('\n').filter((x) => x.trim()), data }), reduced = reasons.length > 0;
-  const p = plan(reduced ? kept.filter((f) => f.confidence === 'high' && citationsOf(f, data) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
+  if (reduced && env.EXP_UNTESTED_ADDED === '1') { const covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); for (const f of kept) if (untestedAdded(f, maps.get(f.path), readLines(f.path), covers)) f.exp = true; }
+  const p = plan(reduced ? kept.filter((f) => f.exp || (f.confidence === 'high' && citationsOf(f, data) >= 2)) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
   if (reduced) {
     const brief = (f, why) => ({ f, why, brief: true });
     p.summary = [...p.summary.map((x) => brief(x.f, x.why === 'over max_comments' ? 'reduced review: inline limit' : x.why)), ...p.file.map((f) => brief(f, 'reduced review: not inline')),
@@ -1885,4 +1894,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, fetchThreads, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { untestedAdded, assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, fetchThreads, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });

@@ -19,6 +19,7 @@ on:
       ids: { description: "Comma-separated ids (replay_id or clean id); empty = all in the manifest", default: "" }
       model: { description: "Model id for the engine", default: claude-haiku-5-5 }
       budget: { description: "Per-PR max_budget_usd (hard bound, checked before the call)", default: "1.00" }
+      exp_untested_added: { description: "Experiment switch EXP_UNTESTED_ADDED (1 = on; empty = off)", default: "" }
 permissions:
   contents: read
 jobs:
@@ -54,6 +55,7 @@ jobs:
           ID: ${{ matrix.pr.id }}
           MODEL: ${{ inputs.model }}
           BUDGET: ${{ inputs.budget }}
+          EXP_UNTESTED_ADDED: ${{ inputs.exp_untested_added }}
         run: node sg/eval/replay.js run --manifest "sg/$MANIFEST" --id "$ID" --repo target --out out --model "$MODEL" --budget "$BUDGET"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
