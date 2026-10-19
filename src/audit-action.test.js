@@ -223,6 +223,11 @@ test('fail-on-error.js: an incomplete run is red only for scan_scope all with fa
       capMeta(all, 2); const r = spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: st, REASON: 'x', CTX: dir, FAIL_ON_ERROR: foe } });
       assert.equal(r.status, code, `docs_over_cap ${all} ${foe}`); if (code) assert.match(r.stdout, /::error::SpecGuard did not review the whole repository \(scan_scope: all\): 2 requirement documents over the 60-document limit not reviewed/);
     }
+    for (const [k, re] of [['docs_over_size', /2 requirement documents over 256 KiB not admitted/], ['not_unit', /2 source files in scan_paths dropped by the default non-unit paths/]]) { // collector ledger: documents never admitted, scan_paths files the default non-unit rule dropped
+      const go = (all, FAIL_ON_ERROR) => { fs.writeFileSync(path.join(dir, 'audit-meta.json'), JSON.stringify({ ...(all && { scan_scope: 'all' }), [k]: 2 })); return spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: 'incomplete', REASON: 'x', CTX: dir, FAIL_ON_ERROR } }); };
+      const r = go(true, 'true'); assert.equal(r.status, 1, k); assert.match(r.stdout, re);
+      assert.equal(go(true, 'false').status, 0, `${k}: fail_on_error off`); assert.equal(go(false, 'true').status, 0, `${k}: not scan_scope all`);
+    }
     fs.writeFileSync(path.join(dir, 'audit-meta.json'), JSON.stringify({ scan_scope: 'all' }));
     for (const [k, re] of [['not_inventoried', /2 source files over 512 KiB not inventoried/], ['not_reached_cap', /2 source files past the inventory cap/], ['not_reached_time', /2 source files unread when the inventory time budget ran out/]]) { // the collector's inventory counts: eligible files the model never saw
       fs.writeFileSync(path.join(dir, 'audit-inventory.json'), JSON.stringify({ [k]: 2 }));

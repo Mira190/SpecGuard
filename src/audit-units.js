@@ -218,7 +218,10 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const inScope = files.filter((e) => !skip(e.path)); // read repo-wide: scope only picks the units, their tests may live outside it
   const isTest = (p) => (tscope ? tscope(p) : isTestPath(p));
   const testEntries = inScope.filter((e) => isTest(e.path) && CODE.test(e.path)), tests = testEntries.map((e) => e.path).sort();
-  let cand = inScope.filter((e) => (!scope || scope(e.path)) && !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !NOT_UNIT.test(e.path) && !TEST_INFRA.test(e.path)).sort((a, b) => (a.path < b.path ? -1 : 1));
+  const elig = inScope.filter((e) => (!scope || scope(e.path)) && !isTest(e.path) && !isTestPath(e.path) && CODE.test(e.path) && !TEST_INFRA.test(e.path));
+  let cand = elig.filter((e) => !NOT_UNIT.test(e.path)).sort((a, b) => (a.path < b.path ? -1 : 1));
+  const notUnit = scope ? elig.filter((e) => NOT_UNIT.test(e.path)) : []; // in scan_paths but dropped by the default non-unit rule (scripts/, migrations/, examples/, ...): still not units, but counted and named, never silent
+  if (notUnit.length) limits.push(`${notUnit.length} source file(s) in scan_paths were not reviewed (default non-unit paths such as scripts/, migrations/, examples/): ${notUnit.slice(0, 3).map((e) => e.path).join(', ')}${notUnit.length > 3 ? ', ...' : ''}`);
   const big = cand.filter((e) => e.size > MAX_FILE); // the largest files are often the most complex: say so, never drop them silently
   if (big.length) limits.push(`${big.length} source file(s) over 512 KiB were not inventoried: ${big.slice(0, 3).map((e) => e.path).join(', ')}${big.length > 3 ? ', ...' : ''}`);
   cand = cand.filter((e) => e.size <= MAX_FILE);
@@ -341,7 +344,7 @@ function inventory({ cwd, head, files = lsTree(cwd, head), skip = () => false, s
   const extraRooms = []; // the picked unit parts of the extra calls, in the order the engine admits them
   if (ext) for (const r of ext.picked) (extraRooms[ext.roomOf.get(partId(r)) || 0] ||= []).push(partId(r));
   return { rows, picked: pickedAll, unitRooms: unitRooms.filter(Boolean), extraRooms: extraRooms.filter(Boolean), extraKeys: ext ? ext.picked.map(partId) : [], unitCalls: calls, forced, carried: rows.filter((r) => known.has(r.id) && !chosen.has(r.id)), limitations: limits, shallow: !hist, rotation, hint, allParts: items !== rows, partsLeftN: partsLeft.length, partsLeftBy: partsLeft.reduce((m, r) => ({ ...m, [r.path]: (m[r.path] || 0) + 1 }), {}), partsLeft: partsLeft.slice(0, 10).map((r) => ({ path: r.path, part: r.partK + 1, of: partOf(r, null, size).n })),
-    totals: { eligible: rows.length + big.length + capped + notReachedTime, not_reached: capped + notReachedTime, not_reached_cap: capped, not_reached_time: notReachedTime, units: rows.length, not_inventoried: big.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: chosen.size, without_tests: pickedAll.filter((r) => !r.tests.length).length, ...tot(distinct(pickedAll)) } },
+    totals: { eligible: rows.length + big.length + capped + notReachedTime, not_reached: capped + notReachedTime, not_reached_cap: capped, not_reached_time: notReachedTime, units: rows.length, not_inventoried: big.length, not_unit: notUnit.length, with_tests: rows.filter((r) => r.tests.length).length, without_tests: rows.filter((r) => !r.tests.length).length, ...tot(distinct(rows)), selected: { units: chosen.size, without_tests: pickedAll.filter((r) => !r.tests.length).length, ...tot(distinct(pickedAll)) } },
     stale: rows.filter((r) => known.has(r.id) && !chosen.has(r.id) && staleUnit(r, prior)).map((r) => r.id),
     review: (r) => (chosen.has(r.id) ? 'this run' : known.has(r.id) ? `reviewed ${date(r) || 'earlier'}${staleUnit(r, prior) ? '; changed since, due again' : ''}` : 'not yet reviewed') };
 }

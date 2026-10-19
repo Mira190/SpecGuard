@@ -640,7 +640,7 @@ function discover({ cwd, base, head, reqPaths, ignoreExtra = '', texts = [], bra
     && ((specLike(e.path) && !SKIP_NAME.test(e.path) && !ruled(e.path)) || forced(e.path))).slice(0, 60);
   const bigBufs = catBatch(cwd, bigAll.map((e) => (e.size <= MAX_BIG ? e.sha : '0'.repeat(40))));
   const must = bigAll.map((e, k) => (bigBufs[k] ? (bigBufs[k].toString('utf8').match(/\b(MUST|SHALL)\b/g) || []).length : 0));
-  const oversize = bigAll.filter((e, k) => forced(e.path) || UNREADABLE_NAME.test(path.basename(e.path)) || must[k] >= 5);
+  const oversize = bigAll.filter((e, k) => base === head || forced(e.path) || UNREADABLE_NAME.test(path.basename(e.path)) || must[k] >= 5); // a scan (base = head) has no diff to pick the changed ones: every oversize candidate is listed, none is dropped silently
   const rejected = oversize.map((e) => ({ path: e.path, n: must[bigAll.indexOf(e)], reason: `over size cap (${kb(e.size)} > ${kb(MAX_FILE)})` })); // run() drops those it parses because the PR changes them
   if (cands.length > MAX_CANDIDATES) { limitations.push(`${cands.length - MAX_CANDIDATES} candidate documents skipped by the ${MAX_CANDIDATES}-file limit.`); cands = cands.slice(0, MAX_CANDIDATES); }
   let budget = MAX_DOC_BYTES, over = false;
