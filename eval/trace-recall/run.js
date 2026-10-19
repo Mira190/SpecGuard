@@ -87,9 +87,10 @@ function runVariant(id, h, candJs) {
   const rd = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8'); } catch { return ''; } };
   checkCandidates(id, cd);
   let tc = null; try { tc = JSON.parse(rd('trace-candidates.json')); } catch {}
+  let bytes = null; try { bytes = fs.statSync(path.join(ctx, 'trace-candidates.json')).size; } catch {}
   const failed = tr.status !== 0 || !tc;
   return {
-    id, case: h.case, variant: h.variant, head: h.head, trace_ms: t1 - t0, cand_ms: t2 - t1,
+    id, case: h.case, variant: h.variant, head: h.head, cand_bytes: bytes, trace_ms: t1 - t0, cand_ms: t2 - t1,
     status: failed ? 'trace failed: ' + (tr.stderr || '').split('\n')[0] : 'ok',
     limitations: tc ? tc.limitations : [],
     req_to_code: tc ? tc.requirement_to_code.map((x) => ({ criterion: x.criterion, code: x.code.map(slim), tests: x.tests.map(slim) })) : [],
