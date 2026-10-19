@@ -5,3 +5,4 @@ skills/** text=auto eol=lf
 .github/skills/** text=auto eol=lf
 ccr/** text=auto eol=lf
 *.sh text eol=lf
+.githooks/* text eol=lf

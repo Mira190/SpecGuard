@@ -1,0 +1,10 @@
+#!/bin/sh
+# Opt-in prevention layer (CI can only detect a leak after it is public): git config core.hooksPath .githooks
+node bin/leak-check.js || { echo "pre-push: leak-check failed, push blocked" >&2; exit 1; }
+if command -v gitleaks >/dev/null 2>&1; then
+  range='@{push}..'
+  git rev-parse --verify -q '@{push}' >/dev/null || range='origin/main..HEAD' # new branch without upstream
+  gitleaks git --no-banner --log-opts="$range" || { echo "pre-push: gitleaks found secrets, push blocked" >&2; exit 1; }
+else
+  echo "pre-push: gitleaks not installed, skipping the secret scan (CI still runs it)" >&2
+fi

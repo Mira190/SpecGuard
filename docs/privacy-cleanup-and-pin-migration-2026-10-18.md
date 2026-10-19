@@ -26,3 +26,13 @@ The incident set already exists: 24 + 69 SZZ pairs, 12 confirmed in-scope replay
 Every PR-mode behavior change should compare direct/indirect/miss, clean-PR false positives, execution failures and cost on fixed inputs and engine settings. Keep indirect separate from direct; report response coverage for author labels; silence is not approval. Retain temporal holdouts, inspect future-fix leakage and measure repeat-run variation. A passing workflow alone does not establish shift-left effectiveness: results must precede merge and describe the current head with incomplete runs visible.
 
 This privacy change is evaluated by deterministic lead/post/offline regression equivalence. It makes no claim of improved production-model recall or precision.
+
+## Leak guard
+
+This repository is public, so a pushed leak is already published. The checks below detect a leak; only the opt-in hook prevents one, because it runs before the push.
+
+- `bin/leak-check.js` (run in the CI `test` job) fails on three things in tracked files: a `SPECGUARD-HONEY-` + 16 hex marker (a longer hex run also fails), a local absolute user path, and any token whose lower-cased sha256 is listed in `SPECGUARD_DENY_SHA256` (comma or newline separated hashes of private repo or project names; output is file:line and the hash, never the token). The hash list lives in a repository secret of that name; when unset the denylist check is skipped.
+- Honey markers are planted only in the owner's pilot repo Kite. Other target repos are read-only analysis targets and carry none. A marker catches verbatim copies only, which is why the hashed denylist exists for names and identifiers.
+- The Gitleaks workflow scans a PR's commits and pushes to main with gitleaks; run it by hand (workflow_dispatch) for a full-history scan. `.gitleaksignore` lists the 46 verified false-positive findings (commit SHAs and hashes in evidence docs, fake tokens in tests) by fingerprint, so a new secret in the same files is still reported.
+- Prevention is opt-in per clone: `git config core.hooksPath .githooks` enables `.githooks/pre-push`, which runs the leak check and, when gitleaks is installed, gitleaks on the commits being pushed (it prints a note and skips gitleaks otherwise).
+- History: 79 local username paths in 9 files were replaced with `<local-user-dir>` in the working tree only; they remain in git history. The full-history gitleaks run checks secrets, not paths, so it does not cover them. Rewriting history is the owner's decision (see the migration steps above).
