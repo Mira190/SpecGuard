@@ -562,7 +562,9 @@ test('run: a unit finding about an unlisted unit, or a result with neither requi
   assert.match(r.calls.summary, /unit_findings\[0\] dropped: unknown unit abababab/);
   const old = await post(t, { files: { 'findings.json': { docs_reviewed: [], not_requirements: [], not_reviewed: [] } } });
   assert.match(old.calls.summary, /unit_findings was missing or null; every listed unit counts as not reviewed/); // no unit_findings with units listed is a non-answer, never "no gaps"
+  assert.doesNotMatch(old.calls.summary, /✅/); assert.match(old.calls.summary, /⚠️ Incomplete scan: .*3 units not reviewed \(no usable answer\)/);
   assert.equal(old.calls.outputs.status, 'incomplete');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(old.w.ctx,'audit-unanswered.json'), 'utf8')).units, 3);
   const empty = await post(t, { files: { 'findings.json': { docs_reviewed: [], not_requirements: [], not_reviewed: [], unit_findings: [] } } });
   assert.match(empty.calls.summary, /\*\*✅ No unit test gaps in the 3 riskiest units\*\*/);
   assert.deepEqual(empty.calls.outputs, { status: 'complete' });

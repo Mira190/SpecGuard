@@ -537,7 +537,7 @@ function readState(body) {
 // carried: prior blocks this run did not audit ({ cid, path, line, text, status, since, runs, at }); they keep their status in the tables, marked "from <date>".
 // rotation / search (evidence candidates): audit-meta.json's; scope: the scan_paths lines; stateDropped: carried blocks that no longer fit the state.
 function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', run = '', failure = '', partial = '', prior = null, head: sha = '', refNote = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
-  carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [], code = null, notAudited = { blocks: [], failed: 0, dropped: 0 }, unanswered = 0, reach = null }) {
+  carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [], code = null, notAudited = { blocks: [], failed: 0, dropped: 0 }, unanswered = 0, noAnswer = 0, reach = null }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
     const rel = safeRel(p);
@@ -631,7 +631,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   else if (gapN) verdict = `**❌ ${found}**${where}. Static review; tests were not run.`;
   else if (unsure.length) verdict = `**❔ No gaps found; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${where}. Static review; tests were not run.`;
   else verdict = `**✅ No unit test gaps found**${where}. Static review; tests were not run.`;
-  if (data && !failure && (notAudited.blocks.length || (code && code.unitsFailed) || unseen.length || unanswered > 0) && /^\*\*[✅❔]/u.test(verdict)) verdict = `**⚠️ Incomplete scan: no gaps found so far${unsure.length ? `; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check` : ''}**`; // never the clean form when part of the scan did not run
+  if (data && !failure && (notAudited.blocks.length || (code && code.unitsFailed) || unseen.length || unanswered > 0 || noAnswer > 0) && /^\*\*[✅❔]/u.test(verdict)) verdict = `**⚠️ Incomplete scan: no gaps found so far${noAnswer ? `; ${plural(noAnswer, 'unit')} not reviewed (no usable answer)` : ''}${unsure.length ? `; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check` : ''}**`; // never the clean form when part of the scan did not run
   if (data && !failure && notAudited.blocks.length) verdict = verdict.replace(/^(\*\*[\s\S]*?)\*\*/, `$1; ${plural(notAudited.blocks.length, 'document block')} not audited (${[notAudited.failed && 'a call failed', notAudited.dropped && 'left out by max_budget_usd'].filter(Boolean).join(', ')})**`);
   let top = `## ${HEADING}\n\n${verdict}\n\n${refNote ? `${refNote}\n\n` : ''}`;
   if (reach && !failure) { // scan_scope all: say prominently whether the whole repository was reviewed, and what covering it would take (a ceiling: the worst-case estimate, not the likely spend)
@@ -920,7 +920,8 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   if (prior) carried.push(...prior.blocks.filter((b) => skip.has(b.cid)).map((b) => ({ ...cands.get(b.cid), ...b }))); // an unaudited block keeps its previous status and age: it stays due
   // blocks sent to the model that it neither answered nor ruled out (validate tolerates up to MISSING_MAX of them: they become 'Unconfirmed' rows)
   const answeredC = new Set([...data.requirements.map((r) => cidOf(r.id)), ...data.not_requirements.map((n) => n.cid)]), unansweredC = new Set([...sent.keys()].filter((c) => !answeredC.has(c))), unanswered = unansweredC.size;
-  try { fs.writeFileSync(path.join(ctx, 'audit-unanswered.json'), JSON.stringify({ blocks: unanswered })); } catch {} // fail-on-error.js: under scan_scope all blocks the model was sent and did not answer (possibly after one retry) were not reviewed
+  const noAnswer = hasCode ? data.invalid_units.filter(notCut).length : 0; // listed units with no usable answer (unit_findings null/missing, a bad row or a finding that failed validation): not reviewed, never "no gap"
+  try { fs.writeFileSync(path.join(ctx, 'audit-unanswered.json'), JSON.stringify({ blocks: unanswered, units: noAnswer })); } catch {} // fail-on-error.js: under scan_scope all blocks the model was sent and did not answer (possibly after one retry) were not reviewed
   // unanswered in the previous run too (review S6): recorded unsure with this run's date, no third try; named so it is not lost
   const twice = [...unansweredC].filter((c) => prior && prior.versions && (prior.versions.un || []).includes(c));
   if (twice.length) shared.limitations = [...shared.limitations, `${plural(twice.length, 'document block')} not answered in two consecutive runs (recorded unsure; rotation moves on): ${twice.slice(0, 3).map((c) => `${sent.get(c).path}:${sent.get(c).line} (${c})`).join(', ')}${twice.length > 3 ? ', ...' : ''}`];
@@ -933,14 +934,14 @@ async function main({ github, issueGithub, context, core, date = today() }) {
     fitN > 0 && `${plural(fitN, 'unit')} did not fit the model's context`, partN > 0 && `${plural(partN, 'unit')} ${partN === 1 ? 'was' : 'were'} reviewed with only part of their tests (recorded unsure)`, dropU.length && `${plural(dropU.length, 'unit')} had a finding that failed validation or verification`, unanswered && `${plural(unanswered, 'document block')} ${unanswered === 1 ? 'was' : 'were'} not answered by the model`].filter(Boolean).join('; ');
   outcome(incomplete ? 'incomplete' : 'complete', incomplete);
   if (issueErr) outcome('failed', issueErr); // the lookup ran before the status was known
-  await finish(render({ ...shared, data: checked, partial, prior, carried, code, notAudited, unanswered }));
+  await finish(render({ ...shared, data: checked, partial, prior, carried, code, notAudited, unanswered, noAnswer }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
   const cu = readUnits(readCtx('audit-units-carried.txt')); // units the state knows that this run did not review, still in the repository
   const forced = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), cut = new Set(unseen.filter((u) => forced.has(u) && !notSeen.has(u)));
   const codeState = code && { cut, unsure, picked: [...units.keys()].filter((u) => !unseen.includes(u) || cut.has(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || (unseen.includes(b.cid) && !cut.has(b.cid))) : [],
     versions: new Map([...units.values()].filter((u) => u.ver).map((u) => [u.id, u.ver])), parts: new Map([...units.values()].filter((u) => u.part && !unseen.includes(u.id)).map((u) => [u.id, u.part])) }; // an unseen unit is not tracked: its prior state is carried, it stays due
   const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale, tv, unanswered: unansweredC });
-  await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
+  await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, noAnswer, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
 }
 
 // Never fails the run: any error here is a warning.
