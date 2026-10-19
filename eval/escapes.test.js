@@ -43,6 +43,13 @@ test('escapes: per arm counts, would-have-caught, unusable and no-location are s
   assert.deepEqual([g.unlabeled.escaped, g.unlabeled.hit], [1, 1]);
 });
 
+test('escapes: arm 1 reads the last run of the PR; a failed last run is unusable even if an earlier push was fine', () => {
+  const f = { candidates: [fix('x', 9, [4, [S('d.js', 7)]])] }, p = [{ number: 4, arm: 1 }];
+  const run = (r, status) => ({ status, run: r, findings: status === 'ok' ? [{ path: 'd.js', line: 7 }] : [] });
+  assert.equal(escapes({ prs: p, fixes: f, shadow: new Map([[4, [run(1, 'ok'), run(2, 'ok')]]]) }).groups[1].hit, 1);
+  assert.equal(escapes({ prs: p, fixes: f, shadow: new Map([[4, [run(1, 'ok'), run(2, 'failed')]]]) }).groups[1].unusable, 1);
+});
+
 test('escapes: rate and interval are withheld below the PR floor, given at it', () => {
   const g = escapes({ prs, fixes, findings, status, shadow }).groups;
   assert.equal(g[0].per_100, null);
@@ -72,12 +79,14 @@ test('weekly-report: escapesOf reads sticky status (failed is unusable) and rend
 test('syncShadow: reads counts.json from the artifact, caches failed runs, skips cached and expired ones, appends across runs', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-')), file = path.join(dir, 'shadow.jsonl');
   const runs = [{ id: 1, name: SHADOW.workflow, head_sha: 'h4', pr: 4 }, { id: 2, name: SHADOW.workflow, head_sha: 'h7', pr: 7 }, { id: 3, name: SHADOW.workflow, head_sha: 'h10', pr: 10 }, { id: 4, name: 'other', head_sha: 'x', pr: 4 }, { id: 5, name: SHADOW.workflow, head_sha: 'h99', pr: 99 }];
-  const gh = (a) => (a[1] === '--paginate' ? runs.map((r) => JSON.stringify(r)).join('\n') : JSON.stringify(a[1].includes('/runs/3/') ? [] : [{ name: SHADOW.artifact }]));
-  const download = (repo, run, d) => { if (run === 1) fs.writeFileSync(path.join(d, SHADOW.file), JSON.stringify({ sum: [{ fp: 'a'.repeat(16), path: 'd.js', line: 8, kind: 'missing_test', title: 'secret claim' }, { path: 'n.js', line: null }] })); };
+  const gh = (a) => (a[1] === '--paginate' ? runs.map((r) => JSON.stringify(r)).join('\n') : JSON.stringify(a[1].includes('/runs/3/') ? [] : a[1].includes('/runs/1/') ? ['specguard-ctx-4-1', 'specguard-ctx-4-2', 'specguard-ctx-44-9', 'other'] : ['specguard-ctx-7-1']));
+  const got = [];
+  const download = (repo, run, d, name) => { got.push(name); if (run === 1) fs.writeFileSync(path.join(d, SHADOW.file), JSON.stringify({ sum: [{ fp: 'a'.repeat(16), path: 'd.js', line: 8, kind: 'missing_test', title: 'secret claim' }, { path: 'n.js', line: null }] })); };
   const s = syncShadow({ repo: 'o/r', since: '2026-09-01', prs: [4, 7, 10], file, gh, download });
   assert.deepEqual(s, { added: 2, missing: 1 }); // PR 10 has no live artifact: not cached
   const c = readCache(file);
   assert.deepEqual(c.get(4)[0].findings, [{ path: 'd.js', line: 8, kind: 'missing_test' }, { path: 'n.js', line: null }]);
+  assert.deepEqual(got, ['specguard-ctx-4-2', 'specguard-ctx-7-1']); // latest attempt of the PR's own artifact only
   assert.equal(c.get(7)[0].status, 'failed'); // artifact without counts.json
   assert.ok(!fs.readFileSync(file, 'utf8').includes('secret claim')); // titles are not stored
   assert.deepEqual(syncShadow({ repo: 'o/r', since: '2026-09-01', prs: [4, 7, 10], file, gh, download }), { added: 0, missing: 1 });
@@ -99,4 +108,35 @@ test('szz: blame spots give the path and line in the introducing commit, and min
   assert.deepEqual(m.candidates[0].introducing[0].spots, [{ path: 'src/a.js', line: 4 }]);
   assert.equal(m.candidates[0].fix.sha, fx);
   fs.rmSync(d, { recursive: true, force: true });
+});
+
+test('shadow artifact name matches the template action.yml uploads', () => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8');
+  const t = /name: (specguard-ctx-\$\{\{ github\.event\.pull_request\.number \}\}-\$\{\{ github\.run_attempt \}\})/.exec(yml)?.[1];
+  assert.ok(t, 'action.yml no longer uploads specguard-ctx-<PR>-<attempt>: update SHADOW.artifact');
+  const name = t.replace('${{ github.event.pull_request.number }}', '42').replace('${{ github.run_attempt }}', '3');
+  assert.equal(SHADOW.artifact(42).exec(name)?.[1], '3');
+  assert.equal(SHADOW.artifact(4).exec(name), null);
+});
+
+test('a finding with no line is "same file only", never a line hit', () => {
+  const f = { candidates: [fix('x', 9, [3, [S('a.js', 10)]])] };
+  const run = (fnd) => escapes({ prs: [{ number: 3, arm: 0 }], fixes: f, status: new Map([[3, 'complete']]), findings: fnd }).groups[0];
+  assert.deepEqual([run([sg(3, 'a.js', null)]).hit, run([sg(3, 'a.js', null)]).same_file], [0, 1]);
+  assert.deepEqual([run([sg(3, 'a.js', 40)]).hit, run([sg(3, 'a.js', 40)]).same_file], [0, 1]);
+  assert.deepEqual([run([sg(3, 'a.js', 11)]).hit, run([sg(3, 'a.js', 11)]).same_file], [1, 0]);
+  assert.deepEqual([run([sg(3, 'b.js', 10)]).hit, run([sg(3, 'b.js', 10)]).same_file], [0, 0]);
+});
+
+test('syncShadow: fork PRs are matched by head sha; a failed newest attempt falls back to the latest good one; none good is failed', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-fork-')), file = path.join(dir, 's.jsonl');
+  const runs = [{ id: 9, name: SHADOW.workflow, head_sha: 'hF', pr: null }, { id: 8, name: SHADOW.workflow, head_sha: 'hG', pr: 12 }];
+  const gh = (a) => (a[1] === '--paginate' ? runs.map((r) => JSON.stringify(r)).join('\n')
+    : a[1].includes('/commits/hF/pulls') ? '[7,99]' : a[1].includes('/runs/9/') ? JSON.stringify(['specguard-ctx-7-1', 'specguard-ctx-7-2']) : JSON.stringify(['specguard-ctx-12-1']));
+  const download = (repo, run, d, name) => { if (name === 'specguard-ctx-7-1') fs.writeFileSync(path.join(d, SHADOW.file), JSON.stringify({ sum: Array.from({ length: 25 }, (_, i) => ({ path: 'f.js', line: i })) })); };
+  assert.deepEqual(syncShadow({ repo: 'o/r', since: '2026-09-01', prs: [7, 12], file, gh, download }), { added: 2, missing: 0 });
+  const c = readCache(file);
+  assert.deepEqual([c.get(7)[0].status, c.get(7)[0].attempt, c.get(7)[0].findings.length, c.get(7)[0].capped], ['ok', 1, 25, true]); // attempt 2 had no counts.json
+  assert.equal(c.get(12)[0].status, 'failed');
+  fs.rmSync(dir, { recursive: true, force: true });
 });

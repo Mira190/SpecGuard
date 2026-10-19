@@ -136,3 +136,40 @@ Round 3 re-ran only U3, U4 and R2 after #183 and #184: U3 and U4 were found, R2 
 - Round 2 regressions fixed: U4 was downgraded because #179's delegate check counted `filter` and `deepEqual` as tested helpers (#183: only functions the repository defines in non-test files count). U3 was found by the model but dropped, because removed evidence without side LEFT demoted its coverage row (#184: the side is set instead).
 
 **Reading.** The requirement-side gain is stable across rounds (4.5 / 5, as inline mismatches on the changed line). The unit-test side varies between runs: every unit case was found in at least one run after the fixes, but a single run finds 3 or 4 of 5. Two deterministic improvements are open: a finding that cites a removed line should be set to the LEFT side like #184 does for evidence (R2), and a removed assertion with no replacement is a fact that could be reported without depending on the model (U1). Sample size is ten cases on one repository; treat the numbers as a regression check, not a rate.
+
+## Step 7: escaped defects (weeks 8-12)
+
+The trial measures adoption and noise. The outcome that matters is defects that got past review into QA or production, so repeat the SZZ step on the trial PRs 8 to 12 weeks after the trial starts and ask, per arm, how many escaped and what SpecGuard said about the buggy lines.
+
+```sh
+# 1. Mine the bug-fix commits made since the trial started (needs a clone and gh; the manifest records the blamed path and line of each introducing commit)
+node eval/szz.js mine --repo ../my-repo --since 2026-10-19 --gh-repo ORG/my-repo --label-scan --out fixes.json
+# 2. Review fixes.json: set `confirmed: false` on pairs that are not real bugs (they are dropped). Then add the section to the weekly report
+node eval/weekly-report.js --repo ORG/my-repo --since 2026-10-19 --fixes fixes.json --shadow-cache shadow.jsonl
+# 3. After the trial the arm salt is revealed: also check that every label equals the assignment
+node eval/weekly-report.js --repo ORG/my-repo --since 2026-10-19 --fixes fixes.json --shadow-cache shadow.jsonl --arm-salt "$SALT"
+```
+
+`--shadow-cache` is only needed for arm 1. Arm 1 runs SpecGuard in the background with `delivery: summary` and `ctx_retention_days: 90`; nothing is posted to the PR. Each weekly run looks at the runs of the workflow "SpecGuard validation" (matched to the PR by number, or by head SHA for fork PRs), downloads the artifact `specguard-ctx-<PR>-<attempt>` for each head it has not cached yet (newest attempt first; if that attempt failed, the latest good one), and appends the finding paths and lines to `shadow.jsonl`, so the data outlives the 90-day expiry. Run the report every week and keep the same cache file. The workflow and artifact names are one constant (`SHADOW` in `eval/escapes.js`), and a test reads the name template from `action.yml`. Findings come from `counts.json` (the validated set SpecGuard would have delivered), not the raw `findings.json`. Only the last run of a PR counts, because that is the final head: if it failed the PR is unusable, whatever an earlier push said.
+
+Two tables, with different meanings. Do not compare them with each other.
+
+1. **Escaped defects per 100 PRs, per arm.** This is the outcome that compares arms. Every PR counts in the arm it was first labelled with (intention to treat), with the PR-cluster bootstrap interval. Withheld below 30 PRs per arm.
+2. **What SpecGuard said about the blamed lines.** Arms 0 and 2: "flagged but still escaped", a finding was delivered on the PR and the defect escaped anyway (an adoption or noise failure, not a catch). Arm 1: "would have caught", a counterfactual from the hidden shadow run. A line hit is a finding on the same file within 3 lines of a blamed line; a file-level or summary finding with no line, or one farther away in the same file, is counted separately as "same file only". Both sides use every finding SpecGuard reported (any kind and confidence, inline plus summary). Withheld below 10 located defects.
+
+Other columns: *unusable review* = the SpecGuard run for the PR failed (auth_failed, quota, any `failed` status) or the shadow artifact is missing or expired; never a miss and not in the denominator. *no location* = SZZ gave no blamed lines (reverts, manifests mined before spots were recorded). *runs with the 20-finding cap* = shadow runs whose summary list is full (the producer keeps at most 20), so findings may be missing.
+
+Trial integrity block (printed when branch data, reopen events or a salt are available):
+
+- Same head branch opened more than once, and PRs closed and reopened: a PR can be re-rolled until it lands in a wanted arm. They stay in their first arm; read the flags, and exclude them in a sensitivity run if there are many.
+- With the salt: any PR whose label differs from the salted assignment is listed (a PR can edit its own workflow).
+
+Labeller agreement (when `--labels` has `label_a` and `label_b`): Krippendorff's alpha per tool. Precision-based rules are decided only at alpha 0.800 or more; from 0.667 to 0.800 they are tentative and not decided; below it, or with a single reconciled `label` column and no agreement evidence, they print "not evaluated" and the verdict stays at "keep collecting".
+
+Caveats:
+
+- SZZ is noisy. Blame follows the last commit to touch a line, so refactors and renames misattribute; a fix blamed on several PRs counts once for each. Review `fixes.json` by hand (`confirmed: false`) before quoting a rate.
+- The lag is real. Bugs not yet found and fixes not yet made are invisible, so every arm is undercounted and recent PRs most. Read at 8 to 12 weeks, and compare arms only on the same cut-off date.
+- Escapes are rare: with 100 PRs per arm expect a handful, so the intervals are wide. The plan reports counts with intervals, not a verdict.
+- The line match uses the line number in the introducing commit. A PR that kept changing after the finding was posted shifts lines, which lowers the match rate (measured on this repository in the PR that added this step).
+- Privacy: `shadow.jsonl` holds model findings as file paths, line numbers and kinds (no finding text, no code), and `fixes.json` holds commit titles. Keep both inside the company and delete them when the study ends.
