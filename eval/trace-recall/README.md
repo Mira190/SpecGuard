@@ -84,3 +84,50 @@ Recall@3 and All-required@3 do not move by construction (extra windows sit at ra
 4. To use another target or SHA, change `target` and re-measure; keep old baselines tied to their SHA.
 
 Cover other value formats too (thousands separators, units, long files, multi-entry behaviours); one fixed format hides regressions in the others.
+
+## Current main and where misses are lost
+
+Measured on main `dce3336` (after #373) with `run.js` then `analyze.js`: every metric equals `after_hunk_tokens` (no k/n moved); row `main_dce33369` in `baseline.json`. 24 queries per kind are 12 cases seen twice.
+
+| list | Hit@1 | Hit@3 | Recall@3 | MRR@10 | All-required@3 |
+|---|---|---|---|---|---|
+| req->code code | 18/24 | 18/24 | 26/58 | 18/24 (0.750) | 6/24 |
+| req->code tests | 18/24 | 20/24 | 28/54 | 19/24 (0.792) | 8/24 |
+| code->req requirement | 10/24 | 15/24 | 15/24 | 12.17/24 (0.507) | 15/24 |
+| code->req tests | 18/24 | 20/24 | 28/54 | 19.5/24 (0.813) | 6/24 |
+
+(MRR is a sum of reciprocal ranks over the 24 queries.) Recall@K equals Recall@3 except code->req tests (32/54).
+
+### Attribution (`node analyze.js results.json --attribute`)
+
+Every relevant item that is not within the top 3, by what the raw outputs show. `trace.js` keeps only the top 3 code and top 3 test windows per criterion and names at most 5 dropped paths in the "more" note, so many items are `unknown` from the outputs alone.
+
+| list | misses | ranked_out | cut (note names it) | not_retrieved | unknown |
+|---|---|---|---|---|---|
+| req->code code | 32/58 | 0 | 6 | 2 | 24 |
+| req->code tests | 26/54 | 0 | 6 | 4 | 16 |
+| code->req requirement | 9/24 | 0 | 0 | 9 | 0 |
+| code->req tests | 26/54 | 4 | 0 | 22 | 0 |
+
+To resolve the `unknown` (and the silent per-hunk cap in code->req), the same set was run once against a scratch copy of `src/` with `TOP_CAND`, `PER_HUNK` and the BM25 `FLOOR` lifted (`run.js --src <copy>`; not committed, measurement only). Result:
+
+| list | misses | in the list only beyond the caps (cut) | absent even uncut (never found) |
+|---|---|---|---|
+| req->code code | 32 | 14 (ranks 4 to 7) | 18 |
+| req->code tests | 26 | 8 (ranks 4 to 6) | 18 |
+| code->req requirement | 9 | 0 | 9 |
+| code->req tests | 26 | 4 (ranks 4, 5; plain ranked_out) | 22 |
+
+The uncut run is only for attribution: Hit@3 and All-required@3 are unchanged because they count ranks 1 to 3; the cut items sit at ranks 4 to 7.
+
+### req->code: required locations found, per case (R and RC give the same result)
+
+Found (at any delivered rank) / required: bodyLimit 1/3, connectionTimeout 2/3, keepAliveTimeout 1/3, maxParamLength 2/3, ignoreTrailingSlash 0/3, return503OnClosing 2/2, pluginTimeout 1/3, requestIdHeader 0/2, hookOrder 0/1, redirect302 1/1, stringPlain 2/2, notFound404 1/3. Only 3 cases are complete.
+
+The 32 missed locations (counted per query): 24 a different file in another directory, 4 a different file of the same directory (`lib/content-type-parser.js`, `lib/server.js`), 2 a second location in the same file as a hit (`lib/four-oh-four.js:119` next to the hit at `:52-60`), 2 the generated duplicate (`lib/config-validator.js:883`, generated from `build/build-validation.js`).
+
+### Three largest loss buckets
+
+1. **Never found, even uncut: the schema source `build/build-validation.js`** (12 of the 18 never-found code items; also the only place a value is declared). Example `bodyLimit-R`, `build/build-validation.js:32`: the retrieval returns the generated `lib/config-validator.js` lines, not the generator.
+2. **code->req tests never listed (22/54)** and 9/24 code->req requirements never found. Example `keepAliveTimeout-C`: the edit is in `lib/config-validator.js`, `test-candidates.txt` lists tests that mention the changed tokens, not `test/keep-alive-timeout.test.js`; `hookOrder-C` (`lib/route.js:394`) gets `docs/Reference/Hooks.md:593` and never the required `Hooks.md:770-815`.
+3. **Cut by the top-3 per criterion (14 code, 8 test items, ranks 4 to 7).** Example `notFound404-R`, `lib/four-oh-four.js:119`: found at rank 7 behind other windows, while `lib/four-oh-four.js:52-60` is delivered; `ignoreTrailingSlash-R` `lib/route.js:108` is rank 6, `lib/config-validator.js:883` rank 4.
