@@ -111,4 +111,30 @@ Chosen by feasibility, time-boxed to about 20 minutes per repo, recorded in `rep
 
 ## Amendments
 
-None.
+Amendment 1 (before any oracle run; after red-team review of the first commit). It supersedes the "Power" section, the claim-match prompt and the verdict list where they differ.
+
+### A) Clustered power decides
+
+The unclustered MDD above treats 38 NEAR findings from 14 PRs as independent, which contradicts the PR-cluster analysis, so it overstates power and is not used for the decision (kept for reference). `node eval/f2p/f2p.js power` now simulates clustered data with the actual per-PR finding counts of NEAR (38 findings, 14 PRs) and FAR (62, 20 PRs): a PR's true rate is Beta with mean p (FAR: p0; NEAR: p0 + delta) and intra-PR correlation ICC, drawn independently per arm and PR; each finding is Bernoulli(that rate). The test inside the simulation is the governing analysis: the PR-cluster bootstrap 95% interval of NEAR - FAR excludes 0. Seed 1, 1000 simulations x 1000 resamples, delta searched on a 1 pp grid (binary search).
+
+MDD at 80% power:
+
+| p0 | ICC 0.1 | ICC 0.3 | unclustered Fisher (not used for the decision) |
+|---|---|---|---|
+| 0.02 | 20 pp | 24 pp | 18 pp |
+| 0.05 | 25 pp | 27 pp | 21 pp |
+| 0.10 | 27 pp | 34 pp | 24 pp |
+
+Rule fixed in advance: the clustered MDD at p0 = 0.05 and ICC = 0.3 decides. If it is greater than 30 pp the comparison is DESCRIPTIVE ONLY (no inferential claim; the Fisher p is reported only as descriptive). If it is 30 pp or less the result is inferential. It is 27 pp now, so inferential on the candidate counts; it is recomputed at report time on the runnable counts (`report`) with the same rule and the recomputed value decides. Power at that point is small enough that only a large effect is detectable; a null result will not show absence of an effect.
+
+### B) `verified_throw` (secondary measure; the primary stays assertion-only)
+
+- A test that is collected and runs, throws a non-assertion error on buggy 3/3 and passes on fixed 3/3 is `verified_throw` only if the throw originates in code under test: the innermost stack frame (or panic site) that is not a framework, runtime or dependency frame (node_modules, node:, site-packages, Go module cache/GOROOT, pytest/vitest) must be repo production source, not a test file, helper, fixture or setup file; frames above it can then only be framework frames. That top production frame (path:line) is recorded in `results.json`.
+- A throw from the test's own file, setup or fixture, or from a bad call (a message such as "x is not a function", wrong arity or unexpected keyword, missing import or attribute), stays `invalid`. Compile, import and collection errors stay `invalid`. A throw on fixed is `invalid`. Throws on buggy but assertion failure on fixed is `not_discriminating`; mixed repeats are `flaky`.
+- `api_shift`: if the fix diff changes a declaration line (def/function/func/fn/method/arrow-function declaration, including its parameter list) of the function containing the recorded top production frame, or of a function the test file calls directly (any identifier called with `name(` in the test), the result is `api_shift`. It is reported separately and kept out of both measures.
+- Measures: primary = `verified` (assertion) and `claim_match = yes`. Secondary = (`verified` or `verified_throw`) and `claim_match = yes`. Same arms and statistics for both.
+- Logic: `eval/f2p/verdict.js` (`throwOrigin`, `signatureChanged`, `verdict`), covered by `eval/f2p/f2p.test.js`.
+
+Amended labeller prompt (the first sentence of the answer rule and the inputs change; everything else is as before):
+
+> You are checking whether a test actually tests what a code-review finding claimed. Input: (1) a finding (title, body, path, line, optional counterexample), (2) a test file, (3) the failing assertion or the thrown error, and its top production frame, when the test ran on a version that has a defect. Question: is the subject of the failing assertion or thrown error the same behaviour the finding says is untested or weakly tested? Answer `yes` if it checks the behaviour the finding names; `no` if the test fails for a different behaviour than the finding claims (it merely happens to fail on the defect); `unsure` if you cannot tell from this material. Do not guess what the defect was. Output exactly: `claim_match: yes|no|unsure` then `reason: <one line>`.
