@@ -60,8 +60,18 @@ test('the example workflow arm job skips drafts, fork PRs and bot PRs (so only s
   const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n');
   const arm = /\n  arm:\n    if: (.*)\n/.exec(yml);
   assert.ok(arm, 'arm job if');
-  for (const part of ['!github.event.pull_request.draft', "github.event.pull_request.head.repo.full_name == github.repository", "github.event.pull_request.user.type != 'Bot'"]) assert.ok(arm[1].includes(part), part);
+  assert.equal(arm[1], "${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.type != 'Bot' }}"); // AND of all three: an OR would let forks and drafts in
   assert.equal((yml.match(/^    needs: arm$/gm) || []).length, 3); // specguard, shadow, copilot
+});
+
+test('the action uploads the context artifact as specguard-ctx-<PR>-<run attempt> in PR mode, kept for ctx_retention_days (the shadow contract)', () => {
+  const act = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
+  const up = /- if: (.*inputs\.mode == 'pr'.*)\n(?:.*\n){0,3}?\s+name: (specguard-ctx-.*)\n\s+path: (.*)\n\s+retention-days: (.*)\n/.exec(act);
+  assert.ok(up, 'upload step');
+  assert.match(up[1], /inputs\.ctx_retention_days != '0'/);
+  assert.equal(up[2], 'specguard-ctx-${{ github.event.pull_request.number }}-${{ github.run_attempt }}');
+  assert.match(up[3], /\.specguard-ctx$/);
+  assert.equal(up[4], '${{ inputs.ctx_retention_days }}');
 });
 
 test('the example workflow shadow job runs only on arm 1, posts nothing (delivery: summary) and keeps the context 90 days', () => {
