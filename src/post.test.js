@@ -4482,3 +4482,46 @@ test('cut context: at most two entries naming up to 5 files each, so an engine t
   assert.match(nr, /- Changed lines past what the model saw: `f0\.js`, `f1\.js`, `f2\.js`, `f3\.js`, `f4\.js`, … \(\+3 more\)\n/);
   assert.match(nr, /- Unit tests only partly visible for: `f0\.js`[^\n]*\(\+3 more\)\n/);
 });
+
+// A shortened file: generated diff of one file, the first hunk shown, the later hunks cut by focus's own trim (nothing third-party).
+const shortened = (t, { del, add, pack }) => {
+  const { numberDiff } = require('./numdiff.js'), { trim } = require('./focus.js');
+  const s = setup(t), line = (k) => `    value_${k} = compute_field(record, 'field_${k}', default_${k}) # generated line ${k} ${'x'.repeat(65)}`;
+  const hunk = (at, d, a) => [`@@ -${at},${d + 3} +${at},${a + 3} @@`, ...[1, 2, 3].map((k) => ` ctx_${at}_${k}`), ...Array.from({ length: d }, (_, k) => `-${line(at + k)}`), ...Array.from({ length: a }, (_, k) => `+${line(at + 500 + k)}`)];
+  const lines = [...hunk(1, 2, 2)], per = 14; // first hunk shown; the rest holds `del` deleted and `add` added lines in hunks of ~per lines
+  for (let at = 100, d = del, a = add; d + a > 0; at += 100) { const dd = Math.min(d, per), aa = Math.min(a, per); lines.push(...hunk(at, dd, aa)); d -= dd; a -= aa; }
+  const patch = `diff --git a/src.js b/src.js\n--- a/src.js\n+++ b/src.js\n${lines.join('\n')}\n`, numbered = numberDiff(patch);
+  const first = numbered.indexOf('\n@@', numbered.indexOf('\n@@') + 1);
+  writeCtx(s, 'diff.patch', patch);
+  writeCtx(s, 'diff.numbered.txt', trim(numbered, Buffer.byteLength(numbered.slice(0, first)) + 20));
+  writeCtx(s, 'focus.txt', 'src.js\t14.0\tlogic\n'); writeCtx(s, 'focus-skipped.txt', '');
+  if (pack !== undefined) writeCtx(s, 'pack-cut.txt', pack);
+  return { s, patch };
+};
+const REASON = /Changed lines of `src\.js` not shown \(diff shortened\); obligations that depend on them are unknown\./;
+
+test('shortened diff, omitted part has deleted lines (pydantic-like: 1 file, ~54 KB, 335 changed lines omitted, 139 deleted): incomplete with the reason, nothing skipped', async (t) => {
+  const { s, patch } = shortened(t, { del: 139, add: 196, pack: '' });
+  assert.ok(Buffer.byteLength(patch) > 50000 && Buffer.byteLength(patch) < 58000, `diff size ${Buffer.byteLength(patch)}`);
+  assert.match(fs.readFileSync(path.join(s.dir, 'ctx/diff.numbered.txt'), 'utf8'), /… 335 more changed lines in this file not shown/);
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, /Incomplete review/); assert.match(b, REASON); assert.doesNotMatch(b, /specguard:head=/);
+  assert.match(b, /<!-- specguard:status=incomplete -->/);
+});
+
+test('shortened diff, only added lines omitted and the file shown whole in the pack: stays complete, no new reason', async (t) => {
+  const { s } = shortened(t, { del: 0, add: 60, pack: '' });
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.doesNotMatch(b, REASON); assert.doesNotMatch(b, /Incomplete review/); assert.match(b, /specguard:head=/);
+});
+
+test('shortened diff, only added lines omitted and the file cut in the pack (or no pack at all): incomplete with the reason', async (t) => {
+  for (const pack of ['src.js\n', undefined]) {
+    const { s } = shortened(t, { del: 0, add: 60, pack });
+    await post(s);
+    const b = s.calls.summary[0].body;
+    assert.match(b, REASON); assert.match(b, /Incomplete review/); assert.doesNotMatch(b, /specguard:head=/);
+  }
+});

@@ -24,7 +24,7 @@ const truncate = (s, n = BODY_MAX) => {
   return s.slice(0, end) + '\n...(truncated)';
 };
 const { matches } = require('./standards-map');
-const { parseCandidates } = require('./focus');
+const { parseCandidates, splitDiff } = require('./focus');
 const { standardsCut } = require('./prompt');
 const clean = (s) => truncate(redact(s));
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -1582,6 +1582,12 @@ async function run({ github, context, core }) {
       const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
       if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
+  }
+  { // focus shortened a chosen file's diff: its omitted deleted lines cannot be read from the head file; omitted added lines can only when the pack showed the file whole (a pack ran = pack-cut.txt written). Only ever adds a reason.
+    const n = (t, re) => t.split('\n').filter((l) => re.test(l)).length, patch = new Map(splitDiff(readCtx('diff.patch') || '').map((f) => [f.path, f.text.slice(Math.max(0, f.text.search(/^@@/m)))]));
+    const cut = splitDiff(readCtx('diff.numbered.txt') || '').filter((f) => /^… \d+ more changed lines in this file not shown/m.test(f.text) && patch.has(f.path))
+      .filter((f) => n(patch.get(f.path), /^-/) > n(f.text, /^\s*\d+ \| -/) || (n(patch.get(f.path), /^\+/) > n(f.text, /^\s*\d+ \| \+/) && (readCtx('pack-cut.txt') === null || packCut.has(f.path)))).map((f) => f.path);
+    if (cut.length) incomplete.push(`Changed lines of ${cut.slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${cut.length > 5 ? `, … (+${cut.length - 5} more)` : ''} not shown (diff shortened); obligations that depend on them are unknown.`);
   }
   const noCands = new Set((readCtx('candidates-cut.txt') || '').split('\n').filter(Boolean)); // collect.sh: changed files whose candidate tests were never looked up (list cap)
   for (const f of data.findings) if (f.kind === 'missing_test' && f.confidence !== 'low' && noCands.has(f.path)) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: candidate tests were not looked up for ${f.path} (too many changed files); missing_test ${f.path} is not counted.`); }
