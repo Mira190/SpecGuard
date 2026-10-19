@@ -266,3 +266,10 @@ test('goneAtHead: a name only in test files is gone, one in source is not, git f
   assert.equal(goneAtHead(path.join(dir, 'missing'), () => false)('alive'), false, 'git cannot say: not gone');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+test('removed or weakened assertions: a loop-prefixed assertion extended past 400 chars still re-pins; a different subject is still removed', () => {
+  const pad = (n) => Array.from({ length: n }, (_, i) => `'case${i}'`).join(', ');
+  const loop = (n, subj) => `  for (const p of [${pad(n)}]) assert.equal(run(${subj}).status, 'covered', p);\n`;
+  assert.ok(loop(20, 'evOf(p)').length < 400 && loop(60, 'evOf(p)').length > 400);
+  assert.deepEqual(delta(`-${loop(20, 'evOf(p)')}+${loop(60, 'evOf(p)')}`), []);
+  assert.deepEqual(delta(`-${loop(20, 'evOf(p)')}+${loop(60, 'other(p)')}`), ['removed 10 for (const p of [' + pad(20) + "]) assert.equal(run(evOf(p)).status, 'covered', p);"]);
+});
