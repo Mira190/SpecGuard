@@ -962,16 +962,33 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   return clean(out + delivered);
 }
 
-// EXP_CUT_RELEVANCE: does the cut candidate test `cand` of changed file `f` mention (whole word) the definition enclosing a changed RIGHT line of f? True (keeps the cut notice) when f or cand cannot be read or a changed line has no derivable name.
-function cutRelevant(f, cand, dm, read) {
-  const src = read(f), body = read(cand);
-  if (!src || !body) return true;
-  const text = body.join('\n');
-  for (const n of dm.get(f)?.changed.RIGHT.keys() || []) {
-    const name = require('./test-map').enclosingName(src, n);
-    if (!name || new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(text)) return true; // same word match as audit-post.js cutTest
+// EXP_CUT_RELEVANCE=1 (arm R): does a cut candidate test mention (whole word) a definition enclosing a changed RIGHT line of changed file f (same match as audit-post.js cutTest)?
+// true (the cut counts) when f or the candidate cannot be read, a changed line has no derivable name, or f has a deletion-only hunk (the deleted definition's tests are the ones to read).
+// memo: Map(f -> one regex of f's enclosing names, or null = every candidate counts).
+function cutRelevant(f, cand, dm, read, memo = new Map()) {
+  if (!memo.has(f)) {
+    const m = dm.get(f), src = read(f), names = new Set();
+    let all = !m || !src;
+    if (!all) {
+      const adds = new Set([...m.changed.RIGHT.keys()].map((n) => m.RIGHT.get(n)));
+      all = [...m.LEFT.values()].some((h) => !adds.has(h));
+      for (const n of m.changed.RIGHT.keys()) { if (all) break; const x = require('./test-map').enclosingName(src, n); if (x) names.add(x); else all = true; }
+    }
+    memo.set(f, all || !names.size ? null : new RegExp(`(?<![\\w$])(?:${[...names].map((x) => x.replace(/\$/g, '\\$')).join('|')})(?![\\w$])`));
   }
-  return false;
+  const re = memo.get(f), body = re && read(cand);
+  return !re || !body || re.test(body.join('\n'));
+}
+// EXP_CUT_RELEVANCE=strong (arm S): test-candidates.txt reason strings. strong = "same name", "mentions <stem>" (a whole-word reference or import of the changed file's stem); weak = "file name has", "calls", "mentions changed", "same directory".
+const STRONG = /^(?:same name|mentions (?!changed )\S)/;
+function candReasons(text) {
+  const m = new Map(); let cur = null;
+  for (const l of String(text).split('\n')) {
+    if (!l.startsWith(' ')) { if (l.trim() && !l.startsWith('(')) cur = l; continue; }
+    const t = /^\s+(\S.*?)\s{2}\((.*)\)\s*$/.exec(l);
+    if (cur && t) m.set(cur + '\0' + t[1], t[2]);
+  }
+  return m;
 }
 
 // Workspace file as lines. Never anything under .git/ or the collection context, never a path that escapes the workspace
@@ -1594,8 +1611,8 @@ async function run({ github, context, core }) {
     const shown = new Map((readCtx('pack-shown.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')));
     const dm = parseDiff(readCtx('diff.patch') || '');
     const past = (f) => !shown.has(f) || [...(dm.get(f)?.changed.RIGHT.keys() || [])].some((n) => n > +shown.get(f));
-    const relevance = process.env['EXP_CUT_RELEVANCE'] === '1'; // bracket form: not an Action input, so the env-mapping test (M1) skips it; measurement switch (eval/replay/prereg-cut-relevance.md); unset = main
-    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [...(packCut.has(f) && past(f) ? [f] : []), ...(cands.get(f) || []).filter((x) => packCut.has(x) && (!relevance || partialGated || cutRelevant(f, x, dm, readFile)))]))];
+    const mode = process.env['EXP_CUT_RELEVANCE'], relevance = mode === '1' || mode === 'strong', why = mode === 'strong' ? candReasons(readCtx('test-candidates.txt') || '') : null, memo = new Map(); // bracket form: not an Action input, so the env-mapping test (M1) skips it; measurement switch (eval/replay/prereg-cut-relevance.md); unset = main
+    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [...(packCut.has(f) && past(f) ? [f] : []), ...(cands.get(f) || []).filter((x) => packCut.has(x) && (!relevance || partialGated || (why ? STRONG.test(why.get(f + ' ' + x) || '') : cutRelevant(f, x, dm, readFile, memo))))]))];
     if (lost.length) incomplete.push(`Review context was cut: the model saw only part of ${lost.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${lost.length > 10 ? `, … (+${lost.length - 10} more)` : ''}; obligations that depend on them are unknown.`);
   }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
@@ -1899,4 +1916,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, fetchThreads, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, cutRelevant, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, fetchThreads, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, cutRelevant, candReasons, STRONG, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });

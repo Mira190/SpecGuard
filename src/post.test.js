@@ -4427,16 +4427,16 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
 });
 
 test('EXP_CUT_RELEVANCE: a cut candidate test counts only when it mentions a definition enclosing a changed line; no name, unreadable test, gated finding stay incomplete; findings never change', async (t) => {
-  const run = async ({ flag, testText, srcText = 'function total(x) {\n  return x + 1;\nif (x) {\n', data = report({ coverage: [row()], findings: [] }), remove = false }) => {
+  const run = async ({ flag, testText, srcText = 'function total(x) {\n  return x + 1;\nif (x) {\n', data = report({ coverage: [row()], findings: [] }), remove = false, diff = '@@ -1,3 +1,3 @@\n function total(x) {\n-  return x;\n+  return x + 1;\n if (x) {\n', cands = 'src.js\n  test.js  (same stem)\n' }) => {
     const s = setup(t, data);
     fs.writeFileSync(path.join(s.dir, 'src.js'), srcText);
     fs.writeFileSync(path.join(s.dir, 'test.js'), testText);
     track(s, 'src.js', 'test.js');
     if (remove) fs.rmSync(path.join(s.dir, 'test.js'));
-    fs.writeFileSync(path.join(s.dir, 'ctx', 'diff.patch'), fileDiff('src.js', '@@ -1,3 +1,3 @@\n function total(x) {\n-  return x;\n+  return x + 1;\n if (x) {\n'));
-    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), 'src.js\n  test.js  (same stem)\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'diff.patch'), fileDiff('src.js', diff));
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), cands);
     fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), 'test.js\n');
-    if (flag) process.env.EXP_CUT_RELEVANCE = '1'; else delete process.env.EXP_CUT_RELEVANCE;
+    if (flag) process.env.EXP_CUT_RELEVANCE = flag === true ? '1' : flag; else delete process.env.EXP_CUT_RELEVANCE;
     t.after(() => { delete process.env.EXP_CUT_RELEVANCE; });
     await post(s);
     return { complete: !/Review context was cut/.test(s.calls.summary[0].body), s }; // the cut notice only: other reduced-review reasons are not under test
@@ -4451,6 +4451,13 @@ ${evidence.quote}
   assert.equal((await run({ flag: false, testText: other })).complete, false, 'and incomplete without it');
   assert.equal((await run({ flag: true, testText: other, srcText: '\n\n\n' })).complete, false, 'a changed line without a name');
   assert.equal((await run({ flag: true, testText: other, remove: true })).complete, false, 'unreadable candidate');
+  // deletion-only hunk: the deleted definition's tests count; two changed definitions where the test names only one: relevant; a top-level statement with no name: relevant
+  assert.equal((await run({ flag: true, testText: other, diff: '@@ -1,4 +1,3 @@\n function total(x) {\n-  old();\n   return x + 1;\n if (x) {\n' })).complete, false, 'deletion-only hunk');
+  assert.equal((await run({ flag: true, testText: relevant, srcText: 'function other2() {\n  return 1;\n}\nfunction total(x) {\n  return x + 1;\nif (x) {\n', diff: '@@ -1,6 +1,6 @@\n function other2() {\n-  return 0;\n+  return 1;\n }\n function total(x) {\n-  return x;\n+  return x + 1;\n if (x) {\n' })).complete, false, 'one of two changed definitions is named');
+  assert.equal((await run({ flag: true, testText: other, srcText: 'const a = 1;\nconst b = 2;\nif (x) {\n', diff: '@@ -1,3 +1,3 @@\n const a = 1;\n-const b = 1;\n+const b = 2;\n if (x) {\n' })).complete, false, 'top-level statement without a name');
+  // arm S: strong reasons (same name, mentions <stem>) count; weak ones do not; a gated finding keeps the notice
+  for (const [why, complete] of [['same name', false], ['mentions src', false], ['file name has total', true], ['mentions changed `total`', true], ['same directory', true]]) assert.equal((await run({ flag: 'strong', testText: other, cands: `src.js\n  test.js  (${why})\n` })).complete, complete, why);
+  assert.equal((await run({ flag: 'strong', testText: other, cands: 'src.js\n  test.js  (same directory)\n', data: report({ coverage: [row('missing_test')], findings: [finding()] }) })).complete, false, 'S keeps the notice when a finding is gated');
   const data = report({ coverage: [row('missing_test')], findings: [finding()] });
   const on = await run({ flag: true, testText: other, data }), off = await run({ flag: false, testText: other, data });
   assert.equal(on.complete, false, 'a finding gated by the partial-visibility gate keeps the cut notice');
