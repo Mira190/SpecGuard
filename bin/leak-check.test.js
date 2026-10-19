@@ -91,6 +91,12 @@ test('pre-push hook blocks a leak added in one commit and deleted in the next; .
   assert.match(hook(`refs/heads/main ${head} refs/heads/main ${base}\n`).stderr, /a\.txt:2: denylisted token/);
 });
 
+test('denylist: runs of 3 parts match (joined with - or _), 4 parts do not', () => {
+  assert.strictEqual(run('x/alpha-beta-gamma/y', sha('alpha_beta_gamma')).status, 1); // '_' join of a '-' split
+  assert.strictEqual(run('x/alpha_beta_gamma/y', sha('alpha-beta-gamma')).status, 1); // '-' join of a '_' split
+  assert.strictEqual(run('x/alpha-beta-gamma-delta/y', sha('alpha-beta-gamma-delta')).status, 0);
+});
+
 const { scanDiff, denyList } = require('./leak-check');
 test('scanDiff: header vs content, "++" content lines, line numbers per file from @@', () => {
   assert.deepStrictEqual(scanDiff(`+++ b/a.txt\n@@ -0,0 +1 @@\n+${M}0123456789abcdef\n`, new Set()), ['a.txt:1: honey marker']);
