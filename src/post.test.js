@@ -213,6 +213,28 @@ test('pack-cut.txt: a missing_test whose candidate test the model saw only partl
   assert.match(weak.calls.summary[0].body, /Low-confidence findings \(1\)/);
 });
 
+test('EXP_PARTIAL_GATE=strong: only a cut candidate matched by "same name" (or imports/requires) gates; weak reasons and a cut weak_test file as such keep their meaning; unset is unchanged; the cut still makes the run incomplete', async (t) => {
+  const run = async (mode, cut, reason, mk = () => setup(t)) => {
+    const s = mk();
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), `src.js\n  test.js  (${reason})\n`);
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut);
+    const saved = process.env.EXP_PARTIAL_GATE;
+    if (mode) process.env.EXP_PARTIAL_GATE = mode; else delete process.env.EXP_PARTIAL_GATE;
+    try { await post(s); } finally { if (saved === undefined) delete process.env.EXP_PARTIAL_GATE; else process.env.EXP_PARTIAL_GATE = saved; }
+    return s;
+  };
+  const gated = (s) => /only partly visible/.test(JSON.stringify(s.calls.summary[0].body)), weakMk = () => setup(t, report({ coverage: [row('weak_test')], findings: [finding('weak_test', evidence)] }));
+  for (const reason of ['mentions changed `indexOf`', 'file name has src', 'calls src', 'mentions src', 'same directory']) {
+    assert.equal(gated(await run('strong', 'test.js\n', reason)), false, `strong: weak reason "${reason}" does not gate`);
+    assert.equal(gated(await run(undefined, 'test.js\n', reason)), true, `unset: "${reason}" gates as before`);
+  }
+  for (const reason of ['same name', 'test imports the changed file']) assert.equal(gated(await run('strong', 'test.js\n', reason)), true, `strong: "${reason}" still gates`);
+  assert.equal(gated(await run('strong', 'test.js\n', 'mentions src', weakMk)), true, 'a weak_test whose own file is cut still gates');
+  const weakReason = await run('strong', 'test.js\n', 'mentions src');
+  assert.match(weakReason.calls.summary[0].body, /Review context was cut/, 'the cut candidate still makes the run incomplete');
+  assert.equal(weakReason.calls.review.length, 1, 'the finding is posted inline');
+});
+
 test('pack-cut.txt listing a changed file or its candidate test: the run is incomplete (no clean verdict, no head marker, execution_complete false); unrelated or empty pack-cut stays complete (F19)', async (t) => {
   const run = async (cut) => {
     const s = setup(t, report({ coverage: [row()], findings: [] }));
@@ -2248,7 +2270,7 @@ test('M1: every env var post.js reads is mapped in the Action post step (runner-
   const src = fs.readFileSync(path.join(__dirname, 'post.js'), 'utf8');
   const read = new Set([...src.matchAll(/\benv\.([A-Z][A-Z_]+)/g)].map((m) => m[1]));
   const mapped = new Set(Object.keys(postStepEnv()));
-  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA', 'GITHUB_RUN_ATTEMPT', 'GITHUB_EVENT_NAME']); // set by the runner / optional fallback to the event payload
+  const runner = new Set(['GITHUB_WORKSPACE', 'BASE_SHA', 'GITHUB_RUN_ATTEMPT', 'GITHUB_EVENT_NAME', 'EXP_PARTIAL_GATE']); // set by the runner / optional fallback to the event payload; EXP_PARTIAL_GATE: offline experiment switch (eval/replay/prereg-h3.md), not an Action input
   assert.ok(read.has('RESOLVE_STALE') && read.has('MAX_COMMENTS'), 'the scan found the known variables');
   assert.deepEqual([...read].filter((k) => !mapped.has(k) && !runner.has(k)), []);
 });

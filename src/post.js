@@ -1566,7 +1566,7 @@ async function run({ github, context, core }) {
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
   const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')[0])); // a scan's lines carry "\tunit ids" (audit-post.js reads those) // the claude engine's pack: files the model saw only partly or not at all
   if (packCut.size) { // a missing/weak-test claim is only trustworthy when its candidate tests were fully visible
-    const cands = parseCandidates(readCtx('test-candidates.txt') || '');
+    const cands = parseCandidates(readCtx('test-candidates.txt') || '', { strongOnly: env.EXP_PARTIAL_GATE === 'strong' }); // EXP_PARTIAL_GATE=strong (experiment H3, eval/replay/prereg-h3.md): only strongly matched cut candidates gate; the incomplete block below is unchanged
     for (const f of data.findings) {
       const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
       if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
