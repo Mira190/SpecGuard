@@ -214,6 +214,12 @@ test('scan gate: identical argument text gates a weak_test only when no identifi
   assert.equal(run(T([['    const input = [];'], ['    const input = [{ price: 10, quantity: 2 }];']], 'input', 'input')), false, 'probe: same local name, other value, stays counted');
   assert.equal(run(T([['    const { input } = setup();'], ['    const { input } = other();']], 'input', 'input')), false, 'destructured locals');
   assert.equal(run(T([['    const emptyInput = [];'], ['    const input = [{ price: 10 }];']], 'emptyInput', 'input')), false, 'probe control: renamed, different text');
+  const ty = ': Array<{ price: number, quantity: number }>'; // R5 #5: a TS type annotation must not hide the declaration
+  assert.equal(run(T([[`    const input${ty} = [];`], [`    const input${ty} = [{ price: 10, quantity: 2 }];`]], 'input', 'input')), false, 'typed, same name');
+  assert.equal(run(T([[`    let input: number[] = [];`], [`    var input: number[] = [1];`]], 'input', 'input')), false, 'let/var typed');
+  assert.equal(run(T([[`    const emptyInput${ty} = [];`], [`    const input${ty} = [{ price: 10, quantity: 2 }];`]], 'emptyInput', 'input')), false, 'typed, renamed');
+  assert.equal(run(T([['    const {} = setup();'], ['    const [] = other();']], 'input', 'input')), true, 'empty destructuring declares nothing and does not throw');
+  assert.equal(run(T([['    const { input }: { input: number[] } = setup();'], ['    const { input }: { input: number[] } = other();']], 'input', 'input')), false, 'typed destructuring');
   assert.equal(run(T([[], []], 'input', 'input')), true, 'shared (not declared in either test) same text still gates');
   assert.equal(run(T([[], []], '[]', '[]')), true, 'same literal gates');
   assert.equal(run(T([['    const x = 1;'], []], "'a', 2", "'a', 2")), true, 'string and number literals gate');
