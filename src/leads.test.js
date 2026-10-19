@@ -306,11 +306,9 @@ test('removed assertions: 50 literal-dense added lines of ~100 KB each finish fa
   assert.ok(Date.now() - t < 2000, `took ${Date.now() - t} ms`);
 });
 
-test('removed assertions: an assertion edited in place that only adds is no lead; a changed or dropped literal still is', () => {
-  const loop = (...a) => `  assert.deepEqual(delta(\`-\${loop(20, 'evOf(p)')}+\${loop(60, 'other(p)'${a.map((x) => `, '${x}'`)})}\`), ['x']);\n`;
-  assert.deepEqual(delta(`-${loop()}+${loop('gap')}`), [], 'a fixture arg added inside a template literal');
-  assert.deepEqual(delta("-  assert.equal(f(1), 2);\n+  assert.equal(f(1), 2, 'why');\n"), [], 'a message added');
+test('removed assertions: counterexamples for in-place edits (a token-subsequence "only adds" rule was evaluated and not adopted: it would hide the inverted assertion)', () => {
   assert.deepEqual(delta("-  assert.equal(f(1), 2);\n+  assert.equal(f(2), 3);\n"), ['removed 10 assert.equal(f(1), 2);'], 'input 1 dropped');
   assert.ok(delta("-  assert.match(validateBaseName('BIG', '.mp4', others), /x/); // case-insensitive FS\n+  assert.match(check('a'), /x/);\n").some((d) => d.includes("'BIG'")), 'Kite #10: the BIG case removed');
   assert.equal(delta("-  assert.deepEqual(nextTrigger(a, 10, 0, 0), x);\n+  for (const [n, h, w] of cases) assert.deepEqual(nextTrigger(n, h, 0, 0), w);\n").length, 1, 'Kite #12: a table row dropped');
+  assert.equal(delta("-  assert.ok(f(x));\n+  assert.ok(!f(x));\n").length, 1, 'an inverted assertion');
 });
