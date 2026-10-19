@@ -158,3 +158,13 @@ test('renderEscapes: the cross-arm outcome and the not-comparable table are labe
   assert.match(other, /\(insufficient data, need 10\) \| \[?n\/a\]? \| \[?n\/a\]? \| 0 \| 2 \| 0 \| 0 \|/); // arm 1 row: same file 0, unusable 2, no location 0, capped 0
   assert.match(other, /Unusable = the review failed or is missing \(never a miss/);
 });
+
+test('escapesOf: a sticky summary with counts but no status marker (older format) is usable; with neither it is unusable', () => {
+  const sticky = (n, body) => ({ issue_url: `https://api.github.com/repos/o/r/issues/${n}`, body: `<!-- specguard:summary -->\n${body}## SpecGuard` });
+  const ds = { repo: 'o/r', since: '2026-09-01', until: '2026-09-30', baseline: [], threads: [], review_comments: [],
+    prs: [3, 6].map((number) => ({ number, created_at: '2026-09-01T00:00:00Z', merged_at: null, user: { login: 'dev', type: 'User' }, labels: [{ name: 'review-arm:0' }] })),
+    issue_comments: [sticky(3, `<!-- specguard:counts ${JSON.stringify({ pr: 3, complete: true })} -->\n`), sticky(6, '')] };
+  const f = { candidates: [fix('f1', 100, [3, [S('a.js', 10)]]), fix('f2', 101, [6, [S('b.js', 5)]])] };
+  const g = escapesOf(ds, f, new Map()).groups[0];
+  assert.deepEqual([g.seen, g.unusable], [1, 1]); // PR 3 usable (no finding: a miss), PR 6 unusable
+});
