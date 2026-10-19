@@ -8,7 +8,7 @@ The set holds no target code: only paths, line ranges and the small edit strings
 
 ```
 node eval/trace-recall/run.js      # needs the network and git; about 1 minute; writes results.json (git-ignored)
-node eval/trace-recall/analyze.js  # prints the metrics; add --json out.json to save them
+node eval/trace-recall/analyze.js  # prints the metrics; add --json out.json to save them; --group original|holdout or --only id1,id2 to select cases
 ```
 
 `run.js` fetches only the pinned commit into `<tmp>/specguard-trace-recall-<sha8>` (reused on later runs), makes each variant a local commit, runs `src/trace.js` with the same environment as `collect.sh`, then runs the very `candidates()` script found inside `src/collect.sh`. Options: `--out`, `--work`, `--only id1,id2`, and `--src <dir>` to measure another checkout's `trace.js` + `collect.sh` (for before/after comparisons).
@@ -17,7 +17,7 @@ It is not part of CI (network). CI runs only `analyze.test.js`, which checks the
 
 ## What is measured
 
-12 behaviours, each as 3 variants: R (requirement doc edited), C (code edited), RC (both), plus T (a test assertion weakened) for 10 of them. The 46 variants are **12 independent cases**, not 46. A case is counted once per variant, so a rate such as 18/24 is 12 cases seen twice. Never quote it as "24 cases".
+12 behaviours (plus 3 holdout, below), each as 3 variants: R (requirement doc edited), C (code edited), RC (both), plus T (a test assertion weakened) for 10 of them. The 46 variants are **12 independent cases**, not 46. A case is counted once per variant, so a rate such as 18/24 is 12 cases seen twice. Never quote it as "24 cases".
 
 | Direction | Variants | Query | Relevant items (ground truth in `cases.json`) |
 |---|---|---|---|
@@ -54,6 +54,23 @@ Every rate prints as `k/n` next to the percentage. A query with no relevant item
 | test->req | 0/10 | 0/10 | 0 |
 
 All 10 T variants ran with status ok and emitted empty `requirement_to_code`, `code_to_requirement` and `test-candidates.txt`. The req->code and code->req numbers on the same run, computed with the pre-change `analyze.js` on the R/C/RC variants only, are identical to the new `analyze.js` (all fields compared). These 10 are 10 cases (at most 6 distinct weakened tests, see above), not 10 independent trials; the result is all-or-nothing because the pipeline has no test-to-code path.
+
+## Delivered windows and the per-criterion cap (wrong_windows)
+
+`analyze.js` also reports, for req->code, `wrong_windows`: delivered code windows that overlap no `expect.code` range (incl. alt), as k/n of delivered windows (one window delivered for two criteria counts twice), the windows delivered per query (p50, max), and the bytes of `trace-candidates.json` per variant (p50, max; `run.js` records `cand_bytes`).
+
+Cases flagged `holdout: true` (`onProtoPoisoning`, `exposeHeadRoutes`, `http2SessionTimeout`, 9 R/RC queries, 6 of them with code ranges) were written and committed before any cap rule was tried; report them apart from the original 12 (`--group holdout`).
+
+Cap experiment (main at ccaf02d; trace.js keeps the top 3 code windows per criterion, ranks 4-8 are dropped). Rules: (a) flat top 5; (b) top 3, then up to 2 more windows from files already among those 3; (c) as (b), also from the same directory. 12 original cases, 24 queries (R/RC), then the 3 holdout cases, 6 queries:
+
+| Rule | original: Recall@K | All-required@3 | wrong_windows | windows/query p50 (max) | bytes p50 | holdout: Recall@K | wrong_windows | windows/query p50 (max) |
+|---|---|---|---|---|---|---|---|---|
+| main (top 3) | 26/58 | 6/24 | 39/72 | 3 (6) | 8462 | 10/22 | 5/18 | 3 (3) |
+| (a) top 5 | 32/58 | 6/24 | 80/120 | 5 (10) | 8947 | 16/22 | 11/30 | 5 (5) |
+| (b) +2 same file | 32/58 | 6/24 | 61/101 | 4 (8) | 8462 | 13/22 | 12/28 | 5 (5) |
+| (c) +2 same dir | 34/58 | 6/24 | 76/118 | 5 (10) | 8932 | 15/22 | 12/30 | 5 (5) |
+
+Recall@3 and All-required@3 do not move by construction (extra windows sit at rank 4-5), and All-required over everything delivered stays 6/24 and 0/6 too: no rule completes a query. Every rule raises the wrong-window share (original 54% to 60-67%, holdout 28% to 37-43%), so none was shipped; `src/` is unchanged. The code->req, test candidates and the tests of req->code are field-for-field identical in all four runs.
 
 ## Baseline
 

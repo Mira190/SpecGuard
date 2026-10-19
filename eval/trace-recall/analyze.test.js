@@ -146,6 +146,16 @@ test('test->code / test->req: a T variant is scored against the case ground trut
   assert.deepEqual(mixed.directions['code->req'], res.directions['code->req']);
 });
 
+test('wrong_windows: delivered req->code code windows overlapping no expect.code range, k/n, windows per query, bytes', () => {
+  // A-R delivers f1:15 (right), x.js (wrong), f2:5 (right). A-RC delivers x, y, z (wrong) and f1:10-12 (right). B-R expects no code, so its one delivered window is wrong.
+  const d = res.req_to_code_delivery;
+  assert.deepEqual(d.wrong_windows, kr(5, 8)); assert.deepEqual(d.windows_per_query, { p50: 3, max: 4 }); assert.equal(d.queries, 3);
+  assert.deepEqual(d.candidate_bytes, { n: 0, p50: null, max: null });
+  const withBytes = analyze({ variants: fx.results.variants.map((v, i) => ({ ...v, cand_bytes: 1000 * (i + 1) })) }, fx.cases).req_to_code_delivery;
+  assert.deepEqual(withBytes.candidate_bytes, { n: 3, p50: 3000, max: 4000 });
+  assert.match(format(res), /wrong_windows 63% \(5\/8\)/);
+});
+
 test('attribute: rank K is not a miss and K+1 is ranked_out; miss kinds same_file / generated_duplicate (alt) / other; shown-file unknown', () => {
   const cases = { cases: [{ id: 'X', expect: { requirement: { file: 'D.md', lines: [1, 1] }, tests: [], code: [
     { file: 'a.js', lines: [1, 1] }, { file: 'a.js', lines: [50, 50] }, { file: 'g.js', lines: [5, 5], alt: [[1, 1]] }, { file: 'z/q.js', lines: [1, 1] }] } }] };
