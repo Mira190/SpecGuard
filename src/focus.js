@@ -198,7 +198,7 @@ function main(ctx, env = process.env) {
   return r;
 }
 
-module.exports = { GENERATED, splitDiff, stats, trim, thresholds, parseCandidates, score, plan, main, DIFF_BUDGET };
+module.exports = { splitDiff, stats, trim, thresholds, parseCandidates, score, plan, main, DIFF_BUDGET };
 
 if (require.main === module) {
   if (!process.argv[2]) { console.error('Usage: node src/focus.js <ctx>'); process.exit(2); }

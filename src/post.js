@@ -24,7 +24,7 @@ const truncate = (s, n = BODY_MAX) => {
   return s.slice(0, end) + '\n...(truncated)';
 };
 const { matches } = require('./standards-map');
-const { parseCandidates, GENERATED } = require('./focus');
+const { parseCandidates } = require('./focus');
 const { standardsCut } = require('./prompt');
 const clean = (s) => truncate(redact(s));
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -737,7 +737,7 @@ function words(s, n) {
 const INTERNAL = /malformed|coverage row|layer not stated|citation|alignment|obligation/i; // validator wording: never shown to a developer
 const parens = (u) => u.replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
 const pin = (f, blob) => (blob ? parens(`${blob}/${String(f.path).split('/').map(encodeURIComponent).join('/')}#L${f.line}`) : '');
-const LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 8, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
+const LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 5, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
 
 // One list item: label (bare: none, the section heading names the kind), title (linked to its inline comment when posted, else the location is linked to the blob line), location, and the first sentence (a standard: its rule);
 // req: the requirement the finding belongs to, on a second line.
@@ -841,7 +841,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   // the model's not_reviewed text as sentences; the automatic "Requirement X is not assessed" note is dropped when X has its own row in the table
   const shownIds = new Set(rows.map((x) => String(x.r.id)));
   const nrParts = (t) => String(t || '').split(/(?<=[.!?])\s+(?=[A-Z0-9`"'(])/).filter((x) => x.trim() && !shownIds.has((/^Requirement (\S+) is not assessed: /.exec(x) || [])[1]));
-  const nrAll = !failed && inc ? incomplete.map((r) => cell(r)) : []; // the first screen: only the reasons the run is incomplete; the model's own not_reviewed sentences are in Details
+  const nrAll = !failed && inc ? [...incomplete.map((r) => cell(r)), ...nrParts(data?.not_reviewed).map((x) => cell(x))] : []; // reasons first, then the model's sentences; the overflow is Details "Not reviewed (more)"
 
   // ---- visible sections
   const vis = []; // { h, atoms, tail }
@@ -921,7 +921,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     const t = traceTable(data, blob, specFiles, covById);
     if (t) add(det, t.head, t.atoms, '\n');
     addPre();
-    if (data.not_reviewed) {
+    if (!inc && data.not_reviewed) {
       const parts = nrParts(data.not_reviewed);
       detail(`**Not reviewed (${plural(parts.length, 'item')})**\n\n`, parts.slice(0, 40).map((x) => `- ${cell(x, 400)}\n`), `${parts.length > 40 ? `- +${parts.length - 40} more\n` : ''}\n`);
     }
@@ -1401,8 +1401,9 @@ function anchorTouched(from, to, file, start, end, cwd, git = (...a) => execFile
 
 // Did the author's own commits from `from` to `to` (first-parent, no merges) change any test file? true / false, or null when git cannot say.
 const isTest = (p) => require('./trace').isTestPath(p); // lazily: trace.js requires this module
-// can a changed file carry a unit-test obligation? Not a doc, snapshot, generated file or test fixture (classifiers: trace.pathKind, focus.GENERATED, trace.FIXTURE_PATH)
-const carriesObligation = (p) => { const t = require('./trace'); return !['doc', 'snapshot'].includes(t.pathKind(p)) && !GENERATED.test(p) && !t.FIXTURE_PATH.test(p); }
+// can a changed file carry a unit-test obligation? Not a doc, snapshot, lockfile/minified/map or test fixture (by path: trace.pathKind, trace.FIXTURE_PATH), and not a generated file. Generated needs content evidence: build/, gen/, dist/ and vendor/ folders hold hand-written code too.
+// head = the file's lines, or null when it is not tracked at the head (no evidence it is generated, so it counts).
+const carriesObligation = (p, head) => { const t = require('./trace'); return !['doc', 'snapshot'].includes(t.pathKind(p)) && !/\.(lock|min\.\w+|map|svg)$/i.test(p) && !(t.FIXTURE_PATH.test(p) && !/(^|\/)(vendor|third_party)\//.test(p)) && !(head || []).slice(0, 5).some((l) => /Code generated|@generated|DO NOT EDIT/.test(l)); }
 function testsChanged(from, to, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 26 })) {
   if (!/^[0-9a-f]{7,64}$/i.test(String(from))) return null;
   try {
@@ -1561,11 +1562,7 @@ async function run({ github, context, core }) {
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();
   if (partial) incomplete.push('The diff exceeded `max_diff_kb` and was truncated; obligations outside the reviewed portion are unknown.');
-  // a skipped/dropped doc, snapshot, generated or fixture file carries no unit-test obligation: one plain note, not an incomplete run
-  const quiet = [], bears = (xs) => xs.filter(carriesObligation), plain = (xs) => xs.length && quiet.push(`Not reviewed (no unit-test obligation): ${xs.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${xs.length > 10 ? `, … (+${xs.length - 10} more)` : ''}`);
-  if (bears(dropped).length) incomplete.push(notReviewed(bears(dropped)));
-  if (focused && bears(skipped).length) incomplete.push(focusNote(focused.files, focused.of, bears(skipped)));
-  plain(dropped.filter((x) => !carriesObligation(x))); plain(skipped.filter((x) => !carriesObligation(x)));
+  const quiet = []; // plain Details run notes: things left out that cannot change a verdict
 
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
@@ -1601,6 +1598,13 @@ async function run({ github, context, core }) {
   if (!tracked) (data.validation_notes ||= []).push('Tracked files could not be listed; no workspace file was read as evidence.');
   // citations (evidence, behaviour, findings, requirement files) are read only from files tracked at the checked-out head
   const readLines = memoed((p) => { const rel = safeRel(p); return rel && tracked && tracked.has(rel) ? readFile(rel) : null; });
+  const carries = (p) => carriesObligation(p, readLines(p));
+  { // a skipped or dropped doc, snapshot, fixture or generated file carries no unit-test obligation: one plain note, not an incomplete run
+    const bears = dropped.filter(carries), skip = (focused ? skipped : []).filter(carries), plain = (xs) => xs.length && quiet.push(`Not reviewed (no unit-test obligation): ${xs.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${xs.length > 10 ? `, … (+${xs.length - 10} more)` : ''}`);
+    if (bears.length) incomplete.push(notReviewed(bears));
+    if (skip.length) incomplete.push(focusNote(focused.files, focused.of, skip));
+    plain(dropped.filter((x) => !bears.includes(x))); plain((focused ? skipped : []).filter((x) => !skip.includes(x)));
+  }
   { // a missing_test claim whose error message or literal already sits in a tracked test file may be covered there: low confidence, not counted (src/test-map.js)
     // hunk-tier candidates stay out of the guard's scope: a test that merely shares a literal with the diff is the "logger test contains 'invalid amount'" case (#217)
     const cands = parseCandidates(readCtx('test-candidates.txt') || '', { skipHunk: true }), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
@@ -1666,9 +1670,9 @@ async function run({ github, context, core }) {
     const past = (f) => !shown.has(f) || [...(dm.get(f)?.changed.RIGHT.keys() || [])].some((n) => n > +shown.get(f));
     const rowsOf = (f) => data.coverage.filter((c) => c.behaviour?.path === f);
     // a cut candidate test of f matters only if the model's conclusion about f could change had it seen the test: a demoted finding, a row not proven covered, or no row at all
-    const open = (f) => demoted.has(f) || (rowsOf(f).length ? rowsOf(f).some((c) => c.status !== 'covered') : carriesObligation(f));
+    const open = (f) => demoted.has(f) || (rowsOf(f).length ? rowsOf(f).some((c) => c.status !== 'covered') : carries(f));
     const files = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean))];
-    const lost = files.filter((f) => carriesObligation(f) && packCut.has(f) && past(f)), cutCand = (f) => (cands.get(f) || []).some((x) => packCut.has(x));
+    const lost = files.filter((f) => carries(f) && packCut.has(f) && past(f)), cutCand = (f) => (cands.get(f) || []).some((x) => packCut.has(x));
     const partly = files.filter((f) => !lost.includes(f) && cutCand(f) && open(f)), rest = files.filter((f) => !lost.includes(f) && !partly.includes(f) && cutCand(f));
     const why = [...lost.map((x) => `\`${cell(x, 120)}\`: changed lines past what the model saw`), ...partly.map((x) => `unit tests of \`${cell(x, 120)}\` were only partly visible`)];
     incomplete.push(...why.slice(0, 10), ...(why.length > 10 ? [`+${why.length - 10} more files not fully reviewed`] : []));

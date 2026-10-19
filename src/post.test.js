@@ -3013,9 +3013,8 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   const common = { data: layoutData(), posted: [{ f, url: 'https://github.com/o/r/pull/1#discussion_r1' }], blob: BLOB };
   const inc = post.buildSummary({ ...common, incomplete: ['The review engine failed; the findings may be partial.', 'Diff over `max_diff_kb`, files not reviewed: `a.js`, `b.js`'], banner: ['Large PR: diffs of 2 large files were shortened.'], rules: ['pkg/REVIEW.md'], lint: { count: 1, changed: ['biome.json'] } });
   assert.match(inc, /## SpecGuard\n\n\*\*⚠️ Incomplete review: 1 unit test gap found so far\*\*\n\n### Missing unit tests/);
-  assert.match(inc, /\n### Not reviewed \(2\)\n\n- The review engine failed; the findings may be partial\.\n- Diff over `max_diff_kb`, files not reviewed: `a\.js`, `b\.js`\n\n> - Large PR: [^\n]*\n> - This PR modifies review rule[^\n]*\n> - Lint\/format configuration changed[^\n]*\n\n<details>/, 'Not reviewed comes after the findings, then the one blockquote, right before Details');
+  assert.match(inc, /\n### Not reviewed \(3\)\n\n- The review engine failed; the findings may be partial\.\n- Diff over `max_diff_kb`, files not reviewed: `a\.js`, `b\.js`\n- Generated files\.\n\n> - Large PR: [^\n]*\n> - This PR modifies review rule[^\n]*\n> - Lint\/format configuration changed[^\n]*\n\n<details>/, 'Not reviewed comes after the findings, then the one blockquote, right before Details');
   assert.equal((inc.match(/^> /gm) || []).length, 3, 'one blockquote, one line each');
-  assert.match(inc.split('<details>')[1], /Generated files\./, 'the model\'s not_reviewed text is in Details');
   assert.doesNotMatch(inc, /Criteria:|✅|\[!WARNING\]/);
   assert.match(inc, /specguard:status=incomplete/);
   const red = post.buildSummary({ ...common, reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }], model: 'mini' } });
@@ -3803,12 +3802,12 @@ test('Not reviewed: visible when the run is incomplete, a list in Details when i
   const done = post.buildSummary(opts), part = post.buildSummary({ ...opts, incomplete: ['The review engine timed out.'] });
   assert.match(done, /<details>[\s\S]*\*\*Not reviewed \(1 item\)\*\*\n\n- Generated files\.\n/);
   assert.doesNotMatch(done, /### Not reviewed/);
-  assert.match(part, /### Not reviewed \(1\)\n\n- The review engine timed out\.\n\n/);
-  assert.match(part.split('<details>')[1], /\*\*Not reviewed \(1 item\)\*\*\n\n- Generated files\.\n/, 'the model text is in Details for an incomplete run too');
-  const many = post.buildSummary({ ...opts, incomplete: Array.from({ length: 13 }, (_, i) => `\`f${i}.js\`: changed lines past what the model saw`) });
-  assert.equal((many.match(/^- /gm) || []).length >= 8, true);
-  assert.match(many, /- \+5 more in Details\n/);
-  assert.match(many, /\*\*Not reviewed \(more\)\*\*\n\n- `f8\.js`/);
+  assert.match(part, /### Not reviewed \(2\)\n\n- The review engine timed out\.\n- Generated files\.\n/);
+  assert.doesNotMatch(part, /\*\*Not reviewed \(\d+ items?\)\*\*/, 'the same sentence is not repeated in Details');
+  const many = post.buildSummary({ ...opts, incomplete: ['The review engine timed out.'], data: { ...layoutData(), not_reviewed: Array.from({ length: 12 }, (_, i) => `Item ${i} was skipped.`).join(' ') } });
+  assert.equal((many.split('<details>')[0].match(/^- (?!\+)/gm) || []).length, 5, 'visible cap is 5');
+  assert.match(many, /- \+8 more in Details\n/);
+  assert.match(many, /\*\*Not reviewed \(more\)\*\*\n\n- Item 4 was skipped\./);
 });
 
 test('issue #8 end to end: criteria cited although none were collected leave no junk rows; the source line says none were found; the findings survive', async (t) => {
@@ -4504,9 +4503,25 @@ test('incomplete summary: the first screen holds the findings and the not-review
   assert.doesNotMatch(fast[0], /Fast-tier model/); assert.match(fast[1], /Only high-confidence findings were posted inline/);
   const [top, rest] = body.split('<details>');
   assert.match(top, /Incomplete review: 1 unit test gap found so far/); assert.match(top, /Verify the boundary total/);
-  assert.match(top, /### Not reviewed \(1\)\n\n- `src\/a\.js`: changed lines past what the model saw/);
-  assert.doesNotMatch(top, /vendored parser|Fast-tier model|Incomplete review\.\*\*/);
-  assert.match(rest, /vendored parser/); assert.match(rest, /next push or rerun reviews again/);
+  assert.match(top, /### Not reviewed \(2\)\n\n- `src\/a\.js`: changed lines past what the model saw\n- The model could not read the vendored parser\./);
+  assert.match(top, /- The model could not read the vendored parser\./, 'the model\'s own not_reviewed text stays on the first screen');
+  assert.doesNotMatch(top, /Fast-tier model|Incomplete review\.\*\*/);
+  assert.doesNotMatch(rest, /vendored parser/, 'and is not repeated in Details'); assert.match(rest, /next push or rerun reviews again/);
   const none = post.buildSummary({ data: report({ coverage: [row()], findings: [] }), incomplete: ['`a.js`: changed lines past what the model saw', 'b'], state: 'incomplete' });
   assert.match(none, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; 2 items not fully reviewed \(listed below\)\*\*/);
+});
+
+test('cut changed file under build/ or gen/: generated only on content evidence (header in the first lines), never by folder name', async (t) => {
+  const run = async (p, text) => {
+    const s = setup(t, report({ coverage: [row()], findings: [] }));
+    fs.mkdirSync(path.dirname(path.join(s.dir, p)), { recursive: true }); fs.writeFileSync(path.join(s.dir, p), text); track(s, p);
+    writeCtx(s, 'test-candidates.txt', `src.js\n  (no candidate test file found)\n${p}\n  (no candidate test file found)\n`); writeCtx(s, 'pack-cut.txt', `${p}\n`);
+    writeCtx(s, 'files.txt', `src.js\n${p}\n`); writeCtx(s, 'diff.patch', fileDiff('src.js', patch) + fileDiff(p, patch));
+    await post(s);
+    return countsOf(s.calls.summary[0].body).complete;
+  };
+  assert.equal(await run('build/x.js', 'l1\nl2\nif (x) {\nl4\n'), false, 'hand-written build script, changed line past the shown lines');
+  assert.equal(await run('gen/x.go', '// Code generated by protoc. DO NOT EDIT.\nl2\nif (x) {\nl4\n'), true, 'a generated header in the first lines');
+  assert.equal(await run('dist/x.js', '/* @generated */\nl2\nif (x) {\nl4\n'), true);
+  assert.equal(await run('vendor/x.js', 'l1\nl2\nif (x) {\nl4\n'), false, 'vendor/ is not skipped by path alone');
 });
