@@ -88,7 +88,8 @@ function lost(ctx, p) {
     }
     for (const x of cands.get(f) || []) if (cut.has(x) && !tests.includes(x)) tests.push(x);
   }
-  return { out, tests };
+  const zero = files.filter((f) => (dm.get(f)?.changed.LEFT.size || 0) > 0 && !blocks(p.text)[f]); // amendment 2: a changed file with deleted lines that the pack shows with 0 lines
+  return { out, tests, zero };
 }
 // in-scope rules of main's list (scope covers at least one changed file; no map = all)
 function inScope(ctx) {
@@ -104,7 +105,7 @@ function measure(arm, ctx, root, limit = 250000, a = null) {
   const size = (f) => Buffer.byteLength(b[f] || ''), files = lines(path.join(ctx, 'files.txt'));
   const r = {
     arm, bytes: Buffer.byteLength(p.text), lostFiles: l.out, lostAny: l.out.length > 0, lostSrc: l.out.some((x) => x.cat !== 'doc'), lostCode: l.out.some((x) => x.cat === 'src'), unseen: l.out.reduce((n, x) => n + x.un, 0), unseenKeys: l.out.flatMap((x) => x.past.map((n) => x.f + ":" + n)),
-    cutTests: l.tests, notice: l.out.length + l.tests.length > 0, ruleBytes: std.reduce((n, f) => n + size(f), 0), rules: std.length, ruleShown: std.filter((f) => b[f]), inScope: ins.length, inScopeDropped: ins.filter((f) => !b[f]),
+    zeroDel: l.zero, contentLost: l.out.length + l.zero.length > 0, contentKeys: [...l.out.flatMap((x) => x.past.map((n) => x.f + ":" + n)), ...l.zero.map((f) => f + ":DEL")], cutTests: l.tests, notice: l.out.length + l.tests.length > 0, ruleBytes: std.reduce((n, f) => n + size(f), 0), rules: std.length, ruleShown: std.filter((f) => b[f]), inScope: ins.length, inScopeDropped: ins.filter((f) => !b[f]),
     cut: [...p.notWhole].sort(), maxFile: Math.max(0, ...Object.values(b).map((x) => Buffer.byteLength(x))), reviewBytes: files.reduce((n, f) => n + size(f), 0),
     ruleEmptyButInScope: !std.some((f) => b[f]) && ins.length > 0,
   };

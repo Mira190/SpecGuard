@@ -255,3 +255,24 @@ Switch `EXP_PACK` (O, F, FC, FCH; unset = main, byte-identical) in `contextPack`
 - FC and FCH fail gates 3 (FC), 4 and 6, and empty the rule block on 44 of 106 fresh PRs. Their rule cost is 387 (holdout) and 1679 (fresh) dropped in-scope rules; no written acceptance of that cost is made because neither is adopted.
 
 **Limitation.** This measures what the model can see, not what it finds. Deviations: (1) fresh-corpus repos qualify on rule bytes at the default-branch tip, not at each base (per-commit tree scans over thousands of commits did not finish); (2) 94 of the 120 fresh collector runs used `TRACE=off` (26 used `auto`) to finish in time, which empties only the last pack tier (spec files); (3) `collect.sh` ran in throwaway shared clones, one per commit, because it checks out and restores rule files in its work tree; (4) head trees for the arms are built from the object store without `git checkout`, and a git symlink is written as the plain file git writes with `core.symlinks=false`, as the holdout-2 collector did on Windows (on a Linux runner a symlinked rule file is followed, so SpecGuard-style `.claude/skills/x` links would show their target); (5) the "code" definition (not doc, not test) is the reading that gives the prereg's 14/96; with "any non-doc" it is 20/96 for A. (6) Fresh results come from four repos with very large rule sets; a repo with small rules would show no effect either way.
+
+### Amendment 2: arm O on the confirmation corpus under "loses changed content": not adopted (final)
+
+Run once, O unchanged from e94f451 (`src/` identical), list in `pack-analysis/confirm-corpus.txt` (all of step 2 + first 10 per repo of step 3, 200 commits; the collector skipped 14, so n=186). Collector: real `src/collect.sh`, gh shimmed, `TRACE=off` for all 200 (step 1 had used 94 off / 26 auto). "Loses content" = a changed RIGHT line past what is shown, or a changed file with deleted lines shown with 0 lines. Raw rows are in SpecGuard-evidence/pack (conf.json).
+
+**Gates on the confirmation corpus, k/n**
+1. A loses changed content on at least 10 PRs: 70/186 (pass).
+2. At least half of those fixed under O: 46/70 (pass; 24 still lose content).
+3. PRs newly losing content under O: 0/186 (pass).
+4. Gate 6 (A loses no content, so O must keep every in-scope rule A had at the same bytes): 1 violation in 116 PRs (fail). `langchain-f37ca688f9e6`: A loses nothing; O shows 241 KB of the changed files against A's 223 KB, and `AGENTS.md` is cut at another size.
+5. Gate 4 on holdout 2 for O: 0/10 kept standards findings cite a rule O drops (pass; unchanged, O's pack is the same). SpecGuard #345-#386 newly losing content: 0/42 (pass).
+6. Rule cost of O: 359 in-scope rules dropped on 41 PRs (all 359 on PRs where A loses content); 0 on 145 PRs.
+
+**Per-repo split (A loses / still lost under O, of n):** cli 11/1 of 25; gitea 5/5 of 10; hono 0/0 of 10; langchain 2/0 of 8 (the gate 6 violation); orpc 20/3 of 29; pydantic 1/0 of 10; pydantic-ai 28/12 of 28; query 0 of 9; rqlite 0 of 10; sqlglot 1/1 of 10; trpc 0 of 9; vitest 2/2 of 28. Rule drops: pydantic-ai 305, orpc 36, cli 18, others 0.
+
+**Design corpora under the new measure (information only; A loses / still lost under O, newly lost, gate 6 violations, rule drops total / PRs):**
+- Holdout 2 (n=96): 24 / 4, 0 new, 1 of 72 (pydantic-ai-hclean2-1, a rule lost), 70 / 10. Split: pydantic-ai 11/0 of 16, orpc 4/1 of 6, gitea 2/1 of 17, langchain 2/0 of 8, cli 1/0, pydantic 1/0, query 1/0, sqlglot 1/1, trpc 1/1, others 0.
+- Fresh step 1 (n=106): 78 / 11, 0 new, 0 of 28, 284 / 61. Split: cli 25/2, orpc 29/5, pydantic-ai 24/4, vitest 0.
+- SpecGuard #345-#386 (n=42): 8 / 3, 0 new, 0 of 34, 0 / 0.
+
+**Conclusion.** The amendment-2 rule requires every gate on the confirmation corpus, and gate 6 fails on 1 PR. O is not adopted. This is final: nothing is tuned, rerun or amended, and the `EXP_PACK` switch and its tests stay as they are. O fixes 46 of 70 losing PRs with no new loss, but it does so by giving the changed files budget that A spent on rule files, and on one PR that moved a rule the literal gate protects. The cost is 359 dropped in-scope rules on 41 PRs.

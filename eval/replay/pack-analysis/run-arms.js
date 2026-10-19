@@ -26,7 +26,7 @@ if (mode === 'holdout') {
   }
 }
 cases.sort((x, y) => x.clone.localeCompare(y.clone));
-const ARMS = ['', 'O', 'F', 'FC', 'FCH'], rows = [];
+const ARMS = process.env.ARMS ? ['', ...process.env.ARMS.split(',')] : ['', 'O', 'F', 'FC', 'FCH'], rows = [];
 let tree = null, cur = null;
 for (const c of cases) {
   if (cur !== c.clone) { tree?.destroy(); cur = c.clone; tree = new Tree(c.clone, path.join(scratch, `${mode}-${path.basename(c.clone)}`), c.follow); }
@@ -35,7 +35,7 @@ for (const c of cases) {
     const a = measure('', c.ctx, tree.dir), row = { id: c.id, A: a };
     for (const arm of ARMS.slice(1)) row[arm] = measure(arm, c.ctx, tree.dir, 250000, a);
     rows.push(row);
-    console.log(c.id, `A lost ${a.lostAny ? a.unseen : 0}`, ARMS.slice(1).map((x) => `${x}:${row[x].lostAny ? row[x].unseen : 0}`).join(' '));
+    console.log(c.id, `A content-lost ${a.contentLost}`, ARMS.slice(1).map((x) => `${x}:${row[x].lostAny ? row[x].unseen : 0}`).join(' '));
   } catch (e) { rows.push({ id: c.id, error: String(e.message).slice(0, 200) }); console.log(c.id, 'ERROR', e.message.slice(0, 100)); }
 }
 tree?.destroy();
