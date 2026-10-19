@@ -2,7 +2,13 @@
 
 Goal: replace the unknowns (human fix rate, precision, time-to-merge, overlap with native Copilot review) with measurements from your repos. Everything below is read-only analysis plus one workflow file. Nothing here changes what SpecGuard posts.
 
-Design: every PR gets exactly one of three setups, so nobody goes without review and the authors, repos and PR template are the same across arms. The arm is `HMAC-SHA256(salt, PR number)`, first 4 bytes as an unsigned integer, mod 3, with the salt in the repository secret `SPECGUARD_ARM_SALT`. Authors cannot compute it, so they cannot choose an arm by opening a throwaway PR. Reveal the salt after the trial so anyone can re-derive the arms (`SPECGUARD_ARM_SALT=... node eval/assign.js N`). Without the secret the arm is PR number mod 3 (predictable; the workflow warns).
+Design: every PR gets exactly one of three setups, so nobody goes without review and the authors, repos and PR template are the same across arms. The arm is `HMAC-SHA256(salt, PR number)`, first 4 bytes as an unsigned integer, mod 3, with the salt in the repository secret `SPECGUARD_ARM_SALT`. Authors cannot compute it, so they cannot predict an arm BEFORE opening a PR. Salting does not stop re-rolls: an author can open a PR, see the `review-arm:N` label, close and reopen it, or open a new PR from the same branch, until the arm suits them. The arms are therefore not tamper-proof: the protection against re-rolls and label tampering depends on the weekly-report checks below (weekly-report enforces it (pending): checks on branch feat/escaped-defect-outcome, which must merge first). Rules:
+
+- Analysis is intention-to-treat: every PR counts in the arm it was FIRST assigned (the arm re-derived from the salt after the trial, not the current label), closed and unmerged PRs included.
+- Flag (a) more than one PR per `headRefName`, and (b) closed-and-reopened PRs, and report the results with and without the flagged PRs.
+- A label that differs from the re-derived arm is a tampering flag.
+
+Reveal the salt after the trial so anyone can re-derive the arms (`SPECGUARD_ARM_SALT=... node eval/assign.js N`). Without the secret the workflow's arm job FAILS with an error (no fallback to PR number mod 3: that is predictable). The unsalted mod 3 in `eval/assign.js` exists only to re-derive the arms of older trials and for back-compat tests.
 
 | Arm | Review |
 |---|---|
@@ -10,7 +16,7 @@ Design: every PR gets exactly one of three setups, so nobody goes without review
 | 1 | native Copilot code review only, plus a shadow SpecGuard run that posts nothing |
 | 2 | both |
 
-The shadow run is the counterfactual for arm 1: it keeps what SpecGuard would have said (the `specguard-ctx` artifact, see the workflow header), so later escaped defects on arm 1 PRs can be matched against SpecGuard's findings. Costs and caveats: the shadow costs SpecGuard credits on arm 1 too; its job summary is visible in the Actions tab (a small contamination risk: do not point authors to it); the artifact is kept 90 days, shorter than the 8 to 12 week escaped-defect window, so the weekly report caches the shadow findings every week; the artifact holds the diff and raw model output, which anyone with repo read access can download (on a private repo they already have the code).
+The shadow run is the counterfactual for arm 1: it keeps what SpecGuard would have said (the `specguard-ctx` artifact, see the workflow header), so later escaped defects on arm 1 PRs can be matched against SpecGuard's findings. Costs and caveats: the shadow costs SpecGuard credits on arm 1 too; its job summary is visible in the Actions tab (a small contamination risk: do not point authors to it); the artifact is kept 90 days, but escapes are read 8 to 12 weeks AFTER the trial and the trial runs up to 4 weeks, so an early PR's artifact can be about 16 weeks (about 112 days) old by then; the weekly report caches the shadow findings every week, and that cache is why it still works; the artifact holds the diff and raw model output, which anyone with repo read access can download (on a private repo they already have the code).
 
 The no-AI baseline is the 4 weeks before the trial (confounded by season and staffing; say so when you quote it).
 
@@ -32,7 +38,7 @@ Then grade each replay against the later fix (`direct`, `indirect`, `miss`, rubr
 
 ## Step 2: day 3, install the workflow and run a canary
 
-1. Copy `docs/validation-workflow.example.yml` to `.github/workflows/specguard-validation.yml`. Replace `<full-commit-sha>` with a full SpecGuard commit SHA (in both SpecGuard steps). Create the repository secret `SPECGUARD_ARM_SALT` (a long random string, kept private until the trial ends). Remove any other SpecGuard workflow. Turn off automatic Copilot review for the repo, org and your own settings, otherwise every PR is arm 2.
+1. Copy `docs/validation-workflow.example.yml` to `.github/workflows/specguard-validation.yml`. Replace `<full-commit-sha>` with a full SpecGuard commit SHA (in both SpecGuard steps). Create the repository secret `SPECGUARD_ARM_SALT` (a long random string, kept private until the trial ends). Without it the arm job fails on every PR, by design: check that the canary fails with "SPECGUARD_ARM_SALT is not set" before you add the secret. Remove any other SpecGuard workflow. Turn off automatic Copilot review for the repo, org and your own settings, otherwise every PR is arm 2.
 2. Requesting the Copilot review from Actions is the one unverified part (see the file header). Open canary PRs until one lands in arm 1 (the `review-arm:1` label; the arm job log shows it) and look at the `copilot` job and the `shadow` job (its run must have an artifact `specguard-ctx-<PR>-<attempt>`). If it passes and Copilot appears as a reviewer, go on. If it fails: add the repo secret `COPILOT_REVIEW_TOKEN` (fine-grained PAT of a Copilot-licensed user, Pull requests: write) and retry. If the API path stays closed, use the two-arm fallback in the file header (ruleset keeps Copilot on for every PR; the workflow varies only SpecGuard; you learn the added value of SpecGuard, not a head-to-head).
 3. Also check an arm 0 and an arm 2 canary: the `review-arm:N` label is set and SpecGuard posts (on arm 1 it must post nothing). PRs where the Copilot request failed get the label `copilot-request-failed` and are excluded by the report.
 4. Run for 2 to 4 weeks. Target at about 300 PRs per month: 100 PRs per arm in 4 weeks. With fewer than 30 PRs per arm the report only gives counts.
@@ -52,7 +58,8 @@ Always use the same `--since` (trial start) so the numbers are cumulative. The r
 ```sh
 node eval/label-export.js --repo ORG/my-repo --since 2026-10-19 --sample 30 --seed 1 --out labels.csv
 # two senior reviewers each get a copy and fill their own column (label_a / label_b: valid | invalid | unsure) and notes, independently, without looking at which tool wrote a finding
-node eval/label-export.js  --repo ORG/my-repo --since 2026-10-19 --import labels-both.csv   # 1: prints alpha; stops below 0.667
+# afterwards each also fills guess_tool_a / guess_tool_b (specguard | copilot | blank = no idea) for every row: the blinding check
+node eval/label-export.js  --repo ORG/my-repo --since 2026-10-19 --import labels-both.csv   # 1: prints alpha per tool and overall, unsure rates, blinding; stops on a failed gate
 # agreement passed: reconcile disagreements by discussion into the label column of the same file, then
 node eval/label-export.js  --repo ORG/my-repo --since 2026-10-19 --import labels-done.csv   # 2: precision per tool only
 node eval/weekly-report.js --repo ORG/my-repo --since 2026-10-19 --labels labels-done.csv
@@ -60,13 +67,20 @@ node eval/weekly-report.js --repo ORG/my-repo --since 2026-10-19 --labels labels
 
 - 30 findings per tool is the minimum; the tool name is hidden and rows are shuffled by `--seed`. Keep the same seed and window for the import, because the ids are hashes of the finding (a different window gives "ids matched no finding").
 - Label `valid` = a real gap or bug that a reviewer would want fixed on this PR. `invalid` = wrong, already covered, or noise. `unsure` is reported but not counted.
-- Agreement before reconciling: the import prints Krippendorff's alpha (nominal) over valid and invalid. `unsure` and blank are treated as missing, and a finding with fewer than two valid or invalid labels does not count. Below 0.667 it prints "labels not reliable: alpha=X < 0.667, revise the labelling guide and relabel" and reports no precision (alpha is also undefined when every label is the same). Only after alpha passes do the reviewers reconcile disagreements by discussion into the `label` column of one file; precision comes from that column. An old file with only `label` still imports but has no agreement check, so it cannot support the decision in Step 6.
+- Agreement before reconciling: the import prints Krippendorff's alpha (nominal) over valid and invalid, PER TOOL (SpecGuard and Copilot separately) and overall, each with a bootstrap 95% interval (findings resampled, 1000 draws, fixed seed), the share labelled valid (prevalence) and each labeller's unsure rate. `unsure` and blank are treated as missing, and a finding with fewer than two valid or invalid labels does not count.
+  - alpha >= 0.800 and bootstrap lower bound >= 0.667 in every scope: decision grade (Krippendorff's threshold for drawing conclusions).
+  - alpha between 0.667 and 0.800, or a lower bound below 0.667: "TENTATIVE, NO DECISION". Precision is printed but is not evidence for Step 6.
+  - alpha below 0.667 in any scope (also undefined when every label is the same): "labels not reliable: alpha=X < 0.667, revise the labelling guide and relabel", no precision.
+  - Either labeller's unsure rate above 20%: refused (the guide is too vague; unsure removes the hard cases from alpha and would flatter it).
+  Only after the gate passes do the reviewers reconcile disagreements by discussion into the `label` column of one file; precision comes from that column. An old file with only `label` still imports but has no agreement check, so it cannot support the decision in Step 6.
+- Blinding is not perfect. The export strips markdown bold and headers, HTML comments, links, tool names and leading labels such as "Gap:" or "Suggestion:", but SpecGuard's comment format and style stay recognisable. So the labellers guess the tool (`guess_tool_a` / `guess_tool_b`) and the import reports, per labeller, the share of correct guesses against 50% (with a 95% interval) and a Bang blinding index (0 = blind, 1 = fully unblinded). If the interval lower bound is above 50% the import says NOT BLIND, and precision must be quoted with that caveat. Residual risk: even when guesses are near 50%, style can still sway a judgement; it cannot be removed, only measured.
 - The `link` column opens the PR files page, which shows who wrote each comment: label from the CSV text and open the link only when the text is not enough.
 
 ## Step 5: read the numbers
 
 | Number | Meaning | Caveat |
 |---|---|---|
+| Arm of a PR | the arm first assigned, re-derived from the salt: intention-to-treat | every PR counts in that arm, closed and unmerged included. Flag more than one PR per `headRefName` and closed-and-reopened PRs; report with and without them. A label that differs from the re-derived arm is a tampering flag. weekly-report enforces it (pending, branch feat/escaped-defect-outcome merges first) |
 | Findings/PR | volume the developer must read | SpecGuard counts inline comments and summary-only findings (the sticky summary's counts `sum`, tracked from 2026-10-17; earlier counts carry none). The report splits them by delivery channel |
 | Fix-through A (addressed / all outcomes) | share of findings where the flagged lines or a test file changed later | Not proof of a fix. Read at the latest run, not at merge. Copilot A uses the same rule from thread state; "dismissed" means a human resolved it with nothing changed. Re-raised findings under a new fingerprint can inflate SpecGuard's `open`/`addressed` |
 | Cluster bootstrap interval | the honest interval: PRs are resampled, not findings | the Wilson interval assumes independent findings and is too narrow |
@@ -85,7 +99,11 @@ Sample-size targets used by the report (from the power arithmetic behind this pl
 
 ## Step 6: decide
 
-Precondition: labeller agreement alpha >= 0.667 (Step 4). Without it the precision number is not evidence and nothing below is decided.
+Preconditions (Step 4, weekly-report enforces them (pending)):
+
+- Labeller agreement alpha >= 0.800 for SpecGuard, for Copilot and overall, with a bootstrap 95% lower bound >= 0.667, and neither labeller above 20% unsure. Between 0.667 and 0.800 the result is "tentative, no decision"; below 0.667 the precision number is not evidence. Nothing below is decided without it.
+- The arm analysis is intention-to-treat (every PR in its first-assigned arm, closed and unmerged included) and PRs flagged for a second PR per branch or a close-and-reopen are reported with and without. If the verdict changes when they are dropped, say so; a re-roll can bias the arms.
+- The blinding result is quoted next to precision.
 
 Continue or expand SpecGuard only if all four hold (pre-registered, evaluated line by line by the report):
 

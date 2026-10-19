@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { findingId, exportRows, toCsv, parseCsv, readLabels, labelPrecision, alpha, agreement, COLUMNS } = require('./label-export');
+const { findingId, exportRows, toCsv, parseCsv, readLabels, labelPrecision, alpha, alphaInterval, agreement, COLUMNS } = require('./label-export');
 
 const F = (tool, pr, line, text) => ({ tool, repo: 'o/r', pr, arm: 2, path: 'src/a.js', line, ref: `${tool}${pr}${line}`, text });
 const FINDINGS = [
@@ -112,4 +112,53 @@ test('CLI import: alpha < 0.667 blocks precision; alpha passed needs a reconcile
   const ok = imp(agree, 'valid');
   assert.equal(ok.status, 0, ok.stderr);
   assert.equal(JSON.parse(ok.stdout).specguard.n, 4);
+});
+
+// 40 doubly labelled findings per tool. The pairs list is [a, b] for one tool; tool x's labellers agree except where told.
+const sheetOf = (byTool) => { const rows = [], tools = new Map(); let i = 0; for (const [tool, pairs] of Object.entries(byTool)) for (const [a, b] of pairs) { const id = `F${i++}`; rows.push({ id, label_a: a, label_b: b }); tools.set(id, tool); } return { rows, toolOf: (id) => tools.get(id) }; };
+const rep = (n, p) => Array.from({ length: n }, () => p);
+const AGREE = [...rep(20, ['valid', 'valid']), ...rep(20, ['invalid', 'invalid'])];
+
+test('agreement per tool: a good SpecGuard sheet cannot hide a bad Copilot sheet; tentative is not a decision', () => {
+  const bad = [...rep(8, ['valid', 'valid']), ...rep(8, ['invalid', 'invalid']), ...rep(12, ['valid', 'invalid']), ...rep(12, ['invalid', 'valid'])];
+  const { rows, toolOf } = sheetOf({ specguard: AGREE, copilot: bad });
+  const ag = agreement(rows, toolOf);
+  assert.equal(ag.scopes.specguard.status, 'reliable');
+  assert.ok(ag.scopes.copilot.alpha < 0.667 && ag.scopes.copilot.status === 'fail');
+  assert.ok(ag.scopes.overall.alpha < 0.8 && ag.scopes.overall.status !== 'reliable');
+  assert.equal(ag.ok, false);
+  const mid = [...rep(17, ['valid', 'valid']), ...rep(17, ['invalid', 'invalid']), ...rep(3, ['valid', 'invalid']), ...rep(3, ['invalid', 'valid'])]; // alpha ~ 0.70
+  const t = agreement(sheetOf({ specguard: AGREE, copilot: mid }).rows, sheetOf({ specguard: AGREE, copilot: mid }).toolOf);
+  assert.ok(t.scopes.copilot.alpha > 0.667 && t.scopes.copilot.alpha < 0.8 && t.scopes.copilot.status === 'tentative');
+  assert.deepEqual([t.ok, t.decision], [true, false]);
+  const good = agreement(sheetOf({ specguard: AGREE, copilot: AGREE }).rows, sheetOf({ specguard: AGREE, copilot: AGREE }).toolOf);
+  assert.deepEqual([good.ok, good.decision, good.scopes.overall.prevalence], [true, true, 0.5]);
+});
+
+test('agreement: a small sample has a wide bootstrap interval (lower bound < 0.667) and the interval is seeded', () => {
+  const pairs = [...rep(4, ['valid', 'valid']), ...rep(4, ['invalid', 'invalid']), ['valid', 'invalid']];
+  const a = alpha(pairs), ci = alphaInterval(pairs), ci2 = alphaInterval(pairs);
+  assert.deepEqual(ci, ci2);
+  assert.ok(ci[0] < a && a < ci[1] + 1e-9 && ci[0] < 0.667, `alpha ${a} ci ${ci}`);
+});
+
+test('agreement: an unsure rate above 20% for either labeller refuses, even with perfect agreement on the rest', () => {
+  const { rows, toolOf } = sheetOf({ specguard: [...AGREE, ...rep(12, ['unsure', 'valid'])] });
+  const ag = agreement(rows, toolOf);
+  assert.ok(ag.unsure.a > 0.2 && ag.unsure.b === 0 && ag.scopes.overall.alpha === 1);
+  assert.equal(ag.ok, false);
+});
+
+test('export normalises text: markdown, links, comments and tool-specific prefixes are gone', () => {
+  const r = exportRows([F('specguard', 1, 1, '## **Gap:** See [docs](https://x.y/z) <!-- specguard:fp=1 --> and https://a.b/c now')], { sample: 0, seed: 1 });
+  assert.equal(r[0].text, 'See docs and now');
+  assert.equal(exportRows([F('copilot', 1, 1, '[Copilot] Suggestion: add a null check')], { sample: 0, seed: 1 })[0].text, 'add a null check');
+});
+
+test('blinding: correct-guess share, Bang index, blank = do not know', () => {
+  const rows = [['specguard', 'specguard'], ['copilot', 'specguard'], ['specguard', ''], ['copilot', 'copilot']].map(([g, t], i) => ({ id: `F${i}`, guess_tool_a: g, guess_tool_b: '', _t: t }));
+  const b = require('./label-export').blinding(rows, (id) => rows[+id.slice(1)]._t);
+  assert.deepEqual([b.a.correct, b.a.wrong, b.a.dont_know, b.a.share, b.a.bi], [2, 1, 0, 2 / 3, 1 / 3]);
+  assert.equal(b.b.dont_know, 3); // the row with no known tool is skipped
+  assert.equal(require('./label-export').blinding([{ id: 'F0' }], () => 'x').a, undefined);
 });
