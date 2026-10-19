@@ -125,7 +125,7 @@ test('--engine mock-replay runs the real claude-api engine once on the saved ans
     const dir = path.join(out, 'run333-' + arm, 'm-1'), ctx = path.join(dir, 'ctx'); // the saved dir has no pack-cut.txt: only the engine can have written these
     assert.ok(fs.readFileSync(path.join(ctx, 'pack-cut.txt'), 'utf8').split('\n').includes('src/a.test.js'), arm);
     assert.ok(fs.existsSync(path.join(ctx, 'pack-shown.txt')), arm);
-    assert.match(fs.readFileSync(path.join(dir, 'summary.md'), 'utf8'), /`src\/a\.js`: changed lines past what the model saw|unit tests of `src\/a\.js` were only partly visible/, arm);
+    assert.match(fs.readFileSync(path.join(dir, 'summary.md'), 'utf8'), /Changed lines past what the model saw: `src\/a\.js`|Unit tests only partly visible for: `src\/a\.js`/, arm);
   }
 });
 

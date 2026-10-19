@@ -1592,9 +1592,11 @@ async function run({ github, context, core }) {
     const shown = new Map((readCtx('pack-shown.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')));
     const dm = parseDiff(readCtx('diff.patch') || '');
     const past = (f) => !shown.has(f) || [...(dm.get(f)?.changed.RIGHT.keys() || [])].some((n) => n > +shown.get(f));
-    // one reason per file, named, so the first screen says which files to look at
-    const why = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [...(packCut.has(f) && past(f) ? [`\`${cell(f, 120)}\`: changed lines past what the model saw`] : []), ...((cands.get(f) || []).some((x) => packCut.has(x)) ? [`unit tests of \`${cell(f, 120)}\` were only partly visible`] : [])]))];
-    incomplete.push(...why.slice(0, 10), ...(why.length > 10 ? [`+${why.length - 10} more files not fully reviewed`] : []));
+    // at most two entries, naming the files (5 each), so the cut cannot push the other reasons off the first screen
+    const files = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean))], named = (xs) => `${xs.slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${xs.length > 5 ? `, … (+${xs.length - 5} more)` : ''}`;
+    const lost = files.filter((f) => packCut.has(f) && past(f)), partly = files.filter((f) => (cands.get(f) || []).some((x) => packCut.has(x)));
+    if (lost.length) incomplete.push(`Changed lines past what the model saw: ${named(lost)}`);
+    if (partly.length) incomplete.push(`Unit tests only partly visible for: ${named(partly)}`);
   }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
   if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);

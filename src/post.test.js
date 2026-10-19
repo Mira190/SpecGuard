@@ -227,7 +227,7 @@ test('pack-cut.txt listing a changed file or its candidate test: the run is inco
     assert.equal(counts.complete, false); assert.equal(counts.execution_complete, false);
     assert.doesNotMatch(body, /No unit test gaps found(?! so far)/);
     assert.match(body, /Partly reviewed/);
-    assert.match(body, cut === 'src.js\n' ? /`src\.js`: changed lines past what the model saw/ : /unit tests of `src\.js` were only partly visible/);
+    assert.match(body, cut === 'src.js\n' ? /Changed lines past what the model saw: `src\.js`/ : /Unit tests only partly visible for: `src\.js`/);
     assert.doesNotMatch(body, /<!-- specguard:head=/); assert.match(body, /<!-- specguard:status=incomplete -->/);
     assert.equal(require('./preflight.js').decide({ pr: { state: 'open', user: { type: 'User', login: 'dev' } }, headSha: 'HEADSHA', comments: [{ user: { type: 'Bot', login: 'github-actions[bot]' }, body }] }), '');
   }
@@ -4170,7 +4170,7 @@ test('pack error end to end (S7): run() with a throwing pack, then post on the s
   const counts = JSON.parse(fs.readFileSync(path.join(ctx, 'counts.json'), 'utf8')), body = s.calls.summary[0].body;
   assert.equal(counts.complete, false);
   assert.doesNotMatch(body, /<!-- specguard:head=/);
-  assert.match(body, /`src\.js`: changed lines past what the model saw/);
+  assert.match(body, /Changed lines past what the model saw: `src\.js`/);
 });
 
 test('E1 PR: a covered row whose only verified evidence is truthiness or interaction-only becomes unknown; value evidence still covers', () => {
@@ -4423,7 +4423,7 @@ test('headline precedence is unchanged from main: fast tier + cut + gaps stays �
     return s.calls.summary[0].body;
   };
   const fast = await go('fast');
-  assert.match(fast, /## SpecGuard\n\n\*\*❌ \d+ unit test gaps? to fix\*\*/); assert.match(fast, /specguard:status=incomplete -->/); assert.match(fast, /changed lines past what the model saw/);
+  assert.match(fast, /## SpecGuard\n\n\*\*❌ \d+ unit test gaps? to fix\*\*/); assert.match(fast, /specguard:status=incomplete -->/); assert.match(fast, /Changed lines past what the model saw/);
   const full = await go('');
   assert.match(full, /## SpecGuard\n\n\*\*⚠️ Incomplete review: \d+ unit test gaps? found so far\*\*/); assert.match(full, /specguard:status=incomplete -->/);
 });
@@ -4469,4 +4469,16 @@ test('incomplete summary: the first screen holds the findings and the not-review
   assert.doesNotMatch(rest, /vendored parser/, 'and is not repeated in Details'); assert.match(rest, /next push or rerun reviews again/);
   const none = post.buildSummary({ data: report({ coverage: [row()], findings: [] }), incomplete: ['`a.js`: changed lines past what the model saw', 'b'], state: 'incomplete' });
   assert.match(none, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; 2 items not fully reviewed \(listed below\)\*\*/);
+});
+
+test('cut context: at most two entries naming up to 5 files each, so an engine timeout and the verdict count stay on the first screen', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] })), fs8 = Array.from({ length: 8 }, (_, i) => `f${i}.js`);
+  writeCtx(s, 'files.txt', ['src.js', ...fs8].join('\n') + '\n'); writeCtx(s, 'pack-cut.txt', [...fs8, ...fs8.map((f) => `t-${f}`)].join('\n') + '\n');
+  writeCtx(s, 'test-candidates.txt', fs8.map((f) => `${f}\n  t-${f}  (same stem)\n`).join('')); writeCtx(s, 'engine-status', 'timeout\n');
+  await post(s);
+  const top = s.calls.summary[0].body.split('<details>')[0], nr = top.slice(top.indexOf('### Not reviewed'));
+  assert.match(top, /Partly reviewed: no gaps in what was reviewed; 3 items not fully reviewed/);
+  assert.match(nr, /### Not reviewed \(3\)/); assert.match(nr, /The review engine timed out/);
+  assert.match(nr, /- Changed lines past what the model saw: `f0\.js`, `f1\.js`, `f2\.js`, `f3\.js`, `f4\.js`, … \(\+3 more\)\n/);
+  assert.match(nr, /- Unit tests only partly visible for: `f0\.js`[^\n]*\(\+3 more\)\n/);
 });
