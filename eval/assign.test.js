@@ -55,3 +55,13 @@ test('the example workflow computes the same arm as assign() for 1..30 with two 
   }
   assert.ok(hit > 10, 'the salted arm is not n % 3');
 });
+
+test('the example workflow shadow job runs only on arm 1, posts nothing (delivery: summary) and keeps the context 90 days', () => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n');
+  const shadow = /\n  shadow:\n([\s\S]*?)(?=\n  \w+:\n|$)/.exec(yml);
+  assert.ok(shadow, 'shadow job');
+  assert.match(shadow[1], /if: \$\{\{ needs\.arm\.outputs\.arm == '1' \}\}/);
+  assert.match(shadow[1], /^ {10}delivery: summary$/m);
+  assert.match(shadow[1], /^ {10}ctx_retention_days: 90$/m);
+  assert.match(shadow[1], /pull-requests: read/); // a read-only token cannot post
+});

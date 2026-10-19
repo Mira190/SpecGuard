@@ -97,6 +97,8 @@ function alpha(units) {
   return De ? 1 - Do / De : null;
 }
 const ALPHA_MIN = 0.667, ALPHA_DECIDE = 0.8, UNSURE_MAX = 0.2;
+// Scope status from alpha and the bootstrap lower bound: fail < 0.667 (or undefined), reliable needs alpha >= 0.800 and lower >= 0.667, else tentative.
+const classify = (a, lower) => (a == null || a < ALPHA_MIN ? 'fail' : a >= ALPHA_DECIDE && lower != null && lower >= ALPHA_MIN ? 'reliable' : 'tentative');
 // Bootstrap 95% interval of alpha: resample the paired findings with replacement, 1000 draws, fixed seed; draws without variation are dropped.
 function alphaInterval(units, seed = 1, draws = 1000) {
   const r = mulberry32(seed), u = units.filter((x) => x.filter((y) => y != null).length > 1), out = [];
@@ -116,7 +118,7 @@ function agreement(rows, toolOf = () => null) {
   const scope = (us) => {
     const a = alpha(us), ci = alphaInterval(us), vals = us.flat().filter(Boolean);
     return { n: us.filter((u) => u[0] && u[1]).length, alpha: a, lower: ci && ci[0], upper: ci && ci[1], prevalence: vals.length ? vals.filter((x) => x === 'valid').length / vals.length : null,
-      status: a == null || a < ALPHA_MIN ? 'fail' : a >= ALPHA_DECIDE && ci && ci[0] >= ALPHA_MIN ? 'reliable' : 'tentative' };
+      status: classify(a, ci && ci[0]) };
   };
   const units = (pick) => rows.filter(pick).map((r) => [v(r.label_a), v(r.label_b)]);
   const scopes = { overall: scope(units(() => true)) };
@@ -180,5 +182,5 @@ function main() {
   if (claimless(findings)) console.error(`${claimless(findings)} summary-only findings have no claim text (counts written before titles were recorded): left out of the sheet and the precision sample.`);
   if (o.out) { fs.writeFileSync(o.out, csv); console.error(`wrote ${o.out}: ${csv.split('\n').length - 2} findings. Send it to the labellers; keep the tool column out of their view.`); } else process.stdout.write(csv);
 }
-module.exports = { findingId, shuffle, exportRows, claimless, toCsv, parseCsv, readLabels, labelPrecision, alpha, alphaInterval, agreement, blinding, ALPHA_MIN, COLUMNS };
+module.exports = { findingId, shuffle, exportRows, claimless, toCsv, parseCsv, readLabels, labelPrecision, alpha, alphaInterval, classify, agreement, blinding, ALPHA_MIN, COLUMNS };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exit(1); }
