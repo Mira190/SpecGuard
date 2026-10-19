@@ -1,0 +1,6 @@
+{"docs_reviewed":[],"requirements":[],"not_requirements":[],
+ "unit_findings":[
+  {"unit":"aaaaaaaa","kind":"missing_test","path":"src/a.ts","line":134,"title":"parse hex digit","body":"..."},
+  {"unit":"bbbbbbbb","kind":"weak_test","path":"src/b.test.ts","line":40,"title":"only checks existence","body":"..."},
+  {"unit":"cccccccc","kind":"missing_test","path":"src/c.ts","line":57,"title":"return value dropped","body":"..."}],
+ "not_reviewed":["src/e.ts did not fit the model's context window","Candidate blocks were judged from their text."]}
