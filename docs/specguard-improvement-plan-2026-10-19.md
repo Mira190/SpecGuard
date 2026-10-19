@@ -20,8 +20,8 @@
 
 | 环节 | 现状证据 | 已有的测量设计 |
 |---|---|---|
-| ① 缺陷存在，SpecGuard 检出 | 离线回放命中 20.7%（9.33/45）；mutation 试点行级命中 0/10（#374） | SZZ 回放（validation-plan Step 1） |
-| ② 送达作者（inline 评论，且点名该缺陷） | 30 个检出事件中只有 5 个送达；288 次回放中 213 次 incomplete | 无 |
+| ① 缺陷存在，SpecGuard 检出 | 离线回放命中 20.7%（9.33/45，`eval/replay/README.md` 第 129 行）；mutation 试点行级命中 0/10（`eval/mutation/README.md` 第 44 行，#374） | SZZ 回放（validation-plan Step 1） |
+| ② 送达作者（inline 评论，且点名该缺陷） | 30 个检出事件中只有 5 个送达（`eval/replay/README.md` 第 172 行）；288 次回放（第 208 行）中 213 次 incomplete（来源：未入库的第三方评审，未在 main 上复核） | 无 |
 | ③ 作者采纳 | fix-through A 只是触碰代理；作者 verdict 已实现（#353/#355），但全部 PR 中只有 1 条，而且来自 owner | 三臂试验中的 fix-through 和 verdict |
 | ④ 新测试真的能抓住该缺陷 | **无** | **无** |
 | ⑤ 没有 SpecGuard 时，缺陷会逃到 QA 或生产（反事实） | **无** | **无**：试验的结果变量是 fix-through、precision、TTM、unique，没有逃逸缺陷 |
