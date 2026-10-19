@@ -57,6 +57,36 @@ False locations: 0 of the 2 emitted T code windows miss every `expect.code` rang
 
 req->code and code->req (and test candidates) are field-for-field identical to main on all 36 R/C/RC variants (raw trace outputs compared, plus the `analyze.js` summary). These 10 are 10 cases (at most 6 distinct weakened tests), not 10 independent trials. Unit tests: `src/trace-weakened.test.js`.
 
+## T random sample (unselected assertions)
+
+The 10 T cases above were hand-picked. This asks what the weakened-assertion trace does on assertions nobody chose. `t-sample.js` lists every single-line `t.assert.{strictEqual,equal,deepStrictEqual,deepEqual,notStrictEqual,notEqual,notDeepStrictEqual,match}(...)` statement in the pinned fastify `test/` that `assertionDelta` flags once weakened (4646 lines in 187 files), draws 50 with a fixed seed (20261019), and turns each into a T variant: the line becomes `t.assert.ok(<the argument without a literal, else the first>)`. The sample, the emitted rows and the labels are in `t-sample.json`; `t-cases.json` is the same sample in `cases.json` shape.
+
+```
+node run.js --only none --work <dir>        # fetch + check out the pinned SHA once
+node t-sample.js --work <dir> --force       # redraw (drops the labels); same seed, same sample
+node run.js --cases t-cases.json --variants T --work <dir> --out <dir>/t-results.json
+node t-sample.js --report                   # the table below, from the labelled t-sample.json
+```
+
+Measured on main `3046d4a` (after #381). Labels: `right` = the window decides / the item states the value or behaviour the assertion pins; `related` = same feature, not the deciding place; `wrong` = unrelated (a literal coincidence is wrong). **One labeller, one target.** The 50 are 40 distinct test files, and the 6 variants that emit are in 6 files; assertions in one file are not independent trials.
+
+| Measure | Result |
+|---|---|
+| variants with a literal on the removed line (a query) | 39/50 |
+| variants that emit at least one row | 6/50 |
+| variants with at least one `right` row | 3/50 |
+| test->code windows emitted | 9 (4 variants: `right` 2/9, `right`+`related` 6/9, `wrong` 3/9) |
+| test->req items emitted | 9 (4 variants: `right` 3/9, `right`+`related` 3/9, `wrong` 6/9) |
+| bytes added to `trace-candidates.json` | p50 0, max 1419 (the 6 emitting variants add 409 to 1419) |
+
+No row in 44/50: no literal of 2+ characters on the line 11 (`undefined`, `null`, `''`, `'/'`, `{ ok: true }`, a variable); literal found nowhere outside `test/` 8 (error messages, response bodies); literal held by many files 14 (`200`, `'content-type'`, `'world'`, `false`, `'fastify'`); literal rare enough to appear in 1-7 non-test files but still no row 11 (`415`, `204`, `400`, `500`, `'kaboom'`; for `415` and `204` the deciding line exists: `lib/handle-request.js:78`, `integration/server.js:28`).
+
+Wrong rows (9 of 18): `'one','two','three','four','five'` matched number words in `TypeScript.md` / `Encapsulation.md` prose (5 doc items, 1 variant); `18`, `30` matched an SVG diagram, `package.json` version ranges and "30 consecutive days" in `LTS.md` (3 rows, 1 variant); `8000` matched an example server's listen port (1 row). Every wrong row comes from a bare number or a number word; all 5 `right` code/doc rows come from a long identifier (`FST_ERR_*`) or a full sentence. `related` rows are `types/errors.d.ts` unions and an import block for the same `FST_ERR_*` name.
+
+Reading: the trace is silent on most real assertions (44/50 emit nothing), and its output on the rest is mixed: all 3 variants whose literal is a whole error code or sentence (`close`, `errors`, `throw` tests) get at least one `right` row (the code definition or the doc row), and all 3 variants whose literals are short (`'one'`..`'five'`, `'Boo'`/`18`/`30`, `8000`) get only `wrong` rows (6 doc items, 3 windows). Test->req precision is 3/9 and test->code `right` 2/9 (6/9 with `related`), so per row the noise is larger than the signal; per variant it is small (3 of 50 variants add noise, at most 1.4 KB).
+
+Smallest change that the evidence supports (not implemented): make a query only when the removed line has a literal of 6+ characters (`weakenedQueries`, trace.js). In this sample it drops exactly the 3 noisy variants and keeps the 3 variants with `right` rows (their literals are 29, 30 and 30 characters). Caveat: chosen after seeing these 50, so it is fitted to them; confirm on a second seed (`--seed`) before shipping.
+
 ## Delivered windows and the per-criterion cap (wrong_windows)
 
 `analyze.js` also reports, for req->code, `wrong_windows`: delivered code windows that overlap no `expect.code` range (incl. alt), as k/n of delivered windows (one window delivered for two criteria counts twice), the windows delivered per query (p50, max), and the bytes of `trace-candidates.json` per variant (p50, max; `run.js` records `cand_bytes`).

@@ -1,0 +1,790 @@
+{
+ "meta": {
+  "target": "37df44a421817e7bb048fce834bf691abb0999d6",
+  "seed": 20261019,
+  "n": 50,
+  "candidate_lines": 4646,
+  "candidate_files": 187,
+  "sampled_files": 40,
+  "labeller": "single labeller (the agent that ran this); strict: a literal coincidence is wrong",
+  "empty_candidates_bytes": 103,
+  "specguard_sha": "3046d4a"
+ },
+ "sample": [
+  {
+   "id": "t01",
+   "file": "test/404s.test.js",
+   "line": 52,
+   "old": "t.assert.strictEqual(response.headers.get('content-type'), 'application/json; charset=utf-8')",
+   "new": "t.assert.ok(response.headers.get('content-type'));",
+   "literals": [
+    "content-type",
+    "application/json; charset=utf-8"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t02",
+   "file": "test/404s.test.js",
+   "line": 240,
+   "old": "t.assert.strictEqual(err.message, 'Not found handler already set for Fastify instance with prefix: \\'/\\'')",
+   "new": "t.assert.ok(err.message);",
+   "literals": [
+    "Not found handler already set for Fastify instance with prefix: \\"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "literal_absent_outside_tests"
+  },
+  {
+   "id": "t03",
+   "file": "test/async-await.test.js",
+   "line": 101,
+   "old": "t.assert.strictEqual(result2.status, 200)",
+   "new": "t.assert.ok(result2.status);",
+   "literals": [
+    "200"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t04",
+   "file": "test/close.test.js",
+   "line": 325,
+   "old": "t.assert.strictEqual(err.code, 'FST_ERR_REOPENED_CLOSE_SERVER')",
+   "new": "t.assert.ok(err.code);",
+   "literals": [
+    "FST_ERR_REOPENED_CLOSE_SERVER"
+   ],
+   "rows": [
+    {
+     "dir": "test->code",
+     "path": "fastify.js",
+     "line": 41,
+     "end": 80,
+     "label": "related",
+     "reason": "destructures the error class from errors; the throw that decides is elsewhere"
+    },
+    {
+     "dir": "test->code",
+     "path": "types/errors.d.ts",
+     "line": 61,
+     "end": 99,
+     "label": "related",
+     "reason": "type union listing the code; no behaviour"
+    },
+    {
+     "dir": "test->code",
+     "path": "lib/errors.js",
+     "line": 461,
+     "end": 500,
+     "label": "right",
+     "reason": "defines FST_ERR_REOPENED_CLOSE_SERVER (code and message)"
+    },
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/Errors.md",
+     "line": 449,
+     "label": "right",
+     "reason": "table row for this exact code and its meaning"
+    }
+   ],
+   "bytes_added": 1415
+  },
+  {
+   "id": "t05",
+   "file": "test/content-parser.test.js",
+   "line": 319,
+   "old": "t.assert.strictEqual(res.statusCode, 415)",
+   "new": "t.assert.ok(res.statusCode);",
+   "literals": [
+    "415"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t06",
+   "file": "test/content-type.test.js",
+   "line": 131,
+   "old": "t.assert.equal(found.isEmpty, false)",
+   "new": "t.assert.ok(found.isEmpty);",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t07",
+   "file": "test/custom-http-server.test.js",
+   "line": 152,
+   "old": "t.assert.deepStrictEqual(server.address(), null)",
+   "new": "t.assert.ok(server.address());",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t08",
+   "file": "test/custom-parser.5.test.js",
+   "line": 128,
+   "old": "t.assert.deepStrictEqual(await result.text(), JSON.stringify({ hello: 'world' }))",
+   "new": "t.assert.ok(await result.text());",
+   "literals": [
+    "world"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t09",
+   "file": "test/fluent-schema.test.js",
+   "line": 55,
+   "old": "t.assert.strictEqual(res3.statusCode, 400)",
+   "new": "t.assert.ok(res3.statusCode);",
+   "literals": [
+    "400"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t10",
+   "file": "test/helper.js",
+   "line": 168,
+   "old": "t.assert.deepStrictEqual(await result.json(), { hello: largeString })",
+   "new": "t.assert.ok(await result.json());",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t11",
+   "file": "test/hooks-async.test.js",
+   "line": 26,
+   "old": "t.assert.strictEqual(reply.test, 'the reply has come')",
+   "new": "t.assert.ok(reply.test);",
+   "literals": [
+    "the reply has come"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "literal_absent_outside_tests"
+  },
+  {
+   "id": "t12",
+   "file": "test/hooks.on-listen.test.js",
+   "line": 877,
+   "old": "t.assert.strictEqual(++order, 3, 'called in childTwo')",
+   "new": "t.assert.ok(++order);",
+   "literals": [
+    "called in childTwo"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "literal_absent_outside_tests"
+  },
+  {
+   "id": "t13",
+   "file": "test/hooks.test.js",
+   "line": 523,
+   "old": "t.assert.strictEqual(route.path, '/')",
+   "new": "t.assert.ok(route.path);",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t14",
+   "file": "test/hooks.test.js",
+   "line": 552,
+   "old": "t.assert.strictEqual(route.path, '/v1/foo')",
+   "new": "t.assert.ok(route.path);",
+   "literals": [
+    "/v1/foo"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "literal_absent_outside_tests"
+  },
+  {
+   "id": "t15",
+   "file": "test/http-methods/get.test.js",
+   "line": 380,
+   "old": "t.assert.deepStrictEqual(body.toString(), 'false')",
+   "new": "t.assert.ok(body.toString());",
+   "literals": [
+    "false"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t16",
+   "file": "test/http-methods/move.test.js",
+   "line": 40,
+   "old": "t.assert.strictEqual(result.headers.get('location'), '/test2.txt')",
+   "new": "t.assert.ok(result.headers.get('location'));",
+   "literals": [
+    "location",
+    "/test2.txt"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t17",
+   "file": "test/http-methods/unlock.test.js",
+   "line": 36,
+   "old": "t.assert.strictEqual(result.status, 204)",
+   "new": "t.assert.ok(result.status);",
+   "literals": [
+    "204"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t18",
+   "file": "test/https/https.test.js",
+   "line": 132,
+   "old": "t.assert.strictEqual(result.statusCode, 200)",
+   "new": "t.assert.ok(result.statusCode);",
+   "literals": [
+    "200"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t19",
+   "file": "test/inject.test.js",
+   "line": 156,
+   "old": "t.assert.strictEqual(res.statusCode, 200)",
+   "new": "t.assert.ok(res.statusCode);",
+   "literals": [
+    "200"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t20",
+   "file": "test/internals/errors.test.js",
+   "line": 278,
+   "old": "t.assert.strictEqual(error.message, 'The hook name must be a string')",
+   "new": "t.assert.ok(error.message);",
+   "literals": [
+    "The hook name must be a string"
+   ],
+   "rows": [
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/Errors.md",
+     "line": 395,
+     "label": "right",
+     "reason": "row states \"The hook name must be a string\" for FST_ERR_HOOK_INVALID_TYPE"
+    }
+   ],
+   "bytes_added": 434
+  },
+  {
+   "id": "t21",
+   "file": "test/internals/errors.test.js",
+   "line": 558,
+   "old": "t.assert.strictEqual(error.message, \"Schema with '%s' already present!\")",
+   "new": "t.assert.ok(error.message);",
+   "literals": [
+    "Schema with '%s' already present!"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t22",
+   "file": "test/internals/handle-request.test.js",
+   "line": 30,
+   "old": "t.assert.strictEqual(res, undefined)",
+   "new": "t.assert.ok(res);",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t23",
+   "file": "test/internals/reply-serialize.test.js",
+   "line": 320,
+   "old": "t.assert.strictEqual(err.message, 'The value \"phone\" cannot be converted to a number.')",
+   "new": "t.assert.ok(err.message);",
+   "literals": [
+    "The value \"phone\" cannot be converted to a number."
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "literal_absent_outside_tests"
+  },
+  {
+   "id": "t24",
+   "file": "test/internals/reply-serialize.test.js",
+   "line": 385,
+   "old": "t.assert.strictEqual(err.message, '\"hello\" is required!')",
+   "new": "t.assert.ok(err.message);",
+   "literals": [
+    "\"hello\" is required!"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "literal_absent_outside_tests"
+  },
+  {
+   "id": "t25",
+   "file": "test/internals/reply.test.js",
+   "line": 58,
+   "old": "t.assert.strictEqual(reply[kRouteContext], context)",
+   "new": "t.assert.ok(reply[kRouteContext]);",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t26",
+   "file": "test/internals/reply.test.js",
+   "line": 691,
+   "old": "t.assert.strictEqual(result.headers.get('content-type'), 'application/json; charset=utf-8')",
+   "new": "t.assert.ok(result.headers.get('content-type'));",
+   "literals": [
+    "content-type",
+    "application/json; charset=utf-8"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t27",
+   "file": "test/internals/reply.test.js",
+   "line": 778,
+   "old": "t.assert.deepStrictEqual(await result.text(), JSON.stringify({ key: 'hello world!' }))",
+   "new": "t.assert.ok(await result.text());",
+   "literals": [
+    "hello world!"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t28",
+   "file": "test/internals/reply.test.js",
+   "line": 856,
+   "old": "t.assert.strictEqual(JSON.parse(res.payload).message, 'some application error')",
+   "new": "t.assert.ok(JSON.parse(res.payload).message);",
+   "literals": [
+    "some application error"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "literal_absent_outside_tests"
+  },
+  {
+   "id": "t29",
+   "file": "test/internals/reply.test.js",
+   "line": 1451,
+   "old": "t.assert.deepStrictEqual(result.headers.getSetCookie(), ['one', 'two', 'three', 'four', 'five', 'six'])",
+   "new": "t.assert.ok(result.headers.getSetCookie());",
+   "literals": [
+    "one",
+    "two",
+    "three",
+    "four",
+    "five"
+   ],
+   "rows": [
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/TypeScript.md",
+     "line": 127,
+     "label": "wrong",
+     "reason": "number word \"five\" in prose; nothing about set-cookie"
+    },
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/TypeScript.md",
+     "line": 110,
+     "label": "wrong",
+     "reason": "number word \"three\" in prose"
+    },
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/TypeScript.md",
+     "line": 1451,
+     "label": "wrong",
+     "reason": "number word \"three\" in prose"
+    },
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/TypeScript.md",
+     "line": 1206,
+     "label": "wrong",
+     "reason": "number word \"four\" in prose"
+    },
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/Encapsulation.md",
+     "line": 34,
+     "label": "wrong",
+     "reason": "\"one/two/three\" as route names"
+    }
+   ],
+   "bytes_added": 1419
+  },
+  {
+   "id": "t30",
+   "file": "test/internals/request.test.js",
+   "line": 62,
+   "old": "t.assert.strictEqual(request.body, undefined)",
+   "new": "t.assert.ok(request.body);",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t31",
+   "file": "test/logger/options.test.js",
+   "line": 359,
+   "old": "t.assert.deepEqual(line.msg, lines.shift())",
+   "new": "t.assert.ok(line.msg);",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t32",
+   "file": "test/plugin.2.test.js",
+   "line": 124,
+   "old": "t.assert.strictEqual(fastify.pluginName, 'fastify')",
+   "new": "t.assert.ok(fastify.pluginName);",
+   "literals": [
+    "fastify"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t33",
+   "file": "test/reply-code.test.js",
+   "line": 95,
+   "old": "t.assert.strictEqual(res.headers['content-length'], undefined)",
+   "new": "t.assert.ok(undefined);",
+   "literals": [
+    "content-length"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t34",
+   "file": "test/reply-code.test.js",
+   "line": 114,
+   "old": "t.assert.strictEqual(res.payload, '')",
+   "new": "t.assert.ok(res.payload);",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t35",
+   "file": "test/reply-early-hints.test.js",
+   "line": 38,
+   "old": "t.assert.strictEqual(res.statusCode, 200)",
+   "new": "t.assert.ok(res.statusCode);",
+   "literals": [
+    "200"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t36",
+   "file": "test/route-hooks.test.js",
+   "line": 275,
+   "old": "t.assert.strictEqual(res.statusCode, 500)",
+   "new": "t.assert.ok(res.statusCode);",
+   "literals": [
+    "500"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t37",
+   "file": "test/route-prefix.test.js",
+   "line": 36,
+   "old": "t.assert.deepStrictEqual(JSON.parse(res.payload), { route: '/first' })",
+   "new": "t.assert.ok(JSON.parse(res.payload));",
+   "literals": [
+    "/first"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t38",
+   "file": "test/route.5.test.js",
+   "line": 130,
+   "old": "t.assert.deepStrictEqual(res.body, '')",
+   "new": "t.assert.ok(res.body);",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t39",
+   "file": "test/route.6.test.js",
+   "line": 166,
+   "old": "t.assert.strictEqual(res.statusCode, 200)",
+   "new": "t.assert.ok(res.statusCode);",
+   "literals": [
+    "200"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t40",
+   "file": "test/router-compile.test.js",
+   "line": 179,
+   "old": "t.assert.deepStrictEqual(res.json(), { ok: true })",
+   "new": "t.assert.ok(res.json());",
+   "literals": [],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "no_literal"
+  },
+  {
+   "id": "t41",
+   "file": "test/schema-feature.test.js",
+   "line": 467,
+   "old": "t.assert.deepStrictEqual(spyData.calls[2], { arguments: ['body', 'GET', '/undefinedBody/:id'], result: true })",
+   "new": "t.assert.ok(spyData.calls[2]);",
+   "literals": [
+    "body",
+    "GET",
+    "/undefinedBody/:id"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t42",
+   "file": "test/schema-feature.test.js",
+   "line": 1327,
+   "old": "t.assert.strictEqual(res.statusCode, 400)",
+   "new": "t.assert.ok(res.statusCode);",
+   "literals": [
+    "400"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t43",
+   "file": "test/schema-serialization.test.js",
+   "line": 317,
+   "old": "t.assert.strictEqual(res.payload, JSON.stringify([{ name: 'Boo', age: 18, verified: false }, { name: 'Woo', age: 30, verified: true }]))",
+   "new": "t.assert.ok(res.payload);",
+   "literals": [
+    "Boo",
+    "18",
+    "Woo",
+    "30"
+   ],
+   "rows": [
+    {
+     "dir": "test->code",
+     "path": "docs/resources/encapsulation_context.svg",
+     "line": 1,
+     "end": 3,
+     "label": "wrong",
+     "reason": "\"18\"/\"30\" inside an SVG diagram"
+    },
+    {
+     "dir": "test->code",
+     "path": "package.json",
+     "line": 181,
+     "end": 220,
+     "label": "wrong",
+     "reason": "\"^18.x\"/\"^30\" version strings"
+    },
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/LTS.md",
+     "line": 33,
+     "label": "wrong",
+     "reason": "\"30 consecutive days\", not the age 30"
+    }
+   ],
+   "bytes_added": 1067
+  },
+  {
+   "id": "t44",
+   "file": "test/schema-validation.test.js",
+   "line": 178,
+   "old": "t.assert.strictEqual(res.statusCode, 200)",
+   "new": "t.assert.ok(res.statusCode);",
+   "literals": [
+    "200"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t45",
+   "file": "test/server.test.js",
+   "line": 79,
+   "old": "t.assert.strictEqual(req.port, 8000)",
+   "new": "t.assert.ok(req.port);",
+   "literals": [
+    "8000"
+   ],
+   "rows": [
+    {
+     "dir": "test->code",
+     "path": "examples/route-prefix.js",
+     "line": 1,
+     "end": 39,
+     "label": "wrong",
+     "reason": "example server listens on port 8000; the test pins req.port parsed from a Host header"
+    }
+   ],
+   "bytes_added": 409
+  },
+  {
+   "id": "t46",
+   "file": "test/skip-reply-send.test.js",
+   "line": 93,
+   "old": "t.assert.strictEqual(line.err.message, 'kaboom')",
+   "new": "t.assert.ok(line.err.message);",
+   "literals": [
+    "kaboom"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "rare_literal_no_row"
+  },
+  {
+   "id": "t47",
+   "file": "test/stream.3.test.js",
+   "line": 123,
+   "old": "t.assert.strictEqual(response.statusCode, 200)",
+   "new": "t.assert.ok(response.statusCode);",
+   "literals": [
+    "200"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  },
+  {
+   "id": "t48",
+   "file": "test/throw.test.js",
+   "line": 205,
+   "old": "t.assert.strictEqual(e.code, 'FST_ERR_DEC_MISSING_DEPENDENCY')",
+   "new": "t.assert.ok(e.code);",
+   "literals": [
+    "FST_ERR_DEC_MISSING_DEPENDENCY"
+   ],
+   "rows": [
+    {
+     "dir": "test->code",
+     "path": "types/errors.d.ts",
+     "line": 1,
+     "end": 40,
+     "label": "related",
+     "reason": "type union listing the code; no behaviour"
+    },
+    {
+     "dir": "test->code",
+     "path": "lib/decorate.js",
+     "line": 1,
+     "end": 40,
+     "label": "related",
+     "reason": "imports the error and calls checkDependencies; the throw is below"
+    },
+    {
+     "dir": "test->code",
+     "path": "lib/decorate.js",
+     "line": 101,
+     "end": 140,
+     "label": "right",
+     "reason": "checkDependencies throws FST_ERR_DEC_MISSING_DEPENDENCY (line 125)"
+    },
+    {
+     "dir": "test->req",
+     "path": "docs/Reference/Errors.md",
+     "line": 391,
+     "label": "right",
+     "reason": "table row for this exact code and its meaning"
+    }
+   ],
+   "bytes_added": 1332
+  },
+  {
+   "id": "t49",
+   "file": "test/url-rewriting.test.js",
+   "line": 39,
+   "old": "t.assert.strictEqual(req.url, '/this-would-404-without-url-rewrite')",
+   "new": "t.assert.ok(req.url);",
+   "literals": [
+    "/this-would-404-without-url-rewrite"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "literal_absent_outside_tests"
+  },
+  {
+   "id": "t50",
+   "file": "test/web-api.test.js",
+   "line": 28,
+   "old": "t.assert.strictEqual(statusCode, 200)",
+   "new": "t.assert.ok(statusCode);",
+   "literals": [
+    "200"
+   ],
+   "rows": [],
+   "bytes_added": 0,
+   "no_row": "common_literal"
+  }
+ ]
+}
