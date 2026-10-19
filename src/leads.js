@@ -210,12 +210,14 @@ const subjectOf = (text) => { // the expression under test on one assertion line
     else if ((m = /^\s*assert\s+(.+?)\s*==/.exec(text))) x = m[1];
     else if ((m = /(?<![\w$])(?:[Aa]ssert|require)\.\w+\s*\(|(?<![\w$.])(?:assert\w*|assert_\w+|assert_eq!)\s*\(/.exec(text))) x = args(text, m.index + m[0].length - 1)[0];
   }
-  return x ? { x: x.replace(/\s+/g, '').replace(/["'`]/g, "'"), weak: !!w } : null;
+  return x ? { x: x.replace(/\s+/g, '').replace(/["'`]/g, "'"), raw: x, weak: !!w } : null;
 };
 // -> [{file, kind: 'removed'|'weakened', line (old side), old, new}] per changed test file
 // ponytail: same-file, single-line assertions, subject = first argument / expect() operand. Ceiling: multi-line assertions, renamed subjects.
-function assertionDelta(diff, isTest) {
-  const per = new Map(); let file = null, old = null, body = false, o = 0, hk = 0;
+// ponytail: an assertion keyword inside a quoted string is no assertion (strings blanked first; ceiling: a quote inside a regex literal or a nested template). gone(name) = no non-test
+// source at head mentions name and a non-test line of this diff dropped it, so the code under test was deleted with its assertion; the first called identifier in the subject is the function under test.
+function assertionDelta(diff, isTest, gone = () => false) {
+  const per = new Map(), dropped = new Set(); let file = null, old = null, body = false, o = 0, hk = 0;
   for (const l of diff.split('\n')) {
     if (l.startsWith('diff --git ')) { body = false; file = null; continue; }
     if (!body) {
@@ -228,7 +230,7 @@ function assertionDelta(diff, isTest) {
     const m = /^@@ -(\d+)/.exec(l);
     if (m) { o = +m[1]; hk++; continue; }
     const e = file && per.get(file), t = l.slice(1).replace(/\r$/, '');
-    if (l[0] === '-') { if (e && t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s) e.rm.push({ hk, line: o, text: t.trim(), ...s }); } o++; }
+    if (l[0] === '-') { if (file && !e) for (const w of t.slice(0, 400).match(/[\w$]+/g) || []) dropped.add(w); if (e &&t.length <= 400 && !quiet(t)) { const s = subjectOf(t); if (s && subjectOf(t.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`/g, '""'))) e.rm.push({ hk, line: o, text: t.trim(), ...s }); } o++; }
     else if (l[0] === '+') { if (e && !quiet(t)) { const u = t.slice(0, 400); e.lines.push(u); const s = subjectOf(u); if (s) e.add.push({ hk, text: u.trim(), at: e.lines.length - 1, ...s }); } } // a long added line still re-pins: its subject comes first
     else if (l[0] === ' ') o++;
   }
@@ -271,6 +273,8 @@ function assertionDelta(diff, isTest) {
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const [f, { rm, add, lines }] of per) for (const r of rm) {
     const flat = (t) => t.replace(/\s+/g, '').replace(/["'`]/g, "'");
+    const under = /(?<![\w$]|\bnew\s+)([\w$]+)\s*\(/.exec(r.raw)?.[1];
+    if (under && dropped.has(under) && gone(under)) continue; // named in code this diff removes and nowhere at head: removed with the code it tested
     if (add.some((a) => flat(a.text) === flat(r.text))) continue; // the same assertion added anywhere in the file: moved
     const same = add.filter((a) => a.x === r.x && a.hk === r.hk); // only the same hunk re-pins: an assertion elsewhere in the file may pin something else
     const exact = !r.weak && EXACT.test(r.text) && literalsOf(r.text, 1).size > 0; // an exact value replaced by a range matcher is weakened
@@ -288,6 +292,20 @@ function assertionDelta(diff, isTest) {
     out.push(same.length ? { file: f, kind: 'weakened', line: r.line, old: r.text, new: same[0].text } : { file: f, kind: 'removed', line: r.line, old: r.text });
   }
   return out;
+}
+
+// gone(name) for assertionDelta: true when no tracked non-test file at cwd names it as a whole word; false when git cannot say. Memoised; one git grep per name.
+function goneAtHead(cwd, isTest, timeout = 10000) {
+  const memo = new Map();
+  return (name) => {
+    if (!memo.has(name)) {
+      let r = false;
+      try { r = !execFileSync('git', ['grep', '-I', '-l', '-w', '-F', '--no-color', '-e', name], { cwd, encoding: 'utf8', timeout, maxBuffer: 1 << 24, stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').some((p) => p && !isTest(p) && !isTestPath(p)); }
+      catch (e) { r = e.status === 1; } // 1 = no match anywhere
+      memo.set(name, r);
+    }
+    return memo.get(name);
+  };
 }
 
 function run(ctx, { cwd = process.cwd(), env = process.env, now = Date.now } = {}) {
@@ -345,7 +363,7 @@ function run(ctx, { cwd = process.cwd(), env = process.env, now = Date.now } = {
     weak.slice(0, 15).map((c) => `weak? ${c.file}:${c.line} — ${short(c.text, 80)} only checks that ${short(c.x, 40)} ${WHAT[c.what]}; nothing pins its value`), Math.max(0, weak.length - 15)]);
 
   // 4. removed or weakened assertions, from the diff
-  const delta = assertionDelta(diff, isTest);
+  const delta = assertionDelta(diff, isTest, goneAtHead(cwd, isTest));
   sections.push(['Removed or weakened assertions (answer each: a weak_test or missing_test finding citing the test file, or where the behaviour is still pinned)',
     delta.slice(0, 15).map((d) => (d.kind === 'removed' ? `assertion removed: ${short(d.old, 100)} (${d.file}:${d.line})` : `assertion weakened: ${short(d.old, 80)} → ${short(d.new, 80)} (${d.file}:${d.line})`)), Math.max(0, delta.length - 15)]);
 
@@ -368,4 +386,4 @@ if (require.main === module) {
   const f = path.join(ctx, 'leads.txt');
   if (out) fs.writeFileSync(f, out); else fs.rmSync(f, { force: true });
 }
-module.exports = { run, assertionDelta, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START, GENERIC };
+module.exports = { run, assertionDelta, goneAtHead, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START, GENERIC };
