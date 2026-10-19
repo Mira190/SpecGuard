@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const api = require('./engines/claude-api.js');
 
 const KEY = 'sk-ant-api03-TESTONLY_0123456789-abcdef'; // made up; must never reach a file, the log or an error message
-const VALID = { requirements_source: '', coverage: [], findings: [], not_reviewed: '', standards: { status: 'no_rules', sources: [], reason: 'none' }, layering: { status: 'not_reviewed', reason: 'none' }, requirements: [] };
+const VALID = { requirements_source: '', coverage: [], findings: [], requirements: [], not_reviewed: '', standards: { status: 'no_rules', sources: [], reason: 'none' }, layering: { status: 'not_reviewed', reason: 'none' }, requirements: [] };
 const STATIC = 'SKILL TEXT\n\nYour final answer must be JSON only';
 const PROMPT = `${STATIC}\n\n---\n\nContext directory (absolute path): /ctx\nPER-PR CONTEXT\n`;
 const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
@@ -1541,7 +1541,7 @@ const ORIGINAL = () => ({
 test('PR mode sends no output_config and writes the answer as the model gave it', async (t) => {
   const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(ORIGINAL()) }] })]);
   await h.go();
-  assert.equal(h.calls.length, 1);
+  assert.ok(h.calls.length <= 2); // ORIGINAL is not valid for post.js (evidence[1]), so the one repair turn is spent; the mock repeats the answer
   assert.ok(!h.calls[0].body.output_config);
   assert.deepEqual(JSON.parse(h.file('findings.json')), ORIGINAL());
 });
@@ -1586,6 +1586,40 @@ test('repair turn: prose twice fails after exactly two calls; a budget that cann
   const http = harness(t, [err(401, 'authentication_error', 'bad key'), good()]);
   await http.go();
   assert.equal(http.calls.length, 1);
+});
+
+// valid JSON that post.js's validate rejects (coverage not an array) spends the same single repair turn
+const shaped = (o) => good({ content: [{ type: 'text', text: JSON.stringify(o) }] }), WRONG = { ...VALID, coverage: {} }, post = require('./post.js');
+test('repair turn: wrong shape then valid -> 2 calls, the error goes back, valid findings; valid first answer -> 1 call', async (t) => {
+  assert.equal(post.validate(JSON.parse(JSON.stringify(WRONG))).ok, false);
+  const h = harness(t, [shaped(WRONG), good()]);
+  await h.go();
+  assert.equal(h.calls.length, 2);
+  const m = h.calls[1].body.messages;
+  assert.equal(m[1].content, JSON.stringify(WRONG));
+  assert.match(m[2].content, /coverage must be an array/);
+  assert.deepEqual(JSON.parse(h.file('findings.json')), VALID);
+  assert.notEqual(h.file('engine-status'), 'failed');
+  const one = harness(t, [good(), good()]);
+  await one.go();
+  assert.equal(one.calls.length, 1, 'a valid answer costs no extra call');
+});
+
+test('repair turn: wrong shape twice -> 2 calls and the bad file as before; no JSON then wrong shape -> no third call; budget too small -> no repair', async (t) => {
+  const twice = harness(t, [shaped(WRONG), shaped(WRONG)]);
+  await twice.go();
+  assert.equal(twice.calls.length, 2);
+  assert.equal(post.validate(JSON.parse(twice.file('findings.json'))).ok, false);
+  const lost = harness(t, [shaped(WRONG), good({ content: [{ type: 'text', text: 'prose' }] })]);
+  await lost.go();
+  assert.equal(lost.calls.length, 2);
+  assert.equal(post.validate(JSON.parse(lost.file('findings.json'))).error, 'coverage must be an array', 'a failed repair keeps the first answer');
+  const mixed = harness(t, [good({ content: [{ type: 'text', text: 'prose' }] }), shaped(WRONG), good()]);
+  await mixed.go();
+  assert.equal(mixed.calls.length, 2, 'one repair turn in total');
+  const poor = harness(t, [shaped(WRONG), good()]);
+  await poor.go({ MAX_BUDGET_USD: '0.02' });
+  assert.equal(poor.calls.length, 1);
 });
 
 test('single call: a reply with unknown usage is charged the call\'s worst case and the cost is flagged as estimated', async (t) => {
