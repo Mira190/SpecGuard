@@ -168,3 +168,11 @@ test('escapesOf: a sticky summary with counts but no status marker (older format
   const g = escapesOf(ds, f, new Map()).groups[0];
   assert.deepEqual([g.seen, g.unusable], [1, 1]); // PR 3 usable (no finding: a miss), PR 6 unusable
 });
+
+test('escapes: shadow runs with a full 20-finding list are counted as capped, and only those', () => {
+  const f = { candidates: [fix('x', 9, [4, [S('d.js', 7)]]), fix('y', 10, [7, [S('e.js', 7)]])] }, p = [{ number: 4, arm: 1 }, { number: 7, arm: 1 }];
+  const run = (capped) => ({ status: 'ok', run: 1, capped, findings: [{ path: 'd.js', line: 7 }] });
+  const x = escapes({ prs: p, fixes: f, shadow: new Map([[4, [run(true)]], [7, [run(false)]]]) });
+  assert.equal(x.groups[1].capped_prs, 1);
+  assert.match(renderEscapes(x).join('\n'), /\| 1 \|\n\nA line hit/); // the last column of the arm row
+});
