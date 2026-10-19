@@ -66,18 +66,20 @@ async function runArm({ pr, prep, arm: { name: arm, key, val }, out, engine = 's
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ ...readJson(path.join(prep, 'meta.json')), ctx }, null, 2));
   const saved = key && process.env[key];
   if (key) process.env[key] = val;
-  try { await finishRealOne(pr.id, path.join(out, `run${pr.run}-${arm}`), { engine: 'claude', model: res.model || '' }); }
+  let cur;
+  try { cur = await finishRealOne(pr.id, path.join(out, `run${pr.run}-${arm}`), { engine: 'claude', model: res.model || '' }); }
   finally { if (key) { if (saved === undefined) delete process.env[key]; else process.env[key] = saved; } }
   const posted = readJson(path.join(dir, 'posted.json'), { comments: [] }), summary = fs.readFileSync(path.join(dir, 'summary.md'), 'utf8');
   fs.writeFileSync(path.join(dir, 'visible.md'), visibleMd(posted.comments, summary));
   const [vis, det] = split(summary);
   const row = { id: pr.id, run: pr.run, arm, inline_n: posted.comments.length, visible_n: parseSummary(vis).items.length, details_n: parseSummary(det).items.length };
   fs.writeFileSync(path.join(dir, 'row.json'), JSON.stringify(row) + '\n');
-  return row;
+  // the CURRENT publisher run (result.json only knows the historical one); non-enumerable so rows.json is unchanged. `incomplete` stays a measurement
+  return Object.defineProperty(row, 'failed', { value: cur.publisher_status === 'failed' ? `publisher: ${cur.publisher_reason || 'failed'}` : null });
 }
 
 async function score({ dl, repos, out, manifests = [], ids, engine = 'saved', arms = parseArms(), log = console.log }) {
-  const meta = new Map(manifests.flatMap((m) => entries(m)).map((e) => [e.id, e])), rows = [], unusable = [];
+  const meta = new Map(manifests.flatMap((m) => entries(m)).map((e) => [e.id, e])), rows = [], unusable = [], prepared = new Map();
   for (const pr of discover(dl).filter((p) => !ids || ids.includes(p.id))) {
     const res = readJson(path.join(pr.dir, 'result.json'), {});
     const why = !fs.existsSync(path.join(pr.dir, 'ctx', 'findings.json')) ? 'no ctx/findings.json (raw answer not kept; cannot re-run post.js)' : res.valid === false || res.invalid_reason ? `invalid replay: ${res.invalid_reason}` : null;
@@ -85,9 +87,13 @@ async function score({ dl, repos, out, manifests = [], ids, engine = 'saved', ar
     const e = meta.get(pr.id), repoDir = path.join(repos, path.basename(res.repo || ''));
     if (!e) log(`warning: ${pr.id}: no manifest entry; PR title/body empty, requirement discovery may differ from the real run`);
     if (!fs.existsSync(repoDir)) { unusable.push({ id: pr.id, run: pr.run, reason: `no clone at ${repoDir}` }); continue; }
-    const prep = path.join(out, '_prep', pr.id);
-    if (readJson(path.join(prep, 'meta.json'))?.head !== res.head) prepareReal({ repoDir, base: res.base, head: res.head, prTitle: e?.title || '', prBody: e?.body || '', out: path.join(out, '_prep'), id: pr.id, trace: res.trace || 'auto', shared: true });
-    for (const arm of arms) rows.push(await runArm({ pr, prep, arm, out, engine, log }));
+    const prep = path.join(out, '_prep', pr.id), key = JSON.stringify([pr.id, res.base, res.head, e?.title || '', e?.body || '']);
+    // ponytail: collect is repeated per invocation (and when base/head/title/body change); persist a keyed cache on disk only if collect time matters
+    if (prepared.get(pr.id) !== key) { prepareReal({ repoDir, base: res.base, head: res.head, prTitle: e?.title || '', prBody: e?.body || '', out: path.join(out, '_prep'), id: pr.id, trace: res.trace || 'auto', shared: true }); prepared.set(pr.id, key); }
+    const got = []; // a pair needs every arm: one current publisher failure drops the whole PR-run
+    for (const arm of arms) got.push(await runArm({ pr, prep, arm, out, engine, log }));
+    const bad = got.find((r) => r.failed);
+    if (bad) unusable.push({ id: pr.id, run: pr.run, arm: bad.arm, reason: bad.failed }); else rows.push(...got);
   }
   fs.writeFileSync(path.join(out, 'rows.json'), JSON.stringify({ rows, unusable }, null, 2) + '\n');
   log(`${rows.length / arms.length} PR-runs scored, ${unusable.length} unusable`);
