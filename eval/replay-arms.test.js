@@ -128,3 +128,61 @@ test('--engine mock-replay runs the real claude-api engine once on the saved ans
     assert.match(fs.readFileSync(path.join(dir, 'summary.md'), 'utf8'), /Review context was cut: the model saw only part of `src\/a\.test\.js`/, arm);
   }
 });
+
+test('the CURRENT publisher status counts: historical valid:true but post.js rejects the answer => the PR-run is unusable (arm named), no row for either arm', async () => {
+  const { base, head } = mkRepo(), dl = path.join(tmp, 'dl-pubfail'), out = path.join(tmp, 'out-pubfail');
+  for (const [id, f] of [['ok-1', findings()], ['pf-1', {}]]) { // {} fails post.js shape validation (coverage must be an array)
+    w(path.join(dl, '555', id, 'result.json'), JSON.stringify({ id, repo: 'o/proj', base, head, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
+    w(path.join(dl, '555', id, 'ctx', 'findings.json'), JSON.stringify(f));
+    w(path.join(dl, '555', id, 'ctx', 'engine-notes'), 'context pack: 3 files, 1 KB\n');
+  }
+  fs.mkdirSync(out, { recursive: true });
+  const r = await score({ dl, repos: path.join(tmp, 'repos'), out, arms: parseArms('A,S=SG_NOOP=1'), log: () => {} });
+  assert.deepStrictEqual(r.rows.map((x) => `${x.id}/${x.arm}`), ['ok-1/A', 'ok-1/S']);
+  assert.strictEqual(r.unusable.length, 1);
+  assert.deepStrictEqual([r.unusable[0].id, r.unusable[0].run, r.unusable[0].arm], ['pf-1', '555', 'A']);
+  assert.match(r.unusable[0].reason, /^publisher: /);
+});
+
+test('same id and head but a changed base => a fresh collect (files.txt follows the new base); a new invocation always re-collects', async () => {
+  const { base, head } = mkRepo(), d = path.join(tmp, 'repos', 'proj'), dl = path.join(tmp, 'dl-base'), out = path.join(tmp, 'out-base');
+  w(path.join(d, 'src', 'b.js'), 'exports.b = 1;\n'); git(d, 'add', '-A'); git(d, 'commit', '-q', '-m', 'b');
+  const head2 = git(d, 'rev-parse', 'HEAD'); // base..head2 has a.js, a.test.js, b.js; head..head2 only b.js
+  const run = async (b) => {
+    w(path.join(dl, '666', 'c-1', 'result.json'), JSON.stringify({ id: 'c-1', repo: 'o/proj', base: b, head: head2, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
+    w(path.join(dl, '666', 'c-1', 'ctx', 'findings.json'), JSON.stringify(findings()));
+    await score({ dl, repos: path.join(tmp, 'repos'), out, log: () => {} });
+    return fs.readFileSync(path.join(out, '_prep', 'c-1', 'ctx', 'files.txt'), 'utf8').split('\n').filter(Boolean).sort();
+  };
+  fs.mkdirSync(out, { recursive: true });
+  assert.ok((await run(base)).includes('src/a.js'));
+  assert.deepStrictEqual(await run(head), ['src/b.js']);
+});
+
+
+test('a CURRENT publisher status of incomplete (here: a cut file) keeps both arms as rows and is not unusable', async () => {
+  const { base, head } = mkRepo(), dl = path.join(tmp, 'dl-inc'), out = path.join(tmp, 'out-inc'), dir = path.join(dl, '777', 'i-1');
+  w(path.join(dir, 'result.json'), JSON.stringify({ id: 'i-1', repo: 'o/proj', base, head, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
+  w(path.join(dir, 'ctx', 'findings.json'), JSON.stringify(findings()));
+  w(path.join(dir, 'ctx', 'pack-cut.txt'), 'src/a.js\n'); // post.js: "Review context was cut" => status incomplete
+  fs.mkdirSync(out, { recursive: true });
+  const r = await score({ dl, repos: path.join(tmp, 'repos'), out, arms: parseArms('A,S=SG_NOOP=1'), log: () => {} });
+  assert.deepStrictEqual(r.unusable, []);
+  assert.deepStrictEqual(r.rows.map((x) => `${x.id}/${x.arm}`), ['i-1/A', 'i-1/S']);
+  for (const arm of ['A', 'S']) assert.match(fs.readFileSync(path.join(out, 'run777-' + arm, 'i-1', 'summary.md'), 'utf8'), /specguard:status=incomplete/);
+});
+
+test('a second score() with identical id/base/head/title/body re-collects (a stale _prep ctx is rebuilt); the prepared clone has core.longpaths=true', async () => {
+  const { base, head } = mkRepo(), dl = path.join(tmp, 'dl-same'), out = path.join(tmp, 'out-same');
+  w(path.join(dl, '888', 's-1', 'result.json'), JSON.stringify({ id: 's-1', repo: 'o/proj', base, head, trace: 'auto', model: 'claude-haiku-5-5', valid: true }));
+  w(path.join(dl, '888', 's-1', 'ctx', 'findings.json'), JSON.stringify(findings()));
+  fs.mkdirSync(out, { recursive: true });
+  const files = path.join(out, '_prep', 's-1', 'ctx', 'files.txt');
+  await score({ dl, repos: path.join(tmp, 'repos'), out, log: () => {} });
+  const fresh = fs.readFileSync(files, 'utf8');
+  assert.ok(fresh.includes('src/a.js'));
+  fs.writeFileSync(files, 'stale');
+  await score({ dl, repos: path.join(tmp, 'repos'), out, log: () => {} });
+  assert.strictEqual(fs.readFileSync(files, 'utf8'), fresh);
+  assert.strictEqual(git(path.join(out, '_prep', 's-1', 'repo'), 'config', '--get', 'core.longpaths'), 'true');
+});

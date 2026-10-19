@@ -213,6 +213,8 @@ test('fail-on-error.js: an incomplete run is red only for scan_scope all with fa
     const unred = un(3);
     assert.equal(unred.status, 1, 'blocks sent to the model and never answered were not reviewed');
     assert.match(unred.stdout, /::error::SpecGuard did not review the whole repository \(scan_scope: all\): 3 document blocks not answered by the model/);
+    const uu = (n, all = true, foe = 'true') => { fs.writeFileSync(path.join(dir, 'audit-unanswered.json'), JSON.stringify({ blocks: 0, units: n })); const r = run(all, foe); fs.rmSync(path.join(dir, 'audit-unanswered.json')); return r; }; // units whose answer was null/missing/a bad row
+    assert.equal(uu(2).status, 1); assert.match(uu(2).stdout, /2 units with no usable answer from the model/); assert.equal(uu(2, true, 'false').status, 0); assert.equal(uu(2, false).status, 0, 'outside scan_scope all it stays advisory'); assert.equal(uu(0).status, 0);
     assert.equal(un(0).status, 0); assert.equal(un(3, true, 'false').status, 0, 'fail_on_error off'); assert.equal(un(3, false).status, 0, 'not scan_scope all');
     assert.match(run(true, 'true').stdout, /::warning::SpecGuard result is incomplete: 20 units were reviewed with only part of their tests/, 'unsure verdicts on reviewed code stay a warning');
     const capMeta = (all, n) => fs.writeFileSync(path.join(dir, 'audit-meta.json'), JSON.stringify({ ...(all && { scan_scope: 'all' }), docs_over_cap: n })); // collector: admissible documents past the 60-document limit

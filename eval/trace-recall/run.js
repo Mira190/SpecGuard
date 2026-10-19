@@ -58,7 +58,7 @@ function makeVariants() { // R / C / RC as local commits on top of the pinned SH
   const heads = {};
   for (const c of cases.cases) {
     if (only && !only.has(c.id)) continue;
-    for (const [v, edits] of [['R', c.edits.R], ['C', c.edits.C], ['RC', [...c.edits.R, ...c.edits.C]]]) {
+    for (const [v, edits] of [['R', c.edits.R], ['C', c.edits.C], ['RC', [...c.edits.R, ...c.edits.C]], ...(c.edits.T ? [['T', c.edits.T]] : [])]) {
       git(['checkout', '-q', '--detach', '-f', BASE]);
       apply(edits);
       git(['commit', '-qam', `${v} ${c.id}`]);
@@ -87,9 +87,10 @@ function runVariant(id, h, candJs) {
   const rd = (f) => { try { return fs.readFileSync(path.join(ctx, f), 'utf8'); } catch { return ''; } };
   checkCandidates(id, cd);
   let tc = null; try { tc = JSON.parse(rd('trace-candidates.json')); } catch {}
+  let bytes = null; try { bytes = fs.statSync(path.join(ctx, 'trace-candidates.json')).size; } catch {}
   const failed = tr.status !== 0 || !tc;
   return {
-    id, case: h.case, variant: h.variant, head: h.head, trace_ms: t1 - t0, cand_ms: t2 - t1,
+    id, case: h.case, variant: h.variant, head: h.head, cand_bytes: bytes, trace_ms: t1 - t0, cand_ms: t2 - t1,
     status: failed ? 'trace failed: ' + (tr.stderr || '').split('\n')[0] : 'ok',
     limitations: tc ? tc.limitations : [],
     req_to_code: tc ? tc.requirement_to_code.map((x) => ({ criterion: x.criterion, code: x.code.map(slim), tests: x.tests.map(slim) })) : [],
@@ -104,7 +105,7 @@ const heads = makeVariants();
 const candJs = candidatesScript();
 const variants = [];
 for (const [id, h] of Object.entries(heads)) { const r = runVariant(id, h, candJs); variants.push(r); console.log(`${id}: ${r.status} ${r.trace_ms + r.cand_ms} ms`); }
-checkNotAllEmpty(variants.filter((v) => v.variant !== 'R').map((v) => ({ id: v.id, text: v.test_candidates })));
+checkNotAllEmpty(variants.filter((v) => v.variant === 'C' || v.variant === 'RC').map((v) => ({ id: v.id, text: v.test_candidates })));
 let srcSha = ''; try { srcSha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: SRC, encoding: 'utf8' }).stdout.trim(); } catch {}
 fs.writeFileSync(OUT, JSON.stringify({ target: cases.target, specguard_sha: srcSha, node: process.version, env_unset: PINNED_UNSET, variants }, null, 1) + '\n');
 console.log(`wrote ${OUT}`);
