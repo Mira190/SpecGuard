@@ -231,7 +231,7 @@ function assertionDelta(diff, isTest, gone = () => false) {
     if (m) { o = +m[1]; hk++; continue; }
     const e = file && per.get(file), t = l.slice(1).replace(/\r$/, '');
     if (l[0] === '-') { if (file && !e) for (const w of t.match(/[\w$]+/g) || []) dropped.add(w); if (e && !quiet(t)) { const s = subjectOf(t); if (s && subjectOf(t.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`/g, '""'))) e.rm.push({ hk, line: o, text: t.trim().slice(0, 400), full: t.trim(), ...s }); } o++; } // ponytail: subjects and dropped names read on the full line, stored text sliced to 400
-    else if (l[0] === '+') { if (e && !quiet(t)) { const u = t.slice(0, 400); e.lines.push(u); const s = subjectOf(t); if (s) e.add.push({ hk, text: u.trim(), full: t.trim(), at: e.lines.length - 1, ...s }); } } // ponytail: a long added line still re-pins: its subject is read on the full line (a loop-prefixed assertion sits at the end), the stored text stays 400
+    else if (l[0] === '+') { if (e && !quiet(t)) { const u = t.slice(0, 400); e.lines.push(t); const s = subjectOf(t); if (s) e.add.push({ hk, text: u.trim(), full: t.trim(), at: e.lines.length - 1, ...s }); } } // ponytail: a long added line still re-pins: subject and table rows are read on the full line (a loop-prefixed assertion sits at the end), only the output text is sliced to 400
     else if (l[0] === ' ') o++;
   }
   const out = [];
