@@ -80,7 +80,22 @@ The result reports the model, the static arm, and model ∪ static. The per-PR d
 
 ## MVP pass: confirmation set, single run, no rescue amendment
 
-**PASS iff** the PR-cluster bootstrap lower bound of observed is above the verdict null's 95% upper bound.
+**Location PASS iff both hold:**
+- **(a) Significance.** The one-sided within-PR permutation p is below 0.05.
+  - The statistic is the sum over PRs of the per-PR catch value, which is the mean over runs when there are 3 runs per PR.
+  - Each run's findings are permuted within its own PR, under the verdict null.
+- **(b) Effect floor.** Observed − chance (verdict null) is at least 10 points.
+  - That is about 4 more of 40 bug PRs pointed at.
+  - It was set before the freeze, after one design look at a different metric: holdout-2 line hits of any finding kind gave +9.6 points (`eval/replay/holdout2-null.js`).
+  - A significant but tiny lift is not a value claim.
+- The PR-cluster bootstrap interval and lift are reported alongside and do not gate. Requiring the cluster lower bound to clear the null's upper bound stacks two 95% intervals (α ≈ 0.005). That was judged too strict and replaced, before the freeze.
+
+**Two tiers in the result:**
+- **"Points at the bug"** = location PASS.
+- **"Catches the bug"** = location PASS AND content evidence, where content evidence is either:
+  - verified fail-to-pass on at least 3 catches (secondary measure 3); or
+  - in the blind semantic grade (secondary measure 1), the false-catch rate on mismatched pairs is below the real-pair catch rate, with one-sided p < 0.05.
+- Location alone does not carry the claim: on holdout 2, 33 of 45 location hits were graded miss.
 
 Otherwise the result is FAIL.
 
