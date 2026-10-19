@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { run, assertionDelta, declName, expectedArgs, mirrorCandidates, weakCandidates } = require('./leads.js');
+const { run, assertionDelta, goneAtHead, declName, expectedArgs, mirrorCandidates, weakCandidates } = require('./leads.js');
 
 // Temp repo: base commit, then head commit; ctx gets diff.patch and files.txt like collect.sh writes them. Returns the leads as {section: [lines]}.
 function leads(t, baseFiles, headFiles, ctxFiles = {}, env = {}) {
@@ -254,4 +254,15 @@ test('removed assertions: one whose function no longer exists at head went with 
   assert.equal(d().length, 3);
   assert.equal(d((n) => n === 'packGuard' || n === 'Set').length, 2, 'only the function this diff dropped and head lacks; `new Set` is no function of the code');
   assert.equal(d((n) => n === 'packGuard', false).length, 3, 'a name this diff never dropped is not claimed gone');
+});
+test('goneAtHead: a name only in test files is gone, one in source is not, git failing keeps the lead', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gone-')), git = (...a) => execFileSync('git', a, { cwd: dir, stdio: 'ignore' });
+  git('init', '-q');
+  fs.writeFileSync(path.join(dir, 'a.js'), 'function alive() {}\n');
+  fs.writeFileSync(path.join(dir, 'a.test.js'), 'alive(); onlyInTest();\n');
+  git('add', '.');
+  const g = goneAtHead(dir, (p) => p.endsWith('.test.js'));
+  assert.deepEqual([g('alive'), g('onlyInTest'), g('nowhere')], [false, true, true]);
+  assert.equal(goneAtHead(path.join(dir, 'missing'), () => false)('alive'), false, 'git cannot say: not gone');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
