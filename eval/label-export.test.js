@@ -164,3 +164,27 @@ test('blinding: correct-guess share, Bang index, blank = do not know', () => {
   assert.equal(b.b.dont_know, 3); // the row with no known tool is skipped
   assert.equal(require('./label-export').blinding([{ id: 'F0' }], () => 'x').a, undefined);
 });
+
+test('classify: alpha exactly 0.800 with lower 0.667 is reliable; exactly 0.667 is tentative; just below 0.667 or undefined fails; a low bound blocks reliable', () => {
+  const { classify } = require('./label-export');
+  assert.equal(classify(0.8, 0.667), 'reliable');
+  assert.equal(classify(0.7999, 0.9), 'tentative');
+  assert.equal(classify(0.8, 0.6669), 'tentative');
+  assert.equal(classify(0.8, null), 'tentative');
+  assert.equal(classify(0.667, 0.5), 'tentative');
+  assert.equal(classify(0.6669, 0.9), 'fail');
+  assert.equal(classify(null, null), 'fail');
+});
+
+test('parseCsv accepts a two-labeller sheet with no label column (label_a and label_b only)', () => {
+  const rows = parseCsv('id,label_a,label_b\nF1,valid,invalid\n');
+  assert.deepEqual(rows, [{ id: 'F1', label_a: 'valid', label_b: 'invalid' }]);
+  assert.throws(() => parseCsv('id,notes\nF1,x'), /id and label/);
+});
+
+test('agreement: labeller b above 20% unsure refuses too (labeller a clean)', () => {
+  const { rows, toolOf } = sheetOf({ specguard: [...AGREE, ...rep(12, ['valid', 'unsure'])] });
+  const ag = agreement(rows, toolOf);
+  assert.ok(ag.unsure.b > 0.2 && ag.unsure.a === 0);
+  assert.equal(ag.ok, false);
+});
