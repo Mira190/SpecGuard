@@ -1161,10 +1161,10 @@ test('run: a block the model neither answered nor ruled out makes the status inc
   assert.equal(miss.calls.outputs.status, 'incomplete');
   assert.match(miss.calls.outputs.reason, /1 document block was not answered by the model/);
   assert.match(miss.calls.summary, /\*\*Not answered by the model:\*\* 1 document block/);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(miss.w.ctx, 'audit-unanswered.json'), 'utf8')), { blocks: 1 }, 'fail-on-error.js reads the count');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(miss.w.ctx, 'audit-unanswered.json'), 'utf8')), { blocks: 1, units: 0 }, 'fail-on-error.js reads the count');
   const all = await runPost(t, { ctxFiles: { 'audit-candidates.txt': candTxt(five), 'findings.json': result([req()], { not_requirements: [1, 2, 3, 4].map(skip) }) } });
   assert.equal(all.calls.outputs.status, 'complete');
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(all.w.ctx, 'audit-unanswered.json'), 'utf8')), { blocks: 0 });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(all.w.ctx, 'audit-unanswered.json'), 'utf8')), { blocks: 0, units: 0 });
 });
 
 test('run (review S6): a block unanswered once is marked for a retry; unanswered in two consecutive runs it is named in the limitations and no longer marked', async (t) => {
