@@ -10,6 +10,8 @@ Design: every PR gets exactly one of three setups, so nobody goes without review
 
 Reveal the salt after the trial so anyone can re-derive the arms (`SPECGUARD_ARM_SALT=... node eval/assign.js N`). Without the secret the workflow's arm job FAILS with an error (no fallback to PR number mod 3: that is predictable). The unsalted mod 3 in `eval/assign.js` exists only to re-derive the arms of older trials and for back-compat tests.
 
+Who is in the study: the arm job's `if:` skips draft PRs, fork PRs and bot PRs, and the other jobs need it, so those PRs are skipped, not failed, and the missing-salt failure can only hit a same-repo, non-draft PR opened by a person, which is exactly a study PR (`eval/assign.test.js` checks the three exclusions in the workflow). A fork PR's token is read-only, so no `review-arm:excluded` label can be written there. Instead the exclusion is by design and not random: fork, bot and draft-only PRs get no arm and are no part of the comparison, and the report must count them (how many PRs were skipped and why) so a reader sees the study population (weekly-report enforces it (pending, branch feat/escaped-defect-outcome)).
+
 | Arm | Review |
 |---|---|
 | 0 | SpecGuard only |
@@ -56,7 +58,7 @@ Always use the same `--since` (trial start) so the numbers are cumulative. The r
 ## Step 4: labelling (weeks 2 and 4)
 
 ```sh
-node eval/label-export.js --repo ORG/my-repo --since 2026-10-19 --sample 30 --seed 1 --out labels.csv
+node eval/label-export.js --repo ORG/my-repo --since 2026-10-19 --sample 100 --seed 1 --out labels.csv
 # two senior reviewers each get a copy and fill their own column (label_a / label_b: valid | invalid | unsure) and notes, independently, without looking at which tool wrote a finding
 # afterwards each also fills guess_tool_a / guess_tool_b (specguard | copilot | blank = no idea) for every row: the blinding check
 node eval/label-export.js  --repo ORG/my-repo --since 2026-10-19 --import labels-both.csv   # 1: prints alpha per tool and overall, unsure rates, blinding; stops on a failed gate
@@ -65,10 +67,18 @@ node eval/label-export.js  --repo ORG/my-repo --since 2026-10-19 --import labels
 node eval/weekly-report.js --repo ORG/my-repo --since 2026-10-19 --labels labels-done.csv
 ```
 
-- 30 findings per tool is the minimum; the tool name is hidden and rows are shuffled by `--seed`. Keep the same seed and window for the import, because the ids are hashes of the finding (a different window gives "ids matched no finding").
+- 100 doubly labelled findings per tool is the minimum for a decision (`--sample 100` is the default). Why 100: `node eval/alpha-power.js` simulates two labellers (valid prevalence 25%, 200 trials per cell, seed 1) against the gate. Share of trials that reach decision grade:
+
+  | Raw agreement (true alpha) | n=30 | n=60 | n=100 | n=150 | n=200 |
+  |---|---|---|---|---|---|
+  | 95% (about 0.87) | 44% | 61% | 82% | 94% | 98% |
+  | 90% (about 0.75) | 18% | 14% | 21% | 23% | 22% |
+
+  Two good labellers (95%) fail the gate more often than not below about 60 findings, so 30 is too few; two mediocre labellers (90%) pass about one time in five at any n (a limit of a 200-trial gate, not of n), so a pass is not proof, a fail is informative. Fewer than 100 doubly labelled findings in a scope is therefore "tentative, no decision" whatever the alpha. A smaller sample can still give a descriptive precision with the Wilson interval (the report's own floor is 30 labelled), not a decision. If less than 100 findings exist per tool, label all of them and say so.
+- Bootstrap draws in which the resample has no variation have no alpha and are dropped; at low prevalence this biases the interval. The import prints the share of dropped draws, and more than 5% makes that scope "tentative, no decision". The tool name is hidden and rows are shuffled by `--seed`. Keep the same seed and window for the import, because the ids are hashes of the finding (a different window gives "ids matched no finding").
 - Label `valid` = a real gap or bug that a reviewer would want fixed on this PR. `invalid` = wrong, already covered, or noise. `unsure` is reported but not counted.
 - Agreement before reconciling: the import prints Krippendorff's alpha (nominal) over valid and invalid, PER TOOL (SpecGuard and Copilot separately) and overall, each with a bootstrap 95% interval (findings resampled, 1000 draws, fixed seed), the share labelled valid (prevalence) and each labeller's unsure rate. `unsure` and blank are treated as missing, and a finding with fewer than two valid or invalid labels does not count.
-  - alpha >= 0.800 and bootstrap lower bound >= 0.667 in every scope: decision grade (Krippendorff's threshold for drawing conclusions).
+  - alpha >= 0.800, bootstrap lower bound >= 0.667, at least 100 doubly labelled findings and at most 5% dropped bootstrap draws, in every scope: decision grade (0.800 is Krippendorff's threshold for drawing conclusions).
   - alpha between 0.667 and 0.800, or a lower bound below 0.667: "TENTATIVE, NO DECISION". Precision is printed but is not evidence for Step 6.
   - alpha below 0.667 in any scope (also undefined when every label is the same): "labels not reliable: alpha=X < 0.667, revise the labelling guide and relabel", no precision.
   - Either labeller's unsure rate above 20%: refused (the guide is too vague; unsure removes the hard cases from alpha and would flatter it).
@@ -101,7 +111,7 @@ Sample-size targets used by the report (from the power arithmetic behind this pl
 
 Preconditions (Step 4, weekly-report enforces them (pending)):
 
-- Labeller agreement alpha >= 0.800 for SpecGuard, for Copilot and overall, with a bootstrap 95% lower bound >= 0.667, and neither labeller above 20% unsure. Between 0.667 and 0.800 the result is "tentative, no decision"; below 0.667 the precision number is not evidence. Nothing below is decided without it.
+- Labeller agreement alpha >= 0.800 for SpecGuard, for Copilot and overall, with a bootstrap 95% lower bound >= 0.667, at least 100 doubly labelled findings per tool (Step 4 power table), at most 5% dropped bootstrap draws, and neither labeller above 20% unsure. Between 0.667 and 0.800, or short of any other condition, the result is "tentative, no decision"; below 0.667 the precision number is not evidence. Nothing below is decided without it.
 - The arm analysis is intention-to-treat (every PR in its first-assigned arm, closed and unmerged included) and PRs flagged for a second PR per branch or a close-and-reopen are reported with and without. If the verdict changes when they are dropped, say so; a re-roll can bias the arms.
 - The blinding result is quoted next to precision.
 

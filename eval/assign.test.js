@@ -56,6 +56,14 @@ test('the example workflow computes the same arm as assign() for 1..30 with two 
   assert.ok(hit > 10, 'the salted arm is not n % 3');
 });
 
+test('the example workflow arm job skips drafts, fork PRs and bot PRs (so only study PRs can hit the missing-salt failure); other jobs need it', () => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n');
+  const arm = /\n  arm:\n    if: (.*)\n/.exec(yml);
+  assert.ok(arm, 'arm job if');
+  for (const part of ['!github.event.pull_request.draft', "github.event.pull_request.head.repo.full_name == github.repository", "github.event.pull_request.user.type != 'Bot'"]) assert.ok(arm[1].includes(part), part);
+  assert.equal((yml.match(/^    needs: arm$/gm) || []).length, 3); // specguard, shadow, copilot
+});
+
 test('the example workflow shadow job runs only on arm 1, posts nothing (delivery: summary) and keeps the context 90 days', () => {
   const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n');
   const shadow = /\n  shadow:\n([\s\S]*?)(?=\n  \w+:\n|$)/.exec(yml);
