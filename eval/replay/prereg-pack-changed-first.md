@@ -49,3 +49,33 @@ The unit is the PR.
 **Report** k/n for every gate, per arm and per corpus. Also report how changes in the cut-test set affect the run status: count PRs whose cut-test set grows or shrinks, and the flips of the "Review context was cut" notice.
 
 **Limitation.** This measures what the model can see, not what it finds. Seeing the changed lines is necessary, not sufficient. Effects on findings need live runs, and those are not part of this decision. The cap value (one file cap) follows an existing constant; it was not tuned.
+
+## Amendment 1 (2026-10-19, after the red-team review by specguard-cf; before any arm was computed)
+
+The implementing agent had started on the arm-A reproduction and the fresh-corpus inputs. It was told to compute no arm until this amendment. The changes below only add an arm or tighten gates.
+
+**Arm O, added; it is tried first.**
+- **Order.** The review files of `files.txt` go in first: changed source files over their room use the `hunks` mode, the others go in as on main. Then come the in-scope rule files (the F filter), filling the remaining budget in the FC sort order below. Then the candidate tests and the remaining tiers, as on main.
+- **Why.** It addresses the cause directly: the order, not the amount of rules. It drops a rule only when the budget is exhausted.
+- **Adoption order** becomes O < F < FC < FCH. The first arm that passes is adopted.
+
+**FC sort.** Before the cap, the in-scope rule files are sorted:
+1. by the number of changed files their scope covers, most first;
+2. then by scope width: a scope that names a directory or file pattern comes before `**` or a missing scope;
+3. then by `standards.txt` order.
+
+The cap then stops the block at the first file that does not fit. O fills its remaining budget in the same order.
+
+**Gate 6, added: no lost rule where there was room.** On every PR where A loses no changed line, each arm's pack contains every in-scope rule file that A's pack contained, at the same bytes. This applies on all three corpora.
+
+**Rule cost, reported.** For every arm, report the number of in-scope rule files dropped (relative to A), per PR and in total, on each corpus.
+- O drops in-scope rules only when the review files exhaust the budget. Those drops are reported as the cost of the fix.
+- For FC and FCH, the result section must state the drop count, and the decision must accept that cost in writing.
+- Gate 6 already forbids drops where A had room.
+
+This departs from the red-team text, which asked for "0 in-scope drops for O" on every PR. That would fail O on exactly the PRs it is meant to fix, where the rules and the changed code cannot both fit. Gate 6 enforces 0 wherever both fit.
+
+**Gate 2, tightened.**
+- **Fresh-corpus source.** The fresh corpus uses the latest first-parent commits of the default branch, whether or not they are merges, so squash-merge repos are included. Each commit is diffed against its first parent.
+- **Growing the corpus.** If fewer than 10 PRs in the fresh corpus have A losing a changed line, the corpus is grown in fixed steps until it reaches 10: up to 60 commits per repo, then the remaining cloned repos, whatever the size of their rule files. Each step's list is frozen before any arm runs on it.
+- **No fallback.** If 10 still cannot be reached, nothing is adopted. The gate-1 fallback is removed.
