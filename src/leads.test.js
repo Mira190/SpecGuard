@@ -291,3 +291,9 @@ test('removed assertions: a long added line equal to the removed one in its firs
   assert.deepEqual(delta(`-${loop('evOf(p)', 'covered')}+${loop('other(p)', 'gap')}`).map((x) => x.slice(0, 10)), ['removed 10']);
   assert.deepEqual(delta(`-${loop('evOf(p)', 'covered')}+${loop('evOf(p)', 'covered')}`), []);
 });
+test('removed assertions: a table-driven added line over 400 chars keeps its rows past char 400', () => {
+  const row = (last) => `+  for (const [input, expected] of [${Array.from({ length: 50 }, (_, i) => `[${i + 10}, ${i + 11}]`).join(', ')}, ${last}]) assert.equal(next(input), expected);\n`;
+  assert.ok(row('[2, 3]').length > 500);
+  assert.deepEqual(delta(`-  assert.equal(next(2), 3);\n${row('[2, 3]')}`), []);
+  assert.deepEqual(delta(`-  assert.equal(next(2), 3);\n${row('[2, 4]')}`), ['removed 10 assert.equal(next(2), 3);']);
+});
