@@ -22,7 +22,10 @@
       "GOPATH": "{evidence}/f2p/env/gopath",
       "CGO_ENABLED": "1",
       "CC": "{evidence}/f2p/env/zigcc.cmd",
-      "GOTOOLCHAIN": "auto"
+      "GOTOOLCHAIN": "auto",
+      "GOFLAGS": "-trimpath",
+      "ZIG_GLOBAL_CACHE_DIR": "{evidence}/f2p/env/zigcache",
+      "ZIG_LOCAL_CACHE_DIR": "{evidence}/f2p/env/zigcache"
     },
     "status": "runnable",
     "setup": "Go 1.25.3 (zip from go.dev) under <evidence>/f2p/tools; module cache under <evidence>/f2p/env; no C compiler on the machine, so cgo (sqlite) uses zig cc from the ziglang pip wheel (env/zigcc.cmd); first build of the db package takes about 8 minutes",

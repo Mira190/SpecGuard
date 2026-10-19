@@ -179,7 +179,11 @@ function freeze(row, h) {
 }
 
 // Run `fn(dir)` with the tree at `rev` in place. overlay: dependency work dir moved to rev (restored to its base afterwards); export: a fresh temp export deleted afterwards.
+// Shared machine: refuse any tree step when C: (or the temp drive) has less than 1.5 GB free.
+const MIN_FREE = 1.5e9;
+function diskGuard() { const s = fs.statfsSync(os.tmpdir()); if (s.bavail * s.bsize < MIN_FREE) throw new Error(`disk guard: under 1.5 GB free on the temp drive, refusing to run`); }
 function withTree(repo, group, rev, kind, fn) {
+  diskGuard();
   const cfg = REPOS()[repo];
   if (cfg.tree === 'overlay') {
     const dir = workDir(repo), base = fs.readFileSync(path.join(dir, '.base'), 'utf8').trim();
