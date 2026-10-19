@@ -212,3 +212,22 @@ Offline re-run of the real `src/post.js` on the saved raw model answers (`ctx/fi
 - Control noise +0.06 per no_known_bug PR-run. TP lost 0.
 - Root cause: the Details-only catches are `gated` by the partial-test-visibility gate (`src/post.js`, "a candidate test file was only partly visible"), which V2 deliberately excludes, so V2 cannot surface them.
 - Decision: not adopted; the post.js arms were not merged (PR #366 closed). Next: H3 (`prereg-h3.md`, a retest on the same PR set, not an adoption test).
+
+## Cut relevance (R, S): result
+
+Pre-registration: `prereg-cut-relevance.md` with amendments 1 and 1b. Code: `src/post.js` `cutRelevant`, `candReasons`, `STRONG`, behind `EXP_CUT_RELEVANCE` (`1` = arm R, `strong` = arm S; off by default; the switch is read as `process.env['EXP_CUT_RELEVANCE']` on purpose, so the Action-input mapping test does not see it).
+
+### Arm S: reason classification (fixed before S was computed)
+
+The reason vocabulary that `collect.sh` can write after a candidate test in `test-candidates.txt` (all from `src/test-map.js` `mapTests`; the PR collector passes no `calls`, so `calls ...` never occurs in the corpora):
+
+| Reason string | Class | Why |
+|---|---|---|
+| `same name` | strong | the test file is named after the changed file |
+| `mentions <stem>` (no `changed`) | strong | a whole-word mention of the changed file's stem in the test: an import or a direct reference |
+| `file name has <names>` | weak | the test file name contains a public name of the file |
+| `calls <names>` | weak | (not emitted by the PR collector) |
+| `mentions changed \`x\`` | weak | shares an identifier with the diff only |
+| `same directory` | weak | proximity only |
+
+S counts a cut candidate toward "lost" only when it is strong. S reads no file. Like R, S keeps the notice when any finding was gated by the partial-visibility gate. Empirical reason counts in the corpus-1 collect output (all 288 PR-runs, summed over their candidate lines): `mentions` 441 (stem and changed together), `same name` 359, `same directory` 111, `file name has` 93.
