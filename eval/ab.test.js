@@ -173,7 +173,7 @@ test('tokens: matches a task.md kickoff with a literal Windows backslash path', 
 });
 
 // ---- --prompt-file (free-form competitor stand-ins) ----
-const COMP = process.env.AB_COMP_DIR || '<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/ab-comp';
+const COMP = process.env.AB_COMP_DIR || ''; // competitor stand-in prompts live outside the repo; the test skips without AB_COMP_DIR
 const stand = path.join(tmp, 'stand.txt');
 put(stand, '<!-- PROVENANCE: inferred -->\nReview the PR.\nWrite {"comments":[]}.\n');
 
@@ -212,7 +212,7 @@ test('finish on a free variant: counts by severity, writes bundle-readable files
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir6, 'cp', 'one', 'ctx', 'findings.json'), 'utf8')).findings[0].origin, 'free');
 });
 
-test('competitor prompt files never mention SpecGuard, coverage, alignment, obligation', { skip: !fs.existsSync(path.join(COMP, 'copilot-style.txt')) }, () => {
+test('competitor prompt files never mention SpecGuard, coverage, alignment, obligation', { skip: !COMP || !fs.existsSync(path.join(COMP, 'copilot-style.txt')) }, () => {
   for (const f of ['copilot-style.txt', 'pocock-style.txt']) {
     const ctx = path.join(src, 'one', 'ctx');
     const text = ab.freePromptBuilder(path.join(COMP, f))(ctx);
