@@ -39,3 +39,9 @@ H's code is committed before it runs on any corpus, and is not changed after.
 **If adopted.** The adopting PR keeps only A plus the O fallback. It deletes F, FC, FCH and `EXP_PACK`, and keeps the A/H identity test.
 
 **Limitation.** This measures what the model can see, not what it finds. The confirmation repos (gitea, hono, langchain, pydantic, query, rqlite, sqlglot, trpc) had few A-loss PRs in their first 10 lines (9 of 80), so the floor may not be met.
+
+## Clarification 1 (2026-10-19, after reviewing H's code at 4d1fdb4, before any corpus run)
+
+A file deleted by the PR does not exist at head, so no pack can show it. `files.txt` lists such files (`collect.sh` uses `git diff --name-only` with no filter). The pack omits them, and in 4d1fdb4 they triggered the `del` fallback on every PR that deletes a whole file. O cannot show the file either, so the fallback would cost rule files and gain nothing.
+
+"A changed file with deleted LEFT lines in the pack with 0 lines" therefore counts only files that exist at head. This applies both to H's runtime switch and to the measure used for every gate. The clarification only removes a case where no arm could show anything, and it was written before any H data.
