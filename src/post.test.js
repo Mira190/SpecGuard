@@ -4454,3 +4454,20 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
   assert.ok(!('verdict' in none));
   assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
 });
+
+test('packLoss (src/focus.js) is the one lost rule: its verdict equals post.js "Review context was cut" on the same ctx, and it also reports right-line and deleted-line parts', async (t) => {
+  const { packLoss, parseCandidates } = require('./focus.js');
+  for (const [cut, shown, candidates] of [['src.js\n', 'src.js\t50\n', ''], ['src.js\n', 'src.js\t2\n', ''], ['src.js\n', '', ''], ['src.js\ntest.js\n', 'src.js\t50\n', 'src.js\n  test.js  (same stem)\n'], ['other.js\n', '', ''], ['', '', '']]) {
+    const s = setup(t, report({ coverage: [row()], findings: [] })), ctx = (n) => path.join(s.dir, 'ctx', n);
+    fs.writeFileSync(ctx('pack-cut.txt'), cut); fs.writeFileSync(ctx('pack-shown.txt'), shown); if (candidates) fs.writeFileSync(ctx('test-candidates.txt'), candidates);
+    await post(s);
+    const incomplete = JSON.parse(fs.readFileSync(ctx('counts.json'), 'utf8')).complete === false;
+    const rd = (n) => { try { return fs.readFileSync(ctx(n), 'utf8'); } catch { return ''; } }, lines = (x) => x.split('\n').filter(Boolean);
+    const l = packLoss({ files: lines(rd('files.txt')), patch: rd('diff.patch'), cands: parseCandidates(rd('test-candidates.txt')), cut: new Set(lines(cut)), shown: new Map(lines(shown).map((x) => x.split('\t'))) });
+    assert.equal(l.lost.length > 0, incomplete, JSON.stringify({ cut, shown }));
+    if (shown === 'src.js\t2\n') assert.deepEqual(l.right, ['src.js']);
+    if (shown === 'src.js\t50\n') assert.deepEqual(l.right, []);
+  }
+  const del = packLoss({ files: ['d.js'], patch: 'diff --git a/d.js b/d.js\n--- a/d.js\n+++ b/d.js\n@@ -1,2 +0,0 @@\n-a\n-b\n', cands: new Map(), cut: new Set(['d.js']), shown: new Map() });
+  assert.deepEqual([del.right, del.del], [[], ['d.js']]);
+});

@@ -198,7 +198,20 @@ function main(ctx, env = process.env) {
   return r;
 }
 
-module.exports = { splitDiff, stats, trim, thresholds, parseCandidates, score, plan, main, DIFF_BUDGET };
+// The pack's loss rule, one copy for post.js ("Review context was cut") and the claude engine (EXP_PACK=H falls back when the pack loses changed content).
+// cut: Set of files the pack showed only partly or not at all; shown: file -> lines shown from the top (no entry = not shown); cands: parseCandidates() of test-candidates.txt.
+// lost: what post.js reports (a cut changed file with no entry in shown or a changed RIGHT line past it, or a cut candidate test of a changed file);
+// right: cut changed files with a changed RIGHT line past what is shown; del: cut changed files with deleted LEFT lines and no lines shown.
+function packLoss({ files, patch, cands, cut, shown }) {
+  const dm = require('./post').parseDiff(patch), right = (f) => [...(dm.get(f)?.changed.RIGHT.keys() || [])]; // lazy: post.js requires this module
+  const past = (f) => !shown.has(f) || right(f).some((n) => n > +shown.get(f));
+  return {
+    lost: [...new Set(files.flatMap((f) => [...(cut.has(f) && past(f) ? [f] : []), ...(cands.get(f) || []).filter((x) => cut.has(x))]))],
+    right: files.filter((f) => cut.has(f) && right(f).some((n) => n > (shown.has(f) ? +shown.get(f) : 0))),
+    del: files.filter((f) => cut.has(f) && !(shown.get(f) > 0) && (dm.get(f)?.changed.LEFT.size || 0) > 0),
+  };
+}
+module.exports = { splitDiff, stats, trim, thresholds, parseCandidates, packLoss, score, plan, main, DIFF_BUDGET };
 
 if (require.main === module) {
   if (!process.argv[2]) { console.error('Usage: node src/focus.js <ctx>'); process.exit(2); }

@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { block, cut, LIMITS } = require('../prompt.js');
-const { parseCandidates } = require('../focus.js');
+const { parseCandidates, packLoss } = require('../focus.js');
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages', API_VERSION = '2023-06-01';
 // ponytail: USD per million tokens, one row per model worth pricing (https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-14). Haiku 5.5 has a second card above 100K prompt tokens.
@@ -245,7 +245,15 @@ function unitSyms(lines) { // the names a unit (or one part's lines) defines, fo
   for (const l of lines) symbolsIn(l, add);
   const syms = [...out]; syms.capped = capped; return syms;
 }
+// EXP_PACK=H: main's pack, or O's when main's pack loses changed content (a changed RIGHT line past what is shown, or a changed file with deleted lines shown with 0 lines; src/focus.js packLoss)
 function contextPack(ctx, root, limit) {
+  const exp = process.env['EXP_PACK'] || '';
+  if (exp !== 'H') return buildPack(ctx, root, limit, exp);
+  const a = buildPack(ctx, root, limit, ''), rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
+  const l = packLoss({ files: rd('files.txt').split('\n').filter(Boolean), patch: rd('diff.patch'), cands: parseCandidates(rd('test-candidates.txt')), cut: new Set(a.notWhole), shown: a.shown });
+  return l.right.length || l.del.length ? buildPack(ctx, root, limit, 'O') : a;
+}
+function buildPack(ctx, root, limit, exp) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const list = (n) => rd(n).split('\n').filter(Boolean);
   const parts = [], seen = new Set(), whole = new Set(), omitted = [], partial = [], shown = new Map(); // partial: cut at the budget; shown: path -> lines shown, for a file cut from the top (post.js checks the changed lines against it)
@@ -286,7 +294,7 @@ function contextPack(ctx, root, limit) {
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
   // EXP_PACK (measurement switch, eval/replay/prereg-pack-changed-first.md; unset = main): O review files before rules, F rules only if their scope covers a changed file, FC sorted and capped at one file cap, FCH + hunks of an over-room changed file; O/FC/FCH sort by changed files covered, then specific scope before wide
-  const exp = process.env['EXP_PACK'] || '', EH = exp === 'O' || exp === 'FCH', dropped = [];
+  const EH = exp === 'O' || exp === 'FCH', dropped = [];
   const rules = (() => {
     const std = list('standards.txt');
     if (!exp) return std;

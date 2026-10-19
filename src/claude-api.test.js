@@ -1758,7 +1758,7 @@ test('unit rooms: unit_findings null, missing or holding a non-object row fails 
 
 // --- EXP_PACK arms (eval/replay/prereg-pack-changed-first.md) ---
 const withExp = (v, fn) => { const old = process.env['EXP_PACK']; if (v) process.env['EXP_PACK'] = v; else delete process.env['EXP_PACK']; try { return fn(); } finally { if (old === undefined) delete process.env['EXP_PACK']; else process.env['EXP_PACK'] = old; } };
-const rule = (n) => 'r'.repeat(n) + '\n';
+const rule = (n) => ('r'.repeat(99) + '\n').repeat(Math.ceil(n / 100)); // lines, so a rule file can be cut at the budget
 const patchOf = (file, line) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -${line},1 +${line},1 @@\n-old\n+changed line ${line}\n`;
 const ruleRepo = (t, rules, map, extra = {}) => tmpRepo(t, { 'src/a.js': 'x\n', ...Object.fromEntries(Object.entries(rules).map(([k, n]) => [k, rule(n)])), ...extra.files }, { 'files.txt': 'src/a.js\n', 'standards.txt': Object.keys(rules).join('\n') + '\n', ...(map && { 'standards-map.json': JSON.stringify(map.map(([path, scope]) => ({ path, scope }))) }), 'diff.patch': patchOf('src/a.js', 1), ...extra.ctx });
 const has = (p, f) => p.text.includes(`name="${f}"`);
@@ -1812,4 +1812,22 @@ test('EXP_PACK FCH/O: a changed source file over its room is shown as its hunks 
   assert.ok(main.text.includes('const v5480 = 5480;'), 'main already slices around the changed lines, with the wide window (30 above)');
   for (const v of ['FCH', 'O']) { const p = withExp(v, () => api.contextPack(r.ctx, r.root, 250000)); assert.ok(p.text.includes('const v5500 = 5500;') && !p.text.includes('const v5480 = 5480;'), v + ': hunk window of 10 above'); }
   assert.ok(withExp('FC', () => api.contextPack(r.ctx, r.root, 250000)).text.includes('const v5480 = 5480;'), 'FC leaves the file as on main');
+});
+
+test('EXP_PACK H: main\'s pack when it loses nothing (deep-equal), O\'s pack when a changed RIGHT line is past what is shown, O\'s when a deleted-line file is shown with 0 lines', (t) => {
+  const run = (v, r, limit) => withExp(v, () => api.contextPack(r.ctx, r.root, limit));
+  const ok = ruleRepo(t, { 'R.md': 100 }, [['R.md', ['**']]]);
+  assert.deepEqual(run('H', ok, 250000), run('', ok, 250000), 'A loses nothing: H is A');
+  // right-line loss: the rule files fill the pack, the big changed file gets a head only
+  const rules = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`R${i}.md`, 9000])), map = Object.keys(rules).map((p) => [p, ['**']]);
+  const big = Array.from({ length: 3000 }, (_, i) => `const v${i} = ${i};`).join('\n') + '\n';
+  const right = ruleRepo(t, rules, map, { files: { 'src/a.js': big }, ctx: { 'diff.patch': patchOf('src/a.js', 2900) } });
+  const a = run('', right, 60000), o = run('O', right, 60000), h = run('H', right, 60000);
+  assert.ok(!a.text.includes('const v2899 = 2899;') && o.text.includes('const v2899 = 2899;'), 'main loses the line, O shows it');
+  assert.deepEqual(h, o);
+  // deleted-line loss: a pure deletion, the file gets no room in main's pack
+  const del = ruleRepo(t, rules, map, { ctx: { 'diff.patch': 'diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1,2 +0,0 @@\n-x\n-y\n' } });
+  const a2 = run('', del, 60000), o2 = run('O', del, 60000);
+  assert.ok(!has(a2, 'src/a.js') && has(o2, 'src/a.js'), 'main shows the file with 0 lines, O shows it');
+  assert.deepEqual(run('H', del, 60000), o2);
 });
