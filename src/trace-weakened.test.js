@@ -40,6 +40,7 @@ test('a weakened assertion: the code line and the requirement item it protected 
 test('a deleted assertion line is a removed assertion too', (t) => {
   const { code, req } = viaTest(run(repo(t, files(TEST(PINNED)), files(TEST('  // gone')))));
   assert.deepEqual([code.length, req.length], [1, 1]);
+  assert.deepEqual([code[0].code[0].path, req[0].candidates[0].path, req[0].candidates[0].line], ['src/server.js', 'docs/specs/server.md', 5]);
 });
 
 test('counterexamples emit nothing: added assertion, renamed test, reformatted assertion, literal found nowhere, no literal', (t) => {
@@ -60,4 +61,21 @@ test('a code-change PR with an ordinary test edit has the same trace output as w
   const ca = run(a), cb = run(b);
   assert.deepEqual(ca, cb);
   assert.ok(ca.code_to_requirement.length > 0 && !JSON.stringify(ca).includes('"via"'));
+});
+
+// 200 is held by many files and doc items: it anchors nothing. A rare literal in the same repo still does.
+const busy = (testText) => {
+  const extra = {};
+  for (let i = 1; i <= 6; i++) extra[`src/route${i}.js`] = `export const route${i} = (res) => { res.statusCode = 200; };
+`;
+  const doc = DOC + [1, 2, 3, 4, 5, 6].map((i) => `
+Route ${i} must answer with status 200 when it succeeds.
+`).join('');
+  return { ...files(testText), ...extra, 'docs/specs/server.md': doc };
+};
+test('a common literal (200) is no anchor: nothing is emitted; a rare literal still is', (t) => {
+  const common = run(repo(t, busy(TEST('  assert.equal(res.statusCode, 200);')), busy(TEST('  assert.ok(res.statusCode);'))));
+  assert.deepEqual([common.requirement_to_code.length, common.code_to_requirement.length], [0, 0]);
+  const rare = viaTest(run(repo(t, busy(TEST(PINNED)), busy(TEST('  assert.ok(opts.bodyLimit);')))));
+  assert.deepEqual([rare.code.length, rare.req.length], [1, 1]);
 });

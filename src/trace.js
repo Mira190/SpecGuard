@@ -729,7 +729,8 @@ const numeric = (v) => /^\d+(?:[.,]\d+)*(?:\s*\S+)?$/.test(v) ? v.replace(/^(\d+
 
 // Removed or weakened test assertions (leads.js assertionDelta: the one heuristic) as queries: the literals and subject identifiers of the removed line.
 // A line without a literal makes no query: identifiers alone would point at unrelated code. ponytail: same-file single-line assertions as in leads.js; at most MAX_TEST_Q queries.
-const MAX_TEST_Q = 5, TEST_NOTE = 'from a removed or weakened test assertion', ASSERT_WORD = new Set('assert strict equal deep ok not to be eq throw match true false expect should is await'.split(' '));
+// LIT_SHARE: a literal held by over 1% of the code windows or requirement items (3 at least) is no anchor (200, 'GET'). ponytail: trace.js had no document-frequency cutoff to reuse; this is share-of-corpus, tune with eval/trace-recall noise cases.
+const LIT_SHARE = 0.01, MAX_TEST_Q = 5, TEST_NOTE = 'from a removed or weakened test assertion', ASSERT_WORD = new Set('assert strict equal deep ok not to be eq throw match true false expect should is await'.split(' '));
 function weakenedQueries(patch) {
   const seen = new Set(), out = [];
   for (const a of require('./leads.js').assertionDelta(patch, isTestPath)) { // lazy: leads.js requires this module
@@ -744,7 +745,7 @@ function weakenedQueries(patch) {
 }
 
 // info.cut is set when the time budget stopped a search early.
-function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {}, stop = null, cover = false }) {
+function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {}, stop = null, cover = false, maxLitShare = 1 }) {
   const eligible = entries.filter((e) => e.size <= MAX_FILE && !skip(e.path));
   const lits = [...new Set(crits.flatMap((c) => c.lits))].slice(0, MAX_LITS);
   const litRe = lits.map((l) => new RegExp(`(?<![\\w])${esc(l)}(?![\\w])`));
@@ -771,6 +772,10 @@ function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {}, sto
     }
   }
   const index = buildIndex(windows(), new Set(queries.flat()));
+  if (maxLitShare < 1) { // a literal in more than this share of the windows (200, "GET", true) is no anchor: it is dropped from every hit
+    const n = new Map(); for (const hs of litHits.values()) for (const x of hs) n.set(x, (n.get(x) || 0) + 1);
+    for (const [x, c] of n) if (c > Math.max(3, maxLitShare * meta.length)) { (info.common ||= new Set()).add(lits[x]); for (const hs of litHits.values()) hs.delete(x); }
+  }
   const shaOf = new Map(entries.map((e) => [e.path, e.sha]));
   const rows = crits.map((c, qi) => {
     const s = index.search(queries[qi]);
@@ -1038,20 +1043,21 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
   try {
     const tq = dl.over() ? [] : weakenedQueries(patch);
     if (tq.length) {
-      const word = (x) => new RegExp(`(?<![\\w])${esc(x)}(?![\\w])`);
+      const t2c = requirementToCode({ cwd, head, entries: d.entries, dl, info, cover: true, maxLitShare: LIT_SHARE, skip: (p) => d.docs.has(p) || d.ruled(p) || (docLike(p) && !/\.feature$/i.test(p)),
+        crits: tq.map((q, i) => ({ id: `T${i + 1}`, heading: '', quote: q.ids.join(' '), previous: '', lits: q.lits })) });
+      for (const r of t2c) { const code = r.code.filter((w) => w.lits >= 1); if (code.length) cand.requirement_to_code.push({ criterion: r.criterion, via: 'test', note: TEST_NOTE, code, tests: [] }); } // a code window must hold a literal of the removed line
+      const word = (x) => new RegExp(`(?<![\\w])${esc(x)}(?![\\w])`); // a literal the code scan found common is common here too
       const rows = []; // each query ranks only the requirement items and descriptive blocks (a default stated in prose) that hold a literal of its removed line
       let blocks = allBlocks;
       if (!blocks.length) { const taken = new Set(allItems.map((i) => `${i.path}:${i.line}`)); blocks = docs.flatMap((x) => blocksOf(x.path, x.text)).filter((b) => !taken.has(`${b.path}:${b.line}`)).map((b) => ({ ...b, kind: 'block' })); }
       for (const q of tq) {
-        const res = q.lits.map(word), pool = allItems.concat(blocks).filter((i) => res.some((re) => re.test(i.text)));
+        const every = allItems.concat(blocks), hit = (l) => every.filter((i) => word(l).test(i.text)).length;
+        const res = q.lits.filter((l) => !(info.common && info.common.has(l)) && hit(l) <= Math.max(3, LIT_SHARE * every.length)).map(word), pool = every.filter((i) => res.some((re) => re.test(i.text))); // a literal in many items is no anchor
         if (pool.length) rows.push(...codeToRequirement([{ path: q.file, line: q.line, end: q.line, context: '', identifiers: q.ids, literals: { added: [], removed: q.lits } }], pool));
       }
       const room = Math.max(0, MAX_HUNKS - cand.code_to_requirement.length);
       cand.code_to_requirement.push(...rows.slice(0, room).map((h) => ({ ...h, via: 'test', note: TEST_NOTE })));
       if (rows.length > room) cand.limitations.push(`${rows.length - room} requirement match(es) for removed or weakened test assertions beyond the ${MAX_HUNKS}-hunk limit were left out of code_to_requirement.`);
-      const t2c = requirementToCode({ cwd, head, entries: d.entries, dl, info, cover: true, skip: (p) => d.docs.has(p) || d.ruled(p) || (docLike(p) && !/\.feature$/i.test(p)),
-        crits: tq.map((q, i) => ({ id: `T${i + 1}`, heading: '', quote: q.ids.join(' '), previous: '', lits: q.lits })) });
-      for (const r of t2c) { const code = r.code.filter((w) => w.lits >= 1); if (code.length) cand.requirement_to_code.push({ criterion: r.criterion, via: 'test', note: TEST_NOTE, code, tests: [] }); } // a code window must hold a literal of the removed line
     }
   } catch (e) { lim('removed-assertion search', e); }
   if (info.cut) cand.limitations.push(`The ${Math.round(budgetMs / 1000)} s time budget was reached; code, test and occurrence search for the changed requirements is partial.`);

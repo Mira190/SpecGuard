@@ -51,9 +51,9 @@ Every rate prints as `k/n` next to the percentage. A query with no relevant item
 | Direction | Hit@3 before | Hit@3 after | Recall@K after | MRR@10 after |
 |---|---|---|---|---|
 | test->code | 0/10 | 2/10 | 2/26 relevant code ranges | 0.200 |
-| test->req | 0/10 | 4/10 | 4/10 | 0.183 |
+| test->req | 0/10 | 3/10 | 3/10 | 0.150 |
 
-False locations: 0 of the 2 emitted T code windows miss every `expect.code` range (`bodyLimit` and `redirect302` hit; the other 8 variants emit no code window). All 4 emitted test->req hunks (`bodyLimit`, `return503OnClosing`, `redirect302`, `notFound404`) contain the expected doc item within their top 3; they also list other doc items of the same hunk. The five initial-config cases stay misses by design: their one shared assertion has no literal on the line, so no query is made (identifiers alone would point at unrelated code).
+False locations: 0 of the 2 emitted T code windows miss every `expect.code` range (`bodyLimit` and `redirect302` hit; the other 8 variants emit no code window). All 3 emitted test->req hunks (`bodyLimit`, `return503OnClosing`, `redirect302`) contain the expected doc item within their top 3; they also list other doc items of the same hunk. A literal held by over 1% of the code windows (3 at least), or by the same share of requirement items, is dropped, and so is a literal the code scan found common (`LIT_SHARE`, trace.js); a query whose literals are all dropped makes no query. This removed `notFound404` (404 is a common status code, the same class as 200). Noise check on real fastify tests, not in cases.json: removing a `statusCode, 200` line, a `content-type` `application/json` line and a `route.method, 'GET'` line emitted 3 code windows and 2-3 doc items each before the cutoff, 0 and 0 after; a `listening, true` line has no quoted or numeric literal and emitted nothing either way. The five initial-config cases stay misses by design: their one shared assertion has no literal on the line, so no query is made (identifiers alone would point at unrelated code).
 
 req->code and code->req (and test candidates) are field-for-field identical to main on all 36 R/C/RC variants (raw trace outputs compared, plus the `analyze.js` summary). These 10 are 10 cases (at most 6 distinct weakened tests), not 10 independent trials. Unit tests: `src/trace-weakened.test.js`.
 
