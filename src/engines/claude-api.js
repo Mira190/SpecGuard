@@ -399,11 +399,11 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       }
     };
     // One call -> { ok: true, found, u, used } or { ok: false, status, reason, why, raw, u? }; u = the API usage object once a reply arrived (paid for even when the answer is unusable).
-    const call = async (system, user, maxTok, prior, cap) => { // prior: the earlier answer with no JSON in it; it is sent back once with a request for the JSON object only; cap = { usd, room }: this call's worst case and what the budget leaves for it
+    const call = async (system, user, maxTok, prior, cap, ask = REPAIR) => { // prior: the earlier answer with no JSON in it; it is sent back once with a request for the JSON object only; cap = { usd, room }: this call's worst case and what the budget leaves for it
       const s = await send({
         model, max_tokens: maxTok,
         ...(system && { system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] }),
-        messages: [{ role: 'user', content: user }, ...(prior ? [{ role: 'assistant', content: prior }, { role: 'user', content: REPAIR }] : [])],
+        messages: [{ role: 'user', content: user }, ...(prior ? [{ role: 'assistant', content: prior }, { role: 'user', content: ask }] : [])],
         // ponytail: the PR findings schema is too large for the provider's grammar (always a 400), so PR reviews ask for plain JSON, validated by post.js. Scans send their schema.
         ...(audit && { output_config: { format: { type: 'json_schema', schema } } }),
       }, cap);
@@ -421,7 +421,7 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
       const answer = (Array.isArray(j.content) ? j.content : []).filter((b) => b?.type === 'text').map((b) => b.text).join('');
       let found; try { found = JSON.stringify(JSON.parse(answer)); } catch { found = require('../extract-json.js').extract(answer); }
       if (!found) { try { w('engine-raw-answer.txt', scrub(answer).slice(0, 200000)); notes.push('raw answer kept in engine-raw-answer.txt'); } catch { /* ctx unwritable */ } } // diagnosis only; the failure below is unchanged
-      return found ? { ...r, ok: true, found } : { ...r, ok: false, status: 'failed', reason: '', why: 'no JSON found in the engine output', answer };
+      return found ? { ...r, ok: true, found, answer } : { ...r, ok: false, status: 'failed', reason: '', why: 'no JSON found in the engine output', answer };
     };
     // usage.json: cost and tokens of every reply received, summed (each priced on its own card)
     const writeUsage = (rs) => {
@@ -542,9 +542,11 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
     if (pack.note) notes.push(pack.note);
     let r = await call(system, user, maxTokens, undefined, { usd: est.usd, room: () => budget }); r.usd = est.usd; // the worst case of this call: charged when its usage is unknown
     const rs = [r];
-    // no JSON in the answer: ask once for the JSON object only, if the budget still covers a second call (length, policy, auth and quota failures are not retried)
-    const again = !r.ok && r.answer?.trim() ? worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user) + Buffer.byteLength(r.answer) + REPAIR.length, maxTokens).usd : 0; // the repair call's own worst case
-    if (again && again + charge(r) <= budget) { const prev = r; r = await call(system, user, maxTokens, prev.answer, { usd: again, room: () => budget - charge(prev) }); r.usd = again; rs.push(r); }
+    // no JSON in the answer, or JSON that post.js's validate would reject: ask once (one repair turn in total, shared) if the budget still covers a second call (length, policy, auth and quota failures are not retried)
+    const verdict = (x) => { if (!x.ok || audit) return null; try { const v = require('../post.js').validate(JSON.parse(x.found)); return v.ok ? null : v.error; } catch { return null; } }; // PR mode only (a scan's answer has another shape); the same validator post.js applies; it repairs in place, so it runs on a fresh parse
+    const bad = verdict(r), ask = bad ? `${REPAIR} Your JSON failed validation: ${bad}. Fix that and return the corrected full object.` : REPAIR;
+    const again = (!r.ok && r.answer?.trim()) || bad ? worstCase(model, Buffer.byteLength(system), Buffer.byteLength(user) + Buffer.byteLength(r.answer) + ask.length, maxTokens).usd : 0; // the repair call's own worst case
+    if (again && again + charge(r) <= budget) { const prev = r, rep = await call(system, user, maxTokens, prev.answer, { usd: again, room: () => budget - charge(prev) }, ask); rep.usd = again; rs.push(rep); r = rep.ok || !bad ? rep : prev; } // a failed repair of a parsed-but-invalid answer leaves that answer, so post.js names the real validation error as before
     writeUsage(rs);
     if (!r.ok) return failEnd(r);
     w('findings.json', r.found);
