@@ -270,6 +270,7 @@ function assertionDelta(diff, isTest, gone = () => false) {
     return [];
   };
   const litList = (t) => [...String(t).replace(/\s\/\/[^'"`\n]*$/gm, '').matchAll(LIT)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]); // every literal in order, duplicates kept; a trailing comment is not part of it
+  const tok = (t) => t.match(/[\w$]+|[^\s\w$]/g).map((x) => (x === '"' || x === '`' ? "'" : x)), head = (t) => /^[^(]*/.exec(t)[0], subseq = (s, t) => { let i = 0; for (const x of t) if (x === s[i]) i++; return i === s.length; };
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const [f, { rm, add, lines }] of per) for (const r of rm) {
     const flat = (t) => t.replace(/\s+/g, '').replace(/["'`]/g, "'");
@@ -284,6 +285,8 @@ function assertionDelta(diff, isTest, gone = () => false) {
     const distinct = (min) => [...literalsOf(r.full, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive
     const lits = distinct(2).length ? distinct(2) : distinct(1);
     if (lits.length && add.some((a) => !a.weak && lits.every((x) => has(a, x)))) continue;
+    // edited in place: an added assertion in the same hunk with the same assert method and subject callee whose tokens hold every token of the removed one, in order (the edit only added: a fixture arg, a message); a changed or dropped literal keeps the lead
+    if (add.some((a) => !a.weak && a.hk === r.hk && head(a.full) === head(r.full) && callee(a.x) === callee(r.x) && subseq(tok(r.full), tok(a.full)))) continue; // ponytail: an arg appended to the call under test (f(1) -> f(1, 9)) passes
     // table-driven: a parameterised added assertion on the same function (no literal in its subject) inside a loop over a table with one row whose literals are
     // exactly the removed assertion's, in order ([1, 2], { input: 1, expected: 2 }, [at(10, 0, 0), [10, 30, 15], at(10, 30, 15)]). A row dropped in the move, an
     // array the loop does not read or a literal assertion keeps the lead.
