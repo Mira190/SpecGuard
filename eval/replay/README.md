@@ -212,3 +212,160 @@ Offline re-run of the real `src/post.js` on the saved raw model answers (`ctx/fi
 - Control noise +0.06 per no_known_bug PR-run. TP lost 0.
 - Root cause: the Details-only catches are `gated` by the partial-test-visibility gate (`src/post.js`, "a candidate test file was only partly visible"), which V2 deliberately excludes, so V2 cannot surface them.
 - Decision: not adopted; the post.js arms were not merged (PR #366 closed). Next: H3 (`prereg-h3.md`, a retest on the same PR set, not an adoption test).
+
+
+## Cut relevance (R, S): not adopted
+
+**Decision.** Gate 4 fails for both arms on both corpora, so neither rule is adopted. The run status keeps the main rule, and the experiment code is not merged. The blind audit (gate 3) was not graded, because its result could not change the decision. The main finding: on most runs the "Review context was cut" notice is not noise. In 68 of the 70 runs whose only remaining reason is a cut candidate test, a cut test names a changed definition (see Reading below).
+
+Pre-registration: `prereg-cut-relevance.md` with amendments 1 and 1b. Code (not merged): branch `fix/cut-relevance` at 38037ce, `src/post.js` `cutRelevant`, `candReasons`, `STRONG`, behind `EXP_CUT_RELEVANCE` (`1` = arm R, `strong` = arm S).
+
+### Arm S: reason classification (fixed before S was computed)
+
+The reason vocabulary that `collect.sh` can write after a candidate test in `test-candidates.txt` (all from `src/test-map.js` `mapTests`; the PR collector passes no `calls`, so `calls ...` never occurs in the corpora):
+
+| Reason string | Class | Why |
+|---|---|---|
+| `same name` | strong | the test file is named after the changed file |
+| `mentions <stem>` (no `changed`) | strong | a whole-word mention of the changed file's stem in the test: an import or a direct reference |
+| `file name has <names>` | weak | the test file name contains a public name of the file |
+| `calls <names>` | weak | (not emitted by the PR collector) |
+| `mentions changed \`x\`` | weak | shares an identifier with the diff only |
+| `same directory` | weak | proximity only |
+
+S counts a cut candidate toward "lost" only when it is strong. S reads no file. Like R, S keeps the notice when any finding was gated by the partial-visibility gate. Empirical reason counts in the corpus-1 collect output (all 288 PR-runs, summed over their candidate lines): `mentions` 441 (stem and changed together), `same name` 359, `same directory` 111, `file name has` 93.
+
+### Method
+
+- Code at 38037ce (`fix/cut-relevance`), prereg amendments 1 and 1b. Output of the first implementation (a914ff5, which counted a deletion-only change as irrelevant) was discarded and everything re-run.
+- Corpus 1: the holdout-2 raw answers of Kite runs 39120706885, 39120718089, 39120729276 (bugs, 45 PRs each) and 39120712567, 39120723905, 39120735452 (controls, 51 each). One `eval/replay-arms.js --engine mock-replay --arms A,R=EXP_CUT_RELEVANCE=1,S=EXP_CUT_RELEVANCE=strong` pass per run, so the three arms share one engine pass and differ only in post.js. Full (not blobless) clones: a blobless source clone makes `git blame` fail inside the shared clones and adds "Historical intent unavailable" to 284 of 288 runs; that was seen and fixed before these numbers.
+- "Incomplete" below means `execution_complete:false` in the counts block, i.e. the `incomplete[]` list of post.js is not empty (the status marker also turns `incomplete` for model-level reasons such as an unconfirmed requirement, which the cut cannot influence). A run is "cut-only" when `execution_complete` is false, the cut bullet is present, and none of the other `incomplete.push` messages is in the summary. A PR flips when all its cut-only runs become complete; the PR denominator is the PRs with at least one cut-only run (52 of the 96 PR ids; the 3 repetitions of a PR are one PR).
+- Corpus 2: SpecGuard's own PRs #345-#386, the latest CI run per PR whose `specguard-ctx` artifact is still downloadable: 38 PRs (#347, #348, #359, #384 have no findings.json in any artifact). R and S decisions are computed offline from the artifact (findings.json is not needed; pack-cut, pack-shown, test-candidates, diff.patch, files.txt and the file contents at the run's head sha). The same offline function reproduces the full post.js arm result on all 288 corpus-1 runs for both arms (0 mismatches), which is the proof that the shortcut is faithful.
+- Analysis scripts: `eval/replay/cut-relevance-analysis/an.js` (gates), `pk.js` (blind packets), `c2.js` (first corpus-2 pass). Raw evidence stays outside the repo (`SpecGuard-evidence`).
+
+### Gates
+
+| | R corpus 1 | S corpus 1 | R corpus 2 | S corpus 2 |
+|---|---|---|---|---|
+| Faithfulness of arm A (published status, headline, inline count) | 287/288 (the one miss is pydantic-ai-hclean2-2, run 39120735452, an invalid answer the publisher rejects today; counted valid as in V1/V2 it is 288/288 by the old convention) | same | n/a | n/a |
+| Incomplete, A (execution_complete false) | 212/288 | 212/288 | 27/38 | 27/38 |
+| Incomplete, arm | 210/288 | 190/288 | 25/38 | 27/38 |
+| Cut-only runs that become complete (run level) | 2/154 | 22/154 | 2/24 | 0/24 |
+| Cut-only PRs that become complete (gate 4, bar 1/3) | 0/52 | 6/52 | 2/24 | 0/24 |
+| Gate 1: findings, confidence, placement identical to A | 288/288 | 288/288 | by construction (the rule only changes status) | same |
+| Gate 2: a clean verdict with a gated finding | 0/288 | 0/288 | 0/38 | 0/38 |
+| Verdict became a pass (headline) | 0/288 | 0/288 | n/a | n/a |
+| Gate 4 (>= 1/3 of cut-only PRs) | fail | fail | fail | fail |
+| Gate 3 (blind two-grader audit) | packets built, not graded: 8 flip cuts + 8 controls | packets built: 20 flip cuts + 20 controls | pooled into the corpus-1 packets | same |
+
+Decision rule outcome: gate 4 fails for both arms on both corpora, so nothing is adopted, whatever the audit says. The audit packets are `audit/packets-R.md` and `audit/packets-S.md` (answer keys `key-R.json`, `key-S.json`) in the evidence folder; no flip turned a verdict into a pass, so the 1b "every ✅ flip" list is empty.
+
+### Flips by enclosing name (checked names of the flipped files)
+
+- R: top names `_validate_regexp_flags` 3, `regexpcount_sql` 3, `regexplike_sql` 3, `logNameStatusRepo` 2, `runEngine` 2, `packGuard` 2, `runReal` 2, `startOf` 1; lengths 5-8: 2, 9-14: 3, 15+: 3. No short common name behind a flip.
+- S (S reads no file; the names are what R would have checked for the same files): `setClient` 6, `hideDisabledQueries` 6, `TanstackQueryDevtools` 3, `TanstackQueryDevtoolsPanel` 3, `logNameStatusRepo` 2, `ModelProfile` 2, `generate_schema` 2, `_generate_schema_from_get_schema_method` 2, `_generate_schema_inner` 2, `inner_handler` 2; lengths 5-8: 4, 9-14: 10, 15+: 8.
+
+### Reading
+
+Of the 154 cut-only corpus-1 runs, 49 also have a changed file cut past a changed line (no arm can flip them) and 49 have a finding gated by partial visibility (the gate keeps the notice; the two sets overlap). Of the 70 runs with only cut candidate tests and no gated finding, R finds at least one test that names a changed definition in 68, so R flips 2 runs. S (strong reasons only) flips 22 runs. On SpecGuard's own PRs (corpus 2) 7 of 24 cut-only runs lose a changed file and 7 have a gated finding; R flips 2 PRs (#358, #379), S none. The name-mention proxy keeps the notice on most runs because the cut test files are large and mention many definitions.
+
+
+## Pack: changed lines before rule files (prereg-pack-changed-first.md + amendment 1): not adopted
+
+Experiment code (not merged): branch `fix/pack-changed-first` at 6300748 (`EXP_PACK` in `src/engines/claude-api.js`, `packLoss` in `src/focus.js`, the post.js refactor and tests). The analysis scripts are in `pack-analysis/` here.
+
+Switch `EXP_PACK` (O, F, FC, FCH; unset = main, byte-identical) in `contextPack`; scripts in `pack-analysis/` (`lib.js` measures, `repro.js` faithfulness, `freeze.js` / `prep-fresh.js` fresh corpus, `run-arms.js`, `summarize.js`); frozen fresh list `pack-analysis/fresh-corpus.txt`. Offline, no model call. Raw outputs are outside the repo (SpecGuard-evidence/pack).
+
+**Faithfulness (arm A against the saved runs).** Holdout 2: main's `contextPack` on the saved collector inputs reproduces the saved `pack-cut.txt` and `pack-shown.txt` on 96/96 PRs (21 PRs lose a changed line, as in the prereg; 14 of them a source/config line, i.e. neither a doc nor a test file). SpecGuard #345-#386: 38/38 PRs with a saved `pack-cut.txt` reproduce (4 have none). The first attempt reproduced 41/96; the causes were in the harness (a symlink the Windows collector had written as a plain file, and a path that changed from directory to file between two heads). The fresh corpus has no saved packs, so A is not checked there.
+
+**Corpora.** Holdout 2: 96 PRs. SpecGuard: 42 PRs, #345-#386 (n for the gates below is 42; 35 where A loses no changed line). Fresh: step 1 of the frozen list (120 first-parent commits, 30 each of cli, orpc, pydantic-ai, vitest; the repos whose rule files exceed one file cap at the tip); 14 were skipped by the collector, so n=106. A loses a changed line on 76 of them (at least 10, so steps 2 and 3 were not needed). Those 76 sit in cli 25/25, orpc 28/29, pydantic-ai 23/24, vitest 0/28, and consecutive commits share rule files, so they are not independent.
+
+**Gates, k/n.** "Code" = a changed file that is not a doc or a test. "Newly lost" = a changed line unseen in the arm that A showed.
+
+| Gate | A | O | F | FC | FCH |
+|---|---|---|---|---|---|
+| 1 holdout, PRs losing a code line (pass: <= 7/96) | 14/96 | 0/96 | 14/96 | 4/96 | 2/96 |
+| 1 holdout, newly lost (pass: 0) | - | 0 | 0 | 0 | 0 |
+| 2 fresh, A-lost PRs no longer lost (pass: >= 38/76) | - | 71/76 | 0/76 | 63/76 | 64/76 |
+| 2 fresh, newly lost (pass: 0) | - | 0 | 0 | 0 | 0 |
+| 3 SpecGuard, newly lost (pass: 0) | - | 0/42 | 0/42 | 0/42 | 0/42 |
+| 3 SpecGuard, text identical to A where rules fit one cap and are all in scope (F, FC) | - | n/a | 28/28 | 8/28 | n/a |
+| 4 holdout-2 kept standards findings citing a rule the arm drops (runs; pass: 0) | - | 0/10 | 0/10 | 2/10 | 2/10 |
+| 5 suite | - | 1633 tests, 1630 pass, 0 fail, 2 skipped, 1 todo (all arms share one build) |||||
+| 6 no in-scope rule lost or changed where A loses no line: holdout | - | 1/75 | 0/75 | 8/75 | 8/75 |
+| 6 same, SpecGuard | - | 0/35 | 0/35 | 0/35 | 0/35 |
+| 6 same, fresh | - | 2/30 | 1/30 | 30/30 | 30/30 |
+
+(Counts in the gate 6 rows are PRs that violate it; pass is 0.) FC fails gate 3 only through rule order: the sort reorders the same rules at the same byte count on all 20 PRs. F fails gate 6 once on fresh because dropping out-of-scope rules lets a rule that A showed partly be shown at another size; the same happens for O in all three cases (O: the last fitting rule is cut shorter, in one holdout PR one rule is gone, because the review files, which A did not show at all, take budget; the changed files there have only deleted lines, so A's lost rule does not count them).
+
+**Rule cost (in-scope rules dropped relative to A, total / PRs affected).** Holdout: O 70 / 10, F 0, FC 387 / 20, FCH 387 / 20 (324 of them on the 21 PRs where A loses a line). SpecGuard: 0 for all. Fresh: O 284 / 61, F 0, FC 1679 / 106, FCH 1679 / 106. Rule bytes shown, holdout: A 4.67 MB, O 3.83, F 4.48, FC 1.82; fresh: A 20.8 MB, O 16.7, F 20.7, FC 1.77.
+
+**Other measures (A / O / F / FC / FCH).**
+- Cut-test set vs A, PRs where it grows / shrinks: holdout O 12 / 9, F 0 / 1, FC 0 / 7, FCH 0 / 8; SpecGuard O 3 / 1, others 0 / 0; fresh O 1 / 28, F 0 / 1, FC 0 / 51, FCH 1 / 51.
+- "Review context was cut" notice, on to off / off to on: holdout O 5 / 1, F 0 / 0, FC 3 / 0, FCH 4 / 0; SpecGuard O 1 / 0, FCH 1 / 0; fresh O 24 / 0, F 0 / 0, FC 48 / 0, FCH 48 / 1.
+- (a) PRs where one file takes over 50% of the budget: 0 in every arm and corpus. Confirmed for O as implemented: the largest block is 42152 bytes (the file cap is 41666 plus block markup) across all arms.
+- (b) PRs where the review files together take over 50%: holdout A 5, O 11, F 5, FC 7, FCH 7; SpecGuard 6 in every arm; fresh A 0, O 10, F 0, FC 4, FCH 4.
+- (c) PRs with an empty rule block while an in-scope rule exists: 0 for A, O, F everywhere; FC and FCH 2 on holdout, 0 on SpecGuard, 44 on fresh (the first sorted rule is larger than the cap).
+- (d) The collector already drops lockfiles, generated files, snapshots, vendored and build output before `files.txt` is written: `src/collect.sh:26-28` (IGNORES: package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock, go.sum, `*.lock`, dist/, build/, vendor/, node_modules/, `*.min.*`, `__snapshots__/`, `*.snap`, `*.svg`, `*.pb.go`, `*_pb2.py`, `*.generated.*`, ...), applied at `src/collect.sh:90`, plus `IGNORE_EXTRA` at `:37`. Other large data files (e.g. `assets/go-licenses.json`) are not excluded.
+
+**Decision (rule: adopt the first of O < F < FC < FCH that passes every gate): nothing is adopted.** The default is unchanged; the switch stays.
+- O passes gates 1 to 5 and is the only arm that removes the loss without newly losing a line (holdout code losses 14 to 0; fresh 71 of 76 fixed). It fails gate 6 literally, on 3 PRs (1 of 75 holdout, 2 of 30 fresh): a rule file that A showed is lost (1 case) or shown shorter (2 cases) because the review files now come first. All three are a trade of the last rule against a changed file, where A's lost-line rule saw no loss. The prereg does not allow a waiver.
+- F fails gates 1 and 2: dropping out-of-scope rules frees almost no budget (it fixes 1 of 21 holdout PRs and 0 of 76 fresh).
+- FC and FCH fail gates 3 (FC), 4 and 6, and empty the rule block on 44 of 106 fresh PRs. Their rule cost is 387 (holdout) and 1679 (fresh) dropped in-scope rules; no written acceptance of that cost is made because neither is adopted.
+
+**Limitation.** This measures what the model can see, not what it finds. Deviations: (1) fresh-corpus repos qualify on rule bytes at the default-branch tip, not at each base (per-commit tree scans over thousands of commits did not finish); (2) 94 of the 120 fresh collector runs used `TRACE=off` (26 used `auto`) to finish in time, which empties only the last pack tier (spec files); (3) `collect.sh` ran in throwaway shared clones, one per commit, because it checks out and restores rule files in its work tree; (4) head trees for the arms are built from the object store without `git checkout`, and a git symlink is written as the plain file git writes with `core.symlinks=false`, as the holdout-2 collector did on Windows (on a Linux runner a symlinked rule file is followed, so SpecGuard-style `.claude/skills/x` links would show their target); (5) the "code" definition (not doc, not test) is the reading that gives the prereg's 14/96; with "any non-doc" it is 20/96 for A. (6) Fresh results come from four repos with very large rule sets; a repo with small rules would show no effect either way.
+
+### Amendment 2: arm O on the confirmation corpus under "loses changed content": not adopted (final)
+
+Experiment code (not merged): branch `fix/pack-changed-first` at 6300748 (`EXP_PACK` in `src/engines/claude-api.js`, `packLoss` in `src/focus.js`, the post.js refactor and tests). The analysis scripts are in `pack-analysis/` here.
+
+Run once, O unchanged from e94f451 (`src/` identical), list in `pack-analysis/confirm-corpus.txt` (all of step 2 + first 10 per repo of step 3, 200 commits; the collector skipped 14, so n=186). Collector: real `src/collect.sh`, gh shimmed, `TRACE=off` for all 200 (step 1 had used 94 off / 26 auto). "Loses content" = a changed RIGHT line past what is shown, or a changed file with deleted lines shown with 0 lines. Raw rows are in SpecGuard-evidence/pack (conf.json).
+
+**Gates on the confirmation corpus, k/n**
+1. A loses changed content on at least 10 PRs: 70/186 (pass).
+2. At least half of those fixed under O: 46/70 (pass; 24 still lose content).
+3. PRs newly losing content under O: 0/186 (pass).
+4. Gate 6 (A loses no content, so O must keep every in-scope rule A had at the same bytes): 1 violation in 116 PRs (fail). `langchain-f37ca688f9e6`: A loses nothing; O shows 241 KB of the changed files against A's 223 KB, and `AGENTS.md` is cut at another size.
+5. Gate 4 on holdout 2 for O: 0/10 kept standards findings cite a rule O drops (pass; unchanged, O's pack is the same). SpecGuard #345-#386 newly losing content: 0/42 (pass).
+6. Rule cost of O: 359 in-scope rules dropped on 41 PRs (all 359 on PRs where A loses content); 0 on 145 PRs.
+
+**Per-repo split (A loses / still lost under O, of n):** cli 11/1 of 25; gitea 5/5 of 10; hono 0/0 of 10; langchain 2/0 of 8 (the gate 6 violation); orpc 20/3 of 29; pydantic 1/0 of 10; pydantic-ai 28/12 of 28; query 0 of 9; rqlite 0 of 10; sqlglot 1/1 of 10; trpc 0 of 9; vitest 2/2 of 28. Rule drops: pydantic-ai 305, orpc 36, cli 18, others 0.
+
+**Design corpora under the new measure (information only; A loses / still lost under O, newly lost, gate 6 violations, rule drops total / PRs):**
+- Holdout 2 (n=96): 24 / 4, 0 new, 1 of 72 (pydantic-ai-hclean2-1, a rule lost), 70 / 10. Split: pydantic-ai 11/0 of 16, orpc 4/1 of 6, gitea 2/1 of 17, langchain 2/0 of 8, cli 1/0, pydantic 1/0, query 1/0, sqlglot 1/1, trpc 1/1, others 0.
+- Fresh step 1 (n=106): 78 / 11, 0 new, 0 of 28, 284 / 61. Split: cli 25/2, orpc 29/5, pydantic-ai 24/4, vitest 0.
+- SpecGuard #345-#386 (n=42): 8 / 3, 0 new, 0 of 34, 0 / 0.
+
+**Conclusion.** The amendment-2 rule requires every gate on the confirmation corpus, and gate 6 fails on 1 PR. O is not adopted. This is final: nothing is tuned, rerun or amended, and the `EXP_PACK` switch and its tests stay as they are. O fixes 46 of 70 losing PRs with no new loss, but it does so by giving the changed files budget that A spent on rule files, and on one PR that moved a rule the literal gate protects. The cost is 359 dropped in-scope rules on 41 PRs.
+
+**Post-hoc note, 2026-10-19 (does not change the decision).** The amendment-2 measure in `pack-analysis/lib.js` did count a file the PR deletes whole as a deleted-line loss: such a file is in `files.txt` but absent at head, so no arm can show it (prereg H, clarification 1). Re-reading the saved confirmation rows (`+++ /dev/null` in the diff), no A-loss PR came only from wholly deleted files (0 of 70) and 1 O-loss PR did (1 of 24). Corrected counts: A loses content on 70/186, fixed under O 47/70 (was 46), O still loses on 23 (was 24), newly lost 0, gate 6 violations 1 of 116 (unchanged, `langchain-f37ca688f9e6`). The measure now ignores files absent at head (`lib.js`, same `packRead` rule as the runtime in arm H). Not adopted stands.
+
+## Arm H (prereg-pack-fallback.md + clarification 1): not adopted
+
+Experiment code (not merged): branch `fix/pack-changed-first` at 6300748 (`EXP_PACK` in `src/engines/claude-api.js`, `packLoss` in `src/focus.js`, the post.js refactor and tests). The analysis scripts are in `pack-analysis/` here.
+
+Code frozen at 9002d09 (`src/` unchanged since). Run once on the frozen confirmation list `pack-analysis/confirm-h-corpus.txt` (step 3, lines 11-40 of each of gitea, hono, langchain, pydantic, query, rqlite, sqlglot, trpc: 240 commits; the collector skipped 28, so n=212; none replaced). Collector: real `src/collect.sh`, gh shimmed, `TRACE=off`. Measure: "loses changed content" as in amendment 2, with a deleted-line file counted only if it exists at head (`pack-analysis/lib.js`, same `packRead` rule as the runtime).
+
+**Floor.** A loses changed content on 27/212 PRs (needs at least 10): met.
+
+**Gates, k/n.**
+2. H loses no changed content on at least half of those PRs: 8/27 (fail; 19 still lose).
+3. Newly lost PRs: 0 by construction (a PR where A loses nothing gets A's pack). Line-level check (every changed line and deleted-line file that A showed is still shown by H, over all 212): 1 violation, `rqlite-bda22a7a75d0` (fail). There A loses 48 line/file items and H, which falls back to O, loses 62: it hides lines A showed.
+4. Holdout 2, kept standards findings citing a rule H drops: 0/10. H equals O on the A-loss PRs (O gave 0/10); computed directly on H as well.
+5. Gate 6 (no in-scope rule lost where A loses nothing): by construction. Checked: H's pack text and note are identical to A's on 185/185 PRs where A loses nothing (0 mismatches).
+
+**Conclusion.** Not adopted: gate 2 and the line-level part of gate 3 fail. This is final; nothing was tuned or rerun. Had every gate passed, adoption would still await the owner's written acceptance of the rule cost.
+
+**Rule cost.** H dropped 3 in-scope rule files on 2 PRs (gitea 2, rqlite 1).
+
+**Per-repo split (A loses / H fixes, of n).** gitea 8/4 of 30; hono 0 of 26; langchain 3/1 of 27; pydantic 2/2 of 26; query 0 of 28; rqlite 1/0 of 16; sqlglot 7/0 of 29; trpc 6/1 of 30. Skipped: 28 (spread over the repos; n per repo above).
+
+**Why gate 2 fails, and a measure gap.** On 12 of the 27 A-loss PRs H returned A's pack unchanged: the loss there is a deleted-line file that has no block in the pack but was never cut either (for example files outside the focus set), so the runtime `del` check, which requires the file to be cut, does not fire, while the amendment-2 measure counts it. On the other 15 H fell back to O and 8 were fixed. The runtime-consistent reading (a deleted-line file counts only if the pack cut it) gives A losing on 19 PRs and H fixing 9 (below half) with 0 newly lost, so the conclusion does not depend on the reading. Reported only; the measure was not changed.
+
+**Design corpora (known, not evidence; A loses / H fixes, newly lost, no-loss PRs differing from A):** holdout 2 (n=96) 22 / 20, 0, 0; fresh step 1 (n=106) 78 / 68, 0, 0; SpecGuard #345-#386 (n=42) 7 / 5, 0, 0. Rule drops: holdout 69 on 9 PRs, fresh 284 on 61, SpecGuard 0.
+
+## Open questions (untested)
+
+1. **Hypothesis: outside rule-heavy repos the loss comes from large changed files.** The testable part is hunk windows for over-room changed files on their own. In arm FCH this was mixed with FC's rule cap and never measured alone (main already slices around the diff's changed lines with a wide window; FCH only narrowed it and dropped symbol hits). It is a hypothesis only; no experiment was opened.
+2. **The diff-section gap (tracked in issue #TBD).** The question was whether deleted lines of a changed file can go unseen while the run stays complete, because the prompt cuts the diff at 40 KB, the pack adds the rest only if budget remains, and `post.js` does not check the diff section for cuts. Checked offline on every corpus with a changed file that has deleted lines, no block in main's pack and no `notWhole` entry (`pack-analysis/diffgap.js`): 37 PRs, 492 files (holdout 2: 1 PR, fresh step 1: 6, confirmation: 19, H confirmation: 11, SpecGuard: 0). All 492 files are in `focus-skipped.txt`: they are not in the prompt's diff at all, and the run is marked incomplete (`post.js` pushes the focus note when a file is skipped). So the 40 KB cut and the rest block were not the cause, and no case shows a deletion hunk unseen with a complete status in that population.
+   A neighbouring gap does exist. When focus shortens a chosen file's diff ("… N more changed lines in this file not shown (read the file for them)") and no file is skipped, nothing marks the run incomplete: `post.js` only counts `shortened` in telemetry. Reading the file cannot recover deleted lines. Across 638 PRs in these corpora, 62 ran focused and 12 of them had a shortened file and no skipped file; in 8 of the 12, 1,946 deleted lines appear nowhere in the prompt. Smallest case: repo pydantic, base 3454d6c9442b91b3325c60f10efb3d79b9467487, head d0d67ea05a9c0af3db47b112a0a24eceeccb77da, file `docs/plugins/conversion_table.py` (1 changed file, 54 KB diff, 335 changed lines not shown, 139 of them deleted). Only the diff-related reasons were checked; other incomplete reasons (engine, requirements, pack cuts) were not evaluated, so "complete" here means no focus or diff reason fires.
