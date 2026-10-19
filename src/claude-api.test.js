@@ -1689,7 +1689,7 @@ test('charge invariant over lost / unknown / HTTP-error / repair paths', async (
     ['lost + known', [reset, good()], 2.5, 2, K + W],
     ['lost + unknown', [reset, good({ usage: {} })], 2.5, 2, 2 * W],
     ['unknown only', [good({ usage: {} })], 2.5, 1, W],
-        ['two lost, no reply', [reset, reset], 3.5, 2, 2 * W],
+    ['two lost, no reply', [reset, reset], 3.5, 2, 2 * W],
     ['two lost + unknown reply (repair turn)', [reset, prose, reset, good({ usage: {} })], 4.5, 4, 4 * W],
     ['lost + unknown + repair', [reset, prose, good({ usage: {} })], 3.5, 3, 3 * W],
   ];
@@ -1701,5 +1701,16 @@ test('charge invariant over lost / unknown / HTTP-error / repair paths', async (
     assert.equal(h.calls.length, attempts, name);
     const got = JSON.parse(h.file('usage.json')).totalCostUsd;
     near(got, want); if (name !== 'lost + known') assert.ok(got >= want - 2e-4, `${name}: charged ${got} < ${want}`);
+  }
+});
+
+test('unit rooms: unit_findings null, missing or holding a non-object row fails that call\'s units (not "no findings"); a valid [] is accepted', async (t) => {
+  for (const [name, uf, bad] of [['null', null, true], ['missing', undefined, true], ['[null]', [null], true], ['[]', [], false]]) {
+    const s = roomRepo(t), body = { docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], ...(uf !== undefined && { unit_findings: uf }) };
+    s.answers((req, ok) => (unitsIn(req)[0] === 'bbbbbbbb' ? good({ content: [{ type: 'text', text: JSON.stringify(body) }] }) : ok(req)));
+    await s.h.go({ GITHUB_WORKSPACE: s.root });
+    const failed = JSON.parse(s.h.file('scan-parts.json')).failed;
+    if (bad) { assert.equal(failed.length, 1, name); assert.deepEqual(failed[0].units, ['bbbbbbbb'], name); assert.match(failed[0].reason, /unit_findings (was not an array|had a row)/, name); } else assert.equal(failed.length, 0, name);
+    assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.unit), ['aaaaaaaa', 'cccccccc'], name);
   }
 });
