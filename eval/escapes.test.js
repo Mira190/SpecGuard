@@ -155,7 +155,7 @@ test('renderEscapes: the cross-arm outcome and the not-comparable table are labe
   assert.match(other, /would have caught \(shadow\)/);
   assert.match(other, /\| unusable review \|/);
   assert.match(other, /\| 1 Copilot only \| would have caught \(shadow\) \| 1\/1 = ?|\| 1 Copilot only \| would have caught \(shadow\) \| 1\/1 \(insufficient/); // PR 4 hit; PRs 7 and 10 are unusable, not misses
-  assert.match(other, /\(insufficient data, need 10\) \| \[?n\/a\]? \| \[?n\/a\]? \| 0 \| 2 \| 0 \| 0 \|/); // arm 1 row: same file 0, unusable 2, no location 0, capped 0
+  assert.match(other, /\| 1 Copilot only \|[^\n]*\| 0 \| 2 \| 0 \| 0 \|\n/); // arm 1 row: same file 0, unusable 2, no location 0, capped 0
   assert.match(other, /Unusable = the review failed or is missing \(never a miss/);
 });
 
@@ -175,4 +175,61 @@ test('escapes: shadow runs with a full 20-finding list are counted as capped, an
   const x = escapes({ prs: p, fixes: f, shadow: new Map([[4, [run(true)]], [7, [run(false)]]]) });
   assert.equal(x.groups[1].capped_prs, 1);
   assert.match(renderEscapes(x).join('\n'), /\| 1 \|\n\nA line hit/); // the last column of the arm row
+});
+
+// Chance baseline: 40 PRs, each with one escaped defect blamed on a line inside a 40-line changed hunk (lines 100-139) of a 5000-line file.
+const chanceFx = () => {
+  const ps = Array.from({ length: 40 }, (_, i) => ({ number: 2000 + i, arm: 0 }));
+  const cands = ps.map((p, i) => fix(`z${i}`, 700 + i, [p.number, [S('f.js', 100 + ((i * 7) % 40))]]));
+  const added = Array.from({ length: 40 }, (_, i) => 100 + i);
+  return { ps, fixes: { candidates: cands }, status: new Map(ps.map((p) => [p.number, 'complete'])), addedOf: () => added, lengthOf: () => 5000 };
+};
+const group = (c, lineOf, extra = {}) => escapes({ prs: c.ps, fixes: c.fixes, status: c.status, addedOf: c.addedOf, lengthOf: c.lengthOf, findings: c.ps.map((p, i) => sg(p.number, 'f.js', lineOf(i))), ...extra }).groups[0];
+
+test('chance: findings on the blamed lines are clearly above the primary null', () => {
+  const g = group(chanceFx(), (i) => 100 + ((i * 7) % 40));
+  assert.equal(g.rate, 1);
+  assert.ok(g.chance.ci[1] < 0.5 && g.chance.rate > 0.05, JSON.stringify(g.chance)); // about 7 of 40 lines are within 3 of a blamed line
+  assert.equal(g.chance.above_chance, true);
+  assert.ok(g.chance.excess > 0.5);
+  assert.equal(g.chance.diff, 40);
+  assert.match(renderEscapes({ fixes: 1, groups: { 0: g } }).join('\n'), /above chance/);
+});
+
+test('chance: findings spread over the changed lines are not above the primary null, though the weak null (whole file) calls them above chance', () => {
+  const g = group(chanceFx(), (i) => 100 + ((i * 13 + 5) % 40));
+  assert.ok(g.rate < 0.5 && g.rate > 0, `observed ${g.rate}`);
+  assert.equal(g.chance.above_chance, false);
+  assert.equal(g.chance.weak_above_chance, true); // 5000 lines: random lines almost never land near a blamed one
+  assert.ok(g.chance.weak.ci[1] < g.rate);
+  const out = renderEscapes({ fixes: 1, groups: { 0: g } }).join('\n');
+  assert.match(out, /not above chance/);
+  assert.match(out, /weak null/);
+});
+
+test('chance: fixed seed reproduces, another seed differs; without a diff the line is permuted among other PRs findings, and a lone file is left out', () => {
+  const c = chanceFx(), at = (i) => 100 + ((i * 13 + 5) % 40);
+  assert.deepEqual(group(c, at).chance, group(c, at).chance);
+  assert.notEqual(group(c, at, { seed: 2 }).chance.rate, group(c, at).chance.rate);
+  const noDiff = group({ ...c, addedOf: undefined }, at).chance;
+  assert.deepEqual([noDiff.diff, noDiff.permuted, noDiff.dropped], [0, 40, 0]);
+  const lone = escapes({ prs: [c.ps[0]], fixes: { candidates: [c.fixes.candidates[0]] }, status: c.status, findings: [sg(c.ps[0].number, 'f.js', 100)] }).groups[0];
+  assert.equal(lone.chance.dropped, 1); // no diff, no other PR with a finding in that file
+});
+
+test('gitSeams: added lines of a commit (new side) and the file length at it', () => {
+  const { gitSeams } = require('./escapes');
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'esc-seam-'));
+  const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: d, encoding: 'utf8' }).trim();
+  git('init', '-q');
+  fs.writeFileSync(path.join(d, 'a.js'), 'l1\nl2\nl3\nl4\nl5\n');
+  git('add', '-A'); git('commit', '-q', '-m', 'one');
+  fs.writeFileSync(path.join(d, 'a.js'), 'l1\nl2\nL3\nl4\nl5\nl6\n');
+  git('add', '-A'); git('commit', '-q', '-m', 'two');
+  const sha = git('rev-parse', 'HEAD'), s = gitSeams(d);
+  assert.deepEqual(s.addedOf({ path: 'a.js', sha }), [3, 6]);
+  assert.equal(s.lengthOf({ path: 'a.js', sha }), 6);
+  assert.deepEqual(s.addedOf({ path: 'nope.js', sha }), []);
+  assert.equal(s.lengthOf({ path: 'a.js', sha: undefined }), 0);
+  fs.rmSync(d, { recursive: true, force: true });
 });
