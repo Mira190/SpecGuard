@@ -3554,8 +3554,8 @@ const evOf = (path_, extra = {}) => ({ path: path_, line: 2, quote: evidence.quo
 
 test('V3: a covered row needs an explicit unit layer unless the path is clearly a plain unit test; otherwise unknown "layer not stated"', () => {
   const run = (e) => { const d = report({ coverage: [row('covered', { evidence: [e] })], findings: [] }); assert.equal(post.validate(d).ok, true); return d.coverage[0]; };
-  for (const p of ['test/a.test.js', 'src/foo.test.js', 'test_quote.py', 'pkg/calc_test.go', 'src/__tests__/calc.test.js', 'src/test/java/FooTest.java', 'src/claude-api.test.js', 'src/ui-utils.test.js', 'src/db-helpers.test.ts', 'src/it.test.js', 'test_quote_api.py']) assert.equal(run(evOf(p)).status, 'covered', p);
-  for (const p of ['tests/api/orders.test.js', 'src/__tests__/db/users.test.js', 'src/Checkout.test.tsx', 'src/user.api.test.js', 'src/components/Menu.test.js', 'test_integration.py', 'src/foo-e2e.test.js', 'src/foo.e2e.test.js', 'src/foo.it.test.js', 'src/test/java/FooIT.java', 'src/__tests__/auth/login.test.js', 'src/ui/Menu.test.js']) {
+  for (const p of ['test/a.test.js', 'src/foo.test.js', 'test_quote.py', 'pkg/calc_test.go', 'src/__tests__/calc.test.js', 'src/test/java/FooTest.java', 'src/claude-api.test.js', 'src/ui-utils.test.js', 'src/db-helpers.test.ts', 'test_quote_api.py']) assert.equal(run(evOf(p)).status, 'covered', p);
+  for (const p of ['tests/api/orders.test.js', 'src/__tests__/db/users.test.js', 'src/Checkout.test.tsx', 'src/user.api.test.js', 'src/ui.test.ts', 'pkg/db_test.go', 'src/api.test.js', 'test_api.py', 'src/it.test.js', 'x/foo.browser.test.ts', 'src/components/Menu.test.js', 'test_integration.py', 'src/foo-e2e.test.js', 'src/foo.e2e.test.js', 'src/foo.it.test.js', 'src/test/java/FooIT.java', 'src/__tests__/auth/login.test.js', 'src/ui/Menu.test.js']) {
     const r = run(evOf(p));
     assert.deepEqual([p, r.status, /layer not stated|unit assertion/.test(r.reason)], [p, 'unknown', true]);
     assert.equal(run(evOf(p, { layer: 'unit' })).status, 'covered', `${p}: a stated unit layer is the model's claim and is kept`);
