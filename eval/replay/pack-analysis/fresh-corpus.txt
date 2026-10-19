@@ -1,0 +1,726 @@
+# Fresh corpus, frozen 2026-10-19T09:37:15Z before any arm was computed on it. Steps 2 and 3 are used only if step 1 (then 1+2) has A losing a changed line on fewer than 10 PRs (prereg amendment 1).
+# Qualification: repo rule files (collector STANDARDS globs, approximated) over one file cap at the default-branch tip; holdout-2 PRs excluded; first-parent commits of the default branch, each diffed against its first parent.
+# Built with eval/replay/pack-analysis/freeze.js
+## step 1
+cli	fa92838bef95fe4a29c1587693885d5e9bdb6cf1	40784251452bad4bd40c165de21c302db88e8a39	Merge pull request #14722 from cli/bdehamer-release-create-atomicity-help
+cli	40784251452bad4bd40c165de21c302db88e8a39	b758ce35643e64cfe4d61bc58b6009c4088e5e0c	Merge pull request #14720 from cli/bagtoad/artifact-html
+cli	b758ce35643e64cfe4d61bc58b6009c4088e5e0c	3d7967df5a94052b0554898ffa02526f0f90b8c9	Merge pull request #14714 from arsalanyavari/14692-clarify-comments-help
+cli	3d7967df5a94052b0554898ffa02526f0f90b8c9	59e9f78eacdf2554f8534d166808c3e9b8c7ebcb	Merge pull request #14678 from cli/bagtoad/artifact-urls
+cli	59e9f78eacdf2554f8534d166808c3e9b8c7ebcb	982d09f66295f253d8cf7f0b1fd3f10f77d00e59	Merge pull request #14706 from cli/dependabot/github_actions/actions/create-github-app-token-3.3.0
+cli	982d09f66295f253d8cf7f0b1fd3f10f77d00e59	e523cb7f38a0d654f581a1d4b355470c8f56ed54	Merge pull request #14705 from cli/dependabot/go_modules/github.com/klauspost/compress-1.20.3
+cli	e523cb7f38a0d654f581a1d4b355470c8f56ed54	819f972eff771d5ec433c8d03c369cc43f1eab49	Merge pull request #14707 from cli/dependabot/github_actions/goreleaser/goreleaser-action-7.3.0
+cli	819f972eff771d5ec433c8d03c369cc43f1eab49	98da056e92a33c4def7c23f8ad68256cc65fbc59	Merge pull request #14697 from cli/dependabot/github_actions/actions/setup-node-7.1.0
+cli	98da056e92a33c4def7c23f8ad68256cc65fbc59	ff67d7622da2503223b8437e8cfaa39e1f6bf0e2	Merge pull request #14696 from cli/dependabot/go_modules/github.com/cli/go-gh/v2-2.16.2
+cli	ff67d7622da2503223b8437e8cfaa39e1f6bf0e2	2c153f50dad5bc14d49fa0813b2c35fb0fd05103	Merge pull request #14485 from cli/dependabot/go_modules/google.golang.org/grpc-1.84.0
+cli	2c153f50dad5bc14d49fa0813b2c35fb0fd05103	d742735c68f07e538a0ec17f432db7eff9bab38c	Merge pull request #14657 from cli/dependabot/go_modules/charm.land/bubbletea/v2-2.1.0
+cli	d742735c68f07e538a0ec17f432db7eff9bab38c	7641f129fb90055a9ada83a241ed36bf9713cf64	Merge pull request #14654 from cli/dependabot/github_actions/codeql-actions-307b189a33
+cli	7641f129fb90055a9ada83a241ed36bf9713cf64	29cc9e1604a1c44f70dc34ab0c21874c7288b5ad	Merge pull request #14655 from cli/dependabot/github_actions/actions/download-artifact-8.0.2
+cli	29cc9e1604a1c44f70dc34ab0c21874c7288b5ad	b33eaba16f4eeddd00bee122cb1d29df8ecbdd9d	Merge pull request #14656 from cli/dependabot/github_actions/actions/upload-artifact-7.0.2
+cli	b33eaba16f4eeddd00bee122cb1d29df8ecbdd9d	e2590dd0f1a0ada394c7d6322594dc87d9408813	Merge pull request #14660 from cli/dependabot/go_modules/golang.org/x/crypto-0.58.0
+cli	e2590dd0f1a0ada394c7d6322594dc87d9408813	d6b82b12e67d108b7c82d76d943a3a47814acbc1	Merge pull request #14682 from cli/williammartin-fix-dependabot-triage-go-version
+cli	d6b82b12e67d108b7c82d76d943a3a47814acbc1	54a671d9a8f8c7a785c132d6f6a25375dc96acc1	Merge pull request #14650 from cli/bdehamer-attestation-verify-bundle-help
+cli	54a671d9a8f8c7a785c132d6f6a25375dc96acc1	de784b80f41bce9575656e09b29e17191b870507	Merge pull request #14648 from A4-Tacks/end-search-bg
+cli	de784b80f41bce9575656e09b29e17191b870507	ec5b512045db67e5a2a4ff4a1b02660b2fb24390	Merge pull request #14474 from jarrensj/remove-claude-md
+cli	ec5b512045db67e5a2a4ff4a1b02660b2fb24390	afbc62c9cdf7bb15c8aab1c6198cd6531108d44b	Merge pull request #14634 from cli/dependabot/go_modules/github.com/mattn/go-colorable-0.1.16
+cli	afbc62c9cdf7bb15c8aab1c6198cd6531108d44b	581392e6aea8df94b1fde390d920a4b0d99c12a2	Merge pull request #14633 from cli/dependabot/go_modules/golang.org/x/sync-0.24.0
+cli	581392e6aea8df94b1fde390d920a4b0d99c12a2	a45729e87739152888e3d4ab708c18721dc2d028	Merge pull request #14632 from cli/bump-go-1.27.2
+cli	a45729e87739152888e3d4ab708c18721dc2d028	b637d4c558f4eddcb30e1600307bb2df8943dbd7	Avoid spawning git for each extension at startup (#14620)
+cli	8db3c3107a174c51de4758f53d5b27911650931b	2c7ec97fddb8da331803e18e8c33395a3b6537ee	Merge pull request #14625 from cli/williammartin-bump-shell-quote
+cli	2c7ec97fddb8da331803e18e8c33395a3b6537ee	31d9601e292365301cb5d66c73b4e12334895be1	Merge pull request #14578 from cli/williammartin-extension-browse-bubbletea
+cli	31d9601e292365301cb5d66c73b4e12334895be1	996be976cad960a726aabb94be67dfc7e31e317b	Merge pull request #14583 from cli/bagtoad/add-accessibility-md
+cli	996be976cad960a726aabb94be67dfc7e31e317b	17142e08db2e300b37e6da1ddcfb651eb6d9c587	Merge pull request #14616 from cli/copilot/gh-skill-document-issue-view
+cli	17142e08db2e300b37e6da1ddcfb651eb6d9c587	6fc1c29d5477bfe71da7af290eb481c0df7811f1	Merge pull request #14592 from reginaldalfret/docs/nix-installation-nix-shell
+cli	6fc1c29d5477bfe71da7af290eb481c0df7811f1	fc4b137cdef0a6bd28fd461b7cf9c84a5812a8cd	Merge pull request #14577 from cli/williammartin-profile-startup-cost
+cli	fc4b137cdef0a6bd28fd461b7cf9c84a5812a8cd	c601748945c7f2390b6a4e99f874b1ce8e47533a	Merge commit from fork
+orpc	0c7f63b419b0a0f433322675926efa51bef3e747	f8504ba580700a128bdf93dfdf26141570ad636c	feat(rpc)!: carry batched cookies and shared headers on the batch response (#2264)
+orpc	f8504ba580700a128bdf93dfdf26141570ad636c	eed2b14d21c7e2fb11c41f3033f47093f3e1991e	docs(bun): fix LICENSE links in README (#2263)
+orpc	eed2b14d21c7e2fb11c41f3033f47093f3e1991e	23f55e97af8c379a0c2f6f39943ee61e6b96effd	feat(effect): enhance effect/wrap with discriminated options and context passing (#2262)
+orpc	23f55e97af8c379a0c2f6f39943ee61e6b96effd	040593174a9c19ee6abcb6b2754a681ca3ff4b70	chore(deps-dev): update msw requirement from ^3.0.2 to ^3.0.3 (#2209)
+orpc	040593174a9c19ee6abcb6b2754a681ca3ff4b70	55947af9f105b1eeda0dc57592ba4a5c7fc46673	chore(deps-dev): bump the dev-dependencies-minor-patch group across 1 directory with 39 updates (#2256)
+orpc	55947af9f105b1eeda0dc57592ba4a5c7fc46673	05f7ef3bd616da65f9cebfdf63fb8547a73041be	fix(effect): close type holes in catchORPCErrorCode and catchORPCErrorCodes (#2261)
+orpc	05f7ef3bd616da65f9cebfdf63fb8547a73041be	0358bf820db06deef3d5ab84cac7033d1ae32862	docs(effect): fix Effect v4 samples and add runtime notes (#2260)
+orpc	0358bf820db06deef3d5ab84cac7033d1ae32862	e691289935c1f2679844da46039490d710b032c0	docs(effect): avoid `onExcessProperty` in the JSON Schema converter example (#2259)
+orpc	e691289935c1f2679844da46039490d710b032c0	364ecde5d8e028950e562e82965320af017ea0c1	fix(msw): handle trailing slashes in origin and bump MSW requirement (#2257)
+orpc	364ecde5d8e028950e562e82965320af017ea0c1	fc12fe01a14c568ce30f8f354ec0edbe4eff2f08	chore: sync sponsors
+orpc	fc12fe01a14c568ce30f8f354ec0edbe4eff2f08	6fdd5e4ebd0dc45394d1ee6c35aab742aace642c	chore: release v2.0.0-beta.44
+orpc	6fdd5e4ebd0dc45394d1ee6c35aab742aace642c	2dc471de4207c99537f08c3675d3a15889569442	fix(json-schema): prevent exponential smart coercion of recursive union schemas (#2229)
+orpc	2dc471de4207c99537f08c3675d3a15889569442	200d8c2e645c27803dbdd452ad57e004bc2e5758	fix(server): start streaming batch at first message, not immediately (#2255)
+orpc	200d8c2e645c27803dbdd452ad57e004bc2e5758	aef5cca296f488989c17feb005d009889958a517	perf(rpc): reuse the shared path prefix of consecutive meta entries in deserialize (#2251)
+orpc	aef5cca296f488989c17feb005d009889958a517	e30a379026b3731794db9765cbef59a794b1036a	fix(rpc): reject meta paths that descend into already deserialized values (#2247)
+orpc	e30a379026b3731794db9765cbef59a794b1036a	576134f37ba9a7b204f99adaf708d6476564dea7	fix(server): reject non-canonical base64url in unsign and decrypt (#2252)
+orpc	576134f37ba9a7b204f99adaf708d6476564dea7	ef6bc84a5b48e8f78dec630e384d030c1f18f2c1	docs(cors): clarify security requirements for origin validation (#2250)
+orpc	ef6bc84a5b48e8f78dec630e384d030c1f18f2c1	d2d57102fc73564916a56678a7f02445f85ddc23	feat(server)!: remove prototype pollution protection plugin (#2249)
+orpc	d2d57102fc73564916a56678a7f02445f85ddc23	8768e97c98fffa10ed7ad578a2200448fcf92c11	fix(openapi): encode leading slash in catch-all path params in OpenAPILink (#2242)
+orpc	8768e97c98fffa10ed7ad578a2200448fcf92c11	870e2830a1fc109434157088620fad836956df5f	chore(deps): bump mime from 4.1.0 to 4.1.1 (#2235)
+orpc	870e2830a1fc109434157088620fad836956df5f	715d760834e7f1c16df2ab6fd0602383f0acca89	docs(nest): warn that bodies parsed by oRPC have no size limit (#2241)
+orpc	715d760834e7f1c16df2ab6fd0602383f0acca89	e8e9816e46e0f4c7eb4d1e2b4ded291ee3576a9d	fix(publisher): cap resumed events at maxBufferedEvents (#2240)
+orpc	e8e9816e46e0f4c7eb4d1e2b4ded291ee3576a9d	44e5bbaf9adb47c293343a8edd3e82374221cf62	feat(server): stream buffered batches when a sub-response is a stream (#2239)
+orpc	44e5bbaf9adb47c293343a8edd3e82374221cf62	f254e8a60ffdf3a79d0ead744395dd6ff84125c6	fix(rpc,openapi)!: throw MalformedResponseError instead of a MALFORMED_ORPC_RESPONSE ORPCError (#2238)
+orpc	f254e8a60ffdf3a79d0ead744395dd6ff84125c6	a9dd65cc6fd490d779397b950b34e13295fe82b3	fix(rpc,json-schema): limit bigint digit count in RPC serializer and smart coercion (#2233)
+orpc	a9dd65cc6fd490d779397b950b34e13295fe82b3	a2ca0afb5df4b8aba7e5f818a8021d51f2accb83	fix(node): keep small uploads in memory in TmpFileUploadHandlerPlugin (#2232)
+orpc	a2ca0afb5df4b8aba7e5f818a8021d51f2accb83	5ee1d2ffec79cf6324bab784cb24bc7a09d010b3	fix(rpc): bound lazy router prefix scan in RPC matcher (#2231)
+orpc	5ee1d2ffec79cf6324bab784cb24bc7a09d010b3	6618a1ffe7cdf8a07652eb9eeda8cdcba2716daa	fix(client): reject opaque and opaqueredirect responses (#2224)
+orpc	6618a1ffe7cdf8a07652eb9eeda8cdcba2716daa	d8664a32487f7117ed26fef736a1ea2c18517c05	fix(publisher,bun): report Redis subscriber connection errors via onError (#2222)
+orpc	d8664a32487f7117ed26fef736a1ea2c18517c05	491b548b82e42ae1c51ea3e3e57cd33a2625e786	fix: compare non-plain objects by reference, not structure (#2220)
+pydantic-ai	b90f46813e7f659640c75d1a581576e6ad5bac39	d7d15bf9cc0c4a70e756fdf1929edd8c52e2a637	Export native `douwebot` traces to Logfire (#10605)
+pydantic-ai	d7d15bf9cc0c4a70e756fdf1929edd8c52e2a637	b86a877bcffd9aaa4b51e7f2e131eff65e23bc3a	Repair agent workflow completion and incident recovery (#10501)
+pydantic-ai	b86a877bcffd9aaa4b51e7f2e131eff65e23bc3a	1edeed76af08df1d3e9256be96e9e4a333b91515	Remove the PostgreSQL pilot report (#10595)
+pydantic-ai	1edeed76af08df1d3e9256be96e9e4a333b91515	b8387d7134196b6b1951d7023cbbb1e614e8b583	Export Logfire traces from three GLM Agentic Workflows (#10379)
+pydantic-ai	b8387d7134196b6b1951d7023cbbb1e614e8b583	085b29384d2b2cdd352c4e9c76c649d9812899f1	Use native PostgreSQL 16 in regular CI (#10594)
+pydantic-ai	085b29384d2b2cdd352c4e9c76c649d9812899f1	0be309f8a0d92f5868e1779c39f93f4e5f30f1ff	Compare Docker and preinstalled PostgreSQL 16 in CI (#10581)
+pydantic-ai	0be309f8a0d92f5868e1779c39f93f4e5f30f1ff	e2535cfd3649e46125622b38d7d6b410f2e48c82	Auto-close Z.ai provider-health incidents with no reset time after a one-hour cool-down (#10356)
+pydantic-ai	e2535cfd3649e46125622b38d7d6b410f2e48c82	a22b8273c27bdffd2b6cc5631d87eef207285888	Use official PostgreSQL and Redis images for CI services (#10580)
+pydantic-ai	a22b8273c27bdffd2b6cc5631d87eef207285888	1640d15282ce37b0a6bcc29be0b3f56c3826165d	Use `DBOS.resume_workflow_async` in the deadline recovery test (#10579)
+pydantic-ai	1640d15282ce37b0a6bcc29be0b3f56c3826165d	52ff60dc01441a078c987b030df86201357dc22f	Require `chore` and reject `bug` for `github-actions` and `test-suite` PRs (#10565)
+pydantic-ai	52ff60dc01441a078c987b030df86201357dc22f	60a50a56f816667c2140e5c8fe726e03e0b37116	Allow variable collection durations in cost-guard test diagnostics (#10567)
+pydantic-ai	60a50a56f816667c2140e5c8fe726e03e0b37116	c1782a5073d5bdc0f1752bb04d8e3600d98f99b3	Raise `PYRIGHT_TIME_BUDGET` and use MongoDB’s Quay image for CI (#10537)
+pydantic-ai	c1782a5073d5bdc0f1752bb04d8e3600d98f99b3	ad50b9da212dd2e05b1cb4e5a53cfdde1f5e382b	Fix MCP Apps `loadResource` meta source in Vercel AI docs (#10577)
+pydantic-ai	ad50b9da212dd2e05b1cb4e5a53cfdde1f5e382b	11025a1f395d29dbe50af2b30f7429574b9a79c1	Drop expired exclude-newer overrides (asyncpg, termflow-md, anthropic, openai) (#10242)
+pydantic-ai	11025a1f395d29dbe50af2b30f7429574b9a79c1	bbe2790190c2d7c704fa80a338bed9a70938f988	Emit `Planning` status-tool events after their store reads, so DBOS recovery with an `event_stream_handler` replays in order (#10343)
+pydantic-ai	bbe2790190c2d7c704fa80a338bed9a70938f988	6cd4321c9408bd82f17e36f1a9b0529ca0168dd1	Dispatch realtime tool calls and check `request_limit` from the session core (#10503)
+pydantic-ai	6cd4321c9408bd82f17e36f1a9b0529ca0168dd1	c9675de73c143315d39a53342f6e4886b74f377f	Run the Prefect task-config example inside a flow so its retry settings apply, and stop promising exactly-once side effects (#10533)
+pydantic-ai	c9675de73c143315d39a53342f6e4886b74f377f	39f2af211fff0c8cf0d3a1c3b4ad6988efa4cc83	Use automatic prompt caching (`anthropic_cache`) on `AsyncAnthropicVertex` (#10513)
+pydantic-ai	39f2af211fff0c8cf0d3a1c3b4ad6988efa4cc83	7de6c8099d8c1fa2ad45b03e5195ff2d16ff738b	Drive `test_request_timeout_covers_sdk_retries` with a patched clock instead of a real 0.2s deadline (#10540)
+pydantic-ai	7de6c8099d8c1fa2ad45b03e5195ff2d16ff738b	67473579a991d63d0b68cda8666705610125b338	Add `ModelProfile.tool_call_id_length` and rewrite tool call IDs that Mistral models reject (#10519)
+pydantic-ai	67473579a991d63d0b68cda8666705610125b338	e24bdf2808c1bbfb3d530cdf140f9f54a23f127c	Register the agent with `__pydantic_ai_agents__` in every Temporal workflow example (#10535)
+pydantic-ai	e24bdf2808c1bbfb3d530cdf140f9f54a23f127c	c30b30969f65594fbc7fadd732ce20f04cb331cb	Give each docs sidebar label one meaning (#10496)
+pydantic-ai	c30b30969f65594fbc7fadd732ce20f04cb331cb	87d18d7240524a696d4b9f991c2b8cb4a76fbff3	Fix the Restate example's Hypercorn install and imports, and stop promising side effects are never duplicated (#10534)
+pydantic-ai	87d18d7240524a696d4b9f991c2b8cb4a76fbff3	de0414538ba5e03a6a3a5ccec4b47b9b319c3dc7	Let shielded model-stream cleanup finish when an outer `anyio` cancel ends a debounced `stream_text()`, `stream_output()` or `stream_response()` (#10448)
+pydantic-ai	de0414538ba5e03a6a3a5ccec4b47b9b319c3dc7	687ed343c152a96a48db60d5c5cfde31ae31f185	Call `OpenAIResponsesModel._process_provider_details` on streamed responses too (#10515)
+pydantic-ai	687ed343c152a96a48db60d5c5cfde31ae31f185	7ccb42bdc1e5c95c468c09c2478e39bcba59645c	Add request-scoped `SystemPromptPart(scope='request')` sent natively as Anthropic `clear_at` system messages (#9711)
+pydantic-ai	7ccb42bdc1e5c95c468c09c2478e39bcba59645c	6fe59e485196ee3c5281f1e3755725d032fe6859	End an OpenAI realtime response created without an id when a malformed `response.done` closes it (#10511)
+pydantic-ai	6fe59e485196ee3c5281f1e3755725d032fe6859	ffa8a7fef3ad2e37040894e7d6d1ea17f77ba22f	Let harness `Skills` ignore `include` and `exclude` names no library has with `unknown_names='skip'` (#10506)
+pydantic-ai	ffa8a7fef3ad2e37040894e7d6d1ea17f77ba22f	5d6a72ee58674ed31330673db4984a8b1d9e76bc	Group the third-party service capabilities under Integrations in the docs (#10498)
+pydantic-ai	5d6a72ee58674ed31330673db4984a8b1d9e76bc	281549b20d70b04212145c5c23728e922e639dc7	Introduce Pydantic Evals and Graph after the Harness on the docs index and README, and name what Evals grades (#10462)
+vitest	2abed8ee20fd311d2de0b5be684048f7d839a95e	de5af2939099c448ba179341debf7d376fd9fdc5	chore: accept PRs from anyone who contributed before (#11634)
+vitest	de5af2939099c448ba179341debf7d376fd9fdc5	fb150158b3499ae9e2bd52defd90b0a09b860424	fix(coverage): v8 `autoAttachSubprocess` to use `.tmp` directory (#11632)
+vitest	fb150158b3499ae9e2bd52defd90b0a09b860424	a967d8f39e2085fa1753a562d327eb9611359dab	fix: reference chai types in every d.ts chunk (#11618)
+vitest	a967d8f39e2085fa1753a562d327eb9611359dab	a60b8e1325b34da365c8c30c79321b8ecf566f11	perf(browser): map only first frame for trace locations (#11613)
+vitest	a60b8e1325b34da365c8c30c79321b8ecf566f11	1453ba6905cc3543c138f1147f75282bda66ea2b	fix: don't fail on console log pending at teardown (#11619)
+vitest	1453ba6905cc3543c138f1147f75282bda66ea2b	1766c257d759a8704a062792f0e0de8fcaab8b27	fix: return the mock to concurrent imports (#11623)
+vitest	3a39cfc5455093591ee69838f9da156eb9b03d5a	7a825db43e2beca0b219d2eadaec334cb81af0c7	fix: rerun setup files after `--changed` filtering (#11621)
+vitest	7a825db43e2beca0b219d2eadaec334cb81af0c7	f0401389e6869b50803841fc134fd4fe0fc1b199	chore: release v5.0.5 (#11609)
+vitest	f0401389e6869b50803841fc134fd4fe0fc1b199	6621a72d6ed371e43f80ff327f5063693bd6b1ad	docs: explain outer-realm values in vm pools (#11608)
+vitest	6621a72d6ed371e43f80ff327f5063693bd6b1ad	e9c3d72f0c8d6867de06a3df43ea28a05eeec444	fix: abort all running tests on cancel (#11606)
+vitest	e9c3d72f0c8d6867de06a3df43ea28a05eeec444	8dd67c2625943d824e257b87ae57a14094e90eed	fix: release mocks of finished test files (#11607)
+vitest	8dd67c2625943d824e257b87ae57a14094e90eed	6c5a447203a29a0708fbc5de4fb91ea501bdc395	fix(browser): run global setup once with instances (#11596)
+vitest	6c5a447203a29a0708fbc5de4fb91ea501bdc395	9697b3894f456b85db91f3824ebe833449305c04	fix: run hook cleanups when a later hook fails (#11605)
+vitest	9697b3894f456b85db91f3824ebe833449305c04	c010fc22b84224de2803724aeaff20bc083f5368	fix: keep the import frame in native loader errors (#11599)
+vitest	c010fc22b84224de2803724aeaff20bc083f5368	6498b666a3ae8961f6f2a8abdc89015b6fd0b3aa	test: parallel screenshot instances, longer timeouts (#11603)
+vitest	6498b666a3ae8961f6f2a8abdc89015b6fd0b3aa	f161e6df2b3c0bc84982d374094379139e380791	fix(browser): wait 30s for the browser to close (#11601)
+vitest	f161e6df2b3c0bc84982d374094379139e380791	fe86a64c6c6aa75481bffe5880b5c4e35ea67927	fix(browser): drop late connections of closed sessions (#11600)
+vitest	fe86a64c6c6aa75481bffe5880b5c4e35ea67927	25b1424a042b89a396d23c073b1eef86532baf30	fix: skip builtin loading in async leak detector (#11598)
+vitest	25b1424a042b89a396d23c073b1eef86532baf30	6ae8e89ff0734cf476e30186a83aebe6771aa330	ci: skip merge reports on closed pull requests (#11597)
+vitest	6ae8e89ff0734cf476e30186a83aebe6771aa330	ea611e44c79fef7ab41efaa359bf85b7159ef253	fix(reporter): end reason `'failed'` on worker crash (#11568)
+vitest	ea611e44c79fef7ab41efaa359bf85b7159ef253	d523a15f2824c7512a22ae57308776f9b6a34db8	fix(browser): run plugin buildStart on server creation (#11593)
+vitest	d523a15f2824c7512a22ae57308776f9b6a34db8	3a8289ac382ff72e7c33345b4847d839e9c3d676	fix: set `skip` in `skipIf`, ignore `undefined` options (#11591)
+vitest	3a8289ac382ff72e7c33345b4847d839e9c3d676	ca081358494a6170b1e4e3f9472243a7f03ad31c	fix: add `data` to the `import.meta.hot` stub (#11590)
+vitest	ca081358494a6170b1e4e3f9472243a7f03ad31c	14921e96253cf5ae460ad3d62c44deb1f78f5f2b	fix(browser): ignore synthetic pagehide events (#11582)
+vitest	14921e96253cf5ae460ad3d62c44deb1f78f5f2b	28dc1edfb6ba5a181fe208576989063795aeadb3	fix: handle quoted file names in `--changed` (#11583)
+vitest	28dc1edfb6ba5a181fe208576989063795aeadb3	2899eb3e97931aaaba561013f483cb671506eea4	fix: keep vite default `fs.deny` with api token file (#11578)
+vitest	2899eb3e97931aaaba561013f483cb671506eea4	9a04899cba636a37f2522409d4744abffd49cc67	chore: enable `trustPolicyExcludePrune` (#11570)
+vitest	9a04899cba636a37f2522409d4744abffd49cc67	f15bdac4f05d2838855d4bd4f47e4076036ea18b	docs: fix `test.projects` usage, test descriptions (#11565)
+vitest	f15bdac4f05d2838855d4bd4f47e4076036ea18b	45da010ed44a1293b03d2118ed2867d21f487be8	chore(deps): update oxc packages (#11551)
+vitest	45da010ed44a1293b03d2118ed2867d21f487be8	cf4f744981c1a81e39280b9743357c646d0ce8c5	chore: add "approve" label for issues that can accept PRs (#11547)
+## step 2
+cli	c601748945c7f2390b6a4e99f874b1ce8e47533a	5092057373a101c8706be0590856c13aaefd62ad	Merge commit from fork
+cli	5092057373a101c8706be0590856c13aaefd62ad	9ee0afb43414a411a214995ac3cb84dec6043b13	Merge commit from fork
+cli	9ee0afb43414a411a214995ac3cb84dec6043b13	1863cb7c0f1d27e9479a95edb30ba97fcc6c01b1	Merge commit from fork
+cli	1863cb7c0f1d27e9479a95edb30ba97fcc6c01b1	0706fa4d513426c0961720732198d6e0f7b54cdd	Merge pull request #14553 from cli/bagtoad/remove-host-versions-from-help
+cli	0706fa4d513426c0961720732198d6e0f7b54cdd	0f6de7b4f0aef53a94505efc2d57e87c578196f7	Merge pull request #14519 from waldyrious/document-search-operator-support
+cli	0f6de7b4f0aef53a94505efc2d57e87c578196f7	1cd39adbf03b0afc7c4600ad829fd3f196335800	Merge pull request #14540 from cli/williammartin-fix-issue-14521
+cli	1cd39adbf03b0afc7c4600ad829fd3f196335800	b85b62f0766e317581bdae212bc58999fc776256	Merge pull request #14543 from cli/dependabot/github_actions/codeql-actions-9d88a12d2b
+cli	b85b62f0766e317581bdae212bc58999fc776256	cfc615f110b10840f64b843eabd887e1c474ee5c	Merge pull request #14542 from cli/dependabot/go_modules/github.com/klauspost/compress-1.20.1
+cli	cfc615f110b10840f64b843eabd887e1c474ee5c	9b031151a825bda919203c5202876a725d637368	Merge pull request #14541 from cli/dependabot/go_modules/charm.land/bubbletea/v2-2.0.10
+cli	9b031151a825bda919203c5202876a725d637368	babd691446b9c935574771ef31e85e88f1362e4a	Merge pull request #14516 from cli/bagtoad/allow-ghu-tokens-for-attach
+cli	babd691446b9c935574771ef31e85e88f1362e4a	b6770c8bc54c72e74e785c307850446b8e10be9d	Merge pull request #14517 from cli/bagtoad/readme-seo
+cli	b6770c8bc54c72e74e785c307850446b8e10be9d	8eba304d7da2417869797f0a61e416a769b281b3	Merge pull request #14507 from cli/williammartin-cli-rendering-follow-up
+cli	8eba304d7da2417869797f0a61e416a769b281b3	6f7893163bb67716e27ab38261d06dc1fc47057b	Merge pull request #14475 from cli/bagtoad/cli-video-comments
+cli	6f7893163bb67716e27ab38261d06dc1fc47057b	a3d31e2764f110dd03c46136177360bc78dc3f63	Merge pull request #14509 from cli/williammartin-reviewer-facing-pr-guidance
+cli	a3d31e2764f110dd03c46136177360bc78dc3f63	5e5cd85ea40988abf5c15ec83d90f545151d220e	Merge pull request #14497 from cli/bagtoad/cli-security-reporting-guidance
+cli	5e5cd85ea40988abf5c15ec83d90f545151d220e	724ae6d9a6e84ba4ad7eb3734dfe64250d4bf2fa	Merge pull request #14487 from cli/dependabot/github_actions/nodeselector/setup-apple-codesign-0.0.3
+cli	724ae6d9a6e84ba4ad7eb3734dfe64250d4bf2fa	0cf1092493af067646fc5f3db9421c6a6ec9c938	Merge pull request #14486 from cli/dependabot/github_actions/codeql-actions-97c20ee9f3
+cli	0cf1092493af067646fc5f3db9421c6a6ec9c938	9eb4db2ba89017ea9dbcaed4f712dc4881f7f37b	Merge pull request #14462 from cli/revert-14437-williammartin-apple-codesign-action
+cli	9eb4db2ba89017ea9dbcaed4f712dc4881f7f37b	adeb51e2f094d848111100a543dd1941b4f4255d	Merge pull request #14461 from cli/bump-go-gh
+cli	adeb51e2f094d848111100a543dd1941b4f4255d	cac0dd795eeb5b9a448474fad7e295272fc5c486	Test explicit default repository resolution (#14460)
+cli	cac0dd795eeb5b9a448474fad7e295272fc5c486	0baa362572d70f11e34e50fedd26ef0b5e89963f	Merge pull request #14443 from cli/dependabot/go_modules/golang.org/x/crypto-0.57.0
+cli	0baa362572d70f11e34e50fedd26ef0b5e89963f	04d01ccc389fc93cbc82ba2d97f1ddd2f3f79e13	Merge pull request #14444 from cli/dependabot/go_modules/golang.org/x/text-0.42.0
+cli	04d01ccc389fc93cbc82ba2d97f1ddd2f3f79e13	339257b11b712b1427f50ad8be0b22065a7ed2b8	Merge pull request #14445 from cli/dependabot/go_modules/golang.org/x/term-0.46.0
+cli	339257b11b712b1427f50ad8be0b22065a7ed2b8	35b55f8cb2a10f57b1fa38721041fbf97c74da83	Merge pull request #14446 from cli/dependabot/github_actions/codeql-actions-8213001b74
+cli	35b55f8cb2a10f57b1fa38721041fbf97c74da83	38316c1c4f275030e3df6666382922e75410d68b	Merge pull request #14447 from cli/dependabot/github_actions/azure/login-3.1.0
+cli	38316c1c4f275030e3df6666382922e75410d68b	9909db87c400abf1e5f01215ee8cae8d69d65045	Use internal Apple codesign action (#14437)
+cli	9909db87c400abf1e5f01215ee8cae8d69d65045	97de969621be4915a607fcbb6e8e63a72494e138	Merge pull request #14442 from cli/bump-go-1.27.1
+cli	97de969621be4915a607fcbb6e8e63a72494e138	4595165dfeeed3fed5670445af393037ed4359d5	Safely replace stale Go bump branches (#14441)
+cli	4595165dfeeed3fed5670445af393037ed4359d5	ba51bb47799e308109a980fca846a90d164f5811	Recognize maintainer authorization (#14438)
+cli	8fcd6a643f993ee12b70ad0edeab741ed133c9f1	7f0590c2b8050bb04c5af52291062e6825dda9df	Fix remote branch deletion for owner case mismatch (#14429)
+orpc	491b548b82e42ae1c51ea3e3e57cd33a2625e786	32f3e1f445b191ee6b708ef10da9a2d94f39c01d	fix(client): stop retrying after iterator is closed (#2221)
+orpc	32f3e1f445b191ee6b708ef10da9a2d94f39c01d	a7721d766e5e64edc0b1357530e31fadd03b3d5b	fix(arktype): respect direction in JSON schema conversion (#2218)
+orpc	a7721d766e5e64edc0b1357530e31fadd03b3d5b	10e2df9aa99fc485214250a5a08871f950b156da	docs: add orpc-angular to ecosystem (#2217)
+orpc	10e2df9aa99fc485214250a5a08871f950b156da	f2d382249cf765dd131f35d7ee034046694ab1da	fix(tanstack-query,pinia-colada): let object overrides beat function base modifiers in query utils (#2213)
+orpc	f2d382249cf765dd131f35d7ee034046694ab1da	0dd6994468f9b5909faa065ef06845b846096303	fix: upgrade standard-server/* packages to 0.10.3 (#2215)
+orpc	0dd6994468f9b5909faa065ef06845b846096303	f0c182522d30d225bfbb39785d897e58a24efd7c	fix(server): keep the response Content-Type when compressing Blob bodies (#2214)
+orpc	f0c182522d30d225bfbb39785d897e58a24efd7c	42c2ba7b01daf9ff15bba73f3d491d67e39887ff	fix(openapi): prefer static routes when matching paths that need normalization (#2211)
+orpc	42c2ba7b01daf9ff15bba73f3d491d67e39887ff	937af925b056f7e1e74701dff0192c4e222e6609	fix(json-schema): only coerce date strings with a valid time suffix (#2212)
+orpc	937af925b056f7e1e74701dff0192c4e222e6609	5f441da3290653a9a1d2f1235076dc92a34cf7ba	fix(tanstack-query): give skipToken queries a distinct query key (#2210)
+orpc	5f441da3290653a9a1d2f1235076dc92a34cf7ba	4e67f77623423ae817a8c8ff0f4d5750479e054a	docs: serve the DeepWiki badge from shields.io (#2204)
+orpc	4e67f77623423ae817a8c8ff0f4d5750479e054a	033de6c958c57f4bddc7bf5aac94426c49713db4	chore(msw): upgrade MSW to v3 while keeping v2 support (#2203)
+orpc	033de6c958c57f4bddc7bf5aac94426c49713db4	d1b6ad0a84b1a73a08b940ddc6bc55c26d23993f	chore: sync sponsors
+orpc	d1b6ad0a84b1a73a08b940ddc6bc55c26d23993f	0a0bb5c95453d62edbcfe4cb2febc3fba9983e7b	chore(deps-dev): bump the dev-dependencies-minor-patch group across 1 directory with 68 updates (#2198)
+orpc	0a0bb5c95453d62edbcfe4cb2febc3fba9983e7b	7e53f2a98011a65620035cbad227803aab143cea	chore(deps): bump type-fest from 5.8.0 to 5.10.0 (#2201)
+orpc	7e53f2a98011a65620035cbad227803aab143cea	4a50f2ca1c6b7d6d992c91adfeecbff98ae723cc	chore(deps-dev): bump the eslint group with 2 updates (#2197)
+orpc	4a50f2ca1c6b7d6d992c91adfeecbff98ae723cc	8c32fc298498d722e95b019669f0c03082daabf3	chore: release v2.0.0-beta.43
+orpc	8c32fc298498d722e95b019669f0c03082daabf3	665249b3f1092c03deb99dbe610324906abeef9e	fix(openapi)!: bound memory used by sparse bracket notation keys (#2196)
+orpc	665249b3f1092c03deb99dbe610324906abeef9e	1dd8c87fa2bcb97df9314b1dcfc9c1d835f83a15	fix: upgrade standard-server/* packages to 0.10.2 (#2194)
+orpc	1dd8c87fa2bcb97df9314b1dcfc9c1d835f83a15	648d1b2c20968df546a633f3c9dc29de9f202213	chore(content): upgrade Blume to v2 (#2193)
+orpc	648d1b2c20968df546a633f3c9dc29de9f202213	769916d7154aa5b8db3e24ca14bdcd4629b076b5	fix(cloudflare): use timestamp-based ids to handle table recreation (#2190)
+orpc	769916d7154aa5b8db3e24ca14bdcd4629b076b5	acbef83238f5463f65b55233dda92276a4cfb5ab	fix(client): prevent retry of non-resendable request bodies (#2183)
+orpc	acbef83238f5463f65b55233dda92276a4cfb5ab	ee02653b280dbe881cfa3e41a127b1cd465ae95c	chore: remove unreliable octet stream benchmarks (#2188)
+orpc	ee02653b280dbe881cfa3e41a127b1cd465ae95c	86c31c3917dc6635c3636d7c81ef063138439ae4	feat(openapi): support enum and union status in detailed responses (#2187)
+orpc	86c31c3917dc6635c3636d7c81ef063138439ae4	f8cdffb4429ef1a1ecad4bf89eb4700732ce632a	fix(openapi,rpc): handle raw chars in paths stored percent-encoded (#2185)
+orpc	f8cdffb4429ef1a1ecad4bf89eb4700732ce632a	57bf278bf8fd675561e7c83902e86e44f3a6cbc3	fix(openapi): fix regex pattern for numeric path validation (#2186)
+orpc	57bf278bf8fd675561e7c83902e86e44f3a6cbc3	d28d10d1a63b1ac9e179d90bc5e11e0960f89f1c	docs: clarify CORS header configuration for batch and binary data (#2182)
+orpc	d28d10d1a63b1ac9e179d90bc5e11e0960f89f1c	7ee24a6165c46728c4cecbf69c985c345d987150	fix(trpc): handle TRPCError in subscription iterators (#2181)
+orpc	7ee24a6165c46728c4cecbf69c985c345d987150	d3ec22450cbc02906200c6be6289805f905e5fcf	fix: raise TanStack Query and Pinia Colada peer dependency floors (#2180)
+orpc	d3ec22450cbc02906200c6be6289805f905e5fcf	95dcbbff3ed688aa8b259ebc77cb81fc2e66ae8e	docs(nest): add testing section to NestJS integration page (#2179)
+orpc	95dcbbff3ed688aa8b259ebc77cb81fc2e66ae8e	2dc60992158d20e04d180f0d0eb6695e80248262	chore: release v2.0.0-beta.42
+pydantic-ai	281549b20d70b04212145c5c23728e922e639dc7	cbfb776758cda4fd573ba83fc7736b9f24b2da9c	Treat a native tool as unsupported when the model can't apply its `allowed_domains`, `blocked_domains`, `max_uses` or `external_web_access` setting (#10451)
+pydantic-ai	cbfb776758cda4fd573ba83fc7736b9f24b2da9c	96108488fb712d4614b6244dd4b3a2f8baebd935	Let the `clai2` `coder` plugin turn single Agent Skills off from its settings menu (#10486)
+pydantic-ai	96108488fb712d4614b6244dd4b3a2f8baebd935	0819823eed75fc8c29ac68d70a4d809a5dbb0629	Use title case for the remaining sentence-case docs sidebar labels (#10500)
+pydantic-ai	0819823eed75fc8c29ac68d70a4d809a5dbb0629	91e8dcb701c11f70b38416abb1f6c25664deb380	Drop the Gateway self-hosting claim from the front pages (#10492)
+pydantic-ai	91e8dcb701c11f70b38416abb1f6c25664deb380	f8a286b5815d6286407af5ac85375d947409bf62	Record a realtime reply the user cut off after it finished generating as interrupted, and mark interrupted speech when seeding (#10466)
+pydantic-ai	f8a286b5815d6286407af5ac85375d947409bf62	d9130af59aed3871b4f44251c1e811881a93c8a0	List all nine durable execution engines on the one Durable Execution page, and fold the Harness durable page into the workspace and Temporal guides (#10465)
+pydantic-ai	d9130af59aed3871b4f44251c1e811881a93c8a0	17d2f18ca815b1b7bbba92c224fbe208b23de563	Say in the durable execution overview and front pages that saving, resuming, and forking a run need no engine (#10463)
+pydantic-ai	17d2f18ca815b1b7bbba92c224fbe208b23de563	a64692a783ddb5104e6fe64e4f663224c625c502	Let `read_file` return images and PDFs, and describe other binary files (#9596)
+pydantic-ai	a64692a783ddb5104e6fe64e4f663224c625c502	f23dc3dce8da2f105f537070bc3244c7178476fd	Wait for the concurrency limiter's waiters by event-loop turns in `test_waiting_count_tracking` (#10478)
+pydantic-ai	f23dc3dce8da2f105f537070bc3244c7178476fd	6158d12e39b335e2f4d09ed97e2f16f12e00de82	Don't load the tokenizer to replay an empty GPT-Live history on a redial (#10474)
+pydantic-ai	6158d12e39b335e2f4d09ed97e2f16f12e00de82	56d15419f2c10287d275877352b72ae371c1cbb5	Update `RealtimeSession.context_window_used` together with the usage it reports (#10467)
+pydantic-ai	56d15419f2c10287d275877352b72ae371c1cbb5	959b31f3e3023c698800fa80c1ad039ce1fa8199	Run the live Harness Postgres integration suite in CI when the Postgres store or media code changes (#10470)
+pydantic-ai	959b31f3e3023c698800fa80c1ad039ce1fa8199	2409f836921760f5c8d73c0282972be046dc98a9	Restore the files #10457 accidentally reverted, including `request_timeout` (#10483)
+pydantic-ai	2409f836921760f5c8d73c0282972be046dc98a9	537af496559b1bbc5c1fb3bf08eb275322ffb5df	Add usage cards, a command palette, and System prompt and About sections to the `clai2` web UI, porting `/system_prompt` to `SettingsMenu` (#10461)
+pydantic-ai	537af496559b1bbc5c1fb3bf08eb275322ffb5df	3ed1beb10ef6503062e43b4cbf0b41810ce775c6	Add an MCP servers section to the `clai2` web Settings, running `/mcp`'s form and subcommands through `Dialogs` (#10459)
+pydantic-ai	3ed1beb10ef6503062e43b4cbf0b41810ce775c6	b4b9ad3de2d7a9cbfd7c70715f1f945496e990ce	Add a Keys & accounts section to the `clai2` web Settings, sharing `/keys` and `/accounts` steps with the terminal (#10457)
+pydantic-ai	b4b9ad3de2d7a9cbfd7c70715f1f945496e990ce	ca78593ab26a1acc4c3ac08c266623e69bdb2e23	Skip the gh-aw `pydantic-ai` engine when an earlier step wrote a `noop` to `GH_AW_SAFE_OUTPUTS` (#10450)
+pydantic-ai	ca78593ab26a1acc4c3ac08c266623e69bdb2e23	9b6a3f396a17a8715d836bfb5faadd099aa7da01	Add a Models section to the `clai2` web Settings, sharing `/model settings`' menu with the terminal (#10456)
+pydantic-ai	9b6a3f396a17a8715d836bfb5faadd099aa7da01	94fc592c15981441d462ee213859da0a18170d15	Skip a queued `CI Review` when its PR has closed or moved to a new head (#10380)
+pydantic-ai	94fc592c15981441d462ee213859da0a18170d15	4d06bfcf19066e6f21ef07b9c66f35c8f203043c	Add a Settings window to the `clai2` web UI, and show a command's declared `Command.menu` in the page (#10442)
+pydantic-ai	4d06bfcf19066e6f21ef07b9c66f35c8f203043c	6af7e5f8e0fcff112f4e03995c2ac7ec0dbe92fa	Redirect docs URLs that readers guessed and hit a 404 on (#10464)
+pydantic-ai	6af7e5f8e0fcff112f4e03995c2ac7ec0dbe92fa	d4ccb9fa915ae101aa5b5470067507e5e27a4eec	Shorten the `DelegationTask` messages serialization fallback comment (#10339)
+pydantic-ai	d4ccb9fa915ae101aa5b5470067507e5e27a4eec	58c2588b9a807bb05878696582848f3acb2fd9ff	Store each message once in `PostgresStepStore` and `MongoStepStore` instead of repeating the history in every snapshot (#10452)
+pydantic-ai	58c2588b9a807bb05878696582848f3acb2fd9ff	eea1f68c8935be13e0d1a42891d65405080cdf8f	Add `ModelSettings['request_timeout']` covering all attempts and stream consumption of one model request (#10072)
+pydantic-ai	eea1f68c8935be13e0d1a42891d65405080cdf8f	a2c7eec48e210d8cc947ee8451c582a766767657	Keep `ToolReturn(tools=...)` reveals when a Vercel AI frontend rebuilds history from the event stream (#10401)
+pydantic-ai	a2c7eec48e210d8cc947ee8451c582a766767657	e1e9670bb1b89e54c501e5bff1ab50feb506971e	Add archived sessions to `clai2`, with `sessions_find` and `sessions_archive` tools for the web UI orchestrator (#10446)
+pydantic-ai	e1e9670bb1b89e54c501e5bff1ab50feb506971e	6a45ddd956519925d725ae56206ed2741d0db809	Correct the `ProcessEventStream` docs on observer work interrupted when the stream ends early (#10449)
+pydantic-ai	6a45ddd956519925d725ae56206ed2741d0db809	c2a974784b27db9529eae688df03d94db8cdb8f0	Make `/update` work from the `clai2` web UI and restart into the same port, token, and session (#10460)
+pydantic-ai	c2a974784b27db9529eae688df03d94db8cdb8f0	9c7b6aed52c571049edc23a2cef50efe127213e2	Close the `AsyncInferenceClient` that `HuggingFaceProvider` builds when the provider or agent exits (#10393)
+pydantic-ai	9c7b6aed52c571049edc23a2cef50efe127213e2	03c29938401915af39084d47444bbd477e9ce8bf	Send tool results in call order from `Model.prepare_messages` so UI round trips keep the prompt cache (#10411)
+vitest	cf4f744981c1a81e39280b9743357c646d0ce8c5	6a11cf66f99fa610b7364363d5ca42b66d994f40	chore: pass down secrets to docs (#11555)
+vitest	6a11cf66f99fa610b7364363d5ca42b66d994f40	58c86edb92ec4d470dc87c060002cbd5725900de	chore: release v5.0.4 (#11554)
+vitest	58c86edb92ec4d470dc87c060002cbd5725900de	5c95521730bbc58ab20052f7ff807c29a8fbeb65	chore(deps): update all non-major dependencies (#11550)
+vitest	5c95521730bbc58ab20052f7ff807c29a8fbeb65	69e6369f64455b4d78a6338521bbfc5fdb909af0	fix(browser): clean up unmocked and pending mocks (#11537)
+vitest	69e6369f64455b4d78a6338521bbfc5fdb909af0	cd423ba045ed50662ea8e7bf7c2373e876cc0e5e	fix(browser): open one cdp session per tester (#11542)
+vitest	cd423ba045ed50662ea8e7bf7c2373e876cc0e5e	caaef94168ff9fad434bf0470c0a3270860c37b7	fix(mocker): fix native loader mocking edge cases (#11540)
+vitest	caaef94168ff9fad434bf0470c0a3270860c37b7	9f61dcca2812269494d12f632eb3d59c68b208ae	fix: resolve mocks in directories with spaces (#11539)
+vitest	9f61dcca2812269494d12f632eb3d59c68b208ae	0fa80f53c2afa3429ead7f357f0ad266b39b240a	fix(coverage): istanbul coverage wrong when module transform warmups (#11529)
+vitest	0fa80f53c2afa3429ead7f357f0ad266b39b240a	bf04b9ccc7235949e63490d310cdca00e61b3e4a	fix(coverage): filenames containing brackets incorrectly showing as uncovered (#11531)
+vitest	bf04b9ccc7235949e63490d310cdca00e61b3e4a	3e3624c5e5ecf77b20065da1aeb60f1182db0ccd	fix(browser): run browser instances as workers (#11525)
+vitest	3e3624c5e5ecf77b20065da1aeb60f1182db0ccd	26642f7936e04ec2591ad1d9b3500642423ba8ce	refactor: resolve maxWorkers once in config (#11524)
+vitest	26642f7936e04ec2591ad1d9b3500642423ba8ce	c06012ac8419ca4ea14a8808aedc8b0120111f81	fix: respect root in projects (#11521)
+vitest	c06012ac8419ca4ea14a8808aedc8b0120111f81	4c468aa40417c5c5868b39fe5521292161d6ae56	feat(experimental): add an option to cache dependencies instead of statically parsing them (#11515)
+vitest	4c468aa40417c5c5868b39fe5521292161d6ae56	662e8a3637725553b9466f768b22ec844e8d5ea6	fix: handle line endings in snapshot (#11522)
+vitest	662e8a3637725553b9466f768b22ec844e8d5ea6	b61d1ced3a11fea09e02a95a8b8fbcecbf0944ac	fix(browser): avoid extra scroll outside the iframe (#11523)
+vitest	b61d1ced3a11fea09e02a95a8b8fbcecbf0944ac	e658b9b6ad2505101863a4d4fe3504430b5ac55c	fix(browser): wait for setup mocks before importing a test file (#11520)
+vitest	e658b9b6ad2505101863a4d4fe3504430b5ac55c	1bc2495c7f6bc0c5b0ac64e2eb9de343639d5a0d	fix(ui): center split pane resize handle (#11506)
+vitest	1bc2495c7f6bc0c5b0ac64e2eb9de343639d5a0d	4ef000a938ca3e54eee1c8dd02e2eb9b1afff0c3	fix(ui): mount index.html handler on the ui base path (#11517)
+vitest	4ef000a938ca3e54eee1c8dd02e2eb9b1afff0c3	f5dd99ed083ba9035f378438e7a9dc9c5ce1c674	fix(coverage): `allowExternal` fails to include uncovered files (#11513)
+vitest	7d9f512c09de1478b40ab3d9743702f4cae7247d	3f6aa413ff4fa99c2f85aad2bf43471f305d0a6f	chore: support /approve-user in issues (#11512)
+vitest	3f6aa413ff4fa99c2f85aad2bf43471f305d0a6f	8df8b1b9bc07842e16aaed6a7a10224bf408b851	ci: fail merge reports job on error (#11510)
+vitest	8df8b1b9bc07842e16aaed6a7a10224bf408b851	1da66405d5e979299601a8c7fd13fb0f78e74495	chore: make ui.theme experimental (#11509)
+vitest	1da66405d5e979299601a8c7fd13fb0f78e74495	36d19cb00ec0f241820b7d885e37e84a61abba2c	feat: support `test.ui.theme` option (#11499)
+vitest	36d19cb00ec0f241820b7d885e37e84a61abba2c	836ddfae19bae765893275e631167b301587d194	fix: wrap module mocks during in-source testing (#11505)
+vitest	836ddfae19bae765893275e631167b301587d194	a19f466cb9af18d7700bc921279086de84266a7d	test(ui): fix playwright trace source locations (#11508)
+vitest	a19f466cb9af18d7700bc921279086de84266a7d	2297d93a854968d2ffee6025700c69099e6b7f80	chore: add `@vitest/ui` to `test/unit`'s `devDependencies` (#11507)
+vitest	2297d93a854968d2ffee6025700c69099e6b7f80	b618afd5cce6a903ca16e0dd9c8f00b58bb0b474	fix(coverage): v8 browser memory leak between test files (#11466)
+vitest	b618afd5cce6a903ca16e0dd9c8f00b58bb0b474	7396ebb5d2b547cee2e027484afe9a6b41934249	fix(vm): bind `this` to `module.exports` (#11504)
+vitest	7396ebb5d2b547cee2e027484afe9a6b41934249	1aca02a21f9970b34f4adda8c8604b7c3a619f1b	chore: simplify pull request template (#11494)
+vitest	1aca02a21f9970b34f4adda8c8604b7c3a619f1b	5ee9e8181cece7933329e46509d5a48e70ee6f00	fix(expect): check value in chai-style returned (#11500)
+## step 3
+gitea	458eda0f1d49f9413afdb353c561402b18267d43	5264304a34a3447893dd52b765e51350cd6e5e88	[skip ci] Updated translations via Crowdin
+gitea	5264304a34a3447893dd52b765e51350cd6e5e88	7e62dda79129c5c7b0414a852c75a0768a0e57f0	refactor: carry the API token on the doer (#39690)
+gitea	7e62dda79129c5c7b0414a852c75a0768a0e57f0	f690ea8efd4cd712d6e8039ab6b91bf9cecad479	chore(actions): update stale go-yaml wrapping comment (#39844)
+gitea	f690ea8efd4cd712d6e8039ab6b91bf9cecad479	ae17c14cffe9d416a38a3bf85f92e5b35fcb9da6	chore: refactor legacy JS init code to use "data-global-init" (#39836)
+gitea	ae17c14cffe9d416a38a3bf85f92e5b35fcb9da6	1031e3498712cc1efc1de0507017f2ee21f5493a	fix: add missing checks to several handlers and models (#39839)
+gitea	1031e3498712cc1efc1de0507017f2ee21f5493a	d0c35bcd58b013e2fe40ee92e6d4f413dd438576	test: run integration tests on random ports and speed up slow tests (#39842)
+gitea	d0c35bcd58b013e2fe40ee92e6d4f413dd438576	64846db0759309542eed0358e80bf067d1e0d2c8	refactor(git): remove unused TreeCommon embedded struct (#39830)
+gitea	64846db0759309542eed0358e80bf067d1e0d2c8	18d0ee174de159661f40d895d9079f6f0b1492f7	fix: use correct template variable on milestone page (#39834)
+gitea	18d0ee174de159661f40d895d9079f6f0b1492f7	52b18b49033c5b36da0836484d07480c93fa1bf7	fix(mailer): reject incoming email tokens of users who cannot sign in (#39833)
+gitea	52b18b49033c5b36da0836484d07480c93fa1bf7	13ddad6e07fb02c0e1f0e4bc46303edb015bcd51	fix(pull): recover PRs whose recorded merge commit never reached the base repo (#39831)
+gitea	13ddad6e07fb02c0e1f0e4bc46303edb015bcd51	b0df5e4abe432ac56bdb9c4e91d5fe7f8fbe90ee	enhance: allow custom watches to bypass on-mention email restriction (#39652)
+gitea	b0df5e4abe432ac56bdb9c4e91d5fe7f8fbe90ee	7f420f8d82386a701c10b6f1e8bb8c2165d2e8f7	fix(markup): prefer sturdier math fonts over Latin Modern Math (#39811)
+gitea	7f420f8d82386a701c10b6f1e8bb8c2165d2e8f7	b0ae5890cf10fc854125c2c10d58ff7e8568d3c3	fix: avoid index out-of-range panic in webhook assignee formatting (#39827)
+gitea	b0ae5890cf10fc854125c2c10d58ff7e8568d3c3	428d72d26f815ca0a4078f4c2494690434f871e4	chore: remove misspell (#39829)
+gitea	428d72d26f815ca0a4078f4c2494690434f871e4	a4908d4af408598fff968692d14d29e2b7f900de	chore: re-enable and extend unescaped-html-literal eslint rule (#39832)
+gitea	a4908d4af408598fff968692d14d29e2b7f900de	31626de2a6cdd3e1fe93216e4ac80f511297f1e7	enhance(actions): add OIDC workload identity support (#39052)
+gitea	31626de2a6cdd3e1fe93216e4ac80f511297f1e7	0081bd84303c93d727c3f5cb880ebd17fc15488e	enhance(repo): prefill new issue and pull request sidebars from query parameters (#39804)
+gitea	0081bd84303c93d727c3f5cb880ebd17fc15488e	3058f5ddf9bb01fed65210b1778bea29def24fb7	fix(actions): bound request body size in artifacts v4 twirp handlers (#39818)
+gitea	3058f5ddf9bb01fed65210b1778bea29def24fb7	efb0b34395516e8ac6e068d471b8f4d595e0f7d0	perf(actions): batch per-row queries in run, job and cancellation paths (#39723)
+gitea	efb0b34395516e8ac6e068d471b8f4d595e0f7d0	42b1f9526187d3c8c4d28814c1d3d043de12bc65	fix(packages): list highest CRAN version in PACKAGES index (#39793)
+gitea	42b1f9526187d3c8c4d28814c1d3d043de12bc65	c1ae4ec29e3af7869a0bf214a3a6e88deeb8a9b6	fix: optimize packages upload memory (#39366)
+gitea	c1ae4ec29e3af7869a0bf214a3a6e88deeb8a9b6	078198d38dc02a05156b817648817799f11ebea2	fix(actions): keep folded block scalars intact across serialization (#39787)
+gitea	078198d38dc02a05156b817648817799f11ebea2	6b252ca3a9ac5bc7cde049550e6b22e595c98c3b	ci: update giteabot to v1.2.1 (#39815)
+gitea	6b252ca3a9ac5bc7cde049550e6b22e595c98c3b	2fe74d3cdd5184a7e22e32e47772caa78d077489	fix(pull): don't auto-detect empty pull requests as manually merged (#39807)
+gitea	2fe74d3cdd5184a7e22e32e47772caa78d077489	a25d1d77eb1ca24ae1c7b60f6b5c66166664c669	refactor: clean up legacy templates and js (#39808)
+gitea	a25d1d77eb1ca24ae1c7b60f6b5c66166664c669	217300fff76a35f07f95283feb60a50d75e44b7d	fix(webauthn): accept unsolicited client extension outputs from WebKit clients (#39792)
+gitea	217300fff76a35f07f95283feb60a50d75e44b7d	70a5ff725c12374367af52487412be7398c00766	fix(pull): fix code context of review comments on unchanged lines (#39799)
+gitea	70a5ff725c12374367af52487412be7398c00766	a36bb47c84fea32bad4b7a79dc314563ae09bc04	enhance(oauth): pre-register a builtin OAuth2 application for gitea-vscode (#39785)
+gitea	a36bb47c84fea32bad4b7a79dc314563ae09bc04	8d6b3e48d3a4ee6a2b343dbf648cec488b746e3f	enhance(ui): use normal line-height for buttons and selection dropdowns (#39796)
+gitea	8d6b3e48d3a4ee6a2b343dbf648cec488b746e3f	222136ee715e8c124803de6228a4054f57e9afb6	[skip ci] Updated translations via Crowdin
+gitea	222136ee715e8c124803de6228a4054f57e9afb6	1c117a9352e4a64cd301028403c33949ab146424	refactor: clean up pull request comment related code and template dict (#39789)
+gitea	1c117a9352e4a64cd301028403c33949ab146424	919116568fe57da017f907d24770fe1907843b2b	refactor: clean up comment model (#39779)
+gitea	919116568fe57da017f907d24770fe1907843b2b	41ccfce3e9c04f217c29aff7bfd7c3d434eb9149	fix(actions): fix schedule cleanup and default branch switch (#39740)
+gitea	41ccfce3e9c04f217c29aff7bfd7c3d434eb9149	c6069f8d9fcfeb6ff141ed8cb40eff8def8cba1f	fix(markup): parse \(...\) inline math next to letters and digits (#39773)
+gitea	c6069f8d9fcfeb6ff141ed8cb40eff8def8cba1f	76f8dc38e7adbce214e4d27c8f1a0ba746492065	fix(gitdiff): unquote C-quoted paths from `git diff-tree --raw` (#39781)
+gitea	76f8dc38e7adbce214e4d27c8f1a0ba746492065	ccc9b928fe777e8d0bb3fe5f03a6a7aa97e5af2b	fix(user): don't match a commit with an empty author email to a user (#39777)
+gitea	ccc9b928fe777e8d0bb3fe5f03a6a7aa97e5af2b	b015cd67e299e489df294bb5f646628108dc5d37	refactor: issue comment context menu and buttons (#39771)
+gitea	b015cd67e299e489df294bb5f646628108dc5d37	aebdbd85fbf6a4092915f6917993b0af6a4aa446	feat(repo): allow deleting protected branches (#39243)
+gitea	aebdbd85fbf6a4092915f6917993b0af6a4aa446	f0434cd8f29a1e069d82a008947485c7858c4174	enhance(repo): allow custom content in issue and pull request sidebars (#39764)
+gitea	f0434cd8f29a1e069d82a008947485c7858c4174	bac747518a3d3e08468c30811c45f4a646d6a9de	[skip ci] Updated translations via Crowdin
+gitea	bac747518a3d3e08468c30811c45f4a646d6a9de	0eb57b927ae4f47cfeba7064d77d6528047584f7	fix(lfs): validate OID before building filesystem object path (#39762)
+gitea	0eb57b927ae4f47cfeba7064d77d6528047584f7	a1cc65126711814fa23b819e7972bd02631715c4	fix(markup): restore code copy newline strip and fix copying rendered blocks (#39755)
+gitea	a1cc65126711814fa23b819e7972bd02631715c4	bd28f254fa5a43e6204ad8e89ac04f51a8b80670	fix(markup): resolve and proxy srcset links of <source> elements (#39708)
+gitea	bd28f254fa5a43e6204ad8e89ac04f51a8b80670	c6e25135705bb947ccc9a8eec3b1e769eda6d970	[skip ci] Updated translations via Crowdin
+gitea	c6e25135705bb947ccc9a8eec3b1e769eda6d970	f270534e8396cd2dfbee6cdac4c3018a5878386c	refactor: migrate protected branch fields into one json column and support system users (#39735)
+gitea	f270534e8396cd2dfbee6cdac4c3018a5878386c	4b5f1f46debe63647e1680b1d543590a9cb90c63	fix: validate "scope" for OAuth2, "state" for OpenID (#39642)
+gitea	4b5f1f46debe63647e1680b1d543590a9cb90c63	c501255d4714afe7325060345b0b882b44fbf44d	enhance(actions): show the steps the runner reports (#39720)
+gitea	c501255d4714afe7325060345b0b882b44fbf44d	0e32b4a3629e3dd3fce3980f12789a288801874c	fix(issues): allow selecting a tag in the issue Branch/Tag dropdown (#39747)
+gitea	0e32b4a3629e3dd3fce3980f12789a288801874c	0eb0126fa244f660d50635bbb38f9116f86a7d8d	fix: correct label deletion and release attachment load (#39743)
+gitea	0eb0126fa244f660d50635bbb38f9116f86a7d8d	6384ed4d118005944e287c19dc26cb2fd75930f3	chore(deps): update dependencies (#39742)
+gitea	6384ed4d118005944e287c19dc26cb2fd75930f3	2f1761e3fe059d18ea40541df80778a5cccf2319	fix(packages/npm): restore former tarball URLs (#39681)
+gitea	2f1761e3fe059d18ea40541df80778a5cccf2319	8c7b8d085c9b0f1f18b1364096161ec0f766b485	fix(auth): avoid "compromised account" false-alarm when login with remember-me token (#39686)
+gitea	8c7b8d085c9b0f1f18b1364096161ec0f766b485	aa32eb97fad8224cc0ef9d4b40df255b8026dd49	fix(models): fix incorrect or unnecessary "scan rows" (#39516)
+gitea	aa32eb97fad8224cc0ef9d4b40df255b8026dd49	8a9e8c4e8ce3d535e98ea775fdf994b66ce5dd40	fix(packages): copy selected Debian installation values (#39718)
+gitea	8a9e8c4e8ce3d535e98ea775fdf994b66ce5dd40	321d3ec104bfbed9a972eb4200a243c195c9f50e	fix(actions): harden log cursor, activity type and actor filter handling (#39721)
+gitea	321d3ec104bfbed9a972eb4200a243c195c9f50e	23fb49fea77c8b2c3b7d1a41cbccea47e2099c2b	refactor(actions): pass secret and variable scope as a struct (#39719)
+gitea	23fb49fea77c8b2c3b7d1a41cbccea47e2099c2b	01fe36985d394eb9f6f66ce6c66b2ec0a278f002	fix(git): match git config values exactly when syncing (#39728)
+gitea	01fe36985d394eb9f6f66ce6c66b2ec0a278f002	e60d1c7fc837c3480ebb26c17fc57c55bd05e321	chore: update license files with line wrapping (#39726)
+gitea	e60d1c7fc837c3480ebb26c17fc57c55bd05e321	c30ddc3e1492ca44f31b81d35fb616709d1e4f3c	refactor: remove NotFoundOrServerError (#39727)
+gitea	c30ddc3e1492ca44f31b81d35fb616709d1e4f3c	c344004e53848cfaac7f2c207c23d54b0ab316c3	refactor(actions): small cleanups across models, services and routers (#39722)
+hono	5ca49b0720755c585c9a9835f0a479ceea36fb52	e9c01079a932ffdfa269c0011075ac43fd8a1035	fix(css): Fix multiline CSS handling in style replacement (#5405)
+hono	e9c01079a932ffdfa269c0011075ac43fd8a1035	08807ce12aa3aa27c8c5adf63e677bbab6bceda9	fix(hono-base): disallow `getPath` when `strict` is `false` (#5563)
+hono	08807ce12aa3aa27c8c5adf63e677bbab6bceda9	e77c7c8eb9fea50a496ba10010063998b55d7a6b	fix(trie-router): keep first value for duplicate path params (#5422) (#5423)
+hono	e77c7c8eb9fea50a496ba10010063998b55d7a6b	d54720da80134a180f5fe2dd98a7676cfc8f08b4	fix(helper/route): match regex params in basePath() the same way as the router (#5498)
+hono	d54720da80134a180f5fe2dd98a7676cfc8f08b4	ae401f080004872678100e890fd3398d3df09e67	fix(serve-static): respect q-values in Accept-Encoding for precompressed files (#5436)
+hono	ae401f080004872678100e890fd3398d3df09e67	2013fed5b21719bb1e6f44ce7f49757660946856	fix(css): keep the descendant combinator before a pseudo-class when minifying (#5451)
+hono	2013fed5b21719bb1e6f44ce7f49757660946856	43379d93e23abaaa54ff85f2ce64a149f50d4295	fix(css): keep "//" inside an unquoted url() when minifying (#5450)
+hono	43379d93e23abaaa54ff85f2ce64a149f50d4295	3362244401515a1530616aefb87eb388152f82a3	fix(jsx): preserve self-closing void elements in cloneElement (#5314)
+hono	3362244401515a1530616aefb87eb388152f82a3	588ec13fa68ea44fed1b5e1b503341db2bf09d70	fix(build): keep barrel imports in the bundled `d.ts` (#5557)
+hono	588ec13fa68ea44fed1b5e1b503341db2bf09d70	552ea024250093a48071b3ded9710de4c6e05f14	fix(serve-static): only serve GET and HEAD requests (#5514)
+hono	552ea024250093a48071b3ded9710de4c6e05f14	f78a245abc393368583085e19c7f5b28b460bf51	docs(readme): remove the deepwiki badge (#5548)
+hono	f78a245abc393368583085e19c7f5b28b460bf51	decda78a369f0a2bd6e989b62b61bda978599791	chore: unified oxfmt and oxlint config (#5518)
+hono	decda78a369f0a2bd6e989b62b61bda978599791	d22fd95c18c2711d8aefc0323632b75fa6a695e4	chore(adapters): release @hono/vercel@1.0.1
+hono	d22fd95c18c2711d8aefc0323632b75fa6a695e4	afe57ddeeb617fc6508f7f248f53643e670d3a7d	chore(adapters): release @hono/service-worker@1.0.1
+hono	afe57ddeeb617fc6508f7f248f53643e670d3a7d	0b9134e2b25c5c8fb92996dbd1c95f35693bf31c	chore(adapters): release @hono/netlify@1.0.2
+hono	0b9134e2b25c5c8fb92996dbd1c95f35693bf31c	f0ea83e77d1a4b5223e27bf4f98bac6050284013	chore(adapters): release @hono/lambda-edge@1.0.1
+hono	f0ea83e77d1a4b5223e27bf4f98bac6050284013	c9bfef0a136d741961025cc7a2c363bd7a64ae32	chore(adapters): release @hono/deno@1.0.3
+hono	c9bfef0a136d741961025cc7a2c363bd7a64ae32	8d0f24be497dbe43cdae3319080a38054b936360	chore(adapters): release @hono/cloudflare-workers@1.0.1
+hono	8d0f24be497dbe43cdae3319080a38054b936360	3c42c647bccff260e33ea78285c52d4455e1e76c	chore(adapters): release @hono/bun@1.0.1
+hono	3c42c647bccff260e33ea78285c52d4455e1e76c	da54a6bd7e5fca3aa3371b6d6c02aad0c02c70c7	chore(adapters): release @hono/aws-lambda@1.0.1
+hono	da54a6bd7e5fca3aa3371b6d6c02aad0c02c70c7	5f36607f67aa9357887337328ac84a1c1d48dc04	fix(adapters): accept Hono v5 prereleases in the `hono` peer range (#5537)
+hono	5f36607f67aa9357887337328ac84a1c1d48dc04	d4542eeb11efb9f1d1450bfb4ba54eb8b0e8e19f	docs(readme): sync the contributing list with CONTRIBUTING.md (#5527)
+hono	d4542eeb11efb9f1d1450bfb4ba54eb8b0e8e19f	08a023cbfde55b434fb0fb30fae35d42e4bf20aa	docs(contributing): ask for issues instead of RPs (#5526)
+hono	08a023cbfde55b434fb0fb30fae35d42e4bf20aa	ae595de8ae05ea548560da93140ee1d53e5a8202	4.13.13
+hono	ae595de8ae05ea548560da93140ee1d53e5a8202	f23b146afcec63606144cde50b5fbd360dd60238	feat(mount): introduce Mount Middleware and deprecate `app.mount` (#5221)
+hono	f23b146afcec63606144cde50b5fbd360dd60238	6d73a74f9757ed65d6103c0e8375097fa20873c4	fix(jsx): allow JSXNode function component results (#5476)
+hono	6d73a74f9757ed65d6103c0e8375097fa20873c4	deff529656cff775b35956f7f9071388d4eb55ae	docs(request): fix jsdoc comments for some getters (#5445)
+hono	deff529656cff775b35956f7f9071388d4eb55ae	6abd35b0a5f35f67b6417627d5b0a6c2d266ac04	test(client): simulate network error for undefined route in parseResponse test (#5439)
+hono	6abd35b0a5f35f67b6417627d5b0a6c2d266ac04	95eb860473d26bd303a2a29716e61a77c8c5e5f5	4.13.12
+hono	95eb860473d26bd303a2a29716e61a77c8c5e5f5	afb2068c1c53a530528ac5f237e245793dd03c07	chore(deps): upgrade vite-plus to 1.0.0 (#5464)
+hono	afb2068c1c53a530528ac5f237e245793dd03c07	e5bb2062a3ddd645e3a16d1300bd76d6c9af33a5	fix(combine): return a Response from a short-circuiting middleware in some() (#5391)
+hono	e5bb2062a3ddd645e3a16d1300bd76d6c9af33a5	c3053ccf14f1c4c70a0c2888eed6121b9f6c8f95	fix(jsx): add px to numeric gridGap, gridRowGap and gridColumnGap (#5487)
+hono	c3053ccf14f1c4c70a0c2888eed6121b9f6c8f95	c437d7569219a21e45fa81797749e8f34fe19dcc	fix(etag): correctly match mixed-case header name in retainedHeader option (#5475)
+hono	c437d7569219a21e45fa81797749e8f34fe19dcc	be1f7498fed269544a3c544db0a5a727048462a8	test(build): type-check the bundled declarations from a consumer project (#5486)
+hono	be1f7498fed269544a3c544db0a5a727048462a8	37ce06904e732d4bc11c9075adf362c76049a594	fix(build): keep internal types private in bundled d.ts and avoid a self-referencing JSX.IntrinsicElements (#5485)
+hono	37ce06904e732d4bc11c9075adf362c76049a594	1e1207cabfcd154146bf6ac9fd6a0b646f7fc484	4.13.11
+hono	1e1207cabfcd154146bf6ac9fd6a0b646f7fc484	8b05c774ef1555c70f5ba5e2991b7e77cc3635cc	test(serve-static): fix the test (#5479)
+hono	8b05c774ef1555c70f5ba5e2991b7e77cc3635cc	18331a905e2415f7f73038357f2eec354123f7a6	Merge commit from fork
+hono	18331a905e2415f7f73038357f2eec354123f7a6	6cd583bd481a86aecb34a7e3164cee16f2ce7f07	chore(adapters): release @hono/netlify@1.0.1
+hono	6cd583bd481a86aecb34a7e3164cee16f2ce7f07	271dd0b1e83d04763fbec7b9de9c8ffb870e6c6d	chore(adapters): release @hono/deno@1.0.2
+hono	271dd0b1e83d04763fbec7b9de9c8ffb870e6c6d	ae93026fe5f23adaa807874934f5097b5bfd6b6c	ci: write the tag version into deno.json before publishing to JSR (#5469)
+hono	ae93026fe5f23adaa807874934f5097b5bfd6b6c	72f0d8d58e20547c25370a97191765a9ca0e1d9b	chore(adapters): release @hono/deno@1.0.1
+hono	72f0d8d58e20547c25370a97191765a9ca0e1d9b	f3d5e8856244eb5faf9e1322834ca1639134d971	feat(adapters/netlify): publish to JSR (#5468)
+hono	f3d5e8856244eb5faf9e1322834ca1639134d971	645ddd6e6ceb0cf5bd9c49dfe03850f874409151	4.13.10
+hono	645ddd6e6ceb0cf5bd9c49dfe03850f874409151	1c6e060d1309195d2feacf29b4a7b5bd7eb3eccb	test: move adapter runtime tests into `adapters/*` (#5466)
+hono	1c6e060d1309195d2feacf29b4a7b5bd7eb3eccb	b877827fccde0be4ee78457ae8b65db2436139f9	feat(adapters/deno): publish to JSR (#5465)
+hono	b877827fccde0be4ee78457ae8b65db2436139f9	4d9f2a2ed4bf2fbd1c891a261b033caf138ea1f8	feat(adapters): add the seven adapters as workspace packages (#5463)
+hono	4d9f2a2ed4bf2fbd1c891a261b033caf138ea1f8	fc2343dbad8af7ab82bc4a6c6907e57416aed878	chore(adapters/bun): ship ESM only (#5462)
+hono	fc2343dbad8af7ab82bc4a6c6907e57416aed878	d7fb6972924f0a22fa3877b1a6e11e5273828527	feat(adapters): add @hono/bun as a workspace package (#5447)
+hono	d7fb6972924f0a22fa3877b1a6e11e5273828527	52f6c7ec865b31001a14eed9b323a0235f0a3156	chore(deps): upgrade vite-plus to `1.0.0-rc.1` (#5459)
+hono	52f6c7ec865b31001a14eed9b323a0235f0a3156	f69c1a525c50dafb45c58690ac8e0d3e62546d5f	ci: remove empty step left in `cr.yml` by the pnpm migration (#5456)
+hono	f69c1a525c50dafb45c58690ac8e0d3e62546d5f	ee0622e14487444211942eec2f6ab7ccede4c6af	chore: stop editorconfig-checker from checking Markdown indent size (#5455)
+hono	ee0622e14487444211942eec2f6ab7ccede4c6af	90d02fb1645c12a65d27f39594d2129db2065ba7	chore: convert build scripts into plugins (#5448)
+hono	90d02fb1645c12a65d27f39594d2129db2065ba7	5f31392d724cf98c9e48a3de119a55284583ad5f	fix(types): allow returning a Blob as a response body (#5446)
+hono	5f31392d724cf98c9e48a3de119a55284583ad5f	3ed3a14f6d47f3a000f6f0206912261fc0e4b6cd	chore: introduce Vite+ (#5444)
+hono	3ed3a14f6d47f3a000f6f0206912261fc0e4b6cd	859e2c2bd0ec6d104e98e126eaa86cfcf5def0d9	chore: replace eslint with oxlint (#5443)
+hono	859e2c2bd0ec6d104e98e126eaa86cfcf5def0d9	57ba76a2a45d0573ed8f1c1e4a9d11dda9c6ab11	chore: let oxfmt sort imports instead of eslint (#5442)
+hono	8dcd52b92beada28962e818bdca8a137a6beb656	a79a8048b6b3fd777c8f2b842cc4ad81c250ba2b	chore: replace prettier with oxfmt (#5435)
+hono	a79a8048b6b3fd777c8f2b842cc4ad81c250ba2b	535ae553fd32db848381db8f40d832c4a4f61ecb	chore(package.json): invoke package scripts through pnpm instead of bun (#5434)
+hono	535ae553fd32db848381db8f40d832c4a4f61ecb	7c3b0df96dbf3e767968ff5afe4c0d999257b8ee	chore: migrate the package manager from bun to pnpm (#5433)
+langchain	4fe944a581895ab47b0f56e204829594d5ba74a8	bd5b134d876ef47858beef27bd29c81eeda03293	chore(model-profiles): refresh model profile data (#41283)
+langchain	bd5b134d876ef47858beef27bd29c81eeda03293	b7b942a7ffd3206e1b572f4d0639377bca4750d7	release(core): 1.6.12 (#41277)
+langchain	b7b942a7ffd3206e1b572f4d0639377bca4750d7	f37ca688f9e68f92c1f9161a342a8e709ac6b16e	fix(core): propagate extras on content-block-start events (#41272)
+langchain	f37ca688f9e68f92c1f9161a342a8e709ac6b16e	011507e51ca3bc971f2074ae546a6132a9db8dc6	docs: update OpenWiki (#40925)
+langchain	011507e51ca3bc971f2074ae546a6132a9db8dc6	738dff9b6009a84bbe7882b15d24e13699d4fb0e	chore(deps): bump mcp from 2.1.1 to 2.2.0 in /libs/langchain_v1 (#41270)
+langchain	738dff9b6009a84bbe7882b15d24e13699d4fb0e	3bf004c794e34e0c883400bd8a4e310ceaa8ef97	chore(model-profiles): refresh model profile data (#41265)
+langchain	3bf004c794e34e0c883400bd8a4e310ceaa8ef97	c088db971097f0f12c7b8c30d473e8dbde09c823	fix: fix dependencies in some partner packages (#41266)
+langchain	c088db971097f0f12c7b8c30d473e8dbde09c823	8d4838fbe5a6572792c8cace3e514df1a1f2ac0d	release(core): 1.6.11 (#41260)
+langchain	8d4838fbe5a6572792c8cace3e514df1a1f2ac0d	7185be59c9a08969a928ce0f5d2ae26432425a48	feat(core): accept address inside LangChainTracer (#41006)
+langchain	7185be59c9a08969a928ce0f5d2ae26432425a48	84ba23c414eca6bf6f6ebd1394a3006378113540	chore(model-profiles): refresh model profile data (#41253)
+langchain	84ba23c414eca6bf6f6ebd1394a3006378113540	ac2f5e355e74aa3da53fcd0e7c5aec9d3ba00ccd	release(langchain): 1.4.6 (#41247)
+langchain	ac2f5e355e74aa3da53fcd0e7c5aec9d3ba00ccd	f295bfef22e9aeb02ad0f79b49883f4b446e4641	feat(langchain): add opt-in per-call interrupts to HITL middleware (#41062)
+langchain	f295bfef22e9aeb02ad0f79b49883f4b446e4641	170060e8387e06cd67b2458db0f232b2fa53fefd	chore(model-profiles): refresh model profile data (#41242)
+langchain	170060e8387e06cd67b2458db0f232b2fa53fefd	4bbbc5a3b0ad47ff2d73bfdce4d4ab86ca5724f9	release(openai): 1.7.2 (#41245)
+langchain	4bbbc5a3b0ad47ff2d73bfdce4d4ab86ca5724f9	8ace87e7a6493d41d4c61bb41a637052367b27f3	fix(openai): keep Responses stream items on one block when output_index drifts (#41121)
+langchain	8ace87e7a6493d41d4c61bb41a637052367b27f3	f2bf626ccee0a0e88d560706d4fdad35e43116e5	chore(model-profiles): refresh model profile data (#41229)
+langchain	f2bf626ccee0a0e88d560706d4fdad35e43116e5	a0074fb7e5f3fe7c192fcec442582bf5babbf642	release(langchain): 1.4.5 (#41226)
+langchain	a0074fb7e5f3fe7c192fcec442582bf5babbf642	36fb6aa0a445e770521b63ff5aa97f8fd6aeb1be	feat(langchain): accept `summarizer` in `SummarizationMiddleware` (#41225)
+langchain	36fb6aa0a445e770521b63ff5aa97f8fd6aeb1be	ba2baca02ea4b3add7ba08aeabf3673dc18199c6	release(anthropic): 1.7.6 (#41221)
+langchain	ba2baca02ea4b3add7ba08aeabf3673dc18199c6	85e0b7da58c32922d8f991962739e9789eb1f649	chore(model-profiles): refresh model profile data (#41215)
+langchain	85e0b7da58c32922d8f991962739e9789eb1f649	fddca066031a2122b3562485bd9c961a46978a1e	release(openai): 1.7.1 (#41222)
+langchain	fddca066031a2122b3562485bd9c961a46978a1e	e4b143729ffb3c6307376909d3aa9921b360c1f5	release(core): 1.6.10 (#41220)
+langchain	e4b143729ffb3c6307376909d3aa9921b360c1f5	b060a7466482ed5dac5fa1ef12e3ad21cccce385	chore(model-profiles): refresh model profile data (#41145)
+langchain	b060a7466482ed5dac5fa1ef12e3ad21cccce385	34489d61433cbf5044a630de2e7797e361672900	feat(core,anthropic,openai): declare mid-conversation support in model profiles (#41180)
+langchain	34489d61433cbf5044a630de2e7797e361672900	e7ca68b92062312221d7768a9d731a2d4942416b	release(langchain): 1.4.4 (#41163)
+langchain	e7ca68b92062312221d7768a9d731a2d4942416b	fc7dc7757a46ebb444be1ead0efdeab5ca7ad8ce	fix(langchain): (SummarizationMiddleware) retry summary step on context overflow (#41159)
+langchain	fc7dc7757a46ebb444be1ead0efdeab5ca7ad8ce	a055e836fd4ff75bfc2fe4adda33d06f0d625a63	release(core): 1.6.9 (#41160)
+langchain	a055e836fd4ff75bfc2fe4adda33d06f0d625a63	2baf2f33c72cf027383a0b123e9be5077eb483d5	feat(core): accept a callable in with_retry (#41158)
+langchain	2baf2f33c72cf027383a0b123e9be5077eb483d5	4acca6482ca3fefca9cfa2f961bbd8819eaa23ae	release(openai): 1.7.0 (#41154)
+langchain	4acca6482ca3fefca9cfa2f961bbd8819eaa23ae	b53209be4c01f17217ac0a00ef679f493dde23b3	release(core): 1.6.8 (#41153)
+langchain	b53209be4c01f17217ac0a00ef679f493dde23b3	2813f7a2fd3a52a64491acd7195b141e409d4709	feat(openai): support decisions api (#41125)
+langchain	2813f7a2fd3a52a64491acd7195b141e409d4709	1f587e3f4e0b34d67ea83896f74f855ee6ec103f	fix(core): harden scoped and compatible IPv6 SSRF checks (#41151)
+langchain	1f587e3f4e0b34d67ea83896f74f855ee6ec103f	38682b8f96300e68064ab30b3812db574ccc6cc8	test(fireworks): stabilize forced tool-call extraction (#41139)
+langchain	38682b8f96300e68064ab30b3812db574ccc6cc8	e986d201b8235a09d74dc7eb02588488f4e23c27	release(fireworks): 1.7.1 (#41137)
+langchain	e986d201b8235a09d74dc7eb02588488f4e23c27	4db8c0e8359dc9789669af140e9c2728718566f8	fix(fireworks): preserve reasoning in streaming and tool loops (#41093)
+langchain	4db8c0e8359dc9789669af140e9c2728718566f8	f5a80b1b04cd4602573f3b35b99d457ba28b8dc9	chore(model-profiles): refresh model profile data (#41117)
+langchain	f5a80b1b04cd4602573f3b35b99d457ba28b8dc9	cb4fec2a9234e66c625f7f59ce4328bd7a251935	chore(deps): bump fsspec from 2026.6.0 to 2026.9.0 in /libs/langchain_v1 (#41097)
+langchain	cb4fec2a9234e66c625f7f59ce4328bd7a251935	315ace880ca1dd5007a4f8cfe4615110b3a6f800	fix(huggingface): use a supported Scaleway model in streaming test (#41095)
+langchain	315ace880ca1dd5007a4f8cfe4615110b3a6f800	f9abeb3e158747880ce5dea80dffb56c9c95867a	chore(deps): bump langgraph-sdk from 0.4.2 to 0.4.4 in /libs/langchain (#41083)
+langchain	f9abeb3e158747880ce5dea80dffb56c9c95867a	adba95c2de751b419e0f1b61109006e28c88767b	chore(deps): bump langgraph-sdk from 0.4.4 to 0.4.6 in /libs/partners/anthropic (#41101)
+langchain	adba95c2de751b419e0f1b61109006e28c88767b	91520b61d3e7d9e2ecfcfd58aa148f293e37be0f	chore(deps): bump langgraph-sdk from 0.4.4 to 0.4.6 in /libs/partners/fireworks (#41100)
+langchain	91520b61d3e7d9e2ecfcfd58aa148f293e37be0f	85996bf088d4b84c300c8b1e61124b0b013f9b87	chore(deps): bump langgraph-sdk from 0.4.4 to 0.4.6 in /libs/partners/huggingface (#41098)
+langchain	85996bf088d4b84c300c8b1e61124b0b013f9b87	fd26921874c424e7b2858183a8b69e33142239b8	chore(deps): bump langgraph-sdk from 0.4.4 to 0.4.6 in /libs/partners/openai (#41096)
+langchain	fd26921874c424e7b2858183a8b69e33142239b8	18290ee2a2b97c0cd817e21719aeab9b80d571f8	chore(deps): bump fsspec from 2025.9.0 to 2026.6.0 in /libs/text-splitters (#41089)
+langchain	18290ee2a2b97c0cd817e21719aeab9b80d571f8	4e1ce08a57500735f3f3b6a80c9658ed047a4e9a	chore(deps): bump fsspec from 2025.9.0 to 2026.6.0 in /libs/langchain (#41082)
+langchain	4e1ce08a57500735f3f3b6a80c9658ed047a4e9a	aff248d9626e6ad0ea07475bbbbabfb8b22a70ee	chore(deps): bump multidict from 6.6.4 to 6.9.1 in /libs/langchain (#41081)
+langchain	aff248d9626e6ad0ea07475bbbbabfb8b22a70ee	82081ec2bd020650bbad27943b82168875a772ec	chore(deps): bump langgraph-sdk from 0.4.2 to 0.4.4 in /libs/partners/anthropic (#41080)
+langchain	82081ec2bd020650bbad27943b82168875a772ec	35914895b968b07525b397b05c96aa8746b3f923	chore(deps): bump langgraph-sdk from 0.4.2 to 0.4.4 in /libs/partners/fireworks (#41078)
+langchain	35914895b968b07525b397b05c96aa8746b3f923	49f2a9f159384f5e526035cd3715832220326eab	chore(deps): bump langgraph-sdk from 0.4.2 to 0.4.4 in /libs/partners/huggingface (#41076)
+langchain	49f2a9f159384f5e526035cd3715832220326eab	a84ecf19027acf12c71d66fc0fec352fc695b460	chore(deps): bump multidict from 6.7.0 to 6.9.1 in /libs/langchain_v1 (#41075)
+langchain	a84ecf19027acf12c71d66fc0fec352fc695b460	071e4a34fff10bfbb1d4e498df95497778efe402	chore(deps): bump langgraph-sdk from 0.4.2 to 0.4.4 in /libs/langchain_v1 (#41074)
+langchain	071e4a34fff10bfbb1d4e498df95497778efe402	425c1adac0b283906412621d51c79f9cfc491b3b	chore(deps): bump langgraph-sdk from 0.4.2 to 0.4.4 in /libs/partners/openai (#41072)
+langchain	425c1adac0b283906412621d51c79f9cfc491b3b	0de4b81d2598cbc3b300d9d5bd722238d94f74fd	chore(deps): bump fsspec from 2025.10.0 to 2026.6.0 in /libs/langchain_v1 (#41071)
+langchain	0de4b81d2598cbc3b300d9d5bd722238d94f74fd	22b44d3034371b45c24d944a0361017c0ddf6f03	chore(deps): bump langgraph-sdk from 0.4.2 to 0.4.4 in /libs/model-profiles (#41069)
+langchain	22b44d3034371b45c24d944a0361017c0ddf6f03	d5fc449b174130d33bb271e712bce57fcb7b09c0	chore(deps): bump fsspec from 2026.6.0 to 2026.9.0 in /libs/partners/qdrant (#41090)
+langchain	d5fc449b174130d33bb271e712bce57fcb7b09c0	bbcafb12240137be5946b608d1ff5f27b0c4b63d	chore(deps): bump fsspec from 2026.6.0 to 2026.9.0 in /libs/partners/mistralai (#41091)
+langchain	bbcafb12240137be5946b608d1ff5f27b0c4b63d	d6b062b15239650862c6cdfcd01fce04827637a2	chore(deps): bump fsspec from 2026.6.0 to 2026.9.0 in /libs/partners/huggingface (#41092)
+langchain	d6b062b15239650862c6cdfcd01fce04827637a2	9ce7d8536996ea835d93e152f2f6fe2bcc135a04	chore(deps): bump fsspec from 2025.9.0 to 2026.6.0 in /libs/partners/qdrant (#41070)
+langchain	9ce7d8536996ea835d93e152f2f6fe2bcc135a04	5cc00936e4ac1182582268985581c1f7675770e6	chore(deps): bump fsspec from 2025.9.0 to 2026.6.0 in /libs/partners/chroma (#41079)
+langchain	5cc00936e4ac1182582268985581c1f7675770e6	44472fecfb0493a2e828250c5d1412ea9e54ae20	chore(deps): bump fsspec from 2025.9.0 to 2026.6.0 in /libs/partners/mistralai (#41073)
+pydantic	5adfeaaaea947f81f0f01868604f219084ec151a	8cd3bec6c7e1d360d92193841613465d30f63955	Add pre-commit hook to prevent invisible Unicode characters (#14008)
+pydantic	8cd3bec6c7e1d360d92193841613465d30f63955	902e9b6dc1746a197df796f982e0392696d30f7f	Fix mangled comment in `test_pickle.py` (#14006)
+pydantic	902e9b6dc1746a197df796f982e0392696d30f7f	e0fb2cead13b1f604505ecb3621c5d6781e9307a	Bump speedate to v0.18.0 (#14007)
+pydantic	e0fb2cead13b1f604505ecb3621c5d6781e9307a	88e964a1f01967ec2d46d9da7f9ffc4016df4cb8	Harden CI (#14000)
+pydantic	88e964a1f01967ec2d46d9da7f9ffc4016df4cb8	44d5e1e8fc8198ecd0083a00a05e099aba0423ab	Fix various issues about GC tracking in `pydantic-core` (#13819)
+pydantic	44d5e1e8fc8198ecd0083a00a05e099aba0423ab	900e8991b7bf066a0d44346636c43b371608d8cf	Support explicit `by_alias` overriding `validate_by_alias` in validation JSON schemas (#13997)
+pydantic	900e8991b7bf066a0d44346636c43b371608d8cf	03de65fc2f44faa4b32e05ce0a5d499cdf38f89b	Copy private attributes when making root model shallow copies (#13989)
+pydantic	03de65fc2f44faa4b32e05ce0a5d499cdf38f89b	b96a4f8716beb6fafedaca92abc57f1628927e3a	Improve performance of `JsonValue` Python serialization (#13995)
+pydantic	b96a4f8716beb6fafedaca92abc57f1628927e3a	e1ca33220585e8f745000eff4b067e04fe7d83e9	Honor `ser_json_inf_nan` in Python serialization with `mode=json` (#13996)
+pydantic	e1ca33220585e8f745000eff4b067e04fe7d83e9	22c4317a5d51d71344275259b4e536c4a90fe53b	Fix unpickling of generic classes defined in separate module (#13994)
+pydantic	22c4317a5d51d71344275259b4e536c4a90fe53b	3eca5695dabc5a451ccfc0f4afa802166e61e27a	Revise Pydantic Logfire description in README (#13990)
+pydantic	3eca5695dabc5a451ccfc0f4afa802166e61e27a	141c1e3df86e1b3f4bfe908fb89ac860e8ba7c0c	Improve release script (#13982)
+pydantic	141c1e3df86e1b3f4bfe908fb89ac860e8ba7c0c	d0d67ea05a9c0af3db47b112a0a24eceeccb77da	Fix JSON Schema cache key mismatch with nested `json_schema_mode_override` (#13980)
+pydantic	d0d67ea05a9c0af3db47b112a0a24eceeccb77da	3454d6c9442b91b3325c60f10efb3d79b9467487	Fix docs conversion table (#13979)
+pydantic	3454d6c9442b91b3325c60f10efb3d79b9467487	0edb9347fad19f29452037d8fc47331cd2c0a096	Support named tuples in `Sequence` validation (#13978)
+pydantic	0edb9347fad19f29452037d8fc47331cd2c0a096	0b1dcd0efefbbf4a472779f5d6e0e2006e64a3fe	Reject out-of-range int inputs for `timedelta` (#13973)
+pydantic	0b1dcd0efefbbf4a472779f5d6e0e2006e64a3fe	68a839f0712c367f17be497b6850ebcb6825d76c	Enforce the `max_digits` whole-digits limit in the Python `Decimal` validator (#13972)
+pydantic	68a839f0712c367f17be497b6850ebcb6825d76c	eb810eccc508b9fb06c167e9a2027b00ab71dd9c	Support `closed` and `extra_items` via inheritance in `TypedDict` (#13967)
+pydantic	eb810eccc508b9fb06c167e9a2027b00ab71dd9c	7cb6ee4c0550ab0380259e10cfaeef4659767de4	Harden CI security (#13966)
+pydantic	7cb6ee4c0550ab0380259e10cfaeef4659767de4	ca359e009fcfaff2a80df33cb99ee6ab21aaf033	Fix `TypeError` on `ForwardRef` on Python 3.10.0 (#13964)
+pydantic	ca359e009fcfaff2a80df33cb99ee6ab21aaf033	9541387a9537e8ad3ef2694fe36ad450a7793078	Bump `samuelcolvin/check-python-version` action to v5.1 (#13960)
+pydantic	9541387a9537e8ad3ef2694fe36ad450a7793078	e40a1762024e3ac6ec036a890ce955062f475c80	Fix `arguments-v3` schema with variadic keywords (#13954)
+pydantic	e40a1762024e3ac6ec036a890ce955062f475c80	0f10d3f2d8903fa0e6e7504f19b1d290c4fefd47	Avoid unnecessary extra dict allocation in model validation (#13956)
+pydantic	0f10d3f2d8903fa0e6e7504f19b1d290c4fefd47	359598f48a183e5cab2cd9348acf3f38521a00a2	Set version post v2.14 release (#13958)
+pydantic	359598f48a183e5cab2cd9348acf3f38521a00a2	fcdefa7198c4fc94a22eecf1a5b7926e20b9fc8a	Avoid Python tuple allocation during model fields validation (#13955)
+pydantic	fcdefa7198c4fc94a22eecf1a5b7926e20b9fc8a	c821eaccf9873357477a1e7d2d4d12dd4e161c8a	Correct v2.14.0 release date (#13952)
+pydantic	b4028f9d87e34750e53be0ba011d70f3c0fcc94e	69ed168e9ad465eef4c8d81efb152a93b604daf5	Avoid validating URL prefix multiple times in multi host URLs (#13945)
+pydantic	69ed168e9ad465eef4c8d81efb152a93b604daf5	895c0c285c5cb4c0c7c7a4619a80941c12f2c75f	Reject large exponents in `Fraction` validation (#13944)
+pydantic	895c0c285c5cb4c0c7c7a4619a80941c12f2c75f	d2cbaaab74ba4a26bb66f604199ec9793aab6177	Fix datetime parsing in custom validator examples (#13931)
+pydantic	d2cbaaab74ba4a26bb66f604199ec9793aab6177	3fbc25ab2bd4f370f478102652f20aea1f5de0b0	Bump virtualenv from 20.36.1 to 21.7.13 (#13943)
+pydantic	3fbc25ab2bd4f370f478102652f20aea1f5de0b0	027b5c714791d5f6e86faea4110ef26f4776648c	Bump `pydantic-core` dependencies (#13942)
+pydantic	027b5c714791d5f6e86faea4110ef26f4776648c	2706d1f6cdd0ca5b941fd5170ecf0254f933e1f6	Rebuild incomplete types during serialization inference (#13922)
+pydantic	2706d1f6cdd0ca5b941fd5170ecf0254f933e1f6	98e9ecec0a5e56cfc92a8882eca19d525340ba98	Handle exceptions during `Decimal` validation (#13940)
+pydantic	98e9ecec0a5e56cfc92a8882eca19d525340ba98	8cbc8965b55aea1a69e748e38fd154a5caf6419e	Fix Clippy lints (#13941)
+pydantic	8cbc8965b55aea1a69e748e38fd154a5caf6419e	23f16f212b782195f51a2dc7f9a60c564b455337	Fix stale file path in algolia plugin comment (#13936)
+pydantic	23f16f212b782195f51a2dc7f9a60c564b455337	1e6cc758a04b3b1b50d12907b6c463a9ea575b4a	Fix pipeline example annotation (#13935)
+pydantic	1e6cc758a04b3b1b50d12907b6c463a9ea575b4a	7a03ceab85630553156dafd8bded382cf4fba709	Activate uncollected smart union serialization test (#13926)
+pydantic	7a03ceab85630553156dafd8bded382cf4fba709	0b2205799fb3735ed0639dd560d088d7858ebfe5	Skip the generic pickle test when cloudpickle is absent (#13929)
+pydantic	0b2205799fb3735ed0639dd560d088d7858ebfe5	10ae33b48978c5d0a75add0d02319880bd334320	Remove xfail on lazy imports tests (#13930)
+pydantic	10ae33b48978c5d0a75add0d02319880bd334320	e87e11b7a74068c2d8107e48ffed6102744abef8	Explicitly enable frame pointers (#13896)
+pydantic	e87e11b7a74068c2d8107e48ffed6102744abef8	f39f19d48cce3fca34c6ebd945a985db580e7f64	Fix third-party tests (#13924)
+pydantic	f39f19d48cce3fca34c6ebd945a985db580e7f64	29933d1c8cfc882a7640f4d831b09381b39aa311	Collect three tests that pytest never ran (#13921)
+pydantic	29933d1c8cfc882a7640f4d831b09381b39aa311	00ab3d5a2f7c99a0e4827680df3a9a003ef03369	Bump py-cov-action/python-coverage-comment-action from 4.1 to 4.4 (#13916)
+pydantic	00ab3d5a2f7c99a0e4827680df3a9a003ef03369	24c1cbd3288a2368020ab7e148e9b5daefe04da9	Bump pnpm/action-setup from 6.0.9 to 6.1.0 (#13917)
+pydantic	24c1cbd3288a2368020ab7e148e9b5daefe04da9	4944bf39a080c0a59d4481a0da2d2c41b4235f72	Bump re-actors/alls-green from 1.2.2 to 1.3.0 (#13915)
+pydantic	4944bf39a080c0a59d4481a0da2d2c41b4235f72	1bde20b3b82436f7fe7f657d6122c6e66dcd1f3c	Bump astral-sh/setup-uv from 10.0.1 to 10.2.0 (#13914)
+pydantic	1bde20b3b82436f7fe7f657d6122c6e66dcd1f3c	1a429e836a4449e331dffa766b7dc16af4264035	Bump uraimo/run-on-arch-action from 3.1.0 to 3.2.0 (#13913)
+pydantic	1a429e836a4449e331dffa766b7dc16af4264035	e5b02608847e59c4cdbeb6355d49374a800a9c91	Document unvalidated updates in `model_copy()` (#13911)
+pydantic	e5b02608847e59c4cdbeb6355d49374a800a9c91	e2ac21dcd66fc682f8a50f6e179dbd95fa4b44ac	Handle OS errors during `ZoneInfo` validation (#13912)
+pydantic	e2ac21dcd66fc682f8a50f6e179dbd95fa4b44ac	b00b63e9eb5734d9725e8efdc5e89c91da20db08	Bump urllib3 from 2.7.0 to 2.8.0 (#13907)
+pydantic	b00b63e9eb5734d9725e8efdc5e89c91da20db08	e99ab582081f37e45212783efc51a5278eb8c9a3	Bump oauthlib from 3.3.1 to 4.0.0 (#13906)
+pydantic	e99ab582081f37e45212783efc51a5278eb8c9a3	50ca66a5b2c07b64162402c1148a48e637a6e418	Add safe unified docs preview dispatch (#13686)
+pydantic	50ca66a5b2c07b64162402c1148a48e637a6e418	5bc650bb3b41d8472db480ffcec4b67ee9158104	Convert annotation to footnote in documentation (#13904)
+pydantic	5bc650bb3b41d8472db480ffcec4b67ee9158104	c9ac504d2ab62f7135950ccd7a5c0684be30805f	Add `__namespace__` parameter to `create_model()` (#13895)
+pydantic	c9ac504d2ab62f7135950ccd7a5c0684be30805f	26f7b8a1ad02951962c4073297fa9a2b1ce8d30c	Correct `MISSING` sentinel `version-added` directive (#13903)
+pydantic	26f7b8a1ad02951962c4073297fa9a2b1ce8d30c	e3d96620f9384e82f9c659469d61a2ffc61c94cb	Respect propagated extra config in the JSON Schema of stdlib dataclasses (#13899)
+pydantic	e3d96620f9384e82f9c659469d61a2ffc61c94cb	199b6ff8c138566999feccc20717ed73ac1a15db	Propagate `init` and `kw_only=False` from `Field()` to stdlib dataclass fields (#13898)
+pydantic	199b6ff8c138566999feccc20717ed73ac1a15db	48785824a8071c9a33d4db9d2c0651b78b38cd3c	Reject newlines in `NameEmail` validation (#13897)
+pydantic	48785824a8071c9a33d4db9d2c0651b78b38cd3c	12418a585cc0a62c1c9d7b9bfc821c56f9928d0a	Encode JSON Schema defaults with a consistent configuration (#13893)
+pydantic	12418a585cc0a62c1c9d7b9bfc821c56f9928d0a	ee4c062be800adb418b7f34ce3e06bc9aad93d74	Correct documentation about IP address strict mode validation (#13894)
+query	959f65e2dd32421bf2d0eb6b98b3afcb60727e13	2653d67fd4f4a0ea80b80cc9ea899045fdcdf70c	refactor(examples/svelte/optimistic-updates): move the fetchers into 'src/lib/api.ts' and share the todos query with 'queryOptions' (#12124)
+query	2653d67fd4f4a0ea80b80cc9ea899045fdcdf70c	ff47e1873250985d412ea8802aae1d9001a1984a	refactor(examples/svelte/load-more-infinite-scroll): type the planets response and move the query into 'src/lib/api.ts' with 'infiniteQueryOptions' (#12123)
+query	ff47e1873250985d412ea8802aae1d9001a1984a	9e6e51c73c67f3de7f292a5a1ec09094cebc02ba	fix(examples/svelte/load-more-infinite-scroll): show 'Loading more...' only while fetching the next page instead of on any background refetch (#12121)
+query	9e6e51c73c67f3de7f292a5a1ec09094cebc02ba	942314910238bf370f46c7226d2bcb5391b12b3f	refactor(examples/svelte/optimistic-updates): infer the 'onError' parameter types instead of 'any' and rename 'context' to 'onMutateResult' (#12120)
+query	942314910238bf370f46c7226d2bcb5391b12b3f	4e413ae8bd65a66b37847288ad24d99bbeb5bf10	fix(examples/svelte/{basic,ssr}): remove the '!postId' check that kept 'Loading...' next to the error for non-numeric post ids (#12119)
+query	4e413ae8bd65a66b37847288ad24d99bbeb5bf10	adb932ea114e80cc8a447e6ea82a08f14cf5ae86	docs(svelte/ssr): update the SvelteKit snippets to Svelte 5 runes with 'PageProps' and 'LayoutProps', add the default 'staleTime' and the missing 'noop' import (#12115)
+query	adb932ea114e80cc8a447e6ea82a08f14cf5ae86	ae6266d571d8766e25d392ee9a844e46e3953ca6	refactor(examples/svelte/star-wars): type the API responses and share the queries with 'queryOptions' (#12116)
+query	ae6266d571d8766e25d392ee9a844e46e3953ca6	a8fe350b8a5dc3a0c0e68bcd72caf29c2cdd2223	fix(examples/svelte/playground): show 'Saved!' only after a successful mutation instead of while idle (#12114)
+query	a8fe350b8a5dc3a0c0e68bcd72caf29c2cdd2223	3119e0c6a0c22f371d6a3a2d943b81343d76d006	fix(examples/svelte/star-wars): throw on non-ok 'fetch' responses in the API functions (#12113)
+query	3119e0c6a0c22f371d6a3a2d943b81343d76d006	86c01185a0420eb2b965aadc474ac195f2ba90c9	refactor(examples/svelte/ssr): read the cached post with 'postQueryOptions(id).queryKey' instead of a hard-coded key (#12112)
+query	86c01185a0420eb2b965aadc474ac195f2ba90c9	69457a9e57096c7d104695e170be62617deec119	refactor(examples/svelte/auto-refetching): move the fetchers into 'src/lib/api.ts' and share the todos query with 'queryOptions' (#12111)
+query	69457a9e57096c7d104695e170be62617deec119	d8ab863425bc2d22166d76a6689e9d2b6b38adc8	fix(examples/svelte/optimistic-updates): render 'Background Updating...' instead of a leftover JSX ternary (#12107)
+query	d8ab863425bc2d22166d76a6689e9d2b6b38adc8	306fcda84dc5cae8ea6f7cebc870ca3a1c573966	refactor(examples/svelte/basic): share the post queries with 'queryOptions' in 'src/lib/queries.ts' (#12110)
+query	306fcda84dc5cae8ea6f7cebc870ca3a1c573966	d0a1dff1ba6ca0898c120c5989968d81cdaeaa83	fix(examples/svelte/optimistic-updates): throw on non-ok responses so a failed create rolls back the optimistic update (#12106)
+query	d0a1dff1ba6ca0898c120c5989968d81cdaeaa83	7592b2f18a789723912af0e53fceccadf7139365	fix(examples/svelte): throw on non-ok 'fetch' responses in the query and mutation functions (#12109)
+query	7592b2f18a789723912af0e53fceccadf7139365	2e86afff57c708a343ce3a2f6a778d70cbc56ea7	fix(examples/solid/offline): throw the response text on non-ok 'fetch' responses and show query errors in 'List' and 'Detail' (#12099)
+query	2e86afff57c708a343ce3a2f6a778d70cbc56ea7	633d8e4bacbf6f6f1d3c06f0f6647c3c0b6536c2	refactor(examples/solid/default-query-function): type the posts with a 'Post' type instead of 'any' (#12105)
+query	633d8e4bacbf6f6f1d3c06f0f6647c3c0b6536c2	aa77cd7f626ed2e26851b92ddb5a3fb737a9025b	docs(solid): replace the deprecated 'route.load' with 'route.preload' in the SSR guide and the solid-start-streaming example (#12104)
+query	aa77cd7f626ed2e26851b92ddb5a3fb737a9025b	f9d7ec0997a4669d739a4d47132c39f88b7bc86e	fix(examples/solid/astro): throw on non-ok 'fetch' responses and show a pokemon load error through an 'ErrorBoundary' (#12103)
+query	f9d7ec0997a4669d739a4d47132c39f88b7bc86e	4ae64479f42df8a981c4eaaa7aabe15608707d32	refactor(examples/solid/basic): remove the always-true 'enabled' and the always-false '!props.postId' check in 'Post' (#12101)
+query	4ae64479f42df8a981c4eaaa7aabe15608707d32	c10c1f770c204d919ce51c336be64f44c2e66629	fix(examples/solid/basic-graphql-request): type post ids as strings and pass the id as a GraphQL variable (#12100)
+query	c10c1f770c204d919ce51c336be64f44c2e66629	c1296c1745b3adc312cd512bce0d300aa20912d6	fix(examples/solid): throw on non-ok 'fetch' responses in the query functions (#12098)
+query	c1296c1745b3adc312cd512bce0d300aa20912d6	de10bb0f9c1f2ec9f1a3db9c7ac3822ffb163c80	fix(examples/preact/simple): throw on non-ok 'fetch' responses in the query function (#12097)
+query	de10bb0f9c1f2ec9f1a3db9c7ac3822ffb163c80	0e7d125f0f393a6d49a4217c9afd0d20733b5ceb	chore(examples/react/react-native): replace the removed 'expo eject' script with 'expo prebuild' and drop the deprecated global 'expo-cli' install step (#12096)
+query	0e7d125f0f393a6d49a4217c9afd0d20733b5ceb	ddff3a70be3255d6154cbb828fb9b00a209ba382	refactor(examples/solid/astro): type the pokemon responses and move the queries into 'src/lib/api.ts' with 'queryOptions' (#12102)
+query	ddff3a70be3255d6154cbb828fb9b00a209ba382	85feb0941982ddbe063f00824fb2aaa2eb7e061d	fix(examples/react/react-native): register 'NetInfo' through 'onlineManager.setEventListener' so connected devices are not treated as offline while reachability is unknown (#12091)
+query	85feb0941982ddbe063f00824fb2aaa2eb7e061d	3c648e4dd8c5b958ecce4560f7ec5324443ba9b8	refactor(examples/react/react-native): refetch only active stale queries in 'useRefreshOnFocus' as in the React Native guide (#12092)
+query	3c648e4dd8c5b958ecce4560f7ec5324443ba9b8	a8eeff39fe983db4223a0f95a4bd4874bf5ee017	feat(examples/react/react-native): render 'ReactQueryDevtools' on web through a platform-specific 'Devtools' component (#12093)
+query	a8eeff39fe983db4223a0f95a4bd4874bf5ee017	af1e58044aab17f483f01bfce5daa213bcb36dd7	refactor(examples/react/react-native): replace the deprecated 'Paragraph' and 'Title' with 'Text' variants from 'react-native-paper' (#12094)
+query	af1e58044aab17f483f01bfce5daa213bcb36dd7	c57cf557c1ff245c87c520529ff1fca6132a89ea	refactor(examples/react/eslint-plugin-demo): rename the 'useApiClient' stub to 'getApiClient' since it is called outside of hooks (#12089)
+query	c57cf557c1ff245c87c520529ff1fca6132a89ea	e39f330fa326be034d7521252cb4d7debcc5f5df	refactor(examples/react/basic): remove the always-true 'enabled' and the always-false '!postId' check in 'Post' (#12088)
+query	e39f330fa326be034d7521252cb4d7debcc5f5df	988e69ebfd6393fd71f170fe727fb545f4c0e372	fix(examples/react/basic-graphql-request): type post ids as strings and pass the id as a GraphQL variable (#12087)
+query	988e69ebfd6393fd71f170fe727fb545f4c0e372	0fba30fbea2d91fdf6b468e671f875ff94b25332	fix(examples/react/algolia): show the search error and use a 'button' that is disabled while fetching for loading more (#12086)
+query	0fba30fbea2d91fdf6b468e671f875ff94b25332	7328d02a360614ac4594c3e1edf1d9d67463b7ab	fix(examples/react/load-more-infinite-scroll): move the projects query into 'infiniteQueryOptions' in 'src/lib' and type 'nextId' and 'previousId' as nullable (#12085)
+query	7328d02a360614ac4594c3e1edf1d9d67463b7ab	d338489e0a9f168f9432b5e60ebb16505a7f15ec	fix(examples/react/pagination): share the projects query with 'queryOptions' in 'src/lib' so the next page prefetch respects 'staleTime' (#12084)
+query	d338489e0a9f168f9432b5e60ebb16505a7f15ec	f0dcdca510ae0c1ab753801b1aaa8b127de8d82d	fix(examples/react/playground): show 'Saved!' only after a successful mutation instead of while idle (#12083)
+query	f0dcdca510ae0c1ab753801b1aaa8b127de8d82d	3ff2ec16783e722564f43f7bb8f8942ec4a211b7	fix(examples/react/offline): show query errors in 'List' and 'Detail' and remove the 'MovieError' element that 'react-location' never renders (#12082)
+query	3ff2ec16783e722564f43f7bb8f8942ec4a211b7	68b655af869190a4e6730e7cd378a327cec93b4e	fix(examples/react/nextjs-app-optimistic-updates): stream the prefetched todos with 'useSuspenseQuery' and a 'React.Suspense' boundary (#12081)
+query	68b655af869190a4e6730e7cd378a327cec93b4e	116687942bf86b37bc6ebc0a579852b0b2d6ee84	docs({react,preact}/quick-start): use 'createRoot' in the React example and keep 'render' from 'preact' in the Preact example (#12080)
+query	116687942bf86b37bc6ebc0a579852b0b2d6ee84	ccbd48336341d9e791f24697288e182b743086cb	docs(react/guides/ssr): add the default 'staleTime' to the 'Remove boilerplate' '_app' example (#12079)
+query	ccbd48336341d9e791f24697288e182b743086cb	cd9e573ea975409c99db6d2d7931c76bc99d291b	docs(react/guides/mutations): use 'createAsyncStoragePersister' instead of the deprecated 'createSyncStoragePersister' (#12078)
+query	cd9e573ea975409c99db6d2d7931c76bc99d291b	9d93dc57d168e036ad2d5ce6b832f4916fbc5669	fix(examples/react/nextjs): set a default 'staleTime' so the statically generated posts are not refetched right after hydration (#12077)
+query	9d93dc57d168e036ad2d5ce6b832f4916fbc5669	daf7444f91615fa3b12e8521a89bcce295275fcb	refactor(examples/react/nextjs-app-prefetching): add 'shouldRedactErrors' to the query client as in the advanced SSR guide (#12076)
+query	daf7444f91615fa3b12e8521a89bcce295275fcb	19ad6d7fd42fe17dc134820c4f61395b26706ea8	fix(examples/react/prefetching): show the error instead of an empty list or blank details when fetching characters fails (#12075)
+query	19ad6d7fd42fe17dc134820c4f61395b26706ea8	d3aac58fbd01e0a7be7c59c7ac6cd9e9e18c99ac	fix(examples/react/nextjs): show the error in 'PostList' instead of an empty list when fetching posts fails (#12074)
+query	d3aac58fbd01e0a7be7c59c7ac6cd9e9e18c99ac	2e7c288ed2021215a147d11051dfbc13bac41873	docs(examples/react/prefetching): replace the unreachable '[user]/[repo]' page with a character details page that reads the prefetched query (#12073)
+query	2e7c288ed2021215a147d11051dfbc13bac41873	0a37fa6f23278412a1d0f283c8a397b09547aaee	refactor(examples/react/shadow-dom): type the dogs response and move the query into 'api.ts' with 'queryOptions' (#12072)
+query	0a37fa6f23278412a1d0f283c8a397b09547aaee	7ec7fcdc909d75ef017bed859de54c96fbee9e21	refactor(examples/react/nextjs-app-optimistic-updates): share the todos query and fetchers with 'queryOptions' (#12071)
+query	7ec7fcdc909d75ef017bed859de54c96fbee9e21	5b7f49013059a07488a8c990c89dcd4fbf5ad578	ci: update Changesets preview action for v3 (#12064)
+query	5b7f49013059a07488a8c990c89dcd4fbf5ad578	090fb4a417d21136a616c8773d12070035208942	refactor(examples/react/prefetching): type the character query and share it with 'queryOptions' (#12070)
+query	090fb4a417d21136a616c8773d12070035208942	256abf45f0fcb2c2ba50ed38c2280e3b8702442f	refactor(examples/react/star-wars): type the API responses and share the queries with 'queryOptions' (#12069)
+query	256abf45f0fcb2c2ba50ed38c2280e3b8702442f	ffb1fbb62d562ef262d4d498172f9185723d9ecf	refactor(examples/react/rick-morty): type the API responses and share the queries with 'queryOptions' (#12068)
+query	ffb1fbb62d562ef262d4d498172f9185723d9ecf	53bd787530fdde85a6fef55e3c4da20fcac4f936	chore(examples/react): update '@types/react' and '@types/react-dom' to '^19' in the examples still on '^18' (#12067)
+query	53bd787530fdde85a6fef55e3c4da20fcac4f936	1099ebb4446bb6357e1c2dc849866ee14e3d6a96	ci(.github/workflows): keep autofix from cancelling the release on pushes and skip the release on pushes by 'autofix-ci[bot]' (#12066)
+query	1099ebb4446bb6357e1c2dc849866ee14e3d6a96	12199722dc3f7443b7bbb575611dce59cfd08534	ci: apply automated fixes
+query	12199722dc3f7443b7bbb575611dce59cfd08534	1fee0443dbeb346b8401557ca286a66cdec7ad71	ci: Version Packages (#12062)
+query	1fee0443dbeb346b8401557ca286a66cdec7ad71	c20886163a3759725cceafb421e864e7d213ec26	fix(query-core): clear mutations before notifying subscribers (#11470)
+query	c20886163a3759725cceafb421e864e7d213ec26	0addcd2a9ae7371dbb7a860277b08ad4c2444975	fix(react-query): retry queries with falsy errors on mount (#11328)
+query	0addcd2a9ae7371dbb7a860277b08ad4c2444975	7ea027855826fb196f2379d94c703ac8e7f13419	fix(preact-query): retry on mount for falsy errors when throwOnError returns false (#11375)
+query	7ea027855826fb196f2379d94c703ac8e7f13419	fce89ddf7a35b14252096ff64a1217efd81b415c	fix(solid-query): subscribe to the new observer when the queryClient changes (#11920)
+rqlite	7e35174ee8144b4b567bf9fc2972dea50963c43c	c6a241c86e87838d259b23f0edeefcd6799f4549	Merge pull request #2973 from rqlite/gomod-20261018
+rqlite	c6a241c86e87838d259b23f0edeefcd6799f4549	0d1b0d559a308c8cd3ba786ec6835b072ce25263	Merge pull request #2972 from rqlite/cdc-no-commit-timestamp-regression
+rqlite	0d1b0d559a308c8cd3ba786ec6835b072ce25263	d35ac9d2e2c781503bc78c4bf43c4df044a16b6e	Merge pull request #2971 from rqlite/finish-go127
+rqlite	d35ac9d2e2c781503bc78c4bf43c4df044a16b6e	793efd314a083ac6ccf9f0676a28c9c1ecb059ee	Merge branch 'claude-console-schema-reserved-names'
+rqlite	793efd314a083ac6ccf9f0676a28c9c1ecb059ee	d6673163793a7ebbda7db6f93e0ab20ce5541b69	Unit test console
+rqlite	d6673163793a7ebbda7db6f93e0ab20ce5541b69	084b2470a66bd7f322f8bd6aafa93e4ebf1eae67	Update config.yml to use latest Docker image
+rqlite	084b2470a66bd7f322f8bd6aafa93e4ebf1eae67	6716b616f6b8f16305bf6163825d46bd4ee23788	Remove MinIO client from CircleCI image
+rqlite	6716b616f6b8f16305bf6163825d46bd4ee23788	8b6bf48b44ca05b74c123055b084b2fa51b467d0	Install node and npm in CircleCI image
+rqlite	8b6bf48b44ca05b74c123055b084b2fa51b467d0	1e8e2bdb27dc05b71654d4550a3af14651e62bdd	Update Go version in CircleCI image
+rqlite	1e8e2bdb27dc05b71654d4550a3af14651e62bdd	a0445852ef21992867465f28745d8daef80df3d6	Merge pull request #2967 from rqlite/fix-req-parser
+rqlite	a0445852ef21992867465f28745d8daef80df3d6	001bf3a64a62b88f6798ae18b13ddf4abfc8b940	Update CHANGELOG.md
+rqlite	001bf3a64a62b88f6798ae18b13ddf4abfc8b940	ee7a45b11a5df23ed5c8b21d98476a68512e5b71	Rewrite TIMESTAMP tokens where possible
+rqlite	ee7a45b11a5df23ed5c8b21d98476a68512e5b71	c54b58548245412a4dff0139805a43455d68405e	Update CHANGELOG.md
+rqlite	c54b58548245412a4dff0139805a43455d68405e	594c5cf1f8ac76d3a7937b088ad09173fbf0c624	CDC HTTP Sink will follow redirects correctly
+rqlite	594c5cf1f8ac76d3a7937b088ad09173fbf0c624	8d5113f3f2eda46c04d6876dcec8d21d14e64eb0	Update stats after error checking
+rqlite	8d5113f3f2eda46c04d6876dcec8d21d14e64eb0	43ec6fed0147bf69c32f729defab3b8e1f340b14	Restore missing line
+rqlite	43ec6fed0147bf69c32f729defab3b8e1f340b14	3b676c65eb4c9ad91872ef05feef73e27738cb59	Increment stat after commit
+rqlite	3b676c65eb4c9ad91872ef05feef73e27738cb59	b346b01d1bbb6f7235018e9daaa7d66ba11659a4	Merge pull request #2963 from rqlite/cdc-nonfinite-floats
+rqlite	b346b01d1bbb6f7235018e9daaa7d66ba11659a4	9f4ad40d772746e3162453b4da8c0d31261dfaed	Correct file name
+rqlite	9f4ad40d772746e3162453b4da8c0d31261dfaed	86c03bd4fd0ead7c252ec3475b80ab38dc04aa57	Update CHANGELOG.md
+rqlite	86c03bd4fd0ead7c252ec3475b80ab38dc04aa57	bbf35b4cbb40954ae65e413db8e601e382634ab7	Use constant time when comparing passwords
+rqlite	bbf35b4cbb40954ae65e413db8e601e382634ab7	e82266019babadbf443da428614b5d544fca23a8	Update CHANGELOG.md
+rqlite	e82266019babadbf443da428614b5d544fca23a8	bda22a7a75d0fc6f18abc818797d5fa1121b074a	Update CHANGELOG.md
+rqlite	bda22a7a75d0fc6f18abc818797d5fa1121b074a	fffe080e28073d2235b069737ec49a3223c64bb7	Fix typos in comments
+rqlite	fffe080e28073d2235b069737ec49a3223c64bb7	c567d99697846c1fd04e34da9da4b54cdd8432e5	More robust node ID detection for Leader stepdown
+rqlite	c567d99697846c1fd04e34da9da4b54cdd8432e5	ab2b0e3e69a857ea350181e4399084f8bc3394eb	Update CHANGELOG.md
+rqlite	ab2b0e3e69a857ea350181e4399084f8bc3394eb	b8762fd864db8127bf2fe4649535bb0ce27ef903	Record SQL analyze start at right point
+rqlite	b8762fd864db8127bf2fe4649535bb0ce27ef903	d68bc8782886fb10a6b9f12e7ae7db069e538b42	Conditionally rewrite SQL during queued writes
+rqlite	d68bc8782886fb10a6b9f12e7ae7db069e538b42	58eeeaa8e8a0a8aaff37ab3f656d1bb03812ab56	Update CHANGELOG.md
+rqlite	58eeeaa8e8a0a8aaff37ab3f656d1bb03812ab56	ca04695d653f930b17c3398ab7afe937db1f69fc	Draw the batcher and FIFO with their internal channels so the package doc shows each channel that CDC events pass through.
+rqlite	ca04695d653f930b17c3398ab7afe937db1f69fc	75a94395ab00cfbf4f8266e41230168210ad0e8a	Update credential_store.go
+rqlite	75a94395ab00cfbf4f8266e41230168210ad0e8a	3229c57910b9e444a92786da536b3551c4092e9e	Update CHANGELOG.md
+rqlite	3229c57910b9e444a92786da536b3551c4092e9e	edb41e7926921f422f30733c15c0dff5e14ccce3	Update CHANGELOG.md
+rqlite	edb41e7926921f422f30733c15c0dff5e14ccce3	580f2f13b3f1cd78a249208828fec4b18ba68ad6	Merge pull request #2897 from rqlite/claude-store-observe-break-on-nodes-err
+rqlite	580f2f13b3f1cd78a249208828fec4b18ba68ad6	93e4737ef693230329abb08ebbad28ffbf0426b4	Update CHANGELOG.md
+rqlite	93e4737ef693230329abb08ebbad28ffbf0426b4	32ff692fd25675674cc5978e95e9e6fade3093cb	Update CHANGELOG.md
+rqlite	32ff692fd25675674cc5978e95e9e6fade3093cb	7e626b951e77f4c71113eebf2e773ecf8ae06ae1	Update CHANGELOG.md
+rqlite	7e626b951e77f4c71113eebf2e773ecf8ae06ae1	9e433c5f8868c7dcb96a3cc357ef5fbeda7643ff	Update CHANGELOG.md
+rqlite	9e433c5f8868c7dcb96a3cc357ef5fbeda7643ff	80c40c146eee86e5e0dd2efda696743ab87421ee	Merge pull request #2956 from rqlite/auth-store-field-fixes
+rqlite	80c40c146eee86e5e0dd2efda696743ab87421ee	1e886e042f3ba9140703916a68c79e493b19e149	Update CHANGELOG.md
+rqlite	1e886e042f3ba9140703916a68c79e493b19e149	b9a98d24e16612d1e21c1712ebf5ac3ee3b961cf	Merge pull request #2883 from rqlite/claude-store-fix-comment-typos
+rqlite	b9a98d24e16612d1e21c1712ebf5ac3ee3b961cf	38edab5eb3bbfbd055a73df8a4884711e692f879	Merge pull request #2941 from rqlite/claude-command-chunker-clone-data
+rqlite	38edab5eb3bbfbd055a73df8a4884711e692f879	df76c3694f09c6e5fed6fb33ff681e028426f0be	Merge pull request #2950 from rqlite/claude-queue-test-flushchan-condition
+rqlite	df76c3694f09c6e5fed6fb33ff681e028426f0be	b51e185a16cd0953f52beabec2e6ec8ebd0bf799	Merge pull request #2894 from rqlite/claude-internal-rarchive-zip-subdir-condition
+rqlite	b51e185a16cd0953f52beabec2e6ec8ebd0bf799	dfbfddacb6d8617850c55830e9a7159c24b2f0d8	Merge branch 'claude-proxy-remove-backup-leftovers'
+rqlite	dfbfddacb6d8617850c55830e9a7159c24b2f0d8	d41ce5b662662eb5b1aeaafb8316d7cc0dcc9d11	Update CHANGELOG.md
+rqlite	d41ce5b662662eb5b1aeaafb8316d7cc0dcc9d11	1c431f403101a1b91c295692b857ad72d96f0f63	Merge pull request #2887 from rqlite/claude-cluster-stats-lock-fields
+rqlite	1c431f403101a1b91c295692b857ad72d96f0f63	f47125649c47c541e4f39ff31c7c850c4d67c853	Update CHANGELOG.md
+rqlite	f47125649c47c541e4f39ff31c7c850c4d67c853	0b840a5793edce8f92079e5dd8c49937e0102a1a	Merge pull request #2882 from rqlite/claude-store-close-temp-on-chmod-fail
+rqlite	0b840a5793edce8f92079e5dd8c49937e0102a1a	8af1548acb2f353583b1d3efbe0f70cc65700ebd	Merge pull request #2881 from rqlite/claude-db-remove-noop-reslice
+rqlite	8af1548acb2f353583b1d3efbe0f70cc65700ebd	4cf4c7b730eecb4afe33e1c1a4833183caeed776	Merge pull request #2895 from rqlite/claude-internal-rtls-test-nil-check
+rqlite	4cf4c7b730eecb4afe33e1c1a4833183caeed776	c0d0daf59c861d6db3a4c2a8fc6cfb092b696f39	Merge pull request #2898 from rqlite/claude-store-remove-redundant-checks
+rqlite	c0d0daf59c861d6db3a4c2a8fc6cfb092b696f39	7a74f868dc60506769d6da6a4457bf266023ab36	Merge pull request #2900 from rqlite/claude-db-update-hook-nil-event
+rqlite	7a74f868dc60506769d6da6a4457bf266023ab36	5963628ccc86e475a525550affa7d27b36bee949	Merge pull request #2901 from rqlite/claude-store-close-errors-is-nothing-new
+rqlite	5963628ccc86e475a525550affa7d27b36bee949	a562e79404b60cada28cf745c61b7bcb76273e16	Merge pull request #2902 from rqlite/claude-http-unshadow-sql-import
+rqlite	a562e79404b60cada28cf745c61b7bcb76273e16	23ed8872080932b2d21f1b908699a329830db06d	Merge pull request #2904 from rqlite/claude-cmd-client-redirect-body
+rqlite	23ed8872080932b2d21f1b908699a329830db06d	4510d70589665986d31b1c13828fdf45d9c144e8	Merge pull request #2903 from rqlite/claude-cmd-defer-close-before-read
+rqlite	4510d70589665986d31b1c13828fdf45d9c144e8	12a161e7a8d7b5a20b879b0d566532d17e7a5637	Merge pull request #2905 from rqlite/claude-internal-rsync-atomictime-sub-lock
+rqlite	12a161e7a8d7b5a20b879b0d566532d17e7a5637	9550894c8143cd3dafdcc241892f44510af13f2a	Merge branch 'claude-snapshot-upgrader-tmpname'
+rqlite	9550894c8143cd3dafdcc241892f44510af13f2a	223598719861d2b96c058faf4b1ec63c8e51a35d	Merge branch 'claude-cmd-node-ops-require-arg'
+sqlglot	9beb4ab2807839088f3439a2b937d222e598b617	513beedd3753a22c1ce234059bd5d831f64e48f0	fix(transforms): don't hoist explodes from nested queries in explode_projection_to_unnest [CLAUDE] (#8664)
+sqlglot	513beedd3753a22c1ce234059bd5d831f64e48f0	7af2aa8db5e9b9df0afea07201574ceeb9e66098	fix(teradata): drop LOCKING request modifier for other dialects instead of crashing [CLAUDE] (#8666)
+sqlglot	7af2aa8db5e9b9df0afea07201574ceeb9e66098	2444b6db78f336b70c6f7aa980e43036367c7b0d	fix(optimizer)!: register CTE reference alias when pivoted (#8667)
+sqlglot	2444b6db78f336b70c6f7aa980e43036367c7b0d	b50e43e4407e010d15da9b313ff99df1b1099343	feat(optimizer): paste join support
+sqlglot	b50e43e4407e010d15da9b313ff99df1b1099343	41a962d5c1252c073b2883ea49b9ae2f49d77a6b	fix(clickhouse): parse PASTE JOIN instead of aliasing the table (#8662)
+sqlglot	41a962d5c1252c073b2883ea49b9ae2f49d77a6b	ca870e845e45144e8c6bd02bb74fa5ac157795c8	fix(parser): keep every argument of UNNEST parsed as a function [CLAUDE] (#8660)
+sqlglot	ca870e845e45144e8c6bd02bb74fa5ac157795c8	cb57d80214bcd4a165194344b34bc930ef5318b8	Don't leak None as property name when a property class has no mapping (#8654)
+sqlglot	cb57d80214bcd4a165194344b34bc930ef5318b8	7e627d5607f2c3a4955c4e07af22df43c1ff6cdb	fix(optimizer): clear child scope caches when projections are merged (#8646)
+sqlglot	7e627d5607f2c3a4955c4e07af22df43c1ff6cdb	d17c7680b70bccb5fda677aaf63980b2663224dc	Sync w/ integration tests
+sqlglot	d17c7680b70bccb5fda677aaf63980b2663224dc	c388227a73fe4e6652e311db0a04b8d838c7c821	fix(bigquery): transpile Trino date parts, FROM_BASE, APPROX_PERCENTILE, ARRAY_SORT and ARRAY_DISTINCT (#8639)
+sqlglot	c388227a73fe4e6652e311db0a04b8d838c7c821	360b315cc5fde521495aaa35f048dafd3abdc548	fix: remove obsolete sqlglotc extensions during builds (#8653)
+sqlglot	360b315cc5fde521495aaa35f048dafd3abdc548	7f415fbc833b329052d8a0a63c1d411c5bddf363	Sync w/ integration tests
+sqlglot	7f415fbc833b329052d8a0a63c1d411c5bddf363	5f12cae562cd1196b81bd4dbafe35def5e3b109b	Sync w/ integration tests
+sqlglot	5f12cae562cd1196b81bd4dbafe35def5e3b109b	caa920da583f57913311798aff2561821ea8ca01	Sync w/ integration tests
+sqlglot	caa920da583f57913311798aff2561821ea8ca01	ce7f6e39dbbbaa61ff01a307226ff867a3a9efb6	starrocks # followup fix
+sqlglot	ce7f6e39dbbbaa61ff01a307226ff867a3a9efb6	df5b53f92e31247e82bc37a512fab0abd4b54031	fix(starrocks): don't treat # as a comment [CLAUDE] (#8644)
+sqlglot	df5b53f92e31247e82bc37a512fab0abd4b54031	954cca1268ae38ae0384d5197e54fe50322ee9e3	chore: refactor starrocks TO_DAYS test
+sqlglot	954cca1268ae38ae0384d5197e54fe50322ee9e3	06aa274a7f18be246492c1423703ce3cf3d48c60	fix(starrocks): preserve native TO_DAYS [CODEX] (#8648)
+sqlglot	06aa274a7f18be246492c1423703ce3cf3d48c60	af2b57734d67082ecc4db97cb5da1e8743918af0	suppress command warning in tests (#8647)
+sqlglot	af2b57734d67082ecc4db97cb5da1e8743918af0	cd41eeef32e13db1a2517d0a0dc5432ec2b89eb5	chore: simplify starrocks tests
+sqlglot	cd41eeef32e13db1a2517d0a0dc5432ec2b89eb5	f321207c8dcc2973d149744fcaa4d1a13edb0026	chore: refactor starrocks tests for LIKE
+sqlglot	f321207c8dcc2973d149744fcaa4d1a13edb0026	d747f5b20dd71a379437dd3cf251ec130edd94b3	fix(starrocks): preserve LIKE argument order [CODEX] (#8645)
+sqlglot	d747f5b20dd71a379437dd3cf251ec130edd94b3	094509aad83fff575f1b4d198e4d03c21c432e58	fix: don't materialize huge interval literals in simplify and the Postgres generator (#8641)
+sqlglot	094509aad83fff575f1b4d198e4d03c21c432e58	97134ffd3cd161222a42405b001a8a30a0a2c6f5	refactor!: merge SortArray into ArraySort with explicit NULL ordering (#8643)
+sqlglot	97134ffd3cd161222a42405b001a8a30a0a2c6f5	00fce66dffd3dba4f90cda5534ec8df595bb1865	fix(optimizer): preserve precedence when unwrapping parens inside Mul (#8620)
+sqlglot	00fce66dffd3dba4f90cda5534ec8df595bb1865	021991fb9a63060e2f71aeac48e134f67c77227f	fix(optimizer): ensure generated decorrelation JOIN comes before reference in ON clause (#8638)
+sqlglot	021991fb9a63060e2f71aeac48e134f67c77227f	03744a2a8376af5f5f70230b04d1c5fbfb71dc61	fix(optimizer): evict dead refs from the type annotator cache (#8642)
+sqlglot	03744a2a8376af5f5f70230b04d1c5fbfb71dc61	f8287a0918808a8a74e618b556c630eb1504f971	fix(hive,spark): parse ALTER TABLE REPLACE COLUMNS [CLAUDE] (#8633)
+sqlglot	f8287a0918808a8a74e618b556c630eb1504f971	552774469174ee686def95e6bcb2da46f61e047b	Update CHANGELOG.md for v30.23.0 [skip ci]
+sqlglot	552774469174ee686def95e6bcb2da46f61e047b	f814e4cb2a8743bba63e8818bae25207bbd3966f	fix(starrocks): keep DATEDIFF's date-part semantics [CLAUDE] (#8636)
+sqlglot	f814e4cb2a8743bba63e8818bae25207bbd3966f	ad8764a0436a7b5c500b783ebe50dbf20c1e477c	fix(mysql): preserve population and sample aggregate semantics [CODEX] (#8632)
+sqlglot	ad8764a0436a7b5c500b783ebe50dbf20c1e477c	e71e4ee1da5c3c6a7d3616d4cd4160a681202f0d	fix: keep a replacement's grouping in replace_placeholders (#8624)
+sqlglot	e71e4ee1da5c3c6a7d3616d4cd4160a681202f0d	2c7b928071ed32e72b218011a1a3c011dba26b24	simplify athena tokenizing
+sqlglot	2c7b928071ed32e72b218011a1a3c011dba26b24	fdba492cec5a1fbe012add7f1aed18f46739c2a3	fix(athena): route by each engine's rules when the combined tokenizer fails [CLAUDE] (#8629)
+sqlglot	fdba492cec5a1fbe012add7f1aed18f46739c2a3	fbda0b91481d679f17844af15fb998cc559533be	fix(optimizer): include semi/anti join refs when identifying alias collisions (#8623)
+sqlglot	fbda0b91481d679f17844af15fb998cc559533be	e92c22287ff73a66e9dece115acedb81133f0dbf	fix(parser): keep the whole statement when REFRESH falls back to a cmd (#8621)
+sqlglot	e92c22287ff73a66e9dece115acedb81133f0dbf	b1b244b1f38a3000c94a7b21ee6dfae1959dd4b2	fix(duckdb): cast array elements to text before applying the ARRAY_TO_STRING null replacement [CLAUDE] (#8627)
+sqlglot	b1b244b1f38a3000c94a7b21ee6dfae1959dd4b2	b9c5f8d4a5857952e6921e45a7bd3b255d48ab1b	fix(optimizer): qualify columns for SPLIT_TO_TABLE (#8625)
+sqlglot	b9c5f8d4a5857952e6921e45a7bd3b255d48ab1b	623dc8889ba7bffa9b006fd1d1641715b73d5ce4	Sync w/ integration tests
+sqlglot	623dc8889ba7bffa9b006fd1d1641715b73d5ce4	ba643d33285475774c3253551e1ed18ac89e6c22	fix(duckdb)!: infer correct types for temporal interval arithmetic (#8622)
+sqlglot	ba643d33285475774c3253551e1ed18ac89e6c22	b679d0cf8cad5bab7bb5004d9b8f8ce51d542b42	fix(clickhouse): transpile RegexpCount to countMatches [CLAUDE] (#8616)
+sqlglot	b679d0cf8cad5bab7bb5004d9b8f8ce51d542b42	c0a945740e55facdc7120c17cda2771dc55c7903	feat(databricks): match_recognize support closes #8617
+sqlglot	c0a945740e55facdc7120c17cda2771dc55c7903	676ba365497215dadf89c3fa57f4872529745650	chore(mysql): tests for named FOREIGN KEY indexes
+sqlglot	676ba365497215dadf89c3fa57f4872529745650	59a96d868a6b8ed114ac3e216201106fea8bc351	feat(mysql): Support named `FOREIGN KEY` indexes. (#8615)
+sqlglot	59a96d868a6b8ed114ac3e216201106fea8bc351	0b0017821590b08497529d37387396adb6c3aa5b	feat(starrocks): support REFRESH MATERIALIZED VIEW options [CLAUDE] (#8613)
+sqlglot	0b0017821590b08497529d37387396adb6c3aa5b	6202d94764305621117dc6229cda79575ca103e5	feat(spark): parse all ALTER TABLE DROP COLUMN[S] forms [CLAUDE] (#8611)
+sqlglot	6202d94764305621117dc6229cda79575ca103e5	5b949bd6b7f1db1474a87ac34d3a9246fa7de237	feat(starrocks): support HLL columns and the HLL_UNION aggregation type [CLAUDE] (#8612)
+sqlglot	5b949bd6b7f1db1474a87ac34d3a9246fa7de237	579789dc3d368daf6aa0919ed5c0994187472a4b	fix(oracle): parse CREATE TABLE physical attributes and storage clauses closes #8581
+sqlglot	579789dc3d368daf6aa0919ed5c0994187472a4b	08f2405cfddc874f4366cbcca9e25233fcb11281	chore: add support for Python 3.15 (#8586)
+sqlglot	08f2405cfddc874f4366cbcca9e25233fcb11281	036c61079d71b9bba614085ecb7b163f4e81cc0d	fix(oracle): expand alternative quoting and support national literals (#8606)
+sqlglot	036c61079d71b9bba614085ecb7b163f4e81cc0d	61c3ca4479c167d9c90d51f73184568769fa0635	tests
+sqlglot	61c3ca4479c167d9c90d51f73184568769fa0635	1f8d15bbd68586704666533b21a5b35d710d68f0	fix(oracle): parse CREATE TABLE TABLESPACE (#8605)
+sqlglot	1f8d15bbd68586704666533b21a5b35d710d68f0	7ee6201688a8184a27177aec66569c4d84cdfba1	fix: convert DuckDB ARRAY_SLICE endpoints to SLICE lengths (#8609)
+sqlglot	7ee6201688a8184a27177aec66569c4d84cdfba1	4d7d7ca94250269dc1903d7175b7b8aa96e9a480	fixup
+sqlglot	4d7d7ca94250269dc1903d7175b7b8aa96e9a480	a0cc28b91c3d186801d478e83967e967b86c90dd	fix(clickhouse)!: generate JSONExtractRaw for JSON-valued extraction (#8601)
+sqlglot	a0cc28b91c3d186801d478e83967e967b86c90dd	ab0a291f91f1ba8c32058340bf76738c4ea685ea	fix(doris): round-trip MATCH operands and quoted analyzers (#8607)
+sqlglot	ab0a291f91f1ba8c32058340bf76738c4ea685ea	282f7b29e9b183cfcad34f2d3bc197bf72cb0a57	fix(oracle): normalize flashback timestamps and simplify parsing (#8608)
+sqlglot	282f7b29e9b183cfcad34f2d3bc197bf72cb0a57	cf39265a3e8efd8c32bab7f9c9b4f123fdfbf682	additional fixups
+sqlglot	cf39265a3e8efd8c32bab7f9c9b4f123fdfbf682	e38929edd78a20f74fc19fee819e14ac23add687	fix(expressions)!: hash flag for case-sensitive nodes [CLAUDE] (#8599)
+sqlglot	e38929edd78a20f74fc19fee819e14ac23add687	fb9b151a7fa22259c58140450e1075d7a0ff0f68	fix(teradata): default window aggregate frame to the whole partition [CLAUDE] (#8596)
+trpc	2c331e84193fe33012340494a4f3db4424005070	5644181f71873a5f732bb2817f7bded75b9b1a71	chore(ci): gate npm publishing behind npm-publish environment and admin check (#7675)
+trpc	5644181f71873a5f732bb2817f7bded75b9b1a71	b829324164f9bec41de5098a105fa32d34419b0f	docs: sponsors sync (#7672)
+trpc	b829324164f9bec41de5098a105fa32d34419b0f	6d92747fa267c51829ec99242be15e0ed968d0de	ci: run required checks in the merge queue (#7676)
+trpc	6d92747fa267c51829ec99242be15e0ed968d0de	0d1feaa1788d050f5ac7042d9c312b63caee4cd9	docs: note default JSON serialization on the data transformers page (#7397)
+trpc	0d1feaa1788d050f5ac7042d9c312b63caee4cd9	f15d2a1cdbae3609f633407cf0ac66d19f06cba1	chore: don't publicly hoist stub `@types/parse-path` (#7673)
+trpc	f15d2a1cdbae3609f633407cf0ac66d19f06cba1	10e2ef98f7842b94eb3026e4f9bcfe62cc39b088	switch to lerna-lite (#7669)
+trpc	10e2ef98f7842b94eb3026e4f9bcfe62cc39b088	cc66c81b6934603a978518ddf00e53792ed2c62d	docs: fix broken trpc.io links in JSDoc and concepts chart (#7658)
+trpc	cc66c81b6934603a978518ddf00e53792ed2c62d	796700d8653b3832409fff997e6f5789519b9ea7	fix(server): avoid `using` under a switch case to unbreak Bun e2e (#7659)
+trpc	796700d8653b3832409fff997e6f5789519b9ea7	d756e591a5e37ef20b8d75ecd4d736c195497289	chore(deps): update dependency bun to v1.4.3 (#7657)
+trpc	d756e591a5e37ef20b8d75ecd4d736c195497289	4625c84ab3e9c708f2bebf2ce60e005c3023469a	chore(deps): update dependency node to v24 (#7651)
+trpc	4625c84ab3e9c708f2bebf2ce60e005c3023469a	fb22a91de23d4d035e7241af4e235978965f005b	chore(deps): update denoland/setup-deno action to v2 (#7647)
+trpc	fb22a91de23d4d035e7241af4e235978965f005b	a442dbda6196c23925421c53529ca33a45b2d290	chore(deps): update actions/checkout action to v7 (#7642)
+trpc	a442dbda6196c23925421c53529ca33a45b2d290	043e96c43bc00c491ffe6c6d53954103ce878477	chore(deps): update codecov/codecov-action action to v7 (#7646)
+trpc	043e96c43bc00c491ffe6c6d53954103ce878477	fbf34a50695b348b2d46b53e0c6ee8ac90670360	chore(deps): update actions/setup-node action to v7 (#7644)
+trpc	fbf34a50695b348b2d46b53e0c6ee8ac90670360	e5d8436356fe304976d44a64eeb87435bbbb052b	chore(deps): update babel monorepo to v8 (#7645)
+trpc	e5d8436356fe304976d44a64eeb87435bbbb052b	bce0d02f18d55fd71ce58da9416bd8ea4bc7184f	chore(deps): update actions/labeler action to v7 (#7643)
+trpc	bce0d02f18d55fd71ce58da9416bd8ea4bc7184f	7095886df89c749e0faec9844692bf0a848e48f0	chore(deps): update actions/cache action to v6 (#7641)
+trpc	7095886df89c749e0faec9844692bf0a848e48f0	dce10f33777d75d5bc3589be803cd89b033b2b3e	fix(deps): update dependency jscodeshift to v17.4.0 (#7640)
+trpc	dce10f33777d75d5bc3589be803cd89b033b2b3e	50543c8d417a8b6a9dcdef6d15e4e6e1063cfabe	fix(deps): update dependency effect to v3.22.2 (#7638)
+trpc	50543c8d417a8b6a9dcdef6d15e4e6e1063cfabe	8c852297bacfa8377b3aba5c524036e67dcebf10	fix(deps): update dependency @clack/prompts to v1.8.1 (#7636)
+trpc	8c852297bacfa8377b3aba5c524036e67dcebf10	69840b5fd52e272a5c276e0e71e5ad6bc675fb91	chore(deps): update dependency @oxc-project/runtime to v0.152.0 (#7632)
+trpc	69840b5fd52e272a5c276e0e71e5ad6bc675fb91	cd1f4d217c3b763fcbff0be2f7dfd6441d879d45	chore(deps): update dependency bun to v1.4.2 (#7633)
+trpc	cd1f4d217c3b763fcbff0be2f7dfd6441d879d45	c27d885a9631b87f9d5d77737ee99da07cd3fff5	chore(deps): update dependency docusaurus-plugin-typedoc to v1.4.3 (#7631)
+trpc	c27d885a9631b87f9d5d77737ee99da07cd3fff5	985b76975416fa6b9fdf1e643fdefe6f80b153fc	fix(deps): update dependency srvx to v0.12.8 (#7630)
+trpc	985b76975416fa6b9fdf1e643fdefe6f80b153fc	fa78a1be7c276e48d806f33ad8352b007fe5cc1e	fix(publishing) pass explicit provenance settings to lerna (#7624)
+trpc	fa78a1be7c276e48d806f33ad8352b007fe5cc1e	ad8e9a0423b97979c54567fa3edecf6a2bb6bd61	chore(ci): run lerna publish at verbose loglevel (#7618)
+trpc	ad8e9a0423b97979c54567fa3edecf6a2bb6bd61	f55eeb408e824a0443a78904644b7a5981644779	Rename workflow for trusted publishing (#7617)
+trpc	f55eeb408e824a0443a78904644b7a5981644779	ec0b0a47ab6c6ffabcb2ba6b80fa08c1410145a9	v11.21.0
+trpc	ec0b0a47ab6c6ffabcb2ba6b80fa08c1410145a9	45e0dd3e886f96cc5eab0ed81847fb9782bc9311	v11.20.0
+trpc	45e0dd3e886f96cc5eab0ed81847fb9782bc9311	9109554a4f24d4a65aea79aae5fe35c835822ad5	feat(openapi): emit per-procedure error shapes (#7600)
+trpc	9109554a4f24d4a65aea79aae5fe35c835822ad5	8b649ad874a8fe97c73962d4617912231b975736	feat(server): add per-procedure error formatters with .errors() (#7591)
+trpc	8b649ad874a8fe97c73962d4617912231b975736	fcc6bca0ece2762e393e6d8c8527bbaa17a878d2	fix(server): Handle premature stream ending (#7604)
+trpc	fcc6bca0ece2762e393e6d8c8527bbaa17a878d2	573d4f33ee2896c2bb7106203a936ae892d1ef1c	v11.19.0
+trpc	573d4f33ee2896c2bb7106203a936ae892d1ef1c	3a77dc4d67f4ad044f03cfa68a9934af93fdea6d	fix(openapi): drop function-valued properties from generated schemas (#7588)
+trpc	3a77dc4d67f4ad044f03cfa68a9934af93fdea6d	4359916f41b58e650e063b192beea91b4f6b3aac	build(deps): upgrade docusaurus to 3.10.2 (#7583)
+trpc	4359916f41b58e650e063b192beea91b4f6b3aac	55e26d34a5bb713792210719b40789bbd056bb49	build(deps): upgrade lerna to v10 (#7582)
+trpc	55e26d34a5bb713792210719b40789bbd056bb49	45b3f4d9bc92cfc2d1d551a7654ac13ca92a0a86	build(deps): patch security advisories in www and examples (#7581)
+trpc	45b3f4d9bc92cfc2d1d551a7654ac13ca92a0a86	fd2d0852b5f63dc42cba02ce412e6e499d8c2fb4	build(deps): upgrade @hey-api/openapi-ts to 0.99.0 (#7586)
+trpc	fd2d0852b5f63dc42cba02ce412e6e499d8c2fb4	5f54e5bedb32383ac6976631ec6ce66e5f29f0a8	build(deps): patch security advisories in packages/* (#7580)
+trpc	c2609f9d7ead1775b1a73f79b9fe8b9a7e6647b3	65bbb0bf1aa5fedbc64c8de64623cde87485ae53	build(deps): upgrade vitest to v5 (#7578)
+trpc	65bbb0bf1aa5fedbc64c8de64623cde87485ae53	352da1c27149e389204fc4dfa12507adfd8a4a78	build(deps): upgrade prettier to 3.9.6 (#7577)
+trpc	352da1c27149e389204fc4dfa12507adfd8a4a78	72af4afd701ec24344579fd7e905316ae509a493	build(deps): upgrade eslint to v10 (#7576)
+trpc	72af4afd701ec24344579fd7e905316ae509a493	1ab54bfc2d7697959327f9cb9a0404aaa5d183ea	build(deps): upgrade typescript to v7 for packages/* (#7575)
+trpc	1ab54bfc2d7697959327f9cb9a0404aaa5d183ea	14209283a8269b96f6018f9548575caf830d51d0	build(deps): upgrade tsdown to 0.23.0 (#7574)
+trpc	c6a4f9b0c46004cba75b664888915face5a1c3ac	ad177e3cc829157432cd84b34dc987829573322a	build(deps): upgrade node to 24.21.0 and @types/node to v24 (#7571)
+trpc	ad177e3cc829157432cd84b34dc987829573322a	a6eea28484a88338e5bfd4ad17f6d55464914ce2	Revert "chore(deps): bump vitest from 4.0.18 to 4.1.11 (#7584)"
+trpc	a6eea28484a88338e5bfd4ad17f6d55464914ce2	d1a9ec68cea9740a5a46dcf98399d9a876f2313a	chore(deps): bump vitest from 4.0.18 to 4.1.11 (#7584)
+trpc	d1a9ec68cea9740a5a46dcf98399d9a876f2313a	6a118b0be9bc9ba4a899c545edbcfdacfc504fad	fix(client): abort httpLink/httpBatchLink requests on unsubscribe (#7469)
+trpc	6a118b0be9bc9ba4a899c545edbcfdacfc504fad	6408c54ba9bea7b18c39be3a7abd79c8841a2333	fix(server): match lazy router keys on a path boundary in getProcedureAtPath (#7474)
+trpc	6408c54ba9bea7b18c39be3a7abd79c8841a2333	622bbbed38d87d8e04f62d15efceddb43de08fa4	fix(server): delete stale clientSubscriptions entry on subscription task rejection (#7401)
+trpc	622bbbed38d87d8e04f62d15efceddb43de08fa4	23bd47e8fc611da7b9cc3677ab620f3e72fe844d	docs: add Authier to awesome tRPC projects (#7558)
+trpc	bc67406b1a12d1ffe38e3eea5a9136ec00100e31	ef684c82910c4c18342088fbe64d222cb25721ed	docs: add vscode-toolkit to awesome-trpc (#7363)
+trpc	ef684c82910c4c18342088fbe64d222cb25721ed	d900ce181de48623d8b50cbcda5c800963eb7508	fix(client): wire the operation AbortSignal in the WebSocket link (#7434)
+trpc	d900ce181de48623d8b50cbcda5c800963eb7508	e35b9989bd474eec209fa2f9b36857a46c836940	docs: add observable deprecation note to subscriptions reference projects (#7375)
+trpc	e35b9989bd474eec209fa2f9b36857a46c836940	2c61222290371fbc7f8645aa552c5b78b18afbe3	fix(tanstack-react-query): subscriptionOptions(skipToken).enabled incorrectly returns true (#7464)
+trpc	2c61222290371fbc7f8645aa552c5b78b18afbe3	3d21d2c1364139938f1d7924802af67b506ca544	fix(docs): fix 19 dead links in llms.txt — use permalink, absolute URLs, and H1 title (#7465)
+trpc	3d21d2c1364139938f1d7924802af67b506ca544	19a0f58c648effba0cb6a8d4c49c43c035576ea5	fix(server): correct assertIsRequestId boolean logic — non-NaN invalid types passed silently (#7477)
+trpc	19a0f58c648effba0cb6a8d4c49c43c035576ea5	c1220cb0daeb230eb0f4bda4172291aabb8aa251	approve esbuild (#7570)
+trpc	c1220cb0daeb230eb0f4bda4172291aabb8aa251	66d054454a3339dd8421da9dcf0648f92816f704	approve esbuild (#7569)
+trpc	66d054454a3339dd8421da9dcf0648f92816f704	4f5315219f947589c9ef0f67b7aa551243312d61	fix(server): preserve `this` when chaining to a pre-existing dispose method (#7457)
