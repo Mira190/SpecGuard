@@ -249,10 +249,10 @@ test('removed assertions: text inside a string literal is not an assertion', () 
   assert.deepEqual(delta("-  assert.match(validateBaseName('BIG', '.mp4', others), /已存在/);\n+  const x = 1;\n"), ["removed 10 assert.match(validateBaseName('BIG', '.mp4', others), /已存在/);"]);
 });
 test('removed assertions: one whose function no longer exists at head went with its code, one whose function stays is a lead', () => {
-  const src = mkdiff('src/x.ts', "-export function packGuard(r) {}\n-export function validateBaseName(a) {}\n");
+  const src = mkdiff('src/x.ts', "-export function packGuard(r) {}\n-export function validateBaseName(a) {}\n-const S = new Set();\n");
   const d = (gone, dropSrc = true) => assertionDelta((dropSrc ? src : '') + mkdiff('test/x.test.ts', "-  assert.match(packGuard(p), /context pack is empty/);\n-  assert.match(validateBaseName('BIG', '.mp4', o), /x/);\n-  assert.equal(new Set(a).size, 1);\n+  const x = 1;\n"), (f) => f.includes('.test.'), gone).map((x) => x.old);
   assert.equal(d().length, 3);
-  assert.equal(d((n) => n === 'packGuard' || n === 'Set').length, 2, 'only the function this diff dropped and head lacks; `new Set` is no function of the code');
+  assert.deepEqual(d((n) => n === 'packGuard' || n === 'Set').map((x) => x.slice(0, 22)), ['assert.match(validateB', 'assert.equal(new Set(a'], 'only the function this diff dropped and head lacks; `new Set` is no function of the code');
   assert.equal(d((n) => n === 'packGuard', false).length, 3, 'a name this diff never dropped is not claimed gone');
 });
 test('goneAtHead: a name only in test files is gone, one in source is not, git failing keeps the lead', () => {
