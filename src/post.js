@@ -962,6 +962,18 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   return clean(out + delivered);
 }
 
+// EXP_CUT_RELEVANCE: does the cut candidate test `cand` of changed file `f` mention (whole word) the definition enclosing a changed RIGHT line of f? True (keeps the cut notice) when f or cand cannot be read or a changed line has no derivable name.
+function cutRelevant(f, cand, dm, read) {
+  const src = read(f), body = read(cand);
+  if (!src || !body) return true;
+  const text = body.join('\n');
+  for (const n of dm.get(f)?.changed.RIGHT.keys() || []) {
+    const name = require('./test-map').enclosingName(src, n);
+    if (!name || new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(text)) return true; // same word match as audit-post.js cutTest
+  }
+  return false;
+}
+
 // Workspace file as lines. Never anything under .git/ or the collection context, never a path that escapes the workspace
 // (also after symlinks): those hold credentials and the collector's own state.
 const DENIED = /^(?:\.git|\.specguard-ctx|\.specguard-src)(?:\/|$)/i; // .specguard-src: the reviewer's own checkout in manual runs, not the repository under review
@@ -1565,11 +1577,12 @@ async function run({ github, context, core }) {
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
   const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')[0])); // a scan's lines carry "\tunit ids" (audit-post.js reads those) // the claude engine's pack: files the model saw only partly or not at all
+  let partialGated = false; // a finding gated by the partial-visibility gate below (EXP_CUT_RELEVANCE keeps the cut notice then)
   if (packCut.size) { // a missing/weak-test claim is only trustworthy when its candidate tests were fully visible
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
     for (const f of data.findings) {
       const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
-      if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
+      if (seen) { f.confidence = 'low'; f.gated = true; partialGated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }
   const noCands = new Set((readCtx('candidates-cut.txt') || '').split('\n').filter(Boolean)); // collect.sh: changed files whose candidate tests were never looked up (list cap)
@@ -1581,7 +1594,8 @@ async function run({ github, context, core }) {
     const shown = new Map((readCtx('pack-shown.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')));
     const dm = parseDiff(readCtx('diff.patch') || '');
     const past = (f) => !shown.has(f) || [...(dm.get(f)?.changed.RIGHT.keys() || [])].some((n) => n > +shown.get(f));
-    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [...(packCut.has(f) && past(f) ? [f] : []), ...(cands.get(f) || []).filter((x) => packCut.has(x))]))];
+    const relevance = process.env['EXP_CUT_RELEVANCE'] === '1'; // bracket form: not an Action input, so the env-mapping test (M1) skips it; measurement switch (eval/replay/prereg-cut-relevance.md); unset = main
+    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [...(packCut.has(f) && past(f) ? [f] : []), ...(cands.get(f) || []).filter((x) => packCut.has(x) && (!relevance || partialGated || cutRelevant(f, x, dm, readFile)))]))];
     if (lost.length) incomplete.push(`Review context was cut: the model saw only part of ${lost.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${lost.length > 10 ? `, … (+${lost.length - 10} more)` : ''}; obligations that depend on them are unknown.`);
   }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
@@ -1885,4 +1899,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, fetchThreads, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });
+Object.assign(module.exports, { assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, citationsOf, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, fetchThreads, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, applyCoverage, coverageAtoms, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, cutRelevant, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead });

@@ -4425,3 +4425,35 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
   assert.ok(!('verdict' in none));
   assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
 });
+
+test('EXP_CUT_RELEVANCE: a cut candidate test counts only when it mentions a definition enclosing a changed line; no name, unreadable test, gated finding stay incomplete; findings never change', async (t) => {
+  const run = async ({ flag, testText, srcText = 'function total(x) {\n  return x + 1;\nif (x) {\n', data = report({ coverage: [row()], findings: [] }), remove = false }) => {
+    const s = setup(t, data);
+    fs.writeFileSync(path.join(s.dir, 'src.js'), srcText);
+    fs.writeFileSync(path.join(s.dir, 'test.js'), testText);
+    track(s, 'src.js', 'test.js');
+    if (remove) fs.rmSync(path.join(s.dir, 'test.js'));
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'diff.patch'), fileDiff('src.js', '@@ -1,3 +1,3 @@\n function total(x) {\n-  return x;\n+  return x + 1;\n if (x) {\n'));
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), 'src.js\n  test.js  (same stem)\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), 'test.js\n');
+    if (flag) process.env.EXP_CUT_RELEVANCE = '1'; else delete process.env.EXP_CUT_RELEVANCE;
+    t.after(() => { delete process.env.EXP_CUT_RELEVANCE; });
+    await post(s);
+    return { complete: !/Review context was cut/.test(s.calls.summary[0].body), s }; // the cut notice only: other reduced-review reasons are not under test
+  };
+  const relevant = `// total
+${evidence.quote}
+`, other = `// other
+${evidence.quote}
+`;
+  assert.equal((await run({ flag: true, testText: relevant })).complete, false, 'relevant cut stays incomplete');
+  assert.equal((await run({ flag: true, testText: other })).complete, true, 'irrelevant cut is complete under the flag');
+  assert.equal((await run({ flag: false, testText: other })).complete, false, 'and incomplete without it');
+  assert.equal((await run({ flag: true, testText: other, srcText: '\n\n\n' })).complete, false, 'a changed line without a name');
+  assert.equal((await run({ flag: true, testText: other, remove: true })).complete, false, 'unreadable candidate');
+  const data = report({ coverage: [row('missing_test')], findings: [finding()] });
+  const on = await run({ flag: true, testText: other, data }), off = await run({ flag: false, testText: other, data });
+  assert.equal(on.complete, false, 'a finding gated by the partial-visibility gate keeps the cut notice');
+  assert.deepEqual(on.s.calls.review, off.s.calls.review);
+  assert.equal(JSON.stringify(on.s.calls.summary[0].body.split('Incomplete')[0]), JSON.stringify(off.s.calls.summary[0].body.split('Incomplete')[0]));
+});
