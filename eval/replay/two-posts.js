@@ -8,7 +8,7 @@ const path = require('node:path');
 const o = require('node:util').parseArgs({ options: { src: { type: 'string' }, out: { type: 'string' }, main: { type: 'string' }, branch: { type: 'string' } } }).values;
 if (!o.src || !o.out || !o.main || !o.branch) { console.error('usage: see the header of this file'); process.exit(2); }
 const trees = { main: require(path.resolve(o.main, 'eval', 'replay.js')), branch: require(path.resolve(o.branch, 'eval', 'replay.js')) };
-const st = (s) => /<!-- specguard:status=(\w+) -->/.exec(s)?.[1] || null, REASON = /Changed lines of (.*?) not shown \(diff shortened\)/;
+const st = (s) => /<!-- specguard:status=(\w+) -->/.exec(s)?.[1] || null, REASON = /Deleted lines of (.*?) not shown \(diff shortened\)/;
 // everything that may differ legitimately: the new reason's line, the status/head/counts markers (build hash, timings) and the headline
 const strip = (s) => s.replace(/^.*not shown \(diff shortened\).*\n/m, '').replace(/<!-- specguard:[^>]*-->\n?/g, '').replace(/^\*\*.*\n/m, '').replace(/### Not reviewed \(\d+\)/, '').replace(/Incomplete review[^\n]*\n/, '');
 

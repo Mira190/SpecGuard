@@ -1588,7 +1588,7 @@ async function run({ github, context, core }) {
     const n = (t, re) => t.split('\n').filter((l) => re.test(l)).length, patch = new Map(splitDiff(readCtx('diff.patch') || '').map((f) => [f.path, f.text.slice(Math.max(0, f.text.search(/^@@/m)))]));
     const cut = splitDiff(readCtx('diff.numbered.txt') || '').filter((f) => /^… \d+ more changed lines in this file not shown/m.test(f.text) && patch.has(f.path))
       .filter((f) => n(patch.get(f.path), /^-/) > n(f.text, /^\s*\d+ \| -/)).map((f) => f.path);
-    if (cut.length) incomplete.push(`Changed lines of ${cut.slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${cut.length > 5 ? `, … (+${cut.length - 5} more)` : ''} not shown (diff shortened); obligations that depend on them are unknown.`);
+    if (cut.length) incomplete.push(`Deleted lines of ${cut.slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${cut.length > 5 ? `, … (+${cut.length - 5} more)` : ''} not shown (diff shortened); obligations that depend on them are unknown.`);
   }
   const noCands = new Set((readCtx('candidates-cut.txt') || '').split('\n').filter(Boolean)); // collect.sh: changed files whose candidate tests were never looked up (list cap)
   for (const f of data.findings) if (f.kind === 'missing_test' && f.confidence !== 'low' && noCands.has(f.path)) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: candidate tests were not looked up for ${f.path} (too many changed files); missing_test ${f.path} is not counted.`); }

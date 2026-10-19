@@ -23,7 +23,7 @@ const names = (o.only ? o.only.split(',') : Object.keys(where));
 const cases = names.flatMap((name) => json(path.join(P, `${name}.json`)).filter((r) => !r.error).map((r) => ({ name, id: r.id, w: where[name](r.id) }))).sort((a, b) => a.w.clone.localeCompare(b.w.clone));
 const arms = { main: require(path.resolve(o.main)), branch: require(path.resolve(o.branch)) };
 const empty = (ctx) => { const src = rd(path.join(ctx, 'standards.txt')).split('\n').map((x) => x.trim()).filter(Boolean); return { requirements: [], requirements_source: 'none', not_reviewed: '', coverage: [], findings: [], standards: src.length ? { status: 'checked', sources: src, reason: 'Fixed empty answer of the replay.' } : { status: 'no_rules', sources: [], reason: 'Fixed empty answer of the replay.' }, layering: { status: 'checked', reason: 'Fixed empty answer of the replay.' } }; };
-const MARK = /^… \d+ more changed lines in this file not shown/m, REASON = /Changed lines of (.*?) not shown \(diff shortened\)/;
+const MARK = /^… \d+ more changed lines in this file not shown/m, REASON = /Deleted lines of (.*?) not shown \(diff shortened\)/;
 
 async function arm(name, c, tree, ctx0) {
   const dir = path.join(out, name, `${c.name}-${c.id}`), ctx = path.join(dir, 'ctx');

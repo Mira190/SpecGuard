@@ -4498,7 +4498,7 @@ const shortened = (t, { del, add, pack }) => {
   if (pack !== undefined) writeCtx(s, 'pack-cut.txt', pack);
   return { s, patch };
 };
-const REASON = /Changed lines of `src\.js` not shown \(diff shortened\); obligations that depend on them are unknown\./;
+const REASON = /Deleted lines of `src\.js` not shown \(diff shortened\); obligations that depend on them are unknown\./;
 
 test('shortened diff, omitted part has deleted lines (pydantic-like: 1 file, ~54 KB, 335 changed lines omitted, 139 deleted): incomplete with the reason, nothing skipped', async (t) => {
   const { s, patch } = shortened(t, { del: 139, add: 196, pack: '' });
