@@ -125,10 +125,15 @@ const layerOf = (p) => { const s = String(p);
     : /(^|[/._-])components?([/._-]|$)/i.test(s) ? 'component' : require('./trace').isTestPath(s) ? 'unit' : undefined; };
 
 // A path that is clearly a plain unit test: a test file outside integration/e2e/api/db/ui/component folders and name tokens (the weak words api/db/ui/component/it only as a whole folder or a dotted tag: tests/api/x.js, user.api.test.js, or the whole file-name stem (ui.test.ts, db_test.go, test_api.py), not one part of a longer stem like claude-api.test.js), not a React component test (.tsx/.jsx),
-// not an IT/integration-named class. Only such a path may omit `layer` on a row that claims `covered`.
+// not an IT/integration-named class, and a source-code file whose name says test (not a fixture, cassette, snapshot, helper module, __init__.py or conftest.py). A `unit` / `unit_tests` folder beats the weak words (tests/unit/api/test_orders.py) but never a strong word; folders under src/test/java|kotlin|scala are package names, not layers. Only such a path may omit `layer` on a row that claims `covered`.
 // ponytail: names only, no framework config; a Playwright `.spec.ts`, an Angular TestBed `.spec.ts` or a unit test under tests/api/ needs `layer: unit` stated. Read the repo's test config if this bites.
-const NOT_PLAIN_UNIT = /(^|[/._-])(integration|integ|e2e|end-to-end|acceptance|functional|cypress|playwright|contract|smoke)([/._-]|$)|(^|\/)(api|apis|db|database|components?|ui|it|itests?)\/|\.(api|apis|db|database|components?|ui|browser|it|itests?)\.|(^|\/)(?:test_)?(api|apis|db|database|components?|ui|it|itests?)(?:[._]test|\.spec)?\.[A-Za-z]+$|(?:IT|ITCase|Integration(?:Tests?)?|E2E)\.[A-Za-z]+$|\.(?:test|spec)\.[jt]sx$|(^|\/)__tests__\/[^/]+\//i;
-const clearlyUnit = (p) => layerOf(p) === 'unit' && !NOT_PLAIN_UNIT.test(String(p));
+const STRONG_NOT_UNIT = /(^|[/._-])(integration|integ|e2e|end-to-end|acceptance|functional|cypress|playwright|contract|smoke)([/._-]|$)|(?:IT|ITCase|Integration(?:Tests?)?|E2E)\.[A-Za-z]+$|\.(?:test|spec)\.[jt]sx$/i;
+const WEAK_NOT_UNIT = /(^|\/)(api|apis|db|database|components?|ui|it|itests?)\/|\.(api|apis|db|database|components?|ui|browser|it|itests?)\.|(^|\/)(?:test_)?(api|apis|db|database|components?|ui|it|itests?)(?:[._]test|\.spec)?\.[A-Za-z]+$|(^|\/)__tests__\/[^/]+\//i;
+const TEST_NAME = /(^|\/)(?:test_[^/]*|[^/]*[._-](?:tests?|spec)(?:\.[^/]*)?|tests?\.[^/]*)$/i, PASCAL_TEST = /[a-z0-9](?:Tests?|Spec)\.[^/]*$/; // the file NAME says test (isTestPath minus its directory clause): tests/__init__.py, conftest.py, tests/example_modules/db.py do not
+const CODE_FILE =/\.(?:[cm]?[jt]s|py|go|java|kts?|scala|rb|rs|cs|php|swift|c|cc|cpp|mm?|dart|exs?|clj)$/i;
+const clearlyUnit = (p) => { const s = String(p);
+  return layerOf(s) === 'unit' && CODE_FILE.test(s) && (TEST_NAME.test(s) || PASCAL_TEST.test(s)) &&!STRONG_NOT_UNIT.test(s)
+    && (/(^|\/)unit(?:[_-]?tests?)?\//i.test(s) || !WEAK_NOT_UNIT.test(s.replace(/(^|\/)src\/test\/(?:java|kotlin|scala)\/(?:.*\/)?/, '$1src/test/'))); };
 
 // Does the cited line (or the quoted block) look like an assertion, and is its test disabled? Common frameworks only.
 // ponytail: regex over the cited text; a custom helper (checkTotal(x)) or an assertion wrapped in a local function reads as no_assertion, and
