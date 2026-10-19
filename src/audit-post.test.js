@@ -1541,3 +1541,16 @@ test('run: scan_scope all with eligible source but nothing reviewed (every file 
   const sample = await runPost(t, { env: { SKIP: 'true' }, ctxFiles: { 'audit-meta.json': { ...meta, scan_scope: undefined }, 'audit-inventory.json': inv } });
   assert.equal(sample.calls.outputs.status, 'complete', 'outside scan_scope all it stays a sample');
 });
+
+test('run: scan_scope all, zero units and zero documents, but scan_paths files dropped as non-unit or an oversize document: the SKIP run is incomplete and fails the strict gate', async (t) => {
+  const { spawnSync } = require('node:child_process');
+  const meta = { head: 'abc123', max_requirements: 80, docs: 0, scan_scope: 'all', limitations: [] };
+  for (const [name, extra, re] of [['not_unit', { not_unit: 2 }, /2 source files in scan_paths dropped/], ['docs_over_size', { docs_over_size: 1 }, /1 requirement document over 256 KiB not admitted/]]) {
+    const r = await runPost(t, { env: { SKIP: 'true', SCAN_SCOPE: 'all' }, ctxFiles: { 'audit-meta.json': { ...meta, ...extra } } });
+    assert.equal(r.calls.outputs.status, 'incomplete', name); assert.match(r.calls.outputs.reason, re, name);
+    const gate = (foe) => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: 'incomplete', REASON: '', CTX: r.w.ctx, FAIL_ON_ERROR: foe } });
+    assert.equal(gate('true').status, 1, name); assert.match(gate('true').stdout, re, name); assert.equal(gate('false').status, 0, name);
+  }
+  const sample = await runPost(t, { env: { SKIP: 'true' }, ctxFiles: { 'audit-meta.json': { ...meta, scan_scope: undefined, not_unit: 2, docs_over_size: 1 } } });
+  assert.equal(sample.calls.outputs.status, 'complete', 'outside scan_scope all it stays a sample');
+});
