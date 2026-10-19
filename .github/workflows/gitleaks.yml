@@ -1,7 +1,7 @@
 name: Gitleaks
 on:
   pull_request: # scans the PR's commits
-  push: { branches: [main] }
+  push: { branches: ['**'] } # branch pushes that never get a PR
   workflow_dispatch: # manual full-history scan
 permissions:
   contents: read
