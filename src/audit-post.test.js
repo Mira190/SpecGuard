@@ -27,7 +27,7 @@ const req = (over = {}) => ({
   id: C1, source: cite('docs/design.md', 3), text: 'A repeating plan stays on after it fires.', class: 'unit', status: 'covered',
   code: [cite('src/plan.js', 2)], tests: [{ ...cite('tests/plan.test.js', 2), layer: 'unit' }], note: '', ...over,
 });
-const result = (rs = [req()], over = {}) => ({ docs_reviewed: ['docs/design.md'], requirements: rs, not_requirements: [], not_reviewed: [], ...over });
+const result = (rs = [req()], over = {}) => ({ docs_reviewed: ['docs/design.md'], requirements: rs, not_requirements: [], not_reviewed: [], unit_findings: [], ...over });
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 test('validate: accepts a good result and the enum lists match audit.schema.json', () => {
@@ -1161,10 +1161,10 @@ test('run: a block the model neither answered nor ruled out makes the status inc
   assert.equal(miss.calls.outputs.status, 'incomplete');
   assert.match(miss.calls.outputs.reason, /1 document block was not answered by the model/);
   assert.match(miss.calls.summary, /\*\*Not answered by the model:\*\* 1 document block/);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(miss.w.ctx, 'audit-unanswered.json'), 'utf8')), { blocks: 1 }, 'fail-on-error.js reads the count');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(miss.w.ctx, 'audit-unanswered.json'), 'utf8')), { blocks: 1, units: 0 }, 'fail-on-error.js reads the count');
   const all = await runPost(t, { ctxFiles: { 'audit-candidates.txt': candTxt(five), 'findings.json': result([req()], { not_requirements: [1, 2, 3, 4].map(skip) }) } });
   assert.equal(all.calls.outputs.status, 'complete');
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(all.w.ctx, 'audit-unanswered.json'), 'utf8')), { blocks: 0 });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(all.w.ctx, 'audit-unanswered.json'), 'utf8')), { blocks: 0, units: 0 });
 });
 
 test('run (review S6): a block unanswered once is marked for a retry; unanswered in two consecutive runs it is named in the limitations and no longer marked', async (t) => {
@@ -1472,6 +1472,16 @@ test('run: scan_scope all with admissible documents past the 60-document limit i
   assert.equal(sel.calls.outputs.status, 'complete'); assert.doesNotMatch(sel.calls.outputs.reason || '', /document limit/);
 });
 
+test('run: scan_scope all with oversize requirement documents (docs_over_size) or scan_paths files dropped by the default non-unit rule (not_unit) is incomplete with the count; outside scan_scope all it stays complete', async (t) => {
+  for (const [k, re] of [['docs_over_size', /2 requirement documents over 256 KiB not admitted/], ['not_unit', /2 source files in scan_paths dropped by the default non-unit paths/]]) {
+    const ctxFiles = { ...UFILES, 'audit-inventory.json': invOf([urow(UID, { path: 'src/plan.js', tests: [] })]), 'findings.json': result(), ...ALL, 'audit-meta.json': { ...ALL['audit-meta.json'], [k]: 2 } };
+    const r = await runPost(t, { ctxFiles });
+    assert.equal(r.calls.outputs.status, 'incomplete', k); assert.match(r.calls.outputs.reason, re, k);
+    const sel = await runPost(t, { ctxFiles: { ...ctxFiles, 'audit-meta.json': { head: 'abc123', max_requirements: 80, docs: 1, [k]: 2, limitations: [] }, 'scan-parts.json': {} } });
+    assert.equal(sel.calls.outputs.status, 'complete', `${k} outside scan_scope all`);
+  }
+});
+
 test('validate: unit_findings that is not an array makes every listed unit invalid (not reviewed); a valid empty array is "no findings"', async (t) => {
   const units = new Map([[UID, { id: UID }], [A1, { id: A1 }]]);
   const bad = clone(result([req()], { unit_findings: 'none' })), good = clone(result([req()], { unit_findings: [] }));
@@ -1504,4 +1514,43 @@ test('state: a 1500 or 3000 unit run keeps the issue body under ISSUE_MAX; gaps 
     assert.deepEqual(Object.keys(st.versions.uv).filter((k) => !ids.has(k)), [], 'uv holds only kept units');
     assert.match(issue.body, new RegExp(`${n + 1 - st.blocks.length} older block\\(s\\) are dropped`));
   }
+});
+
+test('validate: unit_findings null, missing or holding a non-object row, with units listed, leaves every listed unit not reviewed; a valid [] and runs with no units listed keep "no findings"', () => {
+  const units = new Map([[UID, { id: UID }], [A1, { id: A1 }]]), all = [A1, UID].sort();
+  const mk = (uf) => { const r = clone(result([req()])); if (uf === undefined) delete r.unit_findings; else r.unit_findings = uf; return r; };
+  for (const [name, uf, re] of [['null', null, /unit_findings was missing or null/], ['missing', undefined, /unit_findings was missing or null/], ['[null]', [null], /dropped: not an object/]]) {
+    const o = mk(uf); assert.equal(validate(o, ONE(), units).ok, true, name);
+    assert.deepEqual(o.invalid_units.sort(), all, name + ': not reviewed'); assert.match(o.not_reviewed.join('\n'), re, name);
+  }
+  const ok = mk([]); validate(ok, ONE(), units); assert.deepEqual(ok.invalid_units, [], 'a valid [] is no findings');
+  for (const uf of [null, undefined, [null]]) { const o = mk(uf); validate(o, ONE(), new Map()); assert.deepEqual(o.invalid_units, [], 'no units listed: unchanged'); assert.deepEqual(o.unit_findings, []); }
+});
+
+test('run: scan_scope all with eligible source but nothing reviewed (every file over the size cap, no document) is incomplete and fails the strict gate; nothing in scope stays complete', async (t) => {
+  const { spawnSync } = require('node:child_process');
+  const inv = { head: 'abc123', eligible: 1, units: 0, not_inventoried: 1, not_reached: 0, not_reached_cap: 0, not_reached_time: 0, rows: [], unreviewed: [] };
+  const meta = { head: 'abc123', max_requirements: 80, docs: 0, scan_scope: 'all', limitations: [] };
+  const r = await runPost(t, { env: { SKIP: 'true', SCAN_SCOPE: 'all' }, ctxFiles: { 'audit-meta.json': meta, 'audit-inventory.json': inv } });
+  assert.equal(r.calls.outputs.status, 'incomplete'); assert.match(r.calls.outputs.reason, /1 eligible source file not reviewed/);
+  assert.match(r.calls.summary, /1 eligible source file not reviewed/);
+  const gate = (status, foe) => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: status, REASON: '', CTX: r.w.ctx, FAIL_ON_ERROR: foe } });
+  assert.equal(gate('incomplete', 'true').status, 1); assert.match(gate('incomplete', 'true').stdout, /1 source file over 512 KiB not inventoried/); assert.equal(gate('incomplete', 'false').status, 0);
+  const none = await runPost(t, { env: { SKIP: 'true', SCAN_SCOPE: 'all' }, ctxFiles: { 'audit-meta.json': meta } });
+  assert.equal(none.calls.outputs.status, 'complete');
+  const sample = await runPost(t, { env: { SKIP: 'true' }, ctxFiles: { 'audit-meta.json': { ...meta, scan_scope: undefined }, 'audit-inventory.json': inv } });
+  assert.equal(sample.calls.outputs.status, 'complete', 'outside scan_scope all it stays a sample');
+});
+
+test('run: scan_scope all, zero units and zero documents, but scan_paths files dropped as non-unit or an oversize document: the SKIP run is incomplete and fails the strict gate', async (t) => {
+  const { spawnSync } = require('node:child_process');
+  const meta = { head: 'abc123', max_requirements: 80, docs: 0, scan_scope: 'all', limitations: [] };
+  for (const [name, extra, re] of [['not_unit', { not_unit: 2 }, /2 source files in scan_paths dropped/], ['docs_over_size', { docs_over_size: 1 }, /1 requirement document over 256 KiB not admitted/]]) {
+    const r = await runPost(t, { env: { SKIP: 'true', SCAN_SCOPE: 'all' }, ctxFiles: { 'audit-meta.json': { ...meta, ...extra } } });
+    assert.equal(r.calls.outputs.status, 'incomplete', name); assert.match(r.calls.outputs.reason, re, name);
+    const gate = (foe) => spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: 'incomplete', REASON: '', CTX: r.w.ctx, FAIL_ON_ERROR: foe } });
+    assert.equal(gate('true').status, 1, name); assert.match(gate('true').stdout, re, name); assert.equal(gate('false').status, 0, name);
+  }
+  const sample = await runPost(t, { env: { SKIP: 'true' }, ctxFiles: { 'audit-meta.json': { ...meta, scan_scope: undefined, not_unit: 2, docs_over_size: 1 } } });
+  assert.equal(sample.calls.outputs.status, 'complete', 'outside scan_scope all it stays a sample');
 });

@@ -1,0 +1,759 @@
+{
+ "target": {
+  "repo": "https://github.com/fastify/fastify.git",
+  "sha": "37df44a421817e7bb048fce834bf691abb0999d6",
+  "req_paths": "docs/Reference/**"
+ },
+ "cases": [
+  {
+   "id": "t01",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/404s.test.js",
+      "line": 52,
+      "old": "t.assert.strictEqual(response.headers.get('content-type'), 'application/json; charset=utf-8')",
+      "new": "t.assert.ok(response.headers.get('content-type'));"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t02",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/404s.test.js",
+      "line": 240,
+      "old": "t.assert.strictEqual(err.message, 'Not found handler already set for Fastify instance with prefix: \\'/\\'')",
+      "new": "t.assert.ok(err.message);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t03",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/async-await.test.js",
+      "line": 101,
+      "old": "t.assert.strictEqual(result2.status, 200)",
+      "new": "t.assert.ok(result2.status);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t04",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/close.test.js",
+      "line": 325,
+      "old": "t.assert.strictEqual(err.code, 'FST_ERR_REOPENED_CLOSE_SERVER')",
+      "new": "t.assert.ok(err.code);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t05",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/content-parser.test.js",
+      "line": 319,
+      "old": "t.assert.strictEqual(res.statusCode, 415)",
+      "new": "t.assert.ok(res.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t06",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/content-type.test.js",
+      "line": 131,
+      "old": "t.assert.equal(found.isEmpty, false)",
+      "new": "t.assert.ok(found.isEmpty);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t07",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/custom-http-server.test.js",
+      "line": 152,
+      "old": "t.assert.deepStrictEqual(server.address(), null)",
+      "new": "t.assert.ok(server.address());"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t08",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/custom-parser.5.test.js",
+      "line": 128,
+      "old": "t.assert.deepStrictEqual(await result.text(), JSON.stringify({ hello: 'world' }))",
+      "new": "t.assert.ok(await result.text());"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t09",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/fluent-schema.test.js",
+      "line": 55,
+      "old": "t.assert.strictEqual(res3.statusCode, 400)",
+      "new": "t.assert.ok(res3.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t10",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/helper.js",
+      "line": 168,
+      "old": "t.assert.deepStrictEqual(await result.json(), { hello: largeString })",
+      "new": "t.assert.ok(await result.json());"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t11",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/hooks-async.test.js",
+      "line": 26,
+      "old": "t.assert.strictEqual(reply.test, 'the reply has come')",
+      "new": "t.assert.ok(reply.test);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t12",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/hooks.on-listen.test.js",
+      "line": 877,
+      "old": "t.assert.strictEqual(++order, 3, 'called in childTwo')",
+      "new": "t.assert.ok(++order);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t13",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/hooks.test.js",
+      "line": 523,
+      "old": "t.assert.strictEqual(route.path, '/')",
+      "new": "t.assert.ok(route.path);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t14",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/hooks.test.js",
+      "line": 552,
+      "old": "t.assert.strictEqual(route.path, '/v1/foo')",
+      "new": "t.assert.ok(route.path);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t15",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/http-methods/get.test.js",
+      "line": 380,
+      "old": "t.assert.deepStrictEqual(body.toString(), 'false')",
+      "new": "t.assert.ok(body.toString());"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t16",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/http-methods/move.test.js",
+      "line": 40,
+      "old": "t.assert.strictEqual(result.headers.get('location'), '/test2.txt')",
+      "new": "t.assert.ok(result.headers.get('location'));"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t17",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/http-methods/unlock.test.js",
+      "line": 36,
+      "old": "t.assert.strictEqual(result.status, 204)",
+      "new": "t.assert.ok(result.status);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t18",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/https/https.test.js",
+      "line": 132,
+      "old": "t.assert.strictEqual(result.statusCode, 200)",
+      "new": "t.assert.ok(result.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t19",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/inject.test.js",
+      "line": 156,
+      "old": "t.assert.strictEqual(res.statusCode, 200)",
+      "new": "t.assert.ok(res.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t20",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/errors.test.js",
+      "line": 278,
+      "old": "t.assert.strictEqual(error.message, 'The hook name must be a string')",
+      "new": "t.assert.ok(error.message);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t21",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/errors.test.js",
+      "line": 558,
+      "old": "t.assert.strictEqual(error.message, \"Schema with '%s' already present!\")",
+      "new": "t.assert.ok(error.message);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t22",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/handle-request.test.js",
+      "line": 30,
+      "old": "t.assert.strictEqual(res, undefined)",
+      "new": "t.assert.ok(res);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t23",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/reply-serialize.test.js",
+      "line": 320,
+      "old": "t.assert.strictEqual(err.message, 'The value \"phone\" cannot be converted to a number.')",
+      "new": "t.assert.ok(err.message);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t24",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/reply-serialize.test.js",
+      "line": 385,
+      "old": "t.assert.strictEqual(err.message, '\"hello\" is required!')",
+      "new": "t.assert.ok(err.message);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t25",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/reply.test.js",
+      "line": 58,
+      "old": "t.assert.strictEqual(reply[kRouteContext], context)",
+      "new": "t.assert.ok(reply[kRouteContext]);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t26",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/reply.test.js",
+      "line": 691,
+      "old": "t.assert.strictEqual(result.headers.get('content-type'), 'application/json; charset=utf-8')",
+      "new": "t.assert.ok(result.headers.get('content-type'));"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t27",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/reply.test.js",
+      "line": 778,
+      "old": "t.assert.deepStrictEqual(await result.text(), JSON.stringify({ key: 'hello world!' }))",
+      "new": "t.assert.ok(await result.text());"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t28",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/reply.test.js",
+      "line": 856,
+      "old": "t.assert.strictEqual(JSON.parse(res.payload).message, 'some application error')",
+      "new": "t.assert.ok(JSON.parse(res.payload).message);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t29",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/reply.test.js",
+      "line": 1451,
+      "old": "t.assert.deepStrictEqual(result.headers.getSetCookie(), ['one', 'two', 'three', 'four', 'five', 'six'])",
+      "new": "t.assert.ok(result.headers.getSetCookie());"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t30",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/internals/request.test.js",
+      "line": 62,
+      "old": "t.assert.strictEqual(request.body, undefined)",
+      "new": "t.assert.ok(request.body);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t31",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/logger/options.test.js",
+      "line": 359,
+      "old": "t.assert.deepEqual(line.msg, lines.shift())",
+      "new": "t.assert.ok(line.msg);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t32",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/plugin.2.test.js",
+      "line": 124,
+      "old": "t.assert.strictEqual(fastify.pluginName, 'fastify')",
+      "new": "t.assert.ok(fastify.pluginName);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t33",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/reply-code.test.js",
+      "line": 95,
+      "old": "t.assert.strictEqual(res.headers['content-length'], undefined)",
+      "new": "t.assert.ok(undefined);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t34",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/reply-code.test.js",
+      "line": 114,
+      "old": "t.assert.strictEqual(res.payload, '')",
+      "new": "t.assert.ok(res.payload);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t35",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/reply-early-hints.test.js",
+      "line": 38,
+      "old": "t.assert.strictEqual(res.statusCode, 200)",
+      "new": "t.assert.ok(res.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t36",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/route-hooks.test.js",
+      "line": 275,
+      "old": "t.assert.strictEqual(res.statusCode, 500)",
+      "new": "t.assert.ok(res.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t37",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/route-prefix.test.js",
+      "line": 36,
+      "old": "t.assert.deepStrictEqual(JSON.parse(res.payload), { route: '/first' })",
+      "new": "t.assert.ok(JSON.parse(res.payload));"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t38",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/route.5.test.js",
+      "line": 130,
+      "old": "t.assert.deepStrictEqual(res.body, '')",
+      "new": "t.assert.ok(res.body);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t39",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/route.6.test.js",
+      "line": 166,
+      "old": "t.assert.strictEqual(res.statusCode, 200)",
+      "new": "t.assert.ok(res.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t40",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/router-compile.test.js",
+      "line": 179,
+      "old": "t.assert.deepStrictEqual(res.json(), { ok: true })",
+      "new": "t.assert.ok(res.json());"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t41",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/schema-feature.test.js",
+      "line": 467,
+      "old": "t.assert.deepStrictEqual(spyData.calls[2], { arguments: ['body', 'GET', '/undefinedBody/:id'], result: true })",
+      "new": "t.assert.ok(spyData.calls[2]);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t42",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/schema-feature.test.js",
+      "line": 1327,
+      "old": "t.assert.strictEqual(res.statusCode, 400)",
+      "new": "t.assert.ok(res.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t43",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/schema-serialization.test.js",
+      "line": 317,
+      "old": "t.assert.strictEqual(res.payload, JSON.stringify([{ name: 'Boo', age: 18, verified: false }, { name: 'Woo', age: 30, verified: true }]))",
+      "new": "t.assert.ok(res.payload);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t44",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/schema-validation.test.js",
+      "line": 178,
+      "old": "t.assert.strictEqual(res.statusCode, 200)",
+      "new": "t.assert.ok(res.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t45",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/server.test.js",
+      "line": 79,
+      "old": "t.assert.strictEqual(req.port, 8000)",
+      "new": "t.assert.ok(req.port);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t46",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/skip-reply-send.test.js",
+      "line": 93,
+      "old": "t.assert.strictEqual(line.err.message, 'kaboom')",
+      "new": "t.assert.ok(line.err.message);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t47",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/stream.3.test.js",
+      "line": 123,
+      "old": "t.assert.strictEqual(response.statusCode, 200)",
+      "new": "t.assert.ok(response.statusCode);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t48",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/throw.test.js",
+      "line": 205,
+      "old": "t.assert.strictEqual(e.code, 'FST_ERR_DEC_MISSING_DEPENDENCY')",
+      "new": "t.assert.ok(e.code);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t49",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/url-rewriting.test.js",
+      "line": 39,
+      "old": "t.assert.strictEqual(req.url, '/this-would-404-without-url-rewrite')",
+      "new": "t.assert.ok(req.url);"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t50",
+   "edits": {
+    "R": [],
+    "C": [],
+    "T": [
+     {
+      "file": "test/web-api.test.js",
+      "line": 28,
+      "old": "t.assert.strictEqual(statusCode, 200)",
+      "new": "t.assert.ok(statusCode);"
+     }
+    ]
+   }
+  }
+ ]
+}

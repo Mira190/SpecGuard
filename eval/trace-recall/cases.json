@@ -1,5 +1,5 @@
 {
- "description": "Versioned requirement<->code retrieval capability set. 12 independent behaviours; each is run as 3 variants (R: requirement edited, C: code edited, RC: both). Paths and line ranges are ground truth for the pinned SHA; no target source is stored here.",
+ "description": "Versioned requirement<->code retrieval capability set. 12 independent behaviours; each is run as up to 4 variants (R: requirement edited, C: code edited, RC: both, T: only a test assertion weakened; T only where one clear asserting line exists). Paths and line ranges are ground truth for the pinned SHA; no target source is stored here. Cases flagged holdout:true (onProtoPoisoning, exposeHeadRoutes, http2SessionTimeout) were fixed before the capped-window rules were tested; report them apart from the original 12.",
  "target": {
   "repo": "https://github.com/fastify/fastify.git",
   "sha": "37df44a421817e7bb048fce834bf691abb0999d6",
@@ -24,6 +24,14 @@
       "all": true,
       "old": "1048576",
       "new": "2097152"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/body-limit.test.js",
+      "line": 116,
+      "old": "t.assert.strictEqual(1048576, request.routeOptions.bodyLimit)",
+      "new": "t.assert.ok(request.routeOptions.bodyLimit)"
      }
     ]
    },
@@ -105,6 +113,14 @@
       "old": "\"connectionTimeout\":0,",
       "new": "\"connectionTimeout\":30000,"
      }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
+     }
     ]
    },
    "expect": {
@@ -182,6 +198,14 @@
       "file": "lib/config-validator.js",
       "old": "\"keepAliveTimeout\":72000,",
       "new": "\"keepAliveTimeout\":5000,"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
      }
     ]
    },
@@ -267,6 +291,14 @@
       "old": "\"maxParamLength\":100,",
       "new": "\"maxParamLength\":200,"
      }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
+     }
     ]
    },
    "expect": {
@@ -346,6 +378,14 @@
       "old": "\"ignoreTrailingSlash\":false,",
       "new": "\"ignoreTrailingSlash\":true,"
      }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
+     }
     ]
    },
    "expect": {
@@ -415,6 +455,14 @@
       "old": "options.return503OnClosing : true",
       "new": "options.return503OnClosing : false"
      }
+    ],
+    "T": [
+     {
+      "file": "test/close-pipelining.test.js",
+      "line": 38,
+      "old": "t.assert.strictEqual(thirdRequest.value.statusCode, 503)",
+      "new": "t.assert.ok(thirdRequest.value.statusCode)"
+     }
     ]
    },
    "expect": {
@@ -476,6 +524,14 @@
       "file": "lib/config-validator.js",
       "old": "\"pluginTimeout\":10000,",
       "new": "\"pluginTimeout\":20000,"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/internals/initial-config.test.js",
+      "line": 57,
+      "old": "t.assert.deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)",
+      "new": "t.assert.ok(Fastify().initialConfig)"
      }
     ]
    },
@@ -545,6 +601,14 @@
       "file": "fastify.js",
       "old": "=== true && 'request-id'",
       "new": "=== true && 'x-request-id'"
+     }
+    ],
+    "T": [
+     {
+      "file": "test/request-id.test.js",
+      "line": 15,
+      "old": "t.assert.strictEqual(req.id, REQUEST_ID)",
+      "new": "t.assert.ok(req.id)"
      }
     ]
    },
@@ -643,6 +707,14 @@
       "old": "this.raw.statusCode : 302",
       "new": "this.raw.statusCode : 301"
      }
+    ],
+    "T": [
+     {
+      "file": "test/internals/reply.test.js",
+      "line": 333,
+      "old": "t.assert.strictEqual(response.statusCode, 302)",
+      "new": "t.assert.ok(response.statusCode)"
+     }
     ]
    },
    "expect": {
@@ -739,6 +811,14 @@
       "old": "error: 'Not Found',",
       "new": "error: 'Missing',"
      }
+    ],
+    "T": [
+     {
+      "file": "test/404s.test.js",
+      "line": 30,
+      "old": "t.assert.strictEqual(result.status, 404)",
+      "new": "t.assert.ok(result.status)"
+     }
     ]
    },
    "expect": {
@@ -777,6 +857,259 @@
     ],
     "tests": [
      "test/404s.test.js"
+    ]
+   }
+  },
+  {
+   "id": "onProtoPoisoning",
+   "holdout": true,
+   "stmt": "onProtoPoisoning default 'error'",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 307,
+      "old": "`'error'`",
+      "new": "`'remove'`"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "old": "data.onProtoPoisoning = \"error\";",
+      "new": "data.onProtoPoisoning = \"remove\";"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"onProtoPoisoning\":{\"type\":\"string\",\"default\":\"error\"}",
+      "new": "\"onProtoPoisoning\":{\"type\":\"string\",\"default\":\"remove\"}"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"onProtoPoisoning\":\"error\",",
+      "new": "\"onProtoPoisoning\":\"remove\","
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      304,
+      314
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       33,
+       33
+      ]
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       34,
+       34
+      ],
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "fastify.js",
+      "lines": [
+       167,
+       167
+      ],
+      "note": "fallback to the default"
+     },
+     {
+      "file": "lib/content-type-parser.js",
+      "lines": [
+       339,
+       340
+      ],
+      "note": "default parser uses the action"
+     }
+    ],
+    "tests": [
+     "test/proto-poisoning.test.js",
+     "test/internals/initial-config.test.js"
+    ]
+   }
+  },
+  {
+   "id": "exposeHeadRoutes",
+   "holdout": true,
+   "stmt": "exposeHeadRoutes default true: a HEAD route per GET route",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 658,
+      "old": "`true`",
+      "new": "`false`"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "old": "data.exposeHeadRoutes = true;",
+      "new": "data.exposeHeadRoutes = false;"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"exposeHeadRoutes\":{\"type\":\"boolean\",\"default\":true}",
+      "new": "\"exposeHeadRoutes\":{\"type\":\"boolean\",\"default\":false}"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"exposeHeadRoutes\":true,",
+      "new": "\"exposeHeadRoutes\":false,"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      655,
+      661
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       38,
+       38
+      ]
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       49,
+       49
+      ],
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "lib/route.js",
+      "lines": [
+       106,
+       106
+      ],
+      "note": "option read"
+     },
+     {
+      "file": "lib/route.js",
+      "lines": [
+       225,
+       225
+      ],
+      "note": "HEAD exposed unless the route opts out"
+     }
+    ],
+    "tests": [
+     "test/internals/initial-config.test.js",
+     "test/hooks.test.js"
+    ]
+   }
+  },
+  {
+   "id": "http2SessionTimeout",
+   "holdout": true,
+   "stmt": "http2SessionTimeout default 72000",
+   "edits": {
+    "R": [
+     {
+      "file": "docs/Reference/Server.md",
+      "line": 723,
+      "old": "`72000`",
+      "new": "`30000`"
+     }
+    ],
+    "C": [
+     {
+      "file": "lib/config-validator.js",
+      "old": "data.http2SessionTimeout = 72000;",
+      "new": "data.http2SessionTimeout = 30000;"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"http2SessionTimeout\":{\"type\":\"integer\",\"default\":72000}",
+      "new": "\"http2SessionTimeout\":{\"type\":\"integer\",\"default\":30000}"
+     },
+     {
+      "file": "lib/config-validator.js",
+      "old": "\"http2SessionTimeout\":72000,",
+      "new": "\"http2SessionTimeout\":30000,"
+     }
+    ]
+   },
+   "expect": {
+    "requirement": {
+     "file": "docs/Reference/Server.md",
+     "lines": [
+      720,
+      731
+     ]
+    },
+    "code": [
+     {
+      "file": "build/build-validation.js",
+      "lines": [
+       37,
+       37
+      ]
+     },
+     {
+      "file": "lib/config-validator.js",
+      "lines": [
+       46,
+       46
+      ],
+      "alt": [
+       [
+        6,
+        6
+       ],
+       [
+        1187,
+        1187
+       ]
+      ]
+     },
+     {
+      "file": "lib/server.js",
+      "lines": [
+       319,
+       319
+      ],
+      "note": "session timeout use"
+     }
+    ],
+    "tests": [
+     "test/http2/closing.test.js",
+     "test/internals/initial-config.test.js"
     ]
    }
   }
