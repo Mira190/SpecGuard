@@ -280,7 +280,7 @@ function assertionDelta(diff, isTest, gone = () => false) {
     const exact = !r.weak && EXACT.test(r.text) && literalsOf(r.text, 1).size > 0; // an exact value replaced by a range matcher is weakened
     if (same.some((a) => !a.weak && !(exact && RANGE.test(a.text))) || (r.weak && same.length)) continue; // still pinned: moved, reformatted or strengthened
     // re-pinned through a helper or alias: an added assertion holds every distinctive literal of the removed one (literals most assertion lines share, like '.mp4', say nothing)
-    const all = [...rm, ...add], has = (a, x) => literalsOf(a.full, 1).has(x);
+    const all = [...rm, ...add], has = (a, x) => (a.lits ??= literalsOf(a.full, 1)).has(x);
     const distinct = (min) => [...literalsOf(r.full, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive
     const lits = distinct(2).length ? distinct(2) : distinct(1);
     if (lits.length && add.some((a) => !a.weak && lits.every((x) => has(a, x)))) continue;
