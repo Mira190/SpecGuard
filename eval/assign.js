@@ -2,7 +2,8 @@
 // Single source of truth for the validation arms (docs/validation-plan.md). The example workflow repeats this mapping in bash
 // (openssl); eval/assign.test.js runs that snippet and compares it with this function.
 //   With a salt (env SPECGUARD_ARM_SALT, a secret): arm = first 4 bytes of HMAC-SHA256(salt, PR number) as an unsigned int, mod 3, so an
-//   author cannot pick an arm by choosing the PR number. Without a salt: PR number % 3 (predictable; the workflow warns).
+//   author cannot pick an arm by choosing the PR number (it does not stop re-rolls: see the plan). The workflow FAILS without a salt; the
+//   unsalted PR number % 3 below exists only to re-derive arms of older trials and for back-compat tests.
 //   arm 0 = SpecGuard only, arm 1 = native Copilot review only, arm 2 = both.
 //   node eval/assign.js 17   ->  {"arm":2,"specguard":true,"copilot":true}
 const crypto = require('node:crypto');
