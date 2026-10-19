@@ -1830,4 +1830,7 @@ test('EXP_PACK H: main\'s pack when it loses nothing (deep-equal), O\'s pack whe
   const a2 = run('', del, 60000), o2 = run('O', del, 60000);
   assert.ok(!has(a2, 'src/a.js') && has(o2, 'src/a.js'), 'main shows the file with 0 lines, O shows it');
   assert.deepEqual(run('H', del, 60000), o2);
+  // a file the PR deletes whole is absent at head: nothing can show it, so it is no loss and H keeps main's pack
+  const gone = ruleRepo(t, { 'R.md': 100 }, [['R.md', ['**']]], { files: {}, ctx: { 'files.txt': 'src/a.js\nsrc/gone.js\n', 'diff.patch': patchOf('src/a.js', 1) + 'diff --git a/src/gone.js b/src/gone.js\n--- a/src/gone.js\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-x\n-y\n' } });
+  assert.deepEqual(run('H', gone, 250000), run('', gone, 250000));
 });

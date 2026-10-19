@@ -78,7 +78,7 @@ function pack(arm, ctx, root, limit = 250000) {
 }
 const blocks = (text) => { const m = {}; for (const x of text.matchAll(/<untrusted-data name="([^"]+)"[^>]*>\n([\s\S]*?)\n<\/untrusted-data>/g)) m[x[1]] = x[0]; return m; };
 // the post.js lost rule (src/post.js, "Review context was cut") on a pack result: changed files with a changed line past what was shown, and the cut candidate tests of changed files
-function lost(ctx, p) {
+function lost(ctx, p, root) {
   const files = lines(path.join(ctx, 'files.txt')), dm = post.parseDiff(rd(path.join(ctx, 'diff.patch'))), cut = new Set(p.notWhole), cands = parseCandidates(rd(path.join(ctx, 'test-candidates.txt')));
   const out = [], tests = [];
   for (const f of files) {
@@ -88,7 +88,7 @@ function lost(ctx, p) {
     }
     for (const x of cands.get(f) || []) if (cut.has(x) && !tests.includes(x)) tests.push(x);
   }
-  const zero = files.filter((f) => (dm.get(f)?.changed.LEFT.size || 0) > 0 && !blocks(p.text)[f]); // amendment 2: a changed file with deleted lines that the pack shows with 0 lines
+  const zero = files.filter((f) => (dm.get(f)?.changed.LEFT.size || 0) > 0 && !blocks(p.text)[f] && api.packRead(root, f) !== null); // amendment 2: a changed file with deleted lines that the pack shows with 0 lines
   return { out, tests, zero };
 }
 // in-scope rules of main's list (scope covers at least one changed file; no map = all)
@@ -101,7 +101,7 @@ function inScope(ctx) {
 }
 // every measure of one pack; a: the measure() of main on the same PR (for gate 6 and byte identity)
 function measure(arm, ctx, root, limit = 250000, a = null) {
-  const p = pack(arm, ctx, root, limit), b = blocks(p.text), std = lines(path.join(ctx, 'standards.txt')), ins = inScope(ctx), l = lost(ctx, p);
+  const p = pack(arm, ctx, root, limit), b = blocks(p.text), std = lines(path.join(ctx, 'standards.txt')), ins = inScope(ctx), l = lost(ctx, p, root);
   const size = (f) => Buffer.byteLength(b[f] || ''), files = lines(path.join(ctx, 'files.txt'));
   const r = {
     arm, bytes: Buffer.byteLength(p.text), lostFiles: l.out, lostAny: l.out.length > 0, lostSrc: l.out.some((x) => x.cat !== 'doc'), lostCode: l.out.some((x) => x.cat === 'src'), unseen: l.out.reduce((n, x) => n + x.un, 0), unseenKeys: l.out.flatMap((x) => x.past.map((n) => x.f + ":" + n)),

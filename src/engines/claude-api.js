@@ -251,7 +251,7 @@ function contextPack(ctx, root, limit) {
   if (exp !== 'H') return buildPack(ctx, root, limit, exp);
   const a = buildPack(ctx, root, limit, ''), rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
   const l = packLoss({ files: rd('files.txt').split('\n').filter(Boolean), patch: rd('diff.patch'), cands: parseCandidates(rd('test-candidates.txt')), cut: new Set(a.notWhole), shown: a.shown });
-  return l.right.length || l.del.length ? buildPack(ctx, root, limit, 'O') : a;
+  return l.right.length || l.del.filter((p) => packRead(root, p) !== null).length ? buildPack(ctx, root, limit, 'O') : a; // a file the PR deletes is in files.txt but absent at head: no arm can show it
 }
 function buildPack(ctx, root, limit, exp) {
   const rd = (n) => { try { return fs.readFileSync(path.join(ctx, n), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
@@ -602,6 +602,6 @@ function keptRooms({ ctx, root, batch, model, maxTokens, budget, packBytes }) {
   } catch { return null; }
 }
 
-module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, ALL_MAX_CALLS, fit, keptRooms, PRICES, contextPack, windowPack, evidencePack, packFiles, slices, unitSyms };
+module.exports = { DENY, run, strict, messages, classify, cost, worstCase, unitCalls, callUsd, MAX_UNIT_CALLS, ALL_MAX_CALLS, fit, keptRooms, PRICES, contextPack, packRead, windowPack, evidencePack, packFiles, slices, unitSyms };
 
 if (require.main === module) run().catch(() => {}).then(() => process.exit(0)); // last: everything above is initialised before run() starts
