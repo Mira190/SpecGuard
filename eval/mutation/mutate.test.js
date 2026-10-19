@@ -56,6 +56,7 @@ test('score on a real-shaped result artifact (fixtures/real-shape): units file a
   assert.deepStrictEqual([s.false_alarm_any.hit, s.false_alarm_any.of], [0, 2]);
   assert.strictEqual(s.mutants.survived_uncertain, 2);
   assert.strictEqual(s.findings.details_only, 1);
+  assert.deepStrictEqual(s.base_rate, { in_manifest: { of: 6, any: 3, visible: 2 }, all_units: { of: 4, any: 3, visible: 2 } }); // 6 reviewed manifest files (a,b,c,d,f,g; e is not reviewed); a, b, c flagged
   assert.strictEqual(s.cost_usd, 0.42);
   const all = score({ mutants }, JSON.parse(rd('findings.json')), null, rd('summary.md').replace('4 of 5', '5 of 5'));
   assert.deepStrictEqual(all.units.not_reviewed, []); // every unit reviewed: the named file is a caveat
