@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Last step of the action, on every non-cancelled run. A configuration failure (auth, quota, model: only the owner can fix it, a retry or a new push cannot) always goes red.
+// Last step of the action, on every non-cancelled run. A configuration failure (auth, quota, model, budget: only the owner can fix it, a retry or a new push cannot) always goes red.
 // Any other failed run goes red only with FAIL_ON_ERROR=true (manual runs); otherwise it warns. An incomplete one only warns.
 // Reads STATUS (complete | incomplete | failed | empty), REASON and FAIL_ON_ERROR from the environment, and the failure class (first line of engine-error, written by the engine) from CTX. An incomplete status whose counts.json (in CTX, written by post.js) says reduced is a fast-tier review, not a broken one.
 const fs = require('node:fs');
@@ -9,7 +9,7 @@ const { STATUS = '', REASON = '', CTX = '', FAIL_ON_ERROR = '' } = process.env;
 const ctxFile = (n) => { try { return fs.readFileSync(path.join(CTX, n), 'utf8'); } catch { return ''; } };
 const reduced = () => { try { return JSON.parse(ctxFile('counts.json')).reduced === true; } catch { return false; } };
 // CTX is fresh per run (.specguard-ctx in the workspace), so engine-error is never stale. policy: Copilot disabled by the org, only an admin can fix it.
-const CONFIG = ['auth', 'quota', 'model', 'policy', 'internal', 'config']; // internal: the adapter itself threw, deterministic, never a retry
+const CONFIG = ['auth', 'quota', 'model', 'policy', 'internal', 'config', 'budget']; // budget: the engine refused a call whose worst case exceeds max_budget_usd, same inputs every PR; internal: the adapter itself threw, deterministic, never a retry
 const [cls = '', why = ''] = ctxFile('engine-error').split('\n').map((l) => l.trim());
 if (STATUS === 'incomplete' && CONFIG.includes(cls)) { // a multi-part scan where a part hit a configuration failure: the partial result is kept, the job still goes red
   console.log(`::error::SpecGuard could not finish the scan (${cls}): ${esc(why || REASON || 'see the job summary')}; the partial result was kept`);
