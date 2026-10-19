@@ -3583,6 +3583,8 @@ test('V3: a JS/TS file in __tests__/ or test/ is unit evidence only if it declar
   assert.equal(status('test/app.get.js'), 'unknown', 'a supertest file is HTTP-layer: the model states the layer'); assert.equal(status('test/app.use.js'), 'unknown');
   assert.equal(status('test/missing.js'), 'unknown', 'an unreadable file is not evidence');
   put('test/fixtures/data.js', "it('x', () => {});\n"); assert.equal(status('test/fixtures/data.js'), 'unknown');
+  put('test/unit/calc.js', "describe('calc', () => { it('adds', () => {}); });\n"); assert.equal(status('test/unit/calc.js'), 'covered', 'test/unit/ direct child is a unit test dir');
+  put('test/assertions.js', "expect.it('x', function () {});\n"); assert.equal(status('test/assertions.js'), 'unknown', 'expect.it( is not a declaration: it must start the line');
 });
 
 test('V3: the cited line must be an assertion in a test that runs; otherwise the row is not covered', () => {
