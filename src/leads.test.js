@@ -309,6 +309,6 @@ test('removed assertions: 50 literal-dense added lines of ~100 KB each finish fa
 test('removed assertions: counterexamples for in-place edits (a token-subsequence "only adds" rule was evaluated and not adopted: it would hide the inverted assertion)', () => {
   assert.deepEqual(delta("-  assert.equal(f(1), 2);\n+  assert.equal(f(2), 3);\n"), ['removed 10 assert.equal(f(1), 2);'], 'input 1 dropped');
   assert.ok(delta("-  assert.match(validateBaseName('BIG', '.mp4', others), /x/); // case-insensitive FS\n+  assert.match(check('a'), /x/);\n").some((d) => d.includes("'BIG'")), 'Kite #10: the BIG case removed');
-  assert.equal(delta("-  assert.deepEqual(nextTrigger(a, 10, 0, 0), x);\n+  for (const [n, h, w] of cases) assert.deepEqual(nextTrigger(n, h, 0, 0), w);\n").length, 1, 'Kite #12: a table row dropped');
-  assert.equal(delta("-  assert.ok(f(x));\n+  assert.ok(!f(x));\n").length, 1, 'an inverted assertion');
+  assert.deepEqual(delta("-  assert.deepEqual(nextTrigger(a, 10, 0, 0), x);\n+  for (const [n, h, w] of cases) assert.deepEqual(nextTrigger(n, h, 0, 0), w);\n"), ['removed 10 assert.deepEqual(nextTrigger(a, 10, 0, 0), x);'], 'Kite #12: a table row dropped');
+  assert.deepEqual(delta("-  assert.ok(f(x));\n+  assert.ok(!f(x));\n"), ['removed 10 assert.ok(f(x));'], 'an inverted assertion');
 });
