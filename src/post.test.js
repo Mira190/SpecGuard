@@ -4413,3 +4413,27 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
   assert.ok(!('verdict' in none));
   assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
 });
+
+// ---- experiment MISSING_TEST_STATIC_CITATION ----
+async function staticMissing(t, { on = true, testText = null, line = 3, quote = 'if (x) {' } = {}) {
+  const s = setup(t, report({ coverage: [row('missing_test', { behaviour: { path: 'src.js', line, quote } })], findings: [finding('missing_test', { line, quote, confidence: 'low' })] }));
+  fs.writeFileSync(path.join(s.dir, 'src.js'), 'function untestedThing() {\nl2\nif (x) {\nl4\nl5\n');
+  if (testText) fs.writeFileSync(path.join(s.dir, 'test.js'), `test\n${evidence.quote}\n${testText}\n`);
+  writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5.5'] }));
+  if (on) process.env.MISSING_TEST_STATIC_CITATION = '1';
+  t.after(() => { delete process.env.MISSING_TEST_STATIC_CITATION; });
+  await post(s);
+  return s;
+}
+test('static-citation switch: on + added line + no test names the symbol -> inline', async (t) => {
+  assert.equal((await staticMissing(t)).calls.review[0]?.comments.length, 1);
+});
+test('static-citation switch: on + a test references the enclosing symbol -> summary', async (t) => {
+  assert.equal((await staticMissing(t, { testText: 'untestedThing();' })).calls.review[0]?.comments.length ?? 0, 0);
+});
+test('static-citation switch: on + the cited line was not changed by the PR -> summary', async (t) => {
+  assert.equal((await staticMissing(t, { line: 4, quote: 'l4' })).calls.review[0]?.comments.length ?? 0, 0);
+});
+test('static-citation switch: off -> unchanged (summary)', async (t) => {
+  assert.equal((await staticMissing(t, { on: false })).calls.review[0]?.comments.length ?? 0, 0);
+});

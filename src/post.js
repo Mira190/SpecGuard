@@ -1786,7 +1786,17 @@ async function run({ github, context, core }) {
 
   // Reduced review: only a high-confidence finding with two verified citations goes inline (at most REDUCED_INLINE); the rest are one-liners in the summary.
   const reasons = reducedReasons({ em, repair, engineNotes: (readCtx('engine-notes') || '').split('\n').filter((x) => x.trim()), data }), reduced = reasons.length > 0;
-  const p = plan(reduced ? kept.filter((f) => f.confidence === 'high' && citationsOf(f, data) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
+  // Experiment MISSING_TEST_STATIC_CITATION (env, default off): in a reduced review a missing_test on a PR-added line that no tracked test references by its enclosing symbol goes inline
+  // without the high-confidence and two-citation requirements (a missing_test has one citation by construction). The REDUCED_INLINE cap, anchoring and dedup still apply.
+  const staticMissing = reduced && env.MISSING_TEST_STATIC_CITATION === '1' ? (() => {
+    const { enclosingName, makeCoverGuard } = require('./test-map'), guard = makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' });
+    return (f) => { // ponytail: a failed or timed-out search, or no enclosing name, is not "no test references it": not eligible
+      if (f.kind !== 'missing_test' || f.gated || f.side === 'LEFT' || !maps.get(f.path)?.changed.RIGHT.has(f.line)) return false;
+      const name = enclosingName(readLines(f.path) || [], f.line), n = guard.limits.length;
+      return !!name && !guard.symbol(name, f.path) && guard.limits.length === n;
+    };
+  })() : () => false;
+  const p = plan(reduced ? kept.filter((f) => (f.confidence === 'high' && citationsOf(f, data) >= 2) || staticMissing(f)) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
   if (reduced) {
     const brief = (f, why) => ({ f, why, brief: true });
     p.summary = [...p.summary.map((x) => brief(x.f, x.why === 'over max_comments' ? 'reduced review: inline limit' : x.why)), ...p.file.map((f) => brief(f, 'reduced review: not inline')),
