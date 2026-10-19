@@ -160,6 +160,7 @@ test('validatedGaps: inline comments need high confidence; summary items count u
   assert.strictEqual(validatedGaps({}), false);
 });
 
+// Must run serially: it swaps the process-wide TMPDIR/TEMP/TMP, so `{ concurrency: true }` in this file would leak the override into other tests.
 test('SIGINT while the engine runs: the child is stopped, the worktree and temp dir are removed, exit code 130', async () => {
   const { repo } = makeRepo('signal');
   const bin = path.join(tmp, 'signal-bin');
