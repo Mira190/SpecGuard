@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with: { fetch-depth: 0, persist-credentials: false }
-      - uses: Mira190/SpecGuard@c2455028529bdc1ad8bbd9abe9a099e26a902703 # specguard-pin
+      - uses: Mira190/SpecGuard@58f25052807fa0e0272d7c2f6b0058ddb8901c82 # specguard-pin
         with:
           mode: ${{ inputs.mode }}
           scan_issue_token: ${{ secrets.scan_issue_token }}

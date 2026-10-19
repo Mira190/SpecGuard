@@ -224,6 +224,12 @@ test('ci.yml: the test job skips an `edited` event only when the base branch did
   assert.match(read('.github', 'workflows', 'ci.yml'), /if: \$\{\{ github\.event\.action != 'edited' \|\| github\.event\.changes\.base != null \}\}/);
 });
 
+test('ci.yml: the test job has full history and the pre-rewrite history guard', () => {
+  const y = read('.github', 'workflows', 'ci.yml');
+  assert.match(y, /pre-rewrite history detected/);
+  assert.match(y, /fetch-depth: 0, persist-credentials: false \}\n {6}- uses: actions\/setup-node/);
+});
+
 test('specguard-run.yml: manual model/size/budget inputs reach the action (empty = action default); the target checkout is blobless and non-shallow without --shallow-since; counts get the full SHA', () => {
   const y = central(), step = y.slice(y.indexOf('uses: ./.specguard-src')), action = fs.readFileSync(path.join(root, 'action.yml'), 'utf8');
   for (const k of ['max_budget_usd']) {
