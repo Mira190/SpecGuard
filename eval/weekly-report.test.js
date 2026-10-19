@@ -493,3 +493,26 @@ test('excluded by design: unlabelled PRs with no SpecGuard run (fork, bot) are c
   ds.issue_comments = [...ds.issue_comments, counts(9, S(0))];
   assert.equal(analyze(ds).excluded_by_design, 0);
 });
+
+test('load: closed-and-reopened PRs and PRs sharing a head branch are flagged; a merely closed PR is not', () => {
+  const cpm = require('node:child_process');
+  const pr = (number) => ({ number, created_at: '2026-10-10T00:00:00Z', closed_at: null, pull_request: { merged_at: null }, user: { login: 'dev', type: 'User' }, labels: [] });
+  const gh = (a) => {
+    const s = a.join(' ');
+    if (s.includes('search/issues')) return JSON.stringify([pr(1), pr(2), pr(3), pr(4)]);
+    if (s.includes('issues/comments') || s.includes('pulls/comments')) return '[]';
+    if (s.includes('pulls?state=all')) return JSON.stringify([{ number: 4, head: { ref: 'feat/x' }, created_at: '2026-10-12T00:00:00Z' }, { number: 3, head: { ref: 'feat/x' }, created_at: '2026-10-11T00:00:00Z' }, { number: 2, head: { ref: 'feat/b' }, created_at: '2026-10-10T00:00:00Z' }, { number: 1, head: { ref: 'feat/a' }, created_at: '2026-10-10T00:00:00Z' }, { number: 99, head: { ref: 'feat/x' }, created_at: '2026-10-10T00:00:00Z' }]);
+    if (s.includes('issues/events')) return JSON.stringify([{ event: 'reopened', issue: { number: 1 }, created_at: '2026-10-13T00:00:00Z' }, { event: 'closed', issue: { number: 2 }, created_at: '2026-10-13T00:00:00Z' }, { event: 'reopened', issue: { number: 77 }, created_at: '2026-10-13T00:00:00Z' }]);
+    throw new Error('unexpected gh call: ' + s);
+  };
+  const real = cpm.execFileSync;
+  cpm.execFileSync = (cmd, args, o) => (cmd === 'gh' ? gh(args) : real(cmd, args, o));
+  let ds;
+  try { delete require.cache[require.resolve('./weekly-report')]; ds = require('./weekly-report').load({ repo: 'o/r', since: '2026-10-01', until: '2026-10-16' }); }
+  finally { cpm.execFileSync = real; delete require.cache[require.resolve('./weekly-report')]; }
+  assert.deepEqual(ds.reopened, [1]); // 2 was only closed; 77 is outside the window
+  assert.deepEqual(ds.heads, { 1: 'feat/a', 2: 'feat/b', 3: 'feat/x', 4: 'feat/x' }); // 99 is outside the window
+  const i = analyze(ds, {}).integrity;
+  assert.deepEqual(i.reopened, [1]);
+  assert.deepEqual(i.same_branch, [{ branch: 'feat/x', prs: [3, 4] }]);
+});
