@@ -87,6 +87,7 @@ test('pre-push hook blocks a leak added in one commit and deleted in the next; .
   const clean = hook(`refs/heads/main ${base} refs/heads/main ${base}\n`); // empty range
   assert.strictEqual(clean.status, 0, clean.stderr);
   assert.match(clean.stderr, /gitleaks not installed/);
+  assert.strictEqual(hook(`refs/heads/x ${head} refs/heads/x ${'1'.repeat(40)}\n`).status, 1); // unknown remote sha (force push): still scanned, never fails open
   assert.strictEqual(hook(`(delete) 0000000000000000000000000000000000000000 refs/heads/x ${head}\n`).status, 0); // ref deletion: nothing to scan
   fs.writeFileSync(path.join(w, '.git', 'specguard-deny'), sha('secretproj') + '\n');
   assert.match(hook(`refs/heads/main ${head} refs/heads/main ${base}\n`).stderr, /a\.txt:2: denylisted token/);
