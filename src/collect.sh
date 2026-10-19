@@ -218,12 +218,16 @@ fi
 
 # 4b. trace: spec items, candidates and occurrences. Fail-soft like step 4. Prints the count of changed normative spec items.
 # A PR with no code files is reviewed only if a normative spec item changed.
+tracefail=0
 if [ "${TRACE:-auto}" != off ]; then
   if nchanged=$(timeout 60 node "$HERE/trace.js" | tail -n 1); then echo ok > "$CTX/trace-status"
-  else echo "::warning::requirement tracing failed; continuing without trace data"; nchanged=0; fi
+  else echo "::warning::requirement tracing failed; continuing without trace data"; nchanged=0; tracefail=1; fi
 else nchanged=0; fi
 [[ $nchanged =~ ^[0-9]+$ ]] || nchanged=0
 if [ "$ncode" -eq 0 ] && [ "$nchanged" -eq 0 ]; then
+  if [ "$tracefail" -eq 1 ] && [ ${#dropped[@]} -gt 0 ]; then # changed docs that tracing could have admitted were never examined: a failed run, not "nothing to review"
+    echo "requirement tracing failed, so the ${#dropped[@]} changed document(s) in this PR were not examined; re-run the check" > "$CTX/collect-error.txt"; echo "::error::$(cat "$CTX/collect-error.txt")"
+  fi
   : > "$CTX/diff.patch"; : > "$CTX/files.txt"
   echo "nothing reviewable in diff"; out skip true; exit 0
 fi

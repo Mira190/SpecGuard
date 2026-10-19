@@ -321,7 +321,7 @@ test('S12: the reusable workflow forwards every action input; the rest are docum
   for (const k of actionInputs.filter((n) => declared[n] !== undefined && !/^review_timeout_minutes|copilot_max_ai_credits$/.test(n))) assert.equal(norm(declared[k]), norm(new RegExp(`^ {2}${k}: \\{[^\\n]*default: ([^}]*?) \\}$`, 'm').exec(block)[1]), k);
 });
 
-test('fail-on-error.js: a configuration failure (auth, quota, model) fails the job without fail_on_error; transient and budget failures stay advisory unless it is true', () => {
+test('fail-on-error.js: a configuration failure (auth, quota, model) fails the job without fail_on_error; budget refusal also goes red; transient failures stay advisory unless it is true', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-cfg-'));
   try {
     const run = (STATUS, cls, FAIL_ON_ERROR = '') => {
@@ -335,7 +335,7 @@ test('fail-on-error.js: a configuration failure (auth, quota, model) fails the j
       assert.equal(r.status, 1, c);
       assert.equal(r.stdout.trim(), `::error::SpecGuard could not run the model (${c}): The Anthropic API key was rejected`);
     }
-    for (const c of ['rate', 'budget', 'timeout', '']) {
+    for (const c of ['rate', 'timeout', '']) {
       const r = run('failed', c);
       assert.equal(r.status, 0, `${c || 'unclassified'} stays advisory`);
       assert.match(r.stdout, /^::warning::SpecGuard could not complete/);
