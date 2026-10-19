@@ -1,0 +1,17 @@
+#!/bin/sh
+# Opt-in prevention layer (CI can only detect a leak after it is public): git config core.hooksPath .githooks
+# Scans the ADDED lines of every commit being pushed (stdin: <local ref> <local sha> <remote ref> <remote sha>), so add-then-delete leaks are caught.
+z=0000000000000000000000000000000000000000
+bad=0
+command -v gitleaks >/dev/null 2>&1 || echo "pre-push: gitleaks not installed, skipping the secret scan (CI still runs it)" >&2
+while read -r lref lsha rref rsha; do
+  [ "$lsha" = "$z" ] && continue # deleting a ref
+  # new branch, or a remote sha we do not have locally (force push): scan the commits no remote ref has
+  if [ "$rsha" = "$z" ] || ! git cat-file -e "$rsha^{commit}" 2>/dev/null; then set -- "$lsha" --not --remotes=origin; else set -- "$rsha..$lsha"; fi
+  diff=$(git log -p --cc -U0 --format= "$@") || { echo "pre-push: cannot read the range for $lref, push blocked" >&2; bad=1; continue; }
+  printf '%s\n' "$diff" | node bin/leak-check.js --stdin || { echo "pre-push: leak-check failed for $lref, push blocked" >&2; bad=1; }
+  if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks git --no-banner --log-opts="$*" || { echo "pre-push: gitleaks found secrets in $lref, push blocked" >&2; bad=1; }
+  fi
+done
+exit $bad
