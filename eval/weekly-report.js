@@ -461,5 +461,5 @@ function main() {
   }
   console.log(o.json ? JSON.stringify(r, null, 2) : render(r));
 }
-module.exports = { escapesOf, lastCounts, apiGit, unified0, load, findingsOf, copilotOutcome, patchTouches, analyze, decide, render, quantile, TARGET, RULE };
+module.exports = { labelGate, ALPHA, escapesOf, lastCounts, apiGit, unified0, load, findingsOf, copilotOutcome, patchTouches, analyze, decide, render, quantile, TARGET, RULE };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exit(1); }
