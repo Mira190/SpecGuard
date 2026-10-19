@@ -20,19 +20,66 @@ test('armOf reads the review-arm label (names or label objects)', () => {
   assert.equal(armOf([{ name: 'review-arm:3' }, 'x']), null);
 });
 
-test('the example workflow computes the same arm as assign() for 1..30', (t) => {
+test('unsalted assign is PR number % 3 for 1..300 (backward compatible)', () => {
+  for (let n = 1; n <= 300; n++) assert.equal(assign(n, '').arm, n % 3);
+});
+
+test('salted assign: HMAC-SHA256 first 4 bytes mod 3, differs from n % 3, roughly uniform over 1..3000', () => {
+  assert.equal(assign(7, 's3cret').arm, require('node:crypto').createHmac('sha256', 's3cret').update('7').digest().readUInt32BE(0) % 3);
+  let diff = 0; const c = [0, 0, 0];
+  for (let n = 1; n <= 3000; n++) { const a = assign(n, 's3cret').arm; c[a]++; if (a !== n % 3) diff++; }
+  console.log('salted arm counts over 1..3000:', c.join(' '));
+  for (const k of c) assert.ok(k > 700 && k < 1300, `arm count ${k}`);
+  assert.ok(diff > 1500, 'not the PR number mod 3');
+});
+
+test('the example workflow computes the same arm as assign() for 1..30 with two salts, and fails without a salt', () => {
   const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout may have CRLF
   const m = /# BEGIN arm\n([\s\S]*?)\n\s*# END arm/.exec(yml);
   assert.ok(m, 'BEGIN/END arm markers');
   const script = m[1].split('\n').map((l) => l.replace(/^ {10}/, '')).join('\n');
-  if (spawnSync('sh', ['-c', 'true']).status !== 0) return t.skip('no sh');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arm-'));
-  for (let n = 1; n <= 30; n++) {
-    const out = path.join(dir, `o${n}`);
-    const r = spawnSync('sh', ['-c', script], { env: { ...process.env, PR_NUMBER: String(n), GITHUB_OUTPUT: out.split(path.sep).join('/') }, encoding: 'utf8' });
+  const run = (n, salt) => spawnSync('sh', ['-c', script], { env: { ...process.env, SPECGUARD_ARM_SALT: salt, PR_NUMBER: String(n), GITHUB_OUTPUT: path.join(dir, `o${n}`).split(path.sep).join('/') }, encoding: 'utf8' });
+  const none = run(1, '');
+  assert.notEqual(none.status, 0, 'no salt: the arm job must fail');
+  assert.match(none.stdout + none.stderr, /SPECGUARD_ARM_SALT is not set/);
+  let hit = 0;
+  for (const salt of ['s3cret', 'another salt']) for (let n = 1; n <= 30; n++) {
+    const r = run(n, salt);
     assert.equal(r.status, 0, r.stderr);
-    const o = Object.fromEntries(fs.readFileSync(out, 'utf8').trim().split('\n').map((l) => l.split('=')));
-    const a = assign(n);
-    assert.deepEqual({ arm: +o.arm, specguard: o.specguard === 'true', copilot: o.copilot === 'true' }, a, `PR ${n}`);
+    const o = Object.fromEntries(fs.readFileSync(path.join(dir, `o${n}`), 'utf8').trim().split('\n').map((l) => l.split('=')));
+    const a = assign(n, salt);
+    assert.deepEqual({ arm: +o.arm, specguard: o.specguard === 'true', copilot: o.copilot === 'true' }, a, `PR ${n} salt ${salt}`);
+    if (a.arm !== n % 3) hit++;
+    fs.rmSync(path.join(dir, `o${n}`));
   }
+  assert.ok(hit > 10, 'the salted arm is not n % 3');
+});
+
+test('the example workflow arm job skips drafts, fork PRs and bot PRs (so only study PRs can hit the missing-salt failure); other jobs need it', () => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n');
+  const arm = /\n  arm:\n    if: (.*)\n/.exec(yml);
+  assert.ok(arm, 'arm job if');
+  assert.equal(arm[1], "${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.type != 'Bot' }}"); // AND of all three: an OR would let forks and drafts in
+  assert.equal((yml.match(/^    needs: arm$/gm) || []).length, 3); // specguard, shadow, copilot
+});
+
+test('the action uploads the context artifact as specguard-ctx-<PR>-<run attempt> in PR mode, kept for ctx_retention_days (the shadow contract)', () => {
+  const act = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
+  const up = /- if: (.*inputs\.mode == 'pr'.*)\n(?:.*\n){0,3}?\s+name: (specguard-ctx-.*)\n\s+path: (.*)\n\s+retention-days: (.*)\n/.exec(act);
+  assert.ok(up, 'upload step');
+  assert.match(up[1], /inputs\.ctx_retention_days != '0'/);
+  assert.equal(up[2], 'specguard-ctx-${{ github.event.pull_request.number }}-${{ github.run_attempt }}');
+  assert.match(up[3], /\.specguard-ctx$/);
+  assert.equal(up[4], '${{ inputs.ctx_retention_days }}');
+});
+
+test('the example workflow shadow job runs only on arm 1, posts nothing (delivery: summary) and keeps the context 90 days', () => {
+  const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n');
+  const shadow = /\n  shadow:\n([\s\S]*?)(?=\n  \w+:\n|$)/.exec(yml);
+  assert.ok(shadow, 'shadow job');
+  assert.match(shadow[1], /if: \$\{\{ needs\.arm\.outputs\.arm == '1' \}\}/);
+  assert.match(shadow[1], /^ {10}delivery: summary$/m);
+  assert.match(shadow[1], /^ {10}ctx_retention_days: 90$/m);
+  assert.match(shadow[1], /pull-requests: read/); // a read-only token cannot post
 });

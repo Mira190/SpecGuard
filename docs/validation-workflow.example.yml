@@ -1,7 +1,20 @@
 # Three-arm validation workflow (docs/validation-plan.md). Copy to .github/workflows/specguard-validation.yml in the TARGET repo.
-#   arm 0 (PR number % 3 == 0): SpecGuard only
-#   arm 1 (PR number % 3 == 1): native Copilot code review only
-#   arm 2 (PR number % 3 == 2): both
+#   arm 0: SpecGuard only
+#   arm 1: native Copilot code review only, plus a SHADOW SpecGuard run that posts nothing (delivery: summary)
+#   arm 2: both
+# Arm = HMAC-SHA256(secret SPECGUARD_ARM_SALT, PR number), first 4 bytes as an unsigned int, mod 3, so authors cannot pick an arm by
+# choosing a PR number. Create the secret (any long random string) before the trial; reveal it after, so anyone can re-derive the arms.
+# Without the secret the arm job FAILS with an error (no fallback to PR number % 3: that is predictable and would void the trial).
+# The salt hides the arm BEFORE a PR is opened. It does not stop re-rolls (close and reopen, or reopen from the same branch, until the label
+# is the arm the author wants), so the analysis is intention-to-treat and weekly-report must flag them (see the plan; enforcement pending).
+#
+# SHADOW CONTRACT (eval/weekly-report.js relies on it): for every arm-1 PR (label review-arm:1), each run of the workflow "SpecGuard
+# validation" has one artifact named `specguard-ctx-<PR number>-<run attempt>` (job `shadow`; one run per push), kept 90 days (see the retention note below). It holds the
+# action's .specguard-ctx folder: findings.json (raw engine output, before validation), diff.patch, summary.md (the validated review as
+# SpecGuard would have posted it), requirements.md and the other prompt context files. Nothing is posted to the PR.
+# Caveats: the shadow run costs SpecGuard credits on arm 1 too. Its job summary shows in the Actions tab (a small contamination risk: do not
+# point authors to it). Escapes are read 8 to 12 weeks AFTER the trial and the trial runs up to 4 weeks, so an early PR's artifact can be ~16 weeks
+# (~112 days) old by then, older than the 90 day retention: the weekly report must cache shadow findings every week (that cache is why it works). The artifact holds the diff and raw model output: on a private repo anyone with read access can download it (they already have the code).
 # The arm is recorded as the PR label `review-arm:N`; eval/weekly-report.js reads it. No PR goes without review: the "control" is the
 # pre-period (see the plan). The mapping is the same as eval/assign.js (eval/assign.test.js runs the BEGIN/END arm block below).
 #
@@ -34,11 +47,17 @@ jobs:
       - id: arm
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          SPECGUARD_ARM_SALT: ${{ secrets.SPECGUARD_ARM_SALT }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           # BEGIN arm
-          arm=$(( PR_NUMBER % 3 ))
+          if [ -z "$SPECGUARD_ARM_SALT" ]; then
+            echo "::error::Repository secret SPECGUARD_ARM_SALT is not set. Create it (a long random string) before the trial: without it the arm would be predictable."
+            exit 1
+          fi
+          h=$(printf '%s' "$PR_NUMBER" | openssl dgst -sha256 -hmac "$SPECGUARD_ARM_SALT" -r | cut -c1-8)
+          arm=$(( 0x$h % 3 ))
           sg=true; cp=true
           [ "$arm" = 1 ] && sg=false
           [ "$arm" = 0 ] && cp=false
@@ -67,6 +86,26 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with: { fetch-depth: 0, persist-credentials: false }
       - uses: Mira190/SpecGuard@<full-commit-sha> # pin a full commit SHA, not a branch or @v1
+
+  # Arm 1 shadow: SpecGuard reviews, nothing is posted (readOnly client), the specguard-ctx artifact is the counterfactual record.
+  shadow:
+    needs: arm
+    if: ${{ needs.arm.outputs.arm == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency: { group: "specguard-shadow-${{ github.event.pull_request.number }}", cancel-in-progress: true }
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      copilot-requests: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: Mira190/SpecGuard@<full-commit-sha> # same SHA as the specguard job
+        with:
+          delivery: summary
+          ctx_retention_days: 90
 
   copilot:
     needs: arm
