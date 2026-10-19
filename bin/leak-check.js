@@ -4,10 +4,11 @@
 //  - a honey marker (planted in the owner's pilot repo, so seeing one here means private content leaked; 17+ hex still counts, a longer run starts with a full marker)
 //  - a local absolute user path
 //  - any token whose lower-cased sha256 is in SPECGUARD_DENY_SHA256 (comma/newline list; hashes of private repo/project names). Output is file:line and the hash, never the token.
-//   The denylist also reads the untracked per-clone file .git/specguard-deny (one sha256 per line). A name is matched whole and inside paths/URLs/kebab/snake names (1-3 adjacent parts).
+//   The denylist also reads the untracked per-clone file <git-common-dir>/specguard-deny (one sha256 per line; the main .git, also from linked worktrees). A name is matched whole and inside paths/URLs/kebab/snake/camelCase names (1-3 adjacent parts).
 // Usage: node bin/leak-check.js [file...]   (no args: every tracked file) | git log -p -U0 <range> | node bin/leak-check.js --stdin (added lines only). Exit 1 on any hit.
 const fs = require('fs');
 const crypto = require('crypto');
+const path = require('path');
 const { execFileSync } = require('child_process');
 
 const RULES = [
@@ -21,13 +22,16 @@ function* hashes(line) {
   for (const t of line.split(/[^A-Za-z0-9._/-]+/)) {
     const c = new Set([t, t.replace(/^[._/-]+|[._/-]+$/g, '')]);
     const parts = t.split(/[/._-]+/).filter(Boolean);
-    for (let i = 0; i < parts.length; i++) for (let n = 1; n <= 3 && i + n <= parts.length; n++) for (const j of ['-', '_']) c.add(parts.slice(i, i + n).join(j));
+    const runs = (a, js) => { for (let i = 0; i < a.length; i++) for (let n = 1; n <= 3 && i + n <= a.length; n++) for (const j of js) c.add(a.slice(i, i + n).join(j)); };
+    const camel = (p) => p.split(/(?<=[a-z0-9])(?=[A-Z])/); // secretProjApi -> secret, Proj, Api
+    runs(parts.flatMap(camel), ['-', '_']);
+    for (const p of parts) runs(camel(p), ['']); // glued only inside one camelCase word, so my-secret-proj stays clean
     for (const x of c) yield sha(x.toLowerCase());
   }
 }
 
-// deny list = env var + the untracked per-clone file .git/specguard-deny (worktree-safe via git-path)
-function denyList(env = process.env, gitPath = () => execFileSync('git', ['rev-parse', '--git-path', 'specguard-deny'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()) {
+// deny list = env var + the untracked per-clone file <git-common-dir>/specguard-deny (the main .git, shared by linked worktrees; --git-path would give the per-worktree dir)
+function denyList(env = process.env, gitPath = () => path.resolve(execFileSync('git', ['rev-parse', '--git-common-dir'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(), 'specguard-deny')) {
   let f = '';
   try { f = fs.readFileSync(gitPath(), 'utf8'); } catch { /* no repo or no file */ }
   return new Set(((env.SPECGUARD_DENY_SHA256 || '') + '\n' + f).split(/[\s,]+/).map((h) => h.trim().toLowerCase()).filter(Boolean));
@@ -51,20 +55,22 @@ function scan(files, denied = denyList()) {
 // --stdin: a unified diff (git log -p -U0); scans only the added lines, reported as path:newLine
 function scanDiff(diff, denied = denyList()) {
   const hits = [];
-  let file = '?', n = 0, hdr = true, m; // hdr: between 'diff --git' and the first @@, where '+++ path' is a header; after @@ every '+' line is content
+  let file = '?', n = 0, hdr = true, w = 1, m; // hdr: between 'diff --git|--cc' and the first @@, where '+++ path' is a header; after @@ every line starting with w '+' is content (w = parents: 2 in a merge)
   for (const line of diff.split('\n')) {
-    if (line.startsWith('diff --git ')) hdr = true;
+    if (/^diff --(git|cc) /.test(line)) hdr = true;
     else if (hdr && (m = /^\+\+\+ (?:b\/)?(.*)/.exec(line))) file = m[1];
-    else if ((m = /^@@ -\S+ \+(\d+)/.exec(line))) { n = +m[1]; hdr = false; }
-    else if (!hdr && line[0] === '+') scanLine(file, line.slice(1), n++, denied, hits);
+    else if ((m = /^(@@+) -\S+(?: -\S+)* \+(\d+)/.exec(line))) { w = m[1].length - 1; n = +m[2]; hdr = false; }
+    else if (!hdr && line.startsWith('+'.repeat(w))) scanLine(file, line.slice(w), n++, denied, hits);
   }
   return hits;
 }
 
 if (require.main === module) {
   const args = process.argv.slice(2);
-  const hits = args[0] === '--stdin' ? scanDiff(fs.readFileSync(0, 'utf8'))
-    : scan(args.length ? args : execFileSync('git', ['ls-files', '-z'], { maxBuffer: 1 << 28 }).toString().split('\0').filter(Boolean));
+  const denied = denyList();
+  if (args[0] === '--stdin' && !denied.size) console.error('denylist empty: private-name check skipped (set SPECGUARD_DENY_SHA256 or <common-dir>/specguard-deny)');
+  const hits = args[0] === '--stdin' ? scanDiff(fs.readFileSync(0, 'utf8'), denied)
+    : scan(args.length ? args : execFileSync('git', ['ls-files', '-z'], { maxBuffer: 1 << 28 }).toString().split('\0').filter(Boolean), denied);
   hits.forEach((h) => console.error(h));
   process.exit(hits.length ? 1 : 0);
 }
