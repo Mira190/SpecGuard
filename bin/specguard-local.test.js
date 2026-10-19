@@ -165,19 +165,27 @@ test('SIGINT while the engine runs: the child is stopped, the worktree and temp 
   const bin = path.join(tmp, 'signal-bin');
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, 'copilot'), '#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "GitHub Copilot CLI 1.0.92."; exit 0; }\nsleep 3\n', { mode: 0o755 });
-  const before = new Set(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('specguard-local-') && !n.startsWith('specguard-local-bin-test-')));
+  // the run gets its own temp root (os.tmpdir() reads TMPDIR on POSIX, TEMP/TMP on Windows, on every call), so other tests' temp dirs cannot be mistaken for a leak
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-sigint-'));
+  const oldTmp = Object.fromEntries(['TMPDIR', 'TEMP', 'TMP'].map((k) => [k, process.env[k]]));
   const proc = new EventEmitter(), codes = [];
   proc.exit = (c) => codes.push(c);
   const oldPath = process.env.PATH;
   process.env.PATH = bin + path.delimiter + oldPath;
+  Object.assign(process.env, { TMPDIR: root, TEMP: root, TMP: root });
   const logs = [];
+  let left;
   try {
     await assert.rejects(run({ cwd: repo, opts: { base: 'main' }, proc, log: (m) => { logs.push(m); if (/running Copilot/.test(m)) setTimeout(() => proc.emit('SIGINT'), 500); } }), /interrupted/);
-  } finally { process.env.PATH = oldPath; }
+    left = fs.readdirSync(root);
+  } finally {
+    process.env.PATH = oldPath;
+    for (const [k, v] of Object.entries(oldTmp)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
   assert.deepStrictEqual(codes, [130]);
   assert.ok(logs.some((l) => /interrupted \(SIGINT\)/.test(l)));
   assert.strictEqual(git(repo, 'worktree', 'list').split('\n').length, 1, 'no registered worktree is left');
-  const left = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('specguard-local-') && !n.startsWith('specguard-local-bin-test-') && !before.has(n));
   assert.deepStrictEqual(left, [], 'no temp dir is left');
   assert.strictEqual(proc.listenerCount('SIGINT') + proc.listenerCount('SIGTERM'), 0, 'the handlers are removed when the run ends');
 });
