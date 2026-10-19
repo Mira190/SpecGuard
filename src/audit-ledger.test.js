@@ -44,3 +44,13 @@ test('collect: a requirement document over 256 KiB with fewer than 5 MUST lines 
     assert.equal(meta.docs_over_size, all ? 1 : undefined, `${musts} MUST scopeAll ${all}`);
   }
 });
+
+test('collect: mixed directories in one scope: only the non-unit paths are counted and named; src/ and a root script stay units', (t) => {
+  const { root, ctx } = repo(t, { 'migrations/x.py': BODY('x'), 'scripts/deploy.js': BODY('d'), 'src/build.rs': BODY('b'), 'manage.py': BODY('m') });
+  const r = collect({ cwd: root, ctx, scopeAll: true, scanPaths: '**' }), meta = metaOf(ctx);
+  assert.equal(meta.not_unit, 2);
+  assert.ok(meta.limitations.some((l) => /^2 source file\(s\) in scan_paths were not reviewed .*: migrations\/x\.py, scripts\/deploy\.js$/.test(l)), meta.limitations.join('|'));
+  assert.equal(r.units.total, 2);
+  const listed = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8');
+  assert.match(listed, /src\/build\.rs/); assert.match(listed, /manage\.py/); assert.doesNotMatch(listed, /migrations\/x\.py|scripts\/deploy\.js/);
+});
