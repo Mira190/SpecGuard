@@ -133,6 +133,7 @@ runs:
       shell: bash
       env:
         CTX: ${{ github.workspace }}/.specguard-ctx
+        FAIL_ON_ERROR: ${{ inputs.fail_on_error }}
         IGNORE_EXTRA: ${{ inputs.ignore }}
         REQ_PATHS: ${{ inputs.requirements_paths }}
         STANDARDS_PATHS: ${{ inputs.standards_paths }}
