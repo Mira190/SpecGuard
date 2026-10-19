@@ -108,6 +108,54 @@ function analyze(results, cases) {
   return out;
 }
 
+// Where was each relevant item lost? Only the raw outputs are used. For each relevant item whose best rank is not within K:
+//   ranked_out: delivered at rank > K (trace.js keeps only the top 3 per criterion, so this arises only in lists it does not cut); cut: not delivered and a "more"/limit note names it (cite the note);
+//   not_retrieved: not delivered and no note could explain it; unknown: not delivered but a note says something was dropped without naming it.
+// Also per req->code query: required code locations vs found (any rank) and the kind of each miss (same_file | same_dir | generated_duplicate (the case data marks the location with lt ranges) | other).
+const dirOf = (p) => p.split('/').slice(0, -1).join('/');
+function attribute(results, cases) {
+  const byId = new Map(cases.cases.map((c) => [c.id, c]));
+  const counts = {}, misses = [], locs = [];
+  const bump = (list, cls) => { counts[list] = counts[list] || { ranked_out: 0, cut: 0, not_retrieved: 0, unknown: 0 }; counts[list][cls]++; };
+  const MAX_MORE = 5; // trace.js names at most 5 paths in a more note; a note with 5 names may be truncated
+  const truncated = (n) => !/more code\/test/.test(n) || (n.split('): ')[1] || '').split(', ').length >= MAX_MORE;
+  const classify = (list, v, item, rank, notes, nameHit, fileShown) => {
+    if (rank !== null && rank <= K) return;
+    let cls = 'not_retrieved', note = null;
+    if (rank !== null) { cls = 'ranked_out'; note = 'rank ' + rank; }
+    else {
+      const named = notes.find((n) => nameHit(n));
+      const vague = notes.find((n) => /weaker code hunk|more changed file|time budget|more code\/test|criteria limit|deferred:/.test(n) && (fileShown || truncated(n)));
+      if (named) { cls = 'cut'; note = named; } else if (vague) { cls = 'unknown'; note = 'a limit note exists but cannot name the item (' + (fileShown ? 'its file was delivered with another window; dropped windows of shown files are not listed' : 'the note lists only ' + MAX_MORE + ' paths') + '): ' + vague; }
+    }
+    bump(list, cls); misses.push({ list, id: v.id, case: v.case, item, class: cls, note });
+  };
+  for (const v of results.variants || []) {
+    const ex = byId.get(v.case).expect, lim = v.limitations || [];
+    if (v.variant === 'R' || v.variant === 'RC') {
+      const r2c = v.req_to_code || [], codeLists = r2c.map((x) => x.code || []), testLists = r2c.map((x) => x.tests || []);
+      const moreNotes = lim.filter((n) => /more code\/test candidate/.test(n));
+      const found = [];
+      for (const loc of ex.code) {
+        const rank = rankOf(codeLists, (it) => overlaps(it, loc, locRanges(loc)));
+        classify('req->code code', v, loc.file + ':' + loc.lines.join('-'), rank, moreNotes, (n) => n.includes(loc.file), codeLists.some((l) => l.some((it) => it.path === loc.file)));
+        if (rank !== null) found.push(loc);
+      }
+      const hitFiles = new Set(found.map((l) => l.file)), hitDirs = new Set(found.map((l) => dirOf(l.file)));
+      locs.push({ id: v.id, required: ex.code.length, found: found.length, misses: ex.code.filter((l) => !found.includes(l)).map((l) => ({ loc: l.file + ':' + l.lines.join('-'), kind: hitFiles.has(l.file) ? 'same_file' : (l.alt && l.alt.length) ? 'generated_duplicate' : hitDirs.has(dirOf(l.file)) ? 'same_dir' : 'other', alt: !!(l.alt && l.alt.length) })) });
+      for (const t of ex.tests) classify('req->code tests', v, t, rankOf(testLists, (it) => it.path === t), moreNotes, (n) => n.includes(t), testLists.some((l) => l.some((it) => it.path === t)));
+    }
+    if (v.variant === 'C' || v.variant === 'RC') {
+      const reqLists = (v.code_to_req || []).map((h) => h.candidates.slice().sort((a, b) => b.score - a.score));
+      const [a, b] = ex.requirement.lines, hunkNotes = lim.filter((n) => /weaker code hunk/.test(n));
+      classify('code->req requirement', v, ex.requirement.file + ':' + ex.requirement.lines.join('-'), rankOf(reqLists, (it) => it.path === ex.requirement.file && it.line >= a - 1 && it.line <= b + 1), hunkNotes, () => false);
+      const tl = parseTestCandidates(v.test_candidates), trailer = String(v.test_candidates || '').split('\n').filter((l) => /^\(\d+ more changed file/.test(l));
+      for (const t of ex.tests) classify('code->req tests', v, t, rankOf(tl, (it) => it.path === t), trailer, () => false);
+    }
+  }
+  return { counts, misses, req_to_code_locations: locs };
+}
+
 const pct = (r) => (r.rate === null ? '-' : `${Math.round(r.rate * 100)}% (${r.k}/${r.n})`);
 function format(res) {
   const lines = [`${res.variants} variants of ${res.cases} independent cases (a case is counted once per variant; do not read this as ${res.variants} cases)`];
@@ -126,11 +174,12 @@ function format(res) {
   return lines.join('\n');
 }
 
-module.exports = { analyze, format, parseTestCandidates };
+module.exports = { analyze, attribute, format, parseTestCandidates };
 
 if (require.main === module) {
   const args = process.argv.slice(2), opt = (n) => { const i = args.indexOf(n); return i < 0 ? null : args.splice(i, 2)[1]; };
   const only = opt('--only'), group = opt('--group'); // --only id1,id2 ; --group original|holdout (cases flagged "holdout": true)
+  const doAttr = args.includes('--attribute'); if (doAttr) args.splice(args.indexOf('--attribute'), 1);
   const casesFile = opt('--cases') || path.join(__dirname, 'cases.json'), jsonOut = opt('--json');
   const resultsFile = args[0] || path.join(__dirname, 'results.json');
   const results = JSON.parse(fs.readFileSync(resultsFile, 'utf8')), cs = JSON.parse(fs.readFileSync(casesFile, 'utf8'));
@@ -138,5 +187,10 @@ if (require.main === module) {
   results.variants = (results.variants || []).filter((v) => keep.has(v.case));
   const res = analyze(results, cs);
   console.log(format(res));
+  if (doAttr) {
+    const at = attribute(JSON.parse(fs.readFileSync(resultsFile, 'utf8')), JSON.parse(fs.readFileSync(casesFile, 'utf8')));
+    console.log('\nmiss attribution (relevant items not within the top ' + K + '), per list\n' + JSON.stringify(at.counts, null, 1));
+    if (jsonOut) fs.writeFileSync(jsonOut.replace(/\.json$/, '') + '.attribution.json', JSON.stringify(at, null, 1) + '\n');
+  }
   if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(res, null, 1) + '\n');
 }

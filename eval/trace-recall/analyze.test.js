@@ -6,7 +6,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { analyze, format, parseTestCandidates } = require('./analyze.js');
+const { analyze, attribute, format, parseTestCandidates } = require('./analyze.js');
 const fx = require('./fixture.json');
 
 const res = analyze(fx.results, fx.cases);
@@ -114,6 +114,23 @@ test('the harness child env drops every ambient trace setting and keeps the rest
   assert.ok(PINNED_UNSET.includes('TRACE'));
 });
 
+test('attribute: ranked_out, not_retrieved, cut (note names the file), unknown (unnamed limit note); misses by location kind', () => {
+  const at = attribute(fx.results, fx.cases);
+  // A-RC: f1 delivered at rank 4 -> ranked_out; f2 absent -> not_retrieved, a different file of the same (root) module; t1 absent -> not_retrieved
+  assert.deepEqual(at.counts['req->code code'], { ranked_out: 1, cut: 0, not_retrieved: 1, unknown: 0 });
+  assert.deepEqual(at.counts['req->code tests'], { ranked_out: 0, cut: 0, not_retrieved: 1, unknown: 0 });
+  assert.deepEqual(at.req_to_code_locations.find((l) => l.id === 'A-RC'), { id: 'A-RC', required: 2, found: 1, misses: [{ loc: 'f2.js:5-5', kind: 'same_dir', alt: false }] });
+  const withT = attribute({ variants: [...fx.results.variants, ...fx.results_t.variants] }, fx.cases); // T variants add nothing to the four lists
+  assert.deepEqual(withT.counts, at.counts); assert.equal(withT.misses.length, at.misses.length);
+  const rc = fx.results.variants.find((v) => v.id === 'A-RC');
+  const cut = attribute({ variants: [{ ...rc, limitations: ['2 more code/test candidate(s) for S1 not shown (top 3 kept): f2.js.'] }] }, fx.cases);
+  assert.equal(cut.misses.find((m) => m.item === 'f2.js:5-5').class, 'cut');
+  const unk = attribute({ variants: [{ ...rc, limitations: ['9 more code/test candidate(s) for S1 not shown (top 3 kept): a.js, b.js, c.js, d.js, e.js.'] }] }, fx.cases); // 5 names = list may be truncated
+  const full = attribute({ variants: [{ ...rc, limitations: ['2 more code/test candidate(s) for S1 not shown (top 3 kept): a.js, b.js.'] }] }, fx.cases); // complete list without f2 = never retrieved
+  assert.equal(full.misses.find((m) => m.item === 'f2.js:5-5').class, 'not_retrieved');
+  assert.equal(unk.misses.find((m) => m.item === 'f2.js:5-5').class, 'unknown');
+});
+
 test('test->code / test->req: a T variant is scored against the case ground truth; nothing emitted is a 0 with k/n', () => {
   // A-T: f2.js:5 is rank 2 of the emitted windows, f1.js:10-20 is not found; D.md:2 is rank 2 (D.md:9 scores higher but is out of range). B-T has no code item but one requirement.
   const t = analyze(fx.results_t, fx.cases), c = t.directions['test->code'].code, r = t.directions['test->req'].requirement;
@@ -137,4 +154,43 @@ test('wrong_windows: delivered req->code code windows overlapping no expect.code
   const withBytes = analyze({ variants: fx.results.variants.map((v, i) => ({ ...v, cand_bytes: 1000 * (i + 1) })) }, fx.cases).req_to_code_delivery;
   assert.deepEqual(withBytes.candidate_bytes, { n: 3, p50: 3000, max: 4000 });
   assert.match(format(res), /wrong_windows 63% \(5\/8\)/);
+});
+
+test('attribute: rank K is not a miss and K+1 is ranked_out; miss kinds same_file / generated_duplicate (alt) / other; shown-file unknown', () => {
+  const cases = { cases: [{ id: 'X', expect: { requirement: { file: 'D.md', lines: [1, 1] }, tests: [], code: [
+    { file: 'a.js', lines: [1, 1] }, { file: 'a.js', lines: [50, 50] }, { file: 'g.js', lines: [5, 5], alt: [[1, 1]] }, { file: 'z/q.js', lines: [1, 1] }] } }] };
+  const w = (p) => ({ path: p, line: 1, end: 1 });
+  const v = (id, code, limitations) => ({ id, case: 'X', variant: 'R', limitations, req_to_code: [{ criterion: 'S1', code: code.map(w), tests: [] }] });
+  const note = ['3 more code/test candidate(s) for S1 not shown (top 3 kept): b.js, c.js.']; // 2 names: complete list
+  const at = attribute({ variants: [v('X-3', ['p.js', 'p2.js', 'a.js'], note), v('X-4', ['p.js', 'p2.js', 'p3.js', 'a.js'], [])] }, cases);
+  const of = (id, item) => at.misses.find((m) => m.id === id && m.item === item);
+  assert.equal(of('X-3', 'a.js:1-1'), undefined); // rank exactly K: not a miss
+  assert.equal(of('X-4', 'a.js:1-1').class, 'ranked_out'); // rank K+1
+  assert.equal(of('X-3', 'a.js:50-50').class, 'unknown'); // a.js was delivered, a dropped window of a shown file is not listed
+  assert.equal(of('X-4', 'a.js:50-50').class, 'not_retrieved'); // control: no note, nothing dropped
+  assert.equal(of('X-3', 'g.js:5-5').class, 'not_retrieved'); // control: complete note does not name it
+  assert.deepEqual(at.req_to_code_locations.find((l) => l.id === 'X-3').misses.map((m) => m.kind), ['same_file', 'generated_duplicate', 'other']);
+});
+
+test('attribute: code->req requirement and tests are counted; hunk and trailer notes make a miss unknown', () => {
+  const rc = fx.results.variants.find((v) => v.id === 'A-RC'); // requirement found at rank 2; t1 absent
+  const base = attribute({ variants: [rc] }, fx.cases);
+  assert.deepEqual(base.counts['code->req requirement'], undefined); // found within K: no miss, no row
+  assert.deepEqual(base.counts['code->req tests'], { ranked_out: 0, cut: 0, not_retrieved: 1, unknown: 0 });
+  const far = [{ path: 'f1.js', line: 12, candidates: [{ path: 'D.md', line: 9, score: 7 }] }]; // D.md:9 is outside 1-3 +-1
+  const miss = (extra) => attribute({ variants: [{ ...rc, code_to_req: far, ...extra }] }, fx.cases);
+  const req = (a) => a.misses.find((m) => m.list === 'code->req requirement');
+  assert.deepEqual(miss({}).counts['code->req requirement'], { ranked_out: 0, cut: 0, not_retrieved: 1, unknown: 0 });
+  const hunk = miss({ limitations: ['2 weaker code hunk(s) not shown.'] });
+  assert.equal(req(hunk).class, 'unknown'); assert.equal(hunk.counts['code->req requirement'].unknown, 1);
+  const tr = miss({ test_candidates: 'f1.js\n  other.test.js  (stem)\n(3 more changed file(s) not listed)\n' });
+  assert.equal(tr.misses.find((m) => m.list === 'code->req tests').class, 'unknown');
+  assert.deepEqual(tr.counts['code->req tests'], { ranked_out: 0, cut: 0, not_retrieved: 0, unknown: 1 });
+});
+
+test('attribute: a more note naming 4 paths is complete (cap 5), so an absent item is not_retrieved', () => {
+  const rc = fx.results.variants.find((v) => v.id === 'A-RC');
+  const cls = (names) => attribute({ variants: [{ ...rc, limitations: ['9 more code/test candidate(s) for S1 not shown (top 3 kept): ' + names + '.'] }] }, fx.cases).misses.find((m) => m.item === 'f2.js:5-5').class;
+  assert.equal(cls('a.js, b.js, c.js, d.js'), 'not_retrieved');
+  assert.equal(cls('a.js, b.js, c.js, d.js, e.js'), 'unknown');
 });
