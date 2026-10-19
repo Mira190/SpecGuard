@@ -107,7 +107,11 @@ Otherwise the result is FAIL.
 - **Noise ceiling.** A model PASS reads as "catches real bugs at an acceptable noise level" only if the median number of delivered inline comments per control PR is ≤ 2. Otherwise it reads "PASS (location), noise above ceiling". The share of controls with any `missing_test` inline is always reported. The result is written as observed, chance, lift and p, whatever happens. There is no second run and no amendment after the confirmation run starts.
 
 **Repetitions.** These are fixed before the freeze, from the local claude-api cost per run measured on the design set:
-- 3 runs per PR if 3 × 88 runs fit the owner's approved budget; otherwise 1 run per PR.
+- **Fixed: 3 runs per PR.**
+  - Measured on the 135 saved holdout-2 haiku runs: mean $0.0464, median $0.0213, max $0.1228 per run.
+  - By context-pack size: under 100 KB, n = 27, mean $0.0073; 100–200 KB, n = 78, mean $0.0429; 200 KB or more, n = 30, mean $0.0910.
+  - So 88 × 3 runs ≈ $12.26 at the mean, which is under the rule's $15 threshold. The worst case, every run at the max, is $32.42.
+  - If the owner's cap is reached mid-run, the runs not yet made are reported as unusable (misses). The rule is not changed.
 - With 3 runs, a PR's observed value is the mean of its runs, and the bootstrap resamples PRs.
 
 **Power check.** This runs on the design set before the freeze and is reported, not gating. It gives the probability of PASS at n = 40, given the design-set observed and chance rates. If that probability is below 0.5, it is reported to the owner before the confirmation run.
