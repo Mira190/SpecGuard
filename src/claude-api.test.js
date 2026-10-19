@@ -1689,7 +1689,9 @@ test('charge invariant over lost / unknown / HTTP-error / repair paths', async (
     ['lost + known', [reset, good()], 2.5, 2, K + W],
     ['lost + unknown', [reset, good({ usage: {} })], 2.5, 2, 2 * W],
     ['unknown only', [good({ usage: {} })], 2.5, 1, W],
-        ['lost + unknown + repair', [reset, prose, good({ usage: {} })], 3.5, 3, 3 * W],
+        ['two lost, no reply', [reset, reset], 3.5, 2, 2 * W],
+    ['two lost + unknown reply (repair turn)', [reset, prose, reset, good({ usage: {} })], 4.5, 4, 4 * W],
+    ['lost + unknown + repair', [reset, prose, good({ usage: {} })], 3.5, 3, 3 * W],
   ];
   const rej = harness(t, [() => err(400, 'invalid_request_error', 'bad request')]); await rej.go({ MAX_BUDGET_USD: String(2.5 * W) }); // a rejected request was not run: nothing billed, nothing recorded
   assert.equal(rej.calls.length, 1); assert.equal(rej.file('usage.json'), null, 'HTTP error only: no cost recorded');
