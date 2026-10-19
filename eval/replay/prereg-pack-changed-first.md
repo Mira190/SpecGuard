@@ -79,3 +79,35 @@ This departs from the red-team text, which asked for "0 in-scope drops for O" on
 - **Fresh-corpus source.** The fresh corpus uses the latest first-parent commits of the default branch, whether or not they are merges, so squash-merge repos are included. Each commit is diffed against its first parent.
 - **Growing the corpus.** If fewer than 10 PRs in the fresh corpus have A losing a changed line, the corpus is grown in fixed steps until it reaches 10: up to 60 commits per repo, then the remaining cloned repos, whatever the size of their rule files. Each step's list is frozen before any arm runs on it.
 - **No fallback.** If 10 still cannot be reached, nothing is adopted. The gate-1 fallback is removed.
+
+## Amendment 2 (2026-10-19, after the amendment-1 result; a new test, not a rescue)
+
+The amendment-1 decision stands: nothing is adopted. O failed gate 6 on 3 PRs (1 holdout, 2 fresh step 1).
+
+**Cause, read from the result.** In all 3 PRs, a changed file has only deleted lines. A showed that file with 0 lines. The lost-line measure checks RIGHT lines only, so it counted A as "no loss". O showed the deleted lines, and the rule file went to make room for them. So the gate measured a blind spot, the same deletion-only blind spot found in the cut-relevance experiment. It was not a defect in O.
+
+**New measure, "loses changed content".** A PR loses changed content when either of these holds:
+- a changed RIGHT line falls past what the pack shows (the old measure);
+- a changed file with deleted LEFT lines appears in the pack with 0 lines.
+
+Gates 1, 2, 3 and 6 use this measure from now on.
+
+**Design corpora.** Holdout 2, fresh step 1 and SpecGuard #345–#386 have now been read. They are design corpora. Their numbers under the new measure are reported, but they decide nothing.
+
+**Confirmation corpus.** It uses steps already frozen in `pack-analysis/fresh-corpus.txt` (09:37:15Z) and never run for any arm:
+- all of step 2;
+- from step 3, the first 10 lines of each repo in file order.
+
+It has not been prepared yet. Consecutive commits share rule files, so the unit is the PR, and the per-repo split is reported.
+
+**The arm.** O only, with the code unchanged from amendment 1 (`EXP_PACK=O`, commit e94f451 on the rewritten history). There is no new arm and no tuning.
+
+**Adopt O iff all of these hold on the confirmation corpus:**
+1. **Enough loss to test.** A loses changed content on at least 10 PRs. Otherwise nothing is adopted.
+2. **The fix works.** At least half of those PRs no longer lose changed content under O.
+3. **No new loss.** 0 PRs newly lose changed content.
+4. **No rule loss where both fit (gate 6).** On every PR where A loses no changed content, O's pack contains every in-scope rule file that A's pack contained, at the same bytes.
+5. **Rule citations (gate 4, re-checked on holdout 2).** 0 kept standards findings cite a rule file that O drops. SpecGuard #345–#386 must show 0 newly lost.
+6. **Rule cost.** O's in-scope rule drops (total, and PRs affected) are reported on every corpus. The adoption text accepts that cost in writing.
+
+**Not changed by this amendment.** `post.js` still counts RIGHT lines only for the run status. Whether a deletion-only changed file shown with 0 lines should mark a run incomplete is a separate question. It needs its own pre-registration.
