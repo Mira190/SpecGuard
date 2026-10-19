@@ -3587,6 +3587,15 @@ test('V3: a JS/TS file in __tests__/ or test/ is unit evidence only if it declar
   put('test/assertions.js', "expect.it('x', function () {});\n"); assert.equal(status('test/assertions.js'), 'unknown', 'expect.it( is not a declaration: it must start the line');
 });
 
+test('V3: the declaration cache is reset per validate(): a file rewritten between runs is re-read', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-v3c-')), old = process.env.GITHUB_WORKSPACE; process.env.GITHUB_WORKSPACE = dir;
+  t.after(() => { if (old === undefined) delete process.env.GITHUB_WORKSPACE; else process.env.GITHUB_WORKSPACE = old; fs.rmSync(dir, { recursive: true, force: true }); });
+  const f = path.join(dir, 'test', 'calc.js'); fs.mkdirSync(path.dirname(f), { recursive: true });
+  const status = () => { const d = report({ coverage: [row('covered', { evidence: [evOf('test/calc.js')] })], findings: [] }); assert.equal(post.validate(d).ok, true); return d.coverage[0].status; };
+  fs.writeFileSync(f, "describe('calc', () => { it('adds', () => {}); });\n"); assert.equal(status(), 'covered');
+  fs.writeFileSync(f, 'module.exports = { assertOk(x) { if (!x) throw new Error("no"); } };\n'); assert.equal(status(), 'unknown', 'a stale cached declaration must not survive into the next validate()');
+});
+
 test('V3: the cited line must be an assertion in a test that runs; otherwise the row is not covered', () => {
   const kind = (lines, line, p = 'test.js') => {
     const d = report({ coverage: [row('covered', { evidence: [{ ...evidence, path: p, line, quote: lines[line - 1].trim() }] })], findings: [] });
