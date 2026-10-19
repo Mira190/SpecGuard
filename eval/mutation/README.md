@@ -39,6 +39,12 @@ Ground truth for the product's core goal (missing or weak unit tests in code tha
 | Units whose survivors are all uncertain (4) | accept, buffer, cookie, url |
 | Killed-only negative controls (5) | basic-auth (5 killed), concurrent (4), encode (4), filepath (5), mime (3) |
 
+## Headline (read this first)
+
+- **Line level: 0 of 10 candidate survivors were located** (no  finding within +-5 lines of any of them).
+- **Unit-level hits must be read against the base rate**, because most reviewed units get some finding: any finding on 11 of 14 manifest units (79%), 8 of 14 visible (57%); on 13 of 20 reviewed units (65%) any, 8 of 20 (40%) visible. Survivor units: 5 of 5 any, 3 of 5 visible. Killed-only units: 2 of 5 any and visible (40%). So survivor units are flagged somewhat more often than killed-only units, but with n = 5 and 5 that is one or two units, not a measured difference.
+- **One semantic match, found by manual reading only:** the skipped md5 test (crypto.test.ts:24) against the surviving mutant that drops md5's return value. No automated score captures it.
+
 ## SpecGuard result (one run, n = 5 / 5 / 4 units, 10 candidate survivors)
 
 Run 39187431386: success; 20 of 20 units reviewed (7 whole, 13 with part of their tests); 12 model calls; no budget or deadline cut; **cost $0.089** (usage.json). 16 unit findings, 9 visible, 7 low-confidence; 2 findings outside the manifest (middleware/jwk test, color.test.ts).
@@ -50,6 +56,8 @@ Run 39187431386: success; 20 of 20 units reviewed (7 whole, 13 with part of thei
 | Line hit within +-5 | 0 / 10 candidate survivors |
 | False alarm on killed-only units, any or visible | 2 / 5 (basic-auth: 2 visible; encode: 1 visible weak_test + 1 low-confidence); concurrent, filepath, mime quiet |
 | Uncertain-only units flagged | 4 / 4 any (accept, buffer, cookie, url), 3 / 4 visible (accept low-confidence only) |
+| Base rate, all manifest units flagged | 11 / 14 any, 8 / 14 visible |
+| Base rate, all reviewed units (20) flagged | 13 / 20 any, 8 / 20 visible |
 | Units not reviewed | 0 of 20 (9 mutated files are named as partly visible in `not_reviewed`) |
 
 Reading it carefully:

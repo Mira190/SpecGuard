@@ -64,6 +64,8 @@ function score(manifest, findings, units, summary, window = 5, usage = null) {
     false_alarm_visible: withPct(rate(kon, true)),
     uncertain_only_units_flagged: { any: unc.filter((f) => reviewed(f) && flagged(f, false)).length, visible: unc.filter((f) => reviewed(f) && flagged(f, true)).length, of: unc.length },
     findings: { total: fs_.length, visible: fs_.filter((x) => !x.low).length, details_only: fs_.filter((x) => x.low).length, outside_manifest: fs_.filter((x) => !U[x.file]).length },
+    // base rate: how often ANY reviewed unit gets a finding, to read the survivor and killed-only rates against. all_units counts distinct unit files with a finding over the summary's reviewed count.
+    base_rate: (() => { const fl = (vis) => new Set(fs_.filter((x) => !vis || !x.low).map((x) => x.file)); const inM = files.filter(reviewed); return { in_manifest: { of: inM.length, any: inM.filter((f) => fl(false).has(f)).length, visible: inM.filter((f) => fl(true).has(f)).length }, all_units: { of: S.reviewed, any: fl(false).size, visible: fl(true).size } }; })(),
     cost_usd: usage && typeof usage.totalCostUsd === 'number' ? usage.totalCostUsd : null,
   };
 }
