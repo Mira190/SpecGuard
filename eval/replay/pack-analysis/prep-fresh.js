@@ -26,16 +26,16 @@ for (const [repo, items] of byRepo) {
   const todo = items.filter(([, h]) => !fs.existsSync(path.join(out, repo, h.slice(0, 12), 'meta.json')));
   if (!todo.length) continue;
   const clone = path.join(scratch, repo);
-  fs.rmSync(clone, { recursive: true, force: true });
-  execFileSync('git', ['-c', 'core.longpaths=true', 'clone', '-q', '--shared', '--no-checkout', path.resolve(ev, 'repos', repo), clone], { stdio: 'pipe' });
-  for (const [k, v] of [['core.longpaths', 'true'], ['user.name', 'specguard-local'], ['user.email', 'local@example.invalid'], ['core.autocrlf', 'false']]) git(clone, 'config', k, v);
   for (const [, head, base, subj] of todo) {
+    fs.rmSync(clone, { recursive: true, force: true, maxRetries: 5 }); // collect.sh leaves restored rule files in the work tree, so the next checkout would refuse: a fresh shared clone per commit
+    execFileSync('git', ['-c', 'core.longpaths=true', 'clone', '-q', '--shared', '--no-checkout', path.resolve(ev, 'repos', repo), clone], { stdio: 'pipe' });
+    for (const [k, v] of [['core.longpaths', 'true'], ['user.name', 'specguard-local'], ['user.email', 'local@example.invalid'], ['core.autocrlf', 'false']]) git(clone, 'config', k, v);
     const dir = path.join(out, repo, head.slice(0, 12)), ctx = path.join(dir, 'ctx'), pr = path.join(dir, 'pr.json'), go = path.join(dir, 'gh-output.txt');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(pr, JSON.stringify({ number: 1, title: subj, body: '', closingIssuesReferences: [] })); fs.writeFileSync(go, '');
     const r = spawnSync('bash', [fwd(path.join(__dirname, '..', '..', '..', 'src', 'collect.sh'))], {
-      cwd: clone, encoding: 'utf8', maxBuffer: 1 << 28, timeout: 600000,
-      env: { ...process.env, BASE_SHA: base, HEAD_SHA: head, CTX: fwd(ctx), TRACE: 'auto', REQ_PATHS: '', IGNORE_EXTRA: '', PR_NUMBER: '1', GH_REPO: 'local/eval', GH_TOKEN: 'offline', GITHUB_OUTPUT: fwd(go), SG_PR_JSON: fwd(pr), NODE_OPTIONS: `--require "${fwd(shim)}"` },
+      cwd: clone, encoding: 'utf8', maxBuffer: 1 << 28, timeout: 1800000,
+      env: { ...process.env, BASE_SHA: base, HEAD_SHA: head, CTX: fwd(ctx), TRACE: process.env.PREP_TRACE || 'auto', REQ_PATHS: '', IGNORE_EXTRA: '', PR_NUMBER: '1', GH_REPO: 'local/eval', GH_TOKEN: 'offline', GITHUB_OUTPUT: fwd(go), SG_PR_JSON: fwd(pr), NODE_OPTIONS: `--require "${fwd(shim)}"` },
     });
     fs.writeFileSync(path.join(dir, 'collect.log'), `${r.stdout || ''}${r.stderr || ''}`.slice(-20000));
     const o = fs.readFileSync(go, 'utf8');

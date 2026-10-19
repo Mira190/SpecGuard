@@ -212,3 +212,46 @@ Offline re-run of the real `src/post.js` on the saved raw model answers (`ctx/fi
 - Control noise +0.06 per no_known_bug PR-run. TP lost 0.
 - Root cause: the Details-only catches are `gated` by the partial-test-visibility gate (`src/post.js`, "a candidate test file was only partly visible"), which V2 deliberately excludes, so V2 cannot surface them.
 - Decision: not adopted; the post.js arms were not merged (PR #366 closed). Next: H3 (`prereg-h3.md`, a retest on the same PR set, not an adoption test).
+
+## Pack: changed lines before rule files (prereg-pack-changed-first.md + amendment 1): not adopted
+
+Switch `EXP_PACK` (O, F, FC, FCH; unset = main, byte-identical) in `contextPack`; scripts in `pack-analysis/` (`lib.js` measures, `repro.js` faithfulness, `freeze.js` / `prep-fresh.js` fresh corpus, `run-arms.js`, `summarize.js`); frozen fresh list `pack-analysis/fresh-corpus.txt`. Offline, no model call. Raw outputs are outside the repo (SpecGuard-evidence/pack).
+
+**Faithfulness (arm A against the saved runs).** Holdout 2: main's `contextPack` on the saved collector inputs reproduces the saved `pack-cut.txt` and `pack-shown.txt` on 96/96 PRs (21 PRs lose a changed line, as in the prereg; 14 of them a source/config line, i.e. neither a doc nor a test file). SpecGuard #345-#386: 38/38 PRs with a saved `pack-cut.txt` reproduce (4 have none). The first attempt reproduced 41/96; the causes were in the harness (a symlink the Windows collector had written as a plain file, and a path that changed from directory to file between two heads). The fresh corpus has no saved packs, so A is not checked there.
+
+**Corpora.** Holdout 2: 96 PRs. SpecGuard: 42 PRs, #345-#386 (n for the gates below is 42; 35 where A loses no changed line). Fresh: step 1 of the frozen list (120 first-parent commits, 30 each of cli, orpc, pydantic-ai, vitest; the repos whose rule files exceed one file cap at the tip); 14 were skipped by the collector, so n=106. A loses a changed line on 76 of them (at least 10, so steps 2 and 3 were not needed). Those 76 sit in cli 25/25, orpc 28/29, pydantic-ai 23/24, vitest 0/28, and consecutive commits share rule files, so they are not independent.
+
+**Gates, k/n.** "Code" = a changed file that is not a doc or a test. "Newly lost" = a changed line unseen in the arm that A showed.
+
+| Gate | A | O | F | FC | FCH |
+|---|---|---|---|---|---|
+| 1 holdout, PRs losing a code line (pass: <= 7/96) | 14/96 | 0/96 | 14/96 | 4/96 | 2/96 |
+| 1 holdout, newly lost (pass: 0) | - | 0 | 0 | 0 | 0 |
+| 2 fresh, A-lost PRs no longer lost (pass: >= 38/76) | - | 71/76 | 0/76 | 63/76 | 64/76 |
+| 2 fresh, newly lost (pass: 0) | - | 0 | 0 | 0 | 0 |
+| 3 SpecGuard, newly lost (pass: 0) | - | 0/42 | 0/42 | 0/42 | 0/42 |
+| 3 SpecGuard, text identical to A where rules fit one cap and are all in scope (F, FC) | - | n/a | 28/28 | 8/28 | n/a |
+| 4 holdout-2 kept standards findings citing a rule the arm drops (runs; pass: 0) | - | 0/10 | 0/10 | 2/10 | 2/10 |
+| 5 suite | - | 1633 tests, 1630 pass, 0 fail, 2 skipped, 1 todo (all arms share one build) |||||
+| 6 no in-scope rule lost or changed where A loses no line: holdout | - | 1/75 | 0/75 | 8/75 | 8/75 |
+| 6 same, SpecGuard | - | 0/35 | 0/35 | 0/35 | 0/35 |
+| 6 same, fresh | - | 2/30 | 1/30 | 30/30 | 30/30 |
+
+(Counts in the gate 6 rows are PRs that violate it; pass is 0.) FC fails gate 3 only through rule order: the sort reorders the same rules at the same byte count on all 20 PRs. F fails gate 6 once on fresh because dropping out-of-scope rules lets a rule that A showed partly be shown at another size; the same happens for O in all three cases (O: the last fitting rule is cut shorter, in one holdout PR one rule is gone, because the review files, which A did not show at all, take budget; the changed files there have only deleted lines, so A's lost rule does not count them).
+
+**Rule cost (in-scope rules dropped relative to A, total / PRs affected).** Holdout: O 70 / 10, F 0, FC 387 / 20, FCH 387 / 20 (324 of them on the 21 PRs where A loses a line). SpecGuard: 0 for all. Fresh: O 284 / 61, F 0, FC 1679 / 106, FCH 1679 / 106. Rule bytes shown, holdout: A 4.67 MB, O 3.83, F 4.48, FC 1.82; fresh: A 20.8 MB, O 16.7, F 20.7, FC 1.77.
+
+**Other measures (A / O / F / FC / FCH).**
+- Cut-test set vs A, PRs where it grows / shrinks: holdout O 12 / 9, F 0 / 1, FC 0 / 7, FCH 0 / 8; SpecGuard O 3 / 1, others 0 / 0; fresh O 1 / 28, F 0 / 1, FC 0 / 51, FCH 1 / 51.
+- "Review context was cut" notice, on to off / off to on: holdout O 5 / 1, F 0 / 0, FC 3 / 0, FCH 4 / 0; SpecGuard O 1 / 0, FCH 1 / 0; fresh O 24 / 0, F 0 / 0, FC 48 / 0, FCH 48 / 1.
+- (a) PRs where one file takes over 50% of the budget: 0 in every arm and corpus. Confirmed for O as implemented: the largest block is 42152 bytes (the file cap is 41666 plus block markup) across all arms.
+- (b) PRs where the review files together take over 50%: holdout A 5, O 11, F 5, FC 7, FCH 7; SpecGuard 6 in every arm; fresh A 0, O 10, F 0, FC 4, FCH 4.
+- (c) PRs with an empty rule block while an in-scope rule exists: 0 for A, O, F everywhere; FC and FCH 2 on holdout, 0 on SpecGuard, 44 on fresh (the first sorted rule is larger than the cap).
+- (d) The collector already drops lockfiles, generated files, snapshots, vendored and build output before `files.txt` is written: `src/collect.sh:26-28` (IGNORES: package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock, go.sum, `*.lock`, dist/, build/, vendor/, node_modules/, `*.min.*`, `__snapshots__/`, `*.snap`, `*.svg`, `*.pb.go`, `*_pb2.py`, `*.generated.*`, ...), applied at `src/collect.sh:90`, plus `IGNORE_EXTRA` at `:37`. Other large data files (e.g. `assets/go-licenses.json`) are not excluded.
+
+**Decision (rule: adopt the first of O < F < FC < FCH that passes every gate): nothing is adopted.** The default is unchanged; the switch stays.
+- O passes gates 1 to 5 and is the only arm that removes the loss without newly losing a line (holdout code losses 14 to 0; fresh 71 of 76 fixed). It fails gate 6 literally, on 3 PRs (1 of 75 holdout, 2 of 30 fresh): a rule file that A showed is lost (1 case) or shown shorter (2 cases) because the review files now come first. All three are a trade of the last rule against a changed file, where A's lost-line rule saw no loss. The prereg does not allow a waiver.
+- F fails gates 1 and 2: dropping out-of-scope rules frees almost no budget (it fixes 1 of 21 holdout PRs and 0 of 76 fresh).
+- FC and FCH fail gates 3 (FC), 4 and 6, and empty the rule block on 44 of 106 fresh PRs. Their rule cost is 387 (holdout) and 1679 (fresh) dropped in-scope rules; no written acceptance of that cost is made because neither is adopted.
+
+**Limitation.** This measures what the model can see, not what it finds. Deviations: (1) fresh-corpus repos qualify on rule bytes at the default-branch tip, not at each base (per-commit tree scans over thousands of commits did not finish); (2) 94 of the 120 fresh collector runs used `TRACE=off` (26 used `auto`) to finish in time, which empties only the last pack tier (spec files); (3) `collect.sh` ran in throwaway shared clones, one per commit, because it checks out and restores rule files in its work tree; (4) head trees for the arms are built from the object store without `git checkout`, and a git symlink is written as the plain file git writes with `core.symlinks=false`, as the holdout-2 collector did on Windows (on a Linux runner a symlinked rule file is followed, so SpecGuard-style `.claude/skills/x` links would show their target); (5) the "code" definition (not doc, not test) is the reading that gives the prereg's 14/96; with "any non-doc" it is 20/96 for A. (6) Fresh results come from four repos with very large rule sets; a repo with small rules would show no effect either way.
