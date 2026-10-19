@@ -3,6 +3,7 @@
 //   node eval/replay/testgap-confirm-build.js --repos <clones dir> --mined <dir with mine-<clone>.json + repos.txt "<clone> <owner/name>"> --out testgap-confirm.json [--seed 20261020]
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { fixLines, blame, cleanSample } = require('../szz');
 const { qualifies, pairData } = require('./testgap-score');
 const { git, tryGit } = require('./holdout2-null');
@@ -110,6 +111,22 @@ function main() {
     ctlCounts[n] = k;
   }
   for (const [n] of names) { out.repos[n].counts.drawn_bugs = taken[n]; out.repos[n].controls = ctlCounts[n]; }
+  // PR text (title/body) per the prereg: only this is served to the run. Cached; falls back to the commit subject.
+  const cacheFile = path.join(mined, 'prtext.json'), cache = fs.existsSync(cacheFile) ? JSON.parse(fs.readFileSync(cacheFile, 'utf8')) : {};
+  const prText = (e, sha) => {
+    const key = `${e.repo}#${e.pr}`;
+    if (!cache[key]) {
+      try { cache[key] = JSON.parse(execFileSync('gh', ['api', `repos/${e.repo}/pulls/${e.pr}`, '--jq', '{title,body}'], { encoding: 'utf8', maxBuffer: 1 << 26 })); } // read-only
+      catch { cache[key] = { failed: true }; }
+      fs.writeFileSync(cacheFile, JSON.stringify(cache));
+    }
+    const t = cache[key];
+    e.id = `${e.clone}-${e.pr}`;
+    if (t.failed) { e.title = git(R[e.clone].dir, 'log', '-1', '--format=%s', sha).trim(); e.body = ''; e.pr_text = 'commit'; out.funnel_pr_text_fallback = (out.funnel_pr_text_fallback || 0) + 1; }
+    else { e.title = t.title || ''; e.body = t.body || ''; e.pr_text = 'github'; }
+  };
+  for (const b of bugs) prText(b, b.introducing);
+  for (const c of controls) prText(c, c.sha);
   Object.assign(out, { status: 'frozen', n_bugs: bugs.length, n_controls: controls.length, bugs, controls });
   fs.writeFileSync(arg('out'), JSON.stringify(out, null, 1) + '\n');
   console.log(JSON.stringify({ n_bugs: bugs.length, n_controls: controls.length, repos: Object.fromEntries(names.map(([n]) => [n, { ...out.repos[n].counts, controls: out.repos[n].controls }])) }, null, 1));
