@@ -165,6 +165,10 @@ test('scanDiff: header vs content, "++" content lines, line numbers per file fro
   assert.deepStrictEqual(scanDiff(d, new Set()), ['a.txt:2: honey marker', 'b.txt:5: honey marker']);
   assert.deepStrictEqual(scanDiff('diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n+++ b/evil\n+clean\n', new Set()), []);
 });
+test('scanDiff: combined diff reports ++ content lines, not single-parent + or - lines', () => {
+  assert.deepStrictEqual(scanDiff(`diff --cc a.txt\n--- a/a.txt\n+++ b/a.txt\n@@@ -1 -1 +1 @@@\n++${M}0123456789abcdef\n`, new Set()), ['a.txt:1: honey marker']);
+  assert.deepStrictEqual(scanDiff(`diff --cc a.txt\n--- a/a.txt\n+++ b/a.txt\n@@@ -1 -1 +1,2 @@@\n +${M}0123456789abcdef\n+ ${M}0123456789abcdef\n--${M}0123456789abcdef\n`, new Set()), []);
+});
 test('denyList: env and the per-clone git-path file combine, case-insensitive; a missing file is fine', () => {
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'deny-')), 'specguard-deny');
   fs.writeFileSync(f, sha('b').toUpperCase() + '\n\n' + sha('c') + '\n');
