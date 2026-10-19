@@ -9,7 +9,9 @@
 
 So this eval is designed to be able to fail.
 
-**System under test.** The copilot engine, model `gpt-6-luna`, run through the local copilot runner (specguard-ad). Before the confirmation run, the following are frozen and written into the result: the SpecGuard sha, the prompt files, engine settings, budget, and `focus`/pack settings. Each run serves only the PR title and body, with no linked issues, as in holdout 2.
+**System under test.** The `claude-api` engine with model `claude-haiku-5-5`, run locally (`eval/replay.js` prepare, engine, finish), with no GitHub runner time. Before the confirmation run, the following are frozen and written into the result: the SpecGuard sha, the prompt files, engine settings, budget, and `focus`/pack settings. Each run serves only the PR title and body, with no linked issues, as in holdout 2.
+
+**Design baseline first, at zero cost.** Holdout 2 already has haiku outputs: 3 runs per PR, in `SpecGuard-evidence/holdout2-raw`. Before any paid run, those saved findings are scored offline with this metric and both nulls on the design set. That is the design-corpus baseline.
 
 ## Corpus: test-gap bug pairs (mechanical, no human confirmation)
 
@@ -73,7 +75,7 @@ A finding with no line is never a catch. The unit is the PR, and observed = PRs 
 
 Otherwise the result is FAIL. The result is written as observed, chance, lift and p, whatever happens. There is no second run and no amendment after the confirmation run starts.
 
-**Repetitions.** These are fixed before the freeze, from the copilot cost per run that specguard-ad measures:
+**Repetitions.** These are fixed before the freeze, from the local claude-api cost per run measured on the design set:
 - 3 runs per PR if 3 × 88 runs fit the owner's approved budget; otherwise 1 run per PR.
 - With 3 runs, a PR's observed value is the mean of its runs, and the bootstrap resamples PRs.
 
@@ -86,7 +88,7 @@ Otherwise the result is FAIL. The result is written as observed, chance, lift an
    - On controls: delivered missing_test findings per PR, inline comments per PR, and the share of PRs with any inline comment.
    - The same figures on bug PRs, for comparison.
 3. **Verified fail-to-pass.** On catches in hono, rqlite, sqlglot and langchain, specguard-33's harness writes a test from the finding text alone. The test is verified if it fails on I's tree and passes on F's tree. Reported as k/catches.
-4. **Cost.** Copilot cost per run and per PR.
+4. **Cost.** API cost per run and per PR, taken from the engine notes.
 
 ## Limitations
 
