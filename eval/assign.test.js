@@ -20,7 +20,20 @@ test('armOf reads the review-arm label (names or label objects)', () => {
   assert.equal(armOf([{ name: 'review-arm:3' }, 'x']), null);
 });
 
-test('the example workflow computes the same arm as assign() for 1..30', (t) => {
+test('unsalted assign is PR number % 3 for 1..300 (backward compatible)', () => {
+  for (let n = 1; n <= 300; n++) assert.equal(assign(n, '').arm, n % 3);
+});
+
+test('salted assign: HMAC-SHA256 first 4 bytes mod 3, differs from n % 3, roughly uniform over 1..3000', () => {
+  assert.equal(assign(7, 's3cret').arm, require('node:crypto').createHmac('sha256', 's3cret').update('7').digest().readUInt32BE(0) % 3);
+  let diff = 0; const c = [0, 0, 0];
+  for (let n = 1; n <= 3000; n++) { const a = assign(n, 's3cret').arm; c[a]++; if (a !== n % 3) diff++; }
+  console.log('salted arm counts over 1..3000:', c.join(' '));
+  for (const k of c) assert.ok(k > 700 && k < 1300, `arm count ${k}`);
+  assert.ok(diff > 1500, 'not the PR number mod 3');
+});
+
+test('the example workflow computes the same arm as assign() for 1..30, unsalted and salted', (t) => {
   const yml = fs.readFileSync(path.join(__dirname, '..', 'docs', 'validation-workflow.example.yml'), 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout may have CRLF
   const m = /# BEGIN arm\n([\s\S]*?)\n\s*# END arm/.exec(yml);
   assert.ok(m, 'BEGIN/END arm markers');
