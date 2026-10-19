@@ -278,3 +278,25 @@ Run once, O unchanged from e94f451 (`src/` identical), list in `pack-analysis/co
 **Conclusion.** The amendment-2 rule requires every gate on the confirmation corpus, and gate 6 fails on 1 PR. O is not adopted. This is final: nothing is tuned, rerun or amended, and the `EXP_PACK` switch and its tests stay as they are. O fixes 46 of 70 losing PRs with no new loss, but it does so by giving the changed files budget that A spent on rule files, and on one PR that moved a rule the literal gate protects. The cost is 359 dropped in-scope rules on 41 PRs.
 
 **Post-hoc note, 2026-10-19 (does not change the decision).** The amendment-2 measure in `pack-analysis/lib.js` did count a file the PR deletes whole as a deleted-line loss: such a file is in `files.txt` but absent at head, so no arm can show it (prereg H, clarification 1). Re-reading the saved confirmation rows (`+++ /dev/null` in the diff), no A-loss PR came only from wholly deleted files (0 of 70) and 1 O-loss PR did (1 of 24). Corrected counts: A loses content on 70/186, fixed under O 47/70 (was 46), O still loses on 23 (was 24), newly lost 0, gate 6 violations 1 of 116 (unchanged, `langchain-f37ca688f9e6`). The measure now ignores files absent at head (`lib.js`, same `packRead` rule as the runtime in arm H). Not adopted stands.
+
+## Arm H (prereg-pack-fallback.md + clarification 1): not adopted
+
+Code frozen at 9002d09 (`src/` unchanged since). Run once on the frozen confirmation list `pack-analysis/confirm-h-corpus.txt` (step 3, lines 11-40 of each of gitea, hono, langchain, pydantic, query, rqlite, sqlglot, trpc: 240 commits; the collector skipped 28, so n=212; none replaced). Collector: real `src/collect.sh`, gh shimmed, `TRACE=off`. Measure: "loses changed content" as in amendment 2, with a deleted-line file counted only if it exists at head (`pack-analysis/lib.js`, same `packRead` rule as the runtime).
+
+**Floor.** A loses changed content on 27/212 PRs (needs at least 10): met.
+
+**Gates, k/n.**
+2. H loses no changed content on at least half of those PRs: 8/27 (fail; 19 still lose).
+3. Newly lost PRs: 0 by construction (a PR where A loses nothing gets A's pack). Line-level check (every changed line and deleted-line file that A showed is still shown by H, over all 212): 1 violation, `rqlite-bda22a7a75d0` (fail). There A loses 48 line/file items and H, which falls back to O, loses 62: it hides lines A showed.
+4. Holdout 2, kept standards findings citing a rule H drops: 0/10. H equals O on the A-loss PRs (O gave 0/10); computed directly on H as well.
+5. Gate 6 (no in-scope rule lost where A loses nothing): by construction. Checked: H's pack text and note are identical to A's on 185/185 PRs where A loses nothing (0 mismatches).
+
+**Conclusion.** Not adopted: gate 2 and the line-level part of gate 3 fail. This is final; nothing was tuned or rerun. Had every gate passed, adoption would still await the owner's written acceptance of the rule cost.
+
+**Rule cost.** H dropped 3 in-scope rule files on 2 PRs (gitea 2, rqlite 1).
+
+**Per-repo split (A loses / H fixes, of n).** gitea 8/4 of 30; hono 0 of 26; langchain 3/1 of 27; pydantic 2/2 of 26; query 0 of 28; rqlite 1/0 of 16; sqlglot 7/0 of 29; trpc 6/1 of 30. Skipped: 28 (spread over the repos; n per repo above).
+
+**Why gate 2 fails, and a measure gap.** On 12 of the 27 A-loss PRs H returned A's pack unchanged: the loss there is a deleted-line file that has no block in the pack but was never cut either (for example files outside the focus set), so the runtime `del` check, which requires the file to be cut, does not fire, while the amendment-2 measure counts it. On the other 15 H fell back to O and 8 were fixed. The runtime-consistent reading (a deleted-line file counts only if the pack cut it) gives A losing on 19 PRs and H fixing 9 (below half) with 0 newly lost, so the conclusion does not depend on the reading. Reported only; the measure was not changed.
+
+**Design corpora (known, not evidence; A loses / H fixes, newly lost, no-loss PRs differing from A):** holdout 2 (n=96) 22 / 20, 0, 0; fresh step 1 (n=106) 78 / 68, 0, 0; SpecGuard #345-#386 (n=42) 7 / 5, 0, 0. Rule drops: holdout 69 on 9 PRs, fresh 284 on 61, SpecGuard 0.
