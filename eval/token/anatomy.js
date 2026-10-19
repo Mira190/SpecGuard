@@ -1,7 +1,7 @@
 // Token anatomy of simulated-reviewer sub-agent transcripts. Streams JSONL, prints aggregates only.
 // usage: node eval/token/anatomy.js [--json out.json]
 const fs = require('fs'), path = require('path'), readline = require('readline');
-const ROOT = 'C:/Users/emily/.claude/projects/C--Files-Projects-SpecGuard';
+const ROOT = path.join(require('os').homedir(), '.claude/projects/C--Files-Projects-SpecGuard');
 const REAL = 'a80fb590dff54a5a7 aab25b62e44f4ed2a aedb647b21c11c89a ab23ba140433c65ca a4238c23104343ea3 ae5f28a7a25b06c24'.split(' ');
 const HIT = { a80fb590dff54a5a7: 'miss', aab25b62e44f4ed2a: 'hit', aedb647b21c11c89a: 'miss', ab23ba140433c65ca: 'miss', a4238c23104343ea3: 'hit', ae5f28a7a25b06c24: 'hit' };
 const T = s => Math.ceil((s || '').length / 4);

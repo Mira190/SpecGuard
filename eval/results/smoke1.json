@@ -7,7 +7,7 @@
       "id": "r1",
       "goal": "requirements",
       "rep": 1,
-      "error": "Command failed: git -C C:\\Users\\emily\\AppData\\Local\\Temp\\specguard-eval-uIIceP add -A eval-sandbox",
+      "error": "Command failed: git -C <local-user-dir>\\AppData\\Local\\Temp\\specguard-eval-uIIceP add -A eval-sandbox",
       "pr_url": null
     }
   ],
