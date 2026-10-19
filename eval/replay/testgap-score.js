@@ -74,11 +74,11 @@ function qualifies(dir, fx) {
     if (add.length && f.newPath) { const L = linesAt(dir, fx, f.newPath); for (const x of add) { const nm = enclosingName(L, x.n); if (nm) names.add(nm); } }
   }
   const text = testText.join('\n'), hit = [...names].filter((nm) => word(nm).test(text));
-  return { ok: src && hit.length > 0, names: [...names], hit };
+  return { ok: src && hit.length > 0, src, names: [...names], hit };
 }
 
 // per-pair data: I's changed non-test files, units, added lines per unit, B, static flags
-function pairData(dir, p, fx) {
+function pairData(dir, p, fx, withStatic = true) {
   const I = p.introducing, blamed = blamedSpots(dir, fx, I.merge_commit);
   const changed = git(dir, 'diff', '--name-only', '--no-renames', I.base, I.head).split('\n').filter((f) => f && isProd(f));
   const unitsByPath = {}, changedUnits = [];
@@ -95,8 +95,8 @@ function pairData(dir, p, fx) {
   const resolved = blamed.filter((b) => { const u = unitsByPath[b.path].find((x) => b.line >= x.start && b.line <= x.end); return u && u.name !== null; }).length;
   // static arm: changed named definitions whose name is in neither I's test diff nor any test file at I's head
   const grepTests = (nm) => { if (!headTests.length) return false; for (let i = 0; i < headTests.length; i += 200) if (tryGit(dir, 'grep', '-qw', '-F', '-e', nm, I.head, '--', ...headTests.slice(i, i + 200))) return true; return false; };
-  const flags = changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !grepTests(u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
-  return { blamed, resolved, changedFiles: new Set(changed), changedUnits, B, flags };
+  const flags = !withStatic ? [] : changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !grepTests(u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
+  return { blamed, resolved, changedFiles: new Set(changed), changedUnits, unitsByPath, B, flags };
 }
 
 // ---- per-run null draws ----
@@ -221,4 +221,4 @@ function main() {
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
-module.exports = { buildUnits, makeB, isCatch, isCandidate };
+module.exports = { qualifies, pairData, parseDiff, buildUnits, makeB, isCatch, isCandidate };
