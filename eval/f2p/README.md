@@ -187,3 +187,5 @@ Harness bug found before any outcome existed: `repos.json` held a prose note in 
 - All 42 hono writer tests (26 replay, 16 mutation) were dry-run once on the buggy (unmutated, for the mutation arm) tree only, through `try`: 42/42 executed without a compile, import, collection or harness error. Only error versus no error was looked at; pass or fail on buggy was not read.
 
 Shared-machine rule (from 2026-10-20): agents kill only process ids they started themselves, never by name or pattern. During phase A, node processes matching `--test` or `f2p` were killed by pattern while freeing the machine; that may have hit another session's test run.
+
+Deviation recorded before the oracle run (2026-10-20): because `try` failed in setup, the hono writers wrote every hono test without feedback, while the rqlite, sqlglot and langchain writers had feedback. All 9 NEAR findings are hono, so writer feedback is confounded with the arm across repos. The within-hono NEAR vs FAR comparison is the primary descriptive comparison; the cross-repo comparison is reported but confounded by writer feedback. The hono tests are not rewritten.
