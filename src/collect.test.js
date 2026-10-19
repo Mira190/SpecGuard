@@ -218,6 +218,15 @@ test('wp1: a trace.js crash still produces a context, and docs fall back to bein
   assert.equal(skipped(run(t, { 'docs/specs/claims.md': 'AC-4: 30 days\n' }, ({ write }) => write('docs/specs/claims.md', 'AC-4: 45 days\n'), { ...SPEC, STUB_CRASH: '1' })), true);
 });
 
+test('a doc-only PR whose tracing failed is a collect-error (failed run), not a silent skip; trace ok or off still skips', (t) => {
+  const doc = [{ 'docs/specs/claims.md': 'AC-4: 30 days\n' }, ({ write }) => write('docs/specs/claims.md', 'AC-4: 45 days\n')];
+  const bad = run(t, ...doc, { ...SPEC, STUB_CRASH: '1' });
+  assert.match(bad.ctxFile('collect-error.txt'), /tracing failed.*not examined/);
+  assert.equal(run(t, ...doc, { ...SPEC, STUB_COUNT: '0' }).ctxFile('collect-error.txt'), null);
+  assert.equal(run(t, ...doc, { ...SPEC, TRACE: 'off' }).ctxFile('collect-error.txt'), null);
+  assert.equal(run(t, { 'package-lock.json': '1\n' }, ({ write }) => write('package-lock.json', '2\n'), { ...SPEC, STUB_CRASH: '1' }).ctxFile('collect-error.txt'), null); // only ignored files: nothing tracing could have admitted
+});
+
 test('wp1: trace=off never runs trace.js and requirement docs stay dropped; REQ_PATHS reaches trace.js', (t) => {
   const off = run(t, { 'docs/specs/claims.md': 'AC-4: 30 days\n' }, ({ write }) => write('docs/specs/claims.md', 'AC-4: 45 days\n'), { ...SPEC, STUB_COUNT: '1', TRACE: 'off' });
   assert.equal(skipped(off), true);
