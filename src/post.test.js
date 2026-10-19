@@ -4517,11 +4517,17 @@ test('shortened diff, only added lines omitted and the file shown whole in the p
   assert.doesNotMatch(b, REASON); assert.doesNotMatch(b, /Incomplete review/); assert.match(b, /specguard:head=/);
 });
 
-test('shortened diff, only added lines omitted and the file cut in the pack (or no pack at all): incomplete with the reason', async (t) => {
+test('shortened diff, only added lines omitted: no new reason, whether the file is cut in the pack or there is no pack-cut.txt', async (t) => {
   for (const pack of ['src.js\n', undefined]) {
     const { s } = shortened(t, { del: 0, add: 60, pack });
     await post(s);
-    const b = s.calls.summary[0].body;
-    assert.match(b, REASON); assert.match(b, /Incomplete review/); assert.doesNotMatch(b, /specguard:head=/);
+    assert.doesNotMatch(s.calls.summary[0].body, REASON);
   }
+});
+
+test('shortened diff, deleted lines omitted and no pack-cut.txt (agent engine): incomplete with the reason', async (t) => {
+  const { s } = shortened(t, { del: 30, add: 30 });
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, REASON); assert.match(b, /Incomplete review/); assert.doesNotMatch(b, /specguard:head=/);
 });
