@@ -297,3 +297,11 @@ test('removed assertions: a table-driven added line over 400 chars keeps its row
   assert.deepEqual(delta(`-  assert.equal(next(2), 3);\n${row('[2, 3]')}`), []);
   assert.deepEqual(delta(`-  assert.equal(next(2), 3);\n${row('[2, 4]')}`), ['removed 10 assert.equal(next(2), 3);']);
 });
+test('removed assertions: 50 literal-dense added lines of ~100 KB each finish fast (literal sets computed once per entry)', () => {
+  const dense = (k) => `  assert.equal(f${k}(x), { ${Array.from({ length: 6000 }, (_, i) => `k${i}: 'v${i}_${k}'`).join(', ')} });\n`;
+  let body = `-${dense(0)}`;
+  for (let k = 1; k <= 50; k++) body += `+${dense(k)}`;
+  const t = Date.now();
+  assert.equal(delta(body).length, 1);
+  assert.ok(Date.now() - t < 2000, `took ${Date.now() - t} ms`);
+});
