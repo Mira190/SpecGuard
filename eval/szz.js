@@ -103,12 +103,19 @@ function fixLines(repoDir, parent, sha) {
 // Contiguous ranges [a,b] from sorted line numbers.
 const ranges = (ls) => ls.reduce((r, n) => { const t = r[r.length - 1]; if (t && n === t[1] + 1) t[1] = n; else r.push([n, n]); return r; }, []);
 
-// { sha: lineCount } of the commits that last touched the given lines at `parent`.
-function blame(repoDir, parent, file) {
+// { sha: lineCount } of the commits that last touched the given lines at `parent`. `spots` (optional) is filled with { sha: [{ path, line }] }:
+// each blamed line's path and line number in the introducing commit, for matching a PR-time finding to the buggy lines (eval/escapes.js).
+// ponytail: porcelain names the file once per commit, so a commit that also contributed lines from a copied file is attributed to the first one.
+function blame(repoDir, parent, file, spots) {
   if (!file.lines.length) return {};
   const args = ['blame', '-w', '-M', '-C', '--porcelain', ...ranges(file.lines).flatMap(([a, b]) => ['-L', `${a},${b}`]), parent, '--', file.path];
   const raw = tryGit(repoDir, ...args), out = {};
-  for (const l of raw.split('\n')) { const m = /^([0-9a-f]{40}) \d+ \d+/.exec(l); if (m) out[m[1]] = (out[m[1]] || 0) + 1; }
+  let at = null;
+  for (const l of raw.split('\n')) {
+    const m = /^([0-9a-f]{40}) (\d+) \d+/.exec(l);
+    if (m) { out[m[1]] = (out[m[1]] || 0) + 1; at = m[1]; if (spots) (spots[at] ||= []).push({ path: file.path, line: +m[2], named: false }); }
+    else if (at && spots && l.startsWith('filename ')) for (const x of spots[at]) if (!x.named) Object.assign(x, { path: l.slice(9), named: true });
+  }
   return out;
 }
 
@@ -150,11 +157,11 @@ function mine({ repoDir, since, until, labels = DEFAULT_LABELS, repo = null, gh 
     for (const s of new Set(signals.map((x) => x.signal))) stats.signals[s] = (stats.signals[s] || 0) + 1;
 
     const reportMs = Date.parse(cand.report_date);
-    const add = (sha, lines, via) => {
+    const add = (sha, lines, via, spots) => {
       const info = commitInfo(repoDir, sha);
       if (Date.parse(info.date) > reportMs) return 'after_report';
       if (filesTouched(repoDir, sha).length > MASS) return 'mass_change';
-      cand.introducing.push({ sha, title: info.subject, date: info.date, pr: resolvePr(sha, info.subject), lines, via, confirmed: null, scope: null, grade: null, note: null });
+      cand.introducing.push({ sha, title: info.subject, date: info.date, pr: resolvePr(sha, info.subject), lines, via, ...(spots && { spots: spots.slice(0, 50).map(({ path: p, line }) => ({ path: p, line })) }), confirmed: null, scope: null, grade: null, note: null });
       return '';
     };
     const dropped = {};
@@ -162,16 +169,16 @@ function mine({ repoDir, since, until, labels = DEFAULT_LABELS, repo = null, gh 
       const why = add(revertOf, null, 'revert');
       if (why) dropped[why] = 1; else stats.revert_direct++;
     } else {
-      const tally = {};
+      const tally = {}, spots = {};
       let any = false;
       for (const f of fixLines(repoDir, parent, c.sha)) {
         if (f.lines.length) any = true;
-        for (const [sha, n] of Object.entries(blame(repoDir, parent, f))) tally[sha] = (tally[sha] || 0) + n;
+        for (const [sha, n] of Object.entries(blame(repoDir, parent, f, spots))) tally[sha] = (tally[sha] || 0) + n;
       }
       if (!any) cand.status = 'unlocatable';
       for (const [sha, n] of Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 5)) {
         if (sha === c.sha) continue;
-        const why = add(sha, n, 'blame');
+        const why = add(sha, n, 'blame', spots[sha]);
         if (why) dropped[why] = (dropped[why] || 0) + 1;
       }
     }
