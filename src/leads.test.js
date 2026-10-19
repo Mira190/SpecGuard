@@ -268,8 +268,40 @@ test('goneAtHead: a name only in test files is gone, one in source is not, git f
 });
 test('removed or weakened assertions: a loop-prefixed assertion extended past 400 chars still re-pins; a different subject is still removed', () => {
   const pad = (n) => Array.from({ length: n }, (_, i) => `'case${i}'`).join(', ');
-  const loop = (n, subj) => `  for (const p of [${pad(n)}]) assert.equal(run(${subj}).status, 'covered', p);\n`;
+  const loop = (n, subj, want = 'covered') => `  for (const p of [${pad(n)}]) assert.equal(run(${subj}).status, '${want}', p);\n`;
   assert.ok(loop(20, 'evOf(p)').length < 400 && loop(60, 'evOf(p)').length > 400);
   assert.deepEqual(delta(`-${loop(20, 'evOf(p)')}+${loop(60, 'evOf(p)')}`), []);
-  assert.deepEqual(delta(`-${loop(20, 'evOf(p)')}+${loop(60, 'other(p)')}`), ['removed 10 for (const p of [' + pad(20) + "]) assert.equal(run(evOf(p)).status, 'covered', p);"]);
+  assert.deepEqual(delta(`-${loop(20, 'evOf(p)')}+${loop(60, 'other(p)', 'gap')}`), ['removed 10 for (const p of [' + pad(20) + "]) assert.equal(run(evOf(p)).status, 'covered', p);"]);
+});
+
+test('removed assertions: a removed loop line over 400 chars is read in full (assertion past char 400; name dropped past char 400)', () => {
+  const pad = (n) => Array.from({ length: n }, (_, i) => `'case${i}'`).join(', ');
+  const loop = (subj) => `  for (const p of [${pad(60)}]) assert.equal(run(${subj}).status, 'covered', p);\n`;
+  assert.ok(loop('evOf(p)').length > 400);
+  assert.deepEqual(delta(`-${loop('evOf(p)')}+  const x = 1;\n`).map((x) => x.slice(0, 10)), ['removed 10']);
+  assert.deepEqual(delta(`-${loop('evOf(p)')}+${loop('evOf(p)')}`), []);
+  const src = mkdiff('src/x.ts', `-const T = [${pad(60)}]; export function lateGuard(r) {}\n`);
+  const d = (gone) => assertionDelta(src + mkdiff('test/x.test.ts', "-  assert.equal(lateGuard(p), 1);\n+  const x = 1;\n"), (f) => f.includes('.test.'), gone).length;
+  assert.equal(d((n) => n === 'lateGuard'), 0);
+  assert.equal(d(() => false), 1);
+});
+test('removed assertions: a long added line equal to the removed one in its first 400 chars but with another trailing subject is no move', () => {
+  const pad = Array.from({ length: 60 }, (_, i) => `'case${i}'`).join(', ');
+  const loop = (subj, want) => `  for (const p of [${pad}]) assert.equal(run(${subj}).status, '${want}', p);\n`;
+  assert.deepEqual(delta(`-${loop('evOf(p)', 'covered')}+${loop('other(p)', 'gap')}`).map((x) => x.slice(0, 10)), ['removed 10']);
+  assert.deepEqual(delta(`-${loop('evOf(p)', 'covered')}+${loop('evOf(p)', 'covered')}`), []);
+});
+test('removed assertions: a table-driven added line over 400 chars keeps its rows past char 400', () => {
+  const row = (last) => `+  for (const [input, expected] of [${Array.from({ length: 50 }, (_, i) => `[${i + 10}, ${i + 11}]`).join(', ')}, ${last}]) assert.equal(next(input), expected);\n`;
+  assert.ok(row('[2, 3]').length > 500);
+  assert.deepEqual(delta(`-  assert.equal(next(2), 3);\n${row('[2, 3]')}`), []);
+  assert.deepEqual(delta(`-  assert.equal(next(2), 3);\n${row('[2, 4]')}`), ['removed 10 assert.equal(next(2), 3);']);
+});
+test('removed assertions: 50 literal-dense added lines of ~100 KB each finish fast (literal sets computed once per entry)', () => {
+  const dense = (k) => `  assert.equal(f${k}(x), { ${Array.from({ length: 6000 }, (_, i) => `k${i}: 'v${i}_${k}'`).join(', ')} });\n`;
+  let body = `-${dense(0)}`;
+  for (let k = 1; k <= 50; k++) body += `+${dense(k)}`;
+  const t = Date.now();
+  assert.equal(delta(body).length, 1);
+  assert.ok(Date.now() - t < 2000, `took ${Date.now() - t} ms`);
 });
