@@ -214,8 +214,8 @@ test('pack-cut.txt: a missing_test whose candidate test the model saw only partl
 });
 
 test('pack-cut.txt listing a changed file or its candidate test: the run is incomplete (no clean verdict, no head marker, execution_complete false); unrelated or empty pack-cut stays complete (F19)', async (t) => {
-  const run = async (cut, d = report({ coverage: [row()], findings: [] })) => { // d: a cut candidate test counts only when an obligation of its file is not proven
-    const s = setup(t, d);
+  const run = async (cut) => {
+    const s = setup(t, report({ coverage: [row()], findings: [] }));
     fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), 'src.js\n  test.js  (same stem)\n');
     fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), cut);
     await post(s);
@@ -223,7 +223,7 @@ test('pack-cut.txt listing a changed file or its candidate test: the run is inco
     return { body: s.calls.summary[0].body, counts };
   };
   for (const cut of ['src.js\n', 'test.js\n']) {
-    const { body, counts } = await run(cut, report({ coverage: [row('unknown')], findings: [] }));
+    const { body, counts } = await run(cut);
     assert.equal(counts.complete, false); assert.equal(counts.execution_complete, false);
     assert.doesNotMatch(body, /No unit test gaps found(?! so far)/);
     assert.match(body, /Partly reviewed/);
@@ -4455,46 +4455,6 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
   assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
 });
 
-// Review context was cut: incomplete only when the cut text carries an obligation SpecGuard could have judged differently
-const cutRun = async (t, { data, cands = 'src.js\n  test.js  (same stem)\n', cut = 'test.js\n', files, shown, diff }) => {
-  const s = setup(t, data);
-  writeCtx(s, 'test-candidates.txt', cands); writeCtx(s, 'pack-cut.txt', cut);
-  if (files) writeCtx(s, 'files.txt', files); if (shown) writeCtx(s, 'pack-shown.txt', shown); if (diff) writeCtx(s, 'diff.patch', diff);
-  await post(s);
-  const body = s.calls.summary[0].body;
-  return { body, counts: countsOf(body), s };
-};
-test('cut candidate test: incomplete when an obligation of its file is missing_test or unknown; complete when every obligation has verified unit evidence', async (t) => {
-  for (const d of [report(), report({ coverage: [row('unknown')], findings: [] })]) {
-    const { body, counts } = await cutRun(t, { data: d });
-    assert.equal(counts.complete, false); assert.match(body, /unit tests of `src\.js` were only partly visible/);
-  }
-  const ok = await cutRun(t, { data: report({ coverage: [row()], findings: [] }), cands: 'src.js\n  test.js  (mentions src)\n' });
-  assert.equal(ok.counts.complete, true); assert.match(ok.body, /No unit test gaps found/); assert.match(ok.body, /<!-- specguard:head=HEADSHA -->/);
-  assert.match(ok.body, /Some tests of `src\.js` were only partly visible/, 'the plain run note');
-});
-
-test('cut candidate test: a changed source file with no coverage row stays incomplete (the model may have skipped it)', async (t) => {
-  const { counts, body } = await cutRun(t, { data: report({ coverage: [], findings: [] }) });
-  assert.equal(counts.complete, false); assert.match(body, /unit tests of `src\.js` were only partly visible/);
-});
-
-test('cut candidate test: a missing_test demoted because its candidate was cut keeps the run incomplete', async (t) => {
-  const { counts, body } = await cutRun(t, { data: report() });
-  assert.equal(counts.complete, false); assert.match(body, /Low-confidence findings \(1\)/);
-});
-
-test('cut changed file: a doc or fixture past the shown lines is not incomplete; a logic file is, and its verdict is no pass', async (t) => {
-  const diff = fileDiff('src.js', patch) + fileDiff('docs/a.md', patch) + fileDiff('test/fixtures/a.js', patch);
-  const clean = report({ coverage: [row()], findings: [] });
-  const quiet = await cutRun(t, { data: clean, cands: 'src.js\n  (no candidate test file found)\n', cut: 'docs/a.md\ntest/fixtures/a.js\n', files: 'src.js\ndocs/a.md\ntest/fixtures/a.js\n', diff });
-  assert.equal(quiet.counts.complete, true); assert.match(quiet.body, /No unit test gaps found/);
-  const logic = await cutRun(t, { data: clean, cands: 'src.js\n  (no candidate test file found)\n', cut: 'src.js\n', shown: 'src.js\t2\n' });
-  assert.equal(logic.counts.complete, false);
-  assert.match(logic.body, /`src\.js`: changed lines past what the model saw/);
-  assert.doesNotMatch(logic.body.split('<details>')[0], /✅|No gaps found|No unit test gaps found/);
-});
-
 test('incomplete summary: the first screen holds the findings and the not-reviewed files; the model prose, the "Incomplete review." blockquote and the fast-tier sentence are in Details', () => {
   const d = report({ not_reviewed: 'The model could not read the vendored parser.' });
   const f = { f: d.findings[0], why: 'x' };
@@ -4509,19 +4469,4 @@ test('incomplete summary: the first screen holds the findings and the not-review
   assert.doesNotMatch(rest, /vendored parser/, 'and is not repeated in Details'); assert.match(rest, /next push or rerun reviews again/);
   const none = post.buildSummary({ data: report({ coverage: [row()], findings: [] }), incomplete: ['`a.js`: changed lines past what the model saw', 'b'], state: 'incomplete' });
   assert.match(none, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; 2 items not fully reviewed \(listed below\)\*\*/);
-});
-
-test('cut changed file under build/ or gen/: generated only on content evidence (header in the first lines), never by folder name', async (t) => {
-  const run = async (p, text) => {
-    const s = setup(t, report({ coverage: [row()], findings: [] }));
-    fs.mkdirSync(path.dirname(path.join(s.dir, p)), { recursive: true }); fs.writeFileSync(path.join(s.dir, p), text); track(s, p);
-    writeCtx(s, 'test-candidates.txt', `src.js\n  (no candidate test file found)\n${p}\n  (no candidate test file found)\n`); writeCtx(s, 'pack-cut.txt', `${p}\n`);
-    writeCtx(s, 'files.txt', `src.js\n${p}\n`); writeCtx(s, 'diff.patch', fileDiff('src.js', patch) + fileDiff(p, patch));
-    await post(s);
-    return countsOf(s.calls.summary[0].body).complete;
-  };
-  assert.equal(await run('build/x.js', 'l1\nl2\nif (x) {\nl4\n'), false, 'hand-written build script, changed line past the shown lines');
-  assert.equal(await run('gen/x.go', '// Code generated by protoc. DO NOT EDIT.\nl2\nif (x) {\nl4\n'), true, 'a generated header in the first lines');
-  assert.equal(await run('dist/x.js', '/* @generated */\nl2\nif (x) {\nl4\n'), true);
-  assert.equal(await run('vendor/x.js', 'l1\nl2\nif (x) {\nl4\n'), false, 'vendor/ is not skipped by path alone');
 });

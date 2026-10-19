@@ -1125,5 +1125,5 @@ if (require.main === module) {
   }
 }
 
-module.exports = { FIXTURE_PATH, tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, sizeVariants, isTestPath, pathKind,
+module.exports = { tokenize, buildIndex, parseItems, isRequirementDoc, isSpecDoc, pairItems, valueDeltas, durationVariants, sizeVariants, isTestPath, pathKind,
   codeHunks, matchGlob, testScope, classify, namedDocs, blocksOf, run, requirementToCode, lsTree, catBatch, makeClock, RULE_GLOBS, BLOCK_STOP };
