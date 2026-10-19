@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 const { findingsOf, copilotOutcome, patchTouches, analyze, render, quantile } = require('./weekly-report');
 const { exportRows, toCsv } = require('./label-export');
 const { armOf } = require('./assign');
+const { labelGate, ALPHA } = require('./weekly-report');
 
 const D = (day, h = 0) => `2026-09-${String(day).padStart(2, '0')}T${String(h).padStart(2, '0')}:00:00Z`;
 const pr = (number, arm, hrs, extra = {}) => ({ number, created_at: D(1), merged_at: hrs == null ? null : new Date(Date.parse(D(1)) + hrs * 36e5).toISOString(), user: { login: 'dev', type: 'User' }, labels: arm == null ? [] : [{ name: `review-arm:${arm}` }], ...extra });
@@ -515,4 +516,16 @@ test('load: closed-and-reopened PRs and PRs sharing a head branch are flagged; a
   const i = analyze(ds, {}).integrity;
   assert.deepEqual(i.reopened, [1]);
   assert.deepEqual(i.same_branch, [{ branch: 'feat/x', prs: [3, 4] }]);
+});
+
+test('labelGate: the alpha thresholds are inclusive at exactly 0.800 and 0.667', () => {
+  const at = (alpha) => labelGate({ specguard: { alpha, n: 30 } });
+  assert.equal(at(ALPHA.ok).ok, true);
+  assert.equal(at(ALPHA.ok - 1e-9).ok, false);
+  assert.match(at(ALPHA.ok - 1e-9).note, /tentative/);
+  assert.match(at(ALPHA.tentative).note, /tentative/); // exactly 0.667: tentative, not refused
+  assert.match(at(ALPHA.tentative - 1e-9).note, /unreliable/);
+  assert.match(at(null).note, /alpha undefined/);
+  assert.equal(labelGate(undefined).ok, true);
+  assert.match(labelGate(null).note, /no agreement evidence/);
 });
