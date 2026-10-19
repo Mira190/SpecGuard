@@ -116,10 +116,10 @@ test('CLI import: alpha < 0.667 blocks precision; alpha passed needs a reconcile
   assert.equal(JSON.parse(ok.stdout).specguard.n, 4);
 });
 
-// 40 doubly labelled findings per tool. The pairs list is [a, b] for one tool; tool x's labellers agree except where told.
+// 100 doubly labelled findings per tool. The pairs list is [a, b] for one tool; tool x's labellers agree except where told.
 const sheetOf = (byTool) => { const rows = [], tools = new Map(); let i = 0; for (const [tool, pairs] of Object.entries(byTool)) for (const [a, b] of pairs) { const id = `F${i++}`; rows.push({ id, label_a: a, label_b: b }); tools.set(id, tool); } return { rows, toolOf: (id) => tools.get(id) }; };
 const rep = (n, p) => Array.from({ length: n }, () => p);
-const AGREE = [...rep(20, ['valid', 'valid']), ...rep(20, ['invalid', 'invalid'])];
+const AGREE = [...rep(50, ['valid', 'valid']), ...rep(50, ['invalid', 'invalid'])];
 
 test('agreement per tool: a good SpecGuard sheet cannot hide a bad Copilot sheet; tentative is not a decision', () => {
   const bad = [...rep(8, ['valid', 'valid']), ...rep(8, ['invalid', 'invalid']), ...rep(12, ['valid', 'invalid']), ...rep(12, ['invalid', 'valid'])];
@@ -129,7 +129,7 @@ test('agreement per tool: a good SpecGuard sheet cannot hide a bad Copilot sheet
   assert.ok(ag.scopes.copilot.alpha < 0.667 && ag.scopes.copilot.status === 'fail');
   assert.ok(ag.scopes.overall.alpha < 0.8 && ag.scopes.overall.status !== 'reliable');
   assert.equal(ag.ok, false);
-  const mid = [...rep(17, ['valid', 'valid']), ...rep(17, ['invalid', 'invalid']), ...rep(3, ['valid', 'invalid']), ...rep(3, ['invalid', 'valid'])]; // alpha ~ 0.70
+  const mid = [...rep(43, ['valid', 'valid']), ...rep(43, ['invalid', 'invalid']), ...rep(7, ['valid', 'invalid']), ...rep(7, ['invalid', 'valid'])]; // alpha ~ 0.70
   const t = agreement(sheetOf({ specguard: AGREE, copilot: mid }).rows, sheetOf({ specguard: AGREE, copilot: mid }).toolOf);
   assert.ok(t.scopes.copilot.alpha > 0.667 && t.scopes.copilot.alpha < 0.8 && t.scopes.copilot.status === 'tentative');
   assert.deepEqual([t.ok, t.decision], [true, false]);
@@ -145,7 +145,7 @@ test('agreement: a small sample has a wide bootstrap interval (lower bound < 0.6
 });
 
 test('agreement: an unsure rate above 20% for either labeller refuses, even with perfect agreement on the rest', () => {
-  const { rows, toolOf } = sheetOf({ specguard: [...AGREE, ...rep(12, ['unsure', 'valid'])] });
+  const { rows, toolOf } = sheetOf({ specguard: [...AGREE, ...rep(30, ['unsure', 'valid'])] });
   const ag = agreement(rows, toolOf);
   assert.ok(ag.unsure.a > 0.2 && ag.unsure.b === 0 && ag.scopes.overall.alpha === 1);
   assert.equal(ag.ok, false);
@@ -176,6 +176,31 @@ test('classify: alpha exactly 0.800 with lower 0.667 is reliable; exactly 0.667 
   assert.equal(classify(null, null), 'fail');
 });
 
+test('gate: perfect agreement below 100 doubly labelled findings is tentative, at 100 it is reliable', () => {
+  const at = (n) => { const s = sheetOf({ specguard: [...rep(n / 2, ['valid', 'valid']), ...rep(n / 2, ['invalid', 'invalid'])] }); return agreement(s.rows, s.toolOf).scopes.specguard; };
+  assert.equal(require('./label-export').MIN_N, 100);
+  assert.deepEqual([at(98).status, at(98).alpha, at(100).status], ['tentative', 1, 'reliable']);
+});
+
+test('gate: more than 5% dropped bootstrap draws (no variation, low prevalence) make a scope tentative and the share is reported', () => {
+  const us = [...rep(98, ['invalid', 'invalid']), ...rep(2, ['valid', 'valid'])];
+  const ci = alphaInterval(us);
+  assert.ok(ci[2] > 0.05 && ci[2] < 0.3, `dropped ${ci[2]}`); // about 0.98^100 = 13%
+  assert.equal(alphaInterval(AGREE)[2], 0); // balanced labels never drop a draw
+  const s = sheetOf({ specguard: us }), sc = agreement(s.rows, s.toolOf).scopes.specguard;
+  assert.deepEqual([sc.alpha, sc.n, sc.status], [1, 100, 'tentative']);
+  assert.equal(require('./label-export').classify(1, 1, 100, 0.05), 'reliable');
+  assert.equal(require('./label-export').classify(1, 1, 100, 0.051), 'tentative');
+});
+
+test('alpha-power simulation is seeded and reproducible; good labellers pass more often as n grows, mediocre ones rarely', () => {
+  const { power } = require('./alpha-power');
+  const a = power({ agreement: 0.95, n: 100, trials: 20 }), b = power({ agreement: 0.95, n: 100, trials: 20 });
+  assert.deepEqual(a, b);
+  assert.ok(power({ agreement: 0.95, n: 150, trials: 20 }).decisionGrade > power({ agreement: 0.95, n: 30, trials: 20 }).decisionGrade);
+  assert.ok(power({ agreement: 0.8, n: 100, trials: 20 }).decisionGrade <= 0.1);
+});
+
 test('parseCsv accepts a two-labeller sheet with no label column (label_a and label_b only)', () => {
   const rows = parseCsv('id,label_a,label_b\nF1,valid,invalid\n');
   assert.deepEqual(rows, [{ id: 'F1', label_a: 'valid', label_b: 'invalid' }]);
@@ -183,7 +208,7 @@ test('parseCsv accepts a two-labeller sheet with no label column (label_a and la
 });
 
 test('agreement: labeller b above 20% unsure refuses too (labeller a clean)', () => {
-  const { rows, toolOf } = sheetOf({ specguard: [...AGREE, ...rep(12, ['valid', 'unsure'])] });
+  const { rows, toolOf } = sheetOf({ specguard: [...AGREE, ...rep(30, ['valid', 'unsure'])] });
   const ag = agreement(rows, toolOf);
   assert.ok(ag.unsure.b > 0.2 && ag.unsure.a === 0);
   assert.equal(ag.ok, false);
