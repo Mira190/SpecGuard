@@ -33,10 +33,10 @@ The **bug location B** is:
 - A blamed line outside any definition gets only its ±3-line window.
 - The share of blamed lines that resolve to a definition is reported.
 
-**Design set.** Holdout 2's 45 pairs filtered by the rule above. Prompt, model settings and code may be iterated here, with every iteration and its result recorded. Nothing measured on this set decides anything.
+**Design set.** Holdout 2's 45 pairs filtered by the rule above. The number that qualifies is reported. If it is below 15, the design-set power check is reported as "not informative", and nothing is steered by it. Prompt, model settings and code may be iterated here, with every iteration and its result recorded. Nothing measured on this set decides anything.
 
 **Confirmation set.** It comes from the 12 clones in `SpecGuard-evidence/repos`, at their current HEADs (clone HEAD dates 2026-10-15 to 10-19); nothing new is cloned.
-- **Bug PRs.** Fixes dated 2026-01-01 to clone HEAD. Excluded: any pair in holdout 1, holdout 2, `pairs.json`, `clean.json` or the design set. Take the most recent qualifying pairs per repo, at most 6 per repo, until there are 48. That allows up to 8 unusable runs and still leaves n ≥ 40.
+- **Bug PRs.** Fixes dated 2026-01-01 to clone HEAD. Excluded: any pair in holdout 1, holdout 2, `pairs.json`, `clean.json` or the design set. Draw round-robin over the repos in alphabetical order, taking each repo's newest not-yet-drawn qualifying pair in turn and skipping a repo that has reached 6 or has none left, until there are 48. Nothing is left to choice. That allows up to 8 unusable runs and still leaves n ≥ 40.
 - **Controls.** 40 PRs from `szz.js clean` on the same repos, spread over the repos in proportion to the bug PRs, with seed 20261020 and a window ending at least 90 days before the clone HEAD. A control is dropped and replaced, in sampler order, if any of its lines is blamed by a fix from the mined list within 90 days after it.
 - **Freeze.** Both lists go to `eval/replay/testgap-confirm.json` with a UTC timestamp, committed before any arm runs on any of them. If fewer than 40 bug PRs qualify, the result is "not tested", not a smaller-n verdict.
 
@@ -51,6 +51,14 @@ A finding with no line is never a catch. The unit is the PR, and observed = PRs 
 
 `weak_test` findings usually cite a test file, so they rarely hit B. Their hits are reported separately as well as inside the total.
 
+## Static baseline arm (no model, zero cost)
+
+A test-gap bug is, by construction, a definition I changed without a test. A rule with no model could therefore score well on this metric. The static arm uses no new heuristic:
+- It flags every changed definition of I whose name (`enclosingName`) appears neither in I's test diff nor in the candidate tests the collector gathered (`src/test-map.js`, the same lookup the leads use).
+- Each flag is placed at the definition's first added line and scored with the same catch rule, nulls and noise measures. This is done on the design set and on the confirmation set.
+
+The result reports the model, the static arm, and model ∪ static. The per-PR difference model − static is given with its PR-cluster bootstrap interval.
+
 ## Null and lift
 
 - **Eligible findings.** Delivered missing_test/weak_test findings with a line in a non-test source file.
@@ -61,6 +69,7 @@ A finding with no line is never a catch. The unit is the PR, and observed = PRs 
   - 1000 permutations, seed 20261020, giving a chance rate with a 95% interval.
 - **Secondary null.** The same, with units drawn uniformly.
 - **Verdict null.** The verdict uses whichever of the primary and secondary nulls gives the higher upper bound.
+- **Repetitions.** With 3 runs per PR, the null is computed per run on that run's own findings, then averaged per PR in the same way as observed.
 - **Report:**
   - observed k/n, with its PR-cluster bootstrap 95% interval (2000 resamples, same seed);
   - chance [95%], from both nulls;
@@ -73,7 +82,14 @@ A finding with no line is never a catch. The unit is the PR, and observed = PRs 
 
 **PASS iff** the PR-cluster bootstrap lower bound of observed is above the verdict null's 95% upper bound.
 
-Otherwise the result is FAIL. The result is written as observed, chance, lift and p, whatever happens. There is no second run and no amendment after the confirmation run starts.
+Otherwise the result is FAIL.
+
+**How the verdict reads.** These rules are fixed now, before any run:
+- **Static arm.**
+  - The model passes, but the lower bound of model − static per PR is ≤ 0: the claim is "SpecGuard's static leads catch; the model adds no location value".
+  - Only the static arm passes: the result says exactly that.
+  - Neither passes: FAIL.
+- **Noise ceiling.** A model PASS reads as "catches real bugs at an acceptable noise level" only if the median number of delivered inline comments per control PR is ≤ 2. Otherwise it reads "PASS (location), noise above ceiling". The share of controls with any `missing_test` inline is always reported. The result is written as observed, chance, lift and p, whatever happens. There is no second run and no amendment after the confirmation run starts.
 
 **Repetitions.** These are fixed before the freeze, from the local claude-api cost per run measured on the design set:
 - 3 runs per PR if 3 × 88 runs fit the owner's approved budget; otherwise 1 run per PR.
@@ -93,6 +109,6 @@ Otherwise the result is FAIL. The result is written as observed, chance, lift an
 ## Limitations
 
 - SZZ blame and the mechanical fix filter are noisy, and pairs are not confirmed by reading. Before any arm runs, a reading of 20 random confirmation pairs reports the share that are real test-gap bugs. That share is reported but changes nothing.
-- The repos are public. Contamination cannot be ruled out: the fixes may predate the model's training cutoff.
+- The repos are public. Contamination cannot be ruled out: the fixes may predate the model's training cutoff. If a published document gives `claude-haiku-5-5`'s training cutoff, catches are reported split by whether the fix date is before or after that cutoff; otherwise they are split by fix quarter. This split is reported, not gating.
 - `enclosingName` uses line regexes, not a parser. The share of blamed lines resolved to a definition is reported.
 - Location is necessary but not sufficient: a catch here shows that the finding pointed at the right code. Whether its text describes the bug is measured only by secondary measures 1 and 3.
