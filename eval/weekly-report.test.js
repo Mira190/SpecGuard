@@ -6,6 +6,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { findingsOf, copilotOutcome, patchTouches, analyze, render, quantile } = require('./weekly-report');
 const { exportRows, toCsv } = require('./label-export');
+const { armOf } = require('./assign');
+const { labelGate, ALPHA } = require('./weekly-report');
 
 const D = (day, h = 0) => `2026-09-${String(day).padStart(2, '0')}T${String(h).padStart(2, '0')}:00:00Z`;
 const pr = (number, arm, hrs, extra = {}) => ({ number, created_at: D(1), merged_at: hrs == null ? null : new Date(Date.parse(D(1)) + hrs * 36e5).toISOString(), user: { login: 'dev', type: 'User' }, labels: arm == null ? [] : [{ name: `review-arm:${arm}` }], ...extra });
@@ -141,7 +143,8 @@ test('CLI on a fixture: markdown and --json; labels flow through --labels and la
   const run = (...a) => spawnSync(process.execPath, [path.join(__dirname, 'weekly-report.js'), '--fixture', fx, ...a], { encoding: 'utf8' });
   const md = run('--labels', path.join(dir, 'l.csv'));
   assert.equal(md.status, 0, md.stderr);
-  assert.match(md.stdout, /\*\*CONTINUE/);
+  assert.match(md.stdout, /precision rule not evaluated: no agreement evidence/); // one reconciled column, no alpha evidence: precision rules are not decided
+  assert.match(md.stdout, /\*\*KEEP COLLECTING/);
   assert.equal(JSON.parse(run('--json').stdout).prs, 150);
   const imp = spawnSync(process.execPath, [path.join(__dirname, 'label-export.js'), '--fixture', fx, '--import', path.join(dir, 'l.csv')], { encoding: 'utf8' });
   assert.equal(imp.status, 0, imp.stderr);
@@ -426,4 +429,103 @@ test('reply verdicts: per-arm table, noise = (wrong + not important) / verdicts,
   assert.equal(r.verdicts[0].n, 30);
   assert.ok(Math.abs(r.verdicts[0].noise - 20 / 30) < 1e-9 && r.verdicts[0].wilson[0] < 2 / 3 && r.verdicts[0].wilson[1] > 2 / 3);
   assert.match(render(r), /\| 10 \| 20 \| 0 \| 0 \| 30 \| 67% \| \[\d+%, \d+%\] \|/);
+});
+
+test('alpha gate: two-labeller sheet decides at alpha >= 0.8, is tentative from 0.667, refuses below; no gate without sheet rows', () => {
+  const ds = big(), lab = labelsFor(ds, 0.8);
+  const sheet = (flips) => [...lab].map(([id, l], i) => ({ id, label: l, label_a: l, label_b: i < flips ? (l === 'valid' ? 'invalid' : 'valid') : l }));
+  const run = (flips) => { const r = analyze(ds, { labels: lab, rows: sheet(flips) }); return { r, rule: r.decision.rules[1] }; };
+  assert.equal(run(0).rule.status, 'pass');
+  assert.equal(run(0).r.agreement.specguard.alpha, 1);
+  let k = 1; while (run(k).r.agreement.specguard.alpha >= 0.8) k++;
+  assert.equal(run(k).rule.status, 'not evaluated');
+  assert.match(run(k).rule.detail, /tentative/);
+  assert.match(run(50).rule.detail, /below 0.667/);
+  assert.match(run(50).r.decision.verdict, /KEEP COLLECTING/);
+  assert.equal(analyze(ds, { labels: lab }).decision.rules[1].status, 'pass'); // no sheet rows given: no gate
+  assert.match(render(run(k).r), /Labeller agreement/);
+});
+
+test('integrity: same branch opened twice, reopened PRs, and label vs salted assignment are reported', () => {
+  const salt = 's3cret', crypto = require('node:crypto');
+  const arm = (n) => crypto.createHmac('sha256', salt).update(String(n)).digest().readUInt32BE(0) % 3;
+  const ds = { ...small(), heads: { 3: 'feat/a', 6: 'feat/a', 4: 'feat/b' }, reopened: [5] };
+  const r = analyze(ds, { salt });
+  assert.deepEqual(r.integrity.same_branch, [{ branch: 'feat/a', prs: [3, 6] }]);
+  assert.deepEqual(r.integrity.reopened, [5]);
+  assert.ok(r.integrity.salt.checked > 0);
+  const want = ds.prs.filter((p) => !p.user.login.includes('bot') && p.labels.some((l) => /^review-arm:/.test(l.name || l))).map((p) => ({ pr: p.number, label: armOf(p.labels), expected: arm(p.number) })).filter((m) => m.label !== m.expected);
+  assert.ok(want.length > 0 && want.length < r.integrity.salt.checked, 'fixture needs both matching and mismatching labels');
+  assert.deepEqual(r.integrity.salt.mismatches, want); // exact list, computed independently
+  const allMatch = analyze({ ...ds, prs: ds.prs.map((p) => (p.labels.some((l) => /^review-arm:/.test(l.name || l)) ? { ...p, labels: [{ name: `review-arm:${arm(p.number)}` }] } : p)) }, { salt });
+  assert.deepEqual(allMatch.integrity.salt.mismatches, []);
+  const out = render(r);
+  assert.match(out, /feat\/a \(#3, #6\)/);
+  assert.match(out, /Closed and reopened in the window: #5/);
+  assert.doesNotMatch(render(analyze(small(), {})), /Trial integrity/); // nothing loaded, no salt: the section stays out
+  assert.match(render(analyze(ds, {})), /skipped, no salt given/);
+});
+
+test('summary-only findings are not truncated in the totals (the 20-entry cap is the producer, not this report)', () => {
+  const ds = small();
+  const sum = Array.from({ length: 25 }, (_, i) => ({ fp: i.toString(16).padStart(16, '0'), path: 'q.js', line: i, title: 't' + i }));
+  ds.issue_comments = [counts(3, S(1), { sum })];
+  assert.equal(findingsOf(ds).filter((f) => f.delivery === 'summary').length, 25);
+});
+
+test('alpha gate: an alpha that cannot be computed (no variation, or no doubly labelled rows) refuses the precision rules', () => {
+  const ds = big(), lab = labelsFor(ds, 0.8);
+  const none = analyze(ds, { labels: lab, rows: [...lab].map(([id]) => ({ id, label: 'valid', label_a: 'valid', label_b: 'valid' })) }); // both labellers say valid everywhere: no variation
+  assert.equal(none.agreement.specguard.alpha, null);
+  assert.equal(none.decision.rules[1].status, 'not evaluated');
+  assert.match(none.decision.rules[1].detail, /alpha undefined/);
+  const few = analyze(ds, { labels: lab, rows: [...lab].map(([id, l]) => ({ id, label: l, label_a: l, label_b: '' })) }); // second labeller left everything blank
+  assert.equal(few.agreement.specguard.n, 0);
+  assert.equal(few.agreement.specguard.alpha, null);
+  assert.equal(few.decision.rules[1].status, 'not evaluated');
+  assert.match(few.decision.verdict, /KEEP COLLECTING/);
+});
+
+test('excluded by design: unlabelled PRs with no SpecGuard run (fork, bot) are counted and said so; labelled or reviewed ones are not', () => {
+  const ds = small(); // PR 9 has no arm label and no SpecGuard output
+  const r = analyze(ds);
+  assert.equal(r.excluded_by_design, 1);
+  assert.match(render(r), /1 of the unlabelled PRs are excluded by design/);
+  ds.issue_comments = [...ds.issue_comments, counts(9, S(0))];
+  assert.equal(analyze(ds).excluded_by_design, 0);
+});
+
+test('load: closed-and-reopened PRs and PRs sharing a head branch are flagged; a merely closed PR is not', () => {
+  const cpm = require('node:child_process');
+  const pr = (number) => ({ number, created_at: '2026-10-10T00:00:00Z', closed_at: null, pull_request: { merged_at: null }, user: { login: 'dev', type: 'User' }, labels: [] });
+  const gh = (a) => {
+    const s = a.join(' ');
+    if (s.includes('search/issues')) return JSON.stringify([pr(1), pr(2), pr(3), pr(4)]);
+    if (s.includes('issues/comments') || s.includes('pulls/comments')) return '[]';
+    if (s.includes('pulls?state=all')) return JSON.stringify([{ number: 4, head: { ref: 'feat/x' }, created_at: '2026-10-12T00:00:00Z' }, { number: 3, head: { ref: 'feat/x' }, created_at: '2026-10-11T00:00:00Z' }, { number: 2, head: { ref: 'feat/b' }, created_at: '2026-10-10T00:00:00Z' }, { number: 1, head: { ref: 'feat/a' }, created_at: '2026-10-10T00:00:00Z' }, { number: 99, head: { ref: 'feat/x' }, created_at: '2026-10-10T00:00:00Z' }]);
+    if (s.includes('issues/events')) return JSON.stringify([{ event: 'reopened', issue: { number: 1 }, created_at: '2026-10-13T00:00:00Z' }, { event: 'closed', issue: { number: 2 }, created_at: '2026-10-13T00:00:00Z' }, { event: 'reopened', issue: { number: 77 }, created_at: '2026-10-13T00:00:00Z' }]);
+    throw new Error('unexpected gh call: ' + s);
+  };
+  const real = cpm.execFileSync;
+  cpm.execFileSync = (cmd, args, o) => (cmd === 'gh' ? gh(args) : real(cmd, args, o));
+  let ds;
+  try { delete require.cache[require.resolve('./weekly-report')]; ds = require('./weekly-report').load({ repo: 'o/r', since: '2026-10-01', until: '2026-10-16' }); }
+  finally { cpm.execFileSync = real; delete require.cache[require.resolve('./weekly-report')]; }
+  assert.deepEqual(ds.reopened, [1]); // 2 was only closed; 77 is outside the window
+  assert.deepEqual(ds.heads, { 1: 'feat/a', 2: 'feat/b', 3: 'feat/x', 4: 'feat/x' }); // 99 is outside the window
+  const i = analyze(ds, {}).integrity;
+  assert.deepEqual(i.reopened, [1]);
+  assert.deepEqual(i.same_branch, [{ branch: 'feat/x', prs: [3, 4] }]);
+});
+
+test('labelGate: the alpha thresholds are inclusive at exactly 0.800 and 0.667', () => {
+  const at = (alpha) => labelGate({ specguard: { alpha, n: 30 } });
+  assert.equal(at(ALPHA.ok).ok, true);
+  assert.equal(at(ALPHA.ok - 1e-9).ok, false);
+  assert.match(at(ALPHA.ok - 1e-9).note, /tentative/);
+  assert.match(at(ALPHA.tentative).note, /tentative/); // exactly 0.667: tentative, not refused
+  assert.match(at(ALPHA.tentative - 1e-9).note, /unreliable/);
+  assert.match(at(null).note, /alpha undefined/);
+  assert.equal(labelGate(undefined).ok, true);
+  assert.match(labelGate(null).note, /no agreement evidence/);
 });
