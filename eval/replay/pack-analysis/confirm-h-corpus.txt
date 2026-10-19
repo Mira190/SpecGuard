@@ -1,0 +1,241 @@
+# Confirmation corpus for arm H (prereg-pack-fallback.md): step 3, lines 11-40 per repo in file order, from fresh-corpus.txt. Written before any collector run on it.
+gitea	13ddad6e07fb02c0e1f0e4bc46303edb015bcd51	b0df5e4abe432ac56bdb9c4e91d5fe7f8fbe90ee	enhance: allow custom watches to bypass on-mention email restriction (#39652)
+gitea	b0df5e4abe432ac56bdb9c4e91d5fe7f8fbe90ee	7f420f8d82386a701c10b6f1e8bb8c2165d2e8f7	fix(markup): prefer sturdier math fonts over Latin Modern Math (#39811)
+gitea	7f420f8d82386a701c10b6f1e8bb8c2165d2e8f7	b0ae5890cf10fc854125c2c10d58ff7e8568d3c3	fix: avoid index out-of-range panic in webhook assignee formatting (#39827)
+gitea	b0ae5890cf10fc854125c2c10d58ff7e8568d3c3	428d72d26f815ca0a4078f4c2494690434f871e4	chore: remove misspell (#39829)
+gitea	428d72d26f815ca0a4078f4c2494690434f871e4	a4908d4af408598fff968692d14d29e2b7f900de	chore: re-enable and extend unescaped-html-literal eslint rule (#39832)
+gitea	a4908d4af408598fff968692d14d29e2b7f900de	31626de2a6cdd3e1fe93216e4ac80f511297f1e7	enhance(actions): add OIDC workload identity support (#39052)
+gitea	31626de2a6cdd3e1fe93216e4ac80f511297f1e7	0081bd84303c93d727c3f5cb880ebd17fc15488e	enhance(repo): prefill new issue and pull request sidebars from query parameters (#39804)
+gitea	0081bd84303c93d727c3f5cb880ebd17fc15488e	3058f5ddf9bb01fed65210b1778bea29def24fb7	fix(actions): bound request body size in artifacts v4 twirp handlers (#39818)
+gitea	3058f5ddf9bb01fed65210b1778bea29def24fb7	efb0b34395516e8ac6e068d471b8f4d595e0f7d0	perf(actions): batch per-row queries in run, job and cancellation paths (#39723)
+gitea	efb0b34395516e8ac6e068d471b8f4d595e0f7d0	42b1f9526187d3c8c4d28814c1d3d043de12bc65	fix(packages): list highest CRAN version in PACKAGES index (#39793)
+gitea	42b1f9526187d3c8c4d28814c1d3d043de12bc65	c1ae4ec29e3af7869a0bf214a3a6e88deeb8a9b6	fix: optimize packages upload memory (#39366)
+gitea	c1ae4ec29e3af7869a0bf214a3a6e88deeb8a9b6	078198d38dc02a05156b817648817799f11ebea2	fix(actions): keep folded block scalars intact across serialization (#39787)
+gitea	078198d38dc02a05156b817648817799f11ebea2	6b252ca3a9ac5bc7cde049550e6b22e595c98c3b	ci: update giteabot to v1.2.1 (#39815)
+gitea	6b252ca3a9ac5bc7cde049550e6b22e595c98c3b	2fe74d3cdd5184a7e22e32e47772caa78d077489	fix(pull): don't auto-detect empty pull requests as manually merged (#39807)
+gitea	2fe74d3cdd5184a7e22e32e47772caa78d077489	a25d1d77eb1ca24ae1c7b60f6b5c66166664c669	refactor: clean up legacy templates and js (#39808)
+gitea	a25d1d77eb1ca24ae1c7b60f6b5c66166664c669	217300fff76a35f07f95283feb60a50d75e44b7d	fix(webauthn): accept unsolicited client extension outputs from WebKit clients (#39792)
+gitea	217300fff76a35f07f95283feb60a50d75e44b7d	70a5ff725c12374367af52487412be7398c00766	fix(pull): fix code context of review comments on unchanged lines (#39799)
+gitea	70a5ff725c12374367af52487412be7398c00766	a36bb47c84fea32bad4b7a79dc314563ae09bc04	enhance(oauth): pre-register a builtin OAuth2 application for gitea-vscode (#39785)
+gitea	a36bb47c84fea32bad4b7a79dc314563ae09bc04	8d6b3e48d3a4ee6a2b343dbf648cec488b746e3f	enhance(ui): use normal line-height for buttons and selection dropdowns (#39796)
+gitea	8d6b3e48d3a4ee6a2b343dbf648cec488b746e3f	222136ee715e8c124803de6228a4054f57e9afb6	[skip ci] Updated translations via Crowdin
+gitea	222136ee715e8c124803de6228a4054f57e9afb6	1c117a9352e4a64cd301028403c33949ab146424	refactor: clean up pull request comment related code and template dict (#39789)
+gitea	1c117a9352e4a64cd301028403c33949ab146424	919116568fe57da017f907d24770fe1907843b2b	refactor: clean up comment model (#39779)
+gitea	919116568fe57da017f907d24770fe1907843b2b	41ccfce3e9c04f217c29aff7bfd7c3d434eb9149	fix(actions): fix schedule cleanup and default branch switch (#39740)
+gitea	41ccfce3e9c04f217c29aff7bfd7c3d434eb9149	c6069f8d9fcfeb6ff141ed8cb40eff8def8cba1f	fix(markup): parse \(...\) inline math next to letters and digits (#39773)
+gitea	c6069f8d9fcfeb6ff141ed8cb40eff8def8cba1f	76f8dc38e7adbce214e4d27c8f1a0ba746492065	fix(gitdiff): unquote C-quoted paths from `git diff-tree --raw` (#39781)
+gitea	76f8dc38e7adbce214e4d27c8f1a0ba746492065	ccc9b928fe777e8d0bb3fe5f03a6a7aa97e5af2b	fix(user): don't match a commit with an empty author email to a user (#39777)
+gitea	ccc9b928fe777e8d0bb3fe5f03a6a7aa97e5af2b	b015cd67e299e489df294bb5f646628108dc5d37	refactor: issue comment context menu and buttons (#39771)
+gitea	b015cd67e299e489df294bb5f646628108dc5d37	aebdbd85fbf6a4092915f6917993b0af6a4aa446	feat(repo): allow deleting protected branches (#39243)
+gitea	aebdbd85fbf6a4092915f6917993b0af6a4aa446	f0434cd8f29a1e069d82a008947485c7858c4174	enhance(repo): allow custom content in issue and pull request sidebars (#39764)
+gitea	f0434cd8f29a1e069d82a008947485c7858c4174	bac747518a3d3e08468c30811c45f4a646d6a9de	[skip ci] Updated translations via Crowdin
+hono	552ea024250093a48071b3ded9710de4c6e05f14	f78a245abc393368583085e19c7f5b28b460bf51	docs(readme): remove the deepwiki badge (#5548)
+hono	f78a245abc393368583085e19c7f5b28b460bf51	decda78a369f0a2bd6e989b62b61bda978599791	chore: unified oxfmt and oxlint config (#5518)
+hono	decda78a369f0a2bd6e989b62b61bda978599791	d22fd95c18c2711d8aefc0323632b75fa6a695e4	chore(adapters): release @hono/vercel@1.0.1
+hono	d22fd95c18c2711d8aefc0323632b75fa6a695e4	afe57ddeeb617fc6508f7f248f53643e670d3a7d	chore(adapters): release @hono/service-worker@1.0.1
+hono	afe57ddeeb617fc6508f7f248f53643e670d3a7d	0b9134e2b25c5c8fb92996dbd1c95f35693bf31c	chore(adapters): release @hono/netlify@1.0.2
+hono	0b9134e2b25c5c8fb92996dbd1c95f35693bf31c	f0ea83e77d1a4b5223e27bf4f98bac6050284013	chore(adapters): release @hono/lambda-edge@1.0.1
+hono	f0ea83e77d1a4b5223e27bf4f98bac6050284013	c9bfef0a136d741961025cc7a2c363bd7a64ae32	chore(adapters): release @hono/deno@1.0.3
+hono	c9bfef0a136d741961025cc7a2c363bd7a64ae32	8d0f24be497dbe43cdae3319080a38054b936360	chore(adapters): release @hono/cloudflare-workers@1.0.1
+hono	8d0f24be497dbe43cdae3319080a38054b936360	3c42c647bccff260e33ea78285c52d4455e1e76c	chore(adapters): release @hono/bun@1.0.1
+hono	3c42c647bccff260e33ea78285c52d4455e1e76c	da54a6bd7e5fca3aa3371b6d6c02aad0c02c70c7	chore(adapters): release @hono/aws-lambda@1.0.1
+hono	da54a6bd7e5fca3aa3371b6d6c02aad0c02c70c7	5f36607f67aa9357887337328ac84a1c1d48dc04	fix(adapters): accept Hono v5 prereleases in the `hono` peer range (#5537)
+hono	5f36607f67aa9357887337328ac84a1c1d48dc04	d4542eeb11efb9f1d1450bfb4ba54eb8b0e8e19f	docs(readme): sync the contributing list with CONTRIBUTING.md (#5527)
+hono	d4542eeb11efb9f1d1450bfb4ba54eb8b0e8e19f	08a023cbfde55b434fb0fb30fae35d42e4bf20aa	docs(contributing): ask for issues instead of RPs (#5526)
+hono	08a023cbfde55b434fb0fb30fae35d42e4bf20aa	ae595de8ae05ea548560da93140ee1d53e5a8202	4.13.13
+hono	ae595de8ae05ea548560da93140ee1d53e5a8202	f23b146afcec63606144cde50b5fbd360dd60238	feat(mount): introduce Mount Middleware and deprecate `app.mount` (#5221)
+hono	f23b146afcec63606144cde50b5fbd360dd60238	6d73a74f9757ed65d6103c0e8375097fa20873c4	fix(jsx): allow JSXNode function component results (#5476)
+hono	6d73a74f9757ed65d6103c0e8375097fa20873c4	deff529656cff775b35956f7f9071388d4eb55ae	docs(request): fix jsdoc comments for some getters (#5445)
+hono	deff529656cff775b35956f7f9071388d4eb55ae	6abd35b0a5f35f67b6417627d5b0a6c2d266ac04	test(client): simulate network error for undefined route in parseResponse test (#5439)
+hono	6abd35b0a5f35f67b6417627d5b0a6c2d266ac04	95eb860473d26bd303a2a29716e61a77c8c5e5f5	4.13.12
+hono	95eb860473d26bd303a2a29716e61a77c8c5e5f5	afb2068c1c53a530528ac5f237e245793dd03c07	chore(deps): upgrade vite-plus to 1.0.0 (#5464)
+hono	afb2068c1c53a530528ac5f237e245793dd03c07	e5bb2062a3ddd645e3a16d1300bd76d6c9af33a5	fix(combine): return a Response from a short-circuiting middleware in some() (#5391)
+hono	e5bb2062a3ddd645e3a16d1300bd76d6c9af33a5	c3053ccf14f1c4c70a0c2888eed6121b9f6c8f95	fix(jsx): add px to numeric gridGap, gridRowGap and gridColumnGap (#5487)
+hono	c3053ccf14f1c4c70a0c2888eed6121b9f6c8f95	c437d7569219a21e45fa81797749e8f34fe19dcc	fix(etag): correctly match mixed-case header name in retainedHeader option (#5475)
+hono	c437d7569219a21e45fa81797749e8f34fe19dcc	be1f7498fed269544a3c544db0a5a727048462a8	test(build): type-check the bundled declarations from a consumer project (#5486)
+hono	be1f7498fed269544a3c544db0a5a727048462a8	37ce06904e732d4bc11c9075adf362c76049a594	fix(build): keep internal types private in bundled d.ts and avoid a self-referencing JSX.IntrinsicElements (#5485)
+hono	37ce06904e732d4bc11c9075adf362c76049a594	1e1207cabfcd154146bf6ac9fd6a0b646f7fc484	4.13.11
+hono	1e1207cabfcd154146bf6ac9fd6a0b646f7fc484	8b05c774ef1555c70f5ba5e2991b7e77cc3635cc	test(serve-static): fix the test (#5479)
+hono	8b05c774ef1555c70f5ba5e2991b7e77cc3635cc	18331a905e2415f7f73038357f2eec354123f7a6	Merge commit from fork
+hono	18331a905e2415f7f73038357f2eec354123f7a6	6cd583bd481a86aecb34a7e3164cee16f2ce7f07	chore(adapters): release @hono/netlify@1.0.1
+hono	6cd583bd481a86aecb34a7e3164cee16f2ce7f07	271dd0b1e83d04763fbec7b9de9c8ffb870e6c6d	chore(adapters): release @hono/deno@1.0.2
+langchain	84ba23c414eca6bf6f6ebd1394a3006378113540	ac2f5e355e74aa3da53fcd0e7c5aec9d3ba00ccd	release(langchain): 1.4.6 (#41247)
+langchain	ac2f5e355e74aa3da53fcd0e7c5aec9d3ba00ccd	f295bfef22e9aeb02ad0f79b49883f4b446e4641	feat(langchain): add opt-in per-call interrupts to HITL middleware (#41062)
+langchain	f295bfef22e9aeb02ad0f79b49883f4b446e4641	170060e8387e06cd67b2458db0f232b2fa53fefd	chore(model-profiles): refresh model profile data (#41242)
+langchain	170060e8387e06cd67b2458db0f232b2fa53fefd	4bbbc5a3b0ad47ff2d73bfdce4d4ab86ca5724f9	release(openai): 1.7.2 (#41245)
+langchain	4bbbc5a3b0ad47ff2d73bfdce4d4ab86ca5724f9	8ace87e7a6493d41d4c61bb41a637052367b27f3	fix(openai): keep Responses stream items on one block when output_index drifts (#41121)
+langchain	8ace87e7a6493d41d4c61bb41a637052367b27f3	f2bf626ccee0a0e88d560706d4fdad35e43116e5	chore(model-profiles): refresh model profile data (#41229)
+langchain	f2bf626ccee0a0e88d560706d4fdad35e43116e5	a0074fb7e5f3fe7c192fcec442582bf5babbf642	release(langchain): 1.4.5 (#41226)
+langchain	a0074fb7e5f3fe7c192fcec442582bf5babbf642	36fb6aa0a445e770521b63ff5aa97f8fd6aeb1be	feat(langchain): accept `summarizer` in `SummarizationMiddleware` (#41225)
+langchain	36fb6aa0a445e770521b63ff5aa97f8fd6aeb1be	ba2baca02ea4b3add7ba08aeabf3673dc18199c6	release(anthropic): 1.7.6 (#41221)
+langchain	ba2baca02ea4b3add7ba08aeabf3673dc18199c6	85e0b7da58c32922d8f991962739e9789eb1f649	chore(model-profiles): refresh model profile data (#41215)
+langchain	85e0b7da58c32922d8f991962739e9789eb1f649	fddca066031a2122b3562485bd9c961a46978a1e	release(openai): 1.7.1 (#41222)
+langchain	fddca066031a2122b3562485bd9c961a46978a1e	e4b143729ffb3c6307376909d3aa9921b360c1f5	release(core): 1.6.10 (#41220)
+langchain	e4b143729ffb3c6307376909d3aa9921b360c1f5	b060a7466482ed5dac5fa1ef12e3ad21cccce385	chore(model-profiles): refresh model profile data (#41145)
+langchain	b060a7466482ed5dac5fa1ef12e3ad21cccce385	34489d61433cbf5044a630de2e7797e361672900	feat(core,anthropic,openai): declare mid-conversation support in model profiles (#41180)
+langchain	34489d61433cbf5044a630de2e7797e361672900	e7ca68b92062312221d7768a9d731a2d4942416b	release(langchain): 1.4.4 (#41163)
+langchain	e7ca68b92062312221d7768a9d731a2d4942416b	fc7dc7757a46ebb444be1ead0efdeab5ca7ad8ce	fix(langchain): (SummarizationMiddleware) retry summary step on context overflow (#41159)
+langchain	fc7dc7757a46ebb444be1ead0efdeab5ca7ad8ce	a055e836fd4ff75bfc2fe4adda33d06f0d625a63	release(core): 1.6.9 (#41160)
+langchain	a055e836fd4ff75bfc2fe4adda33d06f0d625a63	2baf2f33c72cf027383a0b123e9be5077eb483d5	feat(core): accept a callable in with_retry (#41158)
+langchain	2baf2f33c72cf027383a0b123e9be5077eb483d5	4acca6482ca3fefca9cfa2f961bbd8819eaa23ae	release(openai): 1.7.0 (#41154)
+langchain	4acca6482ca3fefca9cfa2f961bbd8819eaa23ae	b53209be4c01f17217ac0a00ef679f493dde23b3	release(core): 1.6.8 (#41153)
+langchain	b53209be4c01f17217ac0a00ef679f493dde23b3	2813f7a2fd3a52a64491acd7195b141e409d4709	feat(openai): support decisions api (#41125)
+langchain	2813f7a2fd3a52a64491acd7195b141e409d4709	1f587e3f4e0b34d67ea83896f74f855ee6ec103f	fix(core): harden scoped and compatible IPv6 SSRF checks (#41151)
+langchain	1f587e3f4e0b34d67ea83896f74f855ee6ec103f	38682b8f96300e68064ab30b3812db574ccc6cc8	test(fireworks): stabilize forced tool-call extraction (#41139)
+langchain	38682b8f96300e68064ab30b3812db574ccc6cc8	e986d201b8235a09d74dc7eb02588488f4e23c27	release(fireworks): 1.7.1 (#41137)
+langchain	e986d201b8235a09d74dc7eb02588488f4e23c27	4db8c0e8359dc9789669af140e9c2728718566f8	fix(fireworks): preserve reasoning in streaming and tool loops (#41093)
+langchain	4db8c0e8359dc9789669af140e9c2728718566f8	f5a80b1b04cd4602573f3b35b99d457ba28b8dc9	chore(model-profiles): refresh model profile data (#41117)
+langchain	f5a80b1b04cd4602573f3b35b99d457ba28b8dc9	cb4fec2a9234e66c625f7f59ce4328bd7a251935	chore(deps): bump fsspec from 2026.6.0 to 2026.9.0 in /libs/langchain_v1 (#41097)
+langchain	cb4fec2a9234e66c625f7f59ce4328bd7a251935	315ace880ca1dd5007a4f8cfe4615110b3a6f800	fix(huggingface): use a supported Scaleway model in streaming test (#41095)
+langchain	315ace880ca1dd5007a4f8cfe4615110b3a6f800	f9abeb3e158747880ce5dea80dffb56c9c95867a	chore(deps): bump langgraph-sdk from 0.4.2 to 0.4.4 in /libs/langchain (#41083)
+langchain	f9abeb3e158747880ce5dea80dffb56c9c95867a	adba95c2de751b419e0f1b61109006e28c88767b	chore(deps): bump langgraph-sdk from 0.4.4 to 0.4.6 in /libs/partners/anthropic (#41101)
+pydantic	22c4317a5d51d71344275259b4e536c4a90fe53b	3eca5695dabc5a451ccfc0f4afa802166e61e27a	Revise Pydantic Logfire description in README (#13990)
+pydantic	3eca5695dabc5a451ccfc0f4afa802166e61e27a	141c1e3df86e1b3f4bfe908fb89ac860e8ba7c0c	Improve release script (#13982)
+pydantic	141c1e3df86e1b3f4bfe908fb89ac860e8ba7c0c	d0d67ea05a9c0af3db47b112a0a24eceeccb77da	Fix JSON Schema cache key mismatch with nested `json_schema_mode_override` (#13980)
+pydantic	d0d67ea05a9c0af3db47b112a0a24eceeccb77da	3454d6c9442b91b3325c60f10efb3d79b9467487	Fix docs conversion table (#13979)
+pydantic	3454d6c9442b91b3325c60f10efb3d79b9467487	0edb9347fad19f29452037d8fc47331cd2c0a096	Support named tuples in `Sequence` validation (#13978)
+pydantic	0edb9347fad19f29452037d8fc47331cd2c0a096	0b1dcd0efefbbf4a472779f5d6e0e2006e64a3fe	Reject out-of-range int inputs for `timedelta` (#13973)
+pydantic	0b1dcd0efefbbf4a472779f5d6e0e2006e64a3fe	68a839f0712c367f17be497b6850ebcb6825d76c	Enforce the `max_digits` whole-digits limit in the Python `Decimal` validator (#13972)
+pydantic	68a839f0712c367f17be497b6850ebcb6825d76c	eb810eccc508b9fb06c167e9a2027b00ab71dd9c	Support `closed` and `extra_items` via inheritance in `TypedDict` (#13967)
+pydantic	eb810eccc508b9fb06c167e9a2027b00ab71dd9c	7cb6ee4c0550ab0380259e10cfaeef4659767de4	Harden CI security (#13966)
+pydantic	7cb6ee4c0550ab0380259e10cfaeef4659767de4	ca359e009fcfaff2a80df33cb99ee6ab21aaf033	Fix `TypeError` on `ForwardRef` on Python 3.10.0 (#13964)
+pydantic	ca359e009fcfaff2a80df33cb99ee6ab21aaf033	9541387a9537e8ad3ef2694fe36ad450a7793078	Bump `samuelcolvin/check-python-version` action to v5.1 (#13960)
+pydantic	9541387a9537e8ad3ef2694fe36ad450a7793078	e40a1762024e3ac6ec036a890ce955062f475c80	Fix `arguments-v3` schema with variadic keywords (#13954)
+pydantic	e40a1762024e3ac6ec036a890ce955062f475c80	0f10d3f2d8903fa0e6e7504f19b1d290c4fefd47	Avoid unnecessary extra dict allocation in model validation (#13956)
+pydantic	0f10d3f2d8903fa0e6e7504f19b1d290c4fefd47	359598f48a183e5cab2cd9348acf3f38521a00a2	Set version post v2.14 release (#13958)
+pydantic	359598f48a183e5cab2cd9348acf3f38521a00a2	fcdefa7198c4fc94a22eecf1a5b7926e20b9fc8a	Avoid Python tuple allocation during model fields validation (#13955)
+pydantic	fcdefa7198c4fc94a22eecf1a5b7926e20b9fc8a	c821eaccf9873357477a1e7d2d4d12dd4e161c8a	Correct v2.14.0 release date (#13952)
+pydantic	b4028f9d87e34750e53be0ba011d70f3c0fcc94e	69ed168e9ad465eef4c8d81efb152a93b604daf5	Avoid validating URL prefix multiple times in multi host URLs (#13945)
+pydantic	69ed168e9ad465eef4c8d81efb152a93b604daf5	895c0c285c5cb4c0c7c7a4619a80941c12f2c75f	Reject large exponents in `Fraction` validation (#13944)
+pydantic	895c0c285c5cb4c0c7c7a4619a80941c12f2c75f	d2cbaaab74ba4a26bb66f604199ec9793aab6177	Fix datetime parsing in custom validator examples (#13931)
+pydantic	d2cbaaab74ba4a26bb66f604199ec9793aab6177	3fbc25ab2bd4f370f478102652f20aea1f5de0b0	Bump virtualenv from 20.36.1 to 21.7.13 (#13943)
+pydantic	3fbc25ab2bd4f370f478102652f20aea1f5de0b0	027b5c714791d5f6e86faea4110ef26f4776648c	Bump `pydantic-core` dependencies (#13942)
+pydantic	027b5c714791d5f6e86faea4110ef26f4776648c	2706d1f6cdd0ca5b941fd5170ecf0254f933e1f6	Rebuild incomplete types during serialization inference (#13922)
+pydantic	2706d1f6cdd0ca5b941fd5170ecf0254f933e1f6	98e9ecec0a5e56cfc92a8882eca19d525340ba98	Handle exceptions during `Decimal` validation (#13940)
+pydantic	98e9ecec0a5e56cfc92a8882eca19d525340ba98	8cbc8965b55aea1a69e748e38fd154a5caf6419e	Fix Clippy lints (#13941)
+pydantic	8cbc8965b55aea1a69e748e38fd154a5caf6419e	23f16f212b782195f51a2dc7f9a60c564b455337	Fix stale file path in algolia plugin comment (#13936)
+pydantic	23f16f212b782195f51a2dc7f9a60c564b455337	1e6cc758a04b3b1b50d12907b6c463a9ea575b4a	Fix pipeline example annotation (#13935)
+pydantic	1e6cc758a04b3b1b50d12907b6c463a9ea575b4a	7a03ceab85630553156dafd8bded382cf4fba709	Activate uncollected smart union serialization test (#13926)
+pydantic	7a03ceab85630553156dafd8bded382cf4fba709	0b2205799fb3735ed0639dd560d088d7858ebfe5	Skip the generic pickle test when cloudpickle is absent (#13929)
+pydantic	0b2205799fb3735ed0639dd560d088d7858ebfe5	10ae33b48978c5d0a75add0d02319880bd334320	Remove xfail on lazy imports tests (#13930)
+pydantic	10ae33b48978c5d0a75add0d02319880bd334320	e87e11b7a74068c2d8107e48ffed6102744abef8	Explicitly enable frame pointers (#13896)
+query	86c01185a0420eb2b965aadc474ac195f2ba90c9	69457a9e57096c7d104695e170be62617deec119	refactor(examples/svelte/auto-refetching): move the fetchers into 'src/lib/api.ts' and share the todos query with 'queryOptions' (#12111)
+query	69457a9e57096c7d104695e170be62617deec119	d8ab863425bc2d22166d76a6689e9d2b6b38adc8	fix(examples/svelte/optimistic-updates): render 'Background Updating...' instead of a leftover JSX ternary (#12107)
+query	d8ab863425bc2d22166d76a6689e9d2b6b38adc8	306fcda84dc5cae8ea6f7cebc870ca3a1c573966	refactor(examples/svelte/basic): share the post queries with 'queryOptions' in 'src/lib/queries.ts' (#12110)
+query	306fcda84dc5cae8ea6f7cebc870ca3a1c573966	d0a1dff1ba6ca0898c120c5989968d81cdaeaa83	fix(examples/svelte/optimistic-updates): throw on non-ok responses so a failed create rolls back the optimistic update (#12106)
+query	d0a1dff1ba6ca0898c120c5989968d81cdaeaa83	7592b2f18a789723912af0e53fceccadf7139365	fix(examples/svelte): throw on non-ok 'fetch' responses in the query and mutation functions (#12109)
+query	7592b2f18a789723912af0e53fceccadf7139365	2e86afff57c708a343ce3a2f6a778d70cbc56ea7	fix(examples/solid/offline): throw the response text on non-ok 'fetch' responses and show query errors in 'List' and 'Detail' (#12099)
+query	2e86afff57c708a343ce3a2f6a778d70cbc56ea7	633d8e4bacbf6f6f1d3c06f0f6647c3c0b6536c2	refactor(examples/solid/default-query-function): type the posts with a 'Post' type instead of 'any' (#12105)
+query	633d8e4bacbf6f6f1d3c06f0f6647c3c0b6536c2	aa77cd7f626ed2e26851b92ddb5a3fb737a9025b	docs(solid): replace the deprecated 'route.load' with 'route.preload' in the SSR guide and the solid-start-streaming example (#12104)
+query	aa77cd7f626ed2e26851b92ddb5a3fb737a9025b	f9d7ec0997a4669d739a4d47132c39f88b7bc86e	fix(examples/solid/astro): throw on non-ok 'fetch' responses and show a pokemon load error through an 'ErrorBoundary' (#12103)
+query	f9d7ec0997a4669d739a4d47132c39f88b7bc86e	4ae64479f42df8a981c4eaaa7aabe15608707d32	refactor(examples/solid/basic): remove the always-true 'enabled' and the always-false '!props.postId' check in 'Post' (#12101)
+query	4ae64479f42df8a981c4eaaa7aabe15608707d32	c10c1f770c204d919ce51c336be64f44c2e66629	fix(examples/solid/basic-graphql-request): type post ids as strings and pass the id as a GraphQL variable (#12100)
+query	c10c1f770c204d919ce51c336be64f44c2e66629	c1296c1745b3adc312cd512bce0d300aa20912d6	fix(examples/solid): throw on non-ok 'fetch' responses in the query functions (#12098)
+query	c1296c1745b3adc312cd512bce0d300aa20912d6	de10bb0f9c1f2ec9f1a3db9c7ac3822ffb163c80	fix(examples/preact/simple): throw on non-ok 'fetch' responses in the query function (#12097)
+query	de10bb0f9c1f2ec9f1a3db9c7ac3822ffb163c80	0e7d125f0f393a6d49a4217c9afd0d20733b5ceb	chore(examples/react/react-native): replace the removed 'expo eject' script with 'expo prebuild' and drop the deprecated global 'expo-cli' install step (#12096)
+query	0e7d125f0f393a6d49a4217c9afd0d20733b5ceb	ddff3a70be3255d6154cbb828fb9b00a209ba382	refactor(examples/solid/astro): type the pokemon responses and move the queries into 'src/lib/api.ts' with 'queryOptions' (#12102)
+query	ddff3a70be3255d6154cbb828fb9b00a209ba382	85feb0941982ddbe063f00824fb2aaa2eb7e061d	fix(examples/react/react-native): register 'NetInfo' through 'onlineManager.setEventListener' so connected devices are not treated as offline while reachability is unknown (#12091)
+query	85feb0941982ddbe063f00824fb2aaa2eb7e061d	3c648e4dd8c5b958ecce4560f7ec5324443ba9b8	refactor(examples/react/react-native): refetch only active stale queries in 'useRefreshOnFocus' as in the React Native guide (#12092)
+query	3c648e4dd8c5b958ecce4560f7ec5324443ba9b8	a8eeff39fe983db4223a0f95a4bd4874bf5ee017	feat(examples/react/react-native): render 'ReactQueryDevtools' on web through a platform-specific 'Devtools' component (#12093)
+query	a8eeff39fe983db4223a0f95a4bd4874bf5ee017	af1e58044aab17f483f01bfce5daa213bcb36dd7	refactor(examples/react/react-native): replace the deprecated 'Paragraph' and 'Title' with 'Text' variants from 'react-native-paper' (#12094)
+query	af1e58044aab17f483f01bfce5daa213bcb36dd7	c57cf557c1ff245c87c520529ff1fca6132a89ea	refactor(examples/react/eslint-plugin-demo): rename the 'useApiClient' stub to 'getApiClient' since it is called outside of hooks (#12089)
+query	c57cf557c1ff245c87c520529ff1fca6132a89ea	e39f330fa326be034d7521252cb4d7debcc5f5df	refactor(examples/react/basic): remove the always-true 'enabled' and the always-false '!postId' check in 'Post' (#12088)
+query	e39f330fa326be034d7521252cb4d7debcc5f5df	988e69ebfd6393fd71f170fe727fb545f4c0e372	fix(examples/react/basic-graphql-request): type post ids as strings and pass the id as a GraphQL variable (#12087)
+query	988e69ebfd6393fd71f170fe727fb545f4c0e372	0fba30fbea2d91fdf6b468e671f875ff94b25332	fix(examples/react/algolia): show the search error and use a 'button' that is disabled while fetching for loading more (#12086)
+query	0fba30fbea2d91fdf6b468e671f875ff94b25332	7328d02a360614ac4594c3e1edf1d9d67463b7ab	fix(examples/react/load-more-infinite-scroll): move the projects query into 'infiniteQueryOptions' in 'src/lib' and type 'nextId' and 'previousId' as nullable (#12085)
+query	7328d02a360614ac4594c3e1edf1d9d67463b7ab	d338489e0a9f168f9432b5e60ebb16505a7f15ec	fix(examples/react/pagination): share the projects query with 'queryOptions' in 'src/lib' so the next page prefetch respects 'staleTime' (#12084)
+query	d338489e0a9f168f9432b5e60ebb16505a7f15ec	f0dcdca510ae0c1ab753801b1aaa8b127de8d82d	fix(examples/react/playground): show 'Saved!' only after a successful mutation instead of while idle (#12083)
+query	f0dcdca510ae0c1ab753801b1aaa8b127de8d82d	3ff2ec16783e722564f43f7bb8f8942ec4a211b7	fix(examples/react/offline): show query errors in 'List' and 'Detail' and remove the 'MovieError' element that 'react-location' never renders (#12082)
+query	3ff2ec16783e722564f43f7bb8f8942ec4a211b7	68b655af869190a4e6730e7cd378a327cec93b4e	fix(examples/react/nextjs-app-optimistic-updates): stream the prefetched todos with 'useSuspenseQuery' and a 'React.Suspense' boundary (#12081)
+query	68b655af869190a4e6730e7cd378a327cec93b4e	116687942bf86b37bc6ebc0a579852b0b2d6ee84	docs({react,preact}/quick-start): use 'createRoot' in the React example and keep 'render' from 'preact' in the Preact example (#12080)
+query	116687942bf86b37bc6ebc0a579852b0b2d6ee84	ccbd48336341d9e791f24697288e182b743086cb	docs(react/guides/ssr): add the default 'staleTime' to the 'Remove boilerplate' '_app' example (#12079)
+rqlite	a0445852ef21992867465f28745d8daef80df3d6	001bf3a64a62b88f6798ae18b13ddf4abfc8b940	Update CHANGELOG.md
+rqlite	001bf3a64a62b88f6798ae18b13ddf4abfc8b940	ee7a45b11a5df23ed5c8b21d98476a68512e5b71	Rewrite TIMESTAMP tokens where possible
+rqlite	ee7a45b11a5df23ed5c8b21d98476a68512e5b71	c54b58548245412a4dff0139805a43455d68405e	Update CHANGELOG.md
+rqlite	c54b58548245412a4dff0139805a43455d68405e	594c5cf1f8ac76d3a7937b088ad09173fbf0c624	CDC HTTP Sink will follow redirects correctly
+rqlite	594c5cf1f8ac76d3a7937b088ad09173fbf0c624	8d5113f3f2eda46c04d6876dcec8d21d14e64eb0	Update stats after error checking
+rqlite	8d5113f3f2eda46c04d6876dcec8d21d14e64eb0	43ec6fed0147bf69c32f729defab3b8e1f340b14	Restore missing line
+rqlite	43ec6fed0147bf69c32f729defab3b8e1f340b14	3b676c65eb4c9ad91872ef05feef73e27738cb59	Increment stat after commit
+rqlite	3b676c65eb4c9ad91872ef05feef73e27738cb59	b346b01d1bbb6f7235018e9daaa7d66ba11659a4	Merge pull request #2963 from rqlite/cdc-nonfinite-floats
+rqlite	b346b01d1bbb6f7235018e9daaa7d66ba11659a4	9f4ad40d772746e3162453b4da8c0d31261dfaed	Correct file name
+rqlite	9f4ad40d772746e3162453b4da8c0d31261dfaed	86c03bd4fd0ead7c252ec3475b80ab38dc04aa57	Update CHANGELOG.md
+rqlite	86c03bd4fd0ead7c252ec3475b80ab38dc04aa57	bbf35b4cbb40954ae65e413db8e601e382634ab7	Use constant time when comparing passwords
+rqlite	bbf35b4cbb40954ae65e413db8e601e382634ab7	e82266019babadbf443da428614b5d544fca23a8	Update CHANGELOG.md
+rqlite	e82266019babadbf443da428614b5d544fca23a8	bda22a7a75d0fc6f18abc818797d5fa1121b074a	Update CHANGELOG.md
+rqlite	bda22a7a75d0fc6f18abc818797d5fa1121b074a	fffe080e28073d2235b069737ec49a3223c64bb7	Fix typos in comments
+rqlite	fffe080e28073d2235b069737ec49a3223c64bb7	c567d99697846c1fd04e34da9da4b54cdd8432e5	More robust node ID detection for Leader stepdown
+rqlite	c567d99697846c1fd04e34da9da4b54cdd8432e5	ab2b0e3e69a857ea350181e4399084f8bc3394eb	Update CHANGELOG.md
+rqlite	ab2b0e3e69a857ea350181e4399084f8bc3394eb	b8762fd864db8127bf2fe4649535bb0ce27ef903	Record SQL analyze start at right point
+rqlite	b8762fd864db8127bf2fe4649535bb0ce27ef903	d68bc8782886fb10a6b9f12e7ae7db069e538b42	Conditionally rewrite SQL during queued writes
+rqlite	d68bc8782886fb10a6b9f12e7ae7db069e538b42	58eeeaa8e8a0a8aaff37ab3f656d1bb03812ab56	Update CHANGELOG.md
+rqlite	58eeeaa8e8a0a8aaff37ab3f656d1bb03812ab56	ca04695d653f930b17c3398ab7afe937db1f69fc	Draw the batcher and FIFO with their internal channels so the package doc shows each channel that CDC events pass through.
+rqlite	ca04695d653f930b17c3398ab7afe937db1f69fc	75a94395ab00cfbf4f8266e41230168210ad0e8a	Update credential_store.go
+rqlite	75a94395ab00cfbf4f8266e41230168210ad0e8a	3229c57910b9e444a92786da536b3551c4092e9e	Update CHANGELOG.md
+rqlite	3229c57910b9e444a92786da536b3551c4092e9e	edb41e7926921f422f30733c15c0dff5e14ccce3	Update CHANGELOG.md
+rqlite	edb41e7926921f422f30733c15c0dff5e14ccce3	580f2f13b3f1cd78a249208828fec4b18ba68ad6	Merge pull request #2897 from rqlite/claude-store-observe-break-on-nodes-err
+rqlite	580f2f13b3f1cd78a249208828fec4b18ba68ad6	93e4737ef693230329abb08ebbad28ffbf0426b4	Update CHANGELOG.md
+rqlite	93e4737ef693230329abb08ebbad28ffbf0426b4	32ff692fd25675674cc5978e95e9e6fade3093cb	Update CHANGELOG.md
+rqlite	32ff692fd25675674cc5978e95e9e6fade3093cb	7e626b951e77f4c71113eebf2e773ecf8ae06ae1	Update CHANGELOG.md
+rqlite	7e626b951e77f4c71113eebf2e773ecf8ae06ae1	9e433c5f8868c7dcb96a3cc357ef5fbeda7643ff	Update CHANGELOG.md
+rqlite	9e433c5f8868c7dcb96a3cc357ef5fbeda7643ff	80c40c146eee86e5e0dd2efda696743ab87421ee	Merge pull request #2956 from rqlite/auth-store-field-fixes
+rqlite	80c40c146eee86e5e0dd2efda696743ab87421ee	1e886e042f3ba9140703916a68c79e493b19e149	Update CHANGELOG.md
+sqlglot	c388227a73fe4e6652e311db0a04b8d838c7c821	360b315cc5fde521495aaa35f048dafd3abdc548	fix: remove obsolete sqlglotc extensions during builds (#8653)
+sqlglot	360b315cc5fde521495aaa35f048dafd3abdc548	7f415fbc833b329052d8a0a63c1d411c5bddf363	Sync w/ integration tests
+sqlglot	7f415fbc833b329052d8a0a63c1d411c5bddf363	5f12cae562cd1196b81bd4dbafe35def5e3b109b	Sync w/ integration tests
+sqlglot	5f12cae562cd1196b81bd4dbafe35def5e3b109b	caa920da583f57913311798aff2561821ea8ca01	Sync w/ integration tests
+sqlglot	caa920da583f57913311798aff2561821ea8ca01	ce7f6e39dbbbaa61ff01a307226ff867a3a9efb6	starrocks # followup fix
+sqlglot	ce7f6e39dbbbaa61ff01a307226ff867a3a9efb6	df5b53f92e31247e82bc37a512fab0abd4b54031	fix(starrocks): don't treat # as a comment [CLAUDE] (#8644)
+sqlglot	df5b53f92e31247e82bc37a512fab0abd4b54031	954cca1268ae38ae0384d5197e54fe50322ee9e3	chore: refactor starrocks TO_DAYS test
+sqlglot	954cca1268ae38ae0384d5197e54fe50322ee9e3	06aa274a7f18be246492c1423703ce3cf3d48c60	fix(starrocks): preserve native TO_DAYS [CODEX] (#8648)
+sqlglot	06aa274a7f18be246492c1423703ce3cf3d48c60	af2b57734d67082ecc4db97cb5da1e8743918af0	suppress command warning in tests (#8647)
+sqlglot	af2b57734d67082ecc4db97cb5da1e8743918af0	cd41eeef32e13db1a2517d0a0dc5432ec2b89eb5	chore: simplify starrocks tests
+sqlglot	cd41eeef32e13db1a2517d0a0dc5432ec2b89eb5	f321207c8dcc2973d149744fcaa4d1a13edb0026	chore: refactor starrocks tests for LIKE
+sqlglot	f321207c8dcc2973d149744fcaa4d1a13edb0026	d747f5b20dd71a379437dd3cf251ec130edd94b3	fix(starrocks): preserve LIKE argument order [CODEX] (#8645)
+sqlglot	d747f5b20dd71a379437dd3cf251ec130edd94b3	094509aad83fff575f1b4d198e4d03c21c432e58	fix: don't materialize huge interval literals in simplify and the Postgres generator (#8641)
+sqlglot	094509aad83fff575f1b4d198e4d03c21c432e58	97134ffd3cd161222a42405b001a8a30a0a2c6f5	refactor!: merge SortArray into ArraySort with explicit NULL ordering (#8643)
+sqlglot	97134ffd3cd161222a42405b001a8a30a0a2c6f5	00fce66dffd3dba4f90cda5534ec8df595bb1865	fix(optimizer): preserve precedence when unwrapping parens inside Mul (#8620)
+sqlglot	00fce66dffd3dba4f90cda5534ec8df595bb1865	021991fb9a63060e2f71aeac48e134f67c77227f	fix(optimizer): ensure generated decorrelation JOIN comes before reference in ON clause (#8638)
+sqlglot	021991fb9a63060e2f71aeac48e134f67c77227f	03744a2a8376af5f5f70230b04d1c5fbfb71dc61	fix(optimizer): evict dead refs from the type annotator cache (#8642)
+sqlglot	03744a2a8376af5f5f70230b04d1c5fbfb71dc61	f8287a0918808a8a74e618b556c630eb1504f971	fix(hive,spark): parse ALTER TABLE REPLACE COLUMNS [CLAUDE] (#8633)
+sqlglot	f8287a0918808a8a74e618b556c630eb1504f971	552774469174ee686def95e6bcb2da46f61e047b	Update CHANGELOG.md for v30.23.0 [skip ci]
+sqlglot	552774469174ee686def95e6bcb2da46f61e047b	f814e4cb2a8743bba63e8818bae25207bbd3966f	fix(starrocks): keep DATEDIFF's date-part semantics [CLAUDE] (#8636)
+sqlglot	f814e4cb2a8743bba63e8818bae25207bbd3966f	ad8764a0436a7b5c500b783ebe50dbf20c1e477c	fix(mysql): preserve population and sample aggregate semantics [CODEX] (#8632)
+sqlglot	ad8764a0436a7b5c500b783ebe50dbf20c1e477c	e71e4ee1da5c3c6a7d3616d4cd4160a681202f0d	fix: keep a replacement's grouping in replace_placeholders (#8624)
+sqlglot	e71e4ee1da5c3c6a7d3616d4cd4160a681202f0d	2c7b928071ed32e72b218011a1a3c011dba26b24	simplify athena tokenizing
+sqlglot	2c7b928071ed32e72b218011a1a3c011dba26b24	fdba492cec5a1fbe012add7f1aed18f46739c2a3	fix(athena): route by each engine's rules when the combined tokenizer fails [CLAUDE] (#8629)
+sqlglot	fdba492cec5a1fbe012add7f1aed18f46739c2a3	fbda0b91481d679f17844af15fb998cc559533be	fix(optimizer): include semi/anti join refs when identifying alias collisions (#8623)
+sqlglot	fbda0b91481d679f17844af15fb998cc559533be	e92c22287ff73a66e9dece115acedb81133f0dbf	fix(parser): keep the whole statement when REFRESH falls back to a cmd (#8621)
+sqlglot	e92c22287ff73a66e9dece115acedb81133f0dbf	b1b244b1f38a3000c94a7b21ee6dfae1959dd4b2	fix(duckdb): cast array elements to text before applying the ARRAY_TO_STRING null replacement [CLAUDE] (#8627)
+sqlglot	b1b244b1f38a3000c94a7b21ee6dfae1959dd4b2	b9c5f8d4a5857952e6921e45a7bd3b255d48ab1b	fix(optimizer): qualify columns for SPLIT_TO_TABLE (#8625)
+sqlglot	b9c5f8d4a5857952e6921e45a7bd3b255d48ab1b	623dc8889ba7bffa9b006fd1d1641715b73d5ce4	Sync w/ integration tests
+sqlglot	623dc8889ba7bffa9b006fd1d1641715b73d5ce4	ba643d33285475774c3253551e1ed18ac89e6c22	fix(duckdb)!: infer correct types for temporal interval arithmetic (#8622)
+trpc	4625c84ab3e9c708f2bebf2ce60e005c3023469a	fb22a91de23d4d035e7241af4e235978965f005b	chore(deps): update denoland/setup-deno action to v2 (#7647)
+trpc	fb22a91de23d4d035e7241af4e235978965f005b	a442dbda6196c23925421c53529ca33a45b2d290	chore(deps): update actions/checkout action to v7 (#7642)
+trpc	a442dbda6196c23925421c53529ca33a45b2d290	043e96c43bc00c491ffe6c6d53954103ce878477	chore(deps): update codecov/codecov-action action to v7 (#7646)
+trpc	043e96c43bc00c491ffe6c6d53954103ce878477	fbf34a50695b348b2d46b53e0c6ee8ac90670360	chore(deps): update actions/setup-node action to v7 (#7644)
+trpc	fbf34a50695b348b2d46b53e0c6ee8ac90670360	e5d8436356fe304976d44a64eeb87435bbbb052b	chore(deps): update babel monorepo to v8 (#7645)
+trpc	e5d8436356fe304976d44a64eeb87435bbbb052b	bce0d02f18d55fd71ce58da9416bd8ea4bc7184f	chore(deps): update actions/labeler action to v7 (#7643)
+trpc	bce0d02f18d55fd71ce58da9416bd8ea4bc7184f	7095886df89c749e0faec9844692bf0a848e48f0	chore(deps): update actions/cache action to v6 (#7641)
+trpc	7095886df89c749e0faec9844692bf0a848e48f0	dce10f33777d75d5bc3589be803cd89b033b2b3e	fix(deps): update dependency jscodeshift to v17.4.0 (#7640)
+trpc	dce10f33777d75d5bc3589be803cd89b033b2b3e	50543c8d417a8b6a9dcdef6d15e4e6e1063cfabe	fix(deps): update dependency effect to v3.22.2 (#7638)
+trpc	50543c8d417a8b6a9dcdef6d15e4e6e1063cfabe	8c852297bacfa8377b3aba5c524036e67dcebf10	fix(deps): update dependency @clack/prompts to v1.8.1 (#7636)
+trpc	8c852297bacfa8377b3aba5c524036e67dcebf10	69840b5fd52e272a5c276e0e71e5ad6bc675fb91	chore(deps): update dependency @oxc-project/runtime to v0.152.0 (#7632)
+trpc	69840b5fd52e272a5c276e0e71e5ad6bc675fb91	cd1f4d217c3b763fcbff0be2f7dfd6441d879d45	chore(deps): update dependency bun to v1.4.2 (#7633)
+trpc	cd1f4d217c3b763fcbff0be2f7dfd6441d879d45	c27d885a9631b87f9d5d77737ee99da07cd3fff5	chore(deps): update dependency docusaurus-plugin-typedoc to v1.4.3 (#7631)
+trpc	c27d885a9631b87f9d5d77737ee99da07cd3fff5	985b76975416fa6b9fdf1e643fdefe6f80b153fc	fix(deps): update dependency srvx to v0.12.8 (#7630)
+trpc	985b76975416fa6b9fdf1e643fdefe6f80b153fc	fa78a1be7c276e48d806f33ad8352b007fe5cc1e	fix(publishing) pass explicit provenance settings to lerna (#7624)
+trpc	fa78a1be7c276e48d806f33ad8352b007fe5cc1e	ad8e9a0423b97979c54567fa3edecf6a2bb6bd61	chore(ci): run lerna publish at verbose loglevel (#7618)
+trpc	ad8e9a0423b97979c54567fa3edecf6a2bb6bd61	f55eeb408e824a0443a78904644b7a5981644779	Rename workflow for trusted publishing (#7617)
+trpc	f55eeb408e824a0443a78904644b7a5981644779	ec0b0a47ab6c6ffabcb2ba6b80fa08c1410145a9	v11.21.0
+trpc	ec0b0a47ab6c6ffabcb2ba6b80fa08c1410145a9	45e0dd3e886f96cc5eab0ed81847fb9782bc9311	v11.20.0
+trpc	45e0dd3e886f96cc5eab0ed81847fb9782bc9311	9109554a4f24d4a65aea79aae5fe35c835822ad5	feat(openapi): emit per-procedure error shapes (#7600)
+trpc	9109554a4f24d4a65aea79aae5fe35c835822ad5	8b649ad874a8fe97c73962d4617912231b975736	feat(server): add per-procedure error formatters with .errors() (#7591)
+trpc	8b649ad874a8fe97c73962d4617912231b975736	fcc6bca0ece2762e393e6d8c8527bbaa17a878d2	fix(server): Handle premature stream ending (#7604)
+trpc	fcc6bca0ece2762e393e6d8c8527bbaa17a878d2	573d4f33ee2896c2bb7106203a936ae892d1ef1c	v11.19.0
+trpc	573d4f33ee2896c2bb7106203a936ae892d1ef1c	3a77dc4d67f4ad044f03cfa68a9934af93fdea6d	fix(openapi): drop function-valued properties from generated schemas (#7588)
+trpc	3a77dc4d67f4ad044f03cfa68a9934af93fdea6d	4359916f41b58e650e063b192beea91b4f6b3aac	build(deps): upgrade docusaurus to 3.10.2 (#7583)
+trpc	4359916f41b58e650e063b192beea91b4f6b3aac	55e26d34a5bb713792210719b40789bbd056bb49	build(deps): upgrade lerna to v10 (#7582)
+trpc	55e26d34a5bb713792210719b40789bbd056bb49	45b3f4d9bc92cfc2d1d551a7654ac13ca92a0a86	build(deps): patch security advisories in www and examples (#7581)
+trpc	45b3f4d9bc92cfc2d1d551a7654ac13ca92a0a86	fd2d0852b5f63dc42cba02ce412e6e499d8c2fb4	build(deps): upgrade @hey-api/openapi-ts to 0.99.0 (#7586)
+trpc	fd2d0852b5f63dc42cba02ce412e6e499d8c2fb4	5f54e5bedb32383ac6976631ec6ce66e5f29f0a8	build(deps): patch security advisories in packages/* (#7580)
+trpc	c2609f9d7ead1775b1a73f79b9fe8b9a7e6647b3	65bbb0bf1aa5fedbc64c8de64623cde87485ae53	build(deps): upgrade vitest to v5 (#7578)
