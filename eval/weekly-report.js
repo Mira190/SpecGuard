@@ -2,7 +2,7 @@
 // Weekly validation report for the three-arm trial (docs/validation-plan.md): arm 0 SpecGuard only, 1 native Copilot review only, 2 both
 // (label review-arm:N, see eval/assign.js). Prints a markdown report, or JSON with --json.
 //   node eval/weekly-report.js --repo OWNER/REPO --since YYYY-MM-DD [--until D] [--baseline-since D --baseline-until D] [--labels labels.csv] [--json]
-//   add --fixes szz-mine.json [--shadow-cache shadow.jsonl] for the escaped-defect section (docs/validation-plan.md step 7)
+//   add --fixes szz-mine.json [--shadow-cache shadow.jsonl] [--clone REPO_DIR] for the escaped-defect section (docs/validation-plan.md step 7)
 //   node eval/weekly-report.js --fixture dataset.json [...]     (offline; the dataset is what load() builds from gh)
 // Needs an authenticated `gh`. The pull request page is the unit: findings in one PR are not independent, so intervals resample PRs.
 const fs = require('node:fs');
@@ -343,13 +343,13 @@ function analyze(ds, { labels, rows, salt } = {}) {
 }
 
 // Escaped defects: szz mine output + this window's PRs. Sticky status and findings come from the same comments the rest of the report reads.
-function escapesOf(ds, fixes, shadow) {
+function escapesOf(ds, fixes, shadow, opts = {}) {
   const prs = ds.prs.filter((p) => !isBot(p.user) && !(p.labels || []).some((l) => (l.name || l) === INVALID_LABEL)).map((p) => ({ number: p.number, arm: armOf(p.labels) })), status = new Map();
   for (const c of ds.issue_comments || []) {
     const b = String(c.body || '');
     if (b.includes('<!-- specguard:summary -->')) status.set(+/\/issues\/(\d+)$/.exec(c.issue_url || '')?.[1], /<!-- specguard:status=(\w+) -->/.exec(b)?.[1] || (SG_COUNTS.test(b) ? 'complete' : 'failed'));
   }
-  return esc.escapes({ prs, fixes, status, shadow, findings: findingsOf(ds).filter((f) => f.tool === 'specguard') });
+  return esc.escapes({ ...opts, prs, fixes, status, shadow, findings: findingsOf(ds).filter((f) => f.tool === 'specguard') });
 }
 
 // ---- decision rule ------------------------------------------------------------------------------------------
@@ -450,14 +450,14 @@ function render(r) {
 
 function main() {
   const { values: o } = require('node:util').parseArgs({ options: { repo: { type: 'string' }, since: { type: 'string' }, until: { type: 'string' }, fixture: { type: 'string' }, labels: { type: 'string' },
-    'baseline-since': { type: 'string' }, fixes: { type: 'string' }, 'shadow-cache': { type: 'string' }, 'arm-salt': { type: 'string' }, 'baseline-until': { type: 'string' }, json: { type: 'boolean' } } });
+    'baseline-since': { type: 'string' }, fixes: { type: 'string' }, 'shadow-cache': { type: 'string' }, 'arm-salt': { type: 'string' }, clone: { type: 'string' }, 'baseline-until': { type: 'string' }, json: { type: 'boolean' } } });
   if (!o.fixture && !(o.repo && o.since)) { console.error('Usage: node eval/weekly-report.js (--repo OWNER/REPO --since YYYY-MM-DD [--until D] [--baseline-since D --baseline-until D] | --fixture FILE) [--labels labels.csv] [--json]'); process.exit(2); }
   const rows = o.labels ? parseCsv(fs.readFileSync(o.labels, 'utf8')) : null;
   const ds = load(o), r = analyze(ds, { labels: rows ? readLabels(rows) : null, rows, salt: o['arm-salt'] || process.env.SPECGUARD_ARM_SALT });
   if (o.fixes) {
     const cache = o['shadow-cache'];
     if (cache && !o.fixture) { const s = esc.syncShadow({ repo: ds.repo, since: ds.since, prs: ds.prs.filter((p) => armOf(p.labels) === 1).map((p) => p.number), file: cache }); console.error(`shadow cache: ${s.added} added, ${s.missing} arm-1 runs without a live artifact`); }
-    r.escapes = escapesOf(ds, JSON.parse(fs.readFileSync(o.fixes, 'utf8')), cache ? esc.readCache(cache) : new Map());
+    r.escapes = escapesOf(ds, JSON.parse(fs.readFileSync(o.fixes, 'utf8')), cache ? esc.readCache(cache) : new Map(), o.clone ? esc.gitSeams(o.clone) : {}); // --clone: the repo, for the chance baseline's diff and file lengths
   }
   console.log(o.json ? JSON.stringify(r, null, 2) : render(r));
 }
