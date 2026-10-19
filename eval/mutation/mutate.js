@@ -86,12 +86,19 @@ function testOf(repo, file) {
 }
 
 const ENV_KEEP = ['PATH', 'Path', 'SYSTEMROOT', 'SystemRoot', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'COMSPEC', 'PATHEXT', 'NODE_OPTIONS'];
-// vitest json reporter: killed = some test failed; survived = tests ran, none failed; else invalid.
+// vitest json reporter -> { status, reason }. killed only when a test ASSERTION failed in the target test file (reason 'assertion').
+// A failed test that threw some other error (TypeError, test-level timeout), a failed suite (import/compile/setup) or no report is invalid: the mutant was not caught by an assertion.
+const isAssertion = (msg) => /AssertionError|^Error: expect\(|expected .* to |toMatchSnapshot|Snapshot .* mismatched/m.test(String(msg));
 function verdict(res, jsonFile) {
-  if (res.error && res.error.code === 'ETIMEDOUT') return 'timeout';
-  let j; try { j = JSON.parse(fs.readFileSync(jsonFile, 'utf8')); } catch { return 'invalid'; }
-  if (j.numFailedTests > 0) return 'killed';
-  return j.numTotalTests > 0 && j.numFailedTestSuites === 0 && res.status === 0 ? 'survived' : 'invalid';
+  if (res.error && res.error.code === 'ETIMEDOUT') return { status: 'timeout', reason: 'process timeout' };
+  let j; try { j = JSON.parse(fs.readFileSync(jsonFile, 'utf8')); } catch { return { status: 'invalid', reason: 'no report' }; }
+  if (j.numFailedTests > 0) {
+    const failed = (j.testResults || []).flatMap((s) => s.assertionResults || []).filter((a) => a.status === 'failed');
+    if (failed.some((a) => (a.failureMessages || []).some(isAssertion))) return { status: 'killed', reason: 'assertion' };
+    return { status: 'invalid', reason: failed.length ? 'non-assertion test failure (thrown error or test timeout)' : 'failed tests without detail' };
+  }
+  if (j.numFailedTestSuites > 0) return { status: 'invalid', reason: 'suite error (import, compile or setup)' };
+  return j.numTotalTests > 0 && res.status === 0 ? { status: 'survived', reason: 'all tests passed' } : { status: 'invalid', reason: 'no tests ran or non-zero exit' };
 }
 
 function runOne(repo, cmd, test, timeout) {
@@ -111,13 +118,13 @@ function runAll(repo, manifest, { timeout = 120, log = console.error } = {}) {
     for (const m of manifest.mutants) {
       const abs = path.join(repo, m.file), test = testOf(repo, m.file);
       if (!(m.file in orig)) orig[m.file] = fs.readFileSync(abs, 'utf8');
-      if (!(test in base)) { base[test] = runOne(repo, cmd, test, timeout); log(`baseline ${test}: ${base[test]}`); }
-      if (base[test] !== 'survived') { m.status = 'invalid'; m.note = 'baseline does not pass'; continue; }
+      if (!(test in base)) { base[test] = runOne(repo, cmd, test, timeout); log(`baseline ${test}: ${base[test].status}`); }
+      if (base[test].status !== 'survived') { m.status = 'invalid'; m.kill_reason = 'baseline does not pass'; continue; }
       const t = apply(orig[m.file], m);
-      if (t === null) { m.status = 'invalid'; m.note = 'site gone'; continue; }
+      if (t === null) { m.status = 'invalid'; m.kill_reason = 'site gone'; continue; }
       fs.writeFileSync(abs, t);
-      try { m.status = runOne(repo, cmd, test, timeout); } finally { fs.writeFileSync(abs, orig[m.file]); }
-      log(`${m.id} ${m.file}:${m.line} ${m.op} -> ${m.status}`);
+      try { const v = runOne(repo, cmd, test, timeout); m.status = v.status; m.kill_reason = v.reason; } finally { fs.writeFileSync(abs, orig[m.file]); }
+      log(`${m.id} ${m.file}:${m.line} ${m.op} -> ${m.status} (${m.kill_reason})`);
     }
   } finally { restore(); }
   return manifest;

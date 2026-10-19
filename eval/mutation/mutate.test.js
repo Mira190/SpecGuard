@@ -32,25 +32,38 @@ test('testOf finds the test beside the source; verdict reads the vitest json', (
   assert.strictEqual(testOf(d, 'x.ts'), 'x.test.ts');
   assert.strictEqual(testOf(d, 'y.ts'), null);
   const j = path.join(d, 'r.json'), w = (o) => fs.writeFileSync(j, JSON.stringify(o));
-  w({ numFailedTests: 1, numTotalTests: 3 }); assert.strictEqual(verdict({ status: 1 }, j), 'killed');
-  w({ numFailedTests: 0, numTotalTests: 3, numFailedTestSuites: 0 }); assert.strictEqual(verdict({ status: 0 }, j), 'survived');
-  w({ numFailedTests: 0, numTotalTests: 0, numFailedTestSuites: 1 }); assert.strictEqual(verdict({ status: 1 }, j), 'invalid');
-  assert.strictEqual(verdict({ error: { code: 'ETIMEDOUT' } }, j), 'timeout');
+  const st = (res) => verdict(res, j).status, tr = (msgs) => ({ numFailedTests: 1, numTotalTests: 3, testResults: [{ assertionResults: [{ status: 'failed', failureMessages: msgs }] }] });
+  w(tr(['AssertionError: expected 1 to be 2 at x'])); assert.deepStrictEqual(verdict({ status: 1 }, j), { status: 'killed', reason: 'assertion' });
+  w(tr(["TypeError: Cannot read properties of undefined (reading 'x')"])); assert.strictEqual(st({ status: 1 }), 'invalid'); // thrown error, not an assertion
+  w(tr(['Error: Test timed out in 5000ms.'])); assert.strictEqual(st({ status: 1 }), 'invalid');
+  w({ numFailedTests: 0, numTotalTests: 3, numFailedTestSuites: 0 }); assert.strictEqual(st({ status: 0 }), 'survived');
+  w({ numFailedTests: 0, numTotalTests: 0, numFailedTestSuites: 1 }); assert.strictEqual(st({ status: 1 }), 'invalid'); // import/compile error
+  assert.strictEqual(st({ error: { code: 'ETIMEDOUT' } }), 'timeout');
 });
 
-test('score: recall, line hit, false alarm, unreviewed units are misses', () => {
-  const mutants = [['a.ts', 10, 'survived'], ['b.ts', 5, 'survived'], ['c.ts', 5, 'killed'], ['d.ts', 5, 'killed'], ['e.ts', 5, 'survived'], ['b.ts', 9, 'invalid']].map(([file, line, status]) => ({ file, line, status }));
-  const units = ['11111111\ta.ts', '22222222\tb.ts', '33333333\tc.ts', '44444444\td.ts'].join('\n');
-  const findings = { not_reviewed: ['44444444 did not fit'], unit_findings: [
-    { unit: '11111111', kind: 'missing_test', path: 'a.ts', line: 13 },
-    { unit: '22222222', kind: 'weak_test', path: 'b.test.ts', line: 40 },
-    { unit: '33333333', kind: 'weak_test', path: 'c.test.ts', line: 2 },
-    { unit: '44444444', kind: 'missing_test', path: 'd.ts', line: 5 }] };
-  const s = score({ mutants }, findings, units, 'x\nLow-confidence unit findings\nb.test.ts:40', 5);
-  assert.strictEqual(s.units.survivor, 3);
-  assert.deepStrictEqual(s.units.not_reviewed, ['d.ts', 'e.ts']);
-  assert.deepStrictEqual([s.survivor_unit_recall_any.hit, s.survivor_unit_recall_any.of, s.survivor_unit_recall_any.of_reviewed], [2, 3, 2]);
-  assert.strictEqual(s.survivor_unit_recall_visible.hit, 1); // b.ts is Details-only
-  assert.deepStrictEqual([s.line_hit.hit, s.line_hit.of_reviewed_survivors], [1, 2]);
-  assert.deepStrictEqual([s.false_alarm_visible.hit, s.false_alarm_visible.of, s.false_alarm_visible.of_reviewed], [1, 2, 1]); // c.ts flagged, d.ts unreviewed
+test('score on a real-shaped result artifact (fixtures/real-shape): units file absent, free-text not_reviewed, low-confidence section, usage', () => {
+  const dir = path.join(__dirname, 'fixtures', 'real-shape'), rd = (f) => fs.readFileSync(path.join(dir, f), 'utf8');
+  const mutants = [['src/a.ts', 134, 'survived'], ['src/a.ts', 20, 'survived', 'defensive'], ['src/b.ts', 5, 'survived'], ['src/c.ts', 55, 'survived'], ['src/d.ts', 5, 'killed'], ['src/e.ts', 5, 'survived'], ['src/f.ts', 5, 'survived', 'equivalent'], ['src/g.ts', 3, 'killed'], ['src/b.ts', 9, 'invalid']]
+    .map(([file, line, status, uncertain]) => ({ file, line, status, ...(uncertain ? { uncertain } : {}) }));
+  const s = score({ repo: 'x', sha: 'y', mutants }, JSON.parse(rd('findings.json')), null, rd('summary.md'), 5, JSON.parse(rd('usage.json')));
+  assert.deepStrictEqual([s.units.survivor, s.units.killed_only, s.units.uncertain_only], [4, 2, 1]);
+  assert.strictEqual(s.units.summary_units_reviewed, '4 of 5');
+  assert.deepStrictEqual(s.units.not_reviewed, ['src/e.ts']); // named in the free-text not_reviewed, and the summary says 4 of 5
+  // a.ts flagged (visible), b.ts weak_test mapped to b.ts through its test path (visible), c.ts only low-confidence, e.ts not reviewed
+  assert.deepStrictEqual([s.survivor_unit_recall_any.hit, s.survivor_unit_recall_any.of, s.survivor_unit_recall_any.of_reviewed], [3, 4, 3]);
+  assert.strictEqual(s.survivor_unit_recall_visible.hit, 2);
+  assert.deepStrictEqual([s.line_hit.hit, s.line_hit.of_reviewed_survivors], [2, 3]); // a.ts:134 and c.ts:55 (within 5 of the low-confidence c.ts:57); the uncertain a.ts:20 is excluded
+  assert.deepStrictEqual([s.false_alarm_any.hit, s.false_alarm_any.of], [0, 2]);
+  assert.strictEqual(s.mutants.survived_uncertain, 2);
+  assert.strictEqual(s.findings.details_only, 1);
+  assert.strictEqual(s.cost_usd, 0.42);
+  const all = score({ mutants }, JSON.parse(rd('findings.json')), null, rd('summary.md').replace('4 of 5', '5 of 5'));
+  assert.deepStrictEqual(all.units.not_reviewed, []); // every unit reviewed: the named file is a caveat
+});
+
+test('score: an audit-units.txt maps unit ids when it is present', () => {
+  const mutants = [{ file: 'a.ts', line: 10, status: 'survived' }, { file: 'c.ts', line: 5, status: 'killed' }];
+  const findings = { unit_findings: [{ unit: '11111111', kind: 'weak_test', path: 'tests/whatever.js', line: 2 }, { unit: '33333333', kind: 'weak_test', path: 'tests/c.js', line: 2 }] };
+  const s = score({ mutants }, findings, '11111111\ta.ts\n33333333\tc.ts', null);
+  assert.deepStrictEqual([s.survivor_unit_recall_any.hit, s.false_alarm_any.hit], [1, 1]);
 });

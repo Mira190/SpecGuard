@@ -1,380 +1,810 @@
-﻿{
-    "repo":  "honojs/hono",
-    "sha":  "5ca49b0720755c585c9a9835f0a479ceea36fb52",
-    "cmd":  "npx vitest@3.2.4 run --config \u003c{test:{globals:true}}\u003e --root . --reporter=json --outputFile={out} {test}  (vitest installed outside the clone with --ignore-scripts; hono own vp config bypassed; src/utils/color.test.ts fails at baseline, not mutated)",
-    "seed":  1,
-    "mutants":  [
-                    {
-                        "id":  "m01",
-                        "file":  "src/utils/accept.ts",
-                        "line":  57,
-                        "op":  "logic",
-                        "col":  24,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m02",
-                        "file":  "src/utils/accept.ts",
-                        "line":  75,
-                        "op":  "bound",
-                        "col":  10,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m03",
-                        "file":  "src/utils/accept.ts",
-                        "line":  77,
-                        "op":  "eq",
-                        "col":  12,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m04",
-                        "file":  "src/utils/accept.ts",
-                        "line":  130,
-                        "op":  "lit",
-                        "col":  25,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m05",
-                        "file":  "src/utils/basic-auth.ts",
-                        "line":  10,
-                        "op":  "logic",
-                        "col":  72,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m06",
-                        "file":  "src/utils/basic-auth.ts",
-                        "line":  18,
-                        "op":  "lit",
-                        "col":  75,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m07",
-                        "file":  "src/utils/basic-auth.ts",
-                        "line":  22,
-                        "op":  "ret",
-                        "col":  11,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m08",
-                        "file":  "src/utils/basic-auth.ts",
-                        "line":  25,
-                        "op":  "lit",
-                        "col":  53,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m09",
-                        "file":  "src/utils/buffer.ts",
-                        "line":  36,
-                        "op":  "bound",
-                        "col":  19,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m10",
-                        "file":  "src/utils/buffer.ts",
-                        "line":  39,
-                        "op":  "eq",
-                        "col":  12,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m11",
-                        "file":  "src/utils/buffer.ts",
-                        "line":  55,
-                        "op":  "logic",
-                        "col":  16,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m12",
-                        "file":  "src/utils/buffer.ts",
-                        "line":  95,
-                        "op":  "ret",
-                        "col":  9,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m13",
-                        "file":  "src/utils/cookie.ts",
-                        "line":  62,
-                        "op":  "ret",
-                        "col":  11,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m14",
-                        "file":  "src/utils/cookie.ts",
-                        "line":  100,
-                        "op":  "eq",
-                        "col":  37,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m15",
-                        "file":  "src/utils/cookie.ts",
-                        "line":  124,
-                        "op":  "logic",
-                        "col":  11,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m16",
-                        "file":  "src/utils/cookie.ts",
-                        "line":  207,
-                        "op":  "lit",
-                        "col":  21,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m17",
-                        "file":  "src/utils/encode.ts",
-                        "line":  21,
-                        "op":  "ret",
-                        "col":  9,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m18",
-                        "file":  "src/utils/encode.ts",
-                        "line":  28,
-                        "op":  "lit",
-                        "col":  31,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m19",
-                        "file":  "src/utils/encode.ts",
-                        "line":  29,
-                        "op":  "bound",
-                        "col":  42,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m20",
-                        "file":  "src/utils/encode.ts",
-                        "line":  33,
-                        "op":  "ret",
-                        "col":  9,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m21",
-                        "file":  "src/utils/filepath.ts",
-                        "line":  35,
-                        "op":  "logic",
-                        "col":  25,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m22",
-                        "file":  "src/utils/filepath.ts",
-                        "line":  52,
-                        "op":  "arith",
-                        "col":  24,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m23",
-                        "file":  "src/utils/filepath.ts",
-                        "line":  55,
-                        "op":  "lit",
-                        "col":  30,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m24",
-                        "file":  "src/utils/filepath.ts",
-                        "line":  59,
-                        "op":  "ret",
-                        "col":  9,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m25",
-                        "file":  "src/utils/html.ts",
-                        "line":  92,
-                        "op":  "eq",
-                        "col":  11,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m26",
-                        "file":  "src/utils/html.ts",
-                        "line":  101,
-                        "op":  "bound",
-                        "col":  27,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m27",
-                        "file":  "src/utils/html.ts",
-                        "line":  163,
-                        "op":  "lit",
-                        "col":  11,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m28",
-                        "file":  "src/utils/html.ts",
-                        "line":  180,
-                        "op":  "ret",
-                        "col":  11,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m29",
-                        "file":  "src/utils/ipaddr.ts",
-                        "line":  22,
-                        "op":  "lit",
-                        "col":  46,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m30",
-                        "file":  "src/utils/ipaddr.ts",
-                        "line":  98,
-                        "op":  "logic",
-                        "col":  27,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m31",
-                        "file":  "src/utils/ipaddr.ts",
-                        "line":  104,
-                        "op":  "arith",
-                        "col":  24,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m32",
-                        "file":  "src/utils/ipaddr.ts",
-                        "line":  240,
-                        "op":  "eq",
-                        "col":  13,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m33",
-                        "file":  "src/utils/mime.ts",
-                        "line":  15,
-                        "op":  "ret",
-                        "col":  9,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m34",
-                        "file":  "src/utils/mime.ts",
-                        "line":  19,
-                        "op":  "lit",
-                        "col":  39,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m35",
-                        "file":  "src/utils/mime.ts",
-                        "line":  22,
-                        "op":  "lit",
-                        "col":  52,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m36",
-                        "file":  "src/utils/mime.ts",
-                        "line":  23,
-                        "op":  "ret",
-                        "col":  13,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m37",
-                        "file":  "src/utils/url.ts",
-                        "line":  56,
-                        "op":  "eq",
-                        "col":  11,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m38",
-                        "file":  "src/utils/url.ts",
-                        "line":  89,
-                        "op":  "ret",
-                        "col":  15,
-                        "status":  "killed"
-                    },
-                    {
-                        "id":  "m39",
-                        "file":  "src/utils/url.ts",
-                        "line":  110,
-                        "op":  "bound",
-                        "col":  10,
-                        "status":  "survived"
-                    },
-                    {
-                        "id":  "m40",
-                        "file":  "src/utils/url.ts",
-                        "line":  251,
-                        "op":  "arith",
-                        "col":  37,
-                        "status":  "killed"
-                    }
-                ],
-    "units":  {
-                  "src/utils/accept.ts":  {
-                                              "survived":  1,
-                                              "killed":  3,
-                                              "other":  0
-                                          },
-                  "src/utils/basic-auth.ts":  {
-                                                  "survived":  0,
-                                                  "killed":  4,
-                                                  "other":  0
-                                              },
-                  "src/utils/buffer.ts":  {
-                                              "survived":  2,
-                                              "killed":  2,
-                                              "other":  0
-                                          },
-                  "src/utils/cookie.ts":  {
-                                              "survived":  1,
-                                              "killed":  3,
-                                              "other":  0
-                                          },
-                  "src/utils/encode.ts":  {
-                                              "survived":  1,
-                                              "killed":  3,
-                                              "other":  0
-                                          },
-                  "src/utils/filepath.ts":  {
-                                                "survived":  1,
-                                                "killed":  3,
-                                                "other":  0
-                                            },
-                  "src/utils/html.ts":  {
-                                            "survived":  3,
-                                            "killed":  1,
-                                            "other":  0
-                                        },
-                  "src/utils/ipaddr.ts":  {
-                                              "survived":  1,
-                                              "killed":  3,
-                                              "other":  0
-                                          },
-                  "src/utils/mime.ts":  {
-                                            "survived":  1,
-                                            "killed":  3,
-                                            "other":  0
-                                        },
-                  "src/utils/url.ts":  {
-                                           "survived":  1,
-                                           "killed":  3,
-                                           "other":  0
-                                       }
-              }
+{
+ "repo": "honojs/hono",
+ "sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+ "cmd": "node <vitest-install>/node_modules/vitest/vitest.mjs run --config <vc.mjs> --root . --reporter=json --outputFile={out} {test}   (vitest 3.2.4 installed outside the clone with --ignore-scripts; vc.mjs = export default { test: { globals: true } }; hono own vp config bypassed)",
+ "seed": 1,
+ "mutants": [
+  {
+   "id": "m01",
+   "file": "src/utils/accept.ts",
+   "line": 8,
+   "op": "logic",
+   "col": 27,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m02",
+   "file": "src/utils/accept.ts",
+   "line": 57,
+   "op": "logic",
+   "col": 24,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m03",
+   "file": "src/utils/accept.ts",
+   "line": 59,
+   "op": "ret",
+   "col": 13,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m04",
+   "file": "src/utils/accept.ts",
+   "line": 75,
+   "op": "bound",
+   "col": 10,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "loop index <= length: the extra iteration reads charCodeAt(length)=NaN, which matches no branch (unverified)"
+  },
+  {
+   "id": "m05",
+   "file": "src/utils/accept.ts",
+   "line": 77,
+   "op": "eq",
+   "col": 12,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m06",
+   "file": "src/utils/accept.ts",
+   "line": 89,
+   "op": "arith",
+   "col": 15,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m07",
+   "file": "src/utils/accept.ts",
+   "line": 130,
+   "op": "lit",
+   "col": 25,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m08",
+   "file": "src/utils/basic-auth.ts",
+   "line": 10,
+   "op": "logic",
+   "col": 72,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m09",
+   "file": "src/utils/basic-auth.ts",
+   "line": 12,
+   "op": "ret",
+   "col": 11,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m10",
+   "file": "src/utils/basic-auth.ts",
+   "line": 18,
+   "op": "lit",
+   "col": 75,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m11",
+   "file": "src/utils/basic-auth.ts",
+   "line": 22,
+   "op": "ret",
+   "col": 11,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m12",
+   "file": "src/utils/basic-auth.ts",
+   "line": 25,
+   "op": "lit",
+   "col": 53,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m13",
+   "file": "src/utils/body.ts",
+   "line": 111,
+   "op": "logic",
+   "col": 41,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m14",
+   "file": "src/utils/body.ts",
+   "line": 112,
+   "op": "ret",
+   "col": 11,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m15",
+   "file": "src/utils/body.ts",
+   "line": 146,
+   "op": "ret",
+   "col": 11,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m16",
+   "file": "src/utils/body.ts",
+   "line": 165,
+   "op": "lit",
+   "col": 32,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m17",
+   "file": "src/utils/body.ts",
+   "line": 236,
+   "op": "arith",
+   "col": 47,
+   "status": "invalid",
+   "kill_reason": "non-assertion test failure (thrown error or test timeout)"
+  },
+  {
+   "id": "m18",
+   "file": "src/utils/body.ts",
+   "line": 237,
+   "op": "bound",
+   "col": 17,
+   "status": "invalid",
+   "kill_reason": "non-assertion test failure (thrown error or test timeout)"
+  },
+  {
+   "id": "m19",
+   "file": "src/utils/body.ts",
+   "line": 242,
+   "op": "eq",
+   "col": 13,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m20",
+   "file": "src/utils/buffer.ts",
+   "line": 21,
+   "op": "eq",
+   "col": 22,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m21",
+   "file": "src/utils/buffer.ts",
+   "line": 26,
+   "op": "ret",
+   "col": 9,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m22",
+   "file": "src/utils/buffer.ts",
+   "line": 36,
+   "op": "bound",
+   "col": 19,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "i <= bLen reads charCodeAt(bLen)=NaN, and aChar ^ NaN equals aChar ^ 0"
+  },
+  {
+   "id": "m23",
+   "file": "src/utils/buffer.ts",
+   "line": 39,
+   "op": "lit",
+   "col": 17,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m24",
+   "file": "src/utils/buffer.ts",
+   "line": 55,
+   "op": "logic",
+   "col": 30,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "defensive null check on a hash result; the hash functions return a string or null"
+  },
+  {
+   "id": "m25",
+   "file": "src/utils/buffer.ts",
+   "line": 91,
+   "op": "logic",
+   "col": 9,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "defensive falsy check on a hash result; the hash functions return a string or null"
+  },
+  {
+   "id": "m26",
+   "file": "src/utils/concurrent.ts",
+   "line": 21,
+   "op": "eq",
+   "col": 17,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m27",
+   "file": "src/utils/concurrent.ts",
+   "line": 34,
+   "op": "bound",
+   "col": 17,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m28",
+   "file": "src/utils/concurrent.ts",
+   "line": 37,
+   "op": "ret",
+   "col": 13,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m29",
+   "file": "src/utils/concurrent.ts",
+   "line": 51,
+   "op": "ret",
+   "col": 13,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m30",
+   "file": "src/utils/concurrent.ts",
+   "line": 54,
+   "op": "ret",
+   "col": 9,
+   "status": "invalid",
+   "kill_reason": "non-assertion test failure (thrown error or test timeout)"
+  },
+  {
+   "id": "m31",
+   "file": "src/utils/cookie.ts",
+   "line": 87,
+   "op": "lit",
+   "col": 14,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m32",
+   "file": "src/utils/cookie.ts",
+   "line": 90,
+   "op": "bound",
+   "col": 14,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "start <= end reads charCodeAt(end)=NaN, which is not a space, so the trim loop ends the same (unverified)"
+  },
+  {
+   "id": "m33",
+   "file": "src/utils/cookie.ts",
+   "line": 110,
+   "op": "eq",
+   "col": 34,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m34",
+   "file": "src/utils/cookie.ts",
+   "line": 112,
+   "op": "ret",
+   "col": 11,
+   "status": "invalid",
+   "kill_reason": "non-assertion test failure (thrown error or test timeout)"
+  },
+  {
+   "id": "m35",
+   "file": "src/utils/cookie.ts",
+   "line": 161,
+   "op": "arith",
+   "col": 55,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m36",
+   "file": "src/utils/cookie.ts",
+   "line": 206,
+   "op": "logic",
+   "col": 43,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m37",
+   "file": "src/utils/crypto.ts",
+   "line": 24,
+   "op": "ret",
+   "col": 9,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m38",
+   "file": "src/utils/crypto.ts",
+   "line": 30,
+   "op": "ret",
+   "col": 9,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m39",
+   "file": "src/utils/crypto.ts",
+   "line": 36,
+   "op": "logic",
+   "col": 30,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m40",
+   "file": "src/utils/crypto.ts",
+   "line": 39,
+   "op": "eq",
+   "col": 19,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m41",
+   "file": "src/utils/crypto.ts",
+   "line": 45,
+   "op": "logic",
+   "col": 12,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "crypto && crypto.subtle vs ||: both defined in every runtime the test can run in"
+  },
+  {
+   "id": "m42",
+   "file": "src/utils/crypto.ts",
+   "line": 53,
+   "op": "lit",
+   "col": 62,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m43",
+   "file": "src/utils/encode.ts",
+   "line": 18,
+   "op": "lit",
+   "col": 15,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m44",
+   "file": "src/utils/encode.ts",
+   "line": 21,
+   "op": "ret",
+   "col": 9,
+   "status": "invalid",
+   "kill_reason": "non-assertion test failure (thrown error or test timeout)"
+  },
+  {
+   "id": "m45",
+   "file": "src/utils/encode.ts",
+   "line": 28,
+   "op": "lit",
+   "col": 31,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m46",
+   "file": "src/utils/encode.ts",
+   "line": 29,
+   "op": "arith",
+   "col": 35,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m47",
+   "file": "src/utils/encode.ts",
+   "line": 33,
+   "op": "ret",
+   "col": 9,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m48",
+   "file": "src/utils/filepath.ts",
+   "line": 14,
+   "op": "logic",
+   "col": 49,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m49",
+   "file": "src/utils/filepath.ts",
+   "line": 29,
+   "op": "ret",
+   "col": 9,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m50",
+   "file": "src/utils/filepath.ts",
+   "line": 35,
+   "op": "logic",
+   "col": 25,
+   "status": "invalid",
+   "kill_reason": "non-assertion test failure (thrown error or test timeout)"
+  },
+  {
+   "id": "m51",
+   "file": "src/utils/filepath.ts",
+   "line": 52,
+   "op": "arith",
+   "col": 24,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m52",
+   "file": "src/utils/filepath.ts",
+   "line": 55,
+   "op": "eq",
+   "col": 32,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m53",
+   "file": "src/utils/filepath.ts",
+   "line": 59,
+   "op": "ret",
+   "col": 9,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m54",
+   "file": "src/utils/html.ts",
+   "line": 63,
+   "op": "bound",
+   "col": 9,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m55",
+   "file": "src/utils/html.ts",
+   "line": 69,
+   "op": "logic",
+   "col": 59,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m56",
+   "file": "src/utils/html.ts",
+   "line": 73,
+   "op": "eq",
+   "col": 23,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m57",
+   "file": "src/utils/html.ts",
+   "line": 99,
+   "op": "lit",
+   "col": 18,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m58",
+   "file": "src/utils/html.ts",
+   "line": 123,
+   "op": "arith",
+   "col": 21,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m59",
+   "file": "src/utils/html.ts",
+   "line": 180,
+   "op": "ret",
+   "col": 11,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m60",
+   "file": "src/utils/ipaddr.ts",
+   "line": 134,
+   "op": "ret",
+   "col": 11,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m61",
+   "file": "src/utils/ipaddr.ts",
+   "line": 165,
+   "op": "lit",
+   "col": 17,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "empty IPv6 string likely rejected further down anyway (unverified)"
+  },
+  {
+   "id": "m62",
+   "file": "src/utils/ipaddr.ts",
+   "line": 214,
+   "op": "logic",
+   "col": 22,
+   "status": "invalid",
+   "kill_reason": "non-assertion test failure (thrown error or test timeout)"
+  },
+  {
+   "id": "m63",
+   "file": "src/utils/ipaddr.ts",
+   "line": 257,
+   "op": "bound",
+   "col": 17,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "index+1 <= length reads charCodeAt(length)=NaN, which is not a colon"
+  },
+  {
+   "id": "m64",
+   "file": "src/utils/ipaddr.ts",
+   "line": 277,
+   "op": "eq",
+   "col": 26,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m65",
+   "file": "src/utils/ipaddr.ts",
+   "line": 341,
+   "op": "arith",
+   "col": 42,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m66",
+   "file": "src/utils/mime.ts",
+   "line": 15,
+   "op": "ret",
+   "col": 9,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m67",
+   "file": "src/utils/mime.ts",
+   "line": 19,
+   "op": "lit",
+   "col": 42,
+   "status": "invalid",
+   "kill_reason": "non-assertion test failure (thrown error or test timeout)"
+  },
+  {
+   "id": "m68",
+   "file": "src/utils/mime.ts",
+   "line": 22,
+   "op": "logic",
+   "col": 27,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m69",
+   "file": "src/utils/mime.ts",
+   "line": 23,
+   "op": "ret",
+   "col": 13,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m70",
+   "file": "src/utils/stream.ts",
+   "line": 50,
+   "op": "eq",
+   "col": 22,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m71",
+   "file": "src/utils/stream.ts",
+   "line": 57,
+   "op": "ret",
+   "col": 11,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m72",
+   "file": "src/utils/stream.ts",
+   "line": 61,
+   "op": "arith",
+   "col": 26,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m73",
+   "file": "src/utils/stream.ts",
+   "line": 62,
+   "op": "ret",
+   "col": 11,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m74",
+   "file": "src/utils/stream.ts",
+   "line": 66,
+   "op": "ret",
+   "col": 11,
+   "status": "survived",
+   "kill_reason": "all tests passed"
+  },
+  {
+   "id": "m75",
+   "file": "src/utils/url.ts",
+   "line": 64,
+   "op": "lit",
+   "col": 16,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m76",
+   "file": "src/utils/url.ts",
+   "line": 74,
+   "op": "ret",
+   "col": 11,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m77",
+   "file": "src/utils/url.ts",
+   "line": 110,
+   "op": "bound",
+   "col": 10,
+   "status": "survived",
+   "kill_reason": "all tests passed",
+   "uncertain": "i <= url.length reads charCodeAt(length)=NaN, which matches no branch (unverified)"
+  },
+  {
+   "id": "m78",
+   "file": "src/utils/url.ts",
+   "line": 244,
+   "op": "logic",
+   "col": 49,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m79",
+   "file": "src/utils/url.ts",
+   "line": 251,
+   "op": "arith",
+   "col": 37,
+   "status": "killed",
+   "kill_reason": "assertion"
+  },
+  {
+   "id": "m80",
+   "file": "src/utils/url.ts",
+   "line": 301,
+   "op": "eq",
+   "col": 52,
+   "status": "killed",
+   "kill_reason": "assertion"
+  }
+ ],
+ "units": {
+  "src/utils/accept.ts": {
+   "survived": 1,
+   "killed": 6,
+   "other": 0
+  },
+  "src/utils/basic-auth.ts": {
+   "survived": 0,
+   "killed": 5,
+   "other": 0
+  },
+  "src/utils/body.ts": {
+   "survived": 1,
+   "killed": 4,
+   "other": 2
+  },
+  "src/utils/buffer.ts": {
+   "survived": 3,
+   "killed": 3,
+   "other": 0
+  },
+  "src/utils/concurrent.ts": {
+   "survived": 0,
+   "killed": 4,
+   "other": 1
+  },
+  "src/utils/cookie.ts": {
+   "survived": 1,
+   "killed": 4,
+   "other": 1
+  },
+  "src/utils/crypto.ts": {
+   "survived": 2,
+   "killed": 4,
+   "other": 0
+  },
+  "src/utils/encode.ts": {
+   "survived": 0,
+   "killed": 4,
+   "other": 1
+  },
+  "src/utils/filepath.ts": {
+   "survived": 0,
+   "killed": 5,
+   "other": 1
+  },
+  "src/utils/html.ts": {
+   "survived": 4,
+   "killed": 2,
+   "other": 0
+  },
+  "src/utils/ipaddr.ts": {
+   "survived": 3,
+   "killed": 2,
+   "other": 1
+  },
+  "src/utils/mime.ts": {
+   "survived": 0,
+   "killed": 3,
+   "other": 1
+  },
+  "src/utils/stream.ts": {
+   "survived": 3,
+   "killed": 2,
+   "other": 0
+  },
+  "src/utils/url.ts": {
+   "survived": 1,
+   "killed": 5,
+   "other": 0
+  }
+ },
+ "note": "Frozen mutants: file/line/op/col only (no third-party code). status: killed = an assertion failed in the unit test file; survived = all tests passed; invalid = not counted (see kill_reason). uncertain = a survivor judged likely equivalent or defensive-only; reported separately."
 }
