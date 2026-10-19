@@ -50,6 +50,8 @@ function hunks(clone, parent, fix) {
   }
   return res;
 }
+// Dependency manifests: a fix that changes one cannot be run with the installed dependencies (no reinstall is implemented), so its fixed runs are `deps_changed` and excluded.
+const MANIFEST = /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|pyproject\.toml|uv\.lock|requirements[^/]*\.txt|go\.mod|go\.sum)$/;
 const distance = (hs, line) => (hs.length ? Math.min(...hs.map(([s, e]) => Math.max(0, s - line, line - e))) : Infinity);
 
 // Source files a test file may belong to: same directory, same stem without the test marker (x.test.ts, x.spec.ts, x_test.go, test_x.py, x_test.py).
@@ -98,6 +100,7 @@ function replayCandidates({ N = N_DEFAULT } = {}) {
     if (r.error) { row.error = r.error; prs.push(row); continue; }
     Object.assign(row, { buggy_sha: r.parent, fixed_sha: r.fix, sha_method: r.sha_method });
     const touched = hunks(clone, r.parent, r.fix), seen = new Map();
+    row.deps_changed = git(clone, 'diff', '--name-only', '--no-renames', r.parent, r.fix).split('\n').some((p) => MANIFEST.test(p));
     runs.forEach((run, rep) => {
       const dir = path.join(raw, run, 'replay-' + p.replay_id);
       let fj, cj, md = '';
@@ -175,10 +178,11 @@ function cmdPower() {
   console.log(JSON.stringify(powerTable(perPr(cands, 'NEAR'), perPr(cands, 'FAR'), { sims: Number(process.argv[3] || 1000), reps: Number(process.argv[4] || 1000) })));
 }
 
+module.exports = { MANIFEST, resolveFix, hunks, distance, classify, siblings, unitTouched, findingId, summaryBody, ARMS, EV, F2P, ROOT, cloneOf, readJson, sha, powerTable, perPr };
+
 if (require.main === module) {
   const [cmd, ...args] = process.argv.slice(2), H = () => require('./harness');
-  const cmds = { candidates: cmdCandidates, power: cmdPower, export: () => H().cmdExport(), packets: () => H().cmdPackets(), setup: () => H().cmdSetup(args[0], args[1]), baseline: () => H().cmdBaseline(), try: () => H().cmdTry(args[0]),
-    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.slice(1)) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport() };
-  if (!cmds[cmd]) { console.error('usage: f2p.js candidates | power | export | packets | setup <repo> <sha> | baseline | try <id> | run [--mutation] [id|pr...] | report'); process.exitCode = 2; } else cmds[cmd]();
+  const cmds = { candidates: cmdCandidates, power: cmdPower, export: () => H().cmdExport(), packets: () => H().cmdPackets(), setup: () => H().cmdSetup(args[0], args[1]), baseline: () => H().cmdBaseline(args.length ? args : null), try: () => H().cmdTry(args[0]),
+    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.slice(1)) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport(), controls: () => H().cmdControls(args.length ? args : null), 'writers-done': () => H().cmdWritersDone(args[0]), verify: () => H().cmdVerify(args[0]) };
+  if (!cmds[cmd]) { console.error('usage: f2p.js candidates | power | export | packets | setup <repo> <sha> | baseline | try <id> | run [--mutation] [id|pr...] | report | controls [repo|pr...] | writers-done <repo>'); process.exitCode = 2; } else cmds[cmd]();
 }
-module.exports = { resolveFix, hunks, distance, classify, siblings, unitTouched, findingId, summaryBody, ARMS, EV, F2P, ROOT, cloneOf, readJson, sha, powerTable, perPr };

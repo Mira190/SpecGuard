@@ -113,3 +113,35 @@ test('results.json carries no test text', () => {
   const txt = require('node:fs').readFileSync(p, 'utf8');
   assert.ok(!/\b(describe|it|test)\(|expect\(|assert\./.test(txt));
 });
+
+test('report: deps_changed and harness-invalid repos are excluded from the measures but counted per arm', () => {
+  const report = require('./report');
+  const rows = [
+    { id: 'a', pr: 'p1', repo: 'r1', verdict: 'verified', claim_match: 'yes' },
+    { id: 'b', pr: 'p2', repo: 'r1', verdict: 'deps_changed' },
+    { id: 'c', pr: 'p3', repo: 'bad', verdict: 'verified', claim_match: 'yes' },
+    { id: 'd', pr: 'p3', repo: 'r1', verdict: 'not_discriminating' },
+  ];
+  const t = report.tables(rows, { a: 'NEAR', b: 'NEAR', c: 'NEAR', d: 'FAR' }, { invalidRepos: new Set(['bad']) });
+  assert.strictEqual(t.NEAR.runnable, 1);
+  assert.strictEqual(t.NEAR.primary, 1);
+  assert.strictEqual(t.NEAR.exclusions.deps_changed, 1);
+  assert.strictEqual(t.NEAR.exclusions.harness_invalid, 1);
+  assert.strictEqual(t.FAR.runnable, 1);
+});
+
+test('harnessStatus: k/n of the positive controls decides valid, invalid or unvalidated', () => {
+  const { harnessStatus } = require('./harness');
+  const pc = (repo, status) => ({ repo, status });
+  const s = harnessStatus({ positive_control: { a: pc('ok', 'verified'), b: pc('ok', 'verified'), c: pc('ok', 'verified'), d: pc('ok', 'verified'), e: pc('ok', 'not_verified'), f: pc('low', 'not_verified'), g: pc('low', 'verified'), h: pc('none', 'none'), i: pc('un', 'unrunnable') } });
+  assert.deepStrictEqual([s.ok.k, s.ok.n, s.ok.status], [4, 5, 'valid']);
+  assert.strictEqual(s.low.status, 'invalid');
+  assert.strictEqual(s.none.status, 'unvalidated');
+  assert.strictEqual(s.un.status, 'unvalidated');
+});
+
+test('manifest changes are recognised as deps_changed', () => {
+  const { MANIFEST } = f2p;
+  for (const p of ['package.json', 'packages/a/package.json', 'pnpm-lock.yaml', 'go.mod', 'go.sum', 'pyproject.toml', 'uv.lock', 'requirements-dev.txt', 'libs/core/pyproject.toml']) assert.ok(MANIFEST.test(p), p);
+  for (const p of ['src/package.json.ts', 'docs/go.md', 'README.md']) assert.ok(!MANIFEST.test(p), p);
+});

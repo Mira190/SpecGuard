@@ -237,7 +237,8 @@
    ],
    "buggy_sha": "2991776691409d3e624475794d604aa4b71e856a",
    "fixed_sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "orpc-1851",
@@ -250,7 +251,8 @@
    ],
    "buggy_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
    "fixed_sha": "2cd0134f3ea6325737d73ce174633602bfc8b8ac",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "orpc-1705",
@@ -263,7 +265,8 @@
    ],
    "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
    "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "orpc-1718",
@@ -276,7 +279,8 @@
    ],
    "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
    "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "orpc-1743",
@@ -289,7 +293,8 @@
    ],
    "buggy_sha": "5b554ff45bdbc2d91a2f8e1669bf7fd110b16ee4",
    "fixed_sha": "37e8837558c5fdf280c2a489a9911a18b9fa18df",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "orpc-1766",
@@ -302,7 +307,8 @@
    ],
    "buggy_sha": "3078b1ca14ffa4ba2d18ccb932ab2d27b932d5bf",
    "fixed_sha": "0b4ddd342ca0a3caa08cf2186329f72d9a5c8eb9",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "sqlglot-7054",
@@ -315,7 +321,8 @@
    ],
    "buggy_sha": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
    "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "sqlglot-7097",
@@ -328,7 +335,8 @@
    ],
    "buggy_sha": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
    "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "sqlglot-7315",
@@ -341,7 +349,8 @@
    ],
    "buggy_sha": "32a9297a24f06035293a2a3e935a7b65ece25755",
    "fixed_sha": "20fa8aedc48fccb780b973987908db63d0f76895",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "rqlite-2318",
@@ -354,7 +363,8 @@
    ],
    "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
    "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
-   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR"
+   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR",
+   "deps_changed": false
   },
   {
    "replay_id": "rqlite-2313",
@@ -367,7 +377,8 @@
    ],
    "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
    "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
-   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR"
+   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR",
+   "deps_changed": false
   },
   {
    "replay_id": "rqlite-2061",
@@ -380,7 +391,8 @@
    ],
    "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
    "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
-   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR"
+   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-26655",
@@ -393,7 +405,8 @@
    ],
    "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
    "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-32210",
@@ -406,7 +419,8 @@
    ],
    "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
    "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-22610",
@@ -419,7 +433,8 @@
    ],
    "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
    "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-30156",
@@ -432,7 +447,8 @@
    ],
    "buggy_sha": "e355c39e916478f0d4bd721fb4eb412e79c71aa0",
    "fixed_sha": "4e813a262f6f4f79af0f291d0f6ddfbfe2eddcac",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-28691",
@@ -445,7 +461,8 @@
    ],
    "buggy_sha": "41ccfce3e9c04f217c29aff7bfd7c3d434eb9149",
    "fixed_sha": "919116568fe57da017f907d24770fe1907843b2b",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-ai-7141",
@@ -458,7 +475,8 @@
    ],
    "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
    "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-36986",
@@ -471,7 +489,8 @@
    ],
    "buggy_sha": "5b9251150cd2f7201115a718b006ef9458b0e09a",
    "fixed_sha": "ce8cf22af9be12b43e6eb0ce98c1e96ccefefba8",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-37365",
@@ -484,7 +503,8 @@
    ],
    "buggy_sha": "582217a0da4cd4be95d404d89d1a20b773ce2398",
    "fixed_sha": "26bff7f47ec9fb46f43bdb814fc6339a92c1597f",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "langchain-33817",
@@ -497,7 +517,8 @@
    ],
    "buggy_sha": "dc8287c2134470adc022f19e715b7be165bdd475",
    "fixed_sha": "8f7cee0b52bdff6677d88f8aa87b0fe8afa0fdf1",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-35987",
@@ -510,7 +531,8 @@
    ],
    "buggy_sha": "0eba0e371f360eb91af2df3b881b6ee7bca91d2f",
    "fixed_sha": "7997c1ccadf2f0b1a0275a499f0c95c182c79895",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "gitea-37869",
@@ -523,7 +545,8 @@
    ],
    "buggy_sha": "7c629e1ba73f7cb777ac76f7acee98a2ad9c7aff",
    "fixed_sha": "880ddb572456dfbec87eee703513bb78edc4b7ce",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "query-9500",
@@ -536,7 +559,8 @@
    ],
    "buggy_sha": "fc3a3848f25adec750e6ee6d3abf9280c7e3a990",
    "fixed_sha": "b61abc2033f9e2fbf24d6753baedeaa74b2f1c17",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-ai-5020",
@@ -549,7 +573,8 @@
    ],
    "buggy_sha": "512b80b4937f5da9d882f2f46971c6c71d49f9f1",
    "fixed_sha": "90051ef7f6441552fa731e7bf6feb8cf3aa0ef42",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "vitest-10583",
@@ -562,7 +587,8 @@
    ],
    "buggy_sha": "210ba00cbb399bbc15791ab43e7826990df86aa9",
    "fixed_sha": "5622f0959bcbccb9fe4757dc3bb694153998be65",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "hono-3604",
@@ -575,7 +601,8 @@
    ],
    "buggy_sha": "765d13b00913a2b857f4f78065996a9c86aa4eff",
    "fixed_sha": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "vitest-6924",
@@ -588,7 +615,8 @@
    ],
    "buggy_sha": "fad263fe8b4b77076dad08637ef4fc1d6352a0bc",
    "fixed_sha": "66c1cbb53a1bf2a59888df2fa3c002958d21394c",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-13890",
@@ -601,7 +629,8 @@
    ],
    "buggy_sha": "a656b75d58a80f5033f376f7af17092606bbfde2",
    "fixed_sha": "c821eaccf9873357477a1e7d2d4d12dd4e161c8a",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "hono-3787",
@@ -614,7 +643,8 @@
    ],
    "buggy_sha": "65cff90e152dbbbcdde2808af15b48344676edfe",
    "fixed_sha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-ai-3454",
@@ -627,7 +657,8 @@
    ],
    "buggy_sha": "943ade73a8cc8849f9f7383583326e8abe063c08",
    "fixed_sha": "3742e5c52f262dbb26200942192ace319ea40e74",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "langchain-18592",
@@ -640,7 +671,8 @@
    ],
    "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
    "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "langchain-33461",
@@ -653,7 +685,8 @@
    ],
    "buggy_sha": "37205e51bc92999fee33d89580a43e6f1bee4cbb",
    "fixed_sha": "a6b904fd5b1edfd9db45302285fb959f77228056",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "hono-2339",
@@ -666,7 +699,8 @@
    ],
    "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
    "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "hono-3413",
@@ -679,7 +713,8 @@
    ],
    "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
    "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "query-7005",
@@ -692,7 +727,8 @@
    ],
    "buggy_sha": "01c763444e3cf3dfa9744f13911aa1533cac3c29",
    "fixed_sha": "ecd89c8faf7acc226f00633ea3a761d3ab842c1d",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "vitest-9464",
@@ -705,7 +741,8 @@
    ],
    "buggy_sha": "9673c49a40535529db6042df7176f123e95bb8f5",
    "fixed_sha": "5f2739e74983b0e5c9b5f3ce9901cebfeafee50c",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "hono-3366",
@@ -718,7 +755,8 @@
    ],
    "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
    "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "hono-3727",
@@ -731,7 +769,8 @@
    ],
    "buggy_sha": "eea9735fe308e6549509c312d80e13cd9e18898b",
    "fixed_sha": "c91ec9b60df18c76a3feb47533ce097d02f7fe6c",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-ai-6890",
@@ -744,7 +783,8 @@
    ],
    "buggy_sha": "74fc8f7787defef76232df1838cf02e87db5f57b",
    "fixed_sha": "08d64059bb63eb68fb56ab7ca1099d89fbe0f199",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-ai-1812",
@@ -757,7 +797,8 @@
    ],
    "buggy_sha": "e873dd2e9978c8ffc2941f27207becbd5d40a846",
    "fixed_sha": "f9922c68b7b2bb557cc9cb451e04f905688a9bf8",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-ai-5455",
@@ -770,7 +811,8 @@
    ],
    "buggy_sha": "92f22d7a80f29f6c9089f87dd45cbb2a92f90266",
    "fixed_sha": "c26903e5edfb9c0308e9a6696fd3f876c2ff92af",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "vitest-7878",
@@ -783,7 +825,8 @@
    ],
    "buggy_sha": "e9c3d72f0c8d6867de06a3df43ea28a05eeec444",
    "fixed_sha": "6621a72d6ed371e43f80ff327f5063693bd6b1ad",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-ai-3786",
@@ -796,7 +839,8 @@
    ],
    "buggy_sha": "2a49c1db2e91f898b02bc4a138a751fd1548eb8b",
    "fixed_sha": "71f844ed668e2a0cbe9ba49eb5d3dfee373f5e83",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   },
   {
    "replay_id": "pydantic-5674",
@@ -809,7 +853,8 @@
    ],
    "buggy_sha": "6208022f515f48a35642838caf48d62d1d82e398",
    "fixed_sha": "b9361e8e715e9dadd67b9e75d541136f827ac378",
-   "sha_method": "squash commit and its first parent"
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
   }
  ],
  "candidates": [

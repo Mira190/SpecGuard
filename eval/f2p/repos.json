@@ -1,0 +1,86 @@
+{
+  "honojs/hono": {
+    "name": "hono",
+    "runner": "vitest",
+    "tree": "overlay",
+    "status": "runnable",
+    "cmd": "node {evidence}/f2p/work/hono/node_modules/vitest/vitest.mjs run --config {evidence}/f2p/work/hono/vc.mjs --root . --reporter=json --outputFile={out} {test}",
+    "setup": "work dir = tree at 5ca49b0 (also the mutation arm tree); npm install vitest@3.2.4 --ignore-scripts --no-save inside it; vc.mjs = export default { test: { globals: true } } (hono's own config bypassed)",
+    "build": "none (single package, no dist imports); caches cleared by the harness"
+  },
+  "rqlite/rqlite": {
+    "name": "rqlite",
+    "runner": "go",
+    "tree": "export",
+    "cmd": "go test -json -count=1 -run \"{run}\" ./{testdir}",
+    "path_prepend": [
+      "{evidence}/f2p/tools/go/bin"
+    ],
+    "env": {
+      "GOMODCACHE": "{evidence}/f2p/env/gomod",
+      "GOCACHE": "{evidence}/f2p/env/gocache",
+      "GOPATH": "{evidence}/f2p/env/gopath",
+      "CGO_ENABLED": "1",
+      "CC": "{evidence}/f2p/env/zigcc.cmd",
+      "GOTOOLCHAIN": "auto"
+    },
+    "status": "runnable",
+    "setup": "Go 1.25.3 (zip from go.dev) under <evidence>/f2p/tools; module cache under <evidence>/f2p/env; no C compiler on the machine, so cgo (sqlite) uses zig cc from the ziglang pip wheel (env/zigcc.cmd); first build of the db package takes about 8 minutes",
+    "timeout": 900
+  },
+  "tobymao/sqlglot": {
+    "name": "sqlglot",
+    "runner": "pytest",
+    "tree": "export",
+    "status": "runnable",
+    "cmd": "{evidence}/f2p/env/py-sqlglot/Scripts/python.exe -m pytest {test} -p no:cacheprovider -q --tb=short --junitxml={out}",
+    "env": {
+      "PYTHONPATH": "{cwd}"
+    },
+    "setup": "venv under <evidence>/f2p/env/py-sqlglot with pytest duckdb python-dateutil pytz pandas typing_extensions; the exported tree is put on PYTHONPATH (sqlglot is pure Python)"
+  },
+  "TanStack/query": {
+    "name": "query",
+    "status": "unrunnable",
+    "reason": "not attempted: pnpm monorepo install needs more disk than the 2.5 GB free on the evidence drive; fix commits span years of lockfile changes"
+  },
+  "middleapi/orpc": {
+    "name": "orpc",
+    "status": "unrunnable",
+    "reason": "not attempted: pnpm 11 monorepo (workspace packages importing each other) install needs more disk than the 2.5 GB free on the evidence drive"
+  },
+  "vitest-dev/vitest": {
+    "name": "vitest",
+    "status": "unrunnable",
+    "reason": "not attempted: pnpm monorepo that must be built before its tests run; install plus build needs more disk than the 2.5 GB free on the evidence drive"
+  },
+  "go-gitea/gitea": {
+    "name": "gitea",
+    "status": "unrunnable",
+    "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+  },
+  "pydantic/pydantic-ai": {
+    "name": "pydantic-ai",
+    "runner": "pytest",
+    "tree": "export",
+    "status": "runnable",
+    "cmd": "{evidence}/f2p/env/py-pai/Scripts/python.exe -m pytest {test} -p no:cacheprovider -q --tb=short --junitxml={out}",
+    "env": {
+      "PYTHONPATH": "{cwd};{cwd}/pydantic_ai_slim;{cwd}/pydantic_graph;{cwd}/pydantic_evals",
+      "LANGSMITH_TRACING": "false"
+    },
+    "setup": "venv under <evidence>/f2p/env/py-pai with pydantic-ai-slim, pydantic-graph, pydantic-evals and the dev test dependencies from PyPI (latest); the exported tree sources are put first on PYTHONPATH. Dependency versions are those of today, not of each fix commit."
+  },
+  "langchain-ai/langchain": {
+    "name": "langchain",
+    "runner": "pytest",
+    "tree": "export",
+    "status": "runnable",
+    "cmd": "{evidence}/f2p/env/py-langchain/Scripts/python.exe -m pytest {test} -p no:cacheprovider -q --tb=short --junitxml={out}",
+    "env": {
+      "PYTHONPATH": "{cwd}/libs/core",
+      "LANGSMITH_TRACING": "false"
+    },
+    "setup": "venv under <evidence>/f2p/env/py-langchain with libs/core test group of the langchain-18592 tree (uv pip install -r pyproject.toml --group test); libs/core of the exported tree on PYTHONPATH"
+  }
+}

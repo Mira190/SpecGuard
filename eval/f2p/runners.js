@@ -35,11 +35,11 @@ function parsePytest(xml, cwd = '') {
 }
 
 // go test -json. Build failure is an error; a panic is a throw (frames from the goroutine trace); other test failures (t.Error, testify) are assertion failures.
-function parseGo(jsonl, cwd = '') {
+function parseGo(jsonl, cwd = "", stderr = "") {
   const ev = String(jsonl).split('\n').filter((l) => l.startsWith('{')).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
   const out = ev.map((e) => e.Output || '').join('');
   if (/\[build failed\]|\[setup failed\]|cannot find package|no required module/.test(out)) return { outcome: 'error', msg: 'build or setup failed' };
-  if (!ev.some((e) => e.Action === 'pass' || e.Action === 'fail') || !ev.some((e) => e.Test)) return { outcome: 'error', msg: 'no tests ran' };
+  if (!ev.some((e) => e.Action === 'pass' || e.Action === 'fail') || !ev.some((e) => e.Test)) return { outcome: 'error', msg: `no tests ran: ${(out + ' ' + (stderr || '')).replace(/\s+/g, ' ').trim().slice(-200)}` };
   if (!ev.some((e) => e.Action === 'fail')) return { outcome: 'pass' };
   if (/^panic: /m.test(out)) {
     const msg = (/^panic: (.*)$/m.exec(out) || [])[1] || 'panic';

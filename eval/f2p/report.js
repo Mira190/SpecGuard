@@ -3,22 +3,25 @@ const { wilson, fisher2, newcombe, bootDiff } = require('./stats');
 
 const ARMS = ['NEAR', 'FAR']; // UNTOUCHED was not run: structural zero by construction
 // Exclusion classes reported per arm. A NEAR fix touches nearby code and is more likely to change signatures, so exclusions can bias NEAR downward.
-const CLASSES = ['api_shift', 'invalid_bad_call', 'invalid_test_setup', 'invalid_throw_on_fixed', 'invalid_other', 'flaky', 'unrunnable'];
+const CLASSES = ['api_shift', 'invalid_bad_call', 'invalid_test_setup', 'invalid_throw_on_fixed', 'invalid_other', 'flaky', 'unrunnable', 'deps_changed', 'harness_invalid'];
 const klass = (r) => (r.verdict === 'invalid' ? (['bad_call', 'test_setup', 'throw_on_fixed'].includes(r.subtype) ? `invalid_${r.subtype}` : r.subtype === 'compile' ? 'invalid_compile' : 'invalid_other') : r.verdict);
 // Excluded tests that the sensitivity line counts as verified when claim_match is yes: api_shift and every invalid class except compile/import/collection error.
 const SENS = ['api_shift', 'invalid_bad_call', 'invalid_test_setup', 'invalid_throw_on_fixed', 'invalid_other'];
 
 // rows: results.json entries { id, pr, verdict, subtype?, claim_match? }; armOf: id -> arm.
-function tables(rows, armOf) {
+// opts.invalidRepos: repos whose positive-control pass rate is below 80% ("harness invalid"): reported, excluded from the measures. deps_changed rows are excluded too.
+function tables(rows, armOf, opts = {}) {
+  const bad = opts.invalidRepos || new Set();
   const out = {};
   for (const a of ARMS) {
-    const rs = rows.filter((r) => armOf[r.id] === a), run = rs.filter((r) => r.verdict !== 'unrunnable');
+    const rs = rows.filter((r) => armOf[r.id] === a), run = rs.filter((r) => r.verdict !== 'unrunnable' && r.verdict !== 'deps_changed' && !bad.has(r.repo));
     const hit = (f) => run.filter((r) => f(r) && r.claim_match === 'yes');
     const primary = hit((r) => r.verdict === 'verified'), secondary = hit((r) => r.verdict === 'verified' || r.verdict === 'verified_throw'), sens = hit((r) => r.verdict === 'verified' || r.verdict === 'verified_throw' || SENS.includes(klass(r)));
-    const exclusions = Object.fromEntries(CLASSES.map((c) => [c, rs.filter((r) => klass(r) === c).length]));
+    const exclusions = Object.fromEntries(CLASSES.map((c) => [c, rs.filter((r) => (c === 'harness_invalid' ? bad.has(r.repo) : !bad.has(r.repo) && klass(r) === c)).length]));
     out[a] = { total: rs.length, runnable: run.length, exclusions, verdicts: count(rs.map((r) => r.verdict)), verified_no: run.filter((r) => r.verdict === 'verified' && r.claim_match === 'no').length, verified_unsure: run.filter((r) => r.verdict === 'verified' && r.claim_match === 'unsure').length,
       primary: primary.length, secondary: secondary.length, sensitivity: sens.length, rows: { primary, secondary, sens }, prs: [...new Set(run.map((r) => r.pr))] };
   }
+  out.bad = bad;
   return out;
 }
 const count = (xs) => xs.reduce((o, x) => ((o[x] = (o[x] || 0) + 1), o), {});
@@ -26,7 +29,7 @@ const count = (xs) => xs.reduce((o, x) => ((o[x] = (o[x] || 0) + 1), o), {});
 // NEAR vs FAR for one measure ('primary' | 'secondary' | 'sensitivity'): rates, Wilson, difference, Newcombe, Fisher (descriptive when the power rule says so), PR-cluster bootstrap.
 function compare(t, rows, armOf, measure) {
   const x1 = t.NEAR[measure], n1 = t.NEAR.runnable, x2 = t.FAR[measure], n2 = t.FAR.runnable;
-  const flag = (a) => (r) => armOf[r.id] === a && r.verdict !== 'unrunnable';
+  const flag = (a) => (r) => armOf[r.id] === a && r.verdict !== 'unrunnable' && r.verdict !== 'deps_changed' && !(t.bad || new Set()).has(r.repo);
   const hitIds = new Set(t.NEAR.rows[measure === 'sensitivity' ? 'sens' : measure].concat(t.FAR.rows[measure === 'sensitivity' ? 'sens' : measure]).map((r) => r.id));
   const A = rows.filter(flag('NEAR')).map((r) => ({ pr: r.pr, hit: hitIds.has(r.id) })), B = rows.filter(flag('FAR')).map((r) => ({ pr: r.pr, hit: hitIds.has(r.id) }));
   return { near: { x: x1, n: n1, wilson: wilson(x1, n1) }, far: { x: x2, n: n2, wilson: wilson(x2, n2) }, diff: n1 && n2 ? x1 / n1 - x2 / n2 : null, newcombe: n1 && n2 ? newcombe(x1, n1, x2, n2) : null, fisher_p: n1 && n2 ? fisher2(x1, n1, x2, n2) : null, bootstrap: n1 && n2 ? bootDiff(A, B, { reps: 2000, seed: 1 }) : null };

@@ -152,3 +152,29 @@ Amended labeller prompt (the first sentence of the answer rule and the inputs ch
 - Before any fixed run, `run` records the sha256 of every submitted test file in `results.json` (`test_sha256_frozen`). It refuses to run when a test file differs from the recorded hash, also on a later re-run.
 - A writer may iterate on the buggy tree until its test runs (no compile/collection error); the submitted version is frozen and is not changed after the fixed runs.
 - Limit, stated honestly: the shared clones under `<evidence>/repos` hold full history, including the fix. Writers are instructed to read only their packet and buggy tree, but nothing enforces it at the filesystem level. For hono the mutants are applied by the harness at run time only; the writer gets the unmutated tree.
+
+### Harness validation and deviations (amendment 4)
+
+Written before any writer starts; the positive controls below were run on the harness only (no writer test exists).
+
+- Positive control, per repo. For every in-scope PR whose fix adds or edits a test file, each such fix test file is run through the identical harness: the fix's version is copied into the buggy tree and run 3 times, then run 3 times on the fixed tree, with the same verdict logic. Expected: `verified` (or `verified_throw`). A PR is a control success when at least one of its fix test files is `verified` or `verified_throw`. Per repo k/n = control successes / runnable controls (PRs with a fix test file and a runnable repo). Below 80%: the repo is "harness invalid" (its NEAR and FAR results are reported but excluded from the measures). No control at all: "harness unvalidated" (stays in, flagged). Per-PR results are in `results.json` under `positive_control`. Fix tests never appear in packets and are never shown to writers. Controls run before any writer starts, so the dependency work directory is never in an overlaid state while a writer is active.
+- Whole-fix overlay (JS/TS): the overlay applies the whole fix (added, modified and deleted files, from `git diff --name-status --no-renames`). After overlaying, every path of the diff is checked byte-for-byte (sha256) against `git archive` of that revision (absent if deleted there); the run refuses on any difference. Archive content is used rather than raw blobs because the clones convert line endings in `git archive`.
+- Restore check: after the fixed runs the work directory is restored to its base commit and the same check is made against the base; the run refuses on any difference. `f2p.js verify <repo> [--repair]` checks a whole work directory.
+- Writers and the overlaid state: a writer's `try` command works on the dependency work directory (JS/TS) or on a fresh temp export of the buggy tree (Go, Python), under a per-repo lock; `try` always moves the work directory to the buggy commit first, so a writer never sees an overlaid state. Fixed runs (`run`) are refused for a repo until `f2p.js writers-done <repo>` has been recorded, i.e. after every writer for that repo has finished.
+- Rebuild and cache clearing: after every overlay and every restore the harness removes `node_modules/.vite`, `node_modules/.vitest`, `node_modules/.cache`, `.vitest`, `.turbo` and every `*.tsbuildinfo`, then runs the repo's `build` command if `repos.json` has one. The positive controls are what prove this works for a repo.
+- `deps_changed`: if a fix changes a dependency manifest (package.json, a lockfile, pyproject, requirements*.txt, go.mod, go.sum) and the harness does not reinstall dependencies, that PR's fixed runs are not made: its rows get the verdict `deps_changed`, are EXCLUDED from the measures and are reported per arm. No reinstall is implemented. Candidate PRs with `deps_changed`: none (checked in `holdout2-candidates.json`, `prs[].deps_changed`).
+- Dependency versions for Python repos are those installed today, not those of each fix commit; the per-PR baseline (nearest existing test file green at the buggy tree) is the check. A PR whose baseline is not green is `unrunnable`.
+
+Positive-control results (run 2026-10-19/20 on the harness before any writer; `results.json` `positive_control`, `baseline.json`):
+
+| repo | tree / runner | baseline green PRs | positive control k/n | harness | PRs and findings in scope |
+|---|---|---|---|---|---|
+| honojs/hono | overlay, vitest 3.2.4 | 6/6 | 6/6 | valid | 6 PRs, 26 replay findings (+16 mutation findings, same work dir) |
+| rqlite/rqlite | temp export, go test (Go 1.25.3 then 1.26 by GOTOOLCHAIN=auto; cgo via zig cc) | 3/3 | 2/2 (rqlite-2061: the fix adds no test, no control) | valid | 3 PRs, 13 findings |
+| tobymao/sqlglot | temp export, pytest | 1/1 | 1/1 | valid (n = 1) | 1 PR, 1 finding |
+| langchain-ai/langchain | temp export, pytest (libs/core) | 1/1 | 1/1 (one fix test verified, one verified_throw) | valid (n = 1) | 1 PR, 5 findings |
+| pydantic/pydantic-ai | temp export, pytest, dependencies as of today | 3/5 (5020 and 3454: no tests collected) | 2/3 | invalid (< 80%): reported, excluded from the measures; no packets | 5 PRs, 17 findings |
+| go-gitea/gitea | not set up | - | - | unrunnable (see `repos.json`) | 6 PRs, 20 findings |
+| middleapi/orpc, TanStack/query, vitest-dev/vitest | not set up | - | - | unrunnable (disk and monorepo build; see `repos.json`) | 3 + 2 + 2 PRs, 8 + 3 + 7 findings |
+
+The three positive-control failures of pydantic-ai are dependency drift (today's package versions against fix commits from 2025): two PRs collect no tests at the nearest baseline test file and one throws from the test frame on a snapshot mismatch. The 80% rule is applied as pre-registered, not tuned.
