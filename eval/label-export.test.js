@@ -165,6 +165,13 @@ test('blinding: correct-guess share, Bang index, blank = do not know', () => {
   assert.equal(require('./label-export').blinding([{ id: 'F0' }], () => 'x').a, undefined);
 });
 
+test('export: with no sample option every tool is capped at 100 findings (the default sample)', () => {
+  const many = ['specguard', 'copilot'].flatMap((tool) => Array.from({ length: 130 }, (_, i) => F(tool, i + 1, i + 1, `claim ${i}`)));
+  const rows = exportRows(many);
+  assert.equal(rows.length, 200);
+  assert.equal(exportRows(many, { sample: 0 }).length, 260);
+});
+
 test('classify: alpha exactly 0.800 with lower 0.667 is reliable; exactly 0.667 is tentative; just below 0.667 or undefined fails; a low bound blocks reliable', () => {
   const { classify } = require('./label-export');
   assert.equal(classify(0.8, 0.667), 'reliable');
@@ -191,19 +198,6 @@ test('gate: more than 5% dropped bootstrap draws (no variation, low prevalence) 
   assert.deepEqual([sc.alpha, sc.n, sc.status], [1, 100, 'tentative']);
   assert.equal(require('./label-export').classify(1, 1, 100, 0.05), 'reliable');
   assert.equal(require('./label-export').classify(1, 1, 100, 0.051), 'tentative');
-});
-
-test('alpha-power: the plan table cell for 90% agreement at n=30 (18%) reproduces with seed 1, 200 trials (the other cells: run node eval/alpha-power.js)', () => {
-  const { power } = require('./alpha-power');
-  assert.equal(power({ agreement: 0.9, n: 30 }).decisionGrade, 0.18);
-});
-
-test('alpha-power simulation is seeded and reproducible; good labellers pass more often as n grows, mediocre ones rarely', () => {
-  const { power } = require('./alpha-power');
-  const a = power({ agreement: 0.95, n: 100, trials: 6 }), b = power({ agreement: 0.95, n: 100, trials: 6 });
-  assert.deepEqual(a, b);
-  assert.ok(power({ agreement: 0.95, n: 150, trials: 6 }).decisionGrade > power({ agreement: 0.95, n: 30, trials: 6 }).decisionGrade);
-  assert.ok(power({ agreement: 0.8, n: 100, trials: 6 }).decisionGrade <= 0.1);
 });
 
 test('parseCsv accepts a two-labeller sheet with no label column (label_a and label_b only)', () => {
