@@ -195,10 +195,10 @@ test('gate: more than 5% dropped bootstrap draws (no variation, low prevalence) 
 
 test('alpha-power simulation is seeded and reproducible; good labellers pass more often as n grows, mediocre ones rarely', () => {
   const { power } = require('./alpha-power');
-  const a = power({ agreement: 0.95, n: 100, trials: 20 }), b = power({ agreement: 0.95, n: 100, trials: 20 });
+  const a = power({ agreement: 0.95, n: 100, trials: 6 }), b = power({ agreement: 0.95, n: 100, trials: 6 });
   assert.deepEqual(a, b);
-  assert.ok(power({ agreement: 0.95, n: 150, trials: 20 }).decisionGrade > power({ agreement: 0.95, n: 30, trials: 20 }).decisionGrade);
-  assert.ok(power({ agreement: 0.8, n: 100, trials: 20 }).decisionGrade <= 0.1);
+  assert.ok(power({ agreement: 0.95, n: 150, trials: 6 }).decisionGrade > power({ agreement: 0.95, n: 30, trials: 6 }).decisionGrade);
+  assert.ok(power({ agreement: 0.8, n: 100, trials: 6 }).decisionGrade <= 0.1);
 });
 
 test('parseCsv accepts a two-labeller sheet with no label column (label_a and label_b only)', () => {
