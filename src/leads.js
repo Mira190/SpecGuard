@@ -230,8 +230,8 @@ function assertionDelta(diff, isTest, gone = () => false) {
     const m = /^@@ -(\d+)/.exec(l);
     if (m) { o = +m[1]; hk++; continue; }
     const e = file && per.get(file), t = l.slice(1).replace(/\r$/, '');
-    if (l[0] === '-') { if (file && !e) for (const w of t.match(/[\w$]+/g) || []) dropped.add(w); if (e && !quiet(t)) { const s = subjectOf(t); if (s && subjectOf(t.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`/g, '""'))) e.rm.push({ hk, line: o, text: t.trim().slice(0, 400), ...s }); } o++; } // ponytail: subjects and dropped names read on the full line, stored text sliced to 400
-    else if (l[0] === '+') { if (e && !quiet(t)) { const u = t.slice(0, 400); e.lines.push(u); const s = subjectOf(t); if (s) e.add.push({ hk, text: u.trim(), at: e.lines.length - 1, ...s }); } } // ponytail: a long added line still re-pins: its subject is read on the full line (a loop-prefixed assertion sits at the end), the stored text stays 400
+    if (l[0] === '-') { if (file && !e) for (const w of t.match(/[\w$]+/g) || []) dropped.add(w); if (e && !quiet(t)) { const s = subjectOf(t); if (s && subjectOf(t.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`/g, '""'))) e.rm.push({ hk, line: o, text: t.trim().slice(0, 400), full: t.trim(), ...s }); } o++; } // ponytail: subjects and dropped names read on the full line, stored text sliced to 400
+    else if (l[0] === '+') { if (e && !quiet(t)) { const u = t.slice(0, 400); e.lines.push(u); const s = subjectOf(t); if (s) e.add.push({ hk, text: u.trim(), full: t.trim(), at: e.lines.length - 1, ...s }); } } // ponytail: a long added line still re-pins: its subject is read on the full line (a loop-prefixed assertion sits at the end), the stored text stays 400
     else if (l[0] === ' ') o++;
   }
   const out = [];
@@ -275,19 +275,19 @@ function assertionDelta(diff, isTest, gone = () => false) {
     const flat = (t) => t.replace(/\s+/g, '').replace(/["'`]/g, "'");
     const under = /(?<![\w$]|\bnew\s+)([\w$]+)\s*\(/.exec(r.raw)?.[1];
     if (under && dropped.has(under) && gone(under)) continue; // named in code this diff removes and nowhere at head: removed with the code it tested
-    if (add.some((a) => flat(a.text) === flat(r.text))) continue; // the same assertion added anywhere in the file: moved
+    if (add.some((a) => flat(a.full) === flat(r.full))) continue; // the same assertion added anywhere in the file: moved
     const same = add.filter((a) => a.x === r.x && a.hk === r.hk); // only the same hunk re-pins: an assertion elsewhere in the file may pin something else
     const exact = !r.weak && EXACT.test(r.text) && literalsOf(r.text, 1).size > 0; // an exact value replaced by a range matcher is weakened
     if (same.some((a) => !a.weak && !(exact && RANGE.test(a.text))) || (r.weak && same.length)) continue; // still pinned: moved, reformatted or strengthened
     // re-pinned through a helper or alias: an added assertion holds every distinctive literal of the removed one (literals most assertion lines share, like '.mp4', say nothing)
-    const all = [...rm, ...add], has = (a, x) => literalsOf(a.text, 1).has(x);
-    const distinct = (min) => [...literalsOf(r.text, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive
+    const all = [...rm, ...add], has = (a, x) => literalsOf(a.full, 1).has(x);
+    const distinct = (min) => [...literalsOf(r.full, min)].filter((x) => { const n = all.filter((a) => has(a, x)).length; return n <= 2 || n * 3 <= all.length; }); // single characters only when nothing longer is distinctive
     const lits = distinct(2).length ? distinct(2) : distinct(1);
     if (lits.length && add.some((a) => !a.weak && lits.every((x) => has(a, x)))) continue;
     // table-driven: a parameterised added assertion on the same function (no literal in its subject) inside a loop over a table with one row whose literals are
     // exactly the removed assertion's, in order ([1, 2], { input: 1, expected: 2 }, [at(10, 0, 0), [10, 30, 15], at(10, 30, 15)]). A row dropped in the move, an
     // array the loop does not read or a literal assertion keeps the lead.
-    const want = litList(r.text).join('\u0000'), fn = callee(r.x);
+    const want = litList(r.full).join('\u0000'), fn = callee(r.x);
     if (want && fn && add.some((a) => !a.weak && callee(a.x) === fn && !literalsOf(a.x, 1).size && tableOf(lines, a.at).some((row) => litList(row).join('\u0000') === want))) continue;
     out.push(same.length ? { file: f, kind: 'weakened', line: r.line, old: r.text, new: same[0].text } : { file: f, kind: 'removed', line: r.line, old: r.text });
   }
