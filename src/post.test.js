@@ -3575,7 +3575,10 @@ test('V3: a JS/TS file in __tests__/ or test/ is unit evidence only if it declar
   for (const n of ['common', 'support', 'bootstrap', 'shared', 'globals', 'server', 'factory', 'harness', 'env']) { put(`test/${n}.js`, 'module.exports = { assertOk(x) { if (!x) throw new Error("no"); } };\n'); assert.equal(status(`test/${n}.js`), 'unknown', n); }
   put('test/calc.js', "describe('calc', () => { it('adds', () => {}); });\n"); put('src/__tests__/calc.js', "it('adds', () => {});\n");
   assert.equal(status('test/calc.js'), 'covered'); assert.equal(status('src/__tests__/calc.js'), 'covered');
-  put('test/app.get.js', "var request = require('supertest');\nvar express = require('..');\ndescribe('app.get', () => { it('responds', (done) => { request(express()).get('/').expect(200, done); }); });\n");
+  put('test/cli.js', "const { spawnSync } = require('node:child_process');\ndescribe('cli', () => { it('runs', () => { spawnSync('node', ['cli.js']); }); });\n");
+  put('test/net.js', "const http = require('http');\ndescribe('net', () => { it('gets', () => { require('http').request({ host: 'localhost' }); }); });\n");
+  assert.equal(status('test/cli.js'), 'unknown', 'a child_process harness is higher-layer'); assert.equal(status('test/net.js'), 'unknown', 'an http client is higher-layer');
+  put('test/app.get.js',"var request = require('supertest');\nvar express = require('..');\ndescribe('app.get', () => { it('responds', (done) => { request(express()).get('/').expect(200, done); }); });\n");
   put('test/app.use.js', "describe('use', () => { it('mounts', () => { const app = express(); server = app.listen(0); }); });\n");
   assert.equal(status('test/app.get.js'), 'unknown', 'a supertest file is HTTP-layer: the model states the layer'); assert.equal(status('test/app.use.js'), 'unknown');
   assert.equal(status('test/missing.js'), 'unknown', 'an unreadable file is not evidence');
