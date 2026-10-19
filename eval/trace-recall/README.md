@@ -104,6 +104,8 @@ Cap experiment (main at ccaf02d; trace.js keeps the top 3 code windows per crite
 
 Recall@3 and All-required@3 do not move by construction (extra windows sit at rank 4-5), and All-required over everything delivered stays 6/24 and 0/6 too: no rule completes a query. Every rule raises the wrong-window share (original 54% to 60-67%, holdout 28% to 37-43%), so none was shipped; `src/` is unchanged. The code->req, test candidates and the tests of req->code are field-for-field identical in all four runs.
 
+Where the wrong windows are (main at 33b4862, by file class): original 23/39 `.js` source and 14/39 `.d.ts`, 2/39 a workflow `.yml`; holdout 3/5 `.js`, 2/5 `.d.ts`. All 46 right windows are `.js`. No wrong window on the 15 cases is in package.json/lockfiles, svg/html/css, `examples/` or `NOT_CODE_DIR`, so excluding those classes from the window search (tried in a scratch copy) changes nothing here; it only removed the 3 wrong windows of the T random sample (the sample that suggested it), so it was not shipped. The precision loss is ranking among source and declaration files, not file eligibility. Not acted on: `.d.ts` (it decides type contracts; every case here is a runtime value, and the holdout has now been seen).
+
 ## Baseline
 
 `baseline.json` has the same metrics for main before and after PR #239, taken from the raw `trace.js` outputs of the harness that first measured it. Compare a new run to `after_239`.
