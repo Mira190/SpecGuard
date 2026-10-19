@@ -466,3 +466,25 @@ test('summary-only findings are not truncated in the totals (the 20-entry cap is
   ds.issue_comments = [counts(3, S(1), { sum })];
   assert.equal(findingsOf(ds).filter((f) => f.delivery === 'summary').length, 25);
 });
+
+test('alpha gate: an alpha that cannot be computed (no variation, or no doubly labelled rows) refuses the precision rules', () => {
+  const ds = big(), lab = labelsFor(ds, 0.8);
+  const none = analyze(ds, { labels: lab, rows: [...lab].map(([id]) => ({ id, label: 'valid', label_a: 'valid', label_b: 'valid' })) }); // both labellers say valid everywhere: no variation
+  assert.equal(none.agreement.specguard.alpha, null);
+  assert.equal(none.decision.rules[1].status, 'not evaluated');
+  assert.match(none.decision.rules[1].detail, /alpha undefined/);
+  const few = analyze(ds, { labels: lab, rows: [...lab].map(([id, l]) => ({ id, label: l, label_a: l, label_b: '' })) }); // second labeller left everything blank
+  assert.equal(few.agreement.specguard.n, 0);
+  assert.equal(few.agreement.specguard.alpha, null);
+  assert.equal(few.decision.rules[1].status, 'not evaluated');
+  assert.match(few.decision.verdict, /KEEP COLLECTING/);
+});
+
+test('excluded by design: unlabelled PRs with no SpecGuard run (fork, bot) are counted and said so; labelled or reviewed ones are not', () => {
+  const ds = small(); // PR 9 has no arm label and no SpecGuard output
+  const r = analyze(ds);
+  assert.equal(r.excluded_by_design, 1);
+  assert.match(render(r), /1 of the unlabelled PRs are excluded by design/);
+  ds.issue_comments = [...ds.issue_comments, counts(9, S(0))];
+  assert.equal(analyze(ds).excluded_by_design, 0);
+});

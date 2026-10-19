@@ -332,7 +332,10 @@ function analyze(ds, { labels, rows, salt } = {}) {
     }
     joint = { ...j, rate: j.with_outcome >= TARGET.labels ? j.valid_addressed / j.with_outcome : null };
   }
+  // Fork and bot PRs are skipped by the workflow's `if:` on purpose: no arm label and no SpecGuard output at all. Counted, not a failure.
+  const ran = new Set([...(ds.issue_comments || []).filter((c) => String(c.body || '').includes('<!-- specguard:summary -->')).map((c) => +/\/issues\/(\d+)$/.exec(c.issue_url || '')?.[1]), ...(ds.review_comments || []).filter((c) => SG_FP.test(c.body || '')).map((c) => c.pr)]);
   const report = { repo: ds.repo, window: [ds.since, ds.until], prs: prs.length, excluded_copilot_request_failed: invalid.length, unlabeled: usable.filter((p) => armOf(p.labels) === null).length,
+    excluded_by_design: usable.filter((p) => armOf(p.labels) === null && !ran.has(p.number)).length,
     arms, baseline: ttm((ds.baseline || []).filter(real)), specguard, copilot: { ...copilot, A_if_replied_resolved_counts: withReplies }, overlap, labels: lab, unique, channels, joint, verdicts, integrity: integrity(ds, salt),
     ...(rows && { agreement: agreementOf(rows, findings) }) };
   report.decision = decide(report);
@@ -396,6 +399,7 @@ const ARM = ['0 SpecGuard only', '1 Copilot only', '2 both'];
 function render(r) {
   const L = [`# SpecGuard validation: ${r.repo}, ${r.window[0]} to ${r.window[1]}`, '',
     `${r.prs} human PRs; ${r.unlabeled} without a review-arm label; ${r.excluded_copilot_request_failed} excluded (label \`${INVALID_LABEL}\`).`,
+    ...(r.excluded_by_design ? [`${r.excluded_by_design} of the unlabelled PRs are excluded by design: no arm label and no SpecGuard run (fork and bot PRs are skipped by the workflow).`] : []),
     'Counts below ' + TARGET.ttm + ' PRs per arm are counts, not rates. Fix-through is read at each PR\'s latest run, not at merge.', '',
     '## Per arm', '', '| Arm | PRs | SpecGuard findings/PR | Copilot findings/PR | TTM median h | TTM p75 h | merged | SpecGuard credits/PR (last run) | complete runs |', '|---|---|---|---|---|---|---|---|---|'];
   for (const a of [0, 1, 2]) {

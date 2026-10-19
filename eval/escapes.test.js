@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { escapes, syncShadow, readCache, SHADOW, FLOOR } = require('./escapes');
+const { escapes, syncShadow, readCache, renderEscapes, SHADOW, FLOOR, TOL } = require('./escapes');
 const { escapesOf, render, analyze } = require('./weekly-report');
 const szz = require('./szz');
 
@@ -124,7 +124,10 @@ test('a finding with no line is "same file only", never a line hit', () => {
   const run = (fnd) => escapes({ prs: [{ number: 3, arm: 0 }], fixes: f, status: new Map([[3, 'complete']]), findings: fnd }).groups[0];
   assert.deepEqual([run([sg(3, 'a.js', null)]).hit, run([sg(3, 'a.js', null)]).same_file], [0, 1]);
   assert.deepEqual([run([sg(3, 'a.js', 40)]).hit, run([sg(3, 'a.js', 40)]).same_file], [0, 1]);
-  assert.deepEqual([run([sg(3, 'a.js', 11)]).hit, run([sg(3, 'a.js', 11)]).same_file], [1, 0]);
+  assert.deepEqual([run([sg(3, 'a.js', 10 + TOL)]).hit, run([sg(3, 'a.js', 10 + TOL)]).same_file], [1, 0]); // exactly the tolerance: a hit
+  assert.deepEqual([run([sg(3, 'a.js', 10 - TOL)]).hit, run([sg(3, 'a.js', 10 - TOL)]).same_file], [1, 0]);
+  assert.deepEqual([run([sg(3, 'a.js', 10 + TOL + 1)]).hit, run([sg(3, 'a.js', 10 + TOL + 1)]).same_file], [0, 1]); // one more: same file only
+  assert.deepEqual([run([sg(3, 'a.js', 10 - TOL - 1)]).hit, run([sg(3, 'a.js', 10 - TOL - 1)]).same_file], [0, 1]);
   assert.deepEqual([run([sg(3, 'b.js', 10)]).hit, run([sg(3, 'b.js', 10)]).same_file], [0, 0]);
 });
 
@@ -139,4 +142,19 @@ test('syncShadow: fork PRs are matched by head sha; a failed newest attempt fall
   assert.deepEqual([c.get(7)[0].status, c.get(7)[0].attempt, c.get(7)[0].findings.length, c.get(7)[0].capped], ['ok', 1, 25, true]); // attempt 2 had no counts.json
   assert.equal(c.get(12)[0].status, 'failed');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('renderEscapes: the cross-arm outcome and the not-comparable table are labelled separately, and unusable runs are shown as unusable', () => {
+  const x = escapes({ prs, fixes, findings, status, shadow });
+  const out = renderEscapes(x).join('\n');
+  const [cross, other] = out.split('**Not comparable between rows');
+  assert.match(cross, /Outcome, comparable across arms: escaped defects per 100 PRs/);
+  assert.match(cross, /insufficient data \(need 30 PRs\)/); // under the floor: no rate
+  assert.doesNotMatch(cross, /unusable review/);
+  assert.match(other, /flagged but still escaped \(delivered\)/);
+  assert.match(other, /would have caught \(shadow\)/);
+  assert.match(other, /\| unusable review \|/);
+  assert.match(other, /\| 1 Copilot only \| would have caught \(shadow\) \| 1\/1 = ?|\| 1 Copilot only \| would have caught \(shadow\) \| 1\/1 \(insufficient/); // PR 4 hit; PRs 7 and 10 are unusable, not misses
+  assert.match(other, /\(insufficient data, need 10\) \| \[?n\/a\]? \| \[?n\/a\]? \| 0 \| 2 \| 0 \| 0 \|/); // arm 1 row: same file 0, unusable 2, no location 0, capped 0
+  assert.match(other, /Unusable = the review failed or is missing \(never a miss/);
 });

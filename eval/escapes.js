@@ -129,4 +129,4 @@ function renderEscapes(x) {
   return L;
 }
 
-module.exports = { escapes, syncShadow, readCache, renderEscapes, SHADOW, FLOOR };
+module.exports = { escapes, syncShadow, readCache, renderEscapes, SHADOW, FLOOR, TOL };
