@@ -111,7 +111,10 @@ Otherwise the result is FAIL.
   - Measured on the 135 saved holdout-2 haiku runs: mean $0.0464, median $0.0213, max $0.1228 per run.
   - By context-pack size: under 100 KB, n = 27, mean $0.0073; 100–200 KB, n = 78, mean $0.0429; 200 KB or more, n = 30, mean $0.0910.
   - So 88 × 3 runs ≈ $12.26 at the mean, which is under the rule's $15 threshold. The worst case, every run at the max, is $32.42.
-  - If the owner's cap is reached mid-run, the runs not yet made are reported as unusable (misses). The rule is not changed.
+  - **Run order is rep-major.** All 88 PRs (bug and control, in frozen-list order) run rep 1, then rep 2, then rep 3.
+  - **If the owner's cap is reached after rep 1 has finished,** the per-PR values and the nulls use only the reps that finished for every PR. A partial rep is discarded and reported; it does not count as a miss.
+  - **If rep 1 itself does not finish,** the runs not made count as unusable (misses), and the result is labelled "budget-truncated".
+  - **Engine failures** are unaffected: an unusable run counts as a miss.
 - With 3 runs, a PR's observed value is the mean of its runs, and the bootstrap resamples PRs.
 
 **Power check.** This runs on the design set before the freeze and is reported, not gating. It gives the probability of PASS at n = 40, given the design-set observed and chance rates. If that probability is below 0.5, it is reported to the owner before the confirmation run.
