@@ -510,6 +510,19 @@ test('labelGate uses label-export (one source of truth): decision grade needs al
   assert.equal(agreementOf([{ id: 'F0', label: 'valid' }], []), null); // a single reconciled column
 });
 
+test('labelGate: the alpha thresholds are inclusive at exactly 0.800 and 0.667 (the restored boundary assertions, on the label-export classification)', () => {
+  const { classify } = require('./label-export');
+  const at = (alpha, lower = 0.7) => { const status = classify(alpha, lower, 100, 0); return labelGate({ decisions: { specguard: status === 'reliable' }, specguard: { alpha, lower, n: 100, dropped: 0, status }, unsure: { a: 0, b: 0 } }); };
+  assert.equal(at(ALPHA.ok).ok, true);
+  assert.equal(at(ALPHA.ok - 1e-9).ok, false);
+  assert.match(at(ALPHA.ok - 1e-9).note, /tentative/);
+  assert.equal(at(ALPHA.ok, 0.6).ok, false); // alpha 0.800 but the bootstrap lower bound is below 0.667
+  assert.match(at(ALPHA.ok, 0.6).note, /tentative/);
+  assert.match(at(ALPHA.tentative).note, /tentative/); // exactly 0.667: tentative, not refused
+  assert.match(at(ALPHA.tentative - 1e-9).note, /unreliable/);
+  assert.match(at(null).note, /alpha undefined/);
+});
+
 test('alpha gate: alpha 1 on a two-labeller sheet with fewer than 100 doubly labelled SpecGuard findings was a pass under the old point-alpha gate and is now tentative, no decision', () => {
   const ds = big(), lab = labelsFor(ds, 0.8);
   const rows = [...lab].map(([id, l]) => ({ id, label: l, label_a: l, label_b: l }));
