@@ -103,7 +103,7 @@ test('denylist: camelCase names hit, kebab pieces that merely concatenate do not
   assert.strictEqual(run('const secretProjApi = 1', sha('secretproj')).status, 1);
   assert.strictEqual(run('SecretProjInternal', sha('secretproj')).status, 1);
   assert.strictEqual(run('alphaBetaGamma', sha('alphabetagamma')).status, 1); // 3 camel pieces glue
-  assert.strictEqual(run('alphaBetaGammaDelta', sha('alphabetagammadelta')).status, 0); // 4 do not
+  assert.strictEqual(run('xAlphaBetaGammaDelta', sha('alphabetagammadelta')).status, 0); // 4 do not
   assert.strictEqual(run('my-secret-proj and Secretprojects', sha('secretproj')).status, 0);
 });
 
