@@ -27,10 +27,10 @@ function* hashes(line) {
 }
 
 // deny list = env var + the untracked per-clone file .git/specguard-deny (worktree-safe via git-path)
-function denyList() {
+function denyList(env = process.env, gitPath = () => execFileSync('git', ['rev-parse', '--git-path', 'specguard-deny'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()) {
   let f = '';
-  try { f = fs.readFileSync(execFileSync('git', ['rev-parse', '--git-path', 'specguard-deny'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(), 'utf8'); } catch { /* no repo or no file */ }
-  return new Set(((process.env.SPECGUARD_DENY_SHA256 || '') + '\n' + f).split(/[\s,]+/).map((h) => h.trim().toLowerCase()).filter(Boolean));
+  try { f = fs.readFileSync(gitPath(), 'utf8'); } catch { /* no repo or no file */ }
+  return new Set(((env.SPECGUARD_DENY_SHA256 || '') + '\n' + f).split(/[\s,]+/).map((h) => h.trim().toLowerCase()).filter(Boolean));
 }
 
 function scanLine(name, line, at, denied, hits) {
@@ -51,11 +51,12 @@ function scan(files, denied = denyList()) {
 // --stdin: a unified diff (git log -p -U0); scans only the added lines, reported as path:newLine
 function scanDiff(diff, denied = denyList()) {
   const hits = [];
-  let file = '?', n = 0, m;
+  let file = '?', n = 0, hdr = true, m; // hdr: between 'diff --git' and the first @@, where '+++ path' is a header; after @@ every '+' line is content
   for (const line of diff.split('\n')) {
-    if ((m = /^\+\+\+ (?:b\/)?(.*)/.exec(line))) file = m[1];
-    else if ((m = /^@@ -\S+ \+(\d+)/.exec(line))) n = +m[1];
-    else if (line[0] === '+') scanLine(file, line.slice(1), n++, denied, hits);
+    if (line.startsWith('diff --git ')) hdr = true;
+    else if (hdr && (m = /^\+\+\+ (?:b\/)?(.*)/.exec(line))) file = m[1];
+    else if ((m = /^@@ -\S+ \+(\d+)/.exec(line))) { n = +m[1]; hdr = false; }
+    else if (!hdr && line[0] === '+') scanLine(file, line.slice(1), n++, denied, hits);
   }
   return hits;
 }
@@ -67,4 +68,4 @@ if (require.main === module) {
   hits.forEach((h) => console.error(h));
   process.exit(hits.length ? 1 : 0);
 }
-module.exports = { scan, scanDiff };
+module.exports = { scan, scanDiff, denyList };
