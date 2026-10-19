@@ -727,6 +727,22 @@ function codeToRequirement(hunks, items, info = {}, { per: perHunk = PER_HUNK, t
 
 const numeric = (v) => /^\d+(?:[.,]\d+)*(?:\s*\S+)?$/.test(v) ? v.replace(/^(\d+(?:[.,]\d+)*).*$/, '$1') : null;
 
+// Removed or weakened test assertions (leads.js assertionDelta: the one heuristic) as queries: the literals and subject identifiers of the removed line.
+// A line without a literal makes no query: identifiers alone would point at unrelated code. ponytail: same-file single-line assertions as in leads.js; at most MAX_TEST_Q queries.
+const MAX_TEST_Q = 5, TEST_NOTE = 'from a removed or weakened test assertion', ASSERT_WORD = new Set('assert strict equal deep ok not to be eq throw match true false expect should is await'.split(' '));
+function weakenedQueries(patch) {
+  const seen = new Set(), out = [];
+  for (const a of require('./leads.js').assertionDelta(patch, isTestPath)) { // lazy: leads.js requires this module
+    if (seen.has(a.old) || out.length >= MAX_TEST_Q) continue;
+    seen.add(a.old);
+    const lits = [...new Set([...a.old.matchAll(/(?<![\w$.])\d+(?:\.\d+)?(?![\w$])|"([^"\n]*)"|'([^'\n]*)'/g)].map((m) => m[1] ?? m[2] ?? m[0]).filter((x) => x.length >= 2))].slice(0, 5);
+    if (!lits.length) continue;
+    const ids = [...new Set(tokenize(a.old.replace(/"[^"\n]*"|'[^'\n]*'|`[^`\n]*`/g, ' ').replace(/\d+(?:\.\d+)?/g, ' ')).filter((w) => w.length > 1 && !ASSERT_WORD.has(w)))];
+    out.push({ file: a.file, line: a.line, ids, lits: [...new Set(lits.flatMap((v) => [numeric(v) ?? v, ...sizeVariants(v)]))] });
+  }
+  return out;
+}
+
 // info.cut is set when the time budget stopped a search early.
 function requirementToCode({ cwd, head, entries, skip, crits, dl, info = {}, stop = null, cover = false }) {
   const eligible = entries.filter((e) => e.size <= MAX_FILE && !skip(e.path));
@@ -1017,6 +1033,27 @@ function run({ cwd = '.', base, head, ctx, reqPaths = '', trace = '', ignoreExtr
     try { cand.requirement_to_code = requirementToCode({ cwd, head, entries: d.entries, crits: deep, dl, info, skip: (p) => d.docs.has(p) || d.ruled(p) || (docLike(p) && !/\.feature$/i.test(p)) }); } catch (e) { lim('requirement-to-code ranking', e); }
     try { cand.occurrences = occurrences({ cwd, head, crits: deep.filter((c) => c.deltas.removed.length), maps, dl, info }); } catch (e) { lim('occurrence search', e); }
   }
+  // T: a removed or weakened test assertion points at the behaviour it protected: its literals and subject find requirement items (test -> req) and code windows (test -> code).
+  // Real code hunks and S* criteria keep priority; these come after them, under the same hunk limit and time budget. Marked via: "test".
+  try {
+    const tq = dl.over() ? [] : weakenedQueries(patch);
+    if (tq.length) {
+      const word = (x) => new RegExp(`(?<![\\w])${esc(x)}(?![\\w])`);
+      const rows = []; // each query ranks only the requirement items and descriptive blocks (a default stated in prose) that hold a literal of its removed line
+      let blocks = allBlocks;
+      if (!blocks.length) { const taken = new Set(allItems.map((i) => `${i.path}:${i.line}`)); blocks = docs.flatMap((x) => blocksOf(x.path, x.text)).filter((b) => !taken.has(`${b.path}:${b.line}`)).map((b) => ({ ...b, kind: 'block' })); }
+      for (const q of tq) {
+        const res = q.lits.map(word), pool = allItems.concat(blocks).filter((i) => res.some((re) => re.test(i.text)));
+        if (pool.length) rows.push(...codeToRequirement([{ path: q.file, line: q.line, end: q.line, context: '', identifiers: q.ids, literals: { added: [], removed: q.lits } }], pool));
+      }
+      const room = Math.max(0, MAX_HUNKS - cand.code_to_requirement.length);
+      cand.code_to_requirement.push(...rows.slice(0, room).map((h) => ({ ...h, via: 'test', note: TEST_NOTE })));
+      if (rows.length > room) cand.limitations.push(`${rows.length - room} requirement match(es) for removed or weakened test assertions beyond the ${MAX_HUNKS}-hunk limit were left out of code_to_requirement.`);
+      const t2c = requirementToCode({ cwd, head, entries: d.entries, dl, info, cover: true, skip: (p) => d.docs.has(p) || d.ruled(p) || (docLike(p) && !/\.feature$/i.test(p)),
+        crits: tq.map((q, i) => ({ id: `T${i + 1}`, heading: '', quote: q.ids.join(' '), previous: '', lits: q.lits })) });
+      for (const r of t2c) { const code = r.code.filter((w) => w.lits >= 1); if (code.length) cand.requirement_to_code.push({ criterion: r.criterion, via: 'test', note: TEST_NOTE, code, tests: [] }); } // a code window must hold a literal of the removed line
+    }
+  } catch (e) { lim('removed-assertion search', e); }
   if (info.cut) cand.limitations.push(`The ${Math.round(budgetMs / 1000)} s time budget was reached; code, test and occurrence search for the changed requirements is partial.`);
   if (info.valuesCapped) cand.limitations.push(`Occurrence search covers only the first ${MAX_VALUES} changed values.`);
   // Weak models drown in long lists (pilot: 33.7 KB, truncated in the prompt): keep the top TOP_CAND ranked code and test windows per criterion. Ranking is unchanged.
