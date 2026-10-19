@@ -24,7 +24,7 @@ const truncate = (s, n = BODY_MAX) => {
   return s.slice(0, end) + '\n...(truncated)';
 };
 const { matches } = require('./standards-map');
-const { parseCandidates } = require('./focus');
+const { parseCandidates, GENERATED } = require('./focus');
 const { standardsCut } = require('./prompt');
 const clean = (s) => truncate(redact(s));
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -810,7 +810,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   if (failed) verdict = `**⚠️ Could not complete: ${neutralize(String(status || '').replace(/^Could not complete:\s*/i, ''))}**`;
   else if (!data) verdict = status ? `**${neutralize(status)}**` : '';
   else if (reduced && (!gradeOnly(reduced) || (inc && act.length))) verdict = act.length ? `**❌ ${andList(act)} to fix**` : '**⚠️ Reduced review: no high-confidence gaps**'; // the explanation is a blockquote after the table; never a pass line
-  else if (inc) verdict = `**⚠️ Incomplete review: ${act.length ? `${andList(act)} found so far` : 'no unit test gaps found so far'}**`;
+  else if (inc) verdict = act.length ? `**⚠️ Incomplete review: ${andList(act)} found so far**` : `**⚠️ Partly reviewed: no gaps in what was reviewed; ${plural(incomplete.length, 'item')} not fully reviewed (listed below)**`;
   else if (act.length) verdict = `**❌ ${andList(act)} to fix**`;
   else if (checks) verdict = `**❔ No gaps found; ${plural(checks, 'criterion', 'criteria')} need${checks === 1 ? 's' : ''} a person to check**`;
   else if (changed) verdict = '**❔ No gaps found; requirement text changed in this PR, so review it**';
@@ -837,11 +837,11 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const bullets = [...banner.map((r) => cell(r)), ...(changed ? ['Requirement text was changed by this PR: consistency with the changed text does not prove the change itself is approved.'] : []),
     ...(rules.length ? [`This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`] : []),
     ...(lintChanged.length ? [`Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`] : [])];
-  const notice = failed ? '' : [inc ? '> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.' : '', gradeOnly(reduced) ? '> Fast-tier model: only high-confidence findings are posted inline.' : reduced && act.length ? `> Reduced review${reduced.reasons?.some((x) => x.id === 'tier') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
+  const notice = failed ? '' : [reduced && !gradeOnly(reduced) && act.length ? `> Reduced review${reduced.reasons?.some((x) => x.id === 'tier') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
   // the model's not_reviewed text as sentences; the automatic "Requirement X is not assessed" note is dropped when X has its own row in the table
   const shownIds = new Set(rows.map((x) => String(x.r.id)));
   const nrParts = (t) => String(t || '').split(/(?<=[.!?])\s+(?=[A-Z0-9`"'(])/).filter((x) => x.trim() && !shownIds.has((/^Requirement (\S+) is not assessed: /.exec(x) || [])[1]));
-  const nrAll =!failed && inc ? [...incomplete.map((r) => cell(r)), ...nrParts(data?.not_reviewed).map((x) => cell(x))] : [];
+  const nrAll = !failed && inc ? incomplete.map((r) => cell(r)) : []; // the first screen: only the reasons the run is incomplete; the model's own not_reviewed sentences are in Details
 
   // ---- visible sections
   const vis = []; // { h, atoms, tail }
@@ -921,7 +921,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     const t = traceTable(data, blob, specFiles, covById);
     if (t) add(det, t.head, t.atoms, '\n');
     addPre();
-    if (!inc && data.not_reviewed) {
+    if (data.not_reviewed) {
       const parts = nrParts(data.not_reviewed);
       detail(`**Not reviewed (${plural(parts.length, 'item')})**\n\n`, parts.slice(0, 40).map((x) => `- ${cell(x, 400)}\n`), `${parts.length > 40 ? `- +${parts.length - 40} more\n` : ''}\n`);
     }
@@ -935,7 +935,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     if (src) detail(src.h, src.atoms);
     if (reduced) detail('**Reduced review**\n\n', [`Reasons: ${reduced.reasons.map((r) => cell(r.text)).join('; ')} (model: ${cell(reduced.model || 'unknown', 80)}). Only high-confidence findings were posted inline.\n`]);
     const sn = counts && counts.complete && counts.since;
-    const more = [...runNotes.map((x) => `${cell(x)}\n`),
+    const more = [...(inc ? ['Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n'] : []), ...runNotes.map((x) => `${cell(x)}\n`),
       ...(traceNote ? [`Traceability unavailable for this PR (${cell(traceNote)}).\n`] : []),
       ...(sn && counts.since_total ? [`Since earlier reviews${counts.prior_total > counts.since_total ? `, of the ${counts.since_total} most recent` : ''}: ${sn.addressed} addressed · ${sn.open} still open · ${sn.dismissed} dismissed · ${sn.not_observed} not observed (not proof of a fix)\n`] : []),
       ...(resolveNote ? [`Threads for findings no longer reported were left open: ${cell(resolveNote)} (see README, resolve_stale).\n`] : [])];
@@ -1401,6 +1401,8 @@ function anchorTouched(from, to, file, start, end, cwd, git = (...a) => execFile
 
 // Did the author's own commits from `from` to `to` (first-parent, no merges) change any test file? true / false, or null when git cannot say.
 const isTest = (p) => require('./trace').isTestPath(p); // lazily: trace.js requires this module
+// can a changed file carry a unit-test obligation? Not a doc, snapshot, generated file or test fixture (classifiers: trace.pathKind, focus.GENERATED, trace.FIXTURE_PATH)
+const carriesObligation = (p) => { const t = require('./trace'); return !['doc', 'snapshot'].includes(t.pathKind(p)) && !GENERATED.test(p) && !t.FIXTURE_PATH.test(p); }
 function testsChanged(from, to, cwd, git = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 26 })) {
   if (!/^[0-9a-f]{7,64}$/i.test(String(from))) return null;
   try {
@@ -1559,8 +1561,11 @@ async function run({ github, context, core }) {
   const incomplete = [];
   const st = (readCtx('engine-status') || '').trim();
   if (partial) incomplete.push('The diff exceeded `max_diff_kb` and was truncated; obligations outside the reviewed portion are unknown.');
-  if (dropped.length) incomplete.push(notReviewed(dropped));
-  if (focused && skipped.length) incomplete.push(focusNote(focused.files, focused.of, skipped));
+  // a skipped/dropped doc, snapshot, generated or fixture file carries no unit-test obligation: one plain note, not an incomplete run
+  const quiet = [], bears = (xs) => xs.filter(carriesObligation), plain = (xs) => xs.length && quiet.push(`Not reviewed (no unit-test obligation): ${xs.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${xs.length > 10 ? `, … (+${xs.length - 10} more)` : ''}`);
+  if (bears(dropped).length) incomplete.push(notReviewed(bears(dropped)));
+  if (focused && bears(skipped).length) incomplete.push(focusNote(focused.files, focused.of, bears(skipped)));
+  plain(dropped.filter((x) => !carriesObligation(x))); plain(skipped.filter((x) => !carriesObligation(x)));
 
   let data;
   try { data = JSON.parse(fs.readFileSync(path.join(ctx, 'findings.json'), 'utf8')); }
@@ -1576,25 +1581,17 @@ async function run({ github, context, core }) {
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
   const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')[0])); // a scan's lines carry "\tunit ids" (audit-post.js reads those) // the claude engine's pack: files the model saw only partly or not at all
+  const demoted = new Set(); // files whose missing/weak-test finding was demoted because a candidate test was cut
   if (packCut.size) { // a missing/weak-test claim is only trustworthy when its candidate tests were fully visible
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
     for (const f of data.findings) {
       const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
-      if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
+      if (seen) { demoted.add(f.path); f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }
   const noCands = new Set((readCtx('candidates-cut.txt') || '').split('\n').filter(Boolean)); // collect.sh: changed files whose candidate tests were never looked up (list cap)
   for (const f of data.findings) if (f.kind === 'missing_test' && f.confidence !== 'low' && noCands.has(f.path)) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: candidate tests were not looked up for ${f.path} (too many changed files); missing_test ${f.path} is not counted.`); }
   if (noCands.size) incomplete.push(`Candidate tests were not looked up for ${noCands.size} changed file(s) (too many changed files): ${[...noCands].slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${noCands.size > 5 ? ', …' : ''}; their missing-test claims are not counted.`);
-  if (packCut.size) { // a cut changed file, or a cut candidate test of one, means the model never saw what the obligations depend on: no clean verdict, no head marker
-    const cands = parseCandidates(readCtx('test-candidates.txt') || '');
-    // a cut candidate test always counts; a cut changed file only when a changed line lies past the lines the pack showed (pack-shown.txt; no entry = not shown at all). ponytail: the diff section itself is not checked for cuts.
-    const shown = new Map((readCtx('pack-shown.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')));
-    const dm = parseDiff(readCtx('diff.patch') || '');
-    const past = (f) => !shown.has(f) || [...(dm.get(f)?.changed.RIGHT.keys() || [])].some((n) => n > +shown.get(f));
-    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [...(packCut.has(f) && past(f) ? [f] : []), ...(cands.get(f) || []).filter((x) => packCut.has(x))]))];
-    if (lost.length) incomplete.push(`Review context was cut: the model saw only part of ${lost.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${lost.length > 10 ? `, … (+${lost.length - 10} more)` : ''}; obligations that depend on them are unknown.`);
-  }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
   if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);
   const addNote = (m) => { data.not_reviewed = [data.not_reviewed, m].filter(Boolean).join(' '); };
@@ -1661,6 +1658,22 @@ async function run({ github, context, core }) {
   }
   if (partial) addNote('Diff truncated; obligations outside the reviewed portion are unknown.');
   applyCoverage(data, cov);
+  if (packCut.size) { // the model never saw what an obligation depends on: no clean verdict, no head marker
+    const cands = parseCandidates(readCtx('test-candidates.txt') || '');
+    // a cut changed file counts only when a changed line lies past the lines the pack showed (pack-shown.txt; no entry = not shown at all) and it can carry a unit-test obligation. ponytail: the diff section itself is not checked for cuts.
+    const shown = new Map((readCtx('pack-shown.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')));
+    const dm = parseDiff(readCtx('diff.patch') || '');
+    const past = (f) => !shown.has(f) || [...(dm.get(f)?.changed.RIGHT.keys() || [])].some((n) => n > +shown.get(f));
+    const rowsOf = (f) => data.coverage.filter((c) => c.behaviour?.path === f);
+    // a cut candidate test of f matters only if the model's conclusion about f could change had it seen the test: a demoted finding, a row not proven covered, or no row at all
+    const open = (f) => demoted.has(f) || (rowsOf(f).length ? rowsOf(f).some((c) => c.status !== 'covered') : carriesObligation(f));
+    const files = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean))];
+    const lost = files.filter((f) => carriesObligation(f) && packCut.has(f) && past(f)), cutCand = (f) => (cands.get(f) || []).some((x) => packCut.has(x));
+    const partly = files.filter((f) => !lost.includes(f) && cutCand(f) && open(f)), rest = files.filter((f) => !lost.includes(f) && !partly.includes(f) && cutCand(f));
+    const why = [...lost.map((x) => `\`${cell(x, 120)}\`: changed lines past what the model saw`), ...partly.map((x) => `unit tests of \`${cell(x, 120)}\` were only partly visible`)];
+    incomplete.push(...why.slice(0, 10), ...(why.length > 10 ? [`+${why.length - 10} more files not fully reviewed`] : []));
+    if (rest.length) quiet.push(`Some tests of ${rest.slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${rest.length > 5 ? ', …' : ''} were only partly visible; the verified evidence for those files already covers every obligation.`);
+  }
   const base = env.BASE_SHA || pr.base?.sha;
   const dmaps = new Map([...maps, ...(base ? renameMaps(base, headSha, process.env.GITHUB_WORKSPACE || process.cwd()) : [])]);
   differential(data, dmaps);
@@ -1885,7 +1898,7 @@ async function run({ github, context, core }) {
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
   const delivered = summaryOnly ? 'summary only, nothing posted' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || struggling ? undefined : headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: [...quiet, ...(summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [])], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || struggling ? undefined : headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
