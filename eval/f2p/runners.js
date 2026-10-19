@@ -7,11 +7,12 @@ const rel = (f, cwd) => String(f).replace(/\\/g, '/').replace(cwd.replace(/\\/g,
 // 'at fn (path:line:col)' / 'at path:line:col' frames of a JS stack, innermost first, as 'path:line'.
 const jsFrames = (stack, cwd) => [...String(stack).matchAll(/\bat (?:.*? \()?([^\s()]+?):(\d+):\d+\)?/g)].map((m) => `${rel(m[1], cwd)}:${m[2]}`);
 
+const vitestFailures = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')).testResults.flatMap((x) => x.assertionResults || []).filter((a) => a.status === 'failed').flatMap((a) => a.failureMessages || []).join('\n'); } catch { return ''; } };
 // vitest --reporter=json. Assertion-vs-error classification is mutate.js verdict(); a thrown non-assertion error also gets its stack origin.
 function parseVitest(res, jsonFile, cwd) {
   const v = mutVerdict(res, jsonFile);
   if (v.status === 'survived') return { outcome: 'pass' };
-  if (v.status === 'killed') return { outcome: 'assert_fail' };
+  if (v.status === 'killed') return { outcome: 'assert_fail', msg: vitestFailures(jsonFile).slice(0, 1200) }; // msg is for the claim_match labeller only; it never affects the outcome
   if (v.status === 'timeout') return { outcome: 'error', msg: 'timeout' };
   if (!/^non-assertion/.test(v.reason)) return { outcome: 'error', msg: v.reason };
   let msgs = [];
@@ -28,7 +29,7 @@ function parsePytest(xml, cwd = '') {
   const fails = cases.filter((c) => /<failure\b/.test(c));
   if (!fails.length) return cases.every((c) => /<skipped\b/.test(c)) ? { outcome: 'error', msg: 'all tests skipped' } : { outcome: 'pass' };
   const text = fails.map((c) => c.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')).join('\n');
-  if (fails.some((c) => /AssertionError|^\s*E\s+assert\b|message="assert\b/m.test(c))) return { outcome: 'assert_fail' };
+  if (fails.some((c) => /AssertionError|^\s*E\s+assert\b|message="assert\b/m.test(c))) return { outcome: 'assert_fail', msg: text.slice(0, 1200) };
   const frames = [...text.matchAll(/^(\S+\.py):(\d+): /gm)].map((m) => `${rel(m[1], cwd)}:${m[2]}`).reverse();
   const msg = (/message="([^"]*)"/.exec(fails[0]) || [])[1] || 'exception';
   return { outcome: 'throw', msg, ...throwOrigin(frames, msg) };
@@ -46,7 +47,7 @@ function parseGo(jsonl, cwd = "", stderr = "") {
     const frames = [...out.matchAll(/^\s+(\S+\.go):(\d+) \+0x/gm)].map((m) => `${rel(m[1], cwd)}:${m[2]}`);
     return { outcome: 'throw', msg, ...throwOrigin(frames, msg) };
   }
-  return { outcome: 'assert_fail' };
+  return { outcome: 'assert_fail', msg: out.slice(-1200) };
 }
 
 module.exports = { parseVitest, parsePytest, parseGo, jsFrames };

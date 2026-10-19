@@ -1,5 +1,1171 @@
 {
- "rows": {},
+ "rows": {
+  "aad69eecaa0676c82e7b2065f3662dfee73f5e0ad3d52581064057a8d89ab311": {
+   "id": "aad69eecaa0676c82e7b2065f3662dfee73f5e0ad3d52581064057a8d89ab311",
+   "pr": "sqlglot-7315",
+   "repo": "tobymao/sqlglot",
+   "kind": "missing_test",
+   "claim_match": "yes",
+   "claim_reason": "Finding says TRY_TO_NUMBER must become TRY_CAST in DuckDB (null-on-error); the failure is CAST vs TRY_CAST on exactly that input.",
+   "test_sha256_frozen": {
+    "tests/dialects/test_try_to_number_duckdb.py": "78034372691f5d47954afdc660d15639268875c99f0b4a52edff484e7644c19f"
+   },
+   "verdict": "verified",
+   "reason": "assertion fails on buggy, passes on fixed",
+   "runs": {
+    "buggy": [
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "0be00049c599e03a18271ad7867bea6e7c9a5890ee65a4402f53100e63fb2151": {
+   "id": "0be00049c599e03a18271ad7867bea6e7c9a5890ee65a4402f53100e63fb2151",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "libs/core/tests/unit_tests/language_models/chat_models/test_cache_disabled.py": "cd27f4094f24c79c863fa7a1d4a0ec054572508f63459824c5e6a0c3300937b7"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "fed260310ea9e5da972b85454379740fe017b140845679c011a7d599f1f783eb": {
+   "id": "fed260310ea9e5da972b85454379740fe017b140845679c011a7d599f1f783eb",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "libs/core/tests/unit_tests/language_models/chat_models/test_cache_write_on_miss.py": "f0c1d02f35bb41f85944c7aeceb20aba5f5653ecb69c466062269431e598aec2"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "d5022ffaac729bd996347b252f280c07ac18febc96fcb8f8ed6f4d139dd600e9": {
+   "id": "d5022ffaac729bd996347b252f280c07ac18febc96fcb8f8ed6f4d139dd600e9",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "libs/core/tests/unit_tests/language_models/chat_models/test_generation_info_merge.py": "ad644fb442bf85db00cee6a0067b5a84517265a05efc2599f6ad22e594c30f96"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "3401f2b11eb1d9f7136cf7e0e723552991b786834b9b55382d44f05975e70007": {
+   "id": "3401f2b11eb1d9f7136cf7e0e723552991b786834b9b55382d44f05975e70007",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "libs/core/tests/unit_tests/language_models/chat_models/test_generate_response_metadata.py": "6604557359eb50f8c9b0549c3c74dc02784d43a205a151e046d95d34913f012d"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "e60f88d7321310880035eb193f16bdd3a0d672cb8bd0f775f7a42063db9c3bbd": {
+   "id": "e60f88d7321310880035eb193f16bdd3a0d672cb8bd0f775f7a42063db9c3bbd",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "libs/core/tests/unit_tests/language_models/chat_models/test_cache_flag_branches.py": "6633aba372b83db7e350c4ec4031ded4f472ae7d015fb2e33ca3e2a4b4801783"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "dc0bc05ba5e1d49f0b5dabf1ed62e7503486e1a981808b46b11d4c8ee0d46ba5": {
+   "id": "dc0bc05ba5e1d49f0b5dabf1ed62e7503486e1a981808b46b11d4c8ee0d46ba5",
+   "pr": "hono-3787",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/accept-malformed-q.test.ts": "6c5de31d7708f1a093b6adee3489b494178b254ecde536e435990f8016ca34fd"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "82302fed710b0f482bb35b73ec3719f240bb58ac588b4077aaf0c1bb17a5bb74": {
+   "id": "82302fed710b0f482bb35b73ec3719f240bb58ac588b4077aaf0c1bb17a5bb74",
+   "pr": "hono-3787",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/accept-many-params.test.ts": "199b4ce412145acea0da0d9b4f376bfe8ad25732ff2dd02b4c697776329b86ce"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "2b5972894e6403df82a0bc59c4b99a3a8a8f8e7c61a28f4b5a1b6677ecd4d8d3": {
+   "id": "2b5972894e6403df82a0bc59c4b99a3a8a8f8e7c61a28f4b5a1b6677ecd4d8d3",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/jwt/jwt-rs-hash-pinned.test.ts": "5fceec3e01f59be93d2fd38920cb6e23b18b6fb92d8f7d9cfc262a795da8a0a2"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "8321f5f742fc4c76b0aa21a5918873c343c7e89efdd9830742908a5c3bd9e17d": {
+   "id": "8321f5f742fc4c76b0aa21a5918873c343c7e89efdd9830742908a5c3bd9e17d",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": "yes",
+   "claim_reason": "Test checks that a validly signed token with header {\"alg\":\"HS256\"} (no typ) is rejected with JwtHeaderInvalid; on the defective version verify resolves instead.",
+   "test_sha256_frozen": {
+    "src/utils/jwt/jwt-header-invalid-signed.test.ts": "b8fe5f839070b701033164ca9e94a5e9ce91c34725bfcc28ad6121b3b956cb22"
+   },
+   "verdict": "invalid",
+   "subtype": "throw_on_fixed",
+   "reason": "non-assertion throw on fixed tree",
+   "runs": {
+    "buggy": [
+     "throw",
+     "throw",
+     "throw"
+    ],
+    "fixed": [
+     "throw",
+     "throw",
+     "throw"
+    ]
+   }
+  },
+  "79e11a47e7608d8d2d85ffb32c9e776e41a83eb54b413cf9f81dedaae643f718": {
+   "id": "79e11a47e7608d8d2d85ffb32c9e776e41a83eb54b413cf9f81dedaae643f718",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/jwt/jwt-header-invalid-branch.test.ts": "664038c15c6265e9604abf9ca2f8915f1bd45c758d023cac1078c34318a9c86a"
+   },
+   "verdict": "not_discriminating",
+   "reason": "assert_fail on both trees",
+   "runs": {
+    "buggy": [
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
+    ],
+    "fixed": [
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
+    ]
+   }
+  },
+  "600ba5037c26c8bc5cdf403668899a670f2195906fb1a4214a15323f47c7942c": {
+   "id": "600ba5037c26c8bc5cdf403668899a670f2195906fb1a4214a15323f47c7942c",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/jwt/jwt-rs-hash-pinned.test.ts": "5fceec3e01f59be93d2fd38920cb6e23b18b6fb92d8f7d9cfc262a795da8a0a2"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "4221a88afefc8598d6bb5a3a5840c24f6379041a258f1d0a5e81f7d134914b5e": {
+   "id": "4221a88afefc8598d6bb5a3a5840c24f6379041a258f1d0a5e81f7d134914b5e",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/jwt/jwt-header-no-typ.test.ts": "19bd1dfd55abb9dff8e24db7c7b48eb9a3eca1c7f71ee6328f49d5883b371394"
+   },
+   "verdict": "not_discriminating",
+   "reason": "assert_fail on both trees",
+   "runs": {
+    "buggy": [
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
+    ],
+    "fixed": [
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
+    ]
+   }
+  },
+  "2d7a382bf7de165a2c57cdbd294451a28550d01beb79cc64cfdef974ee6d067e": {
+   "id": "2d7a382bf7de165a2c57cdbd294451a28550d01beb79cc64cfdef974ee6d067e",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/serve-static/gzip-branch.test.ts": "1b583746def5d62dd9359f3c70bbc84ca13de608db30a7b5c1b703130c447fc3"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "75ce8eb3a592f278ca781b2aaad886b98508352617f29895c0689d51a7d224aa": {
+   "id": "75ce8eb3a592f278ca781b2aaad886b98508352617f29895c0689d51a7d224aa",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/serve-static/no-accept-encoding.test.ts": "68c844c6861ac118e21ffb54fa1d679682d29d510a6d127e00cf8bd9c852ecd6"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "ba77748f7e23b15fdda76170e4f1096f0ba1957cc88cf7e47f492465ab2be230": {
+   "id": "ba77748f7e23b15fdda76170e4f1096f0ba1957cc88cf7e47f492465ab2be230",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/serve-static/gzip-only.test.ts": "1b583746def5d62dd9359f3c70bbc84ca13de608db30a7b5c1b703130c447fc3"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "e0230af71beecd818dfa1656420afb90c7d6e1195dd1439b3d51431256586bee": {
+   "id": "e0230af71beecd818dfa1656420afb90c7d6e1195dd1439b3d51431256586bee",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/serve-static/zstd-over-gzip.test.ts": "015115c828366a395db49d462b6d1cd183ea0d829d7b1aa50e7f3b8d7ce2f84f"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "1832ddfd559560f1de05dc7d2145ab1fba2eb6442936f62f590f6f16befca6ed": {
+   "id": "1832ddfd559560f1de05dc7d2145ab1fba2eb6442936f62f590f6f16befca6ed",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/serve-static/precompressed-off-default.test.ts": "5778c4e306a2deb9c510fcdf08e921b9f8f0f8e821da50b8d95b9f9b60f82c85"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "650b52260b644252b287b61d0e05e75d9c8a93dfcde912d8bac73a4a127dab6e": {
+   "id": "650b52260b644252b287b61d0e05e75d9c8a93dfcde912d8bac73a4a127dab6e",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/serve-static/gzip-and-priority.test.ts": "4d3edb9e1107f0de2aef565f14430ff40e1494b75fc76efa9150455002fbcdd6"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "16ec6b59a2b6afe4f76f569308c799cc8bacb1956875f5047fc819a6e874948e": {
+   "id": "16ec6b59a2b6afe4f76f569308c799cc8bacb1956875f5047fc819a6e874948e",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/serve-static/precompressed-gate-default.test.ts": "2843dc9e23f1d81cb85a4c08eb1c3abc3310738e4ffcac4d6388340f97d26053"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "8d9c1f644d57f8ab3d3e3f38572f8a361ea9b1e39a2a538b881b332eb8792832": {
+   "id": "8d9c1f644d57f8ab3d3e3f38572f8a361ea9b1e39a2a538b881b332eb8792832",
+   "pr": "hono-3727",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": "no",
+   "claim_reason": "Finding claims 13 groups from an empty section; the failure shows 8 groups with ffff in the wrong position, a different defect than claimed.",
+   "test_sha256_frozen": {
+    "src/utils/ipaddr-mapped-zero.test.ts": "771f4e812c47e40ba8ccae751e1528b955dc309039704d3cc2c3b2b956b40db8"
+   },
+   "verdict": "verified",
+   "reason": "assertion fails on buggy, passes on fixed",
+   "runs": {
+    "buggy": [
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "ad9322348bf8f05bf75c3975b622c7dcf1fa9f0cc46d6425d836bc9a66f4e6ad": {
+   "id": "ad9322348bf8f05bf75c3975b622c7dcf1fa9f0cc46d6425d836bc9a66f4e6ad",
+   "pr": "hono-3604",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/etag/stream-last-chunk.test.ts": "93c1d6f6e36c90a59bf6427479b70925ccd9b8e7112d1e560ed6b66ecc2cda03"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "99ad80e1d12f4accf0c16bbc582271269626472236357f3973c0f73e207ebc22": {
+   "id": "99ad80e1d12f4accf0c16bbc582271269626472236357f3973c0f73e207ebc22",
+   "pr": "hono-3604",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/etag/stream-first-chunk.test.ts": "b7aa3946ed85c98061a38ede647d93ecfeec4fefe0be70e9f3ad8e1c43db422c"
+   },
+   "verdict": "reversed",
+   "reason": "passes on buggy, fails by assertion on fixed",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
+    ]
+   }
+  },
+  "2e8c1d4128db6fe3a9441df8e6d28004952ba7ad0da18313481d37532bf06536": {
+   "id": "2e8c1d4128db6fe3a9441df8e6d28004952ba7ad0da18313481d37532bf06536",
+   "pr": "hono-3604",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/etag/stream-literal.test.ts": "7191744be240ac76a01a7c34d6c3b8cd5b553df143e9970dbc9daecf6e1ede0c"
+   },
+   "verdict": "reversed",
+   "reason": "passes on buggy, fails by assertion on fixed",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
+    ]
+   }
+  },
+  "9be6a0c3748a1573bb4d24142ba832b0c420be69c912f1588ce4cb10188af230": {
+   "id": "9be6a0c3748a1573bb4d24142ba832b0c420be69c912f1588ce4cb10188af230",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/secure-headers/default-report-only-absent-a.test.ts": "1e9139c4bbf3bd4cacf19bed9ada9a4930d2482a302e769b4c99d5d48a7ec0f5"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "2c1849053366ae3e7b852bf170f64ae16c7ec5ca398580af4632d01818399a26": {
+   "id": "2c1849053366ae3e7b852bf170f64ae16c7ec5ca398580af4632d01818399a26",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/secure-headers/csp-full.test.ts": "939b0ece08e4c83422cf153236a4db23f74e3eb4255486516fef66a3c30bebdb"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "066438b47f607561a3fb3fd5cf30fd050b9c821cdb16ee88b3d6734925c2b6f0": {
+   "id": "066438b47f607561a3fb3fd5cf30fd050b9c821cdb16ee88b3d6734925c2b6f0",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/secure-headers/csp-one-only.test.ts": "f4d2672bbac1f2208691b98e94ca1f479c5ccff4fb6ea63e21049c643f540285"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "29dda40751ca852c878705c4d9097666ef79128393c542a151eb2a3cceb1a401": {
+   "id": "29dda40751ca852c878705c4d9097666ef79128393c542a151eb2a3cceb1a401",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/secure-headers/csp-empty.test.ts": "51fb006245be650004bdd07e79a4e6e4792caa80a5d7d0cd43ac3d28c940f591"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "d84a2a57e6dee34749fd05f6663cab2bd5fee889a82980e838300307d32c0fe8": {
+   "id": "d84a2a57e6dee34749fd05f6663cab2bd5fee889a82980e838300307d32c0fe8",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/ipv4-octets.test.ts": "a65eddfec4da6f127b0d7593b8e1bd8f49704fd69ca87a04f7e4290583544979"
+   },
+   "verdict": "invalid",
+   "subtype": "other",
+   "reason": "does not pass 3/3 on the unmutated tree",
+   "runs": {
+    "unmutated": [
+     "error",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "8c8b48c90e072839068e3137f600dd4c9df18513ecd0334be643e0e16ff1763d": {
+   "id": "8c8b48c90e072839068e3137f600dd4c9df18513ecd0334be643e0e16ff1763d",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/url-trydecode.test.ts": "0cfe3d5fa135d6286b0473e2e325be618a1dcc82b5cb0f80248c5d3bbef1f309"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "01f4fc3429729ddd1b83a05a6cfc40c1c938a4c23c8b2ebb6e62f0c9b416da39": {
+   "id": "01f4fc3429729ddd1b83a05a6cfc40c1c938a4c23c8b2ebb6e62f0c9b416da39",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/cookie-dupes.test.ts": "d6b863c0fbb880ce3e8bab164b841c61ad5762052f1c78d24dd487bde6876bc8"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "16085bbdb78f01c3c53062897e23410038484b94afbccf499bc6831c47072e9a": {
+   "id": "16085bbdb78f01c3c53062897e23410038484b94afbccf499bc6831c47072e9a",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/jwk/signed-cookie-header.test.ts": "80f43c22e4cdbdbd5bd16af59d4dadac0b8074508e54eb6af9ad4a62fc30cafe"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "1c908d060db5c5567b71ab53d26570c07feede88b989501ccb996a8d3c8e027f": {
+   "id": "1c908d060db5c5567b71ab53d26570c07feede88b989501ccb996a8d3c8e027f",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/body-other-media.test.ts": "f000ad1889d347178e0ba12c214f93d42a1e5566db6b021a2641c004cdadf4c6"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "4ee957044296b6f404393ac11f8d1b57dbac5c4fbabd1bcdd4cc54f25f91b351": {
+   "id": "4ee957044296b6f404393ac11f8d1b57dbac5c4fbabd1bcdd4cc54f25f91b351",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/accept-q.test.ts": "d224335c043a473d088dbb0eb84453845bf87e79a778734131ab3aabf57bf34e"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "007c55799301c114b8114f554e76a9bad345a2003a9c94963183046dbbb6dd10": {
+   "id": "007c55799301c114b8114f554e76a9bad345a2003a9c94963183046dbbb6dd10",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/buffer-equal-last.test.ts": "a45d4b7224563bdd759e32ba3320f40ea0f523fc8c80c3ab7f4737014b0973f1"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "7743d8068fc283a1e14c1b8eaba68974c18d675c41c68f22b21e4b34df25aec4": {
+   "id": "7743d8068fc283a1e14c1b8eaba68974c18d675c41c68f22b21e4b34df25aec4",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/buffer-prefix.test.ts": "3dda78e3768fdbb8543305203e53371f71fa2422ac1d07cfc25ea940f194f374"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "b6e20d797a9723e3b5f4b67f81173632db770d03223291e7bd06614df5fdbbbf": {
+   "id": "b6e20d797a9723e3b5f4b67f81173632db770d03223291e7bd06614df5fdbbbf",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/crypto-md5.test.ts": "b7cbe7da279bb288337cd0cae2db4cae8cf96568f23f9fe2f2ec156be967d518"
+   },
+   "verdict": "invalid",
+   "subtype": "other",
+   "reason": "does not pass 3/3 on the unmutated tree",
+   "runs": {
+    "unmutated": [
+     "throw",
+     "throw",
+     "throw"
+    ]
+   }
+  },
+  "e0234654487641213486aa67f25ef9f0f66291f6bf0b3882fa056beee7e55a40": {
+   "id": "e0234654487641213486aa67f25ef9f0f66291f6bf0b3882fa056beee7e55a40",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/html-resolve-sync.test.ts": "c6fd33c7ee9270a9db406ad62398984233b00fa11613e7eac73ae9ec82f95c9c"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "ca1afdda458fa63a60cc465fc5f43aa4b3cb2a4c17f9de6a580fefd416c51f47": {
+   "id": "ca1afdda458fa63a60cc465fc5f43aa4b3cb2a4c17f9de6a580fefd416c51f47",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/stream-abort.test.ts": "2f834d321fb5b6aaa3541be35a2547a079b94800cfd19bffbf8d70fea1c9caad"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "3fa921e882ce22c359b26fc851d8e5bb3c28281c4fa1eddbb1eb62898e41933e": {
+   "id": "3fa921e882ce22c359b26fc851d8e5bb3c28281c4fa1eddbb1eb62898e41933e",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/encode-literal.test.ts": "87708d8a6addfeb39b80e2b0ad3790bec6021e9cb43ba6ddbd5dc2aab08193bb"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "0ab0a3fb5301644c079be3e0df9c408e85d2b2b1c03990138989e43d0690c626": {
+   "id": "0ab0a3fb5301644c079be3e0df9c408e85d2b2b1c03990138989e43d0690c626",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/decode-literal.test.ts": "a10aec504a9a57c819d1a9373e2e0f204fb3b4eb4c1ee4d38d38726ad1c34976"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "dc8b7cfd18ae97bbc0fbc3b899772a55c8accefe591857e052ab221fd5c448d6": {
+   "id": "dc8b7cfd18ae97bbc0fbc3b899772a55c8accefe591857e052ab221fd5c448d6",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/color-bundle.test.ts": "20b758b494f2a6fa3b679a0d4ada348353e9b9c94de66eca1b5f1959a67052b6"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "8eb8a74e1947472d3403a4e83345da899f18c21f37a3c1359e8a1b6645479b18": {
+   "id": "8eb8a74e1947472d3403a4e83345da899f18c21f37a3c1359e8a1b6645479b18",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/basic-auth-case.test.ts": "372be6cefccdaea7ac56fa8c127971d9823c2a065a9632ea3ac2fb8fe7639774"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "de9f2efe71cb4fb537e514bf18fafa6da1793e70f330bbcff36275a303bd50e4": {
+   "id": "de9f2efe71cb4fb537e514bf18fafa6da1793e70f330bbcff36275a303bd50e4",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/utils/basic-auth-colon.test.ts": "cfae0c0f4b19115e820e0869f8b36c53ff01601d8f6bd5bc42b11c509d2052e2"
+   },
+   "verdict": "not_discriminating",
+   "reason": "kills 0 survivor(s), 0 uncertain",
+   "kills": [],
+   "kills_uncertain": [],
+   "flaky_mutants": [],
+   "runs": {
+    "unmutated": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "2f6d49a1a38efb51f6b55fe2f198f81314cba141c0bcb2696589742452ed0d01": {
+   "id": "2f6d49a1a38efb51f6b55fe2f198f81314cba141c0bcb2696589742452ed0d01",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/secure-headers/csp-report-to-endpoints.test.ts": "9d715b3a4556ebbf77d5b08459b92228b75bb676ed2959af74bc50eab6161361"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "bbe2c739adc42d4dca5686913428497fc5afdc0dff9d24fe6deb71a3140d1dd7": {
+   "id": "bbe2c739adc42d4dca5686913428497fc5afdc0dff9d24fe6deb71a3140d1dd7",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "kind": "missing_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/secure-headers/csp-report-to-group.test.ts": "c15f06c659027804e05b3639e3093b6606ea5f0bfbe54c893e8dfb322264cb76"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "84a7d230e1981e9ae63311da88e744e4ed5406f3247dc5540407a13961c1573c": {
+   "id": "84a7d230e1981e9ae63311da88e744e4ed5406f3247dc5540407a13961c1573c",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/secure-headers/default-report-only-absent-b.test.ts": "1e9139c4bbf3bd4cacf19bed9ada9a4930d2482a302e769b4c99d5d48a7ec0f5"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  },
+  "87a0afa42af7d2a749b75b04c606f97d3721afbdb82e91e731e0ad16ea189d17": {
+   "id": "87a0afa42af7d2a749b75b04c606f97d3721afbdb82e91e731e0ad16ea189d17",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "kind": "weak_test",
+   "claim_match": null,
+   "claim_reason": null,
+   "test_sha256_frozen": {
+    "src/middleware/secure-headers/default-report-only-absent-c.test.ts": "1e9139c4bbf3bd4cacf19bed9ada9a4930d2482a302e769b4c99d5d48a7ec0f5"
+   },
+   "verdict": "not_discriminating",
+   "reason": "pass on both trees",
+   "runs": {
+    "buggy": [
+     "pass",
+     "pass",
+     "pass"
+    ],
+    "fixed": [
+     "pass",
+     "pass",
+     "pass"
+    ]
+   }
+  }
+ },
  "positive_control": {
   "orpc-1846": {
    "repo": "middleapi/orpc",

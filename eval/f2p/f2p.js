@@ -183,6 +183,6 @@ module.exports = { MANIFEST, resolveFix, hunks, distance, classify, siblings, un
 if (require.main === module) {
   const [cmd, ...args] = process.argv.slice(2), H = () => require('./harness');
   const cmds = { candidates: cmdCandidates, power: cmdPower, export: () => H().cmdExport(), packets: () => H().cmdPackets(), setup: () => H().cmdSetup(args[0], args[1]), baseline: () => H().cmdBaseline(args.length ? args : null), try: () => H().cmdTry(args[0]),
-    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.slice(1)) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport(), controls: () => H().cmdControls(args.length ? args : null), 'writers-done': () => H().cmdWritersDone(args[0]), verify: () => H().cmdVerify(args[0]) };
+    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.length > 1 ? args.slice(1) : null) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport(), controls: () => H().cmdControls(args.length ? args : null), 'writers-done': () => H().cmdWritersDone(args[0]), verify: () => H().cmdVerify(args[0]) };
   if (!cmds[cmd]) { console.error('usage: f2p.js candidates | power | export | packets | setup <repo> <sha> | baseline | try <id> | run [--mutation] [id|pr...] | report | controls [repo|pr...] | writers-done <repo>'); process.exitCode = 2; } else cmds[cmd]();
 }

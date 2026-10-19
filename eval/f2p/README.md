@@ -189,3 +189,28 @@ Harness bug found before any outcome existed: `repos.json` held a prose note in 
 Shared-machine rule (from 2026-10-20): agents kill only process ids they started themselves, never by name or pattern. During phase A, node processes matching `--test` or `f2p` were killed by pattern while freeing the machine; that may have hit another session's test run.
 
 Deviation recorded before the oracle run (2026-10-20): because `try` failed in setup, the hono writers wrote every hono test without feedback, while the rqlite, sqlglot and langchain writers had feedback. All 9 NEAR findings are hono, so writer feedback is confounded with the arm across repos. The within-hono NEAR vs FAR comparison is the primary descriptive comparison; the cross-repo comparison is reported but confounded by writer feedback. The hono tests are not rewritten.
+
+## Results (2026-10-20, runnable scope: hono, sqlglot, langchain; rqlite not yet run)
+
+Two harness changes were made after the first outcomes and change no verdict: `run --mutation` with no ids filtered out every finding (empty-list bug; fixed before the mutation arm ran), and the runners now keep the assertion failure text (`msg`) so the claim_match labeller can see it (outcome classification unchanged; the two verified tests were rerun on buggy only to capture it). A replay run of hono-3413 died mid-way on out-of-memory in `git archive`; its 5 unfinished findings were run once afterwards (the 3 finished ones were not rerun), and the hono work dir was verified identical to 5ca49b0 before and after the mutation arm.
+
+**Decision rule:** clustered MDD at p0 0.05, ICC 0.3 on the runnable counts (NEAR 9 findings / 3 PRs, FAR 23 / 6 PRs) is 86 pp > 30 pp, so everything below is DESCRIPTIVE ONLY.
+
+| arm | findings | runnable | verified | verified + claim_match yes (primary) | sensitivity (excluded + yes) | not_discriminating | reversed | invalid |
+|---|---|---|---|---|---|---|---|---|
+| NEAR (all hono) | 9 | 9 | 1 | **0** | 0 | 8 | 0 | 0 |
+| FAR (hono 17, sqlglot 1, langchain 5) | 23 | 23 | 1 | **1** | 2 | 19 | 2 | 1 (throw on fixed) |
+
+- Primary: NEAR 0/9 (Wilson 0-29.9%) vs FAR 1/23 (0.8-21.0%); Fisher p 1.0 (descriptive); PR-cluster bootstrap of the difference [-23.1, 0.0] pp.
+- Within hono (the primary descriptive comparison, because writer feedback is confounded with the arm across repos): NEAR 0/9 vs FAR 0/17 primary; sensitivity 0/9 vs 1/17.
+- The one NEAR `verified` test (hono-3727, `expandIPv6('::ffff:0.0.0.0')`) failed on buggy for a different defect than the finding claimed (labeller: `claim_match: no`).
+- The FAR primary hit is sqlglot-7315 (TRY_TO_NUMBER to TRY_CAST in DuckDB; `claim_match: yes`).
+- The sensitivity line counts hono-2339 (missing JwtHeaderInvalid rejection test; `claim_match: yes`) as the pre-registered rule says, but that test threw on BOTH trees, so it is not fail-to-pass in any sense.
+- Exclusions per arm: no api_shift, bad_call, test-setup throw, flaky, unrunnable, deps_changed or harness-invalid in either arm; 1 FAR throw on fixed.
+- Positive controls: hono 6/6, sqlglot 1/1 and langchain 1/1 (weakly validated, n = 1).
+
+**Mutation arm (hono 5ca49b0, descriptive, no rate):** 16 tests written to the 16 scan findings; 2 `invalid` (fail on the unmutated tree), 14 pass on the unmutated tree and kill no surviving mutant (0 kills of the 10 candidate and 9 uncertain survivors). This agrees with the pilot's 0/10 line-level result.
+
+**Reading:** no finding near the fix produced a test that catches the bug for the reason the finding gave (0/9). Across 32 replay findings and 16 mutation findings, tests written from SpecGuard's missing_test / weak_test text caught a real defect for the stated reason once (sqlglot-7315, a FAR finding). This is G4 evidence against the claim at this scope, with wide intervals, public repos and one model writer.
+
+Not run: rqlite (13 findings; 6 tests not yet compile-checked, build stopped by machine memory), and the repos listed as unrunnable or harness-invalid above.
