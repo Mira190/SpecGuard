@@ -59,3 +59,7 @@ The agent lists the full reason vocabulary from `collect.sh` and fixes this clas
 - Run-level counts are reported as well.
 
 **Also report** the flips split by the enclosing name that was matched: the top 10 names and the distribution of name lengths. This shows whether the effect comes from short common names.
+
+**Amendment 1b** (same day, after specguard-cf accepted amendment 1)
+- **Flips that turn ✅.** A flip whose verdict becomes ✅ removes the reader's last prompt to look. All such flips are audited, with no sampling and no cap, inside the same blind mix, and 0 of them may be judged "yes". Other flips keep the one-sided 10% bound. The sample sizes are exact at p = 0.1: P(X ≤ 1; n = 46) = 0.048, while n = 45 gives 0.052, which fails.
+- **Where arm S came from.** The red team (specguard-cf) suggested it. It was not designed from any data.
