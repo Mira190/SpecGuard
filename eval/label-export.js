@@ -4,6 +4,8 @@
 // same window, so no key file has to be kept.
 //   node eval/label-export.js --repo OWNER/REPO --since YYYY-MM-DD [--until D] [--sample 30] [--seed N] [--out labels.csv]
 //   node eval/label-export.js --repo ... --since ... --import labels.csv        (precision per tool; feed the file to weekly-report --labels)
+// Two independent labellers: add columns label_a and label_b. Import prints Krippendorff's alpha (nominal, valid|invalid; unsure and blank =
+// missing) and refuses to report precision below 0.667. Then reconcile into the `label` column (required) and import again.
 // Offline: replace --repo/--since with --fixture FILE (the dataset format of eval/weekly-report.js).
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -58,7 +60,7 @@ function parseCsv(text) {
   const [head, ...body] = rows;
   if (!head) return [];
   const h = head.map((x) => x.trim().toLowerCase());
-  if (!h.includes('id') || !h.includes('label')) throw new Error('labels CSV needs the id and label columns');
+  if (!h.includes('id') || !(h.includes('label') || h.includes('label_a'))) throw new Error('labels CSV needs the id and label columns (or label_a and label_b)');
   return body.map((r) => Object.fromEntries(h.map((c, i) => [c, r[i] ?? ''])));
 }
 
@@ -73,6 +75,27 @@ function readLabels(rows) {
     out.set(r.id, label);
   }
   return out;
+}
+
+// Krippendorff's alpha, nominal: units = arrays of values (null = missing); units with fewer than 2 values do not pair. null when there is no variation.
+function alpha(units) {
+  const o = {}, n = {}; let N = 0;
+  for (const u of units) {
+    const v = u.filter((x) => x != null), m = v.length;
+    if (m < 2) continue;
+    for (let i = 0; i < m; i++) { n[v[i]] = (n[v[i]] || 0) + 1; N++; for (let j = 0; j < m; j++) if (i !== j && v[i] !== v[j]) o[v[i] + '|' + v[j]] = (o[v[i] + '|' + v[j]] || 0) + 1 / (m - 1); }
+  }
+  const Do = Object.values(o).reduce((a, b) => a + b, 0), cs = Object.keys(n);
+  let De = 0; for (const c of cs) for (const k of cs) if (c !== k) De += n[c] * n[k] / (N - 1);
+  return De ? 1 - Do / De : null;
+}
+const ALPHA_MIN = 0.667;
+// Agreement of label_a and label_b over valid|invalid; null when the sheet has no two label columns (old single `label` file: no check).
+function agreement(rows) {
+  if (!rows.length || !('label_a' in rows[0]) || !('label_b' in rows[0])) return null;
+  const v = (x) => { const l = String(x || '').trim().toLowerCase(); if (l && !LABELS.includes(l)) throw new Error(`label "${x}" is not one of ${LABELS.join('|')}`); return l === 'valid' || l === 'invalid' ? l : null; };
+  const a = alpha(rows.map((r) => [v(r.label_a), v(r.label_b)]));
+  return { alpha: a, ok: a != null && a >= ALPHA_MIN, n: rows.filter((r) => v(r.label_a) && v(r.label_b)).length };
 }
 
 // Precision = valid / (valid + invalid); unsure rows are reported, not counted. Wilson interval, findings treated as independent.
@@ -99,10 +122,19 @@ function main() {
   if (!o.fixture && !(o.repo && o.since)) { console.error('Usage: node eval/label-export.js (--repo OWNER/REPO --since YYYY-MM-DD [--until D] | --fixture FILE) [--sample 30] [--seed N] [--out labels.csv] [--import labels.csv]'); process.exit(2); }
   const { load, findingsOf } = require('./weekly-report'); // lazy: weekly-report requires this file
   const findings = findingsOf(load(o));
-  if (o.import) { console.log(JSON.stringify(labelPrecision(findings, readLabels(parseCsv(fs.readFileSync(o.import, 'utf8')))), null, 2)); return; }
+  if (o.import) {
+    const rows = parseCsv(fs.readFileSync(o.import, 'utf8')), ag = agreement(rows);
+    if (ag) {
+      const a = ag.alpha == null ? 'undefined (no variation)' : ag.alpha.toFixed(3);
+      console.error(`Krippendorff alpha (valid|invalid, unsure and blank = missing) = ${a} over ${ag.n} doubly labelled findings`);
+      if (!ag.ok) { console.error(`labels not reliable: alpha=${a} < ${ALPHA_MIN}, revise the labelling guide and relabel`); process.exit(1); }
+      if (!rows.some((r) => String(r.label || '').trim())) throw new Error('alpha passed: reconcile the two labels into the label column, then import again');
+    }
+    console.log(JSON.stringify(labelPrecision(findings, readLabels(rows)), null, 2)); return;
+  }
   const csv = toCsv(exportRows(findings, { sample: +o.sample, seed: +o.seed || 1 }));
   if (claimless(findings)) console.error(`${claimless(findings)} summary-only findings have no claim text (counts written before titles were recorded): left out of the sheet and the precision sample.`);
   if (o.out) { fs.writeFileSync(o.out, csv); console.error(`wrote ${o.out}: ${csv.split('\n').length - 2} findings. Send it to the labellers; keep the tool column out of their view.`); } else process.stdout.write(csv);
 }
-module.exports = { findingId, shuffle, exportRows, claimless, toCsv, parseCsv, readLabels, labelPrecision, COLUMNS };
+module.exports = { findingId, shuffle, exportRows, claimless, toCsv, parseCsv, readLabels, labelPrecision, alpha, agreement, ALPHA_MIN, COLUMNS };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exit(1); }
