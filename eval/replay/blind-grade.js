@@ -10,6 +10,7 @@ const { execFileSync } = require('node:child_process');
 
 const SEED = 20261020, DIFF_CAP = 20000, OUT_EST = 150, MAX_TOKENS = 400, SONNET = 'claude-sonnet-5-5', HAIKU = 'claude-haiku-5-5', SONNET_LIMIT = 3.5;
 const PERMS = 10000;
+const SHARED_RULE = "primary excludes every M1/M2 item whose Y shares X's fix PR (rqlite 2706, sqlglot 8474) together with its real partner";
 const API = () => require(path.join(__dirname, '..', '..', 'src', 'engines', 'claude-api.js')); // cost() and PRICES: the same card SpecGuard bills with
 
 // mulberry32 seeded rng
@@ -69,6 +70,29 @@ function leaks(prompt, pairs) {
   return bad;
 }
 
+// M2 (content swap): X's own findings keep path and line; kind, confidence, title and why come from Y's findings, cycling through Y's list when it is shorter.
+// X has no findings: none. Y has no findings: X's findings keep their location with an empty title, kind "none", no confidence and no why.
+function swapContent(xf, yf) {
+  return xf.map((f, i) => {
+    const g = yf.length ? yf[i % yf.length] : { kind: 'none', confidence: null, title: '', why: null };
+    return { where: f.where, path: f.path, line: f.line, kind: g.kind, confidence: g.confidence, title: g.title, why: g.why };
+  });
+}
+
+// crude tell: a title names a code-like identifier (backticked, or snake_case / camelCase / followed by "()") that appears nowhere in X's fix diff or introducing diff (whole-word check)
+function tokensOf(title) {
+  const t = String(title ?? ''), out = new Set();
+  for (const m of t.matchAll(/`([^`]+)`/g)) out.add(m[1].trim());
+  for (const m of t.matchAll(/\b[A-Za-z_][A-Za-z0-9_]*(?:_[A-Za-z0-9_]+|[a-z][A-Z][A-Za-z0-9_]*|(?=\(\)))/g)) out.add(m[0]);
+  return [...out].filter(Boolean);
+}
+const hasWord = (text, tok) => new RegExp(`(?<![A-Za-z0-9_])${tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_])`).test(text);
+const tells = (findings, ...texts) => findings.filter((f) => tokensOf(f.title).some((tok) => !texts.some((x) => hasWord(x, tok)))).length;
+
+function introDiff(o, pair) {
+  try { return execFileSync('git', ['-C', path.join(o.repos, pair.repo.split('/')[1]), 'diff', pair.introducing.base, pair.introducing.head], { encoding: 'utf8', maxBuffer: 1 << 28 }); } catch { return null; }
+}
+
 function build(o) {
   const pairsAll = JSON.parse(fs.readFileSync(o.pairs, 'utf8')).pairs.filter((p) => p.replay_eligible);
   const fixshas = fs.existsSync(o.fixshas) ? JSON.parse(fs.readFileSync(o.fixshas, 'utf8')) : {};
@@ -79,23 +103,32 @@ function build(o) {
   const dropped = { repos: [], pairs: 0, items: 0, same_fix_relaxed: [] }, pairs = [], Y = {};
   for (const [repo, g] of Object.entries(byRepo).sort()) {
     const d = g.length > 1 ? derange(g, r) : null;
-    if (!d) { dropped.repos.push(repo); dropped.pairs += g.length; dropped.items += g.length * runs.length * 2; continue; }
+    if (!d) { dropped.repos.push(repo); dropped.pairs += g.length; dropped.items += g.length * runs.length * 3; continue; }
     Object.assign(Y, d.map); pairs.push(...g); if (d.relaxed) dropped.same_fix_relaxed.push(repo);
   }
   const raw = [];
   for (const p of pairs) runs.forEach((run, i) => {
-    raw.push({ kind: 'real', pair: p, y: p, rep: i + 1, run }, { kind: 'mismatched', pair: p, y: Y[p.id], rep: i + 1, run });
+    for (const arm of ['real', 'M1', 'M2']) raw.push({ arm, pair: p, y: arm === 'real' ? p : Y[p.id], rep: i + 1, run });
   });
-  const shuffled = shuffle(raw, r), items = [], prompts = {};
+  const shuffled = shuffle(raw, r), items = [], prompts = {}, m2tell = { m2_findings: 0, with_foreign_identifier: 0, introducing_diff_missing: 0 }, idiff = {};
   shuffled.forEach((x, i) => {
-    const id = `item-${String(i + 1).padStart(3, '0')}`;
-    const prompt = render(template, x.pair.bug_card, loadDiff(o, x.pair), loadFindings(o.raw, x.run, x.y));
+    const id = `item-${String(i + 1).padStart(3, '0')}`, fixDiff = loadDiff(o, x.pair), xf = loadFindings(o.raw, x.run, x.pair);
+    const findings = x.arm === 'real' ? xf : x.arm === 'M1' ? loadFindings(o.raw, x.run, x.y) : swapContent(xf, loadFindings(o.raw, x.run, x.y));
+    const prompt = render(template, x.pair.bug_card, fixDiff, findings);
     const bad = leaks(prompt, pairsAll);
     if (bad.length) throw new Error(`${id} leaks ${bad.join(', ')}`);
     prompts[id] = prompt;
-    items.push({ id, arm: x.kind, pair: x.pair.id, replay_id: x.pair.replay_id, repo: x.pair.repo, rep: x.rep, findings_from: x.y.id });
+    const it = { id, arm: x.arm, pair: x.pair.id, replay_id: x.pair.replay_id, repo: x.pair.repo, rep: x.rep, findings_from: x.y.id, shares_fix: x.arm !== 'real' && x.y.fix.number === x.pair.fix.number };
+    if (x.arm === 'M2') {
+      if (!(x.pair.id in idiff)) idiff[x.pair.id] = introDiff(o, x.pair);
+      if (idiff[x.pair.id] === null) m2tell.introducing_diff_missing++;
+      it.tell = tells(findings, fixDiff, idiff[x.pair.id] || '');
+      m2tell.m2_findings += findings.length; m2tell.with_foreign_identifier += it.tell;
+    }
+    items.push(it);
   });
-  return { items, prompts, dropped, template };
+  m2tell.method = 'a title token is a backticked span, or an identifier with an underscore, an inner capital (camelCase) or a following "()"; it is foreign when it does not occur as a whole word in the fix diff nor in the introducing diff (git diff base head, read-only) of X';
+  return { items, prompts, dropped, template, m2tell };
 }
 
 const tokens = (s) => Math.ceil(s.length / 4); // chars/4
@@ -150,52 +183,63 @@ async function runAll(o, b, est, deps = {}) {
 }
 
 const caught = (g) => g === 'direct' || g === 'indirect';
-function analyse(items, rows, audit, runs) {
-  const grade = Object.fromEntries(rows.map((r) => [r.id, r.grade]));
+// compare real against one control arm (M1 or M2) over the pairs where both items were graded; excl drops pairs whose Y shares X's fix
+function compare(items, grade, arm, excl) {
   const by = {};
   for (const it of items) { const k = `${it.pair}|${it.rep}`; (by[k] ||= {})[it.arm] = it; }
-  const full = Object.values(by).filter((x) => x.real && x.mismatched && grade[x.real.id] && grade[x.mismatched.id]); // both arms graded
-  const rate = (a) => (a.length ? a.filter(caught).length / a.length : null);
-  const R = full.map((x) => caught(grade[x.real.id])), M = full.map((x) => caught(grade[x.mismatched.id]));
-  const re = rate(R.map((c) => (c ? 'direct' : 'miss'))), mi = rate(M.map((c) => (c ? 'direct' : 'miss')));
-  // permutation: within each repo swap real/mismatched labels across that repo's graded items
-  const rg = {};
-  full.forEach((x, i) => (rg[x.real.repo] ||= []).push(R[i], M[i]));
-  const r = rng(SEED), obs = re - mi; let ge = 0;
-  for (let t = 0; t < PERMS; t++) {
-    let a = 0, c = 0, n = 0;
-    for (const v of Object.values(rg)) { const s = shuffle(v, r), h = v.length / 2; for (let i = 0; i < v.length; i++) { if (i < h) { if (s[i]) a++; } else if (s[i]) c++; } n += h; }
+  const full = Object.values(by).filter((x) => x.real && x[arm] && grade[x.real.id] && grade[x[arm].id] && !(excl && x[arm].shares_fix));
+  const R = full.map((x) => caught(grade[x.real.id])), M = full.map((x) => caught(grade[x[arm].id])), n = full.length;
+  const re = n ? R.filter(Boolean).length / n : null, mi = n ? M.filter(Boolean).length / n : null, obs = re - mi;
+  const rg = {}, repos = {};
+  full.forEach((x, i) => {
+    (rg[x.real.repo] ||= []).push(R[i], M[i]);
+    const g = (repos[x.real.repo] ||= { n: 0, real: 0, control: 0 }); g.n++; g.real += R[i] ? 1 : 0; g.control += M[i] ? 1 : 0;
+  });
+  const r = rng(SEED); let ge = 0;
+  for (let t = 0; t < PERMS; t++) { // within each repo, permute the real/control labels across that repo's graded items
+    let a = 0, c = 0;
+    for (const v of Object.values(rg)) { const s = shuffle(v, r), h = v.length / 2; for (let i = 0; i < v.length; i++) if (s[i]) { if (i < h) a++; else c++; } }
     if ((a - c) / n >= obs - 1e-12) ge++;
   }
-  const repos = {};
-  full.forEach((x, i) => { const g = (repos[x.real.repo] ||= { n: 0, real: 0, mismatched: 0 }); g.n++; g.real += R[i] ? 1 : 0; g.mismatched += M[i] ? 1 : 0; });
+  return { pairs_used: n, real_catch_rate: re, control_catch_rate: mi, difference: obs, p_one_sided: (ge + 1) / (PERMS + 1), permutations: PERMS, per_repo: repos };
+}
+
+function analyse(items, rows, audit) {
+  const grade = Object.fromEntries(rows.map((r) => [r.id, r.grade]));
+  const cmp = (excl) => ({ real_vs_M2: compare(items, grade, 'M2', excl), real_vs_M1: compare(items, grade, 'M1', excl) });
   // descriptive: blind real grade vs audit.json grade (audit rows keyed by replay id and rep)
   let agree = 0, nA = 0;
-  for (const x of full) {
-    const a = audit.find((e) => e.id === x.real.replay_id && e.rep === x.real.rep);
-    if (a) { nA++; if (caught(a.new_grade) === caught(grade[x.real.id])) agree++; }
+  for (const x of items.filter((i) => i.arm === 'real' && grade[i.id])) {
+    const a = audit.find((e) => e.id === x.replay_id && e.rep === x.rep);
+    if (a) { nA++; if (caught(a.new_grade) === caught(grade[x.id])) agree++; }
   }
-  return { pairs_used: full.length, real_catch_rate: re, false_catch_rate: mi, difference: obs, p_one_sided: (ge + 1) / (PERMS + 1), permutations: PERMS, per_repo: repos, audit_agreement: nA ? { n: nA, agree, share: agree / nA } : null, ungradable: rows.filter((r) => r.grade === 'ungradable').length };
+  return {
+    primary: { rule: SHARED_RULE, ...cmp(true) },
+    sensitivity_all_items: { rule: 'all items, shared-fix pairs included', ...cmp(false) },
+    audit_agreement: nA ? { n: nA, agree, share: agree / nA } : null, ungradable: rows.filter((r) => r.grade === 'ungradable').length,
+  };
 }
 
 async function main() {
   const { values: v } = require('node:util').parseArgs({ options: { pairs: { type: 'string' }, raw: { type: 'string' }, runs: { type: 'string' }, audit: { type: 'string' }, fixdiff: { type: 'string' }, fixshas: { type: 'string' }, repos: { type: 'string' }, out: { type: 'string' }, template: { type: 'string', default: path.join(__dirname, 'blind-grade-prompt.md') }, run: { type: 'boolean', default: false }, 'dry-run': { type: 'boolean', default: true }, budget: { type: 'string', default: '5' } } });
   const o = { ...v, budget: parseFloat(v.budget) };
   for (const k of ['pairs', 'raw', 'runs', 'audit', 'fixdiff', 'fixshas', 'out']) if (!o[k]) { console.error(`missing --${k}; see the header of this file`); process.exit(2); }
-  const b = build(o), est = estimate(b.prompts, b.items), counts = { real: b.items.filter((i) => i.arm === 'real').length, mismatched: b.items.filter((i) => i.arm === 'mismatched').length };
+  const b = build(o), est = estimate(b.prompts, b.items), counts = Object.fromEntries(['real', 'M1', 'M2'].map((a) => [a, b.items.filter((i) => i.arm === a).length]));
   fs.mkdirSync(path.join(o.out, 'prompts'), { recursive: true });
-  fs.writeFileSync(path.join(o.out, 'items.json'), JSON.stringify({ seed: SEED, counts, dropped: b.dropped, items: b.items }, null, 1));
+  fs.writeFileSync(path.join(o.out, 'items.json'), JSON.stringify({ seed: SEED, counts, dropped: b.dropped, m2_tell: b.m2tell, items: b.items }, null, 1));
   for (const [id, p] of Object.entries(b.prompts)) fs.writeFileSync(path.join(o.out, 'prompts', `${id}.txt`), p);
-  fs.writeFileSync(path.join(o.out, 'estimate.json'), JSON.stringify({ ...est, counts, dropped: b.dropped }, null, 1));
-  console.log(`# blind-grade: model ${est.model} (${est.reason}); items real ${counts.real}, mismatched ${counts.mismatched}; dropped repos ${b.dropped.repos.length} (${b.dropped.items} items)`);
+  fs.writeFileSync(path.join(o.out, 'estimate.json'), JSON.stringify({ ...est, counts, dropped: b.dropped, m2_tell: b.m2tell }, null, 1));
+  console.log(`# blind-grade: model ${est.model} (${est.reason}); items real ${counts.real}, M1 (whole-PR mismatch) ${counts.M1}, M2 (content swap) ${counts.M2}; dropped repos ${b.dropped.repos.length} (${b.dropped.items} items)`);
+  console.log(`# ${SHARED_RULE}; the all-items figure is reported as a sensitivity`);
+  console.log(`# M2 tell: ${b.m2tell.with_foreign_identifier} of ${b.m2tell.m2_findings} M2 findings name an identifier absent from X's diffs`);
   console.log(`# estimate (${est.method}): input ${est.input_tokens} tokens, output ${est.output_tokens}; sonnet $${est.usd_sonnet.toFixed(3)}, haiku $${est.usd_haiku.toFixed(3)}; cap $${o.budget}`);
   if (!o.run) { console.log('# dry run: no API call. Add --run to pay.'); return; }
   const res = await runAll(o, b, est);
-  const stats = analyse(b.items, res.rows, JSON.parse(fs.readFileSync(o.audit, 'utf8')), o.runs.split(','));
-  const out = { model: est.model, spent_usd: res.spent, stopped_before: res.stopped, ungraded: res.ungraded, dropped: b.dropped, ...stats };
+  const stats = analyse(b.items, res.rows, JSON.parse(fs.readFileSync(o.audit, 'utf8')));
+  const out = { model: est.model, spent_usd: res.spent, stopped_before: res.stopped, ungraded: res.ungraded, dropped: b.dropped, m2_tell: b.m2tell, ...stats };
   fs.writeFileSync(path.join(o.out, 'analysis.json'), JSON.stringify(out, null, 1));
   console.log(JSON.stringify(out, null, 1));
 }
 
-module.exports = { strip, derange, rng, shuffle, render, leaks, build, estimate, parseGrade, runAll, analyse, cutDiff, DIFF_CAP };
+module.exports = { swapContent, tokensOf, tells, strip, derange, rng, shuffle, render, leaks, build, estimate, parseGrade, runAll, analyse, cutDiff, DIFF_CAP };
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
