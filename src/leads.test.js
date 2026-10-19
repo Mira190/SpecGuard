@@ -273,3 +273,15 @@ test('removed or weakened assertions: a loop-prefixed assertion extended past 40
   assert.deepEqual(delta(`-${loop(20, 'evOf(p)')}+${loop(60, 'evOf(p)')}`), []);
   assert.deepEqual(delta(`-${loop(20, 'evOf(p)')}+${loop(60, 'other(p)')}`), ['removed 10 for (const p of [' + pad(20) + "]) assert.equal(run(evOf(p)).status, 'covered', p);"]);
 });
+
+test('removed assertions: a removed loop line over 400 chars is read in full (assertion past char 400; name dropped past char 400)', () => {
+  const pad = (n) => Array.from({ length: n }, (_, i) => `'case${i}'`).join(', ');
+  const loop = (subj) => `  for (const p of [${pad(60)}]) assert.equal(run(${subj}).status, 'covered', p);\n`;
+  assert.ok(loop('evOf(p)').length > 400);
+  assert.deepEqual(delta(`-${loop('evOf(p)')}+  const x = 1;\n`).map((x) => x.slice(0, 10)), ['removed 10']);
+  assert.deepEqual(delta(`-${loop('evOf(p)')}+${loop('evOf(p)')}`), []);
+  const src = mkdiff('src/x.ts', `-const T = [${pad(60)}]; export function lateGuard(r) {}\n`);
+  const d = (gone) => assertionDelta(src + mkdiff('test/x.test.ts', "-  assert.equal(lateGuard(p), 1);\n+  const x = 1;\n"), (f) => f.includes('.test.'), gone).length;
+  assert.equal(d((n) => n === 'lateGuard'), 0);
+  assert.equal(d(() => false), 1);
+});
