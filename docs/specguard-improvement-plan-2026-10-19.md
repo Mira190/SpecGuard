@@ -96,7 +96,7 @@
 | Actions 日志、job summary、sticky 评论、inline 评论、scan issue | 含私有代码引用 |
 | `eval/results/*.json` 中的 `raw_excerpt`（原始输出前 2000 字符） | 私有代码片段 |
 | `label-export.js` 导出的 CSV（finding 原文和 PR 链接）、标注者备注 | 标注者是否可以看私有代码要先授权；备注可能引用代码 |
-| 远端分支 | **已核实**：64 个远端分支的 tip 仍包含 #334 已从 main 移除的 `docs/shift-left-live-review-evidence-2026-10-17.json`。本地分支 `codex/publish-sanitized-review-2026-10-17` 落后 main 173 个提交，仍在跟踪两个已移除的文件；远端同名分支（`b70c8d2`）不包含它们 |
+| 远端分支 | **已核实**：54 个远端分支（初稿的 64 来自未 prune 的本地远端引用）的 tip 仍包含 #334 已从 main 移除的 `docs/shift-left-live-review-evidence-2026-10-17.json`。本地分支 `codex/publish-sanitized-review-2026-10-17` 落后 main 173 个提交，仍在跟踪两个已移除的文件；远端同名分支（`b70c8d2`）不包含它们 |
 | Git 历史：演练时影响 730/1053 个提交、153 个分支、247 个 PR 引用 | 删掉当前文件 ≠ 历史已清除 |
 | 本地 `docs/branch-archives/`、`pr311-ctx`、系统临时目录下的 `mirror.git` 和证据目录 | 含源码副本 |
 | `docs/` 中 15 份未跟踪的评审文档 | 本机路径（含用户名）、临时目录名，可能还有私有仓库名 |
@@ -141,7 +141,7 @@ Codex 或其他 LLM 当评审，和"你"是同一类证据。它们只能用来�
 **P0：本周，不花模型费用**
 
 1. **隐私止血**
-   - 处理 64 个仍含私有文件的远端分支 tip，以及本地旧分支：先备份，再按精确路径删除；之后做历史清理。
+   - 处理 54 个仍含私有文件的远端分支 tip，以及本地旧分支：先备份，再按精确路径删除；之后做历史清理。
    - 加入 gitleaks、蜜标扫描和白名单发布检查。
    - eval：在 fixture 中埋入蜜标，CI 必须变红。
 2. **补全 validation-plan，代码已有部分不重做**
