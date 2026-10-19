@@ -111,3 +111,12 @@ It has not been prepared yet. Consecutive commits share rule files, so the unit 
 6. **Rule cost.** O's in-scope rule drops (total, and PRs affected) are reported on every corpus. The adoption text accepts that cost in writing.
 
 **Not changed by this amendment.** `post.js` still counts RIGHT lines only for the run status. Whether a deletion-only changed file shown with 0 lines should mark a run incomplete is a separate question. It needs its own pre-registration.
+
+**Amendment 2 conditions (specguard-cf, accepted before any confirmation run).**
+- **Provenance.** The measure was changed after O's result on step 1 had been seen. Two things make that acceptable:
+  - The change has its own motivation. It closes the same deletion-only blind spot that the red team found in the cut-relevance experiment (amendment 1, first code change), where a deletion-only file was not counted as unseen.
+  - The verdict comes only from frozen steps that were never run for any arm.
+- **Sample floor.** The confirmation corpus is fixed as defined above: all of step 2, plus the first 10 per repo of step 3. If A loses changed content on fewer than 10 of its PRs, nothing is adopted. No further lines of step 3 are drawn.
+- **One run.** O at e94f451 runs once on the confirmation corpus. There is no amendment 3 to rescue it.
+  - **If it fails:** the result is "not adopted", and the reason is written down.
+  - **If it passes:** the PR that adopts O deletes the F, FC and FCH code and the `EXP_PACK` switch, and keeps only O's code path as the default.
