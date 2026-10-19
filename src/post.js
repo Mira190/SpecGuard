@@ -124,10 +124,10 @@ const layerOf = (p) => { const s = String(p);
   return /(^|[/._-])(e2e|end-to-end|cypress|playwright)([/._-]|$)/i.test(s) ? 'e2e' : /(^|[/._-])(integration|acceptance|functional)([/._-]|$)/i.test(s) ? 'integration'
     : /(^|[/._-])components?([/._-]|$)/i.test(s) ? 'component' : require('./trace').isTestPath(s) ? 'unit' : undefined; };
 
-// A path that is clearly a plain unit test: a test file outside integration/e2e/api/db/ui/component folders and name tokens (the weak words api/db/ui/component/it only as a whole folder or a dotted tag: tests/api/x.js, user.api.test.js, not claude-api.test.js), not a React component test (.tsx/.jsx),
+// A path that is clearly a plain unit test: a test file outside integration/e2e/api/db/ui/component folders and name tokens (the weak words api/db/ui/component/it only as a whole folder or a dotted tag: tests/api/x.js, user.api.test.js, or the whole file-name stem (ui.test.ts, db_test.go, test_api.py), not one part of a longer stem like claude-api.test.js), not a React component test (.tsx/.jsx),
 // not an IT/integration-named class. Only such a path may omit `layer` on a row that claims `covered`.
 // ponytail: names only, no framework config; a Playwright `.spec.ts`, an Angular TestBed `.spec.ts` or a unit test under tests/api/ needs `layer: unit` stated. Read the repo's test config if this bites.
-const NOT_PLAIN_UNIT = /(^|[/._-])(integration|integ|e2e|end-to-end|acceptance|functional|cypress|playwright|contract|smoke)([/._-]|$)|(^|\/)(api|apis|db|database|components?|ui|it|itests?)\/|\.(api|apis|db|database|components?|ui|it|itests?)\.|(?:IT|ITCase|Integration(?:Tests?)?|E2E)\.[A-Za-z]+$|\.(?:test|spec)\.[jt]sx$|(^|\/)__tests__\/[^/]+\//i;
+const NOT_PLAIN_UNIT = /(^|[/._-])(integration|integ|e2e|end-to-end|acceptance|functional|cypress|playwright|contract|smoke)([/._-]|$)|(^|\/)(api|apis|db|database|components?|ui|it|itests?)\/|\.(api|apis|db|database|components?|ui|browser|it|itests?)\.|(^|\/)(?:test_)?(api|apis|db|database|components?|ui|it|itests?)(?:[._]test|\.spec)?\.[A-Za-z]+$|(?:IT|ITCase|Integration(?:Tests?)?|E2E)\.[A-Za-z]+$|\.(?:test|spec)\.[jt]sx$|(^|\/)__tests__\/[^/]+\//i;
 const clearlyUnit = (p) => layerOf(p) === 'unit' && !NOT_PLAIN_UNIT.test(String(p));
 
 // Does the cited line (or the quoted block) look like an assertion, and is its test disabled? Common frameworks only.
