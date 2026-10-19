@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 const { findingsOf, copilotOutcome, patchTouches, analyze, render, quantile } = require('./weekly-report');
 const { exportRows, toCsv } = require('./label-export');
 const { armOf } = require('./assign');
-const { labelGate, ALPHA } = require('./weekly-report');
+const { labelGate, agreementOf, ALPHA } = require('./weekly-report');
 
 const D = (day, h = 0) => `2026-09-${String(day).padStart(2, '0')}T${String(h).padStart(2, '0')}:00:00Z`;
 const pr = (number, arm, hrs, extra = {}) => ({ number, created_at: D(1), merged_at: hrs == null ? null : new Date(Date.parse(D(1)) + hrs * 36e5).toISOString(), user: { login: 'dev', type: 'User' }, labels: arm == null ? [] : [{ name: `review-arm:${arm}` }], ...extra });
@@ -486,6 +486,46 @@ test('alpha gate: an alpha that cannot be computed (no variation, or no doubly l
   assert.match(few.decision.verdict, /KEEP COLLECTING/);
 });
 
+// A SpecGuard-only sheet of n findings, half valid; the second labeller flips `flips` of them (each flip is a disagreement).
+const gateSheet = (n, flips, extra = (r) => r) => {
+  const rows = Array.from({ length: n }, (_, i) => { const l = i % 2 ? 'valid' : 'invalid'; return extra({ id: `F${i}`, label_a: l, label_b: i < flips ? (l === 'valid' ? 'invalid' : 'valid') : l }, i); });
+  return agreementOf(rows, rows.map((r) => ({ fid: r.id, tool: 'specguard' })));
+};
+
+test('labelGate uses label-export (one source of truth): decision grade needs alpha >= 0.8, bootstrap lower >= 0.667, n >= 100 and the unsure cap; boundaries and refusals', () => {
+  assert.deepEqual([labelGate(gateSheet(100, 0)).ok, gateSheet(100, 0).decisions.specguard], [true, true]);
+  assert.equal(ALPHA.ok, 0.8);
+  assert.equal(labelGate(gateSheet(98, 0)).ok, false); // alpha 1 but n < 100
+  assert.match(labelGate(gateSheet(98, 0)).note, /tentative.*98 doubly labelled.*>= 100 findings/);
+  const mid = gateSheet(100, 10); // about 90% raw agreement: alpha about 0.8 or just under, interval wide
+  assert.equal(labelGate(mid).ok, mid.decisions.specguard);
+  const tent = gateSheet(100, 12); // alpha about 0.76: tentative
+  assert.ok(tent.specguard.alpha >= ALPHA.tentative && tent.specguard.alpha < ALPHA.ok, `alpha ${tent.specguard.alpha}`);
+  assert.match(labelGate(tent).note, /tentative/);
+  assert.match(labelGate(gateSheet(100, 50)).note, /unreliable/);
+  assert.match(labelGate(gateSheet(100, 0, (r, i) => (i < 30 ? { ...r, label_a: 'unsure' } : r))).note, /unsure/); // 30% unsure from one labeller
+  assert.match(labelGate(agreementOf([{ id: 'F0', label_a: 'valid', label_b: 'valid' }], [{ fid: 'F0', tool: 'specguard' }])).note, /alpha undefined/);
+  assert.equal(labelGate(undefined).ok, true);
+  assert.match(labelGate(null).note, /no agreement evidence/);
+  assert.equal(agreementOf([{ id: 'F0', label: 'valid' }], []), null); // a single reconciled column
+});
+
+test('alpha gate: alpha 1 on a two-labeller sheet with fewer than 100 doubly labelled SpecGuard findings was a pass under the old point-alpha gate and is now tentative, no decision', () => {
+  const ds = big(), lab = labelsFor(ds, 0.8);
+  const rows = [...lab].map(([id, l]) => ({ id, label: l, label_a: l, label_b: l }));
+  assert.ok(rows.length >= 100);
+  const full = analyze(ds, { labels: lab, rows });
+  assert.equal(full.decision.rules[1].status, 'pass');
+  const half = rows.filter((_, i) => i % 2 === 0);
+  assert.ok(half.length < 100 && half.length >= 30);
+  const small40 = analyze(ds, { labels: lab, rows: half }); // every other row keeps both labels
+  assert.equal(small40.agreement.specguard.alpha, 1); // the old gate (alpha >= 0.8) would pass
+  assert.equal(small40.agreement.specguard.status, 'tentative');
+  assert.equal(small40.decision.rules[1].status, 'not evaluated');
+  assert.match(small40.decision.rules[1].detail, /tentative/);
+  assert.match(small40.decision.verdict, /KEEP COLLECTING/);
+});
+
 test('excluded by design: unlabelled PRs with no SpecGuard run (fork, bot) are counted and said so; labelled or reviewed ones are not', () => {
   const ds = small(); // PR 9 has no arm label and no SpecGuard output
   const r = analyze(ds);
@@ -518,14 +558,3 @@ test('load: closed-and-reopened PRs and PRs sharing a head branch are flagged; a
   assert.deepEqual(i.same_branch, [{ branch: 'feat/x', prs: [3, 4] }]);
 });
 
-test('labelGate: the alpha thresholds are inclusive at exactly 0.800 and 0.667', () => {
-  const at = (alpha) => labelGate({ specguard: { alpha, n: 30 } });
-  assert.equal(at(ALPHA.ok).ok, true);
-  assert.equal(at(ALPHA.ok - 1e-9).ok, false);
-  assert.match(at(ALPHA.ok - 1e-9).note, /tentative/);
-  assert.match(at(ALPHA.tentative).note, /tentative/); // exactly 0.667: tentative, not refused
-  assert.match(at(ALPHA.tentative - 1e-9).note, /unreliable/);
-  assert.match(at(null).note, /alpha undefined/);
-  assert.equal(labelGate(undefined).ok, true);
-  assert.match(labelGate(null).note, /no agreement evidence/);
-});

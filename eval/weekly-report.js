@@ -221,39 +221,26 @@ function sgCredits(ds, prSet) {
   return { prs_with_counts: ts.length, complete: ts.filter((t) => t.complete).length, credits_median: quantile(num('credits'), 0.5), credits_mean: num('credits').length ? num('credits').reduce((a, b) => a + b, 0) / num('credits').length : null, ms_median: quantile(num('ms'), 0.5) };
 }
 
-// Krippendorff's alpha gate for blind labels (docs/validation-plan.md step 4). `alpha` and the 0.667 floor come from label-export when it has them (#391);
-// the inline copy is the same nominal-alpha formula, for a tree without it.
+// Labeller agreement for blind labels (docs/validation-plan.md step 4): one source of truth, label-export's agreement(). The Step 6 precision rules
+// (blind precision, unique share) are about SpecGuard findings only, so they are gated on the SpecGuard scope; the Copilot and overall scopes are
+// reported and only gate comparison text. null when the sheet has no two label columns (a single reconciled column proves nothing about agreement).
 const labelExport = require('./label-export');
-const ALPHA = { ok: 0.8, tentative: 0.667 };
-const alphaOf = labelExport.alpha || ((units) => {
-  const o = {}, n = {}; let N = 0;
-  for (const u of units) {
-    const v = u.filter((x) => x != null), m = v.length;
-    if (m < 2) continue;
-    for (let i = 0; i < m; i++) { n[v[i]] = (n[v[i]] || 0) + 1; N++; for (let j = 0; j < m; j++) if (i !== j && v[i] !== v[j]) o[`${v[i]}|${v[j]}`] = (o[`${v[i]}|${v[j]}`] || 0) + 1 / (m - 1); }
-  }
-  const Do = Object.values(o).reduce((a, b) => a + b, 0), cs = Object.keys(n);
-  let De = 0; for (const c of cs) for (const k of cs) if (c !== k) De += n[c] * n[k] / (N - 1);
-  return De ? 1 - Do / De : null;
-});
-// Per tool, over the findings that tool wrote; null when the sheet has no two label columns (a single reconciled column proves nothing about agreement).
+const ALPHA = { ok: labelExport.ALPHA_DECIDE, tentative: labelExport.ALPHA_MIN };
 function agreementOf(rows, findings) {
-  if (!rows.length || !('label_a' in rows[0]) || !('label_b' in rows[0])) return null;
-  const tool = new Map(findings.map((f) => [f.fid, f.tool])), v = (x) => { const l = String(x || '').trim().toLowerCase(); return l === 'valid' || l === 'invalid' ? l : null; };
-  const out = {};
-  for (const t of ['specguard', 'copilot']) {
-    const rs = rows.filter((r) => tool.get(r.id) === t);
-    out[t] = { alpha: alphaOf(rs.map((r) => [v(r.label_a), v(r.label_b)])), n: rs.filter((r) => v(r.label_a) && v(r.label_b)).length };
-  }
-  return out;
+  const tool = new Map(findings.map((f) => [f.fid, f.tool])), ag = labelExport.agreement(rows, (id) => tool.get(id) || null);
+  if (!ag) return null;
+  const none = { alpha: null, n: 0, lower: null, upper: null, dropped: 1, prevalence: null, status: 'fail' };
+  return { ...ag, specguard: ag.scopes.specguard || none, copilot: ag.scopes.copilot || none };
 }
 // Whether precision-based rules may be evaluated. agreement undefined = programmatic call without sheet rows (no gate).
 function labelGate(agreement) {
   if (agreement === undefined) return { ok: true };
   if (agreement === null) return { ok: false, note: 'precision rule not evaluated: no agreement evidence' };
-  const a = agreement.specguard?.alpha, s = a == null ? 'undefined' : a.toFixed(3);
-  if (a != null && a >= ALPHA.ok) return { ok: true };
-  return { ok: false, note: a != null && a >= ALPHA.tentative ? `precision rule tentative, not decided: labeller alpha ${s} is below ${ALPHA.ok}` : `precision rule not evaluated: labeller alpha ${s} is below ${ALPHA.tentative} (labels unreliable)` };
+  if (agreement.decisions?.specguard) return { ok: true };
+  const s = agreement.specguard, a = s.alpha, f = (x) => (x == null ? 'n/a' : x.toFixed(3)), u = agreement.unsure || {};
+  const capped = Math.max(u.a || 0, u.b || 0) > labelExport.UNSURE_MAX;
+  if (s.status === 'fail' || capped) return { ok: false, note: `precision rule not evaluated: ${capped ? `a labeller marked more than ${labelExport.UNSURE_MAX * 100}% of findings unsure` : `labeller alpha ${a == null ? 'undefined' : f(a)} is below ${ALPHA.tentative} (labels unreliable)`}` };
+  return { ok: false, note: `precision rule tentative, not decided: SpecGuard scope alpha ${f(a)} (bootstrap 95% lower ${f(s.lower)}, ${s.n} doubly labelled, ${Math.round(100 * s.dropped)}% draws dropped); a decision needs alpha >= ${ALPHA.ok}, lower >= ${ALPHA.tentative}, >= ${labelExport.MIN_N} findings and <= ${labelExport.DROP_MAX * 100}% dropped draws` };
 }
 
 // Trial integrity (docs/validation-plan.md step 7): re-rolled PRs (the same branch opened twice, or closed and reopened) let an author pick an arm; with the
@@ -435,7 +422,7 @@ function render(r) {
       `- Same head branch opened more than once: ${i.branches_known ? (i.same_branch.length ? i.same_branch.map((x) => `${x.branch} (#${x.prs.join(', #')})`).join('; ') : 'none') : 'unknown (branch data not loaded)'}.`,
       `- Closed and reopened in the window: ${i.reopened_known ? (i.reopened.length ? `#${i.reopened.join(', #')}` : 'none') : 'unknown (events not loaded)'}.`,
       `- Label equals the salted assignment: ${b ? (b.mismatches.length ? `${b.mismatches.length} of ${b.checked} MISMATCH (${b.mismatches.map((m) => `#${m.pr} labelled ${m.label}, assigned ${m.expected}`).join('; ')}): a PR may have edited its own workflow` : `all ${b.checked} labelled PRs match`) : 'skipped, no salt given (--arm-salt or SPECGUARD_ARM_SALT; only possible after the trial, when the salt is revealed)'}.`, ''); }
-  if (r.agreement !== undefined) L.push('## Labeller agreement (Krippendorff alpha, valid|invalid)', '', r.agreement === null ? 'precision rule not evaluated: no agreement evidence (a single reconciled label column; give the sheet with label_a and label_b).' : ['specguard', 'copilot'].map((t) => `- ${t}: alpha ${r.agreement[t].alpha == null ? 'undefined' : r.agreement[t].alpha.toFixed(3)} over ${r.agreement[t].n} doubly labelled findings (>= ${ALPHA.ok} decides, ${ALPHA.tentative} to ${ALPHA.ok} tentative, below unreliable)`).join('\n'), '');
+  if (r.agreement !== undefined) L.push('## Labeller agreement (Krippendorff alpha, valid|invalid)', '', r.agreement === null ? 'precision rule not evaluated: no agreement evidence (a single reconciled label column; give the sheet with label_a and label_b).' : ['specguard', 'copilot'].map((t) => `- ${t}: alpha ${r.agreement[t].alpha == null ? 'undefined' : r.agreement[t].alpha.toFixed(3)} over ${r.agreement[t].n} doubly labelled findings, bootstrap lower ${r.agreement[t].lower == null ? 'n/a' : r.agreement[t].lower.toFixed(3)}: ${r.agreement[t].status} (decision grade: alpha >= ${ALPHA.ok}, lower >= ${ALPHA.tentative}, >= ${labelExport.MIN_N} findings, <= ${labelExport.DROP_MAX * 100}% dropped draws; ${t === 'specguard' ? 'this scope gates the precision rules' : 'comparison text only'})`).join('\n'), '');
   if (r.escapes) L.push(...esc.renderEscapes(r.escapes));
   const j = r.joint;
   L.push('## P × A (economic assumption, not a measured joint rate)', '', 'F2 multiplies two marginals; they cannot give the joint (50 valid + 50 invalid findings with 50 touched allows anywhere from 0 to 0.5). A counts touched lines, not verified fixes.',
@@ -461,5 +448,5 @@ function main() {
   }
   console.log(o.json ? JSON.stringify(r, null, 2) : render(r));
 }
-module.exports = { labelGate, ALPHA, escapesOf, lastCounts, apiGit, unified0, load, findingsOf, copilotOutcome, patchTouches, analyze, decide, render, quantile, TARGET, RULE };
+module.exports = { labelGate, agreementOf, ALPHA, escapesOf, lastCounts, apiGit, unified0, load, findingsOf, copilotOutcome, patchTouches, analyze, decide, render, quantile, TARGET, RULE };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exit(1); }
