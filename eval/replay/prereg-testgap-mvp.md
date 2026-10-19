@@ -90,6 +90,8 @@ The result reports the model, the static arm, and model ∪ static. The per-PR d
   - A significant but tiny lift is not a value claim.
 - The PR-cluster bootstrap interval and lift are reported alongside and do not gate. Requiring the cluster lower bound to clear the null's upper bound stacks two 95% intervals (α ≈ 0.005). That was judged too strict and replaced, before the freeze.
 
+**Budget caps (owner, 2026-10-20, through specguard-cf):** $35 for the confirmation run and $5 for the blind semantic grade. Both caps are recorded in the result.
+
 **Two tiers in the result:**
 - **"Points at the bug"** = location PASS.
 - **"Catches the bug"** = location PASS AND content evidence, where content evidence is either:
