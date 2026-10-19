@@ -76,8 +76,8 @@
   "reason": "not attempted: pnpm monorepo install needs more disk than the 2.5 GB free on the evidence drive; fix commits span years of lockfile changes"
  },
  "pydantic-ai-5020": {
-  "status": "not_green",
-  "reason": "tests/test_utils.py: error no tests collected",
+  "status": "green",
+  "reason": "",
   "tests": [
    "tests/test_utils.py"
   ]

@@ -158,7 +158,9 @@ function runOnce(repo, dir, testRel, timeout) {
   timeout = timeout || cfg.timeout || 180;
   let run = '.'; try { const fns = [...fs.readFileSync(path.join(dir, testRel), 'utf8').matchAll(/^func (Test\w+)\(/gm)].map((m) => m[1]); if (fns.length) run = `^(${fns.join('|')})$`; } catch { /* not a Go file */ }
   const vars = { run, test: posix(testRel), out: posix(out), testdir: posix(path.posix.dirname(posix(testRel))) || '.', evidence: posix(EV) };
-  const res = spawnSync(fill(cfg.cmd, vars), { cwd: dir, shell: true, env, timeout: timeout * 1000, encoding: 'utf8', maxBuffer: 1 << 28 });
+  let cmd = cfg.cmd; // alt: a second environment for trees whose conftest needs different test plugins
+  if (cfg.alt) { try { if (fs.readFileSync(path.join(dir, cfg.alt.file), 'utf8').includes(cfg.alt.has)) cmd = cfg.alt.cmd; } catch { /* keep default */ } }
+  const res = spawnSync(fill(cmd, vars), { cwd: dir, shell: true, env, timeout: timeout * 1000, encoding: 'utf8', maxBuffer: 1 << 28 });
   if (res.error && res.error.code === 'ETIMEDOUT') return { outcome: 'error', msg: 'timeout' };
   if (cfg.runner === 'vitest') return parseVitest(res, out, dir);
   if (cfg.runner === 'pytest') return parsePytest(fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '', dir);

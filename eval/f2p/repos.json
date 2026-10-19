@@ -69,7 +69,12 @@
       "PYTHONPATH": "{cwd};{cwd}/pydantic_ai_slim;{cwd}/pydantic_graph;{cwd}/pydantic_evals",
       "LANGSMITH_TRACING": "false"
     },
-    "setup": "venv under <evidence>/f2p/env/py-pai with pydantic-ai-slim, pydantic-graph, pydantic-evals and the dev test dependencies from PyPI (latest); the exported tree sources are put first on PYTHONPATH. Dependency versions are those of today, not of each fix commit."
+    "setup": "venv under <evidence>/f2p/env/py-pai with pydantic-ai-slim, pydantic-graph, pydantic-evals and the dev test dependencies from PyPI (latest); the exported tree sources are put first on PYTHONPATH. Dependency versions are those of today, not of each fix commit. Trees whose tests/conftest.py imports cassetter use a second venv (env/py-pai2: cassetter instead of pytest-recording, plus blockbuster, trio, asgi-lifespan, devtools); both venvs share the uv cache by hardlink.",
+    "alt": {
+      "file": "tests/conftest.py",
+      "has": "cassetter",
+      "cmd": "{evidence}/f2p/env/py-pai2/Scripts/python.exe -m pytest {test} -p no:cacheprovider -q --tb=short --junitxml={out}"
+    }
   },
   "langchain-ai/langchain": {
     "name": "langchain",

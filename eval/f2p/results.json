@@ -161,32 +161,32 @@
    "files": [
     {
      "file_sha256": "b2ca64f44ee2",
-     "verdict": "invalid",
-     "reason": "no tests collected",
+     "verdict": "not_discriminating",
+     "reason": "pass on both trees",
      "buggy": [
-      "error",
-      "error",
-      "error"
+      "pass",
+      "pass",
+      "pass"
      ],
      "fixed": [
-      "error",
-      "error",
-      "error"
+      "pass",
+      "pass",
+      "pass"
      ]
     },
     {
      "file_sha256": "33c13e0b177b",
      "verdict": "invalid",
-     "reason": "no tests collected",
+     "reason": "non-assertion throw on fixed tree",
      "buggy": [
-      "error",
-      "error",
-      "error"
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
      ],
      "fixed": [
-      "error",
-      "error",
-      "error"
+      "pass",
+      "pass",
+      "throw"
      ]
     }
    ]
@@ -245,16 +245,16 @@
     {
      "file_sha256": "b2ca64f44ee2",
      "verdict": "invalid",
-     "reason": "no tests collected",
+     "reason": "throw not from code under test (test)",
      "buggy": [
-      "error",
-      "error",
-      "error"
+      "throw",
+      "throw",
+      "throw"
      ],
      "fixed": [
-      "error",
-      "error",
-      "error"
+      "pass",
+      "pass",
+      "pass"
      ]
     }
    ]
@@ -412,21 +412,21 @@
   },
   "pydantic-ai-5455": {
    "repo": "pydantic/pydantic-ai",
-   "status": "verified",
+   "status": "not_verified",
    "files": [
     {
      "file_sha256": "d960bb61fde1",
-     "verdict": "verified",
-     "reason": "assertion fails on buggy, passes on fixed",
+     "verdict": "invalid",
+     "reason": "no tests collected",
      "buggy": [
-      "assert_fail",
-      "assert_fail",
-      "assert_fail"
+      "error",
+      "error",
+      "error"
      ],
      "fixed": [
-      "pass",
-      "pass",
-      "pass"
+      "error",
+      "error",
+      "error"
      ]
     }
    ]
