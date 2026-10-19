@@ -21,6 +21,8 @@ test('export: tool hidden, shuffled by seed (stable per seed), sample is per too
   assert.ok(!JSON.stringify(a).match(/specguard|copilot/i), 'no tool name leaks');
   assert.notDeepEqual(a.map((r) => r.id), c.map((r) => r.id)); // another seed, another order or draw
   assert.deepEqual(Object.keys(a[0]), COLUMNS);
+  assert.deepEqual(COLUMNS.slice(-2), ['guess_tool_a', 'guess_tool_b']);
+  assert.ok(a.every((r) => r.guess_tool_a === '' && r.guess_tool_b === ''));
   assert.equal(exportRows(FINDINGS, { sample: 0, seed: 1 }).length, 5);
 });
 
