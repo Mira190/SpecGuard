@@ -50,7 +50,7 @@ The agent lists the full reason vocabulary from `collect.sh` and fixes this clas
 - **Packet.** Each packet shows the changed file's diff and the unseen part of the cut test: the lines past pack-shown, or the whole file if it was not shown.
 - **Question.** "Does the unseen part directly test a changed or deleted definition?"
 - **Graders.** Two independent model graders, a Sonnet and an Opus subagent, each with no other context. Report raw agreement and Cohen's kappa. If kappa < 0.8, the verdict does not count and the decision is deferred. The main session adjudicates disagreements and records how each was settled.
-- **Bar.** The 95% Clopper-Pearson upper bound of the "yes" rate among the flips must be ≤ 10%. For example: 0 bad needs n ≥ 29, 1 bad needs n ≥ 46, 2 bad needs n ≥ 61. If there are too few flips to reach the bound, the arm is not adopted.
+- **Bar.** The one-sided 95% Clopper-Pearson upper bound of the "yes" rate among the flips must be ≤ 10%. For example: 0 bad needs n ≥ 29, 1 bad needs n ≥ 46, 2 bad needs n ≥ 61. If there are too few flips to reach the bound, the arm is not adopted.
 - **Why 10% and not 5%:** findings never change. A false complete costs only the notice and the retry. On main, the notice is wrong in the other direction on most runs.
 
 **Gates 1–4 must pass on both corpora** (stricter than the original rule). The unit is the PR.
