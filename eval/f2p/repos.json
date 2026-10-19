@@ -6,7 +6,7 @@
     "status": "runnable",
     "cmd": "node {evidence}/f2p/work/hono/node_modules/vitest/vitest.mjs run --config {evidence}/f2p/work/hono/vc.mjs --root . --reporter=json --outputFile={out} {test}",
     "setup": "work dir = tree at 5ca49b0 (also the mutation arm tree); npm install vitest@3.2.4 --ignore-scripts --no-save inside it; vc.mjs = export default { test: { globals: true } } (hono's own config bypassed)",
-    "build": "none (single package, no dist imports); caches cleared by the harness"
+    "build_note": "none (single package, no dist imports); caches cleared by the harness"
   },
   "rqlite/rqlite": {
     "name": "rqlite",

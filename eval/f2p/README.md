@@ -178,3 +178,12 @@ Positive-control results (run 2026-10-19/20 on the harness before any writer; `r
 | middleapi/orpc, TanStack/query, vitest-dev/vitest | not set up | - | - | unrunnable (disk and monorepo build; see `repos.json`) | 3 + 2 + 2 PRs, 8 + 3 + 7 findings |
 
 The three positive-control failures of pydantic-ai are dependency drift (today's package versions against fix commits from 2025): two PRs collect no tests at the nearest baseline test file and one throws from the test frame on a snapshot mismatch. The 80% rule is applied as pre-registered, not tuned.
+
+### Harness bug fix (amendment 5, 2026-10-20, before any oracle outcome)
+
+Harness bug found before any outcome existed: `repos.json` held a prose note in hono's `build` field ("none (single package, ...)"), and `rebuild` ran it as a shell command, so every hono `try` failed in setup and no hono writer could check its test. Fix: the note moved to `build_note`, so hono has no build step. Nothing else changed: no test was rerun, edited or replaced because of how it scored. After the fix:
+
+- The 6 hono positive controls were rerun under the final harness (rebuild step included): 6/6 `verified`, the same as the earlier run.
+- All 42 hono writer tests (26 replay, 16 mutation) were dry-run once on the buggy (unmutated, for the mutation arm) tree only, through `try`: 42/42 executed without a compile, import, collection or harness error. Only error versus no error was looked at; pass or fail on buggy was not read.
+
+Shared-machine rule (from 2026-10-20): agents kill only process ids they started themselves, never by name or pattern. During phase A, node processes matching `--test` or `f2p` were killed by pattern while freeing the machine; that may have hit another session's test run.
