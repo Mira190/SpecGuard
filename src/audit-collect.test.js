@@ -817,3 +817,10 @@ test('CLI: a CONTEXT_PACK_BYTES override reaches the collector, so its planned r
   assert.equal(dflt, 2, 'control: unset is the 250000 default, two calls');
   assert.equal(dflt, kept(250000).rooms);
 });
+
+test('collect: every source file over the size cap: no unit, but audit-inventory.json is still written with the omission counts', (t) => {
+  const { root, ctx } = repo(t, { 'src/big.js': '/*' + 'padding '.repeat(70000) + '*/\nexports.f = () => 1;\n' }), r = collect({ cwd: root, ctx, scopeAll: true });
+  const inv = JSON.parse(fs.readFileSync(path.join(ctx, 'audit-inventory.json'), 'utf8'));
+  assert.deepEqual([inv.eligible, inv.units, inv.not_inventoried, inv.rows.length], [1, 0, 1, 0]);
+  assert.equal(r.units.total, 0);
+});

@@ -158,12 +158,12 @@ function validate(o, cands = ctxCandidates(), units = ctxUnits()) {
     if (missing.length > cands.size * MISSING_MAX) return bad(`${missing.length} of ${cands.size} listed blocks were not answered (e.g. ${missing.slice(0, 5).join(', ')}); answer every block exactly once`);
   }
   // unit_findings (code-first): a malformed row is dropped with a note, never a reason to reject the result. A finding must name a listed unit (units: Map from readUnits; null = unknown).
-  if (o.unit_findings === undefined || o.unit_findings === null) o.unit_findings = [];
+  if ((o.unit_findings === undefined || o.unit_findings === null) && !(units && units.size)) o.unit_findings = []; // no units listed: nothing to mark; with units, null/missing is a non-answer, handled below
   const keep = [], invalid = new Set(); // invalid: listed units whose finding failed validation; they were not reviewed, never "no gap"
-  if (!Array.isArray(o.unit_findings)) { notes.push('unit_findings was not an array; every listed unit counts as not reviewed.'); o.unit_findings = []; for (const u of units ? units.keys() : []) invalid.add(u); } // not "no findings": a valid empty array is that. (The claude api engine fails only the call that sent it.)
+  if (!Array.isArray(o.unit_findings)) { notes.push(`unit_findings was ${o.unit_findings == null ? 'missing or null' : 'not an array'}; every listed unit counts as not reviewed.`); o.unit_findings = []; for (const u of units ? units.keys() : []) invalid.add(u); } // not "no findings": a valid empty array is that. (The claude api engine fails only the call that sent it.)
   for (const [i, f] of o.unit_findings.entries()) {
     const w = `unit_findings[${i}]`, drop = (why) => notes.push(`${w} dropped: ${why}.`);
-    if (!f || typeof f !== 'object' || Array.isArray(f)) { drop('not an object'); continue; }
+    if (!f || typeof f !== 'object' || Array.isArray(f)) { drop('not an object'); for (const u of units ? units.keys() : []) invalid.add(u); continue; } // ponytail: a row with no unit id can't be attributed, so with units listed all of them are unreviewed
     f.kind = slug(f.kind); f.line = whole(f.line); f.unit = typeof f.unit === 'string' ? f.unit.trim().toLowerCase() : f.unit;
     if (!/^[0-9a-f]{8}$/.test(f.unit)) drop('unit must be a unit id (8 hex characters)');
     else if (units && !units.has(f.unit)) drop(`unknown unit ${f.unit}; only the listed units may be reviewed`);
@@ -537,7 +537,7 @@ function readState(body) {
 // carried: prior blocks this run did not audit ({ cid, path, line, text, status, since, runs, at }); they keep their status in the tables, marked "from <date>".
 // rotation / search (evidence candidates): audit-meta.json's; scope: the scan_paths lines; stateDropped: carried blocks that no longer fit the state.
 function render({ data, docs = [], rejected = [], limitations = [], capLeft = [], blob = '', usage = '', run = '', failure = '', partial = '', prior = null, head: sha = '', refNote = '', cap = 0, candidates = 0, max = SUMMARY_MAX,
-  carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [], code = null, notAudited = { blocks: [], failed: 0, dropped: 0 }, unanswered = 0, reach = null }) {
+  carried = [], rotation = null, search = null, scope = [], stateDropped = 0, ruled = [], code = null, notAudited = { blocks: [], failed: 0, dropped: 0 }, unanswered = 0, noAnswer = 0, reach = null }) {
   const link = (p, line, label) => {
     const t = neutralize(label).replace(/[\[\]]/g, '').replace(/\|/g, '\\|');
     const rel = safeRel(p);
@@ -631,7 +631,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   else if (gapN) verdict = `**❌ ${found}**${where}. Static review; tests were not run.`;
   else if (unsure.length) verdict = `**❔ No gaps found; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${where}. Static review; tests were not run.`;
   else verdict = `**✅ No unit test gaps found**${where}. Static review; tests were not run.`;
-  if (data && !failure && (notAudited.blocks.length || (code && code.unitsFailed) || unseen.length || unanswered > 0) && /^\*\*[✅❔]/u.test(verdict)) verdict = `**⚠️ Incomplete scan: no gaps found so far${unsure.length ? `; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check` : ''}**`; // never the clean form when part of the scan did not run
+  if (data && !failure && (notAudited.blocks.length || (code && code.unitsFailed) || unseen.length || unanswered > 0 || noAnswer > 0) && /^\*\*[✅❔]/u.test(verdict)) verdict = `**⚠️ Incomplete scan: no gaps found so far${noAnswer ? `; ${plural(noAnswer, 'unit')} not reviewed (no usable answer)` : ''}${unsure.length ? `; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check` : ''}**`; // never the clean form when part of the scan did not run
   if (data && !failure && notAudited.blocks.length) verdict = verdict.replace(/^(\*\*[\s\S]*?)\*\*/, `$1; ${plural(notAudited.blocks.length, 'document block')} not audited (${[notAudited.failed && 'a call failed', notAudited.dropped && 'left out by max_budget_usd'].filter(Boolean).join(', ')})**`);
   let top = `## ${HEADING}\n\n${verdict}\n\n${refNote ? `${refNote}\n\n` : ''}`;
   if (reach && !failure) { // scan_scope all: say prominently whether the whole repository was reviewed, and what covering it would take (a ceiling: the worst-case estimate, not the likely spend)
@@ -863,7 +863,9 @@ async function main({ github, issueGithub, context, core, date = today() }) {
 
   if (!meta) { outcome('failed', 'the collection step did not produce its context.'); return finish(render({ ...shared, failure: 'the collection step did not produce its context.' })); }
   if (env.SKIP === 'true') {
-    outcome('complete');
+    const iv0 = json('audit-inventory.json') || {}, lost = meta.scan_scope === 'all' ? ['not_inventoried', 'not_reached_cap', 'not_reached_time'].reduce((n, k) => n + (Number.isInteger(iv0[k]) && iv0[k] > 0 ? iv0[k] : 0), 0) : 0; // eligible source existed but none was reviewed (e.g. every file over the size cap): not "nothing in scope"
+    if (lost) shared.limitations = [...shared.limitations, `${plural(lost, 'eligible source file')} not reviewed (over 512 KiB or past the inventory limits); no unit was scanned`];
+    outcome(lost ? 'incomplete' : 'complete', lost ? `${plural(lost, 'eligible source file')} not reviewed and no requirement document` : '');
     await finish(render({ ...shared, data: null }));
     // no document admitted: a stale issue must not keep claiming old results (none is created for an empty scan)
     if (wantIssue && await lookup() && mine) {
@@ -918,7 +920,8 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   if (prior) carried.push(...prior.blocks.filter((b) => skip.has(b.cid)).map((b) => ({ ...cands.get(b.cid), ...b }))); // an unaudited block keeps its previous status and age: it stays due
   // blocks sent to the model that it neither answered nor ruled out (validate tolerates up to MISSING_MAX of them: they become 'Unconfirmed' rows)
   const answeredC = new Set([...data.requirements.map((r) => cidOf(r.id)), ...data.not_requirements.map((n) => n.cid)]), unansweredC = new Set([...sent.keys()].filter((c) => !answeredC.has(c))), unanswered = unansweredC.size;
-  try { fs.writeFileSync(path.join(ctx, 'audit-unanswered.json'), JSON.stringify({ blocks: unanswered })); } catch {} // fail-on-error.js: under scan_scope all blocks the model was sent and did not answer (possibly after one retry) were not reviewed
+  const noAnswer = hasCode ? data.invalid_units.filter(notCut).length : 0; // listed units with no usable answer (unit_findings null/missing, a bad row or a finding that failed validation): not reviewed, never "no gap"
+  try { fs.writeFileSync(path.join(ctx, 'audit-unanswered.json'), JSON.stringify({ blocks: unanswered, units: noAnswer })); } catch {} // fail-on-error.js: under scan_scope all blocks the model was sent and did not answer (possibly after one retry) were not reviewed
   // unanswered in the previous run too (review S6): recorded unsure with this run's date, no third try; named so it is not lost
   const twice = [...unansweredC].filter((c) => prior && prior.versions && (prior.versions.un || []).includes(c));
   if (twice.length) shared.limitations = [...shared.limitations, `${plural(twice.length, 'document block')} not answered in two consecutive runs (recorded unsure; rotation moves on): ${twice.slice(0, 3).map((c) => `${sent.get(c).path}:${sent.get(c).line} (${c})`).join(', ')}${twice.length > 3 ? ', ...' : ''}`];
@@ -931,14 +934,14 @@ async function main({ github, issueGithub, context, core, date = today() }) {
     fitN > 0 && `${plural(fitN, 'unit')} did not fit the model's context`, partN > 0 && `${plural(partN, 'unit')} ${partN === 1 ? 'was' : 'were'} reviewed with only part of their tests (recorded unsure)`, dropU.length && `${plural(dropU.length, 'unit')} had a finding that failed validation or verification`, unanswered && `${plural(unanswered, 'document block')} ${unanswered === 1 ? 'was' : 'were'} not answered by the model`].filter(Boolean).join('; ');
   outcome(incomplete ? 'incomplete' : 'complete', incomplete);
   if (issueErr) outcome('failed', issueErr); // the lookup ran before the status was known
-  await finish(render({ ...shared, data: checked, partial, prior, carried, code, notAudited, unanswered }));
+  await finish(render({ ...shared, data: checked, partial, prior, carried, code, notAudited, unanswered, noAnswer }));
   if (!looked) return; // no issue wanted, a partial audit, or the lookup failed (a blind create could duplicate the issue)
   const cu = readUnits(readCtx('audit-units-carried.txt')); // units the state knows that this run did not review, still in the repository
   const forced = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), cut = new Set(unseen.filter((u) => forced.has(u) && !notSeen.has(u)));
   const codeState = code && { cut, unsure, picked: [...units.keys()].filter((u) => !unseen.includes(u) || cut.has(u)), findings: trackFindings(code.findings.filter((f) => !f.low), prior, meta.head), carried: prior ? prior.blocks.filter((b) => cu.has(b.cid) || (unseen.includes(b.cid) && !cut.has(b.cid))) : [],
     versions: new Map([...units.values()].filter((u) => u.ver).map((u) => [u.id, u.ver])), parts: new Map([...units.values()].filter((u) => u.part && !unseen.includes(u.id)).map((u) => [u.id, u.part])) }; // an unseen unit is not tracked: its prior state is carried, it stays due
   const state = stateOf(meta.head, checked, prior, { carried, date, code: codeState, stale, tv, unanswered: unansweredC });
-  await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
+  await publish(render({ ...shared, data: checked, prior, carried, code, notAudited, unanswered, noAnswer, stateDropped: state.dropped, max: room(state.raw) }), state.raw);
 }
 
 // Never fails the run: any error here is a warning.
