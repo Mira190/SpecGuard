@@ -1,0 +1,15 @@
+[extend]
+useDefault = true
+
+# Verified false positives: commit SHAs / content hashes in evidence docs, fake tokens in credential tests.
+[[allowlists]]
+description = "known false positives"
+paths = [
+  '''docs/complex-repository-traceability-research-sources-2026-10-17\.json''',
+  '''docs/scan-budget-followup-probe-results-2026-10-17\.json''',
+  '''docs/unknown-unknown-runtime-admission-probe-2026-10-17\.json''',
+  '''docs/branch-review-inventory-2026-10-17\.csv''',
+  '''docs/review-probes/latest-source-manifest-2026-10-17\.json''',
+  '''src/auto-engine\.test\.js''',
+  '''src/credential\.test\.js''',
+]

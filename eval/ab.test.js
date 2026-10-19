@@ -173,7 +173,7 @@ test('tokens: matches a task.md kickoff with a literal Windows backslash path', 
 });
 
 // ---- --prompt-file (free-form competitor stand-ins) ----
-const COMP = process.env.AB_COMP_DIR || 'C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/ab-comp';
+const COMP = process.env.AB_COMP_DIR || '<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/ab-comp';
 const stand = path.join(tmp, 'stand.txt');
 put(stand, '<!-- PROVENANCE: inferred -->\nReview the PR.\nWrite {"comments":[]}.\n');
 

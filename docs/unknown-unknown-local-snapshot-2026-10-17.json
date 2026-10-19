@@ -2087,7 +2087,7 @@
       "status_sample": []
     },
     {
-      "worktree": "C:/Users/emily/.codex/worktrees/critical-shift-left-review/SpecGuard",
+      "worktree": "<local-user-dir>/.codex/worktrees/critical-shift-left-review/SpecGuard",
       "HEAD": "9ae180b36c782d4583971d53bee1870373ecbdf7",
       "branch": "refs/heads/codex/critical-shift-left-followup-2026-10-15",
       "status_error": "fatal: this operation must be run in a work tree",
@@ -2095,7 +2095,7 @@
       "status_sample": []
     },
     {
-      "worktree": "C:/Users/emily/.codex/worktrees/shift-left-rereview-2026-10-15/SpecGuard",
+      "worktree": "<local-user-dir>/.codex/worktrees/shift-left-rereview-2026-10-15/SpecGuard",
       "HEAD": "6684ffd11bdeaae5e9eb8c442975cc2970bce2c0",
       "branch": "refs/heads/codex/full-repo-shift-left-audit-2026-10-16",
       "status_error": "fatal: this operation must be run in a work tree",
@@ -2103,7 +2103,7 @@
       "status_sample": []
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/5d9bdf6a-5abb-4015-a20e-77d0f8543212/scratchpad/wt-summary",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/5d9bdf6a-5abb-4015-a20e-77d0f8543212/scratchpad/wt-summary",
       "HEAD": "957b1541ca41563a8f3c7312b42b5eb5fe7dbf31",
       "branch": "refs/heads/feat/summary-v2",
       "status_error": null,
@@ -2111,7 +2111,7 @@
       "status_sample": []
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/adopt",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/adopt",
       "HEAD": "f4a9388d066a1a1369bbd05e0966e5c3d82c8fda",
       "branch": "refs/heads/feat/adopt",
       "status_error": null,
@@ -2135,7 +2135,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/crlffix",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/crlffix",
       "HEAD": "fc0e503519b0337d4a998265fd4939b06238e303",
       "branch": "refs/heads/fix/crlf",
       "status_error": null,
@@ -2159,7 +2159,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/disc",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/disc",
       "HEAD": "8af3a8892e8c0a0953e5a9082523f2b10caec00b",
       "branch": "refs/heads/fix/discovery",
       "status_error": null,
@@ -2183,7 +2183,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/docs2",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/docs2",
       "HEAD": "798e6e55bbf67c67776aaa7c3a599bc407e736e8",
       "branch": "refs/heads/docs/design-update",
       "status_error": null,
@@ -2207,7 +2207,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/gates",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/gates",
       "HEAD": "9e97df5b61852b675fe39747fb60a564745e7f7d",
       "branch": "refs/heads/gates/g4-only",
       "status_error": null,
@@ -2231,7 +2231,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/harden",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/harden",
       "HEAD": "e8d84d2fc4056bed13f329ad95834d0c6d636a17",
       "branch": "refs/heads/hardening/security",
       "status_error": null,
@@ -2255,7 +2255,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/lean",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/lean",
       "HEAD": "a9fa14377f955c43830a33d71bace8828aaf4094",
       "branch": "refs/heads/lean/v1",
       "status_error": null,
@@ -2279,7 +2279,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/met",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/met",
       "HEAD": "78cde9b603638377c4f71301d22682b7684cb3eb",
       "branch": "refs/heads/feat/metrics",
       "status_error": null,
@@ -2303,7 +2303,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/pd",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/pd",
       "HEAD": "79defdbfa0c4067dd64eba5802c5b60a34238461",
       "branch": "refs/heads/fix/pushdown",
       "status_error": null,
@@ -2327,7 +2327,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/scratchpad/skillv2-base",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/scratchpad/skillv2-base",
       "HEAD": "d60f13f4665e985b76babfa2d5b9e23458d16459",
       "detached": true,
       "status_error": null,
@@ -2335,7 +2335,7 @@
       "status_sample": []
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/skillv2",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/skillv2",
       "HEAD": "0fd801881a7494bfaa37790dd3aa722c51e37618",
       "branch": "refs/heads/skill/v2",
       "status_error": null,
@@ -2359,7 +2359,7 @@
       ]
     },
     {
-      "worktree": "C:/Users/emily/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/stale",
+      "worktree": "<local-user-dir>/AppData/Local/Temp/claude/C--Files-Projects-SpecGuard/6f7f6faf-5b4d-421d-9c89-4ab363ef91ee/scratchpad/stale",
       "HEAD": "dfc92414c793c019300291b435ef93ed73fd1822",
       "branch": "refs/heads/feat/stale-threads",
       "status_error": null,

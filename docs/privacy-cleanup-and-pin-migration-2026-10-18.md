@@ -26,3 +26,7 @@ The incident set already exists: 24 + 69 SZZ pairs, 12 confirmed in-scope replay
 Every PR-mode behavior change should compare direct/indirect/miss, clean-PR false positives, execution failures and cost on fixed inputs and engine settings. Keep indirect separate from direct; report response coverage for author labels; silence is not approval. Retain temporal holdouts, inspect future-fix leakage and measure repeat-run variation. A passing workflow alone does not establish shift-left effectiveness: results must precede merge and describe the current head with incomplete runs visible.
 
 This privacy change is evaluated by deterministic lead/post/offline regression equivalence. It makes no claim of improved production-model recall or precision.
+
+## Leak guard
+
+CI runs `bin/leak-check.js` (fails on a `SPECGUARD-HONEY-` + 16 hex marker, or a local absolute user path) and gitleaks on every PR; run the Gitleaks workflow by hand for a full-history scan. Owners plant honey markers in private target repos, so one appearing in this public repo means private content leaked.

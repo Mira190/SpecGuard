@@ -4,7 +4,7 @@ Repo Mira190/SpecGuard, target feature/verified-review. Cost: not measured (chec
 
 | Case | Goal | Rep | Pass | TP | FP | FN | Summary only | JSON valid | Latency | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| r1 | requirements | 1 | error | | | | | | | error: Command failed: git -C C:\Users\emily\AppData\Local\Temp\specguard-eval-uIIceP add -A eval-sandbox |
+| r1 | requirements | 1 | error | | | | | | | error: Command failed: git -C <local-user-dir>\AppData\Local\Temp\specguard-eval-uIIceP add -A eval-sandbox |
 
 ## Aggregate
 
