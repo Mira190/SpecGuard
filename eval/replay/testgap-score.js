@@ -9,6 +9,8 @@ const path = require('node:path');
 const { isProd, isTest, isCommentLine, mulberry32 } = require('../szz');
 const { enclosingName } = require('../../src/test-map');
 const { git, tryGit, addedLines, blamedSpots } = require('./holdout2-null');
+const { parseComment } = require('../grade');
+const { summaryItems } = require('../replay');
 
 const TOL = 3, KINDS = new Set(['missing_test', 'weak_test']);
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
@@ -130,6 +132,11 @@ function main() {
   for (const p of pairs) runsOf[p.id] = runIds.map((run, ri) => {
     let r = null;
     try { r = JSON.parse(fs.readFileSync(path.join(arg('raw'), run, 'replay-' + p.replay_id, 'result.json'), 'utf8')); } catch { /* unusable */ }
+    if (r && arg('posted')) { // --posted ROOT: findings re-published by another post.js (eval/replay/two-posts.js layout ROOT/run<run>-A/<replay_id>/{posted.json,summary.md}); validity still from the saved result.json
+      const d = path.join(arg('posted'), 'run' + run + '-A', p.replay_id);
+      try { const po = JSON.parse(fs.readFileSync(path.join(d, 'posted.json'), 'utf8')), sm = fs.readFileSync(path.join(d, 'summary.md'), 'utf8');
+        r = { ...r, findings: [...po.comments.map(parseComment).filter(Boolean).map((x) => ({ where: 'inline', kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null })), ...summaryItems(sm).map((x) => ({ where: 'summary', kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null, why: x.why || '' }))] };
+      } catch { r = null; } }
     const ok = !!r && r.valid !== false && r.engine_status === 'success' && !r.skip && Array.isArray(r.findings) && !(r.engine_notes || []).some((n) => /context pack: 0 files/.test(n));
     if (r && r.usage && typeof r.usage.cost_usd === 'number') cost.push(r.usage.cost_usd);
     return { id: p.replay_id, rep: ri + 1, ok, findings: ok ? r.findings : [] };
@@ -221,4 +228,4 @@ function main() {
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
-module.exports = { buildUnits, makeB, isCatch, isCandidate };
+module.exports = { buildUnits, makeB, isCatch, isCandidate, isLow, pairData, qualifies, word, parseDiff };
