@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { run, assertionDelta, declName, expectedArgs, mirrorCandidates, weakCandidates } = require('./leads.js');
+const { run, assertionDelta, goneAtHead, declName, expectedArgs, mirrorCandidates, weakCandidates } = require('./leads.js');
 
 // Temp repo: base commit, then head commit; ctx gets diff.patch and files.txt like collect.sh writes them. Returns the leads as {section: [lines]}.
 function leads(t, baseFiles, headFiles, ctxFiles = {}, env = {}) {
@@ -241,4 +241,28 @@ test('removed assertions: an assertion cut from one hunk and pasted unchanged in
 test('symbols: with test_paths set, a test-named file outside it is no test reference (same rule as the cover guard)', (t) => {
   const { sections } = leads(t, {}, { 'src/lib.js': 'export function fooBar() {\n  return 1;\n}\n', 'test/x.test.js': 'fooBar();\n', 'check/y.js': 'fooBar();\n' }, {}, { TEST_PATHS: 'check/' });
   assert.deepEqual(sections[YES], ['fooBar -> check/y.js']);
+});
+
+test('removed assertions: text inside a string literal is not an assertion', () => {
+  assert.deepEqual(delta("-  const body = ' assertion removed: assert.equal(validateBaseName(\\'new name\\', 1), true)';\n+  const body = 'x';\n"), []);
+  assert.deepEqual(delta("-  const s = `assert.match(f(1), /a/)`;\n+  const s = 1;\n"), []);
+  assert.deepEqual(delta("-  assert.match(validateBaseName('BIG', '.mp4', others), /已存在/);\n+  const x = 1;\n"), ["removed 10 assert.match(validateBaseName('BIG', '.mp4', others), /已存在/);"]);
+});
+test('removed assertions: one whose function no longer exists at head went with its code, one whose function stays is a lead', () => {
+  const src = mkdiff('src/x.ts', "-export function packGuard(r) {}\n-export function validateBaseName(a) {}\n-const S = new Set();\n");
+  const d = (gone, dropSrc = true) => assertionDelta((dropSrc ? src : '') + mkdiff('test/x.test.ts', "-  assert.match(packGuard(p), /context pack is empty/);\n-  assert.match(validateBaseName('BIG', '.mp4', o), /x/);\n-  assert.equal(new Set(a).size, 1);\n+  const x = 1;\n"), (f) => f.includes('.test.'), gone).map((x) => x.old);
+  assert.equal(d().length, 3);
+  assert.deepEqual(d((n) => n === 'packGuard' || n === 'Set').map((x) => x.slice(0, 22)), ['assert.match(validateB', 'assert.equal(new Set(a'], 'only the function this diff dropped and head lacks; `new Set` is no function of the code');
+  assert.equal(d((n) => n === 'packGuard', false).length, 3, 'a name this diff never dropped is not claimed gone');
+});
+test('goneAtHead: a name only in test files is gone, one in source is not, git failing keeps the lead', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gone-')), git = (...a) => execFileSync('git', a, { cwd: dir, stdio: 'ignore' });
+  git('init', '-q');
+  fs.writeFileSync(path.join(dir, 'a.js'), 'function alive() {}\n');
+  fs.writeFileSync(path.join(dir, 'a.test.js'), 'alive(); onlyInTest();\n');
+  git('add', '.');
+  const g = goneAtHead(dir, (p) => p.endsWith('.test.js'));
+  assert.deepEqual([g('alive'), g('onlyInTest'), g('nowhere')], [false, true, true]);
+  assert.equal(goneAtHead(path.join(dir, 'missing'), () => false)('alive'), false, 'git cannot say: not gone');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
