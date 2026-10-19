@@ -130,9 +130,15 @@ const layerOf = (p) => { const s = String(p);
 const STRONG_NOT_UNIT = /(^|[/._-])(integration|integ|e2e|end-to-end|acceptance|functional|cypress|playwright|contract|smoke)([/._-]|$)|(?:IT|ITCase|Integration(?:Tests?)?|E2E)\.[A-Za-z]+$|\.(?:test|spec)\.[jt]sx$/i;
 const WEAK_NOT_UNIT = /(^|\/)(api|apis|db|database|components?|ui|it|itests?)\/|\.(api|apis|db|database|components?|ui|browser|it|itests?)\.|(^|\/)(?:test_)?(api|apis|db|database|components?|ui|it|itests?)(?:[._]test|\.spec)?\.[A-Za-z]+$|(^|\/)__tests__\/[^/]+\//i;
 const TEST_NAME = /(^|\/)(?:test_[^/]*|[^/]*[._-](?:tests?|spec)(?:\.[^/]*)?|tests?\.[^/]*)$/i, PASCAL_TEST = /[a-z0-9](?:Tests?|Spec)\.[^/]*$/; // the file NAME says test (isTestPath minus its directory clause): tests/__init__.py, conftest.py, tests/example_modules/db.py do not
+// ponytail: Jest `__tests__/` and a Mocha `test(s)/` (direct child or under unit/) make a JS/TS file a test only if it declares one (TEST_DECL; unreadable = no), so common.js/support.js helpers stay out; JUnit/NUnit `Test*` names and `.test-d.ts` are content-free; Python/Go/Java/C# still need a test-ish name, and a nested test/ (src/test/resources) too.
+const declCache = new Map(); // cleared per validate(): the workspace may differ between runs
+// ponytail: a file that imports a browser/DB/HTTP harness or serves (request(app, .listen() is higher-layer, so the model must state the layer; the list is the common packages only: a hand-written request (http(s), child_process, execa) is seen, a global fetch to localhost or a docker-compose DB is not.
+const HARNESS = /(?:require\(\s*|from\s+)['"](?:supertest|@playwright\/test|playwright|puppeteer|selenium-webdriver|pg|mysql2?|mongodb|mongoose|redis|ioredis|sqlite3|better-sqlite3|knex|@prisma\/client|typeorm|sequelize|(?:node:)?child_process|execa|(?:node:)?https?)['"]|\brequest\(\s*app|\.listen\(/;
+const declares = (s) => { if (!declCache.has(s)) { const l = readFile(s); declCache.set(s, !!l && l.some((x) => TEST_DECL.test(x) && /^\s*[xf]?(?:it|test|describe)\b/.test(x)) && !HARNESS.test(l.join('\n'))); } return declCache.get(s); };
+const TEST_DIR_FILE = (s) => /(^|\/)__tests__\/|^tests?\/(?:unit(?:[_-]?tests?)?\/)?[^/]+$/i.test(s) && /\.[cm]?[jt]s$/.test(s) && !/(^|\/)(?:fixtures?|mocks?|__mocks__|testdata|cassettes|snapshots|__snapshots__)\//i.test(s) && declares(s);
 const CODE_FILE =/\.(?:[cm]?[jt]s|py|go|java|kts?|scala|rb|rs|cs|php|swift|c|cc|cpp|mm?|dart|exs?|clj)$/i;
 const clearlyUnit = (p) => { const s = String(p);
-  return layerOf(s) === 'unit' && CODE_FILE.test(s) && (TEST_NAME.test(s) || PASCAL_TEST.test(s)) &&!STRONG_NOT_UNIT.test(s)
+  return layerOf(s) === 'unit' && CODE_FILE.test(s) && (TEST_NAME.test(s) || PASCAL_TEST.test(s) || /(^|\/)Test[A-Z]\w*\.\w+$|\.test-d\.[jt]s$/.test(s) || TEST_DIR_FILE(s)) &&!STRONG_NOT_UNIT.test(s)
     && (/(^|\/)unit(?:[_-]?tests?)?\//i.test(s) || !WEAK_NOT_UNIT.test(s.replace(/(^|\/)src\/test\/(?:java|kotlin|scala)\/(?:.*\/)?/, '$1src/test/'))); };
 
 // Does the cited line (or the quoted block) look like an assertion, and is its test disabled? Common frameworks only.
@@ -188,7 +194,7 @@ function validate(o) {
   const citation = (v) => v && text(v.path) && int(v.line) && text(v.quote) && (v.side === undefined || ['LEFT', 'RIGHT'].includes(v.side));
   if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('$ is not an object');
   for (const k of ['coverage', 'findings', 'requirements']) if (!Array.isArray(o[k])) return bad(`${k} must be an array`);
-  tidy(o);
+  declCache.clear(); tidy(o);
   const notes = [], degraded = []; // degraded: ids of rows marked unknown on their own content; reducedReasons counts these, never note wording
   if (!str(o.requirements_source)) { o.requirements_source = ''; notes.push('requirements_source was not a string; ignored.'); }
   if (!str(o.not_reviewed)) { o.not_reviewed = ''; notes.push('not_reviewed was not a string; ignored.'); }

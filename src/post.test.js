@@ -3554,8 +3554,8 @@ const evOf = (path_, extra = {}) => ({ path: path_, line: 2, quote: evidence.quo
 
 test('V3: a covered row needs an explicit unit layer unless the path is clearly a plain unit test; otherwise unknown "layer not stated"', () => {
   const run = (e) => { const d = report({ coverage: [row('covered', { evidence: [e] })], findings: [] }); assert.equal(post.validate(d).ok, true); return d.coverage[0]; };
-  for (const p of ['test/a.test.js', 'src/foo.test.js', 'test_quote.py', 'pkg/calc_test.go', 'src/__tests__/calc.test.js', 'src/test/java/FooTest.java', 'src/claude-api.test.js', 'src/ui-utils.test.js', 'src/db-helpers.test.ts', 'test_quote_api.py', 'tests/unit/api/test_orders.py', 'test/unit/db/repo.test.js', 'libs/tests/unit_tests/indexes/test_api.py', 'src/test/java/com/acme/api/FooTest.java', 'src/test/kotlin/com/acme/db/RepoTest.kt']) assert.equal(run(evOf(p)).status, 'covered', p);
-  for (const p of ['tests/api/orders.test.js', 'src/__tests__/db/users.test.js', 'src/Checkout.test.tsx', 'src/user.api.test.js', 'src/ui.test.ts', 'pkg/db_test.go', 'src/api.test.js', 'test_api.py', 'src/it.test.js', 'x/foo.browser.test.ts', 'src/components/Menu.test.js', 'test_integration.py', 'src/foo-e2e.test.js', 'src/foo.e2e.test.js', 'src/foo.it.test.js', 'src/test/java/FooIT.java', 'src/__tests__/auth/login.test.js', 'src/ui/Menu.test.js', 'tests/testdata/x.db', 'tests/fixtures/data.json', 'tests/__init__.py', 'tests/conftest.py', 'tests/cassettes/test_api/foo.yaml', 'src/__snapshots__/x.test.js.snap', 'tests/snapshots/foo.json', 'tests/example_modules/bank.py', 'examples/.test/monotest-api/src/index.ts', 'tests/unit/integration/x.test.js', 'tests/unit/e2e/test_x.py', 'src/test/java/com/acme/integration/FooTest.java', 'src/smoke-alarm.test.js', 'src/contract-parser.test.js', 'src/functional-core.test.js']) {
+  for (const p of ['test/a.test.js', 'src/foo.test.js', 'test_quote.py', 'pkg/calc_test.go', 'src/__tests__/calc.test.js', 'src/test/java/FooTest.java', 'src/claude-api.test.js', 'src/ui-utils.test.js', 'src/db-helpers.test.ts', 'test_quote_api.py', 'tests/unit/api/test_orders.py', 'test/unit/db/repo.test.js', 'libs/tests/unit_tests/indexes/test_api.py', 'src/test/java/com/acme/api/FooTest.java', 'src/test/kotlin/com/acme/db/RepoTest.kt', 'src/test/java/com/acme/TestOrderService.java', 'tests/TestFoo.cs', 'src/__tests__/types.test-d.ts']) assert.equal(run(evOf(p)).status, 'covered', p);
+  for (const p of ['tests/api/orders.test.js', 'src/__tests__/db/users.test.js', 'src/Checkout.test.tsx', 'src/user.api.test.js', 'src/ui.test.ts', 'pkg/db_test.go', 'src/api.test.js', 'test_api.py', 'src/it.test.js', 'x/foo.browser.test.ts', 'src/components/Menu.test.js', 'test_integration.py', 'src/foo-e2e.test.js', 'src/foo.e2e.test.js', 'src/foo.it.test.js', 'src/test/java/FooIT.java', 'src/__tests__/auth/login.test.js', 'src/ui/Menu.test.js', 'tests/testdata/x.db', 'tests/fixtures/data.json', 'tests/__init__.py', 'tests/conftest.py', 'tests/cassettes/test_api/foo.yaml', 'src/__snapshots__/x.test.js.snap', 'tests/snapshots/foo.json', 'tests/example_modules/bank.py', 'examples/.test/monotest-api/src/index.ts', 'tests/unit/integration/x.test.js', 'tests/unit/e2e/test_x.py', 'src/test/java/com/acme/integration/FooTest.java', 'src/smoke-alarm.test.js', 'src/contract-parser.test.js', 'src/functional-core.test.js', 'src/__tests__/helpers.js', 'test/fixtures/data.js', 'tests/utils.py', 'tests/__init__.py', 'test/setup.js', 'tests/__mocks__/fs.js', 'src/__tests__/waitError.ts', 'tests/typed_agent.py', 'tests/test-utils.js']) {
     const r = run(evOf(p));
     assert.deepEqual([p, r.status, /layer not stated|unit assertion/.test(r.reason)], [p, 'unknown', true]);
     assert.equal(run(evOf(p, { layer: 'unit' })).status, 'covered', `${p}: a stated unit layer is the model's claim and is kept`);
@@ -3565,6 +3565,35 @@ test('V3: a covered row needs an explicit unit layer unless the path is clearly 
   const w = report({ coverage: [row('weak_test', { evidence: [evOf('tests/api/orders.test.js')] })], findings: [finding('weak_test')] });
   assert.equal(post.validate(w).ok, true);
   assert.equal(w.coverage[0].status, 'weak_test', 'only a covered claim needs the explicit layer');
+});
+
+test('V3: a JS/TS file in __tests__/ or test/ is unit evidence only if it declares a test; helpers, missing files and fixtures are not', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-v3-')), old = process.env.GITHUB_WORKSPACE; process.env.GITHUB_WORKSPACE = dir;
+  t.after(() => { if (old === undefined) delete process.env.GITHUB_WORKSPACE; else process.env.GITHUB_WORKSPACE = old; fs.rmSync(dir, { recursive: true, force: true }); });
+  const put = (p, c) => { fs.mkdirSync(path.dirname(path.join(dir, p)), { recursive: true }); fs.writeFileSync(path.join(dir, p), c); };
+  const status = (p) => { const d = report({ coverage: [row('covered', { evidence: [evOf(p)] })], findings: [] }); assert.equal(post.validate(d).ok, true); return d.coverage[0].status; };
+  for (const n of ['common', 'support', 'bootstrap', 'shared', 'globals', 'server', 'factory', 'harness', 'env']) { put(`test/${n}.js`, 'module.exports = { assertOk(x) { if (!x) throw new Error("no"); } };\n'); assert.equal(status(`test/${n}.js`), 'unknown', n); }
+  put('test/calc.js', "describe('calc', () => { it('adds', () => {}); });\n"); put('src/__tests__/calc.js', "it('adds', () => {});\n");
+  assert.equal(status('test/calc.js'), 'covered'); assert.equal(status('src/__tests__/calc.js'), 'covered');
+  put('test/cli.js', "const { spawnSync } = require('node:child_process');\ndescribe('cli', () => { it('runs', () => { spawnSync('node', ['cli.js']); }); });\n");
+  put('test/net.js', "const http = require('http');\ndescribe('net', () => { it('gets', () => { require('http').request({ host: 'localhost' }); }); });\n");
+  assert.equal(status('test/cli.js'), 'unknown', 'a child_process harness is higher-layer'); assert.equal(status('test/net.js'), 'unknown', 'an http client is higher-layer');
+  put('test/app.get.js',"var request = require('supertest');\nvar express = require('..');\ndescribe('app.get', () => { it('responds', (done) => { request(express()).get('/').expect(200, done); }); });\n");
+  put('test/app.use.js', "describe('use', () => { it('mounts', () => { const app = express(); server = app.listen(0); }); });\n");
+  assert.equal(status('test/app.get.js'), 'unknown', 'a supertest file is HTTP-layer: the model states the layer'); assert.equal(status('test/app.use.js'), 'unknown');
+  assert.equal(status('test/missing.js'), 'unknown', 'an unreadable file is not evidence');
+  put('test/fixtures/data.js', "it('x', () => {});\n"); assert.equal(status('test/fixtures/data.js'), 'unknown');
+  put('test/unit/calc.js', "describe('calc', () => { it('adds', () => {}); });\n"); assert.equal(status('test/unit/calc.js'), 'covered', 'test/unit/ direct child is a unit test dir');
+  put('test/assertions.js', "expect.it('x', function () {});\n"); assert.equal(status('test/assertions.js'), 'unknown', 'expect.it( is not a declaration: it must start the line');
+});
+
+test('V3: the declaration cache is reset per validate(): a file rewritten between runs is re-read', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-v3c-')), old = process.env.GITHUB_WORKSPACE; process.env.GITHUB_WORKSPACE = dir;
+  t.after(() => { if (old === undefined) delete process.env.GITHUB_WORKSPACE; else process.env.GITHUB_WORKSPACE = old; fs.rmSync(dir, { recursive: true, force: true }); });
+  const f = path.join(dir, 'test', 'calc.js'); fs.mkdirSync(path.dirname(f), { recursive: true });
+  const status = () => { const d = report({ coverage: [row('covered', { evidence: [evOf('test/calc.js')] })], findings: [] }); assert.equal(post.validate(d).ok, true); return d.coverage[0].status; };
+  fs.writeFileSync(f, "describe('calc', () => { it('adds', () => {}); });\n"); assert.equal(status(), 'covered');
+  fs.writeFileSync(f, 'module.exports = { assertOk(x) { if (!x) throw new Error("no"); } };\n'); assert.equal(status(), 'unknown', 'a stale cached declaration must not survive into the next validate()');
 });
 
 test('V3: the cited line must be an assertion in a test that runs; otherwise the row is not covered', () => {
