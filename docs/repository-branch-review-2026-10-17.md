@@ -193,8 +193,8 @@ Head `5f2b1904e80cb3ca28059d1ec147b44f943b949d`，比 main 领先 1、落后 0�
 - C:/Files/Projects/SpecGuard-wt/batch1
 - C:/Files/Projects/SpecGuard-wt/scan
 - C:/Files/Projects/SpecGuard-wt/state
-- C:/Users/emily/.codex/worktrees/critical-shift-left-review/SpecGuard
-- C:/Users/emily/.codex/worktrees/shift-left-rereview-2026-10-15/SpecGuard
+- <local-user-dir>/.codex/worktrees/critical-shift-left-review/SpecGuard
+- <local-user-dir>/.codex/worktrees/shift-left-rereview-2026-10-15/SpecGuard
 
 本次未修改它们的 Git 配置。应单独检查 common gitdir、worktree config 和目录绑定，恢复可读后重新盘点；错误原因未完全确定，不能把它们标成无用目录。
 
