@@ -149,7 +149,8 @@ const parseGrade = (t) => {
 };
 
 async function callModel(model, prompt, key, fetchFn = fetch) {
-  const res = await fetchFn('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model, max_tokens: MAX_TOKENS, temperature: 0, messages: [{ role: 'user', content: prompt }] }) });
+  // no temperature: claude-sonnet-5-5 rejects it (HTTP 400 "`temperature` is deprecated for this model"); src/engines/claude-api.js sends none either
+  const res = await fetchFn('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model, max_tokens: MAX_TOKENS, messages: [{ role: 'user', content: prompt }] }) });
   const j = await res.json();
   if (!res.ok) throw new Error(`HTTP ${res.status} ${j.error?.type || ''}`); // body not echoed: nothing from the request is logged
   return { text: (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join(''), usage: j.usage || {} };
