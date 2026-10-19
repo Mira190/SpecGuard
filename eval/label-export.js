@@ -127,7 +127,9 @@ function agreement(rows, toolOf = () => null) {
   const scopes = { overall: scope(units(() => true)) };
   for (const t of [...new Set(rows.map((r) => toolOf(r.id)).filter(Boolean))].sort()) { const s = scope(units((r) => toolOf(r.id) === t)); if (s.n) scopes[t] = s; }
   const ok = Object.values(scopes).every((s) => s.status !== 'fail') && unsure.a <= UNSURE_MAX && unsure.b <= UNSURE_MAX;
-  return { alpha: scopes.overall.alpha, n: scopes.overall.n, scopes, unsure, ok, decision: ok && Object.values(scopes).every((s) => s.status === 'reliable') };
+  const unsureOk = unsure.a <= UNSURE_MAX && unsure.b <= UNSURE_MAX; // decisions: per scope, reliable and both unsure rates under the cap (weekly-report gates the precision rules on the specguard scope)
+  const decisions = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, unsureOk && s.status === 'reliable']));
+  return { alpha: scopes.overall.alpha, n: scopes.overall.n, scopes, unsure, ok, decisions, decision: ok && Object.values(decisions).every(Boolean) };
 }
 // Blinding check per labeller: correct vs wrong tool guesses (blank or anything else = don't know). share = correct / (correct + wrong), 0.5 when blind;
 // bi = (correct - wrong) / all rows (Bang's blinding index: 0 = blind, 1 = fully unblinded).
@@ -185,5 +187,5 @@ function main() {
   if (claimless(findings)) console.error(`${claimless(findings)} summary-only findings have no claim text (counts written before titles were recorded): left out of the sheet and the precision sample.`);
   if (o.out) { fs.writeFileSync(o.out, csv); console.error(`wrote ${o.out}: ${csv.split('\n').length - 2} findings. Send it to the labellers; keep the tool column out of their view.`); } else process.stdout.write(csv);
 }
-module.exports = { findingId, shuffle, exportRows, claimless, toCsv, parseCsv, readLabels, labelPrecision, alpha, alphaInterval, classify, agreement, blinding, ALPHA_MIN, MIN_N, COLUMNS };
+module.exports = { findingId, shuffle, exportRows, claimless, toCsv, parseCsv, readLabels, labelPrecision, alpha, alphaInterval, classify, agreement, blinding, ALPHA_MIN, ALPHA_DECIDE, UNSURE_MAX, DROP_MAX, MIN_N, COLUMNS };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exit(1); }
