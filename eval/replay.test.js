@@ -181,3 +181,47 @@ test('invalid: no pack note is fine when the PR changed no files', () => {
   assert.strictEqual(invalid({ ...ok, files: 0, engine_notes: [] }), null);
   assert.match(invalid({ ...ok, skip: true }), /skipped/);
 });
+
+test('batch: real claude-api.js with mocked HTTP: cap, resume, reps, total cap, stop on the first invalid run', async () => {
+  const { batch } = require('./replay.js'), api = require('../src/engines/claude-api.js');
+  const { d } = mkRepo(), repos = path.join(tmp, 'b-repos');
+  fs.mkdirSync(repos, { recursive: true }); fs.cpSync(d, path.join(repos, 'r'), { recursive: true });
+  const { base, head } = { base: git(d, 'rev-parse', 'HEAD~1'), head: git(d, 'rev-parse', 'HEAD') };
+  const ids = ['b1', 'b2', 'b3', 'b4'], man = path.join(tmp, 'b-man.json');
+  fs.writeFileSync(man, JSON.stringify({ clean: ids.map((id) => ({ id, repo: 'o/r', number: 5, base, head, pr_title: 't', pr_body: 'limit is 5' })) }));
+  const dirs = ids.map((id) => { const x = path.join(tmp, 'b-dl', `replay-${id}`); fs.mkdirSync(x, { recursive: true }); fs.writeFileSync(path.join(x, 'result.json'), JSON.stringify({ id, repo: 'o/r' })); return x; });
+  let calls = [], bad = null;
+  const fetchFn = async (url, init) => {
+    const body = JSON.parse(init.body); calls.push({ key: init.headers['x-api-key'], model: body.model });
+    if (bad) return { status: 401, ok: false, headers: { get: () => null }, text: async () => JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'bad key' } }) };
+    return { status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify({ type: 'message', model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(findings()) }], usage: { input_tokens: 1000, output_tokens: 100 } }) };
+  };
+  const engine = async ({ dir, ctx, repo, model, budget }) => { const log = console.log; console.log = () => {};
+    try { await api.run({ GITHUB_WORKSPACE: repo, CTX: ctx, PROMPT_FILE: path.join(dir, 'prompt.md'), ANTHROPIC_API_KEY: 'sk-ant-offline-mock', MODEL: model, MAX_BUDGET_USD: budget, MAX_OUTPUT_TOKENS: '32000', TIMEOUT: '12' }, { fetchFn, sleep: async () => {} }); } finally { console.log = log; }
+    return 0; };
+  const run = (o) => batch({ dirs: dirs.slice(0, 2), manifests: [man], repos, budget: '0.5', maxTotal: 100, engine, log: () => {}, ...o });
+  const out = path.join(tmp, 'b-out');
+  let r = await run({ out, cap: 1 });                                   // 1. cap
+  assert.deepStrictEqual([r.ran, r.skipped, r.stopped, calls.length], [1, 0, null, 1]);
+  assert.deepStrictEqual(calls[0], { key: 'sk-ant-offline-mock', model: 'claude-haiku-5-5' });
+  const first = JSON.parse(fs.readFileSync(path.join(out, 'rep1', 'b1', 'result.json'), 'utf8'));
+  assert.ok(first.valid, first.invalid_reason); assert.ok(first.usage.cost_usd > 0); assert.ok(!fs.existsSync(path.join(out, 'rep1', 'b2')));
+  assert.ok(!fs.existsSync(path.join(out, 'rep1', 'b1', 'repo')) && fs.existsSync(path.join(out, 'rep1', 'b1', 'summary.md'))); // the checkout is dropped, the evidence kept
+  r = await run({ out, cap: 5 });                                       // 2. resume
+  assert.deepStrictEqual([r.ran, r.skipped, r.stopped, calls.length], [1, 1, null, 2]);
+  assert.ok(fs.existsSync(path.join(out, 'rep1', 'b2', 'result.json')));
+  assert.ok(Math.abs(r.spent - 2 * first.usage.cost_usd) < 1e-9);       // spent counts every result.json under out
+  const logs = [], out2 = path.join(tmp, 'b-out2'); calls = [];        // reps=2, rep-major, separate dirs
+  r = await run({ out: out2, cap: 9, reps: 2, log: (s) => logs.push(s) });
+  assert.strictEqual(r.ran, 4); assert.deepStrictEqual(logs.map((s) => /^(\w+ rep\d)/.exec(s)[1]), ['b1 rep1', 'b2 rep1', 'b1 rep2', 'b2 rep2']);
+  assert.ok(['rep1', 'rep2'].every((k) => ['b1', 'b2'].every((i) => fs.existsSync(path.join(out2, k, i, 'result.json')))));
+  const out3 = path.join(tmp, 'b-out3'); calls = [];                    // max-total: the 2nd run could pass the cap
+  r = await run({ out: out3, cap: 9, maxTotal: 0.5 + first.usage.cost_usd / 2 });
+  assert.deepStrictEqual([r.ran, r.stopped, calls.length], [1, 'budget', 1]);
+  const out4 = path.join(tmp, 'b-out4'); calls = []; bad = true;        // 3. dead key: invalid, stop, later ids not run
+  r = await run({ out: out4, cap: 9 });
+  assert.deepStrictEqual([r.ran, r.stopped, calls.length], [1, 'b1', 1]);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(out4, 'rep1', 'b1', 'result.json'), 'utf8')).valid, false);
+  assert.ok(!fs.existsSync(path.join(out4, 'rep1', 'b2')));
+  await assert.rejects(batch({ dirs: [dirs[0]], manifests: [], repos, out, cap: 1, maxTotal: 1, budget: '1', engine, log: () => {} }), /no manifest entry for b1/);
+});

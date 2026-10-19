@@ -161,7 +161,7 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
   const meta = prepareReal({ repoDir, base: entry.base, head: entry.head, prTitle: entry.title, prBody: entry.body, out, id: entry.id, trace, shared: true });
   const dir = path.resolve(out, entry.id), ctx = path.join(dir, 'ctx');
   const result = { id: entry.id, repo: entry.repo, pr: entry.number, base: meta.base, head: meta.head, trace, model, files: meta.files, spec_files: meta.spec_files, collect_ok: meta.collect_ok, skip: meta.skip, partial: meta.partial };
-  if (meta.collect_ok && !meta.skip) result.engine_exit = engine({ dir, ctx, repo: meta.repo, model, budget, maxOutput, timeout });
+  if (meta.collect_ok && !meta.skip) result.engine_exit = await engine({ dir, ctx, repo: meta.repo, model, budget, maxOutput, timeout });
   const sf = path.join(ctx, 'engine-status'), status = fs.existsSync(sf) ? fs.readFileSync(sf, 'utf8').trim() : 'success';
   result.engine_status = meta.skip ? 'skipped' : !meta.collect_ok ? 'collect_failed' : status;
   result.engine_notes = readLines(path.join(ctx, 'engine-notes'));
@@ -178,12 +178,33 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
   return result;
 }
 
+// Local batch over saved replay dirs (<dl>/<run>/replay-<id>, each with result.json {id, repo}): sequential, rep-major (rep k writes <out>/rep<k>/<id>), at most `cap` engine runs, resumes by skipping ids whose result.json is already valid,
+// stops at the first invalid run (a dead key must not burn the rest) and before a run that could pass `maxTotal` (spent so far over every result.json under out + this run's `budget`, its hard pre-flight bound).
+async function batch({ dirs, manifests, repos, out, cap, maxTotal, reps = 1, model = 'claude-haiku-5-5', budget, engine = runEngine, log = console.log }) {
+  const subs = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((x) => x.isDirectory()).map((x) => path.join(d, x.name)); } catch { return []; } };
+  let spent = [out, ...subs(out)].flatMap(subs).reduce((t, d) => t + (readJson(path.join(d, 'result.json'), {}).usage?.cost_usd || 0), 0), ran = 0, skipped = 0, stopped = null;
+  const todo = dirs.map((d) => { const id = readJson(path.join(d, 'result.json'), {}).id; const entry = manifests.flatMap(entries).find((e) => e.id === id); if (!entry) throw new Error(`no manifest entry for ${id}`); return entry; });
+  outer: for (let k = 1; k <= reps; k++) for (const entry of todo) {
+    const id = entry.id, o = path.join(out, `rep${k}`);
+    if (readJson(path.join(o, id, 'result.json'), {}).valid === true) { skipped++; log(`${id} rep${k}: done, skipped`); continue; }
+    if (ran >= cap) break outer;
+    if (spent + +budget > maxTotal) { stopped = 'budget'; log(`total cap: spent $${spent} of $${maxTotal}`); break outer; }
+    const r = await runReal({ entry, repoDir: path.join(repos, entry.repo.split('/').pop()), out: o, model, budget, engine }); ran++; spent += r.usage.cost_usd;
+    fs.rmSync(path.join(o, id, 'repo'), { recursive: true, force: true }); // a full checkout per PR and rep (100+ MB on gitea/langchain); nothing reads it after post.js, and replay-arms/two-posts rebuild it from --repos
+    log(`${id} rep${k}: ${r.engine_status} cost=$${r.usage.cost_usd} ${r.valid ? 'valid' : `invalid: ${r.invalid_reason}`}`);
+    if (!r.valid) { stopped = id; break outer; }
+  }
+  return { ran, skipped, stopped, spent };
+}
+
 const USAGE = `Usage:
   node eval/replay.js prepare --repo DIR --base SHA --head SHA --out DIR --id ID [--title T] [--body B] [--trace auto|off] [--shared]
   node eval/replay.js finish  --id ID[,ID...] --out DIR
   node eval/replay.js plan    --manifest FILE [--ids a,b] [--sample N --seed S]     prints the matrix JSON [{id, repo}]
   node eval/replay.js run     --manifest FILE --id ID --repo DIR --out DIR [--model M] [--budget USD] [--max-output N] [--timeout MIN] [--trace auto|off]
                               prepare -> real src/engines/claude.sh (needs ANTHROPIC_API_KEY) -> finish -> <out>/<id>/result.json
+  node eval/replay.js batch   --out DIR --repos DIR --cap N --budget USD --max-total USD [--reps N] [--model M] [--manifest a.json,b.json] DIR...
+                              local sequential real-engine runs over saved replay dirs (<dl>/<run>/replay-<id>); writes <out>/rep<k>/<id>; resumes; stops at the first invalid run or the total cap
 No pass/fail: findings are adjudicated by a human against the later fix (eval/replay/README.md, "Running on the real engine").`;
 
 async function main() {
@@ -191,7 +212,8 @@ async function main() {
     repo: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' }, out: { type: 'string' }, id: { type: 'string' },
     title: { type: 'string', default: '' }, body: { type: 'string', default: '' }, trace: { type: 'string', default: 'auto' }, shared: { type: 'boolean' }, help: { type: 'boolean' },
     manifest: { type: 'string' }, ids: { type: 'string' }, sample: { type: 'string' }, seed: { type: 'string', default: '1' },
-    model: { type: 'string', default: 'claude-haiku-5-5' }, budget: { type: 'string', default: '1.00' }, 'max-output': { type: 'string', default: '32000' }, timeout: { type: 'string', default: '12' } } });
+    model: { type: 'string', default: 'claude-haiku-5-5' }, budget: { type: 'string', default: '1.00' }, 'max-output': { type: 'string', default: '32000' }, timeout: { type: 'string', default: '12' },
+    repos: { type: 'string' }, cap: { type: 'string' }, 'max-total': { type: 'string' }, reps: { type: 'string', default: '1' } } });
   const [cmd] = positionals;
   if (cmd === 'plan' && o.manifest) {
     let l = entries(o.manifest);
@@ -206,6 +228,13 @@ async function main() {
     if (!r.valid) throw new Error(`${r.id}: invalid replay: ${r.invalid_reason}`); // result.json is already written and uploaded
     return console.log(`${r.id}: ${r.engine_status} inline=${r.counts.inline} summary=${r.counts.summary_only} cost=$${r.usage.cost_usd}`);
   }
+  if (cmd === 'batch') {
+    const pos = (x) => +x > 0 ? +x : null, cap = pos(o.cap), maxTotal = pos(o['max-total']), reps = pos(o.reps), budget = process.argv.includes('--budget') ? pos(o.budget) : null;
+    if (!o.out || !o.repos || !cap || !maxTotal || !reps || !budget || positionals.length < 2) { console.log(USAGE); process.exit(2); }
+    const manifests = o.manifest ? o.manifest.split(',') : ['holdout2-pairs.json', 'holdout2-clean.json'].map((f) => path.join(__dirname, 'replay', f));
+    const r = await batch({ dirs: positionals.slice(1), manifests, repos: o.repos, out: o.out, cap, maxTotal, reps, model: o.model, budget: o.budget });
+    console.log(JSON.stringify(r)); if (r.stopped) process.exit(1); return;
+  }
   if (cmd === 'revalidate' && o.out && o.id) return o.id.split(',').forEach((id) => console.log(`${id}: ${revalidate(path.resolve(o.out, id)) || 'valid'}`));
   if (o.help || !['prepare', 'finish'].includes(cmd) || !o.out || !o.id) { console.log(USAGE); process.exit(o.help ? 0 : 2); }
   if (cmd === 'prepare') console.log(JSON.stringify(prepareReal({ repoDir: o.repo, base: o.base, head: o.head, prTitle: o.title, prBody: o.body, out: o.out, id: o.id, trace: o.trace, shared: o.shared }), null, 2));
@@ -213,4 +242,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, runEngine, invalid, revalidate, publisher };
+module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, batch, runEngine, invalid, revalidate, publisher };
