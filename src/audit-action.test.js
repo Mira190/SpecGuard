@@ -330,7 +330,7 @@ test('fail-on-error.js: a configuration failure (auth, quota, model) fails the j
       delete env.FAIL_ON_ERROR; if (FAIL_ON_ERROR) env.FAIL_ON_ERROR = FAIL_ON_ERROR;
       return spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env });
     };
-    for (const c of ['auth', 'quota', 'model', 'policy', 'config']) {
+    for (const c of ['auth', 'quota', 'model', 'policy', 'config', 'budget']) {
       const r = run('failed', c);
       assert.equal(r.status, 1, c);
       assert.equal(r.stdout.trim(), `::error::SpecGuard could not run the model (${c}): The Anthropic API key was rejected`);
