@@ -21,7 +21,7 @@ const PRICES = {
   'claude-opus-5': { in: 5, out: 25 },
 };
 // A reply whose usage lacks input_tokens or output_tokens (or no reply at all: timeout, HTTP failure) may still have been billed: the scan budget charges its part's worst case instead of 0.
-const known = (u) => !!u && typeof u.input_tokens === 'number' && typeof u.output_tokens === 'number', charge = (x) => (known(x.u) ? cost(x.used, x.u) + (x.lost || 0) * (x.usd || 0) : Math.max(x.lost || 0, 1) * (x.usd || 0)); // x.lost: attempts of this call that ended in a network error (status 0): the server may have run and billed each one, charged at the call's worst case (x.usd) on top of the reply's known usage
+const known = (u) => !!u && typeof u.input_tokens === 'number' && typeof u.output_tokens === 'number', charge = (x) => (known(x.u) ? cost(x.used, x.u) + (x.lost || 0) * (x.usd || 0) : ((x.lost || 0) + (x.u ? 1 : 0) || 1) * (x.usd || 0)); // a reply that arrived without usage is one more attempt on top of the lost ones; no reply at all (network error, timeout) is counted in lost, or is itself the one; an HTTP error reply was not run and is not charged. x.lost: attempts of this call that ended in a network error (status 0): the server may have run and billed each one, charged at the call's worst case (x.usd) on top of the reply's known usage
 const DEFAULT_PRICE = { in: 5, out: 25 };
 const priceOf = (model, promptTokens) => { const p = PRICES[model] || DEFAULT_PRICE; return p.longFrom && promptTokens > p.longFrom ? { in: p.longIn, out: p.longOut } : { in: p.in, out: p.out }; };
 const cost = (model, u) => { // u = the API usage object

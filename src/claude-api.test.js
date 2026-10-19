@@ -1620,6 +1620,26 @@ test('network reset then success: both attempts are recorded (the lost one at th
   assert.match(h.file('engine-notes'), /usage unknown for 1 call/);
 });
 
+// R5 #6: a reset (lost) AND a final reply without usage are two attempts that may both have been billed
+test('network reset then a reply with unknown usage: both attempts are charged at the worst case (2W, not 1W)', async (t) => {
+  const W = await worstOf(t), h = harness(t, [reset, good({ usage: {} })]);
+  await h.go({ MAX_BUDGET_USD: String(2.5 * W) });
+  assert.equal(h.calls.length, 2);
+  const u = JSON.parse(h.file('usage.json'));
+  near(u.totalCostUsd, 2 * W); assert.equal(u.costEstimated, true);
+});
+
+test('network reset, then an unknown-usage reply with no JSON: the repair turn is not admitted past the budget (3W needed, 2.5W declared); the 2W is recorded', async (t) => {
+  const W = await worstOf(t), prose = () => good({ usage: {}, content: [{ type: 'text', text: 'prose, no json' }] }), h = harness(t, [reset, prose(), good({ usage: {} })]);
+  await h.go({ MAX_BUDGET_USD: String(2.5 * W) });
+  assert.equal(h.calls.length, 2, 'no repair request');
+  near(JSON.parse(h.file('usage.json')).totalCostUsd, 2 * W);
+  const roomy = harness(t, [reset, prose(), good({ usage: {} })]);
+  await roomy.go({ MAX_BUDGET_USD: String(3.5 * W) });
+  assert.equal(roomy.calls.length, 3, 'control: admitted when 3W fits');
+  near(JSON.parse(roomy.file('usage.json')).totalCostUsd, 3 * W);
+});
+
 test('network reset: the retry is refused when it would exceed the budget; the lost attempt is still charged', async (t) => {
   const W = await worstOf(t), h = harness(t, [reset, good()]);
   await h.go({ MAX_BUDGET_USD: String(1.5 * W) });
@@ -1659,6 +1679,29 @@ test('unit rooms: a unit part whose unit_findings is not an array fails only its
   assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.unit), ['aaaaaaaa', 'cccccccc']);
   const failed = JSON.parse(s.h.file('scan-parts.json')).failed;
   assert.equal(failed.length, 1); assert.deepEqual(failed[0].units, ['bbbbbbbb']); assert.match(failed[0].reason, /unit_findings was not an array/);
+});
+
+// invariant: an attempt whose usage is unknown is charged at the worst case W (each lost attempt and the final reply without usage); a reply with known usage is charged its cost once, plus W per lost attempt before it
+test('charge invariant over lost / unknown / HTTP-error / repair paths', async (t) => {
+  const W = await worstOf(t), K = api.cost('claude-haiku-5-5', good().usage || { input_tokens: 1000, cache_creation_input_tokens: 20000, cache_read_input_tokens: 0, output_tokens: 4000 });
+  const prose = () => good({ usage: {}, content: [{ type: 'text', text: 'prose, no json' }] });
+  const rows = [ // [name, replies, budget in W, attempts, expected charge]
+    ['lost + known', [reset, good()], 2.5, 2, K + W],
+    ['lost + unknown', [reset, good({ usage: {} })], 2.5, 2, 2 * W],
+    ['unknown only', [good({ usage: {} })], 2.5, 1, W],
+    ['two lost, no reply', [reset, reset], 3.5, 2, 2 * W],
+    ['two lost + unknown reply (repair turn)', [reset, prose, reset, good({ usage: {} })], 4.5, 4, 4 * W],
+    ['lost + unknown + repair', [reset, prose, good({ usage: {} })], 3.5, 3, 3 * W],
+  ];
+  const rej = harness(t, [() => err(400, 'invalid_request_error', 'bad request')]); await rej.go({ MAX_BUDGET_USD: String(2.5 * W) }); // a rejected request was not run: nothing billed, nothing recorded
+  assert.equal(rej.calls.length, 1); assert.equal(rej.file('usage.json'), null, 'HTTP error only: no cost recorded');
+  for (const [name, replies, budget, attempts, want] of rows) {
+    const h = harness(t, replies);
+    await h.go({ MAX_BUDGET_USD: String(budget * W) });
+    assert.equal(h.calls.length, attempts, name);
+    const got = JSON.parse(h.file('usage.json')).totalCostUsd;
+    near(got, want); if (name !== 'lost + known') assert.ok(got >= want - 2e-4, `${name}: charged ${got} < ${want}`);
+  }
 });
 
 test('unit rooms: unit_findings null, missing or holding a non-object row fails that call\'s units (not "no findings"); a valid [] is accepted', async (t) => {
