@@ -54,7 +54,7 @@ test('blinding test fails when the stripping is removed (temp copy of the script
 test('prompt template holds the README rubric verbatim', () => {
   const readme = fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8').replace(/\r\n/g, '\n');
   const rubric = /## Grading rubric[^\n]*\n\n([\s\S]*?)\n\n## Running/.exec(readme)[1];
-  assert.ok(fs.readFileSync(path.join(__dirname, 'blind-grade-prompt.md'), 'utf8').includes(rubric));
+  assert.ok(fs.readFileSync(path.join(__dirname, 'blind-grade-prompt.md'), 'utf8').replace(/\r\n/g, '\n').includes(rubric));
 });
 
 test('diff cap is the same for every item and says how it is cut', () => {

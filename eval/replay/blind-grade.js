@@ -73,7 +73,7 @@ function build(o) {
   const pairsAll = JSON.parse(fs.readFileSync(o.pairs, 'utf8')).pairs.filter((p) => p.replay_eligible);
   const fixshas = fs.existsSync(o.fixshas) ? JSON.parse(fs.readFileSync(o.fixshas, 'utf8')) : {};
   for (const p of pairsAll) if (fixshas[p.id]) p.fix.sha = fixshas[p.id];
-  const template = fs.readFileSync(o.template, 'utf8'), runs = o.runs.split(','), r = rng(SEED);
+  const template = fs.readFileSync(o.template, 'utf8').replace(/\r\n/g, '\n'), runs = o.runs.split(','), r = rng(SEED);
   const byRepo = {};
   for (const p of pairsAll) (byRepo[p.repo] ||= []).push(p);
   const dropped = { repos: [], pairs: 0, items: 0, same_fix_relaxed: [] }, pairs = [], Y = {};
