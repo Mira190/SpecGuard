@@ -491,7 +491,8 @@ async function run(env = process.env, { fetchFn = globalThis.fetch, sleep = (ms)
           if (unanswered.length <= (p.retry ? 0 : p.cids.length * 0.2)) unanswered = [];
         }
         if (!obj) { fail(p, why); if (['auth', 'quota', 'model', 'policy'].includes(r.reason)) cfg ||= r; first ||= r.ok ? { status: 'failed', reason: '', why } : r; if (r.status === 'timeout') break; continue; }
-        if (!p.cids && obj.unit_findings != null && !Array.isArray(obj.unit_findings)) { fail(p, 'unit_findings was not an array'); first ||= { status: 'failed', reason: '', why: 'unit_findings was not an array' }; continue; } // not "no findings": this call's units are failed (unreviewed), the other calls' answers stay
+        const ufBad = !p.cids && (!Array.isArray(obj.unit_findings) ? 'unit_findings was not an array' : obj.unit_findings.some((f) => !f || typeof f !== 'object' || Array.isArray(f)) ? 'unit_findings had a row that was not an object' : '');
+        if (ufBad) { fail(p, ufBad); first ||= { status: 'failed', reason: '', why: ufBad }; continue; } // null/missing/bad row is not "no findings" (only a valid []): this call's units are failed (unreviewed), the other calls' answers stay
         ok++;
         if (p.cids) Object.assign(blockCuts, p.blockCuts);
         if (p.cids) merged.requirements.push(...arr('requirements')), merged.not_requirements.push(...arr('not_requirements'));

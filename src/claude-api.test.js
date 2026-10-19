@@ -1660,3 +1660,14 @@ test('unit rooms: a unit part whose unit_findings is not an array fails only its
   const failed = JSON.parse(s.h.file('scan-parts.json')).failed;
   assert.equal(failed.length, 1); assert.deepEqual(failed[0].units, ['bbbbbbbb']); assert.match(failed[0].reason, /unit_findings was not an array/);
 });
+
+test('unit rooms: unit_findings null, missing or holding a non-object row fails that call\'s units (not "no findings"); a valid [] is accepted', async (t) => {
+  for (const [name, uf, bad] of [['null', null, true], ['missing', undefined, true], ['[null]', [null], true], ['[]', [], false]]) {
+    const s = roomRepo(t), body = { docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], ...(uf !== undefined && { unit_findings: uf }) };
+    s.answers((req, ok) => (unitsIn(req)[0] === 'bbbbbbbb' ? good({ content: [{ type: 'text', text: JSON.stringify(body) }] }) : ok(req)));
+    await s.h.go({ GITHUB_WORKSPACE: s.root });
+    const failed = JSON.parse(s.h.file('scan-parts.json')).failed;
+    if (bad) { assert.equal(failed.length, 1, name); assert.deepEqual(failed[0].units, ['bbbbbbbb'], name); assert.match(failed[0].reason, /unit_findings (was not an array|had a row)/, name); } else assert.equal(failed.length, 0, name);
+    assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.unit), ['aaaaaaaa', 'cccccccc'], name);
+  }
+});
