@@ -41,7 +41,7 @@ Ground truth for the product's core goal (missing or weak unit tests in code tha
 
 ## Headline (read this first)
 
-- **Line level: 0 of 10 candidate survivors were located** (no  finding within +-5 lines of any of them).
+- **Line level: 0 of 10 candidate survivors were located** (no `missing_test` finding within +-5 lines of any of them).
 - **Unit-level hits must be read against the base rate**, because most reviewed units get some finding: any finding on 11 of 14 manifest units (79%), 8 of 14 visible (57%); on 13 of 20 reviewed units (65%) any, 8 of 20 (40%) visible. Survivor units: 5 of 5 any, 3 of 5 visible. Killed-only units: 2 of 5 any and visible (40%). So survivor units are flagged somewhat more often than killed-only units, but with n = 5 and 5 that is one or two units, not a measured difference.
 - **One semantic match, found by manual reading only:** the skipped md5 test (crypto.test.ts:24) against the surviving mutant that drops md5's return value. No automated score captures it.
 
