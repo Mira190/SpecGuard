@@ -141,7 +141,8 @@ test('CLI on a fixture: markdown and --json; labels flow through --labels and la
   const run = (...a) => spawnSync(process.execPath, [path.join(__dirname, 'weekly-report.js'), '--fixture', fx, ...a], { encoding: 'utf8' });
   const md = run('--labels', path.join(dir, 'l.csv'));
   assert.equal(md.status, 0, md.stderr);
-  assert.match(md.stdout, /\*\*CONTINUE/);
+  assert.match(md.stdout, /precision rule not evaluated: no agreement evidence/); // one reconciled column, no alpha evidence: precision rules are not decided
+  assert.match(md.stdout, /\*\*KEEP COLLECTING/);
   assert.equal(JSON.parse(run('--json').stdout).prs, 150);
   const imp = spawnSync(process.execPath, [path.join(__dirname, 'label-export.js'), '--fixture', fx, '--import', path.join(dir, 'l.csv')], { encoding: 'utf8' });
   assert.equal(imp.status, 0, imp.stderr);
@@ -426,4 +427,42 @@ test('reply verdicts: per-arm table, noise = (wrong + not important) / verdicts,
   assert.equal(r.verdicts[0].n, 30);
   assert.ok(Math.abs(r.verdicts[0].noise - 20 / 30) < 1e-9 && r.verdicts[0].wilson[0] < 2 / 3 && r.verdicts[0].wilson[1] > 2 / 3);
   assert.match(render(r), /\| 10 \| 20 \| 0 \| 0 \| 30 \| 67% \| \[\d+%, \d+%\] \|/);
+});
+
+test('alpha gate: two-labeller sheet decides at alpha >= 0.8, is tentative from 0.667, refuses below; no gate without sheet rows', () => {
+  const ds = big(), lab = labelsFor(ds, 0.8);
+  const sheet = (flips) => [...lab].map(([id, l], i) => ({ id, label: l, label_a: l, label_b: i < flips ? (l === 'valid' ? 'invalid' : 'valid') : l }));
+  const run = (flips) => { const r = analyze(ds, { labels: lab, rows: sheet(flips) }); return { r, rule: r.decision.rules[1] }; };
+  assert.equal(run(0).rule.status, 'pass');
+  assert.equal(run(0).r.agreement.specguard.alpha, 1);
+  let k = 1; while (run(k).r.agreement.specguard.alpha >= 0.8) k++;
+  assert.equal(run(k).rule.status, 'not evaluated');
+  assert.match(run(k).rule.detail, /tentative/);
+  assert.match(run(50).rule.detail, /below 0.667/);
+  assert.match(run(50).r.decision.verdict, /KEEP COLLECTING/);
+  assert.equal(analyze(ds, { labels: lab }).decision.rules[1].status, 'pass'); // no sheet rows given: no gate
+  assert.match(render(run(k).r), /Labeller agreement/);
+});
+
+test('integrity: same branch opened twice, reopened PRs, and label vs salted assignment are reported', () => {
+  const salt = 's3cret', crypto = require('node:crypto');
+  const arm = (n) => crypto.createHmac('sha256', salt).update(String(n)).digest().readUInt32BE(0) % 3;
+  const ds = { ...small(), heads: { 3: 'feat/a', 6: 'feat/a', 4: 'feat/b' }, reopened: [5] };
+  const r = analyze(ds, { salt });
+  assert.deepEqual(r.integrity.same_branch, [{ branch: 'feat/a', prs: [3, 6] }]);
+  assert.deepEqual(r.integrity.reopened, [5]);
+  assert.ok(r.integrity.salt.checked > 0);
+  assert.ok(r.integrity.salt.mismatches.every((m) => m.expected === arm(m.pr) && m.expected !== m.label));
+  const out = render(r);
+  assert.match(out, /feat\/a \(#3, #6\)/);
+  assert.match(out, /Closed and reopened in the window: #5/);
+  assert.doesNotMatch(render(analyze(small(), {})), /Trial integrity/); // nothing loaded, no salt: the section stays out
+  assert.match(render(analyze(ds, {})), /skipped, no salt given/);
+});
+
+test('summary-only findings are not truncated in the totals (the 20-entry cap is the producer, not this report)', () => {
+  const ds = small();
+  const sum = Array.from({ length: 25 }, (_, i) => ({ fp: i.toString(16).padStart(16, '0'), path: 'q.js', line: i, title: 't' + i }));
+  ds.issue_comments = [counts(3, S(1), { sum })];
+  assert.equal(findingsOf(ds).filter((f) => f.delivery === 'summary').length, 25);
 });

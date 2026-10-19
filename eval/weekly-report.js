@@ -113,7 +113,12 @@ function loadLive({ repo, since, until, 'baseline-since': bs, 'baseline-until': 
       c.tests_changed = post.testsChanged(c.original_commit_id, head, null, git);
     }
   }
-  return { repo, since, until: end, prs, baseline, issue_comments, review_comments, threads };
+  // Re-roll detection: head branch per PR and PRs reopened in the window (both newest first; null if the API call fails, then the report says unknown).
+  const pages = (p, old) => { const all = []; for (let n = 1; ; n++) { const a = parseComments(gh('api', '-X', 'GET', p, '-f', 'per_page=100', '-f', `page=${n}`)); all.push(...a); if (a.length < 100 || String(a[a.length - 1].created_at) < old) return all; } };
+  let heads = null, reopened = null;
+  try { heads = {}; for (const x of pages(`repos/${repo}/pulls?state=all&sort=created&direction=desc`, since)) if (inWindow.has(x.number)) heads[x.number] = x.head?.ref; } catch { heads = null; }
+  try { reopened = [...new Set(pages(`repos/${repo}/issues/events`, since).filter((e) => e.event === 'reopened' && inWindow.has(e.issue?.number)).map((e) => e.issue.number))]; } catch { reopened = null; }
+  return { repo, since, until: end, prs, baseline, issue_comments, review_comments, threads, heads, reopened };
 }
 const load = (o) => (o.fixture ? JSON.parse(fs.readFileSync(o.fixture, 'utf8')) : loadLive(o));
 
@@ -138,7 +143,7 @@ function findingsOf(ds) {
   // Summary-only findings have no review comment; the latest sticky summary's counts list them in `sum`, keyed by the 16-hex fp prefix post.js tracks them under.
   // They join the same exposure set as inline ones, so blind labels, findings/PR, overlap and fix-through see one list. Counts written before `sum` existed carry none.
   for (const [pr, { t }] of lastCounts(ds, new Set(armBy.keys()))) {
-    for (const e of Array.isArray(t.sum) ? t.sum.slice(0, 20) : []) {
+    for (const e of Array.isArray(t.sum) ? t.sum : []) {
       const fp = e?.fp;
       if (!/^[0-9a-f]{16}$/.test(fp) || typeof e.path !== 'string' || out.some((g) => g.tool === 'specguard' && g.pr === pr && g.ref.startsWith(fp))) continue; // also inline: counted once
       const line = Number.isInteger(e.line) ? e.line : null;
@@ -216,7 +221,58 @@ function sgCredits(ds, prSet) {
   return { prs_with_counts: ts.length, complete: ts.filter((t) => t.complete).length, credits_median: quantile(num('credits'), 0.5), credits_mean: num('credits').length ? num('credits').reduce((a, b) => a + b, 0) / num('credits').length : null, ms_median: quantile(num('ms'), 0.5) };
 }
 
-function analyze(ds, { labels } = {}) {
+// Krippendorff's alpha gate for blind labels (docs/validation-plan.md step 4). `alpha` and the 0.667 floor come from label-export when it has them (#391);
+// the inline copy is the same nominal-alpha formula, for a tree without it.
+const labelExport = require('./label-export');
+const ALPHA = { ok: 0.8, tentative: 0.667 };
+const alphaOf = labelExport.alpha || ((units) => {
+  const o = {}, n = {}; let N = 0;
+  for (const u of units) {
+    const v = u.filter((x) => x != null), m = v.length;
+    if (m < 2) continue;
+    for (let i = 0; i < m; i++) { n[v[i]] = (n[v[i]] || 0) + 1; N++; for (let j = 0; j < m; j++) if (i !== j && v[i] !== v[j]) o[`${v[i]}|${v[j]}`] = (o[`${v[i]}|${v[j]}`] || 0) + 1 / (m - 1); }
+  }
+  const Do = Object.values(o).reduce((a, b) => a + b, 0), cs = Object.keys(n);
+  let De = 0; for (const c of cs) for (const k of cs) if (c !== k) De += n[c] * n[k] / (N - 1);
+  return De ? 1 - Do / De : null;
+});
+// Per tool, over the findings that tool wrote; null when the sheet has no two label columns (a single reconciled column proves nothing about agreement).
+function agreementOf(rows, findings) {
+  if (!rows.length || !('label_a' in rows[0]) || !('label_b' in rows[0])) return null;
+  const tool = new Map(findings.map((f) => [f.fid, f.tool])), v = (x) => { const l = String(x || '').trim().toLowerCase(); return l === 'valid' || l === 'invalid' ? l : null; };
+  const out = {};
+  for (const t of ['specguard', 'copilot']) {
+    const rs = rows.filter((r) => tool.get(r.id) === t);
+    out[t] = { alpha: alphaOf(rs.map((r) => [v(r.label_a), v(r.label_b)])), n: rs.filter((r) => v(r.label_a) && v(r.label_b)).length };
+  }
+  return out;
+}
+// Whether precision-based rules may be evaluated. agreement undefined = programmatic call without sheet rows (no gate).
+function labelGate(agreement) {
+  if (agreement === undefined) return { ok: true };
+  if (agreement === null) return { ok: false, note: 'precision rule not evaluated: no agreement evidence' };
+  const a = agreement.specguard?.alpha, s = a == null ? 'undefined' : a.toFixed(3);
+  if (a != null && a >= ALPHA.ok) return { ok: true };
+  return { ok: false, note: a != null && a >= ALPHA.tentative ? `precision rule tentative, not decided: labeller alpha ${s} is below ${ALPHA.ok}` : `precision rule not evaluated: labeller alpha ${s} is below ${ALPHA.tentative} (labels unreliable)` };
+}
+
+// Trial integrity (docs/validation-plan.md step 7): re-rolled PRs (the same branch opened twice, or closed and reopened) let an author pick an arm; with the
+// salt revealed, every label must equal the assignment. Intention to treat: a PR stays in the arm it was first labelled with.
+function armFor(n, salt) {
+  const a = require('./assign');
+  return a.assign.length > 1 ? a.assign(n, salt).arm : require('node:crypto').createHmac('sha256', salt).update(String(n)).digest().readUInt32BE(0) % 3; // same HMAC rule as assign.js with a salt
+}
+function integrity(ds, salt) {
+  const by = new Map();
+  for (const [n, ref] of Object.entries(ds.heads || {})) if (ref) (by.get(ref) || by.set(ref, []).get(ref)).push(+n);
+  const prs = ds.prs.filter((p) => !isBot(p.user)), bad = [];
+  let checked = 0;
+  if (salt) for (const p of prs) { const l = armOf(p.labels); if (l === null) continue; checked++; const want = armFor(p.number, salt); if (l !== want) bad.push({ pr: p.number, label: l, expected: want }); }
+  return { branches_known: !!ds.heads, same_branch: [...by].filter(([, v]) => v.length > 1).map(([ref, v]) => ({ branch: ref, prs: v.sort((a, b) => a - b) })), reopened_known: !!ds.reopened, reopened: ds.reopened || [],
+    salt: salt ? { checked, mismatches: bad } : null };
+}
+
+function analyze(ds, { labels, rows, salt } = {}) {
   const real = (p) => !isBot(p.user);
   const prs = ds.prs.filter(real);
   const invalid = prs.filter((p) => (p.labels || []).some((l) => (l.name || l) === INVALID_LABEL));
@@ -277,7 +333,8 @@ function analyze(ds, { labels } = {}) {
     joint = { ...j, rate: j.with_outcome >= TARGET.labels ? j.valid_addressed / j.with_outcome : null };
   }
   const report = { repo: ds.repo, window: [ds.since, ds.until], prs: prs.length, excluded_copilot_request_failed: invalid.length, unlabeled: usable.filter((p) => armOf(p.labels) === null).length,
-    arms, baseline: ttm((ds.baseline || []).filter(real)), specguard, copilot: { ...copilot, A_if_replied_resolved_counts: withReplies }, overlap, labels: lab, unique, channels, joint, verdicts };
+    arms, baseline: ttm((ds.baseline || []).filter(real)), specguard, copilot: { ...copilot, A_if_replied_resolved_counts: withReplies }, overlap, labels: lab, unique, channels, joint, verdicts, integrity: integrity(ds, salt),
+    ...(rows && { agreement: agreementOf(rows, findings) }) };
   report.decision = decide(report);
   return report;
 }
@@ -293,27 +350,28 @@ function escapesOf(ds, fixes, shadow) {
 }
 
 // ---- decision rule ------------------------------------------------------------------------------------------
-const PASS = 'pass', FAIL = 'fail', NODATA = 'insufficient data';
+const PASS = 'pass', FAIL = 'fail', NODATA = 'insufficient data', NOEVAL = 'not evaluated';
 function decide(r) {
   const a = r.specguard, boot = a.cluster_bootstrap_95, sg = r.labels?.specguard, u = r.unique;
   const fixOk = a.prs >= TARGET.fixPrs && a.findings >= TARGET.fixFindings && boot;
-  const precOk = sg && sg.n >= TARGET.labels;
+  const gate = labelGate(r.agreement); // undefined key (no sheet rows given) = no gate
+  const precOk = sg && sg.n >= TARGET.labels && gate.ok;
   const base = r.baseline, t0 = r.arms[0].ttm;
   const ttmOk = t0.n >= TARGET.ttm && base.n >= TARGET.ttm;
   const ratio = ttmOk ? t0.median / base.median : null;
-  const uniqOk = u && u.valid >= TARGET.validUnique;
+  const uniqOk = u && u.valid >= TARGET.validUnique && gate.ok;
   const uniq = uniqOk ? u.unique / u.valid : null;
   const pa = fixOk && precOk ? sg.precision * a.A : null;
   const f = (x) => (x == null ? 'n/a' : `${(x * 100).toFixed(0)}%`);
   const rules = [
     { rule: `Fix-through A >= ${f(RULE.fix)} with PR-cluster lower bound > ${f(RULE.fixLower)}`, status: !fixOk ? NODATA : a.A >= RULE.fix && boot[0] > RULE.fixLower ? PASS : FAIL,
       detail: `A ${f(a.A)}, cluster 95% [${boot ? `${f(boot[0])}, ${f(boot[1])}` : 'n/a'}], ${a.prs} PRs / ${a.findings} findings (need ${TARGET.fixPrs} PRs, ${TARGET.fixFindings} findings)` },
-    { rule: `Blind precision >= ${f(RULE.precision)}`, status: !precOk ? NODATA : sg.precision >= RULE.precision ? PASS : FAIL,
-      detail: sg ? `${f(sg.precision)} (${sg.valid}/${sg.n}, Wilson [${f(sg.wilson?.[0])}, ${f(sg.wilson?.[1])}], ${sg.unsure} unsure; need ${TARGET.labels} labelled)` : `no labels (need ${TARGET.labels} labelled SpecGuard findings)` },
+    { rule: `Blind precision >= ${f(RULE.precision)}`, status: !precOk ? (sg && !gate.ok ? NOEVAL : NODATA) : sg.precision >= RULE.precision ? PASS : FAIL,
+      detail: sg && !gate.ok ? gate.note : sg ? `${f(sg.precision)} (${sg.valid}/${sg.n}, Wilson [${f(sg.wilson?.[0])}, ${f(sg.wilson?.[1])}], ${sg.unsure} unsure; need ${TARGET.labels} labelled)` : `no labels (need ${TARGET.labels} labelled SpecGuard findings)` },
     { rule: `Time-to-merge, SpecGuard-only arm vs no-AI baseline, <= +${Math.round((RULE.ttm - 1) * 100)}%`, status: !ttmOk ? NODATA : ratio <= RULE.ttm ? PASS : FAIL,
       detail: `arm 0 median ${t0.median?.toFixed(1) ?? 'n/a'} h (n=${t0.n}) vs baseline ${base.median?.toFixed(1) ?? 'n/a'} h (n=${base.n})${ratio ? `, ratio ${ratio.toFixed(2)}` : ''} (need ${TARGET.ttm} merged PRs each)` },
-    { rule: `>= ${f(RULE.unique)} of valid SpecGuard findings in arm 2 unique to SpecGuard`, status: !uniqOk ? NODATA : uniq >= RULE.unique ? PASS : FAIL,
-      detail: u ? `${u.unique}/${u.valid} unique (need ${TARGET.validUnique} valid labelled findings in arm 2)` : `no labels; unlabelled estimate: ${r.overlap.specguard_findings - r.overlap.specguard_also_raised_by_copilot}/${r.overlap.specguard_findings} of SpecGuard findings in arm 2 have no Copilot finding within 3 lines` },
+    { rule: `>= ${f(RULE.unique)} of valid SpecGuard findings in arm 2 unique to SpecGuard`, status: !uniqOk ? (u && !gate.ok ? NOEVAL : NODATA) : uniq >= RULE.unique ? PASS : FAIL,
+      detail: u && !gate.ok ? gate.note : u ? `${u.unique}/${u.valid} unique (need ${TARGET.validUnique} valid labelled findings in arm 2)` : `no labels; unlabelled estimate: ${r.overlap.specguard_findings - r.overlap.specguard_also_raised_by_copilot}/${r.overlap.specguard_findings} of SpecGuard findings in arm 2 have no Copilot finding within 3 lines` },
   ];
   const fix = (c) => (c === null ? NODATA : c ? 'FIRED' : 'not fired');
   const tri = (a1, a2) => (a1 === true || a2 === true ? true : a1 === false && a2 === false ? false : null); // one known true fires it; both known false clears it
@@ -368,6 +426,12 @@ function render(r) {
     if (r.labels.unmatched) L.push('', `${r.labels.unmatched.length} label ids matched no finding in this window (wrong window or --seed?).`);
     L.push('');
   }
+  { const i = r.integrity, b = i.salt;
+    if (i.branches_known || i.reopened_known || b) L.push('## Trial integrity', '', 'Intention to treat: every PR stays in the arm it was first labelled with; re-rolled PRs are flagged here, not moved.',
+      `- Same head branch opened more than once: ${i.branches_known ? (i.same_branch.length ? i.same_branch.map((x) => `${x.branch} (#${x.prs.join(', #')})`).join('; ') : 'none') : 'unknown (branch data not loaded)'}.`,
+      `- Closed and reopened in the window: ${i.reopened_known ? (i.reopened.length ? `#${i.reopened.join(', #')}` : 'none') : 'unknown (events not loaded)'}.`,
+      `- Label equals the salted assignment: ${b ? (b.mismatches.length ? `${b.mismatches.length} of ${b.checked} MISMATCH (${b.mismatches.map((m) => `#${m.pr} labelled ${m.label}, assigned ${m.expected}`).join('; ')}): a PR may have edited its own workflow` : `all ${b.checked} labelled PRs match`) : 'skipped, no salt given (--arm-salt or SPECGUARD_ARM_SALT; only possible after the trial, when the salt is revealed)'}.`, ''); }
+  if (r.agreement !== undefined) L.push('## Labeller agreement (Krippendorff alpha, valid|invalid)', '', r.agreement === null ? 'precision rule not evaluated: no agreement evidence (a single reconciled label column; give the sheet with label_a and label_b).' : ['specguard', 'copilot'].map((t) => `- ${t}: alpha ${r.agreement[t].alpha == null ? 'undefined' : r.agreement[t].alpha.toFixed(3)} over ${r.agreement[t].n} doubly labelled findings (>= ${ALPHA.ok} decides, ${ALPHA.tentative} to ${ALPHA.ok} tentative, below unreliable)`).join('\n'), '');
   if (r.escapes) L.push(...esc.renderEscapes(r.escapes));
   const j = r.joint;
   L.push('## P × A (economic assumption, not a measured joint rate)', '', 'F2 multiplies two marginals; they cannot give the joint (50 valid + 50 invalid findings with 50 touched allows anywhere from 0 to 0.5). A counts touched lines, not verified fixes.',
@@ -382,9 +446,10 @@ function render(r) {
 
 function main() {
   const { values: o } = require('node:util').parseArgs({ options: { repo: { type: 'string' }, since: { type: 'string' }, until: { type: 'string' }, fixture: { type: 'string' }, labels: { type: 'string' },
-    'baseline-since': { type: 'string' }, fixes: { type: 'string' }, 'shadow-cache': { type: 'string' }, 'baseline-until': { type: 'string' }, json: { type: 'boolean' } } });
+    'baseline-since': { type: 'string' }, fixes: { type: 'string' }, 'shadow-cache': { type: 'string' }, 'arm-salt': { type: 'string' }, 'baseline-until': { type: 'string' }, json: { type: 'boolean' } } });
   if (!o.fixture && !(o.repo && o.since)) { console.error('Usage: node eval/weekly-report.js (--repo OWNER/REPO --since YYYY-MM-DD [--until D] [--baseline-since D --baseline-until D] | --fixture FILE) [--labels labels.csv] [--json]'); process.exit(2); }
-  const ds = load(o), r = analyze(ds, { labels: o.labels ? readLabels(parseCsv(fs.readFileSync(o.labels, 'utf8'))) : null });
+  const rows = o.labels ? parseCsv(fs.readFileSync(o.labels, 'utf8')) : null;
+  const ds = load(o), r = analyze(ds, { labels: rows ? readLabels(rows) : null, rows, salt: o['arm-salt'] || process.env.SPECGUARD_ARM_SALT });
   if (o.fixes) {
     const cache = o['shadow-cache'];
     if (cache && !o.fixture) { const s = esc.syncShadow({ repo: ds.repo, since: ds.since, prs: ds.prs.filter((p) => armOf(p.labels) === 1).map((p) => p.number), file: cache }); console.error(`shadow cache: ${s.added} added, ${s.missing} arm-1 runs without a live artifact`); }
