@@ -46,3 +46,44 @@ test('denylist: leak-shaped evidence JSON passes without the hash, fails with it
 test('denylist: trailing punctuation does not hide a name', () => {
   assert.strictEqual(run('see ledger-core.', sha('ledger-core')).status, 1);
 });
+
+const lines = ['see secretproj here', '(secretproj)', 'github.com/acme/secretproj/blob/x.js', 'secretproj-api', 'SecretProj_internal', 'github.com/acme/ledger-core/blob/x.js'];
+test('denylist: a name inside a URL, kebab or snake token, or a hyphenated name inside a URL, still hits', () => {
+  for (const [l, name] of [...lines.slice(0, 5).map((l) => [l, 'secretproj']), [lines[5], 'ledger-core']]) {
+    const r = run(l, sha(name));
+    assert.strictEqual(r.status, 1, l);
+    assert.ok(!/secretproj|ledger/i.test(r.stderr));
+  }
+  assert.strictEqual(run('secretprojects and my-secret-proj', sha('secretproj')).status, 0);
+});
+
+// hook: add-then-delete across two commits must be blocked, scanning added lines of the pushed range only
+const git = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8' });
+test('pre-push hook blocks a leak added in one commit and deleted in the next; .git/specguard-deny feeds the denylist', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-'));
+  const [bare, w] = [path.join(d, 'r.git'), path.join(d, 'w')];
+  git(d, 'init', '-q', '--bare', bare);
+  git(d, 'init', '-q', w);
+  git(w, 'remote', 'add', 'origin', bare);
+  const commit = (m) => git(w, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', m);
+  fs.writeFileSync(path.join(w, 'a.txt'), 'ok\n');
+  git(w, 'add', 'a.txt'); commit('base');
+  git(w, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+  const base = git(w, 'rev-parse', 'HEAD').stdout.trim();
+  fs.writeFileSync(path.join(w, 'a.txt'), `${M}0123456789abcdef\nsee secretproj-api\n`); commit('leak');
+  fs.writeFileSync(path.join(w, 'a.txt'), 'ok\n'); commit('delete');
+  const head = git(w, 'rev-parse', 'HEAD').stdout.trim();
+  fs.cpSync(path.join(__dirname, '..', 'bin'), path.join(w, 'bin'), { recursive: true });
+  const hook = (stdin) => {
+    const env = { ...process.env };
+    delete env.SPECGUARD_DENY_SHA256;
+    return spawnSync('sh', [path.join(__dirname, '..', '.githooks', 'pre-push')], { cwd: w, input: stdin, encoding: 'utf8', env });
+  };
+  const r = hook(`refs/heads/x ${head} refs/heads/x 0000000000000000000000000000000000000000\n`);
+  assert.strictEqual(r.status, 1, r.stderr);
+  assert.match(r.stderr, /a\.txt:1: honey marker/);
+  const clean = hook(`refs/heads/main ${base} refs/heads/main ${base}\n`); // empty range
+  assert.strictEqual(clean.status, 0, clean.stderr);
+  fs.writeFileSync(path.join(w, '.git', 'specguard-deny'), sha('secretproj') + '\n');
+  assert.match(hook(`refs/heads/main ${head} refs/heads/main ${base}\n`).stderr, /a\.txt:2: denylisted token/);
+});
