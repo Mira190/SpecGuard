@@ -99,6 +99,66 @@ test('denylist: runs of 3 parts match (joined with - or _), 4 parts do not', () 
   assert.strictEqual(run('x/alpha-beta-gamma-delta/y', sha('alpha-beta-gamma-delta')).status, 0);
 });
 
+test('denylist: camelCase names hit, kebab pieces that merely concatenate do not', () => {
+  assert.strictEqual(run('const secretProjApi = 1', sha('secretproj')).status, 1);
+  assert.strictEqual(run('SecretProjInternal', sha('secretproj')).status, 1);
+  assert.strictEqual(run('alphaBetaGamma', sha('alphabetagamma')).status, 1); // 3 camel pieces glue
+  assert.strictEqual(run('xAlphaBetaGammaDelta', sha('alphabetagammadelta')).status, 0); // 4 do not
+  assert.strictEqual(run('my-secret-proj and Secretprojects', sha('secretproj')).status, 0);
+});
+
+const tmpRepo = () => {
+  const w = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-'));
+  git(w, 'init', '-q', '-b', 'main');
+  fs.writeFileSync(path.join(w, 'a.txt'), 'ok\n');
+  git(w, 'add', 'a.txt');
+  git(w, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base');
+  return w;
+};
+test('deny file in the main .git is visible from a linked worktree', () => {
+  const w = tmpRepo();
+  const wt = path.join(w, '..', path.basename(w) + '-linked');
+  git(w, 'worktree', 'add', '-q', '-b', 'b', wt);
+  fs.writeFileSync(path.join(w, '.git', 'specguard-deny'), sha('secretproj') + '\n');
+  fs.writeFileSync(path.join(wt, 'x.txt'), 'see secretproj-api\n');
+  const env = { ...process.env };
+  delete env.SPECGUARD_DENY_SHA256;
+  const r = spawnSync(process.execPath, [path.join(__dirname, 'leak-check.js'), 'x.txt'], { cwd: wt, encoding: 'utf8', env });
+  assert.strictEqual(r.status, 1, r.stderr);
+});
+test('--stdin warns on stderr when the denylist is empty (and still passes), not when it is set', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeny-'));
+  const go = (deny) => {
+    const env = { ...process.env };
+    delete env.SPECGUARD_DENY_SHA256;
+    if (deny) env.SPECGUARD_DENY_SHA256 = deny;
+    return spawnSync(process.execPath, [path.join(__dirname, 'leak-check.js'), '--stdin'], { cwd: d, input: '', encoding: 'utf8', env });
+  };
+  const a = go();
+  assert.strictEqual(a.status, 0);
+  assert.match(a.stderr, /denylist empty: private-name check skipped/);
+  assert.doesNotMatch(go(sha('x')).stderr, /denylist empty/);
+});
+test('pre-push hook scans content added while resolving a merge conflict', () => {
+  const w = tmpRepo();
+  const c = (m) => git(w, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', m);
+  const base = git(w, 'rev-parse', 'HEAD').stdout.trim();
+  git(w, 'checkout', '-q', '-b', 'side');
+  fs.writeFileSync(path.join(w, 'a.txt'), 'side\n'); c('side');
+  git(w, 'checkout', '-q', 'main');
+  fs.writeFileSync(path.join(w, 'a.txt'), 'main\n'); c('main');
+  git(w, '-c', 'user.name=t', '-c', 'user.email=t@t', 'merge', 'side');
+  fs.writeFileSync(path.join(w, 'a.txt'), `${M}0123456789abcdef\n`);
+  git(w, 'add', 'a.txt'); c('resolve');
+  const head = git(w, 'rev-parse', 'HEAD').stdout.trim();
+  fs.cpSync(path.join(__dirname, '..', 'bin'), path.join(w, 'bin'), { recursive: true });
+  const env = { ...process.env };
+  delete env.SPECGUARD_DENY_SHA256;
+  const r = spawnSync('sh', [path.join(__dirname, '..', '.githooks', 'pre-push')], { cwd: w, input: `refs/heads/main ${head} refs/heads/main ${base}\n`, encoding: 'utf8', env });
+  assert.strictEqual(r.status, 1, r.stderr);
+  assert.match(r.stderr, /a\.txt:\d+: honey marker/);
+});
+
 const { scanDiff, denyList } = require('./leak-check');
 test('scanDiff: header vs content, "++" content lines, line numbers per file from @@', () => {
   assert.deepStrictEqual(scanDiff(`+++ b/a.txt\n@@ -0,0 +1 @@\n+${M}0123456789abcdef\n`, new Set()), ['a.txt:1: honey marker']);
@@ -106,6 +166,10 @@ test('scanDiff: header vs content, "++" content lines, line numbers per file fro
     `diff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -4,0 +5 @@\n+${M}fedcba9876543210\n-${M}0000000000000000\n`;
   assert.deepStrictEqual(scanDiff(d, new Set()), ['a.txt:2: honey marker', 'b.txt:5: honey marker']);
   assert.deepStrictEqual(scanDiff('diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n+++ b/evil\n+clean\n', new Set()), []);
+});
+test('scanDiff: combined diff reports ++ content lines, not single-parent + or - lines', () => {
+  assert.deepStrictEqual(scanDiff(`diff --cc a.txt\n--- a/a.txt\n+++ b/a.txt\n@@@ -1 -1 +1 @@@\n++${M}0123456789abcdef\n`, new Set()), ['a.txt:1: honey marker']);
+  assert.deepStrictEqual(scanDiff(`diff --cc a.txt\n--- a/a.txt\n+++ b/a.txt\n@@@ -1 -1 +1,2 @@@\n +${M}0123456789abcdef\n+ ${M}0123456789abcdef\n--${M}0123456789abcdef\n`, new Set()), []);
 });
 test('denyList: env and the per-clone git-path file combine, case-insensitive; a missing file is fine', () => {
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'deny-')), 'specguard-deny');
