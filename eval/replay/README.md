@@ -52,7 +52,7 @@ Only findings on the blamed or fixed lines, or naming the same requirement, coun
 
 - Bugs: `--manifest eval/replay/holdout-pairs.json` replays the introducing PR of every `replay_eligible` pair (12). Clean baseline: `holdout-clean.json` (12). Title, body, base and head come from the manifest, as originally written; the target repo is checked out read-only with full history.
 - `specguard_ref` must contain this runner (it is `eval/` only; `src/` is what is scored). Compare two refs by dispatching twice and diffing the grades.
-- Validity: `result.valid` is true only if collect succeeded and was not skipped, the engine exited 0 (`engine_exit`), `engine_status` is `success`, `findings.json` exists, and (when the PR changed files) the engine notes carry `context pack: N files` with N > 0. Otherwise `invalid_reason` says why and the job fails after writing `result.json`. Invalid runs count as misses in the end-to-end catch rate; conditional catch is over valid runs only.
+- Validity: `result.valid` is true only if collect succeeded and was not skipped, the engine exited 0 (`engine_exit`), `engine_status` is `success`, `findings.json` exists, and (when the PR changed files) the engine notes carry `context pack: N files` with N > 0, and the publisher status is not `failed`. Otherwise `invalid_reason` says why and the job fails after writing `result.json`. Invalid runs count as misses in the end-to-end catch rate; conditional catch is over valid runs only.
 - Input parity: the replay serves only the PR title and body. Linked issues are empty (`closingIssuesReferences: []`) and `gh api` returns `[]`, so results are for "PR text only" requirements, not production with linked issues.
 - "inline" means `src/post.js` chose inline against the fake GitHub in `eval/local.js`. It is not a GitHub-accepted comment and nobody saw it.
 - The dispatch input `specguard_ref` runs that ref's code with the API secret. Dispatch only refs you trust (your own branches), never a fork PR ref.
@@ -120,14 +120,14 @@ Clean controls. `szz.js clean` sampled seeded non-fix PR-sized commits from the 
 
 ### Baseline (haiku-5.5, main `src/`, 3 reps, trace auto, context pack on)
 
-Run on Mira190/Kite from `specguard_ref = eval/expand-holdout` (the manifests had to be in the checkout; `src/` and `eval/replay.js` are identical to main at 9271df2). Valid = the engine succeeded and wrote `findings.json` (an empty findings list is valid); also required: `collect_ok`, not skipped, and a context pack with more than 0 files in the engine notes. Every run reported a non-empty pack.
+Run on Mira190/Kite from `specguard_ref = eval/expand-holdout` (the manifests had to be in the checkout; `src/` and `eval/replay.js` are identical to main at 9271df2). Valid = the engine succeeded and wrote `findings.json` (an empty findings list is valid); also required: `collect_ok`, not skipped, and a context pack with more than 0 files in the engine notes. Every run reported a non-empty pack. Publisher-aware (current `post.js` on the saved answers): 283/288 valid (bug 132/135, non_code 49/51); the 3 extra invalid runs (engine ok, publisher status=failed) are hono-3787 rep 2 and vitest-10583 rep 2 ("coverage must be an array") and trpc-hclean2-3 rep 3 ("coverage[0]: invalid status"). The tables below count engine validity only (286/288); the end-to-end 9.33/45 is unchanged because failed runs were already misses.
 
 | measure | value |
 |---|---|
-| bug PRs / runs attempted / valid | 45 / 135 / 134 (pydantic-ai-6890 rep 3: engine failed, graded miss) |
+| bug PRs / runs attempted / valid | 45 / 135 / 132 (pydantic-ai-6890 rep 3: engine failed; hono-3787 rep 2, vitest-10583 rep 2: publisher failed; all graded misses) |
 | caught (direct + indirect), per rep | 9, 7, 12 (direct 6/5/10, indirect 3/2/2) |
 | caught, mean (min-max) | 9.33 (7-12) of 45 = 20.7%; 28 caught events (PR-runs) from 15 distinct PRs. CI unit is the PR: Wilson 95% on n = 45 with x = 9.33 (mean per rep, fractional) = 11.4%-34.6%; PR-cluster bootstrap 11.1%-31.1% (use this one). Wilson on pooled 28/135 would be 14.8%-28.3% and is too narrow because the 3 runs of a PR are not independent |
-| conditional catch over valid runs | 28 caught events / 134 valid PR-runs = 20.9% (end-to-end 28 / 135 = 20.7%); descriptive only, PR-runs are clustered by PR |
+| conditional catch over valid runs | 28 caught events / 132 valid PR-runs = 21.2% (was 28/134 = 20.9% before the publisher check) (end-to-end 28 / 135 = 20.7%); descriptive only, PR-runs are clustered by PR |
 | caught and delivered inline, per rep | 4, 3, 3 (mean 3.33) |
 | PRs caught in 0 / 1 / 2 / 3 of 3 reps | 30 / 7 / 3 / 5 |
 | findings per bug PR-run | 2.04 (0.38 inline) |
@@ -139,7 +139,7 @@ Clean noise, never pooled (valid runs only):
 |---|---|---|---|---|---|
 | no_known_bug | 30 | 90 / 90 | 0.71 | 0.13 | 36% |
 | mixed_fix | 4 | 12 / 12 | 0.42 | 0.08 | 42% |
-| non_code | 17 | 50 / 51 (langchain-hclean2-3 rep 3: engine failed) | 0.02 | 0.00 | 2% |
+| non_code | 17 | 49 / 51 (langchain-hclean2-3 rep 3: engine failed; trpc-hclean2-3 rep 3: publisher failed) | 0.02 | 0.00 | 2% |
 
 Pooling all three would give 0.46 findings per PR-run and hide the difference, so only the no_known_bug row (0.71 findings, 0.13 inline per PR-run) is the noise of a code-changing PR with no known bug. Catch rate by repo (caught reps of 3 per PR): gitea 8/27, rqlite 5/9, pydantic-ai 4/21, hono 4/18, vitest 3/12, sqlglot 2/9, pydantic 1/6, orpc 1/18, langchain 0/9, query 0/6.
 
@@ -206,7 +206,7 @@ Caveats: public repos (contamination possible, new fixes are recent but the mode
 ## Delivery experiment V1/V2 (holdout 2, raw answers): not adopted
 
 Offline re-run of the real `src/post.js` on the saved raw model answers (`ctx/findings.json`, 288 PR-runs, no model call) with `replay-arms.js --engine mock-replay --arms A,NAME=ENV=VAL` (arm A = main; any other arm sets one env var for its post.js run, so a publisher experiment needs no replay code). V1/V2 showed low-confidence defect claims in the visible body.
-- Faithfulness gate (arm A reproduces the published summaries): 288/288.
+- Faithfulness gate (arm A reproduces the published summaries): 288/288, measured at status, headline and inline-count level only (full summary-body equality was not the criterion). V1/V2 corpus (Kite runs 39120706885 to 39120735452, ref 188e2a1): 287/288 valid, pydantic-ai-hclean2-2 in run 39120735452 ("requirements must be an array") was counted valid; it is a non_code control that publishes nothing, so the deltas below and the decision are unchanged (invariance argument, deltas not recomputed).
 - V1 changed 2 PR-runs: +1 visible catch event.
 - V2 changed 16 PR-runs (12 bug, 4 control): +3 visible catch events in total (orpc-1766 x2, langchain-33817 x1), +1 on the 33 NEW PRs. Pre-registered bars: +5 total and +4 new, so not met.
 - Control noise +0.06 per no_known_bug PR-run. TP lost 0.
