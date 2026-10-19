@@ -2382,7 +2382,7 @@ test('M4: a timeout with valid findings never says "No unit test gaps found"', a
   writeCtx(s, 'engine-status', 'timeout\n');
   await post(s);
   assert.doesNotMatch(s.calls.summary[0].body, /No unit test gaps found/);
-  assert.match(s.calls.summary[0].body, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; 1 item not fully reviewed \(listed below\)\*\*/);
+  assert.match(s.calls.summary[0].body, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; see Not reviewed below\*\*/);
 });
 
 test('M7: only our own bot counts: another bot\'s fingerprint comment does not dedupe, another bot\'s thread is not resolved', async (t) => {
@@ -4468,7 +4468,7 @@ test('incomplete summary: the first screen holds the findings and the not-review
   assert.doesNotMatch(top, /Fast-tier model|Incomplete review\.\*\*/);
   assert.doesNotMatch(rest, /vendored parser/, 'and is not repeated in Details'); assert.match(rest, /next push or rerun reviews again/);
   const none = post.buildSummary({ data: report({ coverage: [row()], findings: [] }), incomplete: ['`a.js`: changed lines past what the model saw', 'b'], state: 'incomplete' });
-  assert.match(none, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; 2 items not fully reviewed \(listed below\)\*\*/);
+  assert.match(none, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; see Not reviewed below\*\*/);
 });
 
 test('cut context: at most two entries naming up to 5 files each, so an engine timeout and the verdict count stay on the first screen', async (t) => {
@@ -4477,7 +4477,7 @@ test('cut context: at most two entries naming up to 5 files each, so an engine t
   writeCtx(s, 'test-candidates.txt', fs8.map((f) => `${f}\n  t-${f}  (same stem)\n`).join('')); writeCtx(s, 'engine-status', 'timeout\n');
   await post(s);
   const top = s.calls.summary[0].body.split('<details>')[0], nr = top.slice(top.indexOf('### Not reviewed'));
-  assert.match(top, /Partly reviewed: no gaps in what was reviewed; 3 items not fully reviewed/);
+  assert.match(top, /Partly reviewed: no gaps in what was reviewed; see Not reviewed below/);
   assert.match(nr, /### Not reviewed \(3\)/); assert.match(nr, /The review engine timed out/);
   assert.match(nr, /- Changed lines past what the model saw: `f0\.js`, `f1\.js`, `f2\.js`, `f3\.js`, `f4\.js`, … \(\+3 more\)\n/);
   assert.match(nr, /- Unit tests only partly visible for: `f0\.js`[^\n]*\(\+3 more\)\n/);
