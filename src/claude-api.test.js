@@ -1528,9 +1528,9 @@ const cit = { path: 'a.js', line: 3, quote: 'x()', side: 'RIGHT' };
 const ORIGINAL = () => ({
   requirements_source: 'pr', not_reviewed: '', standards: { status: 'checked', sources: ['S.md'], reason: 'r' }, layering: { status: 'checked', reason: 'r' },
   coverage: [
-    { id: 'o1', obligation: 'o', source: 's', behaviour: { ...cit }, change: { ...cit }, evidence: [{ path: 't.js', line: 1, quote: 'q', layer: 'unit', proves: 'p', kind: 'assertion', side: 'RIGHT' }, { path: 't.js', line: 2, quote: 'q' }], status: 'covered', reason: 'r', alignment: { status: 'mismatch', since: 'introduced', reason: 'r' } },
+    { id: 'o1', obligation: 'o', source: 's', behaviour: { ...cit }, change: { ...cit }, evidence: [{ path: 't.js', line: 1, quote: 'q', layer: 'unit', proves: 'p', kind: 'assertion', side: 'RIGHT' }, { path: 't.js', line: 2, quote: 'q', layer: 'unit', proves: 'p', kind: 'assertion', side: 'RIGHT' }], status: 'covered', reason: 'r', alignment: { status: 'mismatch', since: 'introduced', reason: 'r' } },
     { id: 'o2', obligation: 'o', source: 's', behaviour: null, evidence: [], status: 'unknown', reason: 'r' },
-    { id: 'o3', obligation: 'o', source: 's', behaviour: { ...cit }, change: null, evidence: [{ path: 't.js', line: 9, quote: 'q', kind: 'no_assertion' }], status: 'needs_human', reason: 'r' },
+    { id: 'o3', obligation: 'o', source: 's', behaviour: { ...cit }, change: null, evidence: [{ path: 't.js', line: 9, quote: 'q', kind: 'no_assertion', layer: 'unit', proves: 'p', side: 'RIGHT' }], status: 'needs_human', reason: 'r' },
   ],
   findings: [
     { kind: 'weak_test', path: 'a.js', line: 4, start_line: 2, quote: 'q', title: 't', body: 'b', counterexample: 'c', rule_source: 'R.md:1', rule_quote: 'rq', suggestion: 's', source: 'x', confidence: 'high', obligation_ids: ['o1'], side: 'LEFT' },
@@ -1541,7 +1541,7 @@ const ORIGINAL = () => ({
 test('PR mode sends no output_config and writes the answer as the model gave it', async (t) => {
   const h = harness(t, [good({ content: [{ type: 'text', text: JSON.stringify(ORIGINAL()) }] })]);
   await h.go();
-  assert.ok(h.calls.length <= 2); // ORIGINAL is not valid for post.js (evidence[1]), so the one repair turn is spent; the mock repeats the answer
+  assert.equal(h.calls.length, 1);
   assert.ok(!h.calls[0].body.output_config);
   assert.deepEqual(JSON.parse(h.file('findings.json')), ORIGINAL());
 });
@@ -1603,6 +1603,13 @@ test('repair turn: wrong shape then valid -> 2 calls, the error goes back, valid
   const one = harness(t, [good(), good()]);
   await one.go();
   assert.equal(one.calls.length, 1, 'a valid answer costs no extra call');
+});
+
+test('repair turn: scan mode (CHECK=audit) never repairs a shape post.js would reject: one call', async (t) => {
+  const h = harness(t, [shaped({}), good()]);
+  assert.equal(post.validate({}).ok, false);
+  await h.go({ CHECK: 'audit' });
+  assert.equal(h.calls.length, 1);
 });
 
 test('repair turn: wrong shape twice -> 2 calls and the bad file as before; no JSON then wrong shape -> no third call; budget too small -> no repair', async (t) => {
