@@ -54,3 +54,10 @@ test('collect: mixed directories in one scope: only the non-unit paths are count
   const listed = fs.readFileSync(path.join(ctx, 'audit-units.txt'), 'utf8');
   assert.match(listed, /src\/build\.rs/); assert.match(listed, /manage\.py/); assert.doesNotMatch(listed, /migrations\/x\.py|scripts\/deploy\.js/);
 });
+
+test('collector CLI: scan_scope all with only non-unit files in scan_paths exits 0 and writes skip=true (the post SKIP branch and fail-on-error own the verdict, so a summary is still written)', (t) => {
+  const { root, ctx } = repo(t, { 'scripts/a.js': BODY('a'), 'README.md': '# x\n' });
+  const out = path.join(root, 'gho'); fs.writeFileSync(out, '');
+  const r = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, 'audit-collect.js')], { cwd: root, encoding: 'utf8', env: { ...process.env, CTX: ctx, GITHUB_OUTPUT: out, SCAN_SCOPE: 'all', SCAN_PATHS: 'scripts/**', FAIL_ON_ERROR: 'true', AUDIT_BRANCH_GUARD: 'off', PACK_SPLIT: 'true' } });
+  assert.equal(r.status, 0, r.stdout + r.stderr); assert.match(fs.readFileSync(out, 'utf8'), /skip=true/); assert.equal(metaOf(ctx).not_unit, 1);
+});

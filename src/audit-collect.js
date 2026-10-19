@@ -383,10 +383,6 @@ async function main(env) {
   const r = collect({ ctx: env.CTX, reqPaths: env.REQ_PATHS, standardsPaths: env.STANDARDS_PATHS, testPaths: env.TEST_PATHS, ignoreExtra: env.IGNORE_EXTRA, maxRequirements: max, maxUnits, scanPaths: env.SCAN_PATHS, rotate, prior, refNote: g.note || '', packBytes, unitParts, price, scopeAll });
   console.log(`SpecGuard unit test gap scan: ${r.units ? (() => { const u = new Set(r.units.picked).size; return `${u} of ${r.units.total} units${u === r.units.picked.length ? '' : ` (${r.units.picked.length} parts)`}`; })() : 'no units'}, ${r.docs.length} design document(s), ${r.rejected.length} not admitted${prior ? `; ${r.rotation.picked} of ${r.candidates} blocks chosen from the previous state` : ''}`);
   const nothing = !r.docs.length && !(r.units && r.units.total);
-  if (nothing && scopeAll) { // ponytail: the post step's SKIP branch stays green, so say it here; scan_scope all with files named but not reviewed is not "nothing to audit"
-    const m = JSON.parse(fs.readFileSync(path.join(env.CTX, 'audit-meta.json'), 'utf8')), miss = [m.not_unit && `${m.not_unit} source file(s) in scan_paths dropped by the default non-unit paths`, m.docs_over_size && `${m.docs_over_size} requirement document(s) over 256 KiB`].filter(Boolean).join('; ');
-    if (miss) { console.log(`::${env.FAIL_ON_ERROR === 'true' ? 'error' : 'warning'}::SpecGuard reviewed nothing (scan_scope: all): ${miss}`); if (env.FAIL_ON_ERROR === 'true') process.exit(1); }
-  }
   if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `skip=${nothing ? 'true' : 'false'}\n`);
 }
 
