@@ -67,9 +67,11 @@ test('validate: a result without documents needs no requirements; rows name a li
   assert.match(o.not_reviewed.join('\n'), /unit_findings\[4\] dropped: path, line, quote and title are required\./);
   assert.match(o.not_reviewed.join('\n'), /unit_findings\[6\] dropped: not an object\./);
   // absent or malformed unit_findings: an older result, and a result that is not an array
-  const old = { docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [] };
+  const old = { docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [], unit_findings: [] };
   assert.equal(validate(old, new Map(), UNITS()).ok, true);
-  assert.deepEqual(old.unit_findings, []);
+  assert.deepEqual(old.unit_findings, []); assert.deepEqual(old.invalid_units, [], 'a valid [] is no findings');
+  const gone = { docs_reviewed: [], requirements: [], not_requirements: [], not_reviewed: [] }; // field missing with units listed: not "no findings"
+  assert.equal(validate(gone, new Map(), UNITS()).ok, true); assert.deepEqual(gone.invalid_units.sort(), [...UNITS().keys()].sort());
   const odd = { ...clone(old), unit_findings: 'none' };
   assert.equal(validate(odd, new Map(), UNITS()).ok, true);
   assert.match(odd.not_reviewed[0], /unit_findings was not an array; every listed unit counts as not reviewed/);
@@ -565,8 +567,13 @@ test('run: a unit finding about an unlisted unit, or a result with neither requi
   assert.match(r.calls.summary, /\*\*✅ No unit test gaps in the 3 riskiest units\*\*/);
   assert.match(r.calls.summary, /unit_findings\[0\] dropped: unknown unit abababab/);
   const old = await post(t, { files: { 'findings.json': { docs_reviewed: [], not_requirements: [], not_reviewed: [] } } });
-  assert.match(old.calls.summary, /\*\*✅ No unit test gaps in the 3 riskiest units\*\*/);
-  assert.deepEqual(old.calls.outputs, { status: 'complete' });
+  assert.match(old.calls.summary, /unit_findings was missing or null; every listed unit counts as not reviewed/); // no unit_findings with units listed is a non-answer, never "no gaps"
+  assert.doesNotMatch(old.calls.summary, /✅/); assert.match(old.calls.summary, /⚠️ Incomplete scan: .*3 units not reviewed \(no usable answer\)/);
+  assert.equal(old.calls.outputs.status, 'incomplete');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(old.w.ctx,'audit-unanswered.json'), 'utf8')).units, 3);
+  const empty = await post(t, { files: { 'findings.json': { docs_reviewed: [], not_requirements: [], not_reviewed: [], unit_findings: [] } } });
+  assert.match(empty.calls.summary, /\*\*✅ No unit test gaps in the 3 riskiest units\*\*/);
+  assert.deepEqual(empty.calls.outputs, { status: 'complete' });
 });
 
 test('run: the claude engine pack cut a test file: a missing_test claim about its unit stays out of the counts', async (t) => {
