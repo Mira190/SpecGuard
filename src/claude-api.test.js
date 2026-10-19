@@ -1680,3 +1680,24 @@ test('unit rooms: a unit part whose unit_findings is not an array fails only its
   const failed = JSON.parse(s.h.file('scan-parts.json')).failed;
   assert.equal(failed.length, 1); assert.deepEqual(failed[0].units, ['bbbbbbbb']); assert.match(failed[0].reason, /unit_findings was not an array/);
 });
+
+// invariant: an attempt whose usage is unknown is charged at the worst case W (each lost attempt and the final reply without usage); a reply with known usage is charged its cost once, plus W per lost attempt before it
+test('charge invariant over lost / unknown / HTTP-error / repair paths', async (t) => {
+  const W = await worstOf(t), K = api.cost('claude-haiku-5-5', good().usage || { input_tokens: 1000, cache_creation_input_tokens: 20000, cache_read_input_tokens: 0, output_tokens: 4000 });
+  const prose = () => good({ usage: {}, content: [{ type: 'text', text: 'prose, no json' }] });
+  const rows = [ // [name, replies, budget in W, attempts, expected charge]
+    ['lost + known', [reset, good()], 2.5, 2, K + W],
+    ['lost + unknown', [reset, good({ usage: {} })], 2.5, 2, 2 * W],
+    ['unknown only', [good({ usage: {} })], 2.5, 1, W],
+        ['lost + unknown + repair', [reset, prose, good({ usage: {} })], 3.5, 3, 3 * W],
+  ];
+  const rej = harness(t, [() => err(400, 'invalid_request_error', 'bad request')]); await rej.go({ MAX_BUDGET_USD: String(2.5 * W) }); // a rejected request was not run: nothing billed, nothing recorded
+  assert.equal(rej.calls.length, 1); assert.equal(rej.file('usage.json'), null, 'HTTP error only: no cost recorded');
+  for (const [name, replies, budget, attempts, want] of rows) {
+    const h = harness(t, replies);
+    await h.go({ MAX_BUDGET_USD: String(budget * W) });
+    assert.equal(h.calls.length, attempts, name);
+    const got = JSON.parse(h.file('usage.json')).totalCostUsd;
+    near(got, want); if (name !== 'lost + known') assert.ok(got >= want - 2e-4, `${name}: charged ${got} < ${want}`);
+  }
+});
