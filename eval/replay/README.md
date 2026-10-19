@@ -212,3 +212,58 @@ Offline re-run of the real `src/post.js` on the saved raw model answers (`ctx/fi
 - Control noise +0.06 per no_known_bug PR-run. TP lost 0.
 - Root cause: the Details-only catches are `gated` by the partial-test-visibility gate (`src/post.js`, "a candidate test file was only partly visible"), which V2 deliberately excludes, so V2 cannot surface them.
 - Decision: not adopted; the post.js arms were not merged (PR #366 closed). Next: H3 (`prereg-h3.md`, a retest on the same PR set, not an adoption test).
+
+## Cut relevance (R, S): not adopted
+
+**Decision.** Gate 4 fails for both arms on both corpora, so neither rule is adopted. The run status keeps the main rule, and the experiment code is not merged. The blind audit (gate 3) was not graded, because its result could not change the decision. The main finding: on most runs the "Review context was cut" notice is not noise. In 68 of the 70 runs whose only remaining reason is a cut candidate test, a cut test names a changed definition (see Reading below).
+
+Pre-registration: `prereg-cut-relevance.md` with amendments 1 and 1b. Code (not merged): branch `fix/cut-relevance` at 38037ce, `src/post.js` `cutRelevant`, `candReasons`, `STRONG`, behind `EXP_CUT_RELEVANCE` (`1` = arm R, `strong` = arm S).
+
+### Arm S: reason classification (fixed before S was computed)
+
+The reason vocabulary that `collect.sh` can write after a candidate test in `test-candidates.txt` (all from `src/test-map.js` `mapTests`; the PR collector passes no `calls`, so `calls ...` never occurs in the corpora):
+
+| Reason string | Class | Why |
+|---|---|---|
+| `same name` | strong | the test file is named after the changed file |
+| `mentions <stem>` (no `changed`) | strong | a whole-word mention of the changed file's stem in the test: an import or a direct reference |
+| `file name has <names>` | weak | the test file name contains a public name of the file |
+| `calls <names>` | weak | (not emitted by the PR collector) |
+| `mentions changed \`x\`` | weak | shares an identifier with the diff only |
+| `same directory` | weak | proximity only |
+
+S counts a cut candidate toward "lost" only when it is strong. S reads no file. Like R, S keeps the notice when any finding was gated by the partial-visibility gate. Empirical reason counts in the corpus-1 collect output (all 288 PR-runs, summed over their candidate lines): `mentions` 441 (stem and changed together), `same name` 359, `same directory` 111, `file name has` 93.
+
+### Method
+
+- Code at 38037ce (`fix/cut-relevance`), prereg amendments 1 and 1b. Output of the first implementation (a914ff5, which counted a deletion-only change as irrelevant) was discarded and everything re-run.
+- Corpus 1: the holdout-2 raw answers of Kite runs 39120706885, 39120718089, 39120729276 (bugs, 45 PRs each) and 39120712567, 39120723905, 39120735452 (controls, 51 each). One `eval/replay-arms.js --engine mock-replay --arms A,R=EXP_CUT_RELEVANCE=1,S=EXP_CUT_RELEVANCE=strong` pass per run, so the three arms share one engine pass and differ only in post.js. Full (not blobless) clones: a blobless source clone makes `git blame` fail inside the shared clones and adds "Historical intent unavailable" to 284 of 288 runs; that was seen and fixed before these numbers.
+- "Incomplete" below means `execution_complete:false` in the counts block, i.e. the `incomplete[]` list of post.js is not empty (the status marker also turns `incomplete` for model-level reasons such as an unconfirmed requirement, which the cut cannot influence). A run is "cut-only" when `execution_complete` is false, the cut bullet is present, and none of the other `incomplete.push` messages is in the summary. A PR flips when all its cut-only runs become complete; the PR denominator is the PRs with at least one cut-only run (52 of the 96 PR ids; the 3 repetitions of a PR are one PR).
+- Corpus 2: SpecGuard's own PRs #345-#386, the latest CI run per PR whose `specguard-ctx` artifact is still downloadable: 38 PRs (#347, #348, #359, #384 have no findings.json in any artifact). R and S decisions are computed offline from the artifact (findings.json is not needed; pack-cut, pack-shown, test-candidates, diff.patch, files.txt and the file contents at the run's head sha). The same offline function reproduces the full post.js arm result on all 288 corpus-1 runs for both arms (0 mismatches), which is the proof that the shortcut is faithful.
+- Analysis scripts: `eval/replay/cut-relevance-analysis/an.js` (gates), `pk.js` (blind packets), `c2.js` (first corpus-2 pass). Raw evidence stays outside the repo (`SpecGuard-evidence`).
+
+### Gates
+
+| | R corpus 1 | S corpus 1 | R corpus 2 | S corpus 2 |
+|---|---|---|---|---|
+| Faithfulness of arm A (published status, headline, inline count) | 287/288 (the one miss is pydantic-ai-hclean2-2, run 39120735452, an invalid answer the publisher rejects today; counted valid as in V1/V2 it is 288/288 by the old convention) | same | n/a | n/a |
+| Incomplete, A (execution_complete false) | 212/288 | 212/288 | 27/38 | 27/38 |
+| Incomplete, arm | 210/288 | 190/288 | 25/38 | 27/38 |
+| Cut-only runs that become complete (run level) | 2/154 | 22/154 | 2/24 | 0/24 |
+| Cut-only PRs that become complete (gate 4, bar 1/3) | 0/52 | 6/52 | 2/24 | 0/24 |
+| Gate 1: findings, confidence, placement identical to A | 288/288 | 288/288 | by construction (the rule only changes status) | same |
+| Gate 2: a clean verdict with a gated finding | 0/288 | 0/288 | 0/38 | 0/38 |
+| Verdict became a pass (headline) | 0/288 | 0/288 | n/a | n/a |
+| Gate 4 (>= 1/3 of cut-only PRs) | fail | fail | fail | fail |
+| Gate 3 (blind two-grader audit) | packets built, not graded: 8 flip cuts + 8 controls | packets built: 20 flip cuts + 20 controls | pooled into the corpus-1 packets | same |
+
+Decision rule outcome: gate 4 fails for both arms on both corpora, so nothing is adopted, whatever the audit says. The audit packets are `audit/packets-R.md` and `audit/packets-S.md` (answer keys `key-R.json`, `key-S.json`) in the evidence folder; no flip turned a verdict into a pass, so the 1b "every ✅ flip" list is empty.
+
+### Flips by enclosing name (checked names of the flipped files)
+
+- R: top names `_validate_regexp_flags` 3, `regexpcount_sql` 3, `regexplike_sql` 3, `logNameStatusRepo` 2, `runEngine` 2, `packGuard` 2, `runReal` 2, `startOf` 1; lengths 5-8: 2, 9-14: 3, 15+: 3. No short common name behind a flip.
+- S (S reads no file; the names are what R would have checked for the same files): `setClient` 6, `hideDisabledQueries` 6, `TanstackQueryDevtools` 3, `TanstackQueryDevtoolsPanel` 3, `logNameStatusRepo` 2, `ModelProfile` 2, `generate_schema` 2, `_generate_schema_from_get_schema_method` 2, `_generate_schema_inner` 2, `inner_handler` 2; lengths 5-8: 4, 9-14: 10, 15+: 8.
+
+### Reading
+
+Of the 154 cut-only corpus-1 runs, 49 also have a changed file cut past a changed line (no arm can flip them) and 49 have a finding gated by partial visibility (the gate keeps the notice; the two sets overlap). Of the 70 runs with only cut candidate tests and no gated finding, R finds at least one test that names a changed definition in 68, so R flips 2 runs. S (strong reasons only) flips 22 runs. On SpecGuard's own PRs (corpus 2) 7 of 24 cut-only runs lose a changed file and 7 have a gated finding; R flips 2 PRs (#358, #379), S none. The name-mention proxy keeps the notice on most runs because the cut test files are large and mention many definitions.
