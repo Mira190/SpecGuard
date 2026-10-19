@@ -77,13 +77,38 @@ test('pre-push hook blocks a leak added in one commit and deleted in the next; .
   const hook = (stdin) => {
     const env = { ...process.env };
     delete env.SPECGUARD_DENY_SHA256;
+    env.PATH = env.PATH.split(path.delimiter).filter((p) => !fs.existsSync(path.join(p, 'gitleaks')) && !fs.existsSync(path.join(p, 'gitleaks.exe'))).join(path.delimiter); // gitleaks not installed
     return spawnSync('sh', [path.join(__dirname, '..', '.githooks', 'pre-push')], { cwd: w, input: stdin, encoding: 'utf8', env });
   };
   const r = hook(`refs/heads/x ${head} refs/heads/x 0000000000000000000000000000000000000000\n`);
   assert.strictEqual(r.status, 1, r.stderr);
   assert.match(r.stderr, /a\.txt:1: honey marker/);
+  assert.match(r.stderr, /gitleaks not installed/); // leak-check still ran and blocked without gitleaks
   const clean = hook(`refs/heads/main ${base} refs/heads/main ${base}\n`); // empty range
   assert.strictEqual(clean.status, 0, clean.stderr);
+  assert.match(clean.stderr, /gitleaks not installed/);
   fs.writeFileSync(path.join(w, '.git', 'specguard-deny'), sha('secretproj') + '\n');
   assert.match(hook(`refs/heads/main ${head} refs/heads/main ${base}\n`).stderr, /a\.txt:2: denylisted token/);
+});
+
+const { scanDiff, denyList } = require('./leak-check');
+test('scanDiff: header vs content, "++" content lines, line numbers per file from @@', () => {
+  assert.deepStrictEqual(scanDiff(`+++ b/a.txt\n@@ -0,0 +1 @@\n+${M}0123456789abcdef\n`, new Set()), ['a.txt:1: honey marker']);
+  const d = `diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1,2 @@\n+ok\n++${M}0123456789abcdef\n` +
+    `diff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -4,0 +5 @@\n+${M}fedcba9876543210\n-${M}0000000000000000\n`;
+  assert.deepStrictEqual(scanDiff(d, new Set()), ['a.txt:2: honey marker', 'b.txt:5: honey marker']);
+  assert.deepStrictEqual(scanDiff('diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n+++ b/evil\n+clean\n', new Set()), []);
+});
+test('denyList: env and the per-clone git-path file combine, case-insensitive; a missing file is fine', () => {
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'deny-')), 'specguard-deny');
+  fs.writeFileSync(f, sha('b').toUpperCase() + '\n\n' + sha('c') + '\n');
+  const got = [...denyList({ SPECGUARD_DENY_SHA256: sha('a').toUpperCase() + ',' + sha('d') }, () => f)].sort();
+  assert.deepStrictEqual(got, ['a', 'b', 'c', 'd'].map(sha).sort());
+  assert.deepStrictEqual([...denyList({}, () => { throw new Error('no repo'); })], []);
+});
+test('gitleaks workflow: push on every branch, pull_request and workflow_dispatch kept', () => {
+  const y = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'gitleaks.yml'), 'utf8');
+  assert.match(y, /^\s*push:\s*\{[^}]*'\*\*'/m);
+  assert.match(y, /^\s*pull_request:/m);
+  assert.match(y, /^\s*workflow_dispatch:/m);
 });
