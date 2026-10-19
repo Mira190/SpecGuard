@@ -72,6 +72,7 @@ function messages(prompt, pack = '') {
 // The context pack: repository files appended to the user message, in priority order, until CONTEXT_PACK_BYTES is spent. The prompt was written for an agent that Reads files; here nobody can.
 // Trust boundary: every path comes from the (PR-influenced) context files, so it is resolved against the repo root after realpath and anything outside, secret-like or binary is skipped. Nothing read here is ever logged.
 const { PER_FILE, fileCap, packLimit } = require('../pack-cap');
+const { matches } = require('../standards-map');
 const MAX_FILE = 2 * 1024 * 1024, OVERHEAD = 300; // OVERHEAD: the block markup around a body
 const { DENY } = require('../deny.js');
 function packRead(root, rel) { // text of a regular, small, non-binary file inside the repo, else null
@@ -284,7 +285,21 @@ function contextPack(ctx, root, limit) {
     const b = block(rel, c.text, `${c.cut ? `first ${c.lines} of ${src.length} lines` : 'full file'}${num ? ', line-numbered' : ''}`);
     parts.push(b); used += Buffer.byteLength(b); files++;
   };
-  for (const p of list('standards.txt')) addFile(p, false);
+  // EXP_PACK (measurement switch, eval/replay/prereg-pack-changed-first.md; unset = main): O review files before rules, F rules only if their scope covers a changed file, FC sorted and capped at one file cap, FCH + hunks of an over-room changed file; O/FC/FCH sort by changed files covered, then specific scope before wide
+  const exp = process.env['EXP_PACK'] || '', EH = exp === 'O' || exp === 'FCH', dropped = [];
+  const rules = (() => {
+    const std = list('standards.txt');
+    if (!exp) return std;
+    let map; try { map = new Map(JSON.parse(rd('standards-map.json')).map((e) => [e.path, e.scope])); } catch { return std; } // no map: every rule file, as on main
+    const ch = list('files.txt').map((f) => path.posix.normalize(f.replace(/\\/g, '/'))), wide = (sc) => !sc || !sc.length || sc.some((g) => /^\*\*(\/\*)?$/.test(g));
+    let r = std.map((p, i) => ({ p, i, w: wide(map.get(p)), n: map.has(p) ? ch.filter((f) => matches(map.get(p), f)).length : ch.length })).filter((x) => x.n > 0);
+    if (exp === 'F') return r.map((x) => x.p);
+    r = r.sort((a, b) => b.n - a.n || a.w - b.w || a.i - b.i);
+    if (exp === 'O') return r.map((x) => x.p);
+    let tot = 0, stop = false; // FC: the first rule file that does not fit stops the block
+    return r.map((x) => x.p).filter((p) => { if (stop) return void dropped.push(p); const t = packRead(root, p); if (t === null) return true; tot += Buffer.byteLength(t) + OVERHEAD; if (tot > cap) { stop = true; dropped.push(p); return false; } return true; });
+  })();
+  if (exp !== 'O') for (const p of rules) addFile(p, false);
   const focus = list('focus.txt').map((l) => l.split('\t')[0]);
   // scan mode (audit-units.txt: id, path, risk, why, matched tests, leads): the selected units are the review set and their matched tests their candidate tests
   const units = new Map(list('audit-units.txt').map((l) => l.split('\t')).filter((u) => u[1]).map((u) => [u[1], u[4] && u[4] !== 'none' ? u[4].split(', ') : []])), review = units.size ? [...units.keys()] : focus.length ? focus : list('files.txt');
@@ -297,8 +312,10 @@ function contextPack(ctx, root, limit) {
   const symsOf = new Map(review.map((p) => [p, units.size ? unitSymbols(p) : diffSymbols(diff, path.posix.normalize(p.replace(/\\/g, '/')), leads)])), testsOf = (p) => (units.size ? packTests.get(p) || units.get(p) : cands.get(p)) || [], shared = new Map(), hunk = units.size ? new Map() : require('../test-map.js').hunkTokens(rd('diff.patch')); // hunk: file -> identifiers on its changed lines (the collector ranks candidate tests by them); shared: a test -> the union of the symbols of every review file that lists it (it is added once, for the first of them, so it must be sliced for all)
   for (const p of review) for (const t of testsOf(p)) { const u = shared.get(t) || Object.assign(new Set(), { capped: false }); symsOf.get(p).forEach((n) => u.add(n)); (hunk.get(path.posix.normalize(p.replace(/\\/g, '/'))) || []).forEach((n) => u.add(n)); u.capped ||= !!symsOf.get(p).capped; shared.set(t, u); }
   const tight = !units.size && review.reduce((n, p) => n + Math.min(cap, Buffer.byteLength(packRead(root, p) || '')), 0) > limit * SHARE_AT; // the review files together would fill the pack: each gets a fair share too (shown as slices around its hunks when over it), else the early ones starve the later files and their tests
-  review.forEach((p, i) => { const sd = units.size ? null : diffSeeds(diff, path.posix.normalize(p.replace(/\\/g, '/'))), share = tight && sd && sd.length, hunks = share && !TESTISH.test(p); // share: a file with changed lines is cut to its share; hunks: a source file is then shown as its hunks with a little context (a test file keeps its symbol windows)
-    addFile(p, true, false, units.size ? null : hunks ? [] : symsOf.get(p), share ? used + SHARE_X * (limit - used) / (review.length - i) : limit, unitPart.get(p), false, sd, hunks ? [10, 30] : undefined); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t), own = !units.size && review.includes(t); addFile(t, true, false, own ? symsOf.get(t) : [...u], own ? Math.max(top, used + MIN_CAND) : top, null, !own && u.capped, own ? diffSeeds(diff, path.posix.normalize(t.replace(/\\/g, '/'))) : null); } }); // own: a changed test file reached first as a candidate is added as the review loop adds it (its own symbols and diff hunks), else its hunks would never be seeded // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+  const addTests = (p, i) => { const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t), own = !units.size && review.includes(t); addFile(t, true, false, own ? symsOf.get(t) : [...u], own ? Math.max(top, used + MIN_CAND) : top, null, !own && u.capped, own ? diffSeeds(diff, path.posix.normalize(t.replace(/\\/g, '/'))) : null); } };
+  review.forEach((p, i) => { const sd = units.size ? null : diffSeeds(diff, path.posix.normalize(p.replace(/\\/g, '/'))), share = tight && sd && sd.length, hunks = (share || (EH && sd && sd.length)) && !TESTISH.test(p); // share: a file with changed lines is cut to its share; hunks: a source file is then shown as its hunks with a little context (a test file keeps its symbol windows)
+    addFile(p, true, false, units.size ? null : hunks ? [] : symsOf.get(p), share ? used + SHARE_X * (limit - used) / (review.length - i) : limit, unitPart.get(p), false, sd, hunks ? [10, 30] : undefined); if (exp !== 'O') addTests(p, i); }); // own: a changed test file reached first as a candidate is added as the review loop adds it (its own symbols and diff hunks), else its hunks would never be seeded // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+  if (exp === 'O') { for (const p of rules) addFile(p, false); review.forEach(addTests); } // O: the rules fill what the review files left, then the tests
   for (const [p, keep] of packTests) for (const t of units.get(p) || []) if (!keep.includes(t) && !partial.includes(t)) partial.push(t); // counted out by the collector: not shown, so listed as cut
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
@@ -323,7 +340,7 @@ function contextPack(ctx, root, limit) {
   for (const p of ev.notWhole) if (!partial.includes(p)) partial.push(p);
   for (const p of list('spec-files.txt')) addFile(p, false);
   const text = parts.length ? `Repository files (read from the checked-out repository; rule files, each file under review followed by its candidate tests, files the requirements name and small neighbours of reviewed files, the rest of a cut diff, requirement documents):\n\n${parts.join('\n\n')}` : '';
-  const note = files || omitted.length ? `context pack: ${files} files, ${Math.round(used / 1024)} KB${omitted.length ? `; not included: ${omitted.slice(0, 4).join(', ')}${omitted.length > 4 ? ` (+${omitted.length - 4} more)` : ''}` : ''}` : '';
+  const note = files || omitted.length ? `context pack: ${files} files, ${Math.round(used / 1024)} KB${omitted.length + dropped.length ? `; not included: ${[...omitted, ...dropped].slice(0, 4).join(', ')}${omitted.length + dropped.length > 4 ? ` (+${omitted.length + dropped.length - 4} more)` : ''}` : ''}` : '';
   return { text, note, notWhole: [...partial, ...omitted], blockCuts: ev.blockCuts, shown };
 }
 

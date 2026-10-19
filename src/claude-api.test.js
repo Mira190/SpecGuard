@@ -1755,3 +1755,61 @@ test('unit rooms: unit_findings null, missing or holding a non-object row fails 
     assert.deepEqual(JSON.parse(s.h.file('findings.json')).unit_findings.map((f) => f.unit), ['aaaaaaaa', 'cccccccc'], name);
   }
 });
+
+// --- EXP_PACK arms (eval/replay/prereg-pack-changed-first.md) ---
+const withExp = (v, fn) => { const old = process.env['EXP_PACK']; if (v) process.env['EXP_PACK'] = v; else delete process.env['EXP_PACK']; try { return fn(); } finally { if (old === undefined) delete process.env['EXP_PACK']; else process.env['EXP_PACK'] = old; } };
+const rule = (n) => 'r'.repeat(n) + '\n';
+const patchOf = (file, line) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -${line},1 +${line},1 @@\n-old\n+changed line ${line}\n`;
+const ruleRepo = (t, rules, map, extra = {}) => tmpRepo(t, { 'src/a.js': 'x\n', ...Object.fromEntries(Object.entries(rules).map(([k, n]) => [k, rule(n)])), ...extra.files }, { 'files.txt': 'src/a.js\n', 'standards.txt': Object.keys(rules).join('\n') + '\n', ...(map && { 'standards-map.json': JSON.stringify(map.map(([path, scope]) => ({ path, scope }))) }), 'diff.patch': patchOf('src/a.js', 1), ...extra.ctx });
+const has = (p, f) => p.text.includes(`name="${f}"`);
+
+test('EXP_PACK F: a rule file whose scope covers no changed file is dropped; unset keeps it', (t) => {
+  const r = ruleRepo(t, { 'IN.md': 100, 'OUT.md': 100 }, [['IN.md', ['src/**']], ['OUT.md', ['docs/**']]]);
+  const f = withExp('F', () => api.contextPack(r.ctx, r.root, 250000));
+  assert.ok(has(f, 'IN.md') && !has(f, 'OUT.md'));
+  assert.ok(has(withExp('', () => api.contextPack(r.ctx, r.root, 250000)), 'OUT.md'));
+});
+
+test('EXP_PACK F: a missing or unreadable map keeps every rule file', (t) => {
+  const r = ruleRepo(t, { 'A.md': 100, 'B.md': 100 }, null);
+  for (const v of ['F', 'FC', 'O']) { const p = withExp(v, () => api.contextPack(r.ctx, r.root, 250000)); assert.ok(has(p, 'A.md') && has(p, 'B.md'), v); }
+  fs.writeFileSync(path.join(r.ctx, 'standards-map.json'), '{not json');
+  assert.ok(has(withExp('F', () => api.contextPack(r.ctx, r.root, 250000)), 'B.md'));
+});
+
+test('EXP_PACK FC: the rule files together stop at one file cap, in list order, and the dropped ones are "not included"', (t) => {
+  const cap = require('./pack-cap').fileCap(250000);
+  const r = ruleRepo(t, { 'A.md': 20000, 'B.md': cap - 10000, 'C.md': 100 }, [['A.md', ['**']], ['B.md', ['**']], ['C.md', ['**']]]);
+  const p = withExp('FC', () => api.contextPack(r.ctx, r.root, 250000));
+  assert.ok(has(p, 'A.md') && !has(p, 'B.md') && !has(p, 'C.md'), 'B does not fit, so C (which would fit) is not read either');
+  assert.ok(p.note.includes('not included: B.md, C.md'), p.note);
+  assert.ok(!p.notWhole.includes('B.md'), 'not listed as cut');
+});
+
+test('EXP_PACK FC/O: in-scope rules sort by changed files covered, then specific before wide, then list order', (t) => {
+  const r = ruleRepo(t, { 'W.md': 100, 'P.md': 100, 'Q.md': 100, 'N.md': 100 }, [['W.md', ['**']], ['P.md', ['src/**']], ['Q.md', ['src/a.js', 'lib/b.js']], ['N.md', ['none/**']]], { ctx: { 'files.txt': 'src/a.js\nlib/b.js\n' } });
+  for (const v of ['FC', 'O']) {
+    const p = withExp(v, () => api.contextPack(r.ctx, r.root, 250000)), at = (f) => p.text.indexOf(`name="${f}"`);
+    assert.ok(at('Q.md') >= 0 && at('Q.md') < at('W.md') && at('W.md') < at('P.md'), v + ': Q and W cover 2 (specific Q first), P covers 1');
+    assert.ok(!has(p, 'N.md'), v);
+  }
+});
+
+test('EXP_PACK O: the changed file comes before the rules, and the rules fill only what is left', (t) => {
+  const r = ruleRepo(t, { 'R.md': 100 }, [['R.md', ['**']]]);
+  const o = withExp('O', () => api.contextPack(r.ctx, r.root, 250000)), a = withExp('', () => api.contextPack(r.ctx, r.root, 250000));
+  assert.ok(o.text.indexOf('name="src/a.js"') < o.text.indexOf('name="R.md"'));
+  assert.ok(a.text.indexOf('name="R.md"') < a.text.indexOf('name="src/a.js"'), 'main: rules first');
+  const full = ruleRepo(t, { 'R.md': 40000, 'S.md': 40000 }, [['R.md', ['**']], ['S.md', ['**']]], { files: { 'src/a.js': Array.from({ length: 3000 }, (_, i) => `line ${i}`).join('\n') + '\n' } });
+  const small = withExp('O', () => api.contextPack(full.ctx, full.root, 60000));
+  assert.ok(has(small, 'src/a.js') && Buffer.byteLength(small.text) <= 60000 + 4000, 'the changed file is in; the rules are cut to what remains');
+});
+
+test('EXP_PACK FCH/O: a changed source file over its room is shown as its hunks when the pack is not tight', (t) => {
+  const big = Array.from({ length: 6000 }, (_, i) => `const v${i} = ${i};`).join('\n') + '\n';
+  const r = ruleRepo(t, { 'R.md': 100 }, [['R.md', ['**']]], { files: { 'src/a.js': big }, ctx: { 'diff.patch': patchOf('src/a.js', 5500) } });
+  const main = withExp('', () => api.contextPack(r.ctx, r.root, 250000));
+  assert.ok(main.text.includes('const v5480 = 5480;'), 'main already slices around the changed lines, with the wide window (30 above)');
+  for (const v of ['FCH', 'O']) { const p = withExp(v, () => api.contextPack(r.ctx, r.root, 250000)); assert.ok(p.text.includes('const v5500 = 5500;') && !p.text.includes('const v5480 = 5480;'), v + ': hunk window of 10 above'); }
+  assert.ok(withExp('FC', () => api.contextPack(r.ctx, r.root, 250000)).text.includes('const v5480 = 5480;'), 'FC leaves the file as on main');
+});
