@@ -121,22 +121,19 @@ function replayCandidates({ N = N_DEFAULT } = {}) {
 }
 
 const ARMS = ['NEAR', 'FAR', 'UNTOUCHED', 'UNIT_TOUCHED_WEAK', 'EXCLUDED_NO_LINE'];
-function summarize(cands, prs, sampled) {
+function summarize(cands, prs) {
   const cnt = (f) => cands.filter(f).length, by = {};
   for (const a of ARMS) by[a] = { n: cnt((c) => c.arm === a), prs: new Set(cands.filter((c) => c.arm === a).map((c) => c.pr)).size };
   const reArm = (N) => { const o = { NEAR: 0, FAR: 0 }; for (const c of cands) if (c.dist !== null && c.arm !== 'EXCLUDED_NO_LINE') o[c.dist <= N ? 'NEAR' : 'FAR']++; return o; };
   const perRepo = {}, perPr = {};
   for (const c of cands) { const r = (perRepo[c.repo] = perRepo[c.repo] || {}); r[c.arm] = (r[c.arm] || 0) + 1; const q = (perPr[c.pr] = perPr[c.pr] || {}); q[c.arm] = (q[c.arm] || 0) + 1; }
-  return { N: N_DEFAULT, arms: by, untouched_sampled: sampled, sensitivity: { 10: reArm(10), 20: reArm(20), 40: reArm(40) }, unresolved_prs: prs.filter((p) => p.error).map((p) => p.replay_id), per_repo: perRepo, per_pr: perPr };
+  return { N: N_DEFAULT, arms: by, sensitivity: { 10: reArm(10), 20: reArm(20), 40: reArm(40) }, unresolved_prs: prs.filter((p) => p.error).map((p) => p.replay_id), per_repo: perRepo, per_pr: perPr };
 }
 
 function cmdCandidates() {
   const { prs, cands } = replayCandidates();
-  const near = cands.filter((c) => c.arm === 'NEAR').length, unt = cands.filter((c) => c.arm === 'UNTOUCHED').sort((a, b) => a.id.localeCompare(b.id));
-  // ponytail: UNTOUCHED is a structural zero, so only a NEAR-sized seed-1 sample is run
-  const pick = unt.length > near ? new Set(shuffle([...unt], rng(1)).slice(0, near).map((c) => c.id)) : new Set(unt.map((c) => c.id));
-  for (const c of cands) c.in_oracle_set = c.arm === 'NEAR' || c.arm === 'FAR' || c.arm === 'UNIT_TOUCHED_WEAK' || pick.has(c.id);
-  const out = { generated_by: 'node eval/f2p/f2p.js candidates', reps_by_run: prs[0].runs, summary: summarize(cands, prs, pick.size), prs, candidates: cands.map(({ fields, ...c }) => c) };
+  for (const c of cands) c.in_oracle_set = c.arm === 'NEAR' || c.arm === 'FAR' || c.arm === 'UNIT_TOUCHED_WEAK'; // UNTOUCHED was not run: structural zero by construction
+  const out = { generated_by: 'node eval/f2p/f2p.js candidates', reps_by_run: prs[0].runs, summary: summarize(cands, prs), prs, candidates: cands.map(({ fields, ...c }) => c) };
   fs.writeFileSync(path.join(__dirname, 'holdout2-candidates.json'), JSON.stringify(out, null, 1) + '\n');
   fs.mkdirSync(F2P, { recursive: true });
   fs.writeFileSync(path.join(F2P, 'holdout2-fields.json'), JSON.stringify(Object.fromEntries(cands.map((c) => [c.id, c.fields])), null, 1)); // verbatim finding text stays outside the repo
@@ -179,8 +176,9 @@ function cmdPower() {
 }
 
 if (require.main === module) {
-  const cmd = process.argv[2];
-  const cmds = { candidates: cmdCandidates, power: cmdPower };
-  if (!cmds[cmd]) { console.error('usage: f2p.js candidates | power | export | packets | run | report'); process.exitCode = 2; } else cmds[cmd]();
+  const [cmd, ...args] = process.argv.slice(2), H = () => require('./harness');
+  const cmds = { candidates: cmdCandidates, power: cmdPower, export: () => H().cmdExport(), packets: () => H().cmdPackets(), setup: () => H().cmdSetup(args[0], args[1]), baseline: () => H().cmdBaseline(), try: () => H().cmdTry(args[0]),
+    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.slice(1)) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport() };
+  if (!cmds[cmd]) { console.error('usage: f2p.js candidates | power | export | packets | setup <repo> <sha> | baseline | try <id> | run [--mutation] [id|pr...] | report'); process.exitCode = 2; } else cmds[cmd]();
 }
 module.exports = { resolveFix, hunks, distance, classify, siblings, unitTouched, findingId, summaryBody, ARMS, EV, F2P, ROOT, cloneOf, readJson, sha, powerTable, perPr };

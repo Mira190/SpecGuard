@@ -33,12 +33,12 @@ const tree = (runs) => (runs.every((r) => r.outcome === runs[0].outcome) ? runs[
 // Order: error -> invalid; throw on fixed -> invalid; buggy throws -> invalid unless all production-origin (then verified_throw / api_shift); mixed -> flaky; then the assertion-only table.
 function verdict(buggy, fixed, ctx = {}) {
   const err = [...buggy, ...fixed].find((r) => r.outcome === 'error');
-  if (err) return { verdict: 'invalid', reason: err.msg || 'compile, import or collection error' };
-  if (fixed.some((r) => r.outcome === 'throw')) return { verdict: 'invalid', reason: 'non-assertion throw on fixed tree' };
+  if (err) return { verdict: 'invalid', subtype: 'compile', reason: err.msg || 'compile, import or collection error' };
+  if (fixed.some((r) => r.outcome === 'throw')) return { verdict: 'invalid', subtype: 'throw_on_fixed', reason: 'non-assertion throw on fixed tree' };
   const th = buggy.filter((r) => r.outcome === 'throw');
   if (th.length) {
     const bad = th.find((r) => r.origin !== 'production');
-    if (bad) return { verdict: 'invalid', reason: `throw not from code under test (${bad.origin || 'unknown'})` };
+    if (bad) return { verdict: 'invalid', subtype: bad.origin === 'bad_call' ? 'bad_call' : 'test_setup', reason: `throw not from code under test (${bad.origin || 'unknown'})` };
     if (tree(buggy) !== 'throw' || tree(fixed) === 'mixed') return { verdict: 'flaky', reason: 'mixed results across repeats' };
     if (tree(fixed) !== 'pass') return { verdict: 'not_discriminating', reason: 'throws on buggy, fails by assertion on fixed' };
     return { verdict: ctx.apiShift ? 'api_shift' : 'verified_throw', reason: 'throw in production code on buggy, pass on fixed', frame: th[0].frame };

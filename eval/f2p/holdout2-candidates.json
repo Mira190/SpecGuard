@@ -29,7 +29,6 @@
     "prs": 0
    }
   },
-  "untouched_sampled": 38,
   "sensitivity": {
    "10": {
     "NEAR": 28,
@@ -858,7 +857,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "6a7f3a2b3d85dd739f0d7e879492dc98dc7612b1e07ceb73ebb1d24a5aef41da",
@@ -906,7 +905,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "efbac9b60d44ced57e274761183fcef17508ffebf19baf9558f3f135acd7e936",
@@ -954,7 +953,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "33e2317414e9757f64e993d1879a06a31df5129fc9b38f8411a1c25522768efe",
@@ -1090,7 +1089,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "cded64ee7e8bc01a4a2a47489e99d6f7ad08d0684873355927ffb21d7fe7dde1",
@@ -1252,7 +1251,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "2ad06a6b70b4331342986719962a54d683dc305ffc4a85c0fa18760f9dfe79ce",
@@ -1274,7 +1273,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "eebb546114ab5ed2d3e1d6d88c2edb1326a4eb98061381578a5e3a519aebf5e6",
@@ -1318,7 +1317,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "26215d14b8c8b49c67300e9e16304c7372b7fcb240be0204b860497083e75be7",
@@ -1388,7 +1387,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "10508c746d9c44d134e9609557b1f81c6127a40ac4912fc8917d36ea508ae200",
@@ -1436,7 +1435,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "5077617935b47f726cfe86a8a413170c8a7337e22e6b707251ac85ced28b42c6",
@@ -1460,7 +1459,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "9b43659ef9e16fb6889533f19b622f3121075424d7b669bc2dc1a6c603305a8f",
@@ -1504,7 +1503,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "5e8cf52e3f34ff051f74655e898fe2a721bc6fcf437e68ba43a2f1a435697d83",
@@ -1526,7 +1525,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "ebf49559343b08ce12cccc2f7e1f38f189a0b6aeb0c9fdd5e8b692624f0cb74b",
@@ -1592,7 +1591,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "1b8c4434d02b8c38100bbb371dd9a20e85302507fd840c55c4f3be37572e5ece",
@@ -1746,7 +1745,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "89cfe9100cd988eec7719083cb962b1c5e3e3526a080f5ac6eeac15d3523ad0a",
@@ -2498,7 +2497,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "f28804c730df6a53d0940fa3c45580095db2f54f1f9212ba5a90373609feafb0",
@@ -2520,7 +2519,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "3f82f202f818d0737ba85152fe6f00db65d99353476492497d68e9573ed6f9c0",
@@ -2586,7 +2585,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "035200064e54a9ff6e6867fc27a043ddbf6e830bf603bc00383d60619a3eea89",
@@ -2630,7 +2629,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "dbe45a36e5e9371964d23cc801ee155b43e7d7dfd68f78ce229315377bbbd72b",
@@ -2652,7 +2651,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "c3c3391fa8f3c8174f3c4d7fbec248fa099ee4bc2cb8ce30c94c3e6ce3cc853a",
@@ -2674,7 +2673,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "a3388dcfab37cb49362d2ecab1a286e5b2d93be02421e0549d2661c8f9f7df3d",
@@ -2762,7 +2761,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "8bfb85e7aa0e254b651c149193bb8aedc1823d92ef2203e05644cb3dc8cea8e6",
@@ -2983,7 +2982,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "06c48a2365b498852c98f65fa3b6116a22ad132868bf105cd9b1a72a999dc378",
@@ -3072,7 +3071,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "b41bf0668a125e7f41b01f63ef6f4ea06fd1efaed3d021bd24b5dea11f3e2351",
@@ -3094,7 +3093,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "9d3159a7cd841e67647faa3be2db99bb8432f3c3419546d524b074f2686e0f8c",
@@ -3116,7 +3115,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "936564d881307facbbeb4e82bccfffadf12efd16edfc1ee78a42bf6f21b83a4f",
@@ -3138,7 +3137,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "f520c52e0b00817432ffc1d6e914b1ff7e70afe330b708b6106df746f2a3e1e7",
@@ -3226,7 +3225,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "8eb412eff104e5e9a042e674d5a349cc373d15b3b4fa6cced244834b2894b796",
@@ -3358,7 +3357,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "cbe4fbbee2d8b03dee967777d60496e2808fe938522ab96c851f71f25050597c",
@@ -3600,7 +3599,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "56999246d798924c3a55ad2cb855245a0fe37792321e7a6e0671aa033ee7ff00",
@@ -3622,7 +3621,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "71952cff8a45235fe1986e33013ed8b44c4a0d3a1aa0d3af31595675c78666b7",
@@ -3710,7 +3709,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "e3d55f4ee5cc2387b1ced6edb1db9f064e9e279d197c2a5ec00189c535e4f38b",
@@ -3866,7 +3865,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "b01bc3685a322324f9f7108fcdd522fe9a64653ebcb236eadc98b8f73696f479",
@@ -3976,7 +3975,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "6be4258765ce7c9611094816493f457811d925b9367f7d25f3d112cc402c74b2",
@@ -3998,7 +3997,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "2b5972894e6403df82a0bc59c4b99a3a8a8f8e7c61a28f4b5a1b6677ecd4d8d3",
@@ -4087,7 +4086,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "79e11a47e7608d8d2d85ffb32c9e776e41a83eb54b413cf9f81dedaae643f718",
@@ -4153,7 +4152,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "600ba5037c26c8bc5cdf403668899a670f2195906fb1a4214a15323f47c7942c",
@@ -4977,7 +4976,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "dcad675d202f87bb3ab01ef91b43f72e7bee6e0471bb3610c65b7fccc3cb2ad2",
@@ -4999,7 +4998,7 @@
    "fix_touched_file": false,
    "arm": "UNTOUCHED",
    "dist": null,
-   "in_oracle_set": true
+   "in_oracle_set": false
   },
   {
    "id": "dab6f0041e2ad20180ad0263bbf5da68fc0fe9afd3725af23a5c830c0d7f2b64",

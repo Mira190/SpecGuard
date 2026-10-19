@@ -22,7 +22,7 @@ Hunks = old-side ranges of `git diff --no-renames -U0 <parent> <fix>` (a pure in
 
 - NEAR (treatment): the cited path is a file the fix touched and the distance is <= 20.
 - FAR (primary control): the cited path is a file the fix touched and the distance is > 20 for every hunk (a touched file with no old-side hunk, i.e. added by the fix, is FAR). Same file, not about this fix, so it can pass.
-- UNTOUCHED: the cited path was not touched by the fix. Run through the same pipeline and reported as a third column "structural zero, not a null". Never used in a comparison. If larger than NEAR, a seed-1 random sample of NEAR's size is run (mulberry32 over the pool sorted by id, Fisher-Yates); the pool size is reported.
+- UNTOUCHED: the cited path was not touched by the fix. UNTOUCHED was not run: structural zero by construction.
 - Unit-touched weak_test: a `weak_test` whose cited test file was not touched but whose unit source file (same directory, same stem with the `.test`/`.spec`/`_test`/`test_` marker removed) was. Own subgroup, reported apart, in neither NEAR nor FAR.
 - Excluded, no line: a finding on a touched file with no integer line cannot be placed; counted and reported, not run.
 
@@ -36,8 +36,7 @@ Counts (actual, from `holdout2-candidates.json`):
 |---|---|---|
 | NEAR | 38 (35 missing_test, 3 weak_test) | 14 |
 | FAR | 62 (45 missing_test, 17 weak_test) | 20 |
-| UNTOUCHED pool | 89 (78 missing_test, 11 weak_test) | 23 |
-| UNTOUCHED run (seed-1 sample of 38) | 38 | |
+| UNTOUCHED pool (for the record, not run) | 89 (78 missing_test, 11 weak_test) | 23 |
 | unit-touched weak_test | 0 | 0 |
 | excluded, no line | 0 | 0 |
 
@@ -59,7 +58,7 @@ Rule fixed in advance: if the MDD at p0 = 0.05 is greater than 30 pp the compari
 
 ### Blinding (and its limits)
 
-Writers (phase B, separate agents) get one packet per PR: the finding fields verbatim (kind, title, body/rationale, counterexample and quote if present, path, line), the exported buggy tree path, the repo test command and where to save the test. A packet does NOT show the fix title, fix diff, fix commit message, bug card, the fix-touched flag, the distance or the arm; NEAR, FAR and UNTOUCHED findings are mixed in each packet and shuffled with seed 1. The buggy tree has no history. Writers may run the repo's tests on the buggy tree. Limits: the tree is the real project, so a writer can reason about likely bugs from the code; the finding text was produced from the introducing PR, which a writer might recognise; the fixed tree is never shown; nothing stops a writer fitting a test to the finding wording rather than the defect, which the claim-match step checks. A finding's own location in the buggy tree hints at nothing about the arm beyond what the finding says.
+Writers (phase B, separate agents) get one packet per PR: the finding fields verbatim (kind, title, body/rationale, counterexample and quote if present, path, line), the exported buggy tree path, the repo test command and where to save the test. A packet does NOT show the fix title, fix diff, fix commit message, bug card, the fix-touched flag, the distance or the arm; NEAR and FAR findings are mixed in each packet and shuffled with seed 1. The buggy tree has no history. Writers may run the repo's tests on the buggy tree. Limits: the tree is the real project, so a writer can reason about likely bugs from the code; the finding text was produced from the introducing PR, which a writer might recognise; the fixed tree is never shown; nothing stops a writer fitting a test to the finding wording rather than the defect, which the claim-match step checks. A finding's own location in the buggy tree hints at nothing about the arm beyond what the finding says.
 
 ### Running
 
@@ -87,7 +86,7 @@ For every `verified` test a separate labeller agent sees the finding text, the t
 ### Headline measures
 
 - Primary: NEAR vs FAR rate of (`verified` and `claim_match = yes`) over runnable findings (runnable = not `unrunnable`). Report each rate with a Wilson 95% interval, the difference with a two-sided Fisher exact test at alpha 0.05, and a PR-cluster bootstrap 95% interval for the difference (seed 1, 2000 resamples of PRs). Findings are clustered by PR, so the bootstrap interval governs interpretation.
-- Also: `verified` with `claim_match` no and with unsure, reported separately; `flaky`, `reversed`, `invalid`, `not_discriminating`, `unrunnable` counts per arm and per repo; the UNTOUCHED column ("structural zero, not a null"); the unit-touched weak_test subgroup; the N = 10 / 40 sensitivity table.
+- Also: `verified` with `claim_match` no and with unsure, reported separately; `flaky`, `reversed`, `invalid`, `not_discriminating`, `unrunnable` counts per arm and per repo; the unit-touched weak_test subgroup; the N = 10 / 40 sensitivity table.
 - NEAR PRs with at least one headline hit / PRs with a runnable NEAR finding, Wilson 95%, noting n below 30 when fewer than 30 PRs are runnable (NEAR covers 14 PRs, so n < 30 is certain).
 - Arms are never pooled.
 
@@ -138,3 +137,18 @@ Rule fixed in advance: the clustered MDD at p0 = 0.05 and ICC = 0.3 decides. If 
 Amended labeller prompt (the first sentence of the answer rule and the inputs change; everything else is as before):
 
 > You are checking whether a test actually tests what a code-review finding claimed. Input: (1) a finding (title, body, path, line, optional counterexample), (2) a test file, (3) the failing assertion or the thrown error, and its top production frame, when the test ran on a version that has a defect. Question: is the subject of the failing assertion or thrown error the same behaviour the finding says is untested or weakly tested? Answer `yes` if it checks the behaviour the finding names; `no` if the test fails for a different behaviour than the finding claims (it merely happens to fail on the defect); `unsure` if you cannot tell from this material. Do not guess what the defect was. Output exactly: `claim_match: yes|no|unsure` then `reason: <one line>`.
+
+### Reporting commitments (amendment 2)
+
+- `report` gives per-arm (NEAR / FAR) counts for each exclusion class: `api_shift`, invalid by bad call, invalid by test/setup/fixture throw, invalid by throw on fixed, other invalid, `flaky`, `unrunnable` (invalid by compile/import/collection error is listed too).
+- Reason: a NEAR fix touches nearby code and is more likely to change signatures, so the exclusions can bias NEAR downward.
+- One sensitivity line per measure for NEAR and FAR: "every excluded test (api_shift, and the invalid classes except compile/import/collection error) whose claim_match is yes is counted as verified". To support this the labeller also labels those excluded tests (same prompt, same inputs; for a throw the thrown error and its top frame).
+
+### Scope and isolation (amendment 3)
+
+- UNTOUCHED was not run: structural zero by construction. No packet and no test exists for it; the pool count (89) stays in the counts table for the record. Scope is NEAR + FAR (100 findings in 29 PRs) and the 16 hono mutation-arm findings. A PR whose only findings were UNTOUCHED has no packet.
+- `export` writes only buggy trees, to `<evidence>/f2p/trees/<id>/buggy`; packets name only that path. No fixed tree is written under `trees/`.
+- Fixed runs: for Go and Python the fixed tree is exported with `git archive` into a fresh temp directory after the writer has finished, the 3 fixed repeats run there, and the directory is deleted. For JS/TS monorepos dependencies are installed once in a work directory (`<evidence>/f2p/work/<repo>`), because workspace links resolve to real paths inside the install tree; there the fixed runs overlay the fix's changed files (read with `git show`) onto the work directory, run, and the directory is restored to its base commit. In both cases fixed sources exist only during the fixed runs, and never in the writer-visible tree or packet.
+- Before any fixed run, `run` records the sha256 of every submitted test file in `results.json` (`test_sha256_frozen`). It refuses to run when a test file differs from the recorded hash, also on a later re-run.
+- A writer may iterate on the buggy tree until its test runs (no compile/collection error); the submitted version is frozen and is not changed after the fixed runs.
+- Limit, stated honestly: the shared clones under `<evidence>/repos` hold full history, including the fix. Writers are instructed to read only their packet and buggy tree, but nothing enforces it at the filesystem level. For hono the mutants are applied by the harness at run time only; the writer gets the unmutated tree.

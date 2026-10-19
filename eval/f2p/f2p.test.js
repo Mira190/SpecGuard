@@ -70,3 +70,46 @@ test('stats: Fisher, Wilson and the clustered MDD behave', () => {
   const small = mdd([3, 3, 3, 3], [3, 3, 3, 3], 0.05, { icc: 0.3, sims: 60, reps: 100 });
   assert.ok(small === null || small > 0.3); // 24 findings cannot detect small effects
 });
+
+test('report: exclusion classes per arm and the excluded-yes sensitivity line', () => {
+  const report = require('./report');
+  const rows = [
+    { id: 'a', pr: 'p1', verdict: 'verified', claim_match: 'yes' },
+    { id: 'b', pr: 'p1', verdict: 'api_shift', claim_match: 'yes' },
+    { id: 'c', pr: 'p2', verdict: 'invalid', subtype: 'bad_call', claim_match: 'yes' },
+    { id: 'd', pr: 'p2', verdict: 'invalid', subtype: 'compile', claim_match: 'yes' },
+    { id: 'e', pr: 'p3', verdict: 'verified', claim_match: 'no' },
+    { id: 'f', pr: 'p3', verdict: 'unrunnable' },
+    { id: 'g', pr: 'p4', verdict: 'flaky' },
+    { id: 'h', pr: 'p4', verdict: 'verified_throw', claim_match: 'yes' },
+    { id: 'i', pr: 'p5', verdict: 'invalid', subtype: 'throw_on_fixed' },
+  ];
+  const arm = { a: 'NEAR', b: 'NEAR', c: 'NEAR', d: 'NEAR', e: 'NEAR', f: 'NEAR', g: 'FAR', h: 'FAR', i: 'FAR' };
+  const t = report.tables(rows, arm);
+  assert.strictEqual(t.NEAR.exclusions.api_shift, 1);
+  assert.strictEqual(t.NEAR.exclusions.invalid_bad_call, 1);
+  assert.strictEqual(t.NEAR.exclusions.unrunnable, 1);
+  assert.strictEqual(t.FAR.exclusions.flaky, 1);
+  assert.strictEqual(t.FAR.exclusions.invalid_throw_on_fixed, 1);
+  assert.strictEqual(t.NEAR.runnable, 5);
+  assert.strictEqual(t.NEAR.primary, 1); // only verified + yes
+  assert.strictEqual(t.NEAR.verified_no, 1);
+  assert.strictEqual(t.NEAR.sensitivity, 3); // verified + api_shift + bad_call; compile error is never counted
+  assert.strictEqual(t.FAR.secondary, 1);
+  assert.match(report.format(t, { primary: report.compare(t, rows, arm, 'primary') }), /api_shift\t1\t0/);
+});
+
+test('run refuses a test file that changed after it was frozen', () => {
+  const { freeze } = require('./harness');
+  const row = freeze({ id: 'x' }, { 'a.test.ts': 'h1' });
+  assert.deepStrictEqual(row.test_sha256_frozen, { 'a.test.ts': 'h1' });
+  assert.doesNotThrow(() => freeze(row, { 'a.test.ts': 'h1' }));
+  assert.throws(() => freeze(row, { 'a.test.ts': 'h2' }), /changed since it was frozen/);
+});
+
+test('results.json carries no test text', () => {
+  const p = require('node:path').join(__dirname, 'results.json');
+  if (!require('node:fs').existsSync(p)) return;
+  const txt = require('node:fs').readFileSync(p, 'utf8');
+  assert.ok(!/\b(describe|it|test)\(|expect\(|assert\./.test(txt));
+});
