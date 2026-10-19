@@ -119,6 +119,7 @@ async function finishReal({ ids, out, log = console.log }) {
 // Manifest entry -> { id, repo, number, base, head, title, body }. holdout-pairs.json: the INTRODUCING PR of a replay_eligible pair; holdout-clean.json: a clean PR.
 function entries(manifestPath) {
   const j = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (j.bugs) return [...j.bugs.map((b) => [b, b.introducing, 'bug']), ...j.controls.map((c) => [c, c.sha, 'control'])].map(([x, head, set]) => ({ id: `${x.clone}-${x.pr}`, repo: x.repo, clone: x.clone, number: x.pr, base: x.base || `${head}~1`, head, title: x.title || x.pr_title || '', body: x.body || x.pr_body || '', set })); // testgap-confirm-build.js
   if (j.pairs) return j.pairs.filter((p) => p.replay_eligible).map((p) => ({ id: p.replay_id, repo: p.repo, number: p.introducing.number, base: p.introducing.base, head: p.introducing.head, title: p.introducing.pr_title, body: p.introducing.pr_body, fix: p.fix.number }));
   return j.clean.map((c) => ({ id: c.id, repo: c.repo, number: c.number, base: c.base, head: c.head, title: c.pr_title, body: c.pr_body }));
 }
@@ -178,21 +179,27 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
   return result;
 }
 
-// Local batch over saved replay dirs (<dl>/<run>/replay-<id>, each with result.json {id, repo}): sequential, rep-major (rep k writes <out>/rep<k>/<id>), at most `cap` engine runs, resumes by skipping ids whose result.json is already valid,
-// stops at the first invalid run (a dead key must not burn the rest) and before a run that could pass `maxTotal` (spent so far over every result.json under out + this run's `budget`, its hard pre-flight bound).
-async function batch({ dirs, manifests, repos, out, cap, maxTotal, reps = 1, model = 'claude-haiku-5-5', budget, engine = runEngine, log = console.log }) {
+// Local batch over saved replay dirs (<dl>/<run>/replay-<id>, each with result.json {id, repo}) or `list` (entries, e.g. from a confirm-corpus manifest): sequential, rep-major (rep k writes <out>/rep<k>/<id>), at most `cap` engine runs.
+// Resume skips every id with a result.json, except one marked retryable. An invalid run is never re-rolled: only a run that never reached the model for an account/config reason (engine-error auth/quota/config/model/rate) is retryable, and it stops the batch (a dead key must not burn the rest);
+// any other invalid result is recorded and the batch goes on. A retryable result is renamed result.attempt-<n>.json before its re-run, and spent sums result.json + result.attempt-*.json under out. Stops before a run that could pass `maxTotal` (spent + this run's `budget`).
+const RETRYABLE = new Set(['auth', 'quota', 'config', 'model', 'rate']);
+async function batch({ dirs, list, manifests, repos, out, cap, maxTotal, reps = 1, model = 'claude-haiku-5-5', budget, engine = runEngine, log = console.log }) {
   const subs = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((x) => x.isDirectory()).map((x) => path.join(d, x.name)); } catch { return []; } };
-  let spent = [out, ...subs(out)].flatMap(subs).reduce((t, d) => t + (readJson(path.join(d, 'result.json'), {}).usage?.cost_usd || 0), 0), ran = 0, skipped = 0, stopped = null;
-  const todo = dirs.map((d) => { const id = readJson(path.join(d, 'result.json'), {}).id; const entry = manifests.flatMap(entries).find((e) => e.id === id); if (!entry) throw new Error(`no manifest entry for ${id}`); return entry; });
+  const cost = (f) => readJson(f, {}).usage?.cost_usd || 0, files = (d) => { try { return fs.readdirSync(d).filter((n) => /^result(\.attempt-\d+)?\.json$/.test(n)).map((n) => path.join(d, n)); } catch { return []; } };
+  let spent = [out, ...subs(out)].flatMap(subs).flatMap(files).reduce((t, f) => t + cost(f), 0), ran = 0, skipped = 0, stopped = null;
+  const todo = list || dirs.map((d) => { const id = readJson(path.join(d, 'result.json'), {}).id; const entry = manifests.flatMap(entries).find((e) => e.id === id); if (!entry) throw new Error(`no manifest entry for ${id}`); return entry; });
   outer: for (let k = 1; k <= reps; k++) for (const entry of todo) {
-    const id = entry.id, o = path.join(out, `rep${k}`);
-    if (readJson(path.join(o, id, 'result.json'), {}).valid === true) { skipped++; log(`${id} rep${k}: done, skipped`); continue; }
+    const id = entry.id, o = path.join(out, `rep${k}`), rf = path.join(o, id, 'result.json'), prev = readJson(rf);
+    if (prev && !prev.retryable) { skipped++; log(`${id} rep${k}: done, skipped`); continue; }
     if (ran >= cap) break outer;
     if (spent + +budget > maxTotal) { stopped = 'budget'; log(`total cap: spent $${spent} of $${maxTotal}`); break outer; }
-    const r = await runReal({ entry, repoDir: path.join(repos, entry.repo.split('/').pop()), out: o, model, budget, engine }); ran++; spent += r.usage.cost_usd;
+    if (prev) { let n = 1; while (fs.existsSync(path.join(o, id, `result.attempt-${n}.json`))) n++; fs.renameSync(rf, path.join(o, id, `result.attempt-${n}.json`)); } // its cost stays in spent
+    let r; try { r = await runReal({ entry, repoDir: path.join(repos, entry.clone || entry.repo.split('/').pop()), out: o, model, budget, engine }); } catch (e) { // prepare failed (bad sha, clone): record, never re-roll
+      r = { id, valid: false, engine_status: 'error', invalid_reason: `run failed: ${String(e.message || e).split('\n')[0]}`, usage: {} }; fs.mkdirSync(path.join(o, id), { recursive: true }); fs.writeFileSync(rf, JSON.stringify(r, null, 2) + '\n'); }
+    ran++; const c = r.usage?.cost_usd || 0; spent += c;
     fs.rmSync(path.join(o, id, 'repo'), { recursive: true, force: true }); // a full checkout per PR and rep (100+ MB on gitea/langchain); nothing reads it after post.js, and replay-arms/two-posts rebuild it from --repos
-    log(`${id} rep${k}: ${r.engine_status} cost=$${r.usage.cost_usd} ${r.valid ? 'valid' : `invalid: ${r.invalid_reason}`}`);
-    if (!r.valid) { stopped = id; break outer; }
+    log(`${id} rep${k}: ${r.engine_status} cost=$${c} ${r.valid ? 'valid' : `invalid: ${r.invalid_reason}`}`);
+    if (!r.valid && RETRYABLE.has(readLines(path.join(o, id, 'ctx', 'engine-error'))[0])) { fs.writeFileSync(rf, JSON.stringify({ ...r, retryable: true }, null, 2) + '\n'); stopped = id; break outer; }
   }
   return { ran, skipped, stopped, spent };
 }
@@ -204,7 +211,9 @@ const USAGE = `Usage:
   node eval/replay.js run     --manifest FILE --id ID --repo DIR --out DIR [--model M] [--budget USD] [--max-output N] [--timeout MIN] [--trace auto|off]
                               prepare -> real src/engines/claude.sh (needs ANTHROPIC_API_KEY) -> finish -> <out>/<id>/result.json
   node eval/replay.js batch   --out DIR --repos DIR --cap N --budget USD --max-total USD [--reps N] [--model M] [--manifest a.json,b.json] DIR...
-                              local sequential real-engine runs over saved replay dirs (<dl>/<run>/replay-<id>); writes <out>/rep<k>/<id>; resumes; stops at the first invalid run or the total cap
+  node eval/replay.js batch   --out DIR --repos DIR --cap N --budget USD --max-total USD [--reps N] [--model M] --manifest FILE --ids all|a,b     (no DIRs: confirm-corpus manifest, in manifest order)
+                              local sequential real-engine runs over saved replay dirs (<dl>/<run>/replay-<id>) or manifest entries; writes <out>/rep<k>/<id>; resumes (skips every result.json except retryable: true);
+                              never re-rolls an invalid PR: only an account/config error (auth, quota, config, model, rate) is retryable and stops the batch (exit 1), as does the total cap
 No pass/fail: findings are adjudicated by a human against the later fix (eval/replay/README.md, "Running on the real engine").`;
 
 async function main() {
@@ -230,9 +239,10 @@ async function main() {
   }
   if (cmd === 'batch') {
     const pos = (x) => +x > 0 ? +x : null, cap = pos(o.cap), maxTotal = pos(o['max-total']), reps = pos(o.reps), budget = process.argv.includes('--budget') ? pos(o.budget) : null;
-    if (!o.out || !o.repos || !cap || !maxTotal || !reps || !budget || positionals.length < 2) { console.log(USAGE); process.exit(2); }
+    if (!o.out || !o.repos || !cap || !maxTotal || !reps || !budget || (positionals.length < 2 && !(o.manifest && o.ids))) { console.log(USAGE); process.exit(2); }
     const manifests = o.manifest ? o.manifest.split(',') : ['holdout2-pairs.json', 'holdout2-clean.json'].map((f) => path.join(__dirname, 'replay', f));
-    const r = await batch({ dirs: positionals.slice(1), manifests, repos: o.repos, out: o.out, cap, maxTotal, reps, model: o.model, budget: o.budget });
+    let list; if (positionals.length < 2) { const all = o.manifest.split(',').flatMap(entries); list = o.ids === 'all' ? all : o.ids.split(',').map((id) => all.find((e) => e.id === id) || (() => { throw new Error(`no such id: ${id}`); })()); list = all.filter((e) => list.includes(e)); } // manifest order
+    const r = await batch({ dirs: positionals.slice(1), list, manifests, repos: o.repos, out: o.out, cap, maxTotal, reps, model: o.model, budget: o.budget });
     console.log(JSON.stringify(r)); if (r.stopped) process.exit(1); return;
   }
   if (cmd === 'revalidate' && o.out && o.id) return o.id.split(',').forEach((id) => console.log(`${id}: ${revalidate(path.resolve(o.out, id)) || 'valid'}`));
