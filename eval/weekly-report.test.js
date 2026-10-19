@@ -6,6 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { findingsOf, copilotOutcome, patchTouches, analyze, render, quantile } = require('./weekly-report');
 const { exportRows, toCsv } = require('./label-export');
+const { armOf } = require('./assign');
 
 const D = (day, h = 0) => `2026-09-${String(day).padStart(2, '0')}T${String(h).padStart(2, '0')}:00:00Z`;
 const pr = (number, arm, hrs, extra = {}) => ({ number, created_at: D(1), merged_at: hrs == null ? null : new Date(Date.parse(D(1)) + hrs * 36e5).toISOString(), user: { login: 'dev', type: 'User' }, labels: arm == null ? [] : [{ name: `review-arm:${arm}` }], ...extra });
@@ -452,7 +453,11 @@ test('integrity: same branch opened twice, reopened PRs, and label vs salted ass
   assert.deepEqual(r.integrity.same_branch, [{ branch: 'feat/a', prs: [3, 6] }]);
   assert.deepEqual(r.integrity.reopened, [5]);
   assert.ok(r.integrity.salt.checked > 0);
-  assert.ok(r.integrity.salt.mismatches.every((m) => m.expected === arm(m.pr) && m.expected !== m.label));
+  const want = ds.prs.filter((p) => !p.user.login.includes('bot') && p.labels.some((l) => /^review-arm:/.test(l.name || l))).map((p) => ({ pr: p.number, label: armOf(p.labels), expected: arm(p.number) })).filter((m) => m.label !== m.expected);
+  assert.ok(want.length > 0 && want.length < r.integrity.salt.checked, 'fixture needs both matching and mismatching labels');
+  assert.deepEqual(r.integrity.salt.mismatches, want); // exact list, computed independently
+  const allMatch = analyze({ ...ds, prs: ds.prs.map((p) => (p.labels.some((l) => /^review-arm:/.test(l.name || l)) ? { ...p, labels: [{ name: `review-arm:${arm(p.number)}` }] } : p)) }, { salt });
+  assert.deepEqual(allMatch.integrity.salt.mismatches, []);
   const out = render(r);
   assert.match(out, /feat\/a \(#3, #6\)/);
   assert.match(out, /Closed and reopened in the window: #5/);
