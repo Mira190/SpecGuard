@@ -864,8 +864,10 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   if (!meta) { outcome('failed', 'the collection step did not produce its context.'); return finish(render({ ...shared, failure: 'the collection step did not produce its context.' })); }
   if (env.SKIP === 'true') {
     const iv0 = json('audit-inventory.json') || {}, lost = meta.scan_scope === 'all' ? ['not_inventoried', 'not_reached_cap', 'not_reached_time'].reduce((n, k) => n + (Number.isInteger(iv0[k]) && iv0[k] > 0 ? iv0[k] : 0), 0) : 0; // eligible source existed but none was reviewed (e.g. every file over the size cap): not "nothing in scope"
+    const pos = (k) => (meta.scan_scope === 'all' && Number.isInteger(meta[k]) && meta[k] > 0 ? meta[k] : 0), big = pos('docs_over_size'), nu = pos('not_unit'); // ledger: oversize documents and scan_paths files dropped by the non-unit rule are unreviewed too
     if (lost) shared.limitations = [...shared.limitations, `${plural(lost, 'eligible source file')} not reviewed (over 512 KiB or past the inventory limits); no unit was scanned`];
-    outcome(lost ? 'incomplete' : 'complete', lost ? `${plural(lost, 'eligible source file')} not reviewed and no requirement document` : '');
+    const why = [lost && `${plural(lost, 'eligible source file')} not reviewed and no requirement document`, big && `${plural(big, 'requirement document')} over 256 KiB not admitted`, nu && `${plural(nu, 'source file')} in scan_paths dropped by the default non-unit paths`].filter(Boolean).join('; ');
+    outcome(why ? 'incomplete' : 'complete', why);
     await finish(render({ ...shared, data: null }));
     // no document admitted: a stale issue must not keep claiming old results (none is created for an empty scan)
     if (wantIssue && await lookup() && mine) {
