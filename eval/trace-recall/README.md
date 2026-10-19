@@ -28,7 +28,7 @@ It is not part of CI (network). CI runs only `analyze.test.js`, which checks the
 
 **T variant.** `edits.T` is a test-only edit that replaces an exact assertion with a truthiness check (`strictEqual(1048576, x)` becomes `ok(x)`). It exists only where a test in `expect.tests` has one clear asserting line; 10 of the 12 cases have it, so test->code / test->req have 10 queries. Skipped: `hookOrder` (order is checked through a call counter across many tests, no single line) and `stringPlain` (the `text/plain; charset=utf-8` assertion in `500s.test.js` is on the error path, the others are on `reply.type()`; none pins the send(string) default). Ground truth is the case's own `expect.code` / `expect.requirement`. The five cases `connectionTimeout`, `keepAliveTimeout`, `maxParamLength`, `ignoreTrailingSlash`, `pluginTimeout` share one T edit (the `deepStrictEqual(Fastify().initialConfig, fastifyDefaultOptions)` line in `initial-config.test.js`), so those five are one weakened test, not five independent ones.
 
-What a test-only PR retrieves today: nothing. `src/trace.js` drops test hunks from `code_to_requirement` (`codeHunks(...).filter(!h.is_test ...)`, trace.js:981) and a test file is no requirement, so no criterion exists for `requirement_to_code`. `collect.sh`'s `candidates()` skips test files as changed files (collect.sh:287). Both outputs are empty, so T scores 0 by construction. This is the measured gap, not a harness fault: nothing in `src/` was changed to make T pass. The deleted/weakened-assertion signal comes only from `src/leads.js` (`assertionDelta`), which names the test, not the code behaviour or requirement.
+Before the fix a test-only PR retrieved nothing: `src/trace.js` dropped test hunks from `code_to_requirement` and a test file is no requirement, so no criterion existed for `requirement_to_code`. Now `weakenedQueries` (trace.js) takes the removed or weakened assertions that `src/leads.js` `assertionDelta` flags (the one heuristic, reused) and builds a query from the removed line: its literals and subject identifiers. A removed line with no literal makes no query. The query ranks requirement items and descriptive blocks that hold one of its literals (test->req, emitted as `code_to_requirement` hunks on the test file) and searches the code windows, keeping those that hold a literal (test->code, emitted as `requirement_to_code` rows `T1`.. with no tests). Entries carry `via: "test"` and a `note`. They are appended after the real code hunks and S* rows, under the same hunk limit and budget.
 
 `code_file_level` is the same req->code retrieval counted by file only. It is secondary: a file is not a location.
 
@@ -46,14 +46,16 @@ Every rate prints as `k/n` next to the percentage. A query with no relevant item
 
 **MRR high does not mean all entries were found.** A behaviour that must change in three places can have MRR 1 (the first candidate is right) and Recall 1/3 and All-required 0. Read MRR as "how fast the first right place appears", Recall as "how much of the impact is covered", and All-required as "is the evidence complete". Quote them together.
 
-## T result (pinned fastify, main at the time of this PR)
+## T result (pinned fastify, after the weakened-assertion trace)
 
-| Direction | Hit@3 | Recall@K | MRR@10 |
-|---|---|---|---|
-| test->code | 0/10 | 0/26 relevant code ranges | 0 |
-| test->req | 0/10 | 0/10 | 0 |
+| Direction | Hit@3 before | Hit@3 after | Recall@K after | MRR@10 after |
+|---|---|---|---|---|
+| test->code | 0/10 | 2/10 | 2/26 relevant code ranges | 0.200 |
+| test->req | 0/10 | 3/10 | 3/10 | 0.150 |
 
-All 10 T variants ran with status ok and emitted empty `requirement_to_code`, `code_to_requirement` and `test-candidates.txt`. The req->code and code->req numbers on the same run, computed with the pre-change `analyze.js` on the R/C/RC variants only, are identical to the new `analyze.js` (all fields compared). These 10 are 10 cases (at most 6 distinct weakened tests, see above), not 10 independent trials; the result is all-or-nothing because the pipeline has no test-to-code path.
+False locations: 0 of the 2 emitted T code windows miss every `expect.code` range (`bodyLimit` and `redirect302` hit; the other 8 variants emit no code window). All 3 emitted test->req hunks (`bodyLimit`, `return503OnClosing`, `redirect302`) contain the expected doc item within their top 3; they also list other doc items of the same hunk. A literal held by over 1% of the code windows (3 at least), or by the same share of requirement items, is dropped, and so is a literal the code scan found common (`LIT_SHARE`, trace.js); a query whose literals are all dropped makes no query. This removed `notFound404` (404 is a common status code, the same class as 200). Noise check on real fastify tests, not in cases.json: removing a `statusCode, 200` line, a `content-type` `application/json` line and a `route.method, 'GET'` line emitted 3 code windows and 2-3 doc items each before the cutoff, 0 and 0 after; a `listening, true` line has no quoted or numeric literal and emitted nothing either way. The five initial-config cases stay misses by design: their one shared assertion has no literal on the line, so no query is made (identifiers alone would point at unrelated code).
+
+req->code and code->req (and test candidates) are field-for-field identical to main on all 36 R/C/RC variants (raw trace outputs compared, plus the `analyze.js` summary). These 10 are 10 cases (at most 6 distinct weakened tests), not 10 independent trials. Unit tests: `src/trace-weakened.test.js`.
 
 ## Delivered windows and the per-criterion cap (wrong_windows)
 
