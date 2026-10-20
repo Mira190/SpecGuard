@@ -1,0 +1,1067 @@
+{
+ "status": "ok",
+ "primary": "union",
+ "extended": true,
+ "seed": 20261020,
+ "queue_files": [
+  "queues.json",
+  "queues.json",
+  "queues.json"
+ ],
+ "branch_heads": {
+  "71c31b78bc7568b2112ae36e93024b2672cfc0cf": "7a6f3bf13e15ea72c80c1d60a34addbbb00008bb"
+ },
+ "funnel": {
+  "queue_len": {
+   "hono": 7,
+   "langchain": 30,
+   "sqlglot": 13
+  },
+  "frozen_before_core": {
+   "hono": 6,
+   "langchain": 6,
+   "sqlglot": 6
+  },
+  "frozen_kept": {
+   "hono": 6,
+   "langchain": 3,
+   "sqlglot": 6
+  },
+  "bugs": 40,
+  "frozen": 15,
+  "topup": 25,
+  "unfiltered": 0,
+  "controls": 30,
+  "bugs_by_repo": {
+   "hono": 15,
+   "langchain": 11,
+   "sqlglot": 14
+  },
+  "unfiltered_by_repo": {
+   "hono": 0,
+   "langchain": 0,
+   "sqlglot": 0
+  },
+  "controls_by_repo": {
+   "hono": 11,
+   "langchain": 8,
+   "sqlglot": 11
+  },
+  "control_quota": {
+   "hono": 11,
+   "langchain": 8,
+   "sqlglot": 11
+  },
+  "control_funnel": {
+   "hono": {
+    "quota": 11,
+    "pool": 60,
+    "no_pr": 9,
+    "earlier_set": 0,
+    "blamed_by_later_fix": 0,
+    "not_core": 0,
+    "taken": 11
+   },
+   "langchain": {
+    "quota": 8,
+    "pool": 208,
+    "no_pr": 0,
+    "earlier_set": 0,
+    "blamed_by_later_fix": 3,
+    "not_core": 42,
+    "taken": 8
+   },
+   "sqlglot": {
+    "quota": 11,
+    "pool": 211,
+    "no_pr": 2,
+    "earlier_set": 0,
+    "blamed_by_later_fix": 0,
+    "not_core": 0,
+    "taken": 11
+   }
+  }
+ },
+ "rows": [
+  {
+   "id": "hono-76",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "ffbcb3eeb98cb73df43a531802a8555fee2bf4fa",
+   "fixed_sha": "a192df0844724aeaf5cbc6f1ea2f8425d3f8a86a",
+   "base": "223429fa7102670c9554f7b8371cee1cef212a08",
+   "introducing": {
+    "base": "223429fa7102670c9554f7b8371cee1cef212a08",
+    "head": "ffbcb3eeb98cb73df43a531802a8555fee2bf4fa",
+    "merge_commit": "ffbcb3eeb98cb73df43a531802a8555fee2bf4fa",
+    "number": 76
+   },
+   "fix_sha": "a192df0844724aeaf5cbc6f1ea2f8425d3f8a86a",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "hono-53",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "f1c6ef07402532b17bffe62771ce84c6944cf5d4",
+   "fixed_sha": "76d5589e9b0569f4e74ec37e8dd6979455f70dfa",
+   "base": "98924ce16498a118687414b192c1d5769ab62f2c",
+   "introducing": {
+    "base": "98924ce16498a118687414b192c1d5769ab62f2c",
+    "head": "f1c6ef07402532b17bffe62771ce84c6944cf5d4",
+    "merge_commit": "f1c6ef07402532b17bffe62771ce84c6944cf5d4",
+    "number": 53
+   },
+   "fix_sha": "76d5589e9b0569f4e74ec37e8dd6979455f70dfa",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "hono-3961",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "b6957190abd1ac9cd65191a618d2dda6d300f4e6",
+   "fixed_sha": "bda46ac1147eb16d3c4c6f7e9f89b9b22a953298",
+   "base": "2552738ba337554c1c5c19e88081bc3fa9a31880",
+   "introducing": {
+    "base": "2552738ba337554c1c5c19e88081bc3fa9a31880",
+    "head": "b6957190abd1ac9cd65191a618d2dda6d300f4e6",
+    "merge_commit": "b6957190abd1ac9cd65191a618d2dda6d300f4e6",
+    "number": 3961
+   },
+   "fix_sha": "bda46ac1147eb16d3c4c6f7e9f89b9b22a953298",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "hono-1630",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "fedeb3d69600f6ae9bca7b87cd896a1b2e36647e",
+   "fixed_sha": "6efc564af9bb65bf2003c07707663555157600bc",
+   "base": "8b4392fa360f0ba5e320c6995245c9c0bf029958",
+   "introducing": {
+    "base": "8b4392fa360f0ba5e320c6995245c9c0bf029958",
+    "head": "fedeb3d69600f6ae9bca7b87cd896a1b2e36647e",
+    "merge_commit": "fedeb3d69600f6ae9bca7b87cd896a1b2e36647e",
+    "number": 1630
+   },
+   "fix_sha": "6efc564af9bb65bf2003c07707663555157600bc",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "hono-3589",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "31d6e6c20994fab65448e1c656d431cead4555f3",
+   "fixed_sha": "9ae98c9416dabf6ee3ca0f9d279df0310ce9fcb4",
+   "base": "6b6fbadbee433119c0e53ceb28c91185ec0146c2",
+   "introducing": {
+    "base": "6b6fbadbee433119c0e53ceb28c91185ec0146c2",
+    "head": "31d6e6c20994fab65448e1c656d431cead4555f3",
+    "merge_commit": "31d6e6c20994fab65448e1c656d431cead4555f3",
+    "number": 3589
+   },
+   "fix_sha": "9ae98c9416dabf6ee3ca0f9d279df0310ce9fcb4",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "hono-4314",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "cd9629d45cbd43733f7fb71d5b592d35855d86ac",
+   "fixed_sha": "08a80e2a164344040df46f00ce28600a846ebf1f",
+   "base": "083906656a3824263c83c6049d6bab63898a4f1e",
+   "introducing": {
+    "base": "083906656a3824263c83c6049d6bab63898a4f1e",
+    "head": "cd9629d45cbd43733f7fb71d5b592d35855d86ac",
+    "merge_commit": "cd9629d45cbd43733f7fb71d5b592d35855d86ac",
+    "number": 4314
+   },
+   "fix_sha": "08a80e2a164344040df46f00ce28600a846ebf1f",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "langchain-25493",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "8a71f1b41b83a4c8122ca53306fb09400ef5b537",
+   "fixed_sha": "1840b73209caa438cd7be0d0a43119e6c1f0aa15",
+   "base": "8e3e532e7dd62f4cc61753baa5954692b6cc0bb7",
+   "introducing": {
+    "base": "8e3e532e7dd62f4cc61753baa5954692b6cc0bb7",
+    "head": "8a71f1b41b83a4c8122ca53306fb09400ef5b537",
+    "merge_commit": "8a71f1b41b83a4c8122ca53306fb09400ef5b537",
+    "number": 25493
+   },
+   "fix_sha": "1840b73209caa438cd7be0d0a43119e6c1f0aa15",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "langchain-38003",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "0f1b291f423b967d922ad0fe0e9287ada11e2f02",
+   "fixed_sha": "8bc96308d0eda85720ac45ec3bfc82bdf47ecfe9",
+   "base": "77bbf8ba39c1d5f9e93b694c80019298e6916151",
+   "introducing": {
+    "base": "77bbf8ba39c1d5f9e93b694c80019298e6916151",
+    "head": "0f1b291f423b967d922ad0fe0e9287ada11e2f02",
+    "merge_commit": "0f1b291f423b967d922ad0fe0e9287ada11e2f02",
+    "number": 38003
+   },
+   "fix_sha": "8bc96308d0eda85720ac45ec3bfc82bdf47ecfe9",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "langchain-34035",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "c4b6ba254e1a49ed91f2e268e6484011c540542a",
+   "fixed_sha": "af2ed47c6f008cdd551f3c0d87db3774c8dfe258",
+   "base": "b7d1831f9d3560ed4fb45134861eef3f4544eff3",
+   "introducing": {
+    "base": "b7d1831f9d3560ed4fb45134861eef3f4544eff3",
+    "head": "c4b6ba254e1a49ed91f2e268e6484011c540542a",
+    "merge_commit": "c4b6ba254e1a49ed91f2e268e6484011c540542a",
+    "number": 34035
+   },
+   "fix_sha": "af2ed47c6f008cdd551f3c0d87db3774c8dfe258",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "sqlglot-1031",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "b9d9fd4d3870e0ce07e1009ab74518351654af11",
+   "fixed_sha": "b8333a81f02fafaa040bb3b8535f1c17eb9caf0c",
+   "base": "bb7542005b00a51555316345df53dcaec37749d7",
+   "introducing": {
+    "base": "bb7542005b00a51555316345df53dcaec37749d7",
+    "head": "b9d9fd4d3870e0ce07e1009ab74518351654af11",
+    "merge_commit": "b9d9fd4d3870e0ce07e1009ab74518351654af11",
+    "number": 1031
+   },
+   "fix_sha": "b8333a81f02fafaa040bb3b8535f1c17eb9caf0c",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "sqlglot-7560",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "cf0ffd99ef27a4a4764104feb9b1dd2af1c544ce",
+   "fixed_sha": "f62c3446d0590daea30fed77264194b53b725d24",
+   "base": "fc6e7cb093583d44ac4863d770b583e75d45f365",
+   "introducing": {
+    "base": "fc6e7cb093583d44ac4863d770b583e75d45f365",
+    "head": "cf0ffd99ef27a4a4764104feb9b1dd2af1c544ce",
+    "merge_commit": "cf0ffd99ef27a4a4764104feb9b1dd2af1c544ce",
+    "number": 7560
+   },
+   "fix_sha": "f62c3446d0590daea30fed77264194b53b725d24",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "sqlglot-8063",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "7810755168e8d57d8e5f632248779ecfed782689",
+   "fixed_sha": "cefce19186791442c9995239e1e2bd4931db863a",
+   "base": "f15c499771c44e2800338c15974c5618d5403cc7",
+   "introducing": {
+    "base": "f15c499771c44e2800338c15974c5618d5403cc7",
+    "head": "7810755168e8d57d8e5f632248779ecfed782689",
+    "merge_commit": "7810755168e8d57d8e5f632248779ecfed782689",
+    "number": 8063
+   },
+   "fix_sha": "cefce19186791442c9995239e1e2bd4931db863a",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "sqlglot-7736",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "f3ba8e4d20311c4e657f4f763c3e354fa533ba47",
+   "fixed_sha": "cb4a8214605bf038c185a6b09d2541ff39475650",
+   "base": "ffd3a1401ffd84eab83cebe593b8f3f8c1ee2992",
+   "introducing": {
+    "base": "ffd3a1401ffd84eab83cebe593b8f3f8c1ee2992",
+    "head": "f3ba8e4d20311c4e657f4f763c3e354fa533ba47",
+    "merge_commit": "f3ba8e4d20311c4e657f4f763c3e354fa533ba47",
+    "number": 7736
+   },
+   "fix_sha": "cb4a8214605bf038c185a6b09d2541ff39475650",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "sqlglot-7407",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "e27477f3aa5f555abfab046bc9c9de8062578dfc",
+   "fixed_sha": "6b12cb8444816377fe7eb8b27d492fc117e3409b",
+   "base": "2ac9a203db099d3e99c50c7fbfc5ad27a1ae9e28",
+   "introducing": {
+    "base": "2ac9a203db099d3e99c50c7fbfc5ad27a1ae9e28",
+    "head": "e27477f3aa5f555abfab046bc9c9de8062578dfc",
+    "merge_commit": "e27477f3aa5f555abfab046bc9c9de8062578dfc",
+    "number": 7407
+   },
+   "fix_sha": "6b12cb8444816377fe7eb8b27d492fc117e3409b",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "sqlglot-7873",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "0a374bf421f874d4c0618a2c710aaca14086c74f",
+   "fixed_sha": "66316e335fd617d2f3ab8c412ae7a87356431c97",
+   "base": "a8e03473fff513b126c4cb93edd3d24e3129d408",
+   "introducing": {
+    "base": "a8e03473fff513b126c4cb93edd3d24e3129d408",
+    "head": "0a374bf421f874d4c0618a2c710aaca14086c74f",
+    "merge_commit": "0a374bf421f874d4c0618a2c710aaca14086c74f",
+    "number": 7873
+   },
+   "fix_sha": "66316e335fd617d2f3ab8c412ae7a87356431c97",
+   "set": "frozen",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "hono-5199",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
+   "fixed_sha": "7075369e1f6161e04a227eba37373469c09fc743",
+   "base": "765d13b00913a2b857f4f78065996a9c86aa4eff",
+   "introducing": {
+    "base": "765d13b00913a2b857f4f78065996a9c86aa4eff",
+    "head": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
+    "merge_commit": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
+    "number": 5199
+   },
+   "fix_sha": "7075369e1f6161e04a227eba37373469c09fc743",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "langchain-34257",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "85c401f6485b21bdc474e008285499101fca9ed2",
+   "fixed_sha": "37be34be828856aed5cb72851bad844b555c67bf",
+   "base": "04ec6cacaf8ff1229650885e28399cf722852a14",
+   "introducing": {
+    "base": "04ec6cacaf8ff1229650885e28399cf722852a14",
+    "head": "85c401f6485b21bdc474e008285499101fca9ed2",
+    "merge_commit": "85c401f6485b21bdc474e008285499101fca9ed2",
+    "number": 34257
+   },
+   "fix_sha": "37be34be828856aed5cb72851bad844b555c67bf",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "sqlglot-8027",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "50bf93d568827f305cae5de7e0b4fc673b7cb842",
+   "fixed_sha": "552774469174ee686def95e6bcb2da46f61e047b",
+   "base": "ad54217900e03452313d24199ac56cc7e91c7c4d",
+   "introducing": {
+    "base": "ad54217900e03452313d24199ac56cc7e91c7c4d",
+    "head": "50bf93d568827f305cae5de7e0b4fc673b7cb842",
+    "merge_commit": "50bf93d568827f305cae5de7e0b4fc673b7cb842",
+    "number": 8027
+   },
+   "fix_sha": "552774469174ee686def95e6bcb2da46f61e047b",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-2261",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "65597a8526839a384595174b2a7445789491bfc8",
+   "fixed_sha": "75b4308496d64aed39e96fc105db233bde3d29b3",
+   "base": "e6913190b745f673b7d7fba37bdc1ccbeaf1ef87",
+   "introducing": {
+    "base": "e6913190b745f673b7d7fba37bdc1ccbeaf1ef87",
+    "head": "65597a8526839a384595174b2a7445789491bfc8",
+    "merge_commit": "65597a8526839a384595174b2a7445789491bfc8",
+    "number": 2261
+   },
+   "fix_sha": "75b4308496d64aed39e96fc105db233bde3d29b3",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "langchain-36080",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "70c88c0e723a5d9477d13f4b6ba8893e40b76f50",
+   "fixed_sha": "389f7ad1bc15123b8b901e61d0a1785b0a14815f",
+   "base": "2319fdc9788e526103f079bde9acecfe4a6a3958",
+   "introducing": {
+    "base": "2319fdc9788e526103f079bde9acecfe4a6a3958",
+    "head": "70c88c0e723a5d9477d13f4b6ba8893e40b76f50",
+    "merge_commit": "70c88c0e723a5d9477d13f4b6ba8893e40b76f50",
+    "number": 36080
+   },
+   "fix_sha": "389f7ad1bc15123b8b901e61d0a1785b0a14815f",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "sqlglot-8585",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "f3a6eb95e424ef03bf20fca05a0431a666946e90",
+   "fixed_sha": "a0cc28b91c3d186801d478e83967e967b86c90dd",
+   "base": "ffb9721df98984c62817701ec8cd895cb3b1ee82",
+   "introducing": {
+    "base": "ffb9721df98984c62817701ec8cd895cb3b1ee82",
+    "head": "f3a6eb95e424ef03bf20fca05a0431a666946e90",
+    "merge_commit": "f3a6eb95e424ef03bf20fca05a0431a666946e90",
+    "number": 8585
+   },
+   "fix_sha": "a0cc28b91c3d186801d478e83967e967b86c90dd",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-4214",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "6071651d99409132bc8b006b23390a731bee865d",
+   "fixed_sha": "50e26118cb7a802469f566e4e5a6b8a18cb95e07",
+   "base": "62e0aacef0d1bb0fc8cc52c27d4cbec1b72eb665",
+   "introducing": {
+    "base": "62e0aacef0d1bb0fc8cc52c27d4cbec1b72eb665",
+    "head": "6071651d99409132bc8b006b23390a731bee865d",
+    "merge_commit": "6071651d99409132bc8b006b23390a731bee865d",
+    "number": 4214
+   },
+   "fix_sha": "50e26118cb7a802469f566e4e5a6b8a18cb95e07",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "langchain-34414",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "7902fa32387619d3801297e4d7552a3a585e2ad0",
+   "fixed_sha": "61fd90a2f32e217856702c9aad90a074dd4f2e51",
+   "base": "4be9407b095bec179e08011a1e4bfb11571970db",
+   "introducing": {
+    "base": "4be9407b095bec179e08011a1e4bfb11571970db",
+    "head": "7902fa32387619d3801297e4d7552a3a585e2ad0",
+    "merge_commit": "7902fa32387619d3801297e4d7552a3a585e2ad0",
+    "number": 34414
+   },
+   "fix_sha": "61fd90a2f32e217856702c9aad90a074dd4f2e51",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "sqlglot-8588",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "98bedf649b244d321782a213944320d54f7cc868",
+   "fixed_sha": "ab0a291f91f1ba8c32058340bf76738c4ea685ea",
+   "base": "e237d5980e8084cd2eceb874280efc3f3369c0ba",
+   "introducing": {
+    "base": "e237d5980e8084cd2eceb874280efc3f3369c0ba",
+    "head": "98bedf649b244d321782a213944320d54f7cc868",
+    "merge_commit": "98bedf649b244d321782a213944320d54f7cc868",
+    "number": 8588
+   },
+   "fix_sha": "ab0a291f91f1ba8c32058340bf76738c4ea685ea",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-4556",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "69f303e0c3a45c09e7ec56611973751208737857",
+   "fixed_sha": "076823220335b2ef88360a5619c9e7fee3f568d2",
+   "base": "67ac19a99ff2d3a70f9c4df03b1e41bdbe090298",
+   "introducing": {
+    "base": "67ac19a99ff2d3a70f9c4df03b1e41bdbe090298",
+    "head": "69f303e0c3a45c09e7ec56611973751208737857",
+    "merge_commit": "69f303e0c3a45c09e7ec56611973751208737857",
+    "number": 4556
+   },
+   "fix_sha": "076823220335b2ef88360a5619c9e7fee3f568d2",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "langchain-35281",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "5053436dcfe531edd1619862f74c07c61fd57801",
+   "fixed_sha": "78678534f970a5a01dddfc979594367c58d04b44",
+   "base": "3686bcbd966ff1ef13e5fdbde28aa0e630ddd5c4",
+   "introducing": {
+    "base": "3686bcbd966ff1ef13e5fdbde28aa0e630ddd5c4",
+    "head": "5053436dcfe531edd1619862f74c07c61fd57801",
+    "merge_commit": "5053436dcfe531edd1619862f74c07c61fd57801",
+    "number": 35281
+   },
+   "fix_sha": "78678534f970a5a01dddfc979594367c58d04b44",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "sqlglot-2513",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "ae3d8f377dd514fde5253383a5eb37fe7452261d",
+   "fixed_sha": "f5dd70bff7ebce048d6bdd3f782328104c6c119d",
+   "base": "c24e6defa53375835e1673bbb153d20ad4c822b7",
+   "introducing": {
+    "base": "c24e6defa53375835e1673bbb153d20ad4c822b7",
+    "head": "ae3d8f377dd514fde5253383a5eb37fe7452261d",
+    "merge_commit": "ae3d8f377dd514fde5253383a5eb37fe7452261d",
+    "number": 2513
+   },
+   "fix_sha": "f5dd70bff7ebce048d6bdd3f782328104c6c119d",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-3288",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "1854e2414557736ec375cf8df92faf2c9aff4f2c",
+   "fixed_sha": "3d536ff38d5c24ca584866a7f01cf5691b96e983",
+   "base": "e6459e7304df223e4884bc54cbb8d1f4d759b622",
+   "introducing": {
+    "base": "e6459e7304df223e4884bc54cbb8d1f4d759b622",
+    "head": "1854e2414557736ec375cf8df92faf2c9aff4f2c",
+    "merge_commit": "1854e2414557736ec375cf8df92faf2c9aff4f2c",
+    "number": 3288
+   },
+   "fix_sha": "3d536ff38d5c24ca584866a7f01cf5691b96e983",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "langchain-35319",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "9c160e2368f7f44bd41e967a7b3371208cf13a52",
+   "fixed_sha": "3686bcbd966ff1ef13e5fdbde28aa0e630ddd5c4",
+   "base": "269947b11f3b78eb800dd3fe12f3c07151ac9feb",
+   "introducing": {
+    "base": "269947b11f3b78eb800dd3fe12f3c07151ac9feb",
+    "head": "9c160e2368f7f44bd41e967a7b3371208cf13a52",
+    "merge_commit": "9c160e2368f7f44bd41e967a7b3371208cf13a52",
+    "number": 35319
+   },
+   "fix_sha": "3686bcbd966ff1ef13e5fdbde28aa0e630ddd5c4",
+   "set": "topup",
+   "subgroup": "filtered"
+  },
+  {
+   "id": "sqlglot-1900",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "8d74a35e86b0bdd60a093f02b990a367d413b13e",
+   "fixed_sha": "5b7b413451e2a7a35bfc8c076d3b3636f8a7b203",
+   "base": "bd6f0bb7b5e519a00e876c23629b2fd13035b104",
+   "introducing": {
+    "base": "bd6f0bb7b5e519a00e876c23629b2fd13035b104",
+    "head": "8d74a35e86b0bdd60a093f02b990a367d413b13e",
+    "merge_commit": "8d74a35e86b0bdd60a093f02b990a367d413b13e",
+    "number": 1900
+   },
+   "fix_sha": "5b7b413451e2a7a35bfc8c076d3b3636f8a7b203",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-2499",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "8129a3a06e25033329c9f36b77de2632bdf88a62",
+   "fixed_sha": "5d4e6aa897f0d41f4ccc21519d4461bbd26b8a24",
+   "base": "f2985492a30f14f9b2fbeffd5cc6b3aaeb34a2d1",
+   "introducing": {
+    "base": "f2985492a30f14f9b2fbeffd5cc6b3aaeb34a2d1",
+    "head": "8129a3a06e25033329c9f36b77de2632bdf88a62",
+    "merge_commit": "8129a3a06e25033329c9f36b77de2632bdf88a62",
+    "number": 2499
+   },
+   "fix_sha": "5d4e6aa897f0d41f4ccc21519d4461bbd26b8a24",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "langchain-31555",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "5b165effcdc6b53f1a2a590047e10a27d9c5da0c",
+   "fixed_sha": "16cabfa212782d03b00e08658fb3e74160a1dd45",
+   "base": "e455fab5d3ca2820db2f49c5511a23b168a441ab",
+   "introducing": {
+    "base": "e455fab5d3ca2820db2f49c5511a23b168a441ab",
+    "head": "5b165effcdc6b53f1a2a590047e10a27d9c5da0c",
+    "merge_commit": "5b165effcdc6b53f1a2a590047e10a27d9c5da0c",
+    "number": 31555
+   },
+   "fix_sha": "16cabfa212782d03b00e08658fb3e74160a1dd45",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "sqlglot-4437",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "24022d947f84e24abb00a735451a0c9f60b827b8",
+   "fixed_sha": "a980f017130a5d9c485c53c878982155362ca4de",
+   "base": "739df5ea2731a6fa8dbbd39c1e20164aa6b34689",
+   "introducing": {
+    "base": "739df5ea2731a6fa8dbbd39c1e20164aa6b34689",
+    "head": "24022d947f84e24abb00a735451a0c9f60b827b8",
+    "merge_commit": "24022d947f84e24abb00a735451a0c9f60b827b8",
+    "number": 4437
+   },
+   "fix_sha": "a980f017130a5d9c485c53c878982155362ca4de",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-444",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "85cbf3e98408e8e477d60cd76b96ec298fb5082b",
+   "fixed_sha": "c44c5c22e542ab832ce382b6af22579a12fa2000",
+   "base": "dab3c26878fe8f2ead195a91457c08a1003a9ed1",
+   "introducing": {
+    "base": "dab3c26878fe8f2ead195a91457c08a1003a9ed1",
+    "head": "85cbf3e98408e8e477d60cd76b96ec298fb5082b",
+    "merge_commit": "85cbf3e98408e8e477d60cd76b96ec298fb5082b",
+    "number": 444
+   },
+   "fix_sha": "c44c5c22e542ab832ce382b6af22579a12fa2000",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "langchain-25169",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "0258cb96fa2e537f4bb992af4d24d3a8bc91b7a6",
+   "fixed_sha": "e6a9694f5d095374beb4abace719d38a9a20cf8b",
+   "base": "b35ee09b3fa6bc653a4b2b8e9503d034ccaeab59",
+   "introducing": {
+    "base": "b35ee09b3fa6bc653a4b2b8e9503d034ccaeab59",
+    "head": "0258cb96fa2e537f4bb992af4d24d3a8bc91b7a6",
+    "merge_commit": "0258cb96fa2e537f4bb992af4d24d3a8bc91b7a6",
+    "number": 25169
+   },
+   "fix_sha": "e6a9694f5d095374beb4abace719d38a9a20cf8b",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "sqlglot-7639",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "7e7cf8b06397ed440921d079a39112e073bcfa80",
+   "fixed_sha": "a6698b765b006b4b3b181fcdc75319f7f990164f",
+   "base": "b33d955b2c230ff8af47ca8c659a0f02ca61122a",
+   "introducing": {
+    "base": "b33d955b2c230ff8af47ca8c659a0f02ca61122a",
+    "head": "7e7cf8b06397ed440921d079a39112e073bcfa80",
+    "merge_commit": "7e7cf8b06397ed440921d079a39112e073bcfa80",
+    "number": 7639
+   },
+   "fix_sha": "a6698b765b006b4b3b181fcdc75319f7f990164f",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-3670",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "a15bec32759dd735e32121b54f279e989c7a956e",
+   "fixed_sha": "b7117c46835d51be1d4a64272441a5b0128e20c5",
+   "base": "1e8ebe9f04142b57713d7ac52b30c4414bf9c47c",
+   "introducing": {
+    "base": "1e8ebe9f04142b57713d7ac52b30c4414bf9c47c",
+    "head": "a15bec32759dd735e32121b54f279e989c7a956e",
+    "merge_commit": "a15bec32759dd735e32121b54f279e989c7a956e",
+    "number": 3670
+   },
+   "fix_sha": "b7117c46835d51be1d4a64272441a5b0128e20c5",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "langchain-25360",
+   "repo": "langchain-ai/langchain",
+   "kind": "bug",
+   "buggy_sha": "75ae585deb4143e2c5f9774c74f10aa963fc0b3d",
+   "fixed_sha": "ca7790f8951abce1296f69cd29e63cec5af50b1d",
+   "base": "b7c070d4379db46f64b25062a47c542efd6f643c",
+   "introducing": {
+    "base": "b7c070d4379db46f64b25062a47c542efd6f643c",
+    "head": "75ae585deb4143e2c5f9774c74f10aa963fc0b3d",
+    "merge_commit": "75ae585deb4143e2c5f9774c74f10aa963fc0b3d",
+    "number": 25360
+   },
+   "fix_sha": "ca7790f8951abce1296f69cd29e63cec5af50b1d",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "sqlglot-8486",
+   "repo": "tobymao/sqlglot",
+   "kind": "bug",
+   "buggy_sha": "268ad021b8bfaf164be3b0774657952c3d70bed4",
+   "fixed_sha": "1d2a99b9cc0acf671fd2688ef02097a69404057d",
+   "base": "b4d66eec8e4dfbe0adcff872afa69355abfd63b4",
+   "introducing": {
+    "base": "b4d66eec8e4dfbe0adcff872afa69355abfd63b4",
+    "head": "268ad021b8bfaf164be3b0774657952c3d70bed4",
+    "merge_commit": "268ad021b8bfaf164be3b0774657952c3d70bed4",
+    "number": 8486
+   },
+   "fix_sha": "1d2a99b9cc0acf671fd2688ef02097a69404057d",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-4405",
+   "repo": "honojs/hono",
+   "kind": "bug",
+   "buggy_sha": "f8c9b6e5cb87d9b260d5c4ff3c4cf4389c47ebb2",
+   "fixed_sha": "4f5a3059926b141871c4562f2d0ddbf35d90cc4d",
+   "base": "5ece99500fbcdc1026ab7f458f65cbe9eab29a6b",
+   "introducing": {
+    "base": "5ece99500fbcdc1026ab7f458f65cbe9eab29a6b",
+    "head": "f8c9b6e5cb87d9b260d5c4ff3c4cf4389c47ebb2",
+    "merge_commit": "f8c9b6e5cb87d9b260d5c4ff3c4cf4389c47ebb2",
+    "number": 4405
+   },
+   "fix_sha": "4f5a3059926b141871c4562f2d0ddbf35d90cc4d",
+   "set": "topup",
+   "subgroup": "unfiltered"
+  },
+  {
+   "id": "hono-ctl-4626",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "b6e5a97cd44b3572320b2f14763ff83ff826aeb8",
+   "base": "2a9cd953b6e94ecef45894654ec5e765e1e9e411",
+   "pr_number": 4626,
+   "date": "2026-01-26T23:44:09+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-4791",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "d1722e3e56a9cf0fdac24982c9a55195e093a3f7",
+   "base": "8bd9dddce20eefe94da7ef9602afc603a8df0f91",
+   "pr_number": 4791,
+   "date": "2026-03-23T18:22:06+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-5028",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "c574cf16403b42a17917506bcba1916d32d3094f",
+   "base": "e50df01453e71b071c3e6136b161b160b9fdf916",
+   "pr_number": 5028,
+   "date": "2026-06-18T10:04:07+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-4620",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "8139399f68e3f3f60adffee0c49630d34310a361",
+   "base": "4e872759b092e34458aeecb8b72e3e0c4d4f1784",
+   "pr_number": 4620,
+   "date": "2026-01-09T19:43:42+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-4961",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "c968177d9c11ddc7c7cca57c384497f11a6d60ae",
+   "base": "0265a5453a7c272417eaa22b93d3fb319d2188ed",
+   "pr_number": 4961,
+   "date": "2026-05-25T10:50:42+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-4780",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "58825a72f7cc0a36d08535fc11dc90934ba77aeb",
+   "base": "0e80acb9f82912f44c7ebf949bc00abdfdc1eda0",
+   "pr_number": 4780,
+   "date": "2026-03-10T10:16:08+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-5104",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "3bb9a0e3a7dc0083061e91e885b2e9308585ee40",
+   "base": "d3f97caa29bba1f1ae31a4e023c25224aa2a4261",
+   "pr_number": 5104,
+   "date": "2026-07-13T06:46:00+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-4599",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "00b405a8f840f0f2ce4145e0fe5558cf2beeee78",
+   "base": "69f303e0c3a45c09e7ec56611973751208737857",
+   "pr_number": 4599,
+   "date": "2026-02-19T19:16:26+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-4798",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "0e80acb9f82912f44c7ebf949bc00abdfdc1eda0",
+   "base": "d69deb8886cde681172d8c1280273e032a50d015",
+   "pr_number": 4798,
+   "date": "2026-03-10T09:58:13+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-4921",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "54f2f0cfdae64055ea58ab0372f854c35a780290",
+   "base": "e59db594fbd22dd29e398846f9fb1e0447efefda",
+   "pr_number": 4921,
+   "date": "2026-05-16T18:50:03+09:00",
+   "set": "control"
+  },
+  {
+   "id": "hono-ctl-4645",
+   "repo": "honojs/hono",
+   "kind": "control",
+   "buggy_sha": "bf37828d6df56618bb90649c65c1c4deb2f9bcd6",
+   "base": "9524923b485145148d6395b7531f3f504dc85933",
+   "pr_number": 4645,
+   "date": "2026-02-19T19:20:20+09:00",
+   "set": "control"
+  },
+  {
+   "id": "langchain-ctl-35230",
+   "repo": "langchain-ai/langchain",
+   "kind": "control",
+   "buggy_sha": "b026fd605b0cc150f943e6ea8a8aed45e23373e5",
+   "base": "1573757b3bf53bab48b7ff3804707adf3a173e96",
+   "pr_number": 35230,
+   "date": "2026-02-15T02:42:13-05:00",
+   "set": "control"
+  },
+  {
+   "id": "langchain-ctl-35025",
+   "repo": "langchain-ai/langchain",
+   "kind": "control",
+   "buggy_sha": "3e3dbd9b888ce771152551eee0a2d7b9b6880c30",
+   "base": "e12f592d5d287ad56113f844050f054f711cac07",
+   "pr_number": 35025,
+   "date": "2026-02-05T09:17:54-05:00",
+   "set": "control"
+  },
+  {
+   "id": "langchain-ctl-34756",
+   "repo": "langchain-ai/langchain",
+   "kind": "control",
+   "buggy_sha": "3899154daf9fcbcf3f2dc377d0528ab5bcbf5a29",
+   "base": "1d60235b1b0dfc1a64de107e30ff050ad71fff14",
+   "pr_number": 34756,
+   "date": "2026-01-14T16:38:33-05:00",
+   "set": "control"
+  },
+  {
+   "id": "langchain-ctl-36771",
+   "repo": "langchain-ai/langchain",
+   "kind": "control",
+   "buggy_sha": "c04e05feb14b135081102ed03367ce990ed7d440",
+   "base": "92a6e57d60a412b3d31db072b76abe06d84dd5b6",
+   "pr_number": 36771,
+   "date": "2026-04-16T18:30:54Z",
+   "set": "control"
+  },
+  {
+   "id": "langchain-ctl-36972",
+   "repo": "langchain-ai/langchain",
+   "kind": "control",
+   "buggy_sha": "3f382a9e20aceab7d555a027daad6ce00e660ba0",
+   "base": "9a671d7919597eb7226e2f87cdfbc161a774daf7",
+   "pr_number": 36972,
+   "date": "2026-04-23T14:50:43-04:00",
+   "set": "control"
+  },
+  {
+   "id": "langchain-ctl-35850",
+   "repo": "langchain-ai/langchain",
+   "kind": "control",
+   "buggy_sha": "9b22f9c45074acad26bc602205d4e3c44b657259",
+   "base": "93947dcea8356eeab47da8ddbeabefc86b612029",
+   "pr_number": 35850,
+   "date": "2026-03-13T16:24:35-04:00",
+   "set": "control"
+  },
+  {
+   "id": "langchain-ctl-34851",
+   "repo": "langchain-ai/langchain",
+   "kind": "control",
+   "buggy_sha": "7b4ced2d3b48628aab2a31b4ee56c06c77fc5f2e",
+   "base": "2063577d678c83baf3b6ce36e27798cc3a494df7",
+   "pr_number": 34851,
+   "date": "2026-01-31T22:40:00-05:00",
+   "set": "control"
+  },
+  {
+   "id": "langchain-ctl-36990",
+   "repo": "langchain-ai/langchain",
+   "kind": "control",
+   "buggy_sha": "fa0f0d8efa54005b9256f8d4b28d1ff770372901",
+   "base": "9ce72eba9f6b3961d469a70b1b1980543f4cca91",
+   "pr_number": 36990,
+   "date": "2026-04-24T11:46:25-04:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-6759",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "af008bd51482c69b2c0c9ef01008ec0e657d6c9b",
+   "base": "8c6d01e8eb409e750070055f65ac52e0ec921103",
+   "pr_number": 6759,
+   "date": "2026-01-15T21:25:59+02:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-6948",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "0e872dcb5337d13befe981261466ca14a788ef1e",
+   "base": "713d22f0d44790f8dc7d80ba12ae920815a28c51",
+   "pr_number": 6948,
+   "date": "2026-02-03T20:39:57+02:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-7242",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "df6f05268e15f5de1685552ea87c69d2f5bd48c6",
+   "base": "ab6331fc920636e47c6bb03825086642d9425b77",
+   "pr_number": 7242,
+   "date": "2026-03-09T17:30:03+02:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-7846",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "ab77e9f0d78e945324bcbb857780a728378cc2d7",
+   "base": "77c78147fc6a83bd4126c247c149df7205424010",
+   "pr_number": 7846,
+   "date": "2026-07-09T14:01:40+03:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-6848",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "2a455caf6426f4d4ba2e6801e131804b7eba8a01",
+   "base": "6f3b76b94ea1fe76ef85291634cde53cc2408d02",
+   "pr_number": 6848,
+   "date": "2026-01-26T11:17:22+02:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-6918",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "db51b7517229df2c6cf446962a9732e548a168f5",
+   "base": "a65c8701a30652bfadd4d39cf729a9e13c1fa769",
+   "pr_number": 6918,
+   "date": "2026-02-02T16:18:39+02:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-7536",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "ded89c2e8edc6eee14f9fabb3d6fd036cced284a",
+   "base": "cf0ffd99ef27a4a4764104feb9b1dd2af1c544ce",
+   "pr_number": 7536,
+   "date": "2026-04-27T09:58:39+03:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-7016",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "352fb94c46e5dd0dfd824b4472b03cccf21d3f56",
+   "base": "3ea80fb86482e257c4565ab7876dd6cdd60a7be2",
+   "pr_number": 7016,
+   "date": "2026-02-09T12:26:10+02:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-7524",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "d289db33be43b99096ee9ec8e1c6d695b1d2a4a5",
+   "base": "f8af9d6f77d3b8753b5ce103331a8551e1942558",
+   "pr_number": 7524,
+   "date": "2026-04-20T16:55:01+03:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-6892",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "9d2a12a650afcdaffe780144af26a0f21a6ec4e6",
+   "base": "a4f53fc4910e6c9aaf19cecbfc0d54ee01b04ae8",
+   "pr_number": 6892,
+   "date": "2026-01-30T14:59:54+02:00",
+   "set": "control"
+  },
+  {
+   "id": "sqlglot-ctl-7087",
+   "repo": "tobymao/sqlglot",
+   "kind": "control",
+   "buggy_sha": "aba0db107a0cf02471234c54ffb982f8dca9cfcd",
+   "base": "7664358b27599936dacb2b7d8e5329fe32425e62",
+   "pr_number": 7087,
+   "date": "2026-02-16T18:12:52+02:00",
+   "set": "control"
+  }
+ ]
+}
