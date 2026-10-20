@@ -108,7 +108,7 @@ The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: th
 
 ## TBD before freeze
 
-- The grepTests fix sha (`testgap-score.js`).
+- ~~The grepTests fix sha~~: done, b6accfd on eval/testgap-demotion (`testsName`, with a test that fails with `-q`). E1 code builds on that branch.
 - The `cover` runner sha (specguard-33, eval/f2p-cover), merged with e0's OK.
 - The confirmation list sha.
 - The design-look appendix comes after the freeze.
