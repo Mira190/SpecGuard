@@ -39,6 +39,8 @@ Requirement documents anywhere in the repo (IDs such as `AC-4`, acceptance-crite
 
 **3. Optional:** add standards files (e.g. `.github/copilot-instructions.md`) and link an issue with acceptance criteria by writing "Closes #N" in the PR body.
 
+**4. Recommended:** run your unit tests with coverage before the SpecGuard step, in the same job, and set `coverage_files` to the report (LCOV, Cobertura, JaCoCo, Go or Istanbul JSON). SpecGuard never runs tests. See [Coverage evidence](#coverage-evidence-optional).
+
 ## What you get
 
 - Inline comments from `github-actions[bot]` (or the App or PAT that posted them): test skeletons for missing tests, one-click suggested fixes for standard violations. Each is a standalone review comment: there is no review wrapper, and the summary comment is the only aggregate. A low-confidence finding says so in its bold title; there are no reaction buttons and no coding-agent prompt block. Kind, confidence and rule stay in a hidden HTML comment.
@@ -205,6 +207,19 @@ What it changes, all deterministic and only for the changed non-test files that 
 - The model also sees the per-file numbers in its prompt (`coverage.txt` in the debug artifact).
 
 Paths in the report may be absolute CI paths, relative to a source root, JaCoCo package paths or Go import paths; they are matched to the changed files by suffix. A report older than the head commit (when it carries a timestamp: Cobertura, JaCoCo) is ignored and the summary says so. An unreadable or unmatched report only leaves a note; it never fails the job. Leave `coverage_files` empty to turn all of this off.
+
+**Already uploading coverage elsewhere?** The same file works. Your CI step that produces the report for the tool below runs before SpecGuard in the same job; point `coverage_files` at that file (SpecGuard reads it from the workspace and uploads nothing). The example path is what the usual generator writes; use your own if it differs.
+
+| Tool | Formats it ingests that SpecGuard also reads | `coverage_files:` example | Docs |
+|---|---|---|---|
+| Codecov | LCOV, Cobertura, JaCoCo, Go | `coverage/lcov.info` | [Supported report formats](https://docs.codecov.com/docs/supported-report-formats) |
+| Coveralls | LCOV, Cobertura, JaCoCo, Go (`golang`) | `coverage/lcov.info` | [coverallsapp/github-action](https://github.com/coverallsapp/github-action), [coverage-reporter](https://github.com/coverallsapp/coverage-reporter) |
+| SonarQube / SonarCloud | JaCoCo XML (Java/Kotlin/Scala), LCOV (JS/TS), Cobertura (Python) | `target/site/jacoco/jacoco.xml` | [Test coverage parameters](https://docs.sonarsource.com/sonarqube-server/2026.3/analyzing-source-code/test-coverage/test-coverage-parameters) |
+| GitHub code coverage (Code Quality) | Cobertura XML | `coverage.xml` | [Set up code coverage](https://docs.github.com/en/enterprise-cloud@latest/code-security/how-tos/maintain-quality-code/set-up-code-coverage) (uploaded with `actions/upload-code-coverage`) |
+
+The table lists only formats the cited docs name. [diff-cover](https://github.com/Bachmann1234/diff_cover) works from the same kinds of reports (Cobertura, Clover, JaCoCo XML, LCOV); SpecGuard does not need it.
+
+SpecGuard does not repeat those tools' percentage comments; it adds line-level "never executed" evidence tied to a finding, and since #413 a `missing_test` finding on a line the report shows never ran is no longer demoted by the "candidate test only partly visible", "a test may already cover this" or reduced-review gates.
 
 ## Engines
 
