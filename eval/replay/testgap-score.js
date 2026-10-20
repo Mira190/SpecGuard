@@ -9,9 +9,13 @@ const path = require('node:path');
 const { isProd, isTest, isCommentLine, mulberry32 } = require('../szz');
 const { enclosingName } = require('../../src/test-map');
 const { git, tryGit, addedLines, blamedSpots } = require('./holdout2-null');
+const { CODE } = require('../../src/coverage');
+const { execFileSync } = require('node:child_process');
 const { parseComment } = require('../grade');
 const { summaryItems } = require('../replay');
 
+// code files only: isProd also accepts lockfiles, manifests (package.json, pyproject.toml), CI scripts under .github/ and gitlinks, which would become units or blamed lines
+const isCode = (f) => isProd(f) && CODE.test(f) && !/^\.github\//.test(f);
 const TOL = 3, KINDS = new Set(['missing_test', 'weak_test']);
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
 
@@ -81,8 +85,8 @@ function qualifies(dir, fx) {
 
 // per-pair data: I's changed non-test files, units, added lines per unit, B, static flags
 function pairData(dir, p, fx) {
-  const I = p.introducing, blamed = blamedSpots(dir, fx, I.merge_commit);
-  const changed = git(dir, 'diff', '--name-only', '--no-renames', I.base, I.head).split('\n').filter((f) => f && isProd(f));
+  const I = p.introducing, blamed = blamedSpots(dir, fx, I.merge_commit).filter((b) => isCode(b.path));
+  const changed = git(dir, 'diff', '--name-only', '--no-renames', I.base, I.head).split('\n').filter((f) => f && isCode(f));
   const unitsByPath = {}, changedUnits = [];
   const testRaw = parseDiff(git(dir, 'diff', '-U0', '--no-color', '--no-renames', I.base, I.head));
   const testText = testRaw.filter((f) => f.newPath && isTest(f.newPath)).flatMap((f) => f.added.map((x) => x.text)).join('\n');
@@ -100,9 +104,11 @@ function pairData(dir, p, fx) {
   return { blamed, resolved, changedFiles: new Set(changed), changedUnits, B, flags };
 }
 
-// is `name` (whole word, fixed string) in any of `files` at `head`? -l, not -q: tryGit returns stdout, and -q prints nothing
+// is `name` (whole word, fixed string) in any of `files` at `head`? git grep exits 0 = match, 1 = no match, else error (thrown)
 function testsName(dir, head, files, name) {
-  for (let i = 0; i < files.length; i += 200) if (tryGit(dir, 'grep', '-l', '-w', '-F', '-e', name, head, '--', ...files.slice(i, i + 200))) return true;
+  for (let i = 0; i < files.length; i += 50) { // 50 paths per call: the Windows command line limit is near 32k
+    try { execFileSync('git', ['-C', dir, 'grep', '-l', '-w', '-F', '-e', name, head, '--', ...files.slice(i, i + 50)], { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 28 }); return true; } catch (e) { if (e.status !== 1) throw e; }
+  }
   return false;
 }
 
@@ -236,4 +242,4 @@ function main() {
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
-module.exports = { nullBits, testsName, buildUnits, makeB, isCatch, isCandidate, isLow, pairData, qualifies, word, parseDiff };
+module.exports = { isCode, nullBits, testsName, buildUnits, makeB, isCatch, isCandidate, isLow, pairData, qualifies, word, parseDiff };
