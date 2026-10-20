@@ -234,7 +234,7 @@ node eval/f2p/f2p.js export --set <set>                  # buggy trees only
 node eval/f2p/f2p.js baseline --set <set>                # nearest existing test green at each buggy tree
 node eval/f2p/f2p.js packets --set <set>                 # one blinded packet per group, same format as before
 node eval/f2p/f2p.js try <finding-id> --set <set>        # writers
-node eval/f2p/f2p.js writers-done <repo>                 # after every writer of that repo has finished
+node eval/f2p/f2p.js writers-done <repo> --set <set>     # per set: the holdout2 gate does not open a list set
 node eval/f2p/f2p.js run --set <set>                     # freeze, 3 buggy + 3 fixed runs, same verdict logic, same gates
 node eval/f2p/f2p.js report --set <set>                  # per-finding verdicts and verified + claim_match yes over runnable
 ```

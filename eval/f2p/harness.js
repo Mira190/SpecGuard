@@ -282,8 +282,10 @@ function harnessStatus(res, baseline = {}) {
   for (const o of Object.values(out)) o.status = o.n === 0 ? 'unvalidated' : o.k / o.n < 0.8 ? 'invalid' : 'valid';
   return out;
 }
-const cmdWritersDone = (repo) => { const d = path.join(F2P, 'writers_done'); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, REPOS()[repo].name), new Date().toISOString()); };
-const writersDone = (repo) => fs.existsSync(path.join(F2P, 'writers_done', REPOS()[repo].name));
+// The gate is per set: a list set's writers are separate from the holdout2 writers of the same repo.
+const doneDir = () => path.join(F2P, SET ? `writers_done-${SET}` : 'writers_done');
+const cmdWritersDone = (repo) => { const d = doneDir(); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, REPOS()[repo].name), new Date().toISOString()); };
+const writersDone = (repo) => fs.existsSync(path.join(doneDir(), REPOS()[repo].name));
 
 const diffText = (repo, a, b) => execFileSync('git', ['-C', cloneOf(repo), 'diff', '-U0', '--no-renames', a, b], { encoding: 'utf8', maxBuffer: 1 << 28 });
 const callNames = (id) => [...new Set(testFiles(id).flatMap((r) => [...fs.readFileSync(path.join(F2P, 'tests', id, r), 'utf8').matchAll(/\b([A-Za-z_]\w*)\s*\(/g)].map((m) => m[1])))];
