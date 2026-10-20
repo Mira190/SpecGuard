@@ -57,7 +57,7 @@ The same as the predecessor, unchanged:
    - It runs once, after S's runs. Repos with only one frozen bug PR are dropped and counted, and shared-fix pairs are excluded from the primary.
    - Passes iff the real catch rate is above the M2 false-catch rate, with a one-sided within-repo label permutation p < 0.05 (10000 permutations, seed 20261020).
    - About 288 items (48 bug PRs × 3 runs, real plus M2); estimated at $4–5. If the cap is reached, the pairs not graded are reported and the analysis uses complete pairs.
-2. **f2p:** at least 3 verified f2p catches, from specguard-33's harness on main at f6e4eb7, under its amendment 6/7 rules. The rqlite controls are rerun under those rules before any rqlite row counts. Only hono, sqlglot and langchain run there; rqlite is skipped for memory. At #408's rates (NEAR 0/9 verified, FAR 1/23), the expected yield is close to 0. f2p is therefore reported, but in practice the content tier rests on the blind grade.
+2. **f2p:** at least 3 verified f2p catches, from specguard-33's harness on main at f6e4eb7, under its amendment 6/7 rules. The rqlite controls are rerun under those rules before any rqlite row counts. Only hono, sqlglot and langchain run there; rqlite is skipped for memory. At #410's rates (NEAR 0/9 verified, FAR 1/23), the expected yield is close to 0. f2p is therefore reported, but in practice the content tier rests on the blind grade.
 
 The blind grade is a content measure of its own and does not test location. It is the content condition of the two-tier reading, not a second primary test.
 
@@ -85,7 +85,7 @@ The blind grade is a content measure of its own and does not test location. It i
 The final MVP report lists every earlier attempt at this question with its result, next to this prereg's result:
 - the mutation pilot (#374): 0/10 gaps located at line level;
 - #397: escape line hits at chance (5.0% vs 4.5%);
-- f2p (#408): 1/32 verified;
+- f2p (#410): 1/32 verified;
 - `prereg-testgap-mvp.md`: retired unrun, design power 0;
 - pack arms R, S, O and H: not adopted (#406);
 - this prereg.
