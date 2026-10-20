@@ -506,4 +506,10 @@ test('list import, cover-only rows (E1): no finding, group = row id, controls ha
   assert.throws(() => buildListRows([{ ...ctl, fixed_sha: 'eeeeeeee55' }], 'e1design', env), /control row has no fixed_sha/);
   assert.throws(() => buildListRows([{ ...ctl, kind: 'other' }], 'e1design', env), /kind bug or control/);
   assert.throws(() => buildListRows([{ ...ctl, id: undefined }], 'e1design', env), /id is required/);
+  assert.throws(() => buildListRows([{ ...ctl, repo: undefined }], 'e1design', env), /repo is required/);
+  assert.throws(() => buildListRows([{ ...ctl, buggy_sha: undefined }], 'e1design', env), /buggy_sha is required/);
+  assert.throws(() => buildListRows([{ ...bug, pr: 'other' }], 'e1design', env), /group is its id; drop pr/);
+  // a sha missing from the clone makes the row unresolved; a control's absent fix is never looked up
+  const missing = { ...env, shaExists: (r, s) => s !== 'bbbbbbbb22' };
+  assert.deepStrictEqual(buildListRows([bug, ctl], 'e1design', missing).rows.map((x) => x.status), ['unresolved', 'ok']);
 });
