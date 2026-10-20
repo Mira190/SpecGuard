@@ -3795,10 +3795,12 @@ test('coverage exemption: an UNCHANGED cited line of a changed file that sits in
   assert.match(s.calls.review[0].comments[0].body, /Verify the boundary total \(coverage: never executed\)/);
 });
 
-test('coverage: a v1 coverage.json (no ran) still loads', () => {
+test('coverage: a v1 coverage.json (no ran) still loads, and v2 (what coverage.js now writes) loads too', () => {
   const v1 = JSON.stringify({ v: 1, reports: 1, total: { instrumented: 1, executed: 0 }, files: { 'src.js': { inst: 1, exec: 0, never: [[3, 3]], miss: [[3, 3]] } }, unreported: [], notes: [] });
   assert.equal(post.neverRan(post.loadCoverage(v1), 'src.js', 3), true);
-  assert.equal(post.neverRan(post.loadCoverage(JSON.stringify({ ...JSON.parse(v1), v: 2, files: { 'src.js': { never: [[3, 3]], ran: [[1, 2]], miss: [[3, 3]] } } })), 'src.js', 2), false);
+  const v2 = post.loadCoverage(JSON.stringify({ ...JSON.parse(v1), v: 2, files: { 'src.js': { never: [[3, 3]], ran: [[1, 2]], miss: [[3, 3]] } } }));
+  assert.equal(post.neverRan(v2, 'src.js', 3), true); // a v2 never-line is seen: a rejected v2 (null) would turn the feature off on every real run
+  assert.equal(post.neverRan(v2, 'src.js', 2), false);
   assert.equal(post.loadCoverage(JSON.stringify({ v: 3, reports: 1, files: {} })), null);
 });
 
