@@ -104,7 +104,11 @@ Failing tests do not make a PR unusable; their count is reported.
   - The frozen 88 (`testgap-confirm.json`) keep at most 6 bug PRs per repo, so these repos contribute at most 18. E1 draws its own set:
     - every frozen-set bug PR in hono, sqlglot or langchain-core. Frozen-set members are each repo's newest 6 or fewer qualifying pairs (the builder's `--queues-only` queue, eval/testgap-mvp-prereg @ b5fb76d), taken before the langchain-core rule. A full 12-repo build that stops at 48 before reaching one of them does not change this list.
     - then further qualifying pairs from the same mining output (`SpecGuard-evidence/testgap-confirm/mine-*.json`, fixes from 2026-01-01 to clone HEAD). These use the same mechanical filter, exclusions and langchain-core rule. The exclusions include every pair and clean PR in pairs, holdout and holdout 2, so no design PR re-enters. They are drawn round-robin over the three repos in alphabetical order, newest first, until there are 40.
-    - If fewer than 40 qualify, the window extends once to 2025-07-01. Fewer than 30 then means "not tested".
+    - If fewer than 40 qualify, the window extends once to 2025-07-01: mine 2025-07-01 to 2025-12-31 with the same `szz.js mine`, then rebuild the queues with the same builder.
+    - **Fallback, fixed 2026-10-20 before any final count was seen** (red team; the funnel counts are not outcomes): if the filtered bug set is still under 30 after that single extension, the primary population becomes ALL mechanically eligible bug PRs, i.e. filtered ∪ unfiltered.
+      - The draw rules are the same: the frozen members first, then round-robin newest first, up to 40.
+      - The filtered set is reported as a subgroup, and the selection-effect reading (below) applies through it.
+      - If even the union is under 30, the result is "not tested". There is no further relaxation, and no repos are added after the fact.
   - **Unfiltered comparison set (descriptive).** Up to 20 runnable bug PRs from the same mining output that pass every rule EXCEPT the test-gap filter (their fix adds no test naming a changed definition). They are drawn by the same round-robin rule.
   - **Controls.** 30, all drawn with `szz.js` `cleanSample` (seed 20261020).
     - Allocation follows bugs per repo by largest remainder. The window runs from 2026-01-01 to head − 90 days.
@@ -116,6 +120,7 @@ Failing tests do not make a PR unusable; their count is reported.
 ## How the result reads (fixed now)
 
 - **Scope of every reading:** "on bugs that were later fixed together with a new unit test naming the changed definition", in hono, sqlglot and langchain-core, with the harness's unit scope. Nothing is claimed about the model or other repos.
+  - Under the fallback, the scope is "on mechanically eligible SZZ bugs" instead, and the filtered subgroup carries the test-gap scope.
 - **C does not pass:** on this corpus, coverage gaps at PR time do not predict where test-gap bugs are introduced. This is a real negative for the goal's premise, reported as such and added to the multiplicity list and the assurance case.
 - **C passes:** product phase 1 goes ahead. Coverage-backed missing_test findings become first-class and high-confidence.
 - **C passes but its catch rate on the unfiltered comparison set is at chance** (its cluster interval of observed − chance includes 0): the lift is mostly a product of the selection filter, which favours untested definitions. The reading must say so.
