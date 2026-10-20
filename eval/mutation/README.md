@@ -66,13 +66,35 @@ Reading it carefully:
 - The two killed-only units that were flagged are not clearly false alarms: the basic-auth findings (lowercase scheme accepted, colon inside the password) name inputs the sampled mutants did not touch, so "killed-only" means "5 sampled mutants were caught", not "fully tested". The false-alarm rate here is an upper bound on noise for the sampled lines only. One finding (`cookie.test.ts:163`) says in its own title that it found no gap in cookie.ts.
 - Uncertain-only units were flagged at the same rate as survivor units; with 4 units this says nothing about whether the equivalent-mutant guesses are right.
 
+## Re-scan 2026-10-20 (main 3f2c122, two more runs)
+
+- **Runs:** two owner-requested manual runs, 39370195860 and 39370208118, from main 3f2c122. They used the same parameters as 39187431386: hono@5ca49b0 `src/utils`, `scan_scope: all`, claude-haiku-5-5, `max_budget_usd: 1`. Both reviewed 20 of 20 units.
+- **Scoring:** all three artifacts were re-scored with `score.js` on the frozen manifest.
+- **Overlap:** the overlap column is the file-level Jaccard of `missing_test` and `weak_test` findings (kind + path in `unit_findings`) against the run in the previous row; the first new run is compared with the baseline.
+
+| Run | Line hit (+-5) | Survivor-unit recall, visible | Visible base rate (manifest units) | False alarm, visible | Cost | Overlap with previous run |
+|---|---|---|---|---|---|---|
+| 39187431386 (10-19 baseline, 4c15de9) | 0 / 10 | 3 / 5 | 8 / 14 | 2 / 5 | $0.089 | - |
+| 39370195860 (3f2c122) | 0 / 10 | 1 / 5 | 4 / 14 | 1 / 5 | $0.089 | 8 / 20 with the baseline |
+| 39370208118 (3f2c122) | 0 / 10 | 3 / 5 | 5 / 14 | 1 / 5 | $0.087 | 6 / 20 with 39370195860 (7 / 19 with the baseline) |
+
+Reading it:
+- **No change from the 10-19 baseline.**
+  - Line hits are still 0 of 10.
+  - Visible survivor-unit recall stays at the visible base rate of each run.
+  - #413 does not apply here: it acts only on PR reviews that have a coverage report, and this is a scan without one.
+- **Run-to-run stability is low.** On identical input, about 30-40% of the missing/weak findings name the same file and kind from one run to the next. Model-only gap findings will move between pushes of the same code.
+- **No claim of effectiveness either way.** These are 3 runs of one repo, n = 5 survivor units.
+
+Re-derive: `gh run download <id> --repo Mira190/SpecGuard`, then `node eval/mutation/score.js --manifest eval/mutation/hono-5ca49b0.json --ctx <dir>/specguard-result-<id>`.
+
 ## Limits (read before quoting a number)
 
-- n is tiny: 80 mutants, 14 files (5 / 5 / 4 units per group, 10 candidate survivors), one repo, one scan run, one model. Percentages above are counts of a handful of units; no confidence interval is claimed and differences of one unit move them by 20 points.
+- n is tiny: 80 mutants, 14 files (5 / 5 / 4 units per group, 10 candidate survivors), one repo, three scan runs (one before the re-scan section), one model. Percentages above are counts of a handful of units; no confidence interval is claimed and differences of one unit move them by 20 points.
 - Survivors include equivalent mutants and code the product legitimately judges not worth a unit test. `uncertain` is a hand judgement from reading a few lines, partly unverified. Recall against survivors is a ceiling-style signal, not a labelled precision, and a finding on a non-survivor line is not necessarily wrong.
 - Mutants are line-local; SpecGuard reasons per behaviour or unit, so unit-level hits are far easier than line hits. Findings that are not about a mutated line (the large majority here) say nothing about the mutants.
 - Killed-only does not mean fully tested. The pilot repo has a mature test suite, so few survivors exist.
-- Model output varies run to run; this is one sample. The scan also reviewed 6 units outside the manifest, which are ignored.
+- Model output varies run to run (the re-scan measured 30-40% file-level overlap); the per-finding notes above describe the first run only. The scan also reviewed 6 units outside the manifest, which are ignored.
 - `invalid` mutants (thrown error, not an assertion) are dropped, which also drops some real behavioural kills; the choice is deliberately strict.
 
 Reproduce the mutants: clone hono at the SHA, install vitest outside the clone (`npm i --ignore-scripts vitest@3.2.4`; a short path avoids an esbuild/Windows path problem), then `node eval/mutation/mutate.js run --repo <clone> --manifest eval/mutation/hono-5ca49b0.json --cmd 'node <vitest>/vitest.mjs run --config <vc.mjs> --root . --reporter=json --outputFile={out} {test}'`. Score a run with `node eval/mutation/score.js --manifest eval/mutation/hono-5ca49b0.json --ctx <artifact dir>`.
