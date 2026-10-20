@@ -250,3 +250,38 @@ Code and README fixes only; no row of `results.json` was changed and nothing was
 - B4, skipped is not a pass. For Go and vitest a `pass` needs at least one non-skipped passing test, as for pytest; all-skipped is `error` ("all tests skipped"). The only verified vitest row, hono-3727, is unaffected: its frozen test file (8 lines, hash matches the recorded one) has no skip, todo or only marker, so its fixed runs executed a passing test. The other verified row is pytest (sqlglot-7315), which already had the rule.
 - Also: pytest `DID NOT RAISE` and `pytest.fail` count as assertion failures; a file with both an assertion failure and a thrown error (pytest) or a non-assertion failure (vitest) is an `error`; a run over several test files is an `error` if any file errors (the old reduce let a first assertion failure hide a second file's error); the freeze now happens after every gate (writers-done, runnable, baseline, deps_changed) so a skipped or refused finding is never frozen; `--set` without a value and `--set=x` are refused; `CI=1` is set for every run so vitest never writes snapshots; a test file is placed only at a path that does not exist in the tree.
 - Disk guard: it checks free space on the temp drive (`os.tmpdir()`) only, not on the evidence drive. It is called by every command that exports or checks out a tree: baseline, controls, try, run, run --mutation, export, setup and seal-trees. It is not called by packets, report, import, verify, candidates or power (they write only small files).
+
+### Positive controls rerun under the amendment 6 and 7 rules (amendment 7, 2026-10-20, no writer test rerun)
+
+Before the rerun the `positive_control` block of `results.json` was copied to `positive_control_pre_amendment6`, so the old values stay in the file. Amendment 7 adds four code rules, all tested: a vitest `rejects` failure ("promise resolved ... instead of rejecting") is an assertion failure; ids, groups and set names are letters, digits, `.`, `_`, `-` only and may not be `buggy`, `fixed`, only dots, an existing group or (for a group) an existing set; `archive` refuses an export whose tar did not run or whose file count differs from `git ls-tree -r` of the commit (a non-zero tar exit with every file present, the Windows symlink case, is accepted); an interrupted control (disk guard, memory, harness exception) is a `harness_error`, never replaces a completed result (kept under `positive_control_errors`) and is not in k/n.
+
+The controls were rerun for hono, sqlglot and langchain only (local, no model calls; rqlite and pydantic-ai were not rerun, their old values stay: rqlite 2/2 under the old rules must be rerun before its writer rows, pydantic-ai stays invalid at 1/4). After the rerun the hono work directory was checked: 583 tracked files byte-identical to 5ca49b0.
+
+| PR | file verdicts, before amendment 6 | file verdicts, now | PR control |
+|---|---|---|---|
+| hono-3604, 3787, 2339, 3413, 3366, 3727 | verified (one test file each) | verified | verified, unchanged |
+| sqlglot-7315 | verified, verified | verified, verified | verified, unchanged |
+| langchain-18592 | verified, verified_throw | invalid, verified_throw | verified, unchanged (one of its two fix test files now counts as invalid: assertion failure and a thrown error in the same file is an error) |
+
+| repo | k/n before | k/n now | harness before | harness now |
+|---|---|---|---|---|
+| honojs/hono | 6/6 | 6/6 | valid | valid |
+| tobymao/sqlglot | 1/1 | 1/1 | valid (n = 1) | valid (n = 1) |
+| langchain-ai/langchain | 1/1 | 1/1 | valid (n = 1) | valid (n = 1) |
+| rqlite/rqlite | 2/2 | not rerun | valid | valid under the old rules, to be rerun |
+| pydantic/pydantic-ai | 1/4 | not rerun | invalid | invalid |
+
+No repo changed validity, so no NEAR/FAR row left the measures and the Results table above is unchanged (no writer row was touched: the 48 rows are byte-identical to the committed ones).
+
+### Which committed writer verdicts the new rules could change (amendment 7)
+
+Every committed writer verdict was produced under the pre-amendment-6 rules. Checked against `results.json` and the frozen test files (48 writer rows: 42 hono including the 16 mutation tests, 5 langchain, 1 sqlglot):
+
+- all 48 tests are single files, none has a skip, todo, only, xfail or parametrize marker;
+- the 8 rows with any failing run are single-test files, so the new "assertion plus thrown error in one file is an error" rule cannot touch them; there is no pytest throw in the replay rows;
+- 7 test files hold more than one test: 4 replay files (langchain 2, hono-3787, hono-3366) are pass/pass on both trees, 2 mutation files pass 3/3 on the unmutated tree and kill nothing, and 1 mutation file is invalid (its first unmutated run errored; a stricter rule cannot make it pass);
+- so hono-3727, sqlglot-7315, hono-3604 (two reversed rows) and the mutation rows are unaffected.
+
+One row is not covered by this argument: hono-2339's writer test uses `.rejects.toThrow` and threw on both trees under the old rules (verdict `invalid`, throw on fixed). Its failure text was not stored. Under the new vitest rule a "promise resolved instead of rejecting" failure counts as an assertion failure, so its verdict could differ if that was the message. It was not rerun; the row, and the sensitivity line that counts it, stay as committed and are flagged here.
+
+The rules of amendments 6 and 7 govern all future rows, including rqlite and list sets, in the same `results.json`.

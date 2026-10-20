@@ -1431,12 +1431,12 @@
    "files": [
     {
      "file_sha256": "b7ce280f409a",
-     "verdict": "verified",
-     "reason": "assertion fails on buggy, passes on fixed",
+     "verdict": "invalid",
+     "reason": "assertion failure and a thrown error in the same file",
      "buggy": [
-      "assert_fail",
-      "assert_fail",
-      "assert_fail"
+      "error",
+      "error",
+      "error"
      ],
      "fixed": [
       "pass",
