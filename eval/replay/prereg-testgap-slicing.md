@@ -1,6 +1,6 @@
 # Pre-registration (DRAFT, not frozen): test-gap catches with sliced candidate tests in the context pack
 
-**Status.** Draft, opened 2026-10-20T00:16Z, before any sliced run. It is frozen only after specguard-e0's OK. Until then, every number marked TBD may change, except the noise ceiling, which was fixed at draft time (below).
+**Status.** PAUSED 2026-10-20 (specguard-e0): no confirmation spend; this stays a draft and the frozen set stays untouched (evidence: eval/replay/testgap-evidence-2026-10-20.md, PR #412). Draft opened 2026-10-20T00:16Z, before any sliced run. It is frozen only after specguard-e0's OK. Until then, every number marked TBD may change, except the noise ceiling, which was fixed at draft time (below).
 
 **Predecessor.** `prereg-testgap-mvp.md` (OK at 881cfcb) was retired unrun: its design power was 0 at c64501b, and it never looked at the frozen confirmation set. This prereg owns the single look at the frozen set (`eval/replay/testgap-confirm.json`) at α = 0.05. Its static arm transfers here.
 
