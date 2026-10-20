@@ -180,28 +180,30 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
 }
 
 // Local batch over saved replay dirs (<dl>/<run>/replay-<id>, each with result.json {id, repo}) or `list` (entries, e.g. from a confirm-corpus manifest): sequential, rep-major (rep k writes <out>/rep<k>/<id>), at most `cap` engine runs.
-// Resume skips every id with a result.json, except one marked retryable. An invalid run is never re-rolled: only a run that never reached the model for an account/config reason (engine-error auth/quota/config/model/rate) is retryable, and it stops the batch (a dead key must not burn the rest);
-// any other invalid result is recorded and the batch goes on. A retryable result is renamed result.attempt-<n>.json before its re-run, and spent sums result.json + result.attempt-*.json under out. Stops before a run that could pass `maxTotal` (spent + this run's `budget`).
+// Resume skips every id with a result.json, except one marked retryable. A run that reached the model is never re-rolled (a failure is a miss): retryable iff invalid, never billed (usage.cost_usd 0) and either threw before the engine ran (clone, disk) or stopped for an account/config reason (engine-error auth/quota/config/model/rate); it stops the batch (a dead key must not burn the rest).
+// Any other invalid result, and a throw after a billed engine run (its cost is read from ctx/usage*.json), is recorded as a miss and the batch goes on. Ids in `list` must be unique. The result lists `attempts` (one per result.attempt-*.json). A retryable result is renamed result.attempt-<n>.json before its re-run, and spent sums result.json + result.attempt-*.json under out. Stops before a run that could pass `maxTotal` (spent + this run's `budget`).
 const RETRYABLE = new Set(['auth', 'quota', 'config', 'model', 'rate']);
 async function batch({ dirs, list, manifests, repos, out, cap, maxTotal, reps = 1, model = 'claude-haiku-5-5', budget, engine = runEngine, log = console.log }) {
   const subs = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((x) => x.isDirectory()).map((x) => path.join(d, x.name)); } catch { return []; } };
   const cost = (f) => readJson(f, {}).usage?.cost_usd || 0, files = (d) => { try { return fs.readdirSync(d).filter((n) => /^result(\.attempt-\d+)?\.json$/.test(n)).map((n) => path.join(d, n)); } catch { return []; } };
   let spent = [out, ...subs(out)].flatMap(subs).flatMap(files).reduce((t, f) => t + cost(f), 0), ran = 0, skipped = 0, stopped = null;
   const todo = list || dirs.map((d) => { const id = readJson(path.join(d, 'result.json'), {}).id; const entry = manifests.flatMap(entries).find((e) => e.id === id); if (!entry) throw new Error(`no manifest entry for ${id}`); return entry; });
+  const ids = todo.map((e) => e.id); for (const id of ids) if (ids.indexOf(id) !== ids.lastIndexOf(id)) throw new Error(`duplicate id ${id}`);
   outer: for (let k = 1; k <= reps; k++) for (const entry of todo) {
     const id = entry.id, o = path.join(out, `rep${k}`), rf = path.join(o, id, 'result.json'), prev = readJson(rf);
     if (prev && !prev.retryable) { skipped++; log(`${id} rep${k}: done, skipped`); continue; }
     if (ran >= cap) break outer;
     if (spent + +budget > maxTotal) { stopped = 'budget'; log(`total cap: spent $${spent} of $${maxTotal}`); break outer; }
     if (prev) { let n = 1; while (fs.existsSync(path.join(o, id, `result.attempt-${n}.json`))) n++; fs.renameSync(rf, path.join(o, id, `result.attempt-${n}.json`)); } // its cost stays in spent
-    let r; try { r = await runReal({ entry, repoDir: path.join(repos, entry.clone || entry.repo.split('/').pop()), out: o, model, budget, engine }); } catch (e) { // prepare failed (bad sha, clone): record, never re-roll
-      r = { id, valid: false, engine_status: 'error', invalid_reason: `run failed: ${String(e.message || e).split('\n')[0]}`, usage: {} }; fs.mkdirSync(path.join(o, id), { recursive: true }); fs.writeFileSync(rf, JSON.stringify(r, null, 2) + '\n'); }
+    let r; try { r = await runReal({ entry, repoDir: path.join(repos, entry.clone || entry.repo.split('/').pop()), out: o, model, budget, engine }); } catch (e) { // a throw (clone, full disk, post.js crash) is infrastructure, not the PR: retryable stop for a human, never a recorded miss
+      r = { id, valid: false, engine_status: 'error', invalid_reason: `run failed: ${String(e.message || e).split('\n')[0]}`, usage: { cost_usd: ['usage.json', 'usage-repair.json'].reduce((t, n) => t + (readJson(path.join(o, id, 'ctx', n), {}).totalCostUsd || 0), 0) }, thrown: true }; fs.mkdirSync(path.join(o, id), { recursive: true }); fs.writeFileSync(rf, JSON.stringify(r, null, 2) + '\n'); }
     ran++; const c = r.usage?.cost_usd || 0; spent += c;
     fs.rmSync(path.join(o, id, 'repo'), { recursive: true, force: true }); // a full checkout per PR and rep (100+ MB on gitea/langchain); nothing reads it after post.js, and replay-arms/two-posts rebuild it from --repos
     log(`${id} rep${k}: ${r.engine_status} cost=$${c} ${r.valid ? 'valid' : `invalid: ${r.invalid_reason}`}`);
-    if (!r.valid && RETRYABLE.has(readLines(path.join(o, id, 'ctx', 'engine-error'))[0])) { fs.writeFileSync(rf, JSON.stringify({ ...r, retryable: true }, null, 2) + '\n'); stopped = id; break outer; }
+    if (!r.valid && !(c > 0) && (r.thrown || RETRYABLE.has(readLines(path.join(o, id, 'ctx', 'engine-error'))[0]))) { fs.writeFileSync(rf, JSON.stringify({ ...r, retryable: true }, null, 2) + '\n'); stopped = id; break outer; }
   }
-  return { ran, skipped, stopped, spent };
+  const attempts = subs(out).flatMap((rd) => subs(rd).flatMap((idd) => files(idd).filter((f) => /attempt/.test(f)).map((f) => ({ id: path.basename(idd), rep: +path.basename(rd).slice(3), reason: readJson(f, {}).invalid_reason }))));
+  return { ran, skipped, stopped, spent, attempts };
 }
 
 const USAGE = `Usage:

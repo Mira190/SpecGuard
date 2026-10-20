@@ -230,6 +230,7 @@ test('batch: real claude-api.js with mocked HTTP: cap, resume, reps, total cap, 
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(out4, 'rep1', 'b1', 'result.attempt-1.json'), 'utf8')).retryable, true);
   assert.ok(JSON.parse(fs.readFileSync(path.join(out4, 'rep1', 'b1', 'result.json'), 'utf8')).valid);
   assert.ok(Math.abs(r.spent - (0.25 + 2 * first.usage.cost_usd)) < 1e-9, r.spent);
+  assert.deepStrictEqual(r.attempts.map((a) => [a.id, a.rep, a.reason]), [['b1', 1, dead.invalid_reason]]); // e. the retried attempt is reported
   await assert.rejects(batch({ dirs: [dirs[0]], manifests: [], repos, out, cap: 1, maxTotal: 1, budget: '1', engine, log: () => {} }), /no manifest entry for b1/);
 });
 
@@ -257,7 +258,33 @@ test('batch: an invalid run that is not an account/config error is recorded, the
   let r = await batch({ list, repos, out, cap: 9, maxTotal: 100, budget: '0.5', engine, log: () => {} });
   assert.deepStrictEqual([r.ran, r.stopped, calls.length], [3, null, 2]);
   const res = (i) => JSON.parse(fs.readFileSync(path.join(out, 'rep1', i, 'result.json'), 'utf8'));
-  assert.deepStrictEqual([res('x1').valid, res('x1').retryable, res('x2').valid], [false, undefined, false]); assert.match(res('x3').invalid_reason, /^(run failed|skipped by collect)/);
+  assert.deepStrictEqual([res('x1').valid, res('x1').retryable, res('x2').valid], [false, undefined, false]); assert.match(res('x3').invalid_reason, /skipped by collect|collect failed/);
   r = await batch({ list, repos, out, cap: 9, maxTotal: 100, budget: '0.5', engine, log: () => {} });
   assert.deepStrictEqual([r.ran, r.skipped, calls.length], [0, 3, 2]);
+  r = await batch({ list: [{ id: 'x4', repo: 'o/gone', number: 4, base, head, title: 't', body: '' }], repos, out, cap: 9, maxTotal: 100, budget: '0.5', engine, log: () => {} }); // no clone to copy: a throw is infrastructure, so a retryable stop, not a recorded miss
+  assert.deepStrictEqual([r.ran, r.stopped, res('x4').retryable, calls.length], [1, 'x4', true, 2]);
+});
+
+test('batch: a run that reached the model is a miss (billed answer then 429; a throw after a billed engine run); duplicate ids throw', async () => {
+  const { batch } = require('./replay.js'), api = require('../src/engines/claude-api.js');
+  const { d } = mkRepo(), repos = path.join(tmp, 'y-repos'); fs.mkdirSync(repos, { recursive: true }); fs.cpSync(d, path.join(repos, 'r'), { recursive: true });
+  const base = git(d, 'rev-parse', 'HEAD~1'), head = git(d, 'rev-parse', 'HEAD'), out = path.join(tmp, 'y-out'), E = (id) => ({ id, repo: 'o/r', number: 1, base, head, title: 't', body: '' });
+  let n = 0;
+  const fetchFn = async (url, init) => ++n === 1 ? { status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify({ type: 'message', model: JSON.parse(init.body).model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'no json here' }], usage: { input_tokens: 1000, output_tokens: 100 } }) }
+    : n > 3 ? { status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify({ type: 'message', model: JSON.parse(init.body).model, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(findings()) }], usage: { input_tokens: 1000, output_tokens: 100 } }) } : { status: 429, ok: false, headers: { get: () => null }, text: async () => JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: 'slow down' } }) };
+  const api_engine = async ({ dir, ctx, repo, model, budget }) => { const log = console.log; console.log = () => {};
+    try { await api.run({ GITHUB_WORKSPACE: repo, CTX: ctx, PROMPT_FILE: path.join(dir, 'prompt.md'), ANTHROPIC_API_KEY: 'sk-ant-offline-mock', MODEL: model, MAX_BUDGET_USD: budget, MAX_OUTPUT_TOKENS: '32000', TIMEOUT: '12' }, { fetchFn, sleep: async () => {} }); } finally { console.log = log; }
+    return 0; };
+  const res = (i) => JSON.parse(fs.readFileSync(path.join(out, 'rep1', i, 'result.json'), 'utf8'));
+  const engine = async (a) => { if (a.dir.endsWith('y2')) { fs.writeFileSync(path.join(a.ctx, 'usage.json'), JSON.stringify({ totalCostUsd: 0.3 })); fs.writeFileSync(path.join(a.ctx, 'findings.json'), '{}'); fs.rmSync(path.join(a.dir, 'meta.json')); return 0; } return api_engine(a); };
+  const list = [E('y1'), E('y2'), E('y3')];
+  let r = await batch({ list, repos, out, cap: 9, maxTotal: 100, budget: '0.5', engine, log: () => {} });
+  assert.deepStrictEqual([r.ran, r.stopped], [3, null]);                                           // a. billed then 429: a miss, the batch goes on
+  assert.strictEqual(fs.readFileSync(path.join(out, 'rep1', 'y1', 'ctx', 'engine-error'), 'utf8').trim().split(/\s/)[0], 'rate');
+  assert.deepStrictEqual([res('y1').valid, res('y1').retryable, res('y1').usage.cost_usd > 0], [false, undefined, true]);
+  assert.deepStrictEqual([res('y2').valid, res('y2').retryable, res('y2').thrown, res('y2').usage.cost_usd], [false, undefined, true, 0.3]); // b. a throw after a billed engine run
+  assert.ok(Math.abs(r.spent - (0.3 + res('y1').usage.cost_usd + res('y3').usage.cost_usd)) < 1e-9);
+  const calls = n; r = await batch({ list, repos, out, cap: 9, maxTotal: 100, budget: '0.5', engine, log: () => {} });
+  assert.deepStrictEqual([r.ran, r.skipped, n, r.attempts], [0, 3, calls, []]);
+  await assert.rejects(batch({ list: [E('z'), E('z')], repos, out, cap: 9, maxTotal: 100, budget: '0.5', engine, log: () => {} }), /duplicate id z/); // d.
 });
