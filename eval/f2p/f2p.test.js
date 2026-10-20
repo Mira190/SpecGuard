@@ -298,3 +298,59 @@ test('--set without a value and --set=x are refused', () => {
   assert.throws(() => f2p.parseFlags(['run', '--set=x']), /not accepted/);
   assert.deepStrictEqual(f2p.parseFlags(['run', '--set', 'x', 'id1']), { opts: { set: 'x' }, rest: ['run', 'id1'] });
 });
+
+test('N1a parseVitest: a rejects failure (promise resolved instead of rejecting) is an assertion failure', () => {
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'f2p-vt2-')), file = pathx.join(dir, 'o.json');
+  const run = (msgs) => { fsx.writeFileSync(file, JSON.stringify({ numFailedTestSuites: 0, numFailedTests: msgs.length, numTotalTests: msgs.length, numPassedTests: 0, testResults: [{ assertionResults: msgs.map((m) => ({ status: 'failed', failureMessages: [m] })) }] })); return runners.parseVitest({ status: 1 }, file, dir); };
+  try {
+    assert.strictEqual(run(['Error: promise resolved "5" instead of rejecting']).outcome, 'assert_fail');
+    assert.strictEqual(run(['Error: promise resolved "5" instead of rejecting', 'AssertionError: expected 1 to be 2']).outcome, 'assert_fail');
+    assert.strictEqual(run(['Error: promise resolved "5" instead of rejecting', 'TypeError: x is not a function']).outcome, 'error');
+    assert.strictEqual(run(['TypeError: x is not a function\n    at f (src/a.ts:1:1)']).outcome, 'throw');
+  } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('N1b list names: ids, groups and set names are file-name safe; buggy, fixed and existing groups are refused', () => {
+  const { buildListRows, badName } = require('./harness');
+  for (const bad of ['', '.', '..', 'a/b', 'a b', 'buggy', 'fixed', 'x:y', 'é']) assert.ok(badName(bad), JSON.stringify(bad));
+  for (const ok of ['a', 'hono-5ca49b0', 'case_1.2', 'AbC-9']) assert.ok(!badName(ok), ok);
+  const env = (existing) => ({ repos: { 'honojs/hono': { name: 'hono', status: 'runnable' } }, harness: () => 'valid', hasClone: () => true, shaExists: () => true, depsChanged: () => false, existing });
+  const none = { ids: new Map(), groups: new Map(), sets: new Set() };
+  const e = (over = {}) => ({ repo: 'honojs/hono', buggy_sha: 'aaaaaaaa11', fixed_sha: 'bbbbbbbb22', finding: { kind: 'missing_test', path: 'a.ts', line: 1, title: 't', body: 'b' }, ...over });
+  assert.throws(() => buildListRows([e()], '../x', env(none)), /set name/);
+  assert.throws(() => buildListRows([e()], 'fixed', env(none)), /set name/);
+  assert.throws(() => buildListRows([e()], 'hono-3604', env({ ...none, groups: new Map([['hono-3604', 'holdout2']]) })), /equals an existing group/);
+  assert.throws(() => buildListRows([e({ id: '../evil' })], 's', env(none)), /id .* is not allowed/);
+  assert.throws(() => buildListRows([e({ pr: 'buggy' })], 's', env(none)), /group .* is not allowed/);
+  assert.throws(() => buildListRows([e({ pr: 'a/b' })], 's', env(none)), /group .* is not allowed/);
+  assert.throws(() => buildListRows([e({ pr: 'other' })], 's', env({ ...none, sets: new Set(['other']) })), /equals the name of an existing set/);
+  assert.doesNotThrow(() => buildListRows([e({ pr: 'g1', id: 'id.1' })], 's', env(none)));
+});
+
+test('N1c archive: an incomplete export is refused (tar status and file count against the commit)', () => {
+  const h = require('./harness');
+  assert.throws(() => h.assertExport({ status: null, files: 3, expected: 3, rev: 'abcdef123' }), /tar did not run/);
+  assert.throws(() => h.assertExport({ status: 0, files: 2, expected: 3, rev: 'abcdef123' }), /incomplete: tar exit 0, 2 files on disk, 3 in the commit/);
+  assert.throws(() => h.assertExport({ status: 2, files: 2, expected: 3, rev: 'abcdef123' }), /incomplete/);
+  assert.doesNotThrow(() => h.assertExport({ status: 0, files: 3, expected: 3, rev: 'abcdef123' }));
+  assert.doesNotThrow(() => h.assertExport({ status: 1, files: 3, expected: 3, rev: 'abcdef123' })); // symlink warnings on Windows, every file present
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'f2p-cnt-'));
+  try {
+    fsx.mkdirSync(pathx.join(dir, 'a')); fsx.writeFileSync(pathx.join(dir, 'a', 'x.txt'), '1'); fsx.writeFileSync(pathx.join(dir, 'y.txt'), '2'); fsx.writeFileSync(pathx.join(dir, '.sha'), 's');
+    assert.strictEqual(h.countFiles(dir), 2); // the root .sha is not a tree file
+  } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('N1d controls: an interrupted run is a harness_error that never replaces a completed result and is not in k/n', () => {
+  const h = require('./harness');
+  const res = { positive_control: { 'g1': { repo: 'r', status: 'verified' } } };
+  const kept = h.recordControl(res, 'g1', { repo: 'r', status: 'harness_error', reason: 'disk guard' });
+  assert.strictEqual(kept.status, 'verified');
+  assert.strictEqual(res.positive_control.g1.status, 'verified');
+  assert.strictEqual(res.positive_control_errors.g1.reason, 'disk guard');
+  h.recordControl(res, 'g2', { repo: 'r', status: 'harness_error', reason: 'oom' }); // nothing completed before: recorded as is
+  assert.strictEqual(res.positive_control.g2.status, 'harness_error');
+  h.recordControl(res, 'g1', { repo: 'r', status: 'not_verified' }); // a completed rerun does replace it
+  assert.strictEqual(res.positive_control.g1.status, 'not_verified');
+  assert.deepStrictEqual([h.harnessStatus(res).r.k, h.harnessStatus(res).r.n], [0, 1]); // g2 (harness_error) is out of n
+});

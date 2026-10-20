@@ -9,6 +9,8 @@ const jsFrames = (stack, cwd) => [...String(stack).matchAll(/\bat (?:.*? \()?([^
 
 // Same assertion marker as mutate.js (its isAssertion is not exported).
 const ASSERT = /AssertionError|^Error: expect\(|expected .* to |toMatchSnapshot|Snapshot .* mismatched/m;
+// vitest's `rejects` / `resolves` failures ("promise resolved ... instead of rejecting") are assertion failures, the counterpart of pytest's DID NOT RAISE.
+const VT_ASSERT = new RegExp(ASSERT.source + '|promise (resolved|rejected) .* instead of (rejecting|resolving)', 'm');
 const vitestJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const vitestFailed = (j) => (j ? (j.testResults || []).flatMap((x) => x.assertionResults || []).filter((a) => a.status === 'failed') : []);
 // vitest --reporter=json. Assertion-vs-error classification is mutate.js verdict(); a thrown non-assertion error also gets its stack origin.
@@ -16,8 +18,9 @@ const vitestFailed = (j) => (j ? (j.testResults || []).flatMap((x) => x.assertio
 function parseVitest(res, jsonFile, cwd) {
   const v = mutVerdict(res, jsonFile), j = vitestJson(jsonFile), failed = vitestFailed(j);
   if (v.status === 'survived') return j && j.numPassedTests > 0 ? { outcome: 'pass' } : { outcome: 'error', msg: 'all tests skipped' };
-  if (v.status === 'killed') {
-    if (failed.some((a) => !(a.failureMessages || []).some((m) => ASSERT.test(m)))) return { outcome: 'error', msg: 'assertion failure and a non-assertion failure in the same file' };
+  const isA = (a) => (a.failureMessages || []).some((m) => VT_ASSERT.test(m));
+  if (v.status === 'killed' || (v.status === 'invalid' && /^non-assertion/.test(v.reason) && failed.some(isA))) {
+    if (failed.some((a) => !isA(a))) return { outcome: 'error', msg: 'assertion failure and a non-assertion failure in the same file' };
     return { outcome: 'assert_fail', msg: failed.flatMap((a) => a.failureMessages || []).join('\n').slice(0, 1200) }; // msg is for the claim_match labeller only; it never affects the outcome
   }
   if (v.status === 'timeout') return { outcome: 'error', msg: 'timeout' };

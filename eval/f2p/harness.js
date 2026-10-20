@@ -49,9 +49,16 @@ function archive(clone, rev, dest) {
   fs.mkdirSync(dest, { recursive: true });
   const name = `f2p-${process.pid}-${rev.slice(0, 8)}.tar`, tar = path.join(os.tmpdir(), name);
   execFileSync('git', ['-C', clone, 'archive', '--format=tar', '-o', tar, rev]);
-  spawnSync('tar', ['-xf', name, '-C', dest.replace(/\\/g, '/').replace(/^([A-Za-z]):\//, (m, d) => '/' + d.toLowerCase() + '/')], { cwd: os.tmpdir(), stdio: 'ignore' }); // relative -f: GNU tar reads 'C:' as a host // symlink warnings on Windows are not fatal
+  const x = spawnSync('tar', ['-xf', name, '-C', dest.replace(/\\/g, '/').replace(/^([A-Za-z]):\//, (m, d) => '/' + d.toLowerCase() + '/')], { cwd: os.tmpdir(), stdio: 'ignore' }); // relative -f: GNU tar reads 'C:' as a host // symlink warnings on Windows are not fatal
   fs.rmSync(tar, { force: true });
-  if (!fs.readdirSync(dest).length) throw new Error(`empty export of ${rev}`);
+  assertExport({ status: x.status, files: countFiles(dest), expected: expectedFiles(clone, rev), rev });
+}
+// An export is complete when tar ran and the number of files on disk equals the number of files of the commit (`git ls-tree -r`, submodule entries excluded). tar may exit non-zero on Windows when it cannot create a symlink; that is accepted only when every file is there.
+const countFiles = (dir) => { let n = 0; const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) walk(path.join(d, e.name)); else if (!(d === dir && e.name === '.sha')) n++; } }; walk(dir); return n; };
+const expectedFiles = (clone, rev) => execFileSync('git', ['-C', clone, 'ls-tree', '-r', rev], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\n').filter((l) => l && !l.startsWith('160000')).length;
+function assertExport({ status, files, expected, rev }) {
+  if (status === null || status === undefined) throw new Error(`tar did not run for ${String(rev).slice(0, 8)}`);
+  if (files !== expected) throw new Error(`export of ${String(rev).slice(0, 8)} is incomplete: tar exit ${status}, ${files} files on disk, ${expected} in the commit`);
 }
 // Every exported tree carries .sha (the commit it was exported from); export, baseline, try and run refuse a tree whose .sha differs, or a tree without one (run seal-trees for trees exported before .sha existed).
 const treeSha = (group, dir) => { try { return fs.readFileSync(path.join(dir || treeDir(group), '.sha'), 'utf8').trim(); } catch { return null; } };
@@ -276,15 +283,22 @@ function cmdBaseline(only) {
 // Positive control: every test file the fix added or edited, run through the identical harness (fix version copied into the buggy tree, 3x; then 3x on fixed). Expected: verified or verified_throw.
 // Fix tests never appear in packets. A PR is a control success when at least one of its fix test files is verified/verified_throw.
 const TESTFILE = /(\.(test|spec)\.[cm]?[jt]sx?|_test\.go|(^|\/)test_[^/]*\.py|_test\.py)$/;
+// A control result is recorded here. An interrupted run (disk guard, memory, a harness exception) is a harness_error: it never replaces an earlier completed result (it is kept under positive_control_errors) and it is not counted in k/n.
+function recordControl(res, group, entry) {
+  const PC = (res.positive_control = res.positive_control || {}), old = PC[group];
+  if (entry.status === 'harness_error' && old && old.status !== 'harness_error') { (res.positive_control_errors = res.positive_control_errors || {})[group] = { reason: entry.reason }; return old; }
+  PC[group] = entry; return entry;
+}
 function cmdControls(only) {
   if (SET) throw new Error('positive controls are per harness, not per list set');
   const { reps } = scope(), R = REPOS(), res = loadResults(), PC = (res.positive_control = res.positive_control || {}), seen = new Set();
   for (const c of reps) {
     if (seen.has(c.group) || (only && !only.includes(c.group) && !only.includes(c.repo))) continue; seen.add(c.group);
     const cfg = R[c.repo];
-    if (!cfg || cfg.status === 'unrunnable') { PC[c.group] = { repo: c.repo, status: 'unrunnable', reason: (cfg && cfg.reason) || 'repo not configured' }; continue; }
+    try {
+    if (!cfg || cfg.status === 'unrunnable') { recordControl(res, c.group, { repo: c.repo, status: 'unrunnable', reason: (cfg && cfg.reason) || 'repo not configured' }); continue; }
     const tests = nameStatus(c.repo, c.buggy, c.fixed).filter(([st, p]) => st !== 'D' && TESTFILE.test(p)).map(([, p]) => p);
-    if (!tests.length) { PC[c.group] = { repo: c.repo, status: 'none', reason: 'the fix adds or edits no test file' }; continue; }
+    if (!tests.length) { recordControl(res, c.group, { repo: c.repo, status: 'none', reason: 'the fix adds or edits no test file' }); continue; }
     const files = [], free = lock(c.repo);
     try {
       for (const f of tests) {
@@ -297,10 +311,11 @@ function cmdControls(only) {
         const v = verdict(buggy, fixed, {});
         files.push({ file_sha256: sha(f).slice(0, 12), verdict: v.verdict, reason: v.reason, buggy: buggy.map((r) => r.outcome), fixed: fixed.map((r) => r.outcome) });
       }
-    } catch (e) { PC[c.group] = { repo: c.repo, status: 'harness_error', reason: String(e.message).slice(0, 300), files }; saveResults(res); continue; } finally { free(); }
+    } finally { free(); }
     const ok = files.some((x) => x.verdict === 'verified' || x.verdict === 'verified_throw');
-    PC[c.group] = { repo: c.repo, status: ok ? 'verified' : 'not_verified', files };
+    recordControl(res, c.group, { repo: c.repo, status: ok ? 'verified' : 'not_verified', files });
     saveResults(res); console.error(c.group, PC[c.group].status, files.map((x) => x.verdict).join(','));
+    } catch (e) { recordControl(res, c.group, { repo: c.repo, status: 'harness_error', reason: String(e.message).slice(0, 300) }); saveResults(res); console.error(c.group, 'harness_error', String(e.message).slice(0, 120)); }
   }
   saveResults(res);
 }
@@ -310,7 +325,7 @@ function harnessStatus(res, baseline = {}) {
   for (const [grp, pc] of Object.entries(res.positive_control || {})) {
     if (baseline[grp] && baseline[grp].status !== 'green') { out[pc.repo] = out[pc.repo] || { k: 0, n: 0 }; continue; } // baseline not green: the control is not runnable
     const o = (out[pc.repo] = out[pc.repo] || { k: 0, n: 0 });
-    if (pc.status === 'verified') { o.k++; o.n++; } else if (pc.status === 'not_verified' || pc.status === 'harness_error') o.n++;
+    if (pc.status === 'verified') { o.k++; o.n++; } else if (pc.status === 'not_verified') o.n++; // harness_error (interrupted run) is not counted
   }
   for (const o of Object.values(out)) o.status = o.n === 0 ? 'unvalidated' : o.k / o.n < 0.8 ? 'invalid' : 'valid';
   return out;
@@ -381,9 +396,13 @@ function cmdRunMutation(only) {
 
 // ---- list input: rows from another eval, verified through the same harness ----
 // Pure: rows and per-finding fields from the caller's list. env = { repos, harness(repo) -> 'valid'|..., hasClone(repo), shaExists(repo, sha), depsChanged(repo, a, b) }.
+// Ids, groups and set names become file names: letters, digits, dot, underscore, dash only, never only dots, never 'buggy' or 'fixed'.
+const badName = (v) => !/^[A-Za-z0-9._-]+$/.test(String(v)) || /^\.+$/.test(String(v)) || ['buggy', 'fixed'].includes(String(v));
 function buildListRows(list, name, env) {
   if (!Array.isArray(list)) throw new Error('the list must be a JSON array');
-  const ex = env.existing || { ids: new Set(), groups: new Map() }, pairOf = new Map();
+  const ex = env.existing || { ids: new Set(), groups: new Map(), sets: new Set() }, pairOf = new Map();
+  if (badName(name)) throw new Error(`set name ${name} is not allowed (letters, digits, . _ - only; not buggy or fixed)`);
+  if (ex.groups.has(name)) throw new Error(`set name ${name} equals an existing group`);
   const rows = [], fields = {}, prs = new Map(), seen = new Set();
   list.forEach((e, i) => {
     const f = e.finding || {};
@@ -392,6 +411,9 @@ function buildListRows(list, name, env) {
     const cfg = env.repos[e.repo], rname = (cfg && cfg.name) || String(e.repo).split('/').pop();
     const group = e.pr || `${rname}-${e.buggy_sha.slice(0, 8)}`;
     const id = e.id || sha([name, e.repo, e.buggy_sha, f.path, f.line, f.title].join('|'));
+    if (badName(id)) throw new Error(`entry ${i}: id ${String(id).slice(0, 20)} is not allowed (letters, digits, . _ - only)`);
+    if (badName(group)) throw new Error(`entry ${i}: group ${String(group).slice(0, 20)} is not allowed (letters, digits, . _ - only; not buggy or fixed)`);
+    if (ex.sets && ex.sets.has(group)) throw new Error(`entry ${i}: group ${group} equals the name of an existing set`);
     if (seen.has(id)) throw new Error(`entry ${i}: duplicate id ${id.slice(0, 12)}`);
     if (ex.ids.has(id)) throw new Error(`entry ${i}: id ${id.slice(0, 12)} already exists in another set (${ex.ids.get ? ex.ids.get(id) : 'elsewhere'})`);
     if (ex.groups.has(group)) throw new Error(`entry ${i}: group ${group} already exists in set ${ex.groups.get(group)}`);
@@ -412,15 +434,15 @@ function buildListRows(list, name, env) {
 }
 // Ids and groups of every other candidate file (holdout2, hono, other list sets): a list may not reuse them.
 function existingIds(except) {
-  const ids = new Map(), groups = new Map();
+  const ids = new Map(), groups = new Map(), sets = new Set(['holdout2', 'hono']);
   for (const fn of fs.readdirSync(__dirname).filter((n) => /-candidates\.json$/.test(n) && n !== `${except}-candidates.json`)) {
-    const set = fn.replace(/-candidates\.json$/, ''), j = readJson(path.join(__dirname, fn));
+    const set = fn.replace(/-candidates\.json$/, ''), j = readJson(path.join(__dirname, fn)); sets.add(set);
     for (const c of j.candidates || []) { ids.set(c.id, set); if (c.pr) groups.set(c.pr, set); }
   }
-  return { ids, groups };
+  return { ids, groups, sets };
 }
 function cmdImport(listFile, name) {
-  if (!listFile || !name || !/^[a-z0-9][a-z0-9-]*$/.test(name) || ['holdout2', 'hono'].includes(name)) throw new Error('usage: f2p.js import <list.json> --name <set> (set: lowercase letters, digits, dashes; not holdout2 or hono)');
+  if (!listFile || !name || badName(name) || ['holdout2', 'hono'].includes(name)) throw new Error('usage: f2p.js import <list.json> --name <set> (set: letters, digits, . _ -; not buggy, fixed, holdout2 or hono)');
   const hs = harnessStatus(mainResults(), mainBaseline()), R = REPOS();
   const env = { existing: existingIds(name), repos: R, harness: (r) => (hs[r] || {}).status, hasClone: (r) => fs.existsSync(cloneOf(r)), shaExists: (r, x) => { try { execFileSync('git', ['-C', cloneOf(r), 'cat-file', '-e', x + '^{commit}'], { stdio: 'ignore' }); return true; } catch { return false; } }, depsChanged: (r, a, b) => nameStatus(r, a, b).some(([, p]) => MANIFEST.test(p)) };
   const { rows, fields, prs } = buildListRows(readJson(listFile), name, env);
@@ -459,4 +481,4 @@ function cmdReport() {
   if (mut.length) console.log('\nMutation arm (descriptive, no rate):', JSON.stringify(mut.map((r) => ({ id: r.id.slice(0, 8), verdict: r.verdict, kills: r.kills, kills_uncertain: r.kills_uncertain, claim_match: r.claim_match }))));
 }
 
-module.exports = { assertFree, treeDir, testsRoot, packetsDir, checkTree, existingIds, cmdSealTrees, useSet, files, cmdImport, buildListRows, cmdReportList, cmdVerify, runOnce, withTree, cmdControls, cmdWritersDone, harnessStatus, cmdExport, cmdPackets, cmdSetup, cmdBaseline, cmdTry, cmdRun, cmdRunMutation, cmdReport, freeze, hashes, nearestTest, scope };
+module.exports = { recordControl, assertExport, countFiles, badName, assertFree, treeDir, testsRoot, packetsDir, checkTree, existingIds, cmdSealTrees, useSet, files, cmdImport, buildListRows, cmdReportList, cmdVerify, runOnce, withTree, cmdControls, cmdWritersDone, harnessStatus, cmdExport, cmdPackets, cmdSetup, cmdBaseline, cmdTry, cmdRun, cmdRunMutation, cmdReport, freeze, hashes, nearestTest, scope };
