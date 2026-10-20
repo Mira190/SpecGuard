@@ -235,20 +235,36 @@
    "test_sha256_frozen": {
     "src/utils/jwt/jwt-header-invalid-signed.test.ts": "b8fe5f839070b701033164ca9e94a5e9ce91c34725bfcc28ad6121b3b956cb22"
    },
-   "verdict": "invalid",
-   "subtype": "throw_on_fixed",
-   "reason": "non-assertion throw on fixed tree",
+   "verdict": "not_discriminating",
+   "reason": "assert_fail on both trees",
    "runs": {
     "buggy": [
-     "throw",
-     "throw",
-     "throw"
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
     ],
     "fixed": [
-     "throw",
-     "throw",
-     "throw"
+     "assert_fail",
+     "assert_fail",
+     "assert_fail"
     ]
+   },
+   "pre_amendment6": {
+    "verdict": "invalid",
+    "subtype": "throw_on_fixed",
+    "reason": "non-assertion throw on fixed tree",
+    "runs": {
+     "buggy": [
+      "throw",
+      "throw",
+      "throw"
+     ],
+     "fixed": [
+      "throw",
+      "throw",
+      "throw"
+     ]
+    }
    }
   },
   "79e11a47e7608d8d2d85ffb32c9e776e41a83eb54b413cf9f81dedaae643f718": {

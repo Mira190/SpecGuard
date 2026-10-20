@@ -205,7 +205,7 @@ Two harness changes were made after the first outcomes and change no verdict: `r
 - Within hono (the primary descriptive comparison, because writer feedback is confounded with the arm across repos): NEAR 0/9 vs FAR 0/17 primary; sensitivity 0/9 vs 1/17.
 - The one NEAR `verified` test (hono-3727, `expandIPv6('::ffff:0.0.0.0')`) failed on buggy for a different defect than the finding claimed (labeller: `claim_match: no`).
 - The FAR primary hit is sqlglot-7315 (TRY_TO_NUMBER to TRY_CAST in DuckDB; `claim_match: yes`).
-- The sensitivity line counts hono-2339 (missing JwtHeaderInvalid rejection test; `claim_match: yes`) as the pre-registered rule says, but that test threw on BOTH trees, so it is not fail-to-pass in any sense.
+- The sensitivity line counts hono-2339 (missing JwtHeaderInvalid rejection test; `claim_match: yes`) as the pre-registered rule says, but that test threw on BOTH trees, so it is not fail-to-pass in any sense. (Under the amendment-6/7 rules this test is `not_discriminating`, so the sensitivity line is now 0/9 vs 1/23; see amendment 7.)
 - Exclusions per arm: no api_shift, bad_call, test-setup throw, flaky, unrunnable, deps_changed or harness-invalid in either arm; 1 FAR throw on fixed.
 - Positive controls: hono 6/6, sqlglot 1/1 and langchain 1/1 (weakly validated, n = 1).
 
@@ -282,6 +282,6 @@ Every committed writer verdict was produced under the pre-amendment-6 rules. Che
 - 7 test files hold more than one test: 4 replay files (langchain 2, hono-3787, hono-3366) are pass/pass on both trees, 2 mutation files pass 3/3 on the unmutated tree and kill nothing, and 1 mutation file is invalid (its first unmutated run errored; a stricter rule cannot make it pass);
 - so hono-3727, sqlglot-7315, hono-3604 (two reversed rows) and the mutation rows are unaffected.
 
-One row is not covered by this argument: hono-2339's writer test uses `.rejects.toThrow` and threw on both trees under the old rules (verdict `invalid`, throw on fixed). Its failure text was not stored. Under the new vitest rule a "promise resolved instead of rejecting" failure counts as an assertion failure, so its verdict could differ if that was the message. It was not rerun; the row, and the sensitivity line that counts it, stay as committed and are flagged here.
+One row was not covered by this argument: hono-2339's writer test uses `.rejects.toThrow` and threw on both trees under the old rules (verdict `invalid`, throw on fixed). Its buggy failure text had been captured for the labeller: "promise resolved ... instead of rejecting". Because the new vitest rule changes exactly that class, this one test was rerun once (3 buggy + 3 fixed) under the amendment-6/7 rules, after the controls and before any other run: assert_fail on both trees, verdict `not_discriminating`. The old verdict is kept in the row as `pre_amendment6`. Consequence: the sensitivity line drops from FAR 2/23 to 1/23 (NEAR unchanged 0/9); the primary and secondary lines are unchanged (NEAR 0/9, FAR 1/23). No other writer test was rerun.
 
 The rules of amendments 6 and 7 govern all future rows, including rqlite and list sets, in the same `results.json`.
