@@ -83,21 +83,27 @@ File error kinds over all 15 PRs: collection 2, empty 18, other 8.
 | filtered | 0 | [−1, 1] |
 | unfiltered | −0.250 | [−0.625, 0.250] |
 
-**Flags per PR (C / static):**
+**Flags per PR (C / static), with the PR's failing tests from cover:**
 
-| PR | C | static |
-|---|---|---|
-| sqlglot-7054 | 1 | 3 |
-| sqlglot-7097 | 1 | 2 |
-| sqlglot-7315 | 0 | 3 |
-| hono-3604 | 0 | 2 |
-| hono-3787 | 10 | 16 |
-| langchain-18592 | 2 | 9 |
-| langchain-33461 | 2 | 3 |
-| hono-2339 | 4 | 18 |
-| hono-3413 | 0 | 2 |
-| hono-3366 | 0 | 0 |
-| hono-3727 | 0 | 0 |
+| PR | C | static | failing tests |
+|---|---|---|---|
+| sqlglot-7054 | 1 | 3 | 0 |
+| sqlglot-7097 | 1 | 2 | 0 |
+| sqlglot-7315 | 0 | 3 | 0 |
+| hono-3604 | 0 | 2 | 480 |
+| hono-3787 | 10 | 16 | 485 |
+| langchain-18592 | 2 | 9 | 55 |
+| langchain-33461 | 2 | 3 | 18 |
+| hono-2339 | 4 | 18 | 20 |
+| hono-3413 | 0 | 2 | 478 |
+| hono-3366 | 0 | 0 | 473 |
+| hono-3727 | 0 | 0 | 484 |
+
+**Validity flag** (red team, 2026-10-20):
+- The hono bug rows have about 475–485 failing tests each (hono-2339 has 20), while the hono controls have 0. Every PR is deps_changed=true.
+- This looks like environment breakage on older trees (one env built at 5ca49b0), not bug behaviour.
+- The within-PR null absorbs much of it, because the env is the same within a PR.
+- The C-on-controls noise comparison below (0 flags) is **not comparable** to the bug PRs, because the controls ran on healthier suites.
 
 The filtered set is langchain-33461, hono-3413 and hono-3727.
 
@@ -115,6 +121,8 @@ The filtered set is langchain-33461, hono-3413 and hono-3727.
 | confirmed | 5 | 4 | 0.8 |
 | contradicted | 27 | 9 | 0.333 |
 | unknown | 24 | 0 | 0 |
+
+These are descriptive figures from the design set only, and n is tiny. Coverage-confirmed findings were caught 4/5; n = 5 proves nothing (red team).
 
 ### Power at the confirmation n
 
@@ -136,4 +144,9 @@ It is **below 0.5**, so under the prereg it is reported to e0 and the owner befo
 | filtered | 0 |
 | unfiltered | 0.486 |
 
-This is also below 0.5. Which power figure the prereg means is for the red team to rule. Neither changes the gate.
+This is also below 0.5.
+
+**Red-team ruling (2026-10-20):**
+- The frozen `powerOf` figure (0) is the pre-registered number, and it is reported as such.
+- The independent-column figure is the better estimate, labelled "diagnostic, not frozen".
+- Both are below 0.5, so the reading is the same. Neither changes the gate.
