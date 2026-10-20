@@ -222,9 +222,9 @@ test('B1 parseGo: test timed out is an error, not a throw', () => {
 
 test('B1 parsePytest: a Windows interpreter stdlib frame (...\\Lib\\json\\...) is skipped, a test frame is test', () => {
   const xml = (frames) => `<testsuite><testcase classname="t" name="a"><failure message="ValueError: x">${frames}\nE   ValueError: x</failure></testcase></testsuite>`;
-  const prod = runners.parsePytest(xml('tests/test_x.py:5: in test_a\nsrc/pkg/mod.py:9: in f\nC:\\Users\\u\\anaconda3\\Lib\\json\\decoder.py:355: in raw_decode'), 'C:/tmp/x');
+  const prod = runners.parsePytest(xml('tests/test_x.py:5: in test_a\nsrc/pkg/mod.py:9: in f\nD:\\Python312\\Lib\\json\\decoder.py:355: in raw_decode'), 'C:/tmp/x');
   assert.deepStrictEqual([prod.outcome, prod.origin, prod.frame], ['throw', 'production', 'src/pkg/mod.py:9']);
-  const tst = runners.parsePytest(xml('tests/test_x.py:5: in test_a\nC:\\Users\\u\\anaconda3\\Lib\\json\\decoder.py:355: in raw_decode'), 'C:/tmp/x');
+  const tst = runners.parsePytest(xml('tests/test_x.py:5: in test_a\nD:\\Python312\\Lib\\json\\decoder.py:355: in raw_decode'), 'C:/tmp/x');
   assert.deepStrictEqual([tst.outcome, tst.origin], ['throw', 'test']);
 });
 
