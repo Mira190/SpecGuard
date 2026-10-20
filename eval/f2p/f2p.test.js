@@ -513,3 +513,16 @@ test('list import, cover-only rows (E1): no finding, group = row id, controls ha
   const missing = { ...env, shaExists: (r, s) => s !== 'bbbbbbbb22' };
   assert.deepStrictEqual(buildListRows([bug, ctl], 'e1design', missing).rows.map((x) => x.status), ['unresolved', 'ok']);
 });
+
+test('cover --set reads <set>-candidates.json: a missing set throws and writes nothing', () => {
+  const name = `zz-test-cover-missing-${process.pid}`, out = pathx.join(__dirname, `results-cover-${name}.json`), h = require('./harness');
+  try { assert.throws(() => cov.cmdCover(['x'], name), /ENOENT|no such file/); assert.ok(!fsx.existsSync(out)); } finally { h.useSet(null); fsx.rmSync(out, { force: true }); }
+});
+test("cover --set covers the set's own groups, never holdout2's", () => {
+  const name = `zz-test-cover-${process.pid}`, G = `zz-test-group-${process.pid}`, cand = pathx.join(__dirname, `${name}-candidates.json`), out = pathx.join(__dirname, `results-cover-${name}.json`);
+  const h = require('./harness'), orig = h.checkTree, log = console.log, seen = [];
+  fsx.writeFileSync(cand, JSON.stringify({ prs: [], candidates: [{ in_oracle_set: true, status: 'ok', pr: G, repo: 'honojs/hono', buggy_sha: 'a'.repeat(40), fixed_sha: null }] }));
+  h.checkTree = () => { throw new Error('stub'); }; console.log = (s) => seen.push(JSON.parse(s).group); // a guards() throw is caught per job too, group still logged
+  try { cov.cmdCover([], name); } finally { console.log = log; h.checkTree = orig; h.useSet(null); fsx.rmSync(cand, { force: true }); fsx.rmSync(out, { force: true }); }
+  assert.deepStrictEqual(seen, [G]);
+});
