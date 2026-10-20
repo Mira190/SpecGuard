@@ -2,7 +2,9 @@
 // A run is { outcome: 'pass' | 'assert_fail' | 'throw' | 'error', origin?, frame?, msg? }. throw = collected, ran, threw a non-assertion error; error = compile, import, collection error or timeout.
 
 // Frames that belong to the framework, runtime or dependencies, never to the code under test.
-const FRAMEWORK = /node_modules|node:|site-packages|dist-packages|<frozen|[\\/]go[\\/]pkg[\\/]mod|[\\/]GOROOT|[\\/]usr[\\/]lib|[\\/]pytest|[\\/]vitest/i;
+// Go GOROOT, toolchain and module-cache frames and the Python interpreter's stdlib (Lib\, lib/python3.x) are runtime; trimpath Go frames are filtered by the Go parser, which knows the mode.
+const FRAMEWORK = /node_modules|node:|site-packages|dist-packages|<frozen|[\\/]go[\\/]pkg[\\/]mod|[\\/]go[\\/]src[\\/]|golang\.org[\\/]toolchain|@v\d|[\\/]GOROOT|[\\/]usr[\\/]lib|[\\/]pytest|[\\/]vitest|[\\/]lib[\\/]python3/i;
+const WIN_PYSTD = /(^|[\\/])Lib[\\/]/; // case-sensitive: a repo's own lib/ directory is production code
 // Test code: test files, helpers, fixtures.
 const TESTISH = /(^|[\\/])(tests?|__tests__|testdata|testutils?|fixtures?|helpers?)[\\/]|\.(test|spec)\.[cm]?[jt]sx?$|_test\.go$|(^|[\\/])test_[^\\/]*\.py$|_test\.py$|conftest\.py$|(^|[\\/])setup[^\\/]*\.[jt]s$/i;
 // A bad call or import: the test is wrong, not the code under test.
@@ -12,7 +14,7 @@ const BADCALL = /is not a function|is not a constructor|is not defined|has no at
 // production: the first non-framework frame is not test code (that frame is recorded); test: it is test code, setup or fixture; bad_call: the message says the call itself was wrong; unknown: no usable frame.
 function throwOrigin(frames, msg = '') {
   if (BADCALL.test(msg)) return { origin: 'bad_call', frame: null };
-  const top = (frames || []).find((f) => !FRAMEWORK.test(f));
+  const top = (frames || []).find((f) => !FRAMEWORK.test(f) && !WIN_PYSTD.test(f));
   if (!top) return { origin: 'unknown', frame: null };
   return TESTISH.test(top.replace(/:\d+(:\d+)?(\s.*)?$/, '')) ? { origin: 'test', frame: top } : { origin: 'production', frame: top };
 }

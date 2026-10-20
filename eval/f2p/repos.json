@@ -12,7 +12,7 @@
     "name": "rqlite",
     "runner": "go",
     "tree": "export",
-    "cmd": "go test -json -count=1 -run \"{run}\" ./{testdir}",
+    "cmd": "go test -json -count=1 -trimpath -timeout 20m -run \"{run}\" ./{testdir}",
     "path_prepend": [
       "{evidence}/f2p/tools/go/bin"
     ],

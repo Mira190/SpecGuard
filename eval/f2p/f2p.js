@@ -178,13 +178,22 @@ function cmdPower() {
   console.log(JSON.stringify(powerTable(perPr(cands, 'NEAR'), perPr(cands, 'FAR'), { sims: Number(process.argv[3] || 1000), reps: Number(process.argv[4] || 1000) })));
 }
 
-module.exports = { MANIFEST, resolveFix, hunks, distance, classify, siblings, unitTouched, findingId, summaryBody, ARMS, EV, F2P, ROOT, cloneOf, readJson, sha, powerTable, perPr };
+module.exports = { parseFlags, MANIFEST, resolveFix, hunks, distance, classify, siblings, unitTouched, findingId, summaryBody, ARMS, EV, F2P, ROOT, cloneOf, readJson, sha, powerTable, perPr };
+
+// --set <name> (operate on a list set) and --name <set> (import) are flags with a required value; everything else is positional. `--set` without a value and `--set=x` are refused.
+function parseFlags(raw) {
+  const opts = {}, rest = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (/^--(set|name)=/.test(raw[i])) throw new Error(`${raw[i].split('=')[0]}=<value> is not accepted; write ${raw[i].split('=')[0]} <value>`);
+    if (raw[i] === '--set' || raw[i] === '--name') { const v = raw[++i]; if (!v || v.startsWith('--')) throw new Error(`${raw[i - 1]} needs a value`); opts[raw[i - 1].slice(2)] = v; } else rest.push(raw[i]);
+  }
+  return { opts, rest };
+}
 
 if (require.main === module) {
-  const raw = process.argv.slice(2), opts = {}, rest = []; // --set <name> (operate on a list set) and --name <set> (import) are flags; everything else is positional
-  for (let i = 0; i < raw.length; i++) { if (raw[i] === '--set' || raw[i] === '--name') opts[raw[i].slice(2)] = raw[++i]; else rest.push(raw[i]); }
-  const [cmd, ...args] = rest, H = () => { const h = require('./harness'); if (opts.set) h.useSet(opts.set); return h; };
+  let parsed; try { parsed = parseFlags(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(2); }
+  const opts = parsed.opts, [cmd, ...args] = parsed.rest, H = () => { const h = require('./harness'); if (opts.set) h.useSet(opts.set); return h; };
   const cmds = { candidates: cmdCandidates, power: cmdPower, export: () => H().cmdExport(), packets: () => H().cmdPackets(), setup: () => H().cmdSetup(args[0], args[1]), baseline: () => H().cmdBaseline(args.length ? args : null), try: () => H().cmdTry(args[0]),
-    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.length > 1 ? args.slice(1) : null) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport(), controls: () => H().cmdControls(args.length ? args : null), 'writers-done': () => H().cmdWritersDone(args[0]), verify: () => H().cmdVerify(args[0]), import: () => H().cmdImport(args[0], opts.name) };
+    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.length > 1 ? args.slice(1) : null) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport(), controls: () => H().cmdControls(args.length ? args : null), 'writers-done': () => H().cmdWritersDone(args[0]), verify: () => H().cmdVerify(args[0]), import: () => H().cmdImport(args[0], opts.name), 'seal-trees': () => H().cmdSealTrees() };
   if (!cmds[cmd]) { console.error('usage: f2p.js candidates | power | import <list.json> --name <set> | export | packets | setup <repo> <sha> | baseline | try <id> | run [--mutation] [id|pr...] | report | controls [repo|pr...] | writers-done <repo>   (export, packets, baseline, try, run, report accept --set <set>)'); process.exitCode = 2; } else cmds[cmd]();
 }

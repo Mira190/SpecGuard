@@ -189,3 +189,112 @@ test('default file names are unchanged without --set; a set gets its own files',
   assert.deepStrictEqual(h.files(), { results: 'results-demo.json', baseline: 'baseline-demo.json', cand: 'demo-candidates.json', fields: 'demo-fields.json' });
   h.useSet(null);
 });
+
+// ---- red-team fixes B1-B4 ----
+const fsx = require('node:fs');
+const osx = require('node:os');
+const pathx = require('node:path');
+const runners = require('./runners');
+const goEvents = (test, lines, action = 'fail') => [...lines.map((l) => ({ Action: 'output', Test: test, Output: l + '\n' })), { Action: action, Test: test }, { Action: action }].map((e) => JSON.stringify(e)).join('\n');
+const TESTING = ['testing.tRunner.func1.2({0x1234, 0x5678})', '\ttesting/testing.go:1734 +0x21c', 'testing.tRunner.func1()', '\ttesting/testing.go:1737 +0x35e', 'panic({0x1234?, 0x5678?})', '\truntime/panic.go:787 +0x132'];
+const HEAD = ['panic: runtime error: invalid memory address or nil pointer dereference [recovered]', '\tpanic: runtime error: invalid memory address or nil pointer dereference', 'goroutine 7 [running]:'];
+
+test('B1 parseGo: a nil dereference inside a _test.go (trimpath trace) is origin test', () => {
+  const trace = [...HEAD, ...TESTING, 'github.com/acme/proj/db.TestThing(0xc000)', '\tgithub.com/acme/proj/db/db_new_test.go:21 +0x20', 'testing.tRunner(0xc0001, 0x2345)', '\ttesting/testing.go:1792 +0xf4'];
+  const o = runners.parseGo(goEvents('TestThing', trace), 'C:/tmp/x');
+  assert.deepStrictEqual([o.outcome, o.origin, o.frame], ['throw', 'test', 'github.com/acme/proj/db/db_new_test.go:21']);
+});
+
+test('B1 parseGo: a panic in production code is production, stdlib and runtime frames are skipped', () => {
+  const trace = [...HEAD, ...TESTING, 'github.com/acme/proj/db.(*DB).Query(...)', '\tgithub.com/acme/proj/db/db.go:100 +0x4c', 'github.com/acme/proj/db.TestThing(0xc000)', '\tgithub.com/acme/proj/db/db_new_test.go:21 +0x20'];
+  const o = runners.parseGo(goEvents('TestThing', trace), 'C:/tmp/x');
+  assert.deepStrictEqual([o.outcome, o.origin, o.frame], ['throw', 'production', 'github.com/acme/proj/db/db.go:100']);
+  // a dependency (@v) and an absolute GOROOT frame are runtime too; an absolute frame under cwd is repo-local
+  assert.strictEqual(runners.goFrame('golang.org/x/sys@v0.1.0/unix/a.go', 'C:/tmp/x'), null);
+  assert.strictEqual(runners.goFrame('C:/Go/src/testing/testing.go', 'C:/tmp/x'), null);
+  assert.strictEqual(runners.goFrame('C:/tmp/x/db/db.go', 'C:/tmp/x'), 'db/db.go');
+});
+
+test('B1 parseGo: test timed out is an error, not a throw', () => {
+  const o = runners.parseGo(goEvents('TestSlow', ['panic: test timed out after 15m0s', 'running tests:', '\tTestSlow (15m0s)', 'goroutine 9 [running]:', 'testing.(*M).startAlarm.func1()', '\ttesting/testing.go:2484 +0x1b']), 'C:/tmp/x');
+  assert.deepStrictEqual([o.outcome, o.msg], ['error', 'test timed out']);
+});
+
+test('B1 parsePytest: a Windows interpreter stdlib frame (...\\Lib\\json\\...) is skipped, a test frame is test', () => {
+  const xml = (frames) => `<testsuite><testcase classname="t" name="a"><failure message="ValueError: x">${frames}\nE   ValueError: x</failure></testcase></testsuite>`;
+  const prod = runners.parsePytest(xml('tests/test_x.py:5: in test_a\nsrc/pkg/mod.py:9: in f\nC:\\Users\\u\\anaconda3\\Lib\\json\\decoder.py:355: in raw_decode'), 'C:/tmp/x');
+  assert.deepStrictEqual([prod.outcome, prod.origin, prod.frame], ['throw', 'production', 'src/pkg/mod.py:9']);
+  const tst = runners.parsePytest(xml('tests/test_x.py:5: in test_a\nC:\\Users\\u\\anaconda3\\Lib\\json\\decoder.py:355: in raw_decode'), 'C:/tmp/x');
+  assert.deepStrictEqual([tst.outcome, tst.origin], ['throw', 'test']);
+});
+
+test('B4 parseGo: all tests skipped is an error, a skip next to a pass is a pass', () => {
+  const skipped = [{ Action: 'skip', Test: 'TestA' }, { Action: 'pass' }].map((e) => JSON.stringify(e)).join('\n');
+  assert.deepStrictEqual(runners.parseGo(skipped, 'C:/tmp/x'), { outcome: 'error', msg: 'all tests skipped' });
+  const mixed = [{ Action: 'skip', Test: 'TestA' }, { Action: 'pass', Test: 'TestB' }, { Action: 'pass' }].map((e) => JSON.stringify(e)).join('\n');
+  assert.strictEqual(runners.parseGo(mixed, 'C:/tmp/x').outcome, 'pass');
+});
+
+test('B4 parseVitest: skipped counts are not a pass; assertion next to a non-assertion failure is an error', () => {
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'f2p-vt-')), file = pathx.join(dir, 'o.json');
+  const run = (j, status = 0) => { fsx.writeFileSync(file, JSON.stringify(j)); return runners.parseVitest({ status }, file, dir); };
+  try {
+    const base = { numFailedTestSuites: 0, testResults: [{ assertionResults: [] }] };
+    assert.deepStrictEqual(run({ ...base, numFailedTests: 0, numTotalTests: 2, numPassedTests: 0 }), { outcome: 'error', msg: 'all tests skipped' });
+    assert.strictEqual(run({ ...base, numFailedTests: 0, numTotalTests: 2, numPassedTests: 1 }).outcome, 'pass');
+    const f = (m) => ({ status: 'failed', failureMessages: [m] });
+    assert.strictEqual(run({ numFailedTestSuites: 0, numFailedTests: 1, numTotalTests: 1, numPassedTests: 0, testResults: [{ assertionResults: [f('AssertionError: expected 1 to be 2')] }] }, 1).outcome, 'assert_fail');
+    assert.strictEqual(run({ numFailedTestSuites: 0, numFailedTests: 2, numTotalTests: 2, numPassedTests: 0, testResults: [{ assertionResults: [f('AssertionError: expected 1 to be 2'), f('TypeError: x is not a function')] }] }, 1).outcome, 'error');
+  } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pytest: DID NOT RAISE and pytest.fail are assertions; an assertion next to a thrown error is an error; combine() cannot hide an error', () => {
+  const tc = (msg, body = '') => `<testcase classname="t" name="n"><failure message="${msg}">${body}</failure></testcase>`;
+  const x = (...c) => `<testsuite>${c.join('')}</testsuite>`;
+  assert.strictEqual(runners.parsePytest(x(tc('Failed: DID NOT RAISE &lt;class ValueError&gt;')), '').outcome, 'assert_fail');
+  assert.strictEqual(runners.parsePytest(x(tc('Failed: boom')), '').outcome, 'assert_fail');
+  assert.strictEqual(runners.parsePytest(x(tc('assert 1 == 2'), tc('TypeError: bad', 'src/a.py:1: in f')), '').outcome, 'error');
+  const ok = { outcome: 'pass' }, af = { outcome: 'assert_fail' }, er = { outcome: 'error', msg: 'import' };
+  assert.strictEqual(runners.combine([af, er]).outcome, 'error');
+  assert.strictEqual(runners.combine([er, af]).outcome, 'error');
+  assert.strictEqual(runners.combine([ok, af]).outcome, 'assert_fail');
+  assert.strictEqual(runners.combine([ok, ok]).outcome, 'pass');
+  assert.strictEqual(runners.combine([af, { outcome: 'throw' }]).outcome, 'error');
+});
+
+test('B2 list import: a group that exists in another set, a duplicate id and one group with two pairs are refused', () => {
+  const { buildListRows } = require('./harness');
+  const env = (existing) => ({ repos: { 'honojs/hono': { name: 'hono', status: 'runnable' } }, harness: () => 'valid', hasClone: () => true, shaExists: () => true, depsChanged: () => false, existing });
+  const e = (over = {}) => ({ repo: 'honojs/hono', buggy_sha: 'aaaaaaaa11', fixed_sha: 'bbbbbbbb22', finding: { kind: 'missing_test', path: 'a.ts', line: 1, title: 't', body: 'b' }, ...over });
+  assert.throws(() => buildListRows([e()], 's', env({ ids: new Map(), groups: new Map([['hono-aaaaaaaa', 'holdout2']]) })), /group hono-aaaaaaaa already exists in set holdout2/);
+  assert.throws(() => buildListRows([e({ id: 'x1' })], 's', env({ ids: new Map([['x1', 'hono']]), groups: new Map() })), /already exists in another set/);
+  assert.throws(() => buildListRows([e({ pr: 'g' }), e({ pr: 'g', fixed_sha: 'cccccccc33', finding: { kind: 'missing_test', path: 'b.ts', line: 2, title: 'u', body: 'b' } })], 's', env({ ids: new Map(), groups: new Map() })), /more than one buggy\/fixed pair/);
+  assert.doesNotThrow(() => buildListRows([e({ pr: 'g' }), e({ pr: 'g', finding: { kind: 'missing_test', path: 'b.ts', line: 2, title: 'u', body: 'b' } })], 's', env({ ids: new Map(), groups: new Map() })));
+});
+
+test('B2 trees, tests and packets are namespaced per set; an exported tree whose .sha differs is refused', () => {
+  const h = require('./harness');
+  h.useSet(null);
+  const plain = [h.treeDir('g'), h.testsRoot('i'), h.packetsDir()].map((p) => p.split('\\').join('/'));
+  h.useSet('demo');
+  const named = [h.treeDir('g'), h.testsRoot('i'), h.packetsDir()].map((p) => p.split('\\').join('/'));
+  h.useSet(null);
+  assert.ok(plain[0].endsWith('/trees/g/buggy') && plain[1].endsWith('/tests/i') && plain[2].endsWith('/packets'));
+  assert.ok(named[0].endsWith('/trees/demo/g/buggy') && named[1].endsWith('/tests/demo/i') && named[2].endsWith('/packets/demo'));
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'f2p-sha-'));
+  try {
+    assert.throws(() => h.checkTree('g', 'bbb', dir), /no \.sha/);
+    fsx.writeFileSync(pathx.join(dir, '.sha'), 'aaa\n');
+    assert.throws(() => h.checkTree('g', 'bbb', dir), /expected bbb/);
+    assert.doesNotThrow(() => h.checkTree('g', 'aaa', dir));
+    assert.throws(() => h.assertFree(dir, ['.sha']), /already exists in the tree/);
+    assert.doesNotThrow(() => h.assertFree(dir, ['new.test.ts']));
+  } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('--set without a value and --set=x are refused', () => {
+  assert.throws(() => f2p.parseFlags(['run', '--set']), /needs a value/);
+  assert.throws(() => f2p.parseFlags(['run', '--set', '--name', 'x']), /needs a value/);
+  assert.throws(() => f2p.parseFlags(['run', '--set=x']), /not accepted/);
+  assert.deepStrictEqual(f2p.parseFlags(['run', '--set', 'x', 'id1']), { opts: { set: 'x' }, rest: ['run', 'id1'] });
+});
