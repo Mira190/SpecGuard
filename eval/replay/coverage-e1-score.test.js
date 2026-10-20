@@ -2,10 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { parse } = require('../../src/coverage');
 const { makeB } = require('./testgap-score');
-const { loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, labelLine } = require('./coverage-e1-score');
+const { loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, labelLine, drawNull } = require('./coverage-e1-score');
 
 const lcov = (file, da) => `TN:\nSF:${file}\n${da.map(([l, h]) => `DA:${l},${h}`).join('\n')}\nend_of_record\n`;
 const U = (path, name, start, end, added) => ({ path, name, start, end, added });
+const el = (d) => d.changedUnits.map((u) => ({ path: u.path, lines: u.added }));
 const opt = { perms: 200, boots: 100 };
 
 test('C flags the first added instrumented line with 0 hits; uninstrumented unit skipped', () => {
@@ -57,7 +58,7 @@ const prs = (n, inB) => Array.from({ length: n }, () => {
 });
 
 test('unusable PR: observed 0 with a 1-flag null pulls lift down', () => {
-  const d = prs(1, true)[0], usable = armScore([{ d, k: 1, outcome: 1 }], opt), unusable = armScore([{ d, k: 1, outcome: 0 }], opt);
+  const d = prs(1, true)[0], usable = armScore([{ d, k: 1, outcome: 1, elig: el(d) }], opt), unusable = armScore([{ d, k: 1, outcome: 0, elig: el(d) }], opt);
   assert.strictEqual(unusable.observed, 0);
   assert.ok(unusable.chance > 0.3 && unusable.effect < 0); // one flag over two equal units: chance about 0.5
   assert.ok(usable.effect > unusable.effect);
@@ -66,21 +67,21 @@ test('unusable PR: observed 0 with a 1-flag null pulls lift down', () => {
 test('PASS boundary: needs p < 0.05 and effect >= 0.10', () => {
   const d = prs(1, true)[0];
   // 40 PRs, 1 flag each over 2 equal-weight units (chance 0.5): all caught is far above chance
-  const hi = armScore(Array.from({ length: 40 }, () => ({ d, k: 1, outcome: 1 })), opt);
+  const hi = armScore(Array.from({ length: 40 }, () => ({ d, k: 1, outcome: 1, elig: el(d) })), opt);
   assert.ok(hi.pass && hi.p < 0.05 && hi.effect >= 0.10);
   // at chance: observed 0.5 is no pass
-  const mid = armScore(Array.from({ length: 40 }, (_, i) => ({ d, k: 1, outcome: i % 2 })), opt);
+  const mid = armScore(Array.from({ length: 40 }, (_, i) => ({ d, k: 1, outcome: i % 2, elig: el(d) })), opt);
   assert.ok(!mid.pass);
   // significant but small: 40 PRs, chance 0.5, observed 0.55 -> effect < 0.10 even if p were small
-  const lo = armScore(Array.from({ length: 400 }, (_, i) => ({ d, k: 1, outcome: i % 20 < 11 ? 1 : 0 })), opt);
+  const lo = armScore(Array.from({ length: 400 }, (_, i) => ({ d, k: 1, outcome: i % 20 < 11 ? 1 : 0, elig: el(d) })), opt);
   assert.ok(lo.p < 0.05 && lo.effect < 0.10 && !lo.pass);
 });
 
 test('flag-everything arm gets chance equal to observed', () => {
-  const [d] = prs(1, true), items = Array.from({ length: 20 }, () => ({ d: { changedUnits: [d.changedUnits[0]], B: d.B }, k: 1, outcome: 1 })); // one unit, wholly in B
+  const [d] = prs(1, true), items = Array.from({ length: 20 }, () => ({ d, k: 2, outcome: 1, elig: el(d) })); // 2 units, both flagged, one in B
   const r = armScore(items, opt);
   assert.strictEqual(r.observed, 1);
-  assert.strictEqual(r.chance, 1);
+  assert.strictEqual(r.chance, r.observed);
   assert.ok(!r.pass);
 });
 
@@ -91,4 +92,14 @@ test('comparison 4 labels', () => {
   assert.strictEqual(labelLine(hits, 'a.ts', 9), 'unknown');
   assert.strictEqual(labelLine(hits, 'b.ts', 1), 'unknown');
   assert.strictEqual(labelLine(null, 'a.ts', 1), 'unknown');
+});
+
+test('2 eligible units both flagged, one in B: null hits in every permutation (both nulls)', () => {
+  const [d] = prs(1, true), rng = () => 0.3;
+  for (const uni of [false, true]) assert.ok(drawNull(rng, 50, 2, el(d), d.B, uni, 1).every((b) => b === 1));
+});
+
+test('distinct units: k=1 over 2 equal units hits B half the time; never double-draws', () => {
+  const [d] = prs(1, true), b = drawNull(require('../szz').mulberry32(7), 2000, 1, el(d), d.B, true, 0);
+  assert.ok(Math.abs(b.reduce((s, x) => s + x, 0) / 2000 - 0.5) < 0.05);
 });

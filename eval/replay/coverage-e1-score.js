@@ -7,7 +7,7 @@ const path = require('node:path');
 const { isProd, isTest, mulberry32 } = require('../szz');
 const { git, tryGit, addedLines } = require('./holdout2-null');
 const { parse, resolver } = require('../../src/coverage');
-const { nullBits, buildUnits, pairData, qualifies, testsName, word, parseDiff } = require('./testgap-score');
+const { buildUnits, pairData, qualifies, testsName, word, parseDiff } = require('./testgap-score');
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
 const mean = (a) => { let s = 0; for (const x of a) s += x; return a.length ? s / a.length : 0; };
@@ -29,14 +29,15 @@ function loadHits(parsed, changedFiles) {
 }
 // Arm C: per changed unit, the added lines the report instruments; flag at the first one with 0 hits. A unit with no instrumented added line is skipped and counted.
 function coverFlags(changedUnits, hits) {
-  const flags = []; let noInst = 0;
+  const flags = [], elig = []; let noInst = 0;
   for (const u of changedUnits) {
     const h = hits.get(u.path), inst = h ? u.added.filter((l) => h.has(l)) : [];
     if (!inst.length) { noInst++; continue; }
     const miss = inst.find((l) => h.get(l) === 0);
+    elig.push({ path: u.path, lines: inst });
     if (miss !== undefined) flags.push({ path: u.path, line: miss, name: u.name });
   }
-  return { flags, noInst };
+  return { flags, noInst, elig };
 }
 const stem = (f) => path.posix.basename(f).replace(/\.[^.]*$/, '');
 // does test file `errPath` name source file `src` (module stem as a whole word in the path) or sit beside its test counterpart?
@@ -58,23 +59,40 @@ function unusableReason({ rec, hits, changedSrc }) {
 function evalCover({ rec, parsed, changedUnits, changedFiles, B }) {
   const hits = parsed ? loadHits(parsed, changedFiles) : null, changedSrc = [...new Set(changedUnits.map((u) => u.path))];
   const reason = unusableReason({ rec, hits, changedSrc });
-  if (reason) return { usable: false, reason, flags: [], noInst: 0, outcome: 0 };
-  const { flags, noInst } = coverFlags(changedUnits, hits);
-  return { usable: true, reason: null, flags, noInst, outcome: B && flags.some((f) => B.has(f.path, f.line)) ? 1 : 0 };
+  if (reason) return { usable: false, reason, flags: [], noInst: 0, outcome: 0, elig: changedUnits.map((u) => ({ path: u.path, lines: u.added })) };
+  const { flags, noInst, elig } = coverFlags(changedUnits, hits);
+  return { usable: true, reason: null, flags, noInst, elig, outcome: B && flags.some((f) => B.has(f.path, f.line)) ? 1 : 0 };
 }
 function bootCi(vals, seed, boots) {
   if (!vals.length) return [0, 0];
   const rng = mulberry32(seed);
   return ci(Array.from({ length: boots }, () => mean(Array.from({ length: vals.length }, () => vals[Math.floor(rng() * vals.length)]))));
 }
-// items: [{ d: { changedUnits, B }, k: flags used by the null, outcome }]. Within-PR permutation null (testgap-score nullBits): primary weights units by added lines, secondary uniform.
+// E1 null for one PR: k flags on DISTINCT eligible units drawn without replacement (C and static flag a unit at most once); the flag sits on a uniformly random eligible line.
+// Weights: eligible line count (primary) or 1 (secondary). k >= number of eligible units: every unit is flagged, so the null equals the observed outcome exactly.
+function drawNull(rng, perms, k, elig, B, uniform, outcome) {
+  const out = new Uint8Array(perms);
+  if (!k || !elig.length) return out;
+  if (k >= elig.length) return out.fill(outcome);
+  for (let j = 0; j < perms; j++) {
+    const pool = elig.map((u) => ({ u, w: uniform ? 1 : u.lines.length }));
+    for (let n = 0; n < k; n++) {
+      let r = rng() * pool.reduce((s, x) => s + x.w, 0), i = 0;
+      while (i < pool.length - 1 && r >= pool[i].w) { r -= pool[i].w; i++; }
+      const { u } = pool.splice(i, 1)[0];
+      if (B.has(u.path, u.lines[Math.floor(rng() * u.lines.length)])) out[j] = 1;
+    }
+  }
+  return out;
+}
+// items: [{ d: { B }, k: flags used by the null, outcome, elig: [{ path, lines }] }]. Within-PR permutation null; primary and secondary as above.
 // The verdict uses the null with the higher chance. PASS iff p < 0.05 and observed - chance >= 0.10.
 function armScore(items, { seed = 20261020, perms = 1000, boots = 2000 } = {}) {
   const n = items.length, obs = mean(items.map((i) => i.outcome));
   if (!n) return { n: 0, observed: 0, chance: 0, p: 1, effect: 0, pass: false };
   const R = {};
   for (const kind of ['primary', 'secondary']) {
-    const rng = mulberry32(seed), bits = items.map((i) => nullBits(rng, perms, i.k, i.d, kind === 'secondary'));
+    const rng = mulberry32(seed), bits = items.map((i) => drawNull(rng, perms, i.k, i.elig, i.d.B, kind === 'secondary', i.outcome));
     const nul = Array.from({ length: perms }, (_, j) => mean(bits.map((b) => b[j])));
     R[kind] = { chance: mean(nul), p: nul.filter((x) => x >= obs - EPS).length / perms, perPr: bits.map((b) => mean(b)) };
   }
@@ -112,8 +130,9 @@ function loadReport(coverDir, group) {
 }
 
 function summarize(set, opt) { // set: evaluated bug PRs
-  const item = (x, k) => ({ d: x.d, k, outcome: x.c.outcome });
-  const usable = set.filter((x) => x.c.usable), sItems = set.map((x) => ({ d: x.d, k: x.sflags.length, outcome: x.sflags.some((f) => x.d.B.has(f.path, f.line)) ? 1 : 0 }));
+  const item = (x, k) => ({ d: x.d, k, outcome: x.c.outcome, elig: x.c.elig });
+  const sElig = (x) => x.d.changedUnits.filter((u) => u.name).map((u) => ({ path: u.path, lines: u.added }));
+  const usable = set.filter((x) => x.c.usable), sItems = set.map((x) => ({ d: x.d, k: x.sflags.length, elig: sElig(x), outcome: x.sflags.some((f) => x.d.B.has(f.path, f.line)) ? 1 : 0 }));
   const cItems = set.map((x) => item(x, x.c.usable ? x.c.flags.length : 1)); // unusable: observed 0, null uses 1 flag
   const byDeps = (v) => { const s = usable.filter((x) => !!x.rec.deps_changed === v); return { prs: s.length, ...armScore(s.map((x) => item(x, x.c.flags.length)), opt) }; };
   const tally = (f) => set.filter((x) => !x.c.usable).reduce((a, x) => ((a[f(x)] = (a[f(x)] || 0) + 1), a), {});
@@ -164,4 +183,4 @@ function main() {
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
-module.exports = { loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, bootCi, labelLine, groupOf };
+module.exports = { drawNull, loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, bootCi, labelLine, groupOf };

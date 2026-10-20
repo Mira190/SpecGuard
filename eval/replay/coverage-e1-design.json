@@ -51,8 +51,7 @@
   "buggy_sha": "e0e688a27760b975c39064c0553bbcc10289b36a",
   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
   "base": "cda43c5a11504632b6ab40cf4e2bf82a469750a4",
-  "pr": "langchain-18592",
-  "note": "prereg expected this dropped; mechanically it changes source only under libs/core (libs/partners/openai and libs/langchain changes are test files). Owner decides."
+  "pr": "langchain-18592"
  },
  {
   "id": "langchain-33461",
