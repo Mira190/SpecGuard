@@ -60,8 +60,8 @@ outputs:
   superseded: { description: "true when a newer commit was pushed (or the PR closed) before the model was called; the review was skipped and no AI credits were spent", value: "${{ steps.superseded.outputs.superseded }}" }
 
 # Defence in depth: an earlier step of the adopter's job that ran PR code could have put NODE_OPTIONS=--require ./evil.js in $GITHUB_ENV. Every node process below starts with it cleared:
-# run steps unset it (works whatever the precedence); uses steps set NODE_OPTIONS: '' (a step env: is documented by the runner issue #1611 to win over earlier exports in composite actions, not by docs.github.com).
-# The real protection is to run PR tests in a separate job without secrets (README, Coverage evidence).
+# run steps unset it (works whatever the precedence); uses steps set NODE_OPTIONS: '' (best effort: docs.github.com does not state that a composite step's env: wins over $GITHUB_ENV; only an unconfirmed report, actions/runner issue #1611, says so).
+# Neither stops a fake `node` put on $GITHUB_PATH. The real protection is to run PR tests in a separate job without secrets (README, Coverage evidence).
 runs:
   using: composite
   steps:
