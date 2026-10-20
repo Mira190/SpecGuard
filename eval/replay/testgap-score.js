@@ -96,9 +96,14 @@ function pairData(dir, p, fx) {
   const B = makeB(blamed, unitsByPath);
   const resolved = blamed.filter((b) => { const u = unitsByPath[b.path].find((x) => b.line >= x.start && b.line <= x.end); return u && u.name !== null; }).length;
   // static arm: changed named definitions whose name is in neither I's test diff nor any test file at I's head
-  const grepTests = (nm) => { if (!headTests.length) return false; for (let i = 0; i < headTests.length; i += 200) if (tryGit(dir, 'grep', '-qw', '-F', '-e', nm, I.head, '--', ...headTests.slice(i, i + 200))) return true; return false; };
-  const flags = changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !grepTests(u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
+  const flags = changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !testsName(dir, I.head, headTests, u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
   return { blamed, resolved, changedFiles: new Set(changed), changedUnits, B, flags };
+}
+
+// is `name` (whole word, fixed string) in any of `files` at `head`? -l, not -q: tryGit returns stdout, and -q prints nothing
+function testsName(dir, head, files, name) {
+  for (let i = 0; i < files.length; i += 200) if (tryGit(dir, 'grep', '-l', '-w', '-F', '-e', name, head, '--', ...files.slice(i, i + 200))) return true;
+  return false;
 }
 
 // ---- per-run null draws ----
@@ -231,4 +236,4 @@ function main() {
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
-module.exports = { buildUnits, makeB, isCatch, isCandidate, isLow, pairData, qualifies, word, parseDiff };
+module.exports = { testsName, buildUnits, makeB, isCatch, isCandidate, isLow, pairData, qualifies, word, parseDiff };

@@ -28,3 +28,21 @@ test('low confidence or non-test kind is never a catch', () => {
   assert.ok(!isCatch({ ...f, kind: 'spec_mismatch' }, B));
   assert.ok(!isCatch({ ...f, line: null }, B));
 });
+
+test('testsName: whole-word match in test files at head (git grep -l, not -q)', () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), cp = require('node:child_process');
+  const { testsName } = require('./testgap-score');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tn-'));
+  try {
+    const g = (...a) => cp.execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: dir, stdio: 'pipe' });
+    g('init', '-q');
+    fs.writeFileSync(path.join(dir, 'a.test.js'), 'fooBar();\n');
+    fs.writeFileSync(path.join(dir, 'b.test.js'), 'other();\n');
+    g('add', '.'); g('commit', '-q', '-m', 'x');
+    const files = ['a.test.js', 'b.test.js'];
+    assert.strictEqual(testsName(dir, 'HEAD', files, 'fooBar'), true);
+    assert.strictEqual(testsName(dir, 'HEAD', files, 'bazQux'), false);
+    assert.strictEqual(testsName(dir, 'HEAD', files, 'fooBa'), false);
+    assert.strictEqual(testsName(dir, 'HEAD', [], 'fooBar'), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
