@@ -66,6 +66,7 @@ Failing tests do not make a PR unusable; their count is reported.
   - the one-sided within-PR permutation p is below 0.05; and
   - observed − chance is at least 10 points.
 - This is the only test. The other comparisons are descriptive, with their intervals.
+- **A high raw catch rate is not value.** An arm that flags (almost) every changed definition has chance ≈ observed: the within-PR null permutes its flags over the same changed units. So it earns no lift, and the null penalises it correctly. The same mechanism capped the model's location ceiling: un-demoting every hidden finding raised chance from 2.7% to 20% (eval/testgap-demotion @bdd2f9a). C's raw catch rate must therefore never be read or reported as value without its chance level next to it.
 
 ## Descriptive comparisons (pre-stated, no tests)
 
