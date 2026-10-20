@@ -4,7 +4,11 @@
 
 **Predecessor.** `prereg-testgap-mvp.md` (OK at 881cfcb) was retired unrun: its design power was 0 at c64501b, and it never looked at the frozen confirmation set. This prereg owns the single look at the frozen set (`eval/replay/testgap-confirm.json`) at α = 0.05. Its static arm transfers here.
 
-**Why this arm.** On holdout 2, 49 missing_test findings were demoted on the 24 test-gap pairs × 3 runs (eval/testgap-demotion @ 6e0c829). For 39 of them, and for 21 of the 24 demoted findings inside the bug's function, the reason was "candidate test only partly visible": the context pack cut a large test file to its head. 11 of those test files were over the per-file cap and 10 were squeezed out by the budget. The hypothesis: when the pack shows the test blocks relevant to the changed definitions instead of cutting the file, fewer findings are demoted, and the delivered missing_test findings point at test-gap bugs more often than chance.
+**Why this arm.** On holdout 2, 49 missing_test findings were demoted on the 24 test-gap pairs × 3 runs (eval/testgap-demotion @ 6e0c829). For 39 of them, and for 21 of the 24 demoted findings inside the bug's function, the reason was "candidate test only partly visible". In each case, `pack-cut.txt` listed a candidate test file. 11 of those test files were over the per-file cap and 10 were squeezed by the budget.
+
+Candidate tests are already sliced: `contextPack` → `addFile` shows windows around the lines that name a changed symbol (specguard-ad). The 21 are cases where that slicing failed, for one of four reasons: a matching block was dropped for lack of room, a test block was cut short by the 30-up/80-line window, the symbol set was capped, or no block fit at all. The fix targets whichever of these dominates; specguard-ad will diagnose it at $0 first.
+
+The hypothesis: when the matching test blocks are shown in full, fewer findings are demoted, and the delivered missing_test findings point at test-gap bugs more often than chance.
 
 ## System under test
 - Arm S: claude-api with claude-haiku-5-5, run locally, with pack slicing of candidate test files. The implementation sha is TBD. It is frozen with this prereg.
@@ -37,11 +41,20 @@ The same as the predecessor, unchanged:
 ## Noise (fixed before any sliced run)
 - **Ceiling:** at most 30% of the missing_test findings S delivers, on the frozen set's bug PRs, may name a definition (`enclosingName` at the cited line) that some test file at I's head mentions as a whole word.
 - **Provenance:** the 30% was set on 2026-10-20 AFTER seeing the unsliced diagnosis. There, 19 of 49 demoted findings (39%) and 10 of 24 would-be catches named a definition that a test file mentions. It was set BEFORE any sliced run. The design-look value is reported next to it.
-- **Reading:** if S passes on location but exceeds the ceiling, the result is "PASS (location), noise above ceiling".
+- **Reading (chosen, not FAIL):** if S passes on location but exceeds the ceiling, the result is "PASS (location), noise above ceiling". The MVP claim then states the noise share, and does not call it an acceptable noise level.
 - **Also reported, carried over from the predecessor:** the median number of inline comments per control PR, at most 2, and the share of controls with any missing_test inline.
 
 ## Content tier
-"Catches the bug" needs, on top of a location PASS, at least 3 verified f2p catches on hono, rqlite, sqlglot or langchain (specguard-33's harness, list input @ 11ecb27). Buggy is I's head and fixed is F. The blind-grade budget is spent, so the blind grade is not part of this prereg.
+"Catches the bug" needs a location PASS AND content evidence. Content evidence is either of:
+1. **Blind grade on the frozen set.** The owner approved a cap of $6 on 2026-10-20, before the set was looked at.
+   - The method is the same as `eval/replay/blind-grade.js`: real items against M2 content-swap items (each finding keeps X's path and line, and takes another frozen bug PR's text from the same repo, by seeded derangement). The prompts are blinded, with neutral ids and a leak check.
+   - Grader: claude-sonnet-5-5, with no temperature and max_tokens 2000. The holdout-2 run hit truncation at 400.
+   - It runs once, after S's runs. Repos with only one frozen bug PR are dropped and counted, and shared-fix pairs are excluded from the primary.
+   - Passes iff the real catch rate is above the M2 false-catch rate, with a one-sided within-repo label permutation p < 0.05 (10000 permutations, seed 20261020).
+   - About 288 items (48 bug PRs × 3 runs, real plus M2); estimated at $4–5. If the cap is reached, the pairs not graded are reported and the analysis uses complete pairs.
+2. **f2p:** at least 3 verified f2p catches, from specguard-33's harness at 11ecb27. Only hono, sqlglot and langchain run there; rqlite is skipped for memory. At #408's rates (NEAR 0/9 verified, FAR 1/23), the expected yield is close to 0. f2p is therefore reported, but in practice the content tier rests on the blind grade.
+
+The blind grade is a content measure of its own and does not test location. It is the content condition of the two-tier reading, not a second primary test.
 
 ## Design look (paid, before the freeze)
 - Haiku on the 24 qualifying holdout-2 pairs × 3 runs, with slicing on. Estimated $3–4 (the holdout-2 mean was $0.0464 per run).
