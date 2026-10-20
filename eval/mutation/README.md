@@ -81,7 +81,7 @@ Reading it carefully:
 Reading it:
 - **No change from the 10-19 baseline.**
   - Line hits are still 0 of 10.
-  - Visible survivor-unit recall stays at the visible base rate of each run.
+  - Visible survivor-unit recall is within a few units of each run's visible base rate (60/20/60% vs 57/29/36%, n = 5).
   - #413 does not apply here: it acts only on PR reviews that have a coverage report, and this is a scan without one.
 - **Run-to-run stability is low.** On identical input, about 30-40% of the missing/weak findings name the same file and kind from one run to the next. Model-only gap findings will move between pushes of the same code.
 - **No claim of effectiveness either way.** These are 3 runs of one repo, n = 5 survivor units.
