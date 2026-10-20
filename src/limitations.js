@@ -3,4 +3,4 @@
 // Every other limitation is a GAP: requirement text that really was not collected (the PR itself, timeouts, caps on closing issues, an unreadable closing issue), so the run is incomplete.
 const FACT_LIMITATION = /^(?:No requirement text available|requirements-index\.md exceeded |\d+ more code\/test candidate\(s\) for |Referenced but not readable: |Context trimmed: |Could not read (?:issue|history issue) |Not read: other-repo reference )/;
 const isFactLimitation = (l) => FACT_LIMITATION.test(String(l));
-module.exports = { FACT_LIMITATION, isFactLimitation };
+module.exports = { isFactLimitation };
