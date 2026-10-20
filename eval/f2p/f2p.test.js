@@ -486,3 +486,9 @@ test('cover depsChanged: true only when a changed path is a declared dependency 
   assert.strictEqual(cov.depsChanged(['src/a.ts', 'docs/package.json'], ['package.json']), false);
   assert.strictEqual(cov.depsChanged([], ['pyproject.toml']), false);
 });
+
+test('cover vitestHealth with no JSON report: every selected file is an "other" error, counts are zero', () => {
+  const v = cov.vitestHealth(null, ['src/a.test.ts', 'src/b.test.tsx'], '/t/tree');
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(v.file_errors).map(([f, e]) => [f, e.kind])), { 'src/a.test.ts': 'other', 'src/b.test.tsx': 'other' });
+  assert.deepStrictEqual(v.health, { passed: 0, failed: 0, errored: 2, skipped: 0 });
+});
