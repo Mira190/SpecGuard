@@ -24,11 +24,11 @@ Those runs, PRs and labels are excluded from every E3 count.
 - **LLM runs.**
   - Model: `claude-haiku-5-5`, engine claude-api, through the local `eval/replay.js batch` (#409).
   - 3 reps, rep-major, over the 40 bug PRs, in manifest order: 120 runs.
-  - `--budget` per run is the #409 value, written here before the freeze. `--max-total 8` (USD) for the whole batch. `--cap 120`.
+  - `--budget 0.25` per run (red team: holdout 2 peaked at $0.1228, and claude-api's pre-flight is a hard bound, so a tighter budget would fail big-pack PRs). `--max-total 8` (USD) for the whole batch. `--cap 120`. Expected spend is about $5.5 (holdout-2 mean $0.046 × 120).
   - Each run's checkout is the PR's introducing head, with the PR title and body as the batch manifest gives them.
   - No reruns of a run that reached the model; #409's no-re-roll rule applies. A run that is invalid for any other reason is a miss for every metric it would have fed, and is counted.
   - If the cap stops the batch early, every PR with all 3 reps done is scored. The rest are reported as not run and are never topped up later.
-- **Manifest.** `eval/replay/coverage-e3-manifest.json` (the testgap-confirm-build `bugs` format that `replay.js` reads, `controls: []`). It is built deterministically from the 40 bug rows by `coverage-e3-manifest.js`, with titles and bodies taken from the mining output. It is committed before the freeze.
+- **Manifest.** `eval/replay/coverage-e3-manifest.json` (the testgap-confirm-build `bugs` format that `replay.js` reads, `controls: []`). It is built deterministically from the 40 bug rows by `coverage-e3-manifest.js`, with the INTRODUCING PR's own title and body (each run serves only the PR title and body), read-only via `gh api repos/<repo>/pulls/<n>` and cached. If a fetch fails, it falls back to the commit subject and an empty body, as in testgap-confirm-build.js `prText`. Every entry records `pr_text` (github or commit), and the fallback count is reported. It is committed before the freeze.
 
 ## Findings and labels
 
@@ -87,7 +87,7 @@ Those runs, PRs and labels are excluded from every E3 count.
 
 1. E3 freeze OK (red team).
 2. The cover run on the 70 confirmation rows (E1 rules, the d737045 runner, the job list checked before the run).
-3. The haiku batch on the 40 bugs. A paid run needs the owner's explicit go in the running session, and the spend cap is $8.
+3. The haiku batch on the 40 bugs. The owner approved the $8 cap on 2026-10-20 and sets the key themselves. The owner runs the exact batch command, prepared after the freeze OK, in their own shell with the key set only there. The scorer reads the batch out dir.
 4. Score E1 (its frozen command, plus the power-flag note) and E3 (its frozen command).
 5. Results PRs.
 
@@ -102,8 +102,12 @@ The batch drops each checkout after its run (#409).
 
 ## TBD before freeze
 
-- The `--budget` per run (the #409 value).
-- The scorer and test sha, reviewed.
-- The manifest builder and manifest sha.
-- The exact frozen E3 scorer command.
-- The API key source for the local batch: it must come from the owner, and docs/.env is never read.
+- The scorer and test sha, reviewed by the red team: `coverage-e3-score.js` and its test as of 230449b. 5de39c0 changed only the manifest builder.
+- The manifest builder and manifest sha: 5de39c0. 40 bugs, `pr_text_fallback: 0`.
+- Commands, fixed now. The cover set name is `e1confirm`. The runner is a fresh worktree of main at d737045 or later with the same eval/f2p, and the list is `coverage-e1-confirm.json` at 2fffc35.
+  1. `node eval/f2p/f2p.js import eval/replay/coverage-e1-confirm.json --name e1confirm`, then `export --set e1confirm`. Before cover runs, log the job list and check that it is exactly the 70 row ids.
+  2. `node eval/f2p/f2p.js cover --set e1confirm`. Hono verify afterwards.
+  3. The batch: `node eval/replay.js batch --out <evidence>/e3/batch --repos <evidence>/repos --cap 120 --budget 0.25 --max-total 8 --reps 3 --model claude-haiku-5-5 --manifest eval/replay/coverage-e3-manifest.json --ids all`, run by the owner.
+  4. E1, its frozen step 3 with the confirmation inputs (`--rows eval/replay/coverage-e1-confirm.json`, `--cover-results` and `--cover-dir` for e1confirm), plus `--power-n` omitted. The red team fixes E1's confirmation scorer command separately if it differs.
+  5. E3: `node eval/replay/coverage-e3-score.js --rows eval/replay/coverage-e1-confirm.json --repos <evidence>/repos --cover-results <runner>/eval/f2p/results-cover-e1confirm.json --cover-dir <evidence>/f2p/cover/e1confirm --raw <evidence>/e3/batch --reps 3 --out <evidence>/e3/result.json` (defaults: seed 20261020, perms 10000, boots 2000).
+- The exact batch command: worktree path, Git Bash PATH prefix for collect.sh, out dir. It is handed to the owner after the freeze OK. docs/.env is never read by any agent.
