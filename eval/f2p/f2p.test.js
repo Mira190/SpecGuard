@@ -420,6 +420,11 @@ test('cover file-error kinds: collection (did not load), empty (no tests in the 
   assert.deepStrictEqual(Object.fromEntries(Object.entries(v.file_errors).map(([f, e]) => [f, e.kind])), { 'src/router/common.case.test.ts': 'empty', 'src/a.test.ts': 'collection', 'src/gone.test.ts': 'other' });
   const p = cov.pytestHealth('<testsuite tests="0" errors="1"></testsuite>', 'ERROR tests/test_e.py - no tests ran in file\nERROR tests/test_i.py - ImportError: x\n', '/t/tree');
   assert.deepStrictEqual(Object.fromEntries(Object.entries(p.file_errors).map(([f, e]) => [f, e.kind])), { 'tests/test_e.py': 'empty', 'tests/test_i.py': 'collection' });
+  // committed messages are one line of at most 120 characters
+  const long = cov.pytestHealth('<testsuite tests="0" errors="1"></testsuite>', `ERROR tests/test_l.py - ImportError: ${'x'.repeat(300)}\n`, '/t/tree');
+  assert.ok(long.file_errors['tests/test_l.py'].msg.length <= 120 && !long.file_errors['tests/test_l.py'].msg.includes('\n'));
+  const multi = cov.vitestHealth({ testResults: [{ name: '/t/tree/src/m.test.ts', status: 'failed', message: 'SyntaxError: bad\n    at line two', assertionResults: [] }] }, ['src/m.test.ts'], '/t/tree');
+  assert.strictEqual(multi.file_errors['src/m.test.ts'].msg, 'SyntaxError: bad');
   // a file whose tests ran and failed by assertion is a failed test, not a file error
   const ran = cov.vitestHealth({ numFailedTests: 1, testResults: [{ name: '/t/tree/src/f.test.ts', status: 'failed', assertionResults: [{ status: 'failed' }] }] }, ['src/f.test.ts'], '/t/tree');
   assert.deepStrictEqual([ran.file_errors, ran.health.failed, ran.health.errored], [{}, 1, 0]);
