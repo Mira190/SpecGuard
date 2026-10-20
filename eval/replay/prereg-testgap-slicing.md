@@ -56,14 +56,22 @@ The same as the predecessor, unchanged:
 
 The blind grade is a content measure of its own and does not test location. It is the content condition of the two-tier reading, not a second primary test.
 
-## Design look (paid, before the freeze)
-- Haiku on the 24 qualifying holdout-2 pairs × 3 runs, with slicing on. Estimated $3–4 (the holdout-2 mean was $0.0464 per run).
-- The command and budget flags are TBD.
-- It needs specguard-e0's OK on the design, then the owner's OK in the running session.
-- It reports: delivered catch rate vs chance, the number of demoted findings by reason against 6e0c829, and the noise share against the 30% ceiling.
+## Order (specguard-e0, 2026-10-20)
+1. The slicing implementation is merged with e0's OK.
+2. This prereg is frozen: every arm, gate, α, the noise ceiling and the implementation sha. e0 OKs the prereg sha.
+3. e0 OKs the design-look command.
+4. The design look runs: haiku-5-5, claude-api, local, on the 24 qualifying holdout-2 pairs × 3. Hard cap `--max-total 4`. The owner approved the spend on 2026-10-20 (relayed by e0).
+5. Its results are added as a dated, descriptive appendix that changes no gate.
+6. The owner gives the go for the confirmation run. The power check is reported to the owner first; it does not gate the run, and the owner may still decline the $35.
+7. Only then is the frozen set touched.
+
+**Defect amendment.** If the design look exposes a defect, a dated amendment is allowed before any touch of the frozen set. A defect is an implementation bug, packs not sliced as specified, or an invalid-run rate above 10%.
+- The amendment names the defect and the design-look evidence.
+- No gate, α or ceiling moves because of it.
+- A changed implementation sha means the design look is re-run under the same $4 cap, with a new spend OK from the owner.
 
 ## TBD before freeze
 - The slicing implementation sha.
 - The freeze sha of the confirmation set.
-- The design-look results.
+- The design-look results (appendix, after the freeze; descriptive only).
 - The grepTests fix sha.
