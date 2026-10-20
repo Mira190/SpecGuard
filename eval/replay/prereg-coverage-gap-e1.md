@@ -12,23 +12,38 @@ SpecGuard also has an evidence mode, the target repo's own coverage (`coverage_f
 **Cost.** No model calls. Compute only, run locally in specguard-33's f2p environments. The shared-machine rules apply:
 - each agent kills only the PIDs it started;
 - C: must have at least 1.5 GB free before each step;
-- rqlite runs only while its memory and disk use stay within the f2p harness caps.
+- Runs are serial, keeping at least 1.2 GB of RAM free.
 
 ## Repositories and unit tests
 
-E1 runs only in the repos that are runnable in the f2p harness (main f6e4eb7).
+The runner is `cover` in specguard-33's f2p harness (branch eval/f2p-cover; sha TBD). It must be merged with e0's OK before the design look. Rows are imported with `import` as (repo, buggy sha = I's head) under `--set <name>`, then run with `cover --set <name>`.
 
-| Repo | Unit-test command run with coverage at I's head | Report |
+| Repo | Unit tests run with coverage at I's head | Report |
 |---|---|---|
-| honojs/hono | `vitest run --coverage` (provider v8, reporter lcov), with the repo's unit config and no e2e | lcov |
-| tobymao/sqlglot | `pytest tests/` under `coverage run`, then `coverage xml` | Cobertura |
-| langchain-ai/langchain | `pytest libs/<pkg>/tests/unit_tests` under coverage, for each package I touches | Cobertura |
-| rqlite/rqlite | `go test -coverprofile` on the packages I touches, excluding `system_test/` | Go profile |
+| honojs/hono | the harness's unit scope (vitest, v8, lcov, no e2e) | lcov |
+| tobymao/sqlglot | the harness's unit scope (pytest under coverage) | Cobertura |
+| langchain-ai/langchain | `libs/core` only (langchain_core unit tests); the env exists only for that package | Cobertura |
 
-- rqlite is included only once its f2p controls have been rerun under amendment 6/7 rules. If not, it is excluded and reported.
-- **Executed** means a hit count above 0 on that line in the report, read with `src/coverage.js`'s parsers.
+**rqlite is excluded from E1** (e0, 2026-10-20). The cgo build needs about 2 GB of RAM plus 1–2 GB of Go cache, which is not worth the risk for a first look, and its f2p controls have not been rerun under amendment 6/7 rules.
+
+**langchain scope.** A langchain pair is eligible only if every changed source file of I lies under `libs/core/`. This is fixed now, before any draw.
+- In design this keeps langchain-33461.
+- It drops langchain-33817 (`libs/langchain_v1`) and langchain-18592 (core plus `libs/partners/openai`).
+
+**What counts.**
+- Executed means a hit count above 0 on the line in the report (`src/coverage.js` parsers).
 - A line the report does not instrument is not executable and is ignored.
-- A PR is **unusable** if the coverage run produces no report, or the report covers none of I's changed source files. An unusable PR counts as a miss for arm C and is reported. Failing tests at I's head do not make a PR unusable; their count is reported.
+- A changed definition with 0 instrumented added lines is not a unit for C. These are counted and reported.
+
+**Suite health** is recorded for every PR from the `cover` report: passed, failed, errored/collection error (per test file), skipped, exit code, number of selected test files, `deps_changed`, and tool versions.
+
+**Unusable PRs.** These count as a miss for C, and the count is reported per repo:
+- no report;
+- 0 selected test files;
+- the report covers none of I's changed source files;
+- **any collection or import error in a test file that names a changed source file's module or sits in the same directory as its test counterpart.** Such an error removes coverage the file would have given, which would make fake gaps. This option (unusable) was chosen over dropping only that file's flags.
+
+Failing tests do not make a PR unusable; their count is reported.
 
 ## Arms (scored on the same PRs)
 
@@ -37,7 +52,7 @@ E1 runs only in the repos that are runnable in the f2p harness (main f6e4eb7).
   - C flags a unit if it has at least one added executable line that no unit test executed.
   - The flag is placed at the first such line.
 - **Static (name lookup)**, carried over: flag a changed definition whose name appears in no test file at I's head. It uses `git grep -lw`, with the grepTests bug fixed first.
-- **LLM delivered.** Design set only, from the saved holdout-2 haiku runs (3 runs). No new model runs are made.
+- **LLM delivered.** Design look only, from the saved holdout-2 haiku runs (3 runs). No new model runs are made.
 
 ## Catch rule, nulls, test
 
@@ -62,37 +77,37 @@ E1 runs only in the repos that are runnable in the f2p harness (main f6e4eb7).
 
 ## Corpus
 
-- **Design.**
-  - Holdout 2's replay-eligible pairs in runnable repos: 15 pairs (hono 6, sqlglot 3, langchain 3, rqlite 3).
-  - 6 of them pass the test-gap filter: hono 2, langchain 2, rqlite 2 (one shared fix). None are from sqlglot.
-  - Both rows are reported: the 6 test-gap pairs, and all 15.
-  - n is too small for the design numbers to steer anything except defect fixes. They are reported, not used for power.
-  - Design controls: holdout 2's clean `no_known_bug` PRs in these repos.
+- **Design look.** Holdout 2's replay-eligible pairs in hono, sqlglot and langchain-core: hono 6, sqlglot 3, langchain-33461. That is **10 pairs**, of which 3 pass the test-gap filter (hono 2, langchain 1).
+  - The look reports, for all 10 and for the filtered 3: C's catch rate vs chance, the unusable rate and reasons, flags per PR, and noise on the holdout-2 clean `no_known_bug` PRs in these repos.
+  - **Power** for the confirmation n against the +10 floor comes from resampling the 10 design PRs. If it is below 0.5, it is reported to e0 and the owner before the confirmation run.
+  - The design look changes no gate. Like the slicing draft, it is a dated appendix after the freeze, and defect amendments follow the same rule.
 - **Confirmation.**
-  - The frozen 88 (`testgap-confirm.json`) keep at most 6 bug PRs per repo, so the runnable repos contribute at most 24. That is fewer than 30, so E1 needs its own draw. This draw is E1's choice.
-  - E1 confirmation set:
-    - every frozen-set bug PR in hono, sqlglot, langchain and (if included) rqlite;
-    - then further qualifying pairs from the same mining output (`SpecGuard-evidence/testgap-confirm/mine-*.json`, fixes from 2026-01-01 to the clone HEAD), under the same mechanical filter and exclusions. They are drawn round-robin over these repos in alphabetical order, newest first, until there are 40 bug PRs.
-    - If fewer than 40 qualify, the window is extended back to 2025-07-01 in one fixed step. If there are still fewer than 30, the result is "not tested".
-  - Controls: the frozen set's controls in these repos, topped up with `szz.js clean` (seed 20261020) to 30, under the same 90-day blame exclusion.
-  - The list is written to `eval/replay/coverage-e1-confirm.json` and committed before any coverage run on it. The commit message carries the touch rule: nothing touches the set except the builder.
-- **Ownership.** E1 owns the single look at the frozen-set PRs in these repos. The slicing draft stays paused. The slicing draft keeps its claim on the frozen-set PRs in the other repos, but the slicing prereg would need a new draw for any repo E1 has used.
+  - The frozen 88 (`testgap-confirm.json`) keep at most 6 bug PRs per repo, so these repos contribute at most 18. E1 draws its own set:
+    - every frozen-set bug PR in hono, sqlglot or langchain-core;
+    - then further qualifying pairs from the same mining output (`SpecGuard-evidence/testgap-confirm/mine-*.json`, fixes from 2026-01-01 to clone HEAD). These use the same mechanical filter, exclusions and langchain-core rule, drawn round-robin over the three repos in alphabetical order, newest first, until there are 40.
+    - If fewer than 40 qualify, the window extends once to 2025-07-01. Fewer than 30 then means "not tested".
+  - **Unfiltered comparison set (descriptive).** Up to 20 runnable bug PRs from the same mining output that pass every rule EXCEPT the test-gap filter (their fix adds no test naming a changed definition). They are drawn by the same round-robin rule.
+  - **Controls.** The frozen set's controls in these repos, topped up with `szz.js clean` (seed 20261020) to 30, under the same 90-day blame exclusion and langchain-core rule.
+  - All three lists go to `eval/replay/coverage-e1-confirm.json`, committed before any coverage run on them. The commit message carries the touch rule.
+- **Ownership.** E1 owns the single look at the frozen-set PRs in hono, sqlglot and langchain-core. The slicing draft stays paused, and would need a new draw for those repos.
 
 ## How the result reads (fixed now)
 
-- **C does not pass:** on this corpus, coverage gaps at PR time do not predict where test-gap bugs are introduced. This is a real negative for the goal's premise. It is reported as such, and it goes into the multiplicity list and the assurance case.
-- **C passes and comparison 4 separates** (the confirmed catch rate is above the contradicted catch rate, with non-overlapping cluster intervals on the design set): this supports product phase 1. Coverage-backed missing_test becomes a first-class finding; LLM-only missing_test is labelled unverified.
-- **C passes but does not beat static** (lower bound of C − static ≤ 0): "a name lookup does as well; coverage adds no location value". Phase 1 still needs a separate cost/benefit decision.
-- **Scope:** the claim covers only these repos, their unit-test commands, and coverage at I's head. It says nothing about the model.
+- **Scope of every reading:** "on bugs that were later fixed together with a new unit test naming the changed definition", in hono, sqlglot and langchain-core, with the harness's unit scope. Nothing is claimed about the model or other repos.
+- **C does not pass:** on this corpus, coverage gaps at PR time do not predict where test-gap bugs are introduced. This is a real negative for the goal's premise, reported as such and added to the multiplicity list and the assurance case.
+- **C passes:** product phase 1 goes ahead. Coverage-backed missing_test findings become first-class and high-confidence.
+- **C passes but its catch rate on the unfiltered comparison set is at chance** (its cluster interval of observed − chance includes 0): the lift is mostly a product of the selection filter, which favours untested definitions. The reading must say so.
+- **C passes but does not beat static** (lower bound of C − static ≤ 0): "a name lookup does as well on location". Phase 1 still uses coverage, because the static lookup cannot see execution.
+- **Comparison 4 (does coverage separate the LLM's hits from its misses?) is descriptive and decides nothing.** It uses at most 10 design PRs. It only informs whether LLM-only missing_test findings that coverage contradicts should be hidden; that is a product choice with its own later check.
+- **Noise ceiling (fixed now):** the median number of C flags per control PR is at most 2. The share of control PRs with any flag is always reported. If C passes and is over the ceiling, the result reads "PASS (location), noise above ceiling".
 
 ## Multiplicity
 
-The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`, and adds E1.
+The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: the mutation pilot (#374), #397, f2p (#410), the retired `prereg-testgap-mvp.md`, pack arms R/S/O/H (#406), the paused slicing draft, and E1.
 
 ## TBD before freeze
 
 - The grepTests fix sha (`testgap-score.js`).
-- The coverage runner sha: a script in the f2p harness or in `eval/replay`.
-- The design run results, as a dated appendix that changes no gate.
+- The `cover` runner sha (specguard-33, eval/f2p-cover), merged with e0's OK.
 - The confirmation list sha.
-- rqlite included or excluded.
+- The design-look appendix comes after the freeze.
