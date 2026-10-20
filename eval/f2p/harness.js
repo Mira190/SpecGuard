@@ -189,14 +189,19 @@ function cmdSetup(repo, rev) {
   console.log(`work dir ${dir} at ${rev}; install dependencies there, then record the decision in repos.json`);
 }
 
-// One run of a test file in dir -> { outcome, msg?, origin?, frame? }.
-function runOnce(repo, dir, testRel, timeout) {
-  const cfg = REPOS()[repo], out = path.join(os.tmpdir(), `f2p-${process.pid}.out`);
-  fs.rmSync(out, { force: true });
+// Whitelisted environment of one run (ENV_KEEP + the repo's env + path_prepend).
+function buildEnv(cfg, dir) {
   const env = Object.fromEntries(ENV_KEEP.filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]]));
   env.CI = '1'; // vitest never writes snapshots under CI
   for (const [k, v] of Object.entries(cfg.env || {})) env[k] = fill(v, { evidence: posix(EV), cwd: posix(dir) });
   if (cfg.path_prepend) { const v = cfg.path_prepend.map((p) => fill(p, { evidence: EV })).join(path.delimiter) + path.delimiter + (env.Path || env.PATH || ''); env.Path = v; env.PATH = v; }
+  return env;
+}
+// One run of a test file in dir -> { outcome, msg?, origin?, frame? }.
+function runOnce(repo, dir, testRel, timeout) {
+  const cfg = REPOS()[repo], out = path.join(os.tmpdir(), `f2p-${process.pid}.out`);
+  fs.rmSync(out, { force: true });
+  const env = buildEnv(cfg, dir);
   timeout = timeout || cfg.timeout || 180;
   let run = '.'; try { const fns = [...fs.readFileSync(path.join(dir, testRel), 'utf8').matchAll(/^func (Test\w+)\(/gm)].map((m) => m[1]); if (fns.length) run = `^(${fns.join('|')})$`; } catch { /* not a Go file */ }
   const vars = { run, test: posix(testRel), out: posix(out), testdir: posix(path.posix.dirname(posix(testRel))) || '.', evidence: posix(EV) };
@@ -481,4 +486,4 @@ function cmdReport() {
   if (mut.length) console.log('\nMutation arm (descriptive, no rate):', JSON.stringify(mut.map((r) => ({ id: r.id.slice(0, 8), verdict: r.verdict, kills: r.kills, kills_uncertain: r.kills_uncertain, claim_match: r.claim_match }))));
 }
 
-module.exports = { recordControl, assertExport, countFiles, badName, assertFree, treeDir, testsRoot, packetsDir, checkTree, existingIds, cmdSealTrees, useSet, files, cmdImport, buildListRows, cmdReportList, cmdVerify, runOnce, withTree, cmdControls, cmdWritersDone, harnessStatus, cmdExport, cmdPackets, cmdSetup, cmdBaseline, cmdTry, cmdRun, cmdRunMutation, cmdReport, freeze, hashes, nearestTest, scope };
+module.exports = { buildEnv, diskGuard, lock, nameStatus, workDir, REPOS, fill, posix, cloneOf, recordControl, assertExport, countFiles, badName, assertFree, treeDir, testsRoot, packetsDir, checkTree, existingIds, cmdSealTrees, useSet, files, cmdImport, buildListRows, cmdReportList, cmdVerify, runOnce, withTree, cmdControls, cmdWritersDone, harnessStatus, cmdExport, cmdPackets, cmdSetup, cmdBaseline, cmdTry, cmdRun, cmdRunMutation, cmdReport, freeze, hashes, nearestTest, scope };

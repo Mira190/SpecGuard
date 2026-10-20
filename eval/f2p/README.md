@@ -285,3 +285,30 @@ Every committed writer verdict was produced under the pre-amendment-6 rules. Che
 One row was not covered by this argument: hono-2339's writer test uses `.rejects.toThrow` and threw on both trees under the old rules (verdict `invalid`, throw on fixed). Its buggy failure text had been captured for the labeller: "promise resolved ... instead of rejecting". Because the new vitest rule changes exactly that class, this one test was rerun once (3 buggy + 3 fixed) under the amendment-6/7 rules, after the controls and before any other run: assert_fail on both trees, verdict `not_discriminating`. The old verdict is kept in the row as `pre_amendment6`. Consequence: the sensitivity line drops from FAR 2/23 to 1/23 (NEAR unchanged 0/9); the primary and secondary lines are unchanged (NEAR 0/9, FAR 1/23). No other writer test was rerun.
 
 The rules of amendments 6 and 7 govern all future rows, including rqlite and list sets, in the same `results.json`.
+
+## Coverage (cover) for E1
+
+`cover` runs the UNIT test suite of a tree under coverage so E1 can find changed definitions that no test executed. Suite failures on a buggy tree are expected and still produce coverage.
+
+```
+node eval/f2p/f2p.js cover [--set <set>] [group | repo | hono|sqlglot|langchain ...]   # every cover group of the set (default: holdout2 plus the hono mutation tree)
+node eval/f2p/f2p.js cover head:hono                                                   # smoke: the shared clone's HEAD, nothing written to the repo
+```
+
+Each group runs on its `.sha`-verified tree (hono: overlay with verify and restore; pytest repos: fresh export), under the per-repo lock, the disk guard (here at least 5 GB free) and a RAM guard (at least 1.2 GB free), with the whitelisted environment and no shell (a timeout kills only the child PID).
+
+Scope is the `cover` block of `repos.json`, written into every report:
+
+| repo | dirs | files | source measured |
+| --- | --- | --- | --- |
+| hono (vitest, existing `vc.mjs`, not hono's own config) | `src` | `*.test.ts` and `*.test.tsx` (the JSX unit tests), `runtime-tests/` excluded; vitest runs exactly the selected files (generated include config) | `src/**` |
+| sqlglot (pytest) | `tests` | `test_*.py`, `*_test.py` | `sqlglot` |
+| langchain (pytest) | `libs/core/tests/unit_tests` | `test_*.py`, `*_test.py` | `libs/core/langchain_core` |
+
+A missing dir or 0 selected test files is an error, never "0% covered". `deps_files` lists the manifests that matter for the env; `deps_changed` is true when one differs between the env's base sha (hono work dir `.base`; pytest repos `env_base`) and the tree.
+
+Tools (installed into the existing envs only, never into a tree): `coverage==7.16.2` (`uv pip install --python <venv python> coverage==7.16.2`); hono `npm i --no-save --ignore-scripts --legacy-peer-deps @vitest/coverage-v8@3.2.4 vitest@3.2.4` in the work dir (hono's package.json declares vitest 5.0.1, so the plain command fails with ERESOLVE). Versions are recorded in each report.
+
+Reports go to `<evidence>/f2p/cover/<set or holdout2 or smoke>/<group>/` (`lcov.info` or `coverage.xml`, the runner's own test report, `summary.json`). The repo gets only `results-cover[-<set>].json`: group, tree sha, scope, `selected_tests`, `health`, `file_errors`, `deps_changed`, `tools`, `report` (format, sha256, bytes) and `files` (covered and total lines per source file). No source text and no local paths (messages are scrubbed to one line).
+
+Health fields: `passed`, `failed`, `errored` (collection/import/fixture errors, or vitest files that failed to load or have no result), `skipped`, `exit_code`, `timed_out`, `file_errors_by_kind` (`collection`: the file failed to load, its tests did not run; `empty`: the file has no tests; `other`: e.g. no result). `file_errors` maps each test file that failed to collect or import (repo-relative posix path, for example `src/utils/foo.test.ts` or `tests/test_x.py`) to a short message; collection and import errors silently zero a file's coverage, so E1 should exclude or flag the source files those tests cover. pytest runs with `--continue-on-collection-errors` so one broken file does not hide the rest.
