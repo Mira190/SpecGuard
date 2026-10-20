@@ -24,7 +24,7 @@ const truncate = (s, n = BODY_MAX) => {
   return s.slice(0, end) + '\n...(truncated)';
 };
 const { matches } = require('./standards-map');
-const { parseCandidates } = require('./focus');
+const { parseCandidates, splitDiff } = require('./focus');
 const { standardsCut } = require('./prompt');
 const clean = (s) => truncate(redact(s));
 const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -737,7 +737,7 @@ function words(s, n) {
 const INTERNAL = /malformed|coverage row|layer not stated|citation|alignment|obligation/i; // validator wording: never shown to a developer
 const parens = (u) => u.replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
 const pin = (f, blob) => (blob ? parens(`${blob}/${String(f.path).split('/').map(encodeURIComponent).join('/')}#L${f.line}`) : '');
-const LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 8, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
+const LIST_CAP = 10, ROW_CAP = 15, NR_CAP = 5, MORE_CAP = 30; // visible caps; MORE_CAP: rows of one overflow list in Details, so a thousand rows never starve the sections behind it
 
 // One list item: label (bare: none, the section heading names the kind), title (linked to its inline comment when posted, else the location is linked to the blob line), location, and the first sentence (a standard: its rule);
 // req: the requirement the finding belongs to, on a second line.
@@ -810,7 +810,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   if (failed) verdict = `**⚠️ Could not complete: ${neutralize(String(status || '').replace(/^Could not complete:\s*/i, ''))}**`;
   else if (!data) verdict = status ? `**${neutralize(status)}**` : '';
   else if (reduced && (!gradeOnly(reduced) || (inc && act.length))) verdict = act.length ? `**❌ ${andList(act)} to fix**` : '**⚠️ Reduced review: no high-confidence gaps**'; // the explanation is a blockquote after the table; never a pass line
-  else if (inc) verdict = `**⚠️ Incomplete review: ${act.length ? `${andList(act)} found so far` : 'no unit test gaps found so far'}**`;
+  else if (inc) verdict = act.length ? `**⚠️ Incomplete review: ${andList(act)} found so far**` : `**⚠️ Partly reviewed: no gaps in what was reviewed; see Not reviewed below**`;
   else if (act.length) verdict = `**❌ ${andList(act)} to fix**`;
   else if (checks) verdict = `**❔ No gaps found; ${plural(checks, 'criterion', 'criteria')} need${checks === 1 ? 's' : ''} a person to check**`;
   else if (changed) verdict = '**❔ No gaps found; requirement text changed in this PR, so review it**';
@@ -837,11 +837,11 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const bullets = [...banner.map((r) => cell(r)), ...(changed ? ['Requirement text was changed by this PR: consistency with the changed text does not prove the change itself is approved.'] : []),
     ...(rules.length ? [`This PR modifies review rule or agent-config files (${rules.map((x) => cell(x)).join(', ')}); they were not reviewed, and the base versions were applied.`] : []),
     ...(lintChanged.length ? [`Lint/format configuration changed in this PR (${lintChanged.map((x) => cell(x)).join(', ')}): a passing check may reflect the relaxed config.`] : [])];
-  const notice = failed ? '' : [inc ? '> **Incomplete review.** Not everything was covered; the findings above were verified, and the next push or rerun reviews again.' : '', gradeOnly(reduced) ? '> Fast-tier model: only high-confidence findings are posted inline.' : reduced && act.length ? `> Reduced review${reduced.reasons?.some((x) => x.id === 'tier') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
+  const notice = failed ? '' : [reduced && !gradeOnly(reduced) && act.length ? `> Reduced review${reduced.reasons?.some((x) => x.id === 'tier') ? ' (fast model)' : ''}: only high-confidence findings are shown.` : '', ...bullets.map((b) => `> - ${b}`)].filter(Boolean).join('\n');
   // the model's not_reviewed text as sentences; the automatic "Requirement X is not assessed" note is dropped when X has its own row in the table
   const shownIds = new Set(rows.map((x) => String(x.r.id)));
   const nrParts = (t) => String(t || '').split(/(?<=[.!?])\s+(?=[A-Z0-9`"'(])/).filter((x) => x.trim() && !shownIds.has((/^Requirement (\S+) is not assessed: /.exec(x) || [])[1]));
-  const nrAll =!failed && inc ? [...incomplete.map((r) => cell(r)), ...nrParts(data?.not_reviewed).map((x) => cell(x))] : [];
+  const nrAll = !failed && inc ? [...incomplete.map((r) => cell(r)), ...nrParts(data?.not_reviewed).map((x) => cell(x))] : []; // reasons first, then the model's sentences; the overflow is Details "Not reviewed (more)"
 
   // ---- visible sections
   const vis = []; // { h, atoms, tail }
@@ -935,7 +935,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     if (src) detail(src.h, src.atoms);
     if (reduced) detail('**Reduced review**\n\n', [`Reasons: ${reduced.reasons.map((r) => cell(r.text)).join('; ')} (model: ${cell(reduced.model || 'unknown', 80)}). Only high-confidence findings were posted inline.\n`]);
     const sn = counts && counts.complete && counts.since;
-    const more = [...runNotes.map((x) => `${cell(x)}\n`),
+    const more = [...(inc ? ['Not everything was covered; the findings above were verified, and the next push or rerun reviews again.\n'] : []), ...runNotes.map((x) => `${cell(x)}\n`),
       ...(traceNote ? [`Traceability unavailable for this PR (${cell(traceNote)}).\n`] : []),
       ...(sn && counts.since_total ? [`Since earlier reviews${counts.prior_total > counts.since_total ? `, of the ${counts.since_total} most recent` : ''}: ${sn.addressed} addressed · ${sn.open} still open · ${sn.dismissed} dismissed · ${sn.not_observed} not observed (not proof of a fix)\n`] : []),
       ...(resolveNote ? [`Threads for findings no longer reported were left open: ${cell(resolveNote)} (see README, resolve_stale).\n`] : [])];
@@ -1583,6 +1583,13 @@ async function run({ github, context, core }) {
       if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }
+  { // focus shortened a chosen file's diff: its omitted deleted lines cannot be read from the head file, so obligations on them are unknown. Omitted added lines are not flagged: the pack shows them or "Changed lines past what the model saw" names the file. Only ever adds a reason.
+    // ponytail: with claude-api and context_pack_bytes=0 the model sees the diff only, so hidden added lines go unseen; a user opt-in, no rule for it.
+    const n = (t, re) => t.split('\n').filter((l) => re.test(l)).length, patch = new Map(splitDiff(readCtx('diff.patch') || '').map((f) => [f.path, f.text.slice(Math.max(0, f.text.search(/^@@/m)))]));
+    const cut = splitDiff(readCtx('diff.numbered.txt') || '').filter((f) => /^… \d+ more changed lines in this file not shown/m.test(f.text) && patch.has(f.path))
+      .filter((f) => n(patch.get(f.path), /^-/) > n(f.text, /^\s*\d+ \| -/)).map((f) => f.path);
+    if (cut.length) incomplete.push(`Deleted lines of ${cut.slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${cut.length > 5 ? `, … (+${cut.length - 5} more)` : ''} not shown (diff shortened); obligations that depend on them are unknown.`);
+  }
   const noCands = new Set((readCtx('candidates-cut.txt') || '').split('\n').filter(Boolean)); // collect.sh: changed files whose candidate tests were never looked up (list cap)
   for (const f of data.findings) if (f.kind === 'missing_test' && f.confidence !== 'low' && noCands.has(f.path)) { f.confidence = 'low'; (data.validation_notes ||= []).push(`low confidence: candidate tests were not looked up for ${f.path} (too many changed files); missing_test ${f.path} is not counted.`); }
   if (noCands.size) incomplete.push(`Candidate tests were not looked up for ${noCands.size} changed file(s) (too many changed files): ${[...noCands].slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${noCands.size > 5 ? ', …' : ''}; their missing-test claims are not counted.`);
@@ -1592,8 +1599,11 @@ async function run({ github, context, core }) {
     const shown = new Map((readCtx('pack-shown.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')));
     const dm = parseDiff(readCtx('diff.patch') || '');
     const past = (f) => !shown.has(f) || [...(dm.get(f)?.changed.RIGHT.keys() || [])].some((n) => n > +shown.get(f));
-    const lost = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean).flatMap((f) => [...(packCut.has(f) && past(f) ? [f] : []), ...(cands.get(f) || []).filter((x) => packCut.has(x))]))];
-    if (lost.length) incomplete.push(`Review context was cut: the model saw only part of ${lost.slice(0, 10).map((x) => `\`${cell(x, 120)}\``).join(', ')}${lost.length > 10 ? `, … (+${lost.length - 10} more)` : ''}; obligations that depend on them are unknown.`);
+    // at most two entries, naming the files (5 each), so the cut cannot push the other reasons off the first screen
+    const files = [...new Set((readCtx('files.txt') || '').split('\n').filter(Boolean))], named = (xs) => `${xs.slice(0, 5).map((x) => `\`${cell(x, 120)}\``).join(', ')}${xs.length > 5 ? `, … (+${xs.length - 5} more)` : ''}`;
+    const lost = files.filter((f) => packCut.has(f) && past(f)), partly = files.filter((f) => (cands.get(f) || []).some((x) => packCut.has(x)));
+    if (lost.length) incomplete.push(`Changed lines past what the model saw: ${named(lost)}`);
+    if (partly.length) incomplete.push(`Unit tests only partly visible for: ${named(partly)}`);
   }
   // The engine can leave a parseable findings.json and still have timed out or failed: keep what verifies, but the run is not complete.
   if (st && st !== 'success') incomplete.push(st === 'timeout' ? `The review engine timed out after ${env.REVIEW_TIMEOUT_MINUTES || '12'} minutes; the findings may be partial.` : st === 'failed' ? 'The review engine failed; the findings may be partial.' : `The review engine did not finish cleanly (${st}); the findings may be partial.`);

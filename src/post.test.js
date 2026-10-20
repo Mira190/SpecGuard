@@ -226,8 +226,8 @@ test('pack-cut.txt listing a changed file or its candidate test: the run is inco
     const { body, counts } = await run(cut);
     assert.equal(counts.complete, false); assert.equal(counts.execution_complete, false);
     assert.doesNotMatch(body, /No unit test gaps found(?! so far)/);
-    assert.match(body, /Incomplete review/);
-    assert.match(body, new RegExp(`Review context was cut: the model saw only part of \`${cut.trim().replace('.', '\\.')}\``));
+    assert.match(body, /Partly reviewed/);
+    assert.match(body, cut === 'src.js\n' ? /Changed lines past what the model saw: `src\.js`/ : /Unit tests only partly visible for: `src\.js`/);
     assert.doesNotMatch(body, /<!-- specguard:head=/); assert.match(body, /<!-- specguard:status=incomplete -->/);
     assert.equal(require('./preflight.js').decide({ pr: { state: 'open', user: { type: 'User', login: 'dev' } }, headSha: 'HEADSHA', comments: [{ user: { type: 'Bot', login: 'github-actions[bot]' }, body }] }), '');
   }
@@ -2294,7 +2294,7 @@ test('M3: a collector limitation in requirements-status spec.limitations makes t
   await post(s);
   const body = s.calls.summary[0].body;
   assert.doesNotMatch(body, /No unit test gaps found/);
-  assert.match(body, /Incomplete review/);
+  assert.match(body, /Partly reviewed/);
   assert.match(body, /500 candidate documents skipped/);
   assert.doesNotMatch(body, /specguard:head/);
   assert.match(s.jobSummary.join(), /500 candidate documents skipped/);
@@ -2313,7 +2313,7 @@ test('M3: a capped requirements-index.md or an empty PR body is not "not collect
   const top = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] }));
   writeCtx(top, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: ['2 linked issue(s) omitted by the five-issue limit.'] });
   await post(top);
-  assert.match(top.calls.summary[0].body, /Incomplete review[\s\S]*2 linked issue\(s\) omitted/);
+  assert.match(top.calls.summary[0].body, /Partly reviewed[\s\S]*2 linked issue\(s\) omitted/);
   assert.deepEqual(top.resolved, []);
 });
 
@@ -2342,7 +2342,7 @@ test('V7: an unreadable or other-repository reference is a note in the summary, 
   const lost = withThreads(t, [GONE()], report({ coverage: [row()], findings: [] })); // a real collection failure stays incomplete
   writeCtx(lost, 'requirements-status.json', { status: 'unavailable', sources: [], limitations: ['PR requirements could not be loaded; review is limited to changed behaviour.'] });
   await post(lost);
-  assert.match(lost.calls.summary[0].body, /Incomplete review/);
+  assert.match(lost.calls.summary[0].body, /Partly reviewed/);
 });
 
 test('S2: an unreadable closing issue makes the run incomplete: no head marker, and the preflight does not skip the next push', async (t) => {
@@ -2351,7 +2351,7 @@ test('S2: an unreadable closing issue makes the run incomplete: no head marker, 
   writeCtx(s, 'requirements-status.json', { status: 'partial', sources: ['PR body'], limitations: ['Could not read closing issue #7 (HTTP 403); its acceptance criteria were not reviewed. Grant the token issues:read, or paste the acceptance criteria into the PR body.'] });
   await post(s);
   const body = s.calls.summary[0].body;
-  assert.match(body, /Incomplete review/);
+  assert.match(body, /Partly reviewed/);
   assert.match(body, /"complete":false/);
   assert.doesNotMatch(body, /specguard:head=/);
   assert.equal(decide({ pr: { title: 'T', body: 'x' }, comments: [{ user: { login: 'github-actions[bot]', type: 'Bot' }, body }], headSha: 'HEADSHA' }), '');
@@ -2382,7 +2382,7 @@ test('M4: a timeout with valid findings never says "No unit test gaps found"', a
   writeCtx(s, 'engine-status', 'timeout\n');
   await post(s);
   assert.doesNotMatch(s.calls.summary[0].body, /No unit test gaps found/);
-  assert.match(s.calls.summary[0].body, /\*\*⚠️ Incomplete review: no unit test gaps found so far\*\*/);
+  assert.match(s.calls.summary[0].body, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; see Not reviewed below\*\*/);
 });
 
 test('M7: only our own bot counts: another bot\'s fingerprint comment does not dedupe, another bot\'s thread is not resolved', async (t) => {
@@ -3013,8 +3013,8 @@ test('layout: incomplete, reduced and failed runs never read as a pass; notices 
   const common = { data: layoutData(), posted: [{ f, url: 'https://github.com/o/r/pull/1#discussion_r1' }], blob: BLOB };
   const inc = post.buildSummary({ ...common, incomplete: ['The review engine failed; the findings may be partial.', 'Diff over `max_diff_kb`, files not reviewed: `a.js`, `b.js`'], banner: ['Large PR: diffs of 2 large files were shortened.'], rules: ['pkg/REVIEW.md'], lint: { count: 1, changed: ['biome.json'] } });
   assert.match(inc, /## SpecGuard\n\n\*\*⚠️ Incomplete review: 1 unit test gap found so far\*\*\n\n### Missing unit tests/);
-  assert.match(inc, /\n### Not reviewed \(3\)\n\n- The review engine failed; the findings may be partial\.\n- Diff over `max_diff_kb`, files not reviewed: `a\.js`, `b\.js`\n- Generated files\.\n\n> \*\*Incomplete review\.\*\* Not everything was covered[^\n]*\n> - Large PR: [^\n]*\n> - This PR modifies review rule[^\n]*\n> - Lint\/format configuration changed[^\n]*\n\n<details>/, 'Not reviewed comes after the findings, then the one blockquote, right before Details');
-  assert.equal((inc.match(/^> /gm) || []).length, 4, 'one blockquote, one line each');
+  assert.match(inc, /\n### Not reviewed \(3\)\n\n- The review engine failed; the findings may be partial\.\n- Diff over `max_diff_kb`, files not reviewed: `a\.js`, `b\.js`\n- Generated files\.\n\n> - Large PR: [^\n]*\n> - This PR modifies review rule[^\n]*\n> - Lint\/format configuration changed[^\n]*\n\n<details>/, 'Not reviewed comes after the findings, then the one blockquote, right before Details');
+  assert.equal((inc.match(/^> /gm) || []).length, 3, 'one blockquote, one line each');
   assert.doesNotMatch(inc, /Criteria:|✅|\[!WARNING\]/);
   assert.match(inc, /specguard:status=incomplete/);
   const red = post.buildSummary({ ...common, reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }], model: 'mini' } });
@@ -3502,10 +3502,10 @@ test('reduced: fast tier posts at most 3 inline (high confidence, two citations)
   const body = s.calls.summary[0].body;
   assert.equal(s.calls.review[0].comments.length, 3);
   assert.ok(s.calls.review[0].comments.every((c) => /kind: weak_test, confidence: high/.test(c.body)));
-  assert.match(body, /## SpecGuard\n\n\*\*❌ [^\n]*\*\*\n\n\|[\s\S]*\n> Fast-tier model: only high-confidence findings are posted inline\.\n\n<details>/);
+  assert.match(body, /## SpecGuard\n\n\*\*❌ [^\n]*\*\*\n\n\|[\s\S]*\n\n<details>/);
+  assert.doesNotMatch(body.split('<details>')[0], /Fast-tier model/, 'the grade sentence is in Details only');
   assert.match(body, /\*\*Reduced review\*\*\n\nReasons: fast-tier model \(model: mai-code-1\.1-flash\)\. Only high-confidence findings were posted inline\.\n/);
-  assert.ok(body.indexOf('> Fast-tier model') > body.lastIndexOf('### ') && body.indexOf('> Fast-tier model') < body.indexOf('<details>'), 'after the last section, right before Details');
-  assert.equal((body.match(/^> /gm) || []).length, 1, 'one blockquote line');
+  assert.equal((body.match(/^> /gm) || []).length, 0, 'no blockquote: the fast-tier grade is not a first-screen notice');
   assert.match(body, /\nRun: engine copilot · mai-code-1\.1-flash\n/, 'no usage recorded: the model is in the run line');
   assert.doesNotMatch(body, /something-else/);
   assert.match(body, /### Missing unit tests \(\d+\)\n\n- Untested branch.*src\.js:4.*\(reduced review: needs high confidence and two citations\)/);
@@ -3525,7 +3525,7 @@ test('reduced: a fast-tier run with no findings is "Review complete (fast model)
   writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['claude-haiku-5.5'] }));
   await post(s);
   const c0 = countsOf(s.calls.summary[0].body);
-  assert.match(s.calls.summary[0].body, /## SpecGuard\n\n\*\*✅ Review complete \(fast model\): no high-confidence gaps\*\*\. Static review; tests were not run\.\n\n\| Unit tests \| [^\n]*\n\|---\|---\|---\|---\|\n\| no high-confidence gaps \|[^\n]*\n\n> Fast-tier model: only high-confidence findings are posted inline\.\n\n<details>/);
+  assert.match(s.calls.summary[0].body, /## SpecGuard\n\n\*\*✅ Review complete \(fast model\): no high-confidence gaps\*\*\. Static review; tests were not run\.\n\n\| Unit tests \| [^\n]*\n\|---\|---\|---\|---\|\n\| no high-confidence gaps \|[^\n]*\n\n<details>/);
   assert.doesNotMatch(s.calls.summary[0].body, /No unit test gaps found|✅ no gaps|⚠️/);
   assert.match(s.calls.summary[0].body, /specguard:status=complete -->/); assert.match(s.calls.summary[0].body, /specguard:head=HEADSHA/);
   assert.deepEqual([c0.reduced, c0.complete, c0.execution_complete, c0.tier], [true, false, true, 'fast'], 'counts keep their meanings');
@@ -3803,11 +3803,11 @@ test('Not reviewed: visible when the run is incomplete, a list in Details when i
   assert.match(done, /<details>[\s\S]*\*\*Not reviewed \(1 item\)\*\*\n\n- Generated files\.\n/);
   assert.doesNotMatch(done, /### Not reviewed/);
   assert.match(part, /### Not reviewed \(2\)\n\n- The review engine timed out\.\n- Generated files\.\n/);
-  assert.doesNotMatch(part, /\*\*Not reviewed \(/);
+  assert.doesNotMatch(part, /\*\*Not reviewed \(\d+ items?\)\*\*/, 'the same sentence is not repeated in Details');
   const many = post.buildSummary({ ...opts, incomplete: ['The review engine timed out.'], data: { ...layoutData(), not_reviewed: Array.from({ length: 12 }, (_, i) => `Item ${i} was skipped.`).join(' ') } });
-  assert.equal((many.match(/^- /gm) || []).length >= 8, true);
-  assert.match(many, /- \+5 more in Details\n/);
-  assert.match(many, /\*\*Not reviewed \(more\)\*\*\n\n- Item 7 was skipped\./);
+  assert.equal((many.split('<details>')[0].match(/^- (?!\+)/gm) || []).length, 5, 'visible cap is 5');
+  assert.match(many, /- \+8 more in Details\n/);
+  assert.match(many, /\*\*Not reviewed \(more\)\*\*\n\n- Item 4 was skipped\./);
 });
 
 test('issue #8 end to end: criteria cited although none were collected leave no junk rows; the source line says none were found; the findings survive', async (t) => {
@@ -3842,7 +3842,7 @@ test('layout: the full visible order, with the cost as the last small line outsi
     usage: { totalCostUsd: 0.0069, totalApiDurationMs: 43200, tokenDetails: { input: { tokenCount: 17300 }, cache_read: { tokenCount: 11700 }, cache_write: { tokenCount: 0 }, output: { tokenCount: 10200 } } }, notes: ['context pack: 14 files, 30 KB'],
     delivery: 'summary only, nothing posted', reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }], model: 'claude-haiku-5-5' }, counts: { v: 1, complete: true, since_total: 1, since: { addressed: 1, open: 0, dismissed: 0, not_observed: 0 } } });
   const at = (x) => { const i = s.indexOf(x); assert.ok(i >= 0, `missing ${x}`); return i; };
-  const order = ['**❌', '| Unit tests |', 'Since last push:', '### Missing unit tests', '### Weak unit tests', '### Spec mismatches', '### Coding standard violations', '### Tests to move down', '> Fast-tier model', '<details>', 'Run: engine claude · context pack: 14 files, 30 KB', '</details>', '<sub>Cost $0.0069'].map(at);
+  const order = ['**❌', '| Unit tests |', 'Since last push:', '### Missing unit tests', '### Weak unit tests', '### Spec mismatches', '### Coding standard violations', '### Tests to move down', '<details>', 'Run: engine claude · context pack: 14 files, 30 KB', '</details>', '<sub>Cost $0.0069'].map(at);
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   const last = s.trimEnd().split('\n').pop();
   assert.equal(last, '<sub>Cost $0.0069 · claude-haiku-5-5 · 29.0k in (11.7k cached) · 10.2k out · 43s · summary only, nothing posted</sub>');
@@ -4170,7 +4170,7 @@ test('pack error end to end (S7): run() with a throwing pack, then post on the s
   const counts = JSON.parse(fs.readFileSync(path.join(ctx, 'counts.json'), 'utf8')), body = s.calls.summary[0].body;
   assert.equal(counts.complete, false);
   assert.doesNotMatch(body, /<!-- specguard:head=/);
-  assert.match(body, /Review context was cut: the model saw only part of/);
+  assert.match(body, /Changed lines past what the model saw: `src\.js`/);
 });
 
 test('E1 PR: a covered row whose only verified evidence is truthiness or interaction-only becomes unknown; value evidence still covers', () => {
@@ -4410,7 +4410,7 @@ test('status separates finishing from grade: a fast-tier run with gaps is ❌ an
   cut.outputs = {}; cut.core.setOutput = (k, v) => { cut.outputs[k] = v; };
   await post(cut);
   const cb = cut.calls.summary[0].body;
-  assert.match(cb, /\*\*⚠️ Incomplete review/); assert.match(cb, /specguard:status=incomplete -->/); assert.equal(cut.outputs.status, 'incomplete'); assert.doesNotMatch(cb, /specguard:head=/);
+  assert.match(cb, /\*\*⚠️ Partly reviewed/); assert.match(cb, /specguard:status=incomplete -->/); assert.equal(cut.outputs.status, 'incomplete'); assert.doesNotMatch(cb, /specguard:head=/);
   assert.deepEqual([countsOf(cb).reduced, countsOf(cb).execution_complete], [true, false]);
 });
 
@@ -4423,7 +4423,7 @@ test('headline precedence is unchanged from main: fast tier + cut + gaps stays �
     return s.calls.summary[0].body;
   };
   const fast = await go('fast');
-  assert.match(fast, /## SpecGuard\n\n\*\*❌ \d+ unit test gaps? to fix\*\*/); assert.match(fast, /specguard:status=incomplete -->/); assert.match(fast, /Incomplete review\./);
+  assert.match(fast, /## SpecGuard\n\n\*\*❌ \d+ unit test gaps? to fix\*\*/); assert.match(fast, /specguard:status=incomplete -->/); assert.match(fast, /Changed lines past what the model saw/);
   const full = await go('');
   assert.match(full, /## SpecGuard\n\n\*\*⚠️ Incomplete review: \d+ unit test gaps? found so far\*\*/); assert.match(full, /specguard:status=incomplete -->/);
 });
@@ -4431,8 +4431,8 @@ test('headline precedence is unchanged from main: fast tier + cut + gaps stays �
 test('tier-only reduced review is a grade by id, not by reason wording', () => {
   const d = report({ requirements: [reqOf('R1', ['O1'])], coverage: [row()], findings: [] });
   const s = (reasons) => post.buildSummary({ data: d, blob: BLOB, reduced: { reasons, model: 'mini' } });
-  assert.match(s([{ id: 'tier', text: 'small model' }]), /Fast-tier model: only high-confidence/, 'rewording the tier text keeps it a grade');
-  assert.doesNotMatch(s([{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }]), /Fast-tier model: only high-confidence/, 'control: another reason is not grade-only');
+  assert.match(s([{ id: 'tier', text: 'small model' }]), /\*\*✅ Review complete \(fast model\)/, 'rewording the tier text keeps it a grade');
+  assert.doesNotMatch(s([{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }]), /\*\*✅ Review complete \(fast model\)/, 'control: another reason is not grade-only');
 });
 
 test('author verdicts: only a person\'s reply that starts with a verdict word counts; the last one wins; carried through followUp and the counts line', () => {
@@ -4453,4 +4453,81 @@ test('author verdicts: only a person\'s reply that starts with a verdict word co
   const [none] = post.followUp({ priors: new Map([[fp, { body: mine.body, path: 'a.js' }]]), survive: new Set(), me: null, headSha: 'HEAD', cwd: '.', threads: [{ ...t2, comments: { nodes: [mine] } }] });
   assert.ok(!('verdict' in none));
   assert.match(post.countsComment({ outcomes: [rec] }), /"verdict":"intentional"/);
+});
+
+test('incomplete summary: the first screen holds the findings and the not-reviewed files; the model prose, the "Incomplete review." blockquote and the fast-tier sentence are in Details', () => {
+  const d = report({ not_reviewed: 'The model could not read the vendored parser.' });
+  const f = { f: d.findings[0], why: 'x' };
+  const body = post.buildSummary({ data: d, items: [f], incomplete: ['`src/a.js`: changed lines past what the model saw'], state: 'incomplete' });
+  const fast = post.buildSummary({ data: d, items: [f], incomplete: ['x'], reduced: { reasons: [{ id: 'tier', text: 'fast-tier model' }], model: 'haiku' }, state: 'incomplete' }).split('<details>');
+  assert.doesNotMatch(fast[0], /Fast-tier model/); assert.match(fast[1], /Only high-confidence findings were posted inline/);
+  const [top, rest] = body.split('<details>');
+  assert.match(top, /Incomplete review: 1 unit test gap found so far/); assert.match(top, /Verify the boundary total/);
+  assert.match(top, /### Not reviewed \(2\)\n\n- `src\/a\.js`: changed lines past what the model saw\n- The model could not read the vendored parser\./);
+  assert.match(top, /- The model could not read the vendored parser\./, 'the model\'s own not_reviewed text stays on the first screen');
+  assert.doesNotMatch(top, /Fast-tier model|Incomplete review\.\*\*/);
+  assert.doesNotMatch(rest, /vendored parser/, 'and is not repeated in Details'); assert.match(rest, /next push or rerun reviews again/);
+  const none = post.buildSummary({ data: report({ coverage: [row()], findings: [] }), incomplete: ['`a.js`: changed lines past what the model saw', 'b'], state: 'incomplete' });
+  assert.match(none, /\*\*⚠️ Partly reviewed: no gaps in what was reviewed; see Not reviewed below\*\*/);
+});
+
+test('cut context: at most two entries naming up to 5 files each, so an engine timeout and the verdict count stay on the first screen', async (t) => {
+  const s = setup(t, report({ coverage: [row()], findings: [] })), fs8 = Array.from({ length: 8 }, (_, i) => `f${i}.js`);
+  writeCtx(s, 'files.txt', ['src.js', ...fs8].join('\n') + '\n'); writeCtx(s, 'pack-cut.txt', [...fs8, ...fs8.map((f) => `t-${f}`)].join('\n') + '\n');
+  writeCtx(s, 'test-candidates.txt', fs8.map((f) => `${f}\n  t-${f}  (same stem)\n`).join('')); writeCtx(s, 'engine-status', 'timeout\n');
+  await post(s);
+  const top = s.calls.summary[0].body.split('<details>')[0], nr = top.slice(top.indexOf('### Not reviewed'));
+  assert.match(top, /Partly reviewed: no gaps in what was reviewed; see Not reviewed below/);
+  assert.match(nr, /### Not reviewed \(3\)/); assert.match(nr, /The review engine timed out/);
+  assert.match(nr, /- Changed lines past what the model saw: `f0\.js`, `f1\.js`, `f2\.js`, `f3\.js`, `f4\.js`, … \(\+3 more\)\n/);
+  assert.match(nr, /- Unit tests only partly visible for: `f0\.js`[^\n]*\(\+3 more\)\n/);
+});
+
+// A shortened file: generated diff of one file, the first hunk shown, the later hunks cut by focus's own trim (nothing third-party).
+const shortened = (t, { del, add, pack }) => {
+  const { numberDiff } = require('./numdiff.js'), { trim } = require('./focus.js');
+  const s = setup(t), line = (k) => `    value_${k} = compute_field(record, 'field_${k}', default_${k}) # generated line ${k} ${'x'.repeat(65)}`;
+  const hunk = (at, d, a) => [`@@ -${at},${d + 3} +${at},${a + 3} @@`, ...[1, 2, 3].map((k) => ` ctx_${at}_${k}`), ...Array.from({ length: d }, (_, k) => `-${line(at + k)}`), ...Array.from({ length: a }, (_, k) => `+${line(at + 500 + k)}`)];
+  const lines = [...hunk(1, 2, 2)], per = 14; // first hunk shown; the rest holds `del` deleted and `add` added lines in hunks of ~per lines
+  for (let at = 100, d = del, a = add; d + a > 0; at += 100) { const dd = Math.min(d, per), aa = Math.min(a, per); lines.push(...hunk(at, dd, aa)); d -= dd; a -= aa; }
+  const patch = `diff --git a/src.js b/src.js\n--- a/src.js\n+++ b/src.js\n${lines.join('\n')}\n`, numbered = numberDiff(patch);
+  const first = numbered.indexOf('\n@@', numbered.indexOf('\n@@') + 1);
+  writeCtx(s, 'diff.patch', patch);
+  writeCtx(s, 'diff.numbered.txt', trim(numbered, Buffer.byteLength(numbered.slice(0, first)) + 20));
+  writeCtx(s, 'focus.txt', 'src.js\t14.0\tlogic\n'); writeCtx(s, 'focus-skipped.txt', '');
+  if (pack !== undefined) writeCtx(s, 'pack-cut.txt', pack);
+  return { s, patch };
+};
+const REASON = /Deleted lines of `src\.js` not shown \(diff shortened\); obligations that depend on them are unknown\./;
+
+test('shortened diff, omitted part has deleted lines (pydantic-like: 1 file, ~54 KB, 335 changed lines omitted, 139 deleted): incomplete with the reason, nothing skipped', async (t) => {
+  const { s, patch } = shortened(t, { del: 139, add: 196, pack: '' });
+  assert.ok(Buffer.byteLength(patch) > 50000 && Buffer.byteLength(patch) < 58000, `diff size ${Buffer.byteLength(patch)}`);
+  assert.match(fs.readFileSync(path.join(s.dir, 'ctx/diff.numbered.txt'), 'utf8'), /… 335 more changed lines in this file not shown/);
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, /Incomplete review/); assert.match(b, REASON); assert.doesNotMatch(b, /specguard:head=/);
+  assert.match(b, /<!-- specguard:status=incomplete -->/);
+});
+
+test('shortened diff, only added lines omitted and the file shown whole in the pack: stays complete, no new reason', async (t) => {
+  const { s } = shortened(t, { del: 0, add: 60, pack: '' });
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.doesNotMatch(b, REASON); assert.doesNotMatch(b, /Incomplete review/); assert.match(b, /specguard:head=/);
+});
+
+test('shortened diff, only added lines omitted: no new reason, whether the file is cut in the pack or there is no pack-cut.txt', async (t) => {
+  for (const pack of ['src.js\n', undefined]) {
+    const { s } = shortened(t, { del: 0, add: 60, pack });
+    await post(s);
+    assert.doesNotMatch(s.calls.summary[0].body, REASON);
+  }
+});
+
+test('shortened diff, deleted lines omitted and no pack-cut.txt (agent engine): incomplete with the reason', async (t) => {
+  const { s } = shortened(t, { del: 30, add: 30 });
+  await post(s);
+  const b = s.calls.summary[0].body;
+  assert.match(b, REASON); assert.match(b, /Incomplete review/); assert.doesNotMatch(b, /specguard:head=/);
 });
