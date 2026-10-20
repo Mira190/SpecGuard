@@ -27,7 +27,8 @@ The runner is `cover` in specguard-33's f2p harness (#416, merged into main at 2
 **rqlite is excluded from E1** (e0, 2026-10-20). The cgo build needs about 2 GB of RAM plus 1–2 GB of Go cache, which is not worth the risk for a first look, and its f2p controls have not been rerun under amendment 6/7 rules.
 
 **langchain scope.** A langchain pair is eligible only if every changed source file of I lies under `libs/core/`. This is fixed now, before any draw.
-- A source file is a code file that `isProd` accepts, outside `.github/`. Docs, lockfiles, CI scripts and test files don't count.
+- A source file is a code file: `isProd` accepts it, it has a code extension (`src/coverage.js` CODE), and it is outside `.github/`. Docs, lockfiles, manifests (package.json, jsr.json, pyproject.toml), gitlinks, CI scripts and test files don't count.
+- The same `isCode` test builds every arm's units, and it drops blamed lines on non-code files from B. (Red team, 2026-10-20: `isProd` alone let langchain-33461's uv.lock be 106 of 130 added lines.)
 - In design this keeps langchain-33461 and langchain-18592. 18592's files outside core are docs and tests; an earlier draft wrongly listed it as dropped (corrected before any outcome look).
 - It drops langchain-33817 (`libs/langchain_v1`).
 
@@ -46,6 +47,10 @@ The runner is `cover` in specguard-33's f2p harness (#416, merged into main at 2
 - 0 selected test files;
 - the report covers none of I's changed source files;
 - **a file error of kind `collection` in a test file that names a changed source file's module or sits in the same directory as its test counterpart.** Such an error removes coverage the file would have given, which would make fake gaps. This option (unusable) was chosen over dropping only that file's flags. Errors of kind `empty` or `other` do not make a PR unusable; they are counted.
+  - "Names the module" means the module stem appears as a word in the test path. Generic stems (index, __init__, main, types, utils, package) never match by name, so one broken `index.test.ts` does not make every `index.ts` PR unusable.
+  - Flat test dirs (sqlglot `tests/`, langchain `libs/core/tests/unit_tests/`): an error in a test file under the counterpart dir counts when its filename contains the module stem as a word.
+
+Also reported for usable PRs: how many have kind=`other` errors (e.g. "no result" from a vitest worker crash), a non-zero exit code, or `timed_out`.
 
 Failing tests do not make a PR unusable; their count is reported.
 
@@ -82,19 +87,23 @@ Failing tests do not make a PR unusable; their count is reported.
 2. C vs static: the per-PR difference, with a cluster bootstrap interval. The static arm has no unusable state, so this comparison also reports how many PRs are unusable for C only (a penalty static does not carry).
 3. C vs LLM delivered, on the design set only.
 4. Does coverage separate the LLM's hits from its misses? Design set only. Every saved LLM missing_test finding is counted, hidden or delivered. Each is labelled "confirmed" if its cited line is executable and not executed, "contradicted" if executed, or "unknown" if the line is not instrumented. For each label, report the count and the catch rate.
+   - Runs that fail testgap-score's run-validity check are dropped.
+   - Findings without a line or path are counted as dropped.
+   - Labels from unusable PRs are reported separately.
 5. Noise on controls: the share of changed units that C flags, C flags per control PR, and the same for static.
-6. C's catch rate and chance split by `deps_changed` (true / false).
+6. C's catch rate and chance split by `deps_changed` (true / false), usable PRs only.
 
 ## Corpus
 
 - **Design look.** Holdout 2's replay-eligible pairs in hono, sqlglot and langchain-core: hono 6, sqlglot 3, langchain 2 (33461, 18592). That is **11 pairs** (`coverage-e1-design.json`), plus holdout 2's clean `no_known_bug` controls in these repos (hono 3, langchain 1). The scorer reports how many pass the test-gap filter.
-  - The look reports, for all 10 and for the filtered 3: C's catch rate vs chance, the unusable rate and reasons, flags per PR, and noise on the holdout-2 clean `no_known_bug` PRs in these repos.
+  - The look reports, for all 11, for the filtered subset and for the unfiltered rest: C's catch rate vs chance, the unusable rate and reasons, flags per PR, and noise on the holdout-2 clean `no_known_bug` PRs in these repos.
   - **Power** for the confirmation n against the +10 floor comes from resampling the 11 design PRs. If it is below 0.5, it is reported to e0 and the owner before the confirmation run.
+  - hono-2339 also changes generated `deno_dist/` mirrors of its `src/` files. The appendix notes how many of its units come from them. They are outside the coverage source, so C has no instrumented lines there, but static can still flag them.
   - The design look changes no gate. Like the slicing draft, it is a dated appendix after the freeze, and defect amendments follow the same rule.
 - **Confirmation.**
   - The frozen 88 (`testgap-confirm.json`) keep at most 6 bug PRs per repo, so these repos contribute at most 18. E1 draws its own set:
     - every frozen-set bug PR in hono, sqlglot or langchain-core;
-    - then further qualifying pairs from the same mining output (`SpecGuard-evidence/testgap-confirm/mine-*.json`, fixes from 2026-01-01 to clone HEAD). These use the same mechanical filter, exclusions and langchain-core rule, drawn round-robin over the three repos in alphabetical order, newest first, until there are 40.
+    - then further qualifying pairs from the same mining output (`SpecGuard-evidence/testgap-confirm/mine-*.json`, fixes from 2026-01-01 to clone HEAD). These use the same mechanical filter, exclusions and langchain-core rule. The exclusions include every pair and clean PR in pairs, holdout and holdout 2, so no design PR re-enters. They are drawn round-robin over the three repos in alphabetical order, newest first, until there are 40.
     - If fewer than 40 qualify, the window extends once to 2025-07-01. Fewer than 30 then means "not tested".
   - **Unfiltered comparison set (descriptive).** Up to 20 runnable bug PRs from the same mining output that pass every rule EXCEPT the test-gap filter (their fix adds no test naming a changed definition). They are drawn by the same round-robin rule.
   - **Controls.** The frozen set's controls in these repos, topped up with `szz.js clean` (seed 20261020) to 30, under the same 90-day blame exclusion and langchain-core rule.
@@ -109,7 +118,9 @@ Failing tests do not make a PR unusable; their count is reported.
 - **C passes but its catch rate on the unfiltered comparison set is at chance** (its cluster interval of observed − chance includes 0): the lift is mostly a product of the selection filter, which favours untested definitions. The reading must say so.
 - **C passes but does not beat static** (lower bound of C − static ≤ 0): "a name lookup does as well on location". Phase 1 still uses coverage, because the static lookup cannot see execution.
 - **Comparison 4 (does coverage separate the LLM's hits from its misses?) is descriptive and decides nothing.** It uses at most 11 design PRs. It only informs whether LLM-only missing_test findings that coverage contradicts should be hidden; that is a product choice with its own later check.
-- **Noise ceiling (fixed now):** the median number of C flags per control PR is at most 2. The share of control PRs with any flag is always reported. If C passes and is over the ceiling, the result reads "PASS (location), noise above ceiling".
+- **Noise ceiling (fixed now):** the median number of C flags per usable control PR is at most 2.
+  - For even n, the median is the upper of the two middle values.
+  - With 0 usable controls the ceiling reads "not assessed", never "met". The share of control PRs with any flag is always reported. If C passes and is over the ceiling, the result reads "PASS (location), noise above ceiling".
 
 ## Multiplicity
 
