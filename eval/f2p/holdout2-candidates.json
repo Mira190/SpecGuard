@@ -1,0 +1,5071 @@
+{
+ "generated_by": "node eval/f2p/f2p.js candidates",
+ "reps_by_run": [
+  "39120706885",
+  "39120718089",
+  "39120729276"
+ ],
+ "summary": {
+  "N": 20,
+  "arms": {
+   "NEAR": {
+    "n": 38,
+    "prs": 14
+   },
+   "FAR": {
+    "n": 62,
+    "prs": 20
+   },
+   "UNTOUCHED": {
+    "n": 89,
+    "prs": 23
+   },
+   "UNIT_TOUCHED_WEAK": {
+    "n": 0,
+    "prs": 0
+   },
+   "EXCLUDED_NO_LINE": {
+    "n": 0,
+    "prs": 0
+   }
+  },
+  "sensitivity": {
+   "10": {
+    "NEAR": 28,
+    "FAR": 72
+   },
+   "20": {
+    "NEAR": 38,
+    "FAR": 62
+   },
+   "40": {
+    "NEAR": 48,
+    "FAR": 52
+   }
+  },
+  "unresolved_prs": [],
+  "per_repo": {
+   "middleapi/orpc": {
+    "FAR": 3,
+    "UNTOUCHED": 31,
+    "NEAR": 5
+   },
+   "tobymao/sqlglot": {
+    "UNTOUCHED": 4,
+    "FAR": 1
+   },
+   "rqlite/rqlite": {
+    "FAR": 13,
+    "UNTOUCHED": 2
+   },
+   "go-gitea/gitea": {
+    "NEAR": 14,
+    "FAR": 6,
+    "UNTOUCHED": 18
+   },
+   "pydantic/pydantic-ai": {
+    "FAR": 16,
+    "UNTOUCHED": 2,
+    "NEAR": 1
+   },
+   "langchain-ai/langchain": {
+    "UNTOUCHED": 14,
+    "FAR": 5
+   },
+   "TanStack/query": {
+    "FAR": 1,
+    "UNTOUCHED": 2,
+    "NEAR": 2
+   },
+   "vitest-dev/vitest": {
+    "UNTOUCHED": 7,
+    "NEAR": 7
+   },
+   "honojs/hono": {
+    "FAR": 17,
+    "NEAR": 9,
+    "UNTOUCHED": 9
+   }
+  },
+  "per_pr": {
+   "orpc-1846": {
+    "FAR": 1,
+    "UNTOUCHED": 5
+   },
+   "orpc-1851": {
+    "UNTOUCHED": 1,
+    "NEAR": 3
+   },
+   "orpc-1705": {
+    "UNTOUCHED": 9
+   },
+   "orpc-1718": {
+    "UNTOUCHED": 13
+   },
+   "orpc-1743": {
+    "UNTOUCHED": 3
+   },
+   "orpc-1766": {
+    "FAR": 2,
+    "NEAR": 2
+   },
+   "sqlglot-7054": {
+    "UNTOUCHED": 2
+   },
+   "sqlglot-7097": {
+    "UNTOUCHED": 2
+   },
+   "sqlglot-7315": {
+    "FAR": 1
+   },
+   "rqlite-2318": {
+    "FAR": 4
+   },
+   "rqlite-2313": {
+    "FAR": 3
+   },
+   "rqlite-2061": {
+    "UNTOUCHED": 2,
+    "FAR": 6
+   },
+   "gitea-26655": {
+    "NEAR": 5,
+    "FAR": 1,
+    "UNTOUCHED": 1
+   },
+   "gitea-32210": {
+    "UNTOUCHED": 3,
+    "NEAR": 3,
+    "FAR": 2
+   },
+   "gitea-22610": {
+    "UNTOUCHED": 9
+   },
+   "gitea-30156": {
+    "FAR": 3
+   },
+   "gitea-28691": {
+    "UNTOUCHED": 4,
+    "NEAR": 1
+   },
+   "pydantic-ai-7141": {
+    "FAR": 5,
+    "UNTOUCHED": 2,
+    "NEAR": 1
+   },
+   "langchain-33817": {
+    "UNTOUCHED": 5
+   },
+   "gitea-35987": {
+    "NEAR": 1
+   },
+   "gitea-37869": {
+    "NEAR": 4,
+    "UNTOUCHED": 1
+   },
+   "query-9500": {
+    "FAR": 1,
+    "UNTOUCHED": 1
+   },
+   "pydantic-ai-5020": {
+    "FAR": 1
+   },
+   "vitest-10583": {
+    "UNTOUCHED": 4
+   },
+   "hono-3604": {
+    "FAR": 3
+   },
+   "vitest-6924": {
+    "NEAR": 1
+   },
+   "hono-3787": {
+    "NEAR": 1,
+    "FAR": 1,
+    "UNTOUCHED": 3
+   },
+   "pydantic-ai-3454": {
+    "FAR": 3
+   },
+   "langchain-18592": {
+    "UNTOUCHED": 7,
+    "FAR": 5
+   },
+   "langchain-33461": {
+    "UNTOUCHED": 2
+   },
+   "hono-2339": {
+    "FAR": 5,
+    "UNTOUCHED": 6
+   },
+   "hono-3413": {
+    "FAR": 8
+   },
+   "query-7005": {
+    "NEAR": 2,
+    "UNTOUCHED": 1
+   },
+   "vitest-9464": {
+    "NEAR": 6
+   },
+   "hono-3366": {
+    "NEAR": 7
+   },
+   "hono-3727": {
+    "NEAR": 1
+   },
+   "pydantic-ai-1812": {
+    "FAR": 3
+   },
+   "pydantic-ai-5455": {
+    "FAR": 4
+   },
+   "vitest-7878": {
+    "UNTOUCHED": 3
+   }
+  }
+ },
+ "prs": [
+  {
+   "replay_id": "orpc-1846",
+   "repo": "middleapi/orpc",
+   "fix": 1955,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "2991776691409d3e624475794d604aa4b71e856a",
+   "fixed_sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "orpc-1851",
+   "repo": "middleapi/orpc",
+   "fix": 2099,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fixed_sha": "2cd0134f3ea6325737d73ce174633602bfc8b8ac",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "fix": 2098,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "fix": 2098,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "orpc-1743",
+   "repo": "middleapi/orpc",
+   "fix": 1745,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "5b554ff45bdbc2d91a2f8e1669bf7fd110b16ee4",
+   "fixed_sha": "37e8837558c5fdf280c2a489a9911a18b9fa18df",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "orpc-1766",
+   "repo": "middleapi/orpc",
+   "fix": 1913,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "3078b1ca14ffa4ba2d18ccb932ab2d27b932d5bf",
+   "fixed_sha": "0b4ddd342ca0a3caa08cf2186329f72d9a5c8eb9",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "sqlglot-7054",
+   "repo": "tobymao/sqlglot",
+   "fix": 8474,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
+   "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "sqlglot-7097",
+   "repo": "tobymao/sqlglot",
+   "fix": 8474,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
+   "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "sqlglot-7315",
+   "repo": "tobymao/sqlglot",
+   "fix": 8424,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "32a9297a24f06035293a2a3e935a7b65ece25755",
+   "fixed_sha": "20fa8aedc48fccb780b973987908db63d0f76895",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "rqlite-2318",
+   "repo": "rqlite/rqlite",
+   "fix": 2706,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "rqlite-2313",
+   "repo": "rqlite/rqlite",
+   "fix": 2706,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "fix": 2391,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "sha_method": "GitHub merge_commit_sha (rebase merge) and its first parent; changed-file count equals the PR",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-26655",
+   "repo": "go-gitea/gitea",
+   "fix": 39078,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
+   "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "fix": 39405,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "fix": 39316,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-30156",
+   "repo": "go-gitea/gitea",
+   "fix": 38977,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "e355c39e916478f0d4bd721fb4eb412e79c71aa0",
+   "fixed_sha": "4e813a262f6f4f79af0f291d0f6ddfbfe2eddcac",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-28691",
+   "repo": "go-gitea/gitea",
+   "fix": 39740,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "41ccfce3e9c04f217c29aff7bfd7c3d434eb9149",
+   "fixed_sha": "919116568fe57da017f907d24770fe1907843b2b",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "fix": 7388,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-36986",
+   "repo": "go-gitea/gitea",
+   "fix": 38239,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "5b9251150cd2f7201115a718b006ef9458b0e09a",
+   "fixed_sha": "ce8cf22af9be12b43e6eb0ce98c1e96ccefefba8",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-37365",
+   "repo": "go-gitea/gitea",
+   "fix": 38357,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "582217a0da4cd4be95d404d89d1a20b773ce2398",
+   "fixed_sha": "26bff7f47ec9fb46f43bdb814fc6339a92c1597f",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "langchain-33817",
+   "repo": "langchain-ai/langchain",
+   "fix": 39258,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "dc8287c2134470adc022f19e715b7be165bdd475",
+   "fixed_sha": "8f7cee0b52bdff6677d88f8aa87b0fe8afa0fdf1",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-35987",
+   "repo": "go-gitea/gitea",
+   "fix": 37954,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "0eba0e371f360eb91af2df3b881b6ee7bca91d2f",
+   "fixed_sha": "7997c1ccadf2f0b1a0275a499f0c95c182c79895",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "gitea-37869",
+   "repo": "go-gitea/gitea",
+   "fix": 38453,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "7c629e1ba73f7cb777ac76f7acee98a2ad9c7aff",
+   "fixed_sha": "880ddb572456dfbec87eee703513bb78edc4b7ce",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "query-9500",
+   "repo": "TanStack/query",
+   "fix": 11638,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "fc3a3848f25adec750e6ee6d3abf9280c7e3a990",
+   "fixed_sha": "b61abc2033f9e2fbf24d6753baedeaa74b2f1c17",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-ai-5020",
+   "repo": "pydantic/pydantic-ai",
+   "fix": 9735,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "512b80b4937f5da9d882f2f46971c6c71d49f9f1",
+   "fixed_sha": "90051ef7f6441552fa731e7bf6feb8cf3aa0ef42",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "vitest-10583",
+   "repo": "vitest-dev/vitest",
+   "fix": 10971,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "210ba00cbb399bbc15791ab43e7826990df86aa9",
+   "fixed_sha": "5622f0959bcbccb9fe4757dc3bb694153998be65",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "hono-3604",
+   "repo": "honojs/hono",
+   "fix": 5199,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "765d13b00913a2b857f4f78065996a9c86aa4eff",
+   "fixed_sha": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "vitest-6924",
+   "repo": "vitest-dev/vitest",
+   "fix": 10988,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "fad263fe8b4b77076dad08637ef4fc1d6352a0bc",
+   "fixed_sha": "66c1cbb53a1bf2a59888df2fa3c002958d21394c",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-13890",
+   "repo": "pydantic/pydantic",
+   "fix": 13951,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "a656b75d58a80f5033f376f7af17092606bbfde2",
+   "fixed_sha": "c821eaccf9873357477a1e7d2d4d12dd4e161c8a",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "hono-3787",
+   "repo": "honojs/hono",
+   "fix": 5357,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "65cff90e152dbbbcdde2808af15b48344676edfe",
+   "fixed_sha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-ai-3454",
+   "repo": "pydantic/pydantic-ai",
+   "fix": 9652,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "943ade73a8cc8849f9f7383583326e8abe063c08",
+   "fixed_sha": "3742e5c52f262dbb26200942192ace319ea40e74",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "fix": 39283,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "langchain-33461",
+   "repo": "langchain-ai/langchain",
+   "fix": 39222,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "37205e51bc92999fee33d89580a43e6f1bee4cbb",
+   "fixed_sha": "a6b904fd5b1edfd9db45302285fb959f77228056",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "hono-2339",
+   "repo": "honojs/hono",
+   "fix": 5379,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "hono-3413",
+   "repo": "honojs/hono",
+   "fix": 5147,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "query-7005",
+   "repo": "TanStack/query",
+   "fix": 10815,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "01c763444e3cf3dfa9744f13911aa1533cac3c29",
+   "fixed_sha": "ecd89c8faf7acc226f00633ea3a761d3ab842c1d",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "vitest-9464",
+   "repo": "vitest-dev/vitest",
+   "fix": 11451,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "9673c49a40535529db6042df7176f123e95bb8f5",
+   "fixed_sha": "5f2739e74983b0e5c9b5f3ce9901cebfeafee50c",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "hono-3366",
+   "repo": "honojs/hono",
+   "fix": 5436,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
+   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "hono-3727",
+   "repo": "honojs/hono",
+   "fix": 5247,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "eea9735fe308e6549509c312d80e13cd9e18898b",
+   "fixed_sha": "c91ec9b60df18c76a3feb47533ce097d02f7fe6c",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-ai-6890",
+   "repo": "pydantic/pydantic-ai",
+   "fix": 6999,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "74fc8f7787defef76232df1838cf02e87db5f57b",
+   "fixed_sha": "08d64059bb63eb68fb56ab7ca1099d89fbe0f199",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-ai-1812",
+   "repo": "pydantic/pydantic-ai",
+   "fix": 6421,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "e873dd2e9978c8ffc2941f27207becbd5d40a846",
+   "fixed_sha": "f9922c68b7b2bb557cc9cb451e04f905688a9bf8",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-ai-5455",
+   "repo": "pydantic/pydantic-ai",
+   "fix": 5795,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "92f22d7a80f29f6c9089f87dd45cbb2a92f90266",
+   "fixed_sha": "c26903e5edfb9c0308e9a6696fd3f876c2ff92af",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "vitest-7878",
+   "repo": "vitest-dev/vitest",
+   "fix": 11606,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "e9c3d72f0c8d6867de06a3df43ea28a05eeec444",
+   "fixed_sha": "6621a72d6ed371e43f80ff327f5063693bd6b1ad",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-ai-3786",
+   "repo": "pydantic/pydantic-ai",
+   "fix": 10031,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "2a49c1db2e91f898b02bc4a138a751fd1548eb8b",
+   "fixed_sha": "71f844ed668e2a0cbe9ba49eb5d3dfee373f5e83",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  },
+  {
+   "replay_id": "pydantic-5674",
+   "repo": "pydantic/pydantic",
+   "fix": 13768,
+   "runs": [
+    "39120706885",
+    "39120718089",
+    "39120729276"
+   ],
+   "buggy_sha": "6208022f515f48a35642838caf48d62d1d82e398",
+   "fixed_sha": "b9361e8e715e9dadd67b9e75d541136f827ac378",
+   "sha_method": "squash commit and its first parent",
+   "deps_changed": false
+  }
+ ],
+ "candidates": [
+  {
+   "id": "9e6288c775e5d32599b518ff2896877575165deae05f5c2fff90ffd27d58f59e",
+   "pr": "orpc-1846",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/server/src/plugins/get-method-csrf-protection.ts",
+   "line": 65,
+   "title": "Repeated sec-fetch-mode header is not tested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "2991776691409d3e624475794d604aa4b71e856a",
+   "fixed_sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 21,
+   "in_oracle_set": true
+  },
+  {
+   "id": "d21fe3d452e909f0c7782d52863a326a6d92fa4aed023b17f21e1b744a671c7a",
+   "pr": "orpc-1846",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/server/src/plugins/simple-csrf-protection.test.ts",
+   "line": 56,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "2991776691409d3e624475794d604aa4b71e856a",
+   "fixed_sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "6a7f3a2b3d85dd739f0d7e879492dc98dc7612b1e07ceb73ebb1d24a5aef41da",
+   "pr": "orpc-1846",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/server/src/plugins/simple-csrf-protection.test.ts",
+   "line": 66,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "2991776691409d3e624475794d604aa4b71e856a",
+   "fixed_sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "24fd1d6b26e1b0578a4fdd05a5401d38873563e6292a1f31260df7f4feea8d3a",
+   "pr": "orpc-1846",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/server/src/plugins/simple-csrf-protection.test.ts",
+   "line": 79,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "2991776691409d3e624475794d604aa4b71e856a",
+   "fixed_sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "efbac9b60d44ced57e274761183fcef17508ffebf19baf9558f3f135acd7e936",
+   "pr": "orpc-1846",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/server/src/plugins/simple-csrf-protection.test.ts",
+   "line": 80,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "2991776691409d3e624475794d604aa4b71e856a",
+   "fixed_sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "e8c9452e9f624be8770171ca607bfab8d88fe195edd3a9fb8280ca6e712f595a",
+   "pr": "orpc-1846",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/server/src/plugins/simple-csrf-protection.test.ts",
+   "line": 84,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "2991776691409d3e624475794d604aa4b71e856a",
+   "fixed_sha": "17609e6784e86b64941d8ebefbb4343a85f06361",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "33e2317414e9757f64e993d1879a06a31df5129fc9b38f8411a1c25522768efe",
+   "pr": "orpc-1851",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "weak_test",
+   "path": "packages/shared/src/object.test.ts",
+   "line": 293,
+   "title": "Inherited-value test spreads away the prototype it tests",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fixed_sha": "2cd0134f3ea6325737d73ce174633602bfc8b8ac",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "fed717fa7a963128c2213aaba3d4fa41c91564ad9faacb3b2f9ba4ec75e57db9",
+   "pr": "orpc-1851",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/ai-sdk/src/tool.test.ts",
+   "line": 86,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fixed_sha": "2cd0134f3ea6325737d73ce174633602bfc8b8ac",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 1,
+   "in_oracle_set": true
+  },
+  {
+   "id": "10d7499db1d51bbd47ae87075be2b2afc15272ebc5ef2d565aa84f3d341864c2",
+   "pr": "orpc-1851",
+   "repo": "middleapi/orpc",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/server/src/procedure-client.ts",
+   "line": 232,
+   "title": "No test for a transform that returns an object before an object schema",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fixed_sha": "2cd0134f3ea6325737d73ce174633602bfc8b8ac",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 8,
+   "in_oracle_set": true
+  },
+  {
+   "id": "4978b5e874da47fb1effab03284775e46efd7a0729a81e0b5c6e652681f9119e",
+   "pr": "orpc-1851",
+   "repo": "middleapi/orpc",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/contract/src/plugins/request-validation.ts",
+   "line": 67,
+   "title": "Stacked object failure in the request validation plugin is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fixed_sha": "2cd0134f3ea6325737d73ce174633602bfc8b8ac",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 12,
+   "in_oracle_set": true
+  },
+  {
+   "id": "df38f7f11a88c9d7ba3e1c8ef7d30f71f4e1f75dfc15e12a9f2a7a32a8a2a3a3",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/procedure-utils.ts",
+   "line": 212,
+   "title": "Non-array streamed, live, infinite and mutation interceptors are no longer rejected by any test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "00f93ff5b69e485a2363ffb67a21a4e494f6a84f6aa44c38688303ad26b90508",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/router-utils.test.ts",
+   "line": 261,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "cded64ee7e8bc01a4a2a47489e99d6f7ad08d0684873355927ffb21d7fe7dde1",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/router-utils.test.ts",
+   "line": 262,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "6e55edc105a50a5daaefcc7ac14f578ba74a17c318f689e443bb8544fe621da0",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/router-utils.test.ts",
+   "line": 268,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "140d7d421dbb6bc1b74c20123aa085a37742badd163fa39b6fad0d20697521ed",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/router-utils.test.ts",
+   "line": 283,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "752e5522cda929809c5732616ed308c970165bf3b0e74f5c09575bfe306fc7ac",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/router-utils.test.ts",
+   "line": 284,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "85f57fd5d3dd831fa5fe3825ee4e3c0fc02a40f8a2530dcd0f8ad966cd3c642e",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/procedure-utils.ts",
+   "line": 211,
+   "title": "Non-array rejection pinned only for queryInterceptors",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "47e58eb2570fbf00196c559d9f5b53cab1622787bf88ee1daf1ef9049880d680",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/index.ts",
+   "line": 3,
+   "title": "New public exports not asserted by index.test.ts",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "f48a682816aace42f256dd8be570f913b28f415dcfb31753e61b3ada1ca346ef",
+   "pr": "orpc-1705",
+   "repo": "middleapi/orpc",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/tanstack-query/src/procedure-utils.ts",
+   "line": 235,
+   "title": "Override object loses to base function on conflicting keys",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "2ad06a6b70b4331342986719962a54d683dc305ffc4a85c0fa18760f9dfe79ce",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/procedure-utils.ts",
+   "line": 223,
+   "title": "Override loses to function base on overlapping keys",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "eebb546114ab5ed2d3e1d6d88c2edb1326a4eb98061381578a5e3a519aebf5e6",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/procedure-utils.ts",
+   "line": 199,
+   "title": "Non-query interceptor keys are not validated by any test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "70289cc4249b0a6a10b5fcd56a634e7b658553e41354aa14c414a94809b1f35d",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/types.ts",
+   "line": 14,
+   "title": "No type test for mutation interceptor context with global onMutate",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "26215d14b8c8b49c67300e9e16304c7372b7fcb240be0204b860497083e75be7",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/index.ts",
+   "line": 4,
+   "title": "Public export of the meta API is not tested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "94c16fb64e477bf7b35de743324d094f3cf64927a2246419a7d6f46b3e6de8e8",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/router-utils.test.ts",
+   "line": 305,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "66e790a447de11d43ee0e9a43055455153317d80b32ff7d66a9da6269fb33ebf",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/router-utils.test.ts",
+   "line": 306,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "10508c746d9c44d134e9609557b1f81c6127a40ac4912fc8917d36ea508ae200",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/router-utils.test.ts",
+   "line": 312,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "2355ed84631f0644697ffeda5e223273110e467d8647714bc7a40f940f1afac2",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/router-utils.test.ts",
+   "line": 327,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "5077617935b47f726cfe86a8a413170c8a7337e22e6b707251ac85ced28b42c6",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/router-utils.test.ts",
+   "line": 328,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "9b43659ef9e16fb6889533f19b622f3121075424d7b669bc2dc1a6c603305a8f",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/types.ts",
+   "line": 14,
+   "title": "UseMutationFnContext has no type test for the merged onMutate context",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "c572800252dde12ecb0f20e01a7ddc997479dc76a98f736273d8fc1980f93782",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/procedure-utils.ts",
+   "line": 223,
+   "title": "Override priority on conflicting key after a function base is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "5e8cf52e3f34ff051f74655e898fe2a721bc6fcf437e68ba43a2f1a435697d83",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/procedure-utils.ts",
+   "line": 199,
+   "title": "Only queryInterceptors rejection is pinned for isProcedureUtilsOptions",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "ebf49559343b08ce12cccc2f7e1f38f189a0b6aeb0c9fdd5e8b692624f0cb74b",
+   "pr": "orpc-1718",
+   "repo": "middleapi/orpc",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/pinia-colada/src/index.ts",
+   "line": 4,
+   "title": "Public export of piniaColada is not asserted",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "a717584bec97454e83ef7deeb75907dd85c511cd",
+   "fixed_sha": "9b9ef1c4dccafbc96cba3a64b374f1d29aa6e4d2",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "157a2e2a9ef6d84c66b4e376a170d6bf280e0bd037f0d8a60ce2557d26ce62d4",
+   "pr": "orpc-1743",
+   "repo": "middleapi/orpc",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "packages/openapi/src/adapters/standard/openapi-handler-codec.test.ts",
+   "line": 720,
+   "title": "Informational status is named in the test but never asserted",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5b554ff45bdbc2d91a2f8e1669bf7fd110b16ee4",
+   "fixed_sha": "37e8837558c5fdf280c2a489a9911a18b9fa18df",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "d614f007a23b56eec7cdb3a5bf8f837418af72ba369b15cc6c6ff86feb7d524b",
+   "pr": "orpc-1743",
+   "repo": "middleapi/orpc",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "packages/openapi/src/adapters/standard/openapi-handler-codec.test.ts",
+   "line": 721,
+   "title": "Informational status lower bound is not pinned",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5b554ff45bdbc2d91a2f8e1669bf7fd110b16ee4",
+   "fixed_sha": "37e8837558c5fdf280c2a489a9911a18b9fa18df",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "1b8c4434d02b8c38100bbb371dd9a20e85302507fd840c55c4f3be37572e5ece",
+   "pr": "orpc-1743",
+   "repo": "middleapi/orpc",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/openapi/src/adapters/standard/openapi-handler-codec.ts",
+   "line": 290,
+   "title": "Status 399 boundary is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "5b554ff45bdbc2d91a2f8e1669bf7fd110b16ee4",
+   "fixed_sha": "37e8837558c5fdf280c2a489a9911a18b9fa18df",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "cdd1cf2b5277091877d82273dc974df42fe01e90615d8e0f787dea8b94e5df7d",
+   "pr": "orpc-1766",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/effect/src/error.ts",
+   "line": 37,
+   "title": "Interruption passthrough is not tested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "3078b1ca14ffa4ba2d18ccb932ab2d27b932d5bf",
+   "fixed_sha": "0b4ddd342ca0a3caa08cf2186329f72d9a5c8eb9",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 35,
+   "in_oracle_set": true
+  },
+  {
+   "id": "d330343267b5b655e90361f8a08ac54f19735663d2fc45b14f5915a58b571670",
+   "pr": "orpc-1766",
+   "repo": "middleapi/orpc",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/effect/src/error.ts",
+   "line": 147,
+   "title": "Inherited object keys are treated as handlers",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "3078b1ca14ffa4ba2d18ccb932ab2d27b932d5bf",
+   "fixed_sha": "0b4ddd342ca0a3caa08cf2186329f72d9a5c8eb9",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "933465b33a109d463ab364630df72e8879b461fd67e15f50883f599a6cad79a2",
+   "pr": "orpc-1766",
+   "repo": "middleapi/orpc",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/effect/src/error.ts",
+   "line": 37,
+   "title": "Interruptions are not caught is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "3078b1ca14ffa4ba2d18ccb932ab2d27b932d5bf",
+   "fixed_sha": "0b4ddd342ca0a3caa08cf2186329f72d9a5c8eb9",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 35,
+   "in_oracle_set": true
+  },
+  {
+   "id": "b380f3c4be7a4f694f24199718b2a54d8ecd00863c920d9575e627672d6d322d",
+   "pr": "orpc-1766",
+   "repo": "middleapi/orpc",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/effect/src/error.ts",
+   "line": 147,
+   "title": "No test for a code that names an Object.prototype member",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "3078b1ca14ffa4ba2d18ccb932ab2d27b932d5bf",
+   "fixed_sha": "0b4ddd342ca0a3caa08cf2186329f72d9a5c8eb9",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "c6b49014ec15e85d8849b9cd77b4c6cf8ec30b838b68ec6f8f1863b72eee93b1",
+   "pr": "sqlglot-7054",
+   "repo": "tobymao/sqlglot",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "sqlglot/dialects/duckdb.py",
+   "line": 3236,
+   "title": "Unsupported REGEXP_COUNT flags are not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
+   "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "0b9f294725fc8e382ca3ae4e8de1d7f7d66848284959e1707ce883c375474221",
+   "pr": "sqlglot-7054",
+   "repo": "tobymao/sqlglot",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "sqlglot/dialects/duckdb.py",
+   "line": 3234,
+   "title": "Unsupported regexp flag warning is not tested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
+   "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "89cfe9100cd988eec7719083cb962b1c5e3e3526a080f5ac6eeac15d3523ad0a",
+   "pr": "sqlglot-7097",
+   "repo": "tobymao/sqlglot",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "sqlglot/dialects/duckdb.py",
+   "line": 3761,
+   "title": "option=1 end-position branch is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
+   "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "b7b3f9b59a470620baf2ceac5e6b6a02ed8caf6d2db7bdad7061c0fd6ca3dbdd",
+   "pr": "sqlglot-7097",
+   "repo": "tobymao/sqlglot",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "sqlglot/dialects/duckdb.py",
+   "line": 3761,
+   "title": "option=1 (end position) branch is never tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
+   "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "aad69eecaa0676c82e7b2065f3662dfee73f5e0ad3d52581064057a8d89ab311",
+   "pr": "sqlglot-7315",
+   "repo": "tobymao/sqlglot",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "sqlglot/generators/duckdb.py",
+   "line": 2361,
+   "title": "TRY_TO_NUMBER transpiled to DuckDB has no null-on-error test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "32a9297a24f06035293a2a3e935a7b65ece25755",
+   "fixed_sha": "20fa8aedc48fccb780b973987908db63d0f76895",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 219,
+   "in_oracle_set": true
+  },
+  {
+   "id": "833b1b4045583b18e33746ab3cb7bfeed043c29e5e8b747badeed5b9bd4b42e7",
+   "pr": "rqlite-2318",
+   "repo": "rqlite/rqlite",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 840,
+   "title": "Quoted table name is not tested and the escape looks wrong",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 214,
+   "in_oracle_set": true
+  },
+  {
+   "id": "33dca7776ec8c75e5cc734778aac4c1d369b526c8a718697aef87ebe2432a977",
+   "pr": "rqlite-2318",
+   "repo": "rqlite/rqlite",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "db/db_common_test.go",
+   "line": 155,
+   "title": "Invalid-name assertion passes without the escaping",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 115,
+   "in_oracle_set": true
+  },
+  {
+   "id": "1708411ddf04650faefd7ca3098f87cf2d5e2b3fc6ea8fe51b239c92fb30f95e",
+   "pr": "rqlite-2318",
+   "repo": "rqlite/rqlite",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 840,
+   "title": "Quoted table name is untested and the escape looks wrong",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 214,
+   "in_oracle_set": true
+  },
+  {
+   "id": "01fa0464d05b1736db35099ac6fcde8df74e63cd6faffb4d066358901a53cb03",
+   "pr": "rqlite-2318",
+   "repo": "rqlite/rqlite",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 840,
+   "title": "No test for a table name containing a double quote",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 214,
+   "in_oracle_set": true
+  },
+  {
+   "id": "855af68f7cbdc724eaab3a1a774de6b8bb672012c3d2b5766d04943ce56dc36e",
+   "pr": "rqlite-2313",
+   "repo": "rqlite/rqlite",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 835,
+   "title": "Quote escaping in TableColumnTypes is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 219,
+   "in_oracle_set": true
+  },
+  {
+   "id": "8df57d9100b71a6d3de88d382363f59b0aba0a3b38a32d6f802075945f43f9f3",
+   "pr": "rqlite-2313",
+   "repo": "rqlite/rqlite",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 835,
+   "title": "Quoted table names are untested and the escape is wrong for SQLite",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 219,
+   "in_oracle_set": true
+  },
+  {
+   "id": "7c12b3f38bba5750cf16bdb60bf2922d8e522dc9f8c9dcf22682934bc611cc09",
+   "pr": "rqlite-2313",
+   "repo": "rqlite/rqlite",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 835,
+   "title": "Quoted table names are not tested and the escape is wrong",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f79c1b0a9320ff0ae36ee6046e841567983d89ef",
+   "fixed_sha": "4d320706dea18403158d6d1cfe10948a615599b3",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 219,
+   "in_oracle_set": true
+  },
+  {
+   "id": "6c15121664de7f959f435b083c0f400ff81892651b436aefa3edd5281ee3edd3",
+   "pr": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "weak_test",
+   "path": "db/db_update_hook_test.go",
+   "line": 36,
+   "title": "Hook test never inspects the event",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "fdf179cb605d8179463f2f60fa319553f6a9649139440e703520777b463a79ed",
+   "pr": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 378,
+   "title": "Callback error stat is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 25,
+   "in_oracle_set": true
+  },
+  {
+   "id": "f8860cf22ddc856902536a11ea3436df62fc69fdc5b361d431d925191be791b5",
+   "pr": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 356,
+   "title": "Update hook event fields are never asserted",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 47,
+   "in_oracle_set": true
+  },
+  {
+   "id": "8f92a29f3de292bfdec12b3d557445c8bde087096de967cb1094970facc929d2",
+   "pr": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 375,
+   "title": "Unknown operation path dereferences a nil event",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 28,
+   "in_oracle_set": true
+  },
+  {
+   "id": "100a3168bf4c7c8a56014e27ad2ebb8b849433eca495d1844eb4044533079999",
+   "pr": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 354,
+   "title": "Hook event mapping and table/row id are not asserted",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 49,
+   "in_oracle_set": true
+  },
+  {
+   "id": "c18176a4750d9d94e7c11ec26cf629bc9b5daa1206348c1e06c47c809567227e",
+   "pr": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 375,
+   "title": "Convert-error branch dereferences a nil event",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 28,
+   "in_oracle_set": true
+  },
+  {
+   "id": "e96c0a4d064015486d52f984ea29d006ee6cb6a6dd5f064c82265ee809feefe0",
+   "pr": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "db/db.go",
+   "line": 378,
+   "title": "Callback error counter is never exercised",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 25,
+   "in_oracle_set": true
+  },
+  {
+   "id": "9de75bd777ed56b27f7637220b1672f55b2675a31575be7b2455a5bf18e65434",
+   "pr": "rqlite-2061",
+   "repo": "rqlite/rqlite",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "db/db_update_hook_test.go",
+   "line": 42,
+   "title": "No-change update case is not exercised",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4aec74f5a44071a6bdea40a990f66373d530515f",
+   "fixed_sha": "42c73f936cf1d50b2c60d8eb9926ebb37bc0ce94",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "688c3ae4b51bed98e50e356ed005f44d2142d27e14b47fcdfbde8cebc8a7445a",
+   "pr": "gitea-26655",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "models/actions/schedule.go",
+   "line": 55,
+   "title": "Cron descriptors are not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
+   "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 2,
+   "in_oracle_set": true
+  },
+  {
+   "id": "55cd845ccf63d3f7ebb2eb6afdf040768cb943b5f1e6fbdff9458b1bd3246047",
+   "pr": "gitea-26655",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "services/actions/notifier_helper.go",
+   "line": 386,
+   "title": "Non-default-branch schedule skip is untested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
+   "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 212,
+   "in_oracle_set": true
+  },
+  {
+   "id": "0c68b67bd59e4275a0b3f86b608d272a25a2582ba2750474dbd0b36d1d27f855",
+   "pr": "gitea-26655",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "modules/actions/workflows.go",
+   "line": 124,
+   "title": "Schedule detection in DetectWorkflows is untested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
+   "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "44754bb095fe5c8eba36c46a118f30d83e103a3a51ee97416544ca3cdb52fed1",
+   "pr": "gitea-26655",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "services/actions/schedule_tasks.go",
+   "line": 76,
+   "title": "Next run computation is untested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
+   "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 1,
+   "in_oracle_set": true
+  },
+  {
+   "id": "ee212a36dc347271c167fbe5f78d0f6c0d4f7f9b90cc1839d3b13cb3fe0c4487",
+   "pr": "gitea-26655",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "models/actions/schedule.go",
+   "line": 55,
+   "title": "Descriptor syntax (@hourly etc.) is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
+   "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 2,
+   "in_oracle_set": true
+  },
+  {
+   "id": "62ad4ecd65419a150ffde539cce41e63f181ed48259ac52b4abf2cfd973e384e",
+   "pr": "gitea-26655",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "models/actions/schedule_spec_list.go",
+   "line": 81,
+   "title": "Due-spec filter direction is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
+   "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "8b0e9db22d74938f043a0ce97eefe06543c4d335dbc95e8ff78cf16b5b49252d",
+   "pr": "gitea-26655",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "models/actions/schedule.go",
+   "line": 55,
+   "title": "Descriptor syntax (@​hourly etc.) is not tested",
+   "confidence": null,
+   "where": "details",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "fedf219e776c0263ef8bc3970271e3acb47db9a2",
+   "fixed_sha": "3c0bfe9463c8c069dc550c74ad00365170290969",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 2,
+   "in_oracle_set": true
+  },
+  {
+   "id": "7c1d9c9b72cc3a1624e4faa180c8f3c6e7901b7cde40ad78ac3a324b49abcd04",
+   "pr": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "modules/indexer/code/elasticsearch/elasticsearch.go",
+   "line": 302,
+   "title": "convertResult filename branch is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "c1377f68d2ddc57ee296f3ee710ad4ef845f848364c3994c574100efab004065",
+   "pr": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "modules/indexer/code/bleve/bleve.go",
+   "line": 88,
+   "title": "Filename analyzer mapping is not pinned by a unit test",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 16,
+   "in_oracle_set": true
+  },
+  {
+   "id": "2e02c9390383b01a5dac2f09fcbd908b41b2dd159b496f3c6c8e431851313417",
+   "pr": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "modules/indexer/code/indexer_test.go",
+   "line": 90,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 90,
+   "in_oracle_set": true
+  },
+  {
+   "id": "03d46ddd8f67e7076add329e7c4995b0ff1e30d26987942ba9003954e04de411",
+   "pr": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "modules/indexer/code/indexer_test.go",
+   "line": 92,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 88,
+   "in_oracle_set": true
+  },
+  {
+   "id": "500c8f163c1e1514d861852db5bc6ab7cfedc3764dee559bf20b4cfea2f9064e",
+   "pr": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "modules/indexer/code/bleve/token/path/path_test.go",
+   "line": 50,
+   "title": "Path filter test does not check that every expected term is produced",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "7f7b8538d1d70bbcd0f5905bc16961f2f78466db7013ca8788dd8048e3cf6f1e",
+   "pr": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "modules/indexer/code/elasticsearch/elasticsearch.go",
+   "line": 302,
+   "title": "Filename highlight branch of convertResult is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "1a1e27862110647238e5f29b1842e53bbe53455536c2434c7237a2ffddb66300",
+   "pr": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "modules/indexer/code/elasticsearch/elasticsearch.go",
+   "line": 302,
+   "title": "Filename-highlight branch of convertResult is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "50af6fde835f2638dbd31338fb8f8f2997fa67d1b8cdb4906d321512430b7f16",
+   "pr": "gitea-32210",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "modules/indexer/code/bleve/token/path/path_test.go",
+   "line": 50,
+   "title": "Term check accepts duplicated or wrong terms",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "8b46a956d8d1e474272f14cb1900f62df06c5c45",
+   "fixed_sha": "72243bead799653dd0ac32138aeb8c7ea069ef8e",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "bd28cf18472f4ec8d8cb9168c4aef020aba24f35c51ac26becf57013b91ecc92",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "modules/password/pwn/pwn.go",
+   "line": 87,
+   "title": "Request-build failure is reported as a clean result",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "f28804c730df6a53d0940fa3c45580095db2f54f1f9212ba5a90373609feafb0",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "modules/hcaptcha/hcaptcha.go",
+   "line": 92,
+   "title": "Form encoding for sitekey is not pinned offline",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "3f82f202f818d0737ba85152fe6f00db65d99353476492497d68e9573ed6f9c0",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "modules/hcaptcha/hcaptcha.go",
+   "line": 88,
+   "title": "RemoteIP form value is never checked",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "81dfaeb44bdb02897130a378f3f97ae86db787e699477a0d605909436cb98a31",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "modules/password/pwn/pwn.go",
+   "line": 109,
+   "title": "Range-response suffix matching is only tested over the network",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "715ddbaa16d1d692e8f18d64ab0f9a640ed4b22f46812b3d9c1413121ddce4d8",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "modules/password/pwn/pwn.go",
+   "line": 89,
+   "title": "Add-Padding header is not asserted",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "035200064e54a9ff6e6867fc27a043ddbf6e830bf603bc00383d60619a3eea89",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "modules/password/pwn.go",
+   "line": 17,
+   "title": "IsPwned enable/disable and error paths are untested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "8e64fff3ecad71c15e45ec1a676ed080aab9c4fc03f1441124e06c22331aadee",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "modules/hcaptcha/hcaptcha_test.go",
+   "line": 91,
+   "title": "Error-message assertion compares the code under test with itself",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "dbe45a36e5e9371964d23cc801ee155b43e7d7dfd68f78ce229315377bbbd72b",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "modules/password/pwn/pwn.go",
+   "line": 87,
+   "title": "Request-construction error is reported as success",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "c3c3391fa8f3c8174f3c4d7fbec248fa099ee4bc2cb8ce30c94c3e6ce3cc853a",
+   "pr": "gitea-22610",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "modules/password/pwn/pwn.go",
+   "line": 90,
+   "title": "Padding header is not asserted",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7ebb2caa9e65f394cfe6bcf710d02679a52b199b",
+   "fixed_sha": "b2e11ddb37811d44725799e4574616230650bf4f",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "a3388dcfab37cb49362d2ecab1a286e5b2d93be02421e0549d2661c8f9f7df3d",
+   "pr": "gitea-30156",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "routers/web/repo/commit.go",
+   "line": 445,
+   "title": "Nil commit status panics when actions URLs are hidden",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e355c39e916478f0d4bd721fb4eb412e79c71aa0",
+   "fixed_sha": "4e813a262f6f4f79af0f291d0f6ddfbfe2eddcac",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 24,
+   "in_oracle_set": true
+  },
+  {
+   "id": "22367330fdbdac807f6f5a180d1faec6a8496cc74fa6e995e77f0c4da8e6b42b",
+   "pr": "gitea-30156",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "routers/web/repo/commit.go",
+   "line": 445,
+   "title": "Nil commit.Status is dereferenced when status lookup fails",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e355c39e916478f0d4bd721fb4eb412e79c71aa0",
+   "fixed_sha": "4e813a262f6f4f79af0f291d0f6ddfbfe2eddcac",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 24,
+   "in_oracle_set": true
+  },
+  {
+   "id": "c2f225a7c0df907612fe4fbaf75a603e8cd6e7962d5f670058693828423216bf",
+   "pr": "gitea-30156",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "routers/web/repo/commit.go",
+   "line": 445,
+   "title": "nil commit.Status dereferenced when hiding action URLs",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e355c39e916478f0d4bd721fb4eb412e79c71aa0",
+   "fixed_sha": "4e813a262f6f4f79af0f291d0f6ddfbfe2eddcac",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 24,
+   "in_oracle_set": true
+  },
+  {
+   "id": "61be9774b5dcb651f7dc2807ab98c492f6903f09abfdb5d2fe46a89bfaba0179",
+   "pr": "gitea-28691",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "modules/actions/github.go",
+   "line": 74,
+   "title": "Schedule case has no non-matching test row",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "41ccfce3e9c04f217c29aff7bfd7c3d434eb9149",
+   "fixed_sha": "919116568fe57da017f907d24770fe1907843b2b",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "8bfb85e7aa0e254b651c149193bb8aedc1823d92ef2203e05644cb3dc8cea8e6",
+   "pr": "gitea-28691",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "models/actions/run_list.go",
+   "line": 104,
+   "title": "TriggerEvent condition is not tested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "41ccfce3e9c04f217c29aff7bfd7c3d434eb9149",
+   "fixed_sha": "919116568fe57da017f907d24770fe1907843b2b",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "a57a2e5e0b259e49591fdcd8a3f9bfecbfe3c0129b4bb876b21c8b6290b21147",
+   "pr": "gitea-28691",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "models/actions/run_list.go",
+   "line": 104,
+   "title": "TriggerEvent filter in ToConds is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "41ccfce3e9c04f217c29aff7bfd7c3d434eb9149",
+   "fixed_sha": "919116568fe57da017f907d24770fe1907843b2b",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "6563286ebdad999418ca4c874ec60786fd756c7c954d830727e1bb81500fb4cc",
+   "pr": "gitea-28691",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "modules/actions/github.go",
+   "line": 74,
+   "title": "Schedule workflow must not match non-schedule events",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "41ccfce3e9c04f217c29aff7bfd7c3d434eb9149",
+   "fixed_sha": "919116568fe57da017f907d24770fe1907843b2b",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "8317e99a150846ed755bbd2a11021fbbbe6913567e5ebd2e312d4f37d59d781d",
+   "pr": "gitea-28691",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "models/actions/schedule.go",
+   "line": 123,
+   "title": "CleanRepoScheduleTasks has no test",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "41ccfce3e9c04f217c29aff7bfd7c3d434eb9149",
+   "fixed_sha": "919116568fe57da017f907d24770fe1907843b2b",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 10,
+   "in_oracle_set": true
+  },
+  {
+   "id": "81119e7716fcfa83d3e0f39cc541e9bfb74b9e9274f1a2585595c9700b51cc88",
+   "pr": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_ssrf.py",
+   "line": 699,
+   "title": "Gzip bomb test cannot tell capped from uncapped decompression",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 95,
+   "in_oracle_set": true
+  },
+  {
+   "id": "006b3bdfa72fbc52d89c57c072f3f7529d468a89ee3777ccb381204d0e8cb8ce",
+   "pr": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/models/__init__.py",
+   "line": 86,
+   "title": "FileUrl default 50 MiB limit is never asserted",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "2e1faf94abec650252bb7d9372adcd53408b99d4e8858d4ab6e6ce18c41c8af7",
+   "pr": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_ssrf.py",
+   "line": 699,
+   "title": "Gzip-bomb test does not show the body is never fully expanded",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 95,
+   "in_oracle_set": true
+  },
+  {
+   "id": "22529e6d42aa91a602aeb889fb542e884bc5283da91e50916a5dcb4341720cfb",
+   "pr": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_ssrf.py",
+   "line": 748,
+   "title": "Redirect test does not check that the redirect hop is closed",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 49,
+   "in_oracle_set": true
+  },
+  {
+   "id": "1d76c9a3ba3037c4c2c9154b1da3081e699b53a6820979a567dba961851386a8",
+   "pr": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/_ssrf.py",
+   "line": 604,
+   "title": "Stale content-length on the rebuilt response is not asserted",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 5,
+   "in_oracle_set": true
+  },
+  {
+   "id": "ed9e0267e75a9a02e06fc21738c446bbe3faf5a5dd173032046090393f66d165",
+   "pr": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_web_fetch.py",
+   "line": 549,
+   "title": "Custom max_download_bytes is not asserted through web_fetch_tool",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "06c48a2365b498852c98f65fa3b6116a22ad132868bf105cd9b1a72a999dc378",
+   "pr": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_ssrf.py",
+   "line": 699,
+   "title": "Gzip bomb test does not check the memory bound it names",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 95,
+   "in_oracle_set": true
+  },
+  {
+   "id": "a85c1673cd588882bc8edcbe43c51fb7ce1600de32d4df706bcb7024f503b262",
+   "pr": "pydantic-ai-7141",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_ssrf.py",
+   "line": 748,
+   "title": "Redirect test does not verify the hop is closed",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "4096ee8e16353d4252b2a9605b8732f2d0519953",
+   "fixed_sha": "02aa79858ca9496e86245388e7a6c4f84ccdfd36",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 49,
+   "in_oracle_set": true
+  },
+  {
+   "id": "95cc8af2670ad08d127d1515498689a2284b669a30c61e984a710f69ccde12f5",
+   "pr": "langchain-33817",
+   "repo": "langchain-ai/langchain",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "weak_test",
+   "path": "libs/langchain_v1/tests/unit_tests/agents/test_tool_call_limit.py",
+   "line": 351,
+   "title": "Exception message assertion accepts any message containing 'thread'",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "dc8287c2134470adc022f19e715b7be165bdd475",
+   "fixed_sha": "8f7cee0b52bdff6677d88f8aa87b0fe8afa0fdf1",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "cb00fb8cf8ecead76b1807a5bdc227024593bf4b1ed68eb234ad8a38ca75fa56",
+   "pr": "langchain-33817",
+   "repo": "langchain-ai/langchain",
+   "run": "39120706885",
+   "reps": [
+    1,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/langchain_v1/tests/unit_tests/agents/test_tool_call_limit.py",
+   "line": 107,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "dc8287c2134470adc022f19e715b7be165bdd475",
+   "fixed_sha": "8f7cee0b52bdff6677d88f8aa87b0fe8afa0fdf1",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "b41bf0668a125e7f41b01f63ef6f4ea06fd1efaed3d021bd24b5dea11f3e2351",
+   "pr": "langchain-33817",
+   "repo": "langchain-ai/langchain",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "libs/langchain_v1/tests/unit_tests/agents/test_tool_call_limit.py",
+   "line": 96,
+   "title": "Blocked-message count is no longer pinned",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "dc8287c2134470adc022f19e715b7be165bdd475",
+   "fixed_sha": "8f7cee0b52bdff6677d88f8aa87b0fe8afa0fdf1",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "9d3159a7cd841e67647faa3be2db99bb8432f3c3419546d524b074f2686e0f8c",
+   "pr": "langchain-33817",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "libs/langchain_v1/tests/unit_tests/agents/test_tool_call_limit.py",
+   "line": 343,
+   "title": "Exception message assertion accepts any message mentioning thread",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "dc8287c2134470adc022f19e715b7be165bdd475",
+   "fixed_sha": "8f7cee0b52bdff6677d88f8aa87b0fe8afa0fdf1",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "936564d881307facbbeb4e82bccfffadf12efd16edfc1ee78a42bf6f21b83a4f",
+   "pr": "langchain-33817",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "libs/langchain_v1/tests/unit_tests/agents/test_tool_call_limit.py",
+   "line": 351,
+   "title": "Exception message assertion accepts any message mentioning thread",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "dc8287c2134470adc022f19e715b7be165bdd475",
+   "fixed_sha": "8f7cee0b52bdff6677d88f8aa87b0fe8afa0fdf1",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "f520c52e0b00817432ffc1d6e914b1ff7e70afe330b708b6106df746f2a3e1e7",
+   "pr": "gitea-35987",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "services/pull/pull.go",
+   "line": 884,
+   "title": "Co-author order is no longer chronological and no test pins it",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "0eba0e371f360eb91af2df3b881b6ee7bca91d2f",
+   "fixed_sha": "7997c1ccadf2f0b1a0275a499f0c95c182c79895",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "72c0fd673fc7fd8cae020883206f3c6b03e63fd267d97266fb6285ee2553015a",
+   "pr": "gitea-37869",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "web_src/js/features/admin/common.ts",
+   "line": 61,
+   "title": "Bulk form ids are set once at init and never refreshed",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7c629e1ba73f7cb777ac76f7acee98a2ad9c7aff",
+   "fixed_sha": "880ddb572456dfbec87eee703513bb78edc4b7ce",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "68f867164b4570589243197f555b6a6dc0572153c681705d9dc4a4a56769f52b",
+   "pr": "gitea-37869",
+   "repo": "go-gitea/gitea",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "web_src/js/features/admin/common.ts",
+   "line": 43,
+   "title": "Select-all and count state are untested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "7c629e1ba73f7cb777ac76f7acee98a2ad9c7aff",
+   "fixed_sha": "880ddb572456dfbec87eee703513bb78edc4b7ce",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 5,
+   "in_oracle_set": true
+  },
+  {
+   "id": "88ff7f2ee23593d437b06fd8e6a8ba85745e6c9b26a3c93b858c88586b382f21",
+   "pr": "gitea-37869",
+   "repo": "go-gitea/gitea",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "web_src/js/features/common-fetch-action.ts",
+   "line": 126,
+   "title": "Submitter's confirm dialog is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "7c629e1ba73f7cb777ac76f7acee98a2ad9c7aff",
+   "fixed_sha": "880ddb572456dfbec87eee703513bb78edc4b7ce",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "8eb412eff104e5e9a042e674d5a349cc373d15b3b4fa6cced244834b2894b796",
+   "pr": "gitea-37869",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "web_src/js/features/admin/common.ts",
+   "line": 31,
+   "title": "Count labels never update: buttons lack the selector class",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7c629e1ba73f7cb777ac76f7acee98a2ad9c7aff",
+   "fixed_sha": "880ddb572456dfbec87eee703513bb78edc4b7ce",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 7,
+   "in_oracle_set": true
+  },
+  {
+   "id": "80a798b2505f560932466b0f9d9ae1da2465fbf2fbde5eb4187427dbf8364732",
+   "pr": "gitea-37869",
+   "repo": "go-gitea/gitea",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "web_src/js/features/admin/common.ts",
+   "line": 43,
+   "title": "Select-all state is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "7c629e1ba73f7cb777ac76f7acee98a2ad9c7aff",
+   "fixed_sha": "880ddb572456dfbec87eee703513bb78edc4b7ce",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 5,
+   "in_oracle_set": true
+  },
+  {
+   "id": "e488c7d3e83c3070f8d0196db10debdc2d28c6684b2a9d95fe666c05ef236ca5",
+   "pr": "query-9500",
+   "repo": "TanStack/query",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/query-devtools/src/Devtools.tsx",
+   "line": 680,
+   "title": "Hide-disabled-queries filter has no test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "fc3a3848f25adec750e6ee6d3abf9280c7e3a990",
+   "fixed_sha": "b61abc2033f9e2fbf24d6753baedeaa74b2f1c17",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 66,
+   "in_oracle_set": true
+  },
+  {
+   "id": "6e480334f3a56496310dee9a7571bfb4b37ec4a9dc7db42c0913fc03546e9ee6",
+   "pr": "query-9500",
+   "repo": "TanStack/query",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/query-devtools/src/TanstackQueryDevtools.tsx",
+   "line": 128,
+   "title": "Option forwarding to the devtools component is untested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "fc3a3848f25adec750e6ee6d3abf9280c7e3a990",
+   "fixed_sha": "b61abc2033f9e2fbf24d6753baedeaa74b2f1c17",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "d07fafabed0cc85a1123d785850ab1a9caa6f4f0bd8f91dd0158a08168c39305",
+   "pr": "pydantic-ai-5020",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/_utils.py",
+   "line": 634,
+   "title": "Transitive ref chain through an earlier-mapped def is not covered and fails",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "512b80b4937f5da9d882f2f46971c6c71d49f9f1",
+   "fixed_sha": "90051ef7f6441552fa731e7bf6feb8cf3aa0ef42",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 357,
+   "in_oracle_set": true
+  },
+  {
+   "id": "c515fe62069ddd6754d7d21e2f98605a9ca4682e18973e17cb5c3eb48bada45a",
+   "pr": "vitest-10583",
+   "repo": "vitest-dev/vitest",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/config/apiToken.ts",
+   "line": 43,
+   "title": "Persisted API token reuse is not unit tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "210ba00cbb399bbc15791ab43e7826990df86aa9",
+   "fixed_sha": "5622f0959bcbccb9fe4757dc3bb694153998be65",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "cbe4fbbee2d8b03dee967777d60496e2808fe938522ab96c851f71f25050597c",
+   "pr": "vitest-10583",
+   "repo": "vitest-dev/vitest",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/config/apiToken.ts",
+   "line": 28,
+   "title": "Reuse of an existing token file is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "210ba00cbb399bbc15791ab43e7826990df86aa9",
+   "fixed_sha": "5622f0959bcbccb9fe4757dc3bb694153998be65",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "1bd18c552ae2bd93f2499a8fec5275ee0c15b06733394ab593744fdd57086275",
+   "pr": "vitest-10583",
+   "repo": "vitest-dev/vitest",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/config/apiToken.ts",
+   "line": 29,
+   "title": "Token reuse and trimming are untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "210ba00cbb399bbc15791ab43e7826990df86aa9",
+   "fixed_sha": "5622f0959bcbccb9fe4757dc3bb694153998be65",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "6d698b7548eeba52fae93a52e819b10e5db3b4ef423e3aa40a75fe74a1745dca",
+   "pr": "vitest-10583",
+   "repo": "vitest-dev/vitest",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/config/apiToken.ts",
+   "line": 22,
+   "title": "macOS token directory is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "210ba00cbb399bbc15791ab43e7826990df86aa9",
+   "fixed_sha": "5622f0959bcbccb9fe4757dc3bb694153998be65",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "ad9322348bf8f05bf75c3975b622c7dcf1fa9f0cc46d6425d836bc9a66f4e6ad",
+   "pr": "hono-3604",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "weak_test",
+   "path": "src/middleware/etag/index.test.ts",
+   "line": 97,
+   "title": "Multi-chunk test does not pin the chained digest",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "765d13b00913a2b857f4f78065996a9c86aa4eff",
+   "fixed_sha": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 291,
+   "in_oracle_set": true
+  },
+  {
+   "id": "99ad80e1d12f4accf0c16bbc582271269626472236357f3973c0f73e207ebc22",
+   "pr": "hono-3604",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "src/middleware/etag/index.test.ts",
+   "line": 97,
+   "title": "Multi-chunk test does not show the digest uses all chunks",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "765d13b00913a2b857f4f78065996a9c86aa4eff",
+   "fixed_sha": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 291,
+   "in_oracle_set": true
+  },
+  {
+   "id": "2e8c1d4128db6fe3a9441df8e6d28004952ba7ad0da18313481d37532bf06536",
+   "pr": "hono-3604",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "src/middleware/etag/index.test.ts",
+   "line": 97,
+   "title": "Chained-digest assertion only checks that two ETags differ",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "765d13b00913a2b857f4f78065996a9c86aa4eff",
+   "fixed_sha": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 291,
+   "in_oracle_set": true
+  },
+  {
+   "id": "e14bc4b391faac10cb19fca0e7bf49f107ef439af45998d1d767c07b69cd12cc",
+   "pr": "vitest-6924",
+   "repo": "vitest-dev/vitest",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/utils/base.ts",
+   "line": 36,
+   "title": "Negated wildcard pattern has no unit test",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "fad263fe8b4b77076dad08637ef4fc1d6352a0bc",
+   "fixed_sha": "66c1cbb53a1bf2a59888df2fa3c002958d21394c",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "dc0bc05ba5e1d49f0b5dabf1ed62e7503486e1a981808b46b11d4c8ee0d46ba5",
+   "pr": "hono-3787",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "weak_test",
+   "path": "src/utils/accept.test.ts",
+   "line": 32,
+   "title": "Malformed q range check does not pin the fallback",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "65cff90e152dbbbcdde2808af15b48344676edfe",
+   "fixed_sha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 1,
+   "in_oracle_set": true
+  },
+  {
+   "id": "82302fed710b0f482bb35b73ec3719f240bb58ac588b4077aaf0c1bb17a5bb74",
+   "pr": "hono-3787",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/accept.ts",
+   "line": 25,
+   "title": "No test for many separators within one Accept value",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "65cff90e152dbbbcdde2808af15b48344676edfe",
+   "fixed_sha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 229,
+   "in_oracle_set": true
+  },
+  {
+   "id": "511c20bcab72123a0c3dbe46d61af8633df3e1ee55808fee9826429c965d21ea",
+   "pr": "hono-3787",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/language/language.ts",
+   "line": 200,
+   "title": "Invalid detector type in order is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "65cff90e152dbbbcdde2808af15b48344676edfe",
+   "fixed_sha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "98e1ecdd4b9f34b1205384ae8e264977e84eda9423546aaf7f5bf35ccfe54033",
+   "pr": "hono-3787",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/language/language.ts",
+   "line": 144,
+   "title": "Accept-Language priority by q is not pinned at middleware level",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "65cff90e152dbbbcdde2808af15b48344676edfe",
+   "fixed_sha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "56999246d798924c3a55ad2cb855245a0fe37792321e7a6e0671aa033ee7ff00",
+   "pr": "hono-3787",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/language/language.ts",
+   "line": 200,
+   "title": "Unknown detector in order is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "65cff90e152dbbbcdde2808af15b48344676edfe",
+   "fixed_sha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "71952cff8a45235fe1986e33013ed8b44c4a0d3a1aa0d3af31595675c78666b7",
+   "pr": "pydantic-ai-3454",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/_output.py",
+   "line": 1037,
+   "title": "Bound method output is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "943ade73a8cc8849f9f7383583326e8abe063c08",
+   "fixed_sha": "3742e5c52f262dbb26200942192ace319ea40e74",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 625,
+   "in_oracle_set": true
+  },
+  {
+   "id": "22fb944d6386bc5e95a47de78f7140d02ab2260747fb01af3b71b1251e28d255",
+   "pr": "pydantic-ai-3454",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/_output.py",
+   "line": 1037,
+   "title": "Bound-method output has no test",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "943ade73a8cc8849f9f7383583326e8abe063c08",
+   "fixed_sha": "3742e5c52f262dbb26200942192ace319ea40e74",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 625,
+   "in_oracle_set": true
+  },
+  {
+   "id": "d80d095de9ab325ebf6250e56a1cffeedac15f437e76cc5d4d234b7a1f69102b",
+   "pr": "pydantic-ai-3454",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/_output.py",
+   "line": 1037,
+   "title": "Bound-method output is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "943ade73a8cc8849f9f7383583326e8abe063c08",
+   "fixed_sha": "3742e5c52f262dbb26200942192ace319ea40e74",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 625,
+   "in_oracle_set": true
+  },
+  {
+   "id": "4a9b8254c2fcd56298e4bcfa75ea383c9efd228810339111806d0b551e3cd51c",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/utils/_merge.py",
+   "line": 49,
+   "title": "Indexed list element with no matching index is not tested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "e3d55f4ee5cc2387b1ced6edb1db9f064e9e279d197c2a5ec00189c535e4f38b",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/langchain/tests/unit_tests/test_cache.py",
+   "line": 70,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "ca004ccff7d05ef72fd6cd13708c478941fbf1d399d6081fb7962cc4e77bf44b",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/utils/_merge.py",
+   "line": 49,
+   "title": "Unmatched index entry is not tested as appended",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "933d1e053fe7227a4a9e0fbfc0c678b6a138565fc2e98b8730957580bb9a1c9e",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/utils/_merge.py",
+   "line": 42,
+   "title": "Left element without 'index' key raises KeyError",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "0be00049c599e03a18271ad7867bea6e7c9a5890ee65a4402f53100e63fb2151",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/language_models/chat_models.py",
+   "line": 593,
+   "title": "cache=False bypass is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 1298,
+   "in_oracle_set": true
+  },
+  {
+   "id": "fed260310ea9e5da972b85454379740fe017b140845679c011a7d599f1f783eb",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/language_models/chat_models.py",
+   "line": 619,
+   "title": "Cache write-back after generation is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 1272,
+   "in_oracle_set": true
+  },
+  {
+   "id": "d5022ffaac729bd996347b252f280c07ac18febc96fcb8f8ed6f4d139dd600e9",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/language_models/chat_models.py",
+   "line": 858,
+   "title": "Generation info merge and precedence are unpinned",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 1033,
+   "in_oracle_set": true
+  },
+  {
+   "id": "15507c9e432f4c17ae94fe86b7dff07be6dbea8074de2bf7efad74b42615154d",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/utils/_merge.py",
+   "line": 42,
+   "title": "Index comparison raises KeyError on a left element without 'index'",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "b01bc3685a322324f9f7108fcdd522fe9a64653ebcb236eadc98b8f73696f479",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/utils/_merge.py",
+   "line": 49,
+   "title": "No-match index case is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "d8958dcd9b2e2061c181984f12e5c2a6b0942742bcbdfdde7d2edeb5cc99381a",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/messages/ai.py",
+   "line": 56,
+   "title": "AIMessageChunk addition merges response_metadata: no unit test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "3401f2b11eb1d9f7136cf7e0e723552991b786834b9b55382d44f05975e70007",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/language_models/chat_models.py",
+   "line": 615,
+   "title": "generate path does not test response_metadata from generation_info",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 1276,
+   "in_oracle_set": true
+  },
+  {
+   "id": "e60f88d7321310880035eb193f16bdd3a0d672cb8bd0f775f7a42063db9c3bbd",
+   "pr": "langchain-18592",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/language_models/chat_models.py",
+   "line": 604,
+   "title": "Cache flag branches (raise and bypass) have no unit test",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 1287,
+   "in_oracle_set": true
+  },
+  {
+   "id": "1dd4d8fd13cf45e93ae621825960755ad4769ad9f70ba8ade459e0cc20f63f2a",
+   "pr": "langchain-33461",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/runnables/utils.py",
+   "line": 128,
+   "title": "asyncio_accepts_context version gate is untested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "37205e51bc92999fee33d89580a43e6f1bee4cbb",
+   "fixed_sha": "a6b904fd5b1edfd9db45302285fb959f77228056",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "6be4258765ce7c9611094816493f457811d925b9367f7d25f3d112cc402c74b2",
+   "pr": "langchain-33461",
+   "repo": "langchain-ai/langchain",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "libs/core/langchain_core/runnables/config.py",
+   "line": 551,
+   "title": "ContextThreadPoolExecutor.map kwargs forwarding is untested",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "37205e51bc92999fee33d89580a43e6f1bee4cbb",
+   "fixed_sha": "a6b904fd5b1edfd9db45302285fb959f77228056",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "2b5972894e6403df82a0bc59c4b99a3a8a8f8e7c61a28f4b5a1b6677ecd4d8d3",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2
+   ],
+   "kind": "weak_test",
+   "path": "src/utils/jwt/jwt.test.ts",
+   "line": 225,
+   "title": "RS round trip does not pin the hash",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 131,
+   "in_oracle_set": true
+  },
+  {
+   "id": "8321f5f742fc4c76b0aa21a5918873c343c7e89efdd9830742908a5c3bd9e17d",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/jwt/jwt.ts",
+   "line": 121,
+   "title": "Invalid JWT header is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 56,
+   "in_oracle_set": true
+  },
+  {
+   "id": "dcdc701c41a1a75e4f1f54efaf220fb07dc71abfae88d3ec9b03bf596edeb477",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/jwt/types.ts",
+   "line": 93,
+   "title": "isTokenHeader typ check is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "9411c6549ff3c8e7343e8e41e949fe7addc89295e690d4a4ec8a3c53c6542c4a",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/jwt/key.ts",
+   "line": 19,
+   "title": "Private JWK signing path is not tested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "79e11a47e7608d8d2d85ffb32c9e776e41a83eb54b413cf9f81dedaae643f718",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/jwt/jwt.ts",
+   "line": 120,
+   "title": "JwtHeaderInvalid branch has no test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 57,
+   "in_oracle_set": true
+  },
+  {
+   "id": "fad184bc14a4e15d5d0044b20a2ee12304f89550d4d8fc342d96eaaac08a9e4f",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "src/utils/jwt/types.test.ts",
+   "line": 36,
+   "title": "Invalid-header case does not isolate the typ check",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "a3010e5b7edfbc7c24d9240c06b0e5988b372f4c7070702e3fe94d5b00c76ee8",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/jwt/key.ts",
+   "line": 21,
+   "title": "JWK private key signing is not tested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "600ba5037c26c8bc5cdf403668899a670f2195906fb1a4214a15323f47c7942c",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "src/utils/jwt/jwt.test.ts",
+   "line": 225,
+   "title": "RS round-trip does not pin the hash algorithm",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 131,
+   "in_oracle_set": true
+  },
+  {
+   "id": "e40362d7ca9c881147ada6c31b6b756fff6c8db8b21c09368c548c5f47355ff7",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/jwt/key.ts",
+   "line": 19,
+   "title": "JWK private key signing is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "4221a88afefc8598d6bb5a3a5840c24f6379041a258f1d0a5e81f7d134914b5e",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/jwt/jwt.ts",
+   "line": 121,
+   "title": "Invalid header rejection is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 56,
+   "in_oracle_set": true
+  },
+  {
+   "id": "b400c7939c7ce996fe37db07c700d8398b927d8d4f478b398a6ca291eed853a6",
+   "pr": "hono-2339",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/jwt/types.ts",
+   "line": 93,
+   "title": "typ check in isTokenHeader is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "f950277cd3d9264622785e82785f21c648da699a",
+   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "9be6a0c3748a1573bb4d24142ba832b0c420be69c912f1588ce4cb10188af230",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "weak_test",
+   "path": "src/middleware/secure-headers/index.test.ts",
+   "line": 41,
+   "title": "Assertion checks a misspelled header name",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 442,
+   "in_oracle_set": true
+  },
+  {
+   "id": "2c1849053366ae3e7b852bf170f64ae16c7ec5ca398580af4632d01818399a26",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/secure-headers/index.test.ts",
+   "line": 217,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 266,
+   "in_oracle_set": true
+  },
+  {
+   "id": "066438b47f607561a3fb3fd5cf30fd050b9c821cdb16ee88b3d6734925c2b6f0",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/secure-headers/index.test.ts",
+   "line": 238,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 245,
+   "in_oracle_set": true
+  },
+  {
+   "id": "29dda40751ca852c878705c4d9097666ef79128393c542a151eb2a3cceb1a401",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/secure-headers/index.test.ts",
+   "line": 250,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 233,
+   "in_oracle_set": true
+  },
+  {
+   "id": "2f6d49a1a38efb51f6b55fe2f198f81314cba141c0bcb2696589742452ed0d01",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/secure-headers/index.test.ts",
+   "line": 344,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 139,
+   "in_oracle_set": true
+  },
+  {
+   "id": "bbe2c739adc42d4dca5686913428497fc5afdc0dff9d24fe6deb71a3140d1dd7",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1,
+    2,
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/secure-headers/index.test.ts",
+   "line": 352,
+   "title": "Assertion removed with no replacement",
+   "confidence": null,
+   "where": "summary_visible",
+   "source": "counts.json sum (deterministic)",
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 131,
+   "in_oracle_set": true
+  },
+  {
+   "id": "84a7d230e1981e9ae63311da88e744e4ed5406f3247dc5540407a13961c1573c",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "src/middleware/secure-headers/index.test.ts",
+   "line": 41,
+   "title": "Default-absence check reads a misspelled header name",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 442,
+   "in_oracle_set": true
+  },
+  {
+   "id": "87a0afa42af7d2a749b75b04c606f97d3721afbdb82e91e731e0ad16ea189d17",
+   "pr": "hono-3413",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "src/middleware/secure-headers/index.test.ts",
+   "line": 41,
+   "title": "Default-options check reads a misspelt header name",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "c85aead088659b98b8d05a1187a07d064e12ffe6",
+   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 442,
+   "in_oracle_set": true
+  },
+  {
+   "id": "1216e4458fb733561a2eb92a0e6516e391e77c61fbcb6130c347616ae7a0b6bb",
+   "pr": "query-7005",
+   "repo": "TanStack/query",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/query-devtools/src/utils.tsx",
+   "line": 318,
+   "title": "Shadow-root target branch of setupStyleSheet is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "01c763444e3cf3dfa9744f13911aa1533cac3c29",
+   "fixed_sha": "ecd89c8faf7acc226f00633ea3a761d3ab842c1d",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 2,
+   "in_oracle_set": true
+  },
+  {
+   "id": "5a5c01107c24c2e48f220e2edcd3fe8b41c1596cd05efbc5eba3db8081671280",
+   "pr": "query-7005",
+   "repo": "TanStack/query",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/react-query-devtools/src/devtools.tsx",
+   "line": 71,
+   "title": "React wrapper's shadowDOMTarget forwarding is unpinned",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "01c763444e3cf3dfa9744f13911aa1533cac3c29",
+   "fixed_sha": "ecd89c8faf7acc226f00633ea3a761d3ab842c1d",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "71ad696f4dcbecc7d9a538fc95d8aa14e496b6e0c478e2dc2c831fe88d3d9785",
+   "pr": "query-7005",
+   "repo": "TanStack/query",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/query-devtools/src/utils.tsx",
+   "line": 318,
+   "title": "setupStyleSheet's shadow-root branch is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "01c763444e3cf3dfa9744f13911aa1533cac3c29",
+   "fixed_sha": "ecd89c8faf7acc226f00633ea3a761d3ab842c1d",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 2,
+   "in_oracle_set": true
+  },
+  {
+   "id": "1c4596fb3e61021fbc7b543b4ff0ace4a7522ceb14f11252b19841660e03bce7",
+   "pr": "vitest-9464",
+   "repo": "vitest-dev/vitest",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/reporters/reported-tasks.ts",
+   "line": 232,
+   "title": "TestCase.toTestSpecification has no test",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9673c49a40535529db6042df7176f123e95bb8f5",
+   "fixed_sha": "5f2739e74983b0e5c9b5f3ce9901cebfeafee50c",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 17,
+   "in_oracle_set": true
+  },
+  {
+   "id": "700a0a67d57ffa1e5ffb1fc594bcecd94ab55f6fd930ad058df999ed79349c2a",
+   "pr": "vitest-9464",
+   "repo": "vitest-dev/vitest",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/reporters/reported-tasks.ts",
+   "line": 441,
+   "title": "TestSuite.toTestSpecification has no test",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9673c49a40535529db6042df7176f123e95bb8f5",
+   "fixed_sha": "5f2739e74983b0e5c9b5f3ce9901cebfeafee50c",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 20,
+   "in_oracle_set": true
+  },
+  {
+   "id": "93bcbbcbe9bd680123aa9be7140f6769c1724684017fe492c6a64477c8902ff7",
+   "pr": "vitest-9464",
+   "repo": "vitest-dev/vitest",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/reporters/reported-tasks.ts",
+   "line": 511,
+   "title": "TestModule.toTestSpecification has no test",
+   "confidence": "low",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9673c49a40535529db6042df7176f123e95bb8f5",
+   "fixed_sha": "5f2739e74983b0e5c9b5f3ce9901cebfeafee50c",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 17,
+   "in_oracle_set": true
+  },
+  {
+   "id": "9d495ecb652711e9c9605915c315329bcde503991d21902b8158018573016e82",
+   "pr": "vitest-9464",
+   "repo": "vitest-dev/vitest",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/reporters/reported-tasks.ts",
+   "line": 230,
+   "title": "TestCase.toTestSpecification has no test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9673c49a40535529db6042df7176f123e95bb8f5",
+   "fixed_sha": "5f2739e74983b0e5c9b5f3ce9901cebfeafee50c",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 19,
+   "in_oracle_set": true
+  },
+  {
+   "id": "7d2d6287ce595b2b4c98acc13403495ef9ad59ea4e28f755c7f3b0094cb8bd0a",
+   "pr": "vitest-9464",
+   "repo": "vitest-dev/vitest",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/reporters/reported-tasks.ts",
+   "line": 441,
+   "title": "TestSuite.toTestSpecification collection is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9673c49a40535529db6042df7176f123e95bb8f5",
+   "fixed_sha": "5f2739e74983b0e5c9b5f3ce9901cebfeafee50c",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 20,
+   "in_oracle_set": true
+  },
+  {
+   "id": "badc29d65e77f1c847ad7c18291d3eac1a664a1c3af1940925616ea3a73179fc",
+   "pr": "vitest-9464",
+   "repo": "vitest-dev/vitest",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/vitest/src/node/reporters/reported-tasks.ts",
+   "line": 508,
+   "title": "TestModule.toTestSpecification has no test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "9673c49a40535529db6042df7176f123e95bb8f5",
+   "fixed_sha": "5f2739e74983b0e5c9b5f3ce9901cebfeafee50c",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 20,
+   "in_oracle_set": true
+  },
+  {
+   "id": "2d7a382bf7de165a2c57cdbd294451a28550d01beb79cc64cfdef974ee6d067e",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/serve-static/index.ts",
+   "line": 121,
+   "title": "gzip pre-compressed branch is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
+   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 11,
+   "in_oracle_set": true
+  },
+  {
+   "id": "75ce8eb3a592f278ca781b2aaad886b98508352617f29895c0689d51a7d224aa",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/serve-static/index.ts",
+   "line": 118,
+   "title": "No-Accept-Encoding fallback is untested",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
+   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 8,
+   "in_oracle_set": true
+  },
+  {
+   "id": "ba77748f7e23b15fdda76170e4f1096f0ba1957cc88cf7e47f492465ab2be230",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/serve-static/index.ts",
+   "line": 120,
+   "title": "gzip-only response is untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
+   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 10,
+   "in_oracle_set": true
+  },
+  {
+   "id": "e0230af71beecd818dfa1656420afb90c7d6e1195dd1439b3d51431256586bee",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/serve-static/index.ts",
+   "line": 117,
+   "title": "zstd-over-gzip priority is not pinned",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
+   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 7,
+   "in_oracle_set": true
+  },
+  {
+   "id": "1832ddfd559560f1de05dc7d2145ab1fba2eb6442936f62f590f6f16befca6ed",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/serve-static/index.ts",
+   "line": 107,
+   "title": "Default-off path is not asserted for Accept-Encoding",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
+   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "650b52260b644252b287b61d0e05e75d9c8a93dfcde912d8bac73a4a127dab6e",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/serve-static/index.ts",
+   "line": 121,
+   "title": "gzip selection and zstd-over-gzip priority are untested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
+   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 11,
+   "in_oracle_set": true
+  },
+  {
+   "id": "16ec6b59a2b6afe4f76f569308c799cc8bacb1956875f5047fc819a6e874948e",
+   "pr": "hono-3366",
+   "repo": "honojs/hono",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "src/middleware/serve-static/index.ts",
+   "line": 107,
+   "title": "No test that the precompressed gate is off by default",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "ae401f080004872678100e890fd3398d3df09e67",
+   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "8d9c1f644d57f8ab3d3e3f38572f8a361ea9b1e39a2a538b881b332eb8792832",
+   "pr": "hono-3727",
+   "repo": "honojs/hono",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "src/utils/ipaddr.ts",
+   "line": 20,
+   "title": "Mapped IPv4 with zero octets expands to the wrong groups",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "eea9735fe308e6549509c312d80e13cd9e18898b",
+   "fixed_sha": "c91ec9b60df18c76a3feb47533ce097d02f7fe6c",
+   "fix_touched_file": true,
+   "arm": "NEAR",
+   "dist": 0,
+   "in_oracle_set": true
+  },
+  {
+   "id": "35cca91cd5558bbb9c43f8f9a996c3eb3793a199722abc78a08aadbd30597ec4",
+   "pr": "pydantic-ai-1812",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/_utils.py",
+   "line": 298,
+   "title": "Shared dataclass repr has no test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e873dd2e9978c8ffc2941f27207becbd5d40a846",
+   "fixed_sha": "f9922c68b7b2bb557cc9cb451e04f905688a9bf8",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 244,
+   "in_oracle_set": true
+  },
+  {
+   "id": "42daac21f2e49e6c1c2261b2a50deb5a9fb1dba29a60d2b716b9723a92567160",
+   "pr": "pydantic-ai-1812",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/_utils.py",
+   "line": 298,
+   "title": "New dataclass repr helper has no unit test",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e873dd2e9978c8ffc2941f27207becbd5d40a846",
+   "fixed_sha": "f9922c68b7b2bb557cc9cb451e04f905688a9bf8",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 244,
+   "in_oracle_set": true
+  },
+  {
+   "id": "aaa2957d2437b6b3777dab0aaa6bae299cd9cfb98dea5b706d1b3ac2d7a70702",
+   "pr": "pydantic-ai-1812",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/_utils.py",
+   "line": 298,
+   "title": "Default-omitting repr is not tested",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e873dd2e9978c8ffc2941f27207becbd5d40a846",
+   "fixed_sha": "f9922c68b7b2bb557cc9cb451e04f905688a9bf8",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 244,
+   "in_oracle_set": true
+  },
+  {
+   "id": "4652f59cca085827ad5472ddab07bae4bb054b433fb53e4edf607aee979b6900",
+   "pr": "pydantic-ai-5455",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_streaming.py",
+   "line": 4647,
+   "title": "Early-break test does not observe state after the stream closes",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "92f22d7a80f29f6c9089f87dd45cbb2a92f90266",
+   "fixed_sha": "c26903e5edfb9c0308e9a6696fd3f876c2ff92af",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 330,
+   "in_oracle_set": true
+  },
+  {
+   "id": "cb37c49ad73c15accdf6b50dc10784872fca616bb7a35a8a876155ec293ca19d",
+   "pr": "pydantic-ai-5455",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "pydantic_ai_slim/pydantic_ai/models/__init__.py",
+   "line": 1318,
+   "title": "Cancel after completion is not pinned to 'complete'",
+   "confidence": "high",
+   "where": "summary_visible",
+   "source": "findings.json",
+   "buggy_sha": "92f22d7a80f29f6c9089f87dd45cbb2a92f90266",
+   "fixed_sha": "c26903e5edfb9c0308e9a6696fd3f876c2ff92af",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 485,
+   "in_oracle_set": true
+  },
+  {
+   "id": "037695ece4daff39ac66d259c411868547afb4a785cd46076c05d31776bbcafe",
+   "pr": "pydantic-ai-5455",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_streaming.py",
+   "line": 4647,
+   "title": "Early-break test never closes the generator",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "92f22d7a80f29f6c9089f87dd45cbb2a92f90266",
+   "fixed_sha": "c26903e5edfb9c0308e9a6696fd3f876c2ff92af",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 330,
+   "in_oracle_set": true
+  },
+  {
+   "id": "bb696c902e7d9f2f01e873b976348df415c8218cd6ca6662def96d2a3534ccec",
+   "pr": "pydantic-ai-5455",
+   "repo": "pydantic/pydantic-ai",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "weak_test",
+   "path": "tests/test_streaming.py",
+   "line": 4647,
+   "title": "Early-break assertion cannot detect a finally-based _finished setter",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "92f22d7a80f29f6c9089f87dd45cbb2a92f90266",
+   "fixed_sha": "c26903e5edfb9c0308e9a6696fd3f876c2ff92af",
+   "fix_touched_file": true,
+   "arm": "FAR",
+   "dist": 330,
+   "in_oracle_set": true
+  },
+  {
+   "id": "129b4089fa4b5475761902d8a671eda449b3e7947a5b25ccac66e8b266bd7ead",
+   "pr": "vitest-7878",
+   "repo": "vitest-dev/vitest",
+   "run": "39120706885",
+   "reps": [
+    1
+   ],
+   "kind": "missing_test",
+   "path": "packages/runner/src/test-state.ts",
+   "line": 17,
+   "title": "Finishing one running test can drop other running tests",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e9c3d72f0c8d6867de06a3df43ea28a05eeec444",
+   "fixed_sha": "6621a72d6ed371e43f80ff327f5063693bd6b1ad",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "dcad675d202f87bb3ab01ef91b43f72e7bee6e0471bb3610c65b7fccc3cb2ad2",
+   "pr": "vitest-7878",
+   "repo": "vitest-dev/vitest",
+   "run": "39120718089",
+   "reps": [
+    2
+   ],
+   "kind": "missing_test",
+   "path": "packages/runner/src/test-state.ts",
+   "line": 17,
+   "title": "Finished test removal drops other running tests",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e9c3d72f0c8d6867de06a3df43ea28a05eeec444",
+   "fixed_sha": "6621a72d6ed371e43f80ff327f5063693bd6b1ad",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  },
+  {
+   "id": "dab6f0041e2ad20180ad0263bbf5da68fc0fe9afd3725af23a5c830c0d7f2b64",
+   "pr": "vitest-7878",
+   "repo": "vitest-dev/vitest",
+   "run": "39120729276",
+   "reps": [
+    3
+   ],
+   "kind": "missing_test",
+   "path": "packages/runner/src/test-state.ts",
+   "line": 17,
+   "title": "Running-test cleanup has no unit test and removes too much",
+   "confidence": "high",
+   "where": "details",
+   "source": "findings.json",
+   "buggy_sha": "e9c3d72f0c8d6867de06a3df43ea28a05eeec444",
+   "fixed_sha": "6621a72d6ed371e43f80ff327f5063693bd6b1ad",
+   "fix_touched_file": false,
+   "arm": "UNTOUCHED",
+   "dist": null,
+   "in_oracle_set": false
+  }
+ ]
+}

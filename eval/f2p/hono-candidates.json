@@ -1,0 +1,280 @@
+{
+ "generated_by": "node eval/f2p/f2p.js candidates",
+ "sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+ "candidates": [
+  {
+   "id": "d84a2a57e6dee34749fd05f6663cab2bd5fee889a82980e838300307d32c0fe8",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/ipaddr.ts",
+   "line": 149,
+   "title": "convertIPv4ToBinary octet and separator edge cases",
+   "confidence": null,
+   "unit": "src/utils/ipaddr.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [
+    "m60"
+   ],
+   "uncertain_survivors": [
+    "m61",
+    "m63"
+   ]
+  },
+  {
+   "id": "8c8b48c90e072839068e3137f600dd4c9df18513ecd0334be643e0e16ff1763d",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/url.ts",
+   "line": 84,
+   "title": "tryDecode fallback when full decode throws",
+   "confidence": null,
+   "unit": "src/utils/url.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": [
+    "m77"
+   ]
+  },
+  {
+   "id": "01f4fc3429729ddd1b83a05a6cfc40c1c938a4c23c8b2ebb6e62f0c9b416da39",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "weak_test",
+   "path": "src/utils/cookie.test.ts",
+   "line": 163,
+   "title": "Duplicate-name first-wins check for prototype-colliding names is covered; no gap found in cookie.ts parse",
+   "confidence": null,
+   "unit": "src/utils/cookie.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": [
+    "m32"
+   ]
+  },
+  {
+   "id": "16085bbdb78f01c3c53062897e23410038484b94afbccf499bc6831c47072e9a",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "weak_test",
+   "path": "src/middleware/jwk/index.test.ts",
+   "line": 788,
+   "title": "Signed cookie set-cookie header only checked for non-null",
+   "confidence": null,
+   "unit": null,
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": []
+  },
+  {
+   "id": "1c908d060db5c5567b71ab53d26570c07feede88b989501ccb996a8d3c8e027f",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/body.ts",
+   "line": 111,
+   "title": "parseBody returns empty object for other media types with dot/all options",
+   "confidence": null,
+   "unit": "src/utils/body.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [
+    "m16"
+   ],
+   "uncertain_survivors": []
+  },
+  {
+   "id": "4ee957044296b6f404393ac11f8d1b57dbac5c4fbabd1bcdd4cc54f25f91b351",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "weak_test",
+   "path": "src/utils/accept.test.ts",
+   "line": 68,
+   "title": "uppercase Q parameter value checked",
+   "confidence": null,
+   "unit": "src/utils/accept.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": [
+    "m04"
+   ]
+  },
+  {
+   "id": "007c55799301c114b8114f554e76a9bad345a2003a9c94963183046dbbb6dd10",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/buffer.ts",
+   "line": 8,
+   "title": "equal() byte comparison: no test for differing bytes at the last index path",
+   "confidence": null,
+   "unit": "src/utils/buffer.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": [
+    "m22",
+    "m24",
+    "m25"
+   ]
+  },
+  {
+   "id": "7743d8068fc283a1e14c1b8eaba68974c18d675c41c68f22b21e4b34df25aec4",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/buffer.ts",
+   "line": 29,
+   "title": "constantTimeEqualString differing-length strings with equal prefix",
+   "confidence": null,
+   "unit": "src/utils/buffer.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": [
+    "m22",
+    "m24",
+    "m25"
+   ]
+  },
+  {
+   "id": "b6e20d797a9723e3b5f4b67f81173632db770d03223291e7bd06614df5fdbbbf",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "weak_test",
+   "path": "src/utils/crypto.test.ts",
+   "line": 24,
+   "title": "md5 digest test is skipped",
+   "confidence": null,
+   "unit": "src/utils/crypto.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [
+    "m38"
+   ],
+   "uncertain_survivors": [
+    "m41"
+   ]
+  },
+  {
+   "id": "e0234654487641213486aa67f25ef9f0f66291f6bf0b3882fa056beee7e55a40",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/html.ts",
+   "line": 129,
+   "title": "resolveCallbackSync has no visible unit test",
+   "confidence": null,
+   "unit": "src/utils/html.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [
+    "m54",
+    "m55",
+    "m56",
+    "m59"
+   ],
+   "uncertain_survivors": []
+  },
+  {
+   "id": "ca1afdda458fa63a60cc465fc5f43aa4b3cb2a4c17f9de6a580fefd416c51f47",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/stream.ts",
+   "line": 106,
+   "title": "abort() swallows synchronous listener errors",
+   "confidence": null,
+   "unit": "src/utils/stream.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [
+    "m71",
+    "m73",
+    "m74"
+   ],
+   "uncertain_survivors": []
+  },
+  {
+   "id": "3fa921e882ce22c359b26fc851d8e5bb3c28281c4fa1eddbb1eb62898e41933e",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "weak_test",
+   "path": "src/utils/encode.test.ts",
+   "line": 49,
+   "title": "Encode/decode base64 tests use a self-referential round trip for decode of the same vectors",
+   "confidence": null,
+   "unit": "src/utils/encode.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": []
+  },
+  {
+   "id": "0ab0a3fb5301644c079be3e0df9c408e85d2b2b1c03990138989e43d0690c626",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/encode.ts",
+   "line": 6,
+   "title": "decodeBase64Url mapping of _ and - for input with padding absent",
+   "confidence": null,
+   "unit": "src/utils/encode.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": []
+  },
+  {
+   "id": "dc8b7cfd18ae97bbc0fbc3b899772a55c8accefe591857e052ab221fd5c448d6",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "weak_test",
+   "path": "src/utils/color.test.ts",
+   "line": 44,
+   "title": "esbuild output content only checked for existence",
+   "confidence": null,
+   "unit": null,
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": []
+  },
+  {
+   "id": "8eb8a74e1947472d3403a4e83345da899f18c21f37a3c1359e8a1b6645479b18",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/basic-auth.ts",
+   "line": 3,
+   "title": "Lowercase or mixed-case Basic scheme is accepted",
+   "confidence": null,
+   "unit": "src/utils/basic-auth.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": []
+  },
+  {
+   "id": "de9f2efe71cb4fb537e514bf18fafa6da1793e70f330bbcff36275a303bd50e4",
+   "pr": "hono-5ca49b0",
+   "repo": "honojs/hono",
+   "run": "39187431386",
+   "kind": "missing_test",
+   "path": "src/utils/basic-auth.ts",
+   "line": 25,
+   "title": "Password containing a colon is split at the first colon only",
+   "confidence": null,
+   "unit": "src/utils/basic-auth.ts",
+   "buggy_sha": "5ca49b0720755c585c9a9835f0a479ceea36fb52",
+   "survivors": [],
+   "uncertain_survivors": []
+  }
+ ]
+}
