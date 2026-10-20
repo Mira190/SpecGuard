@@ -20,7 +20,7 @@ The runner is `cover` in specguard-33's f2p harness (branch eval/f2p-cover; sha 
 
 | Repo | Unit tests run with coverage at I's head | Report |
 |---|---|---|
-| honojs/hono | the harness's unit scope (vitest, v8, lcov, no e2e) | lcov |
+| honojs/hono | `src/**/*.test.ts` only (vitest, v8, lcov; no `.test.tsx`, no e2e). The harness must run exactly this set before the design look. | lcov |
 | tobymao/sqlglot | the harness's unit scope (pytest under coverage) | Cobertura |
 | langchain-ai/langchain | `libs/core` only (langchain_core unit tests); the env exists only for that package | Cobertura |
 
@@ -35,13 +35,16 @@ The runner is `cover` in specguard-33's f2p harness (branch eval/f2p-cover; sha 
 - A line the report does not instrument is not executable and is ignored.
 - A changed definition with 0 instrumented added lines is not a unit for C. These are counted and reported.
 
-**Suite health** is recorded for every PR from the `cover` report: passed, failed, errored/collection error (per test file), skipped, exit code, number of selected test files, `deps_changed`, and tool versions.
+**Suite health** is recorded for every PR from the `cover` report: passed, failed, file errors by kind (per test file), skipped, exit code, number of selected test files, `deps_changed`, and tool versions.
+- File error kinds (labelled by the harness): `collection` (a collection or import error), `empty` (a helper file with no tests, e.g. hono's "No test suite found"), and `other`.
+
+**deps_changed.** The f2p venvs were built for older trees, so `deps_changed` is already true at clone HEAD for sqlglot and langchain (the #416 smoke run), and it will be true for many E1 PRs. It is reported per PR and **never excludes a PR on its own**. Whether a PR is usable rests only on the rules below. C's catch rate is also reported split by `deps_changed`, as descriptive only.
 
 **Unusable PRs.** These count as a miss for C, and the count is reported per repo:
 - no report;
 - 0 selected test files;
 - the report covers none of I's changed source files;
-- **any collection or import error in a test file that names a changed source file's module or sits in the same directory as its test counterpart.** Such an error removes coverage the file would have given, which would make fake gaps. This option (unusable) was chosen over dropping only that file's flags.
+- **a file error of kind `collection` in a test file that names a changed source file's module or sits in the same directory as its test counterpart.** Such an error removes coverage the file would have given, which would make fake gaps. This option (unusable) was chosen over dropping only that file's flags. Errors of kind `empty` or `other` do not make a PR unusable; they are counted.
 
 Failing tests do not make a PR unusable; their count is reported.
 
@@ -75,6 +78,7 @@ Failing tests do not make a PR unusable; their count is reported.
 3. C vs LLM delivered, on the design set only.
 4. Does coverage separate the LLM's hits from its misses? Design set only. Every saved LLM missing_test finding is counted, hidden or delivered. Each is labelled "confirmed" if its cited line is executable and not executed, "contradicted" if executed, or "unknown" if the line is not instrumented. For each label, report the count and the catch rate.
 5. Noise on controls: the share of changed units that C flags, C flags per control PR, and the same for static.
+6. C's catch rate and chance split by `deps_changed` (true / false).
 
 ## Corpus
 
@@ -109,6 +113,6 @@ The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: th
 ## TBD before freeze
 
 - ~~The grepTests fix sha~~: done, b6accfd on eval/testgap-demotion (`testsName`, with a test that fails with `-q`). E1 code builds on that branch.
-- The `cover` runner sha (specguard-33, eval/f2p-cover), merged with e0's OK.
+- The `cover` runner sha (specguard-33, eval/f2p-cover, #416), merged with e0's OK. It must label file errors by kind and run exactly `src/**/*.test.ts` for hono.
 - The confirmation list sha.
 - The design-look appendix comes after the freeze.
