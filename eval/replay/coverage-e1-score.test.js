@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { parse } = require('../../src/coverage');
 const { makeB } = require('./testgap-score');
-const { loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, labelLine, drawNull } = require('./coverage-e1-score');
+const { loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, labelLine, drawNull, powerOf, summarize, runValid, medianUpper } = require('./coverage-e1-score');
 
 const lcov = (file, da) => `TN:\nSF:${file}\n${da.map(([l, h]) => `DA:${l},${h}`).join('\n')}\nend_of_record\n`;
 const U = (path, name, start, end, added) => ({ path, name, start, end, added });
@@ -39,8 +39,17 @@ test('unusable rules in order, collection vs empty', () => {
 test('error file in the source directory or the mirrored tests directory counts', () => {
   assert.ok(errCoversSource('src/x/other.test.ts', 'src/x/a.ts'));
   assert.ok(errCoversSource('libs/core/tests/unit_tests/runnables/test_z.py', 'libs/core/pkg/runnables/config.py'));
-  assert.ok(errCoversSource('tests/test_utils.py', 'pkg/utils.py'));
-  assert.ok(!errCoversSource('lib/test_utilsx.py', 'pkg/utils.py'));
+  assert.ok(errCoversSource('lib/test_utilsx.py', 'pkg/utils.py') === false);
+});
+
+test('collection rule: generic stems are not matched by name; flat test dirs match the file name', () => {
+  for (const g of ['utils', 'index', '__init__', 'main', 'types', 'package']) assert.ok(!errCoversSource('lib/test_' + g + '.py', 'pkg/x/' + g + '.py'), g);
+  assert.ok(errCoversSource('src/index.test.ts', 'src/index.ts')); // same directory still counts
+  // flat dirs: sqlglot tests/ and langchain libs/core/tests/unit_tests/
+  assert.ok(errCoversSource('tests/test_parser.py', 'sqlglot/parser.py'));
+  assert.ok(!errCoversSource('tests/test_executor.py', 'sqlglot/parser.py'));
+  assert.ok(errCoversSource('libs/core/tests/unit_tests/test_tools.py', 'libs/core/langchain_core/tools.py'));
+  assert.ok(!errCoversSource('libs/core/tests/unit_tests/test_graph.py', 'libs/core/langchain_core/tools.py'));
 });
 
 test('evalCover: unusable gives outcome 0, usable catch gives 1', () => {
@@ -109,4 +118,64 @@ test('unusable PR with 1 changed unit inside B: observed 0, null still tests B',
   const r = armScore([{ d, k: 1, outcome: 0, elig: el(d), forced: true }], opt);
   assert.strictEqual(r.observed, 0);
   assert.strictEqual(r.chance, 1);
+});
+
+// ---- discriminating tests (each fails under one of the five mutations in the report) ----
+test('(a,d) unequal units: primary chance about 0.1, secondary about 0.5, verdict uses secondary', () => {
+  const B = { has: (p, l) => p === 'a.ts' && l <= 5 }, units = [U('a.ts', 'f', 1, 2, [2]), U('a.ts', 'g', 20, 30, [20, 21, 22, 23, 24, 25, 26, 27, 28])];
+  const d = { changedUnits: units, B }, items = Array.from({ length: 60 }, () => ({ d, k: 1, outcome: 0, elig: el(d) }));
+  const r = armScore(items, { perms: 400, boots: 20 });
+  assert.ok(Math.abs(r.primary.chance - 0.1) < 0.04, 'primary ' + r.primary.chance);
+  assert.ok(Math.abs(r.secondary.chance - 0.5) < 0.05, 'secondary ' + r.secondary.chance);
+  assert.strictEqual(r.verdict_null, 'secondary');
+});
+
+test('(b) ties count: p is the share of null >= observed', () => {
+  const d = prs(1, true)[0], r = armScore([{ d, k: 2, outcome: 1, elig: el(d) }], opt); // both units flagged, null = observed in every permutation
+  assert.strictEqual(r.p, 1);
+  assert.strictEqual(r.pass, false);
+});
+
+test('(c) the null flag line is drawn from the eligible lines, not always the first', () => {
+  const B = { has: (p, l) => l >= 15 }, u = (n) => U('a.ts', n, 10, 19, [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+  const d = { changedUnits: [u('f'), U('b.ts', 'g', 10, 19, [10, 11, 12, 13, 14, 15, 16, 17, 18, 19])], B };
+  const bits = drawNull(require('../szz').mulberry32(3), 2000, 1, el(d), B, true, 0);
+  const share = bits.reduce((s, x) => s + x, 0) / 2000;
+  assert.ok(Math.abs(share - 0.5) < 0.05, 'share ' + share);
+});
+
+test('(e) summarize end to end with an unusable item: observed 0, 1-flag null on a single unit in B', () => {
+  const units = [U('a.ts', 'f', 1, 10, [2, 3, 4])], B = makeB([{ path: 'a.ts', line: 3 }], { 'a.ts': [{ name: 'f', start: 1, end: 10 }] });
+  const d = { changedUnits: units, B }, mk = (id, c) => ({ id, repo: 'x/y', rec: { deps_changed: false, health: { exit_code: 1 }, file_errors: { 't.py': { kind: 'other' } } }, d, c, sflags: [] });
+  const bad = evalCover({ rec: null, parsed: null, changedUnits: units, changedFiles: new Set(['a.ts']), B });
+  const s = summarize([mk('p1', bad)], { ...opt, seed: 20261020, powerN: 5, sims: 20 });
+  assert.strictEqual(s.unusable.count, 1);
+  assert.strictEqual(s.c.observed, 0);
+  assert.strictEqual(s.c.chance, 1);
+  assert.strictEqual(s.c_minus_static.prs_unusable_for_c, 1);
+  assert.ok(s.power_c && s.power_c.n === 5 && s.power_c.sims === 20);
+  const good = evalCover({ rec: { selected_tests: 1, health: { exit_code: 1, timed_out: true }, file_errors: { 't.py': { kind: 'other' } } }, parsed: parse(lcov('a.ts', [[2, 1], [3, 0]])), changedUnits: units, changedFiles: new Set(['a.ts']), B });
+  const s2 = summarize([mk('p2', good)], opt);
+  assert.strictEqual(s2.unusable.count, 0);
+  assert.strictEqual(s2.usable_suite_health.with_other_errors, 1);
+  assert.strictEqual(s2.usable_suite_health.nonzero_exit_code, 1);
+  assert.strictEqual(s2.by_deps_changed_usable_only.false.prs, 1);
+});
+
+test('power: share of resampled sims that PASS; empty is null', () => {
+  const d = prs(1, true)[0], items = Array.from({ length: 10 }, () => ({ d, k: 1, outcome: 1, elig: el(d) }));
+  assert.strictEqual(powerOf(items, { perms: 200 }, 40, 30).pass_share, 1);
+  const none = Array.from({ length: 10 }, () => ({ d, k: 1, outcome: 0, elig: el(d) }));
+  assert.strictEqual(powerOf(none, { perms: 200 }, 40, 30).pass_share, 0);
+  assert.strictEqual(powerOf([], opt, 40, 30), null);
+});
+
+test('median: upper middle for even n, null when no usable control; run validity', () => {
+  assert.strictEqual(medianUpper([1, 5]), 5);
+  assert.strictEqual(medianUpper([4, 1, 9]), 4);
+  assert.strictEqual(medianUpper([]), null);
+  assert.ok(runValid({ engine_status: 'success', findings: [] }));
+  assert.ok(!runValid({ engine_status: 'success', findings: [], valid: false }));
+  assert.ok(!runValid({ engine_status: 'success', findings: [], engine_notes: ['context pack: 0 files'] }));
+  assert.ok(!runValid(null));
 });
