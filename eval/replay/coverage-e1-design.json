@@ -5,8 +5,7 @@
   "kind": "bug",
   "buggy_sha": "4f8a49cd42ef37178cd0626554bfd263a140046e",
   "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
-  "base": "6c08a77598dd672ae0f05eb4b36edfba520f4002",
-  "pr": "sqlglot-7054"
+  "base": "6c08a77598dd672ae0f05eb4b36edfba520f4002"
  },
  {
   "id": "sqlglot-7097",
@@ -14,8 +13,7 @@
   "kind": "bug",
   "buggy_sha": "1074d66231d1de64b6b9aa43de6afbdc6717da5f",
   "fixed_sha": "cb5d8da1bac8eafb2b64618ff205dddbe53664f7",
-  "base": "217e960f57675cc5f5cb9ff9996c048a31d8004c",
-  "pr": "sqlglot-7097"
+  "base": "217e960f57675cc5f5cb9ff9996c048a31d8004c"
  },
  {
   "id": "sqlglot-7315",
@@ -23,8 +21,7 @@
   "kind": "bug",
   "buggy_sha": "61bb18cc00a1749f8945e56ff4e83e4c809bd6df",
   "fixed_sha": "20fa8aedc48fccb780b973987908db63d0f76895",
-  "base": "0b462465bbffc6aabbf380d8d6c86fbcf97c9ef2",
-  "pr": "sqlglot-7315"
+  "base": "0b462465bbffc6aabbf380d8d6c86fbcf97c9ef2"
  },
  {
   "id": "hono-3604",
@@ -32,8 +29,7 @@
   "kind": "bug",
   "buggy_sha": "22db73f461633ffd365ea2e42ff972c83d6cf6c8",
   "fixed_sha": "8a5852d4c1d0c9bc46460d679e6f54a6d88575a1",
-  "base": "6b9fb24874d04017bc6c449dbc75b330345f43aa",
-  "pr": "hono-3604"
+  "base": "6b9fb24874d04017bc6c449dbc75b330345f43aa"
  },
  {
   "id": "hono-3787",
@@ -41,8 +37,7 @@
   "kind": "bug",
   "buggy_sha": "fa92596817183a261ff8c8191304ffa9163815fa",
   "fixed_sha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195",
-  "base": "e4767af5b4c8cf3bdb21cb5bc3396a30142f20bc",
-  "pr": "hono-3787"
+  "base": "e4767af5b4c8cf3bdb21cb5bc3396a30142f20bc"
  },
  {
   "id": "langchain-18592",
@@ -50,8 +45,7 @@
   "kind": "bug",
   "buggy_sha": "e0e688a27760b975c39064c0553bbcc10289b36a",
   "fixed_sha": "b6eccc5f975ed8ccb7a709d00f83954dbfc86ea9",
-  "base": "cda43c5a11504632b6ab40cf4e2bf82a469750a4",
-  "pr": "langchain-18592"
+  "base": "cda43c5a11504632b6ab40cf4e2bf82a469750a4"
  },
  {
   "id": "langchain-33461",
@@ -59,8 +53,7 @@
   "kind": "bug",
   "buggy_sha": "2d5efd7b290eab56e8787abfbdde15d27358d997",
   "fixed_sha": "a6b904fd5b1edfd9db45302285fb959f77228056",
-  "base": "1d2273597a5aa8dda7d1785bd44030e00d78539c",
-  "pr": "langchain-33461"
+  "base": "1d2273597a5aa8dda7d1785bd44030e00d78539c"
  },
  {
   "id": "hono-2339",
@@ -68,8 +61,7 @@
   "kind": "bug",
   "buggy_sha": "53b1653fa00e3526ba4d9966a45cc1f358392bb4",
   "fixed_sha": "52febbcc30bc509d5e4987577e63906fe08fc471",
-  "base": "25beca878f2662fedd84ed3fbf80c6a515609cea",
-  "pr": "hono-2339"
+  "base": "25beca878f2662fedd84ed3fbf80c6a515609cea"
  },
  {
   "id": "hono-3413",
@@ -77,8 +69,7 @@
   "kind": "bug",
   "buggy_sha": "8130a67da1dceb3a6faca4359ec34630ffba4c9f",
   "fixed_sha": "402eb3abe561914f41ee0f8e37f1d7f211f1ee51",
-  "base": "fe0a82a615dd8893e7f6b9e708e0c0cb3394f4a8",
-  "pr": "hono-3413"
+  "base": "fe0a82a615dd8893e7f6b9e708e0c0cb3394f4a8"
  },
  {
   "id": "hono-3366",
@@ -86,8 +77,7 @@
   "kind": "bug",
   "buggy_sha": "c8d5e3461dd08d694e4175170ac60326911210f7",
   "fixed_sha": "d54720da80134a180f5fe2dd98a7676cfc8f08b4",
-  "base": "fdf77862acbbfc1540ff0732a4cfd74a55781393",
-  "pr": "hono-3366"
+  "base": "fdf77862acbbfc1540ff0732a4cfd74a55781393"
  },
  {
   "id": "hono-3727",
@@ -95,39 +85,34 @@
   "kind": "bug",
   "buggy_sha": "af5affc5b48a9c56f3bc68879adf66180c28e70a",
   "fixed_sha": "c91ec9b60df18c76a3feb47533ce097d02f7fe6c",
-  "base": "fc8fb0f730d9ac93d75b6d6a09a575873e7396f8",
-  "pr": "hono-3727"
+  "base": "fc8fb0f730d9ac93d75b6d6a09a575873e7396f8"
  },
  {
   "id": "hono-hclean2-1",
   "repo": "honojs/hono",
   "kind": "control",
   "buggy_sha": "4b44abe1b5c7755aac8555d7943611555183450b",
-  "base": "a10592f3e1864cbe277619633db953450a6b1e4b",
-  "pr": "hono-hclean2-1"
+  "base": "a10592f3e1864cbe277619633db953450a6b1e4b"
  },
  {
   "id": "hono-hclean2-3",
   "repo": "honojs/hono",
   "kind": "control",
   "buggy_sha": "5ad469a888f3944ae3e5d993621612d799f1e96c",
-  "base": "c91ec9b60df18c76a3feb47533ce097d02f7fe6c",
-  "pr": "hono-hclean2-3"
+  "base": "c91ec9b60df18c76a3feb47533ce097d02f7fe6c"
  },
  {
   "id": "hono-hclean3-1",
   "repo": "honojs/hono",
   "kind": "control",
   "buggy_sha": "6f101a7779bf6e79c3af0a09cd888428bbd35ef8",
-  "base": "5fc8aadf7ac9055fdb18fb9a582322a76b77c28b",
-  "pr": "hono-hclean3-1"
+  "base": "5fc8aadf7ac9055fdb18fb9a582322a76b77c28b"
  },
  {
   "id": "langchain-hclean3-1",
   "repo": "langchain-ai/langchain",
   "kind": "control",
   "buggy_sha": "9ac8882a2c405e1f1a75957e81782538e4894c8b",
-  "base": "6d389b1d1d3c39eeb6941710ffffa6e11b1c8f6b",
-  "pr": "langchain-hclean3-1"
+  "base": "6d389b1d1d3c39eeb6941710ffffa6e11b1c8f6b"
  }
 ]

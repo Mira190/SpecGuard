@@ -123,7 +123,7 @@ function staticFlags(dir, base, head, changedUnits) {
   const headTests = tryGit(dir, 'ls-tree', '-r', '--name-only', head).split('\n').filter((f) => f && isTest(f));
   return changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !testsName(dir, head, headTests, u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
 }
-const groupOf = (r) => r.pr || `${r.repo.split('/')[1]}-${r.buggy_sha.slice(0, 8)}`;
+const groupOf = (r) => r.id; // the findings-free import names each cover group by the row id
 function loadReport(coverDir, group) {
   for (const f of ['lcov.info', 'coverage.xml']) { try { return parse(fs.readFileSync(path.join(coverDir, group, f), 'utf8')); } catch { /* next */ } }
   return null;
