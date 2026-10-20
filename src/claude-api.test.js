@@ -586,6 +586,33 @@ test('context pack: an import line that names the symbol is not a cut test: the 
   assert.equal(r.h.file('pack-cut.txt'), '');
 });
 
+// a test block with its call `at` lines below its start; `lead` comment lines come first so the block does not touch the head window
+const longBlock = (lead, at, tail) => '// c\n'.repeat(lead) + "test('long case', () => {\n" + '  ok();\n'.repeat(at - 1) + '  computeTotal(1);\n' + '  ok();\n'.repeat(tail) + '});\n';
+test('context pack: a hit 100 lines below its test start inside a test that fits is shown from the test start, complete, not listed as cut', async (t) => {
+  const r = sliceRepo(t, () => false, {}, longBlock(39, 100, 3));
+  await r.go();
+  assert.match(r.user(), /name="test\/svc\.test\.js" note="relevant slices: lines 1-30, 40-144 of \d+ \(tests referencing computeTotal\), line-numbered"/, 'the window starts at line 40, the test start');
+  assert.doesNotMatch(r.user(), /truncated at the search window/);
+  assert.equal(r.h.file('pack-cut.txt'), '');
+});
+test('context pack: a name in a multi-line import list before the first test is preamble, not a truncated test', async (t) => {
+  const r = sliceRepo(t, () => false, {}, "import {\n  helper,\n  computeTotal,\n} from '../src/svc';\n");
+  await r.go();
+  assert.doesNotMatch(r.user(), /truncated at the search window/);
+  assert.equal(r.h.file('pack-cut.txt'), '');
+});
+test('context pack: a test block longer than 400 lines around the hit is still truncated and listed as cut', async (t) => {
+  const r = sliceRepo(t, () => false, {}, longBlock(39, 100, 500));
+  await r.go();
+  assert.match(r.user(), /truncated at the search window/);
+  assert.equal(r.h.file('pack-cut.txt'), 'test/svc.test.js');
+});
+test('slices: the default window (a source file, no test start near the hit) is unchanged: 30 lines up, 80 long, truncated', () => {
+  const src = Array.from({ length: 300 }, (_, i) => (i === 150 ? 'computeTotal(1);' : `line ${i}`));
+  const r = api.slices(src, ['computeTotal'], 100000);
+  assert.match(r.note, /lines 1-30, 121-200 of 300/);
+  assert.match(r.note, /truncated at the search window/);
+});
 test('context pack: a symbol counts only as a whole word: recomputeTotal is no reference to computeTotal (the file is omitted and listed as cut, no head)', async (t) => {
   const r = repo(t, { 'src/svc.js': 'const x = 1;\nfunction computeTotal(a) {\n  return a;\n}\n', 'test/svc.test.js': bigTest((i) => i === 400).replace('computeTotal(1);', 'recomputeTotal(1);') }, {
     'files.txt': 'src/svc.js\n', 'test-candidates.txt': 'src/svc.js\n  test/svc.test.js  (same stem)\n',
@@ -860,7 +887,7 @@ test('scan parts: each block part carries the full text of its blocks (audit-blo
 
 test('context pack: a long matching test with its assertion outside the slice remains incomplete', async (t) => {
   const r = sliceRepo(t, () => false);
-  const body = `test('long computation', () => {\n  const actual = computeTotal(1);\n${'  prepare();\n'.repeat(100)}  assert.equal(actual, 1);\n});\n`;
+  const body = `test('long computation', () => {\n  const actual = computeTotal(1);\n${'  prepare();\n'.repeat(500)}  assert.equal(actual, 1);\n});\n`;
   fs.writeFileSync(path.join(r.root, 'test/svc.test.js'), bigTest(() => false) + body);
   await r.go();
   assert.match(r.user(), /const actual = computeTotal\(1\)/);

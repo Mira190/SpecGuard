@@ -145,13 +145,14 @@ const IMPORT = /^\s*(?:import\b|from\s+\S+\s+import\b|.*\brequire\(|export\s.*\b
 function slices(src, syms, room, seeds = [], [back, span] = [30, 80]) { // back, span: the most lines of a window above a hit and in all (a source file needs less than a test block)
   const n = src.length, re = syms.length ? new RegExp(`(?<![\\w$])(?:${syms.map((x) => x.replace(/\$/g, '\\$')).join('|')})(?![\\w$])`, 'g') : null, found = new Set(), wins = [], seedAt = new Set(seeds);
   let truncated = false;
+  const first = src.findIndex((l) => TEST_START.test(l));
   src.forEach((l, i) => {
     const m = re ? [...l.matchAll(re)].map((x) => x[0]) : [], sd = seedAt.has(i);
     if (!m.length && !sd) return;
     m.forEach((x) => found.add(x));
     let s = i; while (s > 0 && i - s < back && !TEST_START.test(src[s])) s--; // up to the enclosing test start, or 30 lines
     let e = i; while (e + 1 < n && e + 1 - s < span && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))) e++; // down to the next test at the same or lower indentation, 80 lines at most
-    if (!IMPORT.test(src[i]) && (!TEST_START.test(src[s]) || (e + 1 < n && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))))) truncated = true; // an import line names the symbol outside any test: its window is the preamble, not a cut test
+    if (!IMPORT.test(src[i]) && !(i < first) && (!TEST_START.test(src[s]) || (e + 1 < n && !(TEST_START.test(src[e + 1]) && indentOf(src[e + 1]) <= indentOf(src[s]))))) truncated = true; // an import line, or any line before the first test, names the symbol outside any test: its window is the preamble, not a cut test
     wins.push({ s, e, m: true, k: sd ? 2 : 1 });
   });
   if (!wins.length) return null;
@@ -181,6 +182,7 @@ function slices(src, syms, room, seeds = [], [back, span] = [30, 80]) { // back,
 }
 // A block part's pack (src/scan-parts.js): the files its evidence rows cite, each as line-numbered windows of WIN lines either side of every cited line plus its first HEAD lines (imports), merged when they touch;
 // a file that fits the per-file cap is shown whole. locs: Map path -> cited line numbers, in priority order. Partial or omitted files are returned in notWhole for per-block verification (separate from the unit pack-cut.txt). ponytail: no per-file fairness, first files first.
+const TEST_WIN = [300, 400]; // [back, span] for a candidate test: its whole enclosing block (holdout-2 diagnosis: 14/21 demoted catch findings were false truncations: the test start was >30 lines above the hit, or the block longer than 80)
 const MIN_CAND = 8 * 1024; // a candidate test's least room, so one early candidate cannot starve the later ones (the total budget still bounds it)
 // ponytail: SHARE_AT/SHARE_X were tuned on 9 SpecGuard PRs only (1.5x lost #255 audit-units.js lines); re-tune on a second repo's PRs
 const SHARE_AT = 0.5, SHARE_X = 2; // review files together over SHARE_AT of the pack: each is given SHARE_X times a fair share of what is left (its hunks need more than its tests)
@@ -298,7 +300,7 @@ function contextPack(ctx, root, limit) {
   for (const p of review) for (const t of testsOf(p)) { const u = shared.get(t) || Object.assign(new Set(), { capped: false }); symsOf.get(p).forEach((n) => u.add(n)); (hunk.get(path.posix.normalize(p.replace(/\\/g, '/'))) || []).forEach((n) => u.add(n)); u.capped ||= !!symsOf.get(p).capped; shared.set(t, u); }
   const tight = !units.size && review.reduce((n, p) => n + Math.min(cap, Buffer.byteLength(packRead(root, p) || '')), 0) > limit * SHARE_AT; // the review files together would fill the pack: each gets a fair share too (shown as slices around its hunks when over it), else the early ones starve the later files and their tests
   review.forEach((p, i) => { const sd = units.size ? null : diffSeeds(diff, path.posix.normalize(p.replace(/\\/g, '/'))), share = tight && sd && sd.length, hunks = share && !TESTISH.test(p); // share: a file with changed lines is cut to its share; hunks: a source file is then shown as its hunks with a little context (a test file keeps its symbol windows)
-    addFile(p, true, false, units.size ? null : hunks ? [] : symsOf.get(p), share ? used + SHARE_X * (limit - used) / (review.length - i) : limit, unitPart.get(p), false, sd, hunks ? [10, 30] : undefined); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t), own = !units.size && review.includes(t); addFile(t, true, false, own ? symsOf.get(t) : [...u], own ? Math.max(top, used + MIN_CAND) : top, null, !own && u.capped, own ? diffSeeds(diff, path.posix.normalize(t.replace(/\\/g, '/'))) : null); } }); // own: a changed test file reached first as a candidate is added as the review loop adds it (its own symbols and diff hunks), else its hunks would never be seeded // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
+    addFile(p, true, false, units.size ? null : hunks ? [] : symsOf.get(p), share ? used + SHARE_X * (limit - used) / (review.length - i) : limit, unitPart.get(p), false, sd, hunks ? [10, 30] : undefined); const top = Math.min(limit, used + (limit - used) / (review.length - i)); for (const t of testsOf(p)) { const u = shared.get(t), own = !units.size && review.includes(t); addFile(t, true, false, own ? symsOf.get(t) : [...u], own ? Math.max(top, used + MIN_CAND) : top, null, !own && u.capped, own ? diffSeeds(diff, path.posix.normalize(t.replace(/\\/g, '/'))) : null, TEST_WIN); } }); // own: a changed test file reached first as a candidate is added as the review loop adds it (its own symbols and diff hunks), else its hunks would never be seeded // each file, then its tests (a big test as slices around the changed symbols), together within a fair share of what is left so the later review files still fit
   for (const [p, keep] of packTests) for (const t of units.get(p) || []) if (!keep.includes(t) && !partial.includes(t)) partial.push(t); // counted out by the collector: not shown, so listed as cut
   const ls = tracked(root), code = ls.filter((p) => !NOT_CODE.test(p) && !TESTISH.test(p)); // a: files the requirements name (by file name or by folder name), at most NAMED_MAX, with their tests; tokens that match too many files are generic
   if (ls.length) {
