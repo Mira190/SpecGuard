@@ -123,6 +123,7 @@ function main() {
   const fixsha = JSON.parse(fs.readFileSync(arg('fixshas'), 'utf8'));
   const dirOf = (p) => path.join(repos, p.repo.split('/')[1]);
 
+  const UR = arg('undemote-reasons', 'a'), UND = arg('undemote') ? JSON.parse(fs.readFileSync(arg('undemote'), 'utf8')).findings.filter((x) => UR === 'all' || UR.includes(x.reason)) : null;
   const D = {}, Q = {};
   for (const p of pairs) { const dir = dirOf(p), fx = fixsha[p.id]; Q[p.id] = qualifies(dir, fx); D[p.id] = pairData(dir, p, fx); }
   const qual = pairs.filter((p) => Q[p.id].ok);
@@ -137,6 +138,7 @@ function main() {
       try { const po = JSON.parse(fs.readFileSync(path.join(d, 'posted.json'), 'utf8')), sm = fs.readFileSync(path.join(d, 'summary.md'), 'utf8');
         r = { ...r, findings: [...po.comments.map(parseComment).filter(Boolean).map((x) => ({ where: 'inline', kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null })), ...summaryItems(sm).map((x) => ({ where: 'summary', kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null, why: x.why || '' }))] };
       } catch { r = null; } }
+    if (r && UND) for (const x of UND) if (x.pair === p.id && x.rep === ri + 1) r = { ...r, findings: [...r.findings, { where: 'summary', kind: 'missing_test', path: x.path, line: x.line, title: x.title, confidence: null, why: '', undemoted: x.reason }] }; // --undemote RESULT --undemote-reasons a|all: ceiling check, derived reading only (literal already keeps them)
     const ok = !!r && r.valid !== false && r.engine_status === 'success' && !r.skip && Array.isArray(r.findings) && !(r.engine_notes || []).some((n) => /context pack: 0 files/.test(n));
     if (r && r.usage && typeof r.usage.cost_usd === 'number') cost.push(r.usage.cost_usd);
     return { id: p.replay_id, rep: ri + 1, ok, findings: ok ? r.findings : [] };
@@ -179,10 +181,11 @@ function main() {
     const dboot = Array.from({ length: boots }, () => mean(Array.from({ length: nPR }, () => diff[Math.floor(drng() * nPR)])));
     // power: resample PRs to 40, 1 rep or all reps; new verdict (p < .05 and effect >= .10 vs verdict null)
     const power = {};
+    const PN = +arg('powern', 40);
     for (const nr of [1, reps]) {
       const prng = mulberry32(seed + nr); let pass = 0;
       for (let s = 0; s < sims; s++) {
-        const pick = Array.from({ length: 40 }, () => {
+        const pick = Array.from({ length: PN }, () => {
           const pi = Math.floor(prng() * nPR), rs = R.filter((r) => r.pi === pi);
           return nr === 1 ? [rs[Math.floor(prng() * rs.length)]] : rs;
         });
@@ -208,7 +211,7 @@ function main() {
         secondary_null: { chance: mean(ssn), ci: ci(ssn), p: ssn.filter((x) => x >= sObs - 1e-12).length / perms } },
       model_union_static: union,
       model_minus_static: { mean: mean(diff), ci95: ci(dboot) },
-      power_new_rule_n40: power,
+      ['power_new_rule_n' + PN]: power,
       cross_tab: { caught_and_catch: cell((r) => r.ok && r.catch && grade(r)), caught_no_catch: cell((r) => r.ok && !r.catch && grade(r)),
         catch_graded_miss: cell((r) => r.ok && r.catch && grade(r) === false), neither: cell((r) => r.ok && !r.catch && grade(r) === false) },
     };
@@ -221,7 +224,7 @@ function main() {
     cost: { runs: cost.length, mean: mean(cost), median: pct(cost, 0.5), max: Math.max(...cost),
       total_88pr: Object.fromEntries([1, 3].map((r) => [r + '_rep', { at_mean: 88 * r * mean(cost), at_max: 88 * r * Math.max(...cost) }])) },
     rows: {} };
-  for (const mode of ['derived', 'literal']) {
+  for (const mode of UND ? ['derived'] : ['derived', 'literal']) {
     out.rows[mode] = { qualifying: scoreRow(qual, mode), all45: scoreRow(pairs, mode) };
   }
   fs.writeFileSync(arg('out'), JSON.stringify(out, null, 1));
