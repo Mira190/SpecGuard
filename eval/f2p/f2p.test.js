@@ -492,3 +492,24 @@ test('cover vitestHealth with no JSON report: every selected file is an "other" 
   assert.deepStrictEqual(Object.fromEntries(Object.entries(v.file_errors).map(([f, e]) => [f, e.kind])), { 'src/a.test.ts': 'other', 'src/b.test.tsx': 'other' });
   assert.deepStrictEqual(v.health, { passed: 0, failed: 0, errored: 2, skipped: 0 });
 });
+
+test('list import, cover-only rows (E1): no finding, group = row id, controls have no fix, no packet fields', () => {
+  const { buildListRows } = require('./harness');
+  const env = { repos: { 'honojs/hono': { name: 'hono', status: 'runnable' } }, harness: () => 'valid', hasClone: () => true, shaExists: () => true, depsChanged: () => false, existing: { ids: new Map(), groups: new Map(), sets: new Set() } };
+  const bug = { id: 'e1-hono-3413', repo: 'honojs/hono', kind: 'bug', buggy_sha: 'aaaaaaaa11', fixed_sha: 'bbbbbbbb22', base: 'cccccccc33' };
+  const ctl = { id: 'e1-hono-c1', repo: 'honojs/hono', kind: 'control', buggy_sha: 'dddddddd44' };
+  const r = buildListRows([bug, ctl], 'e1design', env);
+  assert.deepStrictEqual(r.rows.map((x) => [x.id, x.pr, x.cover_only, x.row_kind, x.fixed_sha, x.status]), [['e1-hono-3413', 'e1-hono-3413', true, 'bug', 'bbbbbbbb22', 'ok'], ['e1-hono-c1', 'e1-hono-c1', true, 'control', null, 'ok']]);
+  assert.deepStrictEqual(r.fields, {});
+  assert.strictEqual(r.rows[0].base, 'cccccccc33');
+  assert.throws(() => buildListRows([{ ...bug, fixed_sha: undefined }], 'e1design', env), /bug row needs fixed_sha/);
+  assert.throws(() => buildListRows([{ ...ctl, fixed_sha: 'eeeeeeee55' }], 'e1design', env), /control row has no fixed_sha/);
+  assert.throws(() => buildListRows([{ ...ctl, kind: 'other' }], 'e1design', env), /kind bug or control/);
+  assert.throws(() => buildListRows([{ ...ctl, id: undefined }], 'e1design', env), /id is required/);
+  assert.throws(() => buildListRows([{ ...ctl, repo: undefined }], 'e1design', env), /repo is required/);
+  assert.throws(() => buildListRows([{ ...ctl, buggy_sha: undefined }], 'e1design', env), /buggy_sha is required/);
+  assert.throws(() => buildListRows([{ ...bug, pr: 'other' }], 'e1design', env), /group is its id; drop pr/);
+  // a sha missing from the clone makes the row unresolved; a control's absent fix is never looked up
+  const missing = { ...env, shaExists: (r, s) => s !== 'bbbbbbbb22' };
+  assert.deepStrictEqual(buildListRows([bug, ctl], 'e1design', missing).rows.map((x) => x.status), ['unresolved', 'ok']);
+});
