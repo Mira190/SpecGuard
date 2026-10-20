@@ -195,7 +195,7 @@ async function batch({ dirs, list, manifests, repos, out, cap, maxTotal, reps = 
     if (ran >= cap) break outer;
     if (spent + +budget > maxTotal) { stopped = 'budget'; log(`total cap: spent $${spent} of $${maxTotal}`); break outer; }
     if (prev) { let n = 1; while (fs.existsSync(path.join(o, id, `result.attempt-${n}.json`))) n++; fs.renameSync(rf, path.join(o, id, `result.attempt-${n}.json`)); } // its cost stays in spent
-    let r; try { r = await runReal({ entry, repoDir: path.join(repos, entry.clone || entry.repo.split('/').pop()), out: o, model, budget, engine }); } catch (e) { // a throw (clone, full disk, post.js crash) is infrastructure, not the PR: retryable stop for a human, never a recorded miss
+    let r; try { r = await runReal({ entry, repoDir: path.join(repos, entry.clone || entry.repo.split('/').pop()), out: o, model, budget, engine }); } catch (e) { // a throw (clone, full disk, post.js crash): a retryable stop for a human when nothing was billed, else a miss with its cost
       r = { id, valid: false, engine_status: 'error', invalid_reason: `run failed: ${String(e.message || e).split('\n')[0]}`, usage: { cost_usd: ['usage.json', 'usage-repair.json'].reduce((t, n) => t + (readJson(path.join(o, id, 'ctx', n), {}).totalCostUsd || 0), 0) }, thrown: true }; fs.mkdirSync(path.join(o, id), { recursive: true }); fs.writeFileSync(rf, JSON.stringify(r, null, 2) + '\n'); }
     ran++; const c = r.usage?.cost_usd || 0; spent += c;
     fs.rmSync(path.join(o, id, 'repo'), { recursive: true, force: true }); // a full checkout per PR and rep (100+ MB on gitea/langchain); nothing reads it after post.js, and replay-arms/two-posts rebuild it from --repos
