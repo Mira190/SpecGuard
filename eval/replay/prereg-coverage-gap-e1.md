@@ -27,8 +27,9 @@ The runner is `cover` in specguard-33's f2p harness (#416, merged into main at 2
 **rqlite is excluded from E1** (e0, 2026-10-20). The cgo build needs about 2 GB of RAM plus 1–2 GB of Go cache, which is not worth the risk for a first look, and its f2p controls have not been rerun under amendment 6/7 rules.
 
 **langchain scope.** A langchain pair is eligible only if every changed source file of I lies under `libs/core/`. This is fixed now, before any draw.
-- In design this keeps langchain-33461.
-- It drops langchain-33817 (`libs/langchain_v1`) and langchain-18592 (core plus `libs/partners/openai`).
+- A source file is a code file that `isProd` accepts, outside `.github/`. Docs, lockfiles, CI scripts and test files don't count.
+- In design this keeps langchain-33461 and langchain-18592. 18592's files outside core are docs and tests; an earlier draft wrongly listed it as dropped (corrected before any outcome look).
+- It drops langchain-33817 (`libs/langchain_v1`).
 
 **What counts.**
 - Executed means a hit count above 0 on the line in the report (`src/coverage.js` parsers).
@@ -64,7 +65,11 @@ Failing tests do not make a PR unusable; their count is reported.
 - **Nulls:**
   - Primary: function-level, weighted by added lines.
   - Secondary: uniform.
-  - Each arm's own flags are permuted among I's changed units: 1000 permutations, seed 20261020. The verdict uses the null with the higher chance.
+  - Each arm's own flags are permuted among the units that arm could flag, as distinct units drawn without replacement (each arm flags a unit at most once): 1000 permutations, seed 20261020. The verdict uses the null with the higher chance.
+    - C: units with at least 1 instrumented added line; a flag goes on a random instrumented added line. Weights are instrumented added lines (primary) or 1 (secondary).
+    - static: named changed units.
+    - An unusable PR: 1 flag over all changed units.
+    - If an arm flags every unit it could flag, chance equals observed.
 - **PASS for C iff both:**
   - the one-sided within-PR permutation p is below 0.05; and
   - observed − chance is at least 10 points.
@@ -82,9 +87,9 @@ Failing tests do not make a PR unusable; their count is reported.
 
 ## Corpus
 
-- **Design look.** Holdout 2's replay-eligible pairs in hono, sqlglot and langchain-core: hono 6, sqlglot 3, langchain-33461. That is **10 pairs**, of which 3 pass the test-gap filter (hono 2, langchain 1).
+- **Design look.** Holdout 2's replay-eligible pairs in hono, sqlglot and langchain-core: hono 6, sqlglot 3, langchain 2 (33461, 18592). That is **11 pairs** (`coverage-e1-design.json`), plus holdout 2's clean `no_known_bug` controls in these repos (hono 3, langchain 1). The scorer reports how many pass the test-gap filter.
   - The look reports, for all 10 and for the filtered 3: C's catch rate vs chance, the unusable rate and reasons, flags per PR, and noise on the holdout-2 clean `no_known_bug` PRs in these repos.
-  - **Power** for the confirmation n against the +10 floor comes from resampling the 10 design PRs. If it is below 0.5, it is reported to e0 and the owner before the confirmation run.
+  - **Power** for the confirmation n against the +10 floor comes from resampling the 11 design PRs. If it is below 0.5, it is reported to e0 and the owner before the confirmation run.
   - The design look changes no gate. Like the slicing draft, it is a dated appendix after the freeze, and defect amendments follow the same rule.
 - **Confirmation.**
   - The frozen 88 (`testgap-confirm.json`) keep at most 6 bug PRs per repo, so these repos contribute at most 18. E1 draws its own set:
@@ -103,7 +108,7 @@ Failing tests do not make a PR unusable; their count is reported.
 - **C passes:** product phase 1 goes ahead. Coverage-backed missing_test findings become first-class and high-confidence.
 - **C passes but its catch rate on the unfiltered comparison set is at chance** (its cluster interval of observed − chance includes 0): the lift is mostly a product of the selection filter, which favours untested definitions. The reading must say so.
 - **C passes but does not beat static** (lower bound of C − static ≤ 0): "a name lookup does as well on location". Phase 1 still uses coverage, because the static lookup cannot see execution.
-- **Comparison 4 (does coverage separate the LLM's hits from its misses?) is descriptive and decides nothing.** It uses at most 10 design PRs. It only informs whether LLM-only missing_test findings that coverage contradicts should be hidden; that is a product choice with its own later check.
+- **Comparison 4 (does coverage separate the LLM's hits from its misses?) is descriptive and decides nothing.** It uses at most 11 design PRs. It only informs whether LLM-only missing_test findings that coverage contradicts should be hidden; that is a product choice with its own later check.
 - **Noise ceiling (fixed now):** the median number of C flags per control PR is at most 2. The share of control PRs with any flag is always reported. If C passes and is over the ceiling, the result reads "PASS (location), noise above ceiling".
 
 ## Multiplicity
