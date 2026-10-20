@@ -1228,11 +1228,11 @@ function definesUsedBy(change, behaviour) {
 }
 
 // Execution evidence from src/coverage.js (coverage.json); null = off (no report, unreadable, or none usable). `miss` = [[from, to]] lines of a changed file that are
-// instrumented and never ran (whole file); `never` = the same restricted to lines this PR added. Only a changed file has an entry: elsewhere nothing is known.
+// instrumented and never ran (whole file); `never` = the same restricted to lines this PR added; `ran` (v2) = added lines that executed (a v1 file has none). Only a changed file has an entry: elsewhere nothing is known.
 function loadCoverage(raw) {
   try {
     const j = JSON.parse(raw);
-    return j && j.v === 1 && j.files && typeof j.files === 'object' ? j : null;
+    return j && (j.v === 1 || j.v === 2) && j.files && typeof j.files === 'object' ? j : null;
   } catch { return null; }
 }
 const neverRan = (cov, p, l) => {
@@ -1575,11 +1575,14 @@ async function run({ github, context, core }) {
   const proposedPaths = Array.isArray(data?.findings) ? data.findings.map((f) => f?.path) : []; // for the fix-through telemetry: which files lost a proposed finding to validation
   const v = validate(data);
   if (!v.ok) return failed(`findings.json failed validation: ${v.error}`);
+  const cov = loadCoverage(readCtx('coverage.json')); // optional: the target's own coverage report, joined with the diff by src/coverage.js
+  // A missing_test whose cited line the report proves never ran: execution evidence refutes the "a test may cover it / was only partly seen" premise, so those gates and the reduced-review citation count stand down. Uses the model's cited line (f.line, before verification; the title hook below uses the snapped f.line + d). `miss` covers the whole changed file, so an unchanged cited line counts too.
+  const ranNever = (f) => f.kind === 'missing_test' && neverRan(cov, f.path, f.line);
   const packCut = new Set((readCtx('pack-cut.txt') || '').split('\n').filter(Boolean).map((l) => l.split('\t')[0])); // a scan's lines carry "\tunit ids" (audit-post.js reads those) // the claude engine's pack: files the model saw only partly or not at all
   if (packCut.size) { // a missing/weak-test claim is only trustworthy when its candidate tests were fully visible
     const cands = parseCandidates(readCtx('test-candidates.txt') || '');
     for (const f of data.findings) {
-      const seen = ['missing_test', 'weak_test'].includes(f.kind) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
+      const seen = ['missing_test', 'weak_test'].includes(f.kind) && !ranNever(f) && [...(f.kind === 'weak_test' ? [f.path] : []), ...(cands.get(f.path) || [])].find((p) => packCut.has(p));
       if (seen) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a candidate test file was only partly visible (${seen}); ${f.kind} ${f.path} is not counted.`); }
     }
   }
@@ -1619,7 +1622,7 @@ async function run({ github, context, core }) {
     const cands = parseCandidates(readCtx('test-candidates.txt') || '', { skipHunk: true }), covers = require('./test-map').makeCoverGuard({ cwd: root, testPaths: readCtx('test-paths.txt') || '' }); // collect.sh writes it when test_paths is set
     for (const f of data.findings) {
       // a file absent from test-candidates.txt gets an unscoped search (cands.get is undefined); safe only because such files are in candidates-cut.txt, which already makes the run incomplete
-      const hit = f.kind === 'missing_test' && covers(readLines(f.path), f.line, f.path, cands.get(f.path));
+      const hit = f.kind === 'missing_test' && !ranNever(f) && covers(readLines(f.path), f.line, f.path, cands.get(f.path));
       if (hit && f.confidence === 'low') f.gated = true; // already low: just keep it from being raised later
       else if (hit) { f.confidence = 'low'; f.gated = true; (data.validation_notes ||= []).push(`low confidence: a test may already cover this: ${hit}; missing_test ${f.path} is not counted.`); }
     }
@@ -1628,7 +1631,6 @@ async function run({ github, context, core }) {
   const readRule = memoed(readFile); // the trusted rule inventory may include base-restored files that are not tracked at head
   data.tooling = tooling; // Always overwrite any model-supplied tooling claim.
 
-  const cov = loadCoverage(readCtx('coverage.json')); // optional: the target's own coverage report, joined with the diff by src/coverage.js
   let local = '';
   try { local = fs.readFileSync(path.join(ctx, 'diff.patch'), 'utf8'); } catch {}
   const maps = parseDiff(local);
@@ -1807,7 +1809,7 @@ async function run({ github, context, core }) {
 
   // Reduced review: only a high-confidence finding with two verified citations goes inline (at most REDUCED_INLINE); the rest are one-liners in the summary.
   const reasons = reducedReasons({ em, repair, engineNotes: (readCtx('engine-notes') || '').split('\n').filter((x) => x.trim()), data }), reduced = reasons.length > 0;
-  const p = plan(reduced ? kept.filter((f) => f.confidence === 'high' && citationsOf(f, data) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
+  const p = plan(reduced ? kept.filter((f) => f.confidence === 'high' && citationsOf(f, data) + (ranNever(f) ? 1 : 0) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
   if (reduced) {
     const brief = (f, why) => ({ f, why, brief: true });
     p.summary = [...p.summary.map((x) => brief(x.f, x.why === 'over max_comments' ? 'reduced review: inline limit' : x.why)), ...p.file.map((f) => brief(f, 'reduced review: not inline')),

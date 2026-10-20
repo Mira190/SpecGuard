@@ -116,13 +116,13 @@ function analyze({ patch, files, reports, ws, headTime }) {
       for (const [l, h] of lines) m.set(l, (m.get(l) || 0) + h);
     }
   }
-  const out = { v: 1, reports: used, total: { instrumented: 0, executed: 0 }, files: {}, unreported: [], notes };
+  const out = { v: 2, reports: used, total: { instrumented: 0, executed: 0 }, files: {}, unreported: [], notes };
   if (!used) return { json: out, txt: '' };
   for (const [p, hits] of [...agg].slice(0, MAX_FILES_JSON)) {
     const inst = [], exec = [], never = [], miss = [];
     for (const [l, h] of hits) if (!h) miss.push(l);
     for (const l of added.get(p)?.changed.RIGHT.keys() || []) { const h = hits.get(l); if (h === undefined) continue; inst.push(l); (h ? exec : never).push(l); }
-    out.files[p] = { inst: inst.length, exec: exec.length, never: ranges(never).slice(0, MAX_RANGES), miss: ranges(miss).slice(0, MAX_RANGES) };
+    out.files[p] = { inst: inst.length, exec: exec.length, never: ranges(never).slice(0, MAX_RANGES), ran: ranges(exec).slice(0, MAX_RANGES), miss: ranges(miss).slice(0, MAX_RANGES) };
     out.total.instrumented += inst.length;
     out.total.executed += exec.length;
   }

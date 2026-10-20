@@ -3723,8 +3723,89 @@ test('coverage: the summary states executed/instrumented and lists never-execute
   assert.match(ran.calls.summary[0].body, /executed by tests: 2 of 2 instrumented/);
 });
 
+// coverage.json: `ran` = added lines that executed (v2); `miss` = every instrumented never-run line of the changed file (cited lines are looked up there). The gate fixtures use v: 1, which main also loads, so they fail on main for the gate logic alone (post.js never reads `ran`)
+const COV2 = (miss, ran = [], never = miss) => ({ v: 1, reports: 1, total: { instrumented: 2, executed: 1 }, files: { 'src.js': { inst: 2, exec: 1, never, ran, miss } }, unreported: [], notes: [] });
+
+test('coverage exemption: a missing_test on a line the report shows never ran skips the pack-cut gate; the same finding on a line that ran, or with no report, is still demoted', async (t) => {
+  const run = async (cov) => {
+    const s = setup(t);
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), 'src.js\n  test.js  (same stem)\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), 'big.js\ntest.js\n');
+    if (cov) withCov(s, cov);
+    await post(s);
+    return s;
+  };
+  assert.equal((await run()).calls.review.length, 0, 'demoted without coverage');
+  const ran = await run(COV2([[1, 1]], [[3, 3]]));
+  assert.equal(ran.calls.review.length, 0, 'executed line: still demoted');
+  assert.match(JSON.stringify(ran.calls.summary[0].body), /a candidate test file was only partly visible/);
+  const never = await run(COV2([[3, 3]]));
+  assert.equal(never.calls.review.length, 1, 'never-ran line: delivered');
+  assert.match(never.calls.review[0].comments[0].body, /\(coverage: never executed\)/);
+  assert.doesNotMatch(JSON.stringify(never.calls.summary[0].body), /low confidence: a candidate test file was only partly visible/);
+});
+
+test('coverage exemption: a missing_test on a never-run line skips the "a test may already cover this" guard; an executed line keeps it', async (t) => {
+  const run = async (cov) => {
+    const s = setup(t);
+    fs.writeFileSync(path.join(s.dir, 'src.js'), "l1\nl2\nif (x) {\n  throw new Error('total must be a positive integer');\nl5\n");
+    fs.writeFileSync(path.join(s.dir, 'total.test.js'), "it('rejects', () => assert.throws(() => total(-1), /Total must be a positive integer/));\n");
+    track(s, 'src.js', 'total.test.js');
+    if (cov) withCov(s, cov);
+    await post(s);
+    return s;
+  };
+  assert.equal((await run()).calls.review.length, 0, 'demoted without coverage');
+  const ran = await run(COV2([[1, 1]], [[3, 3]]));
+  assert.equal(ran.calls.review.length, 0);
+  assert.match(JSON.stringify(ran.calls.summary[0].body), /a test may already cover this/);
+  const never = await run(COV2([[3, 3]]));
+  assert.equal(never.calls.review.length, 1);
+  assert.doesNotMatch(JSON.stringify(never.calls.summary[0].body), /a test may already cover this/);
+});
+
+test('coverage exemption: in a reduced review, coverage is the second citation for a high-confidence missing_test; confidence is never raised', async (t) => {
+  const run = async (cov, data) => {
+    const s = setup(t, data);
+    writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['mai-code-1.1-flash'] }));
+    if (cov) withCov(s, cov);
+    await post(s);
+    return s;
+  };
+  assert.equal((await run()).calls.review.length, 0, 'one citation: one-liner');
+  assert.equal((await run(COV2([[1, 1]], [[3, 3]]))).calls.review.length, 0, 'executed line: no help');
+  const never = await run(COV2([[3, 3]]));
+  assert.equal(never.calls.review.length, 1);
+  assert.match(never.calls.review[0].comments[0].body, /confidence: high/);
+  assert.equal((await run(COV2([[3, 3]]), report({ findings: [finding('missing_test', { confidence: 'medium' })] }))).calls.review.length, 0, 'the confidence part is unchanged');
+});
+
+test('coverage exemption: an UNCHANGED cited line of a changed file that sits in miss (not never) is exempt and gets the suffix', async (t) => {
+  const run = async (cov) => {
+    const s = setup(t, report({ findings: [finding('missing_test', { line: 4, quote: 'l4' })] }));
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'test-candidates.txt'), 'src.js\n  test.js  (same stem)\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx', 'pack-cut.txt'), 'test.js\n');
+    if (cov) withCov(s, cov);
+    await post(s);
+    return s;
+  };
+  assert.equal((await run()).calls.review.length, 0, 'demoted without coverage');
+  const s = await run(COV2([[4, 4]], [], []));
+  assert.equal(s.calls.review.length, 1);
+  assert.match(s.calls.review[0].comments[0].body, /Verify the boundary total \(coverage: never executed\)/);
+});
+
+test('coverage: a v1 coverage.json (no ran) still loads, and v2 (what coverage.js now writes) loads too', () => {
+  const v1 = JSON.stringify({ v: 1, reports: 1, total: { instrumented: 1, executed: 0 }, files: { 'src.js': { inst: 1, exec: 0, never: [[3, 3]], miss: [[3, 3]] } }, unreported: [], notes: [] });
+  assert.equal(post.neverRan(post.loadCoverage(v1), 'src.js', 3), true);
+  const v2 = post.loadCoverage(JSON.stringify({ ...JSON.parse(v1), v: 2, files: { 'src.js': { never: [[3, 3]], ran: [[1, 2]], miss: [[3, 3]] } } }));
+  assert.equal(post.neverRan(v2, 'src.js', 3), true); // a v2 never-line is seen: a rejected v2 (null) would turn the feature off on every real run
+  assert.equal(post.neverRan(v2, 'src.js', 2), false);
+  assert.equal(post.loadCoverage(JSON.stringify({ v: 3, reports: 1, files: {} })), null);
+});
+
 test('coverage: everything is off without a usable report (absent, garbled, wrong version, or none used)', async (t) => {
-  for (const c of [undefined, '{garbage', { v: 2, files: {} }, { v: 1, reports: 0, files: {}, notes: [] }]) {
+  for (const c of [undefined, '{garbage', { v: 3, reports: 1, files: {} }, { v: 1, reports: 0, files: {}, notes: [] }]) {
     const s = setup(t);
     if (c !== undefined) withCov(s, c);
     await post(s);
