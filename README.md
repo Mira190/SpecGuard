@@ -39,7 +39,7 @@ Requirement documents anywhere in the repo (IDs such as `AC-4`, acceptance-crite
 
 **3. Optional:** add standards files (e.g. `.github/copilot-instructions.md`) and link an issue with acceptance criteria by writing "Closes #N" in the PR body.
 
-**4. Recommended:** run your unit tests with coverage before the SpecGuard step, in the same job, and set `coverage_files` to the report (LCOV, Cobertura, JaCoCo, Go or Istanbul JSON). SpecGuard never runs tests. See [Coverage evidence](#coverage-evidence-optional).
+**4. Recommended:** run your unit tests with coverage in a separate job with no secrets, upload the report, download it in the SpecGuard job and set `coverage_files` to it (LCOV, Cobertura, JaCoCo, Go or Istanbul JSON). Never run PR code in the job that holds SpecGuard's tokens. See [Coverage evidence](#coverage-evidence-optional).
 
 ## What you get
 
@@ -185,19 +185,40 @@ Unsure verdicts on reviewed code (`scan_scope: all`) only warn. Never make SpecG
 
 ### Coverage evidence (optional)
 
-SpecGuard never executes tests, so its "covered" judgements are static. If your CI already produces a coverage report, point `coverage_files` at it and the changed lines get hard execution evidence. Run the tests with coverage **before** the SpecGuard step, in the same job (SpecGuard does not run them):
+SpecGuard never executes tests, so its "covered" judgements are static. If your CI already produces a coverage report, point `coverage_files` at it and the changed lines get hard execution evidence. Run the tests with coverage in a **separate job** that has no secrets, and hand the report over as an artifact (SpecGuard does not run them):
 
 ```yaml
+jobs:
+  test: # runs PR code: read-only token, no secrets
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with: { fetch-depth: 0 }
+        with: { persist-credentials: false }
       - run: npx c8 --reporter=lcov npm test       # JS: coverage/lcov.info (nyc/istanbul lcov works the same)
       # Python: coverage run -m pytest && coverage xml     -> coverage.xml (Cobertura)
       # Java:   mvn verify (JaCoCo plugin)                 -> target/site/jacoco/jacoco.xml (Gradle: build/reports/jacoco/test/jacocoTestReport.xml, xml enabled)
       # Go:     go test -coverprofile=cover.out ./...      -> cover.out
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }} # a failing test still hands over its report
+        with: { name: coverage, path: coverage/lcov.info }
+  review:
+    needs: test
+    if: ${{ !cancelled() }} # review even when tests fail
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: write, issues: read }
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true # no report: SpecGuard runs without coverage evidence
+        with: { name: coverage, path: coverage }
       - uses: Mira190/SpecGuard@<full-commit-sha>
         with:
           coverage_files: coverage/lcov.info
 ```
+
+Why two jobs: a step that runs PR code can write to `$GITHUB_ENV` (e.g. `NODE_OPTIONS=--require ./x.js`) or `$GITHUB_PATH` (a fake `node`), and every later step in that job, SpecGuard's included, would then run that code with your LLM key and write token in its environment ([design rule](docs/design.md)). The downloaded report is untrusted input: SpecGuard only parses it (it never executes it), and a forged report can only change that PR's own coverage facts and findings.
 
 What it changes, all deterministic and only for the changed non-test files that the report covers:
 
@@ -208,7 +229,7 @@ What it changes, all deterministic and only for the changed non-test files that 
 
 Paths in the report may be absolute CI paths, relative to a source root, JaCoCo package paths or Go import paths; they are matched to the changed files by suffix. A report older than the head commit (when it carries a timestamp: Cobertura, JaCoCo) is ignored and the summary says so. An unreadable or unmatched report only leaves a note; it never fails the job. Leave `coverage_files` empty to turn all of this off.
 
-**Already uploading coverage elsewhere?** The same file works. Your CI step that produces the report for the tool below runs before SpecGuard in the same job; point `coverage_files` at that file (SpecGuard reads it from the workspace and uploads nothing). The example path is what the usual generator writes; use your own if it differs.
+**Already uploading coverage elsewhere?** The same file works. Upload the report your test job already produces for the tool below, download it in the SpecGuard job as above, and point `coverage_files` at it (SpecGuard reads it from the workspace and uploads nothing). The example path is what the usual generator writes; use your own if it differs.
 
 | Tool | Formats it ingests that SpecGuard also reads | `coverage_files:` example | Docs |
 |---|---|---|---|
