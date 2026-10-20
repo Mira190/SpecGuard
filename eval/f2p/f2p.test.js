@@ -470,3 +470,8 @@ test('harness buildEnv: whitelisted keys only, CI=1, cfg.env filled, path_prepen
     assert.strictEqual(env.Path, env.PATH);
   } finally { if (saved === undefined) delete process.env.F2P_SECRET_PROBE; else process.env.F2P_SECRET_PROBE = saved; }
 });
+
+test('cover head:<name> refuses a repo without a cover block before any git call or run', () => {
+  assert.throws(() => cov.cmdCover(['head:nope']), /no cover block for head:nope/);
+  assert.throws(() => cov.cmdCover(['head:rqlite']), /no cover block for head:rqlite/); // rqlite is out of the first-look scope
+});
