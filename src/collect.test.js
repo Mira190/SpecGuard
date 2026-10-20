@@ -734,3 +734,7 @@ test('test-candidates.txt: ignored paths and test_paths exclusions (anchored wit
   assert.deepEqual(go({ IGNORE_EXTRA: 'eval/cases/' }).sort(), ['eval-sandbox/l1/test_pricing.py', 'src/pricing.test.js']);
   assert.deepEqual(go({ IGNORE_EXTRA: 'eval/cases/', TEST_PATHS: '!/src/', MSYS_NO_PATHCONV: '1' }), ['eval-sandbox/l1/test_pricing.py']);
 });
+test('test-candidates.txt: a data file under a test directory is never a candidate (rqlite db.sqlite), the _test.go still is', (t) => {
+  const r = scenario(t, { 'x/db.go': 'package x\n', 'system_test/testdata/db.sqlite': 'SQLite format 3\n', 'system_test/db_test.go': 'package x\n' }, ({ write }) => write('x/db.go', 'package x\n// changed\n'));
+  assert.deepEqual(candBlocks(r)['x/db.go'], ['system_test/db_test.go  (same name)']);
+});

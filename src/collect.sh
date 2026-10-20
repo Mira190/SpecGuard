@@ -285,7 +285,9 @@ const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxB
 const scope = testScope(process.env.TEST_PATHS), DOC = /\.(md|mdx|markdown|rst|adoc|txt)$/i;
 const isTest = scope ? (p) => scope(p) && !DOC.test(p) : isTestPath;
 const ign = String(process.env.IGNORE_EXTRA || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean); // an ignored path is no evidence: never a candidate
-const tests = tracked.filter((p) => isTest(p) && !ign.some((g) => matchGlob(p, g))), testSet = new Set(tests);
+// Data is never a test: a binary or data file (rqlite's system_test/e2e/testdata/v8/chunked/db.sqlite matched db.go by stem) cannot be read, so it showed as a cut candidate. test_paths directories are trusted, data extensions are not.
+const DATA_EXT = /\.(sqlite3?|db|bin|dat|png|jpe?g|gif|ico|pdf|zip|gz|tgz|tar|jar|wasm|so|dll|exe|md|txt|json|ya?ml|toml|lock|csv|xml|snap)$/i, DATA_DIR = /(^|\/)(testdata|fixtures?|__fixtures__|__snapshots__)\//i;
+const tests = tracked.filter((p) => isTest(p) && !DATA_EXT.test(p) && (scope || !DATA_DIR.test(p)) && !ign.some((g) => matchGlob(p, g))), testSet = new Set(tests);
 if (scope) fs.writeFileSync(path.join(ctx, 'test-paths.txt'), String(process.env.TEST_PATHS).split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join('\n') + '\n');
 const specs = new Set(lines('spec-files.txt'));
 const changed = lines('files.txt').filter((f) => !isTest(f) && !isTestPath(f) && !specs.has(f) && !/\.(md|mdx|markdown|rst|adoc|txt|feature|json|ya?ml|toml|lock)$/i.test(f));
