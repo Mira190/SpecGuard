@@ -1597,5 +1597,437 @@
     }
    ]
   }
+ },
+ "positive_control_pre_amendment6": {
+  "orpc-1846": {
+   "repo": "middleapi/orpc",
+   "status": "unrunnable",
+   "reason": "not attempted: pnpm 11 monorepo (workspace packages importing each other) install needs more disk than the 2.5 GB free on the evidence drive"
+  },
+  "orpc-1851": {
+   "repo": "middleapi/orpc",
+   "status": "unrunnable",
+   "reason": "not attempted: pnpm 11 monorepo (workspace packages importing each other) install needs more disk than the 2.5 GB free on the evidence drive"
+  },
+  "orpc-1766": {
+   "repo": "middleapi/orpc",
+   "status": "unrunnable",
+   "reason": "not attempted: pnpm 11 monorepo (workspace packages importing each other) install needs more disk than the 2.5 GB free on the evidence drive"
+  },
+  "sqlglot-7315": {
+   "repo": "tobymao/sqlglot",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "3d52365bb429",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    },
+    {
+     "file_sha256": "48950cdaa69b",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "rqlite-2318": {
+   "repo": "rqlite/rqlite",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "a9d36b584b2d",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "rqlite-2313": {
+   "repo": "rqlite/rqlite",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "a9d36b584b2d",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "rqlite-2061": {
+   "repo": "rqlite/rqlite",
+   "status": "none",
+   "reason": "the fix adds or edits no test file"
+  },
+  "gitea-26655": {
+   "repo": "go-gitea/gitea",
+   "status": "unrunnable",
+   "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+  },
+  "gitea-32210": {
+   "repo": "go-gitea/gitea",
+   "status": "unrunnable",
+   "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+  },
+  "gitea-30156": {
+   "repo": "go-gitea/gitea",
+   "status": "unrunnable",
+   "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+  },
+  "gitea-28691": {
+   "repo": "go-gitea/gitea",
+   "status": "unrunnable",
+   "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+  },
+  "pydantic-ai-7141": {
+   "repo": "pydantic/pydantic-ai",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "59a2924699b4",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "gitea-35987": {
+   "repo": "go-gitea/gitea",
+   "status": "unrunnable",
+   "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+  },
+  "gitea-37869": {
+   "repo": "go-gitea/gitea",
+   "status": "unrunnable",
+   "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+  },
+  "query-9500": {
+   "repo": "TanStack/query",
+   "status": "unrunnable",
+   "reason": "not attempted: pnpm monorepo install needs more disk than the 2.5 GB free on the evidence drive; fix commits span years of lockfile changes"
+  },
+  "pydantic-ai-5020": {
+   "repo": "pydantic/pydantic-ai",
+   "status": "not_verified",
+   "files": [
+    {
+     "file_sha256": "b2ca64f44ee2",
+     "verdict": "not_discriminating",
+     "reason": "pass on both trees",
+     "buggy": [
+      "pass",
+      "pass",
+      "pass"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    },
+    {
+     "file_sha256": "33c13e0b177b",
+     "verdict": "invalid",
+     "reason": "non-assertion throw on fixed tree",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "throw"
+     ]
+    }
+   ]
+  },
+  "hono-3604": {
+   "repo": "honojs/hono",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "34f67bc00c88",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "vitest-6924": {
+   "repo": "vitest-dev/vitest",
+   "status": "unrunnable",
+   "reason": "not attempted: pnpm monorepo that must be built before its tests run; install plus build needs more disk than the 2.5 GB free on the evidence drive"
+  },
+  "hono-3787": {
+   "repo": "honojs/hono",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "11d9ec9b1c19",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "pydantic-ai-3454": {
+   "repo": "pydantic/pydantic-ai",
+   "status": "not_verified",
+   "files": [
+    {
+     "file_sha256": "b2ca64f44ee2",
+     "verdict": "invalid",
+     "reason": "throw not from code under test (test)",
+     "buggy": [
+      "throw",
+      "throw",
+      "throw"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "langchain-18592": {
+   "repo": "langchain-ai/langchain",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "b7ce280f409a",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    },
+    {
+     "file_sha256": "4ac7a1107d2b",
+     "verdict": "verified_throw",
+     "reason": "throw in production code on buggy, pass on fixed",
+     "buggy": [
+      "throw",
+      "throw",
+      "throw"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "hono-2339": {
+   "repo": "honojs/hono",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "d5d213f0f22d",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "hono-3413": {
+   "repo": "honojs/hono",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "c0a96e1c1122",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "query-7005": {
+   "repo": "TanStack/query",
+   "status": "unrunnable",
+   "reason": "not attempted: pnpm monorepo install needs more disk than the 2.5 GB free on the evidence drive; fix commits span years of lockfile changes"
+  },
+  "vitest-9464": {
+   "repo": "vitest-dev/vitest",
+   "status": "unrunnable",
+   "reason": "not attempted: pnpm monorepo that must be built before its tests run; install plus build needs more disk than the 2.5 GB free on the evidence drive"
+  },
+  "hono-3366": {
+   "repo": "honojs/hono",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "534965705469",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "hono-3727": {
+   "repo": "honojs/hono",
+   "status": "verified",
+   "files": [
+    {
+     "file_sha256": "5d0c29cecf16",
+     "verdict": "verified",
+     "reason": "assertion fails on buggy, passes on fixed",
+     "buggy": [
+      "assert_fail",
+      "assert_fail",
+      "assert_fail"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "pydantic-ai-1812": {
+   "repo": "pydantic/pydantic-ai",
+   "status": "not_verified",
+   "files": [
+    {
+     "file_sha256": "33c13e0b177b",
+     "verdict": "invalid",
+     "reason": "throw not from code under test (test)",
+     "buggy": [
+      "throw",
+      "throw",
+      "throw"
+     ],
+     "fixed": [
+      "pass",
+      "pass",
+      "pass"
+     ]
+    }
+   ]
+  },
+  "pydantic-ai-5455": {
+   "repo": "pydantic/pydantic-ai",
+   "status": "not_verified",
+   "files": [
+    {
+     "file_sha256": "d960bb61fde1",
+     "verdict": "invalid",
+     "reason": "no tests collected",
+     "buggy": [
+      "error",
+      "error",
+      "error"
+     ],
+     "fixed": [
+      "error",
+      "error",
+      "error"
+     ]
+    }
+   ]
+  }
  }
 }
