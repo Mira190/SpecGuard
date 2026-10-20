@@ -5,8 +5,23 @@
     "tree": "overlay",
     "status": "runnable",
     "cmd": "node {evidence}/f2p/work/hono/node_modules/vitest/vitest.mjs run --config {evidence}/f2p/work/hono/vc.mjs --root . --reporter=json --outputFile={out} {test}",
-    "setup": "work dir = tree at 5ca49b0 (also the mutation arm tree); npm install vitest@3.2.4 --ignore-scripts --no-save inside it; vc.mjs = export default { test: { globals: true } } (hono's own config bypassed)",
-    "build_note": "none (single package, no dist imports); caches cleared by the harness"
+    "setup": "work dir = tree at 5ca49b0 (also the mutation arm tree); npm install vitest@3.2.4 --ignore-scripts --no-save inside it; vc.mjs = export default { test: { globals: true } } (hono's own config bypassed); cover: npm i --no-save --ignore-scripts --legacy-peer-deps @vitest/coverage-v8@3.2.4 vitest@3.2.4 (package.json declares vitest 5.0.1, so the plain command fails with ERESOLVE and vitest is re-pinned)",
+    "build_note": "none (single package, no dist imports); caches cleared by the harness",
+    "cover": {
+      "dirs": [
+        "src"
+      ],
+      "file_re": "\\.test\\.ts$",
+      "exclude": [
+        "runtime-tests"
+      ],
+      "source": "src/**",
+      "config": "{evidence}/f2p/work/hono/vc.mjs",
+      "deps_files": [
+        "package.json"
+      ],
+      "timeout": 1800
+    }
   },
   "rqlite/rqlite": {
     "name": "rqlite",
@@ -40,7 +55,23 @@
     "env": {
       "PYTHONPATH": "{cwd}"
     },
-    "setup": "venv under <evidence>/f2p/env/py-sqlglot with pytest duckdb python-dateutil pytz pandas typing_extensions; the exported tree is put on PYTHONPATH (sqlglot is pure Python)"
+    "setup": "venv under <evidence>/f2p/env/py-sqlglot with pytest duckdb python-dateutil pytz pandas typing_extensions; the exported tree is put on PYTHONPATH (sqlglot is pure Python); cover: coverage==7.16.2 (uv pip install into the venv)",
+    "cover": {
+      "dirs": [
+        "tests"
+      ],
+      "file_re": "(^|/)(test_[^/]*|[^/]*_test)\\.py$",
+      "source": "sqlglot",
+      "python": "{evidence}/f2p/env/py-sqlglot/Scripts/python.exe",
+      "deps_files": [
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg"
+      ],
+      "env_base": "03f96df1d38e636cbfcaa856257bd06fb6da28f4",
+      "env_base_note": "the sqlglot venv records no base sha; the earliest sqlglot tree of holdout2 is used",
+      "timeout": 1800
+    }
   },
   "TanStack/query": {
     "name": "query",
@@ -89,6 +120,20 @@
       "PYTHONPATH": "{cwd}/libs/core",
       "LANGSMITH_TRACING": "false"
     },
-    "setup": "venv under <evidence>/f2p/env/py-langchain with libs/core test group of the langchain-18592 tree (uv pip install -r pyproject.toml --group test); libs/core of the exported tree on PYTHONPATH"
+    "setup": "venv under <evidence>/f2p/env/py-langchain with libs/core test group of the langchain-18592 tree (uv pip install -r pyproject.toml --group test); libs/core of the exported tree on PYTHONPATH; cover: coverage==7.16.2 (uv pip install into the venv)",
+    "cover": {
+      "dirs": [
+        "libs/core/tests/unit_tests"
+      ],
+      "file_re": "(^|/)(test_[^/]*|[^/]*_test)\\.py$",
+      "source": "libs/core/langchain_core",
+      "python": "{evidence}/f2p/env/py-langchain/Scripts/python.exe",
+      "deps_files": [
+        "libs/core/pyproject.toml",
+        "libs/core/uv.lock"
+      ],
+      "env_base": "5a28e17fbb437ba7ba8ea7ed8751735c85239728",
+      "timeout": 3600
+    }
   }
 }

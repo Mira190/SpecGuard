@@ -354,3 +354,65 @@ test('N1d controls: an interrupted run is a harness_error that never replaces a 
   assert.strictEqual(res.positive_control.g1.status, 'not_verified');
   assert.deepStrictEqual([h.harnessStatus(res).r.k, h.harnessStatus(res).r.n], [0, 1]); // g2 (harness_error) is out of n
 });
+
+// ---- cover (E1) ----
+const cov = require('./cover');
+test('cover: lcov fixture gives covered/total lines per repo-relative file', () => {
+  const lcov = String.raw`TN:
+SF:C:\t\tree\src\a.ts
+DA:1,3
+DA:2,0
+DA:3,1
+LF:3
+LH:2
+end_of_record
+SF:/t/tree/src/b.ts
+DA:5,0
+end_of_record
+`;
+  assert.deepStrictEqual(cov.parseLcov(lcov, String.raw`C:\t\tree`)['src/a.ts'], [2, 3]);
+  assert.deepStrictEqual(cov.parseLcov(lcov, '/t/tree')['src/b.ts'], [0, 1]);
+});
+
+test('cover: coverage.xml fixture gives covered/total lines per repo-relative file', () => {
+  const xml = `<coverage><sources><source>/t/tree</source></sources><packages><package name="sqlglot"><classes>
+<class name="a.py" filename="sqlglot/a.py"><methods/><lines><line number="1" hits="1"/><line number="2" hits="0"/><line number="4" hits="2"/></lines></class>
+<class name="b.py" filename="sqlglot/b.py"><methods/><lines/></class></classes></package></packages></coverage>`;
+  assert.deepStrictEqual(cov.parseCoverageXml(xml, '/t/tree', () => true), { 'sqlglot/a.py': [2, 3], 'sqlglot/b.py': [0, 0] });
+});
+
+test('cover: zero selected test files (or a missing dir) is an error, never 0% covered', () => {
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'f2p-cov-'));
+  try {
+    fsx.mkdirSync(pathx.join(dir, 'src', 'runtime-tests'), { recursive: true });
+    fsx.writeFileSync(pathx.join(dir, 'src', 'runtime-tests', 'x.test.ts'), '');
+    const c = { dirs: ['src'], file_re: '\\.test\\.ts$', exclude: ['runtime-tests'] };
+    assert.throws(() => cov.selectTests(dir, c), /0 test files selected/); // only an excluded file
+    assert.throws(() => cov.selectTests(dir, { ...c, dirs: ['nope'] }), /does not exist/);
+    fsx.writeFileSync(pathx.join(dir, 'src', 'a.test.ts'), '');
+    assert.deepStrictEqual(cov.selectTests(dir, c), ['src/a.test.ts']);
+  } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('cover: collection and import errors are recorded per file with a repo-relative posix path', () => {
+  const stdout = String.raw`ERROR tests\test_x.py - ImportError: cannot import name q from D:\build\tree\mod.py
+ERROR /t/tree/tests/sub/test_y.py - ModuleNotFoundError: No module named z
+ERROR tests/test_z.py::test_a - fixture boom
+FAILED tests/test_w.py::t - assert 0
+`;
+  const xml = '<testsuites><testsuite name="pytest" errors="3" failures="1" skipped="2" tests="9"></testsuite></testsuites>';
+  const r = cov.pytestHealth(xml, stdout, '/t/tree');
+  assert.deepStrictEqual(Object.keys(r.file_errors), ['tests/test_x.py', 'tests/sub/test_y.py']); // the :: line is a test error, not a file error
+  assert.ok(!/[A-Za-z]:[\\/]|build/.test(JSON.stringify(r.file_errors)), 'no local paths in messages');
+  assert.deepStrictEqual(r.health, { passed: 3, failed: 1, errored: 3, skipped: 2 });
+  const j = { numPassedTests: 5, numFailedTests: 1, numPendingTests: 1, numTodoTests: 1, testResults: [{ name: '/t/tree/src/ok.test.ts', status: 'passed', assertionResults: [{}] }, { name: '/t/tree/src/utils/bad.test.ts', status: 'failed', message: 'Failed to resolve import', assertionResults: [] }] };
+  const v = cov.vitestHealth(j, ['src/ok.test.ts', 'src/utils/bad.test.ts', 'src/lost.test.ts'], '/t/tree');
+  assert.deepStrictEqual(v.file_errors, { 'src/utils/bad.test.ts': 'Failed to resolve import', 'src/lost.test.ts': 'no result' });
+  assert.deepStrictEqual(v.health, { passed: 5, failed: 1, errored: 2, skipped: 2 });
+});
+
+test('cover: deps_changed is flagged only for the env manifests', () => {
+  assert.strictEqual(cov.depsChanged(['src/a.ts', 'package.json'], ['package.json']), true);
+  assert.strictEqual(cov.depsChanged(['libs/partners/x/pyproject.toml', 'src/a.ts'], ['libs/core/pyproject.toml', 'libs/core/uv.lock']), false);
+  assert.strictEqual(cov.depsChanged([], ['package.json']), false);
+});
