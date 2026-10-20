@@ -70,13 +70,13 @@ function bootCi(vals, seed, boots) {
 }
 // E1 null for one PR: k flags on DISTINCT eligible units drawn without replacement (C and static flag a unit at most once); the flag sits on a uniformly random eligible line.
 // Weights: eligible line count (primary) or 1 (secondary). k >= number of eligible units: every unit is flagged, so the null equals the observed outcome exactly.
-function drawNull(rng, perms, k, elig, B, uniform, outcome) {
+function drawNull(rng, perms, k, elig, B, uniform, outcome, forced) { // forced: unusable PR, observed 0 is not from flagging, so no shortcut
   const out = new Uint8Array(perms);
   if (!k || !elig.length) return out;
-  if (k >= elig.length) return out.fill(outcome);
+  if (k >= elig.length && !forced) return out.fill(outcome);
   for (let j = 0; j < perms; j++) {
     const pool = elig.map((u) => ({ u, w: uniform ? 1 : u.lines.length }));
-    for (let n = 0; n < k; n++) {
+    for (let n = 0; n < Math.min(k, elig.length); n++) {
       let r = rng() * pool.reduce((s, x) => s + x.w, 0), i = 0;
       while (i < pool.length - 1 && r >= pool[i].w) { r -= pool[i].w; i++; }
       const { u } = pool.splice(i, 1)[0];
@@ -92,7 +92,7 @@ function armScore(items, { seed = 20261020, perms = 1000, boots = 2000 } = {}) {
   if (!n) return { n: 0, observed: 0, chance: 0, p: 1, effect: 0, pass: false };
   const R = {};
   for (const kind of ['primary', 'secondary']) {
-    const rng = mulberry32(seed), bits = items.map((i) => drawNull(rng, perms, i.k, i.elig, i.d.B, kind === 'secondary', i.outcome));
+    const rng = mulberry32(seed), bits = items.map((i) => drawNull(rng, perms, i.k, i.elig, i.d.B, kind === 'secondary', i.outcome, i.forced));
     const nul = Array.from({ length: perms }, (_, j) => mean(bits.map((b) => b[j])));
     R[kind] = { chance: mean(nul), p: nul.filter((x) => x >= obs - EPS).length / perms, perPr: bits.map((b) => mean(b)) };
   }
@@ -130,7 +130,7 @@ function loadReport(coverDir, group) {
 }
 
 function summarize(set, opt) { // set: evaluated bug PRs
-  const item = (x, k) => ({ d: x.d, k, outcome: x.c.outcome, elig: x.c.elig });
+  const item = (x, k) => ({ d: x.d, k, outcome: x.c.outcome, elig: x.c.elig, forced: !x.c.usable });
   const sElig = (x) => x.d.changedUnits.filter((u) => u.name).map((u) => ({ path: u.path, lines: u.added }));
   const usable = set.filter((x) => x.c.usable), sItems = set.map((x) => ({ d: x.d, k: x.sflags.length, elig: sElig(x), outcome: x.sflags.some((f) => x.d.B.has(f.path, f.line)) ? 1 : 0 }));
   const cItems = set.map((x) => item(x, x.c.usable ? x.c.flags.length : 1)); // unusable: observed 0, null uses 1 flag

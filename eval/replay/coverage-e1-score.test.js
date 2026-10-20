@@ -103,3 +103,10 @@ test('distinct units: k=1 over 2 equal units hits B half the time; never double-
   const [d] = prs(1, true), b = drawNull(require('../szz').mulberry32(7), 2000, 1, el(d), d.B, true, 0);
   assert.ok(Math.abs(b.reduce((s, x) => s + x, 0) / 2000 - 0.5) < 0.05);
 });
+
+test('unusable PR with 1 changed unit inside B: observed 0, null still tests B', () => {
+  const d = { changedUnits: [U('a.ts', 'f', 1, 10, [2, 3, 4])], B: makeB([{ path: 'a.ts', line: 3 }], { 'a.ts': [{ name: 'f', start: 1, end: 10 }] }) };
+  const r = armScore([{ d, k: 1, outcome: 0, elig: el(d), forced: true }], opt);
+  assert.strictEqual(r.observed, 0);
+  assert.strictEqual(r.chance, 1);
+});
