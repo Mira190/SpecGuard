@@ -685,8 +685,8 @@ test('claude engine pack: a unit reviewed in parts shows only this run\'s lines,
 test('action.yml: max_units (default 12) reaches the scan collector and the input validation; validate-inputs.sh accepts 1 to 100 only', () => {
   const yml = fs.readFileSync(path.join(__dirname, '..', 'action.yml'), 'utf8').replace(/\r\n/g, '\n');
   assert.match(/^ {2}max_units: \{[^}]*\}/m.exec(yml)[0], /most source files \(units\) per call, riskiest first \(integer 1-100\)[^}]*default: "12" \}$/);
-  assert.match(yml, /id: audit_collect[\s\S]*?MAX_UNITS: \$\{\{ inputs\.max_units \}\}[\s\S]*?run: node "\$GITHUB_ACTION_PATH\/src\/audit-collect\.js"/);
-  assert.match(yml, /MAX_UNITS: \$\{\{ inputs\.max_units \}\}\n {8}TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/);
+  assert.match(yml, /id: audit_collect[\s\S]*?MAX_UNITS: \$\{\{ inputs\.max_units \}\}[\s\S]*?run: unset NODE_OPTIONS; node "\$GITHUB_ACTION_PATH\/src\/audit-collect\.js"/);
+  assert.match(yml, /MAX_UNITS: \$\{\{ inputs\.max_units \}\}\n {8}TIMEOUT: \$\{\{ inputs\.review_timeout_minutes \}\}\n {6}run: \|\n {8}unset NODE_OPTIONS\n {8}bash "\$GITHUB_ACTION_PATH\/src\/validate-inputs\.sh"/);
   assert.equal((yml.match(/MAX_UNITS:/g) || []).length, 2, 'the PR steps do not read it');
   const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
   const v = (env) => spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh').replace(/\\/g, '/')], { encoding: 'utf8', env: { ...process.env, MODEL: '', EFFORT: '', MAX_CREDITS: '200', ...env } });

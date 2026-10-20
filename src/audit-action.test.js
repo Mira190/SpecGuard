@@ -366,3 +366,23 @@ test('action.yml: context_pack_bytes (empty = the 250000 default) reaches the sc
   assert.deepEqual([{}, { CONTEXT_PACK_BYTES: '' }, { CONTEXT_PACK_BYTES: '120000' }, { CONTEXT_PACK_BYTES: '0' }].map(packLimit), [250000, 250000, 120000, 0]);
   for (const bad of ['x', '-5', '1.5', '12k']) assert.throws(() => packLimit({ CONTEXT_PACK_BYTES: bad }), /context_pack_bytes/, bad);
 });
+
+test('action.yml: every step that starts node (directly, through a repo script or as a JS action) clears NODE_OPTIONS, so a poisoned $GITHUB_ENV cannot load code next to the keys', () => {
+  const runs = steps.filter((s) => /^ *run: /m.test(s));
+  const nodeRuns = runs.filter((s) => /\bnode "|\.sh"/.test(s));
+  assert.equal(nodeRuns.length, 9, 'preflight, collect, superseded, audit_collect, coverage, credential, engine, Run the review engine, fail-on-error');
+  for (const s of nodeRuns) assert.match(s.split(/^run: /m)[1], /^(\|\n\s+)?unset NODE_OPTIONS\b/, `unset first: ${s.slice(0, 60)}`);
+  const uses = steps.filter((s) => /^uses: /m.test(s) && !/uses: actions\/checkout/.test(s));
+  assert.equal(uses.length, 5, 'setup-node, 2 github-script, 2 upload-artifact');
+  for (const s of uses) assert.match(s, /^env:\n(?:  .*\n)*?  NODE_OPTIONS: ''$/m, `env NODE_OPTIONS: '' in ${s.slice(0, 80)}`);
+});
+
+test('action.yml: the unset at the top of a run step lets node start although NODE_OPTIONS names a missing module', () => {
+  const s = find(/^id: credential/m);
+  const script = s.split(/^run: /m)[1].trim().replace(/node "\$GITHUB_ACTION_PATH\/src\/credential\.js"/, 'node -p 1');
+  const env = { ...process.env, NODE_OPTIONS: '--require /nonexistent.js' };
+  assert.notEqual(spawnSync('node', ['-p', '1'], { env }).status, 0, 'control: node honours the poisoned NODE_OPTIONS');
+  const r = spawnSync('bash', ['-c', script], { env, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '1');
+});
