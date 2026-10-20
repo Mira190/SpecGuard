@@ -118,7 +118,11 @@ The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: th
 ## TBD before freeze
 
 - ~~The grepTests fix sha~~: done, b6accfd on eval/testgap-demotion (`testsName`, with a test that fails with `-q`). E1 code builds on that branch.
-- ~~The `cover` runner sha~~: done, #416 merged at 26735ba (file errors by kind; hono runs exactly `src/**/*.test.{ts,tsx}` minus runtime-tests). `file_errors` is already keyed by path with `{kind, msg}`. Still needed: a findings-free `import`.
-- The scorer `eval/replay/coverage-e1-score.js` and its test, committed before the design look, plus the design rows `eval/replay/coverage-e1-design.json`.
+- ~~The `cover` runner sha~~: done, #416 merged at 26735ba (file errors by kind; hono runs exactly `src/**/*.test.{ts,tsx}` minus runtime-tests). `file_errors` is already keyed by path with `{kind, msg}`. The findings-free `import` is #419, merged at b8f1357; the runs use a worktree of main at that sha.
+- ~~Scorer and design rows~~: done, bce5f46 (`coverage-e1-score.js`, its synthetic test, `coverage-e1-design.json`: 11 bugs, 4 controls).
+- Design-look command (set `e1design`; the runner on main @ b8f1357, the scorer from this branch):
+  1. `node eval/f2p/f2p.js import eval/replay/coverage-e1-design.json --name e1design`
+  2. `node eval/f2p/f2p.js cover --set e1design`
+  3. `node eval/replay/coverage-e1-score.js --pairs eval/replay/holdout2-pairs.json --fixshas <evidence>/blind-h2/fixshas.json --repos <evidence>/repos --cover-results eval/f2p/results-cover-e1design.json --cover-dir <evidence>/f2p/cover/e1design --rows eval/replay/coverage-e1-design.json --out <evidence>/e1/design.json --raw <evidence>/blind-h2/raw --runs 39120706885,39120718089,39120729276`
 - The confirmation list sha.
 - The design-look appendix comes after the freeze.
