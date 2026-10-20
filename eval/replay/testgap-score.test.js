@@ -44,5 +44,14 @@ test('testsName: whole-word match in test files at head (git grep -l, not -q)', 
     assert.strictEqual(testsName(dir, 'HEAD', files, 'bazQux'), false);
     assert.strictEqual(testsName(dir, 'HEAD', files, 'fooBa'), false);
     assert.strictEqual(testsName(dir, 'HEAD', [], 'fooBar'), false);
+    assert.throws(() => testsName(dir, 'no-such-rev', files, 'fooBar')); // exit 128 is an error, not 'no match'
+    const many = Array.from({ length: 120 }, (_, i) => 'x' + i + '.test.js'); // spans 3 batches, the match is in the last
+    assert.strictEqual(testsName(dir, 'HEAD', [...many, 'a.test.js'], 'fooBar'), true);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('isCode: code files only, no lockfiles, manifests or .github scripts', () => {
+  const { isCode } = require('./testgap-score');
+  for (const f of ['libs/core/uv.lock', 'package.json', 'pyproject.toml', 'jsr.json', '.github/scripts/check_diff.py', 'libs/core/tests/test_a.py', 'README.md']) assert.strictEqual(isCode(f), false, f);
+  for (const f of ['src/a.ts', 'libs/core/langchain_core/x.py', 'sqlglot/parser.py']) assert.strictEqual(isCode(f), true, f);
 });
