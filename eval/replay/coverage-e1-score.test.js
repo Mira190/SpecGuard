@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { parse } = require('../../src/coverage');
 const { makeB } = require('./testgap-score');
-const { loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, labelLine, drawNull, powerOf, summarize, runValid, medianUpper } = require('./coverage-e1-score');
+const { loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, labelLine, drawNull, powerOf, summarize, runValid, medianUpper, groupOf, h2Id, pairFor, rawDir } = require('./coverage-e1-score');
 
 const lcov = (file, da) => `TN:\nSF:${file}\n${da.map(([l, h]) => `DA:${l},${h}`).join('\n')}\nend_of_record\n`;
 const U = (path, name, start, end, added) => ({ path, name, start, end, added });
@@ -178,4 +178,15 @@ test('median: upper middle for even n, null when no usable control; run validity
   assert.ok(!runValid({ engine_status: 'success', findings: [], valid: false }));
   assert.ok(!runValid({ engine_status: 'success', findings: [], engine_notes: ['context pack: 0 files'] }));
   assert.ok(!runValid(null));
+});
+
+test('prefixed design row: holdout-2 joins use replay_id, the cover join uses id', () => {
+  const r = { id: 'e1-x', replay_id: 'x', kind: 'bug' }, pairs = [{ id: 'p1', replay_id: 'x' }, { id: 'p2', replay_id: 'e1-x' }];
+  assert.equal(groupOf(r), 'e1-x');
+  assert.equal(h2Id(r), 'x');
+  assert.equal(pairFor(r, pairs).id, 'p1');
+  assert.equal(rawDir('raw', 'run1', pairFor(r, pairs)).split(require('node:path').sep).join('/'), 'raw/run1/replay-x');
+  const c = { id: 'y' }; // confirmation row: no replay_id, falls back to id
+  assert.equal(h2Id(c), 'y');
+  assert.equal(pairFor({ ...c, introducing: { base: 'b' } }, []).replay_id, 'y');
 });

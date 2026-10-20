@@ -97,6 +97,7 @@ Failing tests do not make a PR unusable; their count is reported.
 
 - **Design look.** Holdout 2's replay-eligible pairs in hono, sqlglot and langchain-core: hono 6, sqlglot 3, langchain 2 (33461, 18592). That is **11 pairs** (`coverage-e1-design.json`), plus holdout 2's clean `no_known_bug` controls in these repos (hono 3, langchain 1). The scorer reports how many pass the test-gap filter.
   - The look reports, for all 11, for the filtered subset and for the unfiltered rest: C's catch rate vs chance, the unusable rate and reasons, flags per PR, and noise on the holdout-2 clean `no_known_bug` PRs in these repos.
+  - Design row ids are prefixed `e1-` because the f2p harness keys trees by group and the holdout-2 f2p set already uses the bare ids at other shas; `replay_id` keeps the holdout-2 join.
   - **Power** for the confirmation n against the +10 floor comes from resampling the 11 design PRs. If it is below 0.5, it is reported to e0 and the owner before the confirmation run.
   - hono-2339 also changes generated `deno_dist/` mirrors of its `src/` files. The appendix notes how many of its units come from them. They are outside the coverage source, so C has no instrumented lines there, but static can still flag them.
   - The design look changes no gate. Like the slicing draft, it is a dated appendix after the freeze, and defect amendments follow the same rule.

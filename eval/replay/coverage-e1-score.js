@@ -144,7 +144,10 @@ function staticFlags(dir, base, head, changedUnits) {
   const headTests = tryGit(dir, 'ls-tree', '-r', '--name-only', head).split('\n').filter((f) => f && isTest(f));
   return changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !testsName(dir, head, headTests, u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
 }
-const groupOf = (r) => r.id; // the findings-free import names each cover group by the row id
+const groupOf = (r) => r.id; // the findings-free import names each cover group by the row id (e1- prefixed for design rows)
+const h2Id = (r) => r.replay_id || r.id; // holdout-2 joins (pairs, fixshas, saved raw runs) use the original replay id
+const pairFor = (r, pairs) => (r.introducing ? { id: h2Id(r), replay_id: h2Id(r), introducing: r.introducing } : pairs.find((x) => x.replay_id === h2Id(r)));
+const rawDir = (raw, run, p) => path.join(raw, run, 'replay-' + p.replay_id);
 function loadReport(coverDir, group) {
   for (const f of ['lcov.info', 'coverage.xml']) { try { return parse(fs.readFileSync(path.join(coverDir, group, f), 'utf8')); } catch { /* next */ } }
   return null;
@@ -191,8 +194,8 @@ function main() {
       continue;
     }
     // a row carries its own pair metadata (introducing { base, head, merge_commit, number } and fix_sha), else it is looked up in --pairs by replay_id
-    const p = r.introducing ? { id: r.id, replay_id: r.id, introducing: r.introducing } : pairs.find((x) => x.replay_id === r.id);
-    if (!p) throw new Error(`row ${r.id}: no introducing metadata and no pair with this replay_id`);
+    const p = pairFor(r, pairs);
+    if (!p) throw new Error(`row ${r.id}: no introducing metadata and no pair with replay_id ${h2Id(r)}`);
     const fx = r.fix_sha || fixsha[p.id] || r.fixed_sha, d = pairData(dir, p, fx);
     bugs.push({ id: r.id, repo: r.repo, p, rec: rec || {}, d, c: evalCover({ rec, parsed, changedUnits: d.changedUnits, changedFiles: d.changedFiles, B: d.B }), sflags: d.flags, ok: qualifies(dir, fx).ok, hits: parsed ? loadHits(parsed, d.changedFiles) : null });
   }
@@ -209,7 +212,7 @@ function main() {
     const mk = () => ({ confirmed: [0, 0], contradicted: [0, 0], unknown: [0, 0] }), lab = { usable: mk(), unusable_pr: mk() };
     let dropped = 0, invalidRuns = 0;
     for (const b of bugs) for (const run of arg('runs').split(',')) {
-      let r = null; try { r = JSON.parse(fs.readFileSync(path.join(arg('raw'), run, 'replay-' + b.p.replay_id, 'result.json'), 'utf8')); } catch { /* missing run */ }
+      let r = null; try { r = JSON.parse(fs.readFileSync(path.join(rawDir(arg('raw'), run, b.p), 'result.json'), 'utf8')); } catch { /* missing run */ }
       if (!runValid(r)) { invalidRuns++; continue; }
       for (const f of r.findings.filter((x) => x.kind === 'missing_test')) {
         if (f.line == null || !f.path) { dropped++; continue; }
@@ -223,4 +226,4 @@ function main() {
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
-module.exports = { drawNull, loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, powerOf, summarize, runValid, medianUpper, bootCi, labelLine, groupOf };
+module.exports = { drawNull, loadHits, coverFlags, errCoversSource, unusableReason, evalCover, armScore, powerOf, summarize, runValid, medianUpper, bootCi, labelLine, groupOf, h2Id, pairFor, rawDir };
