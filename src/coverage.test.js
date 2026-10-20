@@ -76,7 +76,8 @@ test('analyze: added instrumented lines are executed or never executed; counts, 
   const lcov = 'SF:/home/runner/work/r/r/src/a.js\nDA:1,4\nDA:2,0\nDA:3,0\nDA:4,0\nDA:6,1\nDA:7,0\nend_of_record\nSF:/home/runner/work/r/r/src/unchanged.js\nDA:1,0\nend_of_record\n';
   const r = cov.analyze({ patch: diff('src/a.js', 5), files: ['src/a.js', 'src/b.js', 'README.md', 'src/a.test.js'], reports: [{ name: 'lcov.info', text: lcov }], ws: '/home/runner/work/r/r' });
   assert.deepEqual(r.json.total, { instrumented: 4, executed: 1 }); // lines 1-5 added; 5 is not instrumented
-  assert.deepEqual(r.json.files['src/a.js'], { inst: 4, exec: 1, never: [[2, 4]], miss: [[2, 4], [7, 7]] });
+  assert.deepEqual(r.json.files['src/a.js'], { inst: 4, exec: 1, never: [[2, 4]], ran: [[1, 1]], miss: [[2, 4], [7, 7]] });
+  assert.equal(r.json.v, 2, 'v2 adds ran');
   assert.deepEqual(Object.keys(r.json.files), ['src/a.js'], 'unchanged files and test files carry no entry');
   assert.deepEqual(r.json.unreported, ['src/b.js'], 'only code files with no report entry; docs are not listed');
   assert.match(r.txt, /Changed lines executed by tests: 1 of 4 instrumented\./);
@@ -88,7 +89,7 @@ test('analyze: added instrumented lines are executed or never executed; counts, 
 test('analyze: several reports merge (executed in any one counts); a stale or unreadable report is skipped with a note; nothing usable means no txt', () => {
   const a = 'SF:src/a.js\nDA:1,0\nDA:2,0\nend_of_record\n', b = 'SF:src/a.js\nDA:1,1\nend_of_record\n';
   const m = cov.analyze({ patch: diff('src/a.js', 2), files: ['src/a.js'], reports: [{ name: 'a', text: a }, { name: 'b', text: b }] });
-  assert.deepEqual(m.json.files['src/a.js'], { inst: 2, exec: 1, never: [[2, 2]], miss: [[2, 2]] });
+  assert.deepEqual(m.json.files['src/a.js'], { inst: 2, exec: 1, never: [[2, 2]], ran: [[1, 1]], miss: [[2, 2]] });
   const old = '<coverage timestamp="1000000000"><packages><package name=""><classes><class filename="src/a.js"><lines><line number="1" hits="1"/></lines></class></classes></package></packages></coverage>';
   const s = cov.analyze({ patch: diff('src/a.js', 2), files: ['src/a.js'], reports: [{ name: 'cob.xml', text: old }, { name: 'bad.txt', text: 'junk' }], headTime: 2e12 });
   assert.equal(s.json.reports, 0);
@@ -140,7 +141,7 @@ test('main: writes coverage.txt and coverage.json from the workspace; no globs w
   run({ COVERAGE_FILES: '' });
   assert.equal(out('coverage.json'), null);
   run({ COVERAGE_FILES: 'coverage/lcov.info\n' });
-  assert.deepEqual(JSON.parse(out('coverage.json')).files['src/a.js'], { inst: 3, exec: 2, never: [[2, 2]], miss: [[2, 2]] });
+  assert.deepEqual(JSON.parse(out('coverage.json')).files['src/a.js'], { inst: 3, exec: 2, never: [[2, 2]], ran: [[1, 1], [3, 3]], miss: [[2, 2]] });
   assert.match(out('coverage.txt'), /^src\/a\.js 2\/3; never executed: L2$/m);
   run({ COVERAGE_FILES: 'nothing/here.info' });
   assert.match(JSON.parse(out('coverage.json')).notes[0], /no file matched coverage_files/);
