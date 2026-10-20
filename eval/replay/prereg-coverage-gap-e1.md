@@ -102,11 +102,14 @@ Failing tests do not make a PR unusable; their count is reported.
   - The design look changes no gate. Like the slicing draft, it is a dated appendix after the freeze, and defect amendments follow the same rule.
 - **Confirmation.**
   - The frozen 88 (`testgap-confirm.json`) keep at most 6 bug PRs per repo, so these repos contribute at most 18. E1 draws its own set:
-    - every frozen-set bug PR in hono, sqlglot or langchain-core;
+    - every frozen-set bug PR in hono, sqlglot or langchain-core. Frozen-set members are each repo's newest 6 or fewer qualifying pairs (the builder's `--queues-only` queue, eval/testgap-mvp-prereg @ b5fb76d), taken before the langchain-core rule. A full 12-repo build that stops at 48 before reaching one of them does not change this list.
     - then further qualifying pairs from the same mining output (`SpecGuard-evidence/testgap-confirm/mine-*.json`, fixes from 2026-01-01 to clone HEAD). These use the same mechanical filter, exclusions and langchain-core rule. The exclusions include every pair and clean PR in pairs, holdout and holdout 2, so no design PR re-enters. They are drawn round-robin over the three repos in alphabetical order, newest first, until there are 40.
     - If fewer than 40 qualify, the window extends once to 2025-07-01. Fewer than 30 then means "not tested".
   - **Unfiltered comparison set (descriptive).** Up to 20 runnable bug PRs from the same mining output that pass every rule EXCEPT the test-gap filter (their fix adds no test naming a changed definition). They are drawn by the same round-robin rule.
-  - **Controls.** The frozen set's controls in these repos, topped up with `szz.js clean` (seed 20261020) to 30, under the same 90-day blame exclusion and langchain-core rule.
+  - **Controls.** 30, all drawn with `szz.js` `cleanSample` (seed 20261020).
+    - Allocation follows bugs per repo by largest remainder. The window runs from 2026-01-01 to head − 90 days.
+    - Exclusions: the mined fix and I shas, earlier corpora, PRs blamed by a later fix within 90 days, and, for langchain, the langchain-core rule.
+    - The frozen set has no controls for these repos. It is built per repo with `--queues-only` (red team, 2026-10-20, for memory), and the full builder's control quotas span all 12 repos.
   - All three lists go to `eval/replay/coverage-e1-confirm.json`, committed before any coverage run on them. The commit message carries the touch rule.
 - **Ownership.** E1 owns the single look at the frozen-set PRs in hono, sqlglot and langchain-core. The slicing draft stays paused, and would need a new draw for those repos.
 
@@ -135,5 +138,5 @@ The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: th
   1. `node eval/f2p/f2p.js import eval/replay/coverage-e1-design.json --name e1design`
   2. `node eval/f2p/f2p.js cover --set e1design`
   3. `node eval/replay/coverage-e1-score.js --pairs eval/replay/holdout2-pairs.json --fixshas <evidence>/blind-h2/fixshas.json --repos <evidence>/repos --cover-results eval/f2p/results-cover-e1design.json --cover-dir <evidence>/f2p/cover/e1design --rows eval/replay/coverage-e1-design.json --out <evidence>/e1/design.json --raw <evidence>/blind-h2/raw --runs 39120706885,39120718089,39120729276`
-- The confirmation list sha.
+- The confirmation list sha. Built by `coverage-e1-confirm-build.js` (4caabec, red-team review pending) from the per-repo queues of `testgap-confirm-build.js --queues-only` (b5fb76d), run one repo at a time for hono, langchain and sqlglot.
 - The design-look appendix comes after the freeze.
