@@ -12,6 +12,7 @@ const MASS = 50; // commits touching more files than this are mass changes (form
 const SHA = /^[0-9a-f]{40}$/;
 const DOCS = /(\.(md|mdx|markdown|rst|adoc|txt)$|(^|\/)(docs?|documentation|examples?)\/|(^|\/)(CHANGELOG|LICENSE|README)[^/]*$|(^|\/)package-lock\.json$|(^|\/)(yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|go\.sum)$)/i;
 const TESTS = /((^|\/)(tests?|__tests__|specs?|testdata|fixtures|__snapshots__)\/|\.(test|spec)\.[\w]+$|(^|\/)test_[^/]*\.py$|_test\.(go|py|rs|rb)$|Tests?\.(java|kt|cs|swift)$|(^|\/)conftest\.py$)/i;
+const isTest = (p) => !DOCS.test(p) && TESTS.test(p);
 const isProd = (p) => !DOCS.test(p) && !TESTS.test(p);
 const isCommentLine = (l) => /^\s*(\/\/|#|\*|\/\*|--|<!--|""")/.test(l);
 const FIX_PREFIX = /^(fix|bugfix|hotfix|bug|regression)(\([^)]*\))?!?(:|\s|$)/i;
@@ -241,4 +242,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { isProd, isCommentLine, prFromMessage, messageSignals, labelSignals, fixLines, ranges, blame, listCommits, mine, mulberry32, cleanSample, MASS, CONTAMINATION };
+module.exports = { isProd, isTest, DOCS, isCommentLine, prFromMessage, messageSignals, labelSignals, fixLines, ranges, blame, listCommits, mine, mulberry32, cleanSample, MASS, CONTAMINATION };

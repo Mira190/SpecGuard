@@ -31,6 +31,13 @@ function addedLines(dir, base, head, file) {
   return out;
 }
 
+// blamed lines of fix commit fx that sit in the introducing commit, as { path, line } in that commit's numbering
+function blamedSpots(dir, fx, introSha) {
+  const spots = {};
+  for (const f of fixLines(dir, fx + '^', fx)) blame(dir, fx + '^', f, spots);
+  return (spots[introSha] || []).map(({ path: pa, line }) => ({ path: pa, line }));
+}
+
 function main() {
   const seed = +arg('seed', 1), repos = arg('repos'), runs = arg('runs').split(',');
   const pairs = JSON.parse(fs.readFileSync(arg('pairs'), 'utf8')).pairs.filter((p) => p.replay_eligible);
@@ -44,9 +51,7 @@ function main() {
   const blamed = {}, addedMemo = new Map(), lenMemo = new Map();
   for (const p of pairs) {
     const dir = path.join(repos, p.repo.split('/')[1]), fx = fixsha[p.id];
-    const spots = {};
-    for (const f of fixLines(dir, fx + '^', fx)) blame(dir, fx + '^', f, spots);
-    blamed[p.id] = (spots[p.introducing.merge_commit] || []).map(({ path: pa, line }) => ({ path: pa, line }));
+    blamed[p.id] = blamedSpots(dir, fx, p.introducing.merge_commit);
   }
 
   // runs: one escapes() "PR" per (pair, rep); number = running index
@@ -111,3 +116,4 @@ function main() {
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
+module.exports = { git, tryGit, addedLines, blamedSpots };
