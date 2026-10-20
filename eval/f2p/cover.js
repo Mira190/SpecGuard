@@ -37,14 +37,21 @@ function parseCoverageXml(xml, cwd, exists = fs.existsSync) {
   return files;
 }
 
+// Kind of a per-file error. collection: the file's tests did not run because it failed to load (would fake "never executed" gaps); empty: the file has no tests (nothing would have run anyway); other: anything else (e.g. no result).
+const EMPTY_RE = /No test suite found|no tests ran|collected 0 items/i;
+const COLLECTION_RE = /Failed to (?:load|resolve)|Cannot find module|SyntaxError|Transform failed|ImportError|ModuleNotFoundError|collection error|error during collection|ERR_MODULE_NOT_FOUND|is not defined/i;
+const errKind = (msg) => (EMPTY_RE.test(msg) ? 'empty' : COLLECTION_RE.test(msg) ? 'collection' : 'other');
+const fileErr = (msg) => ({ kind: errKind(msg), msg });
+const kindCounts = (fe) => { const c = { collection: 0, empty: 0, other: 0 }; for (const e of Object.values(fe)) c[e.kind]++; return c; };
 // vitest --reporter=json: counts plus a per-file error for every test file that failed to load (status failed with no test results) or that has no result at all.
 function vitestHealth(j, selected, cwd) {
   const res = (j && j.testResults) || [], file_errors = {}, seen = new Set();
   for (const r of res) {
     const f = relPath(r.name, cwd); seen.add(f);
-    if (r.status === 'failed' && !(r.assertionResults || []).length) file_errors[f] = scrub(r.message || 'suite failed to run', cwd);
+    if (!selected.includes(f)) continue; // only the selected set is reported (the run uses exactly that set as its include)
+    if (r.status === 'failed' && !(r.assertionResults || []).length) file_errors[f] = fileErr(scrub(r.message || 'suite failed to run', cwd));
   }
-  for (const f of selected) if (!seen.has(f)) file_errors[f] = 'no result';
+  for (const f of selected) if (!seen.has(f)) file_errors[f] = fileErr('no result');
   const n = (k) => (j && Number(j[k])) || 0;
   return { health: { passed: n('numPassedTests'), failed: n('numFailedTests'), errored: Object.keys(file_errors).length, skipped: n('numPendingTests') + n('numTodoTests') }, file_errors };
 }
@@ -52,7 +59,7 @@ function vitestHealth(j, selected, cwd) {
 function pytestHealth(xml, stdout, cwd) {
   const at = (k) => Number((new RegExp(`<testsuite\\b[^>]*?\\b${k}="(\\d+)"`).exec(xml) || [])[1]) || 0;
   const tests = at('tests'), failed = at('failures'), errored = at('errors'), skipped = at('skipped'), file_errors = {};
-  for (const m of String(stdout).matchAll(/^ERROR (\S+?\.py)(?: - (.*))?$/gm)) file_errors[relPath(m[1], cwd)] = scrub(m[2] || 'collection error', cwd);
+  for (const m of String(stdout).matchAll(/^ERROR (\S+?\.py)(?: - (.*))?$/gm)) file_errors[relPath(m[1], cwd)] = fileErr(scrub(m[2] || 'collection error', cwd));
   return { health: { passed: Math.max(0, tests - failed - errored - skipped), failed, errored, skipped }, file_errors };
 }
 
@@ -80,6 +87,15 @@ function guards() {
   if (os.freemem() < MIN_FREE_RAM) throw new Error('memory guard: under 1.2 GB free RAM, refusing to run coverage');
 }
 
+// vitest config that runs exactly the selected files: the base config plus test.include = the selected paths (glob characters escaped), so "selected" equals "run".
+const globEscape = (p) => p.replace(/[[\]{}()*?!+@]/g, (c) => '\\' + c);
+function includeConfigText(baseConfig, selected) {
+  return `import base from ${JSON.stringify(require('node:url').pathToFileURL(baseConfig).href)};
+export default { ...base, test: { ...(base.test || {}), include: ${JSON.stringify(selected.map(globEscape))} } };
+`;
+}
+function writeIncludeConfig(outDir, baseConfig, selected) { const p = path.join(outDir, 'vitest.cover.config.mjs'); fs.writeFileSync(p, includeConfigText(baseConfig, selected)); return p; }
+
 // One coverage run in `dir` (the tree at rev). Returns the committed row; reports are written under outDir.
 function coverTree(h, repo, cfg, dir, outDir, rev) {
   const cover = cfg.cover, selected = selectTests(dir, cover), env = h.buildEnv(cfg, dir), t0 = Date.now(), timeout = (cover.timeout || 1800) * 1000;
@@ -89,7 +105,7 @@ function coverTree(h, repo, cfg, dir, outDir, rev) {
     if (cover.dirs.length !== 1) throw new Error('vitest cover scope needs exactly one dir');
     const wd = h.workDir(repo), json = path.join(outDir, 'vitest.json'), cj = (f) => JSON.parse(fs.readFileSync(path.join(wd, 'node_modules', f, 'package.json'), 'utf8')).version;
     fs.rmSync(json, { force: true }); fs.rmSync(path.join(outDir, 'lcov.info'), { force: true });
-    const args = [path.join(wd, 'node_modules/vitest/vitest.mjs'), 'run', '--config', h.fill(cover.config, { evidence: h.posix(EV) }), '--root', '.', '--dir', cover.dirs[0], ...(cover.exclude || []).flatMap((x) => ['--exclude', `**/${x.replace(/\/$/, '')}/**`]),
+    const args = [path.join(wd, 'node_modules/vitest/vitest.mjs'), 'run', '--config', writeIncludeConfig(outDir, h.fill(cover.config, { evidence: h.posix(EV) }), selected), '--root', '.', ...(cover.exclude || []).flatMap((x) => ['--exclude', `**/${x.replace(/\/$/, '')}/**`]),
       '--reporter=json', `--outputFile=${json}`, '--coverage.enabled', '--coverage.provider=v8', '--coverage.reporter=lcov', '--coverage.reportOnFailure', `--coverage.reportsDirectory=${outDir}`, `--coverage.include=${cover.source}`, '--coverage.exclude=**/*.test.*', '--coverage.exclude=**/node_modules/**'];
     const r = run(process.execPath, args, { cwd: dir, env, timeout });
     exit_code = r.status; timed_out = Boolean(r.error && r.error.code === 'ETIMEDOUT');
@@ -112,7 +128,7 @@ function coverTree(h, repo, cfg, dir, outDir, rev) {
     tools = { python: ver(['--version'], /Python (\S+)/), pytest: ver(['-m', 'pytest', '--version'], /pytest (\S+)/), coverage: ver(['-m', 'coverage', '--version'], /version (\S+)/) };
   } else throw new Error(`cover is not implemented for runner ${cfg.runner}`);
   const buf = fs.readFileSync(report.file);
-  return { selected_tests: selected.length, health: { ...hc.health, exit_code, timed_out, collection_errors: Object.keys(hc.file_errors).length }, file_errors: hc.file_errors, tools, report: { format: report.format, sha256: sha(buf), bytes: buf.length }, files, wall_s: Math.round((Date.now() - t0) / 1000) };
+  return { selected_tests: selected.length, health: { ...hc.health, exit_code, timed_out, file_errors_by_kind: kindCounts(hc.file_errors) }, file_errors: hc.file_errors, tools, report: { format: report.format, sha256: sha(buf), bytes: buf.length }, files, wall_s: Math.round((Date.now() - t0) / 1000) };
 }
 
 function cmdCover(args, SET) {
@@ -153,4 +169,4 @@ function cmdCover(args, SET) {
   }
 }
 
-module.exports = { parseLcov, parseCoverageXml, vitestHealth, pytestHealth, depsChanged, selectTests, relPath, cmdCover };
+module.exports = { errKind, includeConfigText, parseLcov, parseCoverageXml, vitestHealth, pytestHealth, depsChanged, selectTests, relPath, cmdCover };

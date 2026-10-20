@@ -407,8 +407,27 @@ FAILED tests/test_w.py::t - assert 0
   assert.deepStrictEqual(r.health, { passed: 3, failed: 1, errored: 3, skipped: 2 });
   const j = { numPassedTests: 5, numFailedTests: 1, numPendingTests: 1, numTodoTests: 1, testResults: [{ name: '/t/tree/src/ok.test.ts', status: 'passed', assertionResults: [{}] }, { name: '/t/tree/src/utils/bad.test.ts', status: 'failed', message: 'Failed to resolve import', assertionResults: [] }] };
   const v = cov.vitestHealth(j, ['src/ok.test.ts', 'src/utils/bad.test.ts', 'src/lost.test.ts'], '/t/tree');
-  assert.deepStrictEqual(v.file_errors, { 'src/utils/bad.test.ts': 'Failed to resolve import', 'src/lost.test.ts': 'no result' });
+  assert.deepStrictEqual(v.file_errors, { 'src/utils/bad.test.ts': { kind: 'collection', msg: 'Failed to resolve import' }, 'src/lost.test.ts': { kind: 'other', msg: 'no result' } });
   assert.deepStrictEqual(v.health, { passed: 5, failed: 1, errored: 2, skipped: 2 });
+});
+
+test('cover file-error kinds: collection (did not load), empty (no tests in the file), other', () => {
+  const j = { testResults: [
+    { name: '/t/tree/src/router/common.case.test.ts', status: 'failed', message: 'No test suite found in file /t/tree/src/router/common.case.test.ts', assertionResults: [] },
+    { name: '/t/tree/src/a.test.ts', status: 'failed', message: 'SyntaxError: Unexpected token', assertionResults: [] },
+  ] };
+  const v = cov.vitestHealth(j, ['src/router/common.case.test.ts', 'src/a.test.ts', 'src/gone.test.ts'], '/t/tree');
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(v.file_errors).map(([f, e]) => [f, e.kind])), { 'src/router/common.case.test.ts': 'empty', 'src/a.test.ts': 'collection', 'src/gone.test.ts': 'other' });
+  const p = cov.pytestHealth('<testsuite tests="0" errors="1"></testsuite>', 'ERROR tests/test_e.py - no tests ran in file\nERROR tests/test_i.py - ImportError: x\n', '/t/tree');
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(p.file_errors).map(([f, e]) => [f, e.kind])), { 'tests/test_e.py': 'empty', 'tests/test_i.py': 'collection' });
+});
+
+test('cover vitest: the run includes exactly the selected files, and a .test.tsx outside file_re is neither run nor reported', () => {
+  const re = /\.test\.ts$/, all = ['src/a.test.ts', 'src/helper/css/common.case.test.tsx'], selected = all.filter((f) => re.test(f));
+  const cfg = cov.includeConfigText('D:/w/vc.mjs', selected);
+  assert.ok(cfg.includes('"src/a.test.ts"') && !cfg.includes('.tsx'), 'include lists only selected files');
+  const j = { testResults: [{ name: '/t/tree/src/helper/css/common.case.test.tsx', status: 'failed', message: 'No test suite found', assertionResults: [] }, { name: '/t/tree/src/a.test.ts', status: 'passed', assertionResults: [{}] }] };
+  assert.deepStrictEqual(cov.vitestHealth(j, selected, '/t/tree').file_errors, {});
 });
 
 test('cover: deps_changed is flagged only for the env manifests', () => {

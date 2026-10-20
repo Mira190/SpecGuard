@@ -301,7 +301,7 @@ Scope is the `cover` block of `repos.json`, written into every report:
 
 | repo | dirs | files | source measured |
 | --- | --- | --- | --- |
-| hono (vitest, existing `vc.mjs`, not hono's own config) | `src` | `*.test.ts`, `runtime-tests/` excluded | `src/**` |
+| hono (vitest, existing `vc.mjs`, not hono's own config) | `src` | `*.test.ts` and `*.test.tsx` (the JSX unit tests), `runtime-tests/` excluded; vitest runs exactly the selected files (generated include config) | `src/**` |
 | sqlglot (pytest) | `tests` | `test_*.py`, `*_test.py` | `sqlglot` |
 | langchain (pytest) | `libs/core/tests/unit_tests` | `test_*.py`, `*_test.py` | `libs/core/langchain_core` |
 
@@ -311,4 +311,4 @@ Tools (installed into the existing envs only, never into a tree): `coverage==7.1
 
 Reports go to `<evidence>/f2p/cover/<set or holdout2 or smoke>/<group>/` (`lcov.info` or `coverage.xml`, the runner's own test report, `summary.json`). The repo gets only `results-cover[-<set>].json`: group, tree sha, scope, `selected_tests`, `health`, `file_errors`, `deps_changed`, `tools`, `report` (format, sha256, bytes) and `files` (covered and total lines per source file). No source text and no local paths (messages are scrubbed to one line).
 
-Health fields: `passed`, `failed`, `errored` (collection/import/fixture errors, or vitest files that failed to load or have no result), `skipped`, `exit_code`, `timed_out`, `collection_errors`. `file_errors` maps each test file that failed to collect or import (repo-relative posix path, for example `src/utils/foo.test.ts` or `tests/test_x.py`) to a short message; collection and import errors silently zero a file's coverage, so E1 should exclude or flag the source files those tests cover. pytest runs with `--continue-on-collection-errors` so one broken file does not hide the rest.
+Health fields: `passed`, `failed`, `errored` (collection/import/fixture errors, or vitest files that failed to load or have no result), `skipped`, `exit_code`, `timed_out`, `file_errors_by_kind` (`collection`: the file failed to load, its tests did not run; `empty`: the file has no tests; `other`: e.g. no result). `file_errors` maps each test file that failed to collect or import (repo-relative posix path, for example `src/utils/foo.test.ts` or `tests/test_x.py`) to a short message; collection and import errors silently zero a file's coverage, so E1 should exclude or flag the source files those tests cover. pytest runs with `--continue-on-collection-errors` so one broken file does not hide the rest.

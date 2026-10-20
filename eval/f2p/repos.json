@@ -11,7 +11,7 @@
       "dirs": [
         "src"
       ],
-      "file_re": "\\.test\\.ts$",
+      "file_re": "\\.test\\.tsx?$",
       "exclude": [
         "runtime-tests"
       ],
