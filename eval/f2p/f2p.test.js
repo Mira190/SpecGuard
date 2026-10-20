@@ -416,3 +416,23 @@ test('cover: deps_changed is flagged only for the env manifests', () => {
   assert.strictEqual(cov.depsChanged(['libs/partners/x/pyproject.toml', 'src/a.ts'], ['libs/core/pyproject.toml', 'libs/core/uv.lock']), false);
   assert.strictEqual(cov.depsChanged([], ['package.json']), false);
 });
+
+test('cover relPath: file:/// prefix, tree root and a leading ./ are removed; backslashes become slashes', () => {
+  assert.strictEqual(cov.relPath('file:///D:/t/x/src/a.ts', 'D:/t/x'), 'src/a.ts');
+  assert.strictEqual(cov.relPath('D:\\t\\x\\tests\\test_a.py', 'D:\\t\\x\\'), 'tests/test_a.py');
+  assert.strictEqual(cov.relPath('./src/b.test.ts', ''), 'src/b.test.ts');
+  assert.strictEqual(cov.relPath('other/c.py', 'D:/t/x'), 'other/c.py');
+});
+
+test('harness buildEnv: whitelisted keys only, CI=1, cfg.env filled, path_prepend goes first on PATH', () => {
+  const { buildEnv } = require('./harness');
+  const saved = process.env.F2P_SECRET_PROBE; process.env.F2P_SECRET_PROBE = 'x';
+  try {
+    const env = buildEnv({ env: { K: '{cwd}/k' }, path_prepend: ['/opt/bin'] }, 'D:/t/x');
+    assert.strictEqual(env.CI, '1');
+    assert.strictEqual(env.F2P_SECRET_PROBE, undefined);
+    assert.strictEqual(env.K, 'D:/t/x/k');
+    assert.ok(env.PATH.startsWith('/opt/bin' + require('node:path').delimiter));
+    assert.strictEqual(env.Path, env.PATH);
+  } finally { if (saved === undefined) delete process.env.F2P_SECRET_PROBE; else process.env.F2P_SECRET_PROBE = saved; }
+});
