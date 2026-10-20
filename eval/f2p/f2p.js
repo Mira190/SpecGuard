@@ -181,8 +181,10 @@ function cmdPower() {
 module.exports = { MANIFEST, resolveFix, hunks, distance, classify, siblings, unitTouched, findingId, summaryBody, ARMS, EV, F2P, ROOT, cloneOf, readJson, sha, powerTable, perPr };
 
 if (require.main === module) {
-  const [cmd, ...args] = process.argv.slice(2), H = () => require('./harness');
+  const raw = process.argv.slice(2), opts = {}, rest = []; // --set <name> (operate on a list set) and --name <set> (import) are flags; everything else is positional
+  for (let i = 0; i < raw.length; i++) { if (raw[i] === '--set' || raw[i] === '--name') opts[raw[i].slice(2)] = raw[++i]; else rest.push(raw[i]); }
+  const [cmd, ...args] = rest, H = () => { const h = require('./harness'); if (opts.set) h.useSet(opts.set); return h; };
   const cmds = { candidates: cmdCandidates, power: cmdPower, export: () => H().cmdExport(), packets: () => H().cmdPackets(), setup: () => H().cmdSetup(args[0], args[1]), baseline: () => H().cmdBaseline(args.length ? args : null), try: () => H().cmdTry(args[0]),
-    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.length > 1 ? args.slice(1) : null) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport(), controls: () => H().cmdControls(args.length ? args : null), 'writers-done': () => H().cmdWritersDone(args[0]), verify: () => H().cmdVerify(args[0]) };
-  if (!cmds[cmd]) { console.error('usage: f2p.js candidates | power | export | packets | setup <repo> <sha> | baseline | try <id> | run [--mutation] [id|pr...] | report | controls [repo|pr...] | writers-done <repo>'); process.exitCode = 2; } else cmds[cmd]();
+    run: () => (args[0] === '--mutation' ? H().cmdRunMutation(args.length > 1 ? args.slice(1) : null) : H().cmdRun(args.length ? args : null)), report: () => H().cmdReport(), controls: () => H().cmdControls(args.length ? args : null), 'writers-done': () => H().cmdWritersDone(args[0]), verify: () => H().cmdVerify(args[0]), import: () => H().cmdImport(args[0], opts.name) };
+  if (!cmds[cmd]) { console.error('usage: f2p.js candidates | power | import <list.json> --name <set> | export | packets | setup <repo> <sha> | baseline | try <id> | run [--mutation] [id|pr...] | report | controls [repo|pr...] | writers-done <repo>   (export, packets, baseline, try, run, report accept --set <set>)'); process.exitCode = 2; } else cmds[cmd]();
 }

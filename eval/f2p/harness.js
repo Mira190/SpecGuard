@@ -12,24 +12,30 @@ const report = require('./report');
 
 const { F2P, EV, ROOT, sha, readJson, cloneOf, MANIFEST } = f2p;
 const REPOS = () => readJson(path.join(__dirname, 'repos.json'));
-const RESULTS = path.join(__dirname, 'results.json');
-const CAND = () => readJson(path.join(__dirname, 'holdout2-candidates.json'));
-const HONO = () => readJson(path.join(__dirname, 'hono-candidates.json'));
+// --set <name>: every command works on eval/f2p/<name>-candidates.json (list input, see import) with its own results-<name>.json and baseline-<name>.json; with no set the file names are the original ones.
+let SET = null;
+const useSet = (name) => { SET = name || null; };
+const files = () => ({ results: SET ? `results-${SET}.json` : 'results.json', baseline: SET ? `baseline-${SET}.json` : 'baseline.json', cand: SET ? `${SET}-candidates.json` : 'holdout2-candidates.json', fields: SET ? `${SET}-fields.json` : 'holdout2-fields.json' });
+const resultsFile = () => path.join(__dirname, files().results);
+const baselineFile = () => path.join(__dirname, files().baseline);
+const CAND = () => readJson(path.join(__dirname, files().cand));
+const HONO = () => (SET ? { candidates: [] } : readJson(path.join(__dirname, 'hono-candidates.json')));
+const mainResults = () => (fs.existsSync(path.join(__dirname, 'results.json')) ? readJson(path.join(__dirname, 'results.json')) : { rows: {} }); // positive controls live here
 const REPEATS = 3;
 const ENV_KEEP = ['PATH', 'Path', 'SYSTEMROOT', 'SystemRoot', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'COMSPEC', 'PATHEXT', 'NODE_OPTIONS'];
 const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m));
 const posix = (p) => p.replace(/\\/g, '/');
-const loadResults = () => (fs.existsSync(RESULTS) ? readJson(RESULTS) : { rows: {} });
-const saveResults = (r) => fs.writeFileSync(RESULTS, JSON.stringify(r, null, 1) + '\n');
+const loadResults = () => (fs.existsSync(resultsFile()) ? readJson(resultsFile()) : { rows: {} });
+const saveResults = (r) => fs.writeFileSync(resultsFile(), JSON.stringify(r, null, 1) + '\n');
 
 // Findings that get a packet and a test: NEAR, FAR (and unit-touched weak_test); UNTOUCHED was not run: structural zero by construction. hono findings are the mutation arm.
 function scope() {
   const c = CAND(), pairs = new Map(c.prs.map((p) => [p.replay_id, p]));
-  const reps = c.candidates.filter((x) => x.in_oracle_set).map((x) => ({ ...x, group: x.pr, buggy: x.buggy_sha, fixed: x.fixed_sha }));
+  const reps = c.candidates.filter((x) => x.in_oracle_set && (x.status === undefined || x.status === 'ok')).map((x) => ({ ...x, group: x.pr, buggy: x.buggy_sha, fixed: x.fixed_sha }));
   const hono = HONO().candidates.map((x) => ({ ...x, group: 'hono-5ca49b0', buggy: x.buggy_sha, fixed: null, arm: 'MUTATION' }));
   return { reps, hono, pairs };
 }
-const fieldsOf = (id) => ({ ...(readJson(path.join(F2P, 'holdout2-fields.json'))[id] || readJson(path.join(F2P, 'hono-fields.json'))[id]) });
+const fieldsOf = (id) => (SET ? { ...readJson(path.join(F2P, files().fields))[id] } : { ...(readJson(path.join(F2P, 'holdout2-fields.json'))[id] || readJson(path.join(F2P, 'hono-fields.json'))[id]) });
 
 // Buggy trees only. The fixed tree is never written under <evidence>/f2p/trees; run exports it into a temp dir after the writer is done.
 function archive(clone, rev, dest) {
@@ -56,7 +62,7 @@ function cmdPackets() {
   const { reps, hono } = scope(), R = REPOS(), by = {};
   for (const c of [...reps, ...hono]) (by[c.group] = by[c.group] || []).push(c);
   fs.mkdirSync(path.join(F2P, 'packets'), { recursive: true });
-  const summary = {}, bf = path.join(__dirname, 'baseline.json'), B = fs.existsSync(bf) ? readJson(bf) : {}, HS = harnessStatus(loadResults(), B);
+  const summary = {}, bf = baselineFile(), B = fs.existsSync(bf) ? readJson(bf) : {}, HS = harnessStatus(mainResults(), mainBaseline());
   for (const [group, cs] of Object.entries(by)) {
     const cfg0 = R[cs[0].repo] || {}, bl = B[group], hst = (HS[cs[0].repo] || {}).status; // no packet where the repo or the PR cannot run: those findings are `unrunnable` without a test
     summary[cs[0].repo] = summary[cs[0].repo] || { packets: 0, findings: 0, findings_total: 0 }; summary[cs[0].repo].findings_total += cs.length;
@@ -222,7 +228,7 @@ function nearestTest(dir, p) {
   return found.sort((a, b) => common(b) - common(a) || a.length - b.length)[0] || null;
 }
 function cmdBaseline(only) {
-  const { reps } = scope(), R = REPOS(), file = path.join(__dirname, 'baseline.json'), B = fs.existsSync(file) ? readJson(file) : {}, seen = new Set();
+  const { reps } = scope(), R = REPOS(), file = baselineFile(), B = fs.existsSync(file) ? readJson(file) : {}, seen = new Set();
   for (const c of reps) {
     if (seen.has(c.group) || (only && !only.includes(c.group) && !only.includes(c.repo))) continue; seen.add(c.group);
     const cfg = R[c.repo]; if (!cfg || cfg.status === 'unrunnable') { B[c.group] = { status: 'unrunnable', reason: (cfg && cfg.reason) || 'repo not configured' }; fs.writeFileSync(file, JSON.stringify(B, null, 1) + '\n'); continue; }
@@ -238,6 +244,7 @@ function cmdBaseline(only) {
 // Fix tests never appear in packets. A PR is a control success when at least one of its fix test files is verified/verified_throw.
 const TESTFILE = /(\.(test|spec)\.[cm]?[jt]sx?|_test\.go|(^|\/)test_[^/]*\.py|_test\.py)$/;
 function cmdControls(only) {
+  if (SET) throw new Error('positive controls are per harness, not per list set');
   const { reps } = scope(), R = REPOS(), res = loadResults(), PC = (res.positive_control = res.positive_control || {}), seen = new Set();
   for (const c of reps) {
     if (seen.has(c.group) || (only && !only.includes(c.group) && !only.includes(c.repo))) continue; seen.add(c.group);
@@ -283,7 +290,7 @@ const callNames = (id) => [...new Set(testFiles(id).flatMap((r) => [...fs.readFi
 
 // run: for each finding with a written test (replay arm). Freeze -> 3 buggy runs -> 3 fixed runs (fixed tree only exists during these runs) -> verdict.
 function cmdRun(only) {
-  const { reps } = scope(), R = REPOS(), res = loadResults(), baselineFile = path.join(__dirname, 'baseline.json'), B = fs.existsSync(baselineFile) ? readJson(baselineFile) : {};
+  const { reps } = scope(), R = REPOS(), res = loadResults(), bfile = baselineFile(), B = fs.existsSync(bfile) ? readJson(bfile) : {};
   for (const c of reps) {
     if (only && !only.includes(c.id) && !only.includes(c.group)) continue;
     if (!testFiles(c.id).length) continue;
@@ -309,6 +316,7 @@ function cmdRun(only) {
 
 // Mutation arm (hono): unmutated 3x, then each survivor/uncertain mutant of the unit 3x, applied by the harness at run time only.
 function cmdRunMutation(only) {
+  if (SET) throw new Error('the mutation arm is not available for list sets');
   const man = readJson(path.join(ROOT, 'eval/mutation/hono-5ca49b0.json')), res = loadResults();
   for (const c of HONO().candidates) {
     if ((only && !only.includes(c.id)) || !testFiles(c.id).length) continue;
@@ -333,8 +341,60 @@ function cmdRunMutation(only) {
   }
 }
 
-const baselineOf = () => { const f = path.join(__dirname, 'baseline.json'); return fs.existsSync(f) ? readJson(f) : {}; };
+// ---- list input: rows from another eval, verified through the same harness ----
+// Pure: rows and per-finding fields from the caller's list. env = { repos, harness(repo) -> 'valid'|..., hasClone(repo), shaExists(repo, sha), depsChanged(repo, a, b) }.
+function buildListRows(list, name, env) {
+  if (!Array.isArray(list)) throw new Error('the list must be a JSON array');
+  const rows = [], fields = {}, prs = new Map(), seen = new Set();
+  list.forEach((e, i) => {
+    const f = e.finding || {};
+    for (const k of ['repo', 'buggy_sha', 'fixed_sha']) if (!e[k]) throw new Error(`entry ${i}: ${k} is required`);
+    for (const k of ['kind', 'path', 'title', 'body']) if (!f[k]) throw new Error(`entry ${i}: finding.${k} is required`);
+    const cfg = env.repos[e.repo], rname = (cfg && cfg.name) || String(e.repo).split('/').pop();
+    const group = e.pr || `${rname}-${e.buggy_sha.slice(0, 8)}`;
+    const id = e.id || sha([name, e.repo, e.buggy_sha, f.path, f.line, f.title].join('|'));
+    if (seen.has(id)) throw new Error(`entry ${i}: duplicate id ${id.slice(0, 12)}`);
+    seen.add(id);
+    let status = 'ok', reason = null;
+    if (!cfg) { status = 'unrunnable'; reason = 'repo is not in repos.json'; }
+    else if (cfg.status === 'unrunnable') { status = 'unrunnable'; reason = cfg.reason; }
+    else if (env.harness(e.repo) !== 'valid') { status = 'unrunnable'; reason = `harness is ${env.harness(e.repo) || 'unvalidated'}, not valid`; }
+    else if (!env.hasClone(e.repo) || !env.shaExists(e.repo, e.buggy_sha) || !env.shaExists(e.repo, e.fixed_sha)) { status = 'unresolved'; reason = 'buggy or fixed sha is not in the local clone'; }
+    rows.push({ id, pr: group, repo: e.repo, run: name, reps: [1], kind: f.kind, path: f.path, line: Number.isInteger(f.line) ? f.line : null, title: f.title, confidence: f.confidence ?? null, where: 'list', source: `list:${name}`, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha, fix_touched_file: null, arm: 'LIST', dist: null, in_oracle_set: true, status, reason });
+    fields[id] = { title: f.title, body: f.body, counterexample: f.counterexample, quote: f.quote, path: f.path, line: f.line ?? null, kind: f.kind };
+    if (!prs.has(group)) prs.set(group, { replay_id: group, repo: e.repo, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha, sha_method: 'caller supplied', deps_changed: status === 'ok' ? env.depsChanged(e.repo, e.buggy_sha, e.fixed_sha) : false });
+  });
+  return { rows, fields, prs: [...prs.values()] };
+}
+function cmdImport(listFile, name) {
+  if (!listFile || !name || !/^[a-z0-9][a-z0-9-]*$/.test(name) || ['holdout2', 'hono'].includes(name)) throw new Error('usage: f2p.js import <list.json> --name <set> (set: lowercase letters, digits, dashes; not holdout2 or hono)');
+  const hs = harnessStatus(mainResults(), mainBaseline()), R = REPOS();
+  const env = { repos: R, harness: (r) => (hs[r] || {}).status, hasClone: (r) => fs.existsSync(cloneOf(r)), shaExists: (r, x) => { try { execFileSync('git', ['-C', cloneOf(r), 'cat-file', '-e', x + '^{commit}'], { stdio: 'ignore' }); return true; } catch { return false; } }, depsChanged: (r, a, b) => nameStatus(r, a, b).some(([, p]) => MANIFEST.test(p)) };
+  const { rows, fields, prs } = buildListRows(readJson(listFile), name, env);
+  const count = (st) => rows.filter((r) => r.status === st).length;
+  fs.writeFileSync(path.join(__dirname, `${name}-candidates.json`), JSON.stringify({ generated_by: `node eval/f2p/f2p.js import <list> --name ${name}`, set: name, summary: { rows: rows.length, ok: count('ok'), unrunnable: count('unrunnable'), unresolved: count('unresolved') }, prs, candidates: rows }, null, 1) + '\n');
+  fs.mkdirSync(F2P, { recursive: true });
+  fs.writeFileSync(path.join(F2P, `${name}-fields.json`), JSON.stringify(fields, null, 1)); // verbatim finding text stays outside the repo
+  console.log(JSON.stringify({ set: name, rows: rows.length, ok: count('ok'), unrunnable: count('unrunnable'), unresolved: count('unresolved'), reasons: [...new Set(rows.filter((r) => r.status !== 'ok').map((r) => r.status + ': ' + r.reason))] }, null, 1));
+}
+// report --set: per-finding verdicts and the headline count (verified + claim_match yes over runnable). No NEAR/FAR arms, no power.
+function cmdReportList() {
+  const res = loadResults(), cands = CAND().candidates, out = [];
+  for (const c of cands) {
+    const r = res.rows[c.id] || {};
+    out.push({ id: c.id.slice(0, 8), repo: c.repo, group: c.pr, kind: c.kind, status: c.status, verdict: c.status !== 'ok' ? c.status : r.verdict || 'not_run', claim_match: r.claim_match || null, reason: c.status !== 'ok' ? c.reason : r.reason || '' });
+  }
+  for (const o of out) console.log([o.id, o.repo, o.group, o.kind, o.verdict, o.claim_match || '-', o.reason].join('\t'));
+  const run = out.filter((o) => !['unrunnable', 'unresolved', 'not_run', 'deps_changed'].includes(o.verdict));
+  const hit = run.filter((o) => o.verdict === 'verified' && o.claim_match === 'yes').length;
+  const by = out.reduce((a, o) => ((a[o.verdict] = (a[o.verdict] || 0) + 1), a), {});
+  console.log('\nverdicts:', JSON.stringify(by));
+  console.log(`verified and claim_match yes: ${hit} / ${run.length} runnable (of ${out.length} rows); verified without a claim_match label yet: ${run.filter((o) => o.verdict === 'verified' && !o.claim_match).length}`);
+}
+const mainBaseline = () => { const f = path.join(__dirname, 'baseline.json'); return fs.existsSync(f) ? readJson(f) : {}; };
+const baselineOf = mainBaseline;
 function cmdReport() {
+  if (SET) return cmdReportList();
   const res = loadResults(), cands = CAND().candidates, armOf = Object.fromEntries(cands.map((c) => [c.id, c.arm])), rows = Object.values(res.rows).filter((r) => armOf[r.id]);
   const hs = harnessStatus(res, baselineOf()), invalidRepos = new Set(Object.entries(hs).filter(([, v]) => v.status === 'invalid').map(([k]) => k));
   console.log('Harness (positive controls, k/n):', JSON.stringify(hs));
@@ -346,4 +406,4 @@ function cmdReport() {
   if (mut.length) console.log('\nMutation arm (descriptive, no rate):', JSON.stringify(mut.map((r) => ({ id: r.id.slice(0, 8), verdict: r.verdict, kills: r.kills, kills_uncertain: r.kills_uncertain, claim_match: r.claim_match }))));
 }
 
-module.exports = { cmdVerify, runOnce, withTree, cmdControls, cmdWritersDone, harnessStatus, cmdExport, cmdPackets, cmdSetup, cmdBaseline, cmdTry, cmdRun, cmdRunMutation, cmdReport, freeze, hashes, nearestTest, scope };
+module.exports = { useSet, files, cmdImport, buildListRows, cmdReportList, cmdVerify, runOnce, withTree, cmdControls, cmdWritersDone, harnessStatus, cmdExport, cmdPackets, cmdSetup, cmdBaseline, cmdTry, cmdRun, cmdRunMutation, cmdReport, freeze, hashes, nearestTest, scope };

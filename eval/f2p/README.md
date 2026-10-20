@@ -214,3 +214,29 @@ Two harness changes were made after the first outcomes and change no verdict: `r
 **Reading:** no finding near the fix produced a test that catches the bug for the reason the finding gave (0/9). Across 32 replay findings and 16 mutation findings, tests written from SpecGuard's missing_test / weak_test text caught a real defect for the stated reason once (sqlglot-7315, a FAR finding). This is G4 evidence against the claim at this scope, with wide intervals, public repos and one model writer.
 
 Not run: rqlite (13 findings; 6 tests not yet compile-checked, build stopped by machine memory), and the repos listed as unrunnable or harness-invalid above.
+
+## List input (for other evals)
+
+The harness can verify catches that come from another eval: the caller supplies, per finding, the buggy and the fixed commit and the finding text. Nothing here assumes a bug PR: `buggy_sha` and `fixed_sha` are whatever the caller supplies (the testgap prereg, "Secondary measure 3", uses the introducing PR's head as buggy and the fix commit F as fixed).
+
+Input, a JSON array:
+
+```json
+[{ "id": "optional", "pr": "optional group name", "repo": "honojs/hono", "buggy_sha": "...", "fixed_sha": "...",
+   "finding": { "kind": "missing_test", "path": "src/x.ts", "line": 12, "title": "...", "body": "...", "counterexample": "optional", "quote": "optional" } }]
+```
+
+Commands (a set is a lowercase name; every command that takes `--set <set>` works on `eval/f2p/<set>-candidates.json` instead of the holdout 2 files and writes `results-<set>.json` and `baseline-<set>.json`; without `--set` nothing changes for the existing sets):
+
+```
+node eval/f2p/f2p.js import list.json --name <set>      # writes <set>-candidates.json (+ the finding text under <evidence>/f2p/<set>-fields.json)
+node eval/f2p/f2p.js export --set <set>                  # buggy trees only
+node eval/f2p/f2p.js baseline --set <set>                # nearest existing test green at each buggy tree
+node eval/f2p/f2p.js packets --set <set>                 # one blinded packet per group, same format as before
+node eval/f2p/f2p.js try <finding-id> --set <set>        # writers
+node eval/f2p/f2p.js writers-done <repo>                 # after every writer of that repo has finished
+node eval/f2p/f2p.js run --set <set>                     # freeze, 3 buggy + 3 fixed runs, same verdict logic, same gates
+node eval/f2p/f2p.js report --set <set>                  # per-finding verdicts and verified + claim_match yes over runnable
+```
+
+Rules. `id` defaults to sha256 of `set|repo|buggy|path|line|title`; `group` is `pr` or `<repo-name>-<first 8 of buggy_sha>` (it names the tree and the packet, so it must not carry fix information). Rows have the holdout 2 shape with `arm = "LIST"` and `in_oracle_set = true`, plus `status` and `reason`. Only repos in `repos.json` whose harness is valid (positive controls, 80% rule) are runnable (today: hono, rqlite, sqlglot, langchain); any other repo is recorded `unrunnable` with the reason, never dropped. A buggy or fixed sha that is not in the local clone under `<evidence>/repos` makes the row `unresolved`. `unrunnable` and `unresolved` rows get no packet and are listed by `report`. Blinding is unchanged: a packet carries the finding fields and the buggy tree path, never a fix sha, title or diff, and findings are shuffled with seed 1. `report --set` prints no NEAR/FAR arms and no power; the claim_match labels are filled in as for the other sets. Positive controls and the mutation arm stay holdout 2 only. The same disk guard, freeze (`test_sha256_frozen`), writers-done gate and fixed-tree isolation apply.

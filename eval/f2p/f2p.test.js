@@ -145,3 +145,47 @@ test('manifest changes are recognised as deps_changed', () => {
   for (const p of ['package.json', 'packages/a/package.json', 'pnpm-lock.yaml', 'go.mod', 'go.sum', 'pyproject.toml', 'uv.lock', 'requirements-dev.txt', 'libs/core/pyproject.toml']) assert.ok(MANIFEST.test(p), p);
   for (const p of ['src/package.json.ts', 'docs/go.md', 'README.md']) assert.ok(!MANIFEST.test(p), p);
 });
+
+test('list import: row shape, id stability, unknown repos recorded, unresolved shas', () => {
+  const { buildListRows } = require('./harness');
+  const holdoutKeys = Object.keys(f2p.readJson(require('node:path').join(__dirname, 'holdout2-candidates.json')).candidates[0]);
+  const repos = { 'honojs/hono': { name: 'hono', status: 'runnable' }, 'go-gitea/gitea': { name: 'gitea', status: 'unrunnable', reason: 'not set up' }, 'rqlite/rqlite': { name: 'rqlite', status: 'runnable' } };
+  const env = { repos, harness: (r) => (r === 'honojs/hono' ? 'valid' : 'invalid'), hasClone: () => true, shaExists: (r, s) => s !== 'dead', depsChanged: () => false };
+  const fin = (path, line) => ({ kind: 'missing_test', path, line, title: `t ${path}`, body: 'b' });
+  const list = [
+    { repo: 'honojs/hono', buggy_sha: 'aaaaaaaa11', fixed_sha: 'bbbbbbbb22', finding: fin('src/a.ts', 3) },
+    { repo: 'honojs/hono', buggy_sha: 'aaaaaaaa11', fixed_sha: 'bbbbbbbb22', pr: 'case-7', id: 'given-id', finding: fin('src/b.ts', 4) },
+    { repo: 'someone/else', buggy_sha: 'c1', fixed_sha: 'c2', finding: fin('x.py', 1) },
+    { repo: 'go-gitea/gitea', buggy_sha: 'd1', fixed_sha: 'd2', finding: fin('m.go', 2) },
+    { repo: 'rqlite/rqlite', buggy_sha: 'e1', fixed_sha: 'e2', finding: fin('db/db.go', 5) },
+    { repo: 'honojs/hono', buggy_sha: 'dead', fixed_sha: 'bbbbbbbb22', finding: fin('src/c.ts', 6) },
+  ];
+  const a = buildListRows(list, 'setx', env), b = buildListRows(list, 'setx', env), c = buildListRows(list, 'sety', env);
+  assert.strictEqual(a.rows.length, list.length); // nothing is dropped
+  assert.deepStrictEqual(a.rows.map((x) => x.id), b.rows.map((x) => x.id)); // stable
+  assert.notStrictEqual(a.rows[0].id, c.rows[0].id); // the set name is part of the id
+  assert.strictEqual(a.rows[0].id, f2p.sha(['setx', 'honojs/hono', 'aaaaaaaa11', 'src/a.ts', 3, 't src/a.ts'].join('|')));
+  assert.strictEqual(a.rows[1].id, 'given-id');
+  assert.deepStrictEqual([a.rows[0].pr, a.rows[1].pr], ['hono-aaaaaaaa', 'case-7']);
+  for (const k of holdoutKeys.filter((k) => k !== 'fields')) assert.ok(k in a.rows[0], `row has ${k}`);
+  assert.ok(a.rows.every((x) => x.arm === 'LIST' && x.in_oracle_set === true));
+  assert.deepStrictEqual(a.rows.map((x) => x.status), ['ok', 'ok', 'unrunnable', 'unrunnable', 'unrunnable', 'unresolved']);
+  assert.match(a.rows[2].reason, /not in repos\.json/);
+  assert.strictEqual(a.rows[3].reason, 'not set up');
+  assert.match(a.rows[4].reason, /harness is invalid/);
+  assert.match(a.rows[5].reason, /not in the local clone/);
+  assert.strictEqual(a.fields[a.rows[0].id].body, 'b');
+  assert.throws(() => buildListRows([list[0], list[0]], 'setx', env), /duplicate id/);
+  assert.throws(() => buildListRows([{ repo: 'honojs/hono', buggy_sha: 'a', fixed_sha: 'b', finding: { kind: 'missing_test' } }], 'setx', env), /finding\.path is required/);
+});
+
+test('default file names are unchanged without --set; a set gets its own files', () => {
+  const h = require('./harness');
+  h.useSet(null);
+  assert.deepStrictEqual(h.files(), { results: 'results.json', baseline: 'baseline.json', cand: 'holdout2-candidates.json', fields: 'holdout2-fields.json' });
+  const sc = h.scope();
+  assert.strictEqual(sc.reps.length, f2p.readJson(require('node:path').join(__dirname, 'holdout2-candidates.json')).candidates.filter((x) => x.in_oracle_set).length);
+  h.useSet('demo');
+  assert.deepStrictEqual(h.files(), { results: 'results-demo.json', baseline: 'baseline-demo.json', cand: 'demo-candidates.json', fields: 'demo-fields.json' });
+  h.useSet(null);
+});
