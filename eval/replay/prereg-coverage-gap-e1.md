@@ -20,7 +20,7 @@ The runner is `cover` in specguard-33's f2p harness (branch eval/f2p-cover; sha 
 
 | Repo | Unit tests run with coverage at I's head | Report |
 |---|---|---|
-| honojs/hono | `src/**/*.test.ts` only (vitest, v8, lcov; no `.test.tsx`, no e2e). The harness must run exactly this set before the design look. | lcov |
+| honojs/hono | `src/**/*.test.{ts,tsx}` (file_re `\.test\.tsx?$`), runtime-tests excluded (vitest, v8, lcov, no e2e). The `.tsx` files are JSX unit tests (22 files, about 1090 tests); leaving them out would fake gaps in JSX code. #416 runs exactly this set (124 selected = 124 run at hono HEAD). Known env fact: `jsx/context-isolation.test.ts` fails when run without the `.tsx` set. | lcov |
 | tobymao/sqlglot | the harness's unit scope (pytest under coverage) | Cobertura |
 | langchain-ai/langchain | `libs/core` only (langchain_core unit tests); the env exists only for that package | Cobertura |
 
@@ -113,6 +113,6 @@ The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: th
 ## TBD before freeze
 
 - ~~The grepTests fix sha~~: done, b6accfd on eval/testgap-demotion (`testsName`, with a test that fails with `-q`). E1 code builds on that branch.
-- The `cover` runner sha (specguard-33, eval/f2p-cover, #416), merged with e0's OK. It must label file errors by kind and run exactly `src/**/*.test.ts` for hono.
+- The `cover` runner sha (specguard-33, eval/f2p-cover, #416), merged with e0's OK. It must label file errors by kind and run exactly `src/**/*.test.{ts,tsx}` minus runtime-tests for hono.
 - The confirmation list sha.
 - The design-look appendix comes after the freeze.
