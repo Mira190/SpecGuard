@@ -16,7 +16,7 @@ SpecGuard also has an evidence mode, the target repo's own coverage (`coverage_f
 
 ## Repositories and unit tests
 
-The runner is `cover` in specguard-33's f2p harness (branch eval/f2p-cover; sha TBD). It must be merged with e0's OK before the design look. Rows are imported with `import` as (repo, buggy sha = I's head) under `--set <name>`, then run with `cover --set <name>`.
+The runner is `cover` in specguard-33's f2p harness (#416, merged into main at 26735ba). Rows are imported with `import` as (repo, buggy sha = I's head) under `--set <name>`, then run with `cover --set <name>`.
 
 | Repo | Unit tests run with coverage at I's head | Report |
 |---|---|---|
@@ -40,7 +40,7 @@ The runner is `cover` in specguard-33's f2p harness (branch eval/f2p-cover; sha 
 
 **deps_changed.** The f2p venvs were built for older trees, so `deps_changed` is already true at clone HEAD for sqlglot and langchain (the #416 smoke run), and it will be true for many E1 PRs. It is reported per PR and **never excludes a PR on its own**. Whether a PR is usable rests only on the rules below. C's catch rate is also reported split by `deps_changed`, as descriptive only.
 
-**Unusable PRs.** These count as a miss for C, and the count is reported per repo:
+**Unusable PRs.** These count as a miss for C: observed 0, and the null places 1 flag, so unusable PRs pull lift down. A sensitivity with unusable PRs dropped is descriptive only. The count and reasons are reported per repo:
 - no report;
 - 0 selected test files;
 - the report covers none of I's changed source files;
@@ -113,6 +113,7 @@ The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: th
 ## TBD before freeze
 
 - ~~The grepTests fix sha~~: done, b6accfd on eval/testgap-demotion (`testsName`, with a test that fails with `-q`). E1 code builds on that branch.
-- The `cover` runner sha (specguard-33, eval/f2p-cover, #416), merged with e0's OK. It must label file errors by kind and run exactly `src/**/*.test.{ts,tsx}` minus runtime-tests for hono.
+- ~~The `cover` runner sha~~: done, #416 merged at 26735ba (file errors by kind; hono runs exactly `src/**/*.test.{ts,tsx}` minus runtime-tests). Still needed: a findings-free `import`, and the error kind per file.
+- The scorer `eval/replay/coverage-e1-score.js` and its test, committed before the design look, plus the design rows `eval/replay/coverage-e1-design.json`.
 - The confirmation list sha.
 - The design-look appendix comes after the freeze.
