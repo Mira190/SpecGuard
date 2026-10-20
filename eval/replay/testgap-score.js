@@ -73,14 +73,14 @@ function qualifies(dir, fx) {
   const names = new Set(); let src = false; const testText = [];
   for (const f of files) {
     if (f.newPath && isTest(f.newPath)) { testText.push(...f.added.map((x) => x.text)); continue; }
-    if (!(f.newPath || f.oldPath) || !isProd(f.newPath || f.oldPath) || (f.oldPath && !isProd(f.oldPath))) continue;
+    if (!(f.newPath || f.oldPath) || !isCode(f.newPath || f.oldPath) || (f.oldPath && !isCode(f.oldPath))) continue;
     const rem = f.removed.filter(real), add = f.added.filter(real);
     if (rem.length || add.length) src = true;
     if (rem.length && f.oldPath) { const L = linesAt(dir, fx + '^', f.oldPath); for (const x of rem) { const nm = enclosingName(L, x.n); if (nm) names.add(nm); } }
     if (add.length && f.newPath) { const L = linesAt(dir, fx, f.newPath); for (const x of add) { const nm = enclosingName(L, x.n); if (nm) names.add(nm); } }
   }
   const text = testText.join('\n'), hit = [...names].filter((nm) => word(nm).test(text));
-  return { ok: src && hit.length > 0, names: [...names], hit };
+  return { ok: src && hit.length > 0, src, names: [...names], hit };
 }
 
 // per-pair data: I's changed non-test files, units, added lines per unit, B, static flags
