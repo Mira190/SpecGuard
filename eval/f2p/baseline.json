@@ -1,0 +1,167 @@
+{
+ "orpc-1846": {
+  "status": "unrunnable",
+  "reason": "not attempted: pnpm 11 monorepo (workspace packages importing each other) install needs more disk than the 2.5 GB free on the evidence drive"
+ },
+ "orpc-1851": {
+  "status": "unrunnable",
+  "reason": "not attempted: pnpm 11 monorepo (workspace packages importing each other) install needs more disk than the 2.5 GB free on the evidence drive"
+ },
+ "orpc-1766": {
+  "status": "unrunnable",
+  "reason": "not attempted: pnpm 11 monorepo (workspace packages importing each other) install needs more disk than the 2.5 GB free on the evidence drive"
+ },
+ "sqlglot-7315": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "tests/dialects/test_duckdb.py"
+  ]
+ },
+ "rqlite-2318": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "db/db_checkpoint_test.go",
+   "db/db_common_test.go"
+  ]
+ },
+ "rqlite-2313": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "db/db_checkpoint_test.go"
+  ]
+ },
+ "rqlite-2061": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "db/db_checkpoint_test.go"
+  ]
+ },
+ "gitea-26655": {
+  "status": "unrunnable",
+  "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+ },
+ "gitea-32210": {
+  "status": "unrunnable",
+  "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+ },
+ "gitea-30156": {
+  "status": "unrunnable",
+  "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+ },
+ "gitea-28691": {
+  "status": "unrunnable",
+  "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+ },
+ "pydantic-ai-7141": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "tests/test_ssrf.py"
+  ]
+ },
+ "gitea-35987": {
+  "status": "unrunnable",
+  "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+ },
+ "gitea-37869": {
+  "status": "unrunnable",
+  "reason": "not attempted: the tests under the cited packages need database fixtures and a full cgo build of a very large module (no C compiler on the machine, zig cc is the only option); the 20-minute and disk budgets do not allow it"
+ },
+ "query-9500": {
+  "status": "unrunnable",
+  "reason": "not attempted: pnpm monorepo install needs more disk than the 2.5 GB free on the evidence drive; fix commits span years of lockfile changes"
+ },
+ "pydantic-ai-5020": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "tests/test_utils.py"
+  ]
+ },
+ "hono-3604": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "src/middleware/etag/index.test.ts"
+  ]
+ },
+ "vitest-6924": {
+  "status": "unrunnable",
+  "reason": "not attempted: pnpm monorepo that must be built before its tests run; install plus build needs more disk than the 2.5 GB free on the evidence drive"
+ },
+ "hono-3787": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "src/utils/accept.test.ts"
+  ]
+ },
+ "pydantic-ai-3454": {
+  "status": "not_green",
+  "reason": "tests/clai2/test_grep_output.py: error no tests collected",
+  "tests": [
+   "tests/clai2/test_grep_output.py"
+  ]
+ },
+ "langchain-18592": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "libs/core/tests/unit_tests/language_models/chat_models/test_base.py"
+  ]
+ },
+ "hono-2339": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "src/utils/jwt/jwt.test.ts"
+  ]
+ },
+ "hono-3413": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "src/middleware/secure-headers/index.test.ts"
+  ]
+ },
+ "query-7005": {
+  "status": "unrunnable",
+  "reason": "not attempted: pnpm monorepo install needs more disk than the 2.5 GB free on the evidence drive; fix commits span years of lockfile changes"
+ },
+ "vitest-9464": {
+  "status": "unrunnable",
+  "reason": "not attempted: pnpm monorepo that must be built before its tests run; install plus build needs more disk than the 2.5 GB free on the evidence drive"
+ },
+ "hono-3366": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "src/middleware/serve-static/index.test.ts"
+  ]
+ },
+ "hono-3727": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "src/utils/ipaddr.test.ts"
+  ]
+ },
+ "pydantic-ai-1812": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "tests/test_utils.py"
+  ]
+ },
+ "pydantic-ai-5455": {
+  "status": "green",
+  "reason": "",
+  "tests": [
+   "tests/test_streaming.py"
+  ]
+ }
+}
