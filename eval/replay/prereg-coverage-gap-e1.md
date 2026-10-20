@@ -47,7 +47,7 @@ The runner is `cover` in specguard-33's f2p harness (#416, merged into main at 2
 - 0 selected test files;
 - the report covers none of I's changed source files;
 - **a file error of kind `collection` in a test file that names a changed source file's module or sits in the same directory as its test counterpart.** Such an error removes coverage the file would have given, which would make fake gaps. This option (unusable) was chosen over dropping only that file's flags. Errors of kind `empty` or `other` do not make a PR unusable; they are counted.
-  - "Names the module" means the module stem appears as a word in the test path. Generic stems (index, __init__, main, types, utils, package) never match by name, so one broken `index.test.ts` does not make every `index.ts` PR unusable.
+  - "Names the module" means the module stem appears as a word in the test file's basename, anywhere in the tree. This is a superset of the counterpart-dir rule, so it is conservative for C (red team accepted, 2026-10-20). Generic stems (index, __init__, main, types, utils, package) never match by name, so one broken `index.test.ts` does not make every `index.ts` PR unusable.
   - Flat test dirs (sqlglot `tests/`, langchain `libs/core/tests/unit_tests/`): an error in a test file under the counterpart dir counts when its filename contains the module stem as a word.
 
 Also reported for usable PRs: how many have kind=`other` errors (e.g. "no result" from a vitest worker crash), a non-zero exit code, or `timed_out`.
