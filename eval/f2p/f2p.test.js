@@ -428,6 +428,13 @@ test('cover vitest: the run includes exactly the selected files, and a .test.tsx
   assert.ok(cfg.includes('"src/a.test.ts"') && !cfg.includes('.tsx'), 'include lists only selected files');
   const j = { testResults: [{ name: '/t/tree/src/helper/css/common.case.test.tsx', status: 'failed', message: 'No test suite found', assertionResults: [] }, { name: '/t/tree/src/a.test.ts', status: 'passed', assertionResults: [{}] }] };
   assert.deepStrictEqual(cov.vitestHealth(j, selected, '/t/tree').file_errors, {});
+  assert.ok(cov.includeConfigText('D:/w/vc.mjs', ['src/[id].test.ts', 'src/{a}.test.ts']).includes('"src/\\\\[id\\\\].test.ts","src/\\\\{a\\\\}.test.ts"'), 'glob characters in a path are escaped');
+});
+
+test('cover coverage.xml: a filename resolves against the <source> root that holds it, not the first root', () => {
+  const xml = '<coverage><sources><source>/t/a</source><source>/t/b</source></sources><packages><package><classes><class filename="pkg/m.py"><lines><line number="1" hits="1"/><line number="2" hits="0"/></lines></class></classes></package></packages></coverage>';
+  const files = cov.parseCoverageXml(xml, '/t', (p) => p.replace(/\\/g, '/') === '/t/b/pkg/m.py');
+  assert.deepStrictEqual(files, { 'b/pkg/m.py': [1, 2] });
 });
 
 test('cover: deps_changed is flagged only for the env manifests', () => {
