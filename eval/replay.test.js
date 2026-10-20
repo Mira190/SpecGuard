@@ -288,3 +288,19 @@ test('batch: a run that reached the model is a miss (billed answer then 429; a t
   assert.deepStrictEqual([r.ran, r.skipped, n, r.attempts], [0, 3, calls, []]);
   await assert.rejects(batch({ list: [E('z'), E('z')], repos, out, cap: 9, maxTotal: 100, budget: '0.5', engine, log: () => {} }), /duplicate id z/); // d.
 });
+
+test('batch: an unbilled rate limit (429) or quota error (402) is a retryable stop, never a recorded miss', async () => {
+  const { batch } = require('./replay.js'), api = require('../src/engines/claude-api.js');
+  const { d } = mkRepo(), repos = path.join(tmp, 'q-repos'); fs.mkdirSync(repos, { recursive: true }); fs.cpSync(d, path.join(repos, 'r'), { recursive: true });
+  const base = git(d, 'rev-parse', 'HEAD~1'), head = git(d, 'rev-parse', 'HEAD');
+  for (const [status, type, reason] of [[429, 'rate_limit_error', 'rate'], [402, 'billing_error', 'quota']]) {
+    const out = path.join(tmp, `q-out-${status}`), fetchFn = async () => ({ status, ok: false, headers: { get: () => null }, text: async () => JSON.stringify({ type: 'error', error: { type, message: 'no' } }) });
+    const engine = async ({ dir, ctx, repo, model, budget }) => { const log = console.log; console.log = () => {};
+      try { await api.run({ GITHUB_WORKSPACE: repo, CTX: ctx, PROMPT_FILE: path.join(dir, 'prompt.md'), ANTHROPIC_API_KEY: 'sk-ant-offline-mock', MODEL: model, MAX_BUDGET_USD: budget, MAX_OUTPUT_TOKENS: '32000', TIMEOUT: '12' }, { fetchFn, sleep: async () => {} }); } finally { console.log = log; }
+      return 0; };
+    const r = await batch({ list: ['q1', 'q2'].map((id) => ({ id, repo: 'o/r', number: 1, base, head, title: 't', body: '' })), repos, out, cap: 9, maxTotal: 100, budget: '0.5', engine, log: () => {} });
+    const res = JSON.parse(fs.readFileSync(path.join(out, 'rep1', 'q1', 'result.json'), 'utf8'));
+    assert.strictEqual(fs.readFileSync(path.join(out, 'rep1', 'q1', 'ctx', 'engine-error'), 'utf8').split('\n')[0], reason, `${status}`);
+    assert.deepStrictEqual([res.valid, res.usage.cost_usd, res.retryable, r.stopped, r.ran, fs.existsSync(path.join(out, 'rep1', 'q2'))], [false, 0, true, 'q1', 1, false], `${status}`);
+  }
+});
