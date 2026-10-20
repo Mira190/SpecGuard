@@ -3723,8 +3723,8 @@ test('coverage: the summary states executed/instrumented and lists never-execute
   assert.match(ran.calls.summary[0].body, /executed by tests: 2 of 2 instrumented/);
 });
 
-// coverage.json v2: `ran` = added lines that executed; `miss` = every instrumented never-run line of the changed file (cited lines are looked up there)
-const COV2 = (miss, ran = [], never = miss) => ({ v: 2, reports: 1, total: { instrumented: 2, executed: 1 }, files: { 'src.js': { inst: 2, exec: 1, never, ran, miss } }, unreported: [], notes: [] });
+// coverage.json: `ran` = added lines that executed (v2); `miss` = every instrumented never-run line of the changed file (cited lines are looked up there). The gate fixtures use v: 1, which main also loads, so they fail on main for the gate logic alone (post.js never reads `ran`)
+const COV2 = (miss, ran = [], never = miss) => ({ v: 1, reports: 1, total: { instrumented: 2, executed: 1 }, files: { 'src.js': { inst: 2, exec: 1, never, ran, miss } }, unreported: [], notes: [] });
 
 test('coverage exemption: a missing_test on a line the report shows never ran skips the pack-cut gate; the same finding on a line that ran, or with no report, is still demoted', async (t) => {
   const run = async (cov) => {
