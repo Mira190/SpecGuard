@@ -236,4 +236,4 @@ function main() {
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
-module.exports = { testsName, buildUnits, makeB, isCatch, isCandidate, isLow, pairData, qualifies, word, parseDiff };
+module.exports = { nullBits, testsName, buildUnits, makeB, isCatch, isCandidate, isLow, pairData, qualifies, word, parseDiff };
