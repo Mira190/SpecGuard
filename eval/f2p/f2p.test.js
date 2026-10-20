@@ -420,6 +420,9 @@ test('cover file-error kinds: collection (did not load), empty (no tests in the 
   assert.deepStrictEqual(Object.fromEntries(Object.entries(v.file_errors).map(([f, e]) => [f, e.kind])), { 'src/router/common.case.test.ts': 'empty', 'src/a.test.ts': 'collection', 'src/gone.test.ts': 'other' });
   const p = cov.pytestHealth('<testsuite tests="0" errors="1"></testsuite>', 'ERROR tests/test_e.py - no tests ran in file\nERROR tests/test_i.py - ImportError: x\n', '/t/tree');
   assert.deepStrictEqual(Object.fromEntries(Object.entries(p.file_errors).map(([f, e]) => [f, e.kind])), { 'tests/test_e.py': 'empty', 'tests/test_i.py': 'collection' });
+  // a file whose tests ran and failed by assertion is a failed test, not a file error
+  const ran = cov.vitestHealth({ numFailedTests: 1, testResults: [{ name: '/t/tree/src/f.test.ts', status: 'failed', assertionResults: [{ status: 'failed' }] }] }, ['src/f.test.ts'], '/t/tree');
+  assert.deepStrictEqual([ran.file_errors, ran.health.failed, ran.health.errored], [{}, 1, 0]);
 });
 
 test('cover vitest: the run includes exactly the selected files, and a .test.tsx outside file_re is neither run nor reported', () => {
