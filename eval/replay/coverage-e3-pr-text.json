@@ -1,161 +1,161 @@
 {
- "hono-76": {
-  "body": "",
+ "honojs/hono#76": {
+  "body": null,
   "title": "feat: serve static middleware (Cloudflare only)"
  },
- "hono-53": {
-  "body": "",
+ "honojs/hono#53": {
+  "body": null,
   "title": "feat: CORS  middleware"
  },
- "hono-3961": {
+ "honojs/hono#3961": {
   "body": "Adding two main useful features people have been asking for in the [original PR](https://github.com/honojs/hono/pull/3826) + some slight changes.\r\n\r\n### New features:\r\n- **Allow anonymous requests** by setting the new **`allow_anon`** option to `true`\r\n  - https://github.com/honojs/hono/pull/3826#issuecomment-2656576941\r\n- **Optional callback for the `jwks_uri`** instead of only a hard-coded string\r\n- **`Context`** is now **included in all callbacks**, so you can **e.g** pull information from `c.env` such as auth server\r\n  - https://github.com/honojs/hono/pull/3826#issuecomment-2687416251\r\n- Callbacks now can be either **async or sync**\r\n\r\n**Example:**\r\n```ts\r\napp.use(\r\n  '/auth/*',\r\n  jwk({\r\n    jwks_uri: (c) => `https://${c.env.authServer}/.well-known/jwks.json`,\r\n    allow_anon: true\r\n  })\r\n)\r\n```\r\n**Note 1**: This PR allows having a single endpoint for both authenticated and non-authenticated requests through `allow_anon`. The variable `c.get(\"jwtPayload\")` can be used **to differentiate authenticated requests from anonymous requests** since hono requires requests to have `exp` and `iat` in the payload (in the `verify` stage) which means the payload would always be defined for authenticated requests and be reliably used as indicator.\r\n\r\n**Note 2**: Setting `allow_anon` to `true` means requests without a token present (in either header/cookie) would be allowed to pass through the middleware successfully.\r\n\r\n**Tests**: Added 3 extra tests + modified one test to cover `jwks_uri` being a function.\r\n```\r\n✓ src/middleware/jwk/index.test.ts (34)\r\n ```\r\n \r\nThis PR breaks no code at all except for `Jwt.verifyFromJwks(...)`—specifically removed callbacks support from it since they're redundant and can be called outside, and also since only the middleware can provide the `Context` variable to the callbacks.",
   "title": "feat(hono/jwk): Extended with `allow_anon` option & passing `Context` to callbacks"
  },
- "hono-1630": {
+ "honojs/hono#1630": {
   "body": "This PR is based on #1626.\r\n\r\n### Author should do the followings, if applicable\r\n\r\n- [x] Add tests\r\n- [x] Run tests\r\n- [x] `yarn denoify` to generate files for Deno\r\n",
   "title": "feat: Introduce streaming API with `Suspense` and `use`."
  },
- "hono-3589": {
+ "honojs/hono#3589": {
   "body": "fixes #3518\r\n\r\n### Naming\r\n\r\nThe name `proxyFetch` seems a little redundant, but I rejected the other candidates for the following reasons.\r\n\r\n* `proxy` : The name `proxy` is simple but is avoided because it is confusing with the JavaScript `Proxy` object.\r\n* `fetch` : The name `fetch` is also good. Although it is in the `helper/proxy` namespace, so it can be distinguished, when it is used by being incorporated into the application, from the standpoint of reading the code, it looks like `globalThis.fetch` is being called, so I decided to avoid it because of the cognitive load.\r\n\r\n### Usage\r\n\r\n```ts\r\napp.get('/proxy/:path', (c) => {\r\n  return proxyFetch(new Request(`http://${originServer}/${c.req.param('path')}`, c.req.raw), {\r\n    proxySetRequestHeaders: {\r\n      'X-Forwarded-For': '127.0.0.1',\r\n      'X-Forwarded-Host': c.req.header('host'),\r\n      Authorization: undefined, // prevent propagating \"Authorization\" request headers in c.req.raw\r\n    },\r\n    proxyDeleteResponseHeaderNames: ['Cookie'],\r\n  })\r\n})\r\n```\r\n\r\n### The author should do the following, if applicable\r\n\r\n- [x] Add tests\r\n- [x] Run tests\r\n- [x] `bun run format:fix && bun run lint:fix` to format the code\r\n- [x] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code\r\n",
   "title": "feat(helper/proxy): introduce proxy helper"
  },
- "hono-4314": {
+ "honojs/hono#4314": {
   "body": "This PR adds a `hcParse` util that will automatically parse the response from a `hc` fetch, throwing a structured error if response is not `ok`, it is also type-safe.\r\n\r\nSomewhat resolves #3894\r\n\r\n### The author should do the following, if applicable\r\n\r\n- [x] Add tests\r\n- [x] Run tests\r\n- [x] `bun run format:fix && bun run lint:fix` to format the code\r\n- [ ] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code - I added some doc, but not fully semantics JSDoc.\r\n\r\nNote: this is an alternative PR for #4313, this PR does not add any dependency, ~however, do note that this PR do not have a graceful fail-safe for `json` parsing from [`destr`].~\r\n\r\nThis PR reimplements `fetch-result-please` minimally that is customized for Hono and integrates with `hcParse` better., do note that while the code have a different behavior compared to `fetch-result-please`/`ofetch` (removed `blob` response, `text` for undefined content-type header because we removed `destr`), but the UX should be the same and transparent for Hono's users because Hono always set the `content-type` for us 💪.",
   "title": "feat: add `parseResponse` util to smartly parse `hc`'s Response"
  },
- "langchain-25493": {
+ "langchain-ai/langchain#25493": {
   "body": "needs tests",
   "title": "core[minor]: add langsmith document loader"
  },
- "langchain-38003": {
+ "langchain-ai/langchain#38003": {
   "body": "`handle_tool_error` callables can already return structured message content at runtime, but the public typing only allowed strings. The tool error handling API now reflects the existing output formatting path, including clearer docs for how handled errors become `ToolMessage(status=\"error\")` results.",
   "title": "fix(core): type structured tool error handler output"
  },
- "langchain-34035": {
+ "langchain-ai/langchain#34035": {
   "body": "* Fix validation for input variables in f-string templates\r\n* Restrict functionality of features supported by jinja2 and mustache templates\r\n\r\nFix for advisory: GHSA-6qv9-48xg-fc7f for langchain 1.x",
   "title": "fix(core): fix validation for input variables in f-string templates, restrict functionality supported by jinja2, mustache templates (GHSA-6qv9-48xg-fc7f)"
  },
- "sqlglot-1031": {
-  "body": "",
+ "tobymao/sqlglot#1031": {
+  "body": null,
   "title": "make optimizer more leniant"
  },
- "sqlglot-7560": {
+ "tobymao/sqlglot#7560": {
   "body": "  Fixes `SELECT * FROM cte UNPIVOT(...)` and `SELECT alias.col FROM cte UNPIVOT(...) AS alias` in bigquery and other dialects. Both cases used to error or silently skip star expansion because column resolution for a pivoted CTE went to the wrong place.\r\n\r\n  Background: when a CTE is referenced with a pivot, `scope.py` stores the pivoted `exp.Table` under the pivot alias (not the CTE's `Scope`) so the pivot is treated as a new logical source. But the Table has no schema entry for the CTE name, so column lookups returned `[]`.\r\n\r\n  Changes:\r\n\r\n  - parser: UNPIVOT's pre-FOR value column(s) and the FOR field are now parsed as `Identifier` rather than `Column`. They're new output names, not references to existing columns. IN-list items stay as `Column` since those do reference source-table columns. PIVOT is unchanged.\r\n\r\n  - optimizer/resolver: for pivoted-CTE sources (`Table` with pivots, no db qualifier, name matches a known CTE), fall back to the CTE's `Scope` to read pre-pivot columns. Enables star expansion.\r\n\r\n  - optimizer/qualify_columns: when validating a column against a pivoted source, validate against the post-pivot column set rather than the pre-pivot source columns. Direct references like `u.val` pass, typos like `u.nonexistent` still error.\r\n\r\n  - optimizer/qualify_columns: `_pivot_output_columns` helper factored out of `_expand_stars` and reused by the validator. Collapses ~18 lines of inline logic that computed excluded-vs-output column sets separately then combined them at the use site.\r\n\r\n  - optimizer/qualify_columns: the `_unpivot_columns` filter in `validate_qualify_columns` is removed. With the parser change, unpivot output names are Identifiers and never enter `scope.unqualified_columns`, so the filter was dead code.\r\n",
   "title": "fix(optimizer): qualify (UN)PIVOT on CTE sources"
  },
- "sqlglot-8063": {
+ "tobymao/sqlglot#8063": {
   "body": "Fixes #8035 where `->`, `->>`, `#>`, `#>>`, and `?` were parsed as tight-binding column accessors (like `.` and `::`) via `COLUMN_OPERATORS`, instead of Postgres's actual \"any other operator\" precedence tier, below `+`/`-`, level with `||` and the bitwise operators, left-associative.\r\n\r\nThis caused casts, subscripts, and arithmetic adjacent to these operators to bind to the wrong operand.  To fix it:\r\n- Added `JSON_EXTRACT_OPERATORS`, a new operator tier parsed inside `_parse_bitwise` in `parser.py`, alongside the existing `||` handling.\r\n- Moved the relevant operators out of `COLUMN_OPERATORS` and into `JSON_EXTRACT_OPERATORS` for `PostgresParser` and `DuckDBParser`. Other dialects still treat `->` as lambda syntax.\r\n\r\nSample input:\r\n```\r\nSELECT a #>> b::TEXT[]\r\n```\r\nPrevious: cast attaches to the whole extract:\r\n```\r\nSELECT CAST(a #>> b AS TEXT[])\r\n```\r\nFixed: cast attaches to the path operand, matching Postgres:\r\n```\r\nSELECT a #>> CAST(b AS TEXT[])\r\n```",
   "title": "fix(parser)!: move JSON extraction operators to Postgres's binary-operator precedence tier"
  },
- "sqlglot-7736": {
+ "tobymao/sqlglot#7736": {
   "body": "Follow-up to https://github.com/tobymao/sqlglot/commit/74bef2f4617f2fa25881dded12ae3851a7ddfa1f.\n",
   "title": "Feat(lineage): more `UNPIVOT` lineage improvements"
  },
- "sqlglot-7407": {
+ "tobymao/sqlglot#7407": {
   "body": " 1. Metaclass removal: mypyc can't compile classes inheriting from `type`; Replaced `_TypeAnnotator` metaclass with a module-level `_build_coerces_to()` function.\r\n  2. Property setter bypass: mypyc's compiled property setter enforces the getter's return type (mypyc bug), rejecting wider types the setter accepts. `_set_type` assigns to `_type` directly instead of going through .`type = ...`\r\n  3. isinstance split: mypyc narrows variables to the first type in isinstance checks with sibling `@trait` classes, corrupting the variable for the entire branch (mypyc bug). Split into separate if/elif branches.\r\n  4. `TypeVar` removal on _set_type: mypyc resolves `TypeVars` based on the isinstance-narrowed argument type, generating incorrect type checks (mypyc bug). Changed `E` to  `exp.Expr`.\r\n  5. `t.cast` removal: mypyc enforces `t.cast` at runtime (unlike CPython where it's a no-op). Removed casts that were only meant for mypy type checking.\r\n  6. ClassVar annotations: mypyc creates instance slots for class-level dict/set attributes, making them inaccessible as class attributes. Added ClassVar to prevent slot creation.",
   "title": "feat(optimizer)!: Compile annotate_types.py with mypyc"
  },
- "sqlglot-7873": {
+ "tobymao/sqlglot#7873": {
   "body": "Related: https://github.com/tobymao/sqlglot/pull/7773. I've benchmarked the interesting bits in this PR and they don't introduce any significant perf. regressions.\r\n\r\ncc @deepyaman\r\n",
   "title": "Refactor!: simplify lax/strict %m, %d transpilation to hive hierarchy"
  },
- "hono-5199": {
+ "honojs/hono#5199": {
   "body": "Resolves #4401. Hono's `etag` middleware previously generated ETags for streams by hashing chunks incrementally using `result = generator(mergeBuffers(result, value))`. This computes `hash(hash(chunk1) + chunk2)` instead of `hash(chunk1 + chunk2)`.\r\nConsequently, the generated ETag was mathematically incorrect and depended on how the response stream chunks were split across the network.\r\n\r\nThis PR fixes the digest generation logic in `generateDigest` to accumulate all stream chunks in memory first and perform a single SHA-1 hash on the full payload, ensuring mathematical correctness and consistency across chunk sizes. Additionally, the middleware now skips ETag generation for `text/event-stream` (SSE) responses to prevent infinite reader blocking and hangs.\r\n\r\n ###  Design Decisions & Rationale\r\n\r\n* **Buffer-and-Hash for Correctness:** Native Web Crypto (`crypto.subtle.digest`) does not support streaming/incremental hashing. To calculate the correct SHA-1 hash of the response body, we must collect the stream chunks in memory and merge them. This ensures that identical response payloads always yield the same ETag, regardless of network chunk fragmentation or compression differences.\r\n\r\n* **Targeted SSE Bypass:** Server-Sent Events (SSE) are infinite streams. Trying to read them to the end blocks the reader indefinitely. We added a zero-overhead check for the `Content-Type: text/event-stream` header to bypass the ETag pipeline safely.\r\n\r\n* **Memory Trade-off:** While buffering chunks consumes memory proportional to the response body, the ETag middleware already clones and reads the entire body stream to hash it. Consolidating the chunks in memory is a minor overhead that is necessary to achieve cache specification compliance.\r\n\r\n### The author should do the following, if applicable\r\n\r\n    - [x] Add tests\r\n    - [x] Run tests\r\n    - [x] `bun run format:fix && bun run lint:fix` to format the code\r\n    - [x] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code",
   "title": " fix(etag): resolve incorrect incremental hashing for chunked responses"
  },
- "langchain-34257": {
+ "langchain-ai/langchain#34257": {
   "body": "Adds [PEP 702](https://peps.python.org/pep-0702/) `__deprecated__` attribute support to the `@deprecated` decorator, enabling IDE and type checker integration for deprecation warnings.\r\n\r\n---\r\n\r\nPEP 702 introduced the `__deprecated__` attribute convention, which type checkers (Pyright, mypy) and IDEs (VS Code with Pylance, PyCharm) can use to surface deprecations directly in the editor. This PR sets `__deprecated__` on all objects decorated with `@deprecated`.\r\n\r\nWith this change, developers using supported IDEs will see:\r\n\r\n- **Strikethrough text** on deprecated symbols\r\n- **Hover messages** showing the deprecation reason and suggested alternative\r\n- **Diagnostic warnings** during type checking (e.g., `pyright`, `mypy`)\r\n\r\n### References\r\n\r\n- [PEP 702 – Marking deprecations using the type system](https://peps.python.org/pep-0702/)\r\n- [`typing.deprecated` specification](https://typing.python.org/en/latest/spec/directives.html#deprecated)",
   "title": "feat(core): add PEP 702 `__deprecated__` attribute support to `@deprecated`"
  },
- "sqlglot-8027": {
+ "tobymao/sqlglot#8027": {
   "body": "`WeekStart` nodes reaching a non-BigQuery generator were emitted as literal `WEEK(SUNDAY)` text, which is invalid syntax everywhere else, e.g. `DATEDIFF(WEEK(SUNDAY), ...)` for Snowflake/TSQL/Spark or `DATE_PART(WEEK(THURSDAY), ...)` for `EXTRACT`. Dialects without week-start syntax now emit their plain week unit instead, warning via `unsupported()` when the requested start day differs from the dialect's own week start.\r\n\r\nThe BigQuery-specific `WEEK(SUNDAY) -> WEEK` collapse moves into a `weekstart_sql` override, mysql/exasol (which inspect units textually) use the new `weekstart_name` helper, and `unit_to_str` lowers `WeekStart` to a `'WEEK'` literal for string-unit contexts.\r\n",
   "title": "fix!: degrade BigQuery WEEK(<day>) units gracefully in other dialects"
  },
- "hono-2261": {
+ "honojs/hono#2261": {
   "body": "fixes https://github.com/honojs/hono/issues/2259\r\n\r\n### Author should do the followings, if applicable\r\n\r\n- [x] Add tests\r\n- [x] Run tests\r\n- [x] `yarn denoify` to generate files for Deno\r\n",
   "title": "fix: assign value to element's property for input, textarea, select"
  },
- "langchain-36080": {
+ "langchain-ai/langchain#36080": {
   "body": "```python\r\nfrom langchain.chat_models import init_chat_model\r\n\r\ndef get_weather(location: str) -> str:\r\n    \"\"\"Get the weather at a location.\"\"\"\r\n    pass\r\n\r\nmodel = init_chat_model(\r\n    \"anthropic:claude-haiku-4-5\",\r\n    thinking={\"type\": \"enabled\", \"budget_tokens\": 5_000}\r\n).bind_tools([get_weather])\r\n\r\nmodel.invoke(\"Hello!\", temperature=1)\r\n```\r\n\r\n[Trace before](https://smith.langchain.com/public/537b363f-7b16-40a1-8ccd-5b042fbbe723/r)\r\n\r\n[Trace after](https://smith.langchain.com/public/5de058cf-6bd8-4794-954f-567b1949ba8e/r)\r\n\r\n<img width=\"832\" height=\"911\" alt=\"Screenshot 2026-03-18 at 11 08 59 AM\" src=\"https://github.com/user-attachments/assets/3efd9b3f-01b2-41b4-8bfe-8a1872ecc04b\" />",
   "title": "fix(core): trace invocation params in metadata"
  },
- "sqlglot-8585": {
+ "tobymao/sqlglot#8585": {
   "body": "Fixes #8584\n\nDoris' `MATCH`, `MATCH_ANY`, `MATCH_ALL`, `MATCH_PHRASE`, `MATCH_PHRASE_PREFIX`, `MATCH_PHRASE_EDGE` and `MATCH_REGEXP` now parse into `exp.Match`, the node SQLite's `MATCH` already uses, with two new optional args: `kind` (`ANY`, `PHRASE_PREFIX`, ...) and `analyzer` for `USING ANALYZER`.\n\nThe operators are matched by text in `DorisParser._parse_range`, before the base range parsing (like MySQL's `SOUNDS LIKE`), and only when a string literal follows, since Doris requires one. Tokenizing them as keywords would break identifiers named `match_any` and the like. `c NOT MATCH_ANY 'x'` is accepted and comes out as `NOT c MATCH_ANY 'x'`. Only `DorisGenerator` renders the variants and the analyzer; other dialects keep emitting plain `MATCH` and flag the rest as unsupported.\n\nEvery query in the new test was run on Doris 4.1.3, on a table with inverted indexes for both analyzers.\n\nI used Claude Code to write this change and reviewed it myself.\n",
   "title": "feat(doris): parse full-text search operators [CLAUDE]"
  },
- "hono-4214": {
+ "honojs/hono#4214": {
   "body": "This PR introduces the `fire()` method in the Service Worker adapter. It will do `addEventListener('fetch', handle(app))` for the given Hono instance. Usage:\r\n\r\n```ts\r\nimport { Hono } from 'hono'\r\nimport { fire } from 'hono/service-worker'\r\n\r\nconst app = new Hono()\r\n\r\napp.get('/', (c) => c.text('Hi'))\r\n\r\nfire(app)\r\n```\r\n\r\nThe background: https://github.com/honojs/hono/issues/3127#issuecomment-2843529188\r\n\r\n### The author should do the following, if applicable\r\n\r\n- [ ] Add tests\r\n- [x] Run tests\r\n- [x] `bun run format:fix && bun run lint:fix` to format the code\r\n- [x] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code\r\n",
   "title": "feat(service-worker): add `fire()`"
  },
- "langchain-34414": {
+ "langchain-ai/langchain#34414": {
   "body": "Adds `usage_metadata` (token counts, etc.) to the run metadata in `LangChainTracer`.\r\n\r\nWhen an LLM run ends, usage metadata is extracted from all generations and aggregated using the existing `add_usage` helper, then stored in `run.extra[\"metadata\"][\"usage_metadata\"]`.\r\n\r\nThe original data in outputs remains unchanged.\r\n\r\nAlso, see #34415                 ",
   "title": "feat(core): add `usage_metadata` to metadata in `LangChainTracer`"
  },
- "sqlglot-8588": {
+ "tobymao/sqlglot#8588": {
   "body": "Fixes #8587.\n\nParse Oracle partition clauses before table aliases and insert column lists. Add `AS OF SCN` and `AS OF TIMESTAMP` parsing and generation, including arithmetic expressions and queries with `SAMPLE`.\n\nTested with `make check`.\n",
   "title": "fix(oracle): parse partition clauses and flashback queries [CODEX]"
  },
- "hono-4556": {
+ "honojs/hono#4556": {
   "body": "### Problem\r\nHono RPC client doesn't infer response types from global error handlers like `app.onError()` or global middlewares like `app.use(\"*\")`. This means developers lose type safety for common error responses like 500 and so on when using the RPC client.\r\n\r\n### Solution\r\nAdded ApplyGlobalResponse<App, ResponseType, StatusCode, Format> helper that merges global error response types into all routes.\r\n\r\nUsage:\r\n\r\n```typescript\r\nconst app = new Hono()\r\n  .get('/users', (c) => c.json({ users: [...] }))\r\n  .onError((err, c) => c.json({ error: err.message }, 500))\r\n\r\n// Apply global error type\r\ntype AppWithErrors = ApplyGlobalResponse<typeof app, { error: string }, 500, 'json'>\r\n\r\nconst client = hc<AppWithErrors>('http://api.example.com')\r\n// Now client knows about both success and error responses\r\n```\r\n\r\n### The author should do the following, if applicable\r\n\r\n- [x] Add tests\r\n- [x] Run tests\r\n- [x] `bun run format:fix && bun run lint:fix` to format the code\r\n- [x] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code\r\n",
   "title": "feat(client): Add  `ApplyGlobalResponse` type helper for RPC Client"
  },
- "langchain-35281": {
+ "langchain-ai/langchain#35281": {
   "body": "## Description\n\nFixes #34807\n\nWhen LLMs (e.g. Claude via Bedrock) stream parallel tool calls, `merge_lists()` in `_merge.py` incorrectly merges separate tool calls into one by concatenating their names and IDs. This happens because `merge_lists` only checks the `index` field to determine if two chunks should be merged, but parallel tool calls from some providers can share the same `index` while having different `id` values.\n\n### Root Cause\n\nIn `merge_lists()`, the merge condition at line 113 only checks:\n```python\nif \"index\" in e_left and e_left[\"index\"] == e[\"index\"]\n```\n\nThis causes two parallel tool calls with `index=0` but different IDs to be merged via `merge_dicts()`, which concatenates their string fields (name, id, args).\n\n### Fix\n\nAdded an `id` check to the merge condition:\n```python\nif (\n    \"index\" in e_left\n    and e_left[\"index\"] == e[\"index\"]\n    and (\n        e_left.get(\"id\") is None\n        or e.get(\"id\") is None\n        or e_left[\"id\"] == e[\"id\"]\n    )\n)\n```\n\nThis ensures:\n- **Streaming continuations** (subsequent chunks with `id=None`) still merge correctly with their parent chunk\n- **Same tool chunks** (same `id` + same `index`) merge correctly\n- **Parallel tool calls** (different `id` + same `index`) are kept separate\n- **Legacy chunks** without `id` field maintain backward compatibility\n\n### Note on OpenAI workaround\n\nOpenAI already avoids this bug by prefixing tool call indices with `lc_tc_` (converting integer index to string), which gets special handling in `merge_lists`. This fix addresses the issue at the `merge_lists` level so all providers benefit without needing provider-specific workarounds.\n\n## Tests\n\nAdded `test_merge_tool_calls_parallel_same_index` covering:\n- Two parallel tool calls with same index but different IDs (should not merge)\n- Streaming continuation with `id=None` (should still merge)\n- Three parallel tool calls all with same index (should remain separate)\n\nAll existing tests pass.",
   "title": "fix(core): fix merge_lists incorrectly merging parallel tool calls"
  },
- "sqlglot-2513": {
+ "tobymao/sqlglot#2513": {
   "body": "Ok, here's a swing.\r\n\r\nCheck out the test matrix in `test_dialect` - I think that explains the behavior.",
   "title": "fix!: transpile division"
  },
- "hono-3288": {
+ "honojs/hono#3288": {
   "body": "#3264\r\n\r\n### Key changes\r\n\r\n#### use for-loop instead of recursion for `findInsertBefore` 0dadfbc26c44bff5c5789a34ee20184675648b57\r\n\r\nAs @ryuapp  pointed out in #3203, the implementation with recursive calls did not perform well and sometimes resulted in errors when there were a large number of elements, so it was modified so that recursive calls were not made.\r\n\r\n#### assign type and ref to node object directly. `Object.defineProperties` is too slow 7fd73efa4ba42002eb335c2ba2e993e482edb55d\r\n\r\n* `reactElement.type`\r\n* `reactElement.ref`\r\n\r\nhttps://github.com/honojs/hono/compare/main...usualoma:hono:perf/jsx-dom?expand=1#diff-c9b14c1b74662b399c25e6dc0c870408c466e1c96e39a1d429903b2a3d0db51fL11-L20\r\n\r\nThe code to make the following properties referential is for React compatibility, but the implementation using `Object.defineProperties` was very expensive. This change is not pretty, but it is an acceptable redundancy when considered as a trade-off for improved performance.\r\n\r\n#### Reduce recalculation and reapplication when properties are unchanged\r\n\r\nIn some cases, DOM attributes were being reassigned even when there were no changes to the properties, so reassignment is no longer performed when it is unnecessary.\r\n\r\n\r\n\r\n### benchmark\r\n\r\nBased on this branch (thank you very much @aminya!),\r\n\r\nhttps://github.com/aminya/js-framework-benchmark/tree/hono\r\n\r\nThe following changes were added and benchmarked in my environment.\r\n\r\n```diff\r\ndiff --git a/frameworks/keyed/hono/src/index.tsx b/frameworks/keyed/hono/src/index.tsx\r\nindex 2628e205..998c4b0f 100644\r\n--- a/frameworks/keyed/hono/src/index.tsx\r\n+++ b/frameworks/keyed/hono/src/index.tsx\r\n@@ -141,9 +141,8 @@ const App = () => {\r\n     <table class=\"table table-hover table-striped test-data\">\r\n       <tbody>\r\n         {data.map(item => {\r\n-          console.log(item);\r\n           return (\r\n-            <Row item={item} selected={selected === item.id} dispatch={dispatch} />\r\n+            <Row key={item.id} item={item} selected={selected === item.id} dispatch={dispatch} />\r\n           );\r\n         })}\r\n       </tbody>\r\n```\r\n\r\nPerformance for creation or update is roughly equivalent to React, with smaller file sizes and memory usage, which is an expected result since \"hono/jsx\" aims for \"an implementation with a React-compatible API that is small enough to be practical with a small amount of code\".\r\n\r\n![jsx-dom-bench](https://github.com/user-attachments/assets/1cea9d83-01ac-4788-b830-654aba628db8)\r\n\r\n### The author should do the following, if applicable\r\n\r\n- [x] Add tests\r\n    - Only a few tests have been added, but as most of the changes are internal refactoring with no external specification changes, no further additional tests are considered necessary. \r\n- [x] Run tests\r\n- [x] `bun run format:fix && bun run lint:fix` to format the code\r\n",
   "title": "perf(jsx/dom): improve performance"
  },
- "langchain-35319": {
+ "langchain-ai/langchain#35319": {
   "body": "Reverts langchain-ai/langchain#35317. Meant to merge https://github.com/langchain-ai/langchain/pull/35302.",
   "title": "revert: accept integer temperature values in _get_ls_params"
  },
- "sqlglot-1900": {
+ "tobymao/sqlglot#1900": {
   "body": "Fixes #1898",
   "title": "Fix!(optimizer): preserve parenthesized joins, tables"
  },
- "hono-2499": {
+ "honojs/hono#2499": {
   "body": "This PR adds a status code to the response type and allows type filtering in RPC as below.\r\n\r\nserver.ts\r\n```ts\r\nconst app = new Hono().get(\r\n  \"/posts/:id\",\r\n  zValidator(\r\n    \"param\",\r\n    z.object({\r\n      id: z.string(),\r\n    })\r\n  ),\r\n  async (c) => {\r\n    const { id } = c.req.valid(\"param\");\r\n\r\n    try {\r\n      const post: Post | undefined = await getPost(id);\r\n\r\n      if (post !== undefined) {\r\n        return c.json({ post }, 200);\r\n      }\r\n\r\n      return c.json({ error: \"not found\" }, 404);\r\n    } catch (e) {\r\n      return c.json({ error: \"internal server error\" }, 500);\r\n    }\r\n  }\r\n);\r\n\r\nexport type AppType = typeof app;\r\n```\r\n\r\nclient.ts\r\n```ts\r\nconst client = hc<AppType>(\"/api\");\r\n\r\nconst res = await client.posts[\":id\"].$get({\r\n  param: { id: \"1\" },\r\n});\r\n\r\nif (res.status === 404) {\r\n  const data: { error: string } = await res.json();\r\n  console.log(data.error);\r\n}\r\n\r\nif (res.ok) {\r\n  const data: { post: Post } = await res.json();\r\n  console.log(data.post);\r\n}\r\n\r\n// { post: Post } | { error: string }\r\ntype ResponseType = InferResponseType<(typeof client.posts)[\":id\"][\"$get\"]>;\r\n\r\n// { post: Post }\r\ntype ResponseType200 = InferResponseType<(typeof client.posts)[\":id\"][\"$get\"], 200>;\r\n```\r\n\r\n### Author should do the followings, if applicable\r\n\r\n- [x] Add tests\r\n- [x] Run tests\r\n- [x] `yarn denoify` to generate files for Deno\r\n",
   "title": "feat(rpc): Add status code to response type"
  },
- "langchain-31555": {
+ "langchain-ai/langchain#31555": {
   "body": "Revert serialization regression introduced in https://github.com/langchain-ai/langchain/pull/31238\r\n\r\nFixes https://github.com/langchain-ai/langchain/issues/31486",
   "title": "core(fix): revert `set_text` optimization"
  },
- "sqlglot-4437": {
+ "tobymao/sqlglot#4437": {
   "body": "[Public Slack context](https://tobiko-data.slack.com/archives/C044BRE5W4S/p1732134367565699)\r\n\r\nThe dialect flag `NORMALIZE_FUNCTIONS` is currently serving 2 purposes:\r\n1. Forwarding it's value to the Generator flag `normalize_functions`, if the latter is not defined by the user\r\n2. Preserving the original function name during parse time, which can be used to roundtrip different names for the same AST node\r\n\r\nHowever, while the use case of (1) is distinct from (2), the Generator (`function_fallback_sql`) is using the same flag for both purposes which causes issues such as the following:\r\n\r\n```Python3\r\n>>> import sqlglot\r\n>>> sqlglot.parse_one(\"SELECT JSON_VALUE(a, b)\", read=\"bigquery\").sql(\"bigquery\")\r\n'SELECT JSON_VALUE(a, b)'\r\n>>> sqlglot.parse_one(\"SELECT JSON_VALUE(a, b)\", read=\"bigquery\").sql(\"bigquery\", normalize_functions=\"lower\")\r\n'SELECT json_extract_scalar(a, b)'\r\n\r\n```\r\n\r\nThis PR introduces a new dialect flag to separate these concerns: \r\n\r\n```Python3\r\n>>> import sqlglot\r\n>>> sqlglot.parse_one(\"SELECT JSON_VALUE(a, b)\", read=\"bigquery\").sql(\"bigquery\")\r\n'SELECT JSON_VALUE(a, b)'\r\n>>> sqlglot.parse_one(\"SELECT JSON_VALUE(a, b)\", read=\"bigquery\").sql(\"bigquery\", normalize_functions=\"lower\")\r\n'SELECT json_value(a, b)'\r\n```\r\n",
   "title": "fix: Separate NORMALIZE_FUNCTIONS from name preservation"
  },
- "hono-444": {
+ "honojs/hono#444": {
   "body": "This PR fixes #439.\r\n\r\n### Changes\r\n\r\nThere are no changes to the external specification in this PR, and we can continue to stringify templates with `(<p>text</p>).toString()`. However, there are some changes in the internal structure.\r\n\r\n#### `jsx` returns `JSXNode` instead of `HtmlEscapedString`\r\n\r\nPreviously, upon calling `jsx`, basic stringification was completed and an `HtmlEscapedString` object was returned, but with this PR, a data-wrapped `JSXNode` is returned upon calling `jsx`. The stringification is done at `toString()` call.\r\n\r\n### Discussion\r\n\r\nWith this PR, `escape` defined in utils/html is no longer used inside the hono repository. (Only `escapeToBuffer` is used.)\r\n\r\nThe `escape` function is fast enough and convenient for hono users to use in their applications, but depending on policy, it could be removed as unnecessary.\r\n\r\n### Benchmark\r\n\r\n```\r\nHono x 173,197 ops/sec ±2.16% (93 runs sampled)\r\nReact x 84,569 ops/sec ±2.81% (91 runs sampled)\r\nPreact x 61,307 ops/sec ±3.21% (86 runs sampled)\r\nNano x 16,871 ops/sec ±5.46% (78 runs sampled)\r\nFastest is Hono\r\n```",
   "title": "perf(jsx): JSX performance improvement"
  },
- "langchain-25169": {
+ "langchain-ai/langchain#25169": {
   "body": "Hello. \r\nFirst of all, thank you for maintaining such a great project.\r\n\r\n## Description\r\nIn https://github.com/langchain-ai/langchain/pull/25123, support for structured_output is added. However, `\"additionalProperties\": false` needs to be included at all levels when a nested object is generated.\r\n\r\nerror from current code: https://gist.github.com/fufufukakaka/e9b475300e6934853d119428e390f204\r\n```\r\nBadRequestError: Error code: 400 - {'error': {'message': \"Invalid schema for response_format 'JokeWithEvaluation': In context=('properties', 'self_evaluation'), 'additionalProperties' is required to be supplied and to be false\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': None}}\r\n```\r\n\r\nReference: [Introducing Structured Outputs in the API](https://openai.com/index/introducing-structured-outputs-in-the-api/)\r\n\r\n```json\r\n{\r\n  \"model\": \"gpt-4o-2024-08-06\",\r\n  \"messages\": [\r\n    {\r\n      \"role\": \"system\",\r\n      \"content\": \"You are a helpful math tutor.\"\r\n    },\r\n    {\r\n      \"role\": \"user\",\r\n      \"content\": \"solve 8x + 31 = 2\"\r\n    }\r\n  ],\r\n  \"response_format\": {\r\n    \"type\": \"json_schema\",\r\n    \"json_schema\": {\r\n      \"name\": \"math_response\",\r\n      \"strict\": true,\r\n      \"schema\": {\r\n        \"type\": \"object\",\r\n        \"properties\": {\r\n          \"steps\": {\r\n            \"type\": \"array\",\r\n            \"items\": {\r\n              \"type\": \"object\",\r\n              \"properties\": {\r\n                \"explanation\": {\r\n                  \"type\": \"string\"\r\n                },\r\n                \"output\": {\r\n                  \"type\": \"string\"\r\n                }\r\n              },\r\n              \"required\": [\"explanation\", \"output\"],\r\n              \"additionalProperties\": false\r\n            }\r\n          },\r\n          \"final_answer\": {\r\n            \"type\": \"string\"\r\n          }\r\n        },\r\n        \"required\": [\"steps\", \"final_answer\"],\r\n        \"additionalProperties\": false\r\n      }\r\n    }\r\n  }\r\n}\r\n```\r\n\r\nIn the current code, `\"additionalProperties\": false` is only added at the last level. \r\nThis PR introduces the `_add_additional_properties_key` function, which recursively adds `\"additionalProperties\": false` to the entire JSON schema for the request.\r\n\r\nTwitter handle: `@fukkaa1225`\r\n\r\nThank you!",
   "title": "core: Add additional properties recursively for structured output(openai) when nested object is generated"
  },
- "sqlglot-7639": {
+ "tobymao/sqlglot#7639": {
   "body": "Context: https://github.com/tobymao/sqlglot/pull/7626#issuecomment-4422125774\n\n\n",
   "title": "Refactor: make dialect in build_formatted_time optional, fetch it from parser"
  },
- "hono-3670": {
+ "honojs/hono#3670": {
   "body": "closes #3467\r\n\r\nThis PR fixes a problem in createHandlers where the expected type information was not passed to subsequent handlers \r\nwhen middlewares changed the Context<Env> type.\r\n\r\n### The author should do the following, if applicable\r\n\r\n- [x] Add tests\r\n- [x] Run tests\r\n- [x] `bun run format:fix && bun run lint:fix` to format the code\r\n- [ ] Add [TSDoc](https://tsdoc.org/)/[JSDoc](https://jsdoc.app/about-getting-started) to document the code\r\n",
   "title": "feat(helper/factory): Calculate Context<Env> Type in createHandlers"
  },
- "langchain-25360": {
-  "body": "",
+ "langchain-ai/langchain#25360": {
+  "body": null,
   "title": "Merge support for group manager"
  },
- "sqlglot-8486": {
+ "tobymao/sqlglot#8486": {
   "body": "Fixes #8485\n\n`ALTER TABLE t DROP COLUMN a, b` fell back to parsing as a `Command`: after the first `Drop` action consumed only `a`, the comma-separated continuation (`b`) had no `DROP` keyword for the CSV action parser to match, so the token stream was never fully consumed.\n\n**Change**\n\nIn `_parse_alter_table_drop`, when an action in the CSV list is omitted after a comma and the previous action was a `Drop`, the continuation column is parsed as an additional `Drop` action with the same `kind`. Both syntaxes keep working:\n\n- `ALTER TABLE t DROP a, DROP b` (repeated keyword, MySQL style) — unchanged\n- `ALTER TABLE t DROP COLUMN a, b` (single keyword) — now parsed instead of falling back to `Command`\n\nVerified on the issue's example (Snowflake):\n\n```py\n>>> parse_one(\"ALTER TABLE FOO DROP COLUMN BAR, BAZ\", read=\"snowflake\").sql(read=\"snowflake\")\n'ALTER TABLE FOO DROP COLUMN BAR, DROP COLUMN BAZ'\n```\n\nThe generated round-trip spells out the `DROP` keyword per action, which is semantically equivalent.\n\n**Tests**\n\n- `test_drop_multiple_columns` (tests/test_parser.py) fails on `main` (falls back to `Command`) and passes with the fix\n- The existing MySQL form `ALTER TABLE t DROP b, DROP c` is covered by `test_alter_drop_column` and still passes unchanged\n- Full `test_parser.py` / `test_transpile.py` / `test_expressions.py` and the snowflake/postgres/mysql/duckdb/dialect suites pass (`test_max_nodes` fails on this machine's clean checkout too — MemoryError, unrelated environment limit)\n",
   "title": "fix(parser): parse ALTER TABLE DROP with multiple columns"
  },
- "hono-4405": {
+ "honojs/hono#4405": {
   "body": "Changes `JSONParsed` so it will infer `unknown` values as `JSONValue`.\r\n\r\nI also included handling for `bigint` so `JSONParsed` will be `never`, indicating that an error will be thrown.\r\n\r\nfixes #4368 \r\n",
   "title": "fix(types): JSONParsed infer unknown values"
  }
