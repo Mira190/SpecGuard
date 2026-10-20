@@ -37,7 +37,7 @@ The 26 real catches, cut by grade and by delivery:
 | | Direct | Indirect |
 |---|---|---|
 | Delivered (inline) | 5 | 2 |
-| Hidden (reduced review / low confidence) | 7 | 3 |
+| Hidden (low confidence, summary Details only) | 7 | 3 |
 | Unknown (a regrade with no finding index recorded) | 3 | 6 |
 
 - **Delivered direct: 5/129 = 3.9%, on 3 PRs. Only 1 of the 129 is a missing_test finding.**
@@ -57,7 +57,7 @@ Branch `eval/testgap-demotion` @ 6e0c829 covers the 24 test-gap pairs × 3. Ther
 
 - The mutation pilot (#374): 0/10 gaps located at line level.
 - Escaped-defect line hits on SpecGuard's own history (#397): 5.0% vs a chance level of 4.5%.
-- f2p, a test written from the finding fails on the bug and passes on the fix (#408): 1/32 verified.
+- f2p, a test written from the finding fails on the bug and passes on the fix (#410): 1/32 verified.
 - `prereg-testgap-mvp.md`: retired unrun, design power 0.
 - Pack arms R, S, O and H: not adopted (#406).
 - This note.
