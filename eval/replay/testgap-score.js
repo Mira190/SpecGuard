@@ -9,7 +9,13 @@ const path = require('node:path');
 const { isProd, isTest, isCommentLine, mulberry32 } = require('../szz');
 const { enclosingName } = require('../../src/test-map');
 const { git, tryGit, addedLines, blamedSpots } = require('./holdout2-null');
+const { CODE } = require('../../src/coverage');
+const { execFileSync } = require('node:child_process');
+const { parseComment } = require('../grade');
+const { summaryItems } = require('../replay');
 
+// code files only: isProd also accepts lockfiles, manifests (package.json, pyproject.toml), CI scripts under .github/ and gitlinks, which would become units or blamed lines
+const isCode = (f) => isProd(f) && CODE.test(f) && !/^\.github\//.test(f);
 const TOL = 3, KINDS = new Set(['missing_test', 'weak_test']);
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
 
@@ -67,7 +73,7 @@ function qualifies(dir, fx) {
   const names = new Set(); let src = false; const testText = [];
   for (const f of files) {
     if (f.newPath && isTest(f.newPath)) { testText.push(...f.added.map((x) => x.text)); continue; }
-    if (!(f.newPath || f.oldPath) || !isProd(f.newPath || f.oldPath) || (f.oldPath && !isProd(f.oldPath))) continue;
+    if (!(f.newPath || f.oldPath) || !isCode(f.newPath || f.oldPath) || (f.oldPath && !isCode(f.oldPath))) continue;
     const rem = f.removed.filter(real), add = f.added.filter(real);
     if (rem.length || add.length) src = true;
     if (rem.length && f.oldPath) { const L = linesAt(dir, fx + '^', f.oldPath); for (const x of rem) { const nm = enclosingName(L, x.n); if (nm) names.add(nm); } }
@@ -79,8 +85,8 @@ function qualifies(dir, fx) {
 
 // per-pair data: I's changed non-test files, units, added lines per unit, B, static flags
 function pairData(dir, p, fx, withStatic = true) {
-  const I = p.introducing, blamed = blamedSpots(dir, fx, I.merge_commit);
-  const changed = git(dir, 'diff', '--name-only', '--no-renames', I.base, I.head).split('\n').filter((f) => f && isProd(f));
+  const I = p.introducing, blamed = blamedSpots(dir, fx, I.merge_commit).filter((b) => isCode(b.path));
+  const changed = git(dir, 'diff', '--name-only', '--no-renames', I.base, I.head).split('\n').filter((f) => f && isCode(f));
   const unitsByPath = {}, changedUnits = [];
   const testRaw = parseDiff(git(dir, 'diff', '-U0', '--no-color', '--no-renames', I.base, I.head));
   const testText = testRaw.filter((f) => f.newPath && isTest(f.newPath)).flatMap((f) => f.added.map((x) => x.text)).join('\n');
@@ -94,9 +100,16 @@ function pairData(dir, p, fx, withStatic = true) {
   const B = makeB(blamed, unitsByPath);
   const resolved = blamed.filter((b) => { const u = unitsByPath[b.path].find((x) => b.line >= x.start && b.line <= x.end); return u && u.name !== null; }).length;
   // static arm: changed named definitions whose name is in neither I's test diff nor any test file at I's head
-  const grepTests = (nm) => { if (!headTests.length) return false; for (let i = 0; i < headTests.length; i += 200) if (tryGit(dir, 'grep', '-qw', '-F', '-e', nm, I.head, '--', ...headTests.slice(i, i + 200))) return true; return false; };
-  const flags = !withStatic ? [] : changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !grepTests(u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
+  const flags = !withStatic ? [] : changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !testsName(dir, I.head, headTests, u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
   return { blamed, resolved, changedFiles: new Set(changed), changedUnits, unitsByPath, B, flags };
+}
+
+// is `name` (whole word, fixed string) in any of `files` at `head`? git grep exits 0 = match, 1 = no match, else error (thrown)
+function testsName(dir, head, files, name) {
+  for (let i = 0; i < files.length; i += 50) { // 50 paths per call: the Windows command line limit is near 32k
+    try { execFileSync('git', ['-C', dir, 'grep', '-l', '-w', '-F', '-e', name, head, '--', ...files.slice(i, i + 50)], { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 28 }); return true; } catch (e) { if (e.status !== 1) throw e; }
+  }
+  return false;
 }
 
 // ---- per-run null draws ----
@@ -121,6 +134,7 @@ function main() {
   const fixsha = JSON.parse(fs.readFileSync(arg('fixshas'), 'utf8'));
   const dirOf = (p) => path.join(repos, p.repo.split('/')[1]);
 
+  const UR = arg('undemote-reasons', 'a'), UND = arg('undemote') ? JSON.parse(fs.readFileSync(arg('undemote'), 'utf8')).findings.filter((x) => UR === 'all' || UR.includes(x.reason)) : null;
   const D = {}, Q = {};
   for (const p of pairs) { const dir = dirOf(p), fx = fixsha[p.id]; Q[p.id] = qualifies(dir, fx); D[p.id] = pairData(dir, p, fx); }
   const qual = pairs.filter((p) => Q[p.id].ok);
@@ -130,6 +144,12 @@ function main() {
   for (const p of pairs) runsOf[p.id] = runIds.map((run, ri) => {
     let r = null;
     try { r = JSON.parse(fs.readFileSync(path.join(arg('raw'), run, 'replay-' + p.replay_id, 'result.json'), 'utf8')); } catch { /* unusable */ }
+    if (r && arg('posted')) { // --posted ROOT: findings re-published by another post.js (eval/replay/two-posts.js layout ROOT/run<run>-A/<replay_id>/{posted.json,summary.md}); validity still from the saved result.json
+      const d = path.join(arg('posted'), 'run' + run + '-A', p.replay_id);
+      try { const po = JSON.parse(fs.readFileSync(path.join(d, 'posted.json'), 'utf8')), sm = fs.readFileSync(path.join(d, 'summary.md'), 'utf8');
+        r = { ...r, findings: [...po.comments.map(parseComment).filter(Boolean).map((x) => ({ where: 'inline', kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null })), ...summaryItems(sm).map((x) => ({ where: 'summary', kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null, why: x.why || '' }))] };
+      } catch { r = null; } }
+    if (r && UND) for (const x of UND) if (x.pair === p.id && x.rep === ri + 1) r = { ...r, findings: [...r.findings, { where: 'summary', kind: 'missing_test', path: x.path, line: x.line, title: x.title, confidence: null, why: '', undemoted: x.reason }] }; // --undemote RESULT --undemote-reasons a|all: ceiling check, derived reading only (literal already keeps them)
     const ok = !!r && r.valid !== false && r.engine_status === 'success' && !r.skip && Array.isArray(r.findings) && !(r.engine_notes || []).some((n) => /context pack: 0 files/.test(n));
     if (r && r.usage && typeof r.usage.cost_usd === 'number') cost.push(r.usage.cost_usd);
     return { id: p.replay_id, rep: ri + 1, ok, findings: ok ? r.findings : [] };
@@ -172,10 +192,11 @@ function main() {
     const dboot = Array.from({ length: boots }, () => mean(Array.from({ length: nPR }, () => diff[Math.floor(drng() * nPR)])));
     // power: resample PRs to 40, 1 rep or all reps; new verdict (p < .05 and effect >= .10 vs verdict null)
     const power = {};
+    const PN = +arg('powern', 40);
     for (const nr of [1, reps]) {
       const prng = mulberry32(seed + nr); let pass = 0;
       for (let s = 0; s < sims; s++) {
-        const pick = Array.from({ length: 40 }, () => {
+        const pick = Array.from({ length: PN }, () => {
           const pi = Math.floor(prng() * nPR), rs = R.filter((r) => r.pi === pi);
           return nr === 1 ? [rs[Math.floor(prng() * rs.length)]] : rs;
         });
@@ -201,7 +222,7 @@ function main() {
         secondary_null: { chance: mean(ssn), ci: ci(ssn), p: ssn.filter((x) => x >= sObs - 1e-12).length / perms } },
       model_union_static: union,
       model_minus_static: { mean: mean(diff), ci95: ci(dboot) },
-      power_new_rule_n40: power,
+      ['power_new_rule_n' + PN]: power,
       cross_tab: { caught_and_catch: cell((r) => r.ok && r.catch && grade(r)), caught_no_catch: cell((r) => r.ok && !r.catch && grade(r)),
         catch_graded_miss: cell((r) => r.ok && r.catch && grade(r) === false), neither: cell((r) => r.ok && !r.catch && grade(r) === false) },
     };
@@ -214,11 +235,11 @@ function main() {
     cost: { runs: cost.length, mean: mean(cost), median: pct(cost, 0.5), max: Math.max(...cost),
       total_88pr: Object.fromEntries([1, 3].map((r) => [r + '_rep', { at_mean: 88 * r * mean(cost), at_max: 88 * r * Math.max(...cost) }])) },
     rows: {} };
-  for (const mode of ['derived', 'literal']) {
+  for (const mode of UND ? ['derived'] : ['derived', 'literal']) {
     out.rows[mode] = { qualifying: scoreRow(qual, mode), all45: scoreRow(pairs, mode) };
   }
   fs.writeFileSync(arg('out'), JSON.stringify(out, null, 1));
   console.log(JSON.stringify(out, null, 1));
 }
 if (require.main === module) main();
-module.exports = { qualifies, pairData, parseDiff, buildUnits, makeB, isCatch, isCandidate };
+module.exports = { isCode, nullBits, testsName, buildUnits, makeB, isCatch, isCandidate, isLow, pairData, qualifies, word, parseDiff };

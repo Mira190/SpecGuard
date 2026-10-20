@@ -39,6 +39,8 @@ function blamedSpots(dir, fx, introSha) {
 }
 
 function main() {
+  // --code-only: blamed lines and findings on non-code files (lockfiles, manifests, .github scripts) are dropped; the default is unchanged (bcd568b is cited)
+  const codeOnly = process.argv.includes('--code-only'), isCode = codeOnly ? require('./testgap-score').isCode : () => true; // lazy: testgap-score requires this file
   const seed = +arg('seed', 1), repos = arg('repos'), runs = arg('runs').split(',');
   const pairs = JSON.parse(fs.readFileSync(arg('pairs'), 'utf8')).pairs.filter((p) => p.replay_eligible);
   const audit = JSON.parse(fs.readFileSync(arg('audit'), 'utf8'));
@@ -51,7 +53,7 @@ function main() {
   const blamed = {}, addedMemo = new Map(), lenMemo = new Map();
   for (const p of pairs) {
     const dir = path.join(repos, p.repo.split('/')[1]), fx = fixsha[p.id];
-    blamed[p.id] = blamedSpots(dir, fx, p.introducing.merge_commit);
+    blamed[p.id] = blamedSpots(dir, fx, p.introducing.merge_commit).filter((b) => isCode(b.path));
   }
 
   // runs: one escapes() "PR" per (pair, rep); number = running index
@@ -62,11 +64,11 @@ function main() {
     let r = null;
     try { r = JSON.parse(fs.readFileSync(path.join(arg('raw'), run, 'replay-' + p.replay_id, 'result.json'), 'utf8')); } catch { /* missing */ }
     const ok = !!r && r.engine_status === 'success' && !r.skip;
-    meta.set(num, { id: p.replay_id, rep, pair: p, findings: ok ? r.findings : [], ok });
+    meta.set(num, { id: p.replay_id, rep, pair: p, findings: ok ? r.findings.filter((f) => !f.path || isCode(f.path)) : [], ok });
     prs.push({ number: num });
     status.set(num, ok ? 'complete' : 'failed');
     if (!ok) unusable.push(`${p.replay_id}#${rep}`);
-    for (const f of ok ? r.findings : []) findings.push({ pr: num, path: f.path, line: f.line });
+    for (const f of ok ? r.findings : []) if (!f.path || isCode(f.path)) findings.push({ pr: num, path: f.path, line: f.line });
     cands.push({ fix: { sha: p.id + '#' + rep, pr: -1 }, introducing: [{ pr: num, sha: p.introducing.merge_commit, spots: blamed[p.id] }] });
   }));
   const repoDir = (p) => path.join(repos, p.repo.split('/')[1]);
@@ -101,7 +103,7 @@ function main() {
     hit_graded_miss: ids((r) => r.cls === 'hit' && r.caught === false),
   };
   const out = {
-    seed, tol: TOL, perms: g.chance.perms, runs, pairs: pairs.length, pair_runs: rows.length,
+    seed, code_only: codeOnly, tol: TOL, perms: g.chance.perms, runs, pairs: pairs.length, pair_runs: rows.length,
     unusable, no_location_pairs: pairs.filter((p) => !blamed[p.id].length).map((p) => p.replay_id),
     scored: cnt(scored), hit: g.hit, same_file: g.same_file, rate: g.hit / cnt(scored), per_rep: perRep,
     mean_rep_rate: perRep.reduce((s, r) => s + r.k / r.n, 0) / 3,
