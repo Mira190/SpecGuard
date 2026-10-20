@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds the E1 confirmation list (eval/replay/prereg-coverage-gap-e1.md, "Confirmation") from three per-repo `testgap-confirm-build.js --queues-only` outputs. Offline; no model calls.
-//   node eval/replay/coverage-e1-confirm-build.js --queues hono.json,langchain.json,sqlglot.json --repos <clones dir> --out eval/replay/coverage-e1-confirm.json [--seed 20261020]
+//   node eval/replay/coverage-e1-confirm-build.js --queues hono.json,langchain.json,sqlglot.json --repos <clones dir> --out eval/replay/coverage-e1-confirm.json [--seed 20261020] [--extended]
 // Sets: frozen (each repo's first <= 6 queue rows, taken BEFORE the langchain-core rule, then filtered by it), topup (round-robin, newest first, until 40 bugs),
 // unfiltered (<= 20 candidates that fail only the test-gap filter, same round-robin), control (30 via szz.js cleanSample, proportional to bugs per repo).
 const fs = require('node:fs');
@@ -9,7 +9,7 @@ const { cleanSample } = require('../szz');
 const { isCode } = require('./testgap-score');
 const { git, tryGit } = require('./holdout2-null');
 
-const SINCE = '2026-01-01', NBUG = 40, NUNF = 20, NCTL = 30, PER_REPO = 6, DAY = 864e5;
+const MIN_FILTERED = 30, SINCE = '2026-01-01', NBUG = 40, NUNF = 20, NCTL = 30, PER_REPO = 6, DAY = 864e5;
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
 const here = (f) => path.join(__dirname, f);
 
@@ -17,7 +17,7 @@ const here = (f) => path.join(__dirname, f);
 // langchain rule: every code file of the change lies under libs/core/ (and there is at least one)
 const coreOnly = (files) => { const c = files.filter(isCode); return c.length > 0 && c.every((f) => f.startsWith('libs/core/')); };
 const bugRow = (q, set) => ({ id: `${q.clone}-${q.pr}`, repo: q.repo, kind: 'bug', buggy_sha: q.introducing, fixed_sha: q.fix, base: q.base,
-  introducing: { base: q.base, head: q.introducing, merge_commit: q.introducing, number: q.pr }, fix_sha: q.fix, set });
+  introducing: { base: q.base, head: q.introducing, merge_commit: q.introducing, number: q.pr }, fix_sha: q.fix, set, subgroup: q._sub || 'filtered' });
 // round-robin over `names` (alphabetical), each queue newest first, taking rows that pass `ok` and are not in `taken`, until `limit` rows
 function roundRobin(names, queues, ok, taken, limit) {
   const pos = Object.fromEntries(names.map((n) => [n, 0])), out = [];
@@ -32,7 +32,7 @@ function roundRobin(names, queues, ok, taken, limit) {
   return out;
 }
 // frozen + topup + unfiltered row lists. ok(row, cloneName): the langchain-core rule (injected so tests need no git).
-function assemble({ queues, unfiltered, ok }) {
+function assemble({ queues, unfiltered, ok, extended = false }) {
   const names = Object.keys(queues).sort(), taken = new Set(), funnel = { queue_len: {}, frozen_before_core: {}, frozen_kept: {} };
   const frozen = [];
   for (const n of names) {
@@ -45,8 +45,15 @@ function assemble({ queues, unfiltered, ok }) {
   for (const n of names) for (const r of queues[n].slice(0, PER_REPO)) frozenIds.add(r.introducing); // frozen rows that failed the core rule stay out of the top-up
   for (const i of frozenIds) taken.add(i);
   const topup = roundRobin(names, queues, ok, taken, Math.max(0, NBUG - frozen.length));
+  const nF = frozen.length + topup.length;
+  if (extended && nF < MIN_FILTERED) { // fallback fixed in the prereg: after the single window extension, the primary population is filtered + unfiltered, frozen members first, round-robin newest first up to 40
+    const newest = (a, b) => (a.fix_date < b.fix_date ? 1 : a.fix_date > b.fix_date ? -1 : 0);
+    const U = Object.fromEntries(names.map((n) => [n, [...queues[n].map((r) => ({ ...r, _sub: 'filtered' })), ...(unfiltered[n] || []).map((r) => ({ ...r, _sub: 'unfiltered' }))].sort(newest)]));
+    const top = roundRobin(names, U, ok, new Set(frozenIds), Math.max(0, NBUG - frozen.length));
+    return { primary: 'union', frozen, topup: top, unfiltered: [], status: frozen.length + top.length >= MIN_FILTERED ? 'ok' : 'not_tested', funnel };
+  }
   const bugs = [...frozen, ...topup], un = roundRobin(names, unfiltered, ok, new Set(bugs.map((r) => r.introducing)), NUNF);
-  return { frozen, topup, unfiltered: un, status: bugs.length >= NBUG ? 'ok' : 'needs_window_extension', funnel };
+  return { primary: 'filtered', frozen, topup, unfiltered: un, status: bugs.length >= NBUG || extended ? 'ok' : 'needs_window_extension', funnel };
 }
 // largest-remainder allocation of `total` over names by weight; ties alphabetical
 function allocate(total, weights) {
@@ -66,7 +73,7 @@ function main() {
   const names = Object.keys(queues).sort(), dirOf = (n) => path.join(repos, n);
   const changed = (n, a, b) => tryGit(dirOf(n), 'diff', '--name-only', '--no-renames', a, b).split('\n').filter(Boolean);
   const ok = (r, n) => n !== 'langchain' || coreOnly(changed(n, r.base, r.introducing));
-  const a = assemble({ queues, unfiltered, ok });
+  const a = assemble({ queues, unfiltered, ok, extended: process.argv.includes('--extended') }); // --extended: the queues already include the 2025-07-01 window extension
   const rows = [...a.frozen.map((r) => bugRow(r, 'frozen')), ...a.topup.map((r) => bugRow(r, 'topup')), ...a.unfiltered.map((r) => bugRow(r, 'unfiltered'))];
 
   // earlier corpora (bug pairs and clean PRs), as the builder does
@@ -94,7 +101,7 @@ function main() {
   const ids = rows.map((r) => r.id);
   if (new Set(ids).size !== ids.length || !ids.every(validId)) throw new Error('ids are not unique or not file-name safe');
   const count = (set) => rows.filter((r) => r.set === set).length, by = (set) => Object.fromEntries(names.map((n) => [n, rows.filter((r) => r.set === set && r.repo === R[n].gh).length]));
-  const out = { status: a.status, seed, queue_files: arg('queues').split(',').map((f) => path.basename(f)), branch_heads: Object.fromEntries(files.map((j) => [j.branch_head, j.prereg_commit])),
+  const out = { status: a.status, primary: a.primary, extended: process.argv.includes('--extended'), seed, queue_files: arg('queues').split(',').map((f) => path.basename(f)), branch_heads: Object.fromEntries(files.map((j) => [j.branch_head, j.prereg_commit])),
     funnel: { ...a.funnel, bugs: count('frozen') + count('topup'), frozen: count('frozen'), topup: count('topup'), unfiltered: count('unfiltered'), controls: count('control'),
       bugs_by_repo: Object.fromEntries(names.map((n) => [n, by('frozen')[n] + by('topup')[n]])), unfiltered_by_repo: by('unfiltered'), controls_by_repo: by('control'), control_quota: quota, control_funnel: ctl },
     rows };

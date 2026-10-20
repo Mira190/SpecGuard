@@ -53,7 +53,7 @@ test('ids are unique and file-name safe; rows carry what the scorer needs', () =
   const ids = rows.map((r) => r.id);
   assert.strictEqual(new Set(ids).size, ids.length);
   assert.ok(ids.every(validId));
-  assert.deepStrictEqual(Object.keys(rows[0]).sort(), ['base', 'buggy_sha', 'fix_sha', 'fixed_sha', 'id', 'introducing', 'kind', 'repo', 'set']);
+  assert.deepStrictEqual(Object.keys(rows[0]).sort(), ['base', 'buggy_sha', 'fix_sha', 'fixed_sha', 'id', 'introducing', 'kind', 'repo', 'set', 'subgroup']);
   assert.deepStrictEqual(rows[0].introducing, { base: 'bhono0', head: 'ihono0', merge_commit: 'ihono0', number: 100 });
   assert.ok(!validId('a b') && !validId('a/b'));
 });
@@ -63,4 +63,40 @@ test('control quotas: largest remainder, sums to 30, ties alphabetical', () => {
   assert.strictEqual(q2.hono + q2.langchain + q2.sqlglot, 30);
   assert.deepStrictEqual(q2, { hono: 15, langchain: 8, sqlglot: 7 }); // 15, 7.5, 7.5: first remainder tie goes to langchain
   assert.deepStrictEqual(allocate(30, { a: 0, b: 0 }), { a: 0, b: 0 });
+});
+
+// ---- window-extension fallback (prereg fixed 2026-10-20) ----
+const dated = (clone, n, sub) => Array.from({ length: n }, (_, i) => ({ ...row(clone, i + (sub === 'u' ? 500 : 0)), fix_date: `2026-0${9 - (i % 9)}-1${i % 9}T00:00:00Z`, introducing: sub + clone + i }));
+const none = { hono: [], langchain: [], sqlglot: [] };
+
+test('branch 1: under 40 filtered and not extended gives needs_window_extension, primary filtered', () => {
+  const a = assemble({ queues: { hono: dated('hono', 10, 'f'), langchain: dated('langchain', 5, 'f'), sqlglot: dated('sqlglot', 5, 'f') }, unfiltered: none, ok });
+  assert.strictEqual(a.status, 'needs_window_extension');
+  assert.strictEqual(a.primary, 'filtered');
+});
+
+test('branch 2: extended with 30..39 filtered stays filtered and draws the unfiltered comparison set', () => {
+  const a = assemble({ queues: { hono: dated('hono', 12, 'f'), langchain: dated('langchain', 12, 'f'), sqlglot: dated('sqlglot', 10, 'f') }, unfiltered: { hono: dated('hono', 8, 'u'), langchain: dated('langchain', 8, 'u'), sqlglot: dated('sqlglot', 8, 'u') }, ok, extended: true });
+  assert.strictEqual(a.primary, 'filtered');
+  assert.strictEqual(a.status, 'ok');
+  assert.strictEqual(a.frozen.length + a.topup.length, 34);
+  assert.ok([...a.frozen, ...a.topup].every((r) => !r._sub || r._sub === 'filtered'));
+  assert.ok(a.unfiltered.length > 0 && a.unfiltered.length <= 20);
+});
+
+test('branch 3: extended with under 30 filtered builds filtered + unfiltered, frozen first, subgroup marked, no separate comparison set', () => {
+  const queues = { hono: dated('hono', 8, 'f'), langchain: dated('langchain', 4, 'f'), sqlglot: dated('sqlglot', 4, 'f') }; // 16 filtered
+  const a = assemble({ queues, unfiltered: { hono: dated('hono', 10, 'u'), langchain: dated('langchain', 10, 'u'), sqlglot: dated('sqlglot', 10, 'u') }, ok, extended: true });
+  assert.strictEqual(a.primary, 'union');
+  assert.strictEqual(a.unfiltered.length, 0);
+  assert.strictEqual(a.frozen.length + a.topup.length, 40);
+  assert.strictEqual(a.status, 'ok');
+  const rows = [...a.frozen, ...a.topup].map((r) => bugRow(r, 'x'));
+  assert.ok(rows.some((r) => r.subgroup === 'unfiltered') && rows.some((r) => r.subgroup === 'filtered'));
+  assert.ok(a.frozen.every((r) => bugRow(r, 'frozen').subgroup === 'filtered')); // frozen members come first and are filtered rows
+  assert.strictEqual(new Set(rows.map((r) => r.id)).size, rows.length);
+  // under 30 even as a union: not tested
+  const small = assemble({ queues: { hono: dated('hono', 5, 'f'), langchain: dated('langchain', 2, 'f'), sqlglot: dated('sqlglot', 2, 'f') }, unfiltered: { hono: dated('hono', 5, 'u'), langchain: dated('langchain', 2, 'u'), sqlglot: dated('sqlglot', 3, 'u') }, ok, extended: true });
+  assert.strictEqual(small.primary, 'union');
+  assert.strictEqual(small.status, 'not_tested');
 });
