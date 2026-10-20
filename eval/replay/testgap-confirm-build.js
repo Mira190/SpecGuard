@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Builds the test-gap confirmation corpus as eval/replay/prereg-testgap-mvp.md specifies. Offline except for the earlier `szz.js mine` step (read-only gh).
 //   node eval/replay/testgap-confirm-build.js --repos <clones dir> --mined <dir with mine-<clone>.json + repos.txt "<clone> <owner/name>"> --out testgap-confirm.json [--seed 20261020]
+// --queues-only: write only the per-repo queues (qualifying rows newest first, plus `unfiltered`: candidates that fail ONLY the test-gap filter) and return before the 40-check, the draw, the controls and the PR text.
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -10,6 +11,7 @@ const { git, tryGit } = require('./holdout2-null');
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
 const here = (f) => path.join(__dirname, f);
+const QO = process.argv.includes('--queues-only');
 const SINCE = '2026-01-01', NBUG = 48, NCTL = 40, PER_REPO = 6, DAY = 864e5;
 
 // earlier corpora (bug pairs and clean PRs), by owner/name
@@ -30,7 +32,7 @@ const numstat = (dir, sha) => {
 function main() {
   const seed = +arg('seed', 20261020), repos = arg('repos'), mined = arg('mined');
   const names = fs.readFileSync(path.join(mined, 'repos.txt'), 'utf8').trim().split('\n').map((l) => l.split(' ')).sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  const R = {}, queues = {};
+  const R = {}, queues = {}, unfiltered = {};
   for (const [name, gh] of names) {
     const dir = path.join(repos, name), m = JSON.parse(fs.readFileSync(path.join(mined, `mine-${name}.json`), 'utf8'));
     const head = git(dir, 'rev-parse', 'HEAD').trim(), headDate = git(dir, 'log', '-1', '--format=%cI').trim();
@@ -38,7 +40,8 @@ function main() {
       top_blamed_not_mapped_by_mine: 0, i_not_squash_pr: 0, i_size_out: 0, in_earlier_set: 0, duplicate_i: 0, qualifying: 0 };
     const cands = [...m.candidates].sort((a, b) => (a.fix.date < b.fix.date ? 1 : -1));
     const blamedBy = []; // every mined fix: { date, shas } for the control drop rule
-    const usedI = new Set(), qual = [];
+    const usedI = new Set(), qual = [], usedU = new Set(), unf = []; // unf: --queues-only only; usedU keeps it from touching usedI, so qual is unchanged
+    if (QO) Object.assign(c, { unfiltered_size_and_source_ok: 0, unfiltered_add_only_excluded: 0, unfiltered_blame_lt3: 0, unfiltered_top_blamed_not_mapped_by_mine: 0, unfiltered_i_not_squash_pr: 0, unfiltered_i_size_out: 0, unfiltered_in_earlier_set: 0, unfiltered_duplicate_i: 0, unfiltered_qualifying: 0 });
     for (const cand of cands) {
       const fx = cand.fix.sha;
       const tally = {}, spots = {}; let anyLines = false;
@@ -50,28 +53,38 @@ function main() {
       const q = qualifies(dir, fx);
       if (!q.src) continue;
       c.size_and_source_ok++;
-      if (!q.ok) continue;
-      c.test_gap_name_match++;
-      if (!anyLines) { c.add_only_excluded++; continue; }
+      const gap = !q.ok; // fails only the test-gap filter (counted separately, never in the existing counters)
+      if (gap && !QO) continue;
+      const bump = (k) => { c[gap ? 'unfiltered_' + k : k]++; };
+      if (gap) c.unfiltered_size_and_source_ok++; else c.test_gap_name_match++;
+      if (!anyLines) { bump('add_only_excluded'); continue; }
       const top = Object.entries(tally).filter(([s]) => s !== fx).sort((a, b) => b[1] - a[1])[0];
-      if (!top || top[1] < 3) { c.blame_lt3++; continue; }
+      if (!top || top[1] < 3) { bump('blame_lt3'); continue; }
       const ent = cand.introducing.find((i) => i.sha === top[0]);
-      if (!ent) { c.top_blamed_not_mapped_by_mine++; continue; }
+      if (!ent) { bump('top_blamed_not_mapped_by_mine'); continue; }
       const par = git(dir, 'rev-list', '--parents', '-n1', top[0]).trim().split(' ');
-      if (par.length !== 2 || !ent.pr) { c.i_not_squash_pr++; continue; }
+      if (par.length !== 2 || !ent.pr) { bump('i_not_squash_pr'); continue; }
       const is = numstat(dir, top[0]);
-      if (is.lines < 30 || is.lines > 1200 || is.files > 40) { c.i_size_out++; continue; }
-      if (seen.intro.has(`${gh}#${ent.pr}`) || seen.sha.has(top[0]) || (cand.fix.pr && seen.fix.has(`${gh}#${cand.fix.pr}`))) { c.in_earlier_set++; continue; }
-      if (usedI.has(top[0])) { c.duplicate_i++; continue; } // newest fix per I (cands are newest first)
-      usedI.add(top[0]);
+      if (is.lines < 30 || is.lines > 1200 || is.files > 40) { bump('i_size_out'); continue; }
+      if (seen.intro.has(`${gh}#${ent.pr}`) || seen.sha.has(top[0]) || (cand.fix.pr && seen.fix.has(`${gh}#${cand.fix.pr}`))) { bump('in_earlier_set'); continue; }
+      if ((gap ? usedU : usedI).has(top[0])) { bump('duplicate_i'); continue; } // newest fix per I (cands are newest first)
+      (gap ? usedU : usedI).add(top[0]);
       const pd = pairData(dir, { introducing: { merge_commit: top[0], base: par[1], head: top[0] } }, fx, false);
-      c.qualifying++;
-      qual.push({ repo: gh, clone: name, fix: fx, fix_pr: cand.fix.pr, fix_date: cand.fix.date, introducing: top[0], pr: ent.pr, base: par[1], i_files: is.files, i_lines: is.lines,
+      bump('qualifying');
+      (gap ? unf : qual).push({ repo: gh, clone: name, fix: fx, fix_pr: cand.fix.pr, fix_date: cand.fix.date, introducing: top[0], pr: ent.pr, base: par[1], i_files: is.files, i_lines: is.lines,
         blamed_lines: pd.blamed, B: { blamed: pd.blamed.length, resolved_to_named_definition: pd.resolved, files: [...new Set(pd.blamed.map((b) => b.path))] } });
     }
-    R[name] = { gh, dir, head, headDate, counts: c, blamedBy };
+    R[name] = { gh, dir, head, headDate, counts: c, blamedBy, minedShas: m.candidates.flatMap((x) => [x.fix.sha, ...x.introducing.map((i) => i.sha)]) };
     queues[name] = qual;
+    if (QO) unfiltered[name] = unf.filter((u) => !usedI.has(u.introducing)); // an I that also qualifies through another fix is a bug-set row, not an unfiltered one
     console.error(name, JSON.stringify(c));
+  }
+  if (QO) { // blamed_by: every mined fix { date (ms), shas } for the control drop rule; mined_shas: every mined fix and I sha (control exclusion)
+    const o = { frozen_at: new Date().toISOString(), seed, prereg_commit: git(__dirname, 'log', '-1', '--format=%H', '--', 'prereg-testgap-mvp.md').trim(), branch_head: git(__dirname, 'rev-parse', 'HEAD').trim(),
+      repos: Object.fromEntries(names.map(([n]) => [n, { gh: R[n].gh, head: R[n].head, head_date: R[n].headDate, counts: R[n].counts, blamed_by: R[n].blamedBy.map((b) => ({ date: b.date, shas: [...b.shas] })), mined_shas: R[n].minedShas }])), queues, unfiltered };
+    fs.writeFileSync(arg('out'), JSON.stringify(o, null, 1) + '\n');
+    console.log(JSON.stringify({ queues: Object.fromEntries(names.map(([n]) => [n, queues[n].length])), unfiltered: Object.fromEntries(names.map(([n]) => [n, unfiltered[n].length])) }));
+    return;
   }
   const totalQual = Object.values(queues).reduce((s, q) => s + q.length, 0);
   const out = { frozen_at: new Date().toISOString(), seed, prereg_commit: git(__dirname, 'log', '-1', '--format=%H', '--', 'prereg-testgap-mvp.md').trim(), branch_head: git(__dirname, 'rev-parse', 'HEAD').trim(),
