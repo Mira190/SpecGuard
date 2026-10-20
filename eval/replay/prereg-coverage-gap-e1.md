@@ -74,7 +74,7 @@ Failing tests do not make a PR unusable; their count is reported.
 ## Descriptive comparisons (pre-stated, no tests)
 
 1. C vs chance: lift, plus a PR-cluster bootstrap interval with 2000 resamples.
-2. C vs static: the per-PR difference, with a cluster bootstrap interval.
+2. C vs static: the per-PR difference, with a cluster bootstrap interval. The static arm has no unusable state, so this comparison also reports how many PRs are unusable for C only (a penalty static does not carry).
 3. C vs LLM delivered, on the design set only.
 4. Does coverage separate the LLM's hits from its misses? Design set only. Every saved LLM missing_test finding is counted, hidden or delivered. Each is labelled "confirmed" if its cited line is executable and not executed, "contradicted" if executed, or "unknown" if the line is not instrumented. For each label, report the count and the catch rate.
 5. Noise on controls: the share of changed units that C flags, C flags per control PR, and the same for static.
@@ -113,7 +113,7 @@ The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: th
 ## TBD before freeze
 
 - ~~The grepTests fix sha~~: done, b6accfd on eval/testgap-demotion (`testsName`, with a test that fails with `-q`). E1 code builds on that branch.
-- ~~The `cover` runner sha~~: done, #416 merged at 26735ba (file errors by kind; hono runs exactly `src/**/*.test.{ts,tsx}` minus runtime-tests). Still needed: a findings-free `import`, and the error kind per file.
+- ~~The `cover` runner sha~~: done, #416 merged at 26735ba (file errors by kind; hono runs exactly `src/**/*.test.{ts,tsx}` minus runtime-tests). `file_errors` is already keyed by path with `{kind, msg}`. Still needed: a findings-free `import`.
 - The scorer `eval/replay/coverage-e1-score.js` and its test, committed before the design look, plus the design rows `eval/replay/coverage-e1-design.json`.
 - The confirmation list sha.
 - The design-look appendix comes after the freeze.
