@@ -90,7 +90,7 @@ function coverTree(h, repo, cfg, dir, outDir, rev) {
     const wd = h.workDir(repo), json = path.join(outDir, 'vitest.json'), cj = (f) => JSON.parse(fs.readFileSync(path.join(wd, 'node_modules', f, 'package.json'), 'utf8')).version;
     fs.rmSync(json, { force: true }); fs.rmSync(path.join(outDir, 'lcov.info'), { force: true });
     const args = [path.join(wd, 'node_modules/vitest/vitest.mjs'), 'run', '--config', h.fill(cover.config, { evidence: h.posix(EV) }), '--root', '.', '--dir', cover.dirs[0], ...(cover.exclude || []).flatMap((x) => ['--exclude', `**/${x.replace(/\/$/, '')}/**`]),
-      '--reporter=json', `--outputFile=${json}`, '--coverage.enabled', '--coverage.provider=v8', '--coverage.reporter=lcov', `--coverage.reportsDirectory=${outDir}`, `--coverage.include=${cover.source}`, '--coverage.exclude=**/*.test.*', '--coverage.exclude=**/node_modules/**'];
+      '--reporter=json', `--outputFile=${json}`, '--coverage.enabled', '--coverage.provider=v8', '--coverage.reporter=lcov', '--coverage.reportOnFailure', `--coverage.reportsDirectory=${outDir}`, `--coverage.include=${cover.source}`, '--coverage.exclude=**/*.test.*', '--coverage.exclude=**/node_modules/**'];
     const r = run(process.execPath, args, { cwd: dir, env, timeout });
     exit_code = r.status; timed_out = Boolean(r.error && r.error.code === 'ETIMEDOUT');
     hc = vitestHealth(fs.existsSync(json) ? JSON.parse(fs.readFileSync(json, 'utf8')) : null, selected, dir);
