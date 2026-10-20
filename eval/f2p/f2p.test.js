@@ -475,3 +475,14 @@ test('cover head:<name> refuses a repo without a cover block before any git call
   assert.throws(() => cov.cmdCover(['head:nope']), /no cover block for head:nope/);
   assert.throws(() => cov.cmdCover(['head:rqlite']), /no cover block for head:rqlite/); // rqlite is out of the first-look scope
 });
+
+test('cover coverage.xml without <source>: filenames are kept as written (repo-relative)', () => {
+  const xml = '<coverage><packages><package><classes><class filename="pkg/n.py"><lines><line number="3" hits="0"/><line number="4" hits="2"/><line number="5" hits="1"/></lines></class></classes></package></packages></coverage>';
+  assert.deepStrictEqual(cov.parseCoverageXml(xml, '/t/tree', () => false), { 'pkg/n.py': [2, 3] });
+});
+
+test('cover depsChanged: true only when a changed path is a declared dependency manifest', () => {
+  assert.strictEqual(cov.depsChanged(['src/a.ts', 'package.json'], ['package.json']), true);
+  assert.strictEqual(cov.depsChanged(['src/a.ts', 'docs/package.json'], ['package.json']), false);
+  assert.strictEqual(cov.depsChanged([], ['pyproject.toml']), false);
+});
