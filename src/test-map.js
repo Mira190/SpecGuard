@@ -207,7 +207,8 @@ function enclosingName(lines, line) {
 // line sits outside every definition. The span ends at the matching brace (brace languages) or when the indentation falls back to the declaration's (Python, Ruby).
 // ponytail: a heuristic, not a parser. Ceilings: braces inside multi-line template literals and regex literals are counted, a multi-line /* */ comment is not skipped,
 // a Python docstring line at column 0 ends the span early, a class-field arrow (`handler = () => {`) is a definition nested in its class, and a declaration the patterns miss is
-// invisible (the group then falls to the next definition up or to the file). Upgrade path: tree-sitter.
+// invisible (the group then falls to the next definition up or to the file), and unbalanced parens inside regex literals (e.g. /\(/) keep the paren count open, so a later line can be
+// attributed to the definition. Upgrade path: tree-sitter.
 const PY_START = /^\s*(?:async\s+)?(?:def|class)\s/;
 const unquote = (l) => l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, '');
 const MAX_SIG = 60;
