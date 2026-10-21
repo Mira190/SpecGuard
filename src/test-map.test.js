@@ -360,3 +360,27 @@ test('enclosingDef: a // inside a regex literal is not a comment, so the definit
   const divide = ['function half(a, b) {', '  const c = a / b; // ratio', '  return c / 2;', '}', 'const z = 1;'];
   assert.deepEqual(enclosingDef(divide, 3), { line: 1, name: 'half', end: 4 }, 'a division is not a regex');
 });
+
+test('enclosingDef: a definition ends at the next declaration of the same or lower indentation even when a quote-holding regex keeps its braces open (requirements.js sanitize shape)', () => {
+  const { enclosingDef } = require('./test-map');
+  const lines = [
+    'const sanitize = (s) => {',
+    "  let t = decode(String(s || '').replace(/\\r\\n?/g, '\\n')).replace(INVISIBLE, '');",
+    '  return t.replace(/<!--[\\s\\S]*$/, \'\')',
+    "    .replace(/(\\]\\(\\s*<?[^\\s)]+>?)\\s+(?:\"[^\"]*\"|'[^']*')\\s*\\)/g, '$1)'); // link and image titles",
+    '};',
+    '',
+    'const AC_LINE = /^\\s*AC[\\s._-]*\\d+\\s*[:]/i;',
+    'function next(a) {',
+    '  return a + 1;',
+    '}',
+    'function last(b) {',
+    '  return b;',
+    '}',
+  ];
+  const d = enclosingDef(lines, 3);
+  assert.equal(d.name, 'sanitize');
+  assert.ok(d.end <= 7, `sanitize must not run into next(): ended at ${d.end}`);
+  assert.equal(enclosingDef(lines, 9).name, 'next');
+  assert.equal(enclosingDef(lines, 12).name, 'last');
+});

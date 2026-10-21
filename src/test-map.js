@@ -253,6 +253,17 @@ function defEnd(lines, i) {
   }
   return opened ? Math.min(lines.length, i + 5000) - 1 : byIndent(sig >= 0 ? sig : i);
 }
+// A definition also ends where the next declaration at the same or a lower indentation starts (top level -> the next top-level declaration), whatever the brace count says: a line the
+// string and regex blanking misread (a regex holding a quote) can keep braces or parens open to the end of the file; this caps that damage to the definition's own region.
+function capEnd(lines, i, end) {
+  const base = /^\s*/.exec(lines[i])[0].length;
+  for (let j = i + 1; j <= end && j < lines.length; j++) {
+    const l = lines[j];
+    if (!l.trim() || comment(l) || /^\s*[}\])]/.test(l) || /^\s*/.exec(l)[0].length > base) continue;
+    if (GEN.exec(l) || EXPORT_CONST.exec(l) || namesOf(l.trim())[0] || declName(l)) { let e = j - 1; while (e > i && !lines[e].trim()) e--; return e; }
+  }
+  return end;
+}
 // cache: Map(declaration index -> end index), shared across calls on one file
 function enclosingDef(lines, line, cache = new Map()) {
   for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 3001); i--) {
@@ -260,7 +271,7 @@ function enclosingDef(lines, line, cache = new Map()) {
     if (comment(l)) continue;
     const name = (GEN.exec(l) || EXPORT_CONST.exec(l) || [])[1] || namesOf(l.trim())[0] || declName(l);
     if (!name) continue;
-    if (!cache.has(i)) cache.set(i, defEnd(lines, i));
+    if (!cache.has(i)) cache.set(i, capEnd(lines, i, defEnd(lines, i)));
     if (cache.get(i) >= line - 1) return { line: i + 1, name, end: cache.get(i) + 1 };
   }
   return null;

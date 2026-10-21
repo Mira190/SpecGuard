@@ -1687,15 +1687,36 @@ test('scan coverage: report notes (stale, nothing matched) reach the summary; wi
   assert.match(render({ data: clean(), code: codeWith(part) }), /Coverage evidence notes: b\.info: unrecognised format/);
 });
 
-test('scan coverage: tracked source files in scope that the report never lists are named with their size and the all: true hint', () => {
+test('scan coverage: in-scope source files missing from the report are a count in Details, worded without a cause and without file names', () => {
   const src = { 'src/big.js': new Array(300).fill('x'), 'src/small.js': new Array(5).fill('x'), 'eval/other.js': new Array(900).fill('x'), ...CSRC };
   const sc = audit.scanCoverage({ cov: covOf(CFILE, { unreported: ['src/small.js', 'src/big.js', 'eval/other.js'] }), findings: [], readLines: (p) => src[p] || null, isTest: notTest, inScope: (p) => p.startsWith('src/') });
   assert.equal(sc.noTest.n, 2);
   assert.deepEqual(sc.noTest.top.map((x) => x.path), ['src/big.js', 'src/small.js']);
   const md = render({ data: clean(), code: codeWith(sc) });
-  assert.match(md, /No test loaded 2 source files in scope \(largest: src\/big\.js, 300 lines; src\/small\.js, 5 lines\)/);
-  assert.match(md, /all: true/);
-  assert.doesNotMatch(md, /eval\/other/);
+  const at = md.indexOf('<details>'), line = '2 source files in scope are not in the coverage report (never loaded, or excluded by the coverage tool\'s configuration).';
+  assert.ok(at > 0 && md.indexOf(line) > at, 'inside Details, not on the first screen');
+  assert.ok(md.includes('**Not in the coverage report**'));
+  assert.doesNotMatch(md, /No test loaded|src\/big\.js|src\/small\.js|eval\/other/, 'no cause claimed, no file names');
+  assert.match(render({ data: clean(), code: codeWith(audit.scanCoverage({ cov: covOf(CFILE, { unreported: ['src/big.js'] }), findings: [], readLines: (p) => src[p] || null, isTest: notTest })) }), /1 source file in scope is not in the coverage report/);
+});
+
+test('NOT_UNIT: fixture, testdata and mock directories are not units; ordinary names still are; heuristicTest follows trace.isTestPath', () => {
+  const { NOT_UNIT } = require('./audit-units');
+  for (const p of ['eval/cases/x/fixtures/a.js', 'src/__fixtures__/a.js', 'testdata/a.go', 'src/__mocks__/db.js', 'lib/fixture/a.py']) assert.ok(NOT_UNIT.test(p), p);
+  for (const p of ['src/fixtures.js', 'src/fixturesque/a.js', 'src/testdata.js', 'src/mocks.js']) assert.ok(!NOT_UNIT.test(p), p);
+  assert.equal(audit.heuristicTest('src/test-map.js'), false, 'test-map.js is source: trace.isTestPath does not treat a test- prefix as a test');
+  assert.equal(audit.heuristicTest('src/a.test.js'), true);
+});
+
+test('scan coverage: the coverage-gap count in the verdict ignores relabelled and low claims', () => {
+  const only = scanOf([mt(17), mt(3, { low: true }), mt(16, { low: true })], covOf({ 'src/m.js': { inst: 3, exec: 3, never: [], ran: [[17, 17]], miss: [] } }));
+  const md = render({ data: clean(), code: codeWith(only) });
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.doesNotMatch(vis, /coverage gap/);
+  assert.match(vis, /\| 1 of 1 \| none \| none \|/);
+  const withGaps = scanOf([mt(17), mt(9, { low: true }), mt(16, { low: true })]);
+  const two = render({ data: clean(), code: codeWith(withGaps) }).slice(0, 700);
+  assert.match(two, /\*\*❌ 3 coverage gaps in scope\*\*\./, 'exactly the three definitions, not the relabelled or low claims');
 });
 
 test('scan coverage: CLI entry-point blocks (require.main / __name__ guards) are not worth a unit test; code beside them still is', () => {

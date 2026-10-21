@@ -10,8 +10,7 @@ const { enclosingName } = require('./test-map');
 const { ASSERTION, TEST_DECL, SKIPPED } = post;
 const { version, versionLine } = require('./version');
 const { staticFindings, staticLeads, NOT_UNIT } = require('./audit-units');
-// trace.js's test-path rule; the fallback is a local copy of it in case the export moves (ponytail: keep in sync).
-const { isTestPath = (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/.test(p) } = require('./trace');
+const { isTestPath } = require('./trace'); // the one test-path rule
 
 const { oneLine, cell, plural, norm, neutralize, quoteLine, safeRel, readFile, usageLine, runLine, mergeUsage, findingBlock, findingHead, placeholder } = post;
 const STATUS = ['covered', 'partial', 'missing_test', 'not_implemented', 'contradicted', 'unknown', 'needs_human'];
@@ -768,7 +767,6 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const cn = code && !failure && data ? code.covNotes || [] : []; // notes of the report (stale, no file matched, unreadable), as PR mode shows them
   if (cn.length) body += `<sub>Coverage evidence ${cg ? 'notes' : 'not used'}: ${cn.slice(0, 3).map((x) => cell(x, 200)).join('; ')}</sub>\n\n`;
   const nt = code && !failure && data && cg ? code.noTest : null;
-  if (nt && nt.n) body += `<sub>No test loaded ${plural(nt.n, 'source file')} in scope (largest: ${nt.top.map((x) => `${cell(x.path, 120).replace(/`/g, "'")}, ${x.lines} lines`).join('; ')}). Their lines are not in the report; with c8 or nyc set \`all: true\` so unloaded files are listed.</sub>\n\n`;
   if (code && !failure && data && !cg && uall.some((f) => f.kind === 'missing_test')) body += '<sub>Missing-unit-test findings are not verified: no coverage report</sub>\n\n';
   for (const l of ulists) body += vis(l.title, l.fs.map(uitem), '', UCAP);
   const SIGH = 'Found by rule from the test files at this commit, not by the model; a missing or weak signal is a lead, not a confirmed gap.\n\n| Unit | Signal | Why |\n|---|---|---|\n', SIGN = { test_evidence_not_found: 'test evidence not found', weak_test_signal: 'weak test signal', truthiness_only: 'asserts only truthiness', unreferenced_export: 'no test references it', boundary_unpinned: 'limit no test pins' };
@@ -798,6 +796,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
       + (left ? take(`**Units not yet reviewed (${left})**\n\n`, [...inv.unreviewed.slice(0, 15).map((u) => `- ${link(u.path, 1, u.path)} (risk ${u.score})\n`), ...(left > 15 ? [`- +${left - 15} more\n`] : [])], '') : '')
       + ulists.map((l) => more(l.more, l.fs.map(uhead), '', UCAP)).join('') + (failure || !data ? '' : more('More static test signals', srows, SIGH, SCAP) + (restLeads.length ? take(`**All other static leads (${restLeads.length})**\n\n${SIGH}`, restLeads.map(srow), '') : ''))
       + (ulow.length ? take(`**Low-confidence unit findings (${ulow.length})**\n\nA test file the model could not see whole, or a test that may already cover it, is behind each; they are not counted.\n\n`, ulow.map(uhead), '') : '')
+      + (nt && nt.n ? take('**Not in the coverage report**\n\n', [`${plural(nt.n, 'source file')} in scope ${nt.n === 1 ? 'is' : 'are'} not in the coverage report (never loaded, or excluded by the coverage tool's configuration).\n`], '') : '')
       + (cg && cg.roll.length ? take(`**More never-executed definitions, per file (${cg.roll.reduce((n, r) => n + r.groups.length, 0)}; coverage report)**\n\n`, cg.roll.map((r) => `- ${post.rollupLine(r)}\n`), '') : '');
   }
   let det = [more('More confirmed gaps', confirmed.map(grow), GTOP), more('More new gaps', fresh.map(grow), GTOP), more('More disagreements', clashes, '| Document says | Code says |\n|---|---|\n')].join('');
@@ -998,4 +997,4 @@ async function main({ github, issueGithub, context, core, date = today() }) {
 module.exports = async (args) => {
   try { await main(args); } catch (e) { try { args.core.setOutput?.('status', 'failed'); args.core.setOutput?.('reason', `the scan report failed: ${e.message}`); args.core.warning(`SpecGuard: scan report failed: ${e.message}`); } catch { /* nothing left to report to */ } }
 };
-Object.assign(module.exports, { scanCoverage, readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, resolveIssueTarget, guardIssueTarget, visibilityOf, STATUS, CLASS, MARK, TITLE, HEADING });
+Object.assign(module.exports, { heuristicTest, scanCoverage, readCandidates, readUnits, validate, verify, trackFindings, render, gap, readState, stateComment, stateOf, blocksOf, track, scopeOf, findIssue, resolveIssueTarget, guardIssueTarget, visibilityOf, STATUS, CLASS, MARK, TITLE, HEADING });
