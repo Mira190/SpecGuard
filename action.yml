@@ -59,6 +59,9 @@ outputs:
   partial: { description: "true when the diff was truncated", value: "${{ steps.collect.outputs.partial }}" }
   superseded: { description: "true when a newer commit was pushed (or the PR closed) before the model was called; the review was skipped and no AI credits were spent", value: "${{ steps.superseded.outputs.superseded }}" }
 
+# Defence in depth: an earlier step of the adopter's job that ran PR code could have put NODE_OPTIONS=--require ./evil.js in $GITHUB_ENV. Every node process below starts with it cleared:
+# run steps unset it (works whatever the precedence); uses steps set NODE_OPTIONS: '' (best effort: docs.github.com does not state that a composite step's env: wins over $GITHUB_ENV; only an unconfirmed report, actions/runner issue #1611, says so).
+# Neither stops a fake `node` put on $GITHUB_PATH. The real protection is to run PR tests in a separate job without secrets (README, Coverage evidence).
 runs:
   using: composite
   steps:
@@ -94,7 +97,7 @@ runs:
         INCLUDE_BOTS: ${{ inputs.include_bots }}
         FORCE: ${{ inputs.force }}
         CFG: ${{ format('{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}|{9}|{10}|{11}|{12}|{13}|{14}|{15}|{16}|{17}', inputs.engine, inputs.model, inputs.effort, inputs.auto_tier, inputs.fast_models, inputs.max_comments, inputs.max_diff_kb, inputs.focus_threshold, inputs.focus_files, inputs.ignore, inputs.standards_checks, inputs.standards_ref, inputs.requirements_paths, inputs.test_paths, inputs.standards_paths, inputs.coverage_files, inputs.trace, inputs.base_sha || github.event.pull_request.base.sha) }} # same list as the post step: the summary's cfg marker must match
-      run: node "$GITHUB_ACTION_PATH/src/preflight.js"
+      run: unset NODE_OPTIONS; node "$GITHUB_ACTION_PATH/src/preflight.js"
 
     - id: collect
       if: inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true'
@@ -114,7 +117,7 @@ runs:
         STANDARDS_PATHS: ${{ inputs.standards_paths }}
         TEST_PATHS: ${{ inputs.test_paths }}
         TRACE: ${{ inputs.trace }}
-      run: bash "$GITHUB_ACTION_PATH/src/collect.sh"
+      run: unset NODE_OPTIONS; bash "$GITHUB_ACTION_PATH/src/collect.sh"
 
     # A push that landed while collecting context makes this run stale: skip the engine and post, no AI credits spent. Fails open on API errors.
     - id: superseded
@@ -125,7 +128,7 @@ runs:
         PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
         GH_TOKEN: ${{ inputs.github_token }}
         GH_REPO: ${{ inputs.repository || github.repository }}
-      run: node "$GITHUB_ACTION_PATH/src/superseded.js"
+      run: unset NODE_OPTIONS; node "$GITHUB_ACTION_PATH/src/superseded.js"
 
     # Scan mode: design documents, rule files and test layout at the checked-out HEAD (src/audit-collect.js).
     - id: audit_collect
@@ -156,10 +159,12 @@ runs:
         MAX_REQUIREMENTS: ${{ inputs.audit_max_requirements }} # deprecated alias; the new name wins
         PACK_SPLIT: ${{ inputs.claude_mode != 'agent' && (inputs.engine == 'claude' || (inputs.engine == 'auto' && startsWith(inputs.llm_token || inputs.copilot_token, 'sk-ant-'))) }} # the claude api engine has a context pack: scan parts are sized to it
         AUDIT_BRANCH_GUARD: ${{ inputs.repository && inputs.repository != github.repository && 'off' || 'on' }} # the guard compares this workflow's ref; another repository is not on it
-      run: node "$GITHUB_ACTION_PATH/src/audit-collect.js"
+      run: unset NODE_OPTIONS; node "$GITHUB_ACTION_PATH/src/audit-collect.js"
 
     - if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      env:
+        NODE_OPTIONS: ''
       with:
         node-version: 22
 
@@ -172,7 +177,7 @@ runs:
         CTX: ${{ github.workspace }}/.specguard-ctx
         COVERAGE_FILES: ${{ inputs.coverage_files }}
         HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
-      run: node "$GITHUB_ACTION_PATH/src/coverage.js" || true
+      run: unset NODE_OPTIONS; node "$GITHUB_ACTION_PATH/src/coverage.js" || true
 
     # What the credential is (by prefix; the value is never printed), which engine it selects and the model's real name.
     - id: credential
@@ -182,7 +187,7 @@ runs:
         LLM_TOKEN: ${{ inputs.llm_token || inputs.copilot_token }}
         ENGINE: ${{ inputs.engine }}
         MODEL: ${{ inputs.model }}
-      run: node "$GITHUB_ACTION_PATH/src/credential.js"
+      run: unset NODE_OPTIONS; node "$GITHUB_ACTION_PATH/src/credential.js"
 
     - id: engine
       if: (inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.collect.outputs.skip != 'true' && steps.superseded.outputs.superseded != 'true') || (steps.mode.outputs.mode == 'scan' && steps.audit_collect.outputs.skip != 'true')
@@ -206,6 +211,7 @@ runs:
         MAX_UNITS: ${{ inputs.max_units }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
+        unset NODE_OPTIONS
         bash "$GITHUB_ACTION_PATH/src/validate-inputs.sh" || exit 1 # includes the engine allow-list
         echo "engine=$ENGINE" >> "$GITHUB_OUTPUT"
 
@@ -236,6 +242,7 @@ runs:
         SCAN_SCOPE: ${{ inputs.scan_scope }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
+        unset NODE_OPTIONS
         if [ "$MODE" = scan ]; then skill="$GITHUB_ACTION_PATH/skills/spec-audit"; schema_file="$GITHUB_ACTION_PATH/src/audit.schema.json"
         else skill="$GITHUB_ACTION_PATH/skills/test-review"; schema_file="$GITHUB_ACTION_PATH/src/findings.schema.json"; fi
         # the model can only read the workspace, so inline the skill, the references that can matter and the per-PR context (src/prompt.js)
@@ -250,6 +257,7 @@ runs:
       if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && steps.superseded.outputs.superseded != 'true' }} # failures still report; a cancelled run (superseded push) posts nothing
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
+        NODE_OPTIONS: ''
         ACTION_PATH: ${{ github.action_path }}
         SPECGUARD_REF: ${{ github.action_ref || github.sha }} # recorded in every report with the build id (src/version.js)
         CTX: ${{ github.workspace }}/.specguard-ctx
@@ -278,6 +286,8 @@ runs:
 
     - if: ${{ !cancelled() && inputs.mode == 'pr' && steps.preflight.outputs.skip != 'true' && inputs.ctx_retention_days != '0' }} # raw engine output otherwise dies with the runner
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      env:
+        NODE_OPTIONS: ''
       with:
         name: specguard-ctx-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
         path: ${{ github.workspace }}/.specguard-ctx
@@ -290,6 +300,7 @@ runs:
       if: ${{ !cancelled() && steps.mode.outputs.mode == 'scan' }}
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
+        NODE_OPTIONS: ''
         ACTION_PATH: ${{ github.action_path }}
         SPECGUARD_REF: ${{ github.action_ref || github.sha }}
         CTX: ${{ github.workspace }}/.specguard-ctx
@@ -314,6 +325,8 @@ runs:
 
     - if: ${{ !cancelled() && steps.mode.outputs.mode == 'scan' && inputs.ctx_retention_days != '0' }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      env:
+        NODE_OPTIONS: ''
       with:
         name: specguard-audit-${{ github.run_attempt }}
         path: ${{ github.workspace }}/.specguard-ctx
@@ -329,4 +342,4 @@ runs:
         STATUS: ${{ steps.post.outputs.status || steps.scan_post.outputs.status }}
         REASON: ${{ steps.post.outputs.reason || steps.scan_post.outputs.reason }}
         CTX: ${{ github.workspace }}/.specguard-ctx # counts.json: a reduced review is told apart from an incomplete one
-      run: node "$GITHUB_ACTION_PATH/src/fail-on-error.js"
+      run: unset NODE_OPTIONS; node "$GITHUB_ACTION_PATH/src/fail-on-error.js"
