@@ -62,6 +62,29 @@ Branch `eval/testgap-demotion` @ 6e0c829 covers the 24 test-gap pairs × 3. Ther
 - Pack arms R, S, O and H: not adopted (#406).
 - This note.
 
+## Correction 2026-10-20 (later the same day): code files only
+
+The red team (specguard-e0) found that `pairData` built units and B from every file `isProd` accepts. That included lockfiles, package manifests, gitlinks and `.github/` scripts. The fix (`isCode`, eval/testgap-demotion @ 1afefce) keeps code files only. The re-run cost $0, and its results are in SpecGuard-evidence/e1-recheck.
+
+| Number above | Was | Now |
+|---|---|---|
+| Delivered missing_test/weak_test | 2/72, chance 2.7%, p 0.65 | unchanged |
+| Also the hidden low-confidence ones | chance 21.6%, +9.0 pt, p 0.004 | chance 22.2%, +8.3 pt, p 0.007 |
+| Line hits, any kind ±3 (`holdout2-null`, default) | 45/135 at 23.7% | unchanged (with `--code-only`: 45/135 at 23.9%) |
+| Static arm, qualifying | 50.0% vs 53.2%, p 0.83 | 50.0% vs 55.2%, p 0.90 |
+| Static arm, all 45 | 66.7% vs 63.2%, p 0.32 | 66.7% vs 64.3%, p 0.40 |
+| Ceiling U / U+ (bdd2f9a) | +6.3 / +9.0 pt | +5.9 / +8.3 pt |
+
+No conclusion changes. Every row is still below the +10-point floor, and the location ceiling is now about +8 points.
+
+## Where the cited shas live
+
+Each branch is merged into main with its own merge commit, so every cited sha stays reachable.
+- `eval/holdout2-null` (bcd568b): the line-hit chance baseline, `holdout2-null.js`.
+- `eval/blind-grade` (3680ef1): the blind content grade, `blind-grade.js` plus its prompt and test. Results stay in SpecGuard-evidence.
+- `eval/testgap-demotion` (6e0c829, bdd2f9a, b6accfd, 1afefce): demotion diagnosis, ceiling check (`testgap-ceiling.md`), the grepTests fix, and the code-only fix.
+- `eval/testgap-mvp-prereg` (881cfcb, c64501b, plus the corpus builder up to tip 71c31b7; no corpus freeze was ever committed): `prereg-testgap-mvp.md` (retired unrun), `testgap-score.js`, `testgap-confirm-build.js`.
+
 ## Product fixes to measure on this design set (candidates, not claims)
 
 1. **Delivery.** 7 direct catches are hidden, against 5 delivered.
