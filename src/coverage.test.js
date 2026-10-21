@@ -315,3 +315,14 @@ test('V2 S5: the R-a fingerprint follows the definition name, not its line; Rake
   const fps = g.emit.map((x) => postV2.merge([postV2.gapFinding(x, dup.split('\n'))])[0].fp);
   assert.equal(new Set(fps).size, 2, 'two methods of one name keep distinct fingerprints');
 });
+
+test('V2 gapEvidence: none without a report, never for a never-run line, ran for an executed changed line, unknown otherwise', () => {
+  assert.equal(postV2.gapEvidence(null, 'src.js', 3), 'none');
+  assert.equal(postV2.gapEvidence({ reports: 0, files: {} }, 'src.js', 3), 'none');
+  const never = { reports: 1, files: { 'src.js': { never: [[3, 3]], miss: [[3, 3]], ran: [] } } };
+  assert.equal(postV2.gapEvidence(never, 'src.js', 3), 'never');
+  const ran = { reports: 1, files: { 'src.js': { ran: [[1, 2]], miss: [] } } };
+  assert.equal(postV2.gapEvidence(ran, 'src.js', 1), 'ran');
+  assert.equal(postV2.gapEvidence(ran, 'src.js', 5), 'unknown', 'a line the report does not mention');
+  assert.equal(postV2.gapEvidence(ran, 'other.js', 1), 'unknown', 'a file outside the changed set');
+});
