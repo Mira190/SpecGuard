@@ -135,7 +135,7 @@ function analyze({ patch = '', files, reports, ws, headTime, mode = 'diff' }) {
     out.total.instrumented += inst.length;
     out.total.executed += exec.length;
   }
-  out.unreported = [...known].filter((f) => !agg.has(f) && CODE.test(f)).slice(0, 30);
+  out.unreported = [...known].filter((f) => !agg.has(f) && CODE.test(f)).slice(0, all ? 500 : 30); // scan: the publisher counts the ones in scope
   if (all) return { json: out, txt: '' }; // the scan prompt has no coverage block
   const rows = Object.entries(out.files).filter(([, f]) => f.inst).sort((a, b) => (b[1].inst - b[1].exec) - (a[1].inst - a[1].exec));
   let txt = `Coverage evidence from the repository's own test run (SpecGuard did not run tests). Changed lines executed by tests: ${out.total.executed} of ${out.total.instrumented} instrumented.\n`;

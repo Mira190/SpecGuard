@@ -388,3 +388,10 @@ test('action.yml: the unset at the top of a run step lets node start although NO
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout.trim(), '1');
 });
+
+test('action.yml: scan_gap_top (default 10) reaches the validation and scan post steps; validate-inputs.sh accepts 1 to 50 only', () => {
+  assert.match(/^ {2}scan_gap_top: \{[^}]*\}/m.exec(yml)[0], /default: "10" \}$/);
+  assert.equal(yml.split('SCAN_GAP_TOP: ${{ inputs.scan_gap_top }}').length - 1, 2); // validation, scan post
+  const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
+  for (const [v, code] of [['0', 1], ['51', 1], ['x', 1], ['1.5', 1], ['-3', 1], ['1', 0], ['10', 0], ['50', 0]]) assert.equal(spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh')], { env: { ...process.env, ENGINE: 'claude', SCAN_GAP_TOP: v }, encoding: 'utf8' }).status, code, v);
+});

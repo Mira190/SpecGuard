@@ -207,10 +207,24 @@ function enclosingName(lines, line) {
 // line sits outside every definition. The span ends at the matching brace (brace languages) or when the indentation falls back to the declaration's (Python, Ruby).
 // ponytail: a heuristic, not a parser. Ceilings: braces inside multi-line template literals and regex literals are counted, a multi-line /* */ comment is not skipped,
 // a Python docstring line at column 0 ends the span early, a class-field arrow (`handler = () => {`) is a definition nested in its class, and a declaration the patterns miss is
-// invisible (the group then falls to the next definition up or to the file), and unbalanced parens inside regex literals (e.g. /\(/) keep the paren count open, so a later line can be
-// attributed to the definition. Upgrade path: tree-sitter.
+// invisible (the group then falls to the next definition up or to the file). A single-line regex literal is blanked before the comment strip (so `\/\/` or `\(` inside it counts
+// for nothing): a `/` starts one when the text before it ends with ( , = : [ ! & | ? { } ; return typeof or the line start. Limits: a regex holding a quote character is cut by the
+// string step first, a regex after `)` or an identifier is read as a division, a regex spanning lines is not seen. Upgrade path: tree-sitter.
 const PY_START = /^\s*(?:async\s+)?(?:def|class)\s/;
-const unquote = (l) => l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, '');
+const REGEX_AFTER = /(?:^|[(,=:[!&|?{};]|\breturn|\btypeof)\s*$/;
+function unregex(l) {
+  let out = '';
+  for (let i = 0; i < l.length; i++) {
+    if (l[i] === '/' && l[i + 1] !== '/' && l[i + 1] !== '*' && REGEX_AFTER.test(out)) {
+      let j = i + 1, cls = false;
+      for (; j < l.length; j++) { if (l[j] === '\\') j++; else if (l[j] === '[') cls = true; else if (l[j] === ']') cls = false; else if (l[j] === '/' && !cls) break; }
+      if (j < l.length) { out += '/r/'; i = j; while (/[a-z]/i.test(l[i + 1] || '')) i++; continue; }
+    }
+    out += l[i];
+  }
+  return out;
+}
+const unquote = (l) => unregex(l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\*.*?\*\//g, '')).replace(/\/\/.*$/, '');
 const MAX_SIG = 60;
 function defEnd(lines, i) {
   const indent = (l) => /^\s*/.exec(l)[0].length, base = indent(lines[i]);

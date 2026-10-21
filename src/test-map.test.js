@@ -341,3 +341,22 @@ test('publicDefs: ESM, TS, Python and Go are unchanged', () => {
   assert.deepEqual(names('a.py', 'def _h(): pass\ndef api(): pass'), ['api']);
   assert.deepEqual(names('a.go', 'func helper() {}\nfunc Serve() {}'), ['Serve']);
 });
+
+test('enclosingDef: a // inside a regex literal is not a comment, so the definition ends where its braces end', () => {
+  const { enclosingDef } = require('./test-map');
+  const lines = [
+    'function trackerRefs({ title = "", branch = "" }) {',
+    '  const keys = [];',
+    '  if (!/^(?:dependabot|renovate)\\//i.test(branch)) keys.push(...[title]);',
+    '  return keys;',
+    '}',
+    '',
+    'if (require.main === module) {',
+    '  main();',
+    '}',
+  ];
+  assert.deepEqual(enclosingDef(lines, 4), { line: 1, name: 'trackerRefs', end: 5 });
+  assert.equal(enclosingDef(lines, 8), null, 'the entry-point block is not part of trackerRefs');
+  const divide = ['function half(a, b) {', '  const c = a / b; // ratio', '  return c / 2;', '}', 'const z = 1;'];
+  assert.deepEqual(enclosingDef(divide, 3), { line: 1, name: 'half', end: 4 }, 'a division is not a regex');
+});

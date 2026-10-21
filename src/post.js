@@ -1273,7 +1273,24 @@ const NOT_WORTH_TESTING = [
   { id: 'forwarding-body', body: /^\s*(?:return\s+[\w$.]+|(?:return\s+)?[\w$.]+\s*\(\s*(?:[\w$.]+(?:\s*,\s*[\w$.]+)*)?\s*\))\s*;?\s*$/ },
   { id: 'structural-punctuation', line: /^[\s{}()[\];,]*$/ }, // a lone brace is instrumented by some reporters and says nothing
   { id: 'generated-file', path: GENERATED }, // focus.js's generated-file list
+  { id: 'cli-main-guard', guard: /^\s*(?:if\s*\(\s*require\.main\s*===\s*module\s*\)|if\s+__name__\s*==\s*['"]__main__['"]\s*:)/ }, // CLI glue: every never-run line sits inside the entry-point guard block
 ];
+// is the 1-based line l inside the block of a main guard? Block end: the closing brace at the guard's indent (JS; a braceless one-liner is the guard line itself) or the first line back at its indent (Python).
+// ponytail: indentation heuristic, nearest guard above only; a guard whose closing brace is not at its own indent is not recognised (the line then stays a gap).
+function inMainGuard(src, l, guard) {
+  for (let i = l - 1; i >= Math.max(0, l - 2001); i--) {
+    if (!guard.test(src[i])) continue;
+    const base = /^\s*/.exec(src[i])[0].length, py = /:\s*(?:#.*)?$/.test(src[i]);
+    if (!py && !/\{\s*(?:\/\/.*)?$/.test(src[i])) return i === l - 1; // braceless: the guard line only
+    for (let j = i + 1; j < src.length; j++) {
+      if (!src[j].trim()) continue;
+      const ind = /^\s*/.exec(src[j])[0].length;
+      if (py ? ind <= base : ind === base && /^\s*\}/.test(src[j])) return py ? l - 1 < j : l - 1 <= j;
+    }
+    return true;
+  }
+  return false;
+}
 // branching or error handling; strings and trailing comments are blanked first, and `?.`, `??` and a TypeScript `?:` are not a branch
 const BRANCHING = /\b(?:if|else|switch|case|catch|throw|raise|except)\b|(?<!\?)\?(?![.?:])|&&|\|\|/;
 const branchy = (t) => BRANCHING.test(String(t).replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\/.*$|(?:^|\s)#.*$/, ''));
@@ -1287,7 +1304,7 @@ function lineRanges(lines, max = 6) {
   return rs.slice(0, max).map(([a, b]) => (a === b ? `L${a}` : `L${a}-L${b}`)).join(', ') + (rs.length > max ? `, +${rs.length - max} more` : '');
 }
 // paths: changed reviewable files. Returns { emit: the top groups, roll: [{ path, names, groups }] the rest, index: Map(path NUL declaration line -> group) of both, filtered: groups dropped as not worth a test }
-function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text = '', risk = new Map(), cap = GAP_INLINE_CAP }) { // cap: groups in emit (scan mode: scan_gap_top)
+function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text = '', risk = new Map(), cap = GAP_INLINE_CAP, lead = () => 0 }) { // cap: groups in emit (scan mode: scan_gap_top); lead: a score that ranks before branching (scan: the unit's risk)
   const res = { emit: [], roll: [], index: new Map(), filtered: 0 };
   if (!cov || !(cov.reports > 0)) return res;
   const { enclosingDef } = require('./test-map');
@@ -1307,14 +1324,14 @@ function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text 
     }
     groups.push(...by.values());
   }
-  const lineRules = NOT_WORTH_TESTING.filter((r) => r.line), fwd = NOT_WORTH_TESTING.find((r) => r.body), blank = (l) => !l.trim() || /^\s*(?:\/\/|#|\*|\/\*)/.test(l) || /^[\s{}()[\];,]*$/.test(l);
+  const lineRules = NOT_WORTH_TESTING.filter((r) => r.line), mainGuard = NOT_WORTH_TESTING.find((r) => r.guard).guard, fwd = NOT_WORTH_TESTING.find((r) => r.body), blank = (l) => !l.trim() || /^\s*(?:\/\/|#|\*|\/\*)/.test(l) || /^[\s{}()[\];,]*$/.test(l);
   const forwarding = (g) => { // the never-run line is the whole body of a one-statement definition
     if (!g.decl || g.lines.length !== 1 || !fwd.body.test(g.texts[0])) return false;
     const body = g.src.slice(g.decl, g.end).filter((l) => !blank(l));
     let prev = g.lines[0] - 2; while (prev >= 0 && !g.src[prev].trim()) prev--;
     return body.length === 1 && !(prev >= 0 && branchy(g.src[prev]));
   };
-  const dropped = (g) => NOT_WORTH_TESTING.some((r) => r.path && r.path.test(g.path)) || g.texts.every((t) => lineRules.some((r) => r.line.test(t))) || forwarding(g);
+  const dropped = (g) => NOT_WORTH_TESTING.some((r) => r.path && r.path.test(g.path)) || g.texts.every((t) => lineRules.some((r) => r.line.test(t))) || forwarding(g) || g.lines.every((l) => inMainGuard(g.src, l, mainGuard));
   const kept = groups.filter((g) => !dropped(g) || !++res.filtered);
   for (const g of kept) {
     const name = usableLabel(g.name) ? g.name : null;
@@ -1323,7 +1340,7 @@ function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text 
   const named = new Map();
   for (const g of kept) if (usableLabel(g.name)) named.set(`${g.path}\0${g.name}`, (named.get(`${g.path}\0${g.name}`) || 0) + 1);
   for (const g of kept) g.dupName = usableLabel(g.name) && named.get(`${g.path}\0${g.name}`) > 1;
-  kept.sort((a, b) => b.branch - a.branch || b.lines.length - a.lines.length || b.risk - a.risk || b.mention - a.mention || (a.path < b.path ? -1 : a.path > b.path ? 1 : a.lines[0] - b.lines[0]));
+  kept.sort((a, b) => lead(b) - lead(a) || b.branch - a.branch || b.lines.length - a.lines.length || b.risk - a.risk || b.mention - a.mention || (a.path < b.path ? -1 : a.path > b.path ? 1 : a.lines[0] - b.lines[0]));
   res.emit = kept.slice(0, cap);
   for (const g of res.emit) res.index.set(`${g.path}\0${g.decl}`, g);
   for (const g of kept.slice(cap)) {

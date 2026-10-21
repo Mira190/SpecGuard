@@ -21,6 +21,8 @@ u="${MAX_UNITS:-12}" # scan mode: units reviewed per run (audit-collect.js check
 [[ $u =~ ^[0-9]{1,3}$ ]] && ((10#$u >= 1 && 10#$u <= 100)) || die "max_units must be an integer from 1 to 100"
 sb="${SCAN_BATCH_BLOCKS:-20}" # scan mode, claude api: blocks per call
 [[ $sb =~ ^[0-9]{1,3}$ ]] && ((10#$sb >= 1 && 10#$sb <= 100)) || die "scan_batch_blocks must be an integer from 1 to 100"
+g="${SCAN_GAP_TOP:-10}" # scan mode with coverage_files: coverage gaps listed in the summary
+[[ $g =~ ^[0-9]{1,2}$ ]] && ((10#$g >= 1 && 10#$g <= 50)) || die "scan_gap_top must be an integer from 1 to 50"
 case "${SCAN_SCOPE:-selected}" in selected) ;; all) # the whole repository in one run needs a scan that splits into calls: the claude engine in api mode
   [[ ${MODE:-} == scan || ${MODE:-} == audit ]] || die "scan_scope: all needs mode: scan"
   [[ ${ENGINE:-} == claude && ${CLAUDE_MODE:-api} == api ]] || die "scan_scope: all needs the claude engine in api mode (the other engines cannot split a scan into calls); use scan_scope: selected" ;;

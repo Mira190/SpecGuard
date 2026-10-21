@@ -399,4 +399,4 @@ function staticLeads(rows, cap = 20) {
   return { items: mixed.slice(0, cap), extra: Math.max(0, mixed.length - cap) };
 }
 
-module.exports = { staticFindings, staticLeads, inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };
+module.exports = { NOT_UNIT, staticFindings, staticLeads, inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };
