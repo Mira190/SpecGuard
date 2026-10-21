@@ -73,18 +73,18 @@ function qualifies(dir, fx) {
   const names = new Set(); let src = false; const testText = [];
   for (const f of files) {
     if (f.newPath && isTest(f.newPath)) { testText.push(...f.added.map((x) => x.text)); continue; }
-    if (!(f.newPath || f.oldPath) || !isProd(f.newPath || f.oldPath) || (f.oldPath && !isProd(f.oldPath))) continue;
+    if (!(f.newPath || f.oldPath) || !isCode(f.newPath || f.oldPath) || (f.oldPath && !isCode(f.oldPath))) continue;
     const rem = f.removed.filter(real), add = f.added.filter(real);
     if (rem.length || add.length) src = true;
     if (rem.length && f.oldPath) { const L = linesAt(dir, fx + '^', f.oldPath); for (const x of rem) { const nm = enclosingName(L, x.n); if (nm) names.add(nm); } }
     if (add.length && f.newPath) { const L = linesAt(dir, fx, f.newPath); for (const x of add) { const nm = enclosingName(L, x.n); if (nm) names.add(nm); } }
   }
   const text = testText.join('\n'), hit = [...names].filter((nm) => word(nm).test(text));
-  return { ok: src && hit.length > 0, names: [...names], hit };
+  return { ok: src && hit.length > 0, src, names: [...names], hit };
 }
 
 // per-pair data: I's changed non-test files, units, added lines per unit, B, static flags
-function pairData(dir, p, fx) {
+function pairData(dir, p, fx, withStatic = true) {
   const I = p.introducing, blamed = blamedSpots(dir, fx, I.merge_commit).filter((b) => isCode(b.path));
   const changed = git(dir, 'diff', '--name-only', '--no-renames', I.base, I.head).split('\n').filter((f) => f && isCode(f));
   const unitsByPath = {}, changedUnits = [];
@@ -100,8 +100,8 @@ function pairData(dir, p, fx) {
   const B = makeB(blamed, unitsByPath);
   const resolved = blamed.filter((b) => { const u = unitsByPath[b.path].find((x) => b.line >= x.start && b.line <= x.end); return u && u.name !== null; }).length;
   // static arm: changed named definitions whose name is in neither I's test diff nor any test file at I's head
-  const flags = changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !testsName(dir, I.head, headTests, u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
-  return { blamed, resolved, changedFiles: new Set(changed), changedUnits, B, flags };
+  const flags = !withStatic ? [] : changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !testsName(dir, I.head, headTests, u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
+  return { blamed, resolved, changedFiles: new Set(changed), changedUnits, unitsByPath, B, flags };
 }
 
 // is `name` (whole word, fixed string) in any of `files` at `head`? git grep exits 0 = match, 1 = no match, else error (thrown)
