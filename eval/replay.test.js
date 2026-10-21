@@ -413,10 +413,17 @@ test('a batch that stops (exit 1) with --post-ref still removes its temp worktre
   const { spawnSync } = require('node:child_process'), root = path.join(__dirname, '..'), f = path.join(tmp, 'v2c-stop.json'), repos = path.join(tmp, 'no-repos');
   fs.mkdirSync(repos, { recursive: true });
   fs.writeFileSync(f, JSON.stringify({ rows: [{ id: 'hono-1', repo: 'o/hono', clone: 'hono', pr: 1, sha: 'bbb', parent: 'aaa', title: 't', body: '' }] }));
+  const decoy = path.join(os.tmpdir(), `specguard-postref-decoy-${process.pid}`); // a concurrent run's worktree: the test must leave it alone
+  execFileSync('git', ['-C', root, 'worktree', 'add', '--detach', '-f', decoy, PRE_V2], { stdio: 'ignore' });
   const env = { ...process.env }; delete env.ANTHROPIC_API_KEY;
   const r = spawnSync('node', [path.join(__dirname, 'replay.js'), 'batch', '--out', path.join(tmp, 'stop-out'), '--repos', repos, '--cap', '1', '--budget', '0.25', '--max-total', '6', '--manifest', f, '--ids', 'all', '--post-ref', PRE_V2], { encoding: 'utf8', env });
   const wt = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' });
-  if (/specguard-postref/.test(wt)) for (const m of wt.matchAll(/^worktree (.*specguard-postref.*)$/gm)) execFileSync('git', ['-C', root, 'worktree', 'remove', '--force', m[1]]);
+  // only THIS child's worktree (specguard-postref-<sha12>-<child pid>) is ours to remove; a concurrent run may own another
+  const mine = [...wt.matchAll(/^worktree (.*specguard-postref-[0-9a-f]{12}-(\d+))$/gm)].filter((m) => +m[2] === r.pid).map((m) => m[1]);
+  for (const d of mine) execFileSync('git', ['-C', root, 'worktree', 'remove', '--force', d]);
+  const decoyAlive = fs.existsSync(decoy);
+  execFileSync('git', ['-C', root, 'worktree', 'remove', '--force', decoy]);
   assert.strictEqual(r.status, 1, `${r.stdout}${r.stderr}`); // the batch stopped (a clone that cannot be made is a retryable stop)
-  assert.ok(!/specguard-postref/.test(wt), 'temp worktree left behind');
+  assert.deepStrictEqual(mine, [], 'temp worktree of the child left behind');
+  assert.ok(decoyAlive, "another run's specguard-postref worktree must not be touched");
 });

@@ -544,3 +544,12 @@ test('cover: failing tests are recorded per file (file_failures), apart from loa
   assert.deepStrictEqual(p.file_failures, { 'tests/test_x.py': 1, 'tests/sub/test_y.py': 2 });
   assert.deepStrictEqual(cov.pytestHealth('', '', '/t').file_failures, {});
 });
+
+test('cover: a test-level <error> (fixture/setup) counts as a file failure; the classname fallback cuts at the last test module, not at a test function', () => {
+  const xml = '<testsuites><testsuite name="pytest" errors="1" failures="1" skipped="0" tests="4">'
+    + '<testcase classname="tests.test_utils.test_x" name="a"><failure message="f">x</failure></testcase>'
+    + '<testcase classname="tests.test_fx.TestC" name="b"><error message="fixture boom">x</error></testcase>'
+    + '<testcase classname="tests.test_pkg.test_mod.TestK" name="d"><failure message="f">x</failure></testcase>'
+    + '<testcase classname="tests.test_ok" name="c"/></testsuite></testsuites>';
+  assert.deepStrictEqual(cov.pytestHealth(xml, '', '/t').file_failures, { 'tests/test_utils.py': 1, 'tests/test_fx.py': 1, 'tests/test_pkg/test_mod.py': 1 });
+});

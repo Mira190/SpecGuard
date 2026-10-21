@@ -61,8 +61,9 @@ function pytestHealth(xml, stdout, cwd) {
   const at = (k) => Number((new RegExp(`<testsuite\\b[^>]*?\\b${k}="(\\d+)"`).exec(xml) || [])[1]) || 0;
   const tests = at('tests'), failed = at('failures'), errored = at('errors'), skipped = at('skipped'), file_errors = {}, file_failures = {};
   for (const m of String(xml).matchAll(/<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g)) { // a <failure> child = a failed test; its file: the file attribute, else the test module of classname (tests.test_x.TestC -> tests/test_x.py)
-    if (!/<failure\b/.test(m[2] || '')) continue;
-    const file = /\bfile="([^"]+)"/.exec(m[1]), cls = (/\bclassname="([^"]*)"/.exec(m[1]) || [])[1] || '', seg = cls.split('.'), i = seg.findIndex((x) => /^test_|_test$/.test(x));
+    if (!/<(?:failure|error)\b/.test(m[2] || '')) continue; // a test-level <error> (fixture/setup) means the test never ran: counted like a failure
+    // classname fallback: cut at the LAST test module segment, ignoring the final segment first (it may be a test function: tests.test_utils.test_x -> tests/test_utils.py); a bare module classname (tests.test_x) falls back to the whole list
+    const file = /\bfile="([^"]+)"/.exec(m[1]), cls = (/\bclassname="([^"]*)"/.exec(m[1]) || [])[1] || '', seg = cls.split('.'), isMod = (x) => /^test_|_test$/.test(x), i = seg.slice(0, -1).findLastIndex(isMod) >= 0 ? seg.slice(0, -1).findLastIndex(isMod) : seg.findLastIndex(isMod);
     const f = file ? relPath(file[1], cwd) : i >= 0 ? `${seg.slice(0, i + 1).join('/')}.py` : null; if (f) file_failures[f] = (file_failures[f] || 0) + 1;
   }
   for (const m of String(stdout).matchAll(/^ERROR (\S+?\.py)(?: - (.*))?$/gm)) file_errors[relPath(m[1], cwd)] = fileErr(scrub(m[2] || 'collection error', cwd));
