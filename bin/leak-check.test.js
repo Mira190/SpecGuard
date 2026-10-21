@@ -28,6 +28,12 @@ test('honey marker: 15 hex passes, 16 fails, 17+ fails (a longer run still conta
 test('local user paths fail', () => {
   for (const p of ['C:\\Users\\', 'C:/Users/', '/Users/', '/home/']) assert.strictEqual(run(p + 'alice' + p.slice(-1) + 'x').status, 1, p);
 });
+test('generic CI account ci passes; a real name or a longer one starting with ci still fails', () => {
+  const h = '/ho' + 'me/';
+  assert.strictEqual(run(h + 'ci/x/a.ts').status, 0);
+  assert.strictEqual(run(h + 'alice/x/a.ts').status, 1);
+  assert.strictEqual(run(h + 'circle/x/a.ts').status, 1);
+});
 test('clean text and generic placeholder paths pass', () => {
   assert.strictEqual(run('SPECGUARD-HONEY- short, /home/runner/work and ' + '/home/user/x').status, 0);
 });
