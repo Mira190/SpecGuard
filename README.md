@@ -72,7 +72,7 @@ Give the action one model credential as `llm_token` (a secret). It is detected b
 | Anthropic API key (`sk-ant-...`) | `claude` (default: one Messages API call, schema-enforced JSON, cost bounded up front; optional `claude_mode: agent` = Claude Code CLI) | the key's Anthropic account |
 | empty | `copilot` on the job token (`copilot-requests: write`, org billing) | the organization |
 
-A classic `ghp_` token (Copilot rejects it) and anything unrecognized fail with a clear error. `copilot_token` still works as an alias. The `model` input takes any model id, or the alias `haiku-5.5` (`claude-haiku-5.5` on Copilot, `claude-haiku-5-5` on Claude).
+A classic `ghp_` token (Copilot rejects it) and anything unrecognized fail with a clear error. `copilot_token` is an alias of `llm_token` and still works (`llm_token` wins when both are set). The `model` input takes any model id, or the alias `haiku-5.5` (`claude-haiku-5.5` on Copilot, `claude-haiku-5-5` on Claude).
 
 ## Who pays
 
@@ -80,7 +80,7 @@ It is never the action author's quota. Copilot CLI is billed by the token it run
 
 | Token | What it is | Billed to / used for | Where to store it |
 |---|---|---|---|
-| **Copilot token** (`copilot_token`, primary) | fine-grained PAT, resource owner = **a user** (not an org), account permission **Copilot Requests**. Classic `ghp_` tokens are rejected by the Copilot CLI | that user's Copilot seat (AI credits / premium requests) | `SPECGUARD_COPILOT_TOKEN`: environment secret in `specguard` for [manual runs](#manual-run-specguard-repo); repo or org secret for a [target-side caller](#enterprise-setup) |
+| **Copilot token** (`llm_token`; alias `copilot_token`) | fine-grained PAT, resource owner = **a user** (not an org), account permission **Copilot Requests**. Classic `ghp_` tokens are rejected by the Copilot CLI | that user's Copilot seat (AI credits / premium requests) | `SPECGUARD_COPILOT_TOKEN`: environment secret in `specguard` for [manual runs](#manual-run-specguard-repo); repo or org secret for a [target-side caller](#enterprise-setup) |
 | **Repository-read token** (central runs on other repos only) | GitHub App (preferred) or fine-grained PAT owned by the org, Contents / Pull requests / Issues read | reads the target; costs nothing | `SPECGUARD_APP_ID` + `SPECGUARD_APP_PRIVATE_KEY`, or `SPECGUARD_PAT` (environment secrets) |
 | **Org billing** (alternative, no Copilot token) | job token with `copilot-requests: write` | the org, only if an owner enables "Allow use of Copilot CLI billed to the organization" (personal repo: the repo owner's seat) | nothing to store |
 
@@ -138,7 +138,7 @@ Copilot usage is token-based, so cost grows with agent turns. The PR diff, PR an
 | Input | Default | Meaning |
 |---|---|---|
 | `llm_token` | | The model credential, detected by prefix ([Credentials](#credentials)): a Copilot fine-grained PAT runs Copilot, an Anthropic API key runs the `claude` engine (one Messages API call, billed to the key's Anthropic account). Empty = the job token with `copilot-requests: write` (needs the org policy). |
-| `copilot_token` | | Alias of `llm_token` (it wins when both are set). A fine-grained PAT owned by a user, permission Copilot Requests: Copilot runs on it and is billed to that user's seat ([Who pays](#who-pays)). |
+| `copilot_token` | | Alias of `llm_token` (`llm_token` wins when both are set). A fine-grained PAT owned by a user, permission Copilot Requests: Copilot runs on it and is billed to that user's seat ([Who pays](#who-pays)). |
 | `claude_mode` | `api` | `claude` engine: `api` (default) = ONE Anthropic Messages API call with the context SpecGuard already built, no CLI install, cost bounded up front; `agent` = Claude Code CLI with read-only tools (not bounded up front, see [Engines](#engines)). |
 | `max_output_tokens` | `32000` | `claude` engine, api mode: most output tokens the model may produce (1000-64000); part of the worst-case cost checked against `max_budget_usd`. |
 | `claude_version` | `2.1.284` | Pinned `@anthropic-ai/claude-code` version for `claude_mode: agent`. |
@@ -360,7 +360,7 @@ Which setup fits depends on where the code lives and who may hold a token. GitHu
 | Runs | in the target repo: PR review, on-demand scan, scheduled scan | in the SpecGuard repo, on demand: PR or whole-repo scan of any repo the App is installed on | same as 2 | in the SpecGuard repo, only for it and public repos |
 | Token | the target's own `GITHUB_TOKEN`: **no PAT, no secret** | App installation token, one repo, one hour | PAT in the `specguard` environment | job token |
 | Needs | SpecGuard repo Access setting (below); the caller job grants the permissions | an App (Contents, Pull requests, Issues read) installed on the targets; two environment secrets | PAT with the same read scopes, rotation by its owner | nothing |
-| Copilot billed to (PAT-first) | the user who owns `SPECGUARD_COPILOT_TOKEN`, stored as a secret of the target repo or org and passed as `copilot_token` | the user who owns `SPECGUARD_COPILOT_TOKEN` (environment secret) | same as 2 | same as 2 |
+| Copilot billed to (PAT-first) | the user who owns `SPECGUARD_COPILOT_TOKEN`, stored as a secret of the target repo or org and passed as `llm_token` | the user who owns `SPECGUARD_COPILOT_TOKEN` (environment secret) | same as 2 | same as 2 |
 | Copilot billed to (alternative, no Copilot token) | the org that owns the target repo (policy "Allow use of Copilot CLI billed to the organization") | the org that owns the SpecGuard repo (same policy) | same as 2 | same as 2 |
 | Security | run pages and artifacts are visible to that repo's readers only | run pages and scan issues in the SpecGuard repo quote target code: keep it private, access no wider than the targets' | the PAT reads everything it was granted: smallest scope, short expiry | none beyond 2 |
 
@@ -370,11 +370,11 @@ Which setup fits depends on where the code lives and who may hold a token. GitHu
 2. In the calling organization (Settings > Actions > General) allow the actions in use: `actions/*` (checkout, github-script, setup-node, upload-artifact) and the SpecGuard repository, or actions from your enterprise. "Allow only actions and reusable workflows in this organization" also blocks GitHub's own actions.
 3. Copilot, one of: (a) a Copilot token (the company default when the org does not bill Copilot CLI): create a fine-grained PAT owned by a user (a service account with its own Copilot seat is best), account permission **Copilot Requests**, and store it as the secret `SPECGUARD_COPILOT_TOKEN` in the calling repository or as an organization secret shared with it; (b) an org owner enables Copilot CLI and "Allow use of Copilot CLI billed to the organization", and no token is needed.
 
-Pass the token to the reusable workflow in either form (the secret is optional; without it Copilot uses the job token, i.e. (b)):
+Pass the token to the reusable workflow as `llm_token` (`copilot_token` still works as an alias), in either form (the secret is optional; without it Copilot uses the job token, i.e. (b)):
 
 ```yaml
     uses: ORG/SpecGuard/.github/workflows/specguard.yml@<full-commit-sha>
-    secrets: { copilot_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" }   # explicit
+    secrets: { llm_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" }   # explicit
     # secrets: inherit                                                   # or: passes all caller secrets; SPECGUARD_COPILOT_TOKEN is read by name
 ```
 
@@ -391,7 +391,7 @@ jobs:
   review:
     permissions: { contents: read, pull-requests: write, issues: read, copilot-requests: write } # copilot-requests only for org billing; harmless with a Copilot token
     uses: ORG/SpecGuard/.github/workflows/specguard.yml@<full-commit-sha>
-    secrets: { copilot_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" } # omit when the org bills Copilot CLI
+    secrets: { llm_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" } # omit when the org bills Copilot CLI
 ```
 
 ```yaml
@@ -405,7 +405,7 @@ jobs:
     permissions: { contents: read, issues: write, copilot-requests: write }
     uses: ORG/SpecGuard/.github/workflows/specguard.yml@<full-commit-sha>
     with: { mode: scan, scan_issue: true } # drop scan_issue and issues: write to keep results on the run page
-    secrets: { copilot_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" }
+    secrets: { llm_token: "${{ secrets.SPECGUARD_COPILOT_TOKEN }}" }
 ```
 
 **2 and 3. Central manual run.** See [Manual run](#manual-run-specguard-repo) for the environment, the App (preferred) or PAT, and `scan_issue` (default: an issue in the SpecGuard repo, so the target needs no write access). Copilot needs its own token in both: `SPECGUARD_COPILOT_TOKEN` in the `specguard` environment (the App or `SPECGUARD_PAT` is for reading the target only). Choose the App when policy forbids personal repository-read tokens (the Copilot token is still a user's PAT): its token is minted per job, limited to the one target repository, and revoked when the job ends. Install it on the target repositories only; a target in another organization needs the App installed there.
@@ -413,10 +413,6 @@ jobs:
 **4. Job token.** The SpecGuard repo scanning itself, or a public repo.
 
 GitHub Enterprise Server: the setup avoids the `job.workflow_*` context values that GHES lacks, but needs the actions it uses available on the instance (`create-github-app-token` runs on node24, so the runner must support it) and Copilot CLI with `copilot-requests` on your version. Check these before rolling out; they are not verified here.
-
-## External documents (planned)
-
-Requirement documents in Confluence or other internal sites are not fetched today: a non-GitHub link fails with "not readable from GitHub Actions". The plan is a site token secret in the `specguard` environment and a fetch step that converts the page to Markdown before the run, handled as operator-trusted requirement documents. Until then, paste the content into the repository or commit it as Markdown.
 
 ## Standards evidence
 
@@ -523,7 +519,7 @@ Native CCR remains optional. Its comments cannot reconstruct the complete obliga
 
 ## Troubleshooting
 
-- "Could not complete" in the summary: the engine failed, timed out or returned invalid JSON; the `status` output is `failed` and the job colour follows [job colour](#job-colour). Check the job log. Common causes: no usable Copilot token (set `SPECGUARD_COPILOT_TOKEN` / `copilot_token` when the organization does not bill Copilot CLI; a classic `ghp_` or org-owned PAT is rejected), a missing `copilot-requests: write` permission, a Copilot policy that is not enabled, or the token owner's quota used up. The summary names which one.
+- "Could not complete" in the summary: the engine failed, timed out or returned invalid JSON; the `status` output is `failed` and the job colour follows [job colour](#job-colour). Check the job log. Common causes: no usable Copilot token (set `SPECGUARD_COPILOT_TOKEN` / `llm_token` when the organization does not bill Copilot CLI; a classic `ghp_` or org-owned PAT is rejected), a missing `copilot-requests: write` permission, a Copilot policy that is not enabled, or the token owner's quota used up. The summary names which one.
 - Fork and draft PRs are skipped: a fork's token is read-only and its code is untrusted.
 - Review not posted, with warning annotations (403/404): the token lacks `pull-requests: write`. Findings appear as annotations and in the job summary instead.
 - A false positive: open an issue with the finding, the cited rule or test line and why it is wrong. Add "do not report" rules to `REVIEW.md` meanwhile.

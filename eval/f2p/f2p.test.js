@@ -354,3 +354,175 @@ test('N1d controls: an interrupted run is a harness_error that never replaces a 
   assert.strictEqual(res.positive_control.g1.status, 'not_verified');
   assert.deepStrictEqual([h.harnessStatus(res).r.k, h.harnessStatus(res).r.n], [0, 1]); // g2 (harness_error) is out of n
 });
+
+// ---- cover (E1) ----
+const cov = require('./cover');
+test('cover: lcov fixture gives covered/total lines per repo-relative file', () => {
+  const lcov = String.raw`TN:
+SF:C:\t\tree\src\a.ts
+DA:1,3
+DA:2,0
+DA:3,1
+LF:3
+LH:2
+end_of_record
+SF:/t/tree/src/b.ts
+DA:5,0
+end_of_record
+`;
+  assert.deepStrictEqual(cov.parseLcov(lcov, String.raw`C:\t\tree`)['src/a.ts'], [2, 3]);
+  assert.deepStrictEqual(cov.parseLcov(lcov, '/t/tree')['src/b.ts'], [0, 1]);
+});
+
+test('cover: coverage.xml fixture gives covered/total lines per repo-relative file', () => {
+  const xml = `<coverage><sources><source>/t/tree</source></sources><packages><package name="sqlglot"><classes>
+<class name="a.py" filename="sqlglot/a.py"><methods/><lines><line number="1" hits="1"/><line number="2" hits="0"/><line number="4" hits="2"/></lines></class>
+<class name="b.py" filename="sqlglot/b.py"><methods/><lines/></class></classes></package></packages></coverage>`;
+  assert.deepStrictEqual(cov.parseCoverageXml(xml, '/t/tree', () => true), { 'sqlglot/a.py': [2, 3], 'sqlglot/b.py': [0, 0] });
+});
+
+test('cover: zero selected test files (or a missing dir) is an error, never 0% covered', () => {
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'f2p-cov-'));
+  try {
+    fsx.mkdirSync(pathx.join(dir, 'src', 'runtime-tests'), { recursive: true });
+    fsx.writeFileSync(pathx.join(dir, 'src', 'runtime-tests', 'x.test.ts'), '');
+    const c = { dirs: ['src'], file_re: '\\.test\\.ts$', exclude: ['runtime-tests'] };
+    assert.throws(() => cov.selectTests(dir, c), /0 test files selected/); // only an excluded file
+    assert.throws(() => cov.selectTests(dir, { ...c, dirs: ['nope'] }), /does not exist/);
+    fsx.writeFileSync(pathx.join(dir, 'src', 'a.test.ts'), '');
+    assert.deepStrictEqual(cov.selectTests(dir, c), ['src/a.test.ts']);
+  } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('cover: collection and import errors are recorded per file with a repo-relative posix path', () => {
+  const stdout = String.raw`ERROR tests\test_x.py - ImportError: cannot import name q from D:\build\tree\mod.py
+ERROR /t/tree/tests/sub/test_y.py - ModuleNotFoundError: No module named z
+ERROR tests/test_z.py::test_a - fixture boom
+FAILED tests/test_w.py::t - assert 0
+`;
+  const xml = '<testsuites><testsuite name="pytest" errors="3" failures="1" skipped="2" tests="9"></testsuite></testsuites>';
+  const r = cov.pytestHealth(xml, stdout, '/t/tree');
+  assert.deepStrictEqual(Object.keys(r.file_errors), ['tests/test_x.py', 'tests/sub/test_y.py']); // the :: line is a test error, not a file error
+  assert.ok(!/[A-Za-z]:[\\/]|build/.test(JSON.stringify(r.file_errors)), 'no local paths in messages');
+  assert.deepStrictEqual(r.health, { passed: 3, failed: 1, errored: 3, skipped: 2 });
+  const j = { numPassedTests: 5, numFailedTests: 1, numPendingTests: 1, numTodoTests: 1, testResults: [{ name: '/t/tree/src/ok.test.ts', status: 'passed', assertionResults: [{}] }, { name: '/t/tree/src/utils/bad.test.ts', status: 'failed', message: 'Failed to resolve import', assertionResults: [] }] };
+  const v = cov.vitestHealth(j, ['src/ok.test.ts', 'src/utils/bad.test.ts', 'src/lost.test.ts'], '/t/tree');
+  assert.deepStrictEqual(v.file_errors, { 'src/utils/bad.test.ts': { kind: 'collection', msg: 'Failed to resolve import' }, 'src/lost.test.ts': { kind: 'other', msg: 'no result' } });
+  assert.deepStrictEqual(v.health, { passed: 5, failed: 1, errored: 2, skipped: 2 });
+});
+
+test('cover file-error kinds: collection (did not load), empty (no tests in the file), other', () => {
+  const j = { testResults: [
+    { name: '/t/tree/src/router/common.case.test.ts', status: 'failed', message: 'No test suite found in file /t/tree/src/router/common.case.test.ts', assertionResults: [] },
+    { name: '/t/tree/src/a.test.ts', status: 'failed', message: 'SyntaxError: Unexpected token', assertionResults: [] },
+  ] };
+  const v = cov.vitestHealth(j, ['src/router/common.case.test.ts', 'src/a.test.ts', 'src/gone.test.ts'], '/t/tree');
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(v.file_errors).map(([f, e]) => [f, e.kind])), { 'src/router/common.case.test.ts': 'empty', 'src/a.test.ts': 'collection', 'src/gone.test.ts': 'other' });
+  const p = cov.pytestHealth('<testsuite tests="0" errors="1"></testsuite>', 'ERROR tests/test_e.py - no tests ran in file\nERROR tests/test_i.py - ImportError: x\n', '/t/tree');
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(p.file_errors).map(([f, e]) => [f, e.kind])), { 'tests/test_e.py': 'empty', 'tests/test_i.py': 'collection' });
+  // committed messages are one line of at most 120 characters
+  const long = cov.pytestHealth('<testsuite tests="0" errors="1"></testsuite>', `ERROR tests/test_l.py - ImportError: ${'x'.repeat(300)}\n`, '/t/tree');
+  assert.ok(long.file_errors['tests/test_l.py'].msg.length <= 120 && !long.file_errors['tests/test_l.py'].msg.includes('\n'));
+  const multi = cov.vitestHealth({ testResults: [{ name: '/t/tree/src/m.test.ts', status: 'failed', message: 'SyntaxError: bad\n    at line two', assertionResults: [] }] }, ['src/m.test.ts'], '/t/tree');
+  assert.strictEqual(multi.file_errors['src/m.test.ts'].msg, 'SyntaxError: bad');
+  // a file whose tests ran and failed by assertion is a failed test, not a file error
+  const ran = cov.vitestHealth({ numFailedTests: 1, testResults: [{ name: '/t/tree/src/f.test.ts', status: 'failed', assertionResults: [{ status: 'failed' }] }] }, ['src/f.test.ts'], '/t/tree');
+  assert.deepStrictEqual([ran.file_errors, ran.health.failed, ran.health.errored], [{}, 1, 0]);
+});
+
+test('cover vitest: the run includes exactly the selected files, and a .test.tsx outside file_re is neither run nor reported', () => {
+  const re = /\.test\.ts$/, all = ['src/a.test.ts', 'src/helper/css/common.case.test.tsx'], selected = all.filter((f) => re.test(f));
+  const cfg = cov.includeConfigText('D:/w/vc.mjs', selected);
+  assert.ok(cfg.includes('"src/a.test.ts"') && !cfg.includes('.tsx'), 'include lists only selected files');
+  const j = { testResults: [{ name: '/t/tree/src/helper/css/common.case.test.tsx', status: 'failed', message: 'No test suite found', assertionResults: [] }, { name: '/t/tree/src/a.test.ts', status: 'passed', assertionResults: [{}] }] };
+  assert.deepStrictEqual(cov.vitestHealth(j, selected, '/t/tree').file_errors, {});
+  assert.ok(cov.includeConfigText('D:/w/vc.mjs', ['src/[id].test.ts', 'src/{a}.test.ts']).includes('"src/\\\\[id\\\\].test.ts","src/\\\\{a\\\\}.test.ts"'), 'glob characters in a path are escaped');
+});
+
+test('cover coverage.xml: a filename resolves against the <source> root that holds it, not the first root', () => {
+  const xml = '<coverage><sources><source>/t/a</source><source>/t/b</source></sources><packages><package><classes><class filename="pkg/m.py"><lines><line number="1" hits="1"/><line number="2" hits="0"/></lines></class></classes></package></packages></coverage>';
+  const files = cov.parseCoverageXml(xml, '/t', (p) => p.replace(/\\/g, '/') === '/t/b/pkg/m.py');
+  assert.deepStrictEqual(files, { 'b/pkg/m.py': [1, 2] });
+});
+
+test('cover: deps_changed is flagged only for the env manifests', () => {
+  assert.strictEqual(cov.depsChanged(['src/a.ts', 'package.json'], ['package.json']), true);
+  assert.strictEqual(cov.depsChanged(['libs/partners/x/pyproject.toml', 'src/a.ts'], ['libs/core/pyproject.toml', 'libs/core/uv.lock']), false);
+  assert.strictEqual(cov.depsChanged([], ['package.json']), false);
+});
+
+test('cover relPath: file:/// prefix, tree root and a leading ./ are removed; backslashes become slashes', () => {
+  assert.strictEqual(cov.relPath('file:///D:/t/x/src/a.ts', 'D:/t/x'), 'src/a.ts');
+  assert.strictEqual(cov.relPath('D:\\t\\x\\tests\\test_a.py', 'D:\\t\\x\\'), 'tests/test_a.py');
+  assert.strictEqual(cov.relPath('./src/b.test.ts', ''), 'src/b.test.ts');
+  assert.strictEqual(cov.relPath('other/c.py', 'D:/t/x'), 'other/c.py');
+});
+
+test('harness buildEnv: whitelisted keys only, CI=1, cfg.env filled, path_prepend goes first on PATH', () => {
+  const { buildEnv } = require('./harness');
+  const saved = process.env.F2P_SECRET_PROBE; process.env.F2P_SECRET_PROBE = 'x';
+  try {
+    const env = buildEnv({ env: { K: '{cwd}/k' }, path_prepend: ['/opt/bin'] }, 'D:/t/x');
+    assert.strictEqual(env.CI, '1');
+    assert.strictEqual(env.F2P_SECRET_PROBE, undefined);
+    assert.strictEqual(env.K, 'D:/t/x/k');
+    assert.ok(env.PATH.startsWith('/opt/bin' + require('node:path').delimiter));
+    assert.strictEqual(env.Path, env.PATH);
+  } finally { if (saved === undefined) delete process.env.F2P_SECRET_PROBE; else process.env.F2P_SECRET_PROBE = saved; }
+});
+
+test('cover head:<name> refuses a repo without a cover block before any git call or run', () => {
+  assert.throws(() => cov.cmdCover(['head:nope']), /no cover block for head:nope/);
+  assert.throws(() => cov.cmdCover(['head:rqlite']), /no cover block for head:rqlite/); // rqlite is out of the first-look scope
+});
+
+test('cover coverage.xml without <source>: filenames are kept as written (repo-relative)', () => {
+  const xml = '<coverage><packages><package><classes><class filename="pkg/n.py"><lines><line number="3" hits="0"/><line number="4" hits="2"/><line number="5" hits="1"/></lines></class></classes></package></packages></coverage>';
+  assert.deepStrictEqual(cov.parseCoverageXml(xml, '/t/tree', () => false), { 'pkg/n.py': [2, 3] });
+});
+
+test('cover depsChanged: true only when a changed path is a declared dependency manifest', () => {
+  assert.strictEqual(cov.depsChanged(['src/a.ts', 'package.json'], ['package.json']), true);
+  assert.strictEqual(cov.depsChanged(['src/a.ts', 'docs/package.json'], ['package.json']), false);
+  assert.strictEqual(cov.depsChanged([], ['pyproject.toml']), false);
+});
+
+test('cover vitestHealth with no JSON report: every selected file is an "other" error, counts are zero', () => {
+  const v = cov.vitestHealth(null, ['src/a.test.ts', 'src/b.test.tsx'], '/t/tree');
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(v.file_errors).map(([f, e]) => [f, e.kind])), { 'src/a.test.ts': 'other', 'src/b.test.tsx': 'other' });
+  assert.deepStrictEqual(v.health, { passed: 0, failed: 0, errored: 2, skipped: 0 });
+});
+
+test('list import, cover-only rows (E1): no finding, group = row id, controls have no fix, no packet fields', () => {
+  const { buildListRows } = require('./harness');
+  const env = { repos: { 'honojs/hono': { name: 'hono', status: 'runnable' } }, harness: () => 'valid', hasClone: () => true, shaExists: () => true, depsChanged: () => false, existing: { ids: new Map(), groups: new Map(), sets: new Set() } };
+  const bug = { id: 'e1-hono-3413', repo: 'honojs/hono', kind: 'bug', buggy_sha: 'aaaaaaaa11', fixed_sha: 'bbbbbbbb22', base: 'cccccccc33' };
+  const ctl = { id: 'e1-hono-c1', repo: 'honojs/hono', kind: 'control', buggy_sha: 'dddddddd44' };
+  const r = buildListRows([bug, ctl], 'e1design', env);
+  assert.deepStrictEqual(r.rows.map((x) => [x.id, x.pr, x.cover_only, x.row_kind, x.fixed_sha, x.status]), [['e1-hono-3413', 'e1-hono-3413', true, 'bug', 'bbbbbbbb22', 'ok'], ['e1-hono-c1', 'e1-hono-c1', true, 'control', null, 'ok']]);
+  assert.deepStrictEqual(r.fields, {});
+  assert.strictEqual(r.rows[0].base, 'cccccccc33');
+  assert.throws(() => buildListRows([{ ...bug, fixed_sha: undefined }], 'e1design', env), /bug row needs fixed_sha/);
+  assert.throws(() => buildListRows([{ ...ctl, fixed_sha: 'eeeeeeee55' }], 'e1design', env), /control row has no fixed_sha/);
+  assert.throws(() => buildListRows([{ ...ctl, kind: 'other' }], 'e1design', env), /kind bug or control/);
+  assert.throws(() => buildListRows([{ ...ctl, id: undefined }], 'e1design', env), /id is required/);
+  assert.throws(() => buildListRows([{ ...ctl, repo: undefined }], 'e1design', env), /repo is required/);
+  assert.throws(() => buildListRows([{ ...ctl, buggy_sha: undefined }], 'e1design', env), /buggy_sha is required/);
+  assert.throws(() => buildListRows([{ ...bug, pr: 'other' }], 'e1design', env), /group is its id; drop pr/);
+  // a sha missing from the clone makes the row unresolved; a control's absent fix is never looked up
+  const missing = { ...env, shaExists: (r, s) => s !== 'bbbbbbbb22' };
+  assert.deepStrictEqual(buildListRows([bug, ctl], 'e1design', missing).rows.map((x) => x.status), ['unresolved', 'ok']);
+});
+
+test('cover --set reads <set>-candidates.json: a missing set throws and writes nothing', () => {
+  const name = `zz-test-cover-missing-${process.pid}`, out = pathx.join(__dirname, `results-cover-${name}.json`), h = require('./harness');
+  try { assert.throws(() => cov.cmdCover(['x'], name), /ENOENT|no such file/); assert.ok(!fsx.existsSync(out)); } finally { h.useSet(null); fsx.rmSync(out, { force: true }); }
+});
+test("cover --set covers the set's own groups, never holdout2's", () => {
+  const name = `zz-test-cover-${process.pid}`, G = `zz-test-group-${process.pid}`, cand = pathx.join(__dirname, `${name}-candidates.json`), out = pathx.join(__dirname, `results-cover-${name}.json`);
+  const h = require('./harness'), orig = h.checkTree, log = console.log, seen = [];
+  fsx.writeFileSync(cand, JSON.stringify({ prs: [], candidates: [{ in_oracle_set: true, status: 'ok', pr: G, repo: 'honojs/hono', buggy_sha: 'a'.repeat(40), fixed_sha: null }] }));
+  h.checkTree = () => { throw new Error('stub'); }; console.log = (s) => seen.push(JSON.parse(s).group); // a guards() throw is caught per job too, group still logged
+  try { cov.cmdCover([], name); } finally { console.log = log; h.checkTree = orig; h.useSet(null); fsx.rmSync(cand, { force: true }); fsx.rmSync(out, { force: true }); }
+  assert.deepStrictEqual(seen, [G]);
+});

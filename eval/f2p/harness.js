@@ -95,7 +95,7 @@ function cmdExport() {
 // One markdown packet per PR: finding fields verbatim, buggy tree path, how to run, where to save. No fix information, no arm, no distance; findings shuffled with seed 1.
 function cmdPackets() {
   const { reps, hono } = scope(), R = REPOS(), by = {};
-  for (const c of [...reps, ...hono]) (by[c.group] = by[c.group] || []).push(c);
+  for (const c of [...reps, ...hono].filter((x) => !x.cover_only)) (by[c.group] = by[c.group] || []).push(c);
   fs.mkdirSync(packetsDir(), { recursive: true });
   const summary = {}, bf = baselineFile(), B = fs.existsSync(bf) ? readJson(bf) : {}, HS = harnessStatus(mainResults(), mainBaseline());
   for (const [group, cs] of Object.entries(by)) {
@@ -189,14 +189,19 @@ function cmdSetup(repo, rev) {
   console.log(`work dir ${dir} at ${rev}; install dependencies there, then record the decision in repos.json`);
 }
 
-// One run of a test file in dir -> { outcome, msg?, origin?, frame? }.
-function runOnce(repo, dir, testRel, timeout) {
-  const cfg = REPOS()[repo], out = path.join(os.tmpdir(), `f2p-${process.pid}.out`);
-  fs.rmSync(out, { force: true });
+// Whitelisted environment of one run (ENV_KEEP + the repo's env + path_prepend).
+function buildEnv(cfg, dir) {
   const env = Object.fromEntries(ENV_KEEP.filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]]));
   env.CI = '1'; // vitest never writes snapshots under CI
   for (const [k, v] of Object.entries(cfg.env || {})) env[k] = fill(v, { evidence: posix(EV), cwd: posix(dir) });
   if (cfg.path_prepend) { const v = cfg.path_prepend.map((p) => fill(p, { evidence: EV })).join(path.delimiter) + path.delimiter + (env.Path || env.PATH || ''); env.Path = v; env.PATH = v; }
+  return env;
+}
+// One run of a test file in dir -> { outcome, msg?, origin?, frame? }.
+function runOnce(repo, dir, testRel, timeout) {
+  const cfg = REPOS()[repo], out = path.join(os.tmpdir(), `f2p-${process.pid}.out`);
+  fs.rmSync(out, { force: true });
+  const env = buildEnv(cfg, dir);
   timeout = timeout || cfg.timeout || 180;
   let run = '.'; try { const fns = [...fs.readFileSync(path.join(dir, testRel), 'utf8').matchAll(/^func (Test\w+)\(/gm)].map((m) => m[1]); if (fns.length) run = `^(${fns.join('|')})$`; } catch { /* not a Go file */ }
   const vars = { run, test: posix(testRel), out: posix(out), testdir: posix(path.posix.dirname(posix(testRel))) || '.', evidence: posix(EV) };
@@ -405,11 +410,20 @@ function buildListRows(list, name, env) {
   if (ex.groups.has(name)) throw new Error(`set name ${name} equals an existing group`);
   const rows = [], fields = {}, prs = new Map(), seen = new Set();
   list.forEach((e, i) => {
-    const f = e.finding || {};
-    for (const k of ['repo', 'buggy_sha', 'fixed_sha']) if (!e[k]) throw new Error(`entry ${i}: ${k} is required`);
-    for (const k of ['kind', 'path', 'title', 'body']) if (!f[k]) throw new Error(`entry ${i}: finding.${k} is required`);
+    // A row without `finding` is cover-only (E1): {id, repo, kind: bug|control, buggy_sha, fixed_sha (bugs only), base?}. Its group is its id, so a cover report joins back to the row; it gets no packet and no oracle run.
+    const coverOnly = !e.finding, f = e.finding || {};
+    if (coverOnly) {
+      for (const k of ['id', 'repo', 'buggy_sha']) if (!e[k]) throw new Error(`entry ${i}: ${k} is required`);
+      if (!['bug', 'control'].includes(e.kind)) throw new Error(`entry ${i}: a cover-only row needs kind bug or control`);
+      if (e.kind === 'bug' && !e.fixed_sha) throw new Error(`entry ${i}: a bug row needs fixed_sha`);
+      if (e.kind === 'control' && e.fixed_sha) throw new Error(`entry ${i}: a control row has no fixed_sha`);
+      if (e.pr && e.pr !== e.id) throw new Error(`entry ${i}: a cover-only row's group is its id; drop pr`);
+    } else {
+      for (const k of ['repo', 'buggy_sha', 'fixed_sha']) if (!e[k]) throw new Error(`entry ${i}: ${k} is required`);
+      for (const k of ['kind', 'path', 'title', 'body']) if (!f[k]) throw new Error(`entry ${i}: finding.${k} is required`);
+    }
     const cfg = env.repos[e.repo], rname = (cfg && cfg.name) || String(e.repo).split('/').pop();
-    const group = e.pr || `${rname}-${e.buggy_sha.slice(0, 8)}`;
+    const group = coverOnly ? e.id : e.pr || `${rname}-${e.buggy_sha.slice(0, 8)}`;
     const id = e.id || sha([name, e.repo, e.buggy_sha, f.path, f.line, f.title].join('|'));
     if (badName(id)) throw new Error(`entry ${i}: id ${String(id).slice(0, 20)} is not allowed (letters, digits, . _ - only)`);
     if (badName(group)) throw new Error(`entry ${i}: group ${String(group).slice(0, 20)} is not allowed (letters, digits, . _ - only; not buggy or fixed)`);
@@ -417,7 +431,7 @@ function buildListRows(list, name, env) {
     if (seen.has(id)) throw new Error(`entry ${i}: duplicate id ${id.slice(0, 12)}`);
     if (ex.ids.has(id)) throw new Error(`entry ${i}: id ${id.slice(0, 12)} already exists in another set (${ex.ids.get ? ex.ids.get(id) : 'elsewhere'})`);
     if (ex.groups.has(group)) throw new Error(`entry ${i}: group ${group} already exists in set ${ex.groups.get(group)}`);
-    const pair = e.buggy_sha + '..' + e.fixed_sha;
+    const pair = e.buggy_sha + '..' + (e.fixed_sha || '');
     if (pairOf.has(group) && pairOf.get(group) !== pair) throw new Error(`entry ${i}: group ${group} appears with more than one buggy/fixed pair`);
     pairOf.set(group, pair);
     seen.add(id);
@@ -425,7 +439,12 @@ function buildListRows(list, name, env) {
     if (!cfg) { status = 'unrunnable'; reason = 'repo is not in repos.json'; }
     else if (cfg.status === 'unrunnable') { status = 'unrunnable'; reason = cfg.reason; }
     else if (env.harness(e.repo) !== 'valid') { status = 'unrunnable'; reason = `harness is ${env.harness(e.repo) || 'unvalidated'}, not valid`; }
-    else if (!env.hasClone(e.repo) || !env.shaExists(e.repo, e.buggy_sha) || !env.shaExists(e.repo, e.fixed_sha)) { status = 'unresolved'; reason = 'buggy or fixed sha is not in the local clone'; }
+    else if (!env.hasClone(e.repo) || !env.shaExists(e.repo, e.buggy_sha) || (e.fixed_sha && !env.shaExists(e.repo, e.fixed_sha))) { status = 'unresolved'; reason = 'buggy or fixed sha is not in the local clone'; }
+    if (coverOnly) {
+      rows.push({ id, pr: group, repo: e.repo, run: name, reps: [1], kind: 'cover_only', row_kind: e.kind, base: e.base ?? null, path: null, line: null, title: null, confidence: null, where: 'list', source: `list:${name}`, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha || null, fix_touched_file: null, arm: 'LIST', dist: null, in_oracle_set: true, cover_only: true, status, reason });
+      if (!prs.has(group)) prs.set(group, { replay_id: group, repo: e.repo, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha || null, sha_method: 'caller supplied', deps_changed: false }); // cover computes its own deps_changed against the env
+      return;
+    }
     rows.push({ id, pr: group, repo: e.repo, run: name, reps: [1], kind: f.kind, path: f.path, line: Number.isInteger(f.line) ? f.line : null, title: f.title, confidence: f.confidence ?? null, where: 'list', source: `list:${name}`, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha, fix_touched_file: null, arm: 'LIST', dist: null, in_oracle_set: true, status, reason });
     fields[id] = { title: f.title, body: f.body, counterexample: f.counterexample, quote: f.quote, path: f.path, line: f.line ?? null, kind: f.kind };
     if (!prs.has(group)) prs.set(group, { replay_id: group, repo: e.repo, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha, sha_method: 'caller supplied', deps_changed: status === 'ok' ? env.depsChanged(e.repo, e.buggy_sha, e.fixed_sha) : false });
@@ -481,4 +500,4 @@ function cmdReport() {
   if (mut.length) console.log('\nMutation arm (descriptive, no rate):', JSON.stringify(mut.map((r) => ({ id: r.id.slice(0, 8), verdict: r.verdict, kills: r.kills, kills_uncertain: r.kills_uncertain, claim_match: r.claim_match }))));
 }
 
-module.exports = { recordControl, assertExport, countFiles, badName, assertFree, treeDir, testsRoot, packetsDir, checkTree, existingIds, cmdSealTrees, useSet, files, cmdImport, buildListRows, cmdReportList, cmdVerify, runOnce, withTree, cmdControls, cmdWritersDone, harnessStatus, cmdExport, cmdPackets, cmdSetup, cmdBaseline, cmdTry, cmdRun, cmdRunMutation, cmdReport, freeze, hashes, nearestTest, scope };
+module.exports = { buildEnv, diskGuard, lock, nameStatus, workDir, REPOS, fill, posix, cloneOf, recordControl, assertExport, countFiles, badName, assertFree, treeDir, testsRoot, packetsDir, checkTree, existingIds, cmdSealTrees, useSet, files, cmdImport, buildListRows, cmdReportList, cmdVerify, runOnce, withTree, cmdControls, cmdWritersDone, harnessStatus, cmdExport, cmdPackets, cmdSetup, cmdBaseline, cmdTry, cmdRun, cmdRunMutation, cmdReport, freeze, hashes, nearestTest, scope };
