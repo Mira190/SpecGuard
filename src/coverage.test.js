@@ -278,3 +278,40 @@ test('V2 no report: coverageGaps finds nothing without a usable report', () => {
   assert.deepEqual(postV2.coverageGaps({ cov: null, paths: ['a.js'] }).emit, []);
   assert.deepEqual(postV2.coverageGaps({ cov: { v: 2, reports: 0, files: {} }, paths: ['a.js'] }).emit, []);
 });
+
+test('V2 N1: a multi-line signature does not cut the definition (TypeScript, Black-style Python, multi-line arrow)', () => {
+  const { enclosingDef } = require('./test-map');
+  const ts = ['export function computeTotal(', '  items,', '  discount,', '  tax,', '): number {', '  const a = 1;', '  return a;', '}', 'run();'];
+  assert.deepEqual(enclosingDef(ts, 6), { line: 1, name: 'computeTotal', end: 8 });
+  assert.equal(enclosingDef(ts, 9), null);
+  const py = ['class Svc:', '    def load(', '        self,', '        key,', '    ):', '        return 1', '', '    def save(self, k):', '        return k + 2'];
+  assert.equal(enclosingDef(py, 6).line, 2, 'load, not the class');
+  assert.equal(enclosingDef(py, 9).line, 8, 'save is its own group');
+  const g = gapsFor(py.join('\n'), [[6, 6], [9, 9]], { path: 'm.py' });
+  assert.deepEqual(keys(g).sort(), [[2, [6]], [8, [9]]]);
+  const arrow = ['const f = (', '  a,', '  b,', ') => {', '  return a;', '};'];
+  assert.deepEqual(enclosingDef(arrow, 5), { line: 1, name: 'f', end: 6 });
+  assert.equal(enclosingDef(['function f(a = {}) {', '  x();', '}'], 2).end, 3, 'braces inside the parameter list are not the body');
+});
+
+test('V2 N3: a one-line block comment holding a brace does not unbalance the span', () => {
+  const { enclosingDef } = require('./test-map');
+  assert.equal(enclosingDef(['function f(x) { /* } */', '  y();', '}', 'z();'], 2).end, 3);
+});
+
+test('V2 S5: the R-a fingerprint follows the definition name, not its line; Rakefile-like paths and same-named definitions are handled', () => {
+  const fpOf = (src, path = 'a.js', never = [[3, 3]]) => { const g = gapsFor(src, never, { path }), f = postV2.gapFinding(g.emit[0], src.split('\n')); return { f, fp: postV2.merge([f])[0].fp }; };
+  const body = ['function priceItems(x) {', '  if (x) {', '    throw e;', '  }', '}'];
+  const a = fpOf(body.join('\n')), b = fpOf(['// new', '// lines', ...body].join('\n'), 'a.js', [[5, 5]]);
+  assert.notEqual(a.f.line, b.f.line);
+  assert.equal(a.fp, b.fp, 'lines added above the function do not repost it');
+  assert.notEqual(fpOf(body.join('\n').replace('priceItems', 'otherItems')).fp, a.fp);
+  const rake = fpOf(body.join('\n'), 'Rakefile');
+  assert.notEqual(rake.fp, fpOf(body.join('\n').replace('priceItems', 'otherItems'), 'Rakefile').fp, 'a path without dot or slash still keys on the definition');
+  const noQuote = fpOf(body.join('\n').replace('throw e;', 'throw f;'), 'Rakefile');
+  assert.equal(noQuote.fp, rake.fp, 'a Rakefile finding is not keyed on its quote');
+  const dup = ['class A {', '  process(x) {', '    if (x) {', '      throw e;', '    }', '  }', '}', 'class B {', '  process(x) {', '    if (x) {', '      throw e;', '    }', '  }', '}'].join('\n');
+  const g = gapsFor(dup, [[3, 4], [10, 11]]);
+  const fps = g.emit.map((x) => postV2.merge([postV2.gapFinding(x, dup.split('\n'))])[0].fp);
+  assert.equal(new Set(fps).size, 2, 'two methods of one name keep distinct fingerprints');
+});

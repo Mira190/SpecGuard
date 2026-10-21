@@ -302,6 +302,7 @@ function validate(o) {
     if (f.start_line !== undefined && !int(f.start_line)) return 'invalid start_line';
     if (f.side !== undefined && !['LEFT', 'RIGHT'].includes(f.side)) return 'invalid side';
     for (const k of ['suggestion', 'rule_source', 'rule_quote', 'source', 'counterexample']) if (f[k] !== undefined && !str(f[k])) return `invalid ${k}`;
+    if (/^(?:coverage|relabel)$/i.test(f.source || '') || f.fpKey !== undefined) { delete f.fpKey; if (/^(?:coverage|relabel)$/i.test(f.source || '')) delete f.source; notes.push(`findings: ${f.kind} ${f.path}: a model-supplied source of coverage/relabel was ignored; only the publisher sets those.`); } // those values mean "deterministic" and "never inline"
     if (!['high', 'low'].includes(f.confidence)) { notes.push(`findings: ${f.kind} ${f.path} had no valid confidence; kept at low.`); f.confidence = 'low'; } // a failure only degrades
     if (!Array.isArray(f.obligation_ids)) return 'obligation_ids must be an array';
     f.obligation_ids = [...new Set(f.obligation_ids.filter((id) => ids.has(id)))];
@@ -470,6 +471,7 @@ function skeletonGate(f) {
 // Order, cap, and route findings. Summary items carry the reason they are there.
 function plan(findings, maps, maxComments = 10) {
   const cap = Math.min(HARD_CAP, maxComments);
+  // spec_mismatch ranks first on purpose: the requirement checks are the other v1 differentiator, so a mismatch takes max_comments before any missing_test, R-a included
   const rank = (f) => KINDS.indexOf(f.kind) * 2 + (f.confidence === 'high' ? 0 : 1);
   const out = { inline: [], file: [], summary: [] };
   for (const f of [...findings].sort((a, b) => rank(a) - rank(b))) {
@@ -530,7 +532,7 @@ const counterexampleOk = (s) => typeof s === 'string' && s.replace(/\s/g, '').le
 function commentBody(f, fp, inline = true) {
   const rule = f.rule_source ? `, rule: ${neutralize(f.rule_source).replace(/[<>\r\n]|--/g, ' ')}` : '';
   // the trailer (suggestion, hidden markers) is never cut: only the model's own text is truncated
-  const trailer = `${fix(f, inline)}\n\n<!--\nkind: ${f.kind}, confidence: ${f.confidence}${rule}\n-->\n<!-- specguard:fp=${fp} -->`;
+  const trailer = `${fix(f, inline)}\n\n<!--\nkind: ${f.kind}, confidence: ${f.confidence}${rule}${f.source === 'coverage' || f.source === 'relabel' ? `, source: ${f.source}` : ''}\n-->\n<!-- specguard:fp=${fp} -->`;
   const still = f.kind === 'weak_test' && counterexampleOk(f.counterexample) ? `\n\nStill passes when: ${neutralize(f.counterexample.trim())}` : '';
   return truncate(`**${title1(f.title)}${f.confidence === 'low' ? ' (low confidence)' : ''}**\n\n${neutralize(f.body)}${still}`, BODY_MAX - trailer.length) + trailer;
 }
@@ -1318,6 +1320,9 @@ function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text 
     const name = usableLabel(g.name) ? g.name : null;
     Object.assign(g, { branch: g.texts.filter(branchy).length, risk: risk.get(g.path) || 0, mention: !!name && new RegExp('(?<![\\w$])' + name.replace(/[.*+?^${}()|[\]\\$]/g, '\\$&') + '(?![\\w$])').test(text), models: [], absorbed: [] });
   }
+  const named = new Map();
+  for (const g of kept) if (usableLabel(g.name)) named.set(`${g.path}\0${g.name}`, (named.get(`${g.path}\0${g.name}`) || 0) + 1);
+  for (const g of kept) g.dupName = usableLabel(g.name) && named.get(`${g.path}\0${g.name}`) > 1;
   kept.sort((a, b) => b.branch - a.branch || b.lines.length - a.lines.length || b.risk - a.risk || b.mention - a.mention || (a.path < b.path ? -1 : a.path > b.path ? 1 : a.lines[0] - b.lines[0]));
   res.emit = kept.slice(0, GAP_INLINE_CAP);
   for (const g of res.emit) res.index.set(`${g.path}\0${g.decl}`, g);
@@ -1346,7 +1351,7 @@ function gapFinding(g, src) {
   const a = g.lines[0], n = g.lines.length, rs = lineRanges(g.lines), where = gapLabel(g);
   const own = `The report from the repository's own unit test run shows ${n} added line${n === 1 ? '' : 's'} of ${g.decl ? `\`${where}\`` : 'this file'} never executed (${rs})${g.branch ? `, ${g.branch} of them branching or error handling` : ''}.`;
   return { kind: 'missing_test', source: 'coverage', confidence: 'high', path: g.path, side: 'RIGHT', line: a, quote: String(src[a - 1]).trim(), title: `${where}: ${n} added line${n === 1 ? '' : 's'} never executed by any unit test (${rs})`,
-    fpKey: g.decl ? `${g.path} ${g.decl}-${usableLabel(g.name) ? g.name : 'definition'}` : `${g.path} top-level`, // the declaration, not the first line: covering line a on a later push keeps the finding
+    fpKey: `${/[./]/.test(g.path) ? g.path : `./${g.path}`.replace(/\s/g, '_')} ${!g.decl ? 'top-level' : usableLabel(g.name) && !g.dupName ? g.name : `L${g.decl}`}`, // the definition, not the first line: covering line a, or adding lines above it, keeps the finding (a path with no dot or slash, e.g. Rakefile, gets ./ so the SPEC key form accepts it; two same-named definitions of a file fall back to their declaration line)
     body: [own, ...g.models.map((m) => `**${m.title}**\n\n${m.body}`)].join('\n\n---\n\n'), obligation_ids: [...new Set(g.models.flatMap((m) => m.obligation_ids || []))] };
 }
 
@@ -1537,7 +1542,7 @@ function followUp({ priors, survive, me, headSha, cwd, threads, unseen = () => f
     const link = /\]\(https?:\/\/[^)\s]*\/blob\/[0-9a-f]+\/[^)\s]*#L(\d+)(?:-L(\d+))?\)/.exec(c.body || ''); // a file-level comment names its lines only in this link
     const end = c.original_line ?? (link ? +(link[2] || link[1]) : null), start = c.original_start_line ?? (link ? +link[1] : end);
     const rec = {
-      fp, kind: (/kind: (\w+), confidence/.exec(c.body || '') || [])[1] || c.kind || null, still_reported: survive.has(fp) || (fp.length === 16 && [...survive].some((x) => x.startsWith(fp))),
+      fp, kind: (/kind: (\w+), confidence/.exec(c.body || '') || [])[1] || c.kind || null, ...((x) => x && { source: x[1] })(/confidence: \w+, source: (coverage|relabel)\b/.exec(c.body || '')), still_reported: survive.has(fp) || (fp.length === 16 && [...survive].some((x) => x.startsWith(fp))),
       anchor_touched: anchorTouched(c.original_commit_id, headSha, c.path, start, end, cwd),
       tests_changed: testsChanged(c.original_commit_id, headSha, cwd),
       thread: !th ? 'unknown' : !th.isResolved ? 'open' : th.resolvedBy && ours(th.resolvedBy, me) ? 'specguard' : 'human', up: n('+1'), down: n('-1'), ...(verdictOf(th, me) && { verdict: verdictOf(th, me) }),

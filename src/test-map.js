@@ -205,22 +205,38 @@ function enclosingName(lines, line) {
 }
 // The innermost definition whose span holds the 1-based `line`: { line: its declaration line, name (any name, usable or not), end: its last line }, or null when the
 // line sits outside every definition. The span ends at the matching brace (brace languages) or when the indentation falls back to the declaration's (Python, Ruby).
-// ponytail: braces inside regex literals and block comments are not skipped, and a declaration the patterns miss is invisible; the group then falls to the next definition up or to the file.
-const PY_DEF = /^\s*(?:async\s+)?(?:def|class)\s[^{]*:\s*(?:#.*)?$/;
-const unquote = (l) => l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\/.*$/, '');
+// ponytail: a heuristic, not a parser. Ceilings: braces inside multi-line template literals and regex literals are counted, a multi-line /* */ comment is not skipped,
+// a Python docstring line at column 0 ends the span early, a class-field arrow (`handler = () => {`) is a definition nested in its class, and a declaration the patterns miss is
+// invisible (the group then falls to the next definition up or to the file). Upgrade path: tree-sitter.
+const PY_START = /^\s*(?:async\s+)?(?:def|class)\s/;
+const unquote = (l) => l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, '');
+const MAX_SIG = 60;
 function defEnd(lines, i) {
   const indent = (l) => /^\s*/.exec(l)[0].length, base = indent(lines[i]);
-  const byIndent = () => { let end = i; for (let j = i + 1; j < lines.length; j++) { if (!lines[j].trim()) continue; if (indent(lines[j]) <= base) break; end = j; } return end; };
-  if (PY_DEF.test(lines[i])) return byIndent();
-  let depth = 0, opened = false;
-  for (let j = i; j < Math.min(lines.length, i + 5000); j++) {
-    const s = unquote(lines[j]);
-    for (const ch of s) { if (ch === '{') { depth++; opened = true; } else if (ch === '}') depth--; }
-    if (opened && depth <= 0) return j;
-    if (!opened && /;\s*$/.test(s)) return j;
-    if (!opened && j >= i + 2) break;
+  const byIndent = (from) => { let end = from; for (let j = from + 1; j < lines.length; j++) { if (!lines[j].trim()) continue; if (indent(lines[j]) <= base) break; end = j; } return end; };
+  // the signature may span lines: walk until the parentheses close
+  let pd = 0, sig = -1;
+  for (let j = i; j < Math.min(lines.length, i + MAX_SIG); j++) {
+    for (const ch of unquote(lines[j])) { if (ch === '(') pd++; else if (ch === ')') pd--; }
+    if (pd <= 0) { sig = j; break; }
   }
-  return opened ? Math.min(lines.length, i + 5000) - 1 : byIndent();
+  // Python: the body starts after the line that closes the signature with a colon
+  if (PY_START.test(lines[i]) && sig >= 0 && /:\s*(?:#.*)?$/.test(lines[sig]) && !/\{/.test(unquote(lines.slice(i, sig + 1).join(' ')))) return byIndent(sig);
+  let depth = 0, opened = false;
+  pd = 0;
+  for (let j = i; j < Math.min(lines.length, i + 5000); j++) {
+    for (const ch of unquote(lines[j])) {
+      if (ch === '(') pd++;
+      else if (ch === ')') pd--;
+      else if (pd <= 0 && ch === '{') { depth++; opened = true; }
+      else if (pd <= 0 && ch === '}') depth--;
+      else if (pd <= 0 && ch === ';' && !opened) return j; // a declaration only
+    }
+    if (opened && depth <= 0) return j;
+    if (!opened && pd <= 0 && j >= Math.max(sig, i) + 2) break; // no body brace within two lines of the signature
+    if (!opened && j >= i + MAX_SIG) break;
+  }
+  return opened ? Math.min(lines.length, i + 5000) - 1 : byIndent(sig >= 0 ? sig : i);
 }
 // cache: Map(declaration index -> end index), shared across calls on one file
 function enclosingDef(lines, line, cache = new Map()) {

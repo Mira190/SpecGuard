@@ -4787,3 +4787,29 @@ test('V2 no report: titles stay clean; the summary says once that missing-unit-t
   const withReport = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[13, 13]], miss: [] } }), findings: [[12, '}']] });
   assert.doesNotMatch(withReport.calls.summary[0].body, notice, 'a report exists: no notice');
 });
+
+test('V2 N2: a model cannot claim source coverage or relabel; only the publisher sets them', async (t) => {
+  const d = report({ coverage: [row('missing_test')], findings: [finding('missing_test', { source: 'relabel', fpKey: 'x y' })] });
+  assert.equal(post.validate(d).ok, true);
+  assert.equal(d.findings[0].source, undefined);
+  assert.equal(d.findings[0].fpKey, undefined);
+  assert.match(d.validation_notes.join(' '), /source of coverage\/relabel was ignored/);
+  const ok = post.validate(report({ coverage: [row('missing_test')], findings: [finding('missing_test', { source: 'issue #1 AC 1' })] }));
+  assert.equal(ok.ok, true, 'an ordinary source is untouched');
+  const s = setup(t, report({ coverage: [row('missing_test')], findings: [finding('missing_test', { source: 'relabel' })] }));
+  await post(s);
+  assert.equal(s.calls.review[0].comments.length, 1, 'the claimed relabel did not send the finding to the summary');
+});
+
+test('V2 S7: inline R-a comments say so in the hidden trailer, and follow-up outcomes carry it; old trailers still parse', () => {
+  const f = finding('missing_test');
+  assert.match(post.commentBody({ ...f, source: 'coverage' }, 'abc'), /kind: missing_test, confidence: high, source: coverage\n-->/);
+  assert.doesNotMatch(post.commentBody({ ...f, source: 'issue #1 AC 1' }, 'abc'), /source:/);
+  const fp = 'a'.repeat(40), old = 'b'.repeat(40);
+  const body = (src, id) => `**t**\n\n<!--\nkind: missing_test, confidence: high${src}\n-->\n<!-- specguard:fp=${id} -->`;
+  const run = (id, src) => post.followUp({ priors: new Map([[id, { body: body(src, id), path: 'a.js' }]]), survive: new Set(), me: null, headSha: 'HEAD', cwd: '.', threads: [] })[0];
+  assert.equal(run(fp, ', source: coverage').source, 'coverage');
+  assert.equal(run(fp, ', source: coverage').kind, 'missing_test');
+  assert.equal(run(old, '').source, undefined);
+  assert.equal(run(old, '').kind, 'missing_test');
+});
