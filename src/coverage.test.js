@@ -151,3 +151,56 @@ test('main: writes coverage.txt and coverage.json from the workspace; no globs w
   assert.deepEqual(JSON.parse(out('coverage.json')).notes, ['junk/report.xml: unrecognised format']);
   run({ COVERAGE_FILES: 'coverage/lcov.info', CTX: path.join(d, 'no-such-ctx') });
 });
+
+// ---- V2 coverage gaps: the grouping, filter and ranking in src/post.js ----
+const postV2 = require('./post.js');
+const gapsFor = (src, never, opts = {}) => {
+  const rows = src.split('\n');
+  const maps = new Map([['a.js', { RIGHT: new Map(rows.map((_, i) => [i + 1, 1])) }]]);
+  const cv = { v: 2, reports: 1, files: { 'a.js': { never, ran: [], miss: never } } };
+  return postV2.coverageGaps({ cov: cv, paths: ['a.js'], readLines: () => rows, maps, ...opts });
+};
+const def = (name, body) => [`function ${name}(x) {`, ...body, '}'];
+
+test('V2 filter patterns: the exported array pins what is not worth a unit test', () => {
+  assert.deepEqual(postV2.NOT_WORTH_TESTING.map((r) => r.id), ['logging', 'constant-or-type', 'forwarding-one-liner', 'structural-punctuation', 'generated-file']);
+  const worthless = (l) => postV2.NOT_WORTH_TESTING.some((r) => r.line && r.line.test(l));
+  for (const l of ["  console.log('x');", '  logger.warn(m);', '  log.info(m)', '    print(x)', '  logging.debug("a")', '  const MAX_RETRIES = 3;', '  MAX_ITEMS: int = 5', 'export type Id = string;', 'interface Opts {', '  return x;', '  return wrap(a, b);', 'const f = (a) => g(a);', '}']) assert.ok(worthless(l), l);
+  for (const l of ['  if (x) {', '  throw new Error(m);', '  return a + b;', '  save(a, b);', '  const total = compute(a);', '  return cache.get(a) || load(a);', '  } else {']) assert.ok(!worthless(l), l);
+  assert.ok(postV2.NOT_WORTH_TESTING.find((r) => r.id === 'generated-file').path.test('src/generated/api.js'));
+});
+
+test('V2 groups: never-run lines are grouped by enclosing definition; a mixed group (logging plus a branch) is kept, a generated file is dropped', () => {
+  const src = [...def('keep', ["  console.log('a');", '  if (x) {', '    return 1;', '  }']), ...def('quiet', ["  console.log('b');", "  console.log('c');"])].join('\n');
+  const g = gapsFor(src, [[2, 3], [8, 9]]);
+  assert.deepEqual(g.emit.map((x) => [x.name, x.lines]), [['keep', [2, 3]]]);
+  assert.equal(g.filtered, 1);
+  assert.equal(gapsFor(src, [[2, 3]], { paths: ['dist/a.js'], maps: new Map([['dist/a.js', { RIGHT: new Map([[2, 1], [3, 1]]) }]]), cov: { v: 2, reports: 1, files: { 'dist/a.js': { never: [[2, 3]], ran: [], miss: [] } } } }).filtered, 1);
+});
+
+test('V2 ranking: branching lines, then size, then focus risk, then a PR-text mention; ties keep file order', () => {
+  const body = ['  if (x) {', '    throw new Error(m);', '  }'];
+  const plain = ['  a(x);', '  b(x);', '  c(x);'];
+  const src = [...def('plainBig', plain), ...def('branchSmall', ['  if (x) {']), ...def('branchBig', body)].join('\n');
+  const never = [[2, 4], [7, 7], [10, 12]];
+  assert.deepEqual(gapsFor(src, never).emit.map((x) => x.name), ['branchBig', 'branchSmall', 'plainBig']);
+  const two = [...def('first', ['  a(x);', '  b(x);']), ...def('second', ['  c(x);', '  d(x);'])].join('\n'), n2 = [[2, 3], [6, 7]];
+  assert.deepEqual(gapsFor(two, n2).emit.map((x) => x.name), ['first', 'second'], 'tie keeps file order');
+  assert.deepEqual(gapsFor(two, n2, { text: 'covers second here' }).emit.map((x) => x.name), ['second', 'first'], 'the PR text names the definition');
+  const risk = new Map([['a.js', 5]]);
+  const sizes = [...def('bigGap', ['  a(x);', '  b(x);', '  c(x);']), ...def('smallGap', ['  d(x);'])].join('\n');
+  assert.deepEqual(gapsFor(sizes, [[2, 4], [7, 7]], { risk }).emit.map((x) => x.name), ['bigGap', 'smallGap'], 'larger gap first');
+});
+
+test('V2 cap: at most three groups are emitted; the rest are rolled up per file', () => {
+  const src = ['one', 'two', 'three', 'four', 'five'].map((n) => def(`gap_${n}`, ['  if (x) {', '    throw e;', '  }']).join('\n')).join('\n');
+  const never = [0, 1, 2, 3, 4].map((i) => [i * 5 + 2, i * 5 + 3]);
+  const g = gapsFor(src, never);
+  assert.equal(g.emit.length, 3);
+  assert.deepEqual(g.roll, [{ path: 'a.js', names: ['gap_four', 'gap_five'] }]);
+});
+
+test('V2 no report: coverageGaps finds nothing without a usable report', () => {
+  assert.deepEqual(postV2.coverageGaps({ cov: null, paths: ['a.js'] }).emit, []);
+  assert.deepEqual(postV2.coverageGaps({ cov: { v: 2, reports: 0, files: {} }, paths: ['a.js'] }).emit, []);
+});
