@@ -38,6 +38,7 @@ function parseComment(c) {
     level: c.subject_type === 'file' ? 'file' : 'inline',
     title: (/^\*\*(.+?)\*\*/.exec(body) || [])[1] || '',
     body, source: src ? src[0] : '',
+    origin: (/, source: (coverage|relabel)\s*\n-->/.exec(body) || [])[1] || '', // V2 trailer: who made the finding (`source` above is the requirement it cites)
   };
 }
 
