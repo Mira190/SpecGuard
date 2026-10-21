@@ -176,6 +176,7 @@ async function finishReal({ ids, out, log = console.log }) {
 // Manifest entry -> { id, repo, number, base, head, title, body }. holdout-pairs.json: the INTRODUCING PR of a replay_eligible pair; holdout-clean.json: a clean PR.
 function entries(manifestPath) {
   const j = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (j.rows) return j.rows.map((r) => ({ id: r.id, repo: r.repo, clone: r.clone, number: r.pr, base: r.parent, head: r.sha, title: r.title || '', body: r.body || '', set: 'v2' })); // v2-corpus.json: bug-blind PRs, no fix
   if (j.bugs) return [...j.bugs.map((b) => [b, b.introducing, 'bug']), ...j.controls.map((c) => [c, c.sha, 'control'])].map(([x, head, set]) => ({ id: `${x.clone}-${x.pr}`, repo: x.repo, clone: x.clone, number: x.pr, base: x.base || `${head}~1`, head, title: x.title || x.pr_title || '', body: x.body || x.pr_body || '', set })); // testgap-confirm-build.js
   if (j.pairs) return j.pairs.filter((p) => p.replay_eligible).map((p) => ({ id: p.replay_id, repo: p.repo, number: p.introducing.number, base: p.introducing.base, head: p.introducing.head, title: p.introducing.pr_title, body: p.introducing.pr_body, fix: p.fix.number }));
   return j.clean.map((c) => ({ id: c.id, repo: c.repo, number: c.number, base: c.base, head: c.head, title: c.pr_title, body: c.pr_body }));
@@ -251,7 +252,7 @@ async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget
 // Arm A / re-post: re-run only coverage + post.js on saved run dirs (<from>/rep<k>/<id>: ctx with the saved findings.json, result.json) into a parallel <to> tree. The model is never called.
 // postRef = the older SpecGuard whose coverage.js and post.js process the SAME model output; no postRef = this tree. repos rebuilds the checkout (batch deletes it after each run).
 async function repost({ from, to, repos, coverDir, postRef, model = 'claude-haiku-5-5', log = console.log }) {
-  const root = refRoot(postRef), done = [];
+  const root = refRoot(postRef), done = []; to = path.resolve(to);
   for (const rep of fs.readdirSync(from).filter((n) => /^rep\d+$/.test(n)).sort()) for (const id of fs.readdirSync(path.join(from, rep)).sort()) {
     const src = path.join(from, rep, id), prev = readJson(path.join(src, 'result.json'));
     if (!prev || !fs.existsSync(path.join(src, 'ctx', 'findings.json'))) { log(`${id} ${rep}: no saved findings, skipped`); continue; }
@@ -343,7 +344,7 @@ async function main() {
     const manifests = o.manifest ? o.manifest.split(',') : ['holdout2-pairs.json', 'holdout2-clean.json'].map((f) => path.join(__dirname, 'replay', f));
     let list; if (positionals.length < 2) { const all = o.manifest.split(',').flatMap(entries); list = o.ids === 'all' ? all : o.ids.split(',').map((id) => all.find((e) => e.id === id) || (() => { throw new Error(`no such id: ${id}`); })()); list = all.filter((e) => list.includes(e)); } // manifest order
     const r = await batch({ dirs: positionals.slice(1), list, manifests, repos: o.repos, out: o.out, cap, maxTotal, reps, model: o.model, budget: o.budget, coverDir: o['cover-dir'], postRef: o['post-ref'] });
-    console.log(JSON.stringify(r)); if (r.stopped) process.exit(1); return;
+    console.log(JSON.stringify(r)); if (r.stopped) process.exitCode = 1; return; // not process.exit: the finally(dropRefRoots) must run
   }
   if (cmd === 'repost') {
     if (!o.from || !o.out || !o.repos) { console.log(USAGE); process.exit(2); }

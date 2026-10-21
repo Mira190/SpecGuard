@@ -45,22 +45,28 @@ const fileErr = (msg) => ({ kind: errKind(msg), msg });
 const kindCounts = (fe) => { const c = { collection: 0, empty: 0, other: 0 }; for (const e of Object.values(fe)) c[e.kind]++; return c; };
 // vitest --reporter=json: counts plus a per-file error for every test file that failed to load (status failed with no test results) or that has no result at all.
 function vitestHealth(j, selected, cwd) {
-  const res = (j && j.testResults) || [], file_errors = {}, seen = new Set();
+  const res = (j && j.testResults) || [], file_errors = {}, file_failures = {}, seen = new Set();
   for (const r of res) {
     const f = relPath(r.name, cwd); seen.add(f);
     if (!selected.includes(f)) continue; // only the selected set is reported (the run uses exactly that set as its include)
+    const nf = (r.assertionResults || []).filter((a) => a.status === 'failed').length; if (nf) file_failures[f] = nf; // a test that ran and failed (V2 B3: a counterpart with failures is not clean)
     if (r.status === 'failed' && !(r.assertionResults || []).length) file_errors[f] = fileErr(scrub(r.message || 'suite failed to run', cwd));
   }
   for (const f of selected) if (!seen.has(f)) file_errors[f] = fileErr('no result');
   const n = (k) => (j && Number(j[k])) || 0;
-  return { health: { passed: n('numPassedTests'), failed: n('numFailedTests'), errored: Object.keys(file_errors).length, skipped: n('numPendingTests') + n('numTodoTests') }, file_errors };
+  return { health: { passed: n('numPassedTests'), failed: n('numFailedTests'), errored: Object.keys(file_errors).length, skipped: n('numPendingTests') + n('numTodoTests') }, file_errors, file_failures };
 }
 // pytest: counts from the junit <testsuite> attributes (collection errors are <error> testcases); per-file collection and import errors from the `ERROR <file> - <msg>` summary lines of stdout (a line with :: is a test-level error, counted but not a file error).
 function pytestHealth(xml, stdout, cwd) {
   const at = (k) => Number((new RegExp(`<testsuite\\b[^>]*?\\b${k}="(\\d+)"`).exec(xml) || [])[1]) || 0;
-  const tests = at('tests'), failed = at('failures'), errored = at('errors'), skipped = at('skipped'), file_errors = {};
+  const tests = at('tests'), failed = at('failures'), errored = at('errors'), skipped = at('skipped'), file_errors = {}, file_failures = {};
+  for (const m of String(xml).matchAll(/<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g)) { // a <failure> child = a failed test; its file: the file attribute, else the test module of classname (tests.test_x.TestC -> tests/test_x.py)
+    if (!/<failure\b/.test(m[2] || '')) continue;
+    const file = /\bfile="([^"]+)"/.exec(m[1]), cls = (/\bclassname="([^"]*)"/.exec(m[1]) || [])[1] || '', seg = cls.split('.'), i = seg.findIndex((x) => /^test_|_test$/.test(x));
+    const f = file ? relPath(file[1], cwd) : i >= 0 ? `${seg.slice(0, i + 1).join('/')}.py` : null; if (f) file_failures[f] = (file_failures[f] || 0) + 1;
+  }
   for (const m of String(stdout).matchAll(/^ERROR (\S+?\.py)(?: - (.*))?$/gm)) file_errors[relPath(m[1], cwd)] = fileErr(scrub(m[2] || 'collection error', cwd));
-  return { health: { passed: Math.max(0, tests - failed - errored - skipped), failed, errored, skipped }, file_errors };
+  return { health: { passed: Math.max(0, tests - failed - errored - skipped), failed, errored, skipped }, file_errors, file_failures };
 }
 
 // Dependency manifests of the repo's cover block that differ between the env's base sha and the tree.
@@ -128,7 +134,7 @@ function coverTree(h, repo, cfg, dir, outDir, rev) {
     tools = { python: ver(['--version'], /Python (\S+)/), pytest: ver(['-m', 'pytest', '--version'], /pytest (\S+)/), coverage: ver(['-m', 'coverage', '--version'], /version (\S+)/) };
   } else throw new Error(`cover is not implemented for runner ${cfg.runner}`);
   const buf = fs.readFileSync(report.file);
-  return { selected_tests: selected.length, health: { ...hc.health, exit_code, timed_out, file_errors_by_kind: kindCounts(hc.file_errors) }, file_errors: hc.file_errors, tools, report: { format: report.format, sha256: sha(buf), bytes: buf.length }, files, wall_s: Math.round((Date.now() - t0) / 1000) };
+  return { selected_tests: selected.length, health: { ...hc.health, exit_code, timed_out, file_errors_by_kind: kindCounts(hc.file_errors) }, file_errors: hc.file_errors, file_failures: hc.file_failures, tools, report: { format: report.format, sha256: sha(buf), bytes: buf.length }, files, wall_s: Math.round((Date.now() - t0) / 1000) };
 }
 
 function cmdCover(args, SET) {

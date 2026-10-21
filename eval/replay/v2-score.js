@@ -5,7 +5,7 @@
 // DIR layout: DIR/rep<k>/<id>/result.json (+ ctx/coverage.json for the V2 arm). Everything is gated on the clean-counterpart subset; all-PR numbers are reported next to it.
 const fs = require('node:fs');
 const path = require('node:path');
-const { mulberry32 } = require('../szz');
+const { mulberry32, isTest } = require('../szz');
 const { parse } = require('../../src/coverage');
 const { loadHits, unusableReason, errCoversSource } = require('./coverage-e1-score');
 
@@ -39,10 +39,11 @@ function titleLines(f) {
 const raName = (f) => { const m = /^([A-Za-z_$][\w$]*): \d+ added lines? never executed/.exec(f.title || ''); return m && m[1].length >= 4 ? m[1] : null; };
 
 // G1: technical truth of each R-a at LINE level from the RAW report (E1's loadHits), never from coverage.json. covJson is only an audit of coverage.json against the raw report.
-function g1For(id, runs, report, covJson) {
+// known: all changed non-test files of the PR (as src/coverage.js resolves report paths), not just the R-a paths.
+function g1For(id, runs, report, covJson, known) {
   const ra = runs.flatMap((r, rep) => r.findings.filter(isRa).map((f) => ({ f, rep }))), out = { total: ra.length, verified: 0, false_: 0, unverifiable: 0, truncated: 0, covjson_disagree: 0, detail: [] };
   if (!ra.length) return out;
-  const hits = report ? loadHits(report, uniq(ra.map((x) => x.f.path))) : null;
+  const hits = report ? loadHits(report, uniq([...(known || []), ...ra.map((x) => x.f.path)])) : null;
   for (const { f, rep } of ra) {
     const { lines, truncated } = titleLines(f), h = hits && hits.get(f.path);
     if (truncated) out.truncated++;
@@ -52,6 +53,16 @@ function g1For(id, runs, report, covJson) {
     const never = (covJson?.files?.[f.path]?.never || []).some((r) => lines.every((l) => l >= r[0] && l <= r[1]) || false);
     if (covJson && bad.length && never) out.covjson_disagree++; // coverage.json says never, the raw report disagrees
   }
+  return out;
+}
+
+// g1_all: every never-run line coverage.json lists for the changed files (inline R-a, rolled-up R-a and unreported ones alike) checked against the raw report.
+function g1All(report, covJson, known) {
+  const out = { lines: 0, verified: 0, rate: null };
+  if (!report || !covJson || !covJson.files) return out;
+  const hits = loadHits(report, uniq([...(known || []), ...Object.keys(covJson.files)]));
+  for (const [p, cf] of Object.entries(covJson.files)) for (const r of cf.never || []) for (let l = r[0]; l <= r[1]; l++) { out.lines++; if (hits.get(p)?.get(l) === 0) out.verified++; }
+  out.rate = out.lines ? out.verified / out.lines : null;
   return out;
 }
 
@@ -77,23 +88,20 @@ function raSet(r) {
 }
 // One-sided PR-cluster permutation: within every run the order of the R-a set is shuffled (the random-order arm), the statistic is the mean over PRs of the mean precision@3 of its runs.
 // obs = V2's own top-3 (its delivered inline R-a); p = share of permutations whose statistic >= obs. The gate is p < .05, never a bare obs > mean(random).
-function rankGate(clusters, { seed = SEED, perms = 1000, k = 3 } = {}) {
-  // clusters: [{ id, runs: [[{ y: 0|1, top: bool }...]] }] ; y = later tested; top = V2 put it in its top 3
-  const items = clusters.filter((c) => c.runs.some((r) => r.length));
-  if (!items.length) return { n_prs: 0, v2_at3: null, random_at3: null, p: null, pass: null };
-  const prec = (hits, n) => (n ? hits / n : null);
-  const stat = (perRun) => mean(items.map((c, i) => mean(perRun(c, i).filter((x) => x !== null))));
-  const obs = stat((c) => c.runs.map((r) => { const t = r.filter((x) => x.top); return prec(t.reduce((s, x) => s + x.y, 0), t.length); }));
+function rankGate(clusters, { seed = SEED, perms = 1000 } = {}) {
+  // clusters: [{ id, items: [{ y: 0|1, top: bool }...] }]: one PR = ONE ranking (R-a is deterministic, rep 1's set); y = later tested; top = V2 put it in its top 3.
+  // A PR with no named top item has no observed value, so it is out of the observed AND the null statistic.
+  const cl = clusters.filter((c) => c.items.some((x) => x.top));
+  if (!cl.length) return { n_prs: 0, v2_at3: null, random_at3: null, p: null, pass: null };
+  const sum = (a) => a.reduce((s, x) => s + x.y, 0), ns = cl.map((c) => c.items.filter((x) => x.top).length);
+  const obs = mean(cl.map((c, i) => sum(c.items.filter((x) => x.top)) / ns[i]));
   const rnd = mulberry32(seed), nulls = [];
   for (let b = 0; b < perms; b++) {
-    nulls.push(stat((c) => c.runs.map((r) => {
-      const a = [...r]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-      const n = Math.min(k, r.filter((x) => x.top).length || Math.min(k, r.length)), t = a.slice(0, n);
-      return prec(t.reduce((s, x) => s + x.y, 0), t.length);
-    })));
+    // one shuffle per PR per permutation (reps repeat the same ranking, so they must not be shuffled independently)
+    nulls.push(mean(cl.map((c, i) => { const a = [...c.items]; for (let q = a.length - 1; q > 0; q--) { const j = Math.floor(rnd() * (q + 1)); [a[q], a[j]] = [a[j], a[q]]; } return sum(a.slice(0, ns[i])) / ns[i]; })));
   }
   const p = (1 + nulls.filter((x) => x >= obs - 1e-12).length) / (1 + perms);
-  return { n_prs: items.length, v2_at3: obs, random_at3: mean(nulls), p, pass: p < 0.05 };
+  return { n_prs: cl.length, v2_at3: obs, random_at3: mean(nulls), p, pass: p < 0.05 };
 }
 
 // ---- the measures of one PR subset ----
@@ -102,13 +110,14 @@ function measures(ids, X) {
   const scored = ids.filter((id) => (runsV2[id] || []).length >= (X.reps || 3));
   const out = { prs: ids.length, scored_prs: scored.length };
   // G1 + env artifact
-  const g = { total: 0, verified: 0, false: 0, unverifiable: 0, truncated: 0, covjson_disagree: 0 }; let env = 0, named = 0;
+  const g = { total: 0, verified: 0, false: 0, unverifiable: 0, truncated: 0, covjson_disagree: 0 }; let env = 0, named = 0; const gAll = { lines: 0, verified: 0 };
   for (const id of scored) {
-    const x = g1For(id, runsV2[id], reports[id], covJson[id]);
+    const x = g1For(id, runsV2[id], reports[id], covJson[id], X.changed(id)), ga = g1All(reports[id], covJson[id], X.changed(id));
+    gAll.lines += ga.lines; gAll.verified += ga.verified;
     g.total += x.total; g.verified += x.verified; g.false += x.false_; g.unverifiable += x.unverifiable; g.truncated += x.truncated; g.covjson_disagree += x.covjson_disagree;
     for (const n of uniq(runsV2[id].flatMap((r) => r.findings.filter(isRa).map(raName)).filter(Boolean))) { named++; if (tests(id, n)) env++; }
   }
-  out.G1 = { ...g, rate: g.total ? g.verified / g.total : null, pass: g.total ? g.verified === g.total : null };
+  out.G1 = { ...g, rate: g.total ? g.verified / g.total : null, pass: g.total ? g.verified === g.total : null, g1_all: { ...gAll, rate: gAll.lines ? gAll.verified / gAll.lines : null } };
   out.env_artifact = { definitions_named: named, test_file_names_definition_but_never_ran: env };
   // G2
   const st = scored.map((id) => stability(runsV2[id], isRa)).filter((x) => x !== null);
@@ -116,13 +125,24 @@ function measures(ids, X) {
   const ms = scored.map((id) => stability(runsV2[id], (f) => f.kind === 'missing_test' && !isRa(f))).filter((x) => x !== null).sort((a, b) => a - b);
   out.model_stability_median = ms.length ? ms[Math.floor(ms.length / 2)] : null; // descriptive (Revision 1: >= 0.5)
   // E1'(p)
-  const clusters = [], base = {}, unnamed = { n: 0 };
+  // R-a is deterministic: every PR is scored on rep 1's set, and the sets of all reps must be equal (a difference is reported and is also a G2 failure)
+  const clusters = [], base = {}, mismatch = [], tops = [], unscorable = { unnamed: 0, rollup_more: 0 };
+  const sig = (r) => raSet(r).map((it) => `${it.inline ? 'I' : 'R'}:${it.name}`).join(',');
   for (const id of scored) {
-    const repo = id.split('-')[0], runs = runsV2[id].map((r) => raSet(r).filter((it) => { if (!it.name) { unnamed.n++; return false; } return true; }).map((it) => ({ y: later(id, it.name) ? 1 : 0, top: it.inline })));
-    clusters.push({ id, runs });
-    for (const r of runs) for (const it of r) { (base[repo] ||= [0, 0])[0] += it.y; base[repo][1]++; }
+    const repo = id.split('-')[0], r1 = runsV2[id][0], set = raSet(r1);
+    if (runsV2[id].some((r) => sig(r) !== sig(r1))) mismatch.push(id);
+    unscorable.unnamed += set.filter((it) => !it.name).length;
+    unscorable.rollup_more += (r1.rollup || []).reduce((s, g) => s + Math.max(0, g.count - g.names.length), 0); // "+N more" names the summary does not list
+    const items = set.filter((it) => it.name).map((it) => ({ y: later(id, it.name) ? 1 : 0, top: it.inline }));
+    clusters.push({ id, items });
+    const inl = set.filter((it) => it.inline);
+    if (inl.length) tops.push({ n: inl.length, unnamed: inl.filter((it) => !it.name).length, hits: inl.filter((it) => it.name && later(id, it.name)).length });
+    for (const it of items) { (base[repo] ||= [0, 0])[0] += it.y; base[repo][1]++; }
   }
-  out.E1p = { ...rankGate(clusters, X), unnamed_items: unnamed.n, base_rate_by_repo: Object.fromEntries(Object.entries(base).map(([k, [a, n]]) => [k, { later_tested: a, n, rate: a / n }])), by_kind: {} };
+  const gate = rankGate(clusters, X), topN = tops.reduce((s, t) => s + t.n, 0), share = topN ? tops.reduce((s, t) => s + t.unnamed, 0) / topN : null;
+  out.E1p = { ...gate, gate_raw: gate.pass, v2_at3_unnamed_as_0: tops.length ? mean(tops.map((t) => t.hits / t.n)) : null, unnamed_share_top3: share, readable: share === null ? null : share <= 0.2,
+    unscorable_items: unscorable, rep_set_mismatch: mismatch, base_rate_by_repo: Object.fromEntries(Object.entries(base).map(([k, [a, n]]) => [k, { later_tested: a, n, rate: a / n }])), by_kind: {} };
+  if (share !== null && share > 0.2) out.E1p.pass = null; // not readable: too many inline R-a have no name to match (pre-stated threshold 0.20)
   const label = (f) => (isRa(f) ? 'missing_test:R-a' : isRb(f) ? 'weak_test:R-b' : f.kind + (f.source ? ':' + f.source : ':model'));
   for (const [arm, runsOf] of [['v2', runsV2], ['armA', runsA]]) {
     const acc = {};
@@ -141,11 +161,11 @@ function measures(ids, X) {
   const top = uniq(scored.flatMap((id) => runsV2[id].flatMap((r) => r.findings.filter((f) => isRa(f) && f.where === 'inline').slice(0, 3).map((f) => `${id}|${f.path}|${f.line}`))));
   const lab = judge && judge.labels ? top.filter((k) => judge.labels[k]) : [];
   if (!judge || !lab.length) out.E1j = { status: 'judge not run' };
-  else { const yes = lab.filter((k) => judge.labels[k] === 'yes').length; out.E1j = { status: 'run', items: top.length, labelled: lab.length, yes, rate: yes / lab.length, wilson: wilson(yes, lab.length) }; }
-  // silence + volume (per run), per stratum
-  const rows = scored.flatMap((id) => runsV2[id].map((r) => ({ id, inline: r.findings.filter((f) => f.where === 'inline').length, summary: r.findings.filter((f) => f.where === 'summary').length, ra_inline: r.findings.filter((f) => isRa(f) && f.where === 'inline').length })));
-  const vol = (rs) => ({ runs: rs.length, inline_median: pct(rs.map((r) => r.inline), 0.5), inline_p90: pct(rs.map((r) => r.inline), 0.9), summary_p90: pct(rs.map((r) => r.summary), 0.9), silence: rs.length ? rs.filter((r) => !r.inline).length / rs.length : null, ra_inline_share: rs.reduce((s, r) => s + r.inline, 0) ? rs.reduce((s, r) => s + r.ra_inline, 0) / rs.reduce((s, r) => s + r.inline, 0) : null });
-  out.volume = { ...vol(rows), by_stratum: Object.fromEntries(uniq(scored.map((id) => X.stratum[id] || '?')).sort().map((s) => [s, vol(rows.filter((r) => (X.stratum[r.id] || '?') === s))])) };
+  else { const yes = lab.filter((k) => judge.labels[k] === 'yes').length; out.E1j = { status: 'run', items: top.length, labelled: lab.length, missing_labels: top.length - lab.length, yes, rate: yes / lab.length, wilson: wilson(yes, lab.length) }; }
+  // silence + volume per PR: each PR's value is the median over its reps (R-a repeats, model findings vary), then the median across PRs (p90 = element floor(0.9n) of the ascending sort; n=30 -> the 3rd largest)
+  const per = scored.map((id) => { const rs = runsV2[id], med = (f) => pct(rs.map(f), 0.5), cnt = (r, w) => r.findings.filter((f) => f.where === w).length; return { id, inline: med((r) => cnt(r, 'inline')), summary: med((r) => cnt(r, 'summary')), inline_all: rs.reduce((s, r) => s + cnt(r, 'inline'), 0), ra_inline: rs.reduce((s, r) => s + r.findings.filter((f) => isRa(f) && f.where === 'inline').length, 0) }; });
+  const vol = (rs) => ({ prs: rs.length, inline_median: pct(rs.map((r) => r.inline), 0.5), inline_p90: pct(rs.map((r) => r.inline), 0.9), summary_median: pct(rs.map((r) => r.summary), 0.5), summary_p90: pct(rs.map((r) => r.summary), 0.9), silence: rs.length ? rs.filter((r) => !r.inline).length / rs.length : null, ra_inline_share: rs.reduce((s, r) => s + r.inline_all, 0) ? rs.reduce((s, r) => s + r.ra_inline, 0) / rs.reduce((s, r) => s + r.inline_all, 0) : null });
+  out.volume = { ...vol(per), by_stratum: Object.fromEntries(uniq(scored.map((id) => X.stratum[id] || '?')).sort().map((s) => [s, vol(per.filter((r) => (X.stratum[r.id] || '?') === s))])) };
   // D
   const inl = scored.flatMap((id) => runsV2[id].flatMap((r) => r.findings.filter((f) => isRa(f) && f.where === 'inline').map((f) => `${id}|${f.path}|${f.line}`)));
   if (!skeleton) out.D = { status: 'not run' };
@@ -153,7 +173,7 @@ function measures(ids, X) {
   // H: R-a verified line-level; R-b and R-c unknown (worst case counts them as NOT verified)
   let all = 0, ver = 0, unk = 0;
   for (const id of scored) {
-    const v = g1For(id, runsV2[id], reports[id], null);
+    const v = g1For(id, runsV2[id], reports[id], null, X.changed(id));
     for (const r of runsV2[id]) { all += r.findings.filter((f) => isRa(f) || isRb(f) || isRc(f)).length + (r.rollup || []).reduce((s, g) => s + g.count, 0); unk += r.findings.filter((f) => isRb(f) || isRc(f)).length + (r.rollup || []).reduce((s, g) => s + g.count, 0); }
     ver += v.verified;
   }
@@ -161,12 +181,13 @@ function measures(ids, X) {
   return out;
 }
 
-// clean-counterpart subset (B3): a usable cover run and no file error on a test file that names or neighbours a changed source. Per-file test failures are not in the cover record, only the aggregate (reported, not attributed).
+// clean-counterpart subset (B3): a usable cover run and no file error AND no failing test (file_failures, f2p/cover.js) on a test file that names or neighbours ANY changed code file (E1's errCoversSource).
 function cleanIds(ids, { health, reports, changed }) {
   return ids.filter((id) => {
     const rec = health[id] || null, src = changed(id), hits = reports[id] ? loadHits(reports[id], src) : null;
     if (unusableReason({ rec, hits, changedSrc: src })) return false;
-    return !Object.keys(rec.file_errors || {}).some((ef) => src.some((s) => errCoversSource(ef, s)));
+    // independent of the findings: NO counterpart test file of ANY changed code file may have a load error or a failing test
+    return ![...Object.keys(rec.file_errors || {}), ...Object.keys(rec.file_failures || {})].some((ef) => src.some((s) => errCoversSource(ef, s)));
   });
 }
 
@@ -179,15 +200,15 @@ function score(X) {
     return { status: 'run', n_pos: pos.length, n_neg: neg.length, sensitivity_wilson: sens, specificity_wilson: spec, valid: pos.length >= 40 && neg.length >= 40 && sens[0] >= 0.75 && spec[0] >= 0.75 };
   })();
   const m = mClean; // N1: every gate reads the clean-counterpart subset
-  const j = m.E1j.status === 'run' && judgeCal.valid !== null ? (judgeCal.valid ? m.E1j.wilson[0] >= 0.7 : false) : null;
+  const j = m.E1j.status === 'run' && judgeCal.valid !== null && m.E1j.missing_labels === 0 ? (judgeCal.valid ? m.E1j.wilson[0] >= 0.7 : false) : null; // every item must be labelled
   const gates = {
-    g1_g2: m.G1.pass === null || m.G2.pass === null ? null : m.G1.pass && m.G2.pass,
+    g1_g2: m.G1.pass === false || m.G2.pass === false ? false : m.G1.pass === null || m.G2.pass === null ? null : true, // false wins over null
     ranking: m.E1p.pass,
     judge: j,
     inline_median: m.volume.inline_median === null ? null : m.volume.inline_median <= 3,
   };
   const vals = Object.values(gates);
-  const prompt = (() => { let same = 0, diff = 0; for (const id of ids) (X.runsV2[id] || []).forEach((r, i) => { const a = (X.runsA[id] || [])[i]; if (a && r.prompt_sha256 && a.prompt_sha256) (r.prompt_sha256 === a.prompt_sha256 ? same++ : diff++); }); return { same, differ: diff, arm_a_must_run_live: diff > 0 }; })();
+  const prompt = (() => { let same = 0, diff = 0; for (const id of ids) (X.runsV2[id] || []).forEach((r) => { const a = (X.runsA[id] || []).find((x) => x.rep === r.rep); if (a && r.prompt_sha256 && a.prompt_sha256) (r.prompt_sha256 === a.prompt_sha256 ? same++ : diff++); }); return { same, differ: diff, arm_a_must_run_live: diff > 0 }; })();
   return { clean_ids: clean, clean_n: clean.length, all_n: ids.length, clean: mClean, all: mAll, judge_calibration: judgeCal, gates, pass: vals.includes(false) ? false : vals.includes(null) ? null : true, prompt_check: prompt };
 }
 
@@ -196,7 +217,7 @@ function loadRuns(dir) {
   const out = {};
   if (!dir || !fs.existsSync(dir)) return out;
   for (const rep of fs.readdirSync(dir).filter((n) => /^rep\d+$/.test(n)).sort()) for (const id of fs.readdirSync(path.join(dir, rep))) {
-    try { const r = JSON.parse(fs.readFileSync(path.join(dir, rep, id, 'result.json'), 'utf8')); if (validRun(r)) (out[id] ||= []).push(r); } catch { /* missing */ }
+    try { const r = JSON.parse(fs.readFileSync(path.join(dir, rep, id, 'result.json'), 'utf8')); if (validRun(r)) (out[id] ||= []).push({ ...r, rep }); } catch { /* missing */ }
   }
   return out;
 }
@@ -213,7 +234,7 @@ function main() {
     ids, reps: +arg('reps', 3), seed: +arg('seed', SEED), perms: +arg('perms', 1000), runsV2: loadRuns(v2), runsA: loadRuns(arg('arma')), reports,
     covJson: Object.fromEntries(ids.map((id) => { try { return [id, JSON.parse(fs.readFileSync(path.join(v2, 'rep1', id, 'ctx', 'coverage.json'), 'utf8'))]; } catch { return [id, null]; } })),
     health: (rj(arg('health')) || {}).groups || {}, stratum: Object.fromEntries(ids.map((id) => [id, rows[id].stratum])),
-    changed: (id) => git(rows[id], 'diff-tree', '--no-commit-id', '--name-only', '-r', rows[id].parent, rows[id].sha).split('\n').filter(Boolean),
+    changed: (id) => git(rows[id], 'diff-tree', '--no-commit-id', '--name-only', '-r', rows[id].parent, rows[id].sha).split('\n').filter((f) => f && !isTest(f)), // changed code files (non-test), as src/coverage.js's `known`
     tests: (id, n) => testsName(path.join(repos, rows[id].clone), rows[id].sha, (tf[id] ||= scope(rows[id])), n),
     later: (id, n) => { const row = lt.rows.find((x) => x.id === id); return row.commits.some((c) => testsName(path.join(repos, rows[id].clone), c.sha, c.test_files.map((t) => t.path), n)); },
     defOf: (id, p, l) => { try { const d = enclosingDef(git(rows[id], 'show', `${rows[id].sha}:${p}`).split('\n'), l, cache); return d && d.name && d.name.length >= 4 ? d.name : null; } catch { return null; } },

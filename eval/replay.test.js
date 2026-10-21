@@ -402,3 +402,21 @@ test('V2 repost with a cover dir lacking this id: no coverage, no R-a/R-b, and t
   assert.match(s, /not verified: no coverage report/);
   assert.ok(coverDir);
 });
+
+test('entries reads v2-corpus.json rows (bug-blind PRs: parent -> sha, no fix)', () => {
+  const { entries } = require('./replay.js'), f = path.join(tmp, 'v2c.json');
+  fs.writeFileSync(f, JSON.stringify({ seed: 1, rows: [{ id: 'hono-4862', repo: 'honojs/hono', clone: 'hono', pr: 4862, sha: 'bbb', parent: 'aaa', title: 'feat', body: 'text', stratum: 's1' }] }));
+  assert.deepStrictEqual(entries(f), [{ id: 'hono-4862', repo: 'honojs/hono', clone: 'hono', number: 4862, base: 'aaa', head: 'bbb', title: 'feat', body: 'text', set: 'v2' }]);
+});
+
+test('a batch that stops (exit 1) with --post-ref still removes its temp worktree', { skip: !HAS_PRE_V2 && 'pre-V2 commit not in this clone' }, () => {
+  const { spawnSync } = require('node:child_process'), root = path.join(__dirname, '..'), f = path.join(tmp, 'v2c-stop.json'), repos = path.join(tmp, 'no-repos');
+  fs.mkdirSync(repos, { recursive: true });
+  fs.writeFileSync(f, JSON.stringify({ rows: [{ id: 'hono-1', repo: 'o/hono', clone: 'hono', pr: 1, sha: 'bbb', parent: 'aaa', title: 't', body: '' }] }));
+  const env = { ...process.env }; delete env.ANTHROPIC_API_KEY;
+  const r = spawnSync('node', [path.join(__dirname, 'replay.js'), 'batch', '--out', path.join(tmp, 'stop-out'), '--repos', repos, '--cap', '1', '--budget', '0.25', '--max-total', '6', '--manifest', f, '--ids', 'all', '--post-ref', PRE_V2], { encoding: 'utf8', env });
+  const wt = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' });
+  if (/specguard-postref/.test(wt)) for (const m of wt.matchAll(/^worktree (.*specguard-postref.*)$/gm)) execFileSync('git', ['-C', root, 'worktree', 'remove', '--force', m[1]]);
+  assert.strictEqual(r.status, 1, `${r.stdout}${r.stderr}`); // the batch stopped (a clone that cannot be made is a retryable stop)
+  assert.ok(!/specguard-postref/.test(wt), 'temp worktree left behind');
+});

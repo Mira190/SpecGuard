@@ -526,3 +526,21 @@ test("cover --set covers the set's own groups, never holdout2's", () => {
   try { cov.cmdCover([], name); } finally { console.log = log; h.checkTree = orig; h.useSet(null); fsx.rmSync(cand, { force: true }); fsx.rmSync(out, { force: true }); }
   assert.deepStrictEqual(seen, [G]);
 });
+
+test('cover: failing tests are recorded per file (file_failures), apart from load errors: vitest assertionResults, pytest junit <failure>', () => {
+  const j = { numPassedTests: 2, numFailedTests: 2, testResults: [
+    { name: '/t/tree/src/a.test.ts', status: 'failed', assertionResults: [{ status: 'passed' }, { status: 'failed' }, { status: 'failed' }] },
+    { name: '/t/tree/src/ok.test.ts', status: 'passed', assertionResults: [{ status: 'passed' }] },
+    { name: '/t/tree/src/bad.test.ts', status: 'failed', message: 'Failed to resolve import', assertionResults: [] }] };
+  const v = cov.vitestHealth(j, ['src/a.test.ts', 'src/ok.test.ts', 'src/bad.test.ts'], '/t/tree');
+  assert.deepStrictEqual(v.file_failures, { 'src/a.test.ts': 2 });
+  assert.deepStrictEqual(Object.keys(v.file_errors), ['src/bad.test.ts']);
+  const xml = '<testsuites><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="5">'
+    + '<testcase classname="tests.test_x.TestC" name="t1"><failure message="assert 0">x</failure></testcase>'
+    + '<testcase classname="tests.sub.test_y" name="t2"><failure message="boom">y</failure></testcase>'
+    + '<testcase classname="tests.sub.test_y" name="t3" file="tests/sub/test_y.py"><failure message="b">y</failure></testcase>'
+    + '<testcase classname="tests.test_ok" name="t4"/><testcase classname="tests.test_ok" name="t5"><skipped/></testcase></testsuite></testsuites>';
+  const p = cov.pytestHealth(xml, '', '/t/tree');
+  assert.deepStrictEqual(p.file_failures, { 'tests/test_x.py': 1, 'tests/sub/test_y.py': 2 });
+  assert.deepStrictEqual(cov.pytestHealth('', '', '/t').file_failures, {});
+});
