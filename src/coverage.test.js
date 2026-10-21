@@ -326,3 +326,33 @@ test('V2 gapEvidence: none without a report, never for a never-run line, ran for
   assert.equal(postV2.gapEvidence(ran, 'src.js', 5), 'unknown', 'a line the report does not mention');
   assert.equal(postV2.gapEvidence(ran, 'other.js', 1), 'unknown', 'a file outside the changed set');
 });
+
+test("analyze mode 'all' (scan): every instrumented line of every non-test file is reported as never or ran, with no diff; mode: all is stamped", () => {
+  const lcov = 'SF:/ci/src/a.js\nDA:1,3\nDA:2,0\nDA:3,0\nDA:5,1\nend_of_record\nSF:/ci/src/a.test.js\nDA:1,1\nend_of_record\nSF:/ci/src/b.js\nDA:1,0\nend_of_record\n';
+  const run = (mode) => cov.analyze({ files: ['src/a.js', 'src/b.js', 'src/a.test.js'], reports: [{ name: 'lcov.info', text: lcov }], ws: '/ci', mode });
+  const r = run('all').json;
+  assert.equal(r.v, 2);
+  assert.equal(r.mode, 'all');
+  assert.deepEqual(r.files['src/a.js'].never, [[2, 3]]);
+  assert.deepEqual(r.files['src/a.js'].ran, [[1, 1], [5, 5]]);
+  assert.deepEqual(r.files['src/b.js'].never, [[1, 1]]);
+  assert.equal(r.files['src/a.test.js'], undefined, 'a test file is not source');
+  assert.deepEqual(r.total, { instrumented: 5, executed: 2 });
+  assert.equal(run('all').txt, '');
+  assert.deepEqual(run('diff').json.files['src/a.js'].never, [], 'diff mode with no added lines reports nothing');
+  assert.equal(run('diff').json.mode, undefined);
+});
+
+test("analyze mode 'all': the file and range caps still apply and set truncated; the files with the most never-run lines survive", () => {
+  const many = Array.from({ length: 405 }, (_, i) => `SF:/ci/f${i}.js\nDA:1,${i === 404 ? 0 : 1}\nend_of_record\n`).join('');
+  const files = Array.from({ length: 405 }, (_, i) => `f${i}.js`);
+  const r = cov.analyze({ files, reports: [{ name: 'l', text: many }], ws: '/ci', mode: 'all' }).json;
+  assert.equal(Object.keys(r.files).length, 400);
+  assert.equal(r.truncated, true);
+  assert.ok(r.files['f404.js'], 'the file with a never-run line is kept');
+  const odd = Array.from({ length: 700 }, (_, i) => `DA:${i * 2 + 1},${i % 2}`).join('\n');
+  const r2 = cov.analyze({ files: ['a.js'], reports: [{ name: 'l', text: `SF:a.js\n${odd}\nend_of_record\n` }], mode: 'all' }).json;
+  assert.equal(r2.files['a.js'].never.length, 300);
+  assert.equal(r2.truncated, true);
+  assert.equal(cov.analyze({ files: ['a.js'], reports: [{ name: 'l', text: 'SF:a.js\nDA:1,1\nend_of_record\n' }], mode: 'all' }).json.truncated, undefined);
+});

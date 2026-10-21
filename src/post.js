@@ -1287,7 +1287,7 @@ function lineRanges(lines, max = 6) {
   return rs.slice(0, max).map(([a, b]) => (a === b ? `L${a}` : `L${a}-L${b}`)).join(', ') + (rs.length > max ? `, +${rs.length - max} more` : '');
 }
 // paths: changed reviewable files. Returns { emit: the top groups, roll: [{ path, names, groups }] the rest, index: Map(path NUL declaration line -> group) of both, filtered: groups dropped as not worth a test }
-function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text = '', risk = new Map() }) {
+function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text = '', risk = new Map(), cap = GAP_INLINE_CAP }) { // cap: groups in emit (scan mode: scan_gap_top)
   const res = { emit: [], roll: [], index: new Map(), filtered: 0 };
   if (!cov || !(cov.reports > 0)) return res;
   const { enclosingDef } = require('./test-map');
@@ -1324,9 +1324,9 @@ function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text 
   for (const g of kept) if (usableLabel(g.name)) named.set(`${g.path}\0${g.name}`, (named.get(`${g.path}\0${g.name}`) || 0) + 1);
   for (const g of kept) g.dupName = usableLabel(g.name) && named.get(`${g.path}\0${g.name}`) > 1;
   kept.sort((a, b) => b.branch - a.branch || b.lines.length - a.lines.length || b.risk - a.risk || b.mention - a.mention || (a.path < b.path ? -1 : a.path > b.path ? 1 : a.lines[0] - b.lines[0]));
-  res.emit = kept.slice(0, GAP_INLINE_CAP);
+  res.emit = kept.slice(0, cap);
   for (const g of res.emit) res.index.set(`${g.path}\0${g.decl}`, g);
-  for (const g of kept.slice(GAP_INLINE_CAP)) {
+  for (const g of kept.slice(cap)) {
     g.rolled = true; res.index.set(`${g.path}\0${g.decl}`, g);
     let r = res.roll.find((x) => x.path === g.path); if (!r) res.roll.push((r = { path: g.path, names: [], groups: [] }));
     r.names.push(gapLabel(g)); r.groups.push(g);
@@ -2024,4 +2024,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { NOT_WORTH_TESTING, BRANCHING, coverageGaps, gapEvidence, rollupLine, gapFinding, lineRanges, assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead, oneLine, cell, plural, norm });
+Object.assign(module.exports, { NOT_WORTH_TESTING, BRANCHING, coverageGaps, gapEvidence, rollupLine, gapLabel, RELABEL_NOTE, gapFinding, lineRanges, assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead, oneLine, cell, plural, norm });

@@ -1554,3 +1554,101 @@ test('run: scan_scope all, zero units and zero documents, but scan_paths files d
   const sample = await runPost(t, { env: { SKIP: 'true' }, ctxFiles: { 'audit-meta.json': { ...meta, scan_scope: undefined, not_unit: 2, docs_over_size: 1 } } });
   assert.equal(sample.calls.outputs.status, 'complete', 'outside scan_scope all it stays a sample');
 });
+
+// ---- coverage-backed audit (coverage_files in scan mode) ----
+const CSRC = {
+  'src/m.js': [
+    'function guard(x) {', '  if (!x) {', '    throw new Error("no");', '  }', '  return x;', '}', '',
+    'function logIt(m) {', '  console.log(m);', '}',
+    'function plain(a) {', '  const b = a + 1;', '  const c = b * 2;', '  return c;', '}',
+    'function ran(a) {', '  return a + 1;', '}',
+    'function logThrow(m) {', '  console.log(m);', '  throw new Error(m);', '}',
+  ],
+};
+const covOf = (files, over = {}) => ({ v: 2, mode: 'all', reports: 1, total: {}, files, unreported: [], notes: [], ...over });
+const CFILE = { 'src/m.js': { inst: 14, exec: 3, never: [[3, 3], [9, 9], [12, 13], [20, 21]], ran: [[2, 2], [5, 5], [17, 17]], miss: [[3, 3], [9, 9], [12, 13], [20, 21]] } };
+const rd = (p) => CSRC[p] || null;
+const notTest = (p) => /test/.test(p);
+const mt = (line, over = {}) => ({ unit: A1, kind: 'missing_test', path: 'src/m.js', line, quote: CSRC['src/m.js'][line - 1].trim(), title: `claim at ${line}`, body: 'model text', skeleton: '', fid: `fid${line}`, low: false, ...over });
+const scanOf = (findings, cov = covOf(CFILE), top = 10) => audit.scanCoverage({ cov, findings, readLines: rd, isTest: notTest, top });
+const codeWith = (sc) => ({ ...codeOf([urow(A1, { path: 'src/m.js' })]), findings: sc.findings, gaps: sc.gaps });
+
+test('scan coverage: never-run lines are grouped per definition repo-wide; logging-only groups are dropped, guard and error branches are kept, branching ranks first', () => {
+  const { gaps } = scanOf([]);
+  assert.equal(gaps.filtered, 1, 'logIt (console.log only) is not worth a test');
+  const names = [...gaps.emit, ...gaps.roll.flatMap((r) => r.groups)].map((g) => g.name);
+  assert.deepEqual(names, ['logThrow', 'guard', 'plain'], 'a throw or if line is kept; a logging line next to a throw does not drop the group; branching first, then size');
+  assert.deepEqual(gaps.emit.map((g) => g.lines), [[20, 21], [3], [12, 13]]);
+  assert.ok(gaps.emit[0].branch > 0 && gaps.emit[1].branch > 0 && gaps.emit[2].branch === 0);
+});
+
+test('scan coverage: the top K are listed with exact line ranges and source: coverage, the rest are one rollup line per file in Details', () => {
+  const sc = scanOf([], covOf(CFILE), 1);
+  assert.equal(sc.gaps.emit.length, 1);
+  assert.equal(sc.gaps.roll.length, 1);
+  assert.equal(sc.gaps.roll[0].groups.length, 2);
+  const md = render({ data: clean(), code: codeWith(sc) });
+  const vis = md.slice(0, md.indexOf('<details>')), det = md.slice(md.indexOf('<details>'));
+  assert.match(vis, /### Unit test gaps from the coverage report \(1\)/);
+  assert.match(vis, /logThrow: 2 lines never executed by any unit test \(L20-L21\)/);
+  assert.match(vis, /source: coverage/);
+  assert.doesNotMatch(vis, /guard|plain/);
+  assert.match(vis, /❌ 3 unit test gaps/, 'the deterministic gaps count in the verdict');
+  assert.match(det, /More never-executed definitions, per file \(2; coverage report\)/);
+  assert.match(det, /`src\/m\.js`: 2 more never-executed definitions: guard, plain/);
+});
+
+test('scan coverage: a model missing_test on a line that ran becomes a low-confidence weak_test (source relabel) and is never counted as a gap', () => {
+  const sc = scanOf([mt(17)]);
+  const f = sc.findings[0];
+  assert.equal(f.kind, 'weak_test');
+  assert.equal(f.source, 'relabel');
+  assert.equal(f.low, true);
+  assert.match(f.title, /this line runs under unit tests/);
+  assert.equal(sc.relabeled, 1);
+  const md = render({ data: clean(), code: codeWith(sc) });
+  assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /claim at 17/);
+});
+
+test('scan coverage: a claim on an uninstrumented line says (not verified by coverage); one on a never-run line outside any gap group says so', () => {
+  const sc = scanOf([mt(16), mt(9)]);
+  assert.match(sc.findings[0].title, /claim at 16 \(not verified by coverage\)/);
+  assert.equal(sc.findings[0].kind, 'missing_test');
+  assert.equal(sc.unverified, 1);
+  assert.match(sc.findings[1].title, /\(coverage: never executed\)/, 'logIt was filtered, so the claim keeps its own entry');
+});
+
+test('scan coverage: the model skeleton of a claim inside a never-run definition is attached to its gap entry, not listed twice', () => {
+  const sc = scanOf([mt(3, { title: 'throw on empty is untested', skeleton: 'test("guard throws", () => { assert.throws(() => guard(0)); });' })]);
+  assert.equal(sc.findings.length, 0);
+  assert.equal(sc.merged, 1);
+  const md = render({ data: clean(), code: codeWith(sc) });
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.match(vis, /throw on empty is untested/);
+  assert.match(vis, /guard throws/);
+  assert.doesNotMatch(vis, /### Untested behaviour/);
+});
+
+test('scan coverage: without a report the output is unchanged plus one line that missing_test findings are not verified', () => {
+  const f = mt(17);
+  const off = scanOf([f], null);
+  assert.deepEqual(off.findings, [f]);
+  assert.equal(off.gaps, null);
+  assert.deepEqual(scanOf([f], covOf(CFILE, { reports: 0 })).findings, [f]);
+  const md = render({ data: clean(), code: codeWith(off) });
+  assert.match(md, /Missing-unit-test findings are not verified: no coverage report/);
+  assert.doesNotMatch(render({ data: clean(), code: codeWith(scanOf([f])) }), /not verified: no coverage report/);
+  assert.doesNotMatch(render({ data: clean(), code: codeWith(scanOf([], null)) }), /not verified: no coverage report/, 'no missing_test, no line');
+});
+
+test('scan coverage: a hostile path or definition name from the report cannot inject markup, mentions or comments; the model cannot set source', () => {
+  const bad = 'src/<img src=x onerror=1>@everyone<!-- x -->.js';
+  const lines = ['function f(x) {', '  if (x) {', '    throw new Error("boom");', '  }', '}'];
+  const sc = audit.scanCoverage({ cov: covOf({ [bad]: { inst: 3, exec: 0, never: [[3, 3]], ran: [], miss: [] } }), findings: [], readLines: (p) => (p === bad ? lines : null), isTest: notTest });
+  assert.equal(sc.gaps.emit.length, 1);
+  const md = render({ data: clean(), code: { ...codeOf([urow(A1)]), gaps: sc.gaps } });
+  assert.doesNotMatch(md, /<img|@everyone|<!--/);
+  const v = clone(result([], { unit_findings: [{ unit: A1, kind: 'missing_test', path: 'src/m.js', line: 3, quote: 'throw', title: 't', source: 'coverage', confidence: 'high' }] }));
+  assert.deepEqual(validate(v, new Map(), new Map([[A1, { id: A1 }]])), { ok: true });
+  assert.equal(v.unit_findings[0].source, undefined);
+});

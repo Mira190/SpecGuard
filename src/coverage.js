@@ -100,8 +100,9 @@ const ranges = (nums) => { const out = []; for (const n of [...nums].sort((a, b)
 const show = (rs, max) => rs.slice(0, max).map(([a, b]) => (a === b ? `L${a}` : `L${a}-L${b}`)).join(', ') + (rs.length > max ? `, +${rs.length - max} more` : '');
 
 // files: changed paths (files.txt); reports: [{ name, text }]; headTime: epoch ms of the head commit or undefined.
-function analyze({ patch, files, reports, ws, headTime }) {
-  const known = new Set(files.filter((f) => !isTestPath(f))), resolve = resolver(known, ws), added = parseDiff(patch);
+// mode 'all' (scan): files = every tracked path; every instrumented line of every non-test file is reported (never = lines no test ran, ran = lines that did), not only added lines.
+function analyze({ patch = '', files, reports, ws, headTime, mode = 'diff' }) {
+  const all = mode === 'all', known = new Set(files.filter((f) => !isTestPath(f))), resolve = resolver(known, ws), added = all ? null : parseDiff(patch);
   const agg = new Map(), notes = [];
   let used = 0;
   for (const r of reports) {
@@ -116,17 +117,26 @@ function analyze({ patch, files, reports, ws, headTime }) {
       for (const [l, h] of lines) m.set(l, (m.get(l) || 0) + h);
     }
   }
-  const out = { v: 2, reports: used, total: { instrumented: 0, executed: 0 }, files: {}, unreported: [], notes };
+  const out = { v: 2, ...(all && { mode: 'all' }), reports: used, total: { instrumented: 0, executed: 0 }, files: {}, unreported: [], notes };
   if (!used) return { json: out, txt: '' };
-  for (const [p, hits] of [...agg].slice(0, MAX_FILES_JSON)) {
+  const entries = [...agg];
+  if (all) { // the files with the most never-run lines survive the cap
+    const zero = (m) => { let n = 0; for (const h of m.values()) if (!h) n++; return n; };
+    entries.sort((a, b) => zero(b[1]) - zero(a[1]));
+    if (entries.length > MAX_FILES_JSON) out.truncated = true;
+  }
+  for (const [p, hits] of entries.slice(0, MAX_FILES_JSON)) {
     const inst = [], exec = [], never = [], miss = [];
     for (const [l, h] of hits) if (!h) miss.push(l);
-    for (const l of added.get(p)?.changed.RIGHT.keys() || []) { const h = hits.get(l); if (h === undefined) continue; inst.push(l); (h ? exec : never).push(l); }
-    out.files[p] = { inst: inst.length, exec: exec.length, never: ranges(never).slice(0, MAX_RANGES), ran: ranges(exec).slice(0, MAX_RANGES), miss: ranges(miss).slice(0, MAX_RANGES) };
+    for (const l of all ? hits.keys() : added.get(p)?.changed.RIGHT.keys() || []) { const h = hits.get(l); if (h === undefined) continue; inst.push(l); (h ? exec : never).push(l); }
+    const rn = ranges(never), rr = ranges(exec), rm = ranges(miss);
+    if (Math.max(rn.length, rr.length, rm.length) > MAX_RANGES) out.truncated = true;
+    out.files[p] = { inst: inst.length, exec: exec.length, never: rn.slice(0, MAX_RANGES), ran: rr.slice(0, MAX_RANGES), miss: rm.slice(0, MAX_RANGES) };
     out.total.instrumented += inst.length;
     out.total.executed += exec.length;
   }
   out.unreported = [...known].filter((f) => !agg.has(f) && CODE.test(f)).slice(0, 30);
+  if (all) return { json: out, txt: '' }; // the scan prompt has no coverage block
   const rows = Object.entries(out.files).filter(([, f]) => f.inst).sort((a, b) => (b[1].inst - b[1].exec) - (a[1].inst - a[1].exec));
   let txt = `Coverage evidence from the repository's own test run (SpecGuard did not run tests). Changed lines executed by tests: ${out.total.executed} of ${out.total.instrumented} instrumented.\n`;
   for (const [p, f] of rows) {
@@ -185,11 +195,14 @@ function main(env = process.env) {
       if (!ref || headTime) continue;
       try { const s = Number(execFileSync('git', ['-C', ws, 'log', '-1', '--format=%ct', ref], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()); if (s > 0) headTime = s * 1000; } catch { /* shallow or absent: no staleness check */ }
     }
-    const r = analyze({ patch: rd('diff.patch'), files: rd('files.txt').split('\n').filter(Boolean), reports, ws, headTime });
+    const all = env.COVERAGE_MODE === 'all'; // scan: every tracked source file, not the changed lines
+    let tracked = [];
+    if (all) try { tracked = execFileSync('git', ['-C', ws, 'ls-files', '-z'], { encoding: 'utf8', maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0').filter((f) => f && CODE.test(f)); } catch { /* not a git checkout: nothing to resolve against */ }
+    const r = analyze({ patch: rd('diff.patch'), files: all ? tracked : rd('files.txt').split('\n').filter(Boolean), reports, ws, headTime, mode: all ? 'all' : 'diff' });
     r.json.notes.unshift(...pre);
     if (!r.json.reports && !r.json.notes.length) r.json.notes.push('no usable coverage report');
     write(r.json, r.txt);
-    console.log(`SpecGuard coverage: ${r.json.reports} report(s), ${r.json.total.executed ?? 0} of ${r.json.total.instrumented ?? 0} instrumented changed lines executed${r.json.notes.length ? `; ${r.json.notes.join('; ')}` : ''}`);
+    console.log(`SpecGuard coverage: ${r.json.reports} report(s), ${r.json.total.executed ?? 0} of ${r.json.total.instrumented ?? 0} instrumented ${all ? '' : 'changed '}lines executed${r.json.notes.length ? `; ${r.json.notes.join('; ')}` : ''}`);
   } catch (e) {
     console.log(`::notice::SpecGuard coverage evidence skipped: ${String(e.message).split('\n')[0]}`);
     try { write({ v: 1, reports: 0, total: {}, files: {}, unreported: [], notes: ['coverage evidence could not be read'] }, ''); } catch { /* ctx missing */ }
