@@ -105,11 +105,11 @@ test('run: fake GitHub captures the summary post.js publishes and the inline com
   assert.match(r.summary, /Test the cap at 100|missing/i);
   assert.strictEqual(r.comments.length, 1);
   assert.strictEqual(`${r.comments[0].path}:${r.comments[0].line}`, 'src/price.js:2');
-  assert.strictEqual(r.comments[0].title, 'Test the cap at 100 (not verified: no coverage report)');
+  assert.strictEqual(r.comments[0].title, 'Test the cap at 100');
   assert.ok(!r.comments[0].body.includes('<!--'));
   assert.strictEqual(r.gaps, true);
   const text = format(r);
-  assert.ok(text.startsWith(r.summary) && text.includes('src/price.js:2 — Test the cap at 100 (not verified: no coverage report)'));
+  assert.ok(text.startsWith(r.summary) && text.includes('src/price.js:2 — Test the cap at 100'));
   assert.strictEqual(git(repo, 'rev-parse', '--abbrev-ref', 'HEAD'), 'feature'); // collect.sh ran in a worktree
   assert.strictEqual(git(repo, 'worktree', 'list').split('\n').length, 1);
 });

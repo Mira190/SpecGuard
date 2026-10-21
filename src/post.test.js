@@ -343,7 +343,7 @@ test('a rejected inline anchor sends only that finding to the summary; the other
   const s = setup(t, report({ coverage: [row('missing_test'), row('missing_test', { id: 'O2' })], findings: [finding('missing_test', { title: 'FIRST' }), finding('missing_test', { obligation_ids: ['O2'], title: 'SECOND', line: 4, quote: 'l4' })] }), { retry422: true });
   await post(s);
   assert.equal(s.calls.review[0].comments.length, 1, 'the second comment was posted');
-  assert.match(s.calls.review[0].comments[0].body, /^\*\*SECOND \(not verified: no coverage report\)\*\*/);
+  assert.match(s.calls.review[0].comments[0].body, /^\*\*SECOND\*\*/);
   assert.match(s.calls.summary[0].body, /FIRST[^\n]*could not be posted inline/);
   assert.equal(s.calls.wrapper, 0);
 });
@@ -951,7 +951,7 @@ test('merges same-kind findings on one line into one comment; other kinds stay s
   await post(s);
   const cs = s.calls.review[0].comments;
   assert.equal(cs.length, 1);
-  assert.match(cs[0].body, /Verify the boundary total \(not verified: no coverage report\); Second obligation \(not verified: no coverage report\)/);
+  assert.match(cs[0].body, /Verify the boundary total; Second obligation/);
   assert.match(cs[0].body, /Other gap\./);
   const fp = /specguard:fp=([0-9a-f]{40})/.exec(cs[0].body)[1];
   const again = setup(t, data(), { existing: [{ body: `<!-- specguard:fp=${fp} -->`, user: { type: 'Bot', login: 'github-actions[bot]' } }] });
@@ -986,7 +986,7 @@ test('distinct same-line gaps without an AC source are merged, not dropped; reru
   const cs = s.calls.review[0].comments;
   assert.equal(cs.length, 2);
   const merged = cs.find((c) => c.line === 3);
-  assert.match(merged.body, /Verify the boundary total \(not verified: no coverage report\); Second obligation \(not verified: no coverage report\)/);
+  assert.match(merged.body, /Verify the boundary total; Second obligation/);
   assert.match(merged.body, /Other gap./);
   assert.ok(cs.some((c) => c.line === 2 && /Other line/.test(c.body)));
   const fp = /specguard:fp=([0-9a-f]{40})/.exec(merged.body)[1];
@@ -3714,7 +3714,7 @@ test('coverage: the summary states executed/instrumented and lists never-execute
   assert.match(body, /<details>[\s\S]*\*\*Coverage evidence\*\*/, 'coverage detail sits in Details');
   assert.match(unit, /Changed lines executed by tests: 1 of 2 instrumented \(coverage report\)/);
   assert.match(unit, /Changed lines no test executed \(coverage report\):\n- `src\.js`: L3\n/);
-  assert.match(s.calls.review[0].comments[0].body, /src.js: lines 3–3 are never executed by any unit test[^]*The boundary has no assertion/); // V2: the model finding is merged into the report-backed one
+  assert.match(s.calls.review[0].comments[0].body, /src.js: 1 added line never executed by any unit test \(L3\)[^]*The boundary has no assertion/); // V2: the model finding is merged into the report-backed one
   const ran = setup(t);
   withCov(ran, COV([[1, 1]], []));
   await post(ran);
@@ -3741,7 +3741,7 @@ test('coverage exemption: a missing_test on a line the report shows never ran sk
   assert.match(JSON.stringify(ran.calls.summary[0].body), /a candidate test file was only partly visible/);
   const never = await run(COV2([[3, 3]]));
   assert.equal(never.calls.review.length, 1, 'never-ran line: delivered');
-  assert.match(never.calls.review[0].comments[0].body, /src.js: lines 3–3 are never executed by any unit test/);
+  assert.match(never.calls.review[0].comments[0].body, /src.js: 1 added line never executed by any unit test \(L3\)/);
   assert.doesNotMatch(JSON.stringify(never.calls.summary[0].body), /low confidence: a candidate test file was only partly visible/);
 });
 
@@ -3809,9 +3809,8 @@ test('coverage: everything is off without a usable report (absent, garbled, wron
     const s = setup(t);
     if (c !== undefined) withCov(s, c);
     await post(s);
-    const comment = s.calls.review[0].comments[0].body;
-    assert.match(comment, /\(not verified: no coverage report\)/, 'a model missing_test says the report is absent');
-    const all = (s.calls.summary[0].body + comment).replace(/"coverage_gaps":\{[^}]*\},?/, '').split('(not verified: no coverage report)').join('');
+    // the one notice line V2 adds to the summary is the only mention of coverage here
+    const all = s.calls.summary[0].body.replace('Missing-unit-test findings are not verified: no coverage report (see Coverage evidence)', '') + s.calls.review[0].comments[0].body;
     assert.doesNotMatch(all, /coverage|never executed|executed by tests/i, JSON.stringify(c));
   }
   const note = setup(t);
@@ -4618,8 +4617,11 @@ test('shortened diff, deleted lines omitted and no pack-cut.txt (agent engine): 
 // ---- V2 coverage gaps (R-a deterministic missing_test, R-b relabel, R-c unknown) ----
 const V2SRC = ['function gamma(z) {', '  const y = z + 1;', '  if (z) {', '    return 1;', '  }', '  return y;', '}', 'function alpha(x) {', '  const y = x + 1;', '  if (x) {', "    throw new Error('neg');", '  }', '  return y * 2;', '}', 'function beta(v) {', "  console.log('beta', v);", "  console.log('done');", '}', ''].join('\n');
 const V2COV = (files, extra = {}) => ({ v: 2, reports: 1, total: {}, files, unreported: [], notes: [], ...extra });
-// the fixture file is entirely added; coverage.json is written for it; model findings are given as [line, quote] pairs
-async function v2(t, { src = V2SRC, cov, findings = [], pr } = {}) {
+const CLASSES = ['class A {', '  process(x) {', '    if (x) {', '      throw e;', '    }', '  }', '}', 'class B {', '  process(x) {', '    if (x) {', '      throw e;', '    }', '  }', '}', ''].join('\n');
+const FIVE = ['gapOne', 'gapTwo', 'gapThree', 'gapFour', 'gapFive'].map((n) => `function ${n}(x) {\n  if (x) {\n    throw new Error('bad');\n  }\n}`).join('\n') + '\n';
+const FIVE_NEVER = [0, 1, 2, 3, 4].map((i) => [i * 5 + 2, i * 5 + 3]);
+// the fixture file is entirely added; coverage.json is written for it; model findings are given as [line, quote, extra] triples
+async function v2(t, { src = V2SRC, cov, findings = [], pr, prep } = {}) {
   const nev = Object.values(cov?.files || {}).flatMap((f) => f.never || []), lines = src.split('\n'), at = lines.findIndex((_, i) => !nev.some(([x, y]) => i + 1 >= x && i + 1 <= y)) + 1, cite = { path: 'src.js', line: at, quote: lines[at - 1].trim() }; // a row on a line the report does not call never-run
   const rowAt = row(findings.length ? 'missing_test' : 'covered', { behaviour: cite, change: cite });
   const s = setup(t, report({ coverage: [rowAt], findings: findings.map(([line, quote, extra]) => finding('missing_test', { line, quote, ...extra })) }), pr && { pr });
@@ -4628,10 +4630,12 @@ async function v2(t, { src = V2SRC, cov, findings = [], pr } = {}) {
   const rows = src.replace(/\n$/, '').split('\n');
   fs.writeFileSync(path.join(s.dir, 'ctx', 'diff.patch'), fileDiff('src.js', `@@ -0,0 +1,${rows.length} @@\n${rows.map((l) => `+${l}`).join('\n')}`));
   if (cov) withCov(s, cov);
+  if (prep) prep(s);
   await post(s);
   return s;
 }
 const comments = (s) => (s.calls.review[0]?.comments || []);
+const fpIn = (c) => /specguard:fp=([0-9a-f]{40})/.exec(c.body)[1];
 const gapsOf = (s) => countsOf(s.calls.summary[0].body).coverage_gaps;
 
 test('V2 R-a: one finding per definition whose added lines never ran, anchored on the first never-run line', async (t) => {
@@ -4639,16 +4643,24 @@ test('V2 R-a: one finding per definition whose added lines never ran, anchored o
   const cs = comments(s);
   assert.equal(cs.length, 2);
   assert.deepEqual(cs.map((c) => [c.line, c.side]).sort(), [[10, 'RIGHT'], [3, 'RIGHT']]);
-  assert.ok(cs.some((c) => /\*\*alpha: lines 10–11 are never executed by any unit test\*\*/.test(c.body) && /kind: missing_test, confidence: high/.test(c.body)));
-  assert.ok(cs.some((c) => /\*\*gamma: lines 3–4 are never executed by any unit test\*\*/.test(c.body)));
+  assert.ok(cs.some((c) => /\*\*alpha: 2 added lines never executed by any unit test \(L10-L11\)\*\*/.test(c.body) && /kind: missing_test, confidence: high/.test(c.body)));
+  assert.ok(cs.some((c) => /\*\*gamma: 2 added lines never executed by any unit test \(L3-L4\)\*\*/.test(c.body)));
   assert.deepEqual(gapsOf(s), { emitted: 2, filtered: 0, inline: 2, rolled_up: 0, merged: 0, relabeled: 0, unverified: 0 });
+});
+
+test('V2 R-a title and body name the exact never-run lines, never a span that includes lines that ran', async (t) => {
+  const s = await v2(t, { cov: V2COV({ 'src.js': { never: [[10, 10], [13, 13]], ran: [[9, 9], [11, 11], [14, 14]], miss: [[10, 10], [13, 13]] } }) });
+  const b = comments(s)[0].body;
+  assert.match(b, /\*\*alpha: 2 added lines never executed by any unit test \(L10, L13\)\*\*/);
+  assert.match(b, /2 added lines of `alpha` never executed \(L10, L13\)/);
+  assert.doesNotMatch(b, /L10-L13|10–13/);
 });
 
 test('V2 R-a filter: a logging-only group is dropped, a branch group is kept', async (t) => {
   const s = await v2(t, { cov: V2COV({ 'src.js': { never: [[3, 4], [16, 17]], ran: [[2, 2]], miss: [[3, 4], [16, 17]] } }) });
   const cs = comments(s);
   assert.equal(cs.length, 1);
-  assert.match(cs[0].body, /gamma: lines 3–4/);
+  assert.match(cs[0].body, /gamma: 2 added lines/);
   assert.doesNotMatch(JSON.stringify(s.calls), /beta/);
   assert.equal(gapsOf(s).filtered, 1);
 });
@@ -4656,31 +4668,74 @@ test('V2 R-a filter: a logging-only group is dropped, a branch group is kept', a
 test('V2 R-a ranking: the group with more branching never-run lines comes first, whatever the file order', async (t) => {
   // gamma (first in the file) has 1 branching line, alpha (second) has 2: alpha posts first
   const s = await v2(t, { cov: V2COV({ 'src.js': { never: [[3, 4], [10, 11]], ran: [[2, 2]], miss: [[3, 4], [10, 11]] } }) });
-  assert.match(comments(s)[0].body, /alpha: lines 10–11/);
-  assert.match(comments(s)[1].body, /gamma: lines 3–4/);
+  assert.match(comments(s)[0].body, /alpha: 2 added lines/);
+  assert.match(comments(s)[1].body, /gamma: 2 added lines/);
 });
 
 test('V2 R-a cap: five gaps give three inline comments and one rollup line in the summary; the PR text breaks a tie', async (t) => {
-  const names = ['gapOne', 'gapTwo', 'gapThree', 'gapFour', 'gapFive'];
-  const src = names.map((n) => `function ${n}(x) {\n  if (x) {\n    throw new Error('bad');\n  }\n}`).join('\n') + '\n';
-  const never = names.map((_, i) => [i * 5 + 2, i * 5 + 3]);
-  const s = await v2(t, { src, cov: V2COV({ 'src.js': { never, ran: [], miss: never } }), pr: { title: 'Harden gapFive', body: '' } });
+  const s = await v2(t, { src: FIVE, cov: V2COV({ 'src.js': { never: FIVE_NEVER, ran: [], miss: FIVE_NEVER } }), pr: { title: 'Harden gapFive', body: '' } });
   const titles = comments(s).map((c) => /\*\*(\w+):/.exec(c.body)[1]);
   assert.deepEqual(titles, ['gapFive', 'gapOne', 'gapTwo']);
-  const b = s.calls.summary[0].body;
-  assert.match(b, /`src\.js`: 2 more never-executed definitions: gapThree, gapFour/);
+  assert.match(s.calls.summary[0].body, /`src\.js`: 2 more never-executed definitions: gapThree, gapFour/);
   assert.deepEqual(gapsOf(s), { emitted: 3, filtered: 0, inline: 3, rolled_up: 2, merged: 0, relabeled: 0, unverified: 0 });
+});
+
+test('V2 R-a cap is exclusive: a model finding in a rolled-up definition is named in the rollup line, not posted', async (t) => {
+  const s = await v2(t, { src: FIVE, cov: V2COV({ 'src.js': { never: FIVE_NEVER, ran: [], miss: FIVE_NEVER } }), pr: { title: 'Harden gapFive', body: '' }, findings: [[17, 'if (x) {']] });
+  assert.equal(comments(s).length, 3);
+  assert.ok(comments(s).every((c) => c.line !== 17));
+  assert.match(s.calls.summary[0].body, /gapFour \(Verify the boundary total\)/);
+  assert.equal(gapsOf(s).merged, 1);
 });
 
 test('V2 R-a merge: a model finding in the same definition is merged into the R-a finding (its text kept), not posted separately', async (t) => {
   const s = await v2(t, { cov: V2COV({ 'src.js': { never: [[10, 11]], ran: [[9, 9], [13, 13]], miss: [[10, 11]] } }), findings: [[10, 'if (x) {', { body: 'Add a test: expect(() => alpha(1)).toThrow(). Skeleton: assert.throws(() => alpha(1)).' }]] });
   const cs = comments(s);
   assert.equal(cs.length, 1);
-  assert.match(cs[0].body, /\*\*alpha: lines 10–11 are never executed by any unit test\*\*/);
+  assert.match(cs[0].body, /\*\*alpha: 2 added lines never executed by any unit test \(L10-L11\)\*\*/);
+  assert.match(cs[0].body, /\n\n---\n\n\*\*Verify the boundary total\*\*\n\nAdd a test: expect/, 'the model item is rendered as merge() renders one');
   assert.match(cs[0].body, /Skeleton: assert\.throws\(\(\) => alpha\(1\)\)/);
   assert.match(cs[0].body, /kind: missing_test, confidence: high/);
-  assert.doesNotMatch(cs[0].body, /Verify the boundary total/);
   assert.equal(gapsOf(s).merged, 1);
+});
+
+test('V2 R-a merge: a low-confidence model finding never rides on the inline finding; it keeps its summary path', async (t) => {
+  const s = await v2(t, { cov: V2COV({ 'src.js': { never: [[10, 11]], ran: [[9, 9]], miss: [[10, 11]] } }), findings: [[10, 'if (x) {', { confidence: 'low', title: 'Low model claim' }]] });
+  assert.equal(comments(s).length, 1);
+  assert.doesNotMatch(comments(s)[0].body, /Low model claim/);
+  assert.match(s.calls.summary[0].body, /Low model claim/);
+  assert.equal(gapsOf(s).merged, 0);
+});
+
+test('V2 R-a merge: the key is the declaration, so a model finding joins the right one of two same-named methods', async (t) => {
+  const s = await v2(t, { src: CLASSES, cov: V2COV({ 'src.js': { never: [[3, 4], [10, 11]], ran: [], miss: [[3, 4], [10, 11]] } }), findings: [[10, 'if (x) {', { body: 'Model text for B.' }]] });
+  const cs = comments(s);
+  assert.equal(cs.length, 2);
+  assert.match(cs.find((c) => c.line === 10).body, /Model text for B\./);
+  assert.doesNotMatch(cs.find((c) => c.line === 3).body, /Model text for B\./);
+  assert.match(cs.find((c) => c.line === 3).body, /definition at L2|process/);
+});
+
+test('V2 R-a fingerprint: keyed on the declaration, so covering the first never-run line on a later push keeps it', async (t) => {
+  const a = await v2(t, { cov: V2COV({ 'src.js': { never: [[10, 11]], ran: [[9, 9]], miss: [[10, 11]] } }) });
+  const b = await v2(t, { cov: V2COV({ 'src.js': { never: [[11, 11]], ran: [[9, 9], [10, 10]], miss: [[11, 11]] } }) });
+  assert.notEqual(comments(a)[0].line, comments(b)[0].line);
+  assert.equal(fpIn(comments(a)[0]), fpIn(comments(b)[0]));
+});
+
+test('V2 R-a is deterministic evidence: it bypasses the reduced-review two-citation rule, and it takes max_comments before the model findings', async (t) => {
+  const cov = V2COV({ 'src.js': { never: [[10, 11]], ran: [[9, 9]], miss: [[10, 11]] } });
+  const reduced = await v2(t, { cov, findings: [[6, 'return y;']], prep: (s) => writeCtxR(s, 'engine-model.json', JSON.stringify({ tier: 'fast', used: ['mai-code-1.1-flash'] })) });
+  assert.deepEqual(comments(reduced).map((c) => c.line), [10], 'the model finding (one citation) is a one-liner, the R-a finding is posted');
+  const capped = await v2(t, { cov, findings: [[6, 'return y;']], prep: () => { process.env.MAX_COMMENTS = '1'; } });
+  assert.deepEqual(comments(capped).map((c) => c.line), [10], 'R-a first in the max_comments candidates');
+  assert.match(capped.calls.summary[0].body, /Verify the boundary total/);
+});
+
+test('V2 R-a respects the configured test_paths: a file in them is a test and gets no finding', async (t) => {
+  const s = await v2(t, { cov: V2COV({ 'src.js': { never: [[10, 11]], ran: [[9, 9]], miss: [[10, 11]] } }), prep: (x) => writeCtxR(x, 'test-paths.txt', 'src.js\n') });
+  assert.equal(comments(s).length, 0);
+  assert.equal(gapsOf(s), undefined);
 });
 
 test('V2 R-b: a model missing_test on a line that ran becomes weak_test (relabel), medium at most, summary only, never inline', async (t) => {
@@ -4693,18 +4748,22 @@ test('V2 R-b: a model missing_test on a line that ran becomes weak_test (relabel
   assert.equal(c.findings.weak_test.summary, 1);
   assert.equal(c.findings.missing_test, undefined);
   assert.equal(c.coverage_gaps.relabeled, 1);
+  assert.equal(c.sum[0].source, 'relabel', 'eval can score relabelled findings apart');
 });
 
-test('V2 R-b guard: the inline planner never places a relabelled finding, whatever its confidence or anchor', () => {
+test('V2 R-b guard: the inline planner never places a relabelled finding, and merge() never hides one inside another', () => {
   const f = { kind: 'weak_test', source: 'relabel', confidence: 'high', path: 'src.js', line: 3, quote: 'x', title: 't', body: 'b', obligation_ids: [] };
   const maps = new Map([['src.js', post.parsePatch('@@ -1,3 +1,4 @@\n l1\n+l2\n+l3\n l4\n')]]);
   const p = post.plan([f, { ...f, source: undefined }], maps, 10);
   assert.deepEqual(p.inline.map((x) => x.source), [undefined]);
   assert.equal(p.summary.length, 1);
   assert.equal(p.summary[0].f.source, 'relabel');
+  const m = post.merge([{ ...f, source: undefined }, f]);
+  assert.equal(m.length, 2, 'a relabelled finding is never merged into a plain one on the same line');
+  assert.equal(post.plan(m, maps, 10).inline.length, 1);
 });
 
-test('V2 R-c: a model missing_test on an uninstrumented line keeps today\'s route with "(not verified by coverage)"', async (t) => {
+test('V2 R-c: with a report, a model missing_test on an uninstrumented line keeps today\'s route with "(not verified by coverage)"', async (t) => {
   const s = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[9, 9]], miss: [] } }), findings: [[12, '}']] });
   const cs = comments(s);
   assert.equal(cs.length, 1);
@@ -4714,11 +4773,17 @@ test('V2 R-c: a model missing_test on an uninstrumented line keeps today\'s rout
   assert.equal(gapsOf(s).relabeled, 0);
 });
 
-test('V2 no report: a model missing_test says so, there is no R-a finding, and nothing else changes', async (t) => {
+test('V2 no report: titles stay clean; the summary says once that missing-unit-test findings are not verified', async (t) => {
+  const notice = /Missing-unit-test findings are not verified: no coverage report \(see Coverage evidence\)/g;
   const s = await v2(t, { findings: [[13, 'return y * 2;']] });
   const cs = comments(s);
   assert.equal(cs.length, 1);
-  assert.match(cs[0].body, /Verify the boundary total \(not verified: no coverage report\)/);
-  assert.doesNotMatch(cs[0].body, /never executed/);
-  assert.deepEqual(gapsOf(s), { emitted: 0, filtered: 0, inline: 0, rolled_up: 0, merged: 0, relabeled: 0, unverified: 1 });
+  assert.match(cs[0].body, /^\*\*Verify the boundary total\*\*/);
+  assert.doesNotMatch(cs[0].body, /not verified/);
+  assert.equal((s.calls.summary[0].body.match(notice) || []).length, 1);
+  assert.equal(gapsOf(s), undefined, 'no R-a and nothing unverified is counted without a report');
+  const none = await v2(t, {});
+  assert.doesNotMatch(none.calls.summary[0].body, notice, 'no missing_test, no notice');
+  const withReport = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[13, 13]], miss: [] } }), findings: [[12, '}']] });
+  assert.doesNotMatch(withReport.calls.summary[0].body, notice, 'a report exists: no notice');
 });

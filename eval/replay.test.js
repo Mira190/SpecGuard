@@ -134,8 +134,8 @@ test('runReal: a normal success is valid and its findings are exact (inline and 
   const r = await replay('v-ok', fake());
   assert.deepStrictEqual([r.valid, r.invalid_reason, r.engine_exit, r.findings_present], [true, null, 0, true]);
   assert.deepStrictEqual(r.findings.map(({ where, kind, path: p, line, title }) => ({ where, kind, path: p, line, title })), [
-    { where: 'inline', kind: 'missing_test', path: 'src/a.js', line: 1, title: 'No test (not verified: no coverage report)' },
-    { where: 'summary', kind: 'missing_test', path: 'src/a.js', line: 1, title: 'Low gap (not verified: no coverage report)' }]);
+    { where: 'inline', kind: 'missing_test', path: 'src/a.js', line: 1, title: 'No test' },
+    { where: 'summary', kind: 'missing_test', path: 'src/a.js', line: 1, title: 'Low gap' }]);
   assert.deepStrictEqual(r.counts, { inline: 1, summary_only: 1, pre_existing: 0 });
 });
 

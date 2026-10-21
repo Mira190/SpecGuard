@@ -418,10 +418,11 @@ const verified = (f, lines, line) => (norm(lines[line - 1]) === norm(f.quote) ? 
 // A finding with a suggestion or a range is never merged: the block would replace a range it was not written for.
 function merge(fs_) {
   const groups = new Map();
-  for (const [i, f] of fs_.entries()) { const k = `${f.kind}\0${f.path}\0${f.line}\0${f.confidence}${f.suggestion || f.start_line !== undefined ? `\0${i}` : ''}`; groups.set(k, [...(groups.get(k) || []), f]); }
+  for (const [i, f] of fs_.entries()) { const k = `${f.kind}\0${f.path}\0${f.line}\0${f.confidence}\0${f.source === 'relabel' || f.source === 'coverage' ? f.source : ''}${f.suggestion || f.start_line !== undefined ? `\0${i}` : ''}`; groups.set(k, [...(groups.get(k) || []), f]); }
   return [...groups.values()].map((g) => ({
     ...g[0],
-    fp: fingerprint(g[0].kind, g[0].path, g[0].quote, ...g.map((f) => f.source)),
+    ...(g.some((f) => f.source === 'relabel') && { source: 'relabel' }), // never inline, whoever it was merged with
+    fp: fingerprint(g[0].kind, g[0].path, g[0].quote, ...g.map((f) => f.fpKey || f.source)),
     ...(g.length > 1 && {
     title: oneLine(g.map((f) => f.title).join('; '), 200),
     body: g.map((f) => `**${f.title}**\n\n${f.body}`).join('\n\n---\n\n'),
@@ -787,7 +788,7 @@ const STD_WORD = { checked: 'reviewed', no_rules: 'no rule files found', not_rev
 // anything visible, and what does not fit is counted, never cut mid-item.
 // posted: [{ f, url }] findings delivered as a comment (or already posted earlier); items: [{ f, why }] findings that carry their full text here.
 // status: the whole verdict for a run without findings data (a skipped run); delivery: how the findings reached the PR ("7 inline comments"); runNotes: Details-only facts about the run.
-function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, req, cfg, issues = [], manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [], gapRollup = [] }) {
+function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], posted = [], delivery, banner = [], partial, engine, model, usage, notes, rules = [], lint = {}, blob, specFiles, pre = [], traceNote, headSha, req, cfg, issues = [], manifest, incomplete = [], counts, resolveNote, state, dropped = [], reduced, used, tier, runNotes = [], gapRollup = [], noReport = false }) {
   const isLow = (x) => x.f.confidence === 'low' || x.why === 'low confidence', lows = [...posted, ...items].filter(isLow); // low-confidence findings are never an action: Details only
   posted = posted.filter((x) => !isLow(x)); items = items.filter((x) => !isLow(x));
   const all = [...posted.map((x) => x.f), ...items.map((x) => x.f)], failed = state === 'failed';
@@ -866,6 +867,7 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
       detail(`**${more} (${es.length - LIST_CAP})**\n\n`, es.slice(LIST_CAP).map((e) => findingHead(e.f, { url: e.url, why: e.why, posted: e.posted }, blob)));
     };
     listOf('Missing unit tests', ['missing_test'], 'More missing unit tests');
+    if (noReport && all.some((f) => f.kind === 'missing_test')) add(vis, '', ['<sub>Missing-unit-test findings are not verified: no coverage report (see Coverage evidence)</sub>\n\n'], '');
     if (gapRollup.length) add(vis, '### More never-executed definitions\n\n', gapRollup.map((l) => `- ${l}\n`), '\n');
     listOf('Weak unit tests', ['weak_test'], 'More weak unit tests');
     // a posted mismatch is a row below and a comment; one that was not posted carries its full text here, since no comment holds it
@@ -1258,52 +1260,94 @@ function applyCoverage(data, cov) {
   settle(data, data.validation_notes ||= []);
 }
 // Summary facts for the Unit test gaps section; deterministic, not model findings. Compact and capped.
-// V2 coverage gaps. R-a: the added lines the report proves never ran, grouped by enclosing definition, become findings (kind missing_test, source coverage)
-// unless they are not worth a unit test. The patterns are one exported array so a test can pin them; a group is dropped when every one of its lines matches one.
+// V2 coverage gaps. R-a: the added lines the report proves never ran, grouped by the DECLARATION of the innermost enclosing definition (a name alone is not a key: two
+// classes have a process(), and a generic name is skipped by the name matcher), become findings (kind missing_test, source coverage) unless they are not worth a unit test.
+// The patterns are one exported array so a test can pin them. `line` entries drop a group when every never-run line matches one; `body` is the forwarding rule: it
+// counts only when the never-run line is the ENTIRE body of a one-statement definition and the line before it is not branching; `path` drops a whole file.
 const NOT_WORTH_TESTING = [
-  { id: 'logging', line: /^\s*(?:(?:console|logger|log|logging)\.\w+\s*\(|print\s*\()/ },
-  { id: 'constant-or-type', line: /^\s*(?:(?:export|declare|const|final|static|public|private|readonly)\s+)*[A-Z][A-Z0-9_]*\s*(?::[^=]+)?=|^\s*(?:export\s+)?(?:declare\s+)?(?:type|interface|enum)\s+\w+/ },
-  { id: 'forwarding-one-liner', line: /^\s*return\s+[\w$.]+\s*;?\s*$|^\s*return\s+[\w$.]+\s*\(\s*(?:[\w$.]+(?:\s*,\s*[\w$.]+)*)?\s*\)\s*;?\s*$|=>\s*[\w$.]+\s*\(\s*(?:[\w$.]+(?:\s*,\s*[\w$.]+)*)?\s*\)\s*[;,)]*\s*$/ },
+  { id: 'logging', line: /^\s*(?:(?:console|logger|log|logging)\.(?!fatal|panic|exit)\w+\s*\(|print\s*\()/i },
+  { id: 'constant-or-type', line: /^(?:(?:export|declare|const|final|static|public|readonly)\s+)*[A-Z][A-Z0-9_]+\s*(?::[^=]+)?=|^\s*(?:export\s+)?(?:declare\s+)?(?:type|interface|enum)\s+\w+/ }, // a constant only at module scope (no indent)
+  { id: 'forwarding-one-liner', line: /^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s*)?(?:\([\w$,\s]*\)|\w+)\s*=>\s*[\w$.]+\s*\(\s*(?:[\w$.]+(?:\s*,\s*[\w$.]+)*)?\s*\)\s*;?\s*$/ },
+  { id: 'forwarding-body', body: /^\s*(?:return\s+[\w$.]+|(?:return\s+)?[\w$.]+\s*\(\s*(?:[\w$.]+(?:\s*,\s*[\w$.]+)*)?\s*\))\s*;?\s*$/ },
   { id: 'structural-punctuation', line: /^[\s{}()[\];,]*$/ }, // a lone brace is instrumented by some reporters and says nothing
   { id: 'generated-file', path: GENERATED }, // focus.js's generated-file list
 ];
-const BRANCHING = /\b(?:if|else|switch|case|catch|throw|raise|except)\b|\?(?!\.)|&&|\|\|/;
+// branching or error handling; strings and trailing comments are blanked first, and `?.`, `??` and a TypeScript `?:` are not a branch
+const BRANCHING = /\b(?:if|else|switch|case|catch|throw|raise|except)\b|(?<!\?)\?(?![.?:])|&&|\|\|/;
+const branchy = (t) => BRANCHING.test(String(t).replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\/.*$|(?:^|\s)#.*$/, ''));
 const GAP_INLINE_CAP = 3;
-// paths: changed reviewable files. Returns { emit: the top groups, roll: [{ path, names }] the rest, filtered: groups dropped as not worth a test }
+const usableLabel = (n) => !!n && n.length >= 4 && /^[A-Za-z_$][\w$]*$/.test(n) && !require('./leads').GENERIC.has(n.toLowerCase());
+const gapLabel = (g) => (g.decl ? (usableLabel(g.name) ? g.name : `definition at L${g.decl}`) : g.path);
+// "L3, L9-L11": the exact never-run lines, as coverage.js shows them
+function lineRanges(lines, max = 6) {
+  const rs = [];
+  for (const l of lines) { const r = rs[rs.length - 1]; if (r && l === r[1] + 1) r[1] = l; else rs.push([l, l]); }
+  return rs.slice(0, max).map(([a, b]) => (a === b ? `L${a}` : `L${a}-L${b}`)).join(', ') + (rs.length > max ? `, +${rs.length - max} more` : '');
+}
+// paths: changed reviewable files. Returns { emit: the top groups, roll: [{ path, names, groups }] the rest, index: Map(path NUL declaration line -> group) of both, filtered: groups dropped as not worth a test }
 function coverageGaps({ cov, paths, readLines, maps, isTest: isT = isTest, text = '', risk = new Map() }) {
-  const res = { emit: [], roll: [], filtered: 0 };
+  const res = { emit: [], roll: [], index: new Map(), filtered: 0 };
   if (!cov || !(cov.reports > 0)) return res;
-  const { enclosingName } = require('./test-map');
+  const { enclosingDef } = require('./test-map');
   const groups = [];
   for (const p of paths) {
     const cf = Object.hasOwn(cov.files, p) ? cov.files[p] : null, src = cf && Array.isArray(cf.never) && cf.never.length && !isT(p) ? readLines(p) : null, right = maps.get(p)?.RIGHT;
     if (!src || !right) continue;
-    const by = new Map();
+    const by = new Map(), cache = new Map();
     for (const r of cf.never) {
       if (!Array.isArray(r)) continue;
-      for (let l = r[0]; l <= r[1] && l <= src.length; l++) if (Number.isInteger(l) && l > 0 && right.has(l)) { const n = enclosingName(src, l) || null; if (!by.has(n)) by.set(n, []); by.get(n).push(l); }
+      for (let l = r[0]; l <= r[1] && l <= src.length; l++) {
+        if (!Number.isInteger(l) || l < 1 || !right.has(l)) continue;
+        const d = enclosingDef(src, l, cache), k = d ? d.line : 0;
+        if (!by.has(k)) by.set(k, { path: p, decl: k, name: d ? d.name : null, end: d ? d.end : 0, lines: [], texts: [], src });
+        by.get(k).lines.push(l); by.get(k).texts.push(src[l - 1]);
+      }
     }
-    for (const [name, lines] of by) groups.push({ path: p, name, lines, texts: lines.map((l) => src[l - 1]) });
+    groups.push(...by.values());
   }
-  const dropped = (g) => NOT_WORTH_TESTING.some((r) => r.path && r.path.test(g.path)) || g.texts.every((t) => NOT_WORTH_TESTING.some((r) => r.line && r.line.test(t)));
+  const lineRules = NOT_WORTH_TESTING.filter((r) => r.line), fwd = NOT_WORTH_TESTING.find((r) => r.body), blank = (l) => !l.trim() || /^\s*(?:\/\/|#|\*|\/\*)/.test(l) || /^[\s{}()[\];,]*$/.test(l);
+  const forwarding = (g) => { // the never-run line is the whole body of a one-statement definition
+    if (!g.decl || g.lines.length !== 1 || !fwd.body.test(g.texts[0])) return false;
+    const body = g.src.slice(g.decl, g.end).filter((l) => !blank(l));
+    let prev = g.lines[0] - 2; while (prev >= 0 && !g.src[prev].trim()) prev--;
+    return body.length === 1 && !(prev >= 0 && branchy(g.src[prev]));
+  };
+  const dropped = (g) => NOT_WORTH_TESTING.some((r) => r.path && r.path.test(g.path)) || g.texts.every((t) => lineRules.some((r) => r.line.test(t))) || forwarding(g);
   const kept = groups.filter((g) => !dropped(g) || !++res.filtered);
-  for (const g of kept) Object.assign(g, { branch: g.texts.filter((t) => BRANCHING.test(t)).length, risk: risk.get(g.path) || 0, mention: !!g.name && new RegExp('(?<![\\w$])' + g.name.replace(/[.*+?^${}()|[\]\\$]/g, '\\$&') + '(?![\\w$])').test(text), models: [] });
+  for (const g of kept) {
+    const name = usableLabel(g.name) ? g.name : null;
+    Object.assign(g, { branch: g.texts.filter(branchy).length, risk: risk.get(g.path) || 0, mention: !!name && new RegExp('(?<![\\w$])' + name.replace(/[.*+?^${}()|[\]\\$]/g, '\\$&') + '(?![\\w$])').test(text), models: [], absorbed: [] });
+  }
   kept.sort((a, b) => b.branch - a.branch || b.lines.length - a.lines.length || b.risk - a.risk || b.mention - a.mention || (a.path < b.path ? -1 : a.path > b.path ? 1 : a.lines[0] - b.lines[0]));
   res.emit = kept.slice(0, GAP_INLINE_CAP);
-  for (const g of kept.slice(GAP_INLINE_CAP)) { let r = res.roll.find((x) => x.path === g.path); if (!r) res.roll.push((r = { path: g.path, names: [] })); r.names.push(g.name || '(top level)'); }
+  for (const g of res.emit) res.index.set(`${g.path}\0${g.decl}`, g);
+  for (const g of kept.slice(GAP_INLINE_CAP)) {
+    g.rolled = true; res.index.set(`${g.path}\0${g.decl}`, g);
+    let r = res.roll.find((x) => x.path === g.path); if (!r) res.roll.push((r = { path: g.path, names: [], groups: [] }));
+    r.names.push(gapLabel(g)); r.groups.push(g);
+  }
   return res;
 }
-const rollupLine = (r) => `\`${r.path}\`: ${r.names.length} more never-executed definition${r.names.length === 1 ? '' : 's'}: ${r.names.slice(0, 8).join(', ')}${r.names.length > 8 ? `, +${r.names.length - 8} more` : ''}`;
+// a model finding the cap absorbed is named on its definition's rollup entry
+const rollupLine = (r) => {
+  const names = r.groups.map((g) => `${gapLabel(g)}${g.absorbed.length ? ` (${g.absorbed.map((t) => oneLine(t, 80)).join('; ')})` : ''}`);
+  return `\`${cell(r.path, 200).replace(/`/g, "'")}\`: ${names.length} more never-executed definition${names.length === 1 ? '' : 's'}: ${cell(names.slice(0, 8).join(', '), 600)}${names.length > 8 ? `, +${names.length - 8} more` : ''}`;
+};
 // how a model missing_test on line l of p relates to the report: none (no usable report), never (it never ran), ran (a changed file's line executed), unknown (anything else)
-const gapEvidence = (cov, p, l) => (!cov || !(cov.reports > 0) ? 'none' : neverRan(cov, p, l) ? 'never'
-  : Object.hasOwn(cov.files, p) && Array.isArray(cov.files[p].ran) && cov.files[p].ran.some((r) => Array.isArray(r) && l >= r[0] && l <= r[1]) ? 'ran' : 'unknown');
+const gapEvidence = (cov, p, l) => {
+  if (!cov || !(cov.reports > 0)) return 'none';
+  if (neverRan(cov, p, l)) return 'never';
+  const f = Object.hasOwn(cov.files, p) ? cov.files[p] : null;
+  return f && Array.isArray(f.ran) && f.ran.some((r) => Array.isArray(r) && l >= r[0] && l <= r[1]) ? 'ran' : 'unknown';
+};
 const RELABEL_NOTE = ' (this line runs under unit tests; the claim is about an untested case or assertion)';
-// the R-a finding of one group; the model's text (a missing_test or weak_test in the same definition) is kept in the body
+// the R-a finding of one group; the text of the model findings merged into it (non-low only) is kept in the body
 function gapFinding(g, src) {
-  const a = g.lines[0], b = g.lines[g.lines.length - 1], where = g.name || g.path;
-  const own = `The report from the repository's own unit test run shows ${g.lines.length} added line${g.lines.length === 1 ? '' : 's'} of ${g.name ? `\`${g.name}\`` : 'this file'} (lines ${a}–${b}) that no test executes${g.branch ? `, ${g.branch} of them branching or error handling` : ''}.`;
-  return { kind: 'missing_test', source: 'coverage', confidence: 'high', path: g.path, side: 'RIGHT', line: a, quote: String(src[a - 1]).trim(), title: `${where}: lines ${a}–${b} are never executed by any unit test`,
-    body: [own, ...g.models.map((m) => m.body)].join('\n\n'), obligation_ids: [...new Set(g.models.flatMap((m) => m.obligation_ids || []))] };
+  const a = g.lines[0], n = g.lines.length, rs = lineRanges(g.lines), where = gapLabel(g);
+  const own = `The report from the repository's own unit test run shows ${n} added line${n === 1 ? '' : 's'} of ${g.decl ? `\`${where}\`` : 'this file'} never executed (${rs})${g.branch ? `, ${g.branch} of them branching or error handling` : ''}.`;
+  return { kind: 'missing_test', source: 'coverage', confidence: 'high', path: g.path, side: 'RIGHT', line: a, quote: String(src[a - 1]).trim(), title: `${where}: ${n} added line${n === 1 ? '' : 's'} never executed by any unit test (${rs})`,
+    fpKey: g.decl ? `${g.path} ${g.decl}-${usableLabel(g.name) ? g.name : 'definition'}` : `${g.path} top-level`, // the declaration, not the first line: covering line a on a later push keeps the finding
+    body: [own, ...g.models.map((m) => `**${m.title}**\n\n${m.body}`)].join('\n\n---\n\n'), obligation_ids: [...new Set(g.models.flatMap((m) => m.obligation_ids || []))] };
 }
 
 function coverageAtoms(cov) {
@@ -1795,9 +1839,11 @@ async function run({ github, context, core }) {
       body: `The assertion \`${quote}\` was removed and nothing in this change pins the same behaviour. Restore it or pin the behaviour in another test.` });
   }
   const focusRisk = new Map(chosen.map((l) => l.split('\t')).map((a) => [a[0], parseFloat(a[1]) || 0]));
-  const gaps = coverageGaps({ cov, paths: [...reviewable], readLines, maps, text: `${snapPr?.title || ''}\n${snapPr?.body || ''}`, risk: focusRisk });
-  const cg = { emitted: gaps.emit.length, filtered: gaps.filtered, inline: 0, rolled_up: gaps.roll.reduce((n, r) => n + r.names.length, 0), merged: 0, relabeled: 0, unverified: 0 };
-  const { enclosingName } = require('./test-map');
+  const tscope = require('./trace').testScope(readCtx('test-paths.txt') || ''); // the configured test_paths, else the name heuristic
+  const gaps = coverageGaps({ cov, paths: [...reviewable], readLines, maps, isTest: (p) => (tscope ? tscope(p) : isTest(p)), text: `${snapPr?.title || ''}\n${snapPr?.body || ''}`, risk: focusRisk });
+  const cg = { emitted: gaps.emit.length, filtered: gaps.filtered, inline: 0, rolled_up: gaps.roll.reduce((n, r) => n + r.groups.length, 0), merged: 0, relabeled: 0, unverified: 0 };
+  const { enclosingDef } = require('./test-map'), defCache = new Map();
+  const declAt = (p, rl, l) => { if (!defCache.has(p)) defCache.set(p, new Map()); return enclosingDef(rl, l, defCache.get(p))?.line || 0; };
   for (let f of [...data.findings, ...auto]) {
     if (f.kind === 'spec_mismatch') {
       const req = data.requirements.find((r) => r.obligation_ids.includes(f.obligation_ids[0]));
@@ -1853,19 +1899,19 @@ async function run({ github, context, core }) {
     const exact = [f.kind, f.path, f.line + d, f.title, f.body].join('\0'); // only a verbatim repeat is dropped
     if (seen.has(exact)) continue;
     seen.add(exact);
-    const at = f.line + d, grp = (f.kind === 'missing_test' || f.kind === 'weak_test') && gaps.emit.find((g) => g.path === f.path && g.name === (enclosingName(rl, at) || null));
-    if (grp) { grp.models.push(f); cg.merged++; continue; } // R-a: the model's text rides on the deterministic finding in the same definition
+    const at = f.line + d, grp = (f.kind === 'missing_test' || f.kind === 'weak_test') && f.confidence !== 'low' && gaps.index.size ? gaps.index.get(`${f.path}\0${declAt(f.path, rl, at)}`) : null; // a low or demoted finding keeps its own summary path
+    if (grp) { if (grp.rolled) grp.absorbed.push(f.title); else grp.models.push(f); cg.merged++; continue; } // R-a: the model's text rides on the deterministic finding of its definition; past the cap it is named in the rollup
     let out = f;
     if (f.kind === 'missing_test') { // R-b, R-c and the no-report case: what the report says about the cited line
       const ev = gapEvidence(cov, f.path, at);
       if (ev === 'never') out = { ...f, title: `${f.title} (coverage: never executed)` };
       else if (ev === 'ran') { cg.relabeled++; out = { ...f, kind: 'weak_test', source: 'relabel', confidence: f.confidence === 'high' ? 'medium' : f.confidence, title: `${f.title}${RELABEL_NOTE}` }; }
-      else { cg.unverified++; out = { ...f, title: `${f.title} ${ev === 'none' ? '(not verified: no coverage report)' : '(not verified by coverage)'}` }; }
+      else if (ev === 'unknown') { cg.unverified++; out = { ...f, title: `${f.title} (not verified by coverage)` }; } // with no report the summary says so once, not every title
     }
     cands.push({ ...verified(out, rl, at), line: at, ...(f.start_line !== undefined && { start_line: f.start_line + d }) });
 
   }
-  for (const g of gaps.emit) cands.push(gapFinding(g, readLines(g.path)));
+  cands.unshift(...gaps.emit.map((g) => gapFinding(g, readLines(g.path)))); // the deterministic findings come first: max_comments cuts the model's
   const merged = merge(cands);
   for (const f of merged) { survive.add(f.fp); known.has(f.fp) ? already++ : kept.push(f); } // a merged comment's fp covers all its members
   // ponytail: a finding that validation/verification dropped (its citation or requirement link failed) cannot be fingerprinted like its comment was; hold all resolving instead of guessing.
@@ -1873,7 +1919,7 @@ async function run({ github, context, core }) {
 
   // Reduced review: only a high-confidence finding with two verified citations goes inline (at most REDUCED_INLINE); the rest are one-liners in the summary.
   const reasons = reducedReasons({ em, repair, engineNotes: (readCtx('engine-notes') || '').split('\n').filter((x) => x.trim()), data }), reduced = reasons.length > 0;
-  const p = plan(reduced ? kept.filter((f) => f.confidence === 'high' && citationsOf(f, data) + (ranNever(f) ? 1 : 0) >= 2) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
+  const p = plan(reduced ? kept.filter((f) => f.source === 'coverage' || (f.confidence === 'high' && citationsOf(f, data) + (ranNever(f) ? 1 : 0) >= 2)) : kept, maps, reduced ? Math.min(REDUCED_INLINE, maxComments) : maxComments);
   if (reduced) {
     const brief = (f, why) => ({ f, why, brief: true });
     p.summary = [...p.summary.map((x) => brief(x.f, x.why === 'over max_comments' ? 'reduced review: inline limit' : x.why)), ...p.file.map((f) => brief(f, 'reduced review: not inline')),
@@ -1941,7 +1987,7 @@ async function run({ github, context, core }) {
   const sum = [], seenSum = new Set(); // this run's summary-only and unanchored findings, tracked by the next run
   for (const { f } of [...p.summary, ...unanchored]) {
     const fp = (f.fp || f.sfp || '').slice(0, 16);
-    if (/^[0-9a-f]{16}$/.test(fp) && !seenSum.has(fp) && sum.length < 20) { seenSum.add(fp); sum.push({ fp, path: f.path, line: f.line, kind: f.kind, title: oneLine(neutralize(f.title).replace(/\s+/g, ' ').trim(), 100) }); } // title: the claim a blind labeller judges (eval/label-export.js)
+    if (/^[0-9a-f]{16}$/.test(fp) && !seenSum.has(fp) && sum.length < 20) { seenSum.add(fp); sum.push({ fp, path: f.path, line: f.line, kind: f.kind, ...(f.source === 'coverage' || f.source === 'relabel' ? { source: f.source } : {}), title: oneLine(neutralize(f.title).replace(/\s+/g, ' ').trim(), 100) }); } // title: the claim a blind labeller judges (eval/label-export.js)
   }
   // A summary-only finding that was judged this round and is no longer reported keeps its entry, so the blind-label pool (eval/weekly-report.js) still has it. After this round's own entries: the cap drops them first.
   for (const e of prevSum) if (sum.length < 20 && /^[0-9a-f]{16}$/.test(e?.fp) && !seenSum.has(e.fp) && outcomes.some((o) => o.fp.startsWith(e.fp) && o.outcome !== 'open')) { seenSum.add(e.fp); sum.push({ fp: e.fp, path: e.path, line: e.line, kind: e.kind, title: e.title, at: /^[0-9a-f]{7,40}$/.test(e.at) ? e.at : prevHead }); } // at: the head it was first reported at, so later rounds judge it against the same commit
@@ -1962,7 +2008,7 @@ async function run({ github, context, core }) {
   // how the findings reached the PR, said once at the end of the summary; nothing is said when no comment was posted in a normal run
   const delivered = summaryOnly ? 'summary only, nothing posted' : [inline && plural(inline, 'inline comment'), filed && plural(filed, 'file-level comment'), already && `${already} already posted`].filter(Boolean).join(' · ');
   const placed = [...merged.filter((f) => known.has(f.fp)), ...[...p.inline, ...p.file].filter((f) => !unplaced.has(f))].map((f) => ({ f, url: urls.get(f.fp) }));
-  await publish(buildSummary({ cov, gapRollup: gaps.roll.map(rollupLine), reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || struggling ? undefined : headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, // no head marker: the preflight must retry an incomplete run
+  await publish(buildSummary({ cov, noReport: !cov || !(cov.reports > 0), gapRollup: gaps.roll.map(rollupLine), reduced: reduced && { reasons, model: used.join(', ') || model }, used, tier, delivery: delivered, runNotes: summaryOnly && livePR?.state === 'closed' ? ['The PR is closed; it was reviewed because the run asked for it.'] : [], banner: [...(focused && !skipped.length && focused.shortened ? [`Large PR: diffs of ${focused.shortened} large file${focused.shortened === 1 ? '' : 's'} ${focused.shortened === 1 ? 'was' : 'were'} shortened in the prompt`] : [])], traceNote, data, posted: placed, items: [...p.summary, ...unanchored], rules, lint, incomplete, engine, model, usage, notes, specFiles, pre: preExisting, blob: `${context.serverUrl}/${owner}/${repo}/blob/${headSha}`, resolveNote, headSha: incomplete.length || struggling ? undefined : headSha, req: reqFp, cfg: cfgKey(env.CFG), issues: issueVers, // no head marker: the preflight must retry an incomplete run
     manifest: { reqDocs: specFiles || [], standards: smap ? sentries.map((e) => ({ path: e.path, bytes: e.bytes, lines: e.lines, truncated: cutInPrompt.has(e.path) })) : [...standards], trace: traceNote ? 'unavailable' : traceStatus === 'off' ? 'off' : specFiles?.length ? 'spec found' : 'SPEC_NOT_FOUND', head: headSha, base,
     rejected: (readCtx('spec-rejected.txt') || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return i < 0 ? [l, 'not admitted'] : [l.slice(0, i), l.slice(i + 1)]; }) }, counts: tele, state }), state);
 }
@@ -1973,4 +2019,4 @@ module.exports = async (a) => {
     try { a.core.setOutput?.('status', 'failed'); a.core.setOutput?.('reason', `SpecGuard post failed: ${e.message}`); } catch { /* core may be partial */ }
   }
 };
-Object.assign(module.exports, { NOT_WORTH_TESTING, BRANCHING, coverageGaps, gapEvidence, assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead, oneLine, cell, plural, norm });
+Object.assign(module.exports, { NOT_WORTH_TESTING, BRANCHING, coverageGaps, gapEvidence, rollupLine, gapFinding, lineRanges, assertionKind, weakAssertion, okArg, boolName, refutedBy, counterexampleOk, engineNotes, reducedReasons, layerOf, findLine, slug, whole, outcome, verdictOf, followUp, anchorTouched, testsChanged, countsComment, placeholder, skeletonGate, definedNames, definesUsedBy, parsePatch, parseDiff, validate, anchor, snap, ruleLine, merge, plan, fingerprint, redact, truncate, buildSummary, usageLine, runLine, mergeUsage, loadCoverage, neverRan, commentBody, noGaps, verifyEvidence, verifyRequirements, settle, differential, reflect, renameMaps, quoteLine, neutralize, markChanged, readFile, safeRel, ASSERTION, SKIPPED, TEST_DECL, findingBlock, findingHead, oneLine, cell, plural, norm });
