@@ -83,7 +83,7 @@ Each branch is merged into main with its own merge commit, so every cited sha st
 - `eval/holdout2-null` (bcd568b): the line-hit chance baseline, `holdout2-null.js`.
 - `eval/blind-grade` (3680ef1): the blind content grade, `blind-grade.js` plus its prompt and test. Results stay in SpecGuard-evidence.
 - `eval/testgap-demotion` (6e0c829, bdd2f9a, b6accfd, 1afefce): demotion diagnosis, ceiling check (`testgap-ceiling.md`), the grepTests fix, and the code-only fix.
-- `eval/testgap-mvp-prereg` (881cfcb, c64501b, plus the corpus builder and freeze): `prereg-testgap-mvp.md` (retired unrun), `testgap-score.js`, `testgap-confirm-build.js`.
+- `eval/testgap-mvp-prereg` (881cfcb, c64501b, plus the corpus builder up to tip 71c31b7; no corpus freeze was ever committed): `prereg-testgap-mvp.md` (retired unrun), `testgap-score.js`, `testgap-confirm-build.js`.
 
 ## Product fixes to measure on this design set (candidates, not claims)
 
