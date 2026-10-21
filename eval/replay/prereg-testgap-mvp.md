@@ -1,5 +1,11 @@
 # Pre-registration: do missing-test findings land on real test-gap bugs at PR time? (fixed 2026-10-20, before any arm is run)
 
+> **RETIRED UNRUN (2026-10-20, red team specguard-e0).**
+> - Not run. Design power was 0 at c64501b: delivered missing_test findings land at chance on holdout 2, and the location ceiling is +9 pt (bdd2f9a), below the +10 floor.
+> - The frozen confirmation set (`testgap-confirm.json`) has not been looked at by any arm.
+> - Its single look passes to the named successor: E1, the coverage-gap prereg (`eval/coverage-gap-e1`), for hono, sqlglot and langchain-core. Its static arm transfers too, with the grepTests fix b6accfd.
+> - Evidence: `testgap-evidence-2026-10-20.md` (#412).
+
 **Question.** The phase-1 MVP claim is: when SpecGuard reviews a PR, its delivered `missing_test` and `weak_test` findings point at the code where a bug was introduced that a test would later have caught. "Point at" means more often than findings placed at random among the PR's changed functions.
 
 **What earlier evals say:**

@@ -84,7 +84,7 @@ function qualifies(dir, fx) {
 }
 
 // per-pair data: I's changed non-test files, units, added lines per unit, B, static flags
-function pairData(dir, p, fx) {
+function pairData(dir, p, fx, withStatic = true) {
   const I = p.introducing, blamed = blamedSpots(dir, fx, I.merge_commit).filter((b) => isCode(b.path));
   const changed = git(dir, 'diff', '--name-only', '--no-renames', I.base, I.head).split('\n').filter((f) => f && isCode(f));
   const unitsByPath = {}, changedUnits = [];
@@ -100,8 +100,8 @@ function pairData(dir, p, fx) {
   const B = makeB(blamed, unitsByPath);
   const resolved = blamed.filter((b) => { const u = unitsByPath[b.path].find((x) => b.line >= x.start && b.line <= x.end); return u && u.name !== null; }).length;
   // static arm: changed named definitions whose name is in neither I's test diff nor any test file at I's head
-  const flags = changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !testsName(dir, I.head, headTests, u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
-  return { blamed, resolved, changedFiles: new Set(changed), changedUnits, B, flags };
+  const flags = !withStatic ? [] : changedUnits.filter((u) => u.name && !word(u.name).test(testText) && !testsName(dir, I.head, headTests, u.name)).map((u) => ({ path: u.path, line: u.added[0], name: u.name }));
+  return { blamed, resolved, changedFiles: new Set(changed), changedUnits, unitsByPath, B, flags };
 }
 
 // is `name` (whole word, fixed string) in any of `files` at `head`? git grep exits 0 = match, 1 = no match, else error (thrown)
