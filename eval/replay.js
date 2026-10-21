@@ -4,6 +4,8 @@
 // GitHub and counts findings. No case.json, so no pass/fail: grading is human adjudication against the later fix.
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+const crypto = require('node:crypto');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { buildPrompt, fakeGithub } = require('./local.js');
 const { parseComment, parseSummary } = require('./grade.js');
@@ -11,6 +13,9 @@ const { parseComment, parseSummary } = require('./grade.js');
 const ROOT = path.join(__dirname, '..');
 const fwd = (p) => path.resolve(p).replace(/\\/g, '/');
 const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+// prereg B5: hash of the prompt bytes the model sees (prompt.md). The prompt names its ctx directory, which differs per arm/rep, so that path is blanked first.
+const promptHash = (prompt, ctx) => crypto.createHash('sha256').update(String(prompt).split(fwd(ctx)).join('<CTX>').split(path.resolve(ctx)).join('<CTX>')).digest('hex');
+const readJson = (p, d = null) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return d; } };
 const readLines = (p) => { try { return fs.readFileSync(p, 'utf8').split('\n').filter(Boolean); } catch { return []; } };
 
 // local.js does not export its gh shim; this serves the original PR title/body from pr.json and nothing else.
@@ -23,16 +28,68 @@ cp.execFileSync = function (file, args) {
 };
 `;
 
+function cloneRepo(repoDir, repo, shared) {
+  if (fs.existsSync(path.join(repo, '.git'))) return;
+  execFileSync('git', ['-c', 'core.longpaths=true', 'clone', '-q', ...(shared ? ['--shared'] : ['--no-hardlinks']), '--no-checkout', path.resolve(repoDir), repo], { stdio: 'pipe' });
+  for (const [k, v] of [['core.longpaths', 'true'], ['user.name', 'specguard-local'], ['user.email', 'local@example.invalid'], ['core.autocrlf', 'false']]) git(repo, 'config', k, v);
+}
+
+// ---- V2: coverage report + arm A (post-processing by an older SpecGuard) ----
+// The report of an id lives in <coverDir>/<id>/lcov.info or coverage.xml.
+const coverReport = (coverDir, id) => (coverDir ? ['lcov.info', 'coverage.xml'].map((n) => path.join(coverDir, id, n)).find((p) => fs.existsSync(p)) || null : null);
+// A SpecGuard source root for `ref`: an existing directory is used as is; otherwise a sha gets a detached git worktree of this repo (under the temp dir; dropRefRoots removes it).
+const refRoots = new Map();
+function refRoot(ref) {
+  if (!ref) return ROOT;
+  if (fs.existsSync(path.join(ref, 'src', 'post.js'))) return path.resolve(ref);
+  if (!refRoots.has(ref)) {
+    const sha = git(ROOT, 'rev-parse', '--verify', `${ref}^{commit}`), dir = path.join(os.tmpdir(), `specguard-postref-${sha.slice(0, 12)}-${process.pid}`);
+    if (!fs.existsSync(dir)) git(ROOT, 'worktree', 'add', '--detach', '-f', dir, sha);
+    refRoots.set(ref, dir);
+  }
+  return refRoots.get(ref);
+}
+function dropRefRoots() {
+  for (const dir of refRoots.values()) { try { git(ROOT, 'worktree', 'remove', '--force', dir); } catch { fs.rmSync(dir, { recursive: true, force: true }); } }
+  refRoots.clear();
+}
+// What action.yml's coverage step does, with the real <root>/src/coverage.js. The report is copied into the checkout first (expand() refuses paths outside the workspace).
+// Returns the result.json `coverage` block. coverage.json/txt of an earlier run are removed first, so no report means no V2 input.
+function runCoverage({ root = ROOT, report, repo, ctx, head }) {
+  for (const n of ['coverage.json', 'coverage.txt']) fs.rmSync(path.join(ctx, n), { force: true });
+  if (!report) return { report: null, used: false, note: 'no report for this id' };
+  const rel = `.specguard-cov/${path.basename(report)}`;
+  fs.mkdirSync(path.join(repo, '.specguard-cov'), { recursive: true });
+  fs.copyFileSync(report, path.join(repo, rel));
+  const env = { ...process.env, CTX: fwd(ctx), GITHUB_WORKSPACE: fwd(repo), HEAD_SHA: head, COVERAGE_FILES: rel };
+  for (const k of ['ANTHROPIC_API_KEY', 'GH_TOKEN', 'GITHUB_TOKEN', 'NODE_OPTIONS']) delete env[k];
+  const r = spawnSync('node', [path.join(root, 'src', 'coverage.js')], { encoding: 'utf8', env });
+  const j = readJson(path.join(ctx, 'coverage.json'));
+  return { report: path.basename(report), used: !!j && j.reports > 0, note: `${r.status ? `exit ${r.status}: ` : ''}${r.stdout || ''}${r.stderr || ''}`.trim().split('\n')[0].slice(0, 300) };
+}
+// `source` of a summary-only finding (the summary text does not show it): the counts marker's `sum` list, keyed by kind + path + line.
+function summarySources(summary) {
+  try {
+    const sum = JSON.parse(/<!-- specguard:counts (\{.*\}) -->/.exec(summary || '')?.[1]).sum || [];
+    return new Map(sum.filter((e) => e.source).map((e) => [`${e.kind}|${e.path}|${e.line}`, e.source]));
+  } catch { return new Map(); }
+}
+// "### More never-executed definitions": the R-a groups past the inline cap -> [{ path, count, names }] (the names the summary shows; absorbed model titles in parentheses are dropped)
+function rollupGroups(summary) {
+  const block = /### More never-executed definitions\n\n((?:- [^\n]*\n)+)/.exec(String(summary || ''));
+  return (block ? block[1].split('\n').filter(Boolean) : []).map((l) => {
+    const m = /^- `(.+?)`: (\d+) more never-executed definitions?: (.*)$/.exec(l);
+    return m && { path: m[1], count: +m[2], names: m[3].replace(/, \+\d+ more$/, '').replace(/\s\((?:[^()]|\([^()]*\))*\)/g, '').split(', ').filter(Boolean) };
+  }).filter(Boolean);
+}
+
 // Clone repoDir to <out>/<id>/repo at head (full history, so base is reachable), run the real collect.sh, write prompt.md and meta.json.
 // shared: true uses 'git clone --shared' (objects via .git/objects/info/alternates) instead of a full copy, saving disk. The working copy then
 // DEPENDS ON repoDir staying where it is and keeping its objects: do not move, delete or gc/prune the source clone while shared copies exist.
 function prepareReal({ repoDir, base, head, prTitle = '', prBody = '', out, id, trace = 'auto', shared = false }) {
   const dir = path.resolve(out, id), repo = path.join(dir, 'repo'), ctx = path.join(dir, 'ctx');
   fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(path.join(repo, '.git'))) {
-    execFileSync('git', ['-c', 'core.longpaths=true', 'clone', '-q', ...(shared ? ['--shared'] : ['--no-hardlinks']), '--no-checkout', path.resolve(repoDir), repo], { stdio: 'pipe' });
-    for (const [k, v] of [['core.longpaths', 'true'], ['user.name', 'specguard-local'], ['user.email', 'local@example.invalid'], ['core.autocrlf', 'false']]) git(repo, 'config', k, v);
-  }
+  cloneRepo(repoDir, repo, shared);
   head = git(repo, 'rev-parse', head); base = git(repo, 'rev-parse', base);
   git(repo, 'checkout', '-q', '--detach', head);
   fs.rmSync(ctx, { recursive: true, force: true });
@@ -81,7 +138,7 @@ function summaryItems(summary) {
 // post.js's final status/reason: its core outputs, else (an old result, a downloaded artifact) the summary's status marker and "Could not complete: <reason>" line.
 const publisher = (summary, outputs = {}) => ({ publisher_status: outputs.status || /<!-- specguard:status=(\w+) -->/.exec(summary || '')?.[1] || null, publisher_reason: outputs.reason || /Could not complete: ([^\n]*)/.exec(summary || '')?.[1] || null });
 
-async function finishRealOne(id, out, { engine = 'local', model = '' } = {}) {
+async function finishRealOne(id, out, { engine = 'local', model = '', root = ROOT } = {}) {
   const dir = path.resolve(out, id), meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
   const ctx = path.join(dir, 'ctx'), present = fs.existsSync(path.join(ctx, 'findings.json'));
   const { github, core, posted } = fakeGithub({ headSha: meta.head });
@@ -89,7 +146,7 @@ async function finishRealOne(id, out, { engine = 'local', model = '' } = {}) {
   const env = { CTX: ctx, HEAD_SHA: meta.head, BASE_SHA: meta.base, GITHUB_WORKSPACE: meta.repo, SKIP: String(!!meta.skip), PARTIAL: String(!!meta.partial), MAX_COMMENTS: '10', ENGINE: engine, MODEL: model, STANDARDS_REF: 'head', STANDARDS_CHECKS: '' };
   const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
   Object.assign(process.env, env);
-  try { await require('../src/post.js')({ github, context, core }); }
+  try { await require(path.join(root, 'src', 'post.js'))({ github, context, core }); }
   finally { for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   fs.writeFileSync(path.join(dir, 'posted.json'), JSON.stringify({ comments: posted.comments, reviews: posted.reviews, warnings: posted.warnings }, null, 2) + '\n');
   fs.writeFileSync(path.join(dir, 'summary.md'), posted.summary || '');
@@ -152,38 +209,75 @@ const invalid = (r) => {
   return null;
 };
 
-const readJson = (p, d = null) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return d; } };
-
 // Offline: the invalid reason (or null) of a downloaded artifact dir (result.json + summary.md), also for results written before publisher_status existed. `node eval/replay.js revalidate --out DIR --id ID`.
 const revalidate = (dir) => { const r = readJson(path.join(dir, 'result.json'), {}); return invalid({ ...r, ...(r.publisher_status ? {} : publisher(fs.existsSync(path.join(dir, 'summary.md')) ? fs.readFileSync(path.join(dir, 'summary.md'), 'utf8') : ''))}); };
 
-// prepare -> real engine -> finish (real post.run) -> <out>/<id>/result.json. `engine` is injectable for tests.
-async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget = '1.00', maxOutput = '32000', timeout = '12', trace = 'auto', engine = runEngine }) {
-  const meta = prepareReal({ repoDir, base: entry.base, head: entry.head, prTitle: entry.title, prBody: entry.body, out, id: entry.id, trace, shared: true });
-  const dir = path.resolve(out, entry.id), ctx = path.join(dir, 'ctx');
-  const result = { id: entry.id, repo: entry.repo, pr: entry.number, base: meta.base, head: meta.head, trace, model, files: meta.files, spec_files: meta.spec_files, collect_ok: meta.collect_ok, skip: meta.skip, partial: meta.partial };
-  if (meta.collect_ok && !meta.skip) result.engine_exit = await engine({ dir, ctx, repo: meta.repo, model, budget, maxOutput, timeout });
-  const sf = path.join(ctx, 'engine-status'), status = fs.existsSync(sf) ? fs.readFileSync(sf, 'utf8').trim() : 'success';
-  result.engine_status = meta.skip ? 'skipped' : !meta.collect_ok ? 'collect_failed' : status;
-  result.engine_notes = readLines(path.join(ctx, 'engine-notes'));
-  const u = readJson(path.join(ctx, 'usage.json'), {}), u2 = readJson(path.join(ctx, 'usage-repair.json'), {});
-  result.usage = { cost_usd: (u.totalCostUsd || 0) + (u2.totalCostUsd || 0), model: u.currentModel || null, metrics: u.modelMetrics || null };
-  const row = await finishRealOne(entry.id, out, { engine: 'claude', model });
-  const posted = readJson(path.join(dir, 'posted.json'), { comments: [] });
+// finish (real post.run from `root`) -> findings, source, rollup, counts and validity written to <out>/<id>/result.json. Shared by runReal and repost.
+async function record(id, out, result, { model, root }) {
+  const dir = path.resolve(out, id);
+  const row = await finishRealOne(id, out, { engine: 'claude', model, root });
+  const posted = readJson(path.join(dir, 'posted.json'), { comments: [] }), summary = fs.readFileSync(path.join(dir, 'summary.md'), 'utf8'), srcs = summarySources(summary);
   const f = (where) => (x) => ({ where, kind: x.kind, path: x.path, line: x.line, title: x.title, confidence: x.confidence || null });
-  result.findings = [...posted.comments.map(parseComment).filter(Boolean).map(f('inline')),
-    ...summaryItems(fs.readFileSync(path.join(dir, 'summary.md'), 'utf8')).map((x) => ({ ...f('summary')(x), why: x.why || '' }))];
+  result.findings = [...posted.comments.map(parseComment).filter(Boolean).map((x) => ({ ...f('inline')(x), ...(x.origin && { source: x.origin }) })),
+    ...summaryItems(summary).map((x) => ({ ...f('summary')(x), ...(srcs.has(`${x.kind}|${x.path}|${x.line}`) && { source: srcs.get(`${x.kind}|${x.path}|${x.line}`) }), why: x.why || '' }))];
+  const roll = rollupGroups(summary); if (roll.length) result.rollup = roll; else delete result.rollup;
   result.findings_present = row.findings_present; result.publisher_status = row.publisher_status; result.publisher_reason = row.publisher_reason; result.invalid_reason = invalid(result); result.valid = !result.invalid_reason;
   result.counts = { inline: row.inline.total, summary_only: row.summary_only, pre_existing: row.pre_existing };
   fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 2) + '\n');
   return result;
 }
 
+// prepare -> [V2: real coverage.js on <coverDir>/<id>'s report] -> real engine -> finish (real post.run) -> <out>/<id>/result.json. `engine` is injectable for tests.
+// postRef (arm A): coverage.js and post.js come from that older SpecGuard (sha or directory) instead of this tree; the model output is whatever the engine writes.
+async function runReal({ entry, repoDir, out, model = 'claude-haiku-5-5', budget = '1.00', maxOutput = '32000', timeout = '12', trace = 'auto', engine = runEngine, coverDir, postRef }) {
+  const root = refRoot(postRef);
+  const meta = prepareReal({ repoDir, base: entry.base, head: entry.head, prTitle: entry.title, prBody: entry.body, out, id: entry.id, trace, shared: true });
+  const dir = path.resolve(out, entry.id), ctx = path.join(dir, 'ctx');
+  const result = { id: entry.id, repo: entry.repo, pr: entry.number, base: meta.base, head: meta.head, trace, model, files: meta.files, spec_files: meta.spec_files, collect_ok: meta.collect_ok, skip: meta.skip, partial: meta.partial };
+  if (coverDir && meta.collect_ok && !meta.skip) { // the action's coverage step sits before the engine, so the model's prompt carries coverage.txt
+    result.coverage = runCoverage({ root, report: coverReport(coverDir, entry.id), repo: meta.repo, ctx, head: meta.head });
+    if (result.coverage.used) fs.writeFileSync(path.join(dir, 'prompt.md'), buildPrompt(ctx));
+  }
+  result.prompt_sha256 = promptHash(fs.readFileSync(path.join(dir, 'prompt.md'), 'utf8'), ctx);
+  if (meta.collect_ok && !meta.skip) result.engine_exit = await engine({ dir, ctx, repo: meta.repo, model, budget, maxOutput, timeout });
+  const sf = path.join(ctx, 'engine-status'), status = fs.existsSync(sf) ? fs.readFileSync(sf, 'utf8').trim() : 'success';
+  result.engine_status = meta.skip ? 'skipped' : !meta.collect_ok ? 'collect_failed' : status;
+  result.engine_notes = readLines(path.join(ctx, 'engine-notes'));
+  const u = readJson(path.join(ctx, 'usage.json'), {}), u2 = readJson(path.join(ctx, 'usage-repair.json'), {});
+  result.usage = { cost_usd: (u.totalCostUsd || 0) + (u2.totalCostUsd || 0), model: u.currentModel || null, metrics: u.modelMetrics || null };
+  return record(entry.id, out, result, { model, root });
+}
+
+// Arm A / re-post: re-run only coverage + post.js on saved run dirs (<from>/rep<k>/<id>: ctx with the saved findings.json, result.json) into a parallel <to> tree. The model is never called.
+// postRef = the older SpecGuard whose coverage.js and post.js process the SAME model output; no postRef = this tree. repos rebuilds the checkout (batch deletes it after each run).
+async function repost({ from, to, repos, coverDir, postRef, model = 'claude-haiku-5-5', log = console.log }) {
+  const root = refRoot(postRef), done = [];
+  for (const rep of fs.readdirSync(from).filter((n) => /^rep\d+$/.test(n)).sort()) for (const id of fs.readdirSync(path.join(from, rep)).sort()) {
+    const src = path.join(from, rep, id), prev = readJson(path.join(src, 'result.json'));
+    if (!prev || !fs.existsSync(path.join(src, 'ctx', 'findings.json'))) { log(`${id} ${rep}: no saved findings, skipped`); continue; }
+    const o = path.join(to, rep), dir = path.join(o, id), ctx = path.join(dir, 'ctx'), meta = readJson(path.join(src, 'meta.json'));
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.cpSync(src, dir, { recursive: true, filter: (p) => path.basename(p) !== 'repo' });
+    cloneRepo(path.join(repos, prev.repo.split('/').pop()), path.join(dir, 'repo'), true);
+    git(path.join(dir, 'repo'), 'checkout', '-q', '--detach', meta.head);
+    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ ...meta, repo: path.join(dir, 'repo'), ctx }, null, 2) + '\n');
+    const result = { ...prev, ...(coverDir && { coverage: runCoverage({ root, report: coverReport(coverDir, id), repo: path.join(dir, 'repo'), ctx, head: meta.head }) }) };
+    if (!coverDir) for (const n of ['coverage.json', 'coverage.txt']) fs.rmSync(path.join(ctx, n), { force: true });
+    // B5: the prompt this arm's coverage.js would have sent. If it differs from the source run's, the saved model output is not this arm's: arm A must run live.
+    const prompt = buildPrompt(ctx); fs.writeFileSync(path.join(dir, 'prompt.md'), prompt);
+    Object.assign(result, { source_prompt_sha256: prev.prompt_sha256 || null, prompt_sha256: promptHash(prompt, ctx), prompt_matches_source: !!prev.prompt_sha256 && prev.prompt_sha256 === promptHash(prompt, ctx) });
+    await record(id, o, result, { model: prev.model || model, root });
+    fs.rmSync(path.join(dir, 'repo'), { recursive: true, force: true });
+    log(`${id} ${rep}: reposted`); done.push(`${rep}/${id}`);
+  }
+  return done;
+}
+
 // Local batch over saved replay dirs (<dl>/<run>/replay-<id>, each with result.json {id, repo}) or `list` (entries, e.g. from a confirm-corpus manifest): sequential, rep-major (rep k writes <out>/rep<k>/<id>), at most `cap` engine runs.
 // Resume skips every id with a result.json, except one marked retryable. A run that reached the model is never re-rolled (a failure is a miss): retryable iff invalid, never billed (usage.cost_usd 0) and either threw before the engine ran (clone, disk) or stopped for an account/config reason (engine-error auth/quota/config/model/rate); it stops the batch (a dead key must not burn the rest).
 // Any other invalid result, and a throw after a billed engine run (its cost is read from ctx/usage*.json), is recorded as a miss and the batch goes on. Ids in `list` must be unique. The result lists `attempts` (one per result.attempt-*.json). A retryable result is renamed result.attempt-<n>.json before its re-run, and spent sums result.json + result.attempt-*.json under out. Stops before a run that could pass `maxTotal` (spent + this run's `budget`).
 const RETRYABLE = new Set(['auth', 'quota', 'config', 'model', 'rate']);
-async function batch({ dirs, list, manifests, repos, out, cap, maxTotal, reps = 1, model = 'claude-haiku-5-5', budget, engine = runEngine, log = console.log }) {
+async function batch({ dirs, list, manifests, repos, out, cap, maxTotal, reps = 1, model = 'claude-haiku-5-5', budget, engine = runEngine, coverDir, postRef, log = console.log }) {
   const subs = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((x) => x.isDirectory()).map((x) => path.join(d, x.name)); } catch { return []; } };
   const cost = (f) => readJson(f, {}).usage?.cost_usd || 0, files = (d) => { try { return fs.readdirSync(d).filter((n) => /^result(\.attempt-\d+)?\.json$/.test(n)).map((n) => path.join(d, n)); } catch { return []; } };
   let spent = [out, ...subs(out)].flatMap(subs).flatMap(files).reduce((t, f) => t + cost(f), 0), ran = 0, skipped = 0, stopped = null;
@@ -195,7 +289,7 @@ async function batch({ dirs, list, manifests, repos, out, cap, maxTotal, reps = 
     if (ran >= cap) break outer;
     if (spent + +budget > maxTotal) { stopped = 'budget'; log(`total cap: spent $${spent} of $${maxTotal}`); break outer; }
     if (prev) { let n = 1; while (fs.existsSync(path.join(o, id, `result.attempt-${n}.json`))) n++; fs.renameSync(rf, path.join(o, id, `result.attempt-${n}.json`)); } // its cost stays in spent
-    let r; try { r = await runReal({ entry, repoDir: path.join(repos, entry.clone || entry.repo.split('/').pop()), out: o, model, budget, engine }); } catch (e) { // a throw (clone, full disk, post.js crash): a retryable stop for a human when nothing was billed, else a miss with its cost
+    let r; try { r = await runReal({ entry, repoDir: path.join(repos, entry.clone || entry.repo.split('/').pop()), out: o, model, budget, engine, coverDir, postRef }); } catch (e) { // a throw (clone, full disk, post.js crash): a retryable stop for a human when nothing was billed, else a miss with its cost
       r = { id, valid: false, engine_status: 'error', invalid_reason: `run failed: ${String(e.message || e).split('\n')[0]}`, usage: { cost_usd: ['usage.json', 'usage-repair.json'].reduce((t, n) => t + (readJson(path.join(o, id, 'ctx', n), {}).totalCostUsd || 0), 0) }, thrown: true }; fs.mkdirSync(path.join(o, id), { recursive: true }); fs.writeFileSync(rf, JSON.stringify(r, null, 2) + '\n'); }
     ran++; const c = r.usage?.cost_usd || 0; spent += c;
     fs.rmSync(path.join(o, id, 'repo'), { recursive: true, force: true }); // a full checkout per PR and rep (100+ MB on gitea/langchain); nothing reads it after post.js, and replay-arms/two-posts rebuild it from --repos
@@ -216,6 +310,9 @@ const USAGE = `Usage:
   node eval/replay.js batch   --out DIR --repos DIR --cap N --budget USD --max-total USD [--reps N] [--model M] --manifest FILE --ids all|a,b     (no DIRs: confirm-corpus manifest, in manifest order)
                               local sequential real-engine runs over saved replay dirs (<dl>/<run>/replay-<id>) or manifest entries; writes <out>/rep<k>/<id>; resumes (skips every result.json except retryable: true);
                               never re-rolls an invalid PR: only an account/config error (auth, quota, config, model, rate) is retryable and stops the batch (exit 1), as does the total cap
+  node eval/replay.js repost  --from DIR --out DIR --repos DIR [--post-ref SHA] [--cover-dir D]
+                              V2 arm A: re-run only coverage.js + post.js (from the old SpecGuard at --post-ref; default this tree) on the saved <from>/rep<k>/<id> findings into <out>; no model call
+  batch and run also take --cover-dir D (D/<id>/lcov.info|coverage.xml: real src/coverage.js before the engine) and --post-ref SHA|DIR
 No pass/fail: findings are adjudicated by a human against the later fix (eval/replay/README.md, "Running on the real engine").`;
 
 async function main() {
@@ -224,6 +321,7 @@ async function main() {
     title: { type: 'string', default: '' }, body: { type: 'string', default: '' }, trace: { type: 'string', default: 'auto' }, shared: { type: 'boolean' }, help: { type: 'boolean' },
     manifest: { type: 'string' }, ids: { type: 'string' }, sample: { type: 'string' }, seed: { type: 'string', default: '1' },
     model: { type: 'string', default: 'claude-haiku-5-5' }, budget: { type: 'string', default: '1.00' }, 'max-output': { type: 'string', default: '32000' }, timeout: { type: 'string', default: '12' },
+    'cover-dir': { type: 'string' }, 'post-ref': { type: 'string' }, from: { type: 'string' },
     repos: { type: 'string' }, cap: { type: 'string' }, 'max-total': { type: 'string' }, reps: { type: 'string', default: '1' } } });
   const [cmd] = positionals;
   if (cmd === 'plan' && o.manifest) {
@@ -235,7 +333,7 @@ async function main() {
   if (cmd === 'run' && o.manifest && o.id && o.repo && o.out) {
     const entry = entries(o.manifest).find((e) => e.id === o.id);
     if (!entry) throw new Error(`no such id: ${o.id}`);
-    const r = await runReal({ entry, repoDir: o.repo, out: o.out, model: o.model, budget: o.budget, maxOutput: o['max-output'], timeout: o.timeout, trace: o.trace });
+    const r = await runReal({ entry, repoDir: o.repo, out: o.out, model: o.model, budget: o.budget, maxOutput: o['max-output'], timeout: o.timeout, trace: o.trace, coverDir: o['cover-dir'], postRef: o['post-ref'] });
     if (!r.valid) throw new Error(`${r.id}: invalid replay: ${r.invalid_reason}`); // result.json is already written and uploaded
     return console.log(`${r.id}: ${r.engine_status} inline=${r.counts.inline} summary=${r.counts.summary_only} cost=$${r.usage.cost_usd}`);
   }
@@ -244,8 +342,13 @@ async function main() {
     if (!o.out || !o.repos || !cap || !maxTotal || !reps || !budget || (positionals.length < 2 && !(o.manifest && o.ids))) { console.log(USAGE); process.exit(2); }
     const manifests = o.manifest ? o.manifest.split(',') : ['holdout2-pairs.json', 'holdout2-clean.json'].map((f) => path.join(__dirname, 'replay', f));
     let list; if (positionals.length < 2) { const all = o.manifest.split(',').flatMap(entries); list = o.ids === 'all' ? all : o.ids.split(',').map((id) => all.find((e) => e.id === id) || (() => { throw new Error(`no such id: ${id}`); })()); list = all.filter((e) => list.includes(e)); } // manifest order
-    const r = await batch({ dirs: positionals.slice(1), list, manifests, repos: o.repos, out: o.out, cap, maxTotal, reps, model: o.model, budget: o.budget });
+    const r = await batch({ dirs: positionals.slice(1), list, manifests, repos: o.repos, out: o.out, cap, maxTotal, reps, model: o.model, budget: o.budget, coverDir: o['cover-dir'], postRef: o['post-ref'] });
     console.log(JSON.stringify(r)); if (r.stopped) process.exit(1); return;
+  }
+  if (cmd === 'repost') {
+    if (!o.from || !o.out || !o.repos) { console.log(USAGE); process.exit(2); }
+    const done = await repost({ from: o.from, to: o.out, repos: o.repos, coverDir: o['cover-dir'], postRef: o['post-ref'], model: o.model });
+    return console.log(JSON.stringify({ reposted: done.length }));
   }
   if (cmd === 'revalidate' && o.out && o.id) return o.id.split(',').forEach((id) => console.log(`${id}: ${revalidate(path.resolve(o.out, id)) || 'valid'}`));
   if (o.help || !['prepare', 'finish'].includes(cmd) || !o.out || !o.id) { console.log(USAGE); process.exit(o.help ? 0 : 2); }
@@ -253,5 +356,5 @@ async function main() {
   else await finishReal({ ids: o.id.split(','), out: o.out });
 }
 
-if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, batch, runEngine, invalid, revalidate, publisher };
+if (require.main === module) main().catch((e) => { console.error(e.message); process.exitCode = 1; }).finally(dropRefRoots);
+module.exports = { repost, refRoot, dropRefRoots, runCoverage, coverReport, rollupGroups, summarySources, prepareReal, finishReal, finishRealOne, countFindings, summaryItems, table, entries, sample, runReal, batch, runEngine, invalid, revalidate, publisher };

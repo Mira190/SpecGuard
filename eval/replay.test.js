@@ -304,3 +304,101 @@ test('batch: an unbilled rate limit (429) or quota error (402) is a retryable st
     assert.deepStrictEqual([res.valid, res.usage.cost_usd, res.retryable, r.stopped, r.ran, fs.existsSync(path.join(out, 'rep1', 'q2'))], [false, 0, true, 'q1', 1, false], `${status}`);
   }
 });
+
+// ---- V2: --cover-dir (real coverage.js before the engine) and arm A (--post-ref / repost) ----
+const PRE_V2 = '8af6d2a8cdc715eb2ab1b7e8a5d48e482b984e2e'; // main before #430
+const HAS_PRE_V2 = (() => { try { execFileSync('git', ['-C', path.join(__dirname, '..'), 'cat-file', '-e', `${PRE_V2}^{commit}`], { stdio: 'ignore' }); return true; } catch { return false; } })();
+function mkCovRepo(name) {
+  const d = path.join(tmp, name);
+  fs.mkdirSync(path.join(d, 'src'), { recursive: true });
+  git(d, 'init', '-q');
+  for (const [k, v] of [['user.name', 't'], ['user.email', 't@example.invalid'], ['commit.gpgsign', 'false']]) git(d, 'config', k, v);
+  fs.writeFileSync(path.join(d, 'src', 'a.js'), 'exports.limit = (n) => n > 3;\n');
+  git(d, 'add', '-A'); git(d, 'commit', '-q', '-m', 'base');
+  const base = git(d, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(d, 'src', 'a.js'), "function limit(n) {\n  if (n > 5) {\n    return 'big';\n  }\n  return 'small';\n}\nfunction bump(n) {\n  return n + 1;\n}\nexports.limit = limit;\n");
+  git(d, 'add', '-A'); git(d, 'commit', '-q', '-m', 'head');
+  return { d, base, head: git(d, 'rev-parse', 'HEAD') };
+}
+const LCOV = 'TN:\nSF:src/a.js\nDA:1,1\nDA:2,1\nDA:3,0\nDA:5,1\nDA:7,4\nDA:8,4\nDA:10,1\nend_of_record\n';
+// the model claims a missing test at line 8 (bump), which the report says ran (R-b: relabelled, summary only)
+const covFindings = () => {
+  const q = 'return n + 1;', row = { id: 'O1', obligation: 'limit returns small', source: 'PR body', behaviour: { path: 'src/a.js', line: 8, quote: q }, change: { path: 'src/a.js', line: 8, quote: q, side: 'RIGHT' }, evidence: [], status: 'missing_test', reason: 'no test', alignment: { status: 'consistent', since: 'introduced', reason: 'ok' } };
+  return { requirements_source: 'none', not_reviewed: '', standards: { status: 'no_rules', sources: [], reason: 'none' }, layering: { status: 'checked', reason: 'x' }, requirements: [], coverage: [row],
+    findings: [{ kind: 'missing_test', path: 'src/a.js', line: 8, quote: q, side: 'RIGHT', title: 'bump untested', body: 'No test asserts bump.', confidence: 'high', obligation_ids: ['O1'] }] };
+};
+const covEngine = ({ ctx }) => { fs.writeFileSync(path.join(ctx, 'findings.json'), JSON.stringify(covFindings())); fs.writeFileSync(path.join(ctx, 'engine-notes'), 'context pack: 1 files, 0 KB\n'); return 0; };
+const key = (r) => r.findings.map((f) => [f.where, f.kind, f.path, f.line, f.title, f.source || ''].join('|')).sort();
+async function v2Runs() {
+  const { runReal } = require('./replay.js'), { d, base, head } = mkCovRepo('cov-repo');
+  const coverDir = path.join(tmp, 'cov-reports'); fs.mkdirSync(path.join(coverDir, 'c1'), { recursive: true }); fs.writeFileSync(path.join(coverDir, 'c1', 'lcov.info'), LCOV);
+  const entry = { id: 'c1', repo: 'o/r', number: 5, base, head, title: 't', body: 'limit' };
+  const withCov = await runReal({ entry, repoDir: d, out: path.join(tmp, 'v2-with', 'rep1'), engine: covEngine, coverDir });
+  const without = await runReal({ entry, repoDir: d, out: path.join(tmp, 'v2-without', 'rep1'), engine: covEngine });
+  const none = await runReal({ entry: { ...entry, id: 'c-none' }, repoDir: d, out: path.join(tmp, 'v2-none', 'rep1'), engine: covEngine, coverDir }); // a coverDir without a report for this id
+  return { withCov, without, none, coverDir, d };
+}
+let v2Cache; const v2 = () => (v2Cache ||= v2Runs());
+
+test('V2 --cover-dir: a never-run changed line becomes a source: coverage finding in result.json; the ran line is a relabelled summary item', async () => {
+  const { withCov } = await v2();
+  assert.deepStrictEqual([withCov.coverage.report, withCov.coverage.used], ['lcov.info', true], JSON.stringify(withCov.coverage));
+  const ra = withCov.findings.filter((f) => f.source === 'coverage');
+  assert.strictEqual(ra.length, 1, JSON.stringify(withCov.findings));
+  assert.deepStrictEqual([ra[0].where, ra[0].kind, ra[0].path, ra[0].line], ['inline', 'missing_test', 'src/a.js', 3]);
+  assert.match(ra[0].title, /limit: 1 added line never executed by any unit test \(L3\)/);
+  const rb = withCov.findings.filter((f) => f.source === 'relabel');
+  assert.deepStrictEqual(rb.map((f) => [f.where, f.kind, f.line]), [['summary', 'weak_test', 8]]); // source read from the counts marker
+  assert.ok(withCov.valid, withCov.invalid_reason);
+});
+
+test('V2 without --cover-dir the output is unchanged: no coverage block, no source, no R-a', async () => {
+  const { without, none } = await v2();
+  assert.ok(!('coverage' in without) && !('rollup' in without));
+  assert.ok(without.findings.every((f) => !f.source), JSON.stringify(without.findings));
+  assert.deepStrictEqual(without.findings.map((f) => [f.where, f.kind, f.line]), [['inline', 'missing_test', 8]]);
+  assert.deepStrictEqual(none.coverage, { report: null, used: false, note: 'no report for this id' }); // a cover dir without this id's report: nothing runs, V1 behaviour
+  assert.deepStrictEqual(key(none), key(without));
+});
+
+test('V2 repost: re-posts the saved findings (no model call) into a parallel tree; --post-ref reproduces the pre-V2 behaviour, no ref reproduces V2', { skip: !HAS_PRE_V2 && 'pre-V2 commit not in this clone' }, async () => {
+  const { repost, dropRefRoots } = require('./replay.js'), { withCov, without, coverDir, d } = await v2();
+  const from = path.join(tmp, 'v2-with'), repos = path.join(tmp, 'repos');
+  fs.mkdirSync(repos, { recursive: true }); fs.cpSync(d, path.join(repos, 'r'), { recursive: true }); // the checkout is rebuilt from <repos>/<entry.repo's last segment>
+  try {
+    const now = path.join(tmp, 'v2-repost-now'), old = path.join(tmp, 'v2-repost-old');
+    await repost({ from, to: now, repos, coverDir, log: () => {} });
+    await repost({ from, to: old, repos, coverDir, postRef: PRE_V2, log: () => {} });
+    const rd = (o) => JSON.parse(fs.readFileSync(path.join(o, 'rep1', 'c1', 'result.json'), 'utf8')), rNow = rd(now), rOld = rd(old);
+    assert.deepStrictEqual(key(rNow), key(withCov)); // same code, same saved model output: the same result
+    assert.ok(rOld.findings.length && rOld.findings.every((f) => !f.source), JSON.stringify(rOld.findings)); // pre-V2 post.js knows neither R-a nor R-b
+    assert.deepStrictEqual(key(rOld), key(without)); // arm A = what main did before V2 with the same model output
+    assert.strictEqual(fs.readFileSync(path.join(from, 'rep1', 'c1', 'ctx', 'findings.json'), 'utf8'), fs.readFileSync(path.join(old, 'rep1', 'c1', 'ctx', 'findings.json'), 'utf8')); // the model output is the saved one
+  } finally { dropRefRoots(); }
+});
+
+test('V2 prompt hash (B5): the prompt bytes are hashed per run; coverage changes them; repost records whether the arm saw the same prompt', async () => {
+  const { withCov, without, none, coverDir, d } = await v2();
+  const h = /^[0-9a-f]{64}$/;
+  assert.ok([withCov, without, none].every((r) => h.test(r.prompt_sha256)));
+  assert.notStrictEqual(withCov.prompt_sha256, without.prompt_sha256); // coverage.txt is in the prompt
+  const { repost } = require('./replay.js'), repos = path.join(tmp, 'repos-h');
+  fs.mkdirSync(repos, { recursive: true }); fs.cpSync(d, path.join(repos, 'r'), { recursive: true });
+  const same = path.join(tmp, 'v2-hash-same'), diff = path.join(tmp, 'v2-hash-diff'), rd = (o) => JSON.parse(fs.readFileSync(path.join(o, 'rep1', 'c1', 'result.json'), 'utf8'));
+  await repost({ from: path.join(tmp, 'v2-with'), to: same, repos, coverDir, log: () => {} });
+  await repost({ from: path.join(tmp, 'v2-with'), to: diff, repos, log: () => {} }); // arm without a report: another prompt, so it could not share the model output
+  assert.deepStrictEqual([rd(same).prompt_matches_source, rd(same).source_prompt_sha256], [true, withCov.prompt_sha256]);
+  assert.deepStrictEqual([rd(diff).prompt_matches_source, rd(diff).prompt_sha256], [false, without.prompt_sha256]);
+});
+
+test('V2 repost with a cover dir lacking this id: no coverage, no R-a/R-b, and the no-report notice is in the summary', async () => {
+  const { coverDir, d } = await v2(), { repost } = require('./replay.js'), repos = path.join(tmp, 'repos-n');
+  fs.mkdirSync(repos, { recursive: true }); fs.cpSync(d, path.join(repos, 'r'), { recursive: true });
+  const from = path.join(tmp, 'v2-with'), to = path.join(tmp, 'v2-repost-nobody'), empty = path.join(tmp, 'cov-empty'); fs.mkdirSync(empty, { recursive: true });
+  await repost({ from, to, repos, coverDir: empty, log: () => {} });
+  const r = JSON.parse(fs.readFileSync(path.join(to, 'rep1', 'c1', 'result.json'), 'utf8')), s = fs.readFileSync(path.join(to, 'rep1', 'c1', 'summary.md'), 'utf8');
+  assert.deepStrictEqual(r.coverage, { report: null, used: false, note: 'no report for this id' });
+  assert.ok(r.findings.every((f) => !f.source), JSON.stringify(r.findings));
+  assert.match(s, /not verified: no coverage report/);
+  assert.ok(coverDir);
+});
