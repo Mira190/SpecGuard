@@ -133,6 +133,7 @@ function coverTree(h, repo, cfg, dir, outDir, rev) {
 
 function cmdCover(args, SET) {
   const h = require('./harness'), R = h.REPOS(), set = SET || 'holdout2', jobs = [], seen = new Set();
+  if (SET) h.useSet(SET); // scope() reads the harness's own set; without this --set covered holdout2 groups
   const want = (args || []).filter((a) => !a.startsWith('head:'));
   const bySlug = (n) => Object.keys(R).find((k) => R[k].name === n && R[k].cover);
   for (const a of (args || []).filter((a) => a.startsWith('head:'))) { // smoke: the shared clone's current HEAD, no tree dir, nothing written to the repo

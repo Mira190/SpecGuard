@@ -286,6 +286,9 @@ One row was not covered by this argument: hono-2339's writer test uses `.rejects
 
 The rules of amendments 6 and 7 govern all future rows, including rqlite and list sets, in the same `results.json`.
 
+
+Cover-only rows (for E1): a row without `finding` is `{id, repo, kind: bug|control, buggy_sha, fixed_sha (bug rows only), base?}`. Its group is its `id`, so a `cover --set` report under `<evidence>/f2p/cover/<set>/<id>/` joins back to the row. Cover-only rows get no packet and no oracle run; `export --set` and `cover --set` work on them as on any list row.
+
 ## Coverage (cover) for E1
 
 `cover` runs the UNIT test suite of a tree under coverage so E1 can find changed definitions that no test executed. Suite failures on a buggy tree are expected and still produce coverage.

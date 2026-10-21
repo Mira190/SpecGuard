@@ -112,7 +112,7 @@ test('action.yml: llm_token and copilot_token inputs, engine defaults to auto, c
   assert.match(a.inputs.claude_version.default, /^2\.\d+\.\d+$/);
   const cred = stepOf(a, 'credential'), eng = stepOf(a, 'engine'), run = a.runs.steps.find((s) => s.name === 'Run the review engine');
   assert.equal(cred.env.LLM_TOKEN, '${{ inputs.llm_token || inputs.copilot_token }}');
-  assert.equal(cred.run, 'node "$GITHUB_ACTION_PATH/src/credential.js"');
+  assert.equal(cred.run, 'unset NODE_OPTIONS; node "$GITHUB_ACTION_PATH/src/credential.js"');
   assert.equal(eng.env.ENGINE, '${{ steps.credential.outputs.engine }}');
   assert.equal(eng.env.MODEL, '${{ steps.credential.outputs.model }}');
   assert.equal(run.env.MODEL, '${{ steps.credential.outputs.model }}');

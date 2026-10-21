@@ -386,4 +386,4 @@ if (require.main === module) {
   const f = path.join(ctx, 'leads.txt');
   if (out) fs.writeFileSync(f, out); else fs.rmSync(f, { force: true });
 }
-module.exports = { run, assertionDelta, goneAtHead, declName, hunks, symbolsOf, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START, GENERIC };
+module.exports = { run, assertionDelta, goneAtHead, declName, hunks, expectedArgs, mirrorCandidates, weakCandidates, args, TEST_START, GENERIC };
