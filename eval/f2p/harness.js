@@ -95,7 +95,7 @@ function cmdExport() {
 // One markdown packet per PR: finding fields verbatim, buggy tree path, how to run, where to save. No fix information, no arm, no distance; findings shuffled with seed 1.
 function cmdPackets() {
   const { reps, hono } = scope(), R = REPOS(), by = {};
-  for (const c of [...reps, ...hono]) (by[c.group] = by[c.group] || []).push(c);
+  for (const c of [...reps, ...hono].filter((x) => !x.cover_only)) (by[c.group] = by[c.group] || []).push(c);
   fs.mkdirSync(packetsDir(), { recursive: true });
   const summary = {}, bf = baselineFile(), B = fs.existsSync(bf) ? readJson(bf) : {}, HS = harnessStatus(mainResults(), mainBaseline());
   for (const [group, cs] of Object.entries(by)) {
@@ -410,11 +410,20 @@ function buildListRows(list, name, env) {
   if (ex.groups.has(name)) throw new Error(`set name ${name} equals an existing group`);
   const rows = [], fields = {}, prs = new Map(), seen = new Set();
   list.forEach((e, i) => {
-    const f = e.finding || {};
-    for (const k of ['repo', 'buggy_sha', 'fixed_sha']) if (!e[k]) throw new Error(`entry ${i}: ${k} is required`);
-    for (const k of ['kind', 'path', 'title', 'body']) if (!f[k]) throw new Error(`entry ${i}: finding.${k} is required`);
+    // A row without `finding` is cover-only (E1): {id, repo, kind: bug|control, buggy_sha, fixed_sha (bugs only), base?}. Its group is its id, so a cover report joins back to the row; it gets no packet and no oracle run.
+    const coverOnly = !e.finding, f = e.finding || {};
+    if (coverOnly) {
+      for (const k of ['id', 'repo', 'buggy_sha']) if (!e[k]) throw new Error(`entry ${i}: ${k} is required`);
+      if (!['bug', 'control'].includes(e.kind)) throw new Error(`entry ${i}: a cover-only row needs kind bug or control`);
+      if (e.kind === 'bug' && !e.fixed_sha) throw new Error(`entry ${i}: a bug row needs fixed_sha`);
+      if (e.kind === 'control' && e.fixed_sha) throw new Error(`entry ${i}: a control row has no fixed_sha`);
+      if (e.pr && e.pr !== e.id) throw new Error(`entry ${i}: a cover-only row's group is its id; drop pr`);
+    } else {
+      for (const k of ['repo', 'buggy_sha', 'fixed_sha']) if (!e[k]) throw new Error(`entry ${i}: ${k} is required`);
+      for (const k of ['kind', 'path', 'title', 'body']) if (!f[k]) throw new Error(`entry ${i}: finding.${k} is required`);
+    }
     const cfg = env.repos[e.repo], rname = (cfg && cfg.name) || String(e.repo).split('/').pop();
-    const group = e.pr || `${rname}-${e.buggy_sha.slice(0, 8)}`;
+    const group = coverOnly ? e.id : e.pr || `${rname}-${e.buggy_sha.slice(0, 8)}`;
     const id = e.id || sha([name, e.repo, e.buggy_sha, f.path, f.line, f.title].join('|'));
     if (badName(id)) throw new Error(`entry ${i}: id ${String(id).slice(0, 20)} is not allowed (letters, digits, . _ - only)`);
     if (badName(group)) throw new Error(`entry ${i}: group ${String(group).slice(0, 20)} is not allowed (letters, digits, . _ - only; not buggy or fixed)`);
@@ -422,7 +431,7 @@ function buildListRows(list, name, env) {
     if (seen.has(id)) throw new Error(`entry ${i}: duplicate id ${id.slice(0, 12)}`);
     if (ex.ids.has(id)) throw new Error(`entry ${i}: id ${id.slice(0, 12)} already exists in another set (${ex.ids.get ? ex.ids.get(id) : 'elsewhere'})`);
     if (ex.groups.has(group)) throw new Error(`entry ${i}: group ${group} already exists in set ${ex.groups.get(group)}`);
-    const pair = e.buggy_sha + '..' + e.fixed_sha;
+    const pair = e.buggy_sha + '..' + (e.fixed_sha || '');
     if (pairOf.has(group) && pairOf.get(group) !== pair) throw new Error(`entry ${i}: group ${group} appears with more than one buggy/fixed pair`);
     pairOf.set(group, pair);
     seen.add(id);
@@ -430,7 +439,12 @@ function buildListRows(list, name, env) {
     if (!cfg) { status = 'unrunnable'; reason = 'repo is not in repos.json'; }
     else if (cfg.status === 'unrunnable') { status = 'unrunnable'; reason = cfg.reason; }
     else if (env.harness(e.repo) !== 'valid') { status = 'unrunnable'; reason = `harness is ${env.harness(e.repo) || 'unvalidated'}, not valid`; }
-    else if (!env.hasClone(e.repo) || !env.shaExists(e.repo, e.buggy_sha) || !env.shaExists(e.repo, e.fixed_sha)) { status = 'unresolved'; reason = 'buggy or fixed sha is not in the local clone'; }
+    else if (!env.hasClone(e.repo) || !env.shaExists(e.repo, e.buggy_sha) || (e.fixed_sha && !env.shaExists(e.repo, e.fixed_sha))) { status = 'unresolved'; reason = 'buggy or fixed sha is not in the local clone'; }
+    if (coverOnly) {
+      rows.push({ id, pr: group, repo: e.repo, run: name, reps: [1], kind: 'cover_only', row_kind: e.kind, base: e.base ?? null, path: null, line: null, title: null, confidence: null, where: 'list', source: `list:${name}`, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha || null, fix_touched_file: null, arm: 'LIST', dist: null, in_oracle_set: true, cover_only: true, status, reason });
+      if (!prs.has(group)) prs.set(group, { replay_id: group, repo: e.repo, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha || null, sha_method: 'caller supplied', deps_changed: false }); // cover computes its own deps_changed against the env
+      return;
+    }
     rows.push({ id, pr: group, repo: e.repo, run: name, reps: [1], kind: f.kind, path: f.path, line: Number.isInteger(f.line) ? f.line : null, title: f.title, confidence: f.confidence ?? null, where: 'list', source: `list:${name}`, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha, fix_touched_file: null, arm: 'LIST', dist: null, in_oracle_set: true, status, reason });
     fields[id] = { title: f.title, body: f.body, counterexample: f.counterexample, quote: f.quote, path: f.path, line: f.line ?? null, kind: f.kind };
     if (!prs.has(group)) prs.set(group, { replay_id: group, repo: e.repo, buggy_sha: e.buggy_sha, fixed_sha: e.fixed_sha, sha_method: 'caller supplied', deps_changed: status === 'ok' ? env.depsChanged(e.repo, e.buggy_sha, e.fixed_sha) : false });

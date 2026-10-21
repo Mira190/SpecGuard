@@ -13,7 +13,7 @@ const { execFileSync } = require('child_process');
 
 const RULES = [
   ['honey marker', /SPECGUARD-HONEY-[0-9a-f]{16}/],
-  ['local user path', /(?:[A-Za-z]:[\\/]+Users[\\/]+|\/Users\/|\/home\/)(?!(?:Public|Default|runner|user|name|you|me)[\\/])[\w.-]+[\\/]/],
+  ['local user path', /(?:[A-Za-z]:[\\/]+Users[\\/]+|\/Users\/|\/home\/)(?!(?:Public|Default|runner|ci|user|name|you|me)[\\/])[\w.-]+[\\/]/],
 ];
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 

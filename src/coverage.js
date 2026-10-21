@@ -197,4 +197,4 @@ function main(env = process.env) {
 }
 
 if (require.main === module) main();
-module.exports = { CODE, parse, lcov, xml, gocover, istanbul, resolver, ranges, analyze, expand, main };
+module.exports = { CODE, parse, lcov, xml, istanbul, resolver, ranges, analyze, expand, main };
