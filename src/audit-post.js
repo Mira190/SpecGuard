@@ -13,7 +13,7 @@ const { staticFindings, staticLeads } = require('./audit-units');
 // trace.js's test-path rule; the fallback is a local copy of it in case the export moves (ponytail: keep in sync).
 const { isTestPath = (p) => /(^|[/._-])(test|tests|spec|__tests__)([/._-]|$)/.test(p) } = require('./trace');
 
-const { neutralize, quoteLine, safeRel, readFile, usageLine, runLine, mergeUsage, findingBlock, findingHead, placeholder } = post;
+const { oneLine, cell, plural, norm, neutralize, quoteLine, safeRel, readFile, usageLine, runLine, mergeUsage, findingBlock, findingHead, placeholder } = post;
 const STATUS = ['covered', 'partial', 'missing_test', 'not_implemented', 'contradicted', 'unknown', 'needs_human'];
 const RISK = ['contradicted', 'not_implemented', 'missing_test', 'partial', 'unknown', 'needs_human', 'covered']; // header order: worst first
 const CLASS = ['static', 'unit', 'higher_level', 'human'];
@@ -40,10 +40,6 @@ const testFileOf = (testPaths) => { const scope = require('./trace').testScope(t
 
 const lines = (s) => String(s || '').split('\n').filter(Boolean);
 const bytes = (s) => Buffer.byteLength(s);
-const oneLine = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-const cell = (s, n = Infinity) => oneLine(neutralize(String(s)), n).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
 const solid = (q) =>String(q).replace(/\s/g, '').length >= MIN_QUOTE;
 const CID = /^([0-9a-f]{8})(?:\.[1-9]\d*)?$/; // a block id, or block id + .1, .2 for the atomic requirements a block bundles
 const cidOf = (id) => (CID.exec(String(id)) || [])[1];
