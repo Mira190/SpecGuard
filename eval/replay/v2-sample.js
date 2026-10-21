@@ -2,14 +2,16 @@
 // V2 corpus: a seeded, stratified, bug-blind sample of merged PRs per repo, plus the "later tested" proxy data. Offline except `sample`'s gh calls (read-only, selected rows only). No model calls.
 //   node eval/replay/v2-sample.js sample --repos <clones dir> --out eval/replay/v2-corpus.json --text <pr-text cache json> [--seed 20261021] [--since 2025-07-01] [--follow-days 90]
 //   node eval/replay/v2-sample.js later  --repos <clones dir> --corpus eval/replay/v2-corpus.json --out <raw json, outside the repo> [--follow-days 90]
-// sample: per repo, pool = squash commits "... (#N)" with one parent in [since, HEAD date - follow-days]; minus every sha / `repo#pr` of the earlier corpora; Fisher-Yates shuffle (mulberry32(seed));
+// sample: per repo, pool = squash commits "... (#N)" with one parent in [since, HEAD date - follow-days]; minus every sha / `repo#pr` of the earlier corpora (every 40-hex string in the nine corpus files, plus repo#fix.number of the pairs files); Fisher-Yates shuffle (mulberry32(seed));
 //   walk the shuffled order, keep commits with a code file in the repo's source scope (langchain: also coreOnly), by changed-line stratum s1 [30,150) s2 [150,500) s3 [500,1200]; quotas 3/4/3.
+//   Changed lines = numstat added+deleted, EXCLUDING docs and lockfiles (paths matching DOCS in ../szz) and binary files.
+//   Rows keep the PR body and merge_match (GitHub merge_commit_sha === row sha; null on fallback).
 //   Short s3 is filled by extra s2 rows (stratum s3, drawn_from s2), then short s2 by extra s1 rows (drawn_from s1); s1 has no fallback; still short -> reported in `short`, no throw.
 // later: for each corpus row, first-parent commits after the merge (committer date in (merge, merge + follow-days]) that add/modify a file in the repo's unit-test scope. The scorer (testsName) is separate.
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { listCommits, mulberry32 } = require('../szz');
+const { listCommits, mulberry32, DOCS } = require('../szz');
 const { isCode } = require('./testgap-score');
 const { coreOnly } = require('./coverage-e1-confirm-build');
 const { git, tryGit } = require('./holdout2-null');
@@ -33,7 +35,7 @@ const poolOf = (commits) => commits.filter((c) => c.parents.length === 1 && prOf
 const shuffle = (arr, seed) => { const a = arr.slice(), r = mulberry32(seed); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const isExcluded = (ex, sha, key) => ex.shas.has(sha) || ex.keys.has(key);
 const addEx = (ex, sha, repo, pr) => { if (sha) ex.shas.add(sha); if (repo && pr != null) ex.keys.add(`${repo}#${pr}`); };
-const sumNumstat = (s) => s.split('\n').filter(Boolean).reduce((t, l) => { const [a, d] = l.split('\t'); return t + (a === '-' ? 0 : +a || 0) + (d === '-' ? 0 : +d || 0); }, 0);
+const sumNumstat = (s) => s.split('\n').filter(Boolean).reduce((t, l) => { const [a, d, ...p] = l.split('\t'); return DOCS.test(p.join('\t')) ? t : t + (a === '-' ? 0 : +a || 0) + (d === '-' ? 0 : +d || 0); }, 0);
 // walk the shuffled order with classify(c) -> {stratum, ...} | {drop: reason}; stop once the quotas plus both fallbacks are certainly covered
 function walk(order, classify, q = QUOTAS) {
   const acc = [], funnel = { examined: 0, size: 0, no_unit_code: 0, not_core: 0 }, n = { s1: 0, s2: 0, s3: 0 };
@@ -60,20 +62,26 @@ function select(accepted, q = QUOTAS) {
 const inTestScope = (t, p) => p.startsWith(t.dir) && t.file_re.test(p) && !(t.exclude && (p.startsWith(t.exclude) || p.includes('/' + t.exclude)));
 
 // ---- git side ----
-function loadExcluded() {
-  const ex = { shas: new Set(), keys: new Set() }, rd = (f) => JSON.parse(fs.readFileSync(here(f), 'utf8'));
-  for (const f of ['pairs', 'holdout-pairs', 'holdout2-pairs']) for (const p of rd(f + '.json').pairs) addEx(ex, p.introducing.merge_commit, p.repo, p.introducing.number);
-  for (const f of ['clean', 'holdout-clean', 'holdout2-clean']) { const j = rd(f + '.json'); for (const c of Array.isArray(j) ? j : j.prs || j.clean || j.pairs) addEx(ex, c.merge_commit, c.repo, c.number); }
-  for (const r of rd('coverage-e1-confirm.json').rows) { addEx(ex, r.buggy_sha, r.repo, r.kind === 'bug' ? r.introducing.number : r.pr ?? r.pr_number); addEx(ex, r.fixed_sha); if (r.introducing) addEx(ex, r.introducing.merge_commit); }
-  for (const r of rd('coverage-e1-design.json')) { const m = /(\d+)$/.exec(r.replay_id || ''); addEx(ex, r.buggy_sha, r.repo, m ? +m[1] : null); addEx(ex, r.fixed_sha); }
-  const e3 = rd('coverage-e3-manifest.json');
-  for (const x of [...(e3.bugs || []), ...(e3.controls || [])]) addEx(ex, x.introducing, x.repo, x.pr);
+const EXCLUDE_FILES = ['pairs', 'holdout-pairs', 'holdout2-pairs', 'clean', 'holdout-clean', 'holdout2-clean', 'coverage-e1-confirm', 'coverage-e1-design', 'coverage-e3-manifest'];
+// texts: { name: raw file text } -> { shas, keys, files: {name: {shas, keys}} }; every 40-hex string anywhere counts, plus the structured repo#pr keys
+function exclusionsFrom(texts) {
+  const ex = { shas: new Set(), keys: new Set(), files: {} };
+  for (const [name, text] of Object.entries(texts)) {
+    const e = { shas: new Set(text.match(/\b[0-9a-f]{40}\b/g) || []), keys: new Set() }, j = JSON.parse(text);
+    if (name.endsWith('pairs')) for (const p of j.pairs || []) { addEx(e, p.introducing?.merge_commit, p.repo, p.introducing?.number); if (p.fix && p.fix.number != null) addEx(e, null, p.repo, p.fix.number); }
+    else if (name.endsWith('clean')) for (const c of Array.isArray(j) ? j : j.prs || j.clean || j.pairs || []) addEx(e, c.merge_commit, c.repo, c.number);
+    else if (name === 'coverage-e1-confirm') for (const r of j.rows || []) addEx(e, r.buggy_sha, r.repo, r.kind === 'bug' ? r.introducing?.number : r.pr ?? r.pr_number);
+    else if (name === 'coverage-e1-design') for (const r of j) { const m = /(\d+)$/.exec(r.replay_id || ''); addEx(e, r.buggy_sha, r.repo, m ? +m[1] : null); }
+    else if (name === 'coverage-e3-manifest') for (const x of [...(j.bugs || []), ...(j.controls || [])]) addEx(e, x.introducing, x.repo, x.pr);
+    e.shas.forEach((s) => ex.shas.add(s)); e.keys.forEach((k) => ex.keys.add(k)); ex.files[name] = { shas: e.shas.size, keys: e.keys.size };
+  }
   return ex;
 }
+const loadExcluded = () => exclusionsFrom(Object.fromEntries(EXCLUDE_FILES.map((f) => [f, fs.readFileSync(here(f + '.json'), 'utf8')])));
 function ghText(gh, pr) { // read-only
-  try { return JSON.parse(execFileSync('gh', ['api', `repos/${gh}/pulls/${pr}`, '--jq', '{title,body}'], { encoding: 'utf8', maxBuffer: 1 << 26 })); } catch { return { failed: true }; }
+  try { return JSON.parse(execFileSync('gh', ['api', `repos/${gh}/pulls/${pr}`, '--jq', '{title,body,merge_commit_sha}'], { encoding: 'utf8', maxBuffer: 1 << 26 })); } catch { return { failed: true }; }
 }
-function sampleRepo({ dir, clone, tbl, ex, since, followDays, seed }) {
+function sampleRepo({ dir, clone, tbl, ex, since, followDays, seed, q = QUOTAS }) {
   const head = git(dir, 'rev-parse', 'HEAD').trim(), head_date = git(dir, 'log', '-1', '--format=%cI', 'HEAD').trim(), until = new Date(Date.parse(head_date) - followDays * DAY).toISOString();
   const all = poolOf(listCommits(dir, since, until)), pool = all.filter((c) => !isExcluded(ex, c.sha, `${tbl.gh}#${c.pr}`));
   const classify = (c) => {
@@ -84,23 +92,24 @@ function sampleRepo({ dir, clone, tbl, ex, since, followDays, seed }) {
     if (tbl.core && !coreOnly(files)) return { drop: 'not_core' };
     return { stratum, changed_lines: n, code_files: code.length, parent };
   };
-  const { accepted, funnel } = walk(shuffle(pool, seed), classify), sel = select(accepted);
+  const { accepted, funnel } = walk(shuffle(pool, seed), classify, q), sel = select(accepted, q);
   const taken = Object.fromEntries(STRATA.map((s) => [s, sel.rows.filter((r) => r.stratum === s).length]));
   return { meta: { gh: tbl.gh, head, head_date, until }, funnel: { pool: all.length, excluded: all.length - pool.length, ...funnel, taken, fallback: sel.fallback }, short: sel.short, picked: sel.rows };
 }
 // clones: injectable table (tests); text(gh, pr) injectable fetcher
-function sample({ repos, since, followDays, seed, ex, cache, clones = CLONES, text = ghText }) {
-  const out = { seed, since, follow_days: followDays, repos: {}, quotas: QUOTAS, funnel: {}, short: {}, pr_text_fallback: 0, rows: [] };
+function sample({ repos, since, followDays, seed, ex, cache, clones = CLONES, text = ghText, q = QUOTAS }) {
+  const out = { seed, since, follow_days: followDays, exclusions: { files: ex.files || {}, shas: ex.shas.size, keys: ex.keys.size }, repos: {}, quotas: q, funnel: {}, short: {}, pr_text_fallback: 0, merge_mismatch: 0, rows: [] };
   for (const clone of Object.keys(clones).sort()) {
-    const dir = path.join(repos, clone), r = sampleRepo({ dir, clone, tbl: clones[clone], ex, since, followDays, seed });
+    const dir = path.join(repos, clone), r = sampleRepo({ dir, clone, tbl: clones[clone], ex, since, followDays, seed, q });
     out.repos[clone] = r.meta; out.funnel[clone] = r.funnel; if (Object.keys(r.short).length) out.short[clone] = r.short;
     for (const c of r.picked) { // PR text for selected rows only, in sequence
       const key = `${r.meta.gh}#${c.pr}`;
-      if (!cache[key] || cache[key].failed) cache[key] = text(r.meta.gh, c.pr);
-      const t = cache[key], fb = t.failed;
+      if (!cache[key] || cache[key].failed || !('merge_commit_sha' in cache[key])) cache[key] = text(r.meta.gh, c.pr);
+      const t = cache[key], fb = t.failed, merge_match = fb ? null : t.merge_commit_sha === c.sha;
       if (fb) out.pr_text_fallback++;
+      if (merge_match === false) out.merge_mismatch++;
       out.rows.push({ id: `${clone}-${c.pr}`, repo: r.meta.gh, clone, pr: c.pr, sha: c.sha, parent: c.parent, date: c.date, changed_lines: c.changed_lines, stratum: c.stratum, drawn_from: c.drawn_from,
-        code_files: c.code_files, title: fb ? c.subject : t.title || '', pr_text: fb ? 'commit' : 'github' });
+        code_files: c.code_files, title: fb ? c.subject : t.title || '', body: fb ? '' : t.body || '', merge_match, pr_text: fb ? 'commit' : 'github' });
     }
   }
   out.rows.sort((a, b) => (a.clone < b.clone ? -1 : a.clone > b.clone ? 1 : a.stratum < b.stratum ? -1 : a.stratum > b.stratum ? 1 : 0)); // stable: order taken within a stratum
@@ -137,7 +146,7 @@ function main() {
     fs.writeFileSync(textFile, JSON.stringify(cache, null, 1) + '\n');
     fs.writeFileSync(arg('out'), JSON.stringify(out, null, 1) + '\n');
     for (const c of Object.keys(out.repos)) console.log(c.padEnd(10), STRATA.map((s) => `${s}=${out.rows.filter((r) => r.clone === c && r.stratum === s).length}/${QUOTAS[s]}`).join(' '), JSON.stringify(out.funnel[c]));
-    console.log(JSON.stringify({ short: out.short, pr_text_fallback: out.pr_text_fallback, rows: out.rows.length }));
+    console.log(JSON.stringify({ short: out.short, pr_text_fallback: out.pr_text_fallback, merge_mismatch: out.merge_mismatch, exclusions: { shas: out.exclusions.shas, keys: out.exclusions.keys }, rows: out.rows.length }));
   } else if (cmd === 'later') {
     const corpus = JSON.parse(fs.readFileSync(arg('corpus'), 'utf8')), out = later({ repos, corpus, followDays });
     out.generated_from = path.basename(arg('corpus'));
@@ -146,4 +155,4 @@ function main() {
   } else throw new Error('usage: v2-sample.js sample|later (see header)');
 }
 if (require.main === module) main();
-module.exports = { CLONES, QUOTAS, stratumOf, prOf, poolOf, shuffle, isExcluded, addEx, sumNumstat, walk, select, inTestScope, sample, sampleRepo, later };
+module.exports = { CLONES, QUOTAS, stratumOf, prOf, poolOf, shuffle, isExcluded, addEx, exclusionsFrom, sumNumstat, walk, select, inTestScope, sample, sampleRepo, later };
