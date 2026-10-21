@@ -451,3 +451,8 @@ test('an errored row without expected_findings makes e2e recall unknown; stamped
   const stamped = aggregate([ok, { goal: 'g', error: 'x', expected_findings: 1 }]);
   assert.deepEqual([stamped.recall_delivered_e2e, stamped.unknown_expected], [0.5, 0]);
 });
+
+test('parseComment tolerates a medium-confidence comment (V2 relabel)', () => {
+  const c = parseComment({ path: 'a.js', line: 7, body: '**T**\n\nkind: weak_test, confidence: medium' });
+  assert.deepEqual([c.kind, c.confidence], ['weak_test', 'medium']);
+});

@@ -28,7 +28,7 @@ function parseReflected(cell) {
 // Parses a review comment the Action posted (src/post.js commentBody). Null when it is not ours.
 function parseComment(c) {
   const body = c.body || '';
-  const m = /kind: (\w+), confidence: (high|low)(?:, rule: ([^\n]+))?/.exec(body);
+  const m = /kind: (\w+), confidence: (high|medium|low)(?:, rule: ([^\n]+))?/.exec(body);
   if (!m) return null;
   const link = /\[[^\]\n]+:(\d+)\]\(https?:[^)\s]*#L\d+/.exec(body);
   const src = /\b(issue (?:[\w.-]+\/[\w.-]+)?#\d+|PR body) AC \d+\b/.exec(body);

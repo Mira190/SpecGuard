@@ -203,6 +203,54 @@ function enclosingName(lines, line) {
   for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 61); i--) { const n = (comment(lines[i]) ? [] : GEN.exec(lines[i]) || EXPORT_CONST.exec(lines[i]) || [])[1] || namesOf(lines[i].trim())[0] || declName(lines[i]); if (n && usableName(n)) return n; }
   return null;
 }
+// The innermost definition whose span holds the 1-based `line`: { line: its declaration line, name (any name, usable or not), end: its last line }, or null when the
+// line sits outside every definition. The span ends at the matching brace (brace languages) or when the indentation falls back to the declaration's (Python, Ruby).
+// ponytail: a heuristic, not a parser. Ceilings: braces inside multi-line template literals and regex literals are counted, a multi-line /* */ comment is not skipped,
+// a Python docstring line at column 0 ends the span early, a class-field arrow (`handler = () => {`) is a definition nested in its class, and a declaration the patterns miss is
+// invisible (the group then falls to the next definition up or to the file), and unbalanced parens inside regex literals (e.g. /\(/) keep the paren count open, so a later line can be
+// attributed to the definition. Upgrade path: tree-sitter.
+const PY_START = /^\s*(?:async\s+)?(?:def|class)\s/;
+const unquote = (l) => l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, '');
+const MAX_SIG = 60;
+function defEnd(lines, i) {
+  const indent = (l) => /^\s*/.exec(l)[0].length, base = indent(lines[i]);
+  const byIndent = (from) => { let end = from; for (let j = from + 1; j < lines.length; j++) { if (!lines[j].trim()) continue; if (indent(lines[j]) <= base) break; end = j; } return end; };
+  // the signature may span lines: walk until the parentheses close
+  let pd = 0, sig = -1;
+  for (let j = i; j < Math.min(lines.length, i + MAX_SIG); j++) {
+    for (const ch of unquote(lines[j])) { if (ch === '(') pd++; else if (ch === ')') pd--; }
+    if (pd <= 0) { sig = j; break; }
+  }
+  // Python: the body starts after the line that closes the signature with a colon
+  if (PY_START.test(lines[i]) && sig >= 0 && /:\s*(?:#.*)?$/.test(lines[sig]) && !/\{/.test(unquote(lines.slice(i, sig + 1).join(' ')))) return byIndent(sig);
+  let depth = 0, opened = false;
+  pd = 0;
+  for (let j = i; j < Math.min(lines.length, i + 5000); j++) {
+    for (const ch of unquote(lines[j])) {
+      if (ch === '(') pd++;
+      else if (ch === ')') pd--;
+      else if (pd <= 0 && ch === '{') { depth++; opened = true; }
+      else if (pd <= 0 && ch === '}') depth--;
+      else if (pd <= 0 && ch === ';' && !opened) return j; // a declaration only
+    }
+    if (opened && depth <= 0) return j;
+    if (!opened && pd <= 0 && j >= Math.max(sig, i) + 2) break; // no body brace within two lines of the signature
+    if (!opened && j >= i + MAX_SIG) break;
+  }
+  return opened ? Math.min(lines.length, i + 5000) - 1 : byIndent(sig >= 0 ? sig : i);
+}
+// cache: Map(declaration index -> end index), shared across calls on one file
+function enclosingDef(lines, line, cache = new Map()) {
+  for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 3001); i--) {
+    const l = lines[i];
+    if (comment(l)) continue;
+    const name = (GEN.exec(l) || EXPORT_CONST.exec(l) || [])[1] || namesOf(l.trim())[0] || declName(l);
+    if (!name) continue;
+    if (!cache.has(i)) cache.set(i, defEnd(lines, i));
+    if (cache.get(i) >= line - 1) return { line: i + 1, name, end: cache.get(i) + 1 };
+  }
+  return null;
+}
 // the thrown error class on the cited line (+-2) and the name of the enclosing definition (up to 60 lines up)
 function classAndMethod(lines, line) {
   const cls = lines.slice(Math.max(0, line - 3), line + 2).map((l) => THROWN.exec(l)).find(Boolean);
@@ -278,4 +326,4 @@ function makeCoverGuard({ cwd, testPaths = '', timeout = 15000 }) {
   return Object.assign((lines, line, p = '', eligible = null) => note(p || 'the cited line', run(lines, line, p, eligible)), { symbol: (name, own = '') => note(name, symbol(name, own)), limits });
 }
 
-module.exports = { mapTests, hunkTests, hunkTokens, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, makeCoverGuard, HUNK_REASON };
+module.exports = { mapTests, hunkTests, hunkTokens, indexTests, testStem, near, key, noExt, GENERIC, publicDefs, needlesOf, classAndMethod, enclosingName, enclosingDef, makeCoverGuard, HUNK_REASON };
