@@ -135,6 +135,10 @@ Failing tests do not make a PR unusable; their count is reported.
 
 The final report lists every attempt, as in `testgap-evidence-2026-10-20.md`: the mutation pilot (#374), #397, f2p (#410), the retired `prereg-testgap-mvp.md`, pack arms R/S/O/H (#406), the paused slicing draft, and E1.
 
+Added 2026-10-21, after the results:
+- E1 confirmation: C FAIL (`coverage-e1-confirm-results-2026-10-21.md`).
+- E3, with its own alpha (`prereg-coverage-confirmed-e3.md`): FAIL (`coverage-e3-results-2026-10-21.md`).
+
 ## TBD before freeze
 
 - ~~The grepTests fix sha~~: done, b6accfd on eval/testgap-demotion (`testsName`, with a test that fails with `-q`). E1 code builds on that branch.
