@@ -225,6 +225,7 @@ jobs:
             ${{ github.workspace }}/.specguard-ctx/audit.json
             ${{ github.workspace }}/.specguard-ctx/usage.json
             ${{ github.workspace }}/.specguard-ctx/scan-parts.json
+            ${{ github.workspace }}/.specguard-ctx/coverage.json
           retention-days: 14
           if-no-files-found: ignore
           include-hidden-files: true # the ctx dir is a dot-directory, which upload-artifact skips by default
