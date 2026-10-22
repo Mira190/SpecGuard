@@ -1,304 +1,328 @@
-# 全仓审计 summary 模板：调研、批判与字段规则（2026-10-22）
+# Repo-wide audit summary template: research, critique and field rules (2026-10-22)
 
-样板：[`templates/repo-audit-summary.mock.md`](templates/repo-audit-summary.mock.md)（mock 数据；产品输出一律英文）。
-本文回答四件事：读者要什么（§1）、对需求的批判（§2）、业界怎么做（§3）、每个字段怎么算（§4）。§5 列 unknown unknowns，§6 对照现有 `src/audit-post.js` 列出差距和实现顺序。
+Sample: [`templates/repo-audit-summary.mock.md`](templates/repo-audit-summary.mock.md) (mock data; product output is always English).
+This document answers four questions: what the reader needs (§1), a critique of the requirements (§2), what the industry does (§3), and how each field is computed (§4). §5 lists unknown unknowns; §6 compares against the current `src/audit-post.js` and lists the gaps and the implementation order.
 
-旧模板 [`templates/repository-shift-left-report.md`](templates/repository-shift-left-report.md) 是写给人工审计员的 12 节填空表，字段很全，但它不是给测试者看的 summary。新模板取代它作为产品输出；旧模板留作人工深审的清单。
+The old template [`templates/repository-shift-left-report.md`](templates/repository-shift-left-report.md) is a 12-section fill-in form written for human auditors. Its fields are comprehensive, but it is not a summary for testers. The new template replaces it as the product output; the old template stays as a checklist for manual deep reviews.
 
-## 1. 第一性原理：测试者打开报告，要在一分钟内知道什么
+## 1. First principles: what a tester must learn within one minute of opening the report
 
-读者是测试者 / QA lead。他读这份报告只为了决定下一步做什么。所以报告只有三个问题要回答，顺序固定：
+The reader is a tester / QA lead. They read the report only to decide what to do next. So the report answers three questions, in a fixed order:
 
-1. **这份报告可信吗？** 范围有没有审完，用了哪些证据（有没有覆盖率报告、CI 历史、需求文档），哪些数字是"没测到"而不是"零"。
-2. **先做哪几件事？** 最多 10 条，每条一个动词（Add / Strengthen / Move down / Make CI run / Fix or delete / Clarify / Check），带位置、理由、证据等级、负责人。
-3. **风险集中在哪？** 每个领域一行：状态、要处理的数量、证据等级。细节折叠。
+1. **Can I trust this report?** Was the scope fully audited, what evidence was used (coverage reports, CI history, requirement documents), and which numbers mean "not measured" rather than "zero".
+2. **What do I do first?** At most 10 items, each with one verb (Add / Strengthen / Move down / Make CI run / Fix or delete / Clarify / Check), with location, reason, evidence level and owner.
+3. **Where is the risk concentrated?** One row per area: status, number of items to handle, evidence level. Details are collapsed.
 
-由此推出的设计规则：
+Design rules that follow:
 
-- **可见部分只放会改变下一步行动的内容**（owner 10-13 的规则：summary 只放可行动内容）。每个领域的明细放进 `<details>`，但 `<summary>` 行本身带关键数字，不展开也能看到全貌。
-- **每条发现标证据等级**：E = 执行证据（覆盖率报告、CI 结果）、S = 确定性静态规则、M = 模型判断。排序时 E/S 永远排在 M 前面。理由是我们自己测过：覆盖率缺口在行级 100% 正确（A3），模型的 missing_test 只有 0–15%（A3）、24%（E3 基线）；稳定性 Jaccard 0.17（A1）。把 M 级发现和 E 级混排，等于用低精度结论稀释高精度结论。
-- **不给总分。** 一个 0–100 的健康分不告诉测试者改哪里，而且会被刷分（Goodhart）。我们对模型判断类指标没有 ground truth，合成分会把不可靠的输入包装成看似精确的数字。每个领域给"要处理的数量 + 例子"，数量本身就是可行动的。
-- **"没测到"和"零"必须区分。** 没有 E2E 覆盖率报告就写 "not measured"，不写 0%，也不用静态匹配的测试数冒充覆盖率。没有设计文档就写 "no design document"，不写 0/0。
-- **分母固定由文件决定，不由模型决定。** 同一 commit 同一配置给出同一分母；模型少输出不能让覆盖率变好看。
-- **每条行动有负责人**（CODEOWNERS）。批量报告没有归属就没人修（见 §3.6 Infer 的数据）。
-- **和上次比**：新增 / 已修 / 仍未修，一行。第二次看到同一份长列表的读者会停止阅读。
+- **The visible part contains only what changes the next action** (owner rule of 10-13: the summary holds actionable content only). Each area's details go into `<details>`, but the `<summary>` line itself carries the key numbers, so the overall picture is visible without expanding.
+- **Every finding carries an evidence level**: E = execution evidence (coverage report, CI result), S = deterministic static rule, M = model judgement. When ranking, E/S always come before M. The reason is our own measurements: coverage gaps are 100% correct at line level (A3), while the model's missing_test is only 0–15% (A3) and 24% (E3 baseline); stability Jaccard is 0.17 (A1). Mixing M-level findings with E-level ones dilutes high-precision conclusions with low-precision ones.
+- **One score per area, no total score.** Owner 10-22 asked for concrete scores. Each area gets a score that is a count over a fixed denominator (e.g. "89%: 31 of 35 rules that have a unit seam"), shows its evidence level, and names the fixes that raise it (§4.5). There is still no composite: a 0–100 total does not tell a tester what to change, mixes evidence levels, and invites gaming (Goodhart). No targets or grade bands either: a target becomes a ceiling (§3.3).
+- **"Not measured" and "zero" must be distinguished.** With no E2E coverage report, write "not measured", not 0%, and do not pass off a count of statically matched tests as coverage. With no design document, write "no design document", not 0/0.
+- **The denominator is fixed by files, not by the model.** The same commit with the same configuration gives the same denominator; the model emitting less must not make coverage look better.
+- **Every action has an owner** (CODEOWNERS). A bulk report with no ownership gets no fixes (see the Infer data in §3.6).
+- **Compare with last time**: new / fixed / still open, in one line. A reader who sees the same long list a second time stops reading.
 
-## 2. 对需求的批判
+## 2. Critique of the requirements
 
-需求原文：summary 要包含 requirement health、design health、requirement coverage、design coverage、placement issue、CI check 等；coverage 包括 unit、E2E、integration、component；告诉测试者哪里要加测试、删除、修改，包括 unit test 质量。
+Original requirement: the summary should include requirement health, design health, requirement coverage, design coverage, placement issues, CI checks, etc.; coverage includes unit, E2E, integration and component; it should tell testers where to add, delete or modify tests, including unit test quality.
 
-| # | 需求 | 问题 | 决定 |
+| # | Requirement | Problem | Decision |
 |---|---|---|---|
-| C1 | requirement / design **health 评分** | 评分需要 ground truth 校准；我们没有人工标注（owner 10-21），模型判断的精度未测。总分不指向行动。 | 不打分。按 ISO/IEC/IEEE 29148 的维度列"违反条数 + 例子"，标 M 级。 |
-| C2 | **design coverage** | 没有通用定义。多数仓库没有设计文档（我们的 docless 分支就是为此存在）。 | 定义为"设计文档中的组件/接口/决策 → 有代码位置 → 有对应层级的测试"的比例；无设计文档时整节显示 "no design document"，不出现在 At a glance 的 ❌ 里。 |
-| C3 | 各层 **coverage**（unit/integration/component/E2E） | SpecGuard scan 是静态的，owner 禁止在本地执行第三方代码（10-22）。各层覆盖率只能来自仓库自己的报告（Codecov flag、CI artifact）。静态"有测试文件"不是覆盖率。测试分层本身是启发式（目录、文件名、runner 配置）。 | 表里分两类列：测试清单（静态，总有）和覆盖率（只在有该层报告时有，否则 "not measured"）。分层规则在报告里给链接。 |
-| C4 | 告诉测试者 **哪些要删除** | 静态审查建议删除测试风险高：删错了就丢保护。 | 只在有确定证据时建议删除：长期 skip（带天数）、无断言、测试被测对象自身被 mock、引用已删除功能的需求。措辞是 "fix or delete"，不是 "delete"。 |
-| C5 | 维度很多（"等等"） | 每多一节就多一份读者注意力成本。我们的核心目标是 unit test 缺口（v1，owner 10-21）。 | 全部维度进模板，但只有 E/S 级能支撑的先实现（§6）。M 级领域默认折叠。 |
-| C6 | **unit test quality** | 真正的质量问题是"代码错了测试会不会失败"，这只有 mutation testing 能回答，scan 不执行代码。现有静态信号有噪声：`audit-units.js:289` 把一个 unit 匹配到的所有测试文件的信号相加，而测试文件按名字、提及或目录匹配，一个大的共享测试文件可以匹配多个 unit。A1 自检报告里 52 行 "weak test signal" 指的是 unit（如 `src/post.js`："57 tests without an assertion"），读者不知道该改哪个测试。 | 质量信号按**测试**归属，不按 unit 归属；没有 mutation 时明说 "test strength not measured"。 |
-| C7 | **CI check** 范围 | 安全扫描（SAST、依赖、secret）不是测试者的主要职责，但"测试有没有在 CI 里跑"是。 | CI 节以测试为中心（各层是否在 PR 上跑、有没有测试文件从不被任何 job 跑、重试掩盖失败、覆盖率门禁）；安全只占一行。读不到的设置写 ❔ unknown，不算通过。 |
-| C8 | "让测试者快速抓住重要信息" 与 "包含所有维度" 冲突 | 两者需要取舍。 | 用"可见 = 结论 + 证据来源 + At a glance + Top 10；其余折叠"解决。 |
+| C1 | requirement / design **health score** | Scoring needs ground-truth calibration; we have no human labels (owner 10-21) and the precision of model judgement is unmeasured. A total score does not point to an action. | Revised 10-22 after the owner asked for concrete scores: requirement health = share of requirements that pass every ISO/IEC/IEEE 29148 check, design coverage = share of components with code and a test, each with its denominator, M/S level and the violations listed. No composite (§4.5). |
+| C2 | **design coverage** | There is no general definition. Most repos have no design documents (our docless branch exists for this reason). | Defined as the share of "components/interfaces/decisions in the design document → have a code location → have a test at the matching level"; with no design document the whole section shows "no design document" and is not ranked in the Scores table. |
+| C3 | **coverage** per level (unit/integration/component/E2E) | SpecGuard scan is static, and the owner forbids executing third-party code locally (10-22). Per-level coverage can only come from the repo's own reports (Codecov flag, CI artifact). Statically "having test files" is not coverage. Test layering itself is heuristic (directory, file name, runner config). | The table has two kinds of columns: test inventory (static, always present) and coverage (only when a report exists for that level, otherwise "not measured"). The layering rules are linked in the report. |
+| C4 | Tell testers **what to delete** | Recommending test deletion from static review is risky: deleting the wrong test loses protection. | Recommend deletion only with definite evidence: long-term skip (with days), no assertions, the test's own subject is mocked, requirements that reference a removed feature. Wording is "fix or delete", not "delete". |
+| C5 | Many dimensions ("etc.") | Every extra section costs reader attention. Our core goal is unit test gaps (v1, owner 10-21). | All dimensions go into the template, but only those that E/S level can support are implemented first (§6). M-level areas are collapsed by default. |
+| C6 | **unit test quality** | The real quality question is "does the test fail if the code is wrong", which only mutation testing can answer; scan does not execute code. The existing static signals are noisy: `audit-units.js:289` sums the signals of all test files matched to one unit, and test files match by name, mention or directory, so one large shared test file can match several units. The 52 "weak test signal" rows in the A1 self-audit refer to units (e.g. `src/post.js`: "57 tests without an assertion"), so the reader does not know which test to change. | Attribute quality signals to the **test**, not to the unit; without mutation, say plainly "test strength not measured". |
+| C7 | **CI check** scope | Security scanning (SAST, dependencies, secrets) is not a tester's main responsibility, but "do the tests run in CI" is. | The CI section is test-centred (does each level run on PRs, are there test files that no job ever runs, do retries mask failures, coverage gates); security takes one line. Settings that cannot be read are written ❔ unknown and do not count as passing. |
+| C8 | "Let testers grasp the important information quickly" conflicts with "include all dimensions" | The two need a trade-off. | Resolved by "visible = conclusion + evidence sources + Scores + Top 10; everything else collapsed". |
 
-## 3. 调研：业界做法与证据
+## 3. Research: industry practice and evidence
 
-调研时间 2026-10-22。每条结论带来源；标 *(secondary)* 的来自二手总结，标 UNVERIFIED 的没有核实到原文。ISO 29148、ISO 26262、DO-178C 是付费标准，内容来自二手来源。每小节最后一行写"对模板的影响"。
+Research date 2026-10-22. Every conclusion carries a source; items marked *(secondary)* come from second-hand summaries, and items marked UNVERIFIED were not checked against the original. ISO 29148, ISO 26262 and DO-178C are paid standards, so their content comes from secondary sources. The last line of each subsection states "Impact on the template".
 
-### 3.1 需求质量（requirement health）
+### 3.1 Requirement quality (requirement health)
 
-| 来源 | 维度 / 打分方式 |
+| Source | Dimensions / scoring method |
 |---|---|
-| ISO/IEC/IEEE 29148（经 INCOSE C1–C14） | 单条 9 项：necessary、appropriate、unambiguous、complete、singular、feasible、verifiable、correct、conforming；集合 5 项：complete、consistent、feasible、comprehensible、able to be validated（[arXiv 2408.10886](https://arxiv.org/pdf/2408.10886)、[se-trends](https://www.se-trends.de/en/review-incose-guide-for-writing-requirements/)） |
-| INCOSE Guide for Writing Requirements v4（2023） | 41 条写作规则 + 14 个特性（[INCOSE](https://www.incose.org/docs/default-source/working-groups/requirements-wg/gtwr/incose_rwg_gtwr_v4_040423_final_drafts.pdf)） |
-| IBM RQA | 按 INCOSE 规则给分，代理商称 11 个质量分覆盖指南 80% 以上（[requisis](https://requisis.com/en/saas-doors-dng/rqa-saas.html)；完整清单 UNVERIFIED） |
-| QVscribe | 每条 1–5 格：唯一 imperative、无否定、无模糊词、无逃避条款、EARS 句式（[QRA](https://edu.qracorp.com/knowledge/quality-analysis-scoring-guide-3)） |
-| Jama Connect Advisor | INCOSE 规则符合度 0–100%：81–100 绿，61–80 黄，0–60 红（[Jama](https://help.jamasoftware.com/ah/en/jama-connect-advisor-/interpreting-the-results.html)） |
+| ISO/IEC/IEEE 29148 (via INCOSE C1–C14) | 9 per-requirement items: necessary, appropriate, unambiguous, complete, singular, feasible, verifiable, correct, conforming; 5 set-level items: complete, consistent, feasible, comprehensible, able to be validated ([arXiv 2408.10886](https://arxiv.org/pdf/2408.10886), [se-trends](https://www.se-trends.de/en/review-incose-guide-for-writing-requirements/)) |
+| INCOSE Guide for Writing Requirements v4 (2023) | 41 writing rules + 14 characteristics ([INCOSE](https://www.incose.org/docs/default-source/working-groups/requirements-wg/gtwr/incose_rwg_gtwr_v4_040423_final_drafts.pdf)) |
+| IBM RQA | Scores against INCOSE rules; a reseller claims 11 quality scores cover over 80% of the guide ([requisis](https://requisis.com/en/saas-doors-dng/rqa-saas.html); full list UNVERIFIED) |
+| QVscribe | 1–5 cells per requirement: single imperative, no negation, no vague words, no escape clauses, EARS sentence pattern ([QRA](https://edu.qracorp.com/knowledge/quality-analysis-scoring-guide-3)) |
+| Jama Connect Advisor | INCOSE rule conformance 0–100%: 81–100 green, 61–80 yellow, 0–60 red ([Jama](https://help.jamasoftware.com/ah/en/jama-connect-advisor-/interpreting-the-results.html)) |
 
-自动化能做到哪一步：措辞层面的规则（模糊词、逃避条款、多个 shall、缺单位）可以自动查；necessary、correct、feasible、跨集合一致性需要语义和上下文。需求坏味检测（Smella）平均 precision 59%、recall 82%，项目间差异大（[Femmer et al. JSS 2017](https://arxiv.org/pdf/1611.08847)）。
+How far automation can go: wording-level rules (vague words, escape clauses, multiple shalls, missing units) can be checked automatically; necessary, correct, feasible and cross-set consistency need semantics and context. The requirements smell detector (Smella) averages 59% precision and 82% recall, with large variation between projects ([Femmer et al. JSS 2017](https://arxiv.org/pdf/1611.08847)).
 
-**对模板的影响：** 商业工具确实给分（Jama 0–100%），但在 59% 的 precision 下，打出来的分有四成是噪声。模板只列测试者能动手的维度（不可测、模糊、复合、冲突、过时、找不到代码），每行带原文，标 M 级，默认折叠。"necessary / correct / feasible" 是产品负责人的事，不进测试者报告。
+**Impact on the template:** Commercial tools do give scores (Jama 0–100%), but at 59% precision, four in ten of the points awarded are noise. The template lists only the dimensions a tester can act on (untestable, vague, compound, conflicting, outdated, no code found), each row with the original text, marked M level and collapsed by default. "necessary / correct / feasible" are the product owner's concern and stay out of the tester report.
 
-### 3.2 设计健康（design health）
+### 3.2 Design health
 
-| 来源 | 内容 |
+| Source | Content |
 |---|---|
-| ISO/IEC 25010 maintainability | modularity、reusability、analysability、modifiability、testability（[TMap](https://www.tmap.net/wiki/quality-characteristics-iso25010/)） |
-| ISO/IEC 5055（CISQ） | 138 个 CWE：Security 73、Reliability 74、Performance 18、Maintainability 29（含过度耦合、跨层调用、死代码）（[CISQ](https://www.it-cisq.org/?p=486)） |
-| Martin 包指标 | I = Ce/(Ca+Ce)，A = 抽象类型占比，D = \|A + I − 1\|；没找到 D 预测缺陷的证据 |
-| ArchUnit / dependency-cruiser | 分层规则、洋葱架构、`beFreeOfCycles()`、`no-circular`（[ArchUnit](https://www.archunit.org/userguide/html/000_Index.html)） |
-| Fitness function | "对某个架构特性的客观完整性评估"（[Building Evolutionary Architectures](https://oreilly.com/library/view/building-evolutionary-architectures/9781491986356/ch02.html)） |
-| CodeScene Code Health | 25+ 因素，1–10 分（≥9 健康、4–9 警告、<4 告警）；厂商研究：红色代码缺陷多 15 倍、开发慢 124%（[Tornhill & Borg 2022](https://arxiv.org/pdf/2203.04374)，厂商作者） |
-| SonarQube | 技术债比率 = 修复成本 /（每行成本 × 行数），默认每行 30 分钟；A ≤5%、B 6–10%、C 11–20%、D 21–50%、E >50%（[Sonar](https://docs.sonarsource.com/sonarqube-server/10.4/user-guide/metric-definitions)） |
-| Google design docs / ADR | 大项目 10–20 页，小的 1–3 页；ADR 1–2 页：Context、Decision、Status、Consequences（[Ubl](https://www.industrialempathy.com/posts/design-docs-at-google/)、[Nygard](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)） |
+| ISO/IEC 25010 maintainability | modularity, reusability, analysability, modifiability, testability ([TMap](https://www.tmap.net/wiki/quality-characteristics-iso25010/)) |
+| ISO/IEC 5055 (CISQ) | 138 CWEs: Security 73, Reliability 74, Performance 18, Maintainability 29 (including excessive coupling, cross-layer calls, dead code) ([CISQ](https://www.it-cisq.org/?p=486)) |
+| Martin package metrics | I = Ce/(Ca+Ce), A = share of abstract types, D = \|A + I − 1\|; no evidence found that D predicts defects |
+| ArchUnit / dependency-cruiser | Layering rules, onion architecture, `beFreeOfCycles()`, `no-circular` ([ArchUnit](https://www.archunit.org/userguide/html/000_Index.html)) |
+| Fitness function | "An objective integrity assessment of some architectural characteristic" ([Building Evolutionary Architectures](https://oreilly.com/library/view/building-evolutionary-architectures/9781491986356/ch02.html)) |
+| CodeScene Code Health | 25+ factors, score 1–10 (≥9 healthy, 4–9 warning, <4 alert); vendor study: red code has 15 times more defects and 124% slower development ([Tornhill & Borg 2022](https://arxiv.org/pdf/2203.04374), vendor authors) |
+| SonarQube | Technical debt ratio = remediation cost / (cost per line × lines), default 30 minutes per line; A ≤5%, B 6–10%, C 11–20%, D 21–50%, E >50% ([Sonar](https://docs.sonarsource.com/sonarqube-server/10.4/user-guide/metric-definitions)) |
+| Google design docs / ADR | Large projects 10–20 pages, small ones 1–3 pages; ADR 1–2 pages: Context, Decision, Status, Consequences ([Ubl](https://www.industrialempathy.com/posts/design-docs-at-google/), [Nygard](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)) |
 
-哪些能预测缺陷：
-- **依赖网络：** 在 Windows Server 2003 上，依赖网络指标的 recall 比复杂度指标高 10 个百分点，找出 60% 的关键二进制（[Zimmermann & Nagappan ICSE 2008](https://www.microsoft.com/en-us/research/publication/predicting-defects-using-network-analysis-on-dependency-graphs/)）。
-- **循环依赖：** 缺陷最多、最严重的组件集中在循环依赖里（[Oyetoyan et al.](https://ntnuopen.ntnu.no/ntnu-xmlui/handle/11250/297522)）。
-- **相对 churn：** 区分易错二进制的准确率 89%（[Nagappan & Ball ICSE 2005](https://microsoft.com/en-us/research/?p=151819)）。
-- **组织结构：** 在 Vista 上 precision 和 recall 约 85%，超过 churn、复杂度、覆盖率和依赖指标（[MSR](https://www.microsoft.com/en-us/research/publication/the-influence-of-organizational-structure-on-software-quality-an-empirical-case-study/)）。
-- **反例：** 控制类大小之后，OO 指标与缺陷不再相关（[El Emam et al. TSE 2001](https://neverworkintheory.org/2011/07/07/the-confounding-effect-of-class-size-on-the-validity-of-object-oriented-metrics.html)）。
-- **反例：** Google 的 117 个代码指标都预测不了工程师感知的技术债，解释的方差不到 1%（[DX 总结](https://newsletter.getdx.com/p/measuring-and-managing-tech-debt) *(secondary)*）。
+What predicts defects:
+- **Dependency network:** On Windows Server 2003, dependency-network metrics had 10 percentage points higher recall than complexity metrics and found 60% of the critical binaries ([Zimmermann & Nagappan ICSE 2008](https://www.microsoft.com/en-us/research/publication/predicting-defects-using-network-analysis-on-dependency-graphs/)).
+- **Cyclic dependencies:** The components with the most and the most severe defects concentrate in cyclic dependencies ([Oyetoyan et al.](https://ntnuopen.ntnu.no/ntnu-xmlui/handle/11250/297522)).
+- **Relative churn:** 89% accuracy at separating fault-prone binaries ([Nagappan & Ball ICSE 2005](https://microsoft.com/en-us/research/?p=151819)).
+- **Organizational structure:** On Vista, precision and recall of about 85%, beating churn, complexity, coverage and dependency metrics ([MSR](https://www.microsoft.com/en-us/research/publication/the-influence-of-organizational-structure-on-software-quality-an-empirical-case-study/)).
+- **Counterexample:** After controlling for class size, OO metrics no longer correlate with defects ([El Emam et al. TSE 2001](https://neverworkintheory.org/2011/07/07/the-confounding-effect-of-class-size-on-the-validity-of-object-oriented-metrics.html)).
+- **Counterexample:** None of Google's 117 code metrics predicted engineer-perceived technical debt, explaining less than 1% of the variance ([DX summary](https://newsletter.getdx.com/p/measuring-and-managing-tech-debt) *(secondary)*).
 
-**对模板的影响：** 不做设计总分（Google 自己的数据说明指标分数和人的感受对不上）。只保留有缺陷证据、而且确定可查的两项：循环依赖和设计文档写明的分层规则（S 级）。再加上测试者关心的"设计 ↔ 代码不一致"和"组件没有测试"。风险排序用 churn 和 fix commit（现有 `audit-units.js` 已经这样做，有 Nagappan 的证据支持）；CODEOWNERS 既用来分派，也可以作为风险信号。
+**Impact on the template:** No overall design score (Google's own data shows metric scores do not match how people feel). Keep only the two items that have defect evidence and can be checked deterministically: cyclic dependencies and the layering rules stated in the design document (S level). Add the "design ↔ code mismatch" and "component has no tests" that testers care about. Risk ranking uses churn and fix commits (the existing `audit-units.js` already does this, backed by Nagappan's evidence); CODEOWNERS is used both for assignment and as a risk signal.
 
-### 3.3 覆盖率怎么算
+### 3.3 How coverage is computed
 
-**种类**
-- **Line / statement：** Google 主要用 line 覆盖率，C++、Java、Python 另加 branch。
-- **Delta coverage：** 只看新增或修改的行，Codecov 叫 patch coverage。
-- **Flags：** Codecov 用 flag 按测试类型拆分报告（[Google FSE 2019](https://homes.cs.washington.edu/~rjust/publ/google_coverage_fse_2019.pdf)、[Codecov flags](https://docs.codecov.com/docs/flags)）。
+**Kinds**
+- **Line / statement:** Google mainly uses line coverage, plus branch coverage for C++, Java and Python.
+- **Delta coverage:** Only added or modified lines; Codecov calls it patch coverage.
+- **Flags:** Codecov uses flags to split reports by test type ([Google FSE 2019](https://homes.cs.washington.edu/~rjust/publ/google_coverage_fse_2019.pdf), [Codecov flags](https://docs.codecov.com/docs/flags)).
 
-**阈值**
-- **项目级：** Google 2020 年的建议是 60% acceptable、75% commendable、90% exemplary。
-- **每次提交：** 99% 合理，90% 是好的下限；项目级超过 90% "多半不值得"（[Testing Blog 2020](https://testing.googleblog.com/2020/08/code-coverage-best-practices.html)）。
+**Thresholds**
+- **Project level:** Google's 2020 recommendation is 60% acceptable, 75% commendable, 90% exemplary.
+- **Per commit:** 99% is reasonable and 90% is a good lower bound; going above 90% at project level is "probably not worth it" ([Testing Blog 2020](https://testing.googleblog.com/2020/08/code-coverage-best-practices.html)).
 
-**Google 实践（FSE 2019）**
-- **规模：** 每天约 10 亿行，中位数项目覆盖率约 80%。
-- **使用：** 45% 的开发者写代码时常看覆盖率，40% 评审时常看。每天手动跑覆盖率的只有 0.5%，自动显示在 code review 里才是用起来的原因。
-- **范围：** 论文只统计单机 "unit" 测试，并说 line 覆盖率"不适合"集成测试。
+**Google practice (FSE 2019)**
+- **Scale:** About 1 billion lines per day; the median project has about 80% coverage.
+- **Usage:** 45% of developers often look at coverage while writing code, and 40% while reviewing. Only 0.5% run coverage manually each day; showing it automatically in code review is why it gets used.
+- **Scope:** The paper counts only single-machine "unit" tests and says line coverage is "not suitable" for integration tests.
 
-**只用小测试算覆盖率**
-- SWE at Google 第 11 章："只用 small tests 测覆盖率，避免覆盖率虚高"。
-- 门槛会变成天花板：设 80% 的门槛，工程师就把 80% 当目标（[SWE book ch.11](https://abseil.io/resources/swe-book/html/ch11.html)）。
+**Compute coverage from small tests only**
+- SWE at Google chapter 11: "measure coverage with small tests only, to avoid inflated coverage".
+- A threshold becomes a ceiling: set an 80% threshold and engineers treat 80% as the goal ([SWE book ch.11](https://abseil.io/resources/swe-book/html/ch11.html)).
 
-**需求覆盖率（安全标准）**
-- **DO-178C：** 先做基于需求的测试，再用这些测试测结构覆盖率。
-- **缺口的四种处理：** 补测试、改需求、删死代码、标为停用代码（[LDRA](https://ldra.com/ldra-blog/do-178c-structural-coverage-analysis/)）。
-- **ISO 26262-6：** 所有 ASIL 都高度推荐基于需求的测试。
-- **公式：** "有至少一个已追溯、通过的测试的需求数 / 需求总数"。这是推断，标准原文 UNVERIFIED。
+**Requirement coverage (safety standards)**
+- **DO-178C:** Do requirements-based testing first, then use those tests to measure structural coverage.
+- **Four ways to handle a gap:** add tests, change the requirement, delete dead code, mark it as deactivated code ([LDRA](https://ldra.com/ldra-blog/do-178c-structural-coverage-analysis/)).
+- **ISO 26262-6:** Requirements-based testing is highly recommended for all ASILs.
+- **Formula:** "number of requirements with at least one traced, passing test / total number of requirements". This is an inference; the original standard text is UNVERIFIED.
 
-**层级与比例**
-- **Size 和 scope 是两个独立的轴。** Size 指资源：small 单进程、medium 单机、large 多机；scope 指被验证的代码范围（[SWE book ch.11](https://abseil.io/resources/swe-book/html/ch11.html)）。
-- **SWE book 的比例：** 约 80% unit / 15% integration / 5% E2E（按用例数）。
-- **2015 年博客的比例：** 70/20/10（[Testing Blog 2015](https://testing.googleblog.com/2015/04/just-say-no-to-more-end-to-end-tests.html)）。
-- **其他形状：** Pyramid（Fowler）、Trophy（Dodds，以集成为主）、Honeycomb（Spotify，以集成为主）。Fowler 指出分歧主要在于 "unit" 的定义不同（[test shapes](https://martinfowler.com/articles/2021-test-shapes.html)）。
+**Levels and proportions**
+- **Size and scope are two independent axes.** Size is about resources: small is one process, medium is one machine, large is multiple machines; scope is the range of code being verified ([SWE book ch.11](https://abseil.io/resources/swe-book/html/ch11.html)).
+- **SWE book proportions:** about 80% unit / 15% integration / 5% E2E (by number of cases).
+- **2015 blog proportions:** 70/20/10 ([Testing Blog 2015](https://testing.googleblog.com/2015/04/just-say-no-to-more-end-to-end-tests.html)).
+- **Other shapes:** Pyramid (Fowler), Trophy (Dodds, integration-heavy), Honeycomb (Spotify, integration-heavy). Fowler notes that the disagreement is mostly about how "unit" is defined ([test shapes](https://martinfowler.com/articles/2021-test-shapes.html)).
 
-**覆盖率与缺陷的关系**
-- 控制测试集大小后，覆盖率和测试有效性只有低到中等相关（[Inozemtseva & Holmes ICSE 2014](https://cs.ubc.ca/~rtholmes/papers/icse_2014_inozemtseva.pdf)）。
-- 在真实缺陷上，相关性从中等到强（[Kochhar SANER 2015](https://ink.library.smu.edu.sg/sis_research/2974)）。
-- 100 个 Java 项目：项目级不显著，文件级没有相关（[Kochhar 2017](https://www.microsoft.com/en-us/research/publication/code-coverage-and-post-release-defects-a-large-scale-study-on-open-source-projects/)）。
-- 和我们 E1 的结论一致：覆盖率缺口不能预测 bug 在哪。
+**Relationship between coverage and defects**
+- After controlling for test suite size, coverage and test effectiveness are only low to moderately correlated ([Inozemtseva & Holmes ICSE 2014](https://cs.ubc.ca/~rtholmes/papers/icse_2014_inozemtseva.pdf)).
+- On real defects, the correlation is moderate to strong ([Kochhar SANER 2015](https://ink.library.smu.edu.sg/sis_research/2974)).
+- 100 Java projects: not significant at project level, no correlation at file level ([Kochhar 2017](https://www.microsoft.com/en-us/research/publication/code-coverage-and-post-release-defects-a-large-scale-study-on-open-source-projects/)).
+- Consistent with our E1 result: coverage gaps cannot predict where the bugs are.
 
-**对模板的影响：**
-1. Unit 覆盖率只用 unit 报告（Google 的做法）；E2E 跑到的行不算 unit 已测，这正是"placement"发现的来源。
-2. 覆盖率只作为"这行没有任何测试跑过"的事实来报告，不说"覆盖率低 = 缺陷多"。
-3. 门禁看新代码（patch），不看项目总数，所以 Top action 7 是"加新代码门禁"。
-4. 不在报告里显示 60/75/90 的分档，避免门槛变成天花板。
-5. 层级比例（80/15/5）只作为背景，不作为判定。不同"形状"的主张互相冲突，而且依赖 unit 的定义。
-6. 用户要的层级顺序按 scope 从窄到宽排：Unit → Component → Integration → Contract → E2E。
+**Impact on the template:**
+1. Unit coverage uses only unit reports (Google's approach); lines run by E2E do not count as unit-tested, which is exactly where "placement" findings come from.
+2. Coverage is reported only as the fact "no test ran this line", never as "low coverage = more defects".
+3. The gate looks at new code (patch), not the project total, so Top action 7 is "add a new-code gate".
+4. The 60/75/90 tiers are not shown in the report, so that thresholds do not become ceilings.
+5. Level proportions (80/15/5) are background only, not a verdict. Claims about different "shapes" conflict with each other and depend on the definition of unit.
+6. The level order the user asked for runs by scope from narrow to wide: Unit → Component → Integration → Contract → E2E.
 
-### 3.4 Unit test 质量
+### 3.4 Unit test quality
 
-**Google mutation testing 2018**（[PDF](https://web.eecs.umich.edu/~weimerw/2022-481W/readings/mutation-google.pdf)）
-- 只对 diff 做，每行最多 1 个 mutant，跳过未覆盖行和 "arid" 行。
-- 约 6,000 名工程师使用；70,000 个 diff、1.1M 个 mutant。
-- **压掉 arid 节点后，"有用"率从 20% 升到 80%。**
+**Google mutation testing 2018** ([PDF](https://web.eecs.umich.edu/~weimerw/2022-481W/readings/mutation-google.pdf))
+- Done on the diff only, at most 1 mutant per line, skipping uncovered lines and "arid" lines.
+- About 6,000 engineers used it; 70,000 diffs, 1.1M mutants.
+- **After suppressing arid nodes, the "useful" rate rose from 20% to 80%.**
 
-**Google mutation testing 2021**（[Petrović et al. ICSE 2021](https://ar5iv.labs.arxiv.org/html/2103.07189)）
-- 每个文件在 review 里最多显示 7 个 mutant。
-- 接触 mutant 越多，写的测试越多（rs = 0.9）。
-- 1,502 个高优先级 bug 里，约 70% 与当时会被报告的 mutant 耦合。
+**Google mutation testing 2021** ([Petrović et al. ICSE 2021](https://ar5iv.labs.arxiv.org/html/2103.07189))
+- At most 7 mutants are shown per file in review.
+- The more mutants engineers engaged with, the more tests they wrote (rs = 0.9).
+- Of 1,502 high-priority bugs, about 70% were coupled with a mutant that would have been reported at the time.
 
-**测试坏味**
-- tsDetect：19 种坏味，在它的基准上 precision 96%、recall 97%（[Peruma FSE 2020](https://2020.esec-fse.org/details/esecfse-2020-tool-demos/4/tsDetect-An-Open-Source-Test-Smells-Detection-Tool)）。
-- 有坏味的测试更容易改动、更容易出缺陷，最重要的是 Indirect Testing、Eager Test、Assertion Roulette（[Spadini ICSME 2018](https://research.tudelft.nl/en/publications/on-the-relation-of-test-smells-to-software-code-quality/)）。
-- 但工具和开发者判断差距大（[Panichella EMSE 2022](https://pure.tudelft.nl/ws/portalfiles/portal/137994226/s10664_022_10207_5.pdf)）。
+**Test smells**
+- tsDetect: 19 smells, 96% precision and 97% recall on its benchmark ([Peruma FSE 2020](https://2020.esec-fse.org/details/esecfse-2020-tool-demos/4/tsDetect-An-Open-Source-Test-Smells-Detection-Tool)).
+- Tests with smells change more often and are more defect-prone; the most important are Indirect Testing, Eager Test and Assertion Roulette ([Spadini ICSME 2018](https://research.tudelft.nl/en/publications/on-the-relation-of-test-smells-to-software-code-quality/)).
+- But tools and developers' judgement differ widely ([Panichella EMSE 2022](https://pure.tudelft.nl/ws/portalfiles/portal/137994226/s10664_022_10207_5.pdf)).
 
 **Flaky**
-- **Google 2016：** 1.5% 的运行 flaky，约 16% 的测试有过 flaky；84% 的 pass→fail 跳变涉及 flaky 测试（[Micco](https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html)）。
-- **Meta：** 每个测试有一个概率 flaky 分，unit 基线 <1%，部分 E2E 框架约 10%（[Meta](https://engineering.fb.com/2020/12/10/developer-tools/probabilistic-flakiness/)）。
-- **Microsoft：** quarantine 后测试照跑但结果被压掉，bug 关闭后自动解除 *(secondary)*。
+- **Google 2016:** 1.5% of runs are flaky, about 16% of tests have been flaky; 84% of pass→fail transitions involve flaky tests ([Micco](https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html)).
+- **Meta:** Each test has a probabilistic flakiness score; the unit baseline is <1% and some E2E frameworks are around 10% ([Meta](https://engineering.fb.com/2020/12/10/developer-tools/probabilistic-flakiness/)).
+- **Microsoft:** After quarantine, the test still runs but its result is suppressed, and the quarantine lifts automatically once the bug is closed *(secondary)*.
 
-**删除测试**
-- Google TAP 的 5.5M 个受影响测试里，只有 63K 失败过（[Memon ICSE-SEIP 2017](https://research.google/pubs/taming-google-scale-continuous-testing/)）。
-- Meta 的预测性选择只跑约 1/3 的测试，仍报告 >99.9% 的坏改动（[Meta](https://engineering.fb.com/developer-tools/predictive-test-selection/)）。
-- 没有找到大厂公开的"删除测试"政策（UNVERIFIED）。
+**Deleting tests**
+- Of the 5.5M affected tests in Google TAP, only 63K ever failed ([Memon ICSE-SEIP 2017](https://research.google/pubs/taming-google-scale-continuous-testing/)).
+- Meta's predictive test selection runs only about 1/3 of the tests and still reports >99.9% of bad changes ([Meta](https://engineering.fb.com/developer-tools/predictive-test-selection/)).
+- No public "delete tests" policy from a large company was found (UNVERIFIED).
 
-**对模板的影响：**
-1. "测试强度"只有 mutation 能回答，Google 的经验是每文件封顶 + 压掉无意义位置。没有 mutation 时明写 "not measured"。
-2. 静态坏味只报高确定性的几种（无断言、只断言存在、mock 被测对象、长期 skip），这些是 Indirect Testing 和 Assertion Roulette 的近亲。
-3. Flaky 报成比率（"4 of 71 runs"），不报成是或否，而且要考虑层级的噪声底：E2E 一次红不说明问题。
-4. **"从没失败过"不是删除理由**（63K/5.5M）。删除只针对零保护的测试（无断言、长期 skip、mock 被测对象）。
+**Impact on the template:**
+1. "Test strength" can only be answered by mutation; Google's experience is a per-file cap plus suppressing meaningless locations. Without mutation, write "not measured".
+2. Static smells report only the high-certainty ones (no assertions, existence-only assertions, mocked subject under test, long-term skip), which are close relatives of Indirect Testing and Assertion Roulette.
+3. Report flaky as a ratio ("4 of 71 runs"), not as yes or no, and account for each level's noise floor: a single red E2E run proves nothing.
+4. **"Never failed" is not a reason to delete** (63K/5.5M). Deletion targets only tests with zero protection (no assertions, long-term skip, mocked subject under test).
 
-### 3.5 CI 检查
+### 3.5 CI checks
 
-| 来源 | 内容 |
+| Source | Content |
 |---|---|
-| SonarQube "Sonar way" 门禁（只看新代码） | 无新问题、所有新安全热点已审、覆盖率 ≥80.0%、重复 ≤3.0%；新增不足 20 行时不检查覆盖率和重复（[Sonar](https://docs.sonarsource.com/sonarqube-community-build/quality-standards-administration/managing-quality-gates/introduction-to-quality-gates)） |
-| OpenSSF Scorecard 风险等级 | Critical：Dangerous-Workflow、Webhooks；High：Binary-Artifacts、Branch-Protection、Code-Review、Dependency-Update-Tool、Maintained、Signed-Releases、Token-Permissions、Vulnerabilities；Medium：Fuzzing、Packaging、Pinned-Dependencies、SAST、SBOM、Security-Policy；Low：CI-Tests、CII-Best-Practices、Contributors、License（[checks.md](https://github.com/ossf/scorecard/blob/main/docs/checks.md)） |
-| SLSA v1.0 Build | L1 有 provenance；L2 托管构建 + 签名 provenance；L3 加固隔离构建（[slsa.dev](https://slsa.dev/spec/v1.0/levels)） |
-| DORA（现为 5 项） | change lead time、deployment frequency、failed deployment recovery time、change fail rate、deployment rework rate（[dora.dev](https://dora.dev/guides/dora-metrics/)） |
-| CI 健康 | Uber iOS 主干在 SubmitQueue 之前只有 52% 的时间是绿的 *(secondary)*；"time-to-green" 没有标准定义（UNVERIFIED） |
+| SonarQube "Sonar way" gate (new code only) | No new issues, all new security hotspots reviewed, coverage ≥80.0%, duplication ≤3.0%; coverage and duplication are not checked when fewer than 20 lines are added ([Sonar](https://docs.sonarsource.com/sonarqube-community-build/quality-standards-administration/managing-quality-gates/introduction-to-quality-gates)) |
+| OpenSSF Scorecard risk levels | Critical: Dangerous-Workflow, Webhooks; High: Binary-Artifacts, Branch-Protection, Code-Review, Dependency-Update-Tool, Maintained, Signed-Releases, Token-Permissions, Vulnerabilities; Medium: Fuzzing, Packaging, Pinned-Dependencies, SAST, SBOM, Security-Policy; Low: CI-Tests, CII-Best-Practices, Contributors, License ([checks.md](https://github.com/ossf/scorecard/blob/main/docs/checks.md)) |
+| SLSA v1.0 Build | L1 has provenance; L2 hosted build + signed provenance; L3 hardened, isolated build ([slsa.dev](https://slsa.dev/spec/v1.0/levels)) |
+| DORA (now 5 metrics) | change lead time, deployment frequency, failed deployment recovery time, change fail rate, deployment rework rate ([dora.dev](https://dora.dev/guides/dora-metrics/)) |
+| CI health | Uber's iOS trunk was green only 52% of the time before SubmitQueue *(secondary)*; "time-to-green" has no standard definition (UNVERIFIED) |
 
-**对模板的影响：**
-1. CI 节以测试为中心：各层测试是否在 PR 上跑、有没有测试文件不被任何 job 跑、retry 是否掩盖失败、有没有新代码覆盖率门禁（Sonar 用 80% + 20 行豁免作参考）。
-2. Scorecard 里与测试者有关的是 CI-Tests 和 Branch-Protection；其余安全项只占一行"有/没有/读不到"。
-3. DORA 和 SLSA 不进测试者报告：它们衡量交付和供应链，测试者不会因此改测试。
+**Impact on the template:**
+1. The CI section is test-centred: do tests at each level run on PRs, are there test files that no job runs, do retries mask failures, is there a new-code coverage gate (Sonar's 80% + 20-line exemption as a reference).
+2. In Scorecard, the items relevant to testers are CI-Tests and Branch-Protection; the other security items take one line: "yes/no/cannot read".
+3. DORA and SLSA stay out of the tester report: they measure delivery and supply chain, and testers would not change tests because of them.
 
-### 3.6 呈现与可行动性（最重要）
+### 3.6 Presentation and actionability (the most important)
 
-**Google（Sadowski et al. CACM 2018）**（[PDF](https://6826.csail.mit.edu/2020/papers/google-analysis-cacm.pdf)）
-- **定义：** 开发者没有采取积极行动的发现，就是 "effective false positive"。
-- **2006 年的 FindBugs 夜间 dashboard** 几乎没人用，因为它在开发者的日常流程之外。
-- **2009 年的 fixit：** 审了 3,954 条警告，44% 报了 bug，只修了 16%。
-- **进入 code review 的检查要满足：** 可理解、可行动、易修复、effective false positive <10%、影响显著。"Not useful" 超过 10% 的分析器会被关掉，直到修好。
-- **时机：** 编译时的问题有 74% 被认为是真问题，已提交代码里的问题只有 21%。
-- **整库修复：** 以 patch 形式发给负责人，正面反馈 57%，负面 2%。
+**Google (Sadowski et al. CACM 2018)** ([PDF](https://6826.csail.mit.edu/2020/papers/google-analysis-cacm.pdf))
+- **Definition:** A finding on which developers take no positive action is an "effective false positive".
+- **The 2006 FindBugs nightly dashboard** was barely used because it sat outside developers' daily workflow.
+- **The 2009 fixit:** 3,954 warnings reviewed, 44% led to a bug report, only 16% were fixed.
+- **Checks admitted into code review must be:** understandable, actionable, easy to fix, effective false positive <10%, significant impact. An analyzer with more than 10% "Not useful" is turned off until fixed.
+- **Timing:** 74% of issues found at compile time were judged real problems, versus only 21% for issues in committed code.
+- **Codebase-wide fixes:** Sent to owners as patches, 57% positive feedback and 2% negative.
 
-**Meta Infer（Distefano et al. CACM 2019）**（[PDF](https://6826.csail.mit.edu/2020/papers/facebook-infer-cacm.pdf)）
-- **批量模式：** 夜间运行并分派给开发者，误报率 <20%，修复率仍"接近零"。
-- **改到 diff 时报告：** 同一个分析，修复率 >70%。原因是上下文切换成本和归属。
-- **只报新问题：** Infer 用与位置无关的 bug hash 识别新问题。
-- **反例：** Zoncolan 的批量模式给专职安全专家用，行动率 >80%。**读者是专职 triager 时，批量报告可以有效。**
+**Meta Infer (Distefano et al. CACM 2019)** ([PDF](https://6826.csail.mit.edu/2020/papers/facebook-infer-cacm.pdf))
+- **Batch mode:** Run overnight and assigned to developers, with a false-positive rate <20% but a fix rate still "close to zero".
+- **Reporting at diff time:** The same analysis gets a fix rate >70%. The reasons are context-switching cost and ownership.
+- **Report only new issues:** Infer identifies new issues with a location-independent bug hash.
+- **Counterexample:** Zoncolan's batch mode, used by dedicated security experts, has an action rate >80%. **When the reader is a dedicated triager, batch reports can be effective.**
 
-**其他研究**
-- **Johnson ICSE 2013：** 开发者不用静态分析，主要因为误报和呈现方式（[PDF](https://cs.gmu.edu/%7Ejohnsonb/docs/icse2013.pdf)）。
-- **Coverity 开源数据：** 中位数只有 36.7% 的告警可行动；修复中位数 96 天，尽管修复本身中位数只有 4 行（[Imtiaz ISSRE 2019](https://www.microsoft.com/en-us/research/?p=690690)）。
+**Other research**
+- **Johnson ICSE 2013:** Developers do not use static analysis mainly because of false positives and how results are presented ([PDF](https://cs.gmu.edu/%7Ejohnsonb/docs/icse2013.pdf)).
+- **Coverity open-source data:** Only a median of 36.7% of warnings are actionable; the median fix takes 96 days even though the median fix itself is only 4 lines ([Imtiaz ISSRE 2019](https://www.microsoft.com/en-us/research/?p=690690)).
 
-**同类工具的首页**
-- **SonarQube：** 门禁通过/失败放第一位，然后是 New Code / Overall Code 两个标签页（"Clean as You Code"）。
-- **Codecov PR 评论：** 覆盖率差值 → 受影响文件 → flags。
-- **CodeScene：** 按 hotspot（改动频繁 × 健康差）排序的"优先技术债"。
-- **SARIF：** `baselineState` 支持 new / unchanged / updated / absent（[SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)）。
+**Landing pages of comparable tools**
+- **SonarQube:** Gate pass/fail comes first, then two tabs, New Code / Overall Code ("Clean as You Code").
+- **Codecov PR comment:** coverage delta → affected files → flags.
+- **CodeScene:** "Prioritized technical debt" ranked by hotspot (frequently changed × poor health).
+- **SARIF:** `baselineState` supports new / unchanged / updated / absent ([SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)).
 
-**对模板的影响（这是全文最重要的一条）：**
-1. 全仓审计本质上是批量报告，按 Google 和 Meta 的数据，给普通开发者看几乎没人修。它能成立的条件和 Zoncolan 一样：读者是专职 triager（测试者 / QA lead），并且精度够高。所以：
-   - 顶部先给结论和"证据是否完整"，等同于 Sonar 的门禁优先。
-   - 每条行动标 **new / 持续 N 次扫描**（等同于 SARIF baselineState），而且和上次比放在第一屏。
-   - 每条行动有负责人（CODEOWNERS）和建议修法（测试草稿），对应 Google 的"以 patch 发给负责人得到 57% 正面反馈"。
-   - 列表封顶（Top 10，同文件最多 2 条），对应 Google 每文件最多 7 个 mutant。
-   - 每类发现可以被标记 "not useful"，某一类超过 10% 就关掉，对应 Google 的规则。这一条是新功能，见 §6 R8。
-2. 长期看，最有效的是把同样的发现送到 PR 时刻（diff time）。全仓审计的价值是建立基线、给 QA lead 排优先级；它不应该替代 PR 模式。
+**Impact on the template (the most important item in this document):**
+1. A repo-wide audit is inherently a batch report, and by Google's and Meta's data, shown to ordinary developers it is almost never fixed. It can work under the same condition as Zoncolan: the reader is a dedicated triager (tester / QA lead) and precision is high enough. Therefore:
+   - The top gives the conclusion and "is the evidence complete" first, equivalent to Sonar's gate-first layout.
+   - Every action is marked **new / persisting for N scans** (equivalent to SARIF baselineState), and the comparison with last time sits on the first screen.
+   - Every action has an owner (CODEOWNERS) and a suggested fix (test draft), matching Google's "sent to the owner as a patch, 57% positive feedback".
+   - The list is capped (Top 10, at most 2 per file), matching Google's at most 7 mutants per file.
+   - Each category of finding can be marked "not useful", and a category above 10% is turned off, matching Google's rule. This one is a new feature, see §6 R8.
+2. In the long run, the most effective thing is to deliver the same findings at PR time (diff time). The value of a repo-wide audit is to establish a baseline and let the QA lead prioritize; it should not replace PR mode.
 
-## 4. 字段规则（每个数字怎么来）
+## 4. Field rules (where each number comes from)
 
-### 4.1 顶部
+### 4.1 Top
 
-| 字段 | 来源 | 规则 |
+| Field | Source | Rule |
 |---|---|---|
-| 结论行 | 所有发现 | `N things to fix`；拆成 E/S 条数和 M 条数。scan 不完整时改为 ⚠️ 并在同一行写没审到什么。 |
-| Evidence used | 输入 | 每类证据一行：有/没有/与本 commit 不符（不符 = 不用）。 |
-| At a glance | 各领域 | 固定 8 行，固定顺序（§4.3）。状态：❌ 有 E/S 级问题；⚠️ 只有 M 级问题或部分测量；✅ 测了且无问题；➖ 不适用（如无设计文档）；❔ 没测到。 |
-| 和上次比 | scan state | new / fixed / still open，按 finding id。 |
+| Conclusion line | all findings | `N things to fix`; split into the E/S count and the M count. When the scan is incomplete, change to ⚠️ and state on the same line what was not audited. |
+| Evidence used | inputs | One line per kind of evidence: present / absent / does not match this commit (mismatch = not used). |
+| Scores | each area | Fixed 9 rows in a fixed order (§4.3): score with numerator and denominator, change since the last scan, evidence level, what to act on, the actions that raise it. Rules in §4.5. |
+| Compared with last time | scan state | new / fixed / still open, by finding id. |
 
-### 4.2 Top actions 排序
+### 4.2 Top actions ordering
 
-1. 证据等级：E > S > M（一条同时有 S 和 M 时按 M 算）。
-2. 风险：近 180 天 fix commit 数、错误处理行数、churn（沿用 `audit-units.js` 的 risk）。
-3. 工作量：小的在前（加一个断言 < 加一个测试 < 移动一组测试）。
-4. 上限 10 条；同一文件最多 2 条，避免一个大文件占满列表。
+1. Evidence level: E > S > M (an item with both S and M counts as M).
+2. Risk: number of fix commits in the last 180 days, error-handling lines, churn (reusing the risk of `audit-units.js`).
+3. Effort: smaller first (add an assertion < add a test < move a group of tests).
+4. Capped at 10 items; at most 2 per file, so one large file cannot fill the list.
 
-### 4.3 领域顺序（"你来排序"的答案）
+### 4.3 Area order (the answer to "you decide the order")
 
-按"测试者能直接动手、证据最硬、越往左成本越低"排序：
+Ordered by "the tester can act directly, the evidence is hardest, the further left the lower the cost":
 
-1. **Untested code (unit)**：E 级，直接产出要写的测试；这是 v1 核心目标。
-2. **Tests that never run**：E/S 级，修一行配置就恢复一批保护，回报最高，而且最容易被忽略。
-3. **Unit test quality**：S 级为主（无断言、只断言 truthy、skip、mock 被测对象），flaky 来自 CI（E）。
-4. **Test placement**：shift-left 的核心动作（往下推），S+M。
-5. **Requirement coverage**：M 级（模型映射需求 → 测试）。
-6. **Requirement health**：M 级；只有在它阻碍写测试时才是测试者的事（"不可测"）。
-7. **Design coverage and health**：大多数仓库缺文档；结构问题（循环依赖、分层违反）是 S 级但不是测试者的主要行动。
-8. **CI checks**：放最后作为明细，但其中"测试不跑"已经提到第 2 行。
+1. **Untested code (unit)**: E level, directly yields the tests to write; this is the v1 core goal.
+2. **Tests that never run**: E/S level, fixing one line of configuration restores a batch of protection; the highest payoff and the easiest to overlook.
+3. **Unit test quality**: mostly S level (no assertions, truthy-only assertions, skip, mocked subject under test); flaky comes from CI (E).
+4. **Test placement**: the core shift-left action (push down), S+M.
+5. **Requirement coverage**: M level (model maps requirement → test).
+6. **Requirement health**: M level; it is the tester's concern only when it blocks writing tests ("untestable").
+7. **Design coverage and health**: most repos lack documents; structural problems (cycles, layering violations) are S level but not the tester's main action.
+8. **CI checks**: last, as detail, but "tests that do not run" is already raised in row 2.
 
-覆盖率各层的顺序：Unit → Component → Integration → Contract → End-to-end。理由：越靠下的层越便宜、越快、越确定；shift-left 的目标就是把能在左边证明的东西放到左边。Contract 单列，因为它是服务间调用最常见的缺口，而且通常是 0。
+Order of the coverage levels: Unit → Component → Integration → Contract → End-to-end. Reason: the lower the level the cheaper, faster and more deterministic; the goal of shift-left is to put whatever can be proven on the left on the left. Contract has its own row because it is the most common gap in service-to-service calls and is usually 0.
 
-### 4.4 各节
+### 4.4 Sections
 
-| 节 | 行 | 证据 | 规则 |
+| Section | Rows | Evidence | Rule |
 |---|---|---|---|
-| Untested code | 每个定义一行 | E（unit flag 覆盖率） | 只用 unit 报告；integration/E2E 跑到的行在"Also run by"列说明，但仍算 unit 缺口。报告的 commit 必须等于审计 commit。不在报告里的文件单独计数并说明原因（配置排除/未知）。沿用 #430/#433 的 not-worth-testing 过滤和排序。 |
-| Coverage by level | 每层一行 | S（清单）+ E（覆盖率） | 测试分层规则：runner 配置 > 目录 > 文件名后缀；规则可见。没有该层报告 → "not measured"。"Runs on PRs" 来自 workflow 文件 + 最近 check runs。 |
-| Unit test quality | 每个测试一行 | S / E | 无断言（含 helper 内断言的跨函数检查）、只断言存在、skip 天数（git blame）、mock 被测模块、flaky（CI 中 retry 后通过的次数 / 总次数）、疑似重复（测试体规范化后相同）。 |
-| Test placement | 每条规则一行 | S + M | 下推候选：高层测试中只改变输入数据的多个用例 + 被调用的纯函数 seam（S 找 seam，M 判断是否同一规则）。上推候选：放在 unit 目录但使用真实网络/数据库的测试（S：import 和调用）。 |
-| Requirement coverage | 状态桶 + 缺口行 | M（引用经校验） | 沿用 trace 的状态；"only above unit level" 来自 `class: higher_level`。分母 = 文档中的需求块数，固定。 |
-| Requirement health | 每条问题一行 | M | 维度：verifiable、unambiguous、singular、complete、consistent（跨文档）、current（引用已删除的功能）、traceable（找不到代码）。 |
-| Design coverage | 每个组件一行 | S + M | 组件来自设计文档的标题/列表；代码位置由模型给出并校验存在；测试层级同上。结构检查：import 图的环、设计文档写明的分层规则。 |
-| CI checks | 固定检查项 | S / E | 读 workflow 文件和 check runs（只读 API）。读不到 = ❔，不算通过。 |
-| 方法与精度 | 固定段落 | — | 每类发现的已测精度（来自我们自己的 eval），未测的写 "not yet measured"。 |
+| Untested code | one row per definition | E (unit flag coverage) | Use only the unit report; lines run by integration/E2E are noted in the "Also run by" column but still count as unit gaps. The report's commit must equal the audited commit. Files not in the report are counted separately with the reason (excluded by config / unknown). Reuse the not-worth-testing filter and ordering from #430/#433. |
+| Coverage by level | one row per level | S (inventory) + E (coverage) | Test layering rule: runner config > directory > file-name suffix; the rule is visible. No report for that level → "not measured". "Runs on PRs" comes from workflow files + recent check runs. |
+| Unit test quality | one row per test | S / E | No assertions (including a cross-function check for assertions inside helpers), existence-only assertions, skip days (git blame), mocked module under test, flaky (number of passes after retry in CI / total runs), suspected duplicates (identical after normalizing the test body). |
+| Test placement | one row per rule | S + M | Push-down candidates: multiple cases in a higher-level test that only change input data + the pure-function seam they call (S finds the seam, M judges whether it is the same rule). Push-up candidates: tests placed in a unit directory but using a real network/database (S: imports and calls). |
+| Requirement coverage | status buckets + gap rows | M (citations verified) | Reuse the trace statuses; "only above unit level" comes from `class: higher_level`. Denominator = number of requirement blocks in the documents, fixed. |
+| Requirement health | one row per problem | M | Dimensions: verifiable, unambiguous, singular, complete, consistent (across documents), current (references a removed feature), traceable (no code found). |
+| Design coverage | one row per component | S + M | Components come from the design document's headings/lists; the code location is given by the model and verified to exist; test level as above. Structural checks: cycles in the import graph, layering rules stated in the design document. |
+| CI checks | fixed check items | S / E | Read workflow files and check runs (read-only API). Cannot read = ❔, does not count as passing. |
+| Method and precision | fixed paragraph | — | Measured precision of each kind of finding (from our own evals); write "not yet measured" for those not measured. |
 
-## 5. Unknown unknowns：测试者和报告设计者都容易漏掉的事
+### 4.5 Scores
 
-1. **测试存在但从不运行。** runner 的 include 规则匹配不到、job 只在 nightly 或 main 跑、`describe.skip` 包住整个文件。覆盖率报告和测试计数都看不出来，只有把 workflow + runner 配置 + 测试文件放在一起才看得到。我们自己的 CI 就漏跑了 eval/replay、eval/f2p、eval/mutation 的测试（#432）。
-2. **覆盖率报告和代码不是同一个 commit。** 用旧报告会把已修的缺口报成缺口。规则：commit 不符就不用（#434 已经校验 Codecov 的 sha）。
-3. **"不在报告里" ≠ "被覆盖"。** 覆盖工具的配置会排除文件（生成代码、某些目录），这些文件在百分比里根本不存在。
-4. **E2E 跑过的行会让 unit 覆盖率看起来更高**，如果所有层合并成一个报告。只有按层分 flag 才能说"unit 缺口"。
-5. **重试掩盖 flaky。** `retry: 2` 让 CI 变绿；flaky 只能从"重试后通过"的记录看到。
-6. **skip 的测试在统计里算通过。** 长期 skip 的测试是零保护但看起来有测试。
-7. **mock 了被测对象的测试**，以及只有 snapshot 的测试：都会通过，保护为零或接近零。
-8. **测试分层本身是猜的。** 目录名、文件后缀、runner 配置可能互相矛盾；报告要给出规则，否则读者不信层级统计。
-9. **需求文档和代码谁是真相？** 文档可能描述已删除的功能，也可能代码偏离了文档。报告只能说"不一致"，让负责人决定，不能自动判定代码错。
-10. **非功能需求（性能、安全）不能用 unit 测试证明。** 不应计为 unit 缺口，而应指向合适的层级或标为"需要数字才能测"。
-11. **模型输出不稳定**（A1 Jaccard 0.17）：两次扫描列表不同，读者会以为代码变了。M 级发现需要"两次都报告"才升级（现有的 confirmed 机制）。
-12. **批量报告没人看。** 没有负责人、没有和上次的差异、列表太长，报告就会被忽略。
-13. **预算截断**：scan 没审完时，"没发现问题"是假阴性。顶部必须写清楚没审到什么。
-14. **monorepo**：每个 package 有自己的 runner 和覆盖率，合并百分比没有意义；按 package 分组。
-15. **跨仓契约**：消费者端的契约测试在别的仓库，本仓看起来"没有 contract test"不一定是缺口。
-16. **门槛变天花板**：报告里显示"80% 达标"会让团队停在 80%（SWE book）。报告只说哪些行没跑，不评档。
-17. **小改动豁免**：新增不到 20 行时，百分比门禁没有意义（Sonar 的 fudge factor）。
-18. **工具对生成代码的处理不同**：JaCoCo 会静默过滤带 `Generated` 注解的类（[JaCoCo](https://www.jacoco.org/jacoco/trunk/doc/changes.html)），换工具后数字会变。
-19. **覆盖率运行本身会失败**：插桩会引起超时、OOM、更多 flaky（Google FSE 2019）。没有报告时写 "not measured"，不写 0%。
-20. **"从没失败过"不是低价值**：Google 5.5M 个测试里只有 63K 失败过。
-21. **一个吵的章节会拖垮整份报告的信任**：忽略 flaky 告警是"人之常情"（Google 2016）。M 级章节默认折叠，就是为了不让它们拖累 E 级发现。
-22. **测试 size 和 scope 是两回事**：窄 scope 的 UI 测试可能要浏览器（large），宽 scope 的测试也可能是 small。按目录分层会分错一部分，所以分层规则必须可见。
+Every score obeys five rules, derived from §1:
 
-## 6. 与现有实现的差距和实现顺序
+1. **Fixed denominator** from the files at this commit (or the CI window). The model answering less cannot raise a score.
+2. **Evidence level shown.** A score from static rules is never presented as if it came from execution.
+3. **Movable by a listed fix.** Each row names the Top actions that raise it; a score no fix can move is not shown.
+4. **"Not measured" is not 0% or 100%.** Without the input (coverage flag, CI history, documents) the row says "not measured" or "no design document" and drops out of the ranking.
+5. **No targets, no bands, no composite.** Only the change since the last scan is shown.
 
-现有 scan summary（`src/audit-post.js` `render()`，A1 自检输出见 SpecGuard-evidence/a1-self-audit）的问题：
-
-- 第一屏是漏斗行（"31 eligible = 31 inventoried; 31 selected = 3 reviewed whole + 28 forced (recorded unsure)"），测试者看不懂，也不改变行动。应移入 Details。
-- 52 行 "Static test signals" 按 unit 汇总测试文件级数字，不指向具体测试，读者无法行动。
-- 没有证据等级、没有负责人、没有 At a glance、没有 CI 节。
-
-实现顺序（每一步都要有对应 eval，owner 10-18 的规则）：
-
-| 步 | 内容 | 证据等级 | 依赖 |
+| Score | Numerator / denominator | Level | Not shown when |
 |---|---|---|---|
-| R1 | 新骨架：结论行、Evidence used、At a glance、Top actions、折叠节；现有发现映射进去 | — | 无；纯渲染，可用现有 audit.json 回放对比 |
-| R2 | 质量信号按测试归属，去掉按 unit 重复 | S | test-map |
-| R3 | Tests that never run：workflow + runner 配置 + 测试文件交叉 | S | 新模块，只读 |
-| R4 | CI 节：check runs 历史（retry 后通过、各层是否在 PR 跑） | E | 只读 API |
-| R5 | 按层覆盖率（Codecov flags） | E | #434 |
-| R6 | Placement 下推候选（S 找 seam + M 判断） | S M | trace |
-| R7 | Requirement health、Design coverage | M | 需要先测精度（judge 校准） |
-| R8 | 每条行动可标 "not useful"（scan issue 里的命令或勾选），某类发现的 not-useful 率超过 10% 就默认关掉（Google 的规则） | — | scan issue state |
+| Unit test coverage | lines (and branches) the unit report marks executed / executable lines in scope in that report; files missing from the report are counted separately | E | no unit coverage report for this commit |
+| Tests run on every PR | tests in files that some job runs on `pull_request` / all tests in the inventory | S E | no workflow files |
+| Unit tests free of known defects | unit + component tests with no rule finding (no assertion, existence-only, mocks the code under test, skipped > 90 days, flaky in the CI window, duplicate) / unit + component tests | S E | no unit tests |
+| Rules tested at the lowest level | requirements or rules with a unit seam that a unit test checks / requirements or rules with a unit seam | S M | no requirements and no placement candidates |
+| Requirement coverage | requirements fully tested at any level / all requirement blocks (untestable ones stay in the denominator, so clarifying them raises the score) | M | no requirement documents |
+| Requirement health | requirements that pass every check (verifiable, unambiguous, singular, complete, consistent, current, traceable) / all requirement blocks | M | no requirement documents |
+| Design coverage | design components with a verified code location and a test at the expected level / design components | S M | no design document |
+| Design structure | modules (top-level source folders) in no dependency cycle and no stated layer violation / modules | S | always shown (cycles need no document; layer rules need one) |
+| CI protections | protections in place / protections the token can read (fixed list of 8; unreadable ones are listed as unknown and left out of both numbers) | S | no workflow files |
 
-R1–R5 不依赖模型，可以先上；R6、R7 在测出精度之前默认折叠，并在方法段写 "not yet measured"。
+Percentages are rounded to whole numbers except coverage (one decimal, as coverage tools show it); the numerator and denominator are always shown next to the percentage.
+
+## 5. Unknown unknowns: things both testers and report designers easily miss
+
+1. **Tests exist but never run.** The runner's include rule does not match them, the job runs only nightly or on main, or `describe.skip` wraps the whole file. Neither the coverage report nor the test count shows it; it is visible only when workflow + runner config + test files are put together. Our own CI missed running the eval/replay, eval/f2p and eval/mutation tests (#432).
+2. **The coverage report and the code are not the same commit.** An old report reports already-fixed gaps as gaps. Rule: if the commit does not match, do not use it (#434 already verifies the Codecov sha).
+3. **"Not in the report" ≠ "covered".** Coverage tool configuration excludes files (generated code, some directories), and those files do not exist in the percentage at all.
+4. **Lines run by E2E make unit coverage look higher** if all levels are merged into one report. Only per-level flags allow saying "unit gap".
+5. **Retries mask flaky tests.** `retry: 2` turns CI green; flakiness is visible only in the "passed after retry" records.
+6. **Skipped tests count as passing in statistics.** A long-term skipped test gives zero protection but looks like a test exists.
+7. **Tests that mock the subject under test**, and snapshot-only tests: both pass, with zero or near-zero protection.
+8. **Test layering itself is a guess.** Directory names, file suffixes and runner config can contradict each other; the report must give its rules, or readers will not trust the level statistics.
+9. **Which is the truth, the requirement document or the code?** The document may describe a removed feature, or the code may have drifted from the document. The report can only say "inconsistent" and let the owner decide; it cannot automatically conclude the code is wrong.
+10. **Non-functional requirements (performance, security) cannot be proven with unit tests.** They should not count as unit gaps; they should point to the right level or be marked "needs numbers to be testable".
+11. **Model output is unstable** (A1 Jaccard 0.17): two scans give different lists, and the reader will think the code changed. M-level findings need to be reported in both runs before being promoted (the existing confirmed mechanism).
+12. **Nobody reads bulk reports.** With no owner, no diff against last time, and a list that is too long, the report gets ignored.
+13. **Budget truncation**: when the scan did not finish, "no problems found" is a false negative. The top must state clearly what was not audited.
+14. **Monorepo**: each package has its own runner and coverage, so a merged percentage is meaningless; group by package.
+15. **Cross-repo contracts**: the consumer-side contract tests live in another repo, so "no contract test" in this repo is not necessarily a gap.
+16. **Thresholds become ceilings**: showing "80% reached" in the report makes the team stop at 80% (SWE book). The report only says which lines did not run and gives no grade.
+17. **Small-change exemption**: for fewer than 20 added lines, a percentage gate is meaningless (Sonar's fudge factor).
+18. **Tools treat generated code differently**: JaCoCo silently filters classes with a `Generated` annotation ([JaCoCo](https://www.jacoco.org/jacoco/trunk/doc/changes.html)), so numbers change when the tool changes.
+19. **The coverage run itself can fail**: instrumentation causes timeouts, OOM and more flakiness (Google FSE 2019). With no report, write "not measured", not 0%.
+20. **"Never failed" does not mean low value**: only 63K of Google's 5.5M tests ever failed.
+21. **One noisy section can sink trust in the whole report**: ignoring flaky alerts is "only human" (Google 2016). M-level sections are collapsed by default precisely so they do not drag down E-level findings.
+22. **Test size and scope are different things**: a narrow-scope UI test may need a browser (large), and a wide-scope test may still be small. Layering by directory gets some of them wrong, so the layering rules must be visible.
+
+## 6. Gaps against the current implementation and the implementation order
+
+Problems with the current scan summary (`src/audit-post.js` `render()`; the A1 self-audit output is in SpecGuard-evidence/a1-self-audit):
+
+- The first screen is a funnel line ("31 eligible = 31 inventoried; 31 selected = 3 reviewed whole + 28 forced (recorded unsure)") that testers cannot parse and that changes no action. It should move into Details.
+- The 52 "Static test signals" rows aggregate test-file-level numbers per unit and do not point to a specific test, so the reader cannot act.
+- There are no evidence levels, no owners, no Scores table and no CI section.
+
+Implementation order (each step needs a matching eval, owner rule of 10-18):
+
+| Step | Content | Evidence level | Depends on |
+|---|---|---|---|
+| R1 | New skeleton: conclusion line, Evidence used, Scores, Top actions, collapsed sections; map existing findings into it | — | None; pure rendering, can be compared by replaying existing audit.json |
+| R2 | Attribute quality signals to the test and remove the per-unit duplication | S | test-map |
+| R3 | Tests that never run: cross workflow + runner config + test files | S | New module, read-only |
+| R4 | CI section: check-runs history (passed after retry, whether each level runs on PRs) | E | Read-only API |
+| R5 | Per-level coverage (Codecov flags) | E | #434 |
+| R6 | Placement push-down candidates (S finds the seam + M judges) | S M | trace |
+| R7 | Requirement health, Design coverage | M | Precision must be measured first (judge calibration) |
+| R8 | Each action can be marked "not useful" (a command or checkbox in the scan issue); a category whose not-useful rate exceeds 10% is turned off by default (Google's rule) | — | scan issue state |
+
+R1–R5 do not depend on the model and can ship first; R6 and R7 stay collapsed by default until their precision is measured, and the method paragraph says "not yet measured".
