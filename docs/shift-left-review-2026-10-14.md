@@ -1,285 +1,285 @@
-# Shift-left 与目标对齐：第一性原理批判审查
+# Shift-left and goal alignment: a first-principles critical review
 
-日期：2026-10-14。基线：main `59bfffb`（#120–#124 已合并）。
-性质：只做分析。本文建立在 `docs/goal-first-principles.md`（U1–U20）和 `docs/handoff-goal-critique.md`（N1–N18、P0/P1）之上，不重复它们的论证，只给出这两份文档写完之后的状态变化和新问题。
+Date: 2026-10-14. Baseline: main `59bfffb` (#120–#124 merged).
+Nature: analysis only. This document builds on `docs/goal-first-principles.md` (U1–U20) and `docs/handoff-goal-critique.md` (N1–N18, P0/P1). It does not repeat their arguments; it only gives the state changes and new problems that appeared after those two documents were written.
 
-**更新（同日下午）：** §1–§8 是上午的审查，保留原文。下午的实跑结果、C1–C8 的状态变化、新发现的问题，以及仍未解决的问题，见 §9。傍晚的修复、两份外部审查的处理、安全兜底和 Kite 验收，见 §10。
+**Update (same day, afternoon):** §1–§8 are the morning review, kept as originally written. The afternoon's real runs, the status changes of C1–C8, newly found problems, and the problems still unresolved are in §9. The evening's fixes, the handling of two external reviews, the safety backstops, and the Kite acceptance are in §10.
 
-## 1. 结论
+## 1. Conclusions
 
-1. **SpecGuard 现在能在真实的外部 PR 上找到真实的测试缺陷，单次成本约 $0.01。** 2026-10-14 在 date-fns#4366 上做了一次手动运行，找到 2 个问题，人工核对后都成立：一个缺失测试，一个"去掉修复也照样通过"的弱测试（§4）。这是 shift-left 最想要的那类发现。
-2. **最大的缺口仍然是"结果有没有用"从来没在真实使用中测过。** did-fix、误报率、time-to-merge 至今都是零数据（§5 C1）。另外，**手动运行这条主线在结构上就收集不到 did-fix**：它只把结果写到 run 页面，不写 PR，也不跟踪后续推送。
-3. **今天验证过的引擎，并不是公司要用的引擎。** 今天所有的质量数据都来自 Claude Haiku 5.5（临时 secret `SPEC`）。公司的默认路径是 Copilot PAT，这条路径因为额度用完，最近一直没有跑过（§5 C2）。
-4. **把公司代码发给哪家模型服务商（Q8），是用 SpecGuard 分析内部仓库之前必须先定下来的问题。** 现在手动运行一旦对私有仓库使用 `SPEC`，代码就会被发到 Anthropic API。
-5. **在 precision（不误报）上做了很多，recall（不漏报）却没有在当前引擎上测过。** 截断防护、降级评审只展示高置信项，这些都在压误报。但如果没有在真实仓库上用植入缺陷测过 recall，"安静"可能只是"漏看"（§5 C4）。
-6. **测试分层的判断仍然靠模型，而 push-down 建议依赖这个判断。** express 用 supertest 走 HTTP 的测试被标成了 "unit"（§5 C5）。这类测试按很多团队的定义属于组件测试。
-7. **需求捕获依赖 PR 正文。** 今天三次运行都显示 "no structured acceptance criteria found"。一旦公司的 PR 正文写得很薄，评审就会退化成"只看代码的测试缺口"（§5 C6）。
+1. **SpecGuard can now find real test defects on real external PRs, at about $0.01 per run.** A manual run on date-fns#4366 on 2026-10-14 found 2 problems, and both held up under human checking: one missing test and one weak test that "still passes with the fix removed" (§4). This is exactly the kind of finding shift-left wants most.
+2. **The biggest gap is still that "is the result useful" has never been measured in real use.** did-fix, false-positive rate, and time-to-merge are all zero data so far (§5 C1). Moreover, **the manual-run main path structurally cannot collect did-fix**: it only writes results to the run page, does not write to the PR, and does not track later pushes.
+3. **The engine validated today is not the engine the company will use.** All of today's quality data comes from Claude Haiku 5.5 (temporary secret `SPEC`). The company's default path is the Copilot PAT, which has not run recently because the quota ran out (§5 C2).
+4. **Which model provider company code is sent to (Q8) must be settled before SpecGuard analyzes any internal repository.** Right now, a manual run that uses `SPEC` on a private repository sends the code to the Anthropic API.
+5. **A lot has been done on precision (no false positives), but recall (no misses) has not been measured on the current engine.** Truncation guards and the reduced review showing only high-confidence items all suppress false positives. But without recall measured on a real repository with seeded defects, "quiet" may just mean "not looking" (§5 C4).
+6. **Test layering is still judged by the model, and push-down suggestions depend on that judgment.** An express test that goes through HTTP with supertest was labeled "unit" (§5 C5). By many teams' definitions, this kind of test is a component test.
+7. **Requirement capture depends on the PR body.** All three runs today showed "no structured acceptance criteria found". If the company's PR bodies are thin, the review degrades into "code-only test gaps" (§5 C6).
 
-## 2. 第一性原理：shift-left 的价值链
+## 2. First principles: the shift-left value chain
 
-一个缺陷要在 PR 阶段被拦下，下面每一环都必须成立。任何一环断掉，价值就归零。
+For a defect to be stopped at the PR stage, every link below must hold. If any link breaks, the value drops to zero.
 
-| 环节 | 必须成立的条件 | 今天的证据 | 状态 |
+| Link | Condition that must hold | Evidence today | Status |
 |---|---|---|---|
-| E1 存在 | 缺陷在 PR 时刻能被静态看出来 | 只有 OSS 数据；用户仓库的 50 个缺陷分类（N7/P0-1）没做 | 未知 |
-| E2 看到 | 引擎读到了相关代码、测试和需求 | context pack 会读需求里点名的文件和同目录文件（#124）；date-fns 读到了 `subMonths/test.ts` | 部分 |
-| E3 说对 | 发现是真的，引用准确 | 今天 4 条外部发现人工核对全部成立；dogfood 有 1 条误报（测试文件被截断），已加防护（#123） | 小样本好 |
-| E4 及时 | 合并前送到作者面前 | PR 模式每次推送都跑，大约 1 分钟。**手动运行只写 run 页面，作者看不到** | PR 模式成立，手动运行不成立 |
-| E5 看懂 | 10 秒内知道补哪个测试 | summary v2：结论在第一行，带测试骨架；顶部排版正在重做（`feat/summary-clarity`） | 进行中 |
-| E6 行动 | 作者真的改了 | 零真实数据（N18） | 未测 |
-| E7 值得 | 收益大于噪声、延迟、成本 | 成本已降到每次 $0.01–0.10；噪声和延迟没有真实数据 | 成本成立 |
+| E1 Exists | The defect can be seen statically at PR time | Only OSS data; the 50-defect classification of the user's repositories (N7/P0-1) has not been done | Unknown |
+| E2 Sees | The engine reads the relevant code, tests, and requirements | The context pack reads files named in the requirements and files in the same directory (#124); date-fns read `subMonths/test.ts` | Partial |
+| E3 Says it right | Findings are real and citations are accurate | All 4 external findings today were verified by hand; dogfood had 1 false positive (test file truncated), and a guard was added (#123) | Good on a small sample |
+| E4 In time | Delivered to the author before merge | PR mode runs on every push, in about 1 minute. **Manual runs only write the run page, which the author cannot see** | Holds for PR mode, not for manual runs |
+| E5 Understood | Within 10 seconds the author knows which test to add | summary v2: conclusion on the first line, with a test skeleton; the top layout is being redone (`feat/summary-clarity`) | In progress |
+| E6 Acts | The author actually made changes | Zero real data (N18) | Not tested |
+| E7 Worth it | Benefit exceeds noise, latency, and cost | Cost is down to $0.01–0.10 per run; there is no real data on noise and latency | Cost holds |
 
-**推论：** E3 和 E5 是这一轮投入最多的环节，现在已经接近可用。真正的风险在 E1、E4、E6：它们决定 SpecGuard 是"工具"还是"摆设"，可是这三环一个都没测过。
+**Inference:** E3 and E5 are the links that got the most investment this round and are now close to usable. The real risk is in E1, E4, and E6: they decide whether SpecGuard is a "tool" or a "decoration", yet none of the three has been tested.
 
-## 3. 目标对齐
+## 3. Goal alignment
 
-原始需求（`docs/design.md:40-47`）：评审需求和测试，找出缺失的单元测试；确认编码规范；检查组件/集成测试里哪些应该下沉为单元测试；第一阶段交付 GitHub Actions workflow。用户在 2026-10-13 补充的决定见 `design.md:57-63`，并且把主线定为在 SpecGuard 仓库里手动运行、分析其他仓库。
+Original requirement (`docs/design.md:40-47`): review requirements and tests, find missing unit tests; confirm coding standards; check which component/integration tests should be pushed down to unit tests; the first phase delivers a GitHub Actions workflow. The decisions the user added on 2026-10-13 are in `design.md:57-63`, and they make the main path a manual run in the SpecGuard repository that analyzes other repositories.
 
-| 目标 | 现状 | 证据 | 差距 |
+| Goal | Current state | Evidence | Gap |
 |---|---|---|---|
-| G1 需求 + 测试 → 缺失单元测试 | 能做，质量在小样本上好 | date-fns 的缺失测试和弱测试（§4）；express 9/9 义务项有证据 | recall 没测；需求依赖 PR 正文 |
-| G2 编码规范已确认 | 能读规则文件；lint 结果需要配置 `standards_checks` | express 运行："Lint/format tools are configured … results are not confirmed" | 手动运行拿不到目标仓库的 CI check 结果，"确认"只能做到读规则文件这一步 |
-| G3 测试下沉 | 有建议机制，但从未被验证 | `design.md:511` "Pushdown suggestions are not validated"；supertest 被标成 unit | 分层定义因组织而异（N14），模型判断不可靠 |
-| G4 GitHub workflow 交付 | 完成：PR workflow、reusable workflow、手动运行、本地运行 | `.github/workflows/*`、`bin/specguard-local.js` | 私有仓库需要 `SPECGUARD_PAT`（未设置） |
-| G5 手动运行分析其他仓库（主线） | 能跑通公开仓库；结果可下载（artifact） | 今天 4 次手动运行 | 不能分析已关闭或已合并的 PR；scan 模式今天没有用 Claude 实跑；结果不会回到作者手里 |
-| G6 PAT 优先计费 | Copilot PAT 路径代码就绪，Claude 作为自动适配的另一条路径 | `src/credential.js` | Copilot 路径最近没有实跑（额度用完） |
+| G1 Requirements + tests → missing unit tests | Works; quality is good on a small sample | date-fns missing test and weak test (§4); express 9/9 obligations have evidence | recall not measured; requirements depend on the PR body |
+| G2 Coding standards confirmed | Can read rule files; lint results need `standards_checks` to be configured | express run: "Lint/format tools are configured … results are not confirmed" | A manual run cannot get the target repository's CI check results, so "confirmation" only goes as far as reading the rule files |
+| G3 Test push-down | A suggestion mechanism exists, but it has never been validated | `design.md:511` "Pushdown suggestions are not validated"; supertest was labeled unit | The layering definition varies by organization (N14), and the model's judgment is unreliable |
+| G4 GitHub workflow delivery | Done: PR workflow, reusable workflow, manual run, local run | `.github/workflows/*`, `bin/specguard-local.js` | Private repositories need `SPECGUARD_PAT` (not set) |
+| G5 Manual run analyzes other repositories (main path) | Works on public repositories; results can be downloaded (artifact) | 4 manual runs today | Cannot analyze closed or merged PRs; scan mode was not run for real with Claude today; results do not reach the author |
+| G6 PAT-first billing | The Copilot PAT path is code-ready; Claude is the other, auto-adapted path | `src/credential.js` | The Copilot path has not been run for real recently (quota ran out) |
 
-## 4. 今天的实证（手动运行，Claude Haiku 5.5）
+## 4. Today's empirical results (manual runs, Claude Haiku 5.5)
 
-| 运行 | 修复前（#124 之前） | 修复后 |
+| Run | Before the fix (before #124) | After the fix |
 |---|---|---|
-| express#7511 | 3/7 义务项有证据；4 条被引用校验误降级；需求 X1 显示 "Check by hand" | 9/9 有证据，没有误报 |
-| date-fns#4366 | context pack 只读了 20 KB；`subMonths` 没读到 | 读到 `subMonths/test.ts`，报出 1 个缺失测试和 1 个弱测试，人工核对都成立 |
+| express#7511 | 3/7 obligations have evidence; 4 were wrongly downgraded by citation validation; requirement X1 showed "Check by hand" | 9/9 have evidence, no false positives |
+| date-fns#4366 | The context pack read only 20 KB; `subMonths` was not read | Read `subMonths/test.ts`, reported 1 missing test and 1 weak test, both verified by hand |
 
-date-fns 的弱测试值得单独说一下：`addMonths(1月15日, -1.5)` 在修复前后结果相同，因为 JS 的 `setMonth` 本身就会截断。所以这条断言测不出回归。SpecGuard 给出了能区分修复前后的输入（3月15日）。这类问题正是覆盖率工具和"测试是否存在"检查都看不出来的。
+The date-fns weak test deserves a separate mention: `addMonths(January 15, -1.5)` gives the same result before and after the fix, because JS `setMonth` truncates on its own. So this assertion cannot detect a regression. SpecGuard supplied an input that distinguishes before from after (March 15). This is exactly the kind of problem that coverage tools and "does a test exist" checks cannot see.
 
-dogfood（SpecGuard 评审自己的 PR）期间，报出 2 条真实的弱测试或缺失测试，都已修复，并做了反向验证（去掉被测逻辑，测试会失败）。另有 1 条误报，原因是 3000 行的测试文件被截断。#123 加了防护：测试文件没看全时，不允许断言"缺测试"。
+During dogfood (SpecGuard reviewing its own PRs), it reported 2 real weak or missing tests, both fixed and verified in reverse (remove the logic under test and the test fails). There was also 1 false positive, caused by a 3000-line test file being truncated. #123 added a guard: when a test file was not fully read, asserting "missing test" is not allowed.
 
-**样本局限：** 外部只有 2 个 PR，而且都是测试规范很好的 OSS 库。这不能代表公司仓库。
+**Sample limitation:** There are only 2 external PRs, and both are from OSS libraries with excellent testing practices. This cannot represent the company's repositories.
 
-## 5. 关键问题（按影响排序）
+## 5. Key problems (ordered by impact)
 
-### C1 没有真实使用的结果数据，手动运行也收集不到
+### C1 No result data from real use, and manual runs cannot collect it
 
-- did-fix、误报率、time-to-merge：零数据（Explore 核对，2026-10-14）。`eval/weekly-report.js` 等脚本存在，但从未在真实数据上跑过。
-- 手动运行使用 `delivery: summary`，不写 PR，没有 sticky summary，也就没有 "Since last push" 和 fix-through 的累积。已关闭或已合并的 PR 会被拒绝分析。
-- **建议：** 把手动运行的结果 artifact 汇总进 SpecGuard 仓库里的一个台账（ledger）issue，每次运行追加一行：目标、发现数、类型、成本。对同一个 PR，作者推送后再跑一次，比较两次结果就能得到 fixed/new。这样不需要往目标仓库写任何东西，就能开始积累 E6 的数据。
+- did-fix, false-positive rate, time-to-merge: zero data (checked by Explore, 2026-10-14). Scripts such as `eval/weekly-report.js` exist but have never run on real data.
+- Manual runs use `delivery: summary`, do not write to the PR, and have no sticky summary, so there is no "Since last push" and no accumulation of fix-through. Closed or merged PRs are refused for analysis.
+- **Suggestion:** Aggregate the manual-run result artifacts into a ledger issue in the SpecGuard repository, appending one row per run: target, number of findings, types, cost. For the same PR, run again after the author pushes, and comparing the two results gives fixed/new. This starts accumulating E6 data without writing anything to the target repository.
 
-### C2 验证用的引擎与公司路径不一致，合规问题还没定
+### C2 The validation engine differs from the company path, and the compliance question is still open
 
-- 今天的质量数据全部来自 Claude Haiku 5.5。公司默认的 Copilot 路径（`auto` 模型）从额度用完起就没有实跑过；Kite 试点中 Copilot 有 2/5 次没满足 JSON 契约（`docs/pilot-kite.md:29`）。
-- `specguard-run.yml` 和 `ci.yml` 里还留着临时的 `llm_token: … || secrets.SPEC` 和 `model: haiku-5.5`。
-- Q8（能否把代码发给 Copilot / Anthropic）没有答复。对私有仓库做手动运行之前，必须先回答。
-- **建议：** 做一个明确决定。要么 Claude 成为正式支持的引擎（需要 Q8 批准，并把 `SPEC` 改名为 `SPECGUARD_LLM_TOKEN`），要么等 Copilot 额度恢复后，在同样两个 PR 上用 Copilot 重跑做 A/B，再移除临时配置。
+- All of today's quality data comes from Claude Haiku 5.5. The company's default Copilot path (`auto` model) has not run for real since the quota ran out; in the Kite pilot, Copilot failed to satisfy the JSON contract in 2 of 5 runs (`docs/pilot-kite.md:29`).
+- `specguard-run.yml` and `ci.yml` still contain the temporary `llm_token: … || secrets.SPEC` and `model: haiku-5.5`.
+- Q8 (may code be sent to Copilot / Anthropic) has no answer. It must be answered before running manual runs on private repositories.
+- **Suggestion:** Make an explicit decision. Either Claude becomes an officially supported engine (requires Q8 approval, and renaming `SPEC` to `SPECGUARD_LLM_TOKEN`), or wait for the Copilot quota to recover, rerun the same two PRs with Copilot for an A/B comparison, and then remove the temporary configuration.
 
-### C3 降级评审是 Haiku 的常态，代价没有量化
+### C3 Reduced review is the norm for Haiku, and its cost is not quantified
 
-- Haiku 被归为 fast tier，所以每次都是 reduced：只展示高置信的发现。今天 date-fns 的两条发现都通过了这个门槛，但被挡掉的发现有多少、其中多少是真的，没有数据。
-- **建议：** 对今天这两个 PR，比较 reduced 输出和完整输出（看 findings.json 里被过滤掉的部分），决定 Haiku 加上 context pack 之后是否还需要降级。
+- Haiku is classified as the fast tier, so every run is reduced: only high-confidence findings are shown. Both of today's date-fns findings passed this gate, but there is no data on how many findings were held back or how many of those were real.
+- **Suggestion:** For today's two PRs, compare the reduced output with the full output (look at the filtered-out part of findings.json) and decide whether Haiku plus the context pack still needs the reduced review.
 
-### C4 recall 没有在当前引擎上测过
+### C4 Recall has not been measured on the current engine
 
-- 这一轮的改动大多在压误报（引用校验、截断防护、低置信项不计数）。这些都对，但"安静"和"漏看"在输出上看起来一样。
-- 植入缺陷的工具已经有了（`eval/mutate`、seeded cases），只是没有用 Claude 和 context pack 跑过。
-- **建议：** 选 1 个公开仓库，植入 10 个已知的测试缺口（删断言、放宽断言、删边界用例），走手动运行，报告 recall。recall 低于 6/10，就不要再加防误报的规则。
+- Most changes this round suppress false positives (citation validation, truncation guard, low-confidence items not counted). All of that is right, but "quiet" and "not looking" look identical in the output.
+- Tools for seeding defects already exist (`eval/mutate`, seeded cases); they just have not been run with Claude and the context pack.
+- **Suggestion:** Pick 1 public repository, seed 10 known test gaps (delete assertions, loosen assertions, delete boundary cases), run it as a manual run, and report recall. If recall is below 6/10, stop adding rules that suppress false positives.
 
-### C5 测试分层靠模型判断，push-down 建议不可靠
+### C5 Test layering relies on model judgment, so push-down suggestions are unreliable
 
-- express 用 supertest 发 HTTP 请求的测试被标成 "unit"。对很多团队来说这是组件测试。G3（下沉建议）依赖这个判断，而它从未被验证过（`design.md:511`）。
-- **建议：** 让手动运行支持一个 `test_layers` 映射（路径 glob → 层级），由用户声明；没有声明时，确定性规则优先于模型判断（例如：用到 supertest/HTTP 客户端的算组件测试）。
+- An express test that sends HTTP requests with supertest was labeled "unit". For many teams that is a component test. G3 (push-down suggestions) depends on this judgment, and it has never been validated (`design.md:511`).
+- **Suggestion:** Let manual runs support a `test_layers` mapping (path glob → layer), declared by the user; when none is declared, deterministic rules take precedence over model judgment (for example: anything using supertest or an HTTP client counts as a component test).
 
-### C6 需求捕获依赖 PR 正文，公司 PR 可能更薄
+### C6 Requirement capture depends on the PR body, and company PRs may be thinner
 
-- 今天三次运行都是 "no structured acceptance criteria found"，需求来自 PR 正文的条目和关联 issue。OSS PR 的正文通常写得很仔细，公司的 PR 不一定。
-- P1-1（PR 模板里的 "Acceptance criteria:" 段）没有作为交付物提供。
-- **建议：** 提供一个可复制的 PR 模板，并在 summary 的 Details 里注明"没有结构化验收条件；在 PR 正文加 `Acceptance criteria:` 段会让评审更准"。在第一屏只出现一次，不制造噪声。
+- All three runs today said "no structured acceptance criteria found"; the requirements came from items in the PR body and linked issues. The bodies of OSS PRs are usually written carefully; company PRs may not be.
+- P1-1 (an "Acceptance criteria:" section in the PR template) has not been provided as a deliverable.
+- **Suggestion:** Provide a copyable PR template, and note in the summary's Details "no structured acceptance criteria; adding an `Acceptance criteria:` section to the PR body would make the review more accurate". Show it only once on the first screen, so it does not create noise.
 
-### C7 手动运行的覆盖面
+### C7 Coverage of manual runs
 
-- 能做：公开仓库的 open PR（PR 模式），仓库或分支的 scan。
-- 不能做：私有仓库（`SPECGUARD_PAT` 未设置）、已关闭或已合并的 PR、执行证据（手动运行没有 `coverage_files`）。
-- scan 模式今天没有用 Claude 实跑过。scan 的两次确认机制依赖 issue 状态，但还没在真实仓库上走完一个周期。
+- Can do: open PRs of public repositories (PR mode), scans of a repository or branch.
+- Cannot do: private repositories (`SPECGUARD_PAT` not set), closed or merged PRs, execution evidence (manual runs have no `coverage_files`).
+- Scan mode was not run for real with Claude today. Scan's two-run confirmation mechanism depends on issue state, but it has not completed a full cycle on a real repository.
 
-### C8 summary 仍有可读性债务
+### C8 The summary still has readability debt
 
-- 顶部排版和 "Not assessed" 的歧义正在修（`feat/summary-clarity`）。
-- Details 里的义务项表格仍然很重，"Unit evidence X/Y" 可能被误读成 KPI（N12）。PR summary 没有"不是覆盖率、不用于考核个人"的说明，scan 模式有。
+- The top layout and the "Not assessed" ambiguity are being fixed (`feat/summary-clarity`).
+- The obligation table in Details is still heavy, and "Unit evidence X/Y" may be misread as a KPI (N12). The PR summary has no note saying "this is not coverage and not for evaluating individuals"; scan mode has it.
 
-## 6. 已验证与未验证
+## 6. Verified and not verified
 
-| 已验证（有实跑证据） | 未验证 |
+| Verified (with evidence from real runs) | Not verified |
 |---|---|
-| 凭证自动适配（Claude 路径）；成本有硬上限 | Copilot 路径的当前质量 |
-| 在外部公开 PR 上找到真实的缺失测试和弱测试（n=2 个 PR） | recall；公司仓库上的表现 |
-| context pack 能读到需求点名的文件 | 大型 monorepo 上的打包效果 |
-| 截断时不再断言缺测试 | 防护是否压掉了太多真实发现 |
-| 手动运行端到端：触发、评审、artifact | 私有仓库、scan 模式的两次确认周期 |
-| summary v2 的结构 | 开发者是否真的在 10 秒内看懂并去修（E5、E6） |
+| Credential auto-adaptation (Claude path); cost has a hard cap | Current quality of the Copilot path |
+| Found real missing tests and weak tests on external public PRs (n=2 PRs) | recall; performance on company repositories |
+| The context pack can read files named by requirements | Packing effectiveness on large monorepos |
+| No longer asserts missing tests when truncated | Whether the guard suppresses too many real findings |
+| Manual run end to end: trigger, review, artifact | Private repositories; the two-run confirmation cycle of scan mode |
+| Structure of summary v2 | Whether developers really understand within 10 seconds and go fix it (E5, E6) |
 
-## 7. 需要用户决定的事
+## 7. Decisions needed from the user
 
-| 问题 | 为什么只有用户能定 | 阻塞什么 |
+| Question | Why only the user can decide | What it blocks |
 |---|---|---|
-| Q8：能否把公司代码发给 Anthropic（或 Copilot） | 公司合规政策 | 用 Claude 分析任何内部仓库 |
-| Claude 是否成为正式引擎 | 采购和计费 | 移除临时配置；C2 |
-| 建 `SPECGUARD_PAT`（只读，目标仓库） | 需要用户账号创建 | 分析私有仓库 |
-| 50 个历史缺陷样本（Q6 剩下的部分） | 只有用户能访问缺陷系统 | E1：确定上限 |
-| Q4：是否评审"需求本身是否可测试" | 产品范围 | U10、N10 |
-| Q7：是否评审 coding agent 写的 PR | 产品范围 | N1 |
+| Q8: may company code be sent to Anthropic (or Copilot) | Company compliance policy | Analyzing any internal repository with Claude |
+| Whether Claude becomes an official engine | Procurement and billing | Removing the temporary configuration; C2 |
+| Create `SPECGUARD_PAT` (read-only, target repository) | Needs creation from the user's account | Analyzing private repositories |
+| 50 historical defect samples (the remaining part of Q6) | Only the user can access the defect system | E1: determining the upper bound |
+| Q4: whether to review "is the requirement itself testable" | Product scope | U10, N10 |
+| Q7: whether to review PRs written by coding agents | Product scope | N1 |
 
-## 8. 下一步（按优先级，带退出条件）
+## 8. Next steps (by priority, with exit conditions)
 
-| 优先级 | 动作 | 退出条件 |
+| Priority | Action | Exit condition |
 |---|---|---|
-| P0 | 合并 summary 排版修复 | 重跑 date-fns 后，第一屏 ≤ 8 行，没有内部用语 |
-| P0 | 用户答复 Q8，并决定正式引擎（C2） | 临时 `SPEC` 和 `haiku-5.5` 从两个 workflow 中移除 |
-| P0 | 手动运行结果台账（C1） | SpecGuard 仓库里有一个 issue，自动追加每次手动运行的结果行 |
-| P1 | recall 实验（C4） | 10 个植入缺口的 recall 和 precision 数字写进 `docs/validation-plan.md` |
-| P1 | reduced 与完整输出对比（C3） | 决定 Haiku 加 context pack 后是否保留降级评审 |
-| P1 | 用 `SPECGUARD_PAT` 在 Kite 上做一次手动运行 | 私有仓库路径端到端跑通 |
-| P2 | `test_layers` 声明（C5）；PR 模板（C6）；scan 用 Claude 实跑一个周期（C7） | 各自有一次实跑结果 |
+| P0 | Merge the summary layout fix | After rerunning date-fns, the first screen is ≤ 8 lines with no internal jargon |
+| P0 | User answers Q8 and decides the official engine (C2) | Temporary `SPEC` and `haiku-5.5` are removed from both workflows |
+| P0 | Manual-run result ledger (C1) | There is an issue in the SpecGuard repository that automatically appends a result row for each manual run |
+| P1 | recall experiment (C4) | recall and precision numbers for 10 seeded gaps are written into `docs/validation-plan.md` |
+| P1 | Compare reduced and full output (C3) | Decide whether to keep reduced review after Haiku plus the context pack |
+| P1 | Do one manual run on Kite with `SPECGUARD_PAT` | The private-repository path runs end to end |
+| P2 | `test_layers` declaration (C5); PR template (C6); one cycle of scan run for real with Claude (C7) | Each has one real-run result |
 
-**不做的事：** 在 C1 和 C4 有数据之前，不再增加新的检测机制或防误报规则。现在缺的不是机制，是证据。
+**What not to do:** Until C1 and C4 have data, do not add new detection mechanisms or false-positive-suppression rules. What is missing now is not mechanisms but evidence.
 
-## 9. 下午更新：实跑结果与未解决的问题
+## 9. Afternoon update: real-run results and unresolved problems
 
-基线：main `87667c0`（#164–#166 已合并）。引擎：Claude Haiku 5.5，API 模式（一次调用，没有工具）。
+Baseline: main `87667c0` (#164–#166 merged). Engine: Claude Haiku 5.5, API mode (one call, no tools).
 
-### 9.1 合并的改动
+### 9.1 Merged changes
 
-| PR | 内容 | 对应问题 |
+| PR | Content | Problem addressed |
 |---|---|---|
-| #164 | summary 只在结论行保留图标，表格和标题是纯文字，每条发现单独评论 | C8 |
-| #165 | 按公开名字匹配测试（`test/res.status.js` 对应 `res.status = function`）；更多断言写法计入（supertest `.expect(`、chai、tap 等）；literal guard：被引用行的错误信息已经出现在某个测试里时，missing_test 降为低置信 | C9（新）、误报 |
-| #166 | 装箱公平份额：每个审查对象的测试最多用剩余预算的平均份额；没有完整进入上下文的单元不计入、不记成 `covered`、在第一屏注明；按名字定义的属性（`defineGetter`）计为公开名字 | C11（新） |
-| Kite #7、#8 | Kite 的 scan workflow 改为 SpecGuard main 加 Claude 引擎，并拉取完整 git 历史 | C7 |
+| #164 | The summary keeps icons only on the conclusion line; tables and headings are plain text; each finding gets its own comment | C8 |
+| #165 | Match tests by public name (`test/res.status.js` corresponds to `res.status = function`); more assertion styles count (supertest `.expect(`, chai, tap, etc.); literal guard: when the error message of the cited line already appears in some test, missing_test is downgraded to low confidence | C9 (new), false positives |
+| #166 | Fair-share packing: each reviewed unit's tests may use at most an equal share of the remaining budget; units that did not fully enter the context are not counted, not recorded as `covered`, and are noted on the first screen; properties defined by name (`defineGetter`) count as public names | C11 (new) |
+| Kite #7, #8 | Kite's scan workflow changed to SpecGuard main plus the Claude engine, and fetches the full git history | C7 |
 
-**与 §8 "不做的事" 的冲突：** #165 的 literal guard 和进行中的 `D*` 准则都是新机制，违反了"有 C1、C4 数据之前不再加机制"。理由是它们各自对应已经人工核对过的失败：express 两条误报，Kite 需求行被丢弃。这条原则仍然成立。之后加任何机制，都要先有一条被核对过的失败作为证据。
+**Conflict with §8 "What not to do":** #165's literal guard and the in-progress `D*` criterion are both new mechanisms, which violates "no new mechanisms until there is C1 and C4 data". The justification is that each corresponds to a failure that was already verified by hand: two express false positives, and a dropped Kite requirement row. The principle still stands. Any mechanism added later must first have a verified failure as evidence.
 
-### 9.2 实证
+### 9.2 Empirical results
 
-| 运行 | 结果 | 人工核对 |
+| Run | Result | Human check |
 |---|---|---|
-| express scan，#165 之前 | 6 个单元只看到 2 个，却显示 "6 of 6"；另外 4 个记成 `covered`；2 条 missing_test 都是误报 | 两条误报都有对应测试（`test/res.status.js:119-201`、`test/res.cookie.js:274`） |
-| express scan，#165 之后 | 两条误报消失；新出现 1 条弱测试误报（`res.sendFile.js:170`，该测试真正的检查是 `cb(error)`） | 误报 |
-| express scan，#166 之后，跑了 2 次 | 6 个单元都完整进入上下文；2 次都报出 `test/req.fresh.js:102`，`toUTCString` 少了 `()`，If-Modified-Since 这条路径实际没测到 | **真的，是 express 测试里的 bug**。另外两次都出现 1 条可能成立的弱测试（`app.listen.js:41`）和 1 条误报（`utils.js:130`） |
-| express 真缺口 `req.fresh` 对非 GET 方法返回 false | 4 次运行里只有 1 次报出，而且是低置信（藏在 Details 里） | 漏报 |
-| Kite PR #6（开发者是 Sonnet，实现 `design.md` §4.1） | 17 秒，$0.0075，用 job token，不需要 PAT；两条单元测试核对成立；`overlayDone` 接线未测，标为"需要人判断" | 成立。但需求行被丢弃（见 C10） |
-| Kite scan（131 个需求块加 12 个单元） | 80 个块只答了 2 个，整次被校验作废；输出 553 token；需求文档没有进入上下文 | 失败（见 C12） |
-| 植入缺陷的召回测评（#162，SpecGuard 仓库） | 精确率 100%，召回率 86%（按评分）或 91%（把 summary 里可见的也算上） | 种子用例，不代表真实仓库 |
+| express scan, before #165 | Only 2 of 6 units were seen, yet it showed "6 of 6"; the other 4 were recorded as `covered`; both missing_test findings were false positives | Both false positives have corresponding tests (`test/res.status.js:119-201`, `test/res.cookie.js:274`) |
+| express scan, after #165 | Both false positives disappeared; 1 new weak-test false positive appeared (`res.sendFile.js:170`, whose real check is `cb(error)`) | False positive |
+| express scan, after #166, run 2 times | All 6 units fully entered the context; both runs reported `test/req.fresh.js:102`, where `toUTCString` is missing `()`, so the If-Modified-Since path is actually not tested | **Real, a bug in the express test.** In addition, both runs showed 1 likely-valid weak test (`app.listen.js:41`) and 1 false positive (`utils.js:130`) |
+| express real gap: `req.fresh` returns false for non-GET methods | Reported in only 1 of 4 runs, and with low confidence (hidden in Details) | Miss |
+| Kite PR #6 (developer is Sonnet, implementing `design.md` §4.1) | 17 seconds, $0.0075, uses the job token, no PAT needed; two unit tests verified as valid; the `overlayDone` wiring is untested, marked "needs human judgment" | Valid. But the requirement row was dropped (see C10) |
+| Kite scan (131 requirement blocks plus 12 units) | Only 2 of 80 blocks were answered, and the whole run was voided by validation; output was 553 tokens; the requirements document did not enter the context | Failed (see C12) |
+| Seeded-defect recall evaluation (#162, SpecGuard repository) | Precision 100%, recall 86% (by scoring) or 91% (also counting what is visible in the summary) | Seeded cases; does not represent real repositories |
 
-### 9.3 C1–C8 状态
+### 9.3 Status of C1–C8
 
-| 问题 | 状态 | 变化 |
+| Problem | Status | Change |
 |---|---|---|
-| C1 没有真实使用数据 | 未解决 | Kite 的 PR 模式会写回 PR，fix-through 可以开始累积，但开发者是 agent，不算真实数据。台账没做 |
-| C2 引擎与合规 | 部分 | 用户确认 Kite 是个人仓库，可以用 Anthropic。公司仓库的 Q8 仍未答复；Copilot 路径仍未实跑；`ci.yml` 里的临时 `SPEC` 和 `haiku-5.5` 仍在 |
-| C3 降级评审的代价 | 未解决 | 没有对比数据 |
-| C4 recall | 部分 | 种子用例召回率 86–91%。真实仓库：express 的真缺口 4 次里只报出 1 次。没有在真实仓库上植入缺口测过 |
-| C5 测试分层 | 未解决 | 每次都输出 "nothing to move down"，没有一条正面案例被验证 |
-| C6 需求依赖 PR 正文 | 部分 | Kite 的需求在仓库文档里，`design.md` 能被发现。但 PR 实现的是没改动的 spec 句子时，需求会丢（C10） |
-| C7 手动运行覆盖面 | 部分 | 私有个人仓库可以走仓库自带的 workflow，用 job token。scan 用 Claude 实跑过：只有代码的仓库能跑通，带文档的仓库跑不通（C12） |
-| C8 summary 可读性 | 部分 | #164 已合并。PR summary 里仍没有"不是覆盖率、不用于考核个人"的说明 |
+| C1 No real-use data | Unresolved | Kite's PR mode writes back to the PR, so fix-through can start accumulating, but the developer is an agent, so it does not count as real data. The ledger is not done |
+| C2 Engine and compliance | Partial | The user confirmed Kite is a personal repository and Anthropic may be used. Q8 for company repositories is still unanswered; the Copilot path has still not run for real; the temporary `SPEC` and `haiku-5.5` in `ci.yml` are still there |
+| C3 Cost of reduced review | Unresolved | No comparison data |
+| C4 recall | Partial | Seeded-case recall is 86–91%. On a real repository: the real express gap was reported in 1 of 4 runs. Nothing has been tested by seeding gaps in a real repository |
+| C5 Test layering | Unresolved | Every run outputs "nothing to move down"; not one positive case has been validated |
+| C6 Requirements depend on the PR body | Partial | Kite's requirements are in repository documents, and `design.md` can be discovered. But when a PR implements an unchanged spec sentence, the requirement is lost (C10) |
+| C7 Coverage of manual runs | Partial | Private personal repositories can use the repository's own workflow with the job token. Scan has been run for real with Claude: repositories with only code work, repositories with documents do not (C12) |
+| C8 summary readability | Partial | #164 is merged. The PR summary still has no note saying "this is not coverage and not for evaluating individuals" |
 
-### 9.4 下午发现的新问题
+### 9.4 New problems found in the afternoon
 
-| 编号 | 问题 | 影响 | 状态 |
+| ID | Problem | Impact | Status |
 |---|---|---|---|
-| C9 | 测试匹配漏掉"每个方法一个测试文件"的约定（`test/res.status.js`）；断言正则不认 supertest 等写法，140 个有断言的测试被算成"没断言" | scan 误报 | #165、#166 已修。名字少于 4 个字符的（`req.ip`、`req.get`）仍然匹配不上 |
-| C10 | **场景 A 溯源断了**：PR 实现了一条没改动的 spec 句子。确定性追溯已经找到 `design.md:93`（得分 15.55），但模型输出需求行时漏了引文，整行被校验丢弃，第一屏显示 "Requirements: none found"，"rounded vs floor" 的不一致被埋掉 | 产品的核心价值（validation）断了 | 进行中：`D*` 准则把追溯高分命中的需求块收集起来，引文由系统确定性填写 |
-| C11 | 装箱是深度优先：第 1 个单元吃光预算，其余单元没进上下文，却被计为已审、记成 `covered` | 虚假的"干净" | #166 已修，express 上验证为 6/6 |
-| C12 | **全仓审计的文档部分在 Claude 上跑不通**：一次调用要答 80 个块加 12 个单元，需求文档在装箱里排最后、被饿死；超过 20% 的块没回答，整次作废 | 自动溯源完全不可用 | 进行中：scan 拆成多次调用，需求块按预算分批，结果确定性合并，一批失败只影响这一批 |
-| C13 | 单个源文件超过每个文件的上限（约 41 KB）时永远进不了上下文，只能被如实标成未审 | 大仓库里风险最高的文件往往也最大 | 未解决。方向：审查单位从文件细化到函数 |
-| C14 | 稳定的误报每次运行都重复出现（`utils.js:130` 两次都报），跨两次运行确认挡不住 | 打开 scan issue 后，误报会被确认 | 未解决。等 C4 有数据后再决定是否处理 |
-| C15 | scan 模式不检查 coding standard | 原始需求第 1 条只在 PR 模式里覆盖 | 未决定：scan 是否需要管这一项 |
+| C9 | Test matching misses the "one test file per method" convention (`test/res.status.js`); the assertion regex does not recognize supertest and similar styles, so 140 tests with assertions were counted as "no assertions" | scan false positives | Fixed in #165 and #166. Names shorter than 4 characters (`req.ip`, `req.get`) still cannot be matched |
+| C10 | **Scenario A provenance is broken**: a PR implements an unchanged spec sentence. Deterministic tracing already found `design.md:93` (score 15.55), but when the model output the requirement row it left out the quote, the whole row was discarded by validation, the first screen showed "Requirements: none found", and the "rounded vs floor" inconsistency was buried | The product's core value (validation) is broken | In progress: the `D*` criterion collects the requirement blocks with high tracing scores, and the system fills in the quote deterministically |
+| C11 | Packing is depth-first: the 1st unit eats the whole budget, the other units do not enter the context, yet are counted as reviewed and recorded as `covered` | False "clean" | Fixed in #166, verified as 6/6 on express |
+| C12 | **The document part of the full-repository audit does not work on Claude**: one call has to answer 80 blocks plus 12 units, and the requirements documents are packed last and starved; more than 20% of blocks went unanswered and the whole run was voided | Automatic provenance is completely unusable | In progress: scan is split into multiple calls, requirement blocks are batched by budget, results are merged deterministically, and one failed batch affects only that batch |
+| C13 | A single source file larger than the per-file limit (about 41 KB) can never enter the context and can only be honestly marked as unreviewed | In large repositories the riskiest file is often also the largest | Unresolved. Direction: refine the review unit from file to function |
+| C14 | A stable false positive repeats on every run (`utils.js:130` was reported both times), and two-run confirmation cannot block it | After a scan issue is opened, the false positive will be confirmed | Unresolved. Decide whether to handle it after C4 has data |
+| C15 | scan mode does not check the coding standard | Item 1 of the original requirement is covered only in PR mode | Undecided: whether scan needs to handle this |
 
-### 9.5 仍未解决的问题，按对目标的影响排序
+### 9.5 Still-unresolved problems, ordered by impact on the goal
 
-1. **自动溯源（C10、C12）。** 只有需求这一侧能区分"测试和代码一致"与"行为正确"（`goal-first-principles.md` 结论 2、3）。现在两个模式都断在这里：PR 模式的场景 A 和全仓审计的文档部分。原因相同：系统已经确定性地找到了需求，却把搬运需求文本的工作交给了模型，而且一次给得太多。两个修复都在进行中。
-2. **真实使用的效果（C1，即 E6）。** 仍然没有一个真实开发者看到发现并去修的记录。Kite 的 PR 模式已经能写回 PR，但开发者是 agent。
-3. **真实仓库的召回率（C4）。** 种子用例 86–91%，但 express 的真缺口 4 次只报出 1 次。没有在真实仓库上植入缺口量化过。
-4. **测试下沉（C5，G3）。** 原始需求第 2 条从未被验证。
-5. **公司路径（C2）。** 公司仓库用哪个引擎、Q8 能否把代码发给模型服务商，都没有定。Copilot 路径的当前质量未知。
-6. **大文件（C13）和稳定误报（C14）。** 会随仓库变大而变严重。
-7. **coding standard 在 scan 里缺位（C15）**，以及 PR summary 缺免责说明（C8）。
+1. **Automatic provenance (C10, C12).** Only the requirement side can distinguish "the tests agree with the code" from "the behavior is correct" (`goal-first-principles.md` conclusions 2, 3). Now both modes break here: scenario A in PR mode and the document part of the full-repository audit. The cause is the same: the system had already found the requirement deterministically, but handed the job of carrying the requirement text to the model, and gave it too much at once. Both fixes are in progress.
+2. **Effect in real use (C1, i.e. E6).** There is still not a single record of a real developer seeing a finding and going to fix it. Kite's PR mode can already write back to the PR, but the developer is an agent.
+3. **recall on real repositories (C4).** Seeded cases are at 86–91%, but the real express gap was reported in only 1 of 4 runs. Nothing has been quantified by seeding gaps in a real repository.
+4. **Test push-down (C5, G3).** Item 2 of the original requirement has never been validated.
+5. **Company path (C2).** Which engine company repositories use and whether Q8 allows sending code to a model provider are both undecided. The current quality of the Copilot path is unknown.
+6. **Large files (C13) and stable false positives (C14).** They will get worse as repositories grow.
+7. **Coding standard missing in scan (C15)**, and the missing disclaimer in the PR summary (C8).
 
-### 9.6 更新后的下一步
+### 9.6 Updated next steps
 
-| 优先级 | 动作 | 退出条件 |
+| Priority | Action | Exit condition |
 |---|---|---|
-| P0（进行中） | PR 模式加 `D*` 准则（C10） | Kite PR #6 重跑后，§4.1 出现在第一屏，"rounded vs floor" 交给人判断 |
-| P0（进行中） | scan 拆成多次调用（C12） | Kite 131 个块分批审完，不再整次作废。10-13 用 Copilot 发现的 3 条需求和代码不一致能复现 |
-| P1 | 在 Kite 上植入 10 个已知缺口，覆盖单元测试和需求两侧（C4） | 召回率和精确率写进 `docs/validation-plan.md` |
-| P1 | 函数级审查单位（C13） | 一个超过 41 KB 的单元能被审到 |
-| P1 | 用户决定公司引擎和 Q8（C2） | 移除 `ci.yml` 里的临时配置 |
-| P2 | 测试下沉找一个正面案例（C5）；scan 是否管 coding standard（C15）；PR summary 加免责说明（C8）；手动运行台账（C1） | 各自有一次实跑结果或一个决定 |
+| P0 (in progress) | Add the `D*` criterion to PR mode (C10) | After rerunning Kite PR #6, §4.1 appears on the first screen, and "rounded vs floor" is handed to a human to judge |
+| P0 (in progress) | Split scan into multiple calls (C12) | Kite's 131 blocks are reviewed in batches and the run is no longer voided as a whole. The 3 requirement-vs-code inconsistencies found with Copilot on 10-13 can be reproduced |
+| P1 | Seed 10 known gaps on Kite, covering both the unit-test side and the requirement side (C4) | recall and precision are written into `docs/validation-plan.md` |
+| P1 | Function-level review unit (C13) | A unit larger than 41 KB can be reviewed |
+| P1 | User decides the company engine and Q8 (C2) | Temporary configuration in `ci.yml` is removed |
+| P2 | Find one positive case for test push-down (C5); whether scan handles coding standard (C15); add a disclaimer to the PR summary (C8); manual-run ledger (C1) | Each has one real-run result or one decision |
 
-## 10. 傍晚更新：自动溯源打通、两份外部审查、安全兜底
+## 10. Evening update: automatic provenance works, two external reviews, safety backstops
 
-基线：main（#168–#177 已合并）。引擎：Claude Haiku 5.5。验收仓库：Mira190/Kite（个人私有仓库，SpecGuard 在 Kite 自己的 workflow 里运行，用 job token，不需要 PAT）。
+Baseline: main (#168–#177 merged). Engine: Claude Haiku 5.5. Acceptance repository: Mira190/Kite (a personal private repository; SpecGuard runs in Kite's own workflow, using the job token, no PAT needed).
 
-### 10.1 合并的改动
+### 10.1 Merged changes
 
-| PR | 内容 | 对应问题 |
+| PR | Content | Problem addressed |
 |---|---|---|
-| #168、#171、#172、#176 | `D*` 准则：确定性追溯高分命中的需求块，由 SpecGuard 收集，引文由系统填写；`D*` 由追溯关联到 hunk 内的 obligation；一致性没定论时，第一屏提示"Check that the change does what this requirement says"，并附上模型给出的原因 | C10 |
-| #169、#173、#177 | scan 拆成多次调用：需求块按 20 个一批，结果确定性合并；输出被截断的批次对半拆开重试；漏答的块保留已答部分，没答的重排一次；总成本受 `max_budget_usd` 硬上限约束 | C12 |
-| #170 | 分批时按引用行开窗口装箱；需求块里的数字作为证据字面量，同时命中两个数字的代码窗口优先进入候选 | C12、C9 |
-| #174 | 私有目标配公开控制仓库时直接失败，查不到可见性也失败（SG-01）；完整的需求块原文进入模型，取代原来的 240 字符截断（SG-03） | 安全、C12 |
-| #175 | 按测试层级给建议；冲突语义；没给骨架的缺口发现不计数；不完整时状态为 incomplete（SG-02）；去掉"没匹配到测试就当场确认"（SG-04）；骨架标为"Sketch, not run"；"Confirmed" 改为"Reported in two runs"；Details 截短 | 外部审查 |
-| #177 | 有歧义的需求判为 needs_human 或 unknown，不判为 contradicted 或 mismatch | 外部审查 |
+| #168, #171, #172, #176 | `D*` criterion: requirement blocks with high deterministic-tracing scores are collected by SpecGuard, and the quote is filled in by the system; `D*` is associated through tracing to obligations inside the hunk; when consistency is inconclusive, the first screen prompts "Check that the change does what this requirement says", with the reason given by the model attached | C10 |
+| #169, #173, #177 | scan is split into multiple calls: requirement blocks go in batches of 20, and results are merged deterministically; a batch whose output was truncated is split in half and retried; for blocks left unanswered, the answered part is kept and unanswered ones are re-queued once; total cost is bounded by the hard cap `max_budget_usd` | C12 |
+| #170 | When batching, packing opens windows around cited lines; numbers in a requirement block serve as evidence literals, and code windows hitting two numbers at once get priority as candidates | C12, C9 |
+| #174 | A private target with a public control repository fails immediately, and failing to look up visibility also fails (SG-01); the full original text of the requirement block goes to the model, replacing the earlier 240-character truncation (SG-03) | Security, C12 |
+| #175 | Suggestions by test layer; conflict semantics; gap findings without a skeleton are not counted; status is incomplete when incomplete (SG-02); removed "confirm on the spot when no test matched" (SG-04); skeletons labeled "Sketch, not run"; "Confirmed" changed to "Reported in two runs"; Details shortened | External review |
+| #177 | An ambiguous requirement is judged needs_human or unknown, not contradicted or mismatch | External review |
 
-### 10.2 Kite 验收
+### 10.2 Kite acceptance
 
-| 退出条件 | 结果 |
+| Exit condition | Result |
 |---|---|
-| PR 模式场景 A：PR 实现了一条没改动的 spec 句子（`design.md:93` "rounded to even numbers"） | ✅ 第一屏显示 "Check that the change does what this requirement says: R: rounded to even (direction unspecified); C: floor via evenFloor"。无论模型怎么关联 obligation，都能稳定触发（#176） |
-| 全仓审计不再整次作废 | ✅ 分批调用；被截断的批次会拆开重试；状态如实写明没审的块数 |
-| 10-13 的已知需求和代码不一致能复现 | ✅ 窗口尺寸（spec 1000×740，代码 `height: 800`）连续 3 次被判为 contradicted；"第一行默认选中"在完整原文进入模型后被报出。第 3 条（完成通知缺少操作按钮）还没轮换到 |
-| 证据搜索能确定性地找到 `app.cjs:127` | ✅ 它排在证据第一位（#173） |
-| scan 和 PR 两个模式对同一处不一致的判断一致 | ✅ 全仓审计把 `design.md:93` 判为 contradicted（引用 master 的 `evenFloor`），PR 模式把同一个问题交给人判断 |
-| 外部审查指出的误报 | ✅ "多了 size 排序"那条冲突消失；`cursorBoxes` 这类没给骨架的发现进入 Details，不计数 |
+| PR mode scenario A: a PR implements an unchanged spec sentence (`design.md:93` "rounded to even numbers") | ✅ The first screen shows "Check that the change does what this requirement says: R: rounded to even (direction unspecified); C: floor via evenFloor". It triggers reliably no matter how the model associates obligations (#176) |
+| The full-repository audit is no longer voided as a whole | ✅ Batched calls; truncated batches are split and retried; the status honestly states the number of unreviewed blocks |
+| The known requirement-vs-code inconsistencies of 10-13 can be reproduced | ✅ Window size (spec 1000×740, code `height: 800`) was judged contradicted 3 times in a row; "first row selected by default" was reported once the full original text entered the model. The 3rd one (completion notification lacks an action button) has not yet come up in rotation |
+| Evidence search can deterministically find `app.cjs:127` | ✅ It ranks first in the evidence (#173) |
+| scan and PR modes judge the same inconsistency consistently | ✅ The full-repository audit judged `design.md:93` as contradicted (citing master's `evenFloor`), and PR mode handed the same issue to a human to judge |
+| False positives pointed out by external reviews | ✅ The "extra size sorting" conflict disappeared; findings without a skeleton such as `cursorBoxes` go into Details and are not counted |
 
-**单元测试缺口的人工核对**（run 38515926303，计数的 7 条）：成立 3 条（`Overlay.tsx` 的区域限制、`capture.cjs` 的流清理、`Kbd.tsx` 的标签），部分成立或层级不对 2 条（`Bar.tsx` 属于组件层；`ownFile` 的防穿越核心已经有单元测试），误报 2 条（`has()` 是相邻成对检查，不是弱断言；`textBox` 的期望值是常量算式）。缺测试这一类比较可靠；**弱测试这一类在 Kite 上是 0/2**。
+**Human check of unit-test gaps** (run 38515926303, 7 counted): 3 valid (the region restriction in `Overlay.tsx`, stream cleanup in `capture.cjs`, the label in `Kbd.tsx`), 2 partly valid or wrong layer (`Bar.tsx` belongs to the component layer; the core path-traversal protection of `ownFile` already has unit tests), 2 false positives (`has()` is an adjacent pair check, not a weak assertion; the expected value of `textBox` is a constant expression). The missing-test category is fairly reliable; **the weak-test category is 0/2 on Kite**.
 
-### 10.3 两份外部审查的处理
+### 10.3 Handling of the two external reviews
 
-`docs/review.md`（审查对象是 Kite 审计 run 38510141042）和 `docs/SpecGuard_critical_shift_left_audit_2026-10-14.md`（固定 SHA 的代码审查）里的事实陈述，大部分经过核对成立，已采纳的见 10.1。以下几条没有照单全收：
+The factual statements in `docs/review.md` (reviewing Kite audit run 38510141042) and `docs/SpecGuard_critical_shift_left_audit_2026-10-14.md` (a code review at a pinned SHA) were mostly checked and found valid; what was adopted is in 10.1. The following were not accepted wholesale:
 
-| 说法或建议 | 处理 | 理由 |
+| Claim or suggestion | Handling | Reason |
 |---|---|---|
-| "Kite 只有手动和每周触发"；建议增加 PR 增量审查 | 不采纳 | 事实错误：Kite 有 PR workflow，PR #6 就是例子 |
-| 在 CI 里执行生成的测试骨架 | 不采纳原样 | 在目标仓库 CI 里执行模型生成的代码有安全风险，也违背静态审查的定位。改为把骨架标为"Sketch, not run"，没给骨架的发现不计数 |
-| Requirement Completeness Review | 待用户决定 | 就是待决问题 Q4，属于产品范围 |
-| SG-08 随机抽样、SG-09 需求权威性、SG-11 标准来源、SG-13 动态证据 | 推迟 | 分别依赖召回数据、产品决策、C15 的结论、静态审查的定位 |
+| "Kite has only manual and weekly triggers"; suggests adding incremental PR review | Not adopted | Factually wrong: Kite has a PR workflow, and PR #6 is an example |
+| Execute the generated test skeletons in CI | Not adopted as is | Executing model-generated code in the target repository's CI has security risk and also goes against the static-review positioning. Instead, skeletons are labeled "Sketch, not run", and findings without a skeleton are not counted |
+| Requirement Completeness Review | Pending user decision | This is the open question Q4, which is product scope |
+| SG-08 random sampling, SG-09 requirement authority, SG-11 standards source, SG-13 dynamic evidence | Deferred | They depend, respectively, on recall data, a product decision, the conclusion of C15, and the static-review positioning |
 
-### 10.4 安全兜底（前提：SpecGuard 保持公开仓库）
+### 10.4 Safety backstops (premise: SpecGuard stays a public repository)
 
-原则：公开的控制仓库只能承载公开的数据，私有仓库的结果只能留在私有仓库自己的范围里（Kite 模式）。
+Principle: a public control repository may carry only public data, and the results for a private repository may stay only within that private repository's own scope (the Kite pattern).
 
-| 兜底 | 状态 |
+| Backstop | Status |
 |---|---|
-| G1 私有目标配公开控制仓库：直接失败，查不到可见性也失败 | ✅ #174。实跑：从 SpecGuard 扫 Kite，在守卫这一步失败，review job 被跳过，没有 artifact，日志里只有仓库名；扫 express 正常通过 |
-| G2 `specguard` environment 只允许受保护分支部署 | ✅ 已设置 |
-| G3 main 分支保护：必须通过 `test`，管理员也受约束，禁止强推 | ✅ 已设置 |
-| G4 专用 Anthropic key 加月度消费上限 | ⏳ 需要用户在 Anthropic 控制台操作 |
-| G5 提示词注入（Copilot 的 `view` 可能读工作区以外的文件） | 残余风险：输出里已知格式的凭证会被替换为 `[REDACTED]`；改进方向是把 `view` 限制在工作区内 |
+| G1 Private target with a public control repository: fail immediately, and also fail if visibility cannot be looked up | ✅ #174. Real run: scanning Kite from SpecGuard failed at the guard step, the review job was skipped, there was no artifact, and the log contained only the repository name; scanning express passed normally |
+| G2 The `specguard` environment allows deployment only from protected branches | ✅ Set up |
+| G3 main branch protection: `test` must pass, administrators are also bound, force-push is forbidden | ✅ Set up |
+| G4 A dedicated Anthropic key with a monthly spending cap | ⏳ Needs the user to act in the Anthropic console |
+| G5 Prompt injection (Copilot's `view` may read files outside the workspace) | Residual risk: credentials of known formats in the output are replaced with `[REDACTED]`; the improvement direction is to restrict `view` to the workspace |
 
-### 10.5 仍未解决的问题，按对目标的影响排序
+### 10.5 Still-unresolved problems, ordered by impact on the goal
 
-1. **真实开发者的使用数据（C1，即 E6）**：依旧为零。Kite 上的开发者是 agent。
-2. **真实仓库的召回率和精确率（C4）**：种子用例召回率 86–91%；Kite 上缺测试这一类 3–5/7 成立，弱测试 0/2；express 的 `req.fresh` 缺口 4 次只报出 1 次。需要在 Kite 上植入缺口，覆盖单元测试和需求两侧，拿到量化数字。
-3. **测试层级（C5）**：现在能按 `higher_level` 建议组件或集成测试，但"该下沉什么"还没有一条被验证过的正面案例。
-4. **大文件（C13）**：`electron/app.cjs` 连续几轮都进不了上下文，被如实标为未审。方向是函数级审查单位。
-5. **状态过期（SG-06）**：确认状态没有和代码、测试的哈希绑定。
-6. **summary 体积**：一次输出 63 KB，比 77 KB 小了，但发现多的时候还是很大。
-7. **公司路径（C2）**：公司仓库的引擎和 Q8 未定；`ci.yml` 里的临时 `SPEC` 配置还在。
+1. **Usage data from real developers (C1, i.e. E6)**: still zero. The developer on Kite is an agent.
+2. **recall and precision on real repositories (C4)**: seeded-case recall is 86–91%; on Kite the missing-test category is 3–5/7 valid and weak tests 0/2; the express `req.fresh` gap was reported in only 1 of 4 runs. Gaps need to be seeded on Kite, covering both the unit-test side and the requirement side, to get quantified numbers.
+3. **Test layers (C5)**: it can now suggest component or integration tests according to `higher_level`, but "what should be pushed down" still has no validated positive case.
+4. **Large files (C13)**: `electron/app.cjs` failed to enter the context for several rounds in a row and was honestly marked as unreviewed. The direction is a function-level review unit.
+5. **Stale state (SG-06)**: the confirmation state is not bound to hashes of the code and tests.
+6. **summary size**: one output was 63 KB, smaller than 77 KB, but still large when there are many findings.
+7. **Company path (C2)**: the engine for company repositories and Q8 are undecided; the temporary `SPEC` configuration in `ci.yml` is still there.
 
-### 10.6 下一步
+### 10.6 Next steps
 
-| 优先级 | 动作 | 退出条件 |
+| Priority | Action | Exit condition |
 |---|---|---|
-| P0 | 在 Kite 上植入 10 个已知缺口（单元测试和需求两侧各 5 个），PR 模式和全仓审计各跑一次 | 召回率和精确率写进 `docs/validation-plan.md`，弱测试这一类单独统计 |
-| P1 | 函数级审查单位（C13） | `electron/app.cjs` 能被分片审到 |
-| P1 | 状态绑定代码、测试哈希（SG-06） | 依赖变化后，旧结论显示为过期并重新排队 |
-| P2 | 测试下沉的正面案例（C5）；scan 是否检查 coding standard（C15）；G4 | 各自有一次实跑或一个决定 |
+| P0 | Seed 10 known gaps on Kite (5 each on the unit-test side and the requirement side), and run PR mode and the full-repository audit once each | recall and precision are written into `docs/validation-plan.md`, with the weak-test category counted separately |
+| P1 | Function-level review unit (C13) | `electron/app.cjs` can be reviewed in slices |
+| P1 | Bind state to code and test hashes (SG-06) | After a dependency changes, the old conclusion shows as stale and is re-queued |
+| P2 | Positive case for test push-down (C5); whether scan checks coding standard (C15); G4 | Each has one real run or one decision |

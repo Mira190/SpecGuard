@@ -1,47 +1,47 @@
-# SpecGuard assurance case（主张—论证—证据）
+# SpecGuard assurance case (claim, argument, evidence)
 
-日期：2026-10-19。基线：`origin/main` = `4176c33`。
+Date: 2026-10-19. Baseline: `origin/main` = `4176c33`.
 
-用途：取代"再写一份评审"的习惯。每个主张只有证据能改状态；评审文档不算证据（见 §3 规则）。
-数字只取自 main 上的文件；来自改进方案的数字标注"方案"（[specguard-improvement-plan-2026-10-19.md](specguard-improvement-plan-2026-10-19.md)，下称"方案"）。
+Purpose: replace the habit of "writing one more review". Only evidence can change the status of a claim; review documents do not count as evidence (see the §3 rules).
+Numbers are taken only from files on main; numbers that come from the improvement plan are marked "plan" ([specguard-improvement-plan-2026-10-19.md](specguard-improvement-plan-2026-10-19.md), hereafter "the plan").
 
-证据阶梯：**机制 < 种子 < 离线历史 < shadow < 随机对照 < 纵向 QA 结果**。现在最高只到"离线历史"。
+Evidence ladder: **mechanism < seeded < offline history < shadow < randomized control < longitudinal QA outcome**. Right now the highest rung reached is "offline history".
 
-## 1. 主张树
+## 1. Claim tree
 
-**G0（顶层）**：在同一类 PR 上，打开 SpecGuard 比不打开好：逃到 QA/生产的缺陷更少、修得更早，且收益大于人的注意力成本和费用。状态：**unsupported**。
+**G0 (top level)**: on the same kind of PR, turning SpecGuard on is better than leaving it off: fewer defects escape to QA/production, they are fixed earlier, and the benefit outweighs the cost in human attention and money. Status: **unsupported**.
 
 ```
-G0 ── G1 检出 ── G2 送达 ── G3 采纳 ── G4 新测试能抓住缺陷 ── G5 反事实 ── G6 收益>成本
- └── 侧主张：G7 仓库自身工程质量；G8 数据处理与隐私
+G0 ── G1 detection ── G2 delivery ── G3 adoption ── G4 new tests catch the defect ── G5 counterfactual ── G6 benefit>cost
+ └── side claims: G7 the repo's own engineering quality; G8 data handling and privacy
 ```
 
-## 2. 节点表
+## 2. Node table
 
-| 节点 | 论证（一行） | 证据 | 阶梯 | 状态 | 未关闭的反驳点（defeaters） |
+| Node | Argument (one line) | Evidence | Rung | Status | Open rebuttals (defeaters) |
 |---|---|---|---|---|---|
-| G1 检出 | 回放历史 bug 引入 PR，SpecGuard 能指出该缺陷 | [eval/replay/README.md](../eval/replay/README.md)（SZZ 流程与 rubric）；[eval/mutation/README.md](../eval/mutation/README.md)（mutation 试点方法）；数字：回放命中 20.7%（9.33/45，`eval/replay/README.md` 第 129 行），mutation 行级命中 0/10（`eval/mutation/README.md` 第 44 行）；2026-10-20 测试缺口集（[testgap-evidence-2026-10-20.md](../eval/replay/testgap-evidence-2026-10-20.md)）：送达的 missing_test 落在 bug 定义内 2/72，与随机持平（2.7%，p=0.65）；计入隐藏 finding 也只有 +9 分，低于预注册的 +10 门槛；盲评中送达且 direct 的命中为 5/129，其中 missing_test 只有 1/129；2026-10-21 覆盖率确认集（40 个 SZZ bug PR：hono、sqlglot、langchain-core）：E1 覆盖缺口臂 C 未通过（[coverage-e1-confirm-results-2026-10-21.md](../eval/replay/coverage-e1-confirm-results-2026-10-21.md)），命中 17.5%，随机 28.1%，p=0.997；E3 未通过（[coverage-e3-results-2026-10-21.md](../eval/replay/coverage-e3-results-2026-10-21.md)），覆盖率确认的 missing_test 命中 4/18（22%），被覆盖率反驳的命中 26/58（45%），p=1，设计阶段的 4/5 未复现 | 离线历史 | partial | D1.1 行级定位 0/10，单元级命中约等于基数（方案 §1.2 第 6 条）；D1.2 未与最笨基线对比（diff-cover、"改函数没改测试"、裸 prompt），通用模板对照尚未跑；D1.3 回放集来自公开仓库，可能被训练数据污染；D1.4 内容评分来自 LLM 评审，没有人工标注；D1.5 假设（n=5，不作主张）：送达的 direct 命中 5 个里有 4 个是 spec_mismatch；D1.6 缺少覆盖不能预测 bug 位置（E1；描述性：C 的效应为 −10.6 分，CI 不含 0，即 bug 落在被测试执行过的代码里的比例高于随机）；D1.7 覆盖率确认挑不出更准的 LLM 缺测试 finding（E3） |
-| G2 送达 | 检出的 finding 以 inline 评论送达作者并点名该缺陷 | [docs/validation-plan.md](validation-plan.md)（Step 3/5 指标定义）；数字：30 个检出事件仅 5 个送达（`eval/replay/README.md` 第 172 行），288 次回放（第 208 行）中 213 次 incomplete（来源：未入库的第三方评审，未在 main 上复核） ；2026-10-20：盲评 direct 命中 7 个被隐藏、只有 5 个送达；被降级的 missing_test 有 39/49 是因为候选测试只部分可见（切片失败），见 [testgap-evidence-2026-10-20.md](../eval/replay/testgap-evidence-2026-10-20.md) | 离线历史 | partial | D2.1 incomplete 成为常态；D2.2 无送达率的预注册门槛；D2.3 haiku 一律走 reduced review（`src/engine-model.js:14`），但关掉它释放 0 条被降级的 finding；2026-10-20 已作为精度过滤器评估：它压住的 31 条中 29 条盲评为 miss、2 条未评、0 条真实，送达的 direct 命中 5→5 未丢，决定保留（[tier-arm-2026-10-20.md](../eval/replay/tier-arm-2026-10-20.md)）；#413 使有覆盖率证据的 missing_test finding 可送达（不再被三道降级门槛降级），状态不变，无实测效果 |
-| G3 采纳 | 作者看到后按建议补测试或修代码 | [docs/validation-plan.md](validation-plan.md)（Step 6：fix-through ≥25%、下界 >15%）；作者 verdict 已实现，但全部 PR 只有 1 条，且来自 owner（方案 §0） | 种子 | unsupported | D3.1 无非 owner 真人数据（≥30 条 verdict 未达）；D3.2 fix-through 只是"触碰"代理；D3.3 作者判定本身有噪音 |
-| G4 新测试抓住缺陷 | 按建议写的测试在缺陷版本失败、修复版本通过 | [eval/f2p/README.md](../eval/f2p/README.md)（预注册 fail-to-pass oracle，#410）；数字：修复改动 ±20 行内的 finding（NEAR）0/9，同文件较远的对照（FAR）1/23，hono 内部 0/9 对 0/17（均为 verified 且失败原因与 finding 一致）；hono mutation 14 个有效测试杀死 0 个存活 mutant（仅 3 个面对严格存活 mutant）；唯一 NEAR verified 的失败原因与 finding 不符 | 离线历史 | unsupported（描述性结果无正向信号：NEAR+FAR 合计 1/32 verified 且原因一致） | D4.1 已关闭（oracle 已建、阳性对照 hono 6/6、sqlglot 1/1、langchain 1/1）；D4.2 `weak_test` 无 pseudo-tested 判定；D4.3 样本小，只做描述（聚类 MDD 86 pp），仅 3 个 repo，rqlite 未跑；D4.4 48 个测试中 42 个在无试跑反馈下写成（写测试反馈与分组混杂）；D4.5 单一模型写测试、公开 repo 可能污染 |
-| G5 反事实 | 没有 SpecGuard，该缺陷会逃到 QA/生产 | 无 | 无 | unsupported | **D5.1 shadow 臂从未执行**：首次提出 2026-10-14（[audit](SpecGuard_critical_shift_left_audit_2026-10-14.md) 第 226、377 行），仍未进入 validation-plan；**D5.2 逃逸缺陷结果变量从未执行**：首次提出 2026-10-15（[review](critical-shift-left-review-2026-10-15.md) 第 295 行），2026-10-18 重复（[first-principles audit](SpecGuard_Shift_Left_First_Principles_Audit_2026-10-18.md) 第 60 行）重复；D5.3 分组可预测（PR# mod 3），可被挑选 |
-| G6 收益>成本 | 避免的返工价值大于注意力与模型费用 | 无实测；F2 的 P×A 是经济假设（方案 §0）；成本字段 `totalCostUsd` 见 [eval/mutation/README.md](../eval/mutation/README.md) | 机制 | unsupported | D6.1 无非 owner 团队的实测；D6.2 Kite 自 10-18 因 billing 停跑，种子 PR 全由 owner 制造（方案 §0） |
-| G7 工程质量 | 仓库自身代码有测试、CI、可复现 | [.github/workflows/ci.yml](../.github/workflows/ci.yml)；`src/*.test.js`；mutation 与回放的冻结 manifest | 机制 | partial | D7.1 无第三方指标（Scorecard、zizmor、actionlint、Stryker）；D7.2 已解决：[.github/workflows/gitleaks.yml](../.github/workflows/gitleaks.yml) 在 main 上，触发条件为 pull_request、所有分支 push 与手动 workflow_dispatch（全历史扫描） |
-| G8 数据与隐私 | 不泄露私有代码，发布物已脱敏 | [docs/validation-plan.md](validation-plan.md)（Privacy 节）；风险清单见方案 §2 | 机制 | partial | D8.1 已解决：2026-10-19 按所有者决定重写了历史，main 上的记录是 [.github/workflows/ci.yml](../.github/workflows/ci.yml) 第 25 行的注释（"history was rewritten 2026-10-19 (two private files and local user paths removed)"）；防护：ci.yml 与 [gitleaks.yml](../.github/workflows/gitleaks.yml) 拒绝仍含已移除文件的旧历史（#403，提交 `792dbe5`、`6f71729`）；D8.2 无蜜标端到端泄露测试；D8.3 标注 CSV 与 `raw_excerpt` 可能含私有代码 |
+| G1 detection | Replay historical bug-introducing PRs; SpecGuard can point at the defect | [eval/replay/README.md](../eval/replay/README.md) (SZZ procedure and rubric); [eval/mutation/README.md](../eval/mutation/README.md) (mutation pilot method); numbers: replay hit rate 20.7% (9.33/45, `eval/replay/README.md` line 129), mutation line-level hits 0/10 (`eval/mutation/README.md` line 44); 2026-10-20 test-gap set ([testgap-evidence-2026-10-20.md](../eval/replay/testgap-evidence-2026-10-20.md)): delivered missing_test findings landing inside the bug definition 2/72, level with random (2.7%, p=0.65); counting hidden findings adds only +9 points, below the preregistered +10 threshold; in the blind rating, delivered and direct hits are 5/129, of which missing_test is only 1/129; 2026-10-21 coverage confirmation set (40 SZZ bug PRs: hono, sqlglot, langchain-core): E1 coverage-gap arm C failed ([coverage-e1-confirm-results-2026-10-21.md](../eval/replay/coverage-e1-confirm-results-2026-10-21.md)), hit rate 17.5% vs 28.1% random, p=0.997; E3 failed ([coverage-e3-results-2026-10-21.md](../eval/replay/coverage-e3-results-2026-10-21.md)), coverage-confirmed missing_test hits 4/18 (22%), coverage-contradicted hits 26/58 (45%), p=1, the 4/5 from the design stage did not replicate | offline history | partial | D1.1 line-level location 0/10, unit-level hits roughly equal to the base rate (plan §1.2 item 6); D1.2 not compared with the dumbest baselines (diff-cover, "function changed but test not changed", bare prompt), the generic-template control has not been run; D1.3 the replay set comes from public repos and may be contaminated by training data; D1.4 content scoring comes from an LLM review, there is no human labelling; D1.5 hypothesis (n=5, not asserted as a claim): of the 5 delivered direct hits, 4 are spec_mismatch; D1.6 missing coverage does not predict where the bug is (E1; descriptive: the effect of C is −10.6 points, CI excludes 0, i.e. the share of bugs that fall in code executed by tests is higher than random); D1.7 coverage confirmation cannot pick out more accurate LLM missing-test findings (E3) |
+| G2 delivery | A detected finding reaches the author as an inline comment and names the defect | [docs/validation-plan.md](validation-plan.md) (Step 3/5 metric definitions); numbers: only 5 of 30 detection events were delivered (`eval/replay/README.md` line 172), 213 of 288 replays (line 208) were incomplete (source: third-party review that is not checked in, not re-verified on main); 2026-10-20: 7 blind-rated direct hits were hidden and only 5 delivered; 39 of 49 downgraded missing_test findings were downgraded because the candidate test was only partly visible (slicing failure), see [testgap-evidence-2026-10-20.md](../eval/replay/testgap-evidence-2026-10-20.md) | offline history | partial | D2.1 incomplete has become the norm; D2.2 no preregistered threshold for the delivery rate; D2.3 haiku always uses reduced review (`src/engine-model.js:14`), but turning it off releases 0 downgraded findings; evaluated as a precision filter on 2026-10-20: of the 31 it holds back, 29 were rated miss in the blind rating, 2 were not rated, 0 were real, delivered direct hits 5→5 with none lost, decision to keep it ([tier-arm-2026-10-20.md](../eval/replay/tier-arm-2026-10-20.md)); #413 makes missing_test findings with coverage evidence deliverable (no longer downgraded by the three downgrade gates), status unchanged, no measured effect |
+| G3 adoption | After seeing it, the author adds tests or fixes the code as suggested | [docs/validation-plan.md](validation-plan.md) (Step 6: fix-through ≥25%, lower bound >15%); the author verdict is implemented, but across all PRs there is only 1, and it comes from the owner (plan §0) | seeded | unsupported | D3.1 no real-human data from non-owners (the ≥30 verdicts are not reached); D3.2 fix-through is only a "touched" proxy; D3.3 the author verdict itself is noisy |
+| G4 new tests catch the defect | A test written as suggested fails on the buggy version and passes on the fixed version | [eval/f2p/README.md](../eval/f2p/README.md) (preregistered fail-to-pass oracle, #410); numbers: findings within ±20 lines of the fix change (NEAR) 0/9, the farther same-file control (FAR) 1/23, inside hono 0/9 versus 0/17 (all verified, with failure reason consistent with the finding); of hono's 14 valid mutation tests, 0 kill a surviving mutant (only 3 face a strictly surviving mutant); the failure reason of the only NEAR verified test does not match the finding | offline history | unsupported (descriptive result with no positive signal: NEAR+FAR together 1/32 verified with a consistent reason) | D4.1 closed (oracle built, positive controls hono 6/6, sqlglot 1/1, langchain 1/1); D4.2 `weak_test` has no pseudo-tested verdict; D4.3 small sample, descriptive only (clustered MDD 86 pp), only 3 repos, rqlite not run; D4.4 42 of the 48 tests were written without trial-run feedback (test-writing feedback is confounded with the groups); D4.5 a single model writes the tests, public repos may be contaminated |
+| G5 counterfactual | Without SpecGuard, that defect would have escaped to QA/production | none | none | unsupported | **D5.1 the shadow arm was never executed**: first raised 2026-10-14 ([audit](SpecGuard_critical_shift_left_audit_2026-10-14.md) lines 226, 377), still not in validation-plan; **D5.2 the escaped-defect outcome variable was never executed**: first raised 2026-10-15 ([review](critical-shift-left-review-2026-10-15.md) line 295), repeated 2026-10-18 ([first-principles audit](SpecGuard_Shift_Left_First_Principles_Audit_2026-10-18.md) line 60) repeated; D5.3 the grouping is predictable (PR# mod 3), so it can be cherry-picked |
+| G6 benefit>cost | The value of the avoided rework is greater than the attention and model cost | no measurement; F2's P×A is an economic assumption (plan §0); the cost field `totalCostUsd` is in [eval/mutation/README.md](../eval/mutation/README.md) | mechanism | unsupported | D6.1 no measurement from a non-owner team; D6.2 Kite has been stopped by billing since 10-18, and all seeded PRs were made by the owner (plan §0) |
+| G7 engineering quality | The repo's own code has tests, CI, and is reproducible | [.github/workflows/ci.yml](../.github/workflows/ci.yml); `src/*.test.js`; the frozen manifests of the mutation and replay runs | mechanism | partial | D7.1 no third-party metrics (Scorecard, zizmor, actionlint, Stryker); D7.2 resolved: [.github/workflows/gitleaks.yml](../.github/workflows/gitleaks.yml) is on main, triggered by pull_request, pushes to all branches, and manual workflow_dispatch (full-history scan) |
+| G8 data and privacy | Private code is not leaked, and published artifacts are redacted | [docs/validation-plan.md](validation-plan.md) (Privacy section); risk list in plan §2 | mechanism | partial | D8.1 resolved: on 2026-10-19 history was rewritten by the owner's decision, and the record on main is the comment at [.github/workflows/ci.yml](../.github/workflows/ci.yml) line 25 ("history was rewritten 2026-10-19 (two private files and local user paths removed)"); safeguard: ci.yml and [gitleaks.yml](../.github/workflows/gitleaks.yml) reject old history that still contains the removed files (#403, commits `792dbe5`, `6f71729`); D8.2 no end-to-end leak test with honeytokens; D8.3 the labelled CSV and `raw_excerpt` may contain private code |
 
-## 3. 规则
+## 3. Rules
 
-1. 新增评审文档，只有在**改变某节点状态**或**新增/关闭某 defeater**时才允许，并且必须写明节点编号（如 "G5/D5.1"）。
-2. Codex/LLM 评审只算分诊，证据阶梯不得高于"机制"。
-3. defeater 只能被证据关闭（跑出的数据、执行 oracle、第三方结果），不能因为有更新的评审又提了一次而算关闭，也不能因为被提过多次而算已处理。
-4. 状态变化与证据一起提交，在节点表里改一行。
+1. A new review document is allowed only when it **changes the status of a node** or **adds/closes a defeater**, and it must state the node ID (e.g. "G5/D5.1").
+2. Codex/LLM reviews count only as triage; the evidence ladder must not go above "mechanism" on their basis.
+3. A defeater can be closed only by evidence (data from a run, an execution oracle, a third-party result). It is not closed because a newer review raised it once more, and it is not handled because it has been raised many times.
+4. A status change is committed together with its evidence, by editing one row in the node table.
 
-## 4. 进行中（合并后更新对应节点）
+## 4. In progress (update the matching node after merge)
 
-| 在做的事 | 影响节点 |
+| Work in progress | Nodes affected |
 |---|---|
-| gitleaks / 泄露检查 | G7、G8（D7.2、D8.2） |
-| 加盐 shadow 臂 + Krippendorff α | G5（D5.1、D5.3）、标注可信度（G1 的 precision、G3 的作者判定噪音） |
-| weekly-report 加入逃逸缺陷结果变量 | G5（D5.2） |
+| gitleaks / leak check | G7, G8 (D7.2, D8.2) |
+| salted shadow arm + Krippendorff α | G5 (D5.1, D5.3), label trustworthiness (G1's precision, G3's author-verdict noise) |
+| add the escaped-defect outcome variable to weekly-report | G5 (D5.2) |
 
-以上均为 in progress：合并只说明工具就绪，要等真实团队跑出数据，才能改变状态。
+All of the above are in progress: a merge only means the tooling is ready; the status can change only after a real team produces data.

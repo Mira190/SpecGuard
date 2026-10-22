@@ -1,250 +1,250 @@
-# SpecGuard：面向 Shift Left 的批判性代码审查与 Unknown Unknowns 研究
+# SpecGuard: critical code review and unknown-unknowns research for Shift Left
 
-> **审查日期**：2026-10-14（Australia/Sydney）  
-> **仓库**：[Mira190/SpecGuard](https://github.com/Mira190/SpecGuard)  
-> **固定基线**：`main` / [`5bcf4deb2ba9868969bc1e0b52407c7e34886516`](https://github.com/Mira190/SpecGuard/commit/5bcf4deb2ba9868969bc1e0b52407c7e34886516)  
-> **审查方法**：通过已连接的 GitHub 读取仓库树、实际源代码、工作流、Skill、测试与历史评测报告；静态代码审计、架构推演和可反驳的实验设计。**没有在本次审查中克隆执行、调用付费模型、运行真实 PR/全仓扫描或验证公司仓库权限；故“可触发”与“已触发”严格区分。**  
-> **范围**：只创建本地审计 Markdown，不改代码、不提交 PR、不写入 GitHub。
+> **Review date**: 2026-10-14 (Australia/Sydney)  
+> **Repository**: [Mira190/SpecGuard](https://github.com/Mira190/SpecGuard)  
+> **Pinned baseline**: `main` / [`5bcf4deb2ba9868969bc1e0b52407c7e34886516`](https://github.com/Mira190/SpecGuard/commit/5bcf4deb2ba9868969bc1e0b52407c7e34886516)  
+> **Review method**: through the connected GitHub, read the repository tree, the actual source code, workflows, Skills, tests and historical evaluation reports; static code audit, architectural reasoning and falsifiable experiment design. **In this review nothing was cloned and executed, no paid model was called, no real PR / whole-repo scan was run, and no company repository permissions were verified; so "can be triggered" and "has been triggered" are strictly distinguished.**  
+> **Scope**: only a local audit Markdown file is created; no code is changed, no PR is submitted, and nothing is written to GitHub.
 
 ## 0. Executive verdict
 
-**结论：有相当好的工程基础，但目前是“带有可解释证据的测试缺口候选发现器”，不是“能够证明每个需求已被恰当测试覆盖的全仓审计器”。**
+**Conclusion: a fairly good engineering foundation, but currently it is a "test-gap candidate finder with explainable evidence", not a "whole-repo auditor that can prove every requirement is appropriately covered by tests".**
 
-SpecGuard 已实现：PR 评审、外部仓库手动启动、可复用工作流、风险排序与轮转式仓库扫描、需求文件追溯、测试文件候选定位、代码和测试引用验证、置信度降级、模型引擎适配、扫描状态、预算控制与相当多的测试。它已经不只是 prompt wrapper。近期 D* 需求回填以及 scan 批处理，也修复了先前文档里的若干具体痛点；不能拿旧审计的“进行中”状态冒充当前事实。
+SpecGuard has implemented: PR review, manual launch against external repositories, reusable workflows, risk ranking and a rotating repository scan, requirement-file traceability, candidate test-file location, code and test citation verification, confidence downgrading, model engine adapters, scan state, budget control and quite a lot of tests. It is no longer just a prompt wrapper. The recent D* requirement backfill and the scan batching also fixed several specific pain points in earlier documents; the "in progress" state of the old audit must not pass for the current facts.
 
-但部署前有一个优先级高于准确率的安全组合：**当前 SpecGuard 控制仓库是 public；手动工作流支持访问私有目标仓库；默认把扫描摘要和状态写进控制仓库的 Issue，并上传可含原始私有代码/需求引用的 artifact。** 代码中有“控制仓库必须私有”的文字提醒，却没有看到执行时强制的公开/私有信息流校验。**这是条件性泄露路径，并不意味着已发生实际泄露。** 在确认隔离之前，不应从当前公开控制仓库对内部私有仓库执行手动扫描。
+But before deployment there is a safety combination with higher priority than accuracy: **the current SpecGuard control repository is public; the manual workflow supports accessing private target repositories; by default it writes the scan summary and state into an Issue of the control repository, and uploads artifacts that may contain raw private code / requirement citations.** The code has a textual reminder that "the control repository must be private", but I did not see a runtime-enforced public/private information-flow check. **This is a conditional leak path, and does not mean an actual leak has occurred.** Until isolation is confirmed, manual scans of internal private repositories should not be run from the current public control repository.
 
-第二类核心风险是错误的“已审/确认”语义：**一个源代码引用 + 一个测试引用，并不构成行为充分验证；两次重复的相同模型判断，也不构成两个独立证据。** 第三类是隐蔽的召回率损失：切片、文件名匹配、先选 top-N、扫描块截断和无执行环境可能让困难缺口根本没有机会进入模型上下文。
+The second core risk is the wrong "reviewed/confirmed" semantics: **one source citation + one test citation does not constitute sufficient verification of behavior; two repetitions of the same model judgment do not constitute two independent pieces of evidence.** The third is hidden recall loss: slicing, file-name matching, picking top-N first, scan block truncation and the lack of an execution environment can mean hard gaps never get a chance to enter the model context at all.
 
-### 审查成熟度分项（定性，不是评分）
+### Review maturity by item (qualitative, not a score)
 
-| 目标 | 当前判断 | 不应对外承诺的事项 |
+| Goal | Current judgment | What should not be promised externally |
 |---|---|---|
-| PR 工作流交付 | **已实现**，包括复用和手动启动 | 不承诺所有分支/已关闭 PR 均可审 |
-| 需求 → 行为 → 测试义务 | **部分实现**：需求索引、模型判断、带引用输出 | 不承诺需求已完整读到、要求被正确解释 |
-| 找缺失/弱单元测试 | **已有真实 OSS 成果**，但漏检/误报可复现 | 不承诺穷尽所有缺口或“零结果=充分覆盖” |
-| 编码标准已确认 | **PR 有检测通路**，工具执行结果须显式配置 | 不把“读到标准文件”等同于“CI 符合标准” |
-| 组件/集成测试下沉 | **已有建议类型**，有效性尚未充分验证 | 不把按文件路径推断的 layer 当作真值 |
-| 全仓扫描 | **有界增量抽样 + 轮转**，不是一次性穷尽 | 不应使用笼统的“full repo verified” |
-| 企业安全和实际 Shift Left 价值 | **存在阻断项**：结果驻留、供应商与效果证据 | 不以模型离线 precision 代替生产改进 |
+| PR workflow delivery | **Implemented**, including reuse and manual launch | Do not promise that all branches / closed PRs can be reviewed |
+| Requirement → behavior → test obligation | **Partly implemented**: requirement index, model judgment, output with citations | Do not promise that requirements are fully read and that the requirements are interpreted correctly |
+| Find missing/weak unit tests | **Has real OSS results**, but misses/false positives are reproducible | Do not promise to exhaust all gaps or that "zero results = sufficient coverage" |
+| Coding standards confirmed | **PR has a detection path**, tool execution results must be configured explicitly | Do not equate "read the standards file" with "CI conforms to the standards" |
+| Component/integration test pushdown | **A suggestion type exists**, effectiveness not yet sufficiently verified | Do not treat a layer inferred from the file path as ground truth |
+| Whole-repo scan | **Bounded incremental sampling + rotation**, not a one-time exhaustive scan | Do not use a blanket "full repo verified" |
+| Enterprise security and actual Shift Left value | **There are blocking items**: result residency, vendors and evidence of effect | Do not substitute offline model precision for production improvement |
 
 ---
 
-## 1. 第一性原理：正确的问题不是“有没有测试文件”
+## 1. First principles: the right question is not "is there a test file"
 
-从错误成本出发，Shift Left 不是尽可能多发表评论，而是把**本来会在较晚环节才被发现、且能在更早环节可靠验证的缺陷**提前揭示给能修复的人。
+Starting from the cost of errors, Shift Left is not about posting as many comments as possible, but about revealing to someone who can fix it, earlier, **a defect that would otherwise be found at a later stage and can be reliably verified at an earlier one**.
 
-最小因果链：
+Minimal causal chain:
 
-1. **真实目标行为**存在：业务规则、已批准设计、接口契约、系统不变量、隐私与安全约束等。
-2. **实现行为**可能与目标行为不同：在被调用路径、边界条件、错误路径、时序或多服务协作中体现。
-3. **验证义务**明确：针对每个失败机制，指出必须使测试失败的对抗性输入和可独立判断的预期结果。
-4. **现有证据**可以证明，或不能证明，这个义务：测试名称、代码引用、执行轨迹、assertion、变异敏感性、最近一次通过记录的强度各不相同。
-5. **最便宜且可靠的测试层**可行：unit、component、integration、contract、E2E，并考虑替身是否扭曲契约。
-6. **开发者行动与回归减少**：在合并前接收问题、修正测试或行为，并降低后续 defect escape，而不是只在 PR 留下一条 AI 评论。
+1. **The real target behavior** exists: business rules, approved designs, interface contracts, system invariants, privacy and security constraints, etc.
+2. **The implemented behavior** may differ from the target behavior: manifested in called paths, boundary conditions, error paths, timing or multi-service collaboration.
+3. **The verification obligation** is explicit: for each failure mechanism, point out the adversarial input that must make the test fail and the independently judgeable expected result.
+4. **Existing evidence** can prove, or cannot prove, this obligation: test names, code citations, execution traces, assertions, mutation sensitivity and the last passing record differ in strength.
+5. **The cheapest reliable test layer** is feasible: unit, component, integration, contract, E2E, taking into account whether a test double distorts the contract.
+6. **Developer action and fewer regressions**: receive the issue before merge, fix the test or the behavior, and reduce later defect escapes, rather than just leaving an AI comment on the PR.
 
-不能从“文档提到了 X，测试目录包含 X”推出“X 被验证”。也不能从“没有检索到测试”推出“X 无测试”：后者只有在检索范围充分、所需代码/测试被读完、且排除了间接验证以后才有统计意义。
+One cannot infer "X is verified" from "the document mentions X and the test directory contains X". Nor can one infer "X has no test" from "no test was retrieved": the latter has statistical meaning only when the retrieval scope is sufficient, the needed code/tests have been read in full, and indirect verification has been ruled out.
 
-**建议的产品定义**：
+**Suggested product definition**:
 
 > **SpecGuard is an evidence-aware verification-gap advisor. It links approved requirements and changed behaviour to concrete test obligations, checks whether existing assertions could detect meaningful regressions, recommends the cheapest trustworthy test layer, and explicitly reports what it could not inspect.**
 
-“证据不足”不是“缺测试”的同义词。两者需要不同的报告和处置路径。
+"Insufficient evidence" is not a synonym for "missing test". The two need different reports and handling paths.
 
 ---
 
-## 2. 证据分级：避免把推论当实验结果
+## 2. Evidence grading: avoid treating inference as experimental results
 
-- **E0：代码已核对**：可以从特定代码条件或数据流直接推出的行为，例如“成功返回状态完整，但一部分批次失败”。这是本审计最坚实的层级。
-- **E1：仓库既有实验记录**：`docs/shift-left-review-2026-10-14.md`、`eval/results/recall-claude-2026-10-14b.md` 中作者记载的 OSS、个人仓库与 seeded fixtures 结果。可信度取决于记录与实验设置；**本次未独立重跑**。
-- **E2：可行但未触发的风险推演**：需要特定私有仓库、超过阈值的输入、迁移后的依赖图等条件。本文给出最小可证伪试验，而不宣称已经复现。
-- **E3：产品假设**：例如开发者是否真的修改测试、组织的 coding standards 是否可由 GitHub check 确认，必须在正式 pilot 才能测量。
+- **E0: code checked**: behavior that can be inferred directly from a specific code condition or data flow, for example "a success return state is complete, but some batches failed". This is the most solid level of this audit.
+- **E1: experiment records already in the repository**: results of OSS, personal repositories and seeded fixtures recorded by the author in `docs/shift-left-review-2026-10-14.md` and `eval/results/recall-claude-2026-10-14b.md`. Credibility depends on the records and the experimental setup; **not independently re-run this time**.
+- **E2: risk reasoning that is feasible but not triggered**: needs conditions such as a specific private repository, input over a threshold, or a dependency graph after migration. This document gives the smallest falsifiable test and does not claim it has been reproduced.
+- **E3: product hypotheses**: for example whether developers really change the tests and whether the organization's coding standards can be confirmed by a GitHub check; these can be measured only in a formal pilot.
 
-### 基线事实
+### Baseline facts
 
-- 已确认仓库为 `public`，当前默认分支 `main`，最新审查提交 `5bcf4deb`；源代码树约 505 个 blob（包含大量 fixture 和历史评测数据）。[仓库](https://github.com/Mira190/SpecGuard)
-- 仓库报告的 18 个 seeded 例子：precision 100%、recall 86%、JSON 有效率 100%、22% degraded，测试质量子类 recall 67%。**这是内部测试夹具的结果，不是企业仓库实战准确率，也不是本次重测值。** [评测结果](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/results/recall-claude-2026-10-14b.md)
-- 同日旧版审查还记录：Express 一个真实缺口在 4 次运行中仅出现 1 次（低置信）；另有已查证的误报和能找到的真实弱测试。旧审查基于较早提交，不能据此认定后续提交未修复。 [旧审查 §9](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md)
-- `#168–#172` 已并入当前 HEAD：包括 governing requirement D*、scan batch、证据窗口与对需求 alignment 的输出修正。本文对这些修复给予确认，同时核查残余边界。 [历史提交](https://github.com/Mira190/SpecGuard/commits/main/)
+- Confirmed that the repository is `public`, the current default branch is `main`, and the latest reviewed commit is `5bcf4deb`; the source tree has about 505 blobs (including many fixtures and historical evaluation data). [Repository](https://github.com/Mira190/SpecGuard)
+- The repository reports for 18 seeded examples: precision 100%, recall 86%, JSON validity 100%, 22% degraded, and test-quality sub-class recall 67%. **This is a result on internal test fixtures; it is not accuracy in real enterprise repositories, and it is not a re-measured value from this review.** [Evaluation results](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/results/recall-claude-2026-10-14b.md)
+- The older review of the same day also recorded: one real gap in Express appeared in only 1 of 4 runs (low confidence); there were also verified false positives and real weak tests that could be found. The old review was based on an earlier commit, and it cannot be concluded from it that later commits did not fix things. [Old review §9](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md)
+- `#168–#172` are merged into the current HEAD: including governing requirement D*, scan batch, the evidence window and the output correction for requirement alignment. This document confirms these fixes while checking the residual boundaries. [Commit history](https://github.com/Mira190/SpecGuard/commits/main/)
 
 ---
 
-## 3. 重要发现：按业务影响排序
+## 3. Key findings: ordered by business impact
 
-### SG-01 · P0 · 公共控制仓库接收私有目标扫描结果的潜在信息泄露路径（E0+E2）
+### SG-01 · P0 · Potential information-leak path where the public control repository receives private-target scan results (E0+E2)
 
-**证据链**：
+**Evidence chain**:
 
-- 控制仓库目前 `public`。[仓库](https://github.com/Mira190/SpecGuard)
-- 手动 workflow 支持 `SPECGUARD_PAT`/GitHub App 访问**其他私有目标仓库**；`scan_issue` 默认 `specguard`，即在 SpecGuard 自己的 Issue 中保留扫描结果与历史状态。[`specguard-run.yml#L1-L26`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard-run.yml#L1-L26)
-- 工作流 `review` job 把目标 checkout 后执行扫描，可将包含源代码与需求摘录的 `summary.md`、`findings.json`、`audit.json`、`requirements-status.json` 上传为 14 天的 artifact，并写 job summary。[`specguard-run.yml#L109-L176`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard-run.yml#L109-L176)
-- 文件注释**明确意识到** issue/artifact 包含目标代码，提醒控制仓库必须私有；目前缺少在发布前依据控制仓库和目标仓库可见性**强制拒绝**的代码。GitHub Actions artifact 的可访问性取决于仓库读取权限，不能把 retention 或隐藏目录当作权限屏障。[GitHub 官方 artifact 文档](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)
+- The control repository is currently `public`. [Repository](https://github.com/Mira190/SpecGuard)
+- The manual workflow supports `SPECGUARD_PAT`/GitHub App access to **other private target repositories**; `scan_issue` defaults to `specguard`, i.e. scan results and historical state are kept in SpecGuard's own Issue. [`specguard-run.yml#L1-L26`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard-run.yml#L1-L26)
+- The workflow's `review` job checks out the target and then runs the scan; it can upload `summary.md`, `findings.json`, `audit.json` and `requirements-status.json`, which contain source code and requirement excerpts, as a 14-day artifact, and writes the job summary. [`specguard-run.yml#L109-L176`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard-run.yml#L109-L176)
+- A comment in the file **is explicitly aware** that the issue/artifact contains target code and reminds that the control repository must be private; there is currently no code that **forcibly refuses** based on the visibility of the control repository and the target repository before publishing. The accessibility of GitHub Actions artifacts depends on repository read permissions; retention or a hidden directory cannot be treated as a permission barrier. [GitHub official artifact documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)
 
-**影响**：如果有权限的人从此公开控制仓库调用扫描私有企业仓库，模型返回的具体业务规则、源代码或测试片段可能被公开保存。当前尚无证据显示实际运行过这种组合或已经泄露。
+**Impact**: if someone with permission calls a scan of a private enterprise repository from this public control repository, the specific business rules, source code or test snippets returned by the model may be stored publicly. There is currently no evidence that this combination has actually been run or that anything has leaked.
 
-**修复**：默认阻断 `private target -> public control`，同时阻断对 public issue、artifact、job summary、日志的内容写入；安全默认值优先。最省事的部署是**把控制工作流复制到受控私有/内部仓库，结果只留目标仓库私有作用域**；用 GitHub App 最小权限令牌，确认模型供应商合规。防护应检查**运行时实际仓库 visibility**和**目标 repo visibility**，权限查询失败则 fail closed。回归测试应检查所有交付通道，而非仅仅 Issue。
+**Fix**: by default block `private target -> public control`, and at the same time block writing content to public issues, artifacts, job summaries and logs; safe defaults take priority. The easiest deployment is to **copy the control workflow to a controlled private/internal repository and keep the results only in the target repository's private scope**; use a least-privilege GitHub App token, and confirm the model vendor's compliance. The protection should check the **runtime actual repository visibility** and the **target repo visibility**, and fail closed if the permission query fails. Regression tests should check all delivery channels, not just the Issue.
 
-**验收**：四种 visibility 组合（public→public、private→private、private target→public control 等）在有/无 API 权限下全测；危险组合没有任何可访问的有内容 Issue、artifact 或 summary。
+**Acceptance**: the four visibility combinations (public→public, private→private, private target→public control, etc.) are all tested with and without API permissions; the dangerous combination has no accessible Issue, artifact or summary with content.
 
-### SG-02 · P0 · 多批 scan“成功/完整”与实际覆盖范围矛盾（E0）
+### SG-02 · P0 · Multi-batch scan "success/complete" contradicts the actual coverage scope (E0)
 
-**证据链**：超过 20 个文档块，`scan-parts.js` 分成多个调用；`claude-api.js` 将失败批次和因预算放弃的批次写进 `scan-parts.json`，**只要有一批成功，就执行 `end('success')`**。[`claude-api.js#L342-L379`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js#L342-L379) `audit-post.js` 虽然在正文显示 `Not audited this run`，但只依赖 engine-status 决定 `partial`，因此仍可能设置 action 输出 `status=complete`，且在没有保留下来的 gap 时标题出现绿色 `No unit test gaps...`。[`audit-post.js#L430-L453`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L430-L453) [`#L621-L656`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L621-L656)
+**Evidence chain**: with more than 20 document blocks, `scan-parts.js` splits into multiple calls; `claude-api.js` writes the failed batches and the batches abandoned due to budget into `scan-parts.json`, and **as long as one batch succeeds, it runs `end('success')`**. [`claude-api.js#L342-L379`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js#L342-L379) Although `audit-post.js` shows `Not audited this run` in the body, it relies only on engine-status to decide `partial`, so it can still set the action output `status=complete`, and when there is no retained gap the title shows a green `No unit test gaps...`. [`audit-post.js#L430-L453`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L430-L453) [`#L621-L656`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L621-L656)
 
-**核心问题**：人类展开报告可以看见部分丢失，但下游自动化和管理看板看到 `complete` 可能错误认为覆盖完成。即使每批成功，轮转式 top-N scan 也不等于全仓完整审查。
+**Core problem**: a human who expands the report can see the partial loss, but downstream automation and management dashboards that see `complete` may wrongly believe coverage is complete. Even if every batch succeeds, a rotating top-N scan is not a complete whole-repo review.
 
-**修复**：把**执行是否正常**和**审查范围是否完整**分开：`execution_status={success,partial,failed}`、`scope_status={complete,selected_only,incomplete,unknown}`；若计划批次失败或预算被裁，`status` 不得无条件 complete。总数按 `eligible/selected/prompted/read/answered/verified` 逐项报告，不可只写“reviewed”。
+**Fix**: separate **whether execution was normal** from **whether the review scope is complete**: `execution_status={success,partial,failed}`, `scope_status={complete,selected_only,incomplete,unknown}`; if a planned batch fails or the budget cuts, `status` must not be unconditionally complete. Report totals item by item as `eligible/selected/prompted/read/answered/verified`, and not just "reviewed".
 
-**反证试验**：两个文档 batch，第一个返回无 gap 的有效 JSON，第二个模拟 429 或强制预算裁切；期望 action 不显示总体验证成功，并明确列出未审块数。
+**Refutation test**: two document batches, the first returns valid JSON with no gap, the second simulates a 429 or a forced budget cut; expect the action not to show overall verification success, and to list the number of unreviewed blocks explicitly.
 
-### SG-03 · P0 · 多批文档审查没有取得完整文档，超长需求可能在进入模型前被截断（E0）
+### SG-03 · P0 · Multi-batch document review did not obtain the complete document, and over-long requirements may be truncated before entering the model (E0)
 
-**证据链**：文档抽取给模型的候选行 `text` 限于 **240 字符**，做搜索的 `full` 限于 **600 字符**。[`audit-collect.js#L80-L95`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-collect.js#L80-L95) 当文档块超过默认 20 项后，多批 prompt 由 `scan-parts.js` 使用 `audit-docs.txt`（**路径清单**）、每批 `audit-candidates.txt` 和证据行拼接；pack 只装由 evidence 指向的**代码和测试片段**，而不是把完整需求文档放入 prompt。[`scan-parts.js#L12-L46`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/scan-parts.js#L12-L46) 默认 Claude API 无文件工具。[`claude-api.js#L52-L60`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js#L52-L60)
+**Evidence chain**: the candidate-line `text` that document extraction gives the model is limited to **240 characters**, and the `full` used for search is limited to **600 characters**. [`audit-collect.js#L80-L95`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-collect.js#L80-L95) When the document blocks exceed the default 20 items, the multi-batch prompt is assembled by `scan-parts.js` from `audit-docs.txt` (**a path list**), each batch's `audit-candidates.txt` and the evidence lines; the pack loads only the **code and test fragments** that the evidence points to, and does not put the complete requirement document into the prompt. [`scan-parts.js#L12-L46`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/scan-parts.js#L12-L46) The default Claude API has no file tool. [`claude-api.js#L52-L60`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js#L52-L60)
 
-Skill 同时要求“完整阅读所有 admitted documents”和“每个 block 的每个 clause”，因此多批 API 实际输入与规范发生结构性不一致。[`skills/spec-audit/SKILL.md#L26-L34`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/skills/spec-audit/SKILL.md#L26-L34)
+The Skill requires both "read all admitted documents completely" and "every clause of every block", so the actual input of the multi-batch API is structurally inconsistent with the specification. [`skills/spec-audit/SKILL.md#L26-L34`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/skills/spec-audit/SKILL.md#L26-L34)
 
-**影响**：长 Markdown 表格行、业务规则复合条款、例外条件或不变量可能位于第 240 字符以后；检索器曾使用更多字，但最终推理器只收到短行片段。模型对没看过的尾句不能完成行为对齐审查。不能仅因为 `docs_reviewed` 字段声称读过就信任它。
+**Impact**: long Markdown table rows, compound business-rule clauses, exception conditions or invariants may sit after the 240th character; the retriever used more characters, but the final reasoner receives only the short line fragment. The model cannot complete behavior alignment review for a tail sentence it has not seen. The `docs_reviewed` field claiming to have read must not be trusted on its own.
 
-**修复**：按 block 的起止 byte/line span，从原始**指定 SHA 的需求文件**提取**完整 block**并纳入每批 prompt；过长 block 再按**原子条款**拆分，记录未涵盖子条款。`docs_reviewed` 应由输入打包器生成 manifest，而非模型自报；缺失、截断强制 `unknown`。为了预算可以只包含每批相关 blocks，不必每轮重复全文件。
+**Fix**: extract the **complete block** from the original **requirement file at the specified SHA** by the block's start/end byte/line span and include it in each batch prompt; split over-long blocks further by **atomic clause**, and record the sub-clauses not covered. `docs_reviewed` should be a manifest generated by the input packer, not self-reported by the model; missing or truncated forces `unknown`. For budget reasons each batch may include only the relevant blocks, and need not repeat the whole file every round.
 
-**反证试验**：造一个 400 字符的验收标准，头部写“应保留按钮宽 100”，末尾写“disabled 时不得发请求”；造 25 个 blocks 触发批处理。让末尾规则与实现相反，看是否产生带该片段真实来源的 mismatch。并对比 `scan <=20 blocks`。
+**Refutation test**: build a 400-character acceptance criterion, with "the button width should stay at 100" in the head and "must not send a request when disabled" at the tail; build 25 blocks to trigger batching. Make the tail rule contradict the implementation, and see whether a mismatch with the real source of that fragment is produced. And compare against `scan <=20 blocks`.
 
-### SG-04 · P0 · 无匹配测试文件可能直接成为“确定性确认的缺失测试”（E0）
+### SG-04 · P0 · No matching test file may directly become a "deterministically confirmed missing test" (E0)
 
-`audit-units.js` 使用文件名、公开方法名、字符串 mention、符号调用等启发式匹配测试，一个 unit 至多连接 20 个候选测试文件。名字少于 4 个字符、间接 helper、参数化测试、trait/fixture、聚合测试均可能漏匹配。[`audit-units.js#L70-L118`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js#L70-L118) [`test-map.js#L13-L87`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/test-map.js#L13-L87)
+`audit-units.js` uses heuristics such as file name, public method names, string mentions and symbol calls to match tests, and one unit connects to at most 20 candidate test files. Names shorter than 4 characters, indirect helpers, parameterized tests, traits/fixtures and aggregate tests can all be missed. [`audit-units.js#L70-L118`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js#L70-L118) [`test-map.js#L13-L87`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/test-map.js#L13-L87)
 
-但 `audit-post.js` 在 `missing_test` 且 `!u.tests.length` 时直接令 `det=true`，`trackFindings` 将 `det` 当作 `confirmed`，**无需跨两次独立检测**。[`audit-post.js#L244-L269`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L244-L269) [`#L340-L345`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L340-L345)
+But `audit-post.js`, when `missing_test` and `!u.tests.length`, directly sets `det=true`, and `trackFindings` treats `det` as `confirmed`, **with no need for two independent detections**. [`audit-post.js#L244-L269`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L244-L269) [`#L340-L345`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L340-L345)
 
-**这是把“未检索到测试”升级为“缺失测试已确认”的认识论错误。** 即使在 Express 的已知命名误报修复后，对陌生语言、命名约定和不在测试目录的测试仍然成立。
+**This is an epistemological error that upgrades "no test was retrieved" to "missing test confirmed".** Even after the known naming false-positive fix in Express, it still holds for unfamiliar languages, naming conventions and tests outside the test directory.
 
-**修复**：`!matchedTests` 只能产生 `test_evidence_not_found`；确认 missing_test 前必须对同一行为进行**反向搜索**（测试→symbol/callsite/公共 API）和完整性检查，并且至少给出独立验证方法。`confirmed` 应只用于人工核查、动态实验或经过校准的可穷尽规则。
+**Fix**: `!matchedTests` can only produce `test_evidence_not_found`; before confirming a missing_test there must be a **reverse search** for the same behavior (tests→symbol/callsite/public API) and a completeness check, together with at least an independent verification method. `confirmed` should be used only for human checking, dynamic experiments or calibrated exhaustive rules.
 
-### SG-05 · P1 · `covered` 语义过强：引用存在≠测试断言保护需求（E0）
+### SG-05 · P1 · `covered` semantics too strong: a citation existing ≠ a test assertion protecting the requirement (E0)
 
-`gap()` 对 unit 类的 `covered` 核验只要求有代码引用和一个层级为 `unit` 的测试引用；`verify()` 证明引用在 HEAD 的文件中出现，但不能证明测试调用到该逻辑、断言关键结果、覆盖例外/负路径或能在缺陷注入时失败。[`audit-post.js#L158-L169`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L158-L169) [`#L189-L240`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L189-L240)
+The `covered` check for the unit class in `gap()` only requires a code citation and a test citation at layer `unit`; `verify()` proves the citation appears in the file at HEAD, but cannot prove that the test calls into that logic, asserts the key result, covers exception/negative paths, or would fail under defect injection. [`audit-post.js#L158-L169`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L158-L169) [`#L189-L240`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L189-L240)
 
-**修复**：拆分 `linked_to_code`、`test_exists`、`test_executes_behavior`、`assertion_proves_obligation`、`oracle_independent`、`current_head_run_passed`、`mutation_sensitive`；每一项标明证据类型和未验证原因。没有动态执行时 `covered` 改为 `static_evidence_present`（可叫 `likely_evidenced`）。
+**Fix**: split into `linked_to_code`, `test_exists`, `test_executes_behavior`, `assertion_proves_obligation`, `oracle_independent`, `current_head_run_passed`, `mutation_sensitive`; mark each with its evidence type and the reason it is unverified. Without dynamic execution, change `covered` to `static_evidence_present` (can be called `likely_evidenced`).
 
-### SG-06 · P1 · 两次同样发现不是独立证据；状态可能因代码改动变陈旧（E0+E2）
+### SG-06 · P1 · Two identical findings are not independent evidence; state may become stale after code changes (E0+E2)
 
-`track()` 根据文档块 CID、状态和连续次数将 gap 标记 confirmed；`trackFindings()` 对同一个 fid 在先前 state 存在时也标记 confirmed。CID 主要来自文档原文，fid 来自 unit、finding 类型和引用 quote；**两者没有完整绑定代码、测试、执行/配置、引擎版本**。[`audit-collect.js#L80-L95`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-collect.js#L80-L95) [`audit-post.js#L292-L345`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L292-L345)
+`track()` marks a gap confirmed according to the document block CID, the state and the consecutive count; `trackFindings()` also marks the same fid confirmed when a prior state exists. The CID mainly comes from the document's original text, and the fid comes from the unit, the finding type and the citation quote; **neither is fully bound to the code, tests, execution/configuration or engine version**. [`audit-collect.js#L80-L95`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-collect.js#L80-L95) [`audit-post.js#L292-L345`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js#L292-L345)
 
-相同检索丢失或模型偏差，在同一配置/上下文下连续出现两次的概率高度相关，不是“2 个证据源”。旧状态在轮转过程中可以被携带，即便依赖代码和测试已发生变化。
+The probability that the same retrieval loss or model bias appears twice in a row under the same configuration/context is highly correlated, and is not "2 evidence sources". Old state can be carried through rotation even though the code and tests it depends on have changed.
 
-**修复**：确认条件基于**证据机制多样性**（独立审阅/Mutation Test/实际执行/人工确认），不是调用次数；所有 `evidence` 增加 `{head_sha, relevant_code_hash, tests_hash, requirements_hash, rules_hash, analyzer_version}`；依赖变化使旧结论 `stale`，只允许显示“上次扫描发现”。
+**Fix**: base confirmation on **diversity of evidence mechanisms** (independent review / mutation test / actual execution / human confirmation), not on the number of calls; add `{head_sha, relevant_code_hash, tests_hash, requirements_hash, rules_hash, analyzer_version}` to all `evidence`; a dependency change makes the old conclusion `stale`, and only "found in the last scan" may be shown.
 
-### SG-07 · P1 · 文件是审查单位，既太粗，也不适合“发现遗漏的行为”（E0）
+### SG-07 · P1 · The file is the review unit, which is both too coarse and unsuited to "finding missed behaviors" (E0)
 
-全仓 inventory 以文件为 unit，而不是方法、行为、公共 API 或调用路径；每次默认最多选 12 个源文件，最多列入前 6000 个候选源码、读取前 4000 个测试（总计 48MiB），源文件超过 512KiB 被候选规则排除，单文件 context 装箱还有约 48KiB 上限。[`audit-units.js#L12-L17`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js#L12-L17) [`#L70-L105`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js#L70-L105) [`claude-api.js#L175-L232`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js#L175-L232)
+The whole-repo inventory uses the file as the unit, not the method, behavior, public API or call path; each time it selects at most 12 source files by default, lists at most the first 6000 candidate sources and reads the first 4000 tests (48MiB in total), source files over 512KiB are excluded by the candidate rule, and single-file context packing has a limit of about 48KiB. [`audit-units.js#L12-L17`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js#L12-L17) [`#L70-L105`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js#L70-L105) [`claude-api.js#L175-L232`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js#L175-L232)
 
-这种限制合理控制成本，但在大型仓库中“仓库扫描”不代表每个行为都会看到。文件上的 20 个测试也可能全在测 1 个 happy path，剩余 7 个分支根本没覆盖。
+These limits reasonably control cost, but in a large repository a "repository scan" does not mean every behavior will be seen. The 20 tests on a file may all test one happy path, with the remaining 7 branches not covered at all.
 
-**修复**：分层 inventory：`repo → package → symbol/public API → behavior/branch/obligation`。使用增量解析器/语言插件形成调用索引、符号范围和测试关联；缓存由 SHA 决定并在变化时失效；对无法解析的语言清楚列为 `unsupported`；大文件按方法/AST 区域分片并包含调用者和相关测试。全仓报告显示范围的分母及未扫描原因。
+**Fix**: layered inventory: `repo → package → symbol/public API → behavior/branch/obligation`. Use incremental parsers / language plugins to form a call index, symbol ranges and test associations; the cache is determined by the SHA and invalidated on change; languages that cannot be parsed are clearly listed as `unsupported`; large files are sharded by method/AST region and include callers and related tests. The whole-repo report shows the denominator of the scope and the reasons for what was not scanned.
 
-### SG-08 · P1 · 扫描风险排序存在 Goodhart 效应和静默盲点（E0）
+### SG-08 · P1 · Scan risk ranking has a Goodhart effect and silent blind spots (E0)
 
-优先级公式按公开定义数、行数、最近 180 天 churn 和含 `fix|bug` 的 commit 标题计分；测试文件匹配后 risk factor 降低至 0.3。它是启发式排序，不是经历史 defect 数据校准的发生概率。[`audit-units.js#L35-L52`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js#L35-L52)
+The priority formula scores by the number of public definitions, line count, churn in the last 180 days and commit titles containing `fix|bug`; once a test file matches, the risk factor drops to 0.3. It is a heuristic ranking, not a probability of occurrence calibrated with historical defect data. [`audit-units.js#L35-L52`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js#L35-L52)
 
-低 churn 的安全边界代码、稳定但错误的公共算法、共享低层依赖，可能被排到很后；系统把“测试名字匹配”当风险大幅下降的信号，可能恰好错过断言质量差的核心模块。
+Low-churn security-boundary code, stable but wrong public algorithms and shared low-level dependencies may be ranked very late; the system treats a "test name match" as a signal that risk drops sharply, which may precisely miss core modules with poor assertion quality.
 
-**修复**：显式区分“不确定性优先”和“损害优先”：暴露面、授权/支付/数据隔离、API fan-out、依赖中心性、近期事故、复杂度、覆盖变化、批改动影响，再做成本收益排序；维护**随机抽样审计**作为对冲，测 top-N 与随机组的真实检出率。
+**Fix**: explicitly distinguish "uncertainty first" from "damage first": exposure surface, authorization/payment/data isolation, API fan-out, dependency centrality, recent incidents, complexity, coverage change and the impact of batch changes, and then rank by cost-benefit; maintain a **random sampling audit** as a hedge, and measure the real detection rate of the top-N versus the random group.
 
-### SG-09 · P1 · 需求发现是局部静态文本搜索，不能承担“真实需求真值源”职责（E0+E2）
+### SG-09 · P1 · Requirement discovery is a local static text search and cannot take on the role of "the source of truth for real requirements" (E0+E2)
 
-需求侧依赖 GitHub PR 正文、Issue、仓库内 README/MD/feature 及命名规则；手动 `design_docs` 中指向另一 repo 的链接明确拒绝，外部 Confluence/Jira/Figma/PDF 等没有本机读入通路。[`resolve-inputs.js#L83-L110`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/resolve-inputs.js#L83-L110) [`requirements.js#L231-L307`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/requirements.js#L231-L307)
+The requirement side relies on the GitHub PR body, Issues, the README/MD/feature files in the repository and naming rules; links in the manual `design_docs` that point to another repo are explicitly rejected, and external Confluence/Jira/Figma/PDF etc. have no local read-in path. [`resolve-inputs.js#L83-L110`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/resolve-inputs.js#L83-L110) [`requirements.js#L231-L307`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/requirements.js#L231-L307)
 
-词法匹配还有翻译、术语别名、含义倒置、否定条件、表格例外、省略目标路径等困难。更深的盲点是**设计本身可能错/不受批准**。一个 PR 同时修改代码与设计令两者一致，不能自动证明改动合理。
+Lexical matching also has difficulties with translation, terminology aliases, inverted meaning, negated conditions, table exceptions and omitted target paths. A deeper blind spot is that **the design itself may be wrong / unapproved**. A PR that changes both the code and the design to make them consistent cannot automatically prove the change is reasonable.
 
-**修复**：引入 `requirement_authority`、`approval_status`、`effective_at`、`version`、`supersedes`、`owner` 与 conflict/expiry 标记；支持组织批准的外部源插件（不越权）；把“文档缺失”与“设计不一致”区分。若 design 与实现同时变更，要求明确 change justification 和经过审批的契约差异。
+**Fix**: introduce `requirement_authority`, `approval_status`, `effective_at`, `version`, `supersedes`, `owner` and conflict/expiry markers; support organization-approved external-source plugins (without overstepping authority); distinguish "document missing" from "design inconsistent". If the design and the implementation change at the same time, require an explicit change justification and an approved contract difference.
 
-### SG-10 · P1 · 测试层级分类仅靠路径/模型，尚不能可靠指导 push-down（E0+E1）
+### SG-10 · P1 · Test-layer classification relies only on path/model and cannot yet reliably guide push-down (E0+E1)
 
-`post.js` 默认用目录或文件名识别 e2e/integration/component，否则很多被识别为测试的文件归入 unit；一部分强制模型注明 layer。模型也会在语义不明时分类错误。[`post.js#L121-L136`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/post.js#L121-L136)
+`post.js` by default identifies e2e/integration/component by directory or file name, and otherwise puts many files recognized as tests into unit; part of it forces the model to state the layer. The model also misclassifies when semantics are unclear. [`post.js#L121-L136`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/post.js#L121-L136)
 
-仓库已有实跑记录把 Express 的 supertest HTTP 检查当成 unit、从未充分验证“可以下沉”的正面例子。[`shift-left-review §5 C5`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md)
+The repository already has a live-run record in which Express's supertest HTTP check was treated as unit, and a positive example of "can be pushed down" has never been sufficiently verified. [`shift-left-review §5 C5`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md)
 
-**修复**：允许团队定义 `test_layers` 按 glob/框架/fixture 约束（会有冲突优先级）；检测测试的**实际依赖边界**：纯函数/数据库/HTTP 服务/真实队列/外部网络/仿真；按隔离性、速度、稳定性和需求失败机制判断。不要建议把契约测试完全替换为单元测试：下沉是**补充低成本反馈**，不能抹掉服务边界验证。
+**Fix**: allow teams to define `test_layers` constrained by glob/framework/fixture (with conflict priorities); detect the test's **actual dependency boundary**: pure function / database / HTTP service / real queue / external network / simulation; judge by isolation, speed, stability and the requirement's failure mechanism. Do not suggest fully replacing contract tests with unit tests: pushdown is a **supplementary low-cost feedback**, and cannot erase the verification of service boundaries.
 
-**验收**：准备 20 个由目标团队签字的案例，包括 Angular TestBed、Playwright component、supertest、pytest fixture、Testcontainers、consumer-driven contract；要求列清 `current_layer / suggested_layer / should_add_or_move / why / what higher-layer must remain`，评两位资深 reviewer 一致性。
+**Acceptance**: prepare 20 cases signed off by the target team, including Angular TestBed, Playwright component, supertest, pytest fixture, Testcontainers and consumer-driven contract; require `current_layer / suggested_layer / should_add_or_move / why / what higher-layer must remain` to be listed clearly, and rate the agreement of two senior reviewers.
 
-### SG-11 · P1 · Coding standards 的“读取”与“已通过工具确认”未统一（E0）
+### SG-11 · P1 · "Reading" coding standards and "confirmed by a tool" are not unified (E0)
 
-Action 支持 `standards_paths` 自动查找，也提供可选的 `standards_checks` 来查 GitHub check/status；**默认为空表示并未配置外部检查**。[`action.yml#L21-L28`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/action.yml#L21-L28) 现有旧审查明确提到全仓 scan 尚不检查 coding standard。[`shift-left-review C15`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md)
+The Action supports automatic lookup through `standards_paths`, and also provides the optional `standards_checks` to query GitHub check/status; **empty by default means no external check is configured**. [`action.yml#L21-L28`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/action.yml#L21-L28) The existing old review explicitly mentions that the whole-repo scan does not yet check coding standards. [`shift-left-review C15`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md)
 
-**修复**：将 `standard_source_found / applicable_to_files / check_configured / check_run_at_head / check_provenance / pass_fail / manual_review` 六状态分开；对于 `check:lint` 同名 check，必须校验 check 的 producer/source、目标 SHA、执行条件和时间，避免错误归因；scan 也输出 baseline 的规则覆盖结果（可先只确认可用性）。别声称“已确认”除非确切运行结果与本次 SHA 匹配。
+**Fix**: separate the six states `standard_source_found / applicable_to_files / check_configured / check_run_at_head / check_provenance / pass_fail / manual_review`; for a same-named check such as `check:lint`, the check's producer/source, target SHA, execution conditions and time must be validated, to avoid wrong attribution; scan should also output the rule-coverage result of the baseline (it can first confirm only availability). Do not claim "confirmed" unless the exact run result matches this SHA.
 
-### SG-12 · P1 · 代码/测试证据存在选择偏差，非完整检索会系统性减少 recall（E0+E1）
+### SG-12 · P1 · Code/test evidence has selection bias, and incomplete retrieval systematically reduces recall (E0+E1)
 
-`audit-collect` 仅给每块最多 3 个代码位置和 3 个测试位置；大型测试只选择含给定 symbol 的局部切片（名称短、动态调用、抽象 helper 都可能错过）。[ `audit-collect.js#L118-L151`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-collect.js#L118-L151) [`claude-api.js#L117-L172`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js#L117-L172)
+`audit-collect` gives each block at most 3 code locations and 3 test locations; for large tests it selects only local slices containing the given symbol (short names, dynamic calls and abstract helpers can all be missed). [ `audit-collect.js#L118-L151`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-collect.js#L118-L151) [`claude-api.js#L117-L172`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js#L117-L172)
 
-字面命中被用作保护：测试文本里出现错误消息或 literal，可以将 `missing_test` 降为低置信，但**字面出现不一定有有效 assertion**。[`test-map.js#L89-L139`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/test-map.js#L89-L139)
+Literal hits are used as protection: an error message or literal appearing in the test text can lower `missing_test` to low confidence, but **a literal appearing does not necessarily mean there is a valid assertion**. [`test-map.js#L89-L139`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/test-map.js#L89-L139)
 
-**修复**：对于要输出“缺测试”的候选，使用至少两条方向不同的检索路径（code→tests、tests→code）、补充基于真实调用位置的追踪；对“存在测试”验证 assertions 所在子测试与被测行为的关系。报告区分 `retrieval_sufficient` 与 `no_matching_test`；按语言分层量测 recall，专门打擂台测试 `_test.js`、参数化、短方法名和测试 helper。
+**Fix**: for candidates that are to output "missing test", use at least two retrieval paths in different directions (code→tests, tests→code), supplemented by tracing based on real call locations; for "test exists", verify the relationship between the sub-test where the assertions sit and the behavior under test. The report distinguishes `retrieval_sufficient` from `no_matching_test`; measure recall by language layer, with dedicated challenge tests for `_test.js`, parameterized tests, short method names and test helpers.
 
-### SG-13 · P1 · Snapshot 缺少执行证明、CI 配置与 feature-flag 版本（E0+E2）
+### SG-13 · P1 · Snapshot lacks execution proof, CI configuration and feature-flag version (E0+E2)
 
-SpecGuard 明确不运行测试；`coverage_files` 需调用方**预先在同一个 job**运行收集，且默认为空。[`action.yml#L28`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/action.yml#L28) 即使拿到了 lcov/JaCoCo，行 coverage 也无法说明断言是否独立正确。
+SpecGuard explicitly does not run tests; `coverage_files` requires the caller to collect it **beforehand in the same job**, and it is empty by default. [`action.yml#L28`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/action.yml#L28) Even with lcov/JaCoCo in hand, line coverage cannot show whether the assertions are independently correct.
 
-**修复**：为可选动态证据绑定 `head_sha / build_id / test command / environment / flag matrix / report checksum / timestamp`；对 branch/source mismatch 标记 `invalid_dynamic_evidence`。推荐轻量“提议验证”层：用测试骨架和最小 mutation 验证，不直接在高权限核心扫描 runner 执行陌生 PR 代码；在 target repo 独立、低权限/隔离 runner 中执行。
+**Fix**: bind optional dynamic evidence to `head_sha / build_id / test command / environment / flag matrix / report checksum / timestamp`; mark a branch/source mismatch as `invalid_dynamic_evidence`. A lightweight "proposed verification" layer is recommended: verify with test skeletons and minimal mutation, without executing unfamiliar PR code directly on the high-privilege core scan runner; execute it in an independent, low-privilege / isolated runner in the target repo.
 
-### SG-14 · P1 · 手动运行的交付不一定发生在开发者决策环节（E0+E3）
+### SG-14 · P1 · Delivery of manual runs does not necessarily happen at the developer's decision point (E0+E3)
 
-手动模式默认 `post_to_pr=false`，结果只在 SpecGuard run 页和 artifact；全仓默认写中心 Issue（若启用），这不等于 PR 作者会及时看到、理解并修复。旧审查明确记录缺少真人的 did-fix、误报、time-to-merge 数据。[`specguard-run.yml#L12-L26`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard-run.yml#L12-L26) [`shift-left-review §5 C1`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md)
+Manual mode defaults to `post_to_pr=false`, and results are only on the SpecGuard run page and the artifact; whole-repo defaults to writing a central Issue (if enabled), which does not mean the PR author will see, understand and fix it in time. The old review explicitly records the lack of human did-fix, false-positive and time-to-merge data. [`specguard-run.yml#L12-L26`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard-run.yml#L12-L26) [`shift-left-review §5 C1`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md)
 
-**修复**：为 target team 提供 opt-in PR check/sticky comment、按 CODEOWNERS 指派、低噪声 actionable findings；中心扫描生成**可分派工作项**而非只有大表格。捕获 `acknowledged / accepted / fixed / dismissed / false_positive / deferred / verified` 事件，人工确认后追踪到 PR SHA 与关闭依据。没有生产数据之前不把评论数量当 adoption 成果。
+**Fix**: provide the target team with an opt-in PR check / sticky comment, assignment by CODEOWNERS, and low-noise actionable findings; the central scan produces **assignable work items** and not just a big table. Capture the events `acknowledged / accepted / fixed / dismissed / false_positive / deferred / verified`, and after human confirmation trace to the PR SHA and the closing basis. Before there is production data, do not treat comment counts as an adoption result.
 
-### SG-15 · P2 · 自测集提供了工程回归，却不足以验证跨团队泛化（E1）
+### SG-15 · P2 · The self-test set provides engineering regression but is not enough to verify cross-team generalization (E1)
 
-仓库 18 个 seeded cases 的 precision 为 100%、recall 为 86%，但部分失败不是误报扣分而是“case fail”；评分器将合理的额外发现标注为 acceptable，summary-only 不计入 TP/FP，errored run 不在准确率分母里。[`eval/README.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/README.md) [`recall results`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/results/recall-claude-2026-10-14b.md)
+The repository's 18 seeded cases have precision 100% and recall 86%, but some failures are not deducted as false positives but as "case fail"; the grader marks reasonable extra findings as acceptable, summary-only is not counted in TP/FP, and errored runs are not in the accuracy denominator. [`eval/README.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/README.md) [`recall results`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/results/recall-claude-2026-10-14b.md)
 
-**修复**：生产试点同时测 model-level 与 end-to-end：`TP/FP/FN`、`unknown率`、`未读输入率`、`运行失败率`、`有效送达率`、`did-fix`、`escape bugs`、`时间/成本`。以真实缺陷和仓库做 held-out；将插桩或规则调整锁定，防止对同一 fixtures 反复调到高分。分离 engine；不能把 Claude 结果当 Copilot 默认路径质量。
+**Fix**: the production pilot measures both model-level and end-to-end: `TP/FP/FN`, `unknown rate`, `unread-input rate`, `run failure rate`, `effective delivery rate`, `did-fix`, `escape bugs`, `time/cost`. Hold out real defects and repositories; lock instrumentation or rule adjustments, to prevent tuning to a high score repeatedly on the same fixtures. Separate engines; Claude results cannot be taken as the quality of the Copilot default path.
 
 ---
 
-## 4. Unknown Unknowns：从约束推演未覆盖的缺陷机制
+## 4. Unknown Unknowns: reasoning from constraints to uncovered defect mechanisms
 
-下表不是“模型还可以想到什么”的列表，而是逐条问：**如果系统给出干净结论，但真实行为错误，哪一条假设可能没有成立？** 这样才能设计主动寻找未知缺口的实验。
+The table below is not a list of "what else the model could think of", but asks one by one: **if the system gives a clean conclusion while the real behavior is wrong, which assumption may not have held?** Only this way can experiments that actively look for unknown gaps be designed.
 
-| 类别 | 隐藏假设 | 反例（真实业务有机会发生） | 首选反证/探针 | 推荐默认层级 |
+| Category | Hidden assumption | Counterexample (real business can have this chance) | Preferred refutation/probe | Recommended default layer |
 |---|---|---|---|---|
-| **U1 目标行为漂移** | 文档必然正确 | 开发者同时改需求与代码，隐藏不兼容行为；旧已批准规则被覆盖 | 比较批准 spec 与 base/head，要求 change approval | 需求治理+contract |
-| **U2 未表达的安全不变量** | 没写 AC 就无需测 | 不同租户之间泄露、用户权限越界、未授权重试 | 枚举角色×资源×操作矩阵与否定性质 | unit+integration/security |
-| **U3 未触发路径** | test 引用即实际调用 | test 只测 mock 或 dead branch，返回常数也会通过 | mutation：删调用、反转比较、改返回值 | unit |
-| **U4 Oracle 共谋** | 预期结果独立 | 测试把实现算法抄到 expected，二者同错 | 从规格算 literal expected；metamorphic/property test | unit/property |
-| **U5 边界/组合爆炸** | happy path 代表全路径 | `null/0/负数/溢出/时区/并发 flag` 相互作用 | 边界值与 pairwise + 状态机变换 | unit+component |
-| **U6 时序和并发** | 顺序调用测试够用 | 双击、消息重复、幂等 key、超时后重试竞态 | deterministic scheduler/fake clock + race probe | unit+integration |
-| **U7 事件最终一致性** | 函数完成即业务完成 | 事件丢失、乱序、重复消费、部分事务 | publisher/consumer contract，队列 fault injection | component+integration |
-| **U8 跨仓库契约** | 单 repo 测试可自足 | payload 字段改名令另一 team 的 consumer 出错 | API/schema diff + consumer contract dependency graph | contract |
-| **U9 配置即行为** | 只需扫 source | feature flag 默认值、路由、IAM policy、SQL migration 改变功能 | config/schema/policy diff 与环境矩阵 | unit+integration |
-| **U10 测试层误认** | 文件 `*.test` 表示 unit | supertest/Angular TestBed 启了服务 | 依据真实依赖和 fixture 判层 | 分层治理 |
-| **U11 编译/生成路径** | 改动都在普通源文件 | protobuf/OpenAPI/生成客户端或 CI 构建开关改变行为 | 生成源→产物→调用者图 | contract+build |
-| **U12 测试运行条件** | 存在的测试都在 CI 跑 | `skip`, ignored tag, 条件 job, flaky quarantine，路径过滤 | workflow 和 runner 选择器求交集 | CI 校验 |
-| **U13 测试新旧错配** | 最新 artifact 表示当前 PR | coverage/test 在 base SHA 跑过，HEAD 已变 | SHA+flag+test-report attestation | 证据治理 |
-| **U14 检索/打包饥饿** | 没输出就是没问题 | 长文件尾部真正关键分支未给 LLM | 乱序文件、移动函数、增预算检出敏感性 | 元测试 |
-| **U15 语言/框架缺口** | 通用规则覆盖全部代码 | C++/SQL/Swift fixture/自定义 assertion 未识别 | 语言支持矩阵与未知标签，50 案例/框架 | 扫描可靠性 |
-| **U16 高风险稳定代码** | churn 低风险就低 | 很少改的认证/账单核心算法一直错 | 改用业务损害×依赖中心度排序，随机审计 | 计划 |
-| **U17 生态安全** | 代码不执行就安全 | 机密通过摘要/Issue/artifact/model 请求泄露 | 数据流与 least-privilege/visibility 测试 | 安全阻断 |
-| **U18 组织反作用** | 高检出率会改善质量 | 通知疲劳、PR 延迟、人员被指标考核、压低 precision | 阶梯式 shadow→opt-in→实验，测 did-fix/负担 | 产品试点 |
-| **U19 破坏性测试下沉** | 更多 unit 更好 | 用 mock 取代真实消费者契约，假绿测试增多 | 下沉前/后 defect classes 不变量核对 | contract 保留 |
-| **U20 模型自证循环** | 两次同样 AI 输出即可靠 | 同样检索前提和模型重复稳定误报 | 多方法互证（编译/执行/人工/不同信息源） | 证据治理 |
+| **U1 Target behavior drift** | The document is necessarily correct | The developer changes the requirement and the code together, hiding incompatible behavior; an old approved rule is overwritten | Compare the approved spec with base/head, require change approval | Requirement governance + contract |
+| **U2 Unexpressed security invariants** | No AC written means no need to test | Leakage between tenants, user privilege escalation, unauthorized retry | Enumerate the role × resource × operation matrix and negative properties | unit + integration/security |
+| **U3 Untriggered paths** | A test citation means it was actually called | The test only tests a mock or dead branch, and passes even if a constant is returned | Mutation: delete the call, invert the comparison, change the return value | unit |
+| **U4 Oracle collusion** | The expected result is independent | The test copies the implementation algorithm into expected, and both are wrong the same way | Compute literal expected values from the spec; metamorphic/property test | unit/property |
+| **U5 Boundary / combinatorial explosion** | The happy path represents all paths | `null/0/negative/overflow/timezone/concurrent flag` interactions | Boundary values and pairwise + state-machine transformations | unit + component |
+| **U6 Timing and concurrency** | Sequential-call tests are enough | Double click, duplicate messages, idempotency key, retry race after timeout | deterministic scheduler / fake clock + race probe | unit + integration |
+| **U7 Event eventual consistency** | A function finishing means the business finished | Lost events, out-of-order, duplicate consumption, partial transactions | publisher/consumer contract, queue fault injection | component + integration |
+| **U8 Cross-repo contracts** | Single-repo tests can be self-sufficient | A payload field rename breaks another team's consumer | API/schema diff + consumer contract dependency graph | contract |
+| **U9 Configuration is behavior** | Scanning source is enough | Feature-flag defaults, routing, IAM policy and SQL migrations change functionality | config/schema/policy diff and environment matrix | unit + integration |
+| **U10 Test-layer misidentification** | A `*.test` file means unit | supertest / Angular TestBed started a service | Judge the layer by real dependencies and fixtures | Layered governance |
+| **U11 Compiled/generated paths** | Changes are all in ordinary source files | protobuf/OpenAPI/generated clients or CI build switches change behavior | Generated source → artifact → caller graph | contract + build |
+| **U12 Test run conditions** | Tests that exist all run in CI | `skip`, ignored tag, conditional job, flaky quarantine, path filter | Intersect the workflow and the runner selectors | CI verification |
+| **U13 Test new/old mismatch** | The latest artifact represents the current PR | Coverage/tests were run on the base SHA, HEAD has changed | SHA + flag + test-report attestation | Evidence governance |
+| **U14 Retrieval/packing starvation** | No output means no problem | The truly key branch at the tail of a long file was not given to the LLM | Shuffle files, move functions, check detection sensitivity to a larger budget | Meta-testing |
+| **U15 Language/framework gaps** | General rules cover all code | C++/SQL/Swift fixtures / custom assertions not recognized | Language support matrix and unknown labels, 50 cases per framework | Scan reliability |
+| **U16 High-risk stable code** | Low churn means low risk | Rarely changed authentication/billing core algorithms are wrong all along | Rank by business damage × dependency centrality instead, random audit | Planning |
+| **U17 Ecosystem security** | Code that is not executed is safe | Secrets leak through summaries/Issues/artifacts/model requests | Data flow and least-privilege/visibility tests | Security blocking |
+| **U18 Organizational backlash** | A high detection rate will improve quality | Notification fatigue, PR delay, people assessed by metrics, precision pushed down | Staged shadow → opt-in → experiment, measure did-fix / burden | Product pilot |
+| **U19 Destructive test pushdown** | More unit tests are better | Replacing real consumer contracts with mocks, more falsely-green tests | Check that defect-class invariants are the same before/after pushdown | contract kept |
+| **U20 Model self-proof loop** | Two identical AI outputs are reliable | Repeated stable false positives under the same retrieval premises and model | Cross-check with multiple methods (compile / execute / human / different information sources) | Evidence governance |
 
-### 十个特别容易被漏掉的 **Test Obligations**
+### Ten Test Obligations that are especially easy to miss
 
-这些应当是 SpecGuard 生成候选验证义务的模板，不是默认认为每个 PR 都必须补十条测试：
+These should be the templates by which SpecGuard generates candidate verification obligations; it is not that every PR is by default required to add ten tests:
 
-1. **拒绝路径**：无权限/错误 tenant/被撤销令牌时不能发生副作用。
-2. **状态迁移**：`pending → paid → refunded` 等不允许越级、倒退和重复成功。
-3. **幂等与可恢复**：重复事件/超时重试不会重复扣款或重复触发通知。
-4. **边界精度**：金额四舍五入、小数精度、负值、空值、极大值、闰年/时区/DST。
-5. **失败传播**：下游超时/部分成功时，错误可观测并按约定补偿。
-6. **反向兼容**：旧 consumer 接到新字段/default 后仍可工作。
-7. **授权组合**：角色×资源所有者×动作×flag，而不只是某个 `isAdmin` 测试。
-8. **可观测性副作用**：没有泄露 PII；异常不会被吞；审计事件在拒绝路径仍产生。
-9. **构建和环境矩阵**：release/debug、生产特性开关/区域差异不会绕开测试。
-10. **测试正确性本身**：测试故意将关键比较反转或删掉实现时必须失败（有选择地做 mutation）。
+1. **Rejection path**: with no permission / wrong tenant / a revoked token, there must be no side effects.
+2. **State transitions**: `pending → paid → refunded` etc. must not allow skipping levels, going backwards or repeated success.
+3. **Idempotency and recoverability**: duplicate events / retries after a timeout do not charge twice or trigger notifications twice.
+4. **Boundary precision**: monetary rounding, decimal precision, negative values, empty values, huge values, leap years / timezones / DST.
+5. **Failure propagation**: when downstream times out or partially succeeds, the error is observable and compensated as agreed.
+6. **Backward compatibility**: an old consumer still works after receiving a new field / default.
+7. **Authorization combinations**: role × resource owner × action × flag, not just some `isAdmin` test.
+8. **Observability side effects**: no PII leaked; exceptions are not swallowed; audit events are still produced on rejection paths.
+9. **Build and environment matrix**: release/debug, production feature switches / regional differences do not bypass the tests.
+10. **Test correctness itself**: when the test deliberately inverts a key comparison or deletes the implementation, it must fail (selective mutation).
 
 ---
 
-## 5. 推荐的目标架构：以验证义务为中心而不是以文件为中心
+## 5. Recommended target architecture: centered on verification obligations rather than on files
 
 ```mermaid
 flowchart TD
@@ -267,14 +267,14 @@ flowchart TD
   N --> O[Human disposition and outcome telemetry]
 ```
 
-**分清两个模式的职责**：
+**Keep the responsibilities of the two modes distinct**:
 
-- **PR review**：基于 diff 加 impact graph，聚焦**本次行为更改**引入/失效的义务。目标是 10–60 秒内给作者 1–5 条高置信、能动手的建议；若引用不足，单独列未证实项，不输出假绿。
-- **Full-repo scan**：对固定 SHA 建立**版本化 obligation inventory**，按业务风险和未审时间轮转，保存“哪些义务/哪些文件确实被读到”。结果面向 QA / team owner 的可管理 backlog，支持按 package、risk、状态过滤；一次 batch 不能冒充全仓完成。
-- **Standards checking**：确定性 lint/check/status 与规范范围校验为主，LLM 只解释无法机器检查的规则。默认没有 configured check 就写 `not confirmed`。
-- **Pushdown**：仅给出单位测试可以验证的**可分离纯行为**，同时明确是否必须保留 contract/integration 的风险保护。
+- **PR review**: based on the diff plus an impact graph, focus on the obligations **introduced/invalidated by this behavior change**. The goal is to give the author 1–5 high-confidence, actionable suggestions within 10–60 seconds; if citations are insufficient, list the unproven items separately and do not output a false green.
+- **Full-repo scan**: build a **versioned obligation inventory** on a fixed SHA, rotate by business risk and time since last review, and save "which obligations / which files were actually read". The result is a manageable backlog for QA / the team owner, supporting filtering by package, risk and state; a single batch cannot pass for whole-repo completion.
+- **Standards checking**: mainly deterministic lint/check/status and specification-scope validation; the LLM only explains rules that cannot be machine-checked. With no configured check by default, write `not confirmed`.
+- **Pushdown**: give only the **separable pure behavior** that a unit test can verify, and state explicitly whether the risk protection of contract/integration must be kept.
 
-### 推荐数据契约（示意）
+### Recommended data contract (illustrative)
 
 ```json
 {
@@ -310,163 +310,163 @@ flowchart TD
 }
 ```
 
-该 JSON **不是**当前 SpecGuard 的现有 schema；它是建议迁移时引入的**独立证据清单**。其中数值仅为示例，不代表任何真实扫描结果。
+This JSON is **not** the existing schema of the current SpecGuard; it is an **independent evidence manifest** suggested to be introduced during migration. The numbers in it are only examples and do not represent any real scan result.
 
-### 建议的状态机
+### Suggested state machine
 
-| 状态 | 定义 | 能否显示绿色通过 |
+| State | Definition | Can it show a green pass |
 |---|---|---|
-| `verified_dynamic` | 指定 head 的真实测试执行与独立 oracle/mutation 有支持 | 可以，限定当前义务和执行环境 |
-| `evidenced_static` | 代码、测试与 assertion 的相关性经核验，但未执行 | 只能显示“静态证据存在”，不能叫验证通过 |
-| `missing_test_high_confidence` | 检索足够完整，缺口经独立验证/人工确认 | 作为可行动 issue |
-| `weak_oracle` | 测试执行或 assertion 存在，但不敏感于真实的失败机制 | 作为可行动 issue |
-| `higher_layer_only` | 仅有组件/集成/E2E 证据，需要评估下沉的收益 | 建议补单元测试，不能自动否定集成保护 |
-| `unknown` | 需求含糊、test mapping 不充分、语义证据不足 | 无绿色、无断言“缺失” |
-| `not_reviewed` | 上下文截断、语言不支持、budget、部分 batch 失败 | 无绿色，清晰展示原因 |
-| `stale` | 上次扫描结论基于另一版本的依赖代码、测试或规则 | 无绿色，进入重新审查队列 |
+| `verified_dynamic` | A real test execution at the specified head, supported by an independent oracle/mutation | Yes, limited to the current obligation and execution environment |
+| `evidenced_static` | The relevance of code, test and assertion has been checked, but not executed | Can only show "static evidence exists", must not be called verification passed |
+| `missing_test_high_confidence` | The retrieval is complete enough, and the gap was independently verified / confirmed by a human | As an actionable issue |
+| `weak_oracle` | The test executes or an assertion exists, but is not sensitive to the real failure mechanism | As an actionable issue |
+| `higher_layer_only` | Only component/integration/E2E evidence; the benefit of pushdown needs to be assessed | Suggest adding unit tests, cannot automatically negate integration protection |
+| `unknown` | The requirement is vague, the test mapping is insufficient, or semantic evidence is insufficient | No green, no assertion of "missing" |
+| `not_reviewed` | Context truncated, language unsupported, budget, partial batch failure | No green, show the reason clearly |
+| `stale` | The conclusion of the last scan was based on another version of the dependent code, tests or rules | No green, enters the re-review queue |
 
-关键原则是**不强迫一个需求落在二元 covered/missing 分类里**。当模型无法独立判定时，明确表示不确定，是产品可靠性的组成部分。
+The key principle is **not to force a requirement into the binary covered/missing classification**. When the model cannot judge independently, stating uncertainty explicitly is part of the product's reliability.
 
 ---
 
-## 6. 具体改造路线：按阻塞条件，而非功能数量排期
+## 6. Concrete transformation route: scheduled by blocking conditions, not by feature count
 
-### P0：部署前的“可信输出边界”（先于增加新 LLM feature）
+### P0: the "trusted output boundary" before deployment (ahead of adding new LLM features)
 
-| 工作包 | 最小改造 | 验收条件 | 代码关注点 |
+| Work package | Minimal change | Acceptance condition | Code focus |
 |---|---|---|---|
-| **A. 信息流控制** | 在手动 `resolve`/`review` 检查目标与控制仓库可见性；危险组合 fail closed；隔离 summary、issue、artifact 与日志 | 私有目标内容不可能进入权限较宽的结果通道 | `.github/workflows/specguard-run.yml` |
-| **B. 真正的完成度状态** | 将 `scan-parts.json` 的 failed/dropped 反映到 action output 与 verdict；明确轮转分母 | 一批失败时 `execution_status=partial`，绝不假绿 | `src/engines/claude-api.js`, `src/audit-post.js` |
-| **C. 原文进入模型** | 分批装箱包含完整需求 block 与 SHA/line span，跨长行多 clause 不丢 | 25-block 中 400 字符复合规则的末句能被审到，截断时标 unknown | `src/audit-collect.js`, `src/scan-parts.js`, `src/engines/claude-api.js` |
-| **D. 确认语义** | 删除 `!u.tests.length => det confirmed`；两次模型重复只表示 `stable`, 不等于证明 | 隐式/聚合测试存在时不报“已确认缺失”；两次误报不升级为事实 | `src/audit-post.js`, `src/test-map.js` |
+| **A. Information-flow control** | In the manual `resolve`/`review`, check the visibility of the target and the control repository; fail closed on dangerous combinations; isolate summary, issue, artifact and logs | Private target content cannot enter a result channel with broader permissions | `.github/workflows/specguard-run.yml` |
+| **B. True completeness state** | Reflect failed/dropped in `scan-parts.json` into the action output and the verdict; make the rotation denominator explicit | When one batch fails, `execution_status=partial`, never a false green | `src/engines/claude-api.js`, `src/audit-post.js` |
+| **C. Original text goes into the model** | Batched packing includes the complete requirement block and the SHA/line span; multiple clauses across a long line are not lost | The last sentence of a 400-character compound rule in 25 blocks can be reviewed, and is marked unknown when truncated | `src/audit-collect.js`, `src/scan-parts.js`, `src/engines/claude-api.js` |
+| **D. Confirmation semantics** | Delete `!u.tests.length => det confirmed`; two model repetitions only mean `stable`, not proof | No "confirmed missing" is reported when implicit/aggregate tests exist; two false positives are not upgraded to fact | `src/audit-post.js`, `src/test-map.js` |
 
-### P1：把 PR 和 full scan 从“找到文件”提升为“找到行为”
+### P1: lift PR and full scan from "finding files" to "finding behavior"
 
-1. **Behavior Obligation IR**：从 approved requirement 与 changed branch/public API 生成 `precondition / action / observable effect / invariants / failure mode`。不要让模型一次既搜、既断言、既证实。
-2. **AST-first 双向检索**：对 JS/TS、Python、Java 等选定 pilot 语言做 symbol 级索引，测试引用不只靠文件名。其他语言显式 `unknown`，不假装全支持。
-3. **Verification strength**：从 test existence 升级到是否验证边界、独立 oracle 与变异敏感性；先跑抽样 mutation，不要求所有 PR 都耗时执行。
-4. **团队可配置 test layer**：路径、框架与依赖规则，明确 `move vs add`；合同/集成兜底保留。
-5. **Standards provenance**：处理规则适用范围、同名 checks 来源和 target SHA；全仓 scan 也至少输出 confirmed/not_configured/unknown。
-6. **数据与报告**：让手动扫描的结果能触达 target team，但默认不泄露到中心 public repo；每条 issue 附准确的 requirement/code/test/permalink 和最小 reproducer。
+1. **Behavior Obligation IR**: from the approved requirement and the changed branch/public API, generate `precondition / action / observable effect / invariants / failure mode`. Do not let the model search, assert and substantiate all at once.
+2. **AST-first bidirectional retrieval**: for the selected pilot languages such as JS/TS, Python and Java, build a symbol-level index, so test references do not rely only on file names. Other languages are explicitly `unknown`, without pretending to be fully supported.
+3. **Verification strength**: upgrade from test existence to whether boundaries, an independent oracle and mutation sensitivity are verified; run sampled mutation first, without requiring every PR to take the time to execute.
+4. **Team-configurable test layer**: paths, frameworks and dependency rules, with explicit `move vs add`; contract/integration backstops are kept.
+5. **Standards provenance**: handle rule applicability scope, the source of same-named checks and the target SHA; the whole-repo scan also outputs at least confirmed/not_configured/unknown.
+6. **Data and reporting**: let the results of manual scans reach the target team, but by default do not leak them into the central public repo; attach to each issue an accurate requirement/code/test permalink and a minimal reproducer.
 
-### P2：测量与规模化
+### P2: measurement and scaling
 
-- 把单 repo 的 `scan_issue` 状态升级为**按 head 与 artifact 身份的持久清单**（数据库/私有 object store 等，保留可追责 manifest）；保障并发、失败恢复和幂等性。
-- 每个 repository 建立版本化索引和缓存；PR incremental、定期补全长期未审义务；大 monorepo 按 service + CODEOWNERS 切分。
-- 用最近真实缺陷建立基线，做盲评 A/B，并将成本、延迟、错误率与 fix-through 联合评价；仅提高离线 precision 不是发布条件。
+- Upgrade the single-repo `scan_issue` state into a **persistent manifest by head and artifact identity** (database / private object store etc., keeping an accountable manifest); guarantee concurrency, failure recovery and idempotency.
+- Build a versioned index and cache for each repository; PR incremental, and periodic completion of obligations unreviewed for a long time; split large monorepos by service + CODEOWNERS.
+- Build a baseline from recent real defects, do blind A/B evaluation, and evaluate cost, latency, error rate and fix-through jointly; raising offline precision alone is not a release condition.
 
 ---
 
-## 7. 可立即执行的实验矩阵（最小反证集）
+## 7. Immediately executable experiment matrix (minimal refutation set)
 
-建议**先 12 个可重复的 deterministic/fixture 实验**，再做 2–4 周真实 team pilot；全部在批准的数据和私有实验仓库执行。
+It is suggested to do **first 12 repeatable deterministic/fixture experiments**, and then a 2–4 week real team pilot; all executed on approved data and a private experimental repository.
 
-| 编号 | 待证伪的主张 | 输入与对照 | 合格判据 |
+| ID | Claim to be falsified | Input and control | Pass criterion |
 |---|---|---|---|
-| T01 | 私有数据不会被 public 控制 repo 泄露 | 私有测试 repo + 公开控制 repo，含专用无害 canary 文字 | run 失败且 Issue/artifact/summary 均无 canary |
-| T02 | 批次失败不会显示 complete | 一个有效 batch + 一个模拟失败/预算 dropped | 部分状态 + 缺失清单，非绿色确认 |
-| T03 | 多批完整理解长需求 | 25 个文档块，某块第 300 字有关键否定条款 | 报出正确差异或明确未读，不能 covered |
-| T04 | 看不到匹配测试不会“确定确认缺失” | `req.get` / 参数化测试 / helper/跨目录 indirect tests | 没完整验证时为 unknown，不 confirmed |
-| T05 | `covered` 代表强证据 | 断言 `expect(result).toBeDefined()`，修改内部计算无影响 | 标为 weak oracle，不应只因 test 引用 covered |
-| T06 | 两轮 confirmation 不会重复误报 | 同一模型在相同快照重复稳定伪阳性 | 只叫 repeatable finding，无“独立证实” |
-| T07 | 扫描状态能识别陈旧 | 前一次 covered 后只改测试/helper，需求不变 | 受影响义务的旧证据 stale/重新排队 |
-| T08 | 大文件能被真正审查 | 70KiB TS 文件，缺口在尾部独立函数 | 告知未审 or 函数分片准确定位，不得“整文件通过” |
-| T09 | 层级建议不损害契约 | HTTP supertest、Testcontainers 与纯函数三例 | unit 可下沉且需要的 integration 不被建议删除 |
-| T10 | 标准确认绑定正确 CI | 两个不同来源 `check:lint` 同名但一成一败 | 能报告冲突，不使用错误 check 假通过 |
-| T11 | 需求和代码不能共谋“蒙混过关” | 一个 PR 同时把 spec 和 code 的截止时间改掉 | 要求 approved spec baseline / authority 确认 |
-| T12 | PR 作者真的能修 | 5–10 个真实团队 PR，opt-in shadow+评论对照 | 记录 sent→seen→accepted→fixed，给出差评率/耗时 |
+| T01 | Private data will not leak through the public control repo | A private test repo + the public control repo, with a dedicated harmless canary text | The run fails and neither the Issue/artifact/summary contains the canary |
+| T02 | A batch failure will not show complete | One valid batch + one simulated failure / budget-dropped | Partial status + a list of what is missing, not a green confirmation |
+| T03 | Multi-batch fully understands long requirements | 25 document blocks, one block has a key negation clause at the 300th character | Reports the correct difference or explicitly unread, and must not be covered |
+| T04 | Not seeing a matching test will not "definitely confirm missing" | `req.get` / parameterized tests / helper / cross-directory indirect tests | Unknown when not fully verified, not confirmed |
+| T05 | `covered` represents strong evidence | Asserting `expect(result).toBeDefined()`, modifying the internal computation has no effect | Marked weak oracle, should not be covered merely because of a test citation |
+| T06 | Two rounds of confirmation will not repeat a false positive | The same model repeats a stable false positive on the same snapshot | Called only a repeatable finding, no "independently substantiated" |
+| T07 | Scan state can recognize staleness | After a previous covered, only the test/helper is changed, the requirement unchanged | The old evidence of the affected obligation is stale / re-queued |
+| T08 | Large files can be genuinely reviewed | A 70KiB TS file, with the gap in an independent function at the tail | Tells that it was not reviewed, or function sharding locates it accurately, and must not "pass the whole file" |
+| T09 | Layer suggestions do not damage contracts | Three examples: HTTP supertest, Testcontainers and a pure function | The unit can be pushed down and the needed integration is not suggested for deletion |
+| T10 | Standards confirmation is bound to the correct CI | Two `check:lint` of the same name from different sources, one passes and one fails | Can report the conflict, and does not use the wrong check for a false pass |
+| T11 | Requirements and code cannot collude to "slip through" | A PR changes the deadline in both the spec and the code | Requires an approved spec baseline / authority confirmation |
+| T12 | The PR author can really fix it | 5–10 real team PRs, opt-in shadow + comment control | Records sent→seen→accepted→fixed, and gives the negative-rating rate / time spent |
 
-### 与旧评测的关系
+### Relation to the old evaluation
 
-以已有 `eval/run.js`, `eval/mutate.js`, `eval/grade.js`, `eval/replay.js`, `eval/weekly-report.js` 为骨架扩展，不建议推倒重建。先固定当前 `5bcf4deb` 作 baseline；新增测试先能在旧版稳定失败，再实施修复；保留 20% held-out 用例。对 `Copilot CLI` 和 `Claude API` 要分别跑，而不是跨引擎复用结论。
+Extend the existing `eval/run.js`, `eval/mutate.js`, `eval/grade.js`, `eval/replay.js` and `eval/weekly-report.js` as the skeleton; tearing down and rebuilding is not recommended. First pin the current `5bcf4deb` as the baseline; new tests should first fail stably on the old version, and only then the fix is implemented; keep 20% held-out cases. `Copilot CLI` and `Claude API` must be run separately, and conclusions must not be reused across engines.
 
-**最低报告指标**：
+**Minimum reporting metrics**:
 
-- **Finding quality**：TP、FP、FN（按 failure class / repo / language），另记 credible but unconfirmed；带 95% 置信区间而不是单独一个 100%。
-- **Completeness**：`eligible → selected → packed → completely read → model answered → citation verified`，分母始终是仓库当前可审对象。
-- **Reliability**：CI 运行失败、超时、模型拒绝、schema degradation、budget 截断、runner 版本漂移。
-- **Utility**：真人 `did-fix`、误报 dismiss、actionable rate、time-to-ack、time-to-fix、PR 延迟。
-- **Long-tail**：8–12 周后复盘与历史缺陷同类的新 escape；不能因为时间不够而把“零记录”解释成零缺陷。
+- **Finding quality**: TP, FP, FN (by failure class / repo / language), plus separately credible but unconfirmed; with 95% confidence intervals rather than a lone 100%.
+- **Completeness**: `eligible → selected → packed → completely read → model answered → citation verified`, with the denominator always the repository's currently reviewable objects.
+- **Reliability**: CI run failures, timeouts, model refusals, schema degradation, budget truncation, runner version drift.
+- **Utility**: human `did-fix`, false-positive dismissals, actionable rate, time-to-ack, time-to-fix, PR delay.
+- **Long-tail**: after 8–12 weeks, review new escapes of the same class as historical defects; "zero records" must not be interpreted as zero defects just because time was insufficient.
 
 ---
 
-## 8. 原始用户目标映射与 Done 定义
+## 8. Mapping to the original user goals and the definition of Done
 
 > Original ask: Create a unit test review AI GitHub Workflow. Must review requirements and the tests, identify missing unit tests; confirm coding standard; if possible review component/integration testing and what should be in unit testing. Also support manual full repository/PR scans for other teams.
 
-| 原始目标 | 最低真正 Done 定义 | SpecGuard 当前情况 |
+| Original goal | Minimum real Done definition | SpecGuard's current situation |
 |---|---|---|
-| 需求与测试审查 | 每个重要 changed behavior / sampled requirement 有可追溯 obligation；存在/缺失/未知可靠区分 | **基本骨架具备**，完整性与证明强度需修 |
-| 找缺失 unit test | 缺口有 code+req+test search evidence，实际 false positive 低；不把“未看到”当确认 | **已经能发现部分真实问题**；上述 SG-04 需要阻断 |
-| Coding standards confirmed | 规范适用范围明确，指定 SHA 的真正 check/status 与模型判读分离 | **PR 部分支持**；未配置不能宣称确认 |
-| Higher-level → unit | 建议补的是隔离可测的行为，说明保留哪些高层测试，并获得目标团队审阅认可 | **机制存在，验证不足** |
-| PR+whole-repo manual workflow | 外部目标可审，安全输出，轮转有真诚分母与审计 manifest | **路径已有**；当前 public-control+private-target 是部署阻断 |
-| Shift Left 成果 | 真人看到、修改、复测且 defect escape 或 QA 成本改善超过新增噪声 | **尚需 pilot**，不能凭 AI 评论量判断 |
+| Requirement and test review | Every important changed behavior / sampled requirement has a traceable obligation; present/missing/unknown reliably distinguished | **The basic skeleton exists**; completeness and proof strength need fixing |
+| Find missing unit tests | A gap has code+req+test search evidence, the actual false positive rate is low; "not seen" is not treated as confirmed | **Can already find some real problems**; the SG-04 above needs to be blocked |
+| Coding standards confirmed | The standard's applicable scope is clear, and the real check/status for the specified SHA is separated from the model's reading | **PR partly supported**; not configured must not claim confirmed |
+| Higher-level → unit | What is suggested to add is isolated testable behavior, which higher-level tests to keep is explained, and the target team's review and approval is obtained | **The mechanism exists, verification is insufficient** |
+| PR + whole-repo manual workflow | External targets can be reviewed, output is safe, rotation has an honest denominator and an audit manifest | **The path exists**; the current public-control + private-target is a deployment blocker |
+| Shift Left result | Humans see it, change it, re-test it, and the improvement in defect escapes or QA cost exceeds the added noise | **A pilot is still needed**; cannot be judged by the volume of AI comments |
 
-### “何时可以给其他团队试用”的建议门槛
+### Suggested thresholds for "when other teams can try it"
 
-**Security gate**：SG-01 T01 通过；公司明确代码能够送给哪些供应商与存储范围。
+**Security gate**: SG-01 T01 passes; the company states clearly which vendors and storage scope the code may be sent to.
 
-**Integrity gate**：T02、T03、T04、T07 通过；报告准确声明未审、过期、证据不足；不得虚假绿色。
+**Integrity gate**: T02, T03, T04, T07 pass; the report accurately declares unreviewed, expired and insufficient evidence; no false green.
 
-**Quality gate**：至少 50 个来自 2 个不同语言/领域的 held-out 问题案例，以及 30–50 条真实团队 PR 的人工盲审，对 precision/recall 报数并预先定容忍线。建议起始试点只发布 high-confidence advisory；即使高分也不要自动阻断 merge。
+**Quality gate**: at least 50 held-out problem cases from 2 different languages/domains, plus blind human review of 30–50 real team PRs, reporting precision/recall with tolerance lines set in advance. It is suggested that the initial pilot publish only high-confidence advisories; even with high scores, do not automatically block merges.
 
-**Utility gate**：至少两周跟踪真人 `acknowledged/accepted/fixed/dismissed`，看到某类可重复真实收益后再扩大功能范围。提供 opt-out、团队规则和可解释的判断。
-
----
-
-## 9. 批判性反对意见：哪些“直观优化”反而危险
-
-1. **“全部换更强的模型”**：更大模型可能提升局部推理，但不能凭空读取遗漏的第 300 字或私有外部设计；先修输入和完整性契约。
-2. **“把所有模型发现变成 required check”**：未校准的高置信误报加上团队沟通成本，会使开发者绕过流程或修改规范以逃避警告。先 advisory、分层 gating。
-3. **“扫描出更多条目就代表更完整”**：一个新增 `missing_test` 可能只因 test-map 漏匹配；应先核验负证据的可穷尽性。
-4. **“连续两次一样就是确认”**：重复的偏差也稳定，必须引入与原检索不同的独立证据。
-5. **“文档即 oracle”**：文档可以过时、未经批准或和法律/安全规则冲突；需要 authority 和版本。
-6. **“强制把集成测试下沉”**：contract boundary 不能在 mock 下可靠证实；unit 应补充，不能代替真实通信协议的风险保障。
-7. **“把全仓一口气发给 agent”**：预算和上下文窗口不是一切；结构化 inventory + 增量检索通常更经济、更可追溯。
-8. **“降低输出数量就代表 precision 高”**：只报容易的高置信缺口会隐藏 recall 下降；应联合统计 unknown 与 FN。
-9. **“程序有 900+ 测试，所以产品可信”**：本项目自身的单元测试只能证明确定性规则与既定 fixture，不代表对未知组织的行为理解准确。
-10. **“中心仓库够方便，所有输出集中在那里”**：便利性不能牺牲 least-privilege；用户的数据驻留边界要先设计，而非事后 redaction。
+**Utility gate**: track human `acknowledged/accepted/fixed/dismissed` for at least two weeks, and only expand the feature scope after seeing some class of repeatable real benefit. Provide opt-out, team rules and explainable judgments.
 
 ---
 
-## 10. 最终建议与立即执行顺序
+## 9. Critical objections: which "intuitive optimizations" are actually dangerous
 
-**第一步（必须先做）**：关闭当前公开控制仓库扫描私有目标的可能性，或迁移控制工作流/输出到受控私有位置，加入运行时 enforcement。确认企业对 Copilot/Anthropic 以及 artifact/Issue 的数据处理政策。
-
-**第二步**：修复 SG-02/03/04，令 `complete`、`covered`、`confirmed` 只表示实际满足的证据强度；模型看不到的部分一律 `unknown` 或 `not_reviewed`，而不是假绿或假“确认”。
-
-**第三步**：围绕真正的产品目标建立 requirement/behavior/test obligation 中间表示。先挑一个目标栈（例如 JS/TS），补真实调用与断言检查，再增加复杂多语言支持。
-
-**第四步**：进行真实团队 pilot。成功标准是**合并前有效纠错和开发者行动**，不是“LLM 总共发现多少问题”。
-
-这四步都完成后，SpecGuard 才有资格从“interesting AI reviewer”成长为跨团队可信赖的 Shift-Left Verification Advisor。
+1. **"Switch everything to a stronger model"**: a bigger model may improve local reasoning, but it cannot read the missed 300th character or a private external design out of thin air; first fix the input and the completeness contract.
+2. **"Turn all model findings into a required check"**: uncalibrated high-confidence false positives plus team communication cost will make developers bypass the process or change the standards to dodge warnings. Advisory first, layered gating.
+3. **"More entries scanned means more complete"**: a newly added `missing_test` may be only because the test-map missed a match; first verify whether the negative evidence is exhaustive.
+4. **"Two identical results in a row means confirmed"**: a repeated bias is also stable; independent evidence different from the original retrieval must be introduced.
+5. **"The document is the oracle"**: documents can be outdated, unapproved or in conflict with legal/security rules; authority and version are needed.
+6. **"Force integration tests down to unit"**: a contract boundary cannot be reliably substantiated under a mock; unit should supplement and cannot replace the risk protection of the real communication protocol.
+7. **"Send the whole repo to an agent in one go"**: budget and context window are not everything; a structured inventory + incremental retrieval is usually more economical and more traceable.
+8. **"Lower output volume means high precision"**: reporting only easy high-confidence gaps hides a drop in recall; unknown and FN should be counted jointly.
+9. **"The program has 900+ tests, so the product is trustworthy"**: this project's own unit tests can only prove deterministic rules and the given fixtures, and do not mean its behavioral understanding of unknown organizations is accurate.
+10. **"The central repository is convenient enough, put all output there"**: convenience must not sacrifice least-privilege; the users' data-residency boundary should be designed first, not redacted afterwards.
 
 ---
 
-## 附录 A：主要代码与证据索引（固定 SHA）
+## 10. Final recommendations and immediate order of execution
 
-| 主题 | 可直接核对的文件 |
+**Step one (must be done first)**: close off the possibility of the current public control repository scanning private targets, or migrate the control workflow / output to a controlled private location, and add runtime enforcement. Confirm the enterprise's data-handling policies for Copilot/Anthropic and for artifacts/Issues.
+
+**Step two**: fix SG-02/03/04, so that `complete`, `covered` and `confirmed` only denote the evidence strength actually met; any part the model cannot see is always `unknown` or `not_reviewed`, not a false green or a false "confirmed".
+
+**Step three**: build the requirement/behavior/test obligation intermediate representation around the real product goal. First pick one target stack (for example JS/TS), add real call and assertion checks, and only then add complex multi-language support.
+
+**Step four**: run a real team pilot. The success criterion is **effective correction before merge and developer action**, not "how many problems the LLM found in total".
+
+Only after all four steps are done will SpecGuard be qualified to grow from an "interesting AI reviewer" into a cross-team trustworthy Shift-Left Verification Advisor.
+
+---
+
+## Appendix A: Index of main code and evidence (pinned SHA)
+
+| Topic | Files that can be checked directly |
 |---|---|
-| 控制仓库手动工作流与输出 | [`.github/workflows/specguard-run.yml`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard-run.yml) |
-| 复用工作流（引用的 action SHA） | [`.github/workflows/specguard.yml`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard.yml) |
-| Action 参数、状态和 debug artifact | [`action.yml`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/action.yml) |
-| 完整 scan 文档块选择与检索 | [`src/audit-collect.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-collect.js) |
-| 仓库代码单元与测试映射 | [`src/audit-units.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js), [`src/test-map.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/test-map.js) |
-| 扫描分批和完整性 | [`src/scan-parts.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/scan-parts.js), [`src/engines/claude-api.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js) |
-| 验证/持久扫描状态/发布 | [`src/audit-post.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js) |
-| PR 模式的测试层级和校验 | [`src/post.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/post.js) |
-| 模型审计协议 | [`skills/spec-audit/SKILL.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/skills/spec-audit/SKILL.md) |
-| 既有第一性原理与已有问题 | [`docs/goal-first-principles.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/goal-first-principles.md), [`docs/unknown-unknowns-optimization-2026-10-11.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/unknown-unknowns-optimization-2026-10-11.md) |
-| 既有当日 Shift Left 实跑审查 | [`docs/shift-left-review-2026-10-14.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md) |
-| 评测方法与其限制 | [`eval/README.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/README.md), [`eval/results/recall-claude-2026-10-14b.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/results/recall-claude-2026-10-14b.md) |
+| Control-repository manual workflow and output | [`.github/workflows/specguard-run.yml`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard-run.yml) |
+| Reusable workflow (referenced action SHA) | [`.github/workflows/specguard.yml`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/.github/workflows/specguard.yml) |
+| Action parameters, state and debug artifact | [`action.yml`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/action.yml) |
+| Full-scan document block selection and retrieval | [`src/audit-collect.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-collect.js) |
+| Repository code units and test mapping | [`src/audit-units.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-units.js), [`src/test-map.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/test-map.js) |
+| Scan batching and completeness | [`src/scan-parts.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/scan-parts.js), [`src/engines/claude-api.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/engines/claude-api.js) |
+| Verification / persistent scan state / publishing | [`src/audit-post.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/audit-post.js) |
+| PR-mode test layers and validation | [`src/post.js`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/src/post.js) |
+| Model audit protocol | [`skills/spec-audit/SKILL.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/skills/spec-audit/SKILL.md) |
+| Existing first principles and known problems | [`docs/goal-first-principles.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/goal-first-principles.md), [`docs/unknown-unknowns-optimization-2026-10-11.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/unknown-unknowns-optimization-2026-10-11.md) |
+| Existing live-run Shift Left review of the same day | [`docs/shift-left-review-2026-10-14.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/docs/shift-left-review-2026-10-14.md) |
+| Evaluation method and its limits | [`eval/README.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/README.md), [`eval/results/recall-claude-2026-10-14b.md`](https://github.com/Mira190/SpecGuard/blob/5bcf4deb2ba9868969bc1e0b52407c7e34886516/eval/results/recall-claude-2026-10-14b.md) |
 
-## 附录 B：公开参考阅读
+## Appendix B: Public reference reading
 
-- [GitHub：下载 workflow artifacts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)——审查公开/私有仓库产物访问边界。
-- [GitHub：复用工作流](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations)——权限不超过调用方以及工作流治理。
-- [GitHub：Code scanning REST API](https://docs.github.com/en/rest/code-scanning/code-scanning)——未来可用 SARIF/annotations 与可持续基线管理；不要冒充发现经过动态证实。
-- [Martin Fowler：The Practical Test Pyramid](https://martinfowler.com/articles/practical-test-pyramid.html)——测试层级的维护成本与反馈速度。
-- [Google Testing Blog：Fixing the Test Hourglass](https://testing.googleblog.com/2020/11/fixing-test-hourglass.html)——不能以更多集成测试或更多 unit 的数量作为充分性本身。
+- [GitHub: Downloading workflow artifacts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts) — review the access boundary of artifacts in public/private repositories.
+- [GitHub: Reusing workflow configurations](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations) — permissions not exceeding the caller, and workflow governance.
+- [GitHub: Code scanning REST API](https://docs.github.com/en/rest/code-scanning/code-scanning) — SARIF/annotations and sustainable baseline management usable in the future; do not pass findings off as dynamically substantiated.
+- [Martin Fowler: The Practical Test Pyramid](https://martinfowler.com/articles/practical-test-pyramid.html) — maintenance cost and feedback speed of test layers.
+- [Google Testing Blog: Fixing the Test Hourglass](https://testing.googleblog.com/2020/11/fixing-test-hourglass.html) — the number of more integration tests or more unit tests is not itself sufficiency.
 
-**审计声明**：以上发现基于所示 SHA 的实际源码与该仓库已有的文档。没有访问、分析或上传任何未明确授权的公司仓库代码；本文的危险部署路径和实验结果分别以“静态推演”与“仓库既有记录”标识，未经动态执行的项不可视为已复现漏洞。
+**Audit statement**: the above findings are based on the actual source code at the SHA shown and the documents that repository already has. No company repository code that was not explicitly authorized was accessed, analyzed or uploaded; the dangerous deployment paths and experiment results in this document are labelled respectively as "static reasoning" and "existing repository records", and items without dynamic execution must not be treated as reproduced vulnerabilities.

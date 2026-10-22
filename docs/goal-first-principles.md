@@ -1,219 +1,219 @@
-# SpecGuard 目标的第一性原理分析与 Unknown Unknowns
+# First-Principles Analysis of the SpecGuard Goal, and Unknown Unknowns
 
-日期：2026-10-09。
+Date: 2026-10-09.
 
-**范围**
-- 原始目标：unit test review。
-- 用途：shift-left 质量工程。
-- 新增需求：需求 ↔ 代码双向追溯。
+**Scope**
+- Original goal: unit test review.
+- Purpose: shift-left quality engineering.
+- New requirement: bidirectional requirement ↔ code traceability.
 
-**依据**
-- 对当前代码的核对：`collect.sh`、`requirements.js`、`post.js`、`SKILL.md`。
-- 六路调研，含学术文献、工业实证、现有工具、GitHub Actions 可行性和盲点技术。
-- 配套实现计划：`docs/traceability-plan.md`。
+**Basis**
+- Verification against the current code: `collect.sh`, `requirements.js`, `post.js`, `SKILL.md`.
+- Six lines of research, including academic literature, industrial empirical studies, existing tools, GitHub Actions feasibility, and blind-spot techniques.
+- Companion implementation plan: `docs/traceability-plan.md`.
 
-本文只做分析，不改运行时代码。凡标注「未核实」的数字，均来自二手资料或检索摘要，引用前须回到原文核对。
+This document is analysis only and changes no runtime code. Any number marked "unverified" comes from secondary sources or search summaries, and must be checked against the original before being cited.
 
-## 0. 结论
+## 0. Conclusion
 
-1. **QA 关心的逻辑缺陷，都可以描述为三个工件之间的不一致或缺失。** 三个工件是需求 R（意图）、代码 C（实现）、测试 T（验证），另有一组规则 S。原始目标里的每一条，都落在这个 R–C–T 三角的某一条边上（见 §1.3）。
-2. **SpecGuard 的边际价值，是那些 CI 跑绿了却仍然是错的缺陷。** CI 只能证明 C 与 T 一致；只有把 R 拉进来，才能判断这一致是否正确。
-3. **当前系统没有 R 的时候，`covered` 实际上只表示「测试与代码一致」（verification），不表示「行为正确」（validation）。** 当测试从实现反推出来时，错误会被测试固化。AI 生成的测试最容易这样。
-4. **需求的两个场景，恰好是当前系统处理错的两个「CI 绿」状态（见 §2）。**
-   - 场景 B（只改了需求）：被 `collect.sh:44` 直接跳过。
-   - 场景 A（代码与测试一起改了、需求没改）：被标成 `covered`，给出错误的放心。
+1. **The logic defects QA cares about can all be described as inconsistency or absence among three artifacts.** The three artifacts are the requirement R (intent), the code C (implementation), and the test T (verification), plus a set of rules S. Every item of the original goal falls on some edge of this R–C–T triangle (see §1.3).
+2. **SpecGuard's marginal value is in the defects that are still wrong even though CI is green.** CI can only prove that C and T agree; only by bringing in R can one judge whether that agreement is correct.
+3. **When the current system has no R, `covered` really only means "the test is consistent with the code" (verification), not "the behavior is correct" (validation).** When tests are derived backwards from the implementation, errors get frozen by the tests. AI-generated tests are the most prone to this.
+4. **The two requirement scenarios are exactly the two "CI green" states the current system handles wrongly (see §2).**
+   - Scenario B (only the requirement changed): skipped outright by `collect.sh:44`.
+   - Scenario A (code and tests changed together, requirement unchanged): marked `covered`, giving false reassurance.
 
-   所以双向追溯不是附加功能。它补的是原始目标「review requirements and the tests」里 oracle 缺失的那一半。
-5. **按影响排，最需要先处理的 unknown unknowns 有五个（§4）：**
-   - 把既有漂移算到本 PR 头上；
-   - 测试的预期值本身错了（C=T≠R）；
-   - 修改只同步到了部分位置；
-   - 实现不在本仓库；
-   - 单位和边界的等价换算。
+   So bidirectional traceability is not an add-on feature. It fills in the missing oracle half of the original goal "review requirements and the tests".
+5. **Ranked by impact, the five unknown unknowns that most need handling first are (§4):**
+   - attributing pre-existing drift to this PR;
+   - the test's expected value itself being wrong (C=T≠R);
+   - a change synchronized to only some of the locations;
+   - the implementation not being in this repository;
+   - equivalent conversions of units and boundaries.
 
-   这五个都能用确定性手段低成本处理。
-6. **证明 shift-left 有效的直接方法是回放。** 用 SZZ 从 QA 或生产缺陷反查引入它的 PR，回放 SpecGuard，看它能不能在那个 PR 上提前发现（§6）。种子用例只能证明机制可行，不能证明价值。
+   All five can be handled cheaply by deterministic means.
+6. **The direct way to prove shift-left works is replay.** Use SZZ to trace a QA or production defect back to the PR that introduced it, replay SpecGuard, and see whether it could have found it early on that PR (§6). Seeded cases can only prove the mechanism is feasible, not that it has value.
 
-## 1. 目标拆解
+## 1. Goal decomposition
 
-### 1.1 原始目标（原文）
+### 1.1 Original goal (verbatim)
 
 > Create a unit test review AI GitHub Workflow. Must review requirements and the tests, and identify missing unit tests. 1. Must check coding standard has been confirmed too. 2. If possible — review other testing like component or integration testing and see what can and should be in the unit testing.
 
-目的是 shift QA left：在 PR 阶段、QA 拿到构建之前，抓住测试缺口和需求偏差。
+The purpose is to shift QA left: catch test gaps and requirement deviations at the PR stage, before QA gets the build.
 
-### 1.2 第一性原理：QA 到底在判断什么
+### 1.2 First principles: what exactly does QA judge
 
-QA 判断的是「实际行为 = 预期行为」。PR 时刻，静态审查能看到四样东西：
+QA judges "actual behavior = expected behavior". At PR time, static review can see four things:
 
-| 工件 | 含义 | 在仓库或 PR 里的位置 |
+| Artifact | Meaning | Location in the repo or PR |
 |---|---|---|
-| R 意图 | 应该做什么 | PR 正文、issue、spec/Gherkin/ADR、历史 PR 和 issue、测试名、注释、用户可见文案 |
-| C 实现 | 实际做什么 | 源码、配置、迁移、特性开关、模板、其他服务 |
-| T 验证 | 用什么证明 C 符合 R | 各层测试、快照、golden 文件 |
-| S 规则 | 怎么写 | 仓库的标准文件，以及 lint/format 检查 |
+| R intent | What should be done | PR body, issue, spec/Gherkin/ADR, historical PRs and issues, test names, comments, user-visible copy |
+| C implementation | What is actually done | Source code, configuration, migrations, feature flags, templates, other services |
+| T verification | What proves C conforms to R | Tests at every level, snapshots, golden files |
+| S rules | How to write | The repository's standards files, and lint/format checks |
 
-逻辑类缺陷有五种形态：
+Logic defects take five forms:
 
-| 缺陷形态 | 现有检查 |
+| Defect form | Existing check |
 |---|---|
-| R 有，C 没实现 | 未实现 |
-| C 与 R 矛盾 | 违反需求 |
-| C 变了，没有 T | `missing_test` |
-| T 约束不住 C | `weak_test` |
-| T 断言的值与 R 矛盾 | **当前没有检查** |
+| R exists, C does not implement it | Not implemented |
+| C contradicts R | Violates requirement |
+| C changed, no T | `missing_test` |
+| T cannot constrain C | `weak_test` |
+| The value T asserts contradicts R | **No check currently** |
 
-此外，同一个 R 可能落在多处 C，只改了其中一部分（partial propagation）。
+In addition, the same R may land in multiple places in C, with only part of them changed (partial propagation).
 
-### 1.3 原始要求与三角的边
+### 1.3 Original requirements and the triangle's edges
 
-| 原始要求 | 对应的边 | 现状 | 缺口 |
+| Original requirement | Corresponding edge | Current state | Gap |
 |---|---|---|---|
-| review requirements and the tests | R→T | `requirements[]`、`coverage[]`、逐条 AC 清单 | R 只来自 PR 和 issue；仓库内的 spec 与历史意图都没有用上 |
-| identify missing unit tests | (R ∪ ΔC)→T | `missing_test`，以及 `from behaviour` 义务 | 需求变了但代码没动时（场景 B）整个 PR 被跳过 |
-| 隐含要求：测试测的是对的东西 | T 的 oracle 是否来自 R | `weak_test` 只看 T 能否约束 C | **C=T≠R**：测试与代码一起错时会被判成 `covered` |
-| coding standard confirmed | S→C，加执行证据 | standards 维度和 `inspectChecks` | 已由 goal audit 处理 |
-| component/integration → unit | T 的层级 | `higher_level_only` 加 `pushdown` | 无 |
-| shift-left（目的） | 在 QA 之前发现 | advisory PR review | 价值从未测量过（§6） |
+| review requirements and the tests | R→T | `requirements[]`, `coverage[]`, per-AC checklist | R comes only from the PR and issues; in-repo specs and historical intent are not used at all |
+| identify missing unit tests | (R ∪ ΔC)→T | `missing_test`, and `from behaviour` obligations | When the requirement changed but the code did not (scenario B), the whole PR is skipped |
+| Implicit requirement: the test tests the right thing | Whether T's oracle comes from R | `weak_test` only looks at whether T can constrain C | **C=T≠R**: when test and code are wrong together it is judged `covered` |
+| coding standard confirmed | S→C, plus execution evidence | standards dimension and `inspectChecks` | Already handled by the goal audit |
+| component/integration → unit | T's level | `higher_level_only` plus `pushdown` | None |
+| shift-left (purpose) | Discover before QA | advisory PR review | Value has never been measured (§6) |
 
-### 1.4 范围声明
+### 1.4 Scope statement
 
-静态审查不执行代码，也没有运行环境，所以它看不见以下几类问题：
-- 环境或配置组合问题；
-- 集成时序问题；
-- 用户体验和性能问题；
-- 跨服务契约问题。
+Static review does not execute code and has no runtime environment, so it cannot see the following kinds of problems:
+- environment or configuration combination problems;
+- integration timing problems;
+- user experience and performance problems;
+- cross-service contract problems.
 
-SpecGuard 覆盖的是「逻辑加需求」这一类缺陷，对外的说明应写清这一点。追溯功能让这一类覆盖得更完整，但不会扩大它的边界。
+SpecGuard covers the defect class of "logic plus requirements", and external descriptions should say so clearly. The traceability feature makes coverage of this class more complete, but does not widen its boundary.
 
-## 2. 核心推论：价值在 CI 看不见的地方
+## 2. Core inference: the value lies where CI cannot see
 
-CI 跑测试，所以 CI 绿意味着 C≈T。一个只盯 C 与 T 的审查者，大部分发现 CI 自己也能发现；它独有的价值，是在 CI 绿的状态里引入 R。
+CI runs tests, so CI green means C≈T. For a reviewer that only looks at C and T, most of what it finds CI can find itself; its unique value is introducing R into the CI-green states.
 
-下表列出单个受需求约束的行为的状态空间。v0 是旧值，v1 是新值，∅ 表示不存在，「改」表示本 PR 修改了它。
+The table below lists the state space of a single requirement-constrained behavior. v0 is the old value, v1 the new value, ∅ means nonexistent, and "changed" means this PR modified it.
 
-| # | R | C | T | CI | 当前 SpecGuard | 应有结论 |
+| # | R | C | T | CI | Current SpecGuard | Expected conclusion |
 |---|---|---|---|---|---|---|
-| 1 | v1 改 | v1 改 | v1 改 | 绿 | covered | 一致，且被测试覆盖 |
-| **2** | v1 改 | v0 | v0 | **绿** | **跳过（`collect.sh:44`）** | **场景 B**：实现和测试都过时了 |
-| 3 | v1 改 | v1 改 | v0 | 红 | weak/missing | CI 已经能发现，只需补充定位信息 |
-| 4 | v1 改 | v0 | v1 改 | 红 | 跳过或部分处理 | CI 已经能发现 |
-| **5** | v0 | v1 改 | v1 改 | **绿** | **covered（错误的放心）** | **场景 A**：违反需求，或 spec 没有同步 |
-| 6 | v0 | v1 改 | v0 | 红 | weak_test | CI 已经能发现 |
-| 7 | v0 | v1 改 | ∅ | 绿 | missing_test | missing_test，并指出违反需求 |
-| 8 | ∅（未找到） | v1 改 | v1 改 | 绿 | covered（from behaviour） | 可能存在隐藏需求，见 §4 的 U7 历史意图 |
-| 9 | ∅ | v1 改 | ∅ | 绿 | missing_test | 不变 |
-| 10 | 新增 AC | ∅ | ∅ | 绿 | missing_test 或 unknown | 需求未实现 |
-| **11** | 在 BASE 已与 C 不一致 | v0（未动，PR 只改了附近） | 任意 | 绿 | 未定义 | **pre-existing**：只进摘要，不算到本 PR 头上 |
-| **12** | v1 改 | C1=v1，C2=v0 | 只测了 C1 | **绿** | 只看到 C1 | **部分同步**：列出 C2，以及同样过时的文案、配置、快照 |
+| 1 | v1 changed | v1 changed | v1 changed | green | covered | Consistent, and covered by tests |
+| **2** | v1 changed | v0 | v0 | **green** | **skipped (`collect.sh:44`)** | **Scenario B**: both implementation and tests are stale |
+| 3 | v1 changed | v1 changed | v0 | red | weak/missing | CI can already find it, only locating information needs to be added |
+| 4 | v1 changed | v0 | v1 changed | red | skipped or partially handled | CI can already find it |
+| **5** | v0 | v1 changed | v1 changed | **green** | **covered (false reassurance)** | **Scenario A**: violates the requirement, or the spec was not synchronized |
+| 6 | v0 | v1 changed | v0 | red | weak_test | CI can already find it |
+| 7 | v0 | v1 changed | ∅ | green | missing_test | missing_test, and point out the requirement violation |
+| 8 | ∅ (not found) | v1 changed | v1 changed | green | covered (from behaviour) | A hidden requirement may exist, see U7 historical intent in §4 |
+| 9 | ∅ | v1 changed | ∅ | green | missing_test | Unchanged |
+| 10 | new AC | ∅ | ∅ | green | missing_test or unknown | Requirement not implemented |
+| **11** | Already inconsistent with C at BASE | v0 (untouched, the PR only changed nearby) | any | green | undefined | **pre-existing**: summary only, not attributed to this PR |
+| **12** | v1 changed | C1=v1, C2=v0 | only C1 tested | **green** | sees only C1 | **Partial synchronization**: list C2, and likewise stale copy, config, snapshots |
 
-从表中可以读出三点：
-- CI 红的那几行（3、4、6），SpecGuard 的边际价值低，排序时应往后放。
-- CI 绿的那几行（2、5、7、8、11、12）才是 shift-left 的价值所在。当前系统在 2、5、11、12 上判断错误或看不见。
-- 这张表本身就是评测矩阵：每一行对应一个种子用例（§6 L1），所以覆盖度由构造保证，不靠事后挑选。
+Three points can be read from the table:
+- For the CI-red rows (3, 4, 6), SpecGuard's marginal value is low and they should be ranked later.
+- The CI-green rows (2, 5, 7, 8, 11, 12) are where shift-left value lies. The current system judges wrongly or cannot see on 2, 5, 11, 12.
+- This table is itself the evaluation matrix: each row corresponds to a seeded case (§6 L1), so coverage is guaranteed by construction and not by after-the-fact picking.
 
-## 3. 实证：该投入什么，噪声能容忍多少
+## 3. Evidence: what to invest in, how much noise can be tolerated
 
-| 证据 | 来源 | 推论 |
+| Evidence | Source | Inference |
 |---|---|---|
-| 已修改但未被测试的代码，缺陷率约为未修改代码的 5 倍；超过 70% 的现场缺陷出在未测试的代码里 | CQSE/Teamscale 的 Test Gap Analysis（[AST'13](https://wwwbroy.in.tum.de/publ/papers/AST13Hauptmann.pdf)、[2016 实践报告](https://teamscale.com/hubfs/26978363/Publications/2016-did-we-test-the-right-thing-experiences-with-test-gap-analysis-in-practice.pdf)）。数据来自厂商自己的案例，未核实原表 | 针对已修改行为的 `missing_test` 仍是主干，追溯功能不能挤掉它 |
-| 「需求不完整或隐藏」是最常被提到的问题（48%） | NaPiRE（[arXiv 1612.00163](https://arxiv.org/pdf/1612.00163)） | 需求缺口很常见，但多数发生在 PR 之前。PR 机器人只能暴露「已写下的需求」与代码之间的差距，并标出歧义 |
-| 82.3% 的项目在历史上有过过时的代码引用文档 | Tan et al.（[arXiv 2212.01479](https://arxiv.org/pdf/2212.01479)） | **spec 不是真理**：追溯链接只能当作待核实的主张。仓库里的 spec 已经漂移时，必须有差分机制（U1），否则噪声会淹没一切 |
-| 只有约 19% 的团队用 BDD；正式需求文档很少见（缺少可靠数据） | State of Agile（二手，未核实）、[Patkar 2022](https://scg.unibe.ch/assets/archive/papers/Patk22b.pdf) | 多数仓库里没有 spec 文件。**PR 正文、issue 和历史意图**才是主要的需求来源（U7） |
-| 一般 LLM review 评论的采纳率约 7–20%；重构类建议（18.6%）远高于功能类（5.2%） | RevMate，Mozilla/Ubisoft（[arXiv 2411.07091](https://arxiv.org/html/2411.07091v1)） | 功能类、需求类断言最难被接受，所以要给出最强的证据：两端都有原文引用，并由确定性校验 |
-| 73.8% 的评论被处理，但 PR 关闭时间从 5h52m 增加到 8h20m | Beko/Qodo，ICSE SEIP 2025（[arXiv 2412.18531](https://arxiv.org/abs/2412.18531)） | 除了处理率，还要测 time-to-merge |
-| AI 补丁只展示给作者时，评审不再变慢 | Meta MetaMateCR（[arXiv 2507.13499](https://arxiv.org/abs/2507.13499)） | 发现应面向作者，不进入评审者的关键路径（与现有 COMMENT 方式一致） |
-| 在 diff 上报告的问题修复率约 70%，离线批量报告约 0% | Meta Infer（[CACM 2019](https://cacm.acm.org/magazines/2019/8/238344-scaling-static-analyses-at-facebook/pdf)） | **只报告本 PR 引入的问题**。既有问题只进摘要 |
-| 控制测试套件规模后，覆盖率和变异分数与真实缺陷检测只有弱到中等的相关 | Inozemtseva & Holmes ICSE 2014、Papadakis et al. ICSE 2018 | 覆盖率和变异分数只能用来指出方向，不能当作判决（与 design.md 中 L2a/L3b 的定位一致） |
-| 「1:100 修复成本曲线」证据不足 | Bossavit，*Leprechauns of Software Engineering* | 对外表述不要用这个数字 |
+| Code that was modified but not tested has a defect rate about 5 times that of unmodified code; over 70% of field defects occur in untested code | CQSE/Teamscale's Test Gap Analysis ([AST'13](https://wwwbroy.in.tum.de/publ/papers/AST13Hauptmann.pdf), [2016 practice report](https://teamscale.com/hubfs/26978363/Publications/2016-did-we-test-the-right-thing-experiences-with-test-gap-analysis-in-practice.pdf)). The data comes from the vendor's own cases; original tables not verified | `missing_test` for modified behavior remains the backbone, and the traceability feature must not crowd it out |
+| "Incomplete or hidden requirements" is the most often cited problem (48%) | NaPiRE ([arXiv 1612.00163](https://arxiv.org/pdf/1612.00163)) | Requirement gaps are common, but mostly occur before the PR. A PR bot can only expose the gap between "written-down requirements" and the code, and flag ambiguity |
+| 82.3% of projects have historically had documentation with outdated code references | Tan et al. ([arXiv 2212.01479](https://arxiv.org/pdf/2212.01479)) | **The spec is not the truth**: a traceability link can only be treated as a claim to be verified. When the spec in the repository has already drifted, a differencing mechanism (U1) is needed, otherwise noise will drown everything |
+| Only about 19% of teams use BDD; formal requirement documents are rare (reliable data lacking) | State of Agile (secondary, unverified), [Patkar 2022](https://scg.unibe.ch/assets/archive/papers/Patk22b.pdf) | Most repositories have no spec files. The **PR body, issues, and historical intent** are the main requirement sources (U7) |
+| The adoption rate of general LLM review comments is about 7–20%; refactoring suggestions (18.6%) are far higher than functional ones (5.2%) | RevMate, Mozilla/Ubisoft ([arXiv 2411.07091](https://arxiv.org/html/2411.07091v1)) | Functional and requirement assertions are the hardest to get accepted, so give the strongest evidence: original quotes at both ends, validated deterministically |
+| 73.8% of comments were handled, but PR close time rose from 5h52m to 8h20m | Beko/Qodo, ICSE SEIP 2025 ([arXiv 2412.18531](https://arxiv.org/abs/2412.18531)) | Besides the handling rate, time-to-merge must be measured |
+| When AI patches are shown only to the author, review does not slow down | Meta MetaMateCR ([arXiv 2507.13499](https://arxiv.org/abs/2507.13499)) | Findings should face the author and stay off the reviewer's critical path (consistent with the existing COMMENT approach) |
+| The fix rate of issues reported on a diff is about 70%, while offline batch reports get about 0% | Meta Infer ([CACM 2019](https://cacm.acm.org/magazines/2019/8/238344-scaling-static-analyses-at-facebook/pdf)) | **Report only issues introduced by this PR**. Pre-existing issues go to the summary only |
+| After controlling for test suite size, coverage and mutation score have only weak to moderate correlation with real defect detection | Inozemtseva & Holmes ICSE 2014, Papadakis et al. ICSE 2018 | Coverage and mutation score can only be used to point a direction, not as a verdict (consistent with the positioning of L2a/L3b in design.md) |
+| Evidence for the "1:100 fix cost curve" is insufficient | Bossavit, *Leprechauns of Software Engineering* | Do not use this number in external statements |
 
-**噪声预算**：按上述数据，每个 PR 的需求类 inline 评论应控制在个位数，只放「本 PR 引入的、两端都有引用的」不一致，其余进摘要。这是基于数据的设计假设，需要在 pilot 中验证。
+**Noise budget**: based on the above data, requirement-type inline comments per PR should be kept to single digits, with only "inconsistencies introduced by this PR and referenced at both ends" going inline, and the rest going to the summary. This is a data-based design assumption and needs to be verified in a pilot.
 
 ## 4. Unknown unknowns
 
-### 4.1 挖掘方法
+### 4.1 Mining method
 
-用 Rumsfeld 矩阵，从七个视角系统地扫，而不是靠灵感：
+Use the Rumsfeld matrix to scan systematically from seven perspectives, rather than relying on inspiration:
 
-| 视角 | 要问的问题 |
+| Perspective | Question to ask |
 |---|---|
-| ① 三角状态空间（§2） | R/C/T 的每种组合下，结论都对吗？ |
-| ② 信息在哪里 | R、C、T 各自可能写在哪些地方？哪些地方我们没读？（这一类是「已知但没用上的知识」） |
-| ③ 表示等价 | 同一个值或规则，有多少种写法？ |
-| ④ 时间 | BASE 与 HEAD 的差异、分阶段发布、版本 |
-| ⑤ 权威与人 | 两边不一致时谁说了算？谁来处理这条评论？ |
-| ⑥ 对抗 | 恶意或不当的 PR 内容 |
-| ⑦ 实证回放 | 真实漏到 QA 的缺陷，我们为什么会漏？只有这个视角能找到真正的 unknown unknowns |
+| ① Triangle state space (§2) | Is the conclusion right under every combination of R/C/T? |
+| ② Where the information is | In which places might R, C, and T each be written? Which places did we not read? (This class is "known but unused knowledge") |
+| ③ Representation equivalence | How many ways can the same value or rule be written? |
+| ④ Time | BASE vs HEAD differences, staged rollouts, versions |
+| ⑤ Authority and people | When the two sides disagree, who decides? Who handles this comment? |
+| ⑥ Adversarial | Malicious or improper PR content |
+| ⑦ Empirical replay | For defects that really leaked to QA, why did we miss them? Only this perspective can find true unknown unknowns |
 
-### 4.2 盲点清单
+### 4.2 Blind-spot list
 
-精度是 P，召回是 R；成本按 S/M/L 分级。
+Precision is P, recall is R; cost is graded S/M/L.
 
-| ID | 盲点 | 视角 | 影响 | 现状 | 对策 | 成本 |
+| ID | Blind spot | Perspective | Impact | Current state | Countermeasure | Cost |
 |---|---|---|---|---|---|---|
-| **U1** | **既有漂移被算到本 PR 头上**：BASE 时 spec 与代码已经不一致，PR 只是动了附近的代码 | ④ | P，最大的精度风险 | 无差分概念 | 增加 `since: introduced\|pre_existing`。确定性规则：需求条目和行为引用行都不在 diff 里时，不能标为 introduced。pre_existing 只进摘要 | S |
-| **U2** | **错误的 oracle（C=T≠R）**：测试与代码一起改了，与需求矛盾，却被判为 covered | ① | P，错误的放心 | `covered` 只要求单元断言 | 规则：`alignment=mismatch` 时状态不能是 covered；用 `spec_mismatch` 替代那一条 missing 或 weak 发现 | S |
-| U3 | 只改了 spec 的 PR 被跳过 | ① | R | `collect.sh:44` | spec 文档进入可审查范围（见计划） | S |
-| **U4** | **部分同步**：同一个值出现在前端、后端、配置、i18n 文案、快照、邮件模板里，只改了一处 | ①② | R，最大的召回收益 | 不可见；`*.snap` 和 `__snapshots__` 被默认忽略 | 确定性的「旧值出现位置表」：全仓 grep 旧值及其单位变体，范围包括快照、i18n 和配置，并标注本 PR 是否改到 | S–M |
-| **U5** | **实现不在本仓库**：在远程配置、特性开关平台、另一个服务里，搜不到就被误报为「未实现」 | ② | P | 无 | 增加 `alignment=not_verifiable`，必须列出搜过的范围；未穷尽配置、迁移和 schema 时，不允许报 mismatch | S |
-| **U6** | **表示等价**：30 天 = `2592000000` ms = `P30D`；「超过 30 天」对应 `>` 而不是 `>=`；自然日与工作日；时区；舍入 | ③ | P 和 R | 无 | 由 collector 生成单位变体；`references/trace.md` 给出归一化清单，比较之前先写出归一化后的值；边界两侧都要有测试（29/30/31） | S |
-| **U7** | **历史意图（已知但没用上）**：没有 spec 的仓库，需求其实写在当初引入这行代码的 PR 和 issue 里 | ② | R，在 spec 少的仓库里覆盖面最大 | 未使用 | 对被修改行做 BASE 的 `git blame`，得到 commit，再查对应的 PR，再取其关联 issue，作为可选需求来源（最多 3 个，引用由 post 核对） | S–M |
-| **U20** | **PR 不关联 issue，正文也很单薄**：需求来源 1、2、4 都依赖 PR 正文或 issue 关联，很多仓库两样都没有 | ② | R，否则场景 A 只剩 from behaviour | 只读 PR 正文和关联 issue | 仓库内需求文档按**内容**发现，范围是全仓，不再按 glob 卡门槛。根目录 README、代码旁的 RULES.md、`.kiro/specs`、`openspec/` 都能自动识别；glob 只用于排序，`requirements_paths` 只用于补充或排除；读不了的 docx/pdf 需求文件列入 limitations。详见计划 §4.0 和 §4.1.1，用例 tr16 和 tr17 | S |
-| U8 | 测试名、注释、用户文档里写着需求（测试即规格） | ② | R | agent 会读到，但不作为需求来源 | 允许把它们引作「隐含需求」，标为 `inferred`，只进摘要 | S |
-| U9 | 多个需求来源互相矛盾（issue 说 45，spec 说 30） | ⑤ | P | 无 | 报告来源冲突本身，不替人裁决哪边对（意图信号只用来提示方向） | S |
-| U10 | 需求本身有歧义、无法测试（「30 天内」从哪一天算起？） | ⑤ | P | 无 | 标为 `needs_human`，说明歧义在哪里。这本身就是一种 QE 发现，但是否做成独立 kind 需要先测量 | S |
-| U11 | 分阶段发布：spec 先改，代码在后续 PR；或者靠特性开关、版本化 API 让新旧值并存 | ④ | P | 无 | PR 正文里有「follow-up #N」或 flag 时降级处理；涉及版本或开关时标 not_verifiable | S |
-| U12 | 非功能需求、否定性需求（「不得记录 PII」），无法落到具体某一行 | ② | — | — | 归入 `needs_human`，明确不在范围内 | 0 |
-| U13 | 测试存在，但没被运行（被 skip、被排除、CI 没跑到） | ② | P | 纯静态判断 | design.md 里的 L2a：读取消费方 CI 已有的 coverage 和 JUnit 产物，作为指向证据 | M |
-| U14 | 重命名或移动文件，导致 BASE 和 HEAD 对不上 | ④ | P | collect 使用 `--no-renames` | 差分判定时启用 `-M` | S |
-| U15 | 同一个 PR 每次运行结果不同 | ⑦ | P | stability 运行过 12/12 | 测量每条发现的 Jaccard 稳定度；必要时才做多数投票（代价是 N 倍 token） | M |
-| U16 | 评测真值太小，又是人工挑的，召回从未被测过 | ⑦ | 评测有效性 | 14 + 7 个种子用例 | §6 的 L2/L3：变异生成和历史回放 | M–L |
-| U17 | spec 不一致该由 PO 或 spec 负责人处理，评论却只到了开发者 | ⑤ | 采纳率 | 无 | 在摘要里列出该 spec 文件的 CODEOWNERS（只读、确定性） | S |
-| U18 | 加了 review 之后 PR 变慢（Beko +42%） | ⑤ | 采纳率 | 未测 | pilot 记录 time-to-merge 和按类别的处理率 | 流程 |
-| U19 | spec 被 PR 修改去「合法化」违规代码 | ⑥ | — | — | 这正是需要人来看的情况。`reflected_in.spec=true` 加上「spec 在本 PR 内修改」的提示即可。spec 文本仍然只当数据 | 0 |
+| **U1** | **Pre-existing drift attributed to this PR**: at BASE the spec and code were already inconsistent, and the PR merely touched nearby code | ④ | P, the biggest precision risk | No concept of differencing | Add `since: introduced\|pre_existing`. Deterministic rule: when neither the requirement entry nor the behavior reference line is in the diff, it cannot be marked introduced. pre_existing goes to the summary only | S |
+| **U2** | **Wrong oracle (C=T≠R)**: the test and code were changed together, contradict the requirement, yet are judged covered | ① | P, false reassurance | `covered` only requires unit assertions | Rule: when `alignment=mismatch` the status cannot be covered; replace that missing or weak finding with `spec_mismatch` | S |
+| U3 | PRs that change only the spec are skipped | ① | R | `collect.sh:44` | Spec documents enter the reviewable scope (see the plan) | S |
+| **U4** | **Partial synchronization**: the same value appears in frontend, backend, config, i18n copy, snapshots, email templates, and only one place was changed | ①② | R, the biggest recall gain | Invisible; `*.snap` and `__snapshots__` are ignored by default | A deterministic "old-value occurrence table": grep the whole repository for the old value and its unit variants, including snapshots, i18n, and config, and annotate whether this PR changed them | S–M |
+| **U5** | **Implementation not in this repository**: in remote config, a feature-flag platform, or another service; not found by search and so falsely reported as "not implemented" | ② | P | None | Add `alignment=not_verifiable`, which must list the scope searched; mismatch must not be reported unless config, migrations, and schemas have been exhausted | S |
+| **U6** | **Representation equivalence**: 30 days = `2592000000` ms = `P30D`; "more than 30 days" maps to `>` and not `>=`; calendar days vs business days; time zones; rounding | ③ | P and R | None | The collector generates unit variants; `references/trace.md` gives a normalization list, and the normalized value is written down before comparison; both sides of the boundary need tests (29/30/31) | S |
+| **U7** | **Historical intent (known but unused)**: in repositories without a spec, the requirement is actually written in the PR and issue that originally introduced the line | ② | R, the widest coverage in spec-poor repositories | Unused | Run `git blame` at BASE on modified lines to get the commit, then look up the corresponding PR, then fetch its linked issue, as an optional requirement source (at most 3, quotes verified by post) | S–M |
+| **U20** | **The PR links no issue and its body is thin**: requirement sources 1, 2, and 4 all depend on the PR body or issue links, and many repositories have neither | ② | R, otherwise scenario A is left with only from behaviour | Reads only the PR body and linked issues | In-repo requirement documents are discovered by **content**, across the whole repository, no longer gated by glob. The root README, RULES.md next to code, `.kiro/specs`, and `openspec/` can all be recognized automatically; globs are used only for ranking, and `requirements_paths` only for supplementing or excluding; unreadable docx/pdf requirement files are listed in limitations. See plan §4.0 and §4.1.1, cases tr16 and tr17 | S |
+| U8 | Requirements written in test names, comments, and user docs (tests as spec) | ② | R | The agent reads them, but not as a requirement source | Allow citing them as "implied requirements", marked `inferred`, summary only | S |
+| U9 | Multiple requirement sources contradict each other (issue says 45, spec says 30) | ⑤ | P | None | Report the source conflict itself, without ruling for people on which side is right (intent signals are used only to hint at direction) | S |
+| U10 | The requirement itself is ambiguous and untestable ("within 30 days" counted from which day?) | ⑤ | P | None | Mark as `needs_human`, explaining where the ambiguity lies. This is itself a QE finding, but whether to make it a separate kind needs measurement first | S |
+| U11 | Staged rollout: the spec changes first and the code in a later PR; or feature flags or versioned APIs let old and new values coexist | ④ | P | None | Downgrade when the PR body has "follow-up #N" or a flag; mark not_verifiable when versions or flags are involved | S |
+| U12 | Non-functional and negative requirements ("must not log PII") cannot be pinned to a specific line | ② | — | — | Put in `needs_human`, explicitly out of scope | 0 |
+| U13 | The test exists but is not run (skipped, excluded, not reached by CI) | ② | P | Purely static judgment | L2a in design.md: read the coverage and JUnit artifacts the consumer's CI already has, as pointing evidence | M |
+| U14 | Renaming or moving files makes BASE and HEAD fail to line up | ④ | P | collect uses `--no-renames` | Enable `-M` when determining the diff | S |
+| U15 | The same PR gives different results on each run | ⑦ | P | stability has run 12/12 | Measure per-finding Jaccard stability; do majority voting only if necessary (cost is N times the tokens) | M |
+| U16 | Evaluation ground truth is too small and hand-picked, and recall has never been measured | ⑦ | Evaluation validity | 14 + 7 seeded cases | L2/L3 in §6: mutation generation and historical replay | M–L |
+| U17 | A spec inconsistency should be handled by the PO or spec owner, but the comment reaches only the developer | ⑤ | Adoption rate | None | List the CODEOWNERS of that spec file in the summary (read-only, deterministic) | S |
+| U18 | PRs get slower after adding review (Beko +42%) | ⑤ | Adoption rate | Not measured | The pilot records time-to-merge and handling rate by category | Process |
+| U19 | The spec is modified by the PR to "legitimize" violating code | ⑥ | — | — | This is exactly a case where a human needs to look. `reflected_in.spec=true` plus a hint "spec modified within this PR" is enough. Spec text is still treated as data only | 0 |
 
-### 4.3 优先级
+### 4.3 Priority
 
-| 级别 | 项目 | 说明 |
+| Level | Items | Notes |
 |---|---|---|
-| P0（随追溯 v1 一起做） | U1 差分、U2 错误 oracle、U3 只改 spec 的 PR、U4 出现位置表、U5 not_verifiable、U6 归一化、U14 重命名、**U20 按内容发现需求文档** | 全部是确定性规则或几十行代码，直接决定精度 |
-| P1 | U7 历史意图（依赖 PR 正文；关联了 issue 时更强，但不依赖关联）、U8 隐含需求、U9 来源冲突、U11 分阶段发布 | 低成本，扩大适用面 |
-| P2（达到门槛才做） | U13 覆盖率产物、U15 多数投票、U17 CODEOWNERS、U10 歧义独立成 kind | 需要 pilot 数据来证明值得做 |
+| P0 (do together with traceability v1) | U1 differencing, U2 wrong oracle, U3 spec-only PRs, U4 occurrence table, U5 not_verifiable, U6 normalization, U14 rename, **U20 content-based discovery of requirement documents** | All are deterministic rules or a few dozen lines of code, and directly determine precision |
+| P1 | U7 historical intent (depends on the PR body; stronger when an issue is linked, but does not depend on the link), U8 implied requirements, U9 source conflict, U11 staged rollout | Low cost, widens applicability |
+| P2 (do only once the threshold is reached) | U13 coverage artifacts, U15 majority voting, U17 CODEOWNERS, U10 ambiguity as its own kind | Needs pilot data to prove they are worth doing |
 
-## 5. 对设计的修订
+## 5. Revisions to the design
 
-已写入 `docs/traceability-plan.md`：
-- **差分判定**：`since` 字段，以及确定性的降级规则。
-- **新增 alignment 状态**：`not_verifiable`，必须附上搜索范围。
-- **错误 oracle 规则**：`mismatch` 不能是 covered，由 `spec_mismatch` 顶替那一条 missing 或 weak 发现。
-- **出现位置表**：在 collector 里生成，涵盖旧值的单位变体以及快照、i18n、配置文件。
-- **历史意图来源**：blame → PR → issue，作为可选需求，不强制评估。
-- **归一化清单**：并入 agent 指南。
-- **评测扩充**：对应 §2 的状态矩阵。另加两个确定性生成器：spec 变异和代码变异，并配无操作对照与一致修改对照。
+Already written into `docs/traceability-plan.md`:
+- **Differencing**: the `since` field, and deterministic downgrade rules.
+- **New alignment state**: `not_verifiable`, which must attach the search scope.
+- **Wrong-oracle rule**: `mismatch` cannot be covered, and `spec_mismatch` takes the place of that missing or weak finding.
+- **Occurrence table**: generated in the collector, covering unit variants of the old value as well as snapshots, i18n, and config files.
+- **Historical intent source**: blame → PR → issue, as an optional requirement, not forced into evaluation.
+- **Normalization list**: merged into the agent guide.
+- **Evaluation expansion**: corresponds to the state matrix of §2. Add two deterministic generators: spec mutation and code mutation, with no-op controls and consistent-change controls.
 
-## 6. 评测：怎样证明 shift-left 有效
+## 6. Evaluation: how to prove shift-left works
 
-| 层级 | 方法 | 证明了什么 | 成本 |
+| Level | Method | What it proves | Cost |
 |---|---|---|---|
-| L0 | `node:test` 确定性测试，包括候选召回 recall@8 | collector 和 validator 的机制正确 | 已有体系 |
-| L1 | 状态矩阵种子用例（§2 的 12 行，每行一个 case，外加对抗用例） | 结论逻辑完整，覆盖度由构造保证 | M |
-| L2 | 在真实 OSS 仓库上做变异生成：改 spec 里的值，预期找到代码和测试；改代码里的值或比较符，预期 spec 被标出；无操作重构作对照，不应报告；spec、代码、测试一致修改作对照，不应报告。真值取自旧值出现位置表，并抽样人工复核等价变异 | 真实规模下的召回和误报率 | M |
-| L3 | 历史回放：挖出同时修改 spec 和代码的提交，回滚其中一边构造正例，原提交作为反例 | 真实分布下的表现 | L |
-| **L4** | **SZZ 回放**：从 issue tracker 里 QA 或生产发现的 bug 出发，用 SZZ 算法（Śliwerski、Zimmermann、Zeller，MSR 2005）找到引入它的 PR，在那个 PR 上回放 SpecGuard | **直接测量原始目的：有多少 QA 发现的缺陷能在 PR 阶段被拦下** | L（需要有 bug 标签的 pilot 仓库） |
-| 现场 | 按类别统计处理率和驳回率、每个 PR 的评论数、time-to-merge 的变化 | 采纳度和代价 | 流程 |
+| L0 | `node:test` deterministic tests, including candidate recall recall@8 | The mechanisms of the collector and validator are correct | Existing system |
+| L1 | State-matrix seeded cases (the 12 rows of §2, one case per row, plus adversarial cases) | The conclusion logic is complete, and coverage is guaranteed by construction | M |
+| L2 | Mutation generation on real OSS repositories: change a value in the spec, expect the code and tests to be found; change a value or comparator in the code, expect the spec to be flagged; a no-op refactor as control, nothing should be reported; a consistent change of spec, code, and tests as control, nothing should be reported. Ground truth comes from the old-value occurrence table, with sampled human review of equivalent mutants | Recall and false-positive rate at real scale | M |
+| L3 | Historical replay: mine commits that changed both spec and code, revert one side to construct positives, and use the original commit as the negative | Performance under real distribution | L |
+| **L4** | **SZZ replay**: start from bugs found by QA or production in the issue tracker, use the SZZ algorithm (Śliwerski, Zimmermann, Zeller, MSR 2005) to find the PR that introduced them, and replay SpecGuard on that PR | **Directly measures the original purpose: how many QA-found defects could be stopped at the PR stage** | L (needs a pilot repository with bug labels) |
+| Field | Handling and rejection rates by category, comments per PR, change in time-to-merge | Adoption and cost | Process |
 
-门槛沿用 design.md：高置信度精度 ≥80% 才讨论阻断模式。需求类发现的门槛更严（计划中 ≥90%），因为它最难被接受。
+Thresholds follow design.md: only when high-confidence precision is ≥80% is blocking mode discussed. The threshold for requirement-type findings is stricter (≥90% in the plan), because they are the hardest to get accepted.
 
-L2、L3 和 L4 的可执行方案已写入 `docs/traceability-plan.md` §7.4，对应的工作包是 WP6–WP8：
-- **WP6 外部仓库评测模式**：镜像仓库，通过合并的方式注入 workflow，复制需求上下文。
-- **WP7 变异基准**：由人工确认需求、代码、测试三者的对应关系，共 8 种变异算子（含 3 组对照）。
-- **WP8 SZZ 回放**：人工确认缺陷与引入它的 PR 的对应关系，回放前先判定缺陷是否在范围内，再按 direct、indirect、miss 三档裁定，并用无缺陷 PR 作为噪声基线。
+The executable plans for L2, L3, and L4 are written in `docs/traceability-plan.md` §7.4, and the corresponding work packages are WP6–WP8:
+- **WP6 external repository evaluation mode**: mirror the repository, inject the workflow by merging, and copy the requirement context.
+- **WP7 mutation benchmark**: humans confirm the correspondence among requirement, code, and test, for 8 mutation operators in total (including 3 control groups).
+- **WP8 SZZ replay**: humans confirm the correspondence between a defect and the PR that introduced it; before replay, first determine whether the defect is in scope, then adjudicate on three levels, direct, indirect, and miss, and use defect-free PRs as a noise baseline.
 
-每个场景都分别以 `trace: off` 和 `trace: auto` 运行，直接测出追溯功能带来的增量价值。
+Each scenario is run separately with `trace: off` and `trace: auto`, directly measuring the incremental value the traceability feature brings.
 
-## 7. 需要你确认的问题
+## 7. Questions that need your confirmation
 
-1. 需求原文的约束列表在「Gherkin, Git…」处被截断，第 3 条及以后是什么？「Git…」是指 GitHub Issues、Wiki，还是 Git 历史？如果是 Git 历史，U7 应提升到 P0。
-2. 有没有带 QA 或生产缺陷标签的 pilot 仓库？这决定 L4（最直接的价值证明）能不能做。
-3. 需求类发现的 inline 预算：建议每个 PR 不超过 5 条，只放 introduced 且高置信度的，其余进摘要。可以接受吗？
-4. U10「需求歧义」是否要作为一种 QE 发现单独报出来？它扩展了原始目标的边界，所以需要你来决定。
+1. The constraint list in the original requirement text is truncated at "Gherkin, Git…"; what are item 3 and later? Does "Git…" mean GitHub Issues, the Wiki, or Git history? If it is Git history, U7 should be raised to P0.
+2. Is there a pilot repository with QA or production defect labels? This determines whether L4 (the most direct proof of value) can be done.
+3. Inline budget for requirement-type findings: the suggestion is no more than 5 per PR, only introduced and high-confidence ones, with the rest going to the summary. Is this acceptable?
+4. Should U10 "requirement ambiguity" be reported separately as a kind of QE finding? It extends the boundary of the original goal, so you need to decide.

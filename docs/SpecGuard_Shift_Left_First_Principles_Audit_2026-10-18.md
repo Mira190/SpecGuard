@@ -1,108 +1,108 @@
-# SpecGuard 全面技术评估：Shift Left、目标完成度、近期优化净收益与 Unknown Unknowns
+# SpecGuard Comprehensive Technical Assessment: Shift Left, Goal Completion, Net Benefit of Recent Optimizations, and Unknown Unknowns
 
-> 历史快照说明（2026-10-18 更新）：本文基于 main `08d2c5b` 及当时的 PR #345 草案。该草案中的 same-test / anchored-regex 确定性降级规则已撤回；修订后的 #345 已合并，改为提示词约束并保留反例测试。文中对此旧方案的风险分析是历史记录，不代表当前 main 仍包含该规则。后续 #351 又补充了需求版本发布检查、同一调用门控及 base retarget 测试行为；本报告不替代这些提交的最新验收。
+> Historical snapshot note (updated 2026-10-18): this document is based on main `08d2c5b` and the PR #345 draft at that time. The deterministic downgrade rules for same-test / anchored-regex in that draft have been withdrawn; the revised #345 has been merged and now uses prompt constraints with counterexample tests retained. The risk analysis of the old design in this document is a historical record and does not mean the current main still contains that rule. Later, #351 added a requirement-version release check, same-call gating, and base-retarget test behavior; this report does not replace the latest acceptance of those commits.
 
-> **审查截点：2026-10-18（Australia/Sydney）。** 仓库 [`Mira190/SpecGuard`](https://github.com/Mira190/SpecGuard)；默认分支 `main`；审查的实际主线 SHA 为 [`08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c`](https://github.com/Mira190/SpecGuard/tree/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c)。PR #345 在截点仍为 OPEN，**不能计入 main**；#334 也仍开放。最新主线 [CI #39085373622](https://github.com/Mira190/SpecGuard/actions/runs/39085373622) 成功。本文只读取远程 repo、PR、Actions/jobs/logs、仓库内评测与代码；**没有重新发起模型调用或独立复刻第三方仓库实验，分析阶段未修改产品代码；本文后续作为独立 docs-only 提交，不改变审查截点**。下文明确区分“本轮直接核对”“维护者实验记录”“推论/待证伪”。
+> **Review cut-off: 2026-10-18 (Australia/Sydney).** Repository [`Mira190/SpecGuard`](https://github.com/Mira190/SpecGuard); default branch `main`; the actual mainline SHA reviewed is [`08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c`](https://github.com/Mira190/SpecGuard/tree/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c). PR #345 was still OPEN at the cut-off and **cannot be counted as part of main**; #334 was also still open. The latest mainline [CI #39085373622](https://github.com/Mira190/SpecGuard/actions/runs/39085373622) succeeded. This document only reads the remote repo, PRs, Actions/jobs/logs, and the in-repo evaluations and code; **it did not re-launch model calls or independently replicate third-party repository experiments, and did not modify product code during the analysis phase; this document was subsequently submitted as a separate docs-only commit, which does not change the review cut-off**. Below, "directly checked this round", "maintainer experiment records", and "inference / to be falsified" are clearly distinguished.
 
-## 0. 执行摘要与决策
+## 0. Executive Summary and Decisions
 
-**结论：SpecGuard 已具备真正的 Shift-Left *机制*，但还不能声称已证明真正的 Shift-Left *组织效果*。** PR 早期反馈、需求—代码—测试追溯、测试层级建议、手动跨仓扫描、成本约束、发现状态与覆盖缺口账本都已实现。不过，本项目最大的风险已从“做不到、跑不动”变成“**看起来审完了，却把缺乏证据解释为没有缺口；或反过来，把找不到测试解释为测试不存在**”。
+**Conclusion: SpecGuard already has a real Shift-Left *mechanism*, but cannot yet claim to have proven a real Shift-Left *organizational effect*.** Early PR feedback, requirement-code-test traceability, test-level suggestions, manual cross-repo scanning, cost constraints, finding status, and a coverage-gap ledger are all implemented. However, the project's biggest risk has shifted from "can't do it, can't run it" to "**looking as if the review is complete, while interpreting a lack of evidence as no gaps; or conversely, interpreting failure to find a test as the test not existing**".
 
-五个核心判断：
+Five core judgements:
 
-1. **PR 模式：受控样本有效，真实泛化未证实。** Kite 10 个种子 PR 首屏 10/10（来自项目已有记录，非本轮复跑）；另一次对 10 个零发现 dogfood PR 的独立复审发现 4/10 存在真实漏报。两个数字对应不同、非随机样本，不能互相抵消，更不能外推为生产 recall。详见 [`goal-assessment`](https://github.com/Mira190/SpecGuard/blob/main/docs/goal-assessment-2026-10-17.md)。
-2. **全仓扫描：可用性大幅改善，发现质量仍是主瓶颈。** 10 月 17 日原始第三方 5 仓扫描的 8 条计入模型发现，人工标注 0 条有价值；同日合入多项修复后，五仓单次全量运行已触达其清单中的所有 unit parts/blocks。Cobra 抽查有 7/7“找不到直接测试引用”的陈述属实，**但“属实”不等于应该补独立单测**；其余四仓的新发现尚未系统盲标。
-3. **#343 是有实测支持的正向工程优化，但收益主要是减少误判为 `unsure`，不是召回率/准确率已提高。** 最新 PR 提供离线对照 + branch-pinned 真实 runs；不能把“forced 减少”直接记作“真缺口发现更多”。
-4. **当前绿灯与审查充分性有意解耦，但可用性风险显著。** 最新主线 test job 1480 tests / 1476 pass / 0 fail / 3 skipped / 1 TODO；然而部分 dogfood review 仍为 `incomplete`。手动运行 [`39035605423`](https://github.com/Mira190/SpecGuard/actions/runs/39035605423) 绿色，job log 明示 `STATUS: incomplete`，原因是 20 units 仅看到部分测试；这符合当前 `fail_on_error` 的定义，但用户仅看 Actions 绿色会误解。
-5. **#345 不应仅凭降误报的局部样本直接合并。** 它把“同一测试块中另有精确断言”当作弱测试发现的降级依据；这并不能证明**被指出的那个输出/分支**受到那些断言约束。需同时测试真阴性与假阴性，尤其是不同 assertion subject 的反例。
+1. **PR mode: valid on controlled samples; real-world generalization not confirmed.** Kite 10 seeded PRs first-screen 10/10 (from existing project records, not re-run this round); in addition, an independent re-review of 10 zero-finding dogfood PRs found that 4/10 had real misses. The two numbers correspond to different, non-random samples; they cannot offset each other, and certainly cannot be extrapolated into production recall. See [`goal-assessment`](https://github.com/Mira190/SpecGuard/blob/main/docs/goal-assessment-2026-10-17.md) for details.
+2. **Full-repo scan: usability greatly improved; finding quality remains the main bottleneck.** In the original 5-repo third-party scan on October 17, 8 model findings were counted and human labelling found 0 valuable; after multiple fixes were merged the same day, a single full run on the five repos reached all unit parts/blocks in their inventories. Spot checks on Cobra showed that the statement "no direct test reference found" was true for 7/7, **but "true" does not mean a standalone unit test should be added**; the new findings from the other four repos have not been systematically blind-labelled.
+3. **#343 is a positive engineering optimization supported by measurements, but the gain is mainly fewer misclassifications as `unsure`, not an improvement in recall/accuracy.** The latest PR provides an offline comparison + branch-pinned real runs; a reduction in "forced" cannot be directly recorded as "more real gaps found".
+4. **A green status is currently decoupled from review sufficiency by design, but the usability risk is significant.** The latest mainline test job: 1480 tests / 1476 pass / 0 fail / 3 skipped / 1 TODO; however, some dogfood reviews are still `incomplete`. Manual run [`39035605423`](https://github.com/Mira190/SpecGuard/actions/runs/39035605423) is green, and the job log explicitly states `STATUS: incomplete`, because for 20 units only part of the tests were seen; this matches the current definition of `fail_on_error`, but a user who only looks at Actions green will misread it.
+5. **#345 should not be merged on the strength of a local sample of reduced false positives alone.** It treats "another exact assertion in the same test block" as the basis for downgrading a weak-test finding; this does not prove that **the specific output/branch that was pointed out** is constrained by those assertions. Both true negatives and false negatives need to be tested, especially counterexamples with different assertion subjects.
 
-**建议定位**：当前可作为“PR 前置验证证据审查助手 + 实验性仓库测试债务雷达”；不应包装为“可靠证明没有缺失单测”“全仓行为已验证”“企业级自动 QA 门禁”。下一里程碑不是增加功能数量，而是证明 **delivered precision / recall、完整性、真实作者修复率** 在不同语言、不同仓库、不同改动类型上稳定改善。
+**Recommended positioning**: for now it can serve as a "pre-PR validation-evidence review assistant + experimental repository test-debt radar"; it should not be packaged as "reliably proves there are no missing unit tests", "whole-repo behavior has been verified", or "an enterprise-grade automated QA gate". The next milestone is not to add more features, but to prove that **delivered precision / recall, completeness, and real author fix rate** improve stably across different languages, repositories, and change types.
 
 ---
 
-## 1. 第一性原理：SpecGuard 到底应当优化什么
+## 1. First Principles: What Should SpecGuard Actually Optimize
 
-原始要求见 [`goal-first-principles`](https://github.com/Mira190/SpecGuard/blob/main/docs/goal-first-principles.md)：
+The original requirements are in [`goal-first-principles`](https://github.com/Mira190/SpecGuard/blob/main/docs/goal-first-principles.md):
 
 > Create a unit test review AI GitHub Workflow. Must review requirements and the tests, and identify missing unit tests. Must check coding standard has been confirmed too. If possible, review component/integration testing and determine what can and should move down to unit testing.
 
-质量问题应拆成四个对象：**R 需求意图、C 代码行为、T 测试及其 oracle、S 工程标准**，以及发生时间 **t**。真正需要在 QA 之前回答的不是“代码有没有测试文件”，而是：
+The quality problem should be split into four objects: **R requirement intent, C code behavior, T tests and their oracle, S engineering standards**, plus the time **t** at which things happen. What really needs answering before QA is not "does the code have a test file", but:
 
-- `R → C`：需求是否实现、是否一致；旧需求和新需求是否混淆？
-- `R → T`：每项关键行为、失败路径、边界、不变量是否有正确 oracle？
-- `C → T`：新增/改变的行为是否真被断言约束，而不是仅执行或覆盖？
-- `S → C`：适用的编码规范是否找到、实际 lint/format/check 是否执行并确认？
-- `T_high → T_unit`：能否把稳定、确定、低环境依赖的验证下沉到 unit，同时保留真正的集成契约测试？
-- `t_before_QA`：这些建议是否在 QA 接手之前被送达并采用，最终减少下游缺陷/返工？
+- `R → C`: is the requirement implemented, and is it consistent; are old and new requirements confused?
+- `R → T`: does every key behavior, failure path, boundary, and invariant have a correct oracle?
+- `C → T`: is the added/changed behavior actually constrained by assertions, rather than merely executed or covered?
+- `S → C`: have the applicable coding standards been found, and have the actual lint/format/check been executed and confirmed?
+- `T_high → T_unit`: can stable, deterministic, low-environment-dependency verification be pushed down to unit level while keeping the genuine integration contract tests?
+- `t_before_QA`: were these suggestions delivered and adopted before QA took over, ultimately reducing downstream defects/rework?
 
-一个形式化但实用的目标：
+A formal but practical goal:
 
 `Expected early QA value = P(true actionable gap) × P(delivered) × P(author fixes before QA) × expected downstream cost avoided − review/triage/compute/false-alarm cost`
 
-这个公式提醒：**即便 precision 提高，只要大量真实问题被静默降级（recall 下降），价值可能为负；即便全仓调用 100% 成功，如果报告没有被看见或没有被修复，也不等于 Shift Left。**
+This formula is a reminder: **even if precision rises, the value may be negative if many real problems are silently downgraded (recall falls); even if 100% of whole-repo calls succeed, if the report is not seen or not fixed, it does not amount to Shift Left.**
 
-建议采用五个互不混淆的状态变量：`execution`（引擎及交付执行）；`scope`（对象/文档是否被清点）；`evidence`（候选测试/代码/引用是否完整可见）；`judgement`（模型判定可靠程度）；`delivery`（作者看到何种发现）。任何一个失败都不能被一句“no gaps found”替代。
+We recommend five state variables that do not get mixed up: `execution` (engine and delivery execution); `scope` (whether objects/documents were inventoried); `evidence` (whether candidate tests/code/references are completely visible); `judgement` (how reliable the model's determination is); `delivery` (what kind of findings the author saw). The failure of any one of them cannot be replaced by a single "no gaps found".
 
-## 2. 目标完成度矩阵（功能验收与效果验收分开）
+## 2. Goal Completion Matrix (functional acceptance and effect acceptance kept separate)
 
-| 原始/演进目标 | 实现成熟度（以 main 为准） | 实际收益证据 | 未完成的验收条件 |
+| Original / evolved goal | Implementation maturity (per main) | Evidence of actual benefit | Unmet acceptance conditions |
 |---|---|---|---|
-| PR 触发、随 push 提前审查 | **已实现**。CI `pull_request` 和 reusable Action | Kite 种子样本、真实 dogfood 评论 | 真实团队、无报警样本的 FN、作者处理率、跨仓稳定性 |
-| 需求提取及 R↔C↔T 追溯 | **部分至较完整**：PR/issue + 仓库 docs + trace | 既有检索集指标 R→C MRR 0.444→0.750、C→T Hit@3 4/24→20/24（Fastify 受控集） | 不同语言/monorepo、历史需求冲突、规范仅修改的 PR、动态依赖/跨服务 |
-| 发现 missing unit tests | **已实现但高不确定** | PR 种子 10/10；全仓旧版第三方 0/8 有价值；新版需大样本盲标 | 区分 no matching test、no assertion、no effective oracle、genuine new requirement gap |
-| 发现 weak tests、价值断言与边界 | **已实现基础规则+模型** | 三方 40 个静态种子旧基线 delivered 11/40、raw 21/40、边界 0/10；后续补强但无同口径全面复测 | 语义数据流、属性/不变量、跨测试辅助函数、变异存活验证 |
-| 确认 coding standards | **功能已接入**：instruction/CLAUDE/CONTRIBUTING 与 `standards_checks`, `standards_paths` | 本轮未看到独立完整、真实“违规+lint check”闭环验收 | 适用规则的来源/版本/范围、检查实际通过、缺配置显式 UNKNOWN |
-| integration/component→unit 建议 | **已有语义分类**：`higher_level_only`、`pushdown` | 有真实报告输出，但缺成体系人工价值标注 | 何时必须保留集成测试、单位测试替代成本、无错误降级的设计审查 |
-| 手动输入目标 repo/PR/文件夹扫描 | **已实现 GitHub 内资源**；`scan_paths` + scope anchor、`scan_scope=all` | 5 外部开源仓真实全仓运行 | 非 GitHub 文档 URL 不可直接读；企业内 GitHub repo/App 权限与 end-to-end 验收；scan `all` 只支持 Claude API 引擎 |
-| Reusable workflow / 独立 action | **已实现**，可被其他目标仓调用 | CI 中接口转发校验、README 说明 | 不同企业 org 安全策略、Copilot org quota、private/internal 网络/权限真实 canary |
-| 本地 Shift Left | **有 CLI** `bin/specguard-local.js` 与 Windows bash 修复 | 单测、平台模拟 | IDE 开发循环 UX、与云端配置一致性、取消/缓存/异常收敛真实用户体验 |
-| 整仓全量扫描 | **技术上已实现** `scan_scope=all`，会分段并用预算准入 | 五仓第 2 轮没有未审分段/文档块 | “所有纳入 inventory 的分段”不等于“仓库全部行为”；还有部分测试被切片（unsure） |
-| 真正降低 QA 返工 | **未证明** | 仅 agent 写的种子 PR/闭环实例，无真人作者群组 | 真实作者时间、介入前后缺陷逃逸率、QA 返工时长、干预/对照比较 |
+| PR trigger, earlier review with each push | **Implemented**. CI `pull_request` and reusable Action | Kite seeded samples, real dogfood comments | Real teams, FN on no-alarm samples, author handling rate, cross-repo stability |
+| Requirement extraction and R↔C↔T traceability | **Partial to fairly complete**: PR/issue + repo docs + trace | Existing retrieval-set metrics R→C MRR 0.444→0.750, C→T Hit@3 4/24→20/24 (Fastify controlled set) | Different languages/monorepos, historical requirement conflicts, PRs that only change the spec, dynamic dependencies/cross-service |
+| Finding missing unit tests | **Implemented but highly uncertain** | PR seeds 10/10; full-repo old-version third-party 0/8 valuable; the new version needs a large-sample blind labelling | Distinguish no matching test, no assertion, no effective oracle, genuine new requirement gap |
+| Finding weak tests, value assertions and boundaries | **Basic rules + model implemented** | Three-party 40 static seeds old baseline delivered 11/40, raw 21/40, boundary 0/10; later reinforced but no comprehensive re-test on the same basis | Semantic data flow, properties/invariants, cross-test helper functions, mutation-survival verification |
+| Confirming coding standards | **Functionally wired in**: instruction/CLAUDE/CONTRIBUTING and `standards_checks`, `standards_paths` | No independent, complete, real "violation + lint check" closed-loop acceptance seen this round | Source/version/scope of applicable rules, checks actually passed, missing config explicitly UNKNOWN |
+| integration/component→unit suggestions | **Semantic classification exists**: `higher_level_only`, `pushdown` | Real report output exists, but there is no systematic human value labelling | When the integration test must be kept, the replacement cost of unit tests, design review without wrong downgrades |
+| Manual input of target repo/PR/folder scan | **Implemented for GitHub-internal resources**; `scan_paths` + scope anchor, `scan_scope=all` | Real full-repo runs on 5 external open-source repos | Non-GitHub document URLs cannot be read directly; enterprise-internal GitHub repo/App permissions and end-to-end acceptance; scan `all` supports only the Claude API engine |
+| Reusable workflow / standalone action | **Implemented**, callable from other target repos | Interface-forwarding checks in CI, README description | Security policies of different enterprise orgs, Copilot org quota, real canary for private/internal network/permissions |
+| Local Shift Left | **A CLI exists** `bin/specguard-local.js` and Windows bash fix | Unit tests, platform simulation | IDE development-loop UX, consistency with cloud configuration, real user experience of cancellation/cache/exception convergence |
+| Whole-repo full scan | **Technically implemented** `scan_scope=all`, segments and admits by budget | In round 2 of the five repos there were no unreviewed segments/doc blocks | "All segments included in the inventory" does not equal "all behavior of the repo"; there are also tests that were sliced (unsure) |
+| Actually reducing QA rework | **Not proven** | Only agent-written seed PRs / closed-loop instances, no human author cohort | Real author time, defect escape rate before/after intervention, QA rework duration, intervention/control comparison |
 
-“功能具备”与“目标达成”的差距是本次最重要结论。不要给一个没有可复算定义的“整体完成 85%”。若必须分阶段，当前属于 **技术能力 MVP → 受控试点**；尚未达到经验证的组织级 Shift Left。
+The gap between "functionally present" and "goal achieved" is the most important conclusion of this assessment. Do not give an "overall completion of 85%" that has no reproducible definition. If staging is required, the current stage is **technical-capability MVP → controlled pilot**; it has not reached verified organization-level Shift Left.
 
-## 3. 本轮 GitHub 快照：主线、PR、Actions
+## 3. This Round's GitHub Snapshot: Mainline, PRs, Actions
 
-### 3.1 Git/PR 冻结点
+### 3.1 Git/PR Freeze Points
 
-- 主线 [`08d2c5b`](https://github.com/Mira190/SpecGuard/commit/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c) 是合并 [#343](https://github.com/Mira190/SpecGuard/pull/343) 的提交；GitHub 时间 2026-10-18 01:08 UTC（Sydney 12:08）。
-- [#344](https://github.com/Mira190/SpecGuard/pull/344) 已于 2026-10-18 00:21 UTC 合并：unit provenance、目录 scope 锚定、CommonJS 导出名、repair reserve、Windows Git Bash。
-- [#343](https://github.com/Mira190/SpecGuard/pull/343) 已合并：每个模型调用各自的 cut attribution、按测试内容大小排序、完整 slice 定价。
-- [#345](https://github.com/Mira190/SpecGuard/pull/345) **仍开放**：同测试块 pin 值门控 + `NO_GAP` 正则修订；其 [CI #39084816569](https://github.com/Mira190/SpecGuard/actions/runs/39084816569) 通过，但不代表主线含有该功能。
-- [#334](https://github.com/Mira190/SpecGuard/pull/334) 仍开放，内容为文档/敏感本地证据清理；非主线已落地事实。
-- 近期关键已合并：[#329](https://github.com/Mira190/SpecGuard/pull/329) 整仓一次运行、[#333](https://github.com/Mira190/SpecGuard/pull/333) eval 构造/计分修正、[#335](https://github.com/Mira190/SpecGuard/pull/335) call-level 证据与保守 usage、[#336](https://github.com/Mira190/SpecGuard/pull/336) eval 范围、[#340](https://github.com/Mira190/SpecGuard/pull/340) 报告完整性、[#341](https://github.com/Mira190/SpecGuard/pull/341) 匹配与切片 forced 修正、[#342](https://github.com/Mira190/SpecGuard/pull/342) 手动表单 scope。
+- Mainline [`08d2c5b`](https://github.com/Mira190/SpecGuard/commit/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c) is the commit that merged [#343](https://github.com/Mira190/SpecGuard/pull/343); GitHub time 2026-10-18 01:08 UTC (Sydney 12:08).
+- [#344](https://github.com/Mira190/SpecGuard/pull/344) was merged at 2026-10-18 00:21 UTC: unit provenance, directory scope anchoring, CommonJS export names, repair reserve, Windows Git Bash.
+- [#343](https://github.com/Mira190/SpecGuard/pull/343) is merged: per-model-call cut attribution, ordering by test content size, full slice pricing.
+- [#345](https://github.com/Mira190/SpecGuard/pull/345) **is still open**: same-test-block pin-value gating + `NO_GAP` regex revision; its [CI #39084816569](https://github.com/Mira190/SpecGuard/actions/runs/39084816569) passed, but that does not mean the mainline contains this feature.
+- [#334](https://github.com/Mira190/SpecGuard/pull/334) is still open, its content being cleanup of docs / sensitive local evidence; not a fact landed on the mainline.
+- Key recently merged: [#329](https://github.com/Mira190/SpecGuard/pull/329) whole-repo single run, [#333](https://github.com/Mira190/SpecGuard/pull/333) eval construction/scoring fixes, [#335](https://github.com/Mira190/SpecGuard/pull/335) call-level evidence and conservative usage, [#336](https://github.com/Mira190/SpecGuard/pull/336) eval scope, [#340](https://github.com/Mira190/SpecGuard/pull/340) report completeness, [#341](https://github.com/Mira190/SpecGuard/pull/341) matching and slice forced fixes, [#342](https://github.com/Mira190/SpecGuard/pull/342) manual-form scope.
 
-### 3.2 CI 与审查状态的实际区别
+### 3.2 The Actual Difference Between CI and Review Status
 
-| 证据 | 观察 | 可/不可推断 |
+| Evidence | Observation | What can / cannot be inferred |
 |---|---|---|
-| [main CI #39085373622](https://github.com/Mira190/SpecGuard/actions/runs/39085373622) | test success、dogfood skipped（push，不是 PR） | `node --test` 1480 tests，1476 pass，0 fail，3 skipped，1 TODO；**没有主线这次 push 的 dogfood review** |
-| [#343 CI #39083902859](https://github.com/Mira190/SpecGuard/actions/runs/39083902859) | PR test/dogfood 执行成功 | [#343 summary](https://github.com/Mira190/SpecGuard/pull/343#issuecomment-6243528183) 却明确 `incomplete`：7 个 test files 部分可见；不可当作“PR 审得完整” |
-| [#345 CI #39084816569](https://github.com/Mira190/SpecGuard/actions/runs/39084816569) | test 1478/1474 pass/0 fail/3 skipped/1 TODO；dogfood success | [#345 summary](https://github.com/Mira190/SpecGuard/pull/345#issuecomment-6243678817) `complete=false`，summary-only finding 1，历史 finding 多个 `not_observed`；不能证明这些旧发现都已修复 |
-| [manual #39035605423](https://github.com/Mira190/SpecGuard/actions/runs/39035605423) | job success、`scan` 23/23 units（25 parts） | 日志 `STATUS: incomplete; REASON: 20 units were reviewed with only part of their tests`；`fail_on_error:true` 只把真正 failed 变红；part-of-tests 属 unsure/警告。是**执行成功但验证不完整**的具体反例 |
+| [main CI #39085373622](https://github.com/Mira190/SpecGuard/actions/runs/39085373622) | test success, dogfood skipped (push, not a PR) | `node --test` 1480 tests, 1476 pass, 0 fail, 3 skipped, 1 TODO; **there was no dogfood review for this mainline push** |
+| [#343 CI #39083902859](https://github.com/Mira190/SpecGuard/actions/runs/39083902859) | PR test/dogfood executed successfully | but the [#343 summary](https://github.com/Mira190/SpecGuard/pull/343#issuecomment-6243528183) explicitly says `incomplete`: 7 test files partially visible; cannot be taken as "the PR was reviewed completely" |
+| [#345 CI #39084816569](https://github.com/Mira190/SpecGuard/actions/runs/39084816569) | test 1478/1474 pass/0 fail/3 skipped/1 TODO; dogfood success | [#345 summary](https://github.com/Mira190/SpecGuard/pull/345#issuecomment-6243678817) `complete=false`, summary-only finding 1, several historical findings `not_observed`; cannot prove that these old findings are all fixed |
+| [manual #39035605423](https://github.com/Mira190/SpecGuard/actions/runs/39035605423) | job success, `scan` 23/23 units (25 parts) | log `STATUS: incomplete; REASON: 20 units were reviewed with only part of their tests`; `fail_on_error:true` turns red only for genuinely failed; part-of-tests is an unsure/warning. A concrete counterexample of **successful execution but incomplete verification** |
 
-当前 [`action.yml`](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/action.yml) 的 `fail_on_error` 文案本来就说明 incomplete only warns。逻辑未必是 bug，但 dashboard/branch protection/用户心智有风险。建议把 `execution_status` 与 `verification_assurance` 两个独立 check 交付，明确 required check 的策略：**执行失败阻塞；证据不足默认不应被 UI 误展示为“安全通过”**。
+The `fail_on_error` wording in the current [`action.yml`](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/action.yml) already says that incomplete only warns. The logic is not necessarily a bug, but there is risk for the dashboard / branch protection / user mental model. We recommend delivering two independent checks, `execution_status` and `verification_assurance`, and making the required-check policy explicit: **an execution failure blocks; insufficient evidence should by default not be shown by the UI as "safely passed"**.
 
-### 3.3 还有一个安全/产品边界
+### 3.3 One More Security / Product Boundary
 
-手动 workflow 使用 environment `specguard`，文件本身注释明确要求在 GitHub 仓库设置中**限制到受保护的 main**；YAML 本身不能替代这条组织级配置。它将 private target 结果公开暴露作 fail-closed 防范；`ctx_retention_days:0` 关闭手动结果中的敏感上下文 artifact。反之 [`ci.yml`](https://github.com/Mira190/SpecGuard/blob/main/.github/workflows/ci.yml) dogfood 仍上传 `specguard-ctx` 7 天的 artifact。对将来推广到 internal/private 仓库，**必须单独做权限、artifact 可见范围、fork/PR 信任边界与 prompt injection 测试**。上述是需验收的信任边界，不等于已经发现数据泄露。
+The manual workflow uses the environment `specguard`; the comments in the file itself explicitly require **restricting it to the protected main** in the GitHub repository settings; the YAML itself cannot substitute for this organization-level configuration. It guards against publicly exposing private-target results in a fail-closed way; `ctx_retention_days:0` turns off the sensitive-context artifact in manual results. In contrast, the [`ci.yml`](https://github.com/Mira190/SpecGuard/blob/main/.github/workflows/ci.yml) dogfood still uploads a `specguard-ctx` artifact for 7 days. For future rollout to internal/private repositories, **permissions, artifact visibility scope, the fork/PR trust boundary, and prompt-injection tests must be done separately**. The above are trust boundaries that need acceptance, not a finding that data leakage has occurred.
 
-## 4. 最重要的实测：全仓范围与模型/静态发现质量
+## 4. The Most Important Measurements: Full-Repo Scope and Model/Static Finding Quality
 
-### 4.1 修复前基线——不要遗忘负面数据
+### 4.1 Pre-Fix Baseline: Do Not Forget the Negative Data
 
-项目仓库发布的 [`third-party-scan-eval-2026-10-17.md`](https://github.com/Mira190/SpecGuard/blob/main/docs/third-party-scan-eval-2026-10-17.md) 记录，10 月 17 日对 Nest / Fastify / Flask / Cobra / Hono 的第一批真实扫描：
+The [`third-party-scan-eval-2026-10-17.md`](https://github.com/Mira190/SpecGuard/blob/main/docs/third-party-scan-eval-2026-10-17.md) published in the project repository records the first batch of real scans of Nest / Fastify / Flask / Cobra / Hono on October 17:
 
-- 模型计入 8 条发现，人工评定 **0/8 真正有价值**。其中 6 条已经存在测试（只是候选检索未匹配）；还有非产品性能脚本被当作缺口。
-- 40 个离线静态种子：**raw 21/40，delivered 11/40**；删边界用例 **0/10**。这里是早期版本，不能冒充 #343 之后的分数。
-- weak-lead 抽样存在很高噪声；未引用的导出在 Go 等直接测试入口上比较有用，在 JS/Python 经 public API/DI 间接测试的仓库上常是错的。
-- 这反映开放世界逻辑：`test lookup returns empty` **不蕴含** `no test exists`；`export not lexically mentioned` **不蕴含** `behavior untested`。
+- The model counted 8 findings, and human assessment found **0/8 genuinely valuable**. Of these, 6 already had tests (the candidate retrieval just did not match them); in addition, a non-product performance script was treated as a gap.
+- 40 offline static seeds: **raw 21/40, delivered 11/40**; with boundary cases removed **0/10**. This is an early version and cannot be passed off as a score after #343.
+- Weak-lead sampling has a lot of noise; unreferenced exports are fairly useful on direct test entry points such as Go, but are often wrong in JS/Python repos that are tested indirectly through a public API/DI.
+- This reflects open-world logic: `test lookup returns empty` **does not imply** `no test exists`; `export not lexically mentioned` **does not imply** `behavior untested`.
 
-### 4.2 10 月 17 日修复后的真实全仓运行
+### 4.2 Real Full-Repo Runs After the October 17 Fixes
 
-第 2 轮在 main `b30696a`，五仓通过 `scan_scope: all`；**每个被 inventory 纳入的 unit part 和 doc block 均有调用覆盖，无因预算/时间未调用者**。数据取自同一文档 §8：
+Round 2 was on main `b30696a`, with the five repos run through `scan_scope: all`; **every unit part and doc block included in the inventory had call coverage, with none left uncalled because of budget/time**. The data are taken from §8 of the same document:
 
-| 仓库 | inventory units | 被认为部分测试的 units（第二轮） | 模型调用 | 成本 | 报告 gap 数量（未经统一标注） |
+| Repository | inventory units | units considered to have only part of their tests (round 2) | model calls | cost | reported gap count (not uniformly labelled) |
 |---|---:|---:|---:|---:|---|
 | Nest | 489 | 262 | 108 | $0.77 | 16 + 1 pushdown |
 | Fastify | 33 | 19 | 24 | $0.36 | 10 + 1 pushdown |
@@ -110,15 +110,15 @@
 | Cobra | 18 | 7 | 14 | $0.19 | 6 |
 | Hono | 172 | 133 | 81 | $0.77 | 17 |
 
-Cobra 第 1 轮抽查 7 条“找不到 `_test.go` 直接引用”均属事实；但这只是**精确的静态观察**，并非 7 个经验证需要新增单元测试的义务。其余四仓这一轮的发现缺盲标：**不能给出全仓最新 precision**。
+Spot checks in round 1 on Cobra found 7 cases of "no direct reference found in `_test.go`" were all factual; but this is only an **exact static observation**, not 7 obligations verified as needing new unit tests. The findings of the other four repos in this round lack blind labelling: **the latest full-repo precision cannot be given**.
 
-Kite 8 个种子：在 #329 全量（`130/130` unit parts + `131/131` docs blocks）时模型 3/8、静态可见 6/8；#341/#340 之后全量模型 2/8、静态可见 7/8。全量覆盖没有拯救删除测试类种子（1–3）：说明不足的不仅是检索/预算，还是缺口推断与模型行为的独立瓶颈。注：这是一组专门设计、模型多轮接触过的种子，不可当生产泛化得分。
+Kite 8 seeds: at the time of the #329 full run (`130/130` unit parts + `131/131` docs blocks), model 3/8, statically visible 6/8; after #341/#340 the full-run model was 2/8, statically visible 7/8. Full coverage did not rescue the seeds of the deleted-test type (1–3): this shows that what is lacking is not only retrieval/budget, but that gap inference and model behavior are an independent bottleneck. Note: this is a set of seeds specially designed and touched by the model over multiple rounds, and cannot be treated as a production generalization score.
 
-### 4.3 #343：哪部分可以判定为正向，哪部分还不能
+### 4.3 #343: Which Part Can Be Judged Positive, and Which Part Cannot Yet
 
-[#343 PR](https://github.com/Mira190/SpecGuard/pull/343) 提供的离线 before/after（collector+真实 pack，不等同全新端到端 blinded eval）：
+The offline before/after provided by the [#343 PR](https://github.com/Mira190/SpecGuard/pull/343) (collector + real pack, not equivalent to a fresh end-to-end blinded eval):
 
-| 仓库 | forced before → after | 变化 | 单位调用 before → after |
+| Repository | forced before → after | change | unit calls before → after |
 |---|---:|---:|---:|
 | Nest | 263 → 78 | -70.3% | 108 → 104 |
 | Hono | 133 → 82 | -38.3% | 81 → 78 |
@@ -126,73 +126,73 @@ Kite 8 个种子：在 #329 全量（`130/130` unit parts + `131/131` docs block
 | Flask | 11 → 5 | -54.5% | 9 → 9 |
 | Cobra | 11 → 7 | -36.4% | 14 → 13 |
 
-同 PR 的 branch-pinned **真实运行**（非 main 合并后的新运行）见 [#343 description](https://github.com/Mira190/SpecGuard/pull/343)：
+The same PR's branch-pinned **real runs** (new runs, not runs after merging into main) are in the [#343 description](https://github.com/Mira190/SpecGuard/pull/343):
 
-- Nest [#39083946253](https://github.com/Mira190/SpecGuard/actions/runs/39083946253)：forced 262→79、104 calls、$1.46；
-- Hono [#39083944276](https://github.com/Mira190/SpecGuard/actions/runs/39083944276)：133→81、78 calls、$1.14；
-- Kite seeded [#39083942363](https://github.com/Mira190/SpecGuard/actions/runs/39083942363)：13→0、43/43 units 测试被认为完整；报告 6 missing + 3 weak，**不是**“8/8 种子召回”（发现数量不能当 seed recall）。
+- Nest [#39083946253](https://github.com/Mira190/SpecGuard/actions/runs/39083946253): forced 262→79, 104 calls, $1.46;
+- Hono [#39083944276](https://github.com/Mira190/SpecGuard/actions/runs/39083944276): 133→81, 78 calls, $1.14;
+- Kite seeded [#39083942363](https://github.com/Mira190/SpecGuard/actions/runs/39083942363): 13→0, tests considered complete for 43/43 units; reported 6 missing + 3 weak, which is **not** "8/8 seed recall" (the number of findings cannot be treated as seed recall).
 
-**为什么是工程正收益：** 修复了所有调用共享全局 `pack-cut` 的误归因（一个 shared test 在调用 B 被切，导致调用 A 的单位也变 unsure）；其后按小 test pack 优先、超长 test 按完整 slices 定价，减少部分测试可见性的误分类。PR 在实际 pack 上检查了部分由 forced→非 forced 的单位，没发现“应截断却误认完整”的违反实例。
+**Why it is a positive engineering gain:** it fixed the misattribution in which all calls shared a global `pack-cut` (a shared test cut in call B made the units of call A unsure as well); after that, small test packs take priority and over-long tests are priced by full slices, reducing misclassification of partial-test visibility. The PR checked some units that went from forced to non-forced on the actual packs, and found no violating instance of "should have been truncated but was mistaken as complete".
 
-**还不能说的：** 不能说模型 precision/recall 比 #341 更好；不能说所有 80-line test block 都可见；不能说 #343 在最新 `main` 已跑新一轮五仓盲标；不能以 $1.46/$1.14 证明默认 $1 能做到相同（真实 runs 的预算输入需单独核对）。优先保留 #343，不回滚；但给 forced、`cut attribution`、实际 visible-span 加对账回归，避免未来被优化吞掉。
+**What still cannot be said:** it cannot be said that model precision/recall is better than #341; it cannot be said that every 80-line test block is visible; it cannot be said that #343 has run a new round of five-repo blind labelling on the latest `main`; $1.46/$1.14 cannot be used to prove that the default $1 can achieve the same (the budget inputs of the real runs need to be checked separately). Keep #343 first and do not roll it back; but add reconciliation regressions for forced, `cut attribution`, and the actual visible-span, so that they are not swallowed by future optimizations.
 
-### 4.4 每项最近修复是否“正优化”（净收益判定）
+### 4.4 Is Each Recent Fix a "Positive Optimization" (Net Benefit Judgement)
 
-| PR | 正向证据 | 主要反向风险/证据不足 | 结论 |
+| PR | Positive evidence | Main counter-risk / insufficient evidence | Conclusion |
 |---|---|---|---|
-| #329 全仓 all | 5 仓一次 run 全 parts；Kite 种子 130/130 part | 依赖 Claude API 而非 Copilot；成本、超大仓及完整性语义 | **可保留，功能正向；质量未证** |
-| #333/#336 eval 可信性 | 修复零 diff、错误排除文档、重复计算等，降低“测错对象”的风险 | 历史成绩不可直接跨版本比较 | **高价值正向；需版本化重建基线** |
-| #335/#344 provenance | 限制 finding 引用不存在于自身 call/unit 的来源 | 过强的“own file”门禁可能静默压制跨单元真实缺口 | **大体正向；需负例召回测试** |
-| #340 报告诚实性 | 未评估不再伪装非需求、all 输出完整静态线索、账本 | all 输出增多增加信息过载 | **正向；改 UX 分级** |
-| #341 test 匹配收敛 | 消除同名 index/handler 测试跨目录污染、弱匹配 cut 虚高 | 可能排除跨包 integration 的真实候选 | **正向倾向；需检索 Recall@k 守门** |
-| #342 手动 scope | 目录 URL 锚定扫描范围，降低误审范围 | 非 GitHub URL 和私仓权限仍限制 | **正向 UX/安全** |
-| #343 per-call cut/slice | 离线+branch 实验大量减少 forced；减少调用 | “部分测试可见性”不等于 finding quality | **明确正向工程优化，收益范围限定** |
-| #345 same-test pin（未合入） | Hono/Flask 实例中有真实冗余 weak 断言 | 其他 subject 的断言不能证明当前 subject、分支/参数/路径 | **暂不判定；要求 FN regression** |
+| #329 full-repo all | 5 repos, all parts in one run; Kite seeds 130/130 parts | Depends on Claude API rather than Copilot; cost, very large repos and completeness semantics | **Keep it; functionally positive; quality not proven** |
+| #333/#336 eval credibility | Fixed zero diff, error-excluded docs, double counting, etc., lowering the risk of "testing the wrong object" | Historical scores cannot be compared directly across versions | **High-value positive; baseline needs versioned rebuilding** |
+| #335/#344 provenance | Restricts findings from citing sources that do not exist in their own call/unit | An overly strong "own file" gate may silently suppress real cross-unit gaps | **Largely positive; needs negative-example recall tests** |
+| #340 report honesty | Unassessed items no longer masquerade as non-requirements, all output is complete with static leads, ledger | More all output increases information overload | **Positive; change to tiered UX** |
+| #341 test-matching convergence | Eliminates cross-directory contamination of same-named index/handler tests, inflated weak-match cuts | May exclude real cross-package integration candidates | **Leaning positive; needs retrieval Recall@k guard** |
+| #342 manual scope | Directory URLs anchor the scan scope, reducing review of the wrong scope | Non-GitHub URLs and private-repo permissions still limit it | **Positive UX/security** |
+| #343 per-call cut/slice | Offline + branch experiments greatly reduce forced; fewer calls | "Partial test visibility" does not equal finding quality | **Clearly a positive engineering optimization, with benefit limited in scope** |
+| #345 same-test pin (not merged) | Hono/Flask instances have genuinely redundant weak assertions | Assertions on other subjects cannot prove the current subject, branch/parameter/path | **No judgement yet; require FN regression** |
 
 ---
 
-## 5. PR 模式当前的真正瓶颈：从找到，到作者能用
+## 5. The Real Bottleneck of PR Mode Today: From Finding to Being Usable by the Author
 
-现阶段 PR 链路可拆为 `Changed behavior → obligation → evidence candidates → context pack → model → evidence verifier → confidence gate → inline/summary → author action`。每一步都可能丢真阳性，并且“CI 全绿”不会暴露这一事实。
+The present PR pipeline can be broken down as `Changed behavior → obligation → evidence candidates → context pack → model → evidence verifier → confidence gate → inline/summary → author action`. Every step can lose true positives, and "all CI green" does not expose this fact.
 
-1. **Retrieval**：hunk identifiers 改进了 Fastify 的 C→T 搜索，Hit@3 4/24→20/24；然而相关基线集中一个高贡献文件，剔除后依然进步到 14/24，但仍不是全语言/跨服务保证。改善候选 recall 更应排在扩大模型调用之前。
-2. **Packing**：[#343 dogfood](https://github.com/Mira190/SpecGuard/pull/343#issuecomment-6243528183) 列出多个测试文件只看到部分文本；报告 `execution_complete=false`。这里的根因是证据传输/预算—not reasoning；把上下文丢失标 `unknown` 是对的，但应测损失发生比例与 top-risk 优先权。
-3. **Verification**：模型生成的合理故事可能引用“并非调用真实看到”的行。#335/#344 已加强 provenance，但要防将验证规则改成“只接受单文件局部缺陷”，使跨模块/间接调用类更易漏报。
-4. **Publishing**：fast tier 最多 3 条 inline，其余总结；combined 大 PR 的 10/24 delivered（隔离时 14/24，仓库记录）说明“模型找到了”和“用户第一屏看到了”不是同一事件。优化发送层比盲目拆更多模型 call 更直接。
-5. **Lifecycle**：旧发现 `not_observed` 并不等于 fixed；PR #345 的最新摘要有多个此前记录不再可观察。必须将 `addressed-by-validated-test`、`code-touched`、`still-present`、`unobserved`、`dismissed` 分开，任何修复率都不能把后几类自动算 addressed。
+1. **Retrieval**: hunk identifiers improved the C→T search in Fastify, Hit@3 4/24→20/24; however, the baseline set had one high-contributing file, and after removing it there was still progress to 14/24, but it is still not a guarantee across all languages/cross-service. Improving candidate recall should rank ahead of expanding model calls.
+2. **Packing**: [#343 dogfood](https://github.com/Mira190/SpecGuard/pull/343#issuecomment-6243528183) lists multiple test files where only part of the text was seen; the report has `execution_complete=false`. The root cause here is evidence transport/budget — not reasoning; marking context loss as `unknown` is right, but the proportion in which loss occurs and the top-risk priority should be measured.
+3. **Verification**: a plausible story generated by the model may cite lines "not actually seen by the call". #335/#344 have strengthened provenance, but beware of changing the verification rule into "accept only single-file local defects", which would make cross-module/indirect-call classes easier to miss.
+4. **Publishing**: the fast tier has at most 3 inline comments, the rest are summarized; the combined large-PR delivered 10/24 (14/24 in isolation, repo records), which shows that "the model found it" and "the user saw it on the first screen" are not the same event. Optimizing the delivery layer is more direct than blindly splitting more model calls.
+5. **Lifecycle**: an old finding being `not_observed` does not equal fixed; the latest summary of PR #345 has several previously recorded items that are no longer observable. `addressed-by-validated-test`, `code-touched`, `still-present`, `unobserved`, `dismissed` must be separated, and no fix rate may automatically count the latter classes as addressed.
 
-**强制 UX 原则**：若 `input/source/candidate/pack` 任一环节不完整，顶栏必须明确 `Reviewed X/Y behavior obligations; evidence cut for Z; verdict for affected criteria: UNKNOWN`。`No findings` 应当只代表“在确实审过的范围内暂无可发布发现”，不能被误解为“测试已经充分”。
+**Mandatory UX principle**: if any of `input/source/candidate/pack` is incomplete, the top bar must clearly state `Reviewed X/Y behavior obligations; evidence cut for Z; verdict for affected criteria: UNKNOWN`. `No findings` should only mean "no publishable findings for now within the scope that was actually reviewed", and must not be misread as "the tests are sufficient".
 
-## 6. Unknown unknown：从第一性原理新提出的高风险假说
+## 6. Unknown Unknowns: New High-Risk Hypotheses Raised from First Principles
 
-这些是**需要主动证伪的候选故障模式**，不是已证实 bug。P0 表示若成立将直接损害核心 shift-left 判断。
+These are **candidate failure modes that need to be actively falsified**, not confirmed bugs. P0 means that, if true, they would directly damage the core shift-left judgement.
 
-| 优先级 | 未知/风险假说 | 为什么可能骗过现有测试 | 最小证伪实验与成功门槛 |
+| Priority | Unknown / risk hypothesis | Why it might fool the existing tests | Minimal falsification experiment and success threshold |
 |---|---|---|---|
-| **P0** | **相关性谬误：#345 同块另一个值断言使目标弱断言被降级** | `expect(a.ok).toBeTruthy()` 与 `expect(text).toBe('Hello')` 可以彼此独立；“同块”不构成因果保护 | 同块不同 subject、不同参数、不同 branch 三种真缺口对照 + 真误报对照；前者 delivered recall 不得下降，后者误报须下降；否则只降措辞不压投递 |
-| **P0** | **错误的完备性量化：inventory=100% 却不含生成代码/配置/SQL/schema/外部契约/动态行为** | 分母由启发式清单自己定义，`100% of inventoried` 可能掩盖未纳入对象 | 每仓人工抽 50 个实际 changed behavior；比较 `discoverable / inventoried / reviewed / delivered` 四重分母；不识别的类别显示 excluded/unknown |
-| **P0** | **跨调用 finding 的 provenance 过强或过弱** | 同一行为跨多个 unit、共享测试或一条调用链；严格 own-file gate 可能删正确发现，不严格则幻觉通过 | 双向 mutation：跨 unit 真实缺口、伪造 other-call 引用；分别测 FP/FN，必须有拒绝理由可审计 |
-| **P0** | **实际完整片段 ≠ 语义测试完整** | 80 行窗口可能覆盖断言，却遗漏 setup、helper、fixture、beforeEach、参数表 | 构造断言在窗口内但断言前置 setup/fixture 在窗口外的样本；必须降级 UNKNOWN 或扩上下文；禁止判“fully verified” |
-| **P0** | **相同 CI 绿色但实际 review incomplete** | `fail_on_error` 对 unsure 不阻塞，用户可能只看 badge | 以 Actions consumer 视角抽样 20 次成功 run，统计 complete/unsure/failed；两个明确独立 check + 真实 UI canary |
-| **P0** | **需求 oracle 污染（C=T≠R）** | 需求没变，代码和测试一起改错；传统 code+test reviewer 可能被同向测试误导 | 需求旧值锁定、代码/测试同步改为错误新值，所有 unit 绿；必须报 requirement contradiction |
-| **P0** | **要求只改变，或 PR issue 未链接时掉需求** | 纯文档 PR 或跨仓外部需求链接；PR 模式如果只看 source changes，默认“nothing to review” | 需求-only PR + linked issue + GitHub doc only + 非 GitHub doc URL，逐条验收模型输入和未读源告警 |
-| **P1** | **覆盖率/变异测试数据被错误绑定到 commit** | coverage_file 在同 job 生成，但不是目标 HEAD、合并提交与 PR head 不同；覆盖“有”可能错认 | 在 coverage 文件内附源 SHA/hash；运行 `head`/`merge` 两版本对照；SHA mismatch 降为 unavailable |
-| **P1** | **历史需求偏差误归因当次 PR** | R 在 baseline 已旧，当前 PR 改了邻近模块；差分因果判断不易 | base/head 独立判 R↔C；baseline 已有问题标 pre-existing，不算新 finding 或作者 fix-through |
-| **P1** | **模型版/采样对结果敏感** | Kite 8 种子同框版本从 3/8→2/8；即使全覆盖也变 | 固定 input manifest 每案重复 5–10 次，report pass@1/variance、model/tier、CI/成本分布；比较不是单次 run |
-| **P1** | **Go/Python 自定义 assertion helper、DI/public entry 被误判无测试** | 字面匹配/内置 assertion regex 看不到辅助函数与动态注册 | 10 个 helper、reflection、controller/public API 实例，人工标引 verified edge，测 H@k+校验后的 false positive |
-| **P1** | **一个弱测试与另一个严格测试的语义等价关系被误判** | 同 test / same file / same name 不代表相同输入/输出/分支 | 最小程序+mutation：让目标输出错而 sibling 严格断言仍 pass；如果会 pass，不得降级 |
-| **P1** | **GitHub token/secret/artifact 信任边界** | 公共中心仓、私有目标、来自 PR head 的任意文本、debug artifact；prompt injection 不能代替安全隔离 | canary：未受信任 PR 写入“忽略所有发现”文本、敏感文件 marker、防外部 URL 注入、fork 限权、artifact 下载 ACL；证据隔离验证 |
-| **P1** | **扫完全部耗时过久而失去提前量** | PR 可能已合并/QA 已开始；nest 整仓 12 分钟不一定早于反馈窗口 | 记录 PR created/pushed→bot posted→author viewed/changed→QA started；P50/P95 与基准 CI 对照 |
-| **P2** | **多次扫描对重复结果过度确认** | 同一模型、同一切片、同一 bug 的两次结果不是独立证据 | 跨次使用独立模型/证据源；重复确认仅是稳定性，不是正确性；人工复核后才称 confirmed gap |
-| **P2** | **评级指标 Goodhart 化** | 优化 `forced`、CI success、static lead count 会奖励少报告/少匹配 | 每次优化同时报告 precision, recall, UNKNOWN rate, coverage, review latency, cost, actionable yield；任何指标不能单独优化 |
+| **P0** | **Correlation fallacy: another value assertion in the same block in #345 causes the target weak assertion to be downgraded** | `expect(a.ok).toBeTruthy()` and `expect(text).toBe('Hello')` can be independent of each other; "same block" does not constitute causal protection | Controls with three kinds of real gaps (same block but different subject, different parameter, different branch) + a real false-positive control; delivered recall must not fall for the former, false positives must fall for the latter; otherwise only the wording is lowered and delivery is not suppressed |
+| **P0** | **Wrong completeness quantification: inventory=100% yet it does not include generated code/config/SQL/schema/external contracts/dynamic behavior** | The denominator is defined by the heuristic inventory itself, so `100% of inventoried` may hide objects that were not included | For each repo, manually sample 50 actual changed behaviors; compare the four denominators `discoverable / inventoried / reviewed / delivered`; show unrecognized categories as excluded/unknown |
+| **P0** | **Provenance of cross-call findings is too strong or too weak** | The same behavior spans multiple units, a shared test, or a call chain; a strict own-file gate may delete correct findings, while a lax one lets hallucinations through | Two-way mutation: a genuine cross-unit gap, and a forged other-call citation; measure FP/FN separately, rejection reasons must be auditable |
+| **P0** | **An actually complete snippet ≠ semantically complete tests** | An 80-line window may cover the assertion but miss the setup, helper, fixture, beforeEach, parameter table | Construct samples where the assertion is inside the window but the setup/fixture preceding the assertion is outside it; must be downgraded to UNKNOWN or the context expanded; "fully verified" is forbidden |
+| **P0** | **Same green CI but the review is actually incomplete** | `fail_on_error` does not block on unsure, and users may only look at the badge | From the Actions consumer's view, sample 20 successful runs and count complete/unsure/failed; two clearly independent checks + a real UI canary |
+| **P0** | **Requirement oracle contamination (C=T≠R)** | The requirement did not change, code and tests were changed wrongly together; a traditional code+test reviewer may be misled by tests that agree with the code | Lock the old requirement value, change code/tests in sync to a wrong new value so all units are green; a requirement contradiction must be reported |
+| **P0** | **Requirement is only changed, or the requirement is dropped when the PR issue is not linked** | Docs-only PRs or external requirement links across repos; if PR mode only looks at source changes, the default is "nothing to review" | Requirement-only PR + linked issue + GitHub doc only + non-GitHub doc URL; accept the model input and unread-source warnings item by item |
+| **P1** | **Coverage/mutation-test data is wrongly bound to a commit** | The coverage_file is generated in the same job but is not for the target HEAD, and the merge commit differs from the PR head; "covered" may be mistaken | Attach the source SHA/hash to the coverage file; run `head`/`merge` for two-version comparison; SHA mismatch is downgraded to unavailable |
+| **P1** | **Historical requirement deviation misattributed to the current PR** | R was already stale at the baseline, and the current PR changed an adjacent module; differential causal judgement is not easy | Judge R↔C independently on base/head; mark baseline-existing problems as pre-existing, not counted as a new finding or as author fix-through |
+| **P1** | **Results are sensitive to model version/sampling** | The Kite 8-seed same-frame version went from 3/8→2/8; it changes even with full coverage | Repeat each case 5–10 times with a fixed input manifest, report pass@1/variance, model/tier, CI/cost distribution; compare more than a single run |
+| **P1** | **Go/Python custom assertion helpers, DI/public entry misjudged as untested** | Literal matching / built-in assertion regex cannot see helper functions and dynamic registration | 10 instances of helper, reflection, controller/public API; manually mark verified edges, measure H@k + false positives after verification |
+| **P1** | **Semantic equivalence between a weak test and another strict test is misjudged** | Same test / same file / same name does not mean same input/output/branch | Minimal program + mutation: make the target output wrong while the sibling strict assertion still passes; if it would pass, it must not be downgraded |
+| **P1** | **GitHub token/secret/artifact trust boundary** | Public central repo, private target, arbitrary text from the PR head, debug artifacts; prompt injection cannot substitute for security isolation | Canary: an untrusted PR writes "ignore all findings" text, sensitive-file markers, guard against external URL injection, fork permission limits, artifact download ACL; evidence isolation verification |
+| **P1** | **Scanning everything takes so long that lead time is lost** | The PR may already be merged / QA already started; a 12-minute whole-repo nest run is not necessarily earlier than the feedback window | Record PR created/pushed→bot posted→author viewed/changed→QA started; P50/P95 against a baseline CI |
+| **P2** | **Repeated scans over-confirm repeated results** | Two results from the same model, same slice, same bug are not independent evidence | Use independent models/evidence sources across runs; repeated confirmation is only stability, not correctness; call it a confirmed gap only after human review |
+| **P2** | **Grading metrics becoming Goodhart'd** | Optimizing `forced`, CI success, static lead count rewards under-reporting / under-matching | Each optimization reports precision, recall, UNKNOWN rate, coverage, review latency, cost, actionable yield together; no metric may be optimized alone |
 
-最容易被忽视的是**counterfactual**：判断“测试足够强”的最低条件，不是测试名字像需求，而是“若行为以某个合理方式出错，这些断言是否会失败”。把每条高风险义务关联 1–3 个反例（mutant / counterexample）是比增加 prompt token 更有理论上限的路径。但需注意：mutation 也只能证明具体错误模式被杀死，不能证明全行为正确。
+The most easily overlooked is the **counterfactual**: the minimum condition for judging "the tests are strong enough" is not that the test name resembles the requirement, but "if the behavior goes wrong in some reasonable way, would these assertions fail". Associating each high-risk obligation with 1–3 counterexamples (mutant / counterexample) is a path with a higher theoretical ceiling than adding prompt tokens. But note that mutation can also only prove that specific error patterns were killed; it cannot prove that all behavior is correct.
 
-## 7. 具体优化架构：以证据为先、模型为后
+## 7. Concrete Optimization Architecture: Evidence First, Model Second
 
-### 7.1 将 review 变为 evidence graph，而非一次性文字生成
+### 7.1 Make the Review an Evidence Graph Rather Than One-Shot Text Generation
 
-建议统一最小数据结构（不同语言用 adapter）：
+We recommend a unified minimal data structure (with adapters for different languages):
 
 ```text
 Requirement R {id, text, source_url, source_sha, effective_version}
@@ -204,121 +204,121 @@ ReviewFact {obligation_id, model_call_id, visible_spans, evidence_state,
             verdict, downgrade_reason_id, delivered_channel, version}
 ```
 
-以图边 `R↔B↔T` 为核心，可以支持跨文件/跨包的真实测试保护，而不是用同名测试或 same block 作为“存在覆盖”的替身。确定性层负责 fact：确实没匹配、测试 contains 何断言、精确 span、谁执行过；模型层负责 judgement：这些 fact 是否满足行为 oracle；publisher 负责不要把低置信推成确定结论。
+With the graph edges `R↔B↔T` at the core, real test protection across files/packages can be supported, rather than using a same-named test or the same block as a stand-in for "coverage exists". The deterministic layer is responsible for facts: what truly did not match, which assertions the test contains, the exact span, who executed it; the model layer is responsible for judgement: whether these facts satisfy the behavior oracle; the publisher is responsible for not pushing low confidence into a definitive conclusion.
 
-### 7.2 先区分三类缺口，减少错误承诺
+### 7.2 First Distinguish Three Kinds of Gaps to Reduce Wrong Commitments
 
-1. **No test evidence found**：检索未找到证据（通常静态 lead，**不是 missing test**）。
-2. **Test does not constrain changed behavior**：有匹配测试，但特定 mutant/counterexample 仍会 pass（更高价值）。
-3. **Requirement mismatch**：已有需求与代码/测试实际验证矛盾（最高价值，哪怕 unit tests 全绿）。
+1. **No test evidence found**: retrieval found no evidence (usually a static lead, **not a missing test**).
+2. **Test does not constrain changed behavior**: there is a matching test, but a specific mutant/counterexample would still pass (higher value).
+3. **Requirement mismatch**: the existing requirement contradicts what the code/tests actually verify (highest value, even if all unit tests are green).
 
-UI 建议主视图按 `Requirement contradictions → High-confidence missing/weak unit obligations → Pushdown opportunities → Evidence gaps / unknown`，每项只展示可操作证据与最小新测试案例（inputs、expected、为何当前断言会通过）。“规则违规”需要独立显示 `standards applicable / check executed / result`，不可只说“coding standard confirmed”。
+The recommended main UI view is `Requirement contradictions → High-confidence missing/weak unit obligations → Pushdown opportunities → Evidence gaps / unknown`, with each item showing only actionable evidence and the smallest new test case (inputs, expected, and why the current assertions would pass). "Rule violations" need a separate display of `standards applicable / check executed / result`, and must not just say "coding standard confirmed".
 
-### 7.3 避免对全仓无 diff 场景投入过多模型调用
+### 7.3 Avoid Spending Too Many Model Calls on the Whole-Repo No-Diff Scenario
 
-全仓与 PR 是两种根本不同的推理问题：PR 有明确 ΔC/ΔR，能看到删掉的断言；全仓要从巨大代码空间推断**缺少什么**，属于开放世界信息不完备问题。建议全仓采用静态候选→小规模模型复核→周期状态；让模型只审 `(risk × uncertainty × evidence availability)` 最高的条目。PR 采用 Δ 驱动、精确检索、高价值 counterexample；把关键回归/变异/历史 bug replay 放在优先路径。
+Whole-repo and PR are two fundamentally different reasoning problems: a PR has a clear ΔC/ΔR and can see deleted assertions; the whole repo has to infer **what is missing** from a huge code space, which is an open-world problem of incomplete information. We recommend that the whole repo use static candidates → small-scale model review → periodic state; let the model review only the items with the highest `(risk × uncertainty × evidence availability)`. PR should use Δ-driven, exact retrieval, and high-value counterexamples; put key regression/mutation/historical-bug replay on the priority path.
 
-### 7.4 与现有 CI 的协作而非重复
+### 7.4 Cooperate With the Existing CI Rather Than Duplicate It
 
-- `unit coverage`: 作为执行证据和风险优先级，不代表 oracle 正确；标注 coverage report SHA。
-- `mutation`: 对重点义务验证 counterexample 的可杀性；不必每个 PR 运行全仓 mutation。
-- `lint/format/typecheck`: 直接消费 CI check 结果，模型不重复判断 formatter 已知道的事。
-- `integration/e2e`: 明确哪些网络/合同/兼容性断言必须保留，哪些纯输入输出逻辑能下沉；不鼓励“以 unit 替代端到端”。
-- `historical bugs`: 用曾经逃过 CI 的真实 bug 做 SZZ PR replay，比人工设计种子更接近商业目标。
+- `unit coverage`: serves as execution evidence and risk priority, and does not imply the oracle is correct; label the coverage report SHA.
+- `mutation`: verify the killability of counterexamples for key obligations; there is no need to run whole-repo mutation on every PR.
+- `lint/format/typecheck`: consume the CI check results directly; the model should not repeat what the formatter already knows.
+- `integration/e2e`: state clearly which network/contract/compatibility assertions must be kept and which pure input-output logic can be pushed down; do not encourage "replacing end-to-end with unit".
+- `historical bugs`: using real bugs that once escaped CI for an SZZ PR replay is closer to the commercial goal than hand-designed seeds.
 
-## 8. 行动优先级：每个 PR 必须附反证和退出条件
+## 8. Action Priorities: Every PR Must Carry a Counter-Proof and Exit Conditions
 
-### P0：下一个工作周期，不继续泛化宣传
+### P0: Next Work Cycle, No More Generalized Promotion
 
-| 任务 | 改动点 | 验收（可执行） | 不通过时 |
+| Task | Change points | Acceptance (executable) | If it fails |
 |---|---|---|---|
-| **P0-A 评估 #345 负收益风险** | `src/audit-post.js` `pinnedInTest` | 至少 20 个阴/阳例，覆盖不同 assertion subject / call args / branches / fixture / anchored regex，盲标 delivered FP/FN | 保留特例白名单，撤销广义“同 test 有别的 pin 值即可降级” |
-| **P0-B 可见性/覆盖账本** | `src/audit-units.js`, `src/engines/claude-api.js`, publisher | 产出每个 unit 的 `candidate tests / packed tests / visible full-or-slices / notWhole / verdict`; 守恒对账；对 #343 前后取样反例 | forced 指标不允许单独作为发布成功信号 |
-| **P0-C Release gate** | CI + eval harness | 固定 SHA 的 8 Kite + 40 外仓种子 + 真实正/负 PR，产出 raw/delivered TP/FP/FN + cut rate、准入失败 | 阻止无验证的语义门控发布；CI pass 仅证明代码健康 |
-| **P0-D 编码规范目标验收** | integration eval fixtures | 真正违规与已配置 lint 各 2–3 个 PR，规则适用/未适用/未执行均可辨 | coding standard 在 scorecard 保留未证明 |
-| **P0-E Review status** | summary/check UX | 独立 `engine_result=success`、`evidence=partial`；人工在 GitHub PR/Actions 两处能看懂，无“绿色=全覆盖”歧义 | 不能将 inconclusive 标为通过质量门禁 |
+| **P0-A Assess #345 negative-benefit risk** | `src/audit-post.js` `pinnedInTest` | At least 20 negative/positive examples, covering different assertion subject / call args / branches / fixture / anchored regex, with blind labelling of delivered FP/FN | Keep a special-case whitelist, and revoke the broad "downgrade whenever the same test has another pin value" |
+| **P0-B Visibility/coverage ledger** | `src/audit-units.js`, `src/engines/claude-api.js`, publisher | Produce per unit `candidate tests / packed tests / visible full-or-slices / notWhole / verdict`; conservation reconciliation; sample counterexamples before and after #343 | The forced metric must not be used alone as a release-success signal |
+| **P0-C Release gate** | CI + eval harness | A fixed-SHA set of 8 Kite + 40 external-repo seeds + real positive/negative PRs, producing raw/delivered TP/FP/FN + cut rate, admission failures | Block release of semantic gating without verification; CI pass only proves code health |
+| **P0-D Coding-standard goal acceptance** | integration eval fixtures | 2–3 PRs each for real violations and configured lint, with applicable / not applicable / not executed all distinguishable | Coding standard stays unproven in the scorecard |
+| **P0-E Review status** | summary/check UX | Independent `engine_result=success`, `evidence=partial`; a human can understand it in both GitHub PR/Actions views, with no "green = full coverage" ambiguity | Inconclusive must not be labelled as passing the quality gate |
 
-### P1：建立跨仓和跨语言可迁移质量
+### P1: Build Cross-Repo and Cross-Language Transferable Quality
 
-- **测试检索 Recall@k 基准**：真实 Nest/Fastify/Flask/Cobra/Hono 各抽定量行为，直接调用匹配 API 前后对比 `hit@3`, `all-required`, `unread`, false matches；每个 FP 给出真实保护路径。若召回下降，不允许用减少 forced 掩盖它。
-- **大 PR delivery 研究**：同一固定输入在 `inline cap 3/10`、高低置信、单次/分块条件下交付端 recall 与 reviewer cognitive load；先解决被压到 Details 的高价值发现，再花钱拆调用。
-- **至少两次真实 Copilot 端到端 canary**：用公司实际授权的 token/org billing；需要核验 model、权限、成本、json repair、发布、失败分类，而非只测试 adapter mock。
-- **Requirements source adapters**：对 GitHub 之外的 Confluence/SharePoint/Docs 链接，提供明示的可信抓取机制或要求提前导入 snapshot，包含版本/ACL；不可默默忽略。当前手动表单输入只支持能从 GitHub 访问的文档源。
-- **独立人工标签**：两名审阅者不看模型结论来源，标注“真实测试义务/可行动/值得 unit/已有间接测试/不确定”，冲突仲裁、计算一致性。
+- **Test-retrieval Recall@k benchmark**: sample a fixed number of behaviors from each of the real Nest/Fastify/Flask/Cobra/Hono, and compare `hit@3`, `all-required`, `unread`, false matches before and after the matching API is called directly; give every FP the real protection path. If recall falls, reducing forced must not be allowed to mask it.
+- **Large-PR delivery study**: with the same fixed input under `inline cap 3/10`, high/low confidence, and single-call/chunked conditions, measure delivery-side recall and reviewer cognitive load; first solve the high-value findings that are pushed down into Details, then spend money on splitting calls.
+- **At least two real Copilot end-to-end canaries**: use the token/org billing actually authorized by the company; the model, permissions, cost, json repair, publishing and failure classification must be verified, not just the adapter mock.
+- **Requirements source adapters**: for Confluence/SharePoint/Docs links outside GitHub, provide an explicit trusted-fetch mechanism or require importing a snapshot in advance, including version/ACL; they must not be silently ignored. Currently the manual form input supports only document sources accessible from GitHub.
+- **Independent human labels**: two reviewers who do not see the source of the model's conclusion label "real test obligation / actionable / worth a unit test / already has indirect test / uncertain", with conflict arbitration and agreement computed.
 
-### P2：产品化、性价比与组织采用
+### P2: Productization, Cost-Effectiveness, and Organizational Adoption
 
-- 把 unit/requirement/call/source manifest 做增量缓存，以 commit/tree/hash 失效，不让全仓每 push 重扫；每次报告 cache hit、material delta 和漏评边界。
-- 对异常场景（API throttling、超时、output invalid、scan interruptions）保留上次已确认结论但标为 stale，绝不假装新审通过；确保 status/check 消费端区分“失败”“未审”。
-- 做真实开发者 A/B 或交叉试点，测被提前修复的真实缺陷、QA 被退回次数、作者耗时、噪声投诉、token 消耗；仅比较模型 tokens 不是最终目标。
+- Make an incremental cache of the unit/requirement/call/source manifest, invalidated by commit/tree/hash, so the whole repo is not rescanned on every push; each report states cache hits, material delta, and the boundaries that were missed.
+- For abnormal scenarios (API throttling, timeouts, invalid output, scan interruptions), retain the last confirmed conclusion but mark it stale, and never pretend that a new review passed; ensure that status/check consumers distinguish "failed" from "not reviewed".
+- Run real developer A/B or crossover pilots, measuring real defects fixed early, the number of times QA sent work back, author time, noise complaints, and token consumption; comparing model tokens alone is not the final goal.
 
-## 9. 建议使用的评测协议与最低验收门槛
+## 9. Recommended Evaluation Protocol and Minimum Acceptance Thresholds
 
-当前没有足够数据制定绝对“合格 precision”。建议以下 **预注册试点门槛（目标，不是现状）**：
+There is currently not enough data to set an absolute "acceptable precision". We recommend the following **pre-registered pilot thresholds (targets, not the current state)**:
 
-| 指标 | 精确定义 | 建议试点门槛 |
+| Metric | Precise definition | Suggested pilot threshold |
 |---|---|---|
-| Delivered actionable precision | 人工判真正值得处理的已送达发现 / 全部已送达可行动发现 | ≥ 70%，并报告 95% CI 与分语言/类型结果 |
-| Delivered recall | 被送达的真实缺口 / 事先独立确认的真实缺口（包括运行失败） | ≥ 70% 正样本种子；真实回放基线逐步设定，不得用种子冒充生产值 |
-| FN silent rate | 真缺口未发现在 summary/inline 且也未标 UNKNOWN 的比例 | 趋近 0；每项 gate 优化 FN 不上升 |
-| Evidence completeness | 对纳入的 obligation 真正收齐必需 R/B/T spans 的比例 | 报告率 100%；比例本身单独测量，不能用 inventory coverage 代替 |
-| Run reliability | PR/scan 预期执行中确实完成且可追溯状态的次数 / 预期执行次数 | ≥ 99% 运行分类准确（从原始 jobs/summary 验证） |
-| Fix-through (verified) | 作者在 QA 前新增/修改测试且新测试能杀死对应 counterexample 的发现比例 | 先建立 ≥ 30 个真人作者事件的基线，再制定门槛 |
-| Time-to-feedback | push→可见结果 P50/P95；与 QA 接手时间比较 | PR P95 需符合目标团队时效，且在 QA 前送达 |
-| Cost per *validated* finding | 总模型/runner/人工分诊成本 / 人工确认并提前修复的缺口数 | 逐月下降；不得只优化 cost/run |
+| Delivered actionable precision | Delivered findings that a human judged truly worth handling / all delivered actionable findings | ≥ 70%, and report the 95% CI and results by language/type |
+| Delivered recall | Real gaps that were delivered / real gaps independently confirmed in advance (including run failures) | ≥ 70% on positive-sample seeds; for real-replay baselines set gradually, and seeds must not be passed off as production values |
+| FN silent rate | Proportion of real gaps that were neither found in summary/inline nor marked UNKNOWN | Approaches 0; FN must not rise with any gate optimization |
+| Evidence completeness | Proportion of included obligations for which the required R/B/T spans were truly collected | Reporting rate 100%; the proportion itself is measured separately and cannot be replaced by inventory coverage |
+| Run reliability | Number of times a PR/scan expected execution actually completed with a traceable status / number of expected executions | ≥ 99% run-classification accuracy (verified from the raw jobs/summary) |
+| Fix-through (verified) | Proportion of findings where the author added/modified tests before QA and the new tests can kill the corresponding counterexample | First establish a baseline of ≥ 30 human-author events, then set a threshold |
+| Time-to-feedback | push→visible result P50/P95; compared with the QA takeover time | PR P95 must meet the target team's timeliness, and be delivered before QA |
+| Cost per *validated* finding | Total model/runner/human triage cost / number of gaps confirmed by humans and fixed early | Falling month by month; cost/run must not be the only thing optimized |
 
-**必须采用配对实验：** 在相同 repository SHA、gold truth、预算、模型/tier 和上下文上测试 baseline 与 candidate；模型有波动时重复多次；同时看 FN、FP、unknown 与交付渠道。禁止用“本版本生成了更多 leads”来证明“测试缺口抓得更准”。把原来因 eval 构造失败而生成 `zero-diff` 的案例重新审定（[#333](https://github.com/Mira190/SpecGuard/pull/333) 已修工具），历史分数要注明不可直比。
+**A paired experiment must be used:** test baseline and candidate on the same repository SHA, gold truth, budget, model/tier and context; repeat multiple times when the model fluctuates; look at FN, FP, unknown and delivery channel together. It is forbidden to use "this version generated more leads" to prove "test gaps are caught more accurately". Re-adjudicate the cases that originally produced `zero-diff` because of eval construction failures ([#333](https://github.com/Mira190/SpecGuard/pull/333) has fixed the tooling), and note that historical scores are not directly comparable.
 
-## 10. 对 #345 的专门批判性设计复审
+## 10. A Dedicated Critical Design Re-Review of #345
 
-本轮 #345 是最值得优先关注的**潜在负优化**。它提出 `pinnedInTest(lines, citedLine)`：以测试声明边界扫描 same test；如果找到任意被认定为精确的断言，则把弱断言 finding 降为 low confidence；对 `CALL_SUBJECT` 的被质疑行作例外；增加 `NO_GAP` 对“not a gap”的识别。正动机明确：原先 Hono/Flask 有“test 其实已经 pin value”的误报。问题是：
+This round, #345 is the **potential negative optimization** most worth prioritizing. It introduces `pinnedInTest(lines, citedLine)`: scan the same test by test-declaration boundaries; if any assertion deemed exact is found, downgrade the weak-assertion finding to low confidence; make an exception for the questioned line of `CALL_SUBJECT`; and add recognition of "not a gap" via `NO_GAP`. The positive motivation is clear: previously Hono/Flask had false positives where "the test actually already pins the value". The problem is:
 
 ```js
 it('checkout', () => {
-  expect(result.success).toBeTruthy();   // 需要测试 true/false 的语义
-  expect(receipt.label).toBe('Paid');    // 只钉住另一个字段
+  expect(result.success).toBeTruthy();   // need to test the semantics of true/false
+  expect(receipt.label).toBe('Paid');    // only pins another field
 });
 ```
 
-若 bug 令 `success=true` 且 receipt.label 仍为 `Paid`，第二个严格断言无法证伪前一个行为缺陷。此时用“same test pins a value”降级并非 sound。更复杂情况是两条独立 API 调用、不同 branch、fixture 初始化与表格驱动场景；当前 `CALL_SUBJECT` 例外只覆盖部分直接调用表达式。**同一个 test block 是组织结构，不是因果证据。**
+If a bug makes `success=true` while receipt.label is still `Paid`, the second strict assertion cannot falsify the defect in the earlier behavior. Downgrading with "the same test pins a value" is then not sound. More complicated cases are two independent API calls, different branches, fixture initialization, and table-driven scenarios; the current `CALL_SUBJECT` exception covers only some direct call expressions. **The same test block is organizational structure, not causal evidence.**
 
-建议更安全的策略：只有能展示同一行为的 data/control-dependency 或同一输入输出的严格 oracle 时才降级；否则仅在详情中说明“同测试块还存在其他断言，人工确认是否约束此行为”，**不改变 delivered 级别**。先用三个真实发现保持 recall 的控制组，再做多语言反例和 5 仓 before/after 盲标。如果 #345 在降低 FP 的同时引入不可接受 FN，应缩小规则而非用更长正则修补。
+A safer strategy is recommended: downgrade only when a data/control dependency of the same behavior, or a strict oracle on the same input and output, can be shown; otherwise only note in the details that "other assertions also exist in the same test block, a human should confirm whether they constrain this behavior", **without changing the delivered level**. First use three real findings as a control group that preserves recall, then do multi-language counterexamples and a 5-repo before/after blind labelling. If #345 introduces unacceptable FN while reducing FP, narrow the rule rather than patching it with a longer regex.
 
-`NO_GAP` 文本判断也属于弱语义信号：模型写“not a gap in legacy but new path is a gap”已被该 PR 排除误删，但更多否定/转述上下文仍可能误触。建议改为模型输出显式 `verdict: gap | no_gap | unsure` 并由 schema、证据校验，而不让自由文本触发关键 gate。任何 LLM 自我否定的字符串都不能替代评审证据。
+The `NO_GAP` text judgement is also a weak semantic signal: the case where the model writes "not a gap in legacy but new path is a gap" has been excluded from wrongful deletion by that PR, but more negation/paraphrase contexts may still trigger it by mistake. We recommend changing to the model outputting an explicit `verdict: gap | no_gap | unsure`, validated by schema and evidence, rather than letting free text trigger a critical gate. No string in which the LLM negates itself can replace review evidence.
 
-## 11. 建议的端到端用户体验（Shift Left 真正落地）
+## 11. Recommended End-to-End User Experience (Where Shift Left Truly Lands)
 
-**PR 作者收到的首屏**应回答：
+**The first screen the PR author receives** should answer:
 
-- 哪个 requirement/changed behavior 最可能出问题？
-- 当前哪一个测试（含路径/行/输入与断言）没有约束它？
-- 给出一个能让当前测试依然通过但行为错误的反例；建议补的 unit assertion 应钉哪个值？
-- 是否确实阅读了相关测试/规范；未读/截断/未匹配的是什么？
-- 是本 PR 新引入、还是 pre-existing；属于 unit、integration 或更高层？
+- Which requirement/changed behavior is most likely to go wrong?
+- Which current test (with path/line/input and assertion) does not constrain it?
+- Give a counterexample that would let the current tests still pass while the behavior is wrong; which value should the suggested new unit assertion pin?
+- Were the relevant tests/specs actually read; what was unread/truncated/unmatched?
+- Is this newly introduced by this PR or pre-existing; is it a unit, integration, or higher-level matter?
 
-在 Actions 手动全仓模式：第一屏只给 `scope coverage / evidence coverage / verified high-confidence issues / leads / unknowns` 5 项，后面是可下载 JSON/CSV 的 per-unit ledger。不要默认把几十个 `unreferenced_export` 作为“漏单测”推给其他团队；应提供“review candidate + how to check”的明确行动建议。手动 one-off `scan_issue=none` 必须标注未跨次确认。
+In Actions manual whole-repo mode: the first screen gives only 5 items, `scope coverage / evidence coverage / verified high-confidence issues / leads / unknowns`, followed by a per-unit ledger downloadable as JSON/CSV. Do not by default push dozens of `unreferenced_export` items to other teams as "missing unit tests"; provide a clear action suggestion of "review candidate + how to check". A manual one-off `scan_issue=none` must be labelled as not confirmed across runs.
 
-## 12. 结论：什么才是下一次可以宣布的里程碑
+## 12. Conclusion: What Is the Next Milestone That Can Be Announced
 
-**现在可以合理宣布：** SpecGuard 已在 PR 和跨仓扫描两个入口提供前置测试证据审查；全仓一次 run 的分段执行、预算和可观察性较 10 月 17 日早期明显改善；#343 对 `unsure` 误归因有实测的大幅修正；主线自动化测试健康。
+**What can reasonably be announced now:** SpecGuard already provides pre-emptive test-evidence review at two entry points, PR and cross-repo scan; the segmented execution, budget, and observability of a single whole-repo run are markedly improved compared with early October 17; #343 has a measured large correction of `unsure` misattribution; mainline automated tests are healthy.
 
-**现在不能合理宣布：** “已证明让 QA 工作量下降”“扫描 100% 就意味着全部测试充分”“模型能可靠发现复杂第三方项目遗漏的 unit tests”“近期每次 gate 变化都是正优化”“#345 已落地主线”。
+**What cannot reasonably be announced now:** "proven to reduce QA workload", "100% scanned means all tests are sufficient", "the model can reliably find the unit tests missing from complex third-party projects", "every recent gate change is a positive optimization", "#345 has landed on the mainline".
 
-**单一最重要的下个里程碑：** 在固定真实 PR/SZZ 回放 + 五仓人工标注 + 受控 counterexample 集上，建立按 `source→candidate→packed evidence→model→verified→delivered→author fixed` 每一层的损失账本，然后证明一个优化在 **delivered recall 不降**的情况下显著提高 actionable precision 或缩短 QA 前的反馈周期。届时才可把“Shift Left 机制”升级为“Shift Left 效果”。
+**The single most important next milestone:** on fixed real PR/SZZ replay + five-repo human labelling + a controlled counterexample set, establish a loss ledger for each layer of `source→candidate→packed evidence→model→verified→delivered→author fixed`, and then prove that an optimization significantly raises actionable precision or shortens the feedback cycle before QA **without lowering delivered recall**. Only then can "Shift Left mechanism" be upgraded to "Shift Left effect".
 
 ---
 
-## 附录 A：核心直接证据（固定 URL，便于复核）
+## Appendix A: Core Direct Evidence (fixed URLs, for easy re-checking)
 
-1. **主线、CI 与产品配置**：[`main 08d2c5b`](https://github.com/Mira190/SpecGuard/commit/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c)；[CI run 39085373622](https://github.com/Mira190/SpecGuard/actions/runs/39085373622)；[`ci.yml`](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/.github/workflows/ci.yml)；[`action.yml`](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/action.yml)；[manual workflow](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/.github/workflows/specguard-run.yml)。
-2. **最新重要 PR**：[#329](https://github.com/Mira190/SpecGuard/pull/329)、[#333](https://github.com/Mira190/SpecGuard/pull/333)、[#335](https://github.com/Mira190/SpecGuard/pull/335)、[#336](https://github.com/Mira190/SpecGuard/pull/336)、[#340](https://github.com/Mira190/SpecGuard/pull/340)、[#341](https://github.com/Mira190/SpecGuard/pull/341)、[#342](https://github.com/Mira190/SpecGuard/pull/342)、[#343](https://github.com/Mira190/SpecGuard/pull/343)、[#344](https://github.com/Mira190/SpecGuard/pull/344)、[开放 #345](https://github.com/Mira190/SpecGuard/pull/345)。
-3. **真实评价与局限**：[`third-party-scan-eval`](https://github.com/Mira190/SpecGuard/blob/main/docs/third-party-scan-eval-2026-10-17.md)；[`goal-assessment`](https://github.com/Mira190/SpecGuard/blob/main/docs/goal-assessment-2026-10-17.md)；[`goal-first-principles`](https://github.com/Mira190/SpecGuard/blob/main/docs/goal-first-principles.md)；[`latest-pr-actions-shift-left-followup`](https://github.com/Mira190/SpecGuard/blob/main/docs/latest-pr-actions-shift-left-followup-2026-10-17.md)。
-4. **独立运行/发布证据**：[#343 真实分支 runs 汇总](https://github.com/Mira190/SpecGuard/pull/343)；[#343 incomplete dogfood summary](https://github.com/Mira190/SpecGuard/pull/343#issuecomment-6243528183)；[#345 incomplete dogfood summary](https://github.com/Mira190/SpecGuard/pull/345#issuecomment-6243678817)；[手动 run 39035605423](https://github.com/Mira190/SpecGuard/actions/runs/39035605423)。
-5. **实现定位**：[`src/audit-units.js` — slices/cost/pack/risk](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/src/audit-units.js)；[`src/audit-post.js` — provenance/gates/cuts](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/src/audit-post.js)；[`src/engines/claude-api.js`](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/src/engines/claude-api.js)。
+1. **Mainline, CI and product configuration**: [`main 08d2c5b`](https://github.com/Mira190/SpecGuard/commit/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c); [CI run 39085373622](https://github.com/Mira190/SpecGuard/actions/runs/39085373622); [`ci.yml`](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/.github/workflows/ci.yml); [`action.yml`](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/action.yml); [manual workflow](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/.github/workflows/specguard-run.yml).
+2. **Latest important PRs**: [#329](https://github.com/Mira190/SpecGuard/pull/329), [#333](https://github.com/Mira190/SpecGuard/pull/333), [#335](https://github.com/Mira190/SpecGuard/pull/335), [#336](https://github.com/Mira190/SpecGuard/pull/336), [#340](https://github.com/Mira190/SpecGuard/pull/340), [#341](https://github.com/Mira190/SpecGuard/pull/341), [#342](https://github.com/Mira190/SpecGuard/pull/342), [#343](https://github.com/Mira190/SpecGuard/pull/343), [#344](https://github.com/Mira190/SpecGuard/pull/344), [open #345](https://github.com/Mira190/SpecGuard/pull/345).
+3. **Real evaluation and limitations**: [`third-party-scan-eval`](https://github.com/Mira190/SpecGuard/blob/main/docs/third-party-scan-eval-2026-10-17.md); [`goal-assessment`](https://github.com/Mira190/SpecGuard/blob/main/docs/goal-assessment-2026-10-17.md); [`goal-first-principles`](https://github.com/Mira190/SpecGuard/blob/main/docs/goal-first-principles.md); [`latest-pr-actions-shift-left-followup`](https://github.com/Mira190/SpecGuard/blob/main/docs/latest-pr-actions-shift-left-followup-2026-10-17.md).
+4. **Independent run/publishing evidence**: [#343 real branch runs summary](https://github.com/Mira190/SpecGuard/pull/343); [#343 incomplete dogfood summary](https://github.com/Mira190/SpecGuard/pull/343#issuecomment-6243528183); [#345 incomplete dogfood summary](https://github.com/Mira190/SpecGuard/pull/345#issuecomment-6243678817); [manual run 39035605423](https://github.com/Mira190/SpecGuard/actions/runs/39035605423).
+5. **Implementation pointers**: [`src/audit-units.js` — slices/cost/pack/risk](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/src/audit-units.js); [`src/audit-post.js` — provenance/gates/cuts](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/src/audit-post.js); [`src/engines/claude-api.js`](https://github.com/Mira190/SpecGuard/blob/08d2c5b87bb8ffc144f4ca3135e8aa4ec79f327c/src/engines/claude-api.js).
 
-## 附录 B：证据分级及本报告未做的事
+## Appendix B: Evidence Grading and What This Report Did Not Do
 
-- **A：本轮直接核对**：GitHub repo SHA、PR state/merge、CI job log 的 TAP 统计、真实 dogfood issue comment JSON/正文、手动 run 39035605423 log、main 主要 workflow/action 与部分实现代码。
-- **B：仓库发布的试验记录**：Nest/Hono/Kite 分支实跑数字、五仓盲标、40 静态种子、10 PR 种子/复审数据。阅读其报告与 PR 描述，但**未在本轮重新标注每一条或解开 artifact ZIP**；推断应以 B 级证据陈述。
-- **C：需要验证的新风险**：#345 主体不匹配降级、不可见 fixture、inventory 定义漏洞、需求 oracle 版本、用户看到绿色误会、真实人类 adoption 等；它们是实验待办，不是已坐实的代码缺陷。
-- 分析阶段没有触发付费模型、没有覆盖用户本地未提交 worktree，也没有修改产品代码或原有 issue/PR。本文以独立 docs-only PR 提交，报告证据级别需复核后再合入主分支。
+- **A: directly checked this round**: GitHub repo SHA, PR state/merge, TAP statistics of CI job logs, real dogfood issue comment JSON/body, the manual run 39035605423 log, the main workflows/action in main and some implementation code.
+- **B: experiment records published in the repository**: branch live-run numbers for Nest/Hono/Kite, five-repo blind labelling, 40 static seeds, 10-PR seed/re-review data. Their reports and PR descriptions were read, but **each item was not re-labelled this round and artifact ZIPs were not unpacked**; inferences should be stated as B-level evidence.
+- **C: new risks that need verification**: #345's subject-mismatch downgrade, invisible fixtures, inventory-definition loopholes, requirement-oracle versioning, users misreading green, real human adoption, etc.; they are experimental to-dos, not confirmed code defects.
+- No paid model was triggered during the analysis phase, the user's local uncommitted worktree was not covered, and no product code or existing issue/PR was modified. This document is submitted as a separate docs-only PR, and the evidence level of the report needs to be re-checked before it is merged into the main branch.

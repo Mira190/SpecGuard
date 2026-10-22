@@ -1,26 +1,26 @@
 # SpecGuard version evaluation · 2026-10-17
 
-**结论：有可复现的可靠性提升；完整目标、调用级溯源和团队 shift-left 收益尚未通过验收。**
+**Conclusion: there is a reproducible reliability improvement; the full goal, call-level provenance, and team shift-left benefit have not yet passed acceptance.**
 
-比较：7c131b5 → b377cff；追加核对 main 5247da3（#305 诊断改进）。本轮没有新付费模型调用。
+Comparison: 7c131b5 → b377cff; additionally checked main 5247da3 (#305 diagnostic improvements). This round made no new paid model calls.
 
-| 配对指标 | 旧版 | 新版 |
+| Paired metric | Old version | New version |
 |---|---:|---:|
-| 21 个路径分类回归样例 | 16/21 | 21/21 |
-| dropped/failed part 的越界已验证 finding | 各 1 | 各 0 |
-| collector 仍有后续 part | complete | incomplete |
-| 低实际消耗下、同预算准入调用 | 1 | 2 |
-| changed test 自己的 hunk 可见 | 0/1 | 1/1 |
-| changed identifier 对应测试可见 | 0/1 | 1/1 |
+| 21 path-classification regression samples | 16/21 | 21/21 |
+| Out-of-bounds validated findings from dropped/failed parts | 1 each | 0 each |
+| Collector still has later parts | complete | incomplete |
+| Calls admitted under the same budget at low actual consumption | 1 | 2 |
+| Changed test's own hunk visible | 0/1 | 1/1 |
+| Test for changed identifier visible | 0/1 | 1/1 |
 
-上述是受控模块探针，不是总体模型准确率。真实 #301 pack 重建的新源码/测试行可见率两版相同；不能说所有 PR 都提升。
+The above are controlled module probes, not overall model accuracy. The visibility rate of new source/test lines in the real #301 pack rebuild is the same in both versions; it cannot be said that every PR improved.
 
-固定 candidate tree 的真实 Linux CI：1436 tests，1432 pass，0 fail，3 skipped，1 TODO。dogfood review 本身为 incomplete；job success 不等于完整审查。
+Real Linux CI on the fixed candidate tree: 1436 tests, 1432 pass, 0 fail, 3 skipped, 1 TODO. The dogfood review itself was incomplete; job success does not mean a complete review.
 
-本次读取的 23 个真实 eval PR 中，5 个没有提交预期变更（#299、#302、#303、#304、#306），不能计作 reviewer pass/miss。18 个有效构造跨三个 product builds，且 grader 存在 inline/coverage 重复计 FP 的反例，不能据此给出最新版本 precision 或提升比例。
+Of the 23 real eval PRs read this time, 5 did not commit the expected change (#299, #302, #303, #304, #306) and cannot be counted as reviewer pass/miss. The 18 valid ones span three product builds, and the grader has counterexamples of double-counting FPs across inline/coverage, so no latest-version precision or improvement ratio can be given from them.
 
-未达成项：finding 仍可借另一成功调用的源码通过校验；单调用 cut-source 的 finding 仍可非低置信；未知 single-call usage 仍记零估算成本；selected-scope complete 仍不等于全仓完成；没有真人 QA 收益或有效 matched model A/B 证据。
+Not achieved: a finding can still pass validation using source from another successful call; findings from a single-call cut source can still be non-low confidence; unknown single-call usage is still recorded as zero estimated cost; selected-scope complete still does not equal whole-repo complete; there is no human QA benefit or valid matched model A/B evidence.
 
-下一轮：先验证 eval 输入和修复计分身份，再补 call/attempt→实际源码/测试可见范围→需求版本→最终送达的完整来源链，最后做固定条件模型 A/B 与真人试点。
+Next round: first validate the eval inputs and fix the scoring identity, then fill in the full provenance chain of call/attempt → actually visible source/test scope → requirement version → final delivery, and finally run a fixed-condition model A/B and a human pilot.
 
-[完整公开报告](report.md)。原始证据、源码快照与复跑脚本保存在本地，未随本公开版提交；本次整理没有重新执行历史评测。
+[Full public report](report.md). Raw evidence, source snapshots, and rerun scripts are kept locally and were not committed with this public version; this cleanup did not re-run the historical evaluation.

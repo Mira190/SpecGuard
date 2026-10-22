@@ -1,306 +1,306 @@
-# SpecGuard：如何确保 shift left，并发挥最大价值
+# SpecGuard: how to ensure shift-left and deliver the most value
 
-日期：2026-10-16（Australia/Sydney）。本地代码基线：`b1aaf113aae3ca69fcc70e7b9026130affa6c30f`。
+Date: 2026-10-16 (Australia/Sydney). Local code baseline: `b1aaf113aae3ca69fcc70e7b9026130affa6c30f`.
 
-本文接续 [10 月 15 日交接](handoff-2026-10-15.md)和[批判性复查](critical-shift-left-followup-2026-10-15.md)，分析下一阶段的产品与验证策略。依据是本地代码、已有评估和研究文档；没有重新读取线上状态、运行付费模型或开展真人试点。下文“已具备”指代码中存在相应路径；历史结果仍受其当时版本和样本限制。建议与目标不代表当前实现或已测收益。
+This document follows on from the [October 15 handoff](handoff-2026-10-15.md) and the [critical follow-up review](critical-shift-left-followup-2026-10-15.md), and analyzes the product and validation strategy for the next phase. It is based on local code and existing evaluation and research documents; it did not re-read live state, run paid models, or run a human pilot. "Already in place" below means the corresponding path exists in the code; historical results are still limited by the version and sample at the time. Suggestions and goals do not represent the current implementation or measured benefits.
 
-## 1. 核心判断
+## 1. Core judgment
 
-**确保 shift left，必须把“更早发现”连到“更早采取有效行动”，再验证交给 QA 的变更确实获得了额外保护。** 只把机器人放在 PR 上、增加评论、提高静态覆盖比例，都不足以证明这一点。
+**To ensure shift-left, "finding earlier" must be connected to "taking effective action earlier", and then it must be verified that the change handed to QA really received additional protection.** Merely putting a bot on the PR, adding comments, or raising the proportion of static coverage is not enough to show this.
 
-能够保证的是流程执行、证据边界和结果可追溯；静态 AI 审查不能保证发现全部缺陷。是否真正减少 QA 返工，需要后续观测验证。
+What can be guaranteed is process execution, evidence boundaries, and traceable results; static AI review cannot guarantee finding all defects. Whether it really reduces QA rework needs to be verified by later observation.
 
-SpecGuard 最值得投入的方向，是在正常 CI 和人工评审之外，找到与需求、可观察行为有关的验证缺口，并让作者在交付前完成可核验的修正。尤其要关注：代码与测试一起偏离需求、边界断言被删除、错误路径没有被保护，以及测试看起来存在却约束不住错误行为。
+The direction most worth investing in for SpecGuard is to find, beyond normal CI and human review, verification gaps related to requirements and observable behavior, and to let the author complete verifiable corrections before delivery. In particular, attention should go to: code and tests deviating from the requirement together, boundary assertions being deleted, error paths left unprotected, and tests that look present but do not constrain wrong behavior.
 
-下一阶段建议按这个顺序推进：
+The next phase is recommended to proceed in this order:
 
-1. 守住结论可信度：输入不足不能变成“已覆盖”，语法线索不能变成语义证明。
-2. 把现有每次 push 的 PR 审查变成可执行的作者反馈；保留可选本地入口，让愿意提前检查的人更早得到结果。
-3. 对少量高价值发现验证“修复后真的能抓住对应错误”，先证明单位发现的收益。
-4. 用真实缺陷回放和真人 PR 对照试点，验证增量价值，再决定扩展哪些能力。
+1. Protect the credibility of conclusions: insufficient input must not become "covered", and syntactic clues must not become semantic proof.
+2. Turn the existing per-push PR review into actionable author feedback; keep an optional local entry point so people who want to check earlier get results earlier.
+3. For a small number of high-value findings, verify that "after the fix, the corresponding error is really caught", proving the benefit of a single finding first.
+4. Use real defect replay and a controlled pilot on human-authored PRs to verify the incremental value, and then decide which capabilities to extend.
 
-本项目已有决策是“每次 push 的 PR Action、advisory only”（见 [design.md](design.md)）。本文沿用该决策；本地检查是补充入口，以下门槛也不授权自动阻断合并。
+The project's existing decision is "PR Action on every push, advisory only" (see [design.md](design.md)). This document keeps that decision; the local check is a supplementary entry point, and the thresholds below do not authorize automatically blocking merges.
 
-## 2. 把目标写成能检查的完整链路
+## 2. Write the goal as a checkable end-to-end chain
 
 ```text
-PR 时刻可获得的需求与变更
-  → 与变更相关的可观察行为及测试义务
-  → 在作者还能修改时送达的可信发现
-  → 作者确认意图并补测试、改实现或纠正规格
-  → 验证新保护能够区分正确与错误行为
-  → 交给 QA 的版本保留这份保护
-  → QA 逃逸缺陷回流，形成下一轮评估样本
+Requirements and changes available at PR time
+  → Observable behavior and test obligations related to the change
+  → Credible findings delivered while the author can still modify
+  → Author confirms intent and adds tests, changes the implementation, or corrects the spec
+  → Verify the new protection can distinguish correct from wrong behavior
+  → The version handed to QA retains this protection
+  → Defects escaping QA flow back and form the next round of evaluation samples
 ```
 
-其中任一环断开，前面的工作都可能没有兑现价值。
+If any link breaks, the work before it may not have delivered value.
 
-| 环节 | 必须回答的问题 | 失败信号 |
+| Link | Question that must be answered | Failure signal |
 |---|---|---|
-| 意图 | 当时应实现什么？来源是否冲突、过时或只能推断？ | 从实现反推需求，再拿同一实现证明自己正确 |
-| 搜索 | 相关实现、测试、规范是否进入可见范围？ | 候选没找到就宣布缺测试；截断后仍宣布全覆盖 |
-| 判断 | 哪个输入、边界或错误路径没有被保护？ | 只说“建议增加测试”，没有具体可接受错误 |
-| 送达 | 作者是否在有效时间内看到并能处理？ | 结果在交接 QA 后才出现，或关键发现只在折叠详情里 |
-| 行动 | 人是否确认了意图，并完成相关修正？ | 测试文件有任意修改，就记成修复 |
-| 验证 | 修正是否增加了对目标错误的区分能力？ | 新测试与实现共用同一错误预期，或者根本没被 CI 执行 |
-| 结果 | 与原有流程相比，是否减少了逃逸或返工？ | 把评论采纳率、种子召回率直接称作 QA 缺陷下降 |
+| Intent | What should have been implemented at the time? Is the source conflicting, outdated, or only inferred? | Inferring the requirement from the implementation, then using the same implementation to prove itself correct |
+| Search | Did the relevant implementation, tests, and specs enter the visible range? | Declaring missing tests when no candidate was found; still declaring full coverage after truncation |
+| Judgment | Which input, boundary, or error path is not protected? | Only saying "suggest adding tests", with no specific acceptable error |
+| Delivery | Did the author see it within a useful time and can they handle it? | The result appears only after handoff to QA, or the key finding is only in collapsed details |
+| Action | Did a person confirm the intent and complete the relevant fix? | Any modification to a test file is recorded as a fix |
+| Verification | Did the fix add the ability to distinguish the target error? | The new test shares the same wrong expectation as the implementation, or is never executed by CI at all |
+| Outcome | Compared with the existing process, were escapes or rework reduced? | Calling comment adoption rate or seeded recall directly a decrease in QA defects |
 
-可以把单条发现的预期价值拆成：
+The expected value of a single finding can be broken down as:
 
-> 对应错误的潜在损失 × 发现有效、及时送达、作者采取行动且行动有效的联合概率 − 模型、计算和人的处理成本。
+> Potential loss from the corresponding error × joint probability that the finding is valid, delivered in time, the author acts, and the action is effective − the cost of model, compute, and human handling.
 
-这是一种决策框架，不是当前可精确计算的分数。若分解为概率连乘，必须使用逐步条件概率，不能把互相依赖的观测比例直接相乘。暂时未知的参数应标未知，避免用人为权重包装成 ROI。
+This is a decision framework, not a score that can be computed precisely today. If it is decomposed into a product of probabilities, stepwise conditional probabilities must be used; interdependent observed proportions cannot be multiplied directly. Parameters that are currently unknown should be marked unknown, to avoid dressing them up as ROI with arbitrary weights.
 
-## 3. 当前能力与真正未完成的部分
+## 3. Current capabilities and what is truly unfinished
 
-| 能力 | 本地证据与现状 | 对下一步的含义 |
+| Capability | Local evidence and current state | Meaning for the next step |
 |---|---|---|
-| PR 前审查 | [本地入口](../bin/specguard-local.js)复用 collect、prompt、Copilot 和 post；只审已提交变更，默认 advisory | 已有入口，不必先建设 IDE 平台。它不覆盖未提交编辑；离线关联 issue 不可用，默认正文来自提交信息 |
-| PR 持续反馈 | [collect](../src/collect.sh)、[post](../src/post.js)和 Action 已有收集、校验、投递与新鲜度路径 | 流程位置已经前移；需要测反馈是否及时、是否有用，而非继续只统计运行次数 |
-| 静态证据与义务 | [审查契约](../skills/test-review/SKILL.md)要求需求、行为、断言、层级和限制；私有 helper 不单独创造义务 | 应按行为保护判断，不把内部拆函数变成新增测试债 |
-| 删除断言线索 | 本基线 `post.js` 已可在 diff 确认删除时提升附近低置信发现，并保留确定性降级及 weak-test 反例门槛 | 交接里的该开放项已有代码进展。删除事实仍不证明全仓不存在等效测试，需继续保留跨文件迁移对照 |
-| weak-test 反例 | `counterexampleOk` 校验具体文本形态；[prove harness](../eval/prove/README.md)可在有限 Node 测试范围做执行验证 | 已有形态检查，仍未证明反例语义正确；执行验证工具也不是默认 Action 能力 |
-| 大文件 scan | [audit-units](../src/audit-units.js)约 40 KB 分片并保存游标；[contextPack](../src/engines/claude-api.js)另受单文件和共享预算约束 | 有诚实的不完整状态，但不能保证每个分片最终都被读到；需测持续进展 |
-| 标准确认 | [checks](../src/checks.js)读取配置的 check/status；规则审查与执行状态分开 | 机制已有，交接中的标准正反 canary 和真实 pushdown 收益仍需现场证据 |
-| 已有评估 | 交接记录 Kite 最近一轮 9/10 种子目标可见；[field study](field-study.md)记录 12 仓库、333 次确定性收集 | 前者是特定旧基线单轮回归证据，后者未运行模型；均不能证明本版本真人精度或 QA 收益 |
-| 价值测量工具 | 已有 [replay](../eval/replay/README.md)、[validation plan](validation-plan.md)、label-export、weekly-report | 优先复用；补足语义裁定与修复证据，不先建设新的指标平台 |
+| Pre-PR review | The [local entry point](../bin/specguard-local.js) reuses collect, prompt, Copilot, and post; it reviews only committed changes, advisory by default | An entry point already exists; no need to build an IDE platform first. It does not cover uncommitted edits; linked issues are unavailable offline, and the default body comes from commit messages |
+| Continuous PR feedback | [collect](../src/collect.sh), [post](../src/post.js), and the Action already have collection, validation, delivery, and freshness paths | The process position has moved earlier; what needs measuring is whether feedback is timely and useful, rather than continuing to count runs |
+| Static evidence and obligations | The [review contract](../skills/test-review/SKILL.md) requires requirement, behavior, assertion, layer, and limits; private helpers alone do not create obligations | Judge by behavior protection; do not turn internal function splitting into new test debt |
+| Deleted-assertion clue | In this baseline `post.js` can already raise nearby low-confidence findings when the diff confirms a deletion, while keeping deterministic downgrades and the weak-test counterexample threshold | The open item in the handoff has code progress. A confirmed deletion still does not prove that no equivalent test exists in the whole repository, so cross-file migration controls should be kept |
+| weak-test counterexample | `counterexampleOk` checks the concrete text form; the [prove harness](../eval/prove/README.md) can do execution verification within a limited Node test scope | A form check exists, but it still does not prove the counterexample is semantically correct; the execution-verification tool is also not a default Action capability |
+| Large-file scan | [audit-units](../src/audit-units.js) shards at about 40 KB and saves a cursor; [contextPack](../src/engines/claude-api.js) is additionally limited by per-file and shared budgets | There is an honest incomplete status, but it cannot guarantee that every shard is eventually read; sustained progress needs to be measured |
+| Standards confirmation | [checks](../src/checks.js) reads configured check/status; rule review is kept separate from execution status | The mechanism exists, but the standards positive/negative canary from the handoff and real pushdown benefits still need field evidence |
+| Existing evaluations | The handoff records that Kite's latest round had 9/10 seeded targets visible; [field study](field-study.md) records 12 repositories and 333 deterministic collections | The former is single-round regression evidence on a specific old baseline, and the latter did not run a model; neither can prove this version's precision on humans or QA benefits |
+| Value measurement tools | [replay](../eval/replay/README.md), [validation plan](validation-plan.md), label-export, and weekly-report already exist | Reuse first; fill in semantic adjudication and fix evidence, rather than building a new metrics platform first |
 
-尤其要避免用“F01–F18 都有修复”代替目标验收。修复让系统更可信，但收益还取决于需求可见性、作者行动和测试实际保护能力。
+In particular, avoid using "F01–F18 all have fixes" in place of goal acceptance. The fixes make the system more credible, but the benefit also depends on requirement visibility, author action, and the tests' actual protective power.
 
-## 4. 如何把检查真正前移
+## 4. How to really move checking earlier
 
-### 4.1 在需求进入开发时，提供最少但足够的意图
+### 4.1 When a requirement enters development, provide the minimum but sufficient intent
 
-不要求每个仓库先建设完整规格库。对高风险变更，PR 正文或现有 issue 至少应能回答：
+It is not required that every repository first build a complete spec library. For high-risk changes, the PR body or an existing issue should at least be able to answer:
 
-- 哪个外部可观察行为改变了，谁会受影响？
-- 一组正常、边界和失败输入，分别期望什么？
-- 新旧规则如何切换，是否依赖版本、开关或后续 PR？
-- 期望值来自哪份需求，冲突由谁决定？
+- Which externally observable behavior changed, and who is affected?
+- For a set of normal, boundary, and failing inputs, what is expected for each?
+- How do the old and new rules switch, and does it depend on a version, a flag, or a later PR?
+- Which requirement do the expected values come from, and who decides conflicts?
 
-例如“退款期限从 30 天变为 45 天”，仍不足以写对边界测试：第 45 天是否允许、从付款还是收货算起、是否按自然日，都需要明确。SpecGuard 可以指出这些信息缺口，最终意图由需求负责人确认。
+For example, "refund period changes from 30 days to 45 days" is still not enough to write correct boundary tests: whether day 45 is allowed, whether it counts from payment or from receipt, and whether it uses calendar days all need to be explicit. SpecGuard can point out these information gaps; the final intent is confirmed by the requirement owner.
 
-**没有独立需求时，只能检查实现暴露的行为和验证缺口，不能据此宣称符合业务意图。** 需求不清的收益是更早澄清，需与已确认缺陷分别统计。
+**Without an independent requirement, one can only check the behavior the implementation exposes and the verification gaps; one cannot claim conformance to business intent on that basis.** The benefit of unclear requirements is earlier clarification, and it should be counted separately from confirmed defects.
 
-### 4.2 在作者完成一个提交后，提供可选本地反馈
+### 4.2 After the author finishes a commit, provide optional local feedback
 
-先推广已有入口，文档示意如下；路径按实际 clone 替换：
+First promote the existing entry point; the documentation example is below, with the path replaced according to the actual clone:
 
 ```powershell
 node C:/path/to/SpecGuard/bin/specguard-local.js --base origin/main --body C:/path/to/intent.md
 ```
 
-这是使用示例，本文没有执行。它会调用 Copilot 并消耗额度；调用的是已提交分支与 base 的比较，`--body` 补充当时的需求文本。工作流里的 `requirements_paths`、`standards_paths`、`test_paths` 和 `ignore` 应同步到对应本地参数，减少入口差异。
+This is a usage example and was not executed for this document. It calls Copilot and consumes quota; what it calls is a comparison of the committed branch against base, and `--body` supplies the requirement text at that time. `requirements_paths`, `standards_paths`, `test_paths`, and `ignore` in the workflow should be synced to the corresponding local parameters to reduce differences between the entry points.
 
-本地与 PR 的外部上下文和检查状态不完全相同，不能承诺两边输出一致。衡量是否值得推广，应看“同一类问题首次发现时间提前多少”和“避免多少次 PR 往返”，并把本地调用成本计入总成本。当前不需要把 AI 检查强制加入所有人的 pre-commit。
+The external context and check status differ somewhat between local and PR, so consistent output on both sides cannot be promised. To measure whether promotion is worthwhile, look at "how much earlier the first discovery of the same class of problem comes" and "how many PR round trips are avoided", and count local invocation cost in the total cost. There is currently no need to force an AI check into everyone's pre-commit.
 
-### 4.3 PR 每次 push 的主路径，要让作者迅速作出决定
+### 4.3 The main path of PR on every push should let the author decide quickly
 
-保持已有运行决策，先改善反馈有效性：
+Keep the existing run decision, and first improve the effectiveness of feedback:
 
-1. 首屏说明最高价值行为缺口、相关需求及不确定性。
-2. 每条建议提供最小输入、预期结果和应保护的公共行为；代码骨架服从仓库现有测试框架。
-3. 同一行为的实现偏差、弱测试与缺测试合并解释，避免让作者处理多个重复任务。
-4. 缺少上下文时说明缺什么和下一步如何核查，不把“无法证明有测试”写成“证明没有测试”。
-5. 再次 push 后区分仍存在、后来有修改、未再观察到和已验证修复；当前代理状态保留原含义。
+1. The first screen states the highest-value behavior gap, the related requirement, and the uncertainty.
+2. Each suggestion provides the minimal input, the expected result, and the public behavior to protect; code skeletons follow the repository's existing test framework.
+3. For the same behavior, implementation deviation, weak test, and missing test are explained together, so the author does not have to handle several duplicate tasks.
+4. When context is missing, say what is missing and how to check next; do not write "cannot prove a test exists" as "proved no test exists".
+5. After another push, distinguish still present, changed later, no longer observed, and verified fixed; the current proxy statuses keep their original meaning.
 
-可先把“普通小 PR 首个可执行反馈 p95 ≤5 分钟”作为待校准的体验目标；这不是当前性能结果。大 PR、模型排队和不完整审查单独报告，不能丢掉慢样本来达标。
+"Time to first actionable feedback p95 ≤ 5 minutes for ordinary small PRs" can first be taken as an experience goal to be calibrated; it is not a current performance result. Large PRs, model queueing, and incomplete reviews are reported separately, and slow samples cannot be dropped to meet the target.
 
-### 4.4 QA 交接时，保留已知风险
+### 4.4 At QA handoff, retain the known risks
 
-由作者在现有交接流程中带上：已确认且未处理的行为风险、需求歧义、未审查范围和新增回归测试。SpecGuard 的静态结果用于指导 QA 关注点，正常单元、集成和端到端 CI 继续提供执行证据。
+The author carries, in the existing handoff process: confirmed but unhandled behavior risks, requirement ambiguities, unreviewed scope, and newly added regression tests. SpecGuard's static results guide QA's attention, while normal unit, integration, and end-to-end CI continue to provide execution evidence.
 
-这里不要求 SpecGuard 建设新的发布门禁。首先用人工交接确认这份信息是否有用；如果没人使用，新增一个报告页面不会自动带来价值。
+SpecGuard is not required here to build a new release gate. First confirm manually whether this information is useful; if nobody uses it, adding a report page will not automatically bring value.
 
-## 5. 把资源放到边际收益最高的地方
+## 5. Put resources where the marginal return is highest
 
-### 5.1 以错误后果和可行动性排序
+### 5.1 Rank by error consequence and actionability
 
-| 场景 | 潜在增量价值 | 成立条件 | 优先级 |
+| Scenario | Potential incremental value | Conditions for it to hold | Priority |
 |---|---|---|---|
-| CI 绿，但代码与测试一起偏离明确需求 | 引入独立 oracle，可能发现现有测试无法发现的错误 | 需求确实适用于当前版本，来源冲突已处理 | 高 |
-| 删除边界、拒绝或错误路径断言 | 在测试重构时保住原保护 | 查找等效替代，区分迁移与真正删除 | 高 |
-| 新增业务分支没有行为断言 | 在 QA 首次发现前提出具体回归场景 | 看过相关候选测试，且能描述实际错误 | 高 |
-| 弱断言仍接受具体错误 | 让新增断言真正限制错误行为 | 反例正确；不能仅凭 `assert.ok` 等写法判弱 | 高，但需更强验证 |
-| 只有高层测试保护可独立判断的业务规则 | 可能缩短定位与反馈时间 | 能保持同一故障集合，并保留必要集成检查 | 有条件推进 |
-| 已被 lint/测试 CI 明确报出的同一问题 | 增量通常在解释与定位 | 比已有错误信息多提供可行动信息 | 较低 |
-| 没有行为风险的风格建议、私有 helper 直接测试 | 容易消耗阅读与维护时间 | 只有明确仓库规则或可证行为风险才值得报告 | 最低 |
+| CI is green, but the code and tests deviate from a clear requirement together | Introduces an independent oracle that may find errors existing tests cannot | The requirement really applies to the current version, and source conflicts are resolved | High |
+| Boundary, rejection, or error-path assertions are deleted | Preserves the original protection during test refactoring | Look for equivalent replacements; distinguish migration from true deletion | High |
+| A new business branch has no behavior assertion | Proposes a concrete regression scenario before QA first finds it | Relevant candidate tests were seen, and the actual error can be described | High |
+| A weak assertion still accepts a specific error | Makes the new assertion really constrain wrong behavior | The counterexample is correct; a test cannot be judged weak merely from forms like `assert.ok` | High, but needs stronger verification |
+| Only a high-level test protects a business rule that can be judged independently | May shorten localization and feedback time | The same fault set can be preserved, and necessary integration checks are kept | Advance conditionally |
+| The same problem is already clearly reported by lint/test CI | The increment is usually in explanation and localization | Provides more actionable information than the existing error message | Lower |
+| Style suggestions without behavior risk, direct tests of private helpers | Easily consumes reading and maintenance time | Worth reporting only with a clear repository rule or provable behavior risk | Lowest |
 
-“CI 绿”不等于没有价值，“CI 红”也不等于可以跳过审查；这里决定的是有限阅读和验证预算的优先级。
+"CI green" does not mean no value, and "CI red" does not mean the review can be skipped; what is decided here is the priority of the limited reading and verification budget.
 
-### 5.2 用两个轴判断需求与测试，防止错误的放心
+### 5.2 Use two axes to judge requirements and tests, to prevent false reassurance
 
-| 需求对齐 | 测试保护 | 应传达的结论 |
+| Requirement alignment | Test protection | Conclusion to convey |
 |---|---|---|
-| 对齐 | 有有效行为断言 | 有静态支持；运行是否通过看对应 CI |
-| 不对齐 | 测试与实现相互一致 | 先澄清或修正需求偏差，不能因测试通过而放心 |
-| 对齐 | 无断言或断言不约束目标错误 | 补目标行为保护 |
-| 未知或冲突 | 任意 | 明确待确认意图，不代替负责人裁决 |
+| Aligned | Valid behavior assertions exist | There is static support; whether it runs and passes depends on the corresponding CI |
+| Not aligned | Tests and implementation agree with each other | First clarify or correct the requirement deviation; do not be reassured because tests pass |
+| Aligned | No assertion, or the assertion does not constrain the target error | Add protection for the target behavior |
+| Unknown or conflicting | Any | State clearly that the intent awaits confirmation; do not rule in place of the owner |
 
-这是分析模型，不要求现在新增 schema。关键是现有 `covered`、alignment 与报告措辞保持一致。
+This is an analysis model and does not require adding a schema now. The key is that the existing `covered`, alignment, and report wording stay consistent.
 
-例如需求明确“第 45 天可退款”，实现写成 `< 45`，测试也断言第 45 天拒绝：CI 可以全绿。有效处理是根据需求补 `44/45/46` 的独立期望并修正实现，而不是只再添加一个遵循当前实现的测试。
+For example, if the requirement clearly says "a refund is allowed on day 45", the implementation is written as `< 45`, and the test also asserts that day 45 is rejected: CI can be entirely green. The effective handling is to add independent expectations for `44/45/46` according to the requirement and fix the implementation, rather than adding just one more test that follows the current implementation.
 
-### 5.3 三个原始目标分别验收
+### 5.3 Accept the three original goals separately
 
-- **缺失或弱单元测试：** 核验新增测试能保护目标行为，避免只增加测试数量。
-- **coding standard confirmed：** 分别报告适用规则、AI 是否审查、配置的执行检查及其对应 SHA。`not_configured`、`pending`、不可读和同名 producer 冲突都不能变成通过。先补交接中尚缺的标准违规正例与干净反例。
-- **高层测试下推：** 选择一个已有慢高层测试保护的纯业务规则，用相同输入和故障集合比较。记录检测能力、耗时和维护负担；保留原本保护网络、数据库或集成接线的检查。仅“单元测试数增加”不算收益。
+- **Missing or weak unit tests:** Verify that the new tests can protect the target behavior, rather than just increasing the number of tests.
+- **coding standard confirmed:** Report separately the applicable rules, whether the AI reviewed them, the configured execution checks, and their corresponding SHAs. `not_configured`, `pending`, unreadable, and same-name producer conflicts must not become a pass. First add the standards-violation positive example and clean negative example still missing from the handoff.
+- **Pushing high-level tests down:** Choose one pure business rule already protected by a slow high-level test, and compare using the same inputs and fault set. Record detection ability, elapsed time, and maintenance burden; keep the checks that originally protected network, database, or integration wiring. "The number of unit tests increased" alone does not count as a benefit.
 
-## 6. 把可信度作为持续不变量
+## 6. Treat credibility as a standing invariant
 
-以下原则适用于本地、PR、scan、报告和 grader，不能只在某个入口成立：
+The following principles apply to local, PR, scan, reports, and the grader, and cannot hold at only one entry point:
 
-| 不变量 | 验证方式 |
+| Invariant | How to verify |
 |---|---|
-| 信息减少不会提高把握 | 删除相关测试上下文、截断源码或损坏引用后，不得从 unknown 升级 covered，不得静默缩小义务集 |
-| 无关信息不会消除真实风险 | 加入未消费数组、注释、导入和死代码，不应抹掉真正删除的行为保护 |
-| 等价组织方式不增加测试债 | helper 内联/提取、测试参数化、重命名、跨文件迁移等行为等价对照，结论应稳定 |
-| 静态证据与执行证明分开 | 引用存在、断言形态合理、测试被执行、测试能发现目标错误分别记录，不能相互替代 |
-| 陈旧证据不继承新版本信用 | 需求、源码、测试、base/head 或可用外部意图变了，原结论必须按相关性失效或重新核对 |
-| 输出身份与状态不漂移 | 同一行为跨 inline/summary 只计一次；execution、scope、reduced 各按明确口径报告 |
-| 不完整扫描有进度或明确停滞 | 相同树、相同预算重复运行，逐步消耗待审范围；若永远装不下，报告原因，不靠重复调度伪装前进 |
+| Less information does not raise confidence | After deleting relevant test context, truncating source, or corrupting a reference, it must not upgrade from unknown to covered, and must not silently shrink the obligation set |
+| Irrelevant information does not erase real risk | Adding unused arrays, comments, imports, and dead code should not wipe out the behavior protection that was truly deleted |
+| Equivalent organization does not add test debt | For behavior-equivalent controls such as helper inlining/extraction, test parameterization, renaming, and cross-file migration, the conclusion should be stable |
+| Static evidence is separate from execution proof | Reference exists, assertion form is reasonable, test is executed, and test can find the target error are recorded separately and cannot substitute for each other |
+| Stale evidence does not inherit credit for a new version | If the requirement, source, test, base/head, or available external intent changed, the original conclusion must be invalidated by relevance or rechecked |
+| Output identity and status do not drift | The same behavior is counted once across inline/summary; execution, scope, and reduced are each reported with a clear definition |
+| Incomplete scans make progress or clearly stall | Repeated runs on the same tree with the same budget gradually consume the to-be-reviewed scope; if it can never fit, report the reason, and do not feign progress through repeated scheduling |
 
-近期代码优先关注两点：
+Recent code should prioritize two points:
 
-1. **预算协同：** scan 的约 40 KB 分片不一定满足 context pack 的实际单文件配额。应从实际预算决定分片或每批数量，并验证游标在内容确实审到后才前进。这是交接仍指出的实际缺口。
-2. **语义校准：** `counterexampleOk` 只证明反例写得具体，不证明反例成立。对被判有用的 weak-test 样本，使用人工核对或有限执行证明校准；不必立即让每条发现都运行昂贵的第二模型或变异测试。
+1. **Budget coordination:** Scan's shards of about 40 KB do not necessarily satisfy the context pack's actual per-file quota. Shard size or per-batch count should be decided from the actual budget, and it should be verified that the cursor advances only after the content has really been reviewed. This is a real gap the handoff still points out.
+2. **Semantic calibration:** `counterexampleOk` only proves the counterexample is written concretely, not that the counterexample holds. For weak-test samples judged useful, calibrate with human checking or limited execution proof; there is no need to immediately make every finding run an expensive second model or mutation testing.
 
-“删除由 diff 确认”同样只是局部事实：另一文件可能已有等效保护。针对这一点增加正反对照，比继续提高所有删除线索的置信度更有意义。
+"Deletion confirmed by diff" is likewise only a local fact: another file may already have equivalent protection. Adding positive and negative controls for this point is more meaningful than continuing to raise the confidence of all deletion clues.
 
-## 7. 建立最小的有效修复闭环
+## 7. Build the minimal effective fix loop
 
-### 7.1 用证据区分状态
+### 7.1 Distinguish states with evidence
 
-以下是试点裁定用语，不代表代码已有相应字段：
+The following is the wording for pilot adjudication; it does not mean the code already has corresponding fields:
 
-| 状态 | 最少证据 | 能说明什么 |
+| State | Minimum evidence | What it shows |
 |---|---|---|
-| 已送达 | 作者实际可见的 inline 或首屏摘要 | 反馈可被使用 |
-| 已确认有效 | 人确认目标行为、需求和原保护缺口 | 发现值得处理 |
-| 后续有修改 | 相关行或测试文件发生变化 | 只有行动代理信号 |
-| 已验证保护增强 | 相关新测试运行，且能区分目标错误；意图已核实 | 行动增加了针对性保护 |
-| 已暴露并修复缺陷 | 需求驱动的新测试在错误实现失败、修复后通过 | 在交付前找到并修正了具体缺陷 |
-| 未再观察到 | 后续报告没有同项 | 可能修复、漏报或范围变化，需继续核对 |
+| Delivered | An inline comment or first-screen summary the author can actually see | The feedback can be used |
+| Confirmed valid | A person confirmed the target behavior, the requirement, and the original protection gap | The finding is worth handling |
+| Later changes | Relevant lines or test files changed | Only a proxy signal of action |
+| Verified protection strengthened | The relevant new test runs and can distinguish the target error; intent is verified | The action added targeted protection |
+| Defect exposed and fixed | A requirement-driven new test fails on the wrong implementation and passes after the fix | A specific defect was found and fixed before delivery |
+| No longer observed | A later report does not have the same item | May be fixed, missed, or scope change; needs continued checking |
 
-缺测试时，现实现可能本来就正确，不能一律要求新测试在旧 HEAD 上失败。此时可验证它能杀死合理的目标故障变体；如果新增需求测试直接在 HEAD 失败，再走先红后绿的缺陷修复路径。
+When a test is missing, the current implementation may already have been correct, so it cannot be uniformly required that the new test fail on the old HEAD. In that case, one can verify that it kills a reasonable target fault variant; if a newly added requirement test fails directly on HEAD, take the red-then-green defect-fix path.
 
-现有 [prove harness](../eval/prove/README.md)可作为受控样本验证起点，但仅支持有限框架和故障变体，不能把所有变体被杀死视为测试充分。oracle 来自实现的镜像测试，还需要独立需求判断。
+The existing [prove harness](../eval/prove/README.md) can serve as a starting point for controlled-sample verification, but it supports only limited frameworks and fault variants, and killing all variants must not be taken as proof the test is sufficient. If the oracle is a mirror test derived from the implementation, independent requirement judgment is still needed.
 
-### 7.2 先用一份人工表补齐证据
+### 7.2 First fill in the evidence with a manual table
 
-复用已有评论与导出工具，人工补充以下字段即可：
+Reuse the existing comments and export tools, and add the following fields by hand:
 
-`repo/PR/head + 行为标识 + 需求来源 + 首次送达时间 + 人工有效性 + 处理人/决定 + 修复提交 + 验证命令与结果 + 对应故障或反例 + 是否在 QA 交接前完成`。
+`repo/PR/head + behavior identifier + requirement source + first delivery time + manual validity + handler/decision + fix commit + verification command and result + corresponding fault or counterexample + whether completed before QA handoff`.
 
-行为标识按需求和外部行为归一，不能只用行号；展示位置和指纹变化不代表新增一个独立收益。每次 push 的报告也不能把同一修复重复累计。
+The behavior identifier is normalized by requirement and external behavior, and cannot use only line numbers; a change in display position or fingerprint does not mean a new independent benefit. The report on every push also must not count the same fix repeatedly.
 
-作者处理实现与测试；需求负责人决定歧义和来源冲突；QA 负责人裁定逃逸缺陷是否属于同一行为；试点负责人汇总口径。一个人可兼任多种角色，但每项需有人负责，不能把“需要人工”当成没有主人的终点。
+The author handles implementation and tests; the requirement owner decides ambiguities and source conflicts; the QA lead adjudicates whether an escaped defect belongs to the same behavior; the pilot lead consolidates the definitions. One person can hold multiple roles, but every item needs someone responsible, and "needs a human" must not be treated as an endpoint with no owner.
 
-执行 PR 代码的验证复用仓库现有隔离 CI，不放进持有发布凭据的模型审查进程。此处提出闭环，不改变当前 Action 静态只读的职责。
+Verification that executes PR code reuses the repository's existing isolated CI, and is not placed in the model review process that holds release credentials. A loop is proposed here, which does not change the Action's current static, read-only responsibility.
 
-## 8. 用哪些指标判断价值已经兑现
+## 8. Which metrics show that the value has been delivered
 
-### 8.1 主指标与诊断指标分开
+### 8.1 Separate primary metrics from diagnostic metrics
 
-| 指标 | 定义与分母 | 不能据此声称的事 |
+| Metric | Definition and denominator | What cannot be claimed from it |
 |---|---|---|
-| 每 100 个 eligible PR 的有效提前干预 | QA 交接前完成、人工确认有效且有目标保护/缺陷修复证据的独立行为数 / eligible PR 数 ×100 | 不等于这些 PR 原本一定会出现生产缺陷 |
-| 历史可提前发现率 | 回放中 direct 与 indirect 命中 / 已确认、在范围内且当时可见的历史缺陷；两类分开列出 | 不能直接当作现场避免率 |
-| 增量有效发现 | 同一 PR 下，人工判定现有 CI/评审未提供等效行为提示的有效发现 | 行号不重叠不能证明语义独有 |
-| 提前量 | 同一行为首次可执行提示到原 QA 发现时点的间隔；现场另记提示是否早于实际交接 | 回放只能证明本可提前，不能证明当时作者会修 |
-| 逃逸趋势 | 一致观察窗内，按变更风险分层的 QA/生产确认缺陷与 eligible PR 数、行为机会数 | 简单前后下降不能证明因果 |
+| Effective early interventions per 100 eligible PRs | Number of independent behaviors, completed before QA handoff, confirmed valid by a human and with target protection/defect-fix evidence / number of eligible PRs × 100 | Does not mean those PRs would certainly have had production defects |
+| Historical early-detectability rate | In replay, direct and indirect hits / confirmed, in-scope historical defects that were visible at the time; the two classes listed separately | Cannot be taken directly as an on-site avoidance rate |
+| Incremental valid findings | For the same PR, valid findings for which a human judges that existing CI/review gave no equivalent behavior hint | Non-overlapping line numbers do not prove semantic uniqueness |
+| Lead time | The interval between the first actionable hint for the same behavior and the time the original QA found it; on site, also record whether the hint came before the actual handoff | Replay can only prove it could have been earlier, not that the author would have fixed it then |
+| Escape trend | Within a consistent observation window, QA/production-confirmed defects stratified by change risk, against eligible PR count and behavior opportunity count | A simple before/after decrease cannot prove causation |
 
-Eligible PR 指预先约定会考虑使用该工具的目标 PR 群体，先于输出定义；其中 failed、skipped、reduced、focused 和 incomplete 分层保留，不能只统计成功运行。AI 生成、人写、bot PR 分层，不能把无人类处理人的种子 PR 纳入真人采纳率。
+Eligible PRs are the target PR population that was agreed in advance to be considered for using the tool, defined before the output; failed, skipped, reduced, focused, and incomplete are kept as strata, and only successful runs must not be counted. AI-generated, human-written, and bot PRs are stratified, and seeded PRs without a human handler cannot be included in the human adoption rate.
 
-“行为机会数”由独立人工清单或固定抽样定义，不用模型本轮生成的 obligation 总数作为跨版本质量分母；否则模型少列义务就会显得更好。
+"Behavior opportunity count" is defined by an independent manual list or fixed sampling, and the total number of obligations generated by the model this round is not used as the cross-version quality denominator; otherwise a model that lists fewer obligations would look better.
 
-同时记录护栏：
+Also record guardrails:
 
-- 人工 precision、无效和 unsure 的数量；inline 与首屏摘要都计入用户阅读负担，折叠信息另列。
-- 首个可执行反馈的 p50/p95、发生在作者有效修改窗口内的比例。
-- 每 PR 的人工阅读处理时间、review 往返、time-to-merge，以及是否减少 QA 返工。
-- 每 PR 全部本地调用、每次 push、修复重试和 scan 分摊成本，不只取最后一次运行。
-- 运行失败、未审查范围、重复发现、陈旧证据以及大文件长期停滞的占比。
+- The manual precision, and the numbers of invalid and unsure; both inline and the first-screen summary count toward the user's reading burden, and collapsed information is listed separately.
+- The p50/p95 of time to first actionable feedback, and the proportion that occurs within the author's effective modification window.
+- Human reading and handling time per PR, review round trips, time-to-merge, and whether QA rework is reduced.
+- All local invocations per PR, per push, fix retries, and amortized scan cost, not just the last run.
+- The proportions of failed runs, unreviewed scope, duplicate findings, stale evidence, and long-term stalls on large files.
 
-`addressed` 或“with later changes”继续作为诊断信号。现有 [weekly report](../eval/weekly-report.js)主要依赖这些代理，且现有计划注明部分指标只含 inline、成本只取最后一次运行；因此不能直接改名成有效修复率或全周期成本。
+`addressed` or "with later changes" continue to serve as diagnostic signals. The existing [weekly report](../eval/weekly-report.js) mainly relies on these proxies, and the existing plan notes that some metrics include only inline and that cost takes only the last run; therefore it cannot be directly renamed as an effective fix rate or full-cycle cost.
 
-### 8.2 门槛必须区分用途
+### 8.2 Thresholds must distinguish their purposes
 
-现有文档有不同语境：[validation plan](validation-plan.md)用 65% 盲测 precision 等条件判断是否值得继续试点；[design](design.md)提到 ≥80% 才讨论阻断；[traceability plan](traceability-plan.md)对需求类发现提出更严目标。它们不是同一份通过标准。
+The existing documents have different contexts: the [validation plan](validation-plan.md) uses conditions such as 65% blind-test precision to decide whether the pilot is worth continuing; [design](design.md) mentions that only ≥80% would justify discussing blocking; the [traceability plan](traceability-plan.md) sets a stricter goal for requirement-type findings. They are not one and the same pass standard.
 
-本文建议：
+This document recommends:
 
-1. 保留原试点预注册条件，单独报告新指标，不在看过数据后更改及格线。
-2. 高置信首屏发现以人工 precision ≥80% 为试点优化目标，需求矛盾以 ≥90% 为更严目标；报告样本量和区间。这是建议目标，未达到不代表阻断 CI，而是应缩小投递或修正判断。
-3. 扩展到更多仓库，需要看到多于个别样例的有效提前干预，并满足事先约定的阅读时间、延迟与成本预算。样本不足记“未证实”。
-4. 是否阻断是独立产品决策。达到某个 precision 也不自动满足执行证明、可恢复性和用户授权等要求；当前保持 advisory。
+1. Keep the original pilot pre-registered conditions, and report the new metrics separately, without changing the pass line after seeing the data.
+2. For high-confidence first-screen findings, take manual precision ≥80% as the pilot optimization goal, and ≥90% for requirement contradictions as the stricter goal; report sample sizes and intervals. These are recommended goals, and missing them does not mean blocking CI; it means delivery should be narrowed or the judgment corrected.
+3. Expanding to more repositories requires seeing more than isolated examples of effective early intervention, and meeting pre-agreed budgets for reading time, latency, and cost. When the sample is insufficient, record "not established".
+4. Whether to block is an independent product decision. Reaching some precision does not automatically satisfy requirements such as execution proof, recoverability, and user authorization; for now it stays advisory.
 
-## 9. 验证设计：先证机制，再证增量，最后看结果
+## 9. Validation design: prove the mechanism first, then the increment, and finally look at outcomes
 
-### 9.1 历史回放要防止未来信息泄漏
+### 9.1 Historical replay must prevent future-information leakage
 
-复用 [SZZ 与 replay](../eval/replay/README.md)：先人工确认缺陷和引入 PR 的关系，再在看输出前判定范围。SZZ 是候选定位，新增遗漏、重构和跨提交行为都可能使它找错。
+Reuse [SZZ and replay](../eval/replay/README.md): first confirm by hand the relationship between the defect and the introducing PR, then determine the scope before seeing the output. SZZ is candidate localization, and newly added omissions, refactors, and cross-commit behavior can all make it find the wrong thing.
 
-关键约束是重建 **PR 当时** 的信息：原始 base/head、当时需求版本、正文和可见讨论。后续修复 diff、解释原因的 issue 更新、未来提交及其历史关联，只给裁定者看，不给 reviewer。若无法还原 issue 当时内容，明确记为缺失或潜在污染，不能静默使用今天的描述。
+The key constraint is to reconstruct the information **at the time of the PR**: the original base/head, the requirement version at the time, the body, and visible discussion. The later fix diff, issue updates that explain the cause, and future commits and their historical associations are shown only to the adjudicator, not to the reviewer. If the issue's content at that time cannot be restored, record it explicitly as missing or potentially contaminated; today's description must not be used silently.
 
-配同窗口的干净 PR，并用相同版本、模型、预算、schema/skill 和可用上下文回放。既报告全部确认缺陷中有多少在工具范围内，也报告范围内的 direct、indirect、miss；不把跨服务或运行环境缺陷混入召回分母，也不隐去它们以夸大总体覆盖。
+Pair with clean PRs from the same window, and replay with the same version, model, budget, schema/skill, and available context. Report both how many of all confirmed defects are within the tool's scope, and the direct, indirect, and miss counts within scope; do not mix cross-service or runtime-environment defects into the recall denominator, and do not hide them to exaggerate overall coverage.
 
-至少 30 个 in-scope 缺陷再依已有 rubric 报比例和区间，较少时先报计数。公开仓库可能存在训练污染，内部样本单列；回放结果只能证明潜在检测能力。
+Report proportions and intervals per the existing rubric only once there are at least 30 in-scope defects; with fewer, report counts first. Public repositories may have training contamination, so internal samples are listed separately; replay results can only prove potential detection ability.
 
-### 9.2 真人试点测“在已有流程上多带来什么”
+### 9.2 A human pilot measures "what it adds on top of the existing process"
 
-优先选择有真实需求、稳定测试 CI、可定位 QA 缺陷和愿意裁定发现的仓库。先验证一个适合的仓库，再按原 S6 目标扩到不同语言和测试形态。
+Prefer repositories with real requirements, stable test CI, locatable QA defects, and people willing to adjudicate findings. Verify one suitable repository first, then extend to different languages and test shapes per the original S6 goal.
 
-已有 [三臂计划](validation-plan.md)可以继续使用，但 `PR number mod 3` 是确定性分组，不能直接称为随机试验。应检查时间、作者、团队和风险是否平衡。使用历史无 AI 基线时，人员、业务和季节混杂必须保留在结论里。
+The existing [three-arm plan](validation-plan.md) can continue to be used, but `PR number mod 3` is a deterministic grouping and cannot be called a randomized trial directly. Check whether time, authors, teams, and risk are balanced. When using a historical no-AI baseline, confounding from people, business, and seasons must be kept in the conclusion.
 
-如果问题是“已有评审工具之外，SpecGuard 有没有增量”，可在所有 PR 保留现有流程，再由预先固定的分配随机决定是否加 SpecGuard；按仓库/风险分层，并记录作者相互学习带来的污染。需要改变试点设计时先固定新方案，不把不同方案结果拼成同一因果估计。
+If the question is "does SpecGuard add an increment beyond existing review tools", the existing process can be kept on all PRs, and a pre-fixed allocation can randomly decide whether to add SpecGuard; stratify by repository/risk, and record contamination from authors learning from each other. When the pilot design needs to change, fix the new plan first, and do not stitch the results of different plans into one causal estimate.
 
-人工裁定按行为语义盲标 valid/invalid/unsure，必要时再看上下文。比较语义独有发现和有效提前干预，按 PR 聚类估计不确定性，不能把一个 PR 的十条评论当成十个独立样本。
+Human adjudication blind-labels valid/invalid/unsure by behavior semantics, looking at more context where needed. Compare semantically unique findings and effective early interventions, and estimate uncertainty clustered by PR; ten comments on one PR cannot be treated as ten independent samples.
 
-除已报告发现外，还要独立抽样复核零发现、失败与不完整 PR，按人工行为清单查漏。只检查机器人说了什么，会测到 precision，却看不见静默遗漏或义务分母缩小。
+In addition to the reported findings, independently sample and recheck PRs with zero findings, failures, and incomplete reviews, and look for omissions against the manual behavior list. Checking only what the bot said measures precision but cannot see silent omissions or a shrunken obligation denominator.
 
-### 9.3 QA 收益需要滞后观察
+### 9.3 QA benefit needs lagged observation
 
-2–4 周可以验证反馈及时性、有效性和部分修复闭环，通常不足以证明逃逸缺陷下降。沿用现有计划，在 8–12 周回查相关 PR 的 QA/生产缺陷；每个 PR 使用相同成熟观察窗，记录尚未发布、尚未进入 QA 或观察未结束的情况。
+2–4 weeks can verify the timeliness and validity of feedback and part of the fix loop, and is usually not enough to prove a decrease in escaped defects. Following the existing plan, recheck QA/production defects of the relevant PRs at 8–12 weeks; each PR uses the same maturity observation window, recording cases not yet released, not yet in QA, or with the observation unfinished.
 
-历史发现后加入回归集合；评测集与调优集分开。用于修 prompt 的真实漏报，不能同时继续作为“未见过样本”的收益证据。
+Historical findings are added to the regression set afterwards; the evaluation set is kept separate from the tuning set. Real misses used to fix the prompt cannot at the same time continue to serve as benefit evidence from "unseen samples".
 
-## 10. 建议执行顺序与停止条件
+## 10. Suggested execution order and stop conditions
 
-以下是工作顺序，天数从真正具备试点条件后计算，不承诺按日历自动完成。
+The following is the order of work; days are counted from when pilot conditions are actually in place, and are not a promise of automatic completion on the calendar.
 
-| 阶段 | 最小交付 | 验收与决策 |
+| Stage | Minimum deliverable | Acceptance and decision |
 |---|---|---|
-| 第 1–3 个工作日：固定可信基线 | 固定完整代码 SHA、模型、配置；复核删除断言迁移、weak-test 反例和 scan 实际预算；补标准正反 canary 方案 | 已修与未修分开记录；输入降级不产生更强结论；大文件能推进或明确停滞 |
-| 第 4–10 个工作日：证明单项收益 | 抽取一批真实高价值发现；人工表记录独立 oracle、处理和验证；完成一个真实 pushdown 成对样例 | 至少展示能复核的保护增强或缺陷修复；只有代理修改的样本不计有效闭环 |
-| 第 2–4 周：真人增量试点 | 复用导出、盲标和周报；另补首屏摘要、全周期成本与有效干预 | 达到预定样本和护栏才判断继续或扩展；不够就报告证据不足 |
-| 第 8–12 周：逃逸复查 | 对试点 PR 做相同成熟观察窗的 QA/生产回访 | 报风险分层、对照差异与区间，无法归因时保持相关性结论 |
+| Working days 1–3: fix a credible baseline | Fix the full code SHA, model, and configuration; recheck deleted-assertion migration, weak-test counterexamples, and scan's actual budget; add a plan for standards positive/negative canaries | Fixed and unfixed items recorded separately; input degradation does not produce stronger conclusions; large files can advance or clearly stall |
+| Working days 4–10: prove single-item benefit | Extract a batch of real high-value findings; the manual table records the independent oracle, handling, and verification; complete one real pushdown paired example | Show at least a protection strengthening or defect fix that can be rechecked; samples with only proxy changes do not count as an effective loop |
+| Weeks 2–4: human incremental pilot | Reuse export, blind labeling, and the weekly report; additionally add first-screen summary, full-cycle cost, and effective intervention | Decide to continue or extend only after the predetermined sample and guardrails are met; if insufficient, report insufficient evidence |
+| Weeks 8–12: escape recheck | Follow up on QA/production for the pilot PRs with the same maturity observation window | Report risk strata, control differences, and intervals; when attribution is not possible, keep the correlational conclusion |
 
-建议事先约定以下停止或收缩条件：
+The following stop or narrowing conditions are recommended to be agreed in advance:
 
-- 发现主要是现有 lint/CI 的重复信息：降低这类投递，集中需求与行为缺口。
-- 有效发现不少，但作者长期无法处理：检查时机、归属和建议成本，不先增加发现数量。
-- 只有扫描报表在增长，PR 前有效干预没有增长：限制扫描投入，先打通行动闭环。
-- 需求始终不可得：缩小为行为验证审查，保留“需求对齐未知”的真实边界。
-- 同等风险下，处理成本和等待时间超过可确认收益：先收缩到高价值类型或摘要投递，重新验证。
+- Findings are mainly duplicates of existing lint/CI: reduce delivery of this class and concentrate on requirement and behavior gaps.
+- There are plenty of valid findings, but authors cannot handle them for a long time: check timing, ownership, and suggestion cost, and do not increase the number of findings first.
+- Only the scan reports grow and effective pre-PR interventions do not: limit scan investment and first get the action loop working.
+- Requirements are never available: narrow to behavior-verification review, keeping the true boundary of "requirement alignment unknown".
+- At equal risk, handling cost and waiting time exceed the confirmable benefit: first narrow to high-value types or summary delivery, and re-verify.
 
-上述收缩是未来试点决策，不改变本项目当前每次 push 的运行承诺。跨团队自动通知、自动指派、自动改代码和阻断合并都不作为本轮前置建设。
+The narrowing above is a future pilot decision and does not change this project's current per-push run commitment. Cross-team automatic notification, automatic assignment, automatic code changes, and blocking merges are not prerequisites for this round.
 
-## 11. 下一阶段应交付的证据
+## 11. Evidence to deliver in the next phase
 
-最大价值可以先用一份可审计的小样本证明，而不依赖庞大的新平台：
+The greatest value can first be proven with a small auditable sample, without relying on a huge new platform:
 
-1. 固定版本上的真实案例：需求、原保护缺口、实际送达、作者决定、修复和执行证据能串起来。
-2. 干净对照与误报清单：说明何时不该评论，尤其是等价重构、跨文件测试迁移和来源冲突。
-3. 一份使用统一分母的试点报告：区分潜在发现、人工有效、有效提前干预与滞后逃逸结果。
-4. 一份投入决策：哪些发现值得优先投递，哪些验证值得运行，哪些能力暂不扩展。
+1. Real cases on a fixed version: the requirement, the original protection gap, actual delivery, the author's decision, the fix, and execution evidence can be strung together.
+2. Clean controls and a false-positive list: explain when not to comment, especially equivalent refactors, cross-file test migration, and source conflicts.
+3. A pilot report using a unified denominator: distinguishing potential findings, human-valid, effective early interventions, and lagged escape results.
+4. An investment decision: which findings are worth delivering first, which verifications are worth running, and which capabilities are not to be extended for now.
 
-当团队能指出“这条需求下的这个错误，在交给 QA 前被发现并获得了可执行保护，而且原有流程没有给出等效提示”，SpecGuard 的 shift-left 价值才从设计主张变成了可复核事实。此后再以对照和成熟观察窗判断规模化收益。
+When the team can point out "this error under this requirement was found before handoff to QA and received actionable protection, and the existing process gave no equivalent hint", SpecGuard's shift-left value changes from a design claim into a verifiable fact. After that, judge the benefit at scale with controls and mature observation windows.
 
-## 12. 依据与本次边界
+## 12. Basis and boundaries of this document
 
-- 目标与既有决策：[design.md](design.md)。
-- 修复历史与现场观察：[handoff-2026-10-15.md](handoff-2026-10-15.md)、[critical-shift-left-followup-2026-10-15.md](critical-shift-left-followup-2026-10-15.md)、[context completeness](review-context-completeness-2026-10-15.md)。这些是历史快照，以本文声明的本地基线区分现状。
-- 价值验证方案与工具：[validation-plan.md](validation-plan.md)、[replay rubric](../eval/replay/README.md)、[prove harness](../eval/prove/README.md)、[field study](field-study.md)。
-- 本次只新增策略文档与 README 入口；核对本地链接、diff 格式和关键实现依据，不修改运行逻辑，不重新运行工程全套测试，不将历史结果声称为本基线新验收。
+- Goals and existing decisions: [design.md](design.md).
+- Fix history and field observations: [handoff-2026-10-15.md](handoff-2026-10-15.md), [critical-shift-left-followup-2026-10-15.md](critical-shift-left-followup-2026-10-15.md), [context completeness](review-context-completeness-2026-10-15.md). These are historical snapshots, distinguished from the current state by the local baseline declared in this document.
+- Value validation plans and tools: [validation-plan.md](validation-plan.md), [replay rubric](../eval/replay/README.md), [prove harness](../eval/prove/README.md), [field study](field-study.md).
+- This change only adds the strategy document and a README entry; it checks local links, diff format, and the key implementation basis, does not modify runtime logic, does not rerun the full engineering test suite, and does not claim historical results as new acceptance of this baseline.
