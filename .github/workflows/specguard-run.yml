@@ -11,6 +11,8 @@ name: SpecGuard manual run
 # with copilot-requests: write, which works only when the organization enables "Allow use of Copilot CLI billed to the organization".
 # Token order: GitHub App installation token (environment secrets SPECGUARD_APP_ID = the App's Client ID or App ID, and SPECGUARD_APP_PRIVATE_KEY; minted per job, scoped to the one target repository, read-only
 # unless post_to_pr or scan_issue: target), else SPECGUARD_PAT, else the job token (repository access only; Copilot has its own token above). The App needs Contents, Pull requests and Issues read (Pull requests write for post_to_pr) and must be installed on the target repository.
+# Coverage (scans only): coverage_codecov true = fetch the scanned repository's PUBLIC Codecov report for exactly the scanned commit (anonymous GET to api.codecov.io; coverage_flag optional), convert it to LCOV and pass it as coverage_files.
+# The step has no secret in its env and runs only bin/ scripts of this repository. No report (or a failed fetch) = a warning and a scan without coverage. Private repositories need a Codecov token, which this does not support.
 on:
   workflow_dispatch:
     inputs:
@@ -23,6 +25,8 @@ on:
       max_budget_usd: { description: "Claude engine: budget in USD per run, at most 20. A ceiling, not a cost: the engine spends only what the parts need (a full scan of a ~500-unit repository cost about $1.5 on haiku-5.5). Empty = the action default (1.00), which a full scan of a large repository exceeds.", required: false, type: string, default: "5" }
       scan_scope: { description: "Scans only: all = review the whole repository in this one run (every unit part and document block, claude engine; incomplete and red when the budget or the time limit stops it, so set max_budget_usd); selected = the riskiest units and the first blocks one run's caps allow.", required: false, type: choice, default: all, options: [all, selected] }
       scan_issue: { description: "Scans only: where the scan's results are kept. none = this run's page only; specguard = a tracking issue in this repository; target = an issue in the scanned repository. This repository is public, so its run pages and issues are visible to anyone.", required: false, type: choice, default: none, options: [specguard, target, none] }
+      coverage_codecov: { description: "Scans only: use the scanned repository's public Codecov report for the scanned commit as coverage evidence (needs a report for exactly that commit; partial lines count as executed).", required: false, type: boolean, default: false }
+      coverage_flag: { description: "Scans only, with coverage_codecov: the Codecov flag to read (e.g. a unit-test flag). Empty = the combined report. A flag name does not guarantee unit-only coverage.", required: false, type: string }
 permissions: {}
 concurrency: { group: "specguard-run-${{ inputs.target }}", cancel-in-progress: false }
 
@@ -157,6 +161,23 @@ jobs:
         shell: bash
         run: |
           echo '**One-off scan: gaps are unconfirmed; run it again with a scan issue (scan_issue: specguard or target) to confirm across runs.**' >> "$GITHUB_STEP_SUMMARY"
+      # Optional coverage evidence: a public report fetched as DATA. Its own step with an explicit env that holds no secret and no token; it runs only this repository's bin/ scripts, never code of the target. Any failure only warns.
+      - id: cov
+        if: needs.resolve.outputs.mode == 'scan' && inputs.coverage_codecov
+        shell: bash
+        env:
+          TARGET_REPO: ${{ needs.resolve.outputs.repo }}
+          SCAN_SHA: ${{ steps.head.outputs.sha }}
+          FLAG: ${{ inputs.coverage_flag }}
+        run: |
+          if [ -e .specguard-cov ] || [ -L .specguard-cov ]; then echo "::warning::the scanned repository has a path named .specguard-cov; scanning without Codecov coverage"; exit 0; fi
+          mkdir .specguard-cov
+          tmp="$RUNNER_TEMP/codecov-report.json"
+          if node .specguard-src/bin/codecov-fetch.js "${TARGET_REPO%%/*}" "${TARGET_REPO#*/}" "$SCAN_SHA" "${FLAG:--}" "$tmp"              && node .specguard-src/bin/codecov-to-lcov.js "$tmp" .specguard-cov/codecov.lcov              && grep -q '^SF:' .specguard-cov/codecov.lcov; then
+            echo "file=.specguard-cov/codecov.lcov" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::no usable public Codecov report for $SCAN_SHA; scanning without coverage"
+          fi
       - uses: ./.specguard-src
         with:
           mode: ${{ needs.resolve.outputs.mode }}
@@ -179,6 +200,7 @@ jobs:
           standards_paths: ${{ needs.resolve.outputs.rules }}
           test_paths: ${{ needs.resolve.outputs.tests }}
           ignore: .specguard-src/
+          coverage_files: ${{ steps.cov.outputs.file }} # empty unless coverage_codecov produced a report
           scan_issue: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue != 'none' && 'true' || 'false' }}
           scan_issue_repo: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue == 'specguard' && github.repository || '' }} # empty = the scanned repository (scan_issue: target, written with github_token)
           scan_issue_token: ${{ needs.resolve.outputs.mode == 'scan' && inputs.scan_issue == 'specguard' && github.token || '' }}

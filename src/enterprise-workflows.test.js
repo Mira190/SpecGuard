@@ -248,3 +248,27 @@ test('specguard-run.yml: manual model/size/budget inputs reach the action (empty
   assert.match(action, /SPECGUARD_REF: \$\{\{ github\.action_ref \|\| github\.sha \}\}/);
   assert.doesNotMatch(action, /SPECGUARD_REF: \$\{\{ github\.action_ref \}\}/);
 });
+
+test('specguard-run.yml: the Codecov coverage step is scan-only, secret-free, runs only bin scripts, and coverage_files comes only from it', () => {
+  const y = central();
+  const inputs = /^ {6}coverage_codecov: \{[^}]*type: boolean, default: false \}/m;
+  assert.match(y, inputs);
+  assert.match(y, /^ {6}coverage_flag: \{[^}]*type: string \}/m);
+  assert.match(y, /^# Coverage \(scans only\): coverage_codecov/m); // documented in the header
+  const step = /^ {6}- id: cov\n((?: {8}.*\n|\n)+)/m.exec(y);
+  assert.ok(step, 'cov step');
+  const s = step[1];
+  assert.match(s, /^ {8}if: needs\.resolve\.outputs\.mode == 'scan' && inputs\.coverage_codecov$/m);
+  const env = /^ {8}env:\n((?: {10}.*\n)+)/m.exec(s)[1];
+  assert.doesNotMatch(env, /secrets\.|github\.token|steps\.app|TOKEN|KEY/i);
+  assert.match(env, /SCAN_SHA: \$\{\{ steps\.head\.outputs\.sha \}\}/);
+  assert.doesNotMatch(s, /secrets\.|github\.token|steps\.app/);
+  const run = s.replace(/#.*$/gm, '');
+  for (const m of run.matchAll(/\bnode (\S+)/g)) assert.match(m[1], /^\.specguard-src\/bin\/codecov-(fetch|to-lcov)\.js$/);
+  assert.doesNotMatch(run, /\b(npm|npx|yarn|pnpm|make|bash \.|sh \.)\b|\.\/(?!\.)/);
+  // the only way coverage_files is set, and the output is written only after a usable report exists
+  assert.equal([...y.matchAll(/^ +coverage_files:/gm)].length, 1);
+  assert.match(y, /^ {10}coverage_files: \$\{\{ steps\.cov\.outputs\.file \}\}/m);
+  assert.equal([...y.matchAll(/GITHUB_OUTPUT/g)].filter((m) => y.slice(m.index - 80, m.index).includes('codecov.lcov')).length, 1);
+  assert.match(s, /grep -q '\^SF:'[^\n]*\n\s+echo "file=\.specguard-cov\/codecov\.lcov"/);
+});
