@@ -30,19 +30,19 @@ Evidence: **E** executed (coverage report, CI results) · **S** static rule (exa
 
 ### Do these first
 
-| # | Do | Where | Why | Ev. | Owner |
-|---|---|---|---|---|---|
-| 1 | **Add a unit test** for the refund error path | [`src/payments/refund.ts:88-104`](#) `refund()` | 17 lines never run by any test, 6 are `catch`/`throw`; 4 fix commits in 180 days | E | @payments |
-| 2 | **Make CI run** `test/integration/legacy/**` | [`vitest.integration.config.ts:7`](#) | `include` matches `*.int.ts`; these 38 tests are `*.spec.ts`, so no job runs them | S E | @platform |
-| 3 | **Fix or quarantine** a flaky test | [`test/cart/merge.test.ts:41`](#) `merges guest cart` | failed then passed on retry in 4 of 71 runs | E | @cart |
-| 4 | **Add a unit test** for the coupon stacking limit | [`src/pricing/coupons.ts:52-61`](#) `applyCoupons()` | branch `stack > MAX_STACK` never runs in unit or integration tests; only `e2e/checkout.e2e.ts` names the function | E | @pricing |
-| 5 | **Move down** the tax-rounding cases | [`e2e/checkout.e2e.ts:120-188`](#) → `src/pricing/tax.ts` `roundTax()` | 6 E2E cases vary only the amount; `roundTax()` is pure. Keep 1 E2E for the wiring | S M | @pricing |
-| 6 | **Add an assertion** or delete | [`test/inventory/reserve.test.ts:15`](#) and 3 more | the test body has no `expect`; it passes whatever the code does | S | @inventory |
-| 7 | **Add a coverage gate on new code** | [`.github/workflows/ci.yml`](#) | only a 60% project-wide check exists; changed lines can be untested | S | @platform |
-| 8 | **Clarify** with the requirement owner | [`docs/requirements/checkout.md:34`](#) REQ-CHK-12 | "the page must load quickly": no number, so no test can pass or fail it | M | @product |
-| 9 | **Check:** the code may contradict the design | [`docs/design.md:58`](#) vs [`src/clients/inventory.ts:22`](#) | doc: "3 retries, exponential backoff"; code: `retries: 5`, fixed 200 ms delay | M | @inventory |
+| # | Do | Where | Why | Ev. | Owner | Seen |
+|---|---|---|---|---|---|---|
+| 1 | **Add a unit test** for the refund error path | [`src/payments/refund.ts:88-104`](#) `refund()` | 17 lines never run by any test, 6 are `catch`/`throw`; 4 fix commits in 180 days | E | @payments | 3 scans |
+| 2 | **Make CI run** `test/integration/legacy/**` | [`vitest.integration.config.ts:7`](#) | `include` matches `*.int.ts`; these 38 tests are `*.spec.ts`, so no job runs them | S E | @platform | new |
+| 3 | **Fix or quarantine** a flaky test | [`test/cart/merge.test.ts:41`](#) `merges guest cart` | failed then passed on retry in 4 of 71 runs | E | @cart | 2 scans |
+| 4 | **Add a unit test** for the coupon stacking limit | [`src/pricing/coupons.ts:52-61`](#) `applyCoupons()` | branch `stack > MAX_STACK` never runs in unit or integration tests; only `e2e/checkout.e2e.ts` names the function | E | @pricing | new |
+| 5 | **Move down** the tax-rounding cases | [`e2e/checkout.e2e.ts:120-188`](#) → `src/pricing/tax.ts` `roundTax()` | 6 E2E cases vary only the amount; `roundTax()` is pure. Keep 1 E2E for the wiring | S M | @pricing | 3 scans |
+| 6 | **Add an assertion** or delete | [`test/inventory/reserve.test.ts:15`](#) and 3 more | the test body has no `expect`; it passes whatever the code does | S | @inventory | 3 scans |
+| 7 | **Add a coverage gate on new code** | [`.github/workflows/ci.yml`](#) | only a 60% project-wide check exists; changed lines can be untested | S | @platform | 3 scans |
+| 8 | **Clarify** with the requirement owner | [`docs/requirements/checkout.md:34`](#) REQ-CHK-12 | "the page must load quickly": no number, so no test can pass or fail it | M | @product | new |
+| 9 | **Check:** the code may contradict the design | [`docs/design.md:58`](#) vs [`src/clients/inventory.ts:22`](#) | doc: "3 retries, exponential backoff"; code: `retries: 5`, fixed 200 ms delay | M | @inventory | 2 scans |
 
-Ranking: items backed by evidence (E, S) come before model judgements (M); then by risk (fix commits, error-handling lines); then by effort. "Owner" comes from CODEOWNERS.
+Ranking: items backed by evidence (E, S) come before model judgements (M); then by risk (fix commits, error-handling lines); then by effort; at most 2 per file. "Owner" comes from CODEOWNERS. "Seen" counts the scans that reported it. Not useful? Comment `/specguard not-useful 5`; a finding type that more than 10% of readers mark not useful is turned off.
 
 <details><summary><b>Untested code (unit)</b>: 12 definitions with lines no unit test runs · unit line coverage 71.4%, branch 58.2%</summary>
 
@@ -55,6 +55,17 @@ Source: the repository's unit coverage report for `4f2c9e1` (flag `unit`). Lines
 | `src/cart/merge.ts` `mergeCarts()` | 30-37 (8) | 3 | 1 | integration |
 | `src/orders/cancel.ts` `cancelOrder()` | 71-79 (9) | 4 | 0 | none |
 | `src/shipping/zones.ts` `zoneFor()` | 12-15 (4) | 0 | 1 | none |
+
+Test sketch for `refund()` (not run; fill in the fixture):
+
+```ts
+it('rejects a refund larger than the captured amount', async () => {
+  const gateway = fakeGateway({ captured: 50_00 });
+  await expect(refund(gateway, { orderId: 'o1', amount: 60_00 }))
+    .rejects.toThrow(RefundExceedsCaptureError);
+  expect(gateway.refunds).toHaveLength(0);
+});
+```
 
 +7 more in the run artifact (`audit.json`). 14 source files are not in the coverage report at all: 9 excluded by its config as generated (`src/gen/**`), 5 for no stated reason (`src/admin/**`). Not in the report does not mean tested.
 
