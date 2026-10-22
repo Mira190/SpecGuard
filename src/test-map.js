@@ -207,10 +207,24 @@ function enclosingName(lines, line) {
 // line sits outside every definition. The span ends at the matching brace (brace languages) or when the indentation falls back to the declaration's (Python, Ruby).
 // ponytail: a heuristic, not a parser. Ceilings: braces inside multi-line template literals and regex literals are counted, a multi-line /* */ comment is not skipped,
 // a Python docstring line at column 0 ends the span early, a class-field arrow (`handler = () => {`) is a definition nested in its class, and a declaration the patterns miss is
-// invisible (the group then falls to the next definition up or to the file), and unbalanced parens inside regex literals (e.g. /\(/) keep the paren count open, so a later line can be
-// attributed to the definition. Upgrade path: tree-sitter.
+// invisible (the group then falls to the next definition up or to the file). A single-line regex literal is blanked before the comment strip (so `\/\/` or `\(` inside it counts
+// for nothing): a `/` starts one when the text before it ends with ( , = : [ ! & | ? { } ; return typeof or the line start. Limits: a regex holding a quote character is cut by the
+// string step first, a regex after `)` or an identifier is read as a division, a regex spanning lines is not seen. Upgrade path: tree-sitter.
 const PY_START = /^\s*(?:async\s+)?(?:def|class)\s/;
-const unquote = (l) => l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, '');
+const REGEX_AFTER = /(?:^|[(,=:[!&|?{};]|\breturn|\btypeof)\s*$/;
+function unregex(l) {
+  let out = '';
+  for (let i = 0; i < l.length; i++) {
+    if (l[i] === '/' && l[i + 1] !== '/' && l[i + 1] !== '*' && REGEX_AFTER.test(out)) {
+      let j = i + 1, cls = false;
+      for (; j < l.length; j++) { if (l[j] === '\\') j++; else if (l[j] === '[') cls = true; else if (l[j] === ']') cls = false; else if (l[j] === '/' && !cls) break; }
+      if (j < l.length) { out += '/r/'; i = j; while (/[a-z]/i.test(l[i + 1] || '')) i++; continue; }
+    }
+    out += l[i];
+  }
+  return out;
+}
+const unquote = (l) => unregex(l.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""').replace(/\/\*.*?\*\//g, '')).replace(/\/\/.*$/, '');
 const MAX_SIG = 60;
 function defEnd(lines, i) {
   const indent = (l) => /^\s*/.exec(l)[0].length, base = indent(lines[i]);
@@ -239,6 +253,17 @@ function defEnd(lines, i) {
   }
   return opened ? Math.min(lines.length, i + 5000) - 1 : byIndent(sig >= 0 ? sig : i);
 }
+// A definition also ends where the next declaration at the same or a lower indentation starts (top level -> the next top-level declaration), whatever the brace count says: a line the
+// string and regex blanking misread (a regex holding a quote) can keep braces or parens open to the end of the file; this caps that damage to the definition's own region.
+function capEnd(lines, i, end) {
+  const base = /^\s*/.exec(lines[i])[0].length;
+  for (let j = i + 1; j <= end && j < lines.length; j++) {
+    const l = lines[j];
+    if (!l.trim() || comment(l) || /^\s*[}\])]/.test(l) || /^\s*/.exec(l)[0].length > base) continue;
+    if (GEN.exec(l) || EXPORT_CONST.exec(l) || namesOf(l.trim())[0] || declName(l)) { let e = j - 1; while (e > i && !lines[e].trim()) e--; return e; }
+  }
+  return end;
+}
 // cache: Map(declaration index -> end index), shared across calls on one file
 function enclosingDef(lines, line, cache = new Map()) {
   for (let i = Math.min(line - 1, lines.length - 1); i >= Math.max(0, line - 3001); i--) {
@@ -246,7 +271,7 @@ function enclosingDef(lines, line, cache = new Map()) {
     if (comment(l)) continue;
     const name = (GEN.exec(l) || EXPORT_CONST.exec(l) || [])[1] || namesOf(l.trim())[0] || declName(l);
     if (!name) continue;
-    if (!cache.has(i)) cache.set(i, defEnd(lines, i));
+    if (!cache.has(i)) cache.set(i, capEnd(lines, i, defEnd(lines, i)));
     if (cache.get(i) >= line - 1) return { line: i + 1, name, end: cache.get(i) + 1 };
   }
   return null;

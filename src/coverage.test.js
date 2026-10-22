@@ -164,7 +164,7 @@ const def = (name, body) => [`function ${name}(x) {`, ...body, '}'];
 const keys = (g) => g.emit.map((x) => [x.decl, x.lines]);
 
 test('V2 filter patterns: the exported array pins what is not worth a unit test', () => {
-  assert.deepEqual(postV2.NOT_WORTH_TESTING.map((r) => r.id), ['logging', 'constant-or-type', 'forwarding-one-liner', 'forwarding-body', 'structural-punctuation', 'generated-file']);
+  assert.deepEqual(postV2.NOT_WORTH_TESTING.map((r) => r.id), ['logging', 'constant-or-type', 'forwarding-one-liner', 'forwarding-body', 'structural-punctuation', 'generated-file', 'cli-main-guard']);
   const worthless = (l) => postV2.NOT_WORTH_TESTING.some((r) => r.line && r.line.test(l));
   for (const l of ["  console.log('x');", '  logger.warn(m);', '  log.info(m)', '    print(x)', '  logging.debug("a")', 'const MAX_RETRIES = 3;', 'MAX_ITEMS: int = 5', 'export type Id = string;', 'interface Opts {', 'const f = (a) => g(a);', '}']) assert.ok(worthless(l), l);
   // guards, error returns, a one-letter module name, a callback in a chain and a fatal log are NOT noise
@@ -325,4 +325,56 @@ test('V2 gapEvidence: none without a report, never for a never-run line, ran for
   assert.equal(postV2.gapEvidence(ran, 'src.js', 1), 'ran');
   assert.equal(postV2.gapEvidence(ran, 'src.js', 5), 'unknown', 'a line the report does not mention');
   assert.equal(postV2.gapEvidence(ran, 'other.js', 1), 'unknown', 'a file outside the changed set');
+});
+
+test("analyze mode 'all' (scan): every instrumented line of every non-test file is reported as never or ran, with no diff; mode: all is stamped", () => {
+  const lcov = 'SF:/ci/src/a.js\nDA:1,3\nDA:2,0\nDA:3,0\nDA:5,1\nend_of_record\nSF:/ci/src/a.test.js\nDA:1,1\nend_of_record\nSF:/ci/src/b.js\nDA:1,0\nend_of_record\n';
+  const run = (mode) => cov.analyze({ files: ['src/a.js', 'src/b.js', 'src/a.test.js'], reports: [{ name: 'lcov.info', text: lcov }], ws: '/ci', mode });
+  const r = run('all').json;
+  assert.equal(r.v, 2);
+  assert.equal(r.mode, 'all');
+  assert.deepEqual(r.files['src/a.js'].never, [[2, 3]]);
+  assert.deepEqual(r.files['src/a.js'].ran, [[1, 1], [5, 5]]);
+  assert.deepEqual(r.files['src/b.js'].never, [[1, 1]]);
+  assert.equal(r.files['src/a.test.js'], undefined, 'a test file is not source');
+  assert.deepEqual(r.total, { instrumented: 5, executed: 2 });
+  assert.equal(run('all').txt, '');
+  assert.deepEqual(run('diff').json.files['src/a.js'].never, [], 'diff mode with no added lines reports nothing');
+  assert.equal(run('diff').json.mode, undefined);
+});
+
+test("analyze mode 'all': the file and range caps still apply and set truncated; the files with the most never-run lines survive", () => {
+  const many = Array.from({ length: 405 }, (_, i) => `SF:/ci/f${i}.js\nDA:1,${i === 404 ? 0 : 1}\nend_of_record\n`).join('');
+  const files = Array.from({ length: 405 }, (_, i) => `f${i}.js`);
+  const r = cov.analyze({ files, reports: [{ name: 'l', text: many }], ws: '/ci', mode: 'all' }).json;
+  assert.equal(Object.keys(r.files).length, 400);
+  assert.equal(r.truncated, true);
+  assert.ok(r.files['f404.js'], 'the file with a never-run line is kept');
+  const odd = Array.from({ length: 700 }, (_, i) => `DA:${i * 2 + 1},${i % 2}`).join('\n');
+  const r2 = cov.analyze({ files: ['a.js'], reports: [{ name: 'l', text: `SF:a.js\n${odd}\nend_of_record\n` }], mode: 'all' }).json;
+  assert.equal(r2.files['a.js'].never.length, 300);
+  assert.equal(r2.truncated, true);
+  assert.equal(cov.analyze({ files: ['a.js'], reports: [{ name: 'l', text: 'SF:a.js\nDA:1,1\nend_of_record\n' }], mode: 'all' }).json.truncated, undefined);
+});
+
+test("main() in scan mode (COVERAGE_MODE=all) lists the tracked source files with git ls-files and writes a whole-file coverage.json; without it the diff files are used", () => {
+  const { execFileSync } = require('node:child_process');
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'specguard-covall-')), ctx = path.join(ws, '.ctx');
+  try {
+    fs.mkdirSync(path.join(ws, 'src')); fs.mkdirSync(ctx);
+    fs.writeFileSync(path.join(ws, 'src', 'a.js'), 'x\ny\nz\n');
+    fs.writeFileSync(path.join(ws, 'lcov.info'), 'SF:/ci/work/src/a.js\nDA:1,1\nDA:2,0\nDA:3,0\nend_of_record\n');
+    const git = (...a) => execFileSync('git', ['-C', ws, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { stdio: 'ignore' });
+    git('init', '-q'); git('add', 'src/a.js'); git('commit', '-q', '-m', 'x');
+    const env = { CTX: ctx, GITHUB_WORKSPACE: ws, COVERAGE_FILES: 'lcov.info' };
+    cov.main({ ...env, COVERAGE_MODE: 'all' });
+    const all = JSON.parse(fs.readFileSync(path.join(ctx, 'coverage.json'), 'utf8'));
+    assert.equal(all.mode, 'all');
+    assert.deepEqual(all.files['src/a.js'].never, [[2, 3]]);
+    assert.deepEqual(all.files['src/a.js'].ran, [[1, 1]]);
+    cov.main(env);
+    const diffMode = JSON.parse(fs.readFileSync(path.join(ctx, 'coverage.json'), 'utf8'));
+    assert.equal(diffMode.mode, undefined);
+    assert.deepEqual(diffMode.files, {}, 'no changed files in diff mode: nothing resolves');
+  } finally { fs.rmSync(ws, { recursive: true, force: true }); }
 });

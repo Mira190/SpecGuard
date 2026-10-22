@@ -341,3 +341,46 @@ test('publicDefs: ESM, TS, Python and Go are unchanged', () => {
   assert.deepEqual(names('a.py', 'def _h(): pass\ndef api(): pass'), ['api']);
   assert.deepEqual(names('a.go', 'func helper() {}\nfunc Serve() {}'), ['Serve']);
 });
+
+test('enclosingDef: a // inside a regex literal is not a comment, so the definition ends where its braces end', () => {
+  const { enclosingDef } = require('./test-map');
+  const lines = [
+    'function trackerRefs({ title = "", branch = "" }) {',
+    '  const keys = [];',
+    '  if (!/^(?:dependabot|renovate)\\//i.test(branch)) keys.push(...[title]);',
+    '  return keys;',
+    '}',
+    '',
+    'if (require.main === module) {',
+    '  main();',
+    '}',
+  ];
+  assert.deepEqual(enclosingDef(lines, 4), { line: 1, name: 'trackerRefs', end: 5 });
+  assert.equal(enclosingDef(lines, 8), null, 'the entry-point block is not part of trackerRefs');
+  const divide = ['function half(a, b) {', '  const c = a / b; // ratio', '  return c / 2;', '}', 'const z = 1;'];
+  assert.deepEqual(enclosingDef(divide, 3), { line: 1, name: 'half', end: 4 }, 'a division is not a regex');
+});
+
+test('enclosingDef: a definition ends at the next declaration of the same or lower indentation even when a quote-holding regex keeps its braces open (requirements.js sanitize shape)', () => {
+  const { enclosingDef } = require('./test-map');
+  const lines = [
+    'const sanitize = (s) => {',
+    "  let t = decode(String(s || '').replace(/\\r\\n?/g, '\\n')).replace(INVISIBLE, '');",
+    '  return t.replace(/<!--[\\s\\S]*$/, \'\')',
+    "    .replace(/(\\]\\(\\s*<?[^\\s)]+>?)\\s+(?:\"[^\"]*\"|'[^']*')\\s*\\)/g, '$1)'); // link and image titles",
+    '};',
+    '',
+    'const AC_LINE = /^\\s*AC[\\s._-]*\\d+\\s*[:]/i;',
+    'function next(a) {',
+    '  return a + 1;',
+    '}',
+    'function last(b) {',
+    '  return b;',
+    '}',
+  ];
+  const d = enclosingDef(lines, 3);
+  assert.equal(d.name, 'sanitize');
+  assert.ok(d.end <= 7, `sanitize must not run into next(): ended at ${d.end}`);
+  assert.equal(enclosingDef(lines, 9).name, 'next');
+  assert.equal(enclosingDef(lines, 12).name, 'last');
+});

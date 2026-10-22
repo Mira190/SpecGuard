@@ -1554,3 +1554,192 @@ test('run: scan_scope all, zero units and zero documents, but scan_paths files d
   const sample = await runPost(t, { env: { SKIP: 'true' }, ctxFiles: { 'audit-meta.json': { ...meta, scan_scope: undefined, not_unit: 2, docs_over_size: 1 } } });
   assert.equal(sample.calls.outputs.status, 'complete', 'outside scan_scope all it stays a sample');
 });
+
+// ---- coverage-backed audit (coverage_files in scan mode) ----
+const CSRC = {
+  'src/m.js': [
+    'function guard(x) {', '  if (!x) {', '    throw new Error("no");', '  }', '  return x;', '}', '',
+    'function logIt(m) {', '  console.log(m);', '}',
+    'function plain(a) {', '  const b = a + 1;', '  const c = b * 2;', '  return c;', '}',
+    'function ran(a) {', '  return a + 1;', '}',
+    'function logThrow(m) {', '  console.log(m);', '  throw new Error(m);', '}',
+  ],
+};
+const covOf = (files, over = {}) => ({ v: 2, mode: 'all', reports: 1, total: {}, files, unreported: [], notes: [], ...over });
+const CFILE = { 'src/m.js': { inst: 14, exec: 3, never: [[3, 3], [9, 9], [12, 13], [20, 21]], ran: [[2, 2], [5, 5], [17, 17]], miss: [[3, 3], [9, 9], [12, 13], [20, 21]] } };
+const rd = (p) => CSRC[p] || null;
+const notTest = (p) => /test/.test(p);
+const mt = (line, over = {}) => ({ unit: A1, kind: 'missing_test', path: 'src/m.js', line, quote: CSRC['src/m.js'][line - 1].trim(), title: `claim at ${line}`, body: 'model text', skeleton: '', fid: `fid${line}`, low: false, ...over });
+const scanOf = (findings, cov = covOf(CFILE), top = 10, more = {}) => audit.scanCoverage({ cov, findings, readLines: rd, isTest: notTest, top, ...more });
+const codeWith = (sc) => ({ ...codeOf([urow(A1, { path: 'src/m.js' })]), findings: sc.findings, gaps: sc.gaps, noTest: sc.noTest, covNotes: sc.notes });
+
+test('scan coverage: never-run lines are grouped per definition repo-wide; logging-only groups are dropped, guard and error branches are kept, branching ranks first', () => {
+  const { gaps } = scanOf([]);
+  assert.equal(gaps.filtered, 1, 'logIt (console.log only) is not worth a test');
+  const names = [...gaps.emit, ...gaps.roll.flatMap((r) => r.groups)].map((g) => g.name);
+  assert.deepEqual(names, ['logThrow', 'guard', 'plain'], 'a throw or if line is kept; a logging line next to a throw does not drop the group; branching first, then size');
+  assert.deepEqual(gaps.emit.map((g) => g.lines), [[20, 21], [3], [12, 13]]);
+  assert.ok(gaps.emit[0].branch > 0 && gaps.emit[1].branch > 0 && gaps.emit[2].branch === 0);
+});
+
+test('scan coverage: the top K are listed with exact line ranges and source: coverage, the rest are one rollup line per file in Details; the verdict words them as coverage gaps in scope', () => {
+  const sc = scanOf([], covOf(CFILE), 1);
+  assert.equal(sc.gaps.emit.length, 1);
+  assert.equal(sc.gaps.roll.length, 1);
+  assert.equal(sc.gaps.roll[0].groups.length, 2);
+  const md = render({ data: clean(), code: codeWith(sc) });
+  const vis = md.slice(0, md.indexOf('<details>')), det = md.slice(md.indexOf('<details>'));
+  assert.match(vis, /### Unit test gaps from the coverage report \(1\)/);
+  assert.match(vis, /logThrow: 2 lines never executed by any unit test \(L20-L21\)/);
+  assert.match(vis, /source: coverage/);
+  assert.doesNotMatch(vis, /guard|plain/);
+  assert.match(vis, /\*\*❌ 3 coverage gaps in scope \(top 1 listed\)\*\*/, 'worded apart from the model gaps, never "in the riskiest units"');
+  assert.doesNotMatch(vis.split('\n')[2], /riskiest/);
+  assert.match(vis, /\| 1 of 1 \| 3 \| none \|/, 'the No unit test cell counts the coverage gaps');
+  assert.match(det, /More never-executed definitions, per file \(2; coverage report\)/);
+  assert.match(det, /`src\/m\.js`: 2 more never-executed definitions: guard, plain/);
+});
+
+test('scan coverage: scan_paths and the non-unit rule bound the gaps, and the unit risk ranks before branching', () => {
+  const lines = ['function f(a) {', '  const b = a + 1;', '  return b;', '}', 'function g(a) {', '  if (a) {', '    throw new Error("x");', '  }', '}'];
+  const files = { 'src/low.js': lines, 'src/high.js': lines, 'eval/run.js': lines, 'examples/demo.js': lines };
+  const cf = (never) => ({ inst: 5, exec: 0, never, ran: [], miss: never });
+  const cov = covOf({ 'src/low.js': cf([[7, 7]]), 'src/high.js': cf([[2, 3]]), 'eval/run.js': cf([[7, 7]]), 'examples/demo.js': cf([[7, 7]]) });
+  const { scopeFn } = require('./audit-collect'), { NOT_UNIT } = require('./audit-units');
+  const scope = scopeFn('src/**\nexamples/**');
+  const sc = audit.scanCoverage({ cov, findings: [], readLines: (p) => files[p] || null, isTest: notTest, top: 10, inScope: (p) => scope(p) && !NOT_UNIT.test(p), risk: new Map([['src/high.js', 9], ['src/low.js', 2]]) });
+  const all = [...sc.gaps.emit, ...sc.gaps.roll.flatMap((r) => r.groups)];
+  assert.deepEqual(all.map((g) => g.path), ['src/high.js', 'src/low.js'], 'eval/ is outside scan_paths, examples/ is not a unit; the riskier unit leads although src/low.js has the branching line');
+  const unscoped = audit.scanCoverage({ cov, findings: [], readLines: (p) => files[p] || null, isTest: notTest });
+  assert.equal(unscoped.gaps.emit.length, 4, 'without a scope all four count (the old behaviour)');
+});
+
+test('scan coverage: a model missing_test merged into a gap stays in the finding list (flagged), so its unit is not recorded as covered; it is not listed twice', () => {
+  const sc = scanOf([mt(3, { title: 'throw on empty is untested', skeleton: 'test("guard throws", () => { assert.throws(() => guard(0)); });' })]);
+  assert.equal(sc.merged, 1);
+  assert.equal(sc.findings.length, 1);
+  assert.equal(sc.findings[0].merged, true);
+  assert.equal(sc.findings[0].low, false);
+  const kept = sc.findings.filter((f) => !f.low);
+  assert.deepEqual(new Set(kept.map((f) => f.unit)), new Set([A1]), 'the unit has a solid finding: verify-side bookkeeping keeps it unsure/gap, not covered');
+  const state = audit.readState(audit.stateComment('h1', clean(), null, { date: DATE, code: { picked: [A1], findings: audit.trackFindings(kept, null, 'h1'), carried: [] } }));
+  assert.equal(state.blocks.find((b) => b.cid === A1).status, 'gap', 'the unit is a gap in the scan state, not covered');
+  const md = render({ data: clean(), code: codeWith(sc) });
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.match(vis, /throw on empty is untested/);
+  assert.match(vis, /guard throws/);
+  assert.doesNotMatch(vis, /### Untested behaviour/);
+  assert.equal((vis.match(/throw on empty is untested/g) || []).length, 1);
+});
+
+test('scan coverage: a model missing_test on a line that ran becomes a low-confidence weak_test (source relabel) and is never counted in the verdict or the table', () => {
+  const ranOnly = covOf({ 'src/m.js': { inst: 3, exec: 3, never: [], ran: [[2, 2], [5, 5], [17, 17]], miss: [] } });
+  const sc = scanOf([mt(17)], ranOnly);
+  const f = sc.findings[0];
+  assert.equal(f.kind, 'weak_test');
+  assert.equal(f.source, 'relabel');
+  assert.equal(f.low, true);
+  assert.match(f.title, /this line runs under unit tests/);
+  assert.equal(sc.relabeled, 1);
+  const md = render({ data: clean(), code: codeWith(sc) });
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.doesNotMatch(vis, /claim at 17/);
+  assert.match(vis, /\*\*✅|\*\*❔ No/);
+  assert.doesNotMatch(vis, /coverage gap|1 unit test gap/);
+  assert.match(vis, /\| 1 of 1 \| none \| none \|/);
+});
+
+test('scan coverage: a model-supplied source is never kept; a claim with source coverage on a ran line is still relabelled, on any other line it carries no source', () => {
+  const sc = scanOf([mt(17, { source: 'coverage' }), mt(16, { source: 'coverage' }), mt(2, { kind: 'weak_test', source: 'relabel' })]);
+  assert.equal(sc.findings[0].source, 'relabel');
+  assert.equal(sc.findings[0].kind, 'weak_test');
+  assert.equal(sc.findings[1].source, undefined);
+  assert.equal(sc.findings[2].source, undefined);
+});
+
+test('scan coverage: a claim on an uninstrumented line says (not verified by coverage); one on a never-run line outside any gap group says so', () => {
+  const sc = scanOf([mt(16), mt(9)]);
+  assert.match(sc.findings[0].title, /claim at 16 \(not verified by coverage\)/);
+  assert.equal(sc.findings[0].kind, 'missing_test');
+  assert.equal(sc.unverified, 1);
+  assert.match(sc.findings[1].title, /\(coverage: never executed\)/, 'logIt was filtered, so the claim keeps its own entry');
+});
+
+test('scan coverage: without a report the output is unchanged plus one line that missing_test findings are not verified', () => {
+  const f = mt(17);
+  const off = scanOf([f], null);
+  assert.deepEqual(off.findings, [f]);
+  assert.equal(off.gaps, null);
+  assert.deepEqual(scanOf([f], covOf(CFILE, { reports: 0 })).findings, [f]);
+  const md = render({ data: clean(), code: codeWith(off) });
+  assert.match(md, /Missing-unit-test findings are not verified: no coverage report/);
+  assert.doesNotMatch(render({ data: clean(), code: codeWith(scanOf([f])) }), /not verified: no coverage report/);
+  assert.doesNotMatch(render({ data: clean(), code: codeWith(scanOf([], null)) }), /not verified: no coverage report/, 'no missing_test, no line');
+});
+
+test('scan coverage: report notes (stale, nothing matched) reach the summary; with a usable report they read as notes', () => {
+  const stale = scanOf([mt(17)], covOf({}, { reports: 0, notes: ['lcov.info is older than the head commit; not used'] }));
+  assert.deepEqual(stale.notes, ['lcov.info is older than the head commit; not used']);
+  const md = render({ data: clean(), code: codeWith(stale) });
+  assert.match(md, /Coverage evidence not used: lcov\.info is older than the head commit; not used/);
+  assert.match(md, /not verified: no coverage report/);
+  const part = scanOf([], covOf(CFILE, { notes: ['b.info: unrecognised format'] }));
+  assert.match(render({ data: clean(), code: codeWith(part) }), /Coverage evidence notes: b\.info: unrecognised format/);
+});
+
+test('scan coverage: in-scope source files missing from the report are a count in Details, worded without a cause and without file names', () => {
+  const src = { 'src/big.js': new Array(300).fill('x'), 'src/small.js': new Array(5).fill('x'), 'eval/other.js': new Array(900).fill('x'), ...CSRC };
+  const sc = audit.scanCoverage({ cov: covOf(CFILE, { unreported: ['src/small.js', 'src/big.js', 'eval/other.js'] }), findings: [], readLines: (p) => src[p] || null, isTest: notTest, inScope: (p) => p.startsWith('src/') });
+  assert.equal(sc.noTest.n, 2);
+  assert.deepEqual(sc.noTest.top.map((x) => x.path), ['src/big.js', 'src/small.js']);
+  const md = render({ data: clean(), code: codeWith(sc) });
+  const at = md.indexOf('<details>'), line = '2 source files in scope are not in the coverage report (never loaded, or excluded by the coverage tool\'s configuration).';
+  assert.ok(at > 0 && md.indexOf(line) > at, 'inside Details, not on the first screen');
+  assert.ok(md.includes('**Not in the coverage report**'));
+  assert.doesNotMatch(md, /No test loaded|src\/big\.js|src\/small\.js|eval\/other/, 'no cause claimed, no file names');
+  assert.match(render({ data: clean(), code: codeWith(audit.scanCoverage({ cov: covOf(CFILE, { unreported: ['src/big.js'] }), findings: [], readLines: (p) => src[p] || null, isTest: notTest })) }), /1 source file in scope is not in the coverage report/);
+});
+
+test('NOT_UNIT: fixture, testdata and mock directories are not units; ordinary names still are; heuristicTest follows trace.isTestPath', () => {
+  const { NOT_UNIT } = require('./audit-units');
+  for (const p of ['eval/cases/x/fixtures/a.js', 'src/__fixtures__/a.js', 'testdata/a.go', 'src/__mocks__/db.js', 'lib/fixture/a.py']) assert.ok(NOT_UNIT.test(p), p);
+  for (const p of ['src/fixtures.js', 'src/fixturesque/a.js', 'src/testdata.js', 'src/mocks.js']) assert.ok(!NOT_UNIT.test(p), p);
+  assert.equal(audit.heuristicTest('src/test-map.js'), false, 'test-map.js is source: trace.isTestPath does not treat a test- prefix as a test');
+  assert.equal(audit.heuristicTest('src/a.test.js'), true);
+});
+
+test('scan coverage: the coverage-gap count in the verdict ignores relabelled and low claims', () => {
+  const only = scanOf([mt(17), mt(3, { low: true }), mt(16, { low: true })], covOf({ 'src/m.js': { inst: 3, exec: 3, never: [], ran: [[17, 17]], miss: [] } }));
+  const md = render({ data: clean(), code: codeWith(only) });
+  const vis = md.slice(0, md.indexOf('<details>'));
+  assert.doesNotMatch(vis, /coverage gap/);
+  assert.match(vis, /\| 1 of 1 \| none \| none \|/);
+  const withGaps = scanOf([mt(17), mt(9, { low: true }), mt(16, { low: true })]);
+  const two = render({ data: clean(), code: codeWith(withGaps) }).slice(0, 700);
+  assert.match(two, /\*\*❌ 3 coverage gaps in scope\*\*\./, 'exactly the three definitions, not the relabelled or low claims');
+});
+
+test('scan coverage: CLI entry-point blocks (require.main / __name__ guards) are not worth a unit test; code beside them still is', () => {
+  const js = ['function a(x) {', '  return x + 1;', '}', 'if (require.main === module) {', '  const x = process.argv[2];', '  if (x) {', '    run(x);', '  }', '}'];
+  const py = ['def a(x):', '    return x + 1', '', "if __name__ == '__main__':", '    n = int(sys.argv[1])', '    if n:', '        run(n)'];
+  const one = ['function b(x) {', '  return x + 1;', '}', 'if (require.main === module) main();'];
+  const cf = (never) => ({ inst: 9, exec: 1, never, ran: [], miss: never });
+  const cov = covOf({ 'src/c.js': cf([[5, 8]]), 'src/d.py': cf([[5, 7]]), 'src/e.js': cf([[4, 4]]), 'src/f.js': cf([[2, 2], [5, 5]]) });
+  const files = { 'src/c.js': js, 'src/d.py': py, 'src/e.js': one, 'src/f.js': js };
+  const { gaps } = audit.scanCoverage({ cov, findings: [], readLines: (p) => files[p] || null, isTest: notTest });
+  assert.equal(gaps.filtered, 4, 'c.js, d.py, e.js and the guarded part of f.js hold only guarded lines');
+  const all = [...gaps.emit, ...gaps.roll.flatMap((r) => r.groups)];
+  assert.deepEqual(all.map((g) => `${g.path}:${g.name}`), ['src/f.js:a'], 'f.js also has a never-run line inside a(): that group stays');
+});
+
+test('scan coverage: a hostile path from the report cannot inject markup, mentions, comments or a backtick breakout', () => {
+  const bad = 'src/<img src=x onerror=1>@everyone<!-- x -->`b.js';
+  const lines = ['function f(x) {', '  if (x) {', '    throw new Error("boom");', '  }', '}'];
+  const files = { [bad]: { inst: 3, exec: 0, never: [[3, 3]], ran: [], miss: [] }, 'src/ok`two.js': { inst: 3, exec: 0, never: [[3, 3]], ran: [], miss: [] } };
+  const sc = audit.scanCoverage({ cov: covOf(files, { unreported: [bad] }), findings: [], readLines: () => lines, isTest: notTest, top: 1 });
+  assert.equal(sc.gaps.emit.length, 1);
+  assert.equal(sc.gaps.roll.length, 1, 'the second file is a rollup line');
+  const md = render({ data: clean(), code: { ...codeOf([urow(A1)]), gaps: sc.gaps, noTest: sc.noTest } });
+  assert.doesNotMatch(md, /<img|@everyone|<!--/);
+  assert.doesNotMatch(md, /`[^`\n]*`[^`\n]*`b\.js|ok`two|`b\.js/, 'no backtick from a path ends a code span early');
+});
