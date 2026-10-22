@@ -215,7 +215,7 @@ test('specguard-run.yml: the results artifact uploads only the named result file
   assert.match(step, /retention-days: 14\n/);
   assert.match(step, /if-no-files-found: ignore\n/);
   const paths = /path: \|\n((?: {12}.*\n)+)/.exec(step)[1].trim().split('\n').map((l) => l.trim());
-  assert.deepEqual(paths.map((p) => p.replace('${{ github.workspace }}/.specguard-ctx/', '')).sort(), ['audit.json', 'findings.json', 'requirements-status.json', 'scan-parts.json', 'summary.md', 'usage.json']);
+  assert.deepEqual(paths.map((p) => p.replace('${{ github.workspace }}/.specguard-ctx/', '')).sort(), ['audit.json', 'coverage.json', 'findings.json', 'requirements-status.json', 'scan-parts.json', 'summary.md', 'usage.json']);
   assert.ok(paths.every((p) => /\.(md|json)$/.test(p)), 'files, not the directory');
   assert.match(y, /quote the target repository, so this repository must stay private/);
 });
