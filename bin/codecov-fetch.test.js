@@ -38,6 +38,17 @@ test('sends one anonymous GET: no auth, cookie or token header; redirects refuse
   assert.ok(init.signal);
 });
 
+test('the request timeout is 60 seconds and the signal is the one passed to fetch', async () => {
+  const real = AbortSignal.timeout, seen = [], sig = real.call(AbortSignal, 60000);
+  AbortSignal.timeout = (ms) => { seen.push(ms); return sig; };
+  try {
+    const f = recorder(reply(200, good()));
+    await fetchReport(args(f));
+    assert.deepEqual(seen, [60000]);
+    assert.equal(f.calls[0].init.signal, sig);
+  } finally { AbortSignal.timeout = real; }
+});
+
 test('a report for another sha (or without commit_file_url) is refused', async () => {
   await assert.rejects(fetchReport(args(recorder(reply(200, good(OTHER))))), /report is not for the requested sha/);
   await assert.rejects(fetchReport(args(recorder(reply(200, '{"files":[]}')))), /report is not for the requested sha/);
