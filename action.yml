@@ -209,9 +209,9 @@ runs:
         CONTEXT_PACK_BYTES: ${{ inputs.context_pack_bytes }}
         SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}
         SCAN_SCOPE: ${{ inputs.scan_scope }}
+        SCAN_GAP_TOP: ${{ inputs.scan_gap_top }}
         MODE: ${{ steps.mode.outputs.mode }}
         MAX_UNITS: ${{ inputs.max_units }}
-        SCAN_GAP_TOP: ${{ inputs.scan_gap_top }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
       run: |
         unset NODE_OPTIONS
