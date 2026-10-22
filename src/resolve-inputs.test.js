@@ -194,9 +194,9 @@ const workflow = () => fs.readFileSync(path.join(__dirname, '..', '.github', 'wo
 
 test('specguard-run.yml: one required target plus optional inputs, nothing else on the form', () => {
   const y = workflow(), form = /^ {4}inputs:\n((?: {6}.*\n)+)/m.exec(y)[1];
-  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_budget_usd', 'scan_scope', 'scan_issue']);
+  assert.deepEqual([...form.matchAll(/^ {6}(\w+): \{/gm)].map((m) => m[1]), ['target', 'design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_budget_usd', 'scan_scope', 'scan_issue', 'coverage_codecov', 'coverage_flag']);
   assert.match(y, /^ {6}target: \{[^}]*required: true/m);
-  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_budget_usd', 'scan_scope', 'scan_issue']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
+  for (const k of ['design_docs', 'rules_docs', 'test_dirs', 'post_to_pr', 'model', 'max_budget_usd', 'scan_scope', 'scan_issue', 'coverage_codecov', 'coverage_flag']) assert.match(y, new RegExp(`^ {6}${k}: \\{[^}]*required: false`, 'm'), k);
   assert.match(y, /^ {6}post_to_pr: \{[^}]*type: boolean, default: false/m);
   assert.match(y, /^ {10}scan_paths: \$\{\{ needs\.resolve\.outputs\.mode == 'scan' && needs\.resolve\.outputs\.scan_paths \|\| '' \}\}/m, 'the link path scopes scans only');
   assert.match(y, /^ {6}scan_scope: \{[^}]*type: choice, default: all, options: \[all, selected\]/m, 'the whole repository by default');

@@ -15,7 +15,7 @@ const MAX_FILE = 512 * 1024, MAX_UNITS_READ = 6000, MAX_TESTS_READ = 4000, TEST_
 const PER_UNIT_TESTS = 20, ROWS_KEPT = 100, LEADS = 3;
 const CODE = /\.(?:[cm]?[jt]sx?|py|go|java|kt|cs|rb|php|rs|swift|scala)$/i;
 // Not product code: examples, benchmarks, docs, generated or build output, config files, type declarations. ponytail: a name list; a repo that keeps product code in `examples/` narrows with scan_paths.
-const NOT_UNIT = /(^|\/)(?:examples?|samples?|demos?|benchmarks?|bench|docs|integration|e2e|perf[\w-]*|dist|build|out|coverage|migrations?|node_modules|vendor|third_party|generated)\/|^scripts\/|\.d\.[cm]?ts$|(^|\/)(?:[\w.-]*\.config|\.[\w-]*rc|gulpfile|Gruntfile|Rakefile|setup|conftest|__init__)\.[a-z]+$|\.(?:min|bundle)\./i;
+const NOT_UNIT = /(^|\/)(?:examples?|samples?|demos?|benchmarks?|bench|docs|integration|e2e|perf[\w-]*|dist|build|out|coverage|migrations?|node_modules|vendor|third_party|generated|fixtures?|__fixtures__|testdata|__mocks__)\/|^scripts\/|\.d\.[cm]?ts$|(^|\/)(?:[\w.-]*\.config|\.[\w-]*rc|gulpfile|Gruntfile|Rakefile|setup|conftest|__init__)\.[a-z]+$|\.(?:min|bundle)\./i;
 // Test infrastructure by name: a basename with a smoke/e2e/harness/runner/fixture/playwright/cypress token (runner-utils.js counts, testrunner.js does not), or a support/helpers dir under a test dir.
 const TEST_INFRA = /(^|\/)[^/]*(?<![a-z0-9])(?:smoke|e2e|harness|runners?|fixtures?|playwright|cypress)(?![a-z0-9])[^/]*$|(^|\/)(?:tests?|specs?|__tests__|e2e)\/(?:[^/]+\/)*(?:support|helpers)\//i;
 // First-level relative imports of a source text (JS/TS require, import, export-from, dynamic import), resolved against the tracked files -> blob shas.
@@ -399,4 +399,4 @@ function staticLeads(rows, cap = 20) {
   return { items: mixed.slice(0, cap), extra: Math.max(0, mixed.length - cap) };
 }
 
-module.exports = { staticFindings, staticLeads, inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };
+module.exports = { NOT_UNIT, staticFindings, staticLeads, inventory, write, pick, risk, factorOf, publicCount, testSignals, history, sha8, DAYS };

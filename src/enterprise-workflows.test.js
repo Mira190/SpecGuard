@@ -215,7 +215,7 @@ test('specguard-run.yml: the results artifact uploads only the named result file
   assert.match(step, /retention-days: 14\n/);
   assert.match(step, /if-no-files-found: ignore\n/);
   const paths = /path: \|\n((?: {12}.*\n)+)/.exec(step)[1].trim().split('\n').map((l) => l.trim());
-  assert.deepEqual(paths.map((p) => p.replace('${{ github.workspace }}/.specguard-ctx/', '')).sort(), ['audit.json', 'findings.json', 'requirements-status.json', 'scan-parts.json', 'summary.md', 'usage.json']);
+  assert.deepEqual(paths.map((p) => p.replace('${{ github.workspace }}/.specguard-ctx/', '')).sort(), ['audit.json', 'coverage.json', 'findings.json', 'requirements-status.json', 'scan-parts.json', 'summary.md', 'usage.json']);
   assert.ok(paths.every((p) => /\.(md|json)$/.test(p)), 'files, not the directory');
   assert.match(y, /quote the target repository, so this repository must stay private/);
 });
@@ -247,4 +247,40 @@ test('specguard-run.yml: manual model/size/budget inputs reach the action (empty
   assert.doesNotMatch(co.replace(/#.*/g, ''), /--shallow-since|fetch-depth: 0$/m);
   assert.match(action, /SPECGUARD_REF: \$\{\{ github\.action_ref \|\| github\.sha \}\}/);
   assert.doesNotMatch(action, /SPECGUARD_REF: \$\{\{ github\.action_ref \}\}/);
+});
+
+test('specguard-run.yml: the Codecov coverage step is scan-only, secret-free, runs only bin scripts, and coverage_files comes only from it', () => {
+  const y = central();
+  const inputs = /^ {6}coverage_codecov: \{[^}]*type: boolean, default: false \}/m;
+  assert.match(y, inputs);
+  assert.match(y, /^ {6}coverage_flag: \{[^}]*type: string \}/m);
+  assert.match(y, /^# Coverage \(scans only\): coverage_codecov/m); // documented in the header
+  const step = /^ {6}- id: cov\n((?: {8}.*\n|\n)+)/m.exec(y);
+  assert.ok(step, 'cov step');
+  const s = step[1];
+  assert.match(s, /^ {8}if: needs\.resolve\.outputs\.mode == 'scan' && inputs\.coverage_codecov$/m);
+  const env = /^ {8}env:\n((?: {10}.*\n)+)/m.exec(s)[1];
+  assert.doesNotMatch(env, /secrets\.|github\.token|steps\.app|TOKEN|KEY/i);
+  assert.match(env, /SCAN_SHA: \$\{\{ steps\.head\.outputs\.sha \}\}/);
+  assert.doesNotMatch(s, /secrets\.|github\.token|steps\.app/);
+  const run = s.replace(/#.*$/gm, '');
+  for (const m of run.matchAll(/\bnode (\S+)/g)) assert.match(m[1], /^\.specguard-src\/bin\/codecov-(fetch|to-lcov)\.js$/);
+  assert.doesNotMatch(run, /\b(npm|npx|yarn|pnpm|make|bash \.|sh \.)\b|\.\/(?!\.)/);
+  // the only way coverage_files is set, and the output is written only after a usable report exists
+  assert.equal([...y.matchAll(/^ +coverage_files:/gm)].length, 1);
+  assert.match(y, /^ {10}coverage_files: \$\{\{ steps\.cov\.outputs\.file \}\}/m);
+  assert.equal([...y.matchAll(/GITHUB_OUTPUT/g)].filter((m) => y.slice(m.index - 80, m.index).includes('codecov.lcov')).length, 1);
+  assert.match(s, /grep -q '\^SF:'[^\n]*&& ok=true\n\s+if \[ "\$ok" = true \]; then\n\s+echo "file=\.specguard-cov\/codecov\.lcov"/);
+  assert.match(y, /^# [^\n]*Carried-forward flags may contain coverage from older commits/m, 'the header carries the flag caveat');
+  assert.match(read('README.md'), /carried-forward flags may contain coverage from older commits/);
+});
+
+test('specguard-run.yml: the review job env (inherited by every step, including the cov step) references no secret except boolean != \'\' checks', () => {
+  const y = central();
+  const job = y.slice(y.indexOf('\n  review:\n'), y.indexOf('\n    steps:', y.indexOf('\n  review:\n')));
+  const env = /^ {4}env:[^\n]*\n((?: {6}.*\n?)+)/m.exec(job + '\n');
+  assert.ok(env, 'review job env');
+  const refs = [...env[1].matchAll(/secrets\.\w+\b(?! *!= '')/g)];
+  assert.deepEqual(refs.map((m) => m[0]), [], 'only `secrets.X != \'\'` checks may appear in the job env');
+  assert.match(env[1], /secrets\.SPECGUARD_APP_ID != ''/); // the check itself is still there, so the test is not vacuous
 });
