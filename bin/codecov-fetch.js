@@ -21,7 +21,8 @@ function assertAllowed(url) {
 }
 
 // fetchImpl is injectable for tests; the default is the global fetch.
-async function fetchReport({ owner, repo, sha, flag, fetchImpl = fetch }) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function fetchReport({ owner, repo, sha, flag, fetchImpl = fetch, retryDelayMs = 3000 }) {
   const url = buildUrl(owner, repo, sha, flag);
   assertAllowed(url);
   let res;
@@ -29,12 +30,16 @@ async function fetchReport({ owner, repo, sha, flag, fetchImpl = fetch }) {
     // no headers beyond Accept: nothing that identifies or authenticates us; redirects are refused so the host cannot change
     res = await fetchImpl(url, { method: 'GET', headers: { Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(60000) });
     if (res.status < 500) break;
+    if (attempt === 0) await sleep(retryDelayMs);
   }
   if (res.status !== 200) throw new Error(`Codecov answered HTTP ${res.status}`);
   if (!/json/i.test(res.headers.get('content-type') || '')) throw new Error('Codecov answer is not JSON');
+  if (Number(res.headers.get('content-length')) > MAX_BYTES) throw new Error('report larger than 50 MB refused');
   const text = await res.text();
   if (Buffer.byteLength(text) > MAX_BYTES) throw new Error('report larger than 50 MB refused');
-  try { JSON.parse(text); } catch { throw new Error('Codecov answer is not valid JSON'); }
+  let body;
+  try { body = JSON.parse(text); } catch { throw new Error('Codecov answer is not valid JSON'); }
+  if (!body || typeof body.commit_file_url !== 'string' || !body.commit_file_url.includes(`/commit/${sha}/`)) throw new Error('report is not for the requested sha');
   return text;
 }
 

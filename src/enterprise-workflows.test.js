@@ -270,5 +270,17 @@ test('specguard-run.yml: the Codecov coverage step is scan-only, secret-free, ru
   assert.equal([...y.matchAll(/^ +coverage_files:/gm)].length, 1);
   assert.match(y, /^ {10}coverage_files: \$\{\{ steps\.cov\.outputs\.file \}\}/m);
   assert.equal([...y.matchAll(/GITHUB_OUTPUT/g)].filter((m) => y.slice(m.index - 80, m.index).includes('codecov.lcov')).length, 1);
-  assert.match(s, /grep -q '\^SF:'[^\n]*\n\s+echo "file=\.specguard-cov\/codecov\.lcov"/);
+  assert.match(s, /grep -q '\^SF:'[^\n]*&& ok=true\n\s+if \[ "\$ok" = true \]; then\n\s+echo "file=\.specguard-cov\/codecov\.lcov"/);
+  assert.match(y, /^# [^\n]*Carried-forward flags may contain coverage from older commits/m, 'the header carries the flag caveat');
+  assert.match(read('README.md'), /carried-forward flags may contain coverage from older commits/);
+});
+
+test('specguard-run.yml: the review job env (inherited by every step, including the cov step) references no secret except boolean != \'\' checks', () => {
+  const y = central();
+  const job = y.slice(y.indexOf('\n  review:\n'), y.indexOf('\n    steps:', y.indexOf('\n  review:\n')));
+  const env = /^ {4}env:[^\n]*\n((?: {6}.*\n?)+)/m.exec(job + '\n');
+  assert.ok(env, 'review job env');
+  const refs = [...env[1].matchAll(/secrets\.\w+\b(?! *!= '')/g)];
+  assert.deepEqual(refs.map((m) => m[0]), [], 'only `secrets.X != \'\'` checks may appear in the job env');
+  assert.match(env[1], /secrets\.SPECGUARD_APP_ID != ''/); // the check itself is still there, so the test is not vacuous
 });

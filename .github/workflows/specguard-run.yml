@@ -12,7 +12,7 @@ name: SpecGuard manual run
 # Token order: GitHub App installation token (environment secrets SPECGUARD_APP_ID = the App's Client ID or App ID, and SPECGUARD_APP_PRIVATE_KEY; minted per job, scoped to the one target repository, read-only
 # unless post_to_pr or scan_issue: target), else SPECGUARD_PAT, else the job token (repository access only; Copilot has its own token above). The App needs Contents, Pull requests and Issues read (Pull requests write for post_to_pr) and must be installed on the target repository.
 # Coverage (scans only): coverage_codecov true = fetch the scanned repository's PUBLIC Codecov report for exactly the scanned commit (anonymous GET to api.codecov.io; coverage_flag optional), convert it to LCOV and pass it as coverage_files.
-# The step has no secret in its env and runs only bin/ scripts of this repository. No report (or a failed fetch) = a warning and a scan without coverage. Private repositories need a Codecov token, which this does not support.
+# The step has no secret in its env and runs only bin/ scripts of this repository. No report (or a failed fetch) = a warning and a scan without coverage. Private repositories need a Codecov token, which this does not support. Carried-forward flags may contain coverage from older commits.
 on:
   workflow_dispatch:
     inputs:
@@ -173,7 +173,11 @@ jobs:
           if [ -e .specguard-cov ] || [ -L .specguard-cov ]; then echo "::warning::the scanned repository has a path named .specguard-cov; scanning without Codecov coverage"; exit 0; fi
           mkdir .specguard-cov
           tmp="$RUNNER_TEMP/codecov-report.json"
-          if node .specguard-src/bin/codecov-fetch.js "${TARGET_REPO%%/*}" "${TARGET_REPO#*/}" "$SCAN_SHA" "${FLAG:--}" "$tmp"              && node .specguard-src/bin/codecov-to-lcov.js "$tmp" .specguard-cov/codecov.lcov              && grep -q '^SF:' .specguard-cov/codecov.lcov; then
+          ok=false
+          node .specguard-src/bin/codecov-fetch.js "${TARGET_REPO%%/*}" "${TARGET_REPO#*/}" "$SCAN_SHA" "${FLAG:--}" "$tmp" \
+            && node .specguard-src/bin/codecov-to-lcov.js "$tmp" .specguard-cov/codecov.lcov \
+            && grep -q '^SF:' .specguard-cov/codecov.lcov && ok=true
+          if [ "$ok" = true ]; then
             echo "file=.specguard-cov/codecov.lcov" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::no usable public Codecov report for $SCAN_SHA; scanning without coverage"
