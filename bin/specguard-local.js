@@ -11,7 +11,7 @@ const { parseComment, parseSummary } = require('../eval/grade.js');
 const { assemble } = require('../src/prompt.js');
 
 const ROOT = path.join(__dirname, '..');
-const USAGE = `Usage: node bin/specguard-local.js [--base REF] [--body FILE] [--model X] [--effort Y] [--auto-tier T] [--json] [--fail-on-gaps] [--keep]
+const USAGE = `Usage: node bin/specguard-local.js [--base REF] [--body FILE] [--model X] [--effort Y] [--auto-tier T] [--unverified-missing-tests details|show] [--json] [--fail-on-gaps] [--keep]
        [--requirements-paths GLOB]... [--standards-paths GLOB]... [--test-paths GLOB]... [--ignore GLOB]...
 
 Reviews the commits between the merge-base of --base (default: the remote default branch, else main, else master) and HEAD with Copilot.
@@ -21,10 +21,12 @@ Advisory: exit 0 unless the tool crashed (3). With --fail-on-gaps: 1 when the VA
 --body FILE            requirement text (default: the commit messages since the base; linked issues are unavailable offline)
 --requirements-paths, --standards-paths, --test-paths, --ignore
                        the CI action's inputs of the same names (a glob or folder per flag, repeatable; !glob excludes). Copy them from your workflow so the local run matches CI.
+--unverified-missing-tests details|show
+                       the action input of the same name. details (default): a model missing_test without coverage evidence is listed in Details, not delivered or counted (the gate ignores it); show: deliver it as before.
 --keep                 keep the context directory (diff, prompt inputs, raw engine output) and print its path`;
 
 const list = { type: 'string', multiple: true };
-const OPTIONS = { base: { type: 'string' }, body: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, 'auto-tier': { type: 'string' },
+const OPTIONS = { base: { type: 'string' }, body: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, 'auto-tier': { type: 'string' }, 'unverified-missing-tests': { type: 'string' },
   'requirements-paths': list, 'standards-paths': list, 'test-paths': list, ignore: list,
   json: { type: 'boolean' }, 'fail-on-gaps': { type: 'boolean' }, keep: { type: 'boolean' }, help: { type: 'boolean' } };
 
@@ -43,6 +45,7 @@ const readLines = (p) => { try { return fs.readFileSync(p, 'utf8').split('\n').f
 
 function parse(argv) {
   const { values } = parseArgs({ args: argv, options: OPTIONS, allowPositionals: false });
+  if (values['unverified-missing-tests'] !== undefined && !['details', 'show'].includes(values['unverified-missing-tests'])) throw new Error('--unverified-missing-tests must be details or show');
   return { ...values };
 }
 
@@ -182,7 +185,7 @@ async function run({ cwd = process.cwd(), opts = {}, log = (m) => console.error(
     let status = '';
     core.setOutput = (k, v) => { if (k === 'status') status = v; };
     const context = { repo: { owner: 'local', repo: 'local' }, serverUrl: 'https://github.com', payload: { pull_request: { number: 1, head: { sha: head }, base: { sha: base } } } };
-    const env = { CTX: fwd(ctx), HEAD_SHA: head, BASE_SHA: base, GITHUB_WORKSPACE: fwd(wt), SKIP: String(skip), PARTIAL: String(partial), MAX_COMMENTS: '10', ENGINE: 'copilot', MODEL: opts.model || '', STANDARDS_REF: 'head', STANDARDS_CHECKS: '' };
+    const env = { CTX: fwd(ctx), HEAD_SHA: head, BASE_SHA: base, GITHUB_WORKSPACE: fwd(wt), SKIP: String(skip), PARTIAL: String(partial), MAX_COMMENTS: '10', ENGINE: 'copilot', MODEL: opts.model || '', STANDARDS_REF: 'head', STANDARDS_CHECKS: '', UNVERIFIED_MISSING_TESTS: opts['unverified-missing-tests'] || 'details' }; // the action's default; a flag only (an exported variable must not change the review)
     const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
     Object.assign(process.env, env);
     try { await require('../src/post.js')({ github, context, core }); }

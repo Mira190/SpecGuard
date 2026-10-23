@@ -47,6 +47,8 @@ test('parse: flags, defaults, rejects unknown flags; the CI path inputs are repe
   assert.deepStrictEqual(o, { base: 'origin/dev', model: 'gpt-5', effort: 'high', 'auto-tier': 'balance', json: true, 'fail-on-gaps': true, body: 'b.md' });
   assert.deepStrictEqual(parse(['--requirements-paths', 'docs/**', '--requirements-paths', '!docs/old/**', '--standards-paths', 'RULES.md', '--test-paths', 'qa/', '--ignore', 'gen/']),
     { 'requirements-paths': ['docs/**', '!docs/old/**'], 'standards-paths': ['RULES.md'], 'test-paths': ['qa/'], ignore: ['gen/'] });
+  assert.deepStrictEqual(parse(['--unverified-missing-tests', 'show']), { 'unverified-missing-tests': 'show' });
+  assert.throws(() => parse(['--unverified-missing-tests', 'hide']));
   assert.throws(() => parse(['--engine', 'copilot']));
   assert.throws(() => parse(['--base']));
 });
@@ -99,7 +101,7 @@ test('run: fake GitHub captures the summary post.js publishes and the inline com
   process.env.SPECGUARD_LOCAL_FINDINGS = canned('run', findings());
   const logs = [];
   let r;
-  try { r = await run({ cwd: repo, opts: { base: 'main' }, log: (m) => logs.push(m) }); } finally { delete process.env.SPECGUARD_LOCAL_FINDINGS; }
+  try { r = await run({ cwd: repo, opts: { base: 'main', 'unverified-missing-tests': 'show' }, log: (m) => logs.push(m) }); } finally { delete process.env.SPECGUARD_LOCAL_FINDINGS; }
   assert.ok(logs.some((l) => /uncommitted changes are not reviewed/.test(l)));
   assert.ok(r.summary.startsWith('<!-- specguard:summary -->'), r.summary.slice(0, 200));
   assert.match(r.summary, /Test the cap at 100|missing/i);
@@ -120,7 +122,7 @@ test('run: the CI path inputs reach collect.sh (--ignore removes the file from t
   const r = await review(repo, 'flags', findings(), { base: 'main', ignore: ['src/price.js'] }, { log: (m) => logs.push(m) });
   assert.ok(logs.includes('nothing reviewable in the diff'), logs.join('\n'));
   assert.strictEqual(r.gaps, false);
-  const again = await review(repo, 'flags2', findings(), { base: 'main', 'test-paths': ['qa/'], 'requirements-paths': ['docs/**'], 'standards-paths': ['RULES.md'] });
+  const again = await review(repo, 'flags2', findings(), { base: 'main', 'unverified-missing-tests': 'show', 'test-paths': ['qa/'], 'requirements-paths': ['docs/**'], 'standards-paths': ['RULES.md'] });
   assert.strictEqual(again.gaps, true, 'unrelated globs change nothing');
   git(repo, 'remote', 'add', 'origin', path.join(tmp, 'flags-nowhere.git'));
   git(repo, 'update-ref', 'refs/remotes/origin/main', git(repo, 'rev-parse', 'main'));
@@ -140,7 +142,13 @@ test('--fail-on-gaps gates on the VALIDATED review (V5): a low-confidence findin
   const bad = await review(repo, 'dropped', dropped);
   assert.strictEqual(bad.comments.length, 0);
   assert.strictEqual(bad.gaps, false, 'the raw findings.json holds a missing_test, the validated review does not');
-  assert.strictEqual((await review(repo, 'high', findings())).gaps, true);
+  assert.strictEqual((await review(repo, 'high', findings(), { base: 'main', 'unverified-missing-tests': 'show' })).gaps, true);
+  // the default (details): a model missing_test without execution evidence is held in Details, so the gate (which reads what post.js delivered) does not trip on it
+  const held = await review(repo, 'held', findings());
+  assert.strictEqual(held.gaps, false, 'held in Details: not delivered, not counted, not a gate');
+  assert.strictEqual(held.comments.length, 0);
+  assert.match(held.summary, /Unverified missing-test suggestions \(1\)/);
+  assert.doesNotMatch(held.summary, /\d+ missing/);
 });
 
 test('validatedGaps: inline comments need high confidence; summary items count unless post.js marked them low confidence', () => {
@@ -236,10 +244,11 @@ test('main: exit code is 0 (advisory) unless --fail-on-gaps and gaps exist; --js
   process.chdir(repo); console.log = (m) => lines.push(m); console.error = quiet;
   try {
     process.env.SPECGUARD_LOCAL_FINDINGS = canned('gap', findings());
-    assert.strictEqual(await main(['--base', 'main']), 0);
-    assert.strictEqual(await main(['--base', 'main', '--fail-on-gaps']), 1);
+    assert.strictEqual(await main(['--base', 'main', '--unverified-missing-tests', 'show']), 0);
+    assert.strictEqual(await main(['--base', 'main', '--unverified-missing-tests', 'show', '--fail-on-gaps']), 1);
+    assert.notStrictEqual(await main(['--base', 'main', '--fail-on-gaps']), 1, 'default details: the held missing_test does not gate');
     lines.length = 0;
-    assert.strictEqual(await main(['--base', 'main', '--json']), 0);
+    assert.strictEqual(await main(['--base', 'main', '--unverified-missing-tests', 'show', '--json']), 0);
     const j = JSON.parse(lines.join('\n'));
     assert.strictEqual(j.gaps, true); assert.strictEqual(j.comments.length, 1); assert.ok(j.summary);
     process.env.SPECGUARD_LOCAL_FINDINGS = canned('clean', findings({ findings: [], coverage: [{ ...findings().coverage[0], status: 'covered', evidence: [{ path: 'src/price.js', line: 2, quote: behaviour.quote, layer: 'unit', kind: 'assertion', proves: 'The cap is asserted.' }] }] }));
