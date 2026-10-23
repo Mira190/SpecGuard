@@ -122,7 +122,7 @@ function setup(t, data = report(), options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-'));
   const previous = { ...process.env };
   t.after(() => {
-    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF', 'DELIVERY']) {
+    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF', 'DELIVERY', 'UNVERIFIED_MISSING_TESTS']) {
       if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
     }
     fs.rmSync(dir, { recursive: true, force: true });
@@ -157,7 +157,7 @@ function setup(t, data = report(), options = {}) {
   const jobSummary = []; // what reaches the run's job summary (core.summary)
   const core = { warning: (s) => warnings.push(s), summary: { addRaw(x) { jobSummary.push(x); return this; }, async write() {} } };
   const context = { repo: { owner: 'o', repo: 'r' }, serverUrl: 'https://github.com', payload: { pull_request: { number: 7, head: { sha: 'HEADSHA' } } } };
-  Object.assign(process.env, { CTX: path.join(dir, 'ctx'), GITHUB_WORKSPACE: dir, HEAD_SHA: 'HEADSHA', MAX_COMMENTS: '10', ENGINE: 'copilot', SKIP: 'false', PARTIAL: 'false', STANDARDS_CHECKS: '', STANDARDS_REF: 'head' });
+  Object.assign(process.env, { CTX: path.join(dir, 'ctx'), GITHUB_WORKSPACE: dir, HEAD_SHA: 'HEADSHA', MAX_COMMENTS: '10', ENGINE: 'copilot', SKIP: 'false', PARTIAL: 'false', STANDARDS_CHECKS: '', STANDARDS_REF: 'head', UNVERIFIED_MISSING_TESTS: 'show' }); // the older tests exercise other behaviour with a model missing_test; the demotion tests set 'details' (the action default)
   return { github, context, core, calls, warnings, dir, jobSummary };
 }
 
@@ -4812,4 +4812,273 @@ test('V2 S7: inline R-a comments say so in the hidden trailer, and follow-up out
   assert.equal(run(fp, ', source: coverage').kind, 'missing_test');
   assert.equal(run(old, '').source, undefined);
   assert.equal(run(old, '').kind, 'missing_test');
+});
+
+// ---- unverified_missing_tests: a model missing_test without execution evidence goes to Details (default) ----
+const DET = (extra) => (s) => { process.env.UNVERIFIED_MISSING_TESTS = 'details'; extra?.(s); };
+const visible = (s) => s.calls.summary[0].body.replace(/<!-- specguard:counts .*? -->/s, '').split('<details><summary>')[0];
+const UNV_H = /\*\*Unverified missing-test suggestions \((\d+)\)\*\*\n\nThese are model suggestions not confirmed by a coverage report; on four evaluation corpora, 1 of 58 such claims with a coverage label cited a line no test ran\. See \[Coverage evidence\]\(https:\/\/github\.com\/Mira190\/SpecGuard#coverage-evidence-optional\)\./;
+
+test('unverified: no coverage report: a model missing_test is not inline, not in the visible summary, not counted; it sits in Details and the verdict says not verified', async (t) => {
+  const s = await v2(t, { findings: [[13, 'return y * 2;']], prep: DET() });
+  assert.equal(comments(s).length, 0);
+  assert.equal(s.calls.file.length, 0);
+  const b = s.calls.summary[0].body, vis = visible(s);
+  assert.doesNotMatch(vis, /Verify the boundary total|Missing unit tests \(/);
+  assert.match(vis, /\*\*❔ Missing unit tests: not verified \(no coverage report\); 1 suggestion in Details\*\*/);
+  assert.doesNotMatch(b, /No unit test gaps found|No gaps found|\| no gaps \|/);
+  assert.match(vis, /\| not verified \(no coverage report\) \|/, 'the table does not claim "no gaps"');
+  assert.equal(UNV_H.exec(b)[1], '1');
+  assert.match(b.slice(b.indexOf('<details><summary>')), /Unverified missing-test suggestions \(1\)[\s\S]*Verify the boundary total[\s\S]*`src\.js:13`/);
+  const c = countsOf(b);
+  assert.equal(c.unverified_missing_test, 1);
+  assert.equal(c.findings.missing_test, undefined, 'not counted as a unit test gap');
+  assert.equal(c.sum, undefined, 'not tracked as a summary-only finding');
+  assert.match(b, /specguard:status=complete/);
+});
+
+test('unverified: with no model missing_test the count is 0 and there is no section', async (t) => {
+  const none = await v2(t, { prep: DET() });
+  assert.equal(countsOf(none.calls.summary[0].body).unverified_missing_test, 0);
+  assert.doesNotMatch(none.calls.summary[0].body, /Unverified missing-test suggestions/);
+});
+
+test('unverified: with a report, a claim on a never-run line (outside any gap) and one merged into a coverage gap are delivered', async (t) => {
+  const never = await v2(t, { cov: V2COV({ 'src.js': { never: [[16, 17]], ran: [[9, 9]], miss: [[16, 17]] } }), findings: [[16, "console.log('beta', v);"]], prep: DET() });
+  assert.equal(comments(never).length, 1);
+  assert.match(comments(never)[0].body, /\(coverage: never executed\)/);
+  assert.equal(countsOf(never.calls.summary[0].body).unverified_missing_test, 0);
+  assert.doesNotMatch(never.calls.summary[0].body, /Unverified missing-test suggestions/);
+  const merged = await v2(t, { cov: V2COV({ 'src.js': { never: [[11, 11]], ran: [[9, 9]], miss: [[11, 11]] } }), findings: [[11, "throw new Error('neg');"]], prep: DET() });
+  assert.equal(comments(merged).length, 1);
+  assert.match(comments(merged)[0].body, /never executed/);
+  assert.equal(countsOf(merged.calls.summary[0].body).unverified_missing_test, 0);
+});
+
+test('unverified: with a report, a claim on a line that ran or on an uninstrumented line goes to Details, uncounted, with the telemetry kept', async (t) => {
+  const ran = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[9, 9], [10, 10], [13, 13]], miss: [] } }), findings: [[13, 'return y * 2;']], prep: DET() });
+  assert.equal(comments(ran).length, 0);
+  const rb = ran.calls.summary[0].body, rc = countsOf(rb);
+  assert.doesNotMatch(visible(ran), /Verify the boundary total/);
+  assert.match(rb, UNV_H);
+  assert.match(rb, /Verify the boundary total/);
+  assert.equal(rc.unverified_missing_test, 1);
+  assert.equal(rc.findings.weak_test, undefined, 'a held claim is not relabelled and counted');
+  assert.equal(rc.findings.missing_test, undefined);
+  assert.equal(rc.coverage_gaps, undefined, "held claims are not counted as relabelled");
+  assert.doesNotMatch(visible(ran), /Missing unit tests: not verified/, 'a report exists: the verdict is not the no-report one');
+  const unk = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[9, 9]], miss: [] } }), findings: [[12, '}']], prep: DET() });
+  assert.equal(comments(unk).length, 0);
+  assert.match(unk.calls.summary[0].body, UNV_H);
+  assert.equal(countsOf(unk.calls.summary[0].body).unverified_missing_test, 1);
+  assert.equal(gapsOf(unk), undefined, "held claims are not counted as unverified");
+  assert.equal(countsOf(unk.calls.summary[0].body).findings.missing_test, undefined);
+});
+
+test('unverified: a coverage-sourced gap beside held suggestions still counts as the gap; the verdict is the gap, not "not verified"', async (t) => {
+  const s = await v2(t, { cov: V2COV({ 'src.js': { never: [[11, 11]], ran: [[9, 9], [6, 6]], miss: [[11, 11]] } }), findings: [[6, 'return y;']], prep: DET() });
+  assert.equal(comments(s).length, 1);
+  assert.match(visible(s), /❌ 1 unit test gap to fix/);
+  assert.equal(countsOf(s.calls.summary[0].body).unverified_missing_test, 1);
+});
+
+test('unverified: unverified_missing_tests: show restores today\'s placement and adds no counts field', async (t) => {
+  const s = await v2(t, { findings: [[13, 'return y * 2;']], prep: () => { process.env.UNVERIFIED_MISSING_TESTS = 'show'; } });
+  assert.equal(comments(s).length, 1);
+  assert.doesNotMatch(s.calls.summary[0].body, /Unverified missing-test suggestions|not verified \(no coverage report\); /);
+  assert.equal(countsOf(s.calls.summary[0].body).unverified_missing_test, undefined);
+  assert.equal(countsOf(s.calls.summary[0].body).findings.missing_test.posted, 1);
+});
+
+test('unverified: a held suggestion neither makes the run incomplete nor trips fail_on_error', async (t) => {
+  const { spawnSync } = require('node:child_process');
+  const s = await v2(t, { findings: [[13, 'return y * 2;']], prep: DET() });
+  const status = /specguard:status=(\w+)/.exec(s.calls.summary[0].body)[1];
+  assert.equal(status, 'complete');
+  const r = spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: status, REASON: '', FAIL_ON_ERROR: 'true' } });
+  assert.equal(r.status, 0);
+});
+
+// ---- review fixes for the unverified demotion ----
+const ALLOUT = (s) => JSON.stringify([s.calls.review, s.calls.file, s.calls.summary]);
+const NEAR = 'assertion removed: assert.equal(gone, 1); (test.js:2)';
+const nearRun = async (t, findings, { lead = NEAR, mode = 'details' } = {}) => { // a removed assertion in test.js:2 (LEFT) with the model findings given
+  const s = setup(t, report({ coverage: [row('missing_test')], findings }));
+  if (lead) { // no lead: the default setup diff (src.js only)
+    fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+    fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', '@@ -1,3 +1,2 @@\n test\n-assert.equal(gone, 1);\n assert.ok(1);'));
+    fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), `${lead}\n`);
+  }
+  process.env.UNVERIFIED_MISSING_TESTS = mode;
+  await post(s);
+  return s;
+};
+
+test('unverified: a model missing_test that absorbs a removed-assertion lead is delivered under details, RIGHT and LEFT, with the removal note', async (t) => {
+  const right = await nearRun(t, [finding('missing_test', { path: 'test.js', line: 2, quote: evidence.quote, confidence: 'low', title: 'NEARBY ONE' })]);
+  assert.doesNotMatch(ALLOUT(right), /Unverified missing-test suggestions/);
+  assert.equal(right.calls.review[0].comments.length, 1);
+  assert.match(ALLOUT(right), /Removal confirmed by the diff\./);
+  const left = await nearRun(t, [finding('missing_test', { path: 'test.js', side: 'LEFT', line: 2, quote: 'assert.equal(gone, 1);', confidence: 'low', title: 'NEARBY ONE' })]);
+  const lb = left.calls.summary[0].body;
+  assert.doesNotMatch(lb, /Unverified missing-test suggestions/);
+  assert.match(visible(left), /NEARBY ONE/);
+  assert.match(ALLOUT(left), /Removal confirmed by the diff\./);
+  assert.equal(countsOf(lb).unverified_missing_test, 0);
+});
+
+test('unverified: a lone deterministic "Assertion removed with no replacement" finding is still delivered under details', async (t) => {
+  const s = await nearRun(t, []);
+  assert.equal([...ALLOUT(s).matchAll(/Assertion removed with no replacement/g)].length > 0, true);
+  assert.doesNotMatch(s.calls.summary[0].body, /Unverified missing-test suggestions/);
+  assert.match(visible(s), /Assertion removed with no replacement/);
+});
+
+test('unverified: held LEFT-side, outside-the-diff and quote-matches-a-removed-line findings go to Details under details and to the old routes under show', async (t) => {
+  const cases = [
+    ['LEFT side', { side: 'LEFT', line: 2, quote: 'old' }, /removed test or assertion/],
+    ['outside the diff', { path: 'test.js', line: 2, quote: evidence.quote }, /outside the reviewed diff/],
+    ['quote of a removed line', { line: 2, quote: 'old' }, /removed test or assertion/],
+  ];
+  for (const [name, extra, old] of cases) {
+    const d = await nearRun(t, [finding('missing_test', { title: 'HELD ONE', ...extra })], { lead: '', mode: 'details' });
+    const b = d.calls.summary[0].body;
+    assert.equal(UNV_H.exec(b)?.[1], '1', name);
+    assert.doesNotMatch(visible(d), old, name);
+    assert.doesNotMatch(visible(d), /HELD ONE/, name);
+    assert.equal(countsOf(b).unverified_missing_test, 1, name);
+    assert.equal(countsOf(b).held[0].ev, 'none', name);
+    const sh = await nearRun(t, [finding('missing_test', { title: 'HELD ONE', ...extra })], { lead: '', mode: 'show' });
+    assert.match(sh.calls.summary[0].body, old, name);
+    assert.doesNotMatch(sh.calls.summary[0].body, /Unverified missing-test suggestions/, name);
+  }
+});
+
+test('unverified: a low-confidence model missing_test under details goes to Unverified, not to Low-confidence findings (intended)', async (t) => {
+  const s = await v2(t, { findings: [[13, 'return y * 2;', { confidence: 'low' }]], prep: DET() });
+  const b = s.calls.summary[0].body;
+  assert.equal(UNV_H.exec(b)[1], '1');
+  assert.doesNotMatch(b, /Low-confidence findings/);
+});
+
+test('unverified: a prior inline thread of a now-held finding is never resolved, even when the model quote was trimmed; a really gone thread still is', async (t) => {
+  const pages = (fp) => [[thread('held-old', fp), ...GONE()]];
+  const prep = (fp) => (s) => {
+    process.env.UNVERIFIED_MISSING_TESTS = 'details'; s.resolved = [];
+    s.github.graphql = async (q, v) => { if (/resolveReviewThread/.test(q)) { s.resolved.push(v.t); return {}; } return { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: pages(fp)[0] } } } }; };
+  };
+  const fp = fpOf('missing_test', 'src.js', 'return y * 2;'); // the posted comment's fingerprint uses the verified quote
+  for (const [name, cov] of [['no report', undefined], ['line ran', V2COV({ 'src.js': { never: [], ran: [[13, 13]], miss: [] } })], ['uninstrumented', V2COV({ 'src.js': { never: [], ran: [[9, 9]], miss: [] } })]]) {
+    const s = await v2(t, { cov, findings: [[13, 'return y * 2;...']], prep: prep(fp) });
+    assert.match(s.calls.summary[0].body, UNV_H, name);
+    assert.deepEqual(s.resolved, ['gone'], name);
+  }
+});
+
+test('unverified telemetry: held findings do not touch the relabelled/unverified counters; a capped held list with fp, path, line, title and ev rides beside unverified_missing_test', async (t) => {
+  const none = await v2(t, { findings: [[13, 'return y * 2;']], prep: DET() });
+  const c = countsOf(none.calls.summary[0].body);
+  assert.deepEqual(c.held, [{ fp: fpOf('missing_test', 'src.js', 'return y * 2;').slice(0, 16), path: 'src.js', line: 13, title: 'Verify the boundary total', ev: 'none' }]);
+  assert.equal(c.sum, undefined, 'no synthetic priors');
+  const ran = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[9, 9], [13, 13]], miss: [] } }), findings: [[13, 'return y * 2;']], prep: DET() });
+  assert.equal(countsOf(ran.calls.summary[0].body).held[0].ev, 'ran');
+  assert.equal(gapsOf(ran), undefined);
+  const unk = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[9, 9]], miss: [] } }), findings: [[13, 'return y * 2;']], prep: DET() });
+  assert.equal(countsOf(unk.calls.summary[0].body).held[0].ev, 'unknown');
+  assert.equal(countsOf(none.calls.summary[0].body).findings.missing_test, undefined);
+  const clean = await v2(t, { prep: DET() });
+  assert.equal(countsOf(clean.calls.summary[0].body).held, undefined);
+});
+
+test('countsComment: held is truncated before sum and outcomes keep the marker under COUNTS_MAX', () => {
+  const held = Array.from({ length: 50 }, (_, i) => ({ fp: String(i).padStart(16, '0'), path: `src/${'d'.repeat(60)}/${i}.js`, line: i + 1, title: 'x'.repeat(120), ev: 'none' }));
+  const sum = Array.from({ length: 20 }, (_, i) => ({ fp: String(i).padStart(16, '1'), path: 'a.js', line: i + 1, kind: 'missing_test', title: 'y'.repeat(100) }));
+  const line = post.countsComment({ v: 1, held, sum, outcomes: [] }), o = JSON.parse(/<!-- specguard:counts (.*) -->/.exec(line)[1]);
+  assert.ok(line.length <= 8192 + 40);
+  assert.equal(o.sum.length, 20, 'the tracked summary entries survive');
+  assert.ok(o.held.length < 50 && o.held_dropped === 50 - o.held.length);
+});
+
+test('unverified verdict precedence and trigger: checks and changed requirements are not hidden or called "no gaps"; only held suggestions without execution evidence trigger it', () => {
+  const held = (ev) => [{ f: finding('missing_test', { title: 'HELD ONE' }), raw: {}, ev }];
+  const r = { id: 'R1', source: 'PR body', quote: 'Return 42.', obligation_ids: ['O1'], reason: 'Unit assertion found.' };
+  const unconfirmed = () => { const d = report({ requirements: [r], coverage: [row()], findings: [] }); post.verifyRequirements(d, { documents: [{ source: 'PR body', text: 'Return 42.\nReject zero.' }], criteria: [{ id: 'R1', source: 'PR body', quote: 'Return 42.' }, { id: 'R2', source: 'PR body', quote: 'Reject zero.' }] }); return d; };
+  const clean = () => report({ requirements: [r], coverage: [row()], findings: [] });
+  const top = (s) => s.split('<details>')[0];
+  const a = top(post.buildSummary({ data: unconfirmed(), unverified: held('none') }));
+  assert.match(a, /\*\*❔ Missing unit tests not verified \(no coverage report\); 1 criterion needs a person to check\*\*/);
+  assert.doesNotMatch(a, /No gaps found/);
+  const c = top(post.buildSummary({ data: { ...clean(), requirements: [{ ...r, req_change: { previous: 'x' } }] }, unverified: held('unknown') }));
+  assert.match(c, /\*\*❔ Missing unit tests not verified \(not checked against the coverage report\); requirement text changed in this PR, so review it\*\*/);
+  const n = top(post.buildSummary({ data: clean(), unverified: held('none') }));
+  assert.match(n, /\*\*❔ Missing unit tests: not verified \(no coverage report\); 1 suggestion in Details\*\*/);
+  assert.match(n, /\| not verified \(no coverage report\) \|/);
+  const u = top(post.buildSummary({ data: clean(), unverified: held('unknown') }));
+  assert.match(u, /\*\*❔ Missing unit tests: not verified \(not checked against the coverage report\); 1 suggestion in Details\*\*/);
+  assert.match(u, /\| not verified \(not checked against the coverage report\) \|/);
+  const ran = top(post.buildSummary({ data: clean(), unverified: held('ran') }));
+  assert.match(ran, /No unit test gaps found/);
+  assert.match(ran, /\| no gaps \|/);
+  const inc = top(post.buildSummary({ data: clean(), unverified: held('none'), incomplete: ['x'] }));
+  assert.match(inc, /\*\*⚠️ Partly reviewed: missing unit tests not verified; see Not reviewed below\*\*/);
+  assert.match(top(post.buildSummary({ data: clean(), unverified: held('ran'), incomplete: ['x'] })), /Partly reviewed: no gaps in what was reviewed/);
+  assert.match(top(post.buildSummary({ data: unconfirmed() })), /\*\*❔ No gaps found; 1 criterion needs a person to check\*\*/);
+});
+
+test('countsComment: a full marker drops held first and keeps every fix-through outcome', () => {
+  const held = Array.from({ length: 50 }, (_, i) => ({ fp: String(i).padStart(16, '0'), path: `src/${'d'.repeat(60)}/${i}.js`, line: i + 1, title: 'x'.repeat(120), ev: 'none' }));
+  const sum = Array.from({ length: 10 }, (_, i) => ({ fp: String(i).padStart(16, '1'), path: 'a.js', line: i + 1, kind: 'missing_test', title: 'y'.repeat(100) }));
+  const outcomes = Array.from({ length: 15 }, (_, i) => ({ fp: String(i).padStart(16, '2'), outcome: 'open', kind: 'missing_test', still_reported: true }));
+  const line = post.countsComment({ v: 1, held, sum, outcomes }), o = JSON.parse(/<!-- specguard:counts (.*) -->/.exec(line)[1]);
+  assert.ok(line.length <= 8192 + 40);
+  assert.equal(o.outcomes.length, 15, 'no outcome dropped while held can still shrink');
+  assert.equal(o.dropped, undefined);
+  assert.equal(o.sum.length, 10);
+  assert.ok(o.held.length < 50 && o.held_dropped === 50 - o.held.length);
+});
+
+test('unverified: a reduced review with held suggestions without execution evidence never says "no high-confidence gaps", in the verdict or the cell', () => {
+  const held = (ev) => [{ f: finding('missing_test', { title: 'HELD ONE' }), raw: {}, ev }];
+  const data = () => report({ requirements: [], coverage: [row()], findings: [] });
+  const top = (s) => s.split('<details>')[0];
+  const mixed = { reasons: [{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }], model: 'mini' };
+  const grade = { reasons: [{ id: 'tier', text: 'fast-tier model' }], model: 'mini' };
+  for (const [name, reduced] of [['mixed reasons', mixed], ['grade only', grade]]) {
+    const a = top(post.buildSummary({ data: data(), unverified: held('none'), reduced }));
+    assert.match(a, /not verified \(no coverage report\)/, name);
+    assert.match(a, /\| not verified \(no coverage report\) \|/, name);
+    assert.doesNotMatch(a, /no high-confidence gaps/, name);
+  }
+  assert.match(top(post.buildSummary({ data: data(), unverified: held('unknown'), reduced: mixed })), /Reduced review: missing unit tests not verified \(not checked against the coverage report\)/);
+  const ran = top(post.buildSummary({ data: data(), unverified: held('ran'), reduced: mixed }));
+  assert.match(ran, /Reduced review: no high-confidence gaps/);
+  assert.match(ran, /\| no high-confidence gaps \|/);
+});
+
+test('unverified: a model missing_test near the 6th removed assertion is absorbed and delivered; the cap limits only new auto findings', async (t) => {
+  const s = setup(t, report({ coverage: [row('missing_test')], findings: [finding('missing_test', { path: 'test.js', side: 'LEFT', line: 102, quote: 'assert.equal(gone5, 1);', confidence: 'low', title: 'SIXTH ONE' })] }));
+  const at = (i) => 2 + i * 20; // LEFT line of removal i, far enough apart that none is near another
+  const hunks = Array.from({ length: 6 }, (_, i) => `@@ -${at(i) - 1},2 +${at(i) - 1 - i},1 @@\n ctx${i}\n-assert.equal(gone${i}, 1);`).join('\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', hunks));
+  fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), `${Array.from({ length: 6 }, (_, i) => `  assertion removed: assert.equal(gone${i}, 1); (test.js:${at(i)})`).join('\n')}\n`);
+  process.env.UNVERIFIED_MISSING_TESTS = 'details';
+  await post(s);
+  const all = ALLOUT(s);
+  assert.match(all, /Removal confirmed by the diff\./);
+  assert.match(visible(s), /SIXTH ONE/);
+  assert.doesNotMatch(s.calls.summary[0].body, /Unverified missing-test suggestions/);
+  assert.equal([...all.matchAll(/Assertion removed with no replacement/g)].length > 0, true);
+});
+
+test('layout: "Since last push" subtracts open held priors by fingerprint, not by the capped held list', () => {
+  const posted = [{ f: finding('missing_test', { title: 'M1' }), url: 'https://github.com/o/r/pull/1#discussion_r1' }, { f: finding('weak_test', { title: 'W1', line: 5 }), url: 'https://github.com/o/r/pull/1#discussion_r2' }];
+  const hf = finding('missing_test', { title: 'HELD', line: 9, quote: 'return z;' });
+  const unverified = [{ f: hf, raw: {}, ev: 'none' }];
+  const fp = post.fingerprint(hf.kind, hf.path, hf.quote, hf.source);
+  const mk = (ofp) => ({ v: 1, complete: true, since: { addressed: 0, open: 2, dismissed: 0, not_observed: 0 }, since_total: 3, prior_total: 3, outcomes: [{ fp: ofp, outcome: 'open' }], held: [] });
+  const out = (c, u) => visibleOf(post.buildSummary({ data: layoutData(), posted, blob: BLOB, counts: c, unverified: u }));
+  assert.match(out(mk(fp), unverified), /\nSince last push: 1 new\n/);
+  assert.match(out(mk(fp.slice(0, 16)), unverified), /\nSince last push: 1 new\n/, 'a 16-char prior matches too');
+  assert.doesNotMatch(out(mk('f'.repeat(40)), unverified), /Since last push/, 'an unrelated open prior is not subtracted');
 });

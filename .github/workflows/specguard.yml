@@ -48,6 +48,7 @@ on:
       mode: { description: "pr (review a pull request) | scan (unit test gap scan of the checked-out repository: the riskiest source files that lack real unit tests, plus, when design documents exist, documented behaviour that lacks unit-test evidence; run it on the default branch, on demand or on a schedule). audit is accepted as an alias of scan.", required: false, type: string, default: pr }
       max_units: { description: "Scan mode: most source files (units) reviewed per run, riskiest first (integer 1-100). With scan_issue: true the runs rotate through all units, like the document blocks.", required: false, type: string, default: "12" }
       scan_gap_top: { description: "Scan mode with coverage_files: most coverage-backed unit test gaps listed in full in the summary, the rest rolled up per file in Details (integer 1-50).", type: string, default: "10" }
+      unverified_missing_tests: { description: "details | show. details (default): model missing_test findings are delivered when coverage confirms them or they carry a removed assertion confirmed by the diff; the others go to a collapsed Details section and are not counted; show: deliver them as before.", type: string, default: "details" }
       scan_batch_blocks: { description: "Scan mode, claude engine (api mode): most document blocks per API call (integer 1-100). A scan with more blocks is split into one call for the units and one per batch of blocks; the answers are merged, a failed call loses only its own blocks (listed as not audited, due again) and max_budget_usd bounds the whole run (trailing batches are dropped first).", required: false, type: string, default: "20" }
       scan_scope: { description: "Scan mode: selected (default) | all (review the whole repository in one run: every unit part and document block; claude engine in api mode only; incomplete, and red with fail_on_error, when the budget or review_timeout_minutes stops it).", required: false, type: string, default: selected }
       scan_max_blocks: { description: "Scan mode: most document blocks audited per run (integer 1-500; empty = 80). With scan_issue: true the runs rotate through all blocks (changed documents, gaps to confirm, never-audited blocks, then the least recently audited); without it the first blocks in document order.", required: false, type: string, default: "" }
@@ -110,6 +111,7 @@ jobs:
           ctx_retention_days: ${{ inputs.ctx_retention_days }}
           max_units: ${{ inputs.max_units }}
           scan_gap_top: ${{ inputs.scan_gap_top }}
+          unverified_missing_tests: ${{ inputs.unverified_missing_tests }}
           scan_batch_blocks: ${{ inputs.scan_batch_blocks }}
           scan_scope: ${{ inputs.scan_scope }}
           scan_max_blocks: ${{ inputs.scan_max_blocks }}

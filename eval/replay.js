@@ -143,7 +143,7 @@ async function finishRealOne(id, out, { engine = 'local', model = '', root = ROO
   const ctx = path.join(dir, 'ctx'), present = fs.existsSync(path.join(ctx, 'findings.json'));
   const { github, core, posted } = fakeGithub({ headSha: meta.head });
   const context = { repo: { owner: 'local', repo: 'eval' }, serverUrl: 'https://github.com', payload: { pull_request: { number: 1, head: { sha: meta.head }, base: { sha: meta.base } } } };
-  const env = { CTX: ctx, HEAD_SHA: meta.head, BASE_SHA: meta.base, GITHUB_WORKSPACE: meta.repo, SKIP: String(!!meta.skip), PARTIAL: String(!!meta.partial), MAX_COMMENTS: '10', ENGINE: engine, MODEL: model, STANDARDS_REF: 'head', STANDARDS_CHECKS: '' };
+  const env = { CTX: ctx, HEAD_SHA: meta.head, BASE_SHA: meta.base, GITHUB_WORKSPACE: meta.repo, SKIP: String(!!meta.skip), PARTIAL: String(!!meta.partial), MAX_COMMENTS: '10', ENGINE: engine, MODEL: model, STANDARDS_REF: 'head', STANDARDS_CHECKS: '', UNVERIFIED_MISSING_TESTS: process.env.UNVERIFIED_MISSING_TESTS || 'show' }; // frozen evals predate the hold: default show; an arm (--arms X=UNVERIFIED_MISSING_TESTS=details) overrides
   const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
   Object.assign(process.env, env);
   try { await require(path.join(root, 'src', 'post.js'))({ github, context, core }); }

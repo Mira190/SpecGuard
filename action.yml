@@ -26,8 +26,9 @@ inputs:
   requirements_paths: { description: "Globs (one per line) that add requirement documents; a !glob line excludes; a leading / anchors at the repository root (!/docs/** leaves docs/ folders deeper in the tree alone). Empty = content-based discovery only.", default: "" }
   test_paths: { description: "Globs or folders (one per line; a !glob line excludes) that are the authoritative unit-test locations. Empty = discover test files by name and layout.", default: "" }
   standards_paths: { description: "Globs (one per line) that add coding-standard or review-guideline documents, read from the base commit; a !glob line excludes.", default: "" }
-  coverage_files: { description: "Optional. Coverage report globs, one per line, relative to the workspace (LCOV, Cobertura XML, JaCoCo XML, Go cover profile, Istanbul coverage-final.json). SpecGuard never runs tests: run them with coverage in a SEPARATE job with no secrets (contents: read, persist-credentials: false), upload the report as an artifact and download it before this step; never run PR code in the job that holds SpecGuard's tokens (README: Coverage evidence). The report is parsed as untrusted data. With a report, changed lines that no test executed are reported as facts and a 'covered' judgement for such a line is downgraded. In scan mode the report covers the whole repository: definitions with never-run lines are listed as deterministic unit test gaps (top scan_gap_top in the summary, the rest per file in Details), and the model's missing_test claims are checked against it (a line that ran becomes a low-confidence weak_test). Empty = off.", default: "" }
+  coverage_files: { description: "Optional. Coverage report globs, one per line, relative to the workspace (LCOV, Cobertura XML, JaCoCo XML, Go cover profile, Istanbul coverage-final.json). SpecGuard never runs tests: run them with coverage in a SEPARATE job with no secrets (contents: read, persist-credentials: false), upload the report as an artifact and download it before this step; never run PR code in the job that holds SpecGuard's tokens (README: Coverage evidence). The report is parsed as untrusted data. With a report, changed lines that no test executed are reported as facts and a 'covered' judgement for such a line is downgraded. In scan mode the report covers the whole repository: definitions with never-run lines are listed as deterministic unit test gaps (top scan_gap_top in the summary, the rest per file in Details), and the model's missing_test claims are checked against it (with unverified_missing_tests: show, a line that ran becomes a low-confidence weak_test; by default it goes to the unverified Details section). Empty = off.", default: "" }
   scan_gap_top: { description: "Scan mode with coverage_files: most coverage-backed unit test gaps (definitions with lines no test executed) listed in full in the summary, the rest rolled up per file in Details (integer 1-50).", default: "10" }
+  unverified_missing_tests: { description: "details | show. details (default): a model missing_test finding is delivered only when a coverage report confirms its line never ran, it merges into a coverage-reported gap, or it carries a removed assertion confirmed by the diff; every other one goes to a collapsed Details section (unverified suggestions) and is not counted. show: deliver them as before.", default: "details" }
   trace: { description: "auto | off. auto traces requirement docs and code when any requirement doc is found.", default: auto }
   claude_version: { description: "Pinned @anthropic-ai/claude-code version (claude engine).", default: "2.1.284" }
   copilot_version: { description: "Pinned @github/copilot version (>= 1.0.85).", default: "1.0.92" }
@@ -210,6 +211,7 @@ runs:
         SCAN_BATCH_BLOCKS: ${{ inputs.scan_batch_blocks }}
         SCAN_SCOPE: ${{ inputs.scan_scope }}
         SCAN_GAP_TOP: ${{ inputs.scan_gap_top }}
+        UNVERIFIED_MISSING_TESTS: ${{ inputs.unverified_missing_tests }}
         MODE: ${{ steps.mode.outputs.mode }}
         MAX_UNITS: ${{ inputs.max_units }}
         TIMEOUT: ${{ inputs.review_timeout_minutes }}
@@ -266,6 +268,7 @@ runs:
         CTX: ${{ github.workspace }}/.specguard-ctx
         MAX_COMMENTS: ${{ inputs.max_comments }}
         RESOLVE_STALE: ${{ inputs.resolve_stale }}
+        UNVERIFIED_MISSING_TESTS: ${{ inputs.unverified_missing_tests }}
         ENGINE: ${{ steps.engine.outputs.engine }}
         MODEL: ${{ steps.credential.outputs.model }}
         SKIP: ${{ steps.collect.outputs.skip }}
@@ -314,6 +317,7 @@ runs:
         SCAN_PATHS: ${{ inputs.scan_paths }}
         TEST_PATHS: ${{ inputs.test_paths }}
         SCAN_GAP_TOP: ${{ inputs.scan_gap_top }}
+        UNVERIFIED_MISSING_TESTS: ${{ inputs.unverified_missing_tests }}
         AUDIT_ISSUE: ${{ inputs.audit_issue }} # deprecated alias; the new name wins
         TARGET_REPO: ${{ inputs.repository }}
         TARGET_SHA: ${{ inputs.head_sha }}

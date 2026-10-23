@@ -368,7 +368,7 @@ async function runPost(t, { ctxFiles = {}, env = {}, mock = {}, files } = {}) {
   for (const [n, v] of Object.entries(ctxFiles)) w.put(n, v);
   const m = mocks(mock);
   const saved = { ...process.env };
-  Object.assign(process.env, { CTX: w.ctx, GITHUB_WORKSPACE: w.root, ENGINE: '', MODEL: '', SKIP: '', AUDIT_ISSUE: 'false', ...env });
+  Object.assign(process.env, { CTX: w.ctx, GITHUB_WORKSPACE: w.root, ENGINE: '', MODEL: '', SKIP: '', AUDIT_ISSUE: 'false', UNVERIFIED_MISSING_TESTS: 'show', ...env }); // older tests exercise other behaviour with a model missing_test; the demotion tests pass 'details' (the action default)
   try { await audit({ github: m.github, context: m.context, core: m.core, date: DATE }); } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
   return { ...m, w };
 }
@@ -1698,6 +1698,91 @@ test('scan coverage: in-scope source files missing from the report are a count i
   assert.ok(md.includes('**Not in the coverage report**'));
   assert.doesNotMatch(md, /No test loaded|src\/big\.js|src\/small\.js|eval\/other/, 'no cause claimed, no file names');
   assert.match(render({ data: clean(), code: codeWith(audit.scanCoverage({ cov: covOf(CFILE, { unreported: ['src/big.js'] }), findings: [], readLines: (p) => src[p] || null, isTest: notTest })) }), /1 source file in scope is not in the coverage report/);
+});
+
+// ---- unverified_missing_tests (scan mode): a model missing_test without execution evidence is a held, uncounted Details suggestion ----
+const UNV_SCAN = /\*\*Unverified missing-test suggestions \((\d+)\)\*\*\n\nThese are model suggestions not confirmed by a coverage report; on four evaluation corpora, 1 of 58 such claims with a coverage label cited a line no test ran\. See \[Coverage evidence\]\(https:\/\/github\.com\/Mira190\/SpecGuard#coverage-evidence-optional\)\./;
+
+test('unverified scan: no report: held, not in the visible summary, not counted, verdict says not verified; show keeps today\'s output', () => {
+  const f = mt(17), held = scanOf([f], null, 10, { hold: true });
+  assert.equal(held.findings.length, 1);
+  assert.deepEqual([held.findings[0].low, held.findings[0].unv], [true, true]);
+  const md = render({ data: clean(), code: codeWith(held) }), vis = md.slice(0, md.indexOf('<details>')), det = md.slice(md.indexOf('<details>'));
+  assert.match(vis, /\*\*❔ Missing unit tests: not verified \(no coverage report\); 1 suggestion in Details\*\*/);
+  assert.doesNotMatch(md, /No unit test gaps/);
+  assert.doesNotMatch(vis, /claim at 17|Untested behaviour/);
+  assert.match(vis, /\| not verified \|/, 'the No unit test cell does not say none');
+  assert.equal(UNV_SCAN.exec(det)[1], '1');
+  assert.match(det, /Unverified missing-test suggestions \(1\)[\s\S]*claim at 17[\s\S]*`src\/m\.js:17`/);
+  assert.doesNotMatch(det, /Low-confidence unit findings/, 'it has its own section');
+  const show = render({ data: clean(), code: codeWith(scanOf([f], null)) });
+  assert.match(show, /### Untested behaviour \(1\)/);
+  assert.doesNotMatch(show, /Unverified missing-test suggestions/);
+});
+
+test('unverified scan: with a report only a never-run line or a merged gap is delivered; a line that ran or an uninstrumented one is held and not relabelled', () => {
+  const never = scanOf([mt(9)], covOf(CFILE), 10, { hold: true });
+  assert.deepEqual([never.findings[0].low, never.findings[0].unv], [false, undefined]);
+  assert.match(never.findings[0].title, /\(coverage: never executed\)/);
+  const merged = scanOf([mt(12)], covOf(CFILE), 10, { hold: true });
+  assert.equal(merged.merged, 1);
+  assert.equal(merged.findings[0].merged, true);
+  const ran = scanOf([mt(17)], covOf(CFILE), 10, { hold: true });
+  assert.deepEqual([ran.findings[0].kind, ran.findings[0].low, ran.findings[0].unv, ran.findings[0].source], ['missing_test', true, true, undefined]);
+  assert.equal(ran.relabeled, 0);
+  const unk = scanOf([mt(7)], covOf(CFILE), 10, { hold: true });
+  assert.deepEqual([unk.findings[0].low, unk.findings[0].unv], [true, true]);
+  assert.equal(unk.unverified, 0);
+  const md = render({ data: clean(), code: codeWith(scanOf([mt(17), mt(7)], covOf(CFILE), 10, { hold: true })) });
+  assert.equal(UNV_SCAN.exec(md)[1], '2');
+  assert.doesNotMatch(md, /Missing unit tests: not verified/, 'a report exists');
+  assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /claim at/);
+});
+
+test('unverified scan: evidence-based trigger, precedence over person-check blocks, the show note, and no relabelled/unverified counting', () => {
+  const top = (md) => md.slice(0, md.indexOf('<details>'));
+  const none = scanOf([mt(17)], null, 10, { hold: true });
+  const RAN = covOf({ 'src/m.js': { inst: 3, exec: 3, never: [], ran: [[17, 17]], miss: [] } }), ran = scanOf([mt(17)], RAN, 10, { hold: true }), unk = scanOf([mt(7)], RAN, 10, { hold: true });
+  assert.deepEqual([none.findings[0].ev, unk.findings[0].ev, ran.findings[0].ev], ['none', 'unknown', 'ran']);
+  assert.deepEqual([ran.relabeled, unk.unverified, none.relabeled, none.unverified], [0, 0, 0, 0]);
+  const person = (sc) => top(render({ data: dataOf({ [A]: 'needs_human' }), code: codeWith(sc) }));
+  assert.match(person(none), /\*\*❔ Missing unit tests not verified \(no coverage report\); 1 block needs a person to check\*\*/);
+  assert.match(person(unk), /Missing unit tests not verified \(not checked against the coverage report\); 1 block needs a person to check/);
+  assert.doesNotMatch(person(none), /No unit test gaps in/);
+  assert.match(top(render({ data: clean(), code: codeWith(unk) })), /\*\*❔ Missing unit tests: not verified \(not checked against the coverage report\); 1 suggestion in Details\*\*/);
+  assert.match(top(render({ data: clean(), code: codeWith(ran) })), /✅ No unit test gaps/);
+  assert.doesNotMatch(top(render({ data: clean(), code: codeWith(ran) })), /not verified/);
+  const note = /Missing-unit-test findings are not verified: no coverage report/;
+  assert.match(render({ data: clean(), code: codeWith(scanOf([mt(17, { low: true })], null)) }), note, 'show mode: a low-confidence missing_test still gets the note');
+  assert.doesNotMatch(render({ data: clean(), code: codeWith(none) }), note, 'held ones have their own wording');
+});
+
+test('unverified scan run: audit.json carries a capped held list (fp, path, line, title, ev) and the unit findings', async (t) => {
+  const solid = { unit: UID, kind: 'missing_test', path: 'src/plan.js', line: 1, quote: FILES['src/plan.js'][0], title: 'No test', skeleton: 'it("fires", () => {});' };
+  const r = await runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result([req()], { unit_findings: [solid] }) }, env: { AUDIT_ISSUE: 'true', UNVERIFIED_MISSING_TESTS: 'details' } });
+  const aj = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
+  assert.equal(aj.held.length, 1);
+  assert.deepEqual([aj.held[0].path, aj.held[0].line, aj.held[0].title, aj.held[0].ev], ['src/plan.js', 1, 'No test', 'none']);
+  assert.match(aj.held[0].fp, /^[0-9a-f]{16}$/);
+  const show = await runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result([req()], { unit_findings: [solid] }) }, env: { AUDIT_ISSUE: 'true', UNVERIFIED_MISSING_TESTS: 'show' } });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(show.w.ctx, 'audit.json'), 'utf8')).held, undefined);
+});
+
+test('unverified scan run: held suggestions leave the run complete and fail_on_error green; they are not tracked in the state; show lists them as gaps', async (t) => {
+  const { spawnSync } = require('node:child_process');
+  const solid = { unit: UID, kind: 'missing_test', path: 'src/plan.js', line: 1, quote: FILES['src/plan.js'][0], title: 'No test', skeleton: 'it("fires", () => {});' };
+  const run = (UNVERIFIED_MISSING_TESTS) => runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result([req()], { unit_findings: [solid] }) }, env: { AUDIT_ISSUE: 'true', UNVERIFIED_MISSING_TESTS } });
+  const held = await run('details'), s = held.calls.summary;
+  assert.equal(held.calls.outputs.status, 'complete');
+  assert.equal(spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: held.calls.outputs.status, REASON: '', CTX: held.w.ctx, FAIL_ON_ERROR: 'true' } }).status, 0);
+  assert.match(s, /Missing unit tests: not verified \(no coverage report\); 1 suggestion in Details/);
+  assert.match(s, UNV_SCAN);
+  assert.doesNotMatch(s, /### Untested behaviour/);
+  const st = audit.readState((held.calls.created[0] || held.calls.updated[0]).body);
+  assert.equal((st.findings || []).length, 0, 'a held suggestion is not a tracked finding');
+  const show = await run('show');
+  assert.match(show.calls.summary, /### Untested behaviour \(1\)/);
+  assert.doesNotMatch(show.calls.summary, /Unverified missing-test suggestions/);
 });
 
 test('NOT_UNIT: fixture, testdata and mock directories are not units; ordinary names still are; heuristicTest follows trace.isTestPath', () => {

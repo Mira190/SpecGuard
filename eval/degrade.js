@@ -162,7 +162,7 @@ async function observe(fx, ws, text) {
   out.rows = d.coverage.filter((c) => c.status !== 'unknown').length;
   const { github, core, posted } = fakeGithub({ headSha: 'HEADSHA' });
   const context = { repo: { owner: 'o', repo: 'r' }, serverUrl: 'https://github.com', payload: { pull_request: { number: 1, head: { sha: 'HEADSHA' } } } };
-  const env = { CTX: ctx, GITHUB_WORKSPACE: ws, HEAD_SHA: 'HEADSHA', SKIP: 'false', PARTIAL: 'false', MAX_COMMENTS: '10', ENGINE: 'degrade', MODEL: '', STANDARDS_REF: 'head', STANDARDS_CHECKS: '' };
+  const env = { CTX: ctx, GITHUB_WORKSPACE: ws, HEAD_SHA: 'HEADSHA', SKIP: 'false', PARTIAL: 'false', MAX_COMMENTS: '10', ENGINE: 'degrade', MODEL: '', STANDARDS_REF: 'head', STANDARDS_CHECKS: '', UNVERIFIED_MISSING_TESTS: process.env.UNVERIFIED_MISSING_TESTS || 'show' }; // frozen evals predate the hold: default show; the caller's env may set details
   const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
   Object.assign(process.env, env);
   try { await post({ github, context, core }); }
