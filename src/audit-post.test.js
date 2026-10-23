@@ -1729,14 +1729,43 @@ test('unverified scan: with a report only a never-run line or a merged gap is de
   assert.equal(merged.findings[0].merged, true);
   const ran = scanOf([mt(17)], covOf(CFILE), 10, { hold: true });
   assert.deepEqual([ran.findings[0].kind, ran.findings[0].low, ran.findings[0].unv, ran.findings[0].source], ['missing_test', true, true, undefined]);
-  assert.equal(ran.relabeled, 1);
+  assert.equal(ran.relabeled, 0);
   const unk = scanOf([mt(7)], covOf(CFILE), 10, { hold: true });
   assert.deepEqual([unk.findings[0].low, unk.findings[0].unv], [true, true]);
-  assert.equal(unk.unverified, 1);
+  assert.equal(unk.unverified, 0);
   const md = render({ data: clean(), code: codeWith(scanOf([mt(17), mt(7)], covOf(CFILE), 10, { hold: true })) });
   assert.equal(UNV_SCAN.exec(md)[1], '2');
   assert.doesNotMatch(md, /Missing unit tests: not verified/, 'a report exists');
   assert.doesNotMatch(md.slice(0, md.indexOf('<details>')), /claim at/);
+});
+
+test('unverified scan: evidence-based trigger, precedence over person-check blocks, the show note, and no relabelled/unverified counting', () => {
+  const top = (md) => md.slice(0, md.indexOf('<details>'));
+  const none = scanOf([mt(17)], null, 10, { hold: true });
+  const RAN = covOf({ 'src/m.js': { inst: 3, exec: 3, never: [], ran: [[17, 17]], miss: [] } }), ran = scanOf([mt(17)], RAN, 10, { hold: true }), unk = scanOf([mt(7)], RAN, 10, { hold: true });
+  assert.deepEqual([none.findings[0].ev, unk.findings[0].ev, ran.findings[0].ev], ['none', 'unknown', 'ran']);
+  assert.deepEqual([ran.relabeled, unk.unverified, none.relabeled, none.unverified], [0, 0, 0, 0]);
+  const person = (sc) => top(render({ data: dataOf({ [A]: 'needs_human' }), code: codeWith(sc) }));
+  assert.match(person(none), /\*\*❔ Missing unit tests not verified \(no coverage report\); 1 block needs a person to check\*\*/);
+  assert.match(person(unk), /Missing unit tests not verified \(lines not in the coverage report\); 1 block needs a person to check/);
+  assert.doesNotMatch(person(none), /No unit test gaps in/);
+  assert.match(top(render({ data: clean(), code: codeWith(unk) })), /\*\*❔ Missing unit tests: not verified \(lines not in the coverage report\); 1 suggestion in Details\*\*/);
+  assert.match(top(render({ data: clean(), code: codeWith(ran) })), /✅ No unit test gaps/);
+  assert.doesNotMatch(top(render({ data: clean(), code: codeWith(ran) })), /not verified/);
+  const note = /Missing-unit-test findings are not verified: no coverage report/;
+  assert.match(render({ data: clean(), code: codeWith(scanOf([mt(17, { low: true })], null)) }), note, 'show mode: a low-confidence missing_test still gets the note');
+  assert.doesNotMatch(render({ data: clean(), code: codeWith(none) }), note, 'held ones have their own wording');
+});
+
+test('unverified scan run: audit.json carries a capped held list (fp, path, line, title, ev) and the unit findings', async (t) => {
+  const solid = { unit: UID, kind: 'missing_test', path: 'src/plan.js', line: 1, quote: FILES['src/plan.js'][0], title: 'No test', skeleton: 'it("fires", () => {});' };
+  const r = await runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result([req()], { unit_findings: [solid] }) }, env: { AUDIT_ISSUE: 'true', UNVERIFIED_MISSING_TESTS: 'details' } });
+  const aj = JSON.parse(fs.readFileSync(path.join(r.w.ctx, 'audit.json'), 'utf8'));
+  assert.equal(aj.held.length, 1);
+  assert.deepEqual([aj.held[0].path, aj.held[0].line, aj.held[0].title, aj.held[0].ev], ['src/plan.js', 1, 'No test', 'none']);
+  assert.match(aj.held[0].fp, /^[0-9a-f]{16}$/);
+  const show = await runPost(t, { ctxFiles: { ...UFILES, 'findings.json': result([req()], { unit_findings: [solid] }) }, env: { AUDIT_ISSUE: 'true', UNVERIFIED_MISSING_TESTS: 'show' } });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(show.w.ctx, 'audit.json'), 'utf8')).held, undefined);
 });
 
 test('unverified scan run: held suggestions leave the run complete and fail_on_error green; they are not tracked in the state; show lists them as gaps', async (t) => {

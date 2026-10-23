@@ -687,9 +687,10 @@ const outcome = (p) => ((p.thread === 'human' && p.anchor_touched === false && p
 const COUNTS_MAX = 8192;
 // Hidden machine-readable line in the sticky summary. It repeats finding titles, so a consumer that greps the comment body for finding text must strip the `specguard:counts` line first. `outcomes` drops its oldest entries first to stay under COUNTS_MAX; the tally in `since` always covers all of them.
 function countsComment(c) {
-  const o = { ...c, outcomes: [...(c.outcomes || [])], ...(c.sum && { sum: [...c.sum] }) };
+  const o = { ...c, outcomes: [...(c.outcomes || [])], ...(c.sum && { sum: [...c.sum] }), ...(c.held && { held: [...c.held] }) };
   const json = () => JSON.stringify(o).replace(/[<>]/g, (ch) => (ch === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d'); // can never close the HTML comment
   while (json().length > COUNTS_MAX && o.outcomes.length) { o.outcomes.shift(); o.dropped = (o.dropped || 0) + 1; }
+  while (o.held?.length && json().length > COUNTS_MAX) { o.held.pop(); o.held_dropped = (o.held_dropped || 0) + 1; } // the held (unverified) list is a diagnostic: it goes before the tracked summary entries
   while (o.sum?.length && json().length > COUNTS_MAX) { o.sum.pop(); o.sum_dropped = (o.sum_dropped || 0) + 1; } // then the summary-only entries, last first (carried-forward ones sit after this run's)
   return `<!-- specguard:counts ${json()} -->`;
 }
@@ -809,16 +810,18 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const evidenced = rows.filter((x) => x.kind === 'evidenced' && !todoKeys.has(sentOf(x)) && !seenEv.has(sentOf(x)) && seenEv.add(sentOf(x))); // a sentence with a gap or unconfirmed row is not also "evidenced"
   const checks = todo.filter((x) => x.kind === 'unassessed' || x.kind === 'check').length, heldRaw = new Set(unverified.map((x) => x.raw)), isClean = !!data && noGaps({ ...data, findings: (data.findings || []).filter((f) => !heldRaw.has(f)) }) && !inc && (!reduced || gradeOnly(reduced));
   const changed = !!data && reqChanged(data);
+  const nvWhy = unverified.some((x) => x.ev === 'none') ? 'no coverage report' : unverified.some((x) => x.ev === 'unknown') ? 'lines not in the coverage report' : ''; // held suggestions with no execution evidence ('ran' ones are contradicted by the report: "no gaps" stays)
+  const nvLead = nvWhy ? `Missing unit tests not verified (${nvWhy})` : '';
 
   let verdict = '';
   if (failed) verdict = `**⚠️ Could not complete: ${neutralize(String(status || '').replace(/^Could not complete:\s*/i, ''))}**`;
   else if (!data) verdict = status ? `**${neutralize(status)}**` : '';
   else if (reduced && (!gradeOnly(reduced) || (inc && act.length))) verdict = act.length ? `**❌ ${andList(act)} to fix**` : '**⚠️ Reduced review: no high-confidence gaps**'; // the explanation is a blockquote after the table; never a pass line
-  else if (inc) verdict = act.length ? `**⚠️ Incomplete review: ${andList(act)} found so far**` : `**⚠️ Partly reviewed: no gaps in what was reviewed; see Not reviewed below**`;
+  else if (inc) verdict = act.length ? `**⚠️ Incomplete review: ${andList(act)} found so far**` : `**⚠️ Partly reviewed: ${nvWhy ? 'missing unit tests not verified' : 'no gaps in what was reviewed'}; see Not reviewed below**`;
   else if (act.length) verdict = `**❌ ${andList(act)} to fix**`;
-  else if (unverified.length && noReport) verdict = `**❔ Missing unit tests: not verified (no coverage report); ${plural(unverified.length, 'suggestion')} in Details**`; // never "no gaps" while model claims sit unchecked
-  else if (checks) verdict = `**❔ No gaps found; ${plural(checks, 'criterion', 'criteria')} need${checks === 1 ? 's' : ''} a person to check**`;
-  else if (changed) verdict = '**❔ No gaps found; requirement text changed in this PR, so review it**';
+  else if (checks) verdict = `**❔ ${nvLead || 'No gaps found'}; ${plural(checks, 'criterion', 'criteria')} need${checks === 1 ? 's' : ''} a person to check**`;
+  else if (changed) verdict = `**❔ ${nvLead || 'No gaps found'}; requirement text changed in this PR, so review it**`;
+  else if (nvWhy) verdict = `**❔ Missing unit tests: not verified (${nvWhy}); ${plural(unverified.length, 'suggestion')} in Details**`; // never "no gaps" while model claims sit unchecked
   else if (!data.coverage.length) verdict = '**❔ No gaps found; no behaviour was assessed, so this is not evidence that tests are sufficient**';
   else if (isClean && reduced) verdict = '**✅ Review complete (fast model): no high-confidence gaps**. Static review; tests were not run.';
   else if (isClean) verdict = `**✅ No unit test gaps found** in ${rows.length ? `the ${rows.length} assessed ${rows.length === 1 ? 'criterion' : 'criteria'}` : 'the changed behaviour'}. Static review; tests were not run.`;
@@ -832,8 +835,8 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     const tool = tooling && tooling.status !== 'not_configured' ? `; tool checks ${cell(tooling.status)}` : ''; // a configured check always says its state, a pass too (review F11)
     const std = data.standards.status === 'checked' ? (nk('standard') ? plural(nk('standard'), 'violation') : 'no violations') : data.standards.status === 'no_rules' ? 'none found' : 'not reviewed';
     const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
-    const unit = nk('missing_test') || nk('weak_test') ? [nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ') : reduced ? 'no high-confidence gaps' : unverified.length && noReport ? 'not verified (no coverage report)' : 'no gaps';
-    const snc = counts && counts.complete && counts.since_total && counts.since, delta = snc ? [snc.addressed && `${snc.addressed} with later changes (fix not verified)`, Math.max(0, all.length - snc.open) && `${Math.max(0, all.length - snc.open)} new`].filter(Boolean) : []; // push-to-push: addressed earlier findings (a proxy: never called fixed), and findings not reported before
+    const unit = nk('missing_test') || nk('weak_test') ? [nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ') : reduced ? 'no high-confidence gaps' : nvWhy ? `not verified (${nvWhy})` : 'no gaps';
+    const snc = counts && counts.complete && counts.since_total && counts.since, heldOpen = snc ? (counts.outcomes || []).filter((o) => o.outcome === 'open' && (counts.held || []).some((h) => o.fp.startsWith(h.fp))).length : 0, nw = snc ? Math.max(0, all.length - (snc.open - heldOpen)) : 0, delta = snc ? [snc.addressed && `${snc.addressed} with later changes (fix not verified)`, nw && `${nw} new`].filter(Boolean) : []; // open held priors are not in `all` // push-to-push: addressed earlier findings (a proxy: never called fixed), and findings not reported before
     line2 = `| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| ${unit} | ${req || 'none found'} | ${std}${tool} | ${lay} |\n${delta.length ? `\nSince last push: ${delta.join(' · ')}\n` : ''}`;
   }
 
@@ -1844,7 +1847,7 @@ async function run({ github, context, core }) {
   const unanchored = []; // items that failed to post or anchor; they go to the summary
   const gate = (r) => { if (r.note) (data.validation_notes ||= []).push(r.note); return r.f; }; // quality gates only demote or trim; each leaves a validation note
   // A removed assertion with no replacement is a fact (leads.txt), not a judgement: report it when no missing_test/weak_test finding cites that test file near it (either side).
-  const auto = [];
+  const auto = [], absorbed = new Set(); // absorbed: model findings that carry a removal lead; they stay delivered (the removal is a diff fact)
   // leads.txt indents each lead; and a lead is trusted only as far as the diff agrees: recomputing it drops removals re-pinned through a helper.
   const standing = new Set(require('./leads').assertionDelta(local, () => true).filter((d) => d.kind === 'removed').map((d) => `${d.file}:${d.line}`));
   for (const m of (readCtx('leads.txt') || '').matchAll(/^\s*assertion removed: .* \((.+):(\d+)\)\s*$/gm)) {
@@ -1856,6 +1859,7 @@ async function run({ github, context, core }) {
       // a low-confidence nearby finding is raised, not duplicated. A cross-file re-pin is no new risk: the lead is already posted when no finding is nearby.
       const n = data.findings[near];
       if (n.confidence !== 'high' && !n.gated && (n.kind !== 'weak_test' || counterexampleOk(n.counterexample))) data.findings[near] = { ...n, confidence: 'high', body: `${n.body}\n\nRemoval confirmed by the diff.` };
+      absorbed.add(data.findings[near]);
       continue;
     }
     const quote = ch.get(line).trim();
@@ -1868,15 +1872,17 @@ async function run({ github, context, core }) {
   const cg = { emitted: gaps.emit.length, filtered: gaps.filtered, inline: 0, rolled_up: gaps.roll.reduce((n, r) => n + r.groups.length, 0), merged: 0, relabeled: 0, unverified: 0 };
   const { enclosingDef } = require('./test-map'), defCache = new Map();
   // A model missing_test without execution evidence (not merged into a coverage gap, line not confirmed never-run) is not delivered: it is listed in Details and not counted. unverified_missing_tests: show restores the old placement.
-  const hold = env.UNVERIFIED_MISSING_TESTS !== 'show', unverified = [], autoSet = new Set(auto);
+  const hold = env.UNVERIFIED_MISSING_TESTS !== 'show', unverified = [], autoSet = new Set(auto), noRep = !cov || !(cov.reports > 0);
   const declAt = (p, rl, l) => { if (!defCache.has(p)) defCache.set(p, new Map()); return enclosingDef(rl, l, defCache.get(p))?.line || 0; };
   for (let f of [...data.findings, ...auto]) {
     if (f.kind === 'spec_mismatch') {
       const req = data.requirements.find((r) => r.obligation_ids.includes(f.obligation_ids[0]));
       if (req && specPath(req.source) && req.ref) f = { ...f, source: `${req.source.replace(REMOVED, '')} ${req.ref}` };
     }
-    const orig = f, held = hold && f.kind === 'missing_test' && !autoSet.has(f);
-    const park = (g, why) => { if (held && (g.side === 'LEFT' || gapEvidence(cov, g.path, g.line) !== 'never')) unverified.push({ f: g, why: '', raw: orig }); else unanchored.push({ f: g, why }); }; // the thread of a prior inline comment stays as it is: survive (below) still holds its fingerprint
+    const orig = f, held = hold && f.kind === 'missing_test' && !autoSet.has(f) && !absorbed.has(f);
+    // a held finding keeps any earlier inline thread open: its verified-quote fingerprint (and the relabelled one) stays in survive, so SpecGuard never resolves it or scores it addressed
+    const keep = (g, ev) => { survive.add(fingerprint(g.kind, g.path, g.quote, g.source)); if (ev === 'ran') survive.add(fingerprint('weak_test', g.path, g.quote, 'relabel')); unverified.push({ f: g, why: '', raw: orig, ev }); };
+    const park = (g, why) => { const ev = g.side === 'LEFT' ? (noRep ? 'none' : 'unknown') : gapEvidence(cov, g.path, g.line); if (held && ev !== 'never') keep(g, ev); else unanchored.push({ f: g, why }); }; // LEFT lines are not in a report: unknown
     const sfp = fingerprint(f.kind, f.path, f.quote, f.source);
     survive.add(sfp); // before any route or drop below
     f = { ...f, sfp }; // kept for `sum`: an unanchored copy may carry a rewritten quote
@@ -1932,7 +1938,7 @@ async function run({ github, context, core }) {
     let out = f;
     if (f.kind === 'missing_test') { // R-b, R-c and the no-report case: what the report says about the cited line
       const ev = gapEvidence(cov, f.path, at);
-      if (held && ev !== 'never') { if (ev === 'ran') cg.relabeled++; else if (ev === 'unknown') cg.unverified++; unverified.push({ f: { ...verified(f, rl, at), line: at }, why: '', raw: orig }); continue; }
+      if (held && ev !== 'never') { keep({ ...verified(f, rl, at), line: at }, ev); continue; }
       if (ev === 'never') out = { ...f, title: `${f.title} (coverage: never executed)` };
       else if (ev === 'ran') { cg.relabeled++; out = { ...f, kind: 'weak_test', source: 'relabel', confidence: f.confidence === 'high' ? 'medium' : f.confidence, title: `${f.title}${RELABEL_NOTE}` }; }
       else if (ev === 'unknown') { cg.unverified++; out = { ...f, title: `${f.title} (not verified by coverage)` }; } // with no report the summary says so once, not every title
@@ -2029,7 +2035,7 @@ async function run({ github, context, core }) {
   cg.inline = [...p.inline].filter((f) => f.source === 'coverage' && !unplaced.has(f)).length;
   const since = { addressed: 0, open: 0, dismissed: 0, not_observed: 0 };
   for (const o of outcomes) since[o.outcome]++;
-  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', specguard: require('./version').version(), complete, execution_complete: execComplete, outcome_valid: valid, findings: byKind, ...(Object.values(cg).some(Boolean) && { coverage_gaps: cg }), ...(hold && { unverified_missing_test: unverified.length }), pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes, ...(sum.length && { sum }) };
+  const tele = { v: 1, ...(em && { model: used.join(', '), ...(tier && { tier }), ...(reduced && { reduced: true }) }), ...measure(), ...(focused && { focused }), pr: pr.number, merged: livePR?.merged === true || !!livePR?.merged_at, head: headSha, engine: engine || 'n/a', specguard: require('./version').version(), complete, execution_complete: execComplete, outcome_valid: valid, findings: byKind, ...(Object.values(cg).some(Boolean) && { coverage_gaps: cg }), ...(hold && { unverified_missing_test: unverified.length }), ...(unverified.length && { held: unverified.slice(0, 50).map(({ f, ev }) => ({ fp: fingerprint(f.kind, f.path, f.quote, f.source).slice(0, 16), path: f.path, line: f.line, title: oneLine(neutralize(f.title).replace(/\s+/g, ' ').trim(), 120), ev })) }), pre_existing: preExisting.length, posted: { inline, file: filed }, already, since, since_total: outcomes.length, prior_total: priors.size, outcomes, ...(sum.length && { sum }) };
   if (ctx) try { fs.writeFileSync(path.join(ctx, 'counts.json'), JSON.stringify(tele) + '\n'); } catch { /* ctx not writable: the sticky comment still carries the counts */ } // summary-only and manual runs have no sticky comment: the artifact carries it
   const resolveNote = !stop && !summaryOnly && complete && env.RESOLVE_STALE !== 'false' ? await resolveStale({ github, core, owner, repo, number: pr.number, current: survive, actor: me, threads }) : undefined;
 

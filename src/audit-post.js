@@ -385,8 +385,8 @@ function scanCoverage({ cov, findings, readLines, isTest, top = 10, inScope = ()
   const notes = cov && Array.isArray(cov.notes) ? cov.notes.slice(0, 3).map(String) : [];
   const off = { findings, gaps: null, noTest: { n: 0, top: [] }, notes, truncated: false, relabeled: 0, unverified: 0, merged: 0 };
   // hold (unverified_missing_tests: details): a model missing_test with no execution evidence (not merged into a gap, line not confirmed never-run) is a low, unv finding: Details only, never counted or tracked
-  const park = (f) => ({ ...f, low: true, unv: true, lowWhy: 'unverified missing-test suggestion' });
-  if (!cov || cov.mode !== 'all' || !(cov.reports > 0)) return hold ? { ...off, findings: findings.map((f) => (f.kind === 'missing_test' ? park(f) : f)) } : off;
+  const park = (f, ev) => ({ ...f, low: true, unv: true, ev, lowWhy: 'unverified missing-test suggestion' }); // ev: what the report says about its line (none = no report); held ones are not counted as relabelled/unverified
+  if (!cov || cov.mode !== 'all' || !(cov.reports > 0)) return hold ? { ...off, findings: findings.map((f) => (f.kind === 'missing_test' ? park(f, 'none') : f)) } : off;
   const { enclosingDef } = require('./test-map'), caches = new Map();
   const paths = Object.keys(cov.files).filter((p) => inScope(p) && !isTest(p)); // scan_paths and the non-unit rule, as the unit inventory applies them
   const gaps = post.coverageGaps({ cov, paths, readLines, maps: EVERY_LINE, isTest, cap: top, risk, lead: (g) => risk.get(g.path) || 0 });
@@ -401,7 +401,7 @@ function scanCoverage({ cov, findings, readLines, isTest, top = 10, inScope = ()
       stat.merged++; out.push({ ...f, merged: true }); continue;
     }
     const ev = post.gapEvidence(cov, f.path, f.line);
-    if (hold && ev !== 'never') { if (ev === 'ran') stat.relabeled++; else if (ev === 'unknown') stat.unverified++; out.push(park(f)); }
+    if (hold && ev !== 'never') out.push(park(f, ev));
     else if (ev === 'ran') { stat.relabeled++; out.push({ ...f, kind: 'weak_test', source: 'relabel', low: true, lowWhy: post.RELABEL_NOTE.trim().replace(/^\(|\)$/g, ''), title: `${f.title}${post.RELABEL_NOTE}` }); }
     else if (ev === 'unknown') { stat.unverified++; out.push({ ...f, title: `${f.title} (not verified by coverage)` }); }
     else out.push(ev === 'never' ? { ...f, title: `${f.title} (coverage: never executed)` } : f);
@@ -578,7 +578,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const blocks = data ? track(blocksOf(data), prior, sha) : [], byCid = new Map(blocks.map((b) => [b.cid, b]));
   // code-first part (code = { list: Map of the reviewed units, inv: audit-inventory.json, findings: verified unit findings }): confirmed findings first, then by the unit's risk; low-confidence ones are Details only
   const uall = code ? trackFindings(code.findings.filter((f) => !f.merged), prior, sha).sort((a, b) => (b.confirmed - a.confirmed) || (((code.list.get(b.unit) || {}).score || 0) - ((code.list.get(a.unit) || {}).score || 0))) : [];
-  const uf = uall.filter((f) => !f.low), ulow = uall.filter((f) => f.low && !f.unv), unv = uall.filter((f) => f.unv), noRep = !(code && code.gaps), inv = code ? code.inv : null;
+  const uf = uall.filter((f) => !f.low), ulow = uall.filter((f) => f.low && !f.unv), unv = uall.filter((f) => f.unv), nvWhy = unv.some((f) => f.ev === 'none') ? 'no coverage report' : unv.some((f) => f.ev === 'unknown') ? 'lines not in the coverage report' : '', inv = code ? code.inv : null; // nvWhy: held suggestions with no execution evidence ('ran' ones are contradicted by the report)
   const unseen = (code && code.unseen) || [], failedS = new Set(code ? code.failed || (code.unitsFailed ? unseen : []) : []), reachS = new Set((code && code.unreached) || []), unfit = failedS.size ? 'were not reviewed: the unit call failed' : reachS.size ? 'were not reached (max_budget_usd)' : "did not fit the model's context", forcedS = new Set(inv && Array.isArray(inv.forced) ? inv.forced : []), lost = unseen.filter((u) => !forcedS.has(u) || failedS.has(u) || reachS.has(u)), seenN = inv ? inv.rotation.picked - lost.length : 0; // a forced unit (tests cut, recorded unsure) was reviewed: it counts as seen here, only the funnel line tells it apart // unseen: picked units the model's context did not hold whole (pack-cut.txt): not reviewed this run
   const riskiest = inv && lost.length ? `${seenN} unit${seenN === 1 ? '' : 's'} that fit the model's context` : inv ? (inv.rotation.picked === 1 ? 'riskiest unit' : `${inv.rotation.picked} riskiest units`) : '';
   // static test signals (no model): rule-based leads for the reviewed units, from the inventory's counts; an older inventory without `signals` has none. Never counted as gaps, never in the state.
@@ -649,11 +649,11 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   if (failure) verdict = `**⚠️ Could not complete: ${cell(failure, 400)}**`;
   else if (code && data) {
     const both = [unitPart, covPart, docPart].filter(Boolean).join('; ');
-    if (partial) verdict = `**⚠️ Incomplete scan: ${both ? `${both} found so far` : 'no unit test gaps found so far'}**`;
+    if (partial) verdict = `**⚠️ Incomplete scan: ${both ? `${both} found so far` : nvWhy ? 'missing unit tests not verified' : 'no unit test gaps found so far'}**`;
     else if (both) verdict = `**❌ ${both}**${at7}. Static review; tests were not run.`;
     else if (lost.length && !seenN) verdict = `**⚠️ The scan could not review any unit: ${code.unitsFailed ? 'the unit call failed' : reachS.size ? 'max_budget_usd did not cover the unit calls' : "none fit the model's context"}**${at7}.`;
-    else if (unv.length && noRep) verdict = `**❔ Missing unit tests: not verified (no coverage report); ${plural(unv.length, 'suggestion')} in Details**${at7}. Static review; tests were not run.`; // never "no gaps" while model claims sit unchecked
-    else if (unsure.length) verdict = `**❔ No unit test gaps in the ${riskiest}; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${at7}. Static review; tests were not run.`;
+    else if (unsure.length) verdict = `**❔ ${nvWhy ? `Missing unit tests not verified (${nvWhy})` : `No unit test gaps in the ${riskiest}`}; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${at7}. Static review; tests were not run.`;
+    else if (nvWhy) verdict = `**❔ Missing unit tests: not verified (${nvWhy}); ${plural(unv.length, 'suggestion')} in Details**${at7}. Static review; tests were not run.`; // never "no gaps" while model claims sit unchecked
     else if (sigUnits) verdict = `**❔ No model-verified unit test gaps in the ${riskiest}; ${plural(sigUnits, 'unit')} ${sigUnits === 1 ? 'has' : 'have'} static test signals to check**${at7}. Static review; tests were not run.`;
     else verdict = `**✅ No unit test gaps in the ${riskiest}**${at7}. Static review; tests were not run.`;
   }
@@ -662,7 +662,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   else if (gapN) verdict = `**❌ ${found}**${where}. Static review; tests were not run.`;
   else if (unsure.length) verdict = `**❔ No gaps found; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check**${where}. Static review; tests were not run.`;
   else verdict = `**✅ No unit test gaps found**${where}. Static review; tests were not run.`;
-  if (data && !failure && (notAudited.blocks.length || (code && code.unitsFailed) || unseen.length || unanswered > 0 || noAnswer > 0) && /^\*\*[✅❔]/u.test(verdict)) verdict = `**⚠️ Incomplete scan: no gaps found so far${noAnswer ? `; ${plural(noAnswer, 'unit')} not reviewed (no usable answer)` : ''}${unsure.length ? `; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check` : ''}**`; // never the clean form when part of the scan did not run
+  if (data && !failure && (notAudited.blocks.length || (code && code.unitsFailed) || unseen.length || unanswered > 0 || noAnswer > 0) && /^\*\*[✅❔]/u.test(verdict)) verdict = `**⚠️ Incomplete scan: ${nvWhy ? 'missing unit tests not verified' : 'no gaps found so far'}${noAnswer ? `; ${plural(noAnswer, 'unit')} not reviewed (no usable answer)` : ''}${unsure.length ? `; ${plural(unsure.length, 'block')} need${unsure.length === 1 ? 's' : ''} a person to check` : ''}**`; // never the clean form when part of the scan did not run
   if (data && !failure && notAudited.blocks.length) verdict = verdict.replace(/^(\*\*[\s\S]*?)\*\*/, `$1; ${plural(notAudited.blocks.length, 'document block')} not audited (${[notAudited.failed && 'a call failed', notAudited.dropped && 'left out by max_budget_usd'].filter(Boolean).join(', ')})**`);
   let top = `## ${HEADING}\n\n${verdict}\n\n${refNote ? `${refNote}\n\n` : ''}`;
   if (reach && !failure) { // scan_scope all: say prominently whether the whole repository was reviewed, and what covering it would take (a ceiling: the worst-case estimate, not the likely spend)
@@ -671,7 +671,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   }
   if (code && data && !failure && !partial) { // the shape of the unit result in one glance (not for an incomplete run)
     const n = (k) => uf.filter((f) => f.kind === k).length, cellOf = (k, extra = 0) => (n(k) + extra ? `${n(k) + extra}` : 'none'), r = inv.rotation;
-    top += `| Units reviewed | No unit test | Weak tests | Skipped tests | Design documents |\n|---|---|---|---|---|\n| ${seenN} of ${r.total}${r.rotate ? ` (rotation ${r.run} of ${r.runs})` : ''} | ${unv.length && noRep && !n('missing_test') ? 'not verified' : cellOf('missing_test', covN)} | ${cellOf('weak_test')} | ${(inv.selected && inv.selected.skipped_tests) || 'none'} | ${docs.length ? `${docs.length} read` : 'none found'} |\n\n`;
+    top += `| Units reviewed | No unit test | Weak tests | Skipped tests | Design documents |\n|---|---|---|---|---|\n| ${seenN} of ${r.total}${r.rotate ? ` (rotation ${r.run} of ${r.runs})` : ''} | ${nvWhy && !n('missing_test') && !covN ? 'not verified' : cellOf('missing_test', covN)} | ${cellOf('weak_test')} | ${(inv.selected && inv.selected.skipped_tests) || 'none'} | ${docs.length ? `${docs.length} read` : 'none found'} |\n\n`;
   }
   if (code && !failure && inv.eligible != null) { // one line that reconciles the funnel: eligible = inventoried + over 512 KiB; selected = reviewed whole + did not fit + forced
     // a unit with a part that did not run (collector parts_left, engine-dropped or failed part) is reviewed in part, never whole
@@ -771,7 +771,7 @@ function render({ data, docs = [], rejected = [], limitations = [], capLeft = []
   const cn = code && !failure && data ? code.covNotes || [] : []; // notes of the report (stale, no file matched, unreadable), as PR mode shows them
   if (cn.length) body += `<sub>Coverage evidence ${cg ? 'notes' : 'not used'}: ${cn.slice(0, 3).map((x) => cell(x, 200)).join('; ')}</sub>\n\n`;
   const nt = code && !failure && data && cg ? code.noTest : null;
-  if (code && !failure && data && !cg && uf.some((f) => f.kind === 'missing_test')) body += '<sub>Missing-unit-test findings are not verified: no coverage report</sub>\n\n';
+  if (code && !failure && data && !cg && uall.some((f) => f.kind === 'missing_test' && !f.unv)) body += '<sub>Missing-unit-test findings are not verified: no coverage report</sub>\n\n';
   for (const l of ulists) body += vis(l.title, l.fs.map(uitem), '', UCAP);
   const SIGH = 'Found by rule from the test files at this commit, not by the model; a missing or weak signal is a lead, not a confirmed gap.\n\n| Unit | Signal | Why |\n|---|---|---|\n', SIGN = { test_evidence_not_found: 'test evidence not found', weak_test_signal: 'weak test signal', truthiness_only: 'asserts only truthiness', unreferenced_export: 'no test references it', boundary_unpinned: 'limit no test pins' };
   const srow = (s) => `| ${link(s.path, s.line || 1, s.line ? `${s.path}:${s.line}` : s.path)} | ${SIGN[s.kind]} | ${cell(s.why, 200)} |\n`;
@@ -967,7 +967,7 @@ async function main({ github, issueGithub, context, core, date = today() }) {
   const unsure = [...dropU, ...lowU], unseen = cutUnits; // seen but inconclusive: tracked this run as unsure (rotation moves on, never covered); unseen: not tracked, still due
   const code = hasCode ? { list: units, inv, findings: checked.unit_findings, gaps: sc.gaps, noTest: sc.noTest, covNotes: sc.notes, covTruncated: sc.truncated, unseen, unitsFailed, failed: [...failedU], unreached: [...reachedNot], partsDropped, partsFailed, extraAdmitted: ((inv && inv.extra_keys) || []).filter((k) => !dKeys.has(k) && !(Array.isArray(sp.droppedUnits) ? sp.droppedUnits : []).includes(k.split(':')[0])).length } : null; // extra_keys: the parts the collector queued for runtime admission; the ones the engine skipped are in droppedParts/droppedUnits
   const notAudited = { blocks: [...skip].map((c) => cands.get(c)), failed: [...skip].filter((c) => !spDropped.includes(c)).length, dropped: spDropped.filter((c) => skip.has(c)).length };
-  try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked, ...(sc.gaps ? { coverage_gaps: [...sc.gaps.emit.map((g) => ({ g, listed: true })), ...sc.gaps.roll.flatMap((r) => r.groups.map((g) => ({ g, listed: false })))].map(({ g, listed }) => ({ source: 'coverage', path: g.path, definition: g.decl ? post.gapLabel(g) : null, lines: post.lineRanges(g.lines, 50), branching: g.branch, listed })) } : {}), ...(shared.reach && hasCode ? { static_leads: staticLeads(inv.rows.filter((r) => units.has(r.id)), Infinity).items } : {}) }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
+  try { fs.writeFileSync(path.join(ctx, 'audit.json'), JSON.stringify({ head: meta.head, specguard: version(), ...(partial ? { partial } : {}), ...checked, ...(checked.unit_findings.some((f) => f.unv) ? { held: checked.unit_findings.filter((f) => f.unv).slice(0, 50).map((f) => ({ fp: post.fingerprint(f.kind, f.path, f.quote, f.source).slice(0, 16), path: f.path, line: f.line, title: post.oneLine(post.neutralize(f.title).replace(/\s+/g, ' ').trim(), 120), ev: f.ev })) } : {}), ...(sc.gaps ? { coverage_gaps: [...sc.gaps.emit.map((g) => ({ g, listed: true })), ...sc.gaps.roll.flatMap((r) => r.groups.map((g) => ({ g, listed: false })))].map(({ g, listed }) => ({ source: 'coverage', path: g.path, definition: g.decl ? post.gapLabel(g) : null, lines: post.lineRanges(g.lines, 50), branching: g.branch, listed })) } : {}), ...(shared.reach && hasCode ? { static_leads: staticLeads(inv.rows.filter((r) => units.has(r.id)), Infinity).items } : {}) }, null, 2) + '\n'); } catch (e) { core.warning(`SpecGuard: could not write audit.json: ${e.message}`); }
   const looked = wantIssue && !partial && await lookup();
   // the blocks this run did not audit: the state's blocks that are still in the documents (audit-carried.txt), with the text and place from the collector
   const tv = new Map(lines(readCtx('audit-textver.txt')).map((l) => l.split(String.fromCharCode(9))).filter((x) => HEX8.test(x[0]) && HEX8.test(x[1])));
