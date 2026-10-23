@@ -1882,7 +1882,7 @@ async function run({ github, context, core }) {
     }
     const orig = f, held = hold && f.kind === 'missing_test' && !autoSet.has(f) && !absorbed.has(f);
     // a held finding keeps any earlier inline thread open: its verified-quote fingerprint (and the relabelled one) stays in survive, so SpecGuard never resolves it or scores it addressed
-    const keep = (g, ev) => { survive.add(fingerprint(g.kind, g.path, g.quote, g.source)); const rf = fingerprint('weak_test', g.path, g.quote, 'relabel'); if (ev === 'ran' && /source: relabel/.test(priors.get(rf)?.body || '')) survive.add(rf); unverified.push({ f: g, why: '', raw: orig, ev }); };
+    const keep = (g, ev) => { survive.add(fingerprint(g.kind, g.path, g.quote, g.source)); if (ev === 'ran') survive.add(fingerprint('weak_test', g.path, g.quote, 'relabel')); /* ponytail: also matches a real weak_test with the same quote (as under show); that only keeps a thread open, never claims a fix. Relabel priors are summary-only (16-char sum fps, no body), so their provenance is not checkable here */ unverified.push({ f: g, why: '', raw: orig, ev }); };
     const park = (g, why) => { const ev = g.side === 'LEFT' ? (noRep ? 'none' : 'unknown') : gapEvidence(cov, g.path, g.line); if (held && ev !== 'never') keep(g, ev); else unanchored.push({ f: g, why }); }; // LEFT lines are not in a report: unknown
     const sfp = fingerprint(f.kind, f.path, f.quote, f.source);
     survive.add(sfp); // before any route or drop below
