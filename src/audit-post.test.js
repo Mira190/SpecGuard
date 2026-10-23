@@ -1747,9 +1747,9 @@ test('unverified scan: evidence-based trigger, precedence over person-check bloc
   assert.deepEqual([ran.relabeled, unk.unverified, none.relabeled, none.unverified], [0, 0, 0, 0]);
   const person = (sc) => top(render({ data: dataOf({ [A]: 'needs_human' }), code: codeWith(sc) }));
   assert.match(person(none), /\*\*❔ Missing unit tests not verified \(no coverage report\); 1 block needs a person to check\*\*/);
-  assert.match(person(unk), /Missing unit tests not verified \(lines not in the coverage report\); 1 block needs a person to check/);
+  assert.match(person(unk), /Missing unit tests not verified \(not checked against the coverage report\); 1 block needs a person to check/);
   assert.doesNotMatch(person(none), /No unit test gaps in/);
-  assert.match(top(render({ data: clean(), code: codeWith(unk) })), /\*\*❔ Missing unit tests: not verified \(lines not in the coverage report\); 1 suggestion in Details\*\*/);
+  assert.match(top(render({ data: clean(), code: codeWith(unk) })), /\*\*❔ Missing unit tests: not verified \(not checked against the coverage report\); 1 suggestion in Details\*\*/);
   assert.match(top(render({ data: clean(), code: codeWith(ran) })), /✅ No unit test gaps/);
   assert.doesNotMatch(top(render({ data: clean(), code: codeWith(ran) })), /not verified/);
   const note = /Missing-unit-test findings are not verified: no coverage report/;

@@ -689,8 +689,8 @@ const COUNTS_MAX = 8192;
 function countsComment(c) {
   const o = { ...c, outcomes: [...(c.outcomes || [])], ...(c.sum && { sum: [...c.sum] }), ...(c.held && { held: [...c.held] }) };
   const json = () => JSON.stringify(o).replace(/[<>]/g, (ch) => (ch === '<' ? '\\u003c' : '\\u003e')).replace(/--/g, '-\\u002d'); // can never close the HTML comment
+  while (o.held?.length && json().length > COUNTS_MAX) { o.held.pop(); o.held_dropped = (o.held_dropped || 0) + 1; } // the held (unverified) list is a diagnostic: it goes first, before the outcomes (read for fix-through) and the tracked summary entries
   while (json().length > COUNTS_MAX && o.outcomes.length) { o.outcomes.shift(); o.dropped = (o.dropped || 0) + 1; }
-  while (o.held?.length && json().length > COUNTS_MAX) { o.held.pop(); o.held_dropped = (o.held_dropped || 0) + 1; } // the held (unverified) list is a diagnostic: it goes before the tracked summary entries
   while (o.sum?.length && json().length > COUNTS_MAX) { o.sum.pop(); o.sum_dropped = (o.sum_dropped || 0) + 1; } // then the summary-only entries, last first (carried-forward ones sit after this run's)
   return `<!-- specguard:counts ${json()} -->`;
 }
@@ -810,13 +810,13 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
   const evidenced = rows.filter((x) => x.kind === 'evidenced' && !todoKeys.has(sentOf(x)) && !seenEv.has(sentOf(x)) && seenEv.add(sentOf(x))); // a sentence with a gap or unconfirmed row is not also "evidenced"
   const checks = todo.filter((x) => x.kind === 'unassessed' || x.kind === 'check').length, heldRaw = new Set(unverified.map((x) => x.raw)), isClean = !!data && noGaps({ ...data, findings: (data.findings || []).filter((f) => !heldRaw.has(f)) }) && !inc && (!reduced || gradeOnly(reduced));
   const changed = !!data && reqChanged(data);
-  const nvWhy = unverified.some((x) => x.ev === 'none') ? 'no coverage report' : unverified.some((x) => x.ev === 'unknown') ? 'lines not in the coverage report' : ''; // held suggestions with no execution evidence ('ran' ones are contradicted by the report: "no gaps" stays)
+  const nvWhy = unverified.some((x) => x.ev === 'none') ? 'no coverage report' : unverified.some((x) => x.ev === 'unknown') ? 'not checked against the coverage report' : ''; // held suggestions with no execution evidence ('ran' ones are contradicted by the report: "no gaps" stays)
   const nvLead = nvWhy ? `Missing unit tests not verified (${nvWhy})` : '';
 
   let verdict = '';
   if (failed) verdict = `**⚠️ Could not complete: ${neutralize(String(status || '').replace(/^Could not complete:\s*/i, ''))}**`;
   else if (!data) verdict = status ? `**${neutralize(status)}**` : '';
-  else if (reduced && (!gradeOnly(reduced) || (inc && act.length))) verdict = act.length ? `**❌ ${andList(act)} to fix**` : '**⚠️ Reduced review: no high-confidence gaps**'; // the explanation is a blockquote after the table; never a pass line
+  else if (reduced && (!gradeOnly(reduced) || (inc && act.length))) verdict = act.length ? `**❌ ${andList(act)} to fix**` : (nvWhy ? `**⚠️ Reduced review: missing unit tests not verified (${nvWhy})**` : '**⚠️ Reduced review: no high-confidence gaps**'); // the explanation is a blockquote after the table; never a pass line
   else if (inc) verdict = act.length ? `**⚠️ Incomplete review: ${andList(act)} found so far**` : `**⚠️ Partly reviewed: ${nvWhy ? 'missing unit tests not verified' : 'no gaps in what was reviewed'}; see Not reviewed below**`;
   else if (act.length) verdict = `**❌ ${andList(act)} to fix**`;
   else if (checks) verdict = `**❔ ${nvLead || 'No gaps found'}; ${plural(checks, 'criterion', 'criteria')} need${checks === 1 ? 's' : ''} a person to check**`;
@@ -835,8 +835,8 @@ function buildSummary({ cov, status, data, tooling = data?.tooling, items = [], 
     const tool = tooling && tooling.status !== 'not_configured' ? `; tool checks ${cell(tooling.status)}` : ''; // a configured check always says its state, a pass too (review F11)
     const std = data.standards.status === 'checked' ? (nk('standard') ? plural(nk('standard'), 'violation') : 'no violations') : data.standards.status === 'no_rules' ? 'none found' : 'not reviewed';
     const lay = data.layering.status === 'checked' ? (nk('pushdown') ? `${nk('pushdown')} to move down` : 'nothing to move down') : 'not reviewed';
-    const unit = nk('missing_test') || nk('weak_test') ? [nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ') : reduced ? 'no high-confidence gaps' : nvWhy ? `not verified (${nvWhy})` : 'no gaps';
-    const snc = counts && counts.complete && counts.since_total && counts.since, heldOpen = snc ? (counts.outcomes || []).filter((o) => o.outcome === 'open' && (counts.held || []).some((h) => o.fp.startsWith(h.fp))).length : 0, nw = snc ? Math.max(0, all.length - (snc.open - heldOpen)) : 0, delta = snc ? [snc.addressed && `${snc.addressed} with later changes (fix not verified)`, nw && `${nw} new`].filter(Boolean) : []; // open held priors are not in `all` // push-to-push: addressed earlier findings (a proxy: never called fixed), and findings not reported before
+    const unit = nk('missing_test') || nk('weak_test') ? [nk('missing_test') && `${nk('missing_test')} missing`, nk('weak_test') && `${nk('weak_test')} weak`].filter(Boolean).join(' · ') : nvWhy ? `not verified (${nvWhy})` : reduced ? 'no high-confidence gaps' : 'no gaps';
+    const snc = counts && counts.complete && counts.since_total && counts.since, heldFps = unverified.map(({ f, ev }) => [fingerprint(f.kind, f.path, f.quote, f.source), ev === 'ran' && fingerprint('weak_test', f.path, f.quote, 'relabel')]).flat().filter(Boolean), heldOpen = snc ? (counts.outcomes || []).filter((o) => o.outcome === 'open' && heldFps.some((h) => h.startsWith(o.fp) || o.fp.startsWith(h))).length : 0, nw = snc ? Math.max(0, all.length - (snc.open - heldOpen)) : 0, delta = snc ? [snc.addressed && `${snc.addressed} with later changes (fix not verified)`, nw && `${nw} new`].filter(Boolean) : []; // open held priors are not in `all` // push-to-push: addressed earlier findings (a proxy: never called fixed), and findings not reported before
     line2 = `| Unit tests | Requirements | Coding standards | Test layers |\n|---|---|---|---|\n| ${unit} | ${req || 'none found'} | ${std}${tool} | ${lay} |\n${delta.length ? `\nSince last push: ${delta.join(' · ')}\n` : ''}`;
   }
 
@@ -1853,7 +1853,7 @@ async function run({ github, context, core }) {
   for (const m of (readCtx('leads.txt') || '').matchAll(/^\s*assertion removed: .* \((.+):(\d+)\)\s*$/gm)) {
     const path_ = m[1], line = +m[2], ch = maps.get(path_)?.changed.LEFT, rightAt = maps.get(path_)?.rightAt.get(line);
     if (!standing.has(`${path_}:${line}`)) continue;
-    if (auto.length >= 5 || !ch || !reviewable.has(path_) || !ch.has(line)) continue;
+    if (!ch || !reviewable.has(path_) || !ch.has(line)) continue;
     const near = data.findings.findIndex((f) => ['missing_test', 'weak_test'].includes(f.kind) && f.path === path_ && Math.abs(f.line - (f.side === 'LEFT' ? line : rightAt)) <= 5); // one coordinate system: a RIGHT finding is compared at the removal's RIGHT position
     if (near >= 0) {
       // a low-confidence nearby finding is raised, not duplicated. A cross-file re-pin is no new risk: the lead is already posted when no finding is nearby.
@@ -1862,6 +1862,7 @@ async function run({ github, context, core }) {
       absorbed.add(data.findings[near]);
       continue;
     }
+    if (auto.length >= 5) continue; // the cap limits only new auto findings, never absorbing a model finding
     const quote = ch.get(line).trim();
     auto.push({ kind: 'missing_test', confidence: 'high', path: path_, side: 'LEFT', line, quote, title: 'Assertion removed with no replacement', obligation_ids: [], // ponytail: no coverage row; the LEFT path below never reads obligations
       body: `The assertion \`${quote}\` was removed and nothing in this change pins the same behaviour. Restore it or pin the behaviour in another test.` });
@@ -1881,7 +1882,7 @@ async function run({ github, context, core }) {
     }
     const orig = f, held = hold && f.kind === 'missing_test' && !autoSet.has(f) && !absorbed.has(f);
     // a held finding keeps any earlier inline thread open: its verified-quote fingerprint (and the relabelled one) stays in survive, so SpecGuard never resolves it or scores it addressed
-    const keep = (g, ev) => { survive.add(fingerprint(g.kind, g.path, g.quote, g.source)); if (ev === 'ran') survive.add(fingerprint('weak_test', g.path, g.quote, 'relabel')); unverified.push({ f: g, why: '', raw: orig, ev }); };
+    const keep = (g, ev) => { survive.add(fingerprint(g.kind, g.path, g.quote, g.source)); const rf = fingerprint('weak_test', g.path, g.quote, 'relabel'); if (ev === 'ran' && /source: relabel/.test(priors.get(rf)?.body || '')) survive.add(rf); unverified.push({ f: g, why: '', raw: orig, ev }); };
     const park = (g, why) => { const ev = g.side === 'LEFT' ? (noRep ? 'none' : 'unknown') : gapEvidence(cov, g.path, g.line); if (held && ev !== 'never') keep(g, ev); else unanchored.push({ f: g, why }); }; // LEFT lines are not in a report: unknown
     const sfp = fingerprint(f.kind, f.path, f.quote, f.source);
     survive.add(sfp); // before any route or drop below

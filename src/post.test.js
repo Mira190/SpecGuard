@@ -5009,13 +5009,13 @@ test('unverified verdict precedence and trigger: checks and changed requirements
   assert.match(a, /\*\*❔ Missing unit tests not verified \(no coverage report\); 1 criterion needs a person to check\*\*/);
   assert.doesNotMatch(a, /No gaps found/);
   const c = top(post.buildSummary({ data: { ...clean(), requirements: [{ ...r, req_change: { previous: 'x' } }] }, unverified: held('unknown') }));
-  assert.match(c, /\*\*❔ Missing unit tests not verified \(lines not in the coverage report\); requirement text changed in this PR, so review it\*\*/);
+  assert.match(c, /\*\*❔ Missing unit tests not verified \(not checked against the coverage report\); requirement text changed in this PR, so review it\*\*/);
   const n = top(post.buildSummary({ data: clean(), unverified: held('none') }));
   assert.match(n, /\*\*❔ Missing unit tests: not verified \(no coverage report\); 1 suggestion in Details\*\*/);
   assert.match(n, /\| not verified \(no coverage report\) \|/);
   const u = top(post.buildSummary({ data: clean(), unverified: held('unknown') }));
-  assert.match(u, /\*\*❔ Missing unit tests: not verified \(lines not in the coverage report\); 1 suggestion in Details\*\*/);
-  assert.match(u, /\| not verified \(lines not in the coverage report\) \|/);
+  assert.match(u, /\*\*❔ Missing unit tests: not verified \(not checked against the coverage report\); 1 suggestion in Details\*\*/);
+  assert.match(u, /\| not verified \(not checked against the coverage report\) \|/);
   const ran = top(post.buildSummary({ data: clean(), unverified: held('ran') }));
   assert.match(ran, /No unit test gaps found/);
   assert.match(ran, /\| no gaps \|/);
@@ -5023,4 +5023,62 @@ test('unverified verdict precedence and trigger: checks and changed requirements
   assert.match(inc, /\*\*⚠️ Partly reviewed: missing unit tests not verified; see Not reviewed below\*\*/);
   assert.match(top(post.buildSummary({ data: clean(), unverified: held('ran'), incomplete: ['x'] })), /Partly reviewed: no gaps in what was reviewed/);
   assert.match(top(post.buildSummary({ data: unconfirmed() })), /\*\*❔ No gaps found; 1 criterion needs a person to check\*\*/);
+});
+
+test('countsComment: a full marker drops held first and keeps every fix-through outcome', () => {
+  const held = Array.from({ length: 50 }, (_, i) => ({ fp: String(i).padStart(16, '0'), path: `src/${'d'.repeat(60)}/${i}.js`, line: i + 1, title: 'x'.repeat(120), ev: 'none' }));
+  const sum = Array.from({ length: 10 }, (_, i) => ({ fp: String(i).padStart(16, '1'), path: 'a.js', line: i + 1, kind: 'missing_test', title: 'y'.repeat(100) }));
+  const outcomes = Array.from({ length: 15 }, (_, i) => ({ fp: String(i).padStart(16, '2'), outcome: 'open', kind: 'missing_test', still_reported: true }));
+  const line = post.countsComment({ v: 1, held, sum, outcomes }), o = JSON.parse(/<!-- specguard:counts (.*) -->/.exec(line)[1]);
+  assert.ok(line.length <= 8192 + 40);
+  assert.equal(o.outcomes.length, 15, 'no outcome dropped while held can still shrink');
+  assert.equal(o.dropped, undefined);
+  assert.equal(o.sum.length, 10);
+  assert.ok(o.held.length < 50 && o.held_dropped === 50 - o.held.length);
+});
+
+test('unverified: a reduced review with held suggestions without execution evidence never says "no high-confidence gaps", in the verdict or the cell', () => {
+  const held = (ev) => [{ f: finding('missing_test', { title: 'HELD ONE' }), raw: {}, ev }];
+  const data = () => report({ requirements: [], coverage: [row()], findings: [] });
+  const top = (s) => s.split('<details>')[0];
+  const mixed = { reasons: [{ id: 'tier', text: 'fast-tier model' }, { id: 'notes', text: '3 engine notes' }], model: 'mini' };
+  const grade = { reasons: [{ id: 'tier', text: 'fast-tier model' }], model: 'mini' };
+  for (const [name, reduced] of [['mixed reasons', mixed], ['grade only', grade]]) {
+    const a = top(post.buildSummary({ data: data(), unverified: held('none'), reduced }));
+    assert.match(a, /not verified \(no coverage report\)/, name);
+    assert.match(a, /\| not verified \(no coverage report\) \|/, name);
+    assert.doesNotMatch(a, /no high-confidence gaps/, name);
+  }
+  assert.match(top(post.buildSummary({ data: data(), unverified: held('unknown'), reduced: mixed })), /Reduced review: missing unit tests not verified \(not checked against the coverage report\)/);
+  const ran = top(post.buildSummary({ data: data(), unverified: held('ran'), reduced: mixed }));
+  assert.match(ran, /Reduced review: no high-confidence gaps/);
+  assert.match(ran, /\| no high-confidence gaps \|/);
+});
+
+test('unverified: a model missing_test near the 6th removed assertion is absorbed and delivered; the cap limits only new auto findings', async (t) => {
+  const s = setup(t, report({ coverage: [row('missing_test')], findings: [finding('missing_test', { path: 'test.js', side: 'LEFT', line: 102, quote: 'assert.equal(gone5, 1);', confidence: 'low', title: 'SIXTH ONE' })] }));
+  const at = (i) => 2 + i * 20; // LEFT line of removal i, far enough apart that none is near another
+  const hunks = Array.from({ length: 6 }, (_, i) => `@@ -${at(i) - 1},2 +${at(i) - 1 - i},1 @@\n ctx${i}\n-assert.equal(gone${i}, 1);`).join('\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/files.txt'), 'src.js\ntest.js\n');
+  fs.writeFileSync(path.join(s.dir, 'ctx/diff.patch'), fileDiff('src.js', patch) + fileDiff('test.js', hunks));
+  fs.writeFileSync(path.join(s.dir, 'ctx/leads.txt'), `${Array.from({ length: 6 }, (_, i) => `  assertion removed: assert.equal(gone${i}, 1); (test.js:${at(i)})`).join('\n')}\n`);
+  process.env.UNVERIFIED_MISSING_TESTS = 'details';
+  await post(s);
+  const all = ALLOUT(s);
+  assert.match(all, /Removal confirmed by the diff\./);
+  assert.match(visible(s), /SIXTH ONE/);
+  assert.doesNotMatch(s.calls.summary[0].body, /Unverified missing-test suggestions/);
+  assert.equal([...all.matchAll(/Assertion removed with no replacement/g)].length > 0, true);
+});
+
+test('layout: "Since last push" subtracts open held priors by fingerprint, not by the capped held list', () => {
+  const posted = [{ f: finding('missing_test', { title: 'M1' }), url: 'https://github.com/o/r/pull/1#discussion_r1' }, { f: finding('weak_test', { title: 'W1', line: 5 }), url: 'https://github.com/o/r/pull/1#discussion_r2' }];
+  const hf = finding('missing_test', { title: 'HELD', line: 9, quote: 'return z;' });
+  const unverified = [{ f: hf, raw: {}, ev: 'none' }];
+  const fp = post.fingerprint(hf.kind, hf.path, hf.quote, hf.source);
+  const mk = (ofp) => ({ v: 1, complete: true, since: { addressed: 0, open: 2, dismissed: 0, not_observed: 0 }, since_total: 3, prior_total: 3, outcomes: [{ fp: ofp, outcome: 'open' }], held: [] });
+  const out = (c, u) => visibleOf(post.buildSummary({ data: layoutData(), posted, blob: BLOB, counts: c, unverified: u }));
+  assert.match(out(mk(fp), unverified), /\nSince last push: 1 new\n/);
+  assert.match(out(mk(fp.slice(0, 16)), unverified), /\nSince last push: 1 new\n/, 'a 16-char prior matches too');
+  assert.doesNotMatch(out(mk('f'.repeat(40)), unverified), /Since last push/, 'an unrelated open prior is not subtracted');
 });
