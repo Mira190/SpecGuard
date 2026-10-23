@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const audit = require('./audit-post');
+process.env.UNVERIFIED_MISSING_TESTS = 'show'; // these tests exercise the unit-finding flow with a model missing_test; the demotion itself is tested in audit-post.test.js (the action default is details)
 const { validate, verify, render, readUnits, readState, stateOf, trackFindings } = audit;
 const { sha8: unitId } = require('./audit-units');
 const sha8 = (...p) => require('node:crypto').createHash('sha1').update(p.join('\n')).digest('hex').slice(0, 8); // finding ids (variadic, as in audit-post.js); unit ids hash the path alone

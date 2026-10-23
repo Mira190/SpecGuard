@@ -395,3 +395,13 @@ test('action.yml: scan_gap_top (default 10) reaches the validation and scan post
   const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
   for (const [v, code] of [['0', 1], ['51', 1], ['x', 1], ['1.5', 1], ['-3', 1], ['1', 0], ['10', 0], ['50', 0]]) assert.equal(spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh')], { env: { ...process.env, ENGINE: 'claude', SCAN_GAP_TOP: v }, encoding: 'utf8' }).status, code, v);
 });
+
+test('action.yml: unverified_missing_tests (default details) reaches the validation, the PR post and the scan post steps and the reusable workflow; validate-inputs.sh accepts details and show only', () => {
+  assert.match(/^ {2}unverified_missing_tests: \{[^}]*\}/m.exec(yml)[0], /default: "details" \}$/);
+  assert.equal(yml.split('UNVERIFIED_MISSING_TESTS: ${{ inputs.unverified_missing_tests }}').length - 1, 3); // validation, PR post, scan post
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'specguard.yml'), 'utf8'), /unverified_missing_tests: \$\{\{ inputs\.unverified_missing_tests \}\}/);
+  const bash = process.platform === 'win32' ? path.join(process.env.ProgramFiles, 'Git/bin/bash.exe') : 'bash';
+  const v = (UNVERIFIED_MISSING_TESTS) => spawnSync(bash, [path.join(__dirname, 'validate-inputs.sh')], { env: { ...process.env, ENGINE: 'claude', UNVERIFIED_MISSING_TESTS }, encoding: 'utf8' });
+  for (const [x, code] of [['details', 0], ['show', 0], ['', 0], ['hide', 1], ['Details', 1], ['true', 1]]) assert.equal(v(x).status, code, x);
+  assert.match(v('hide').stdout, /unverified_missing_tests must be details or show/);
+});

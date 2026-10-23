@@ -122,7 +122,7 @@ function setup(t, data = report(), options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-'));
   const previous = { ...process.env };
   t.after(() => {
-    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF', 'DELIVERY']) {
+    for (const key of ['CTX', 'GITHUB_WORKSPACE', 'HEAD_SHA', 'MAX_COMMENTS', 'ENGINE', 'SKIP', 'PARTIAL', 'STANDARDS_CHECKS', 'STANDARDS_REF', 'DELIVERY', 'UNVERIFIED_MISSING_TESTS']) {
       if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
     }
     fs.rmSync(dir, { recursive: true, force: true });
@@ -157,7 +157,7 @@ function setup(t, data = report(), options = {}) {
   const jobSummary = []; // what reaches the run's job summary (core.summary)
   const core = { warning: (s) => warnings.push(s), summary: { addRaw(x) { jobSummary.push(x); return this; }, async write() {} } };
   const context = { repo: { owner: 'o', repo: 'r' }, serverUrl: 'https://github.com', payload: { pull_request: { number: 7, head: { sha: 'HEADSHA' } } } };
-  Object.assign(process.env, { CTX: path.join(dir, 'ctx'), GITHUB_WORKSPACE: dir, HEAD_SHA: 'HEADSHA', MAX_COMMENTS: '10', ENGINE: 'copilot', SKIP: 'false', PARTIAL: 'false', STANDARDS_CHECKS: '', STANDARDS_REF: 'head' });
+  Object.assign(process.env, { CTX: path.join(dir, 'ctx'), GITHUB_WORKSPACE: dir, HEAD_SHA: 'HEADSHA', MAX_COMMENTS: '10', ENGINE: 'copilot', SKIP: 'false', PARTIAL: 'false', STANDARDS_CHECKS: '', STANDARDS_REF: 'head', UNVERIFIED_MISSING_TESTS: 'show' }); // the older tests exercise other behaviour with a model missing_test; the demotion tests set 'details' (the action default)
   return { github, context, core, calls, warnings, dir, jobSummary };
 }
 
@@ -4812,4 +4812,89 @@ test('V2 S7: inline R-a comments say so in the hidden trailer, and follow-up out
   assert.equal(run(fp, ', source: coverage').kind, 'missing_test');
   assert.equal(run(old, '').source, undefined);
   assert.equal(run(old, '').kind, 'missing_test');
+});
+
+// ---- unverified_missing_tests: a model missing_test without execution evidence goes to Details (default) ----
+const DET = (extra) => (s) => { process.env.UNVERIFIED_MISSING_TESTS = 'details'; extra?.(s); };
+const visible = (s) => s.calls.summary[0].body.split('<details><summary>')[0];
+const UNV_H = /\*\*Unverified missing-test suggestions \((\d+)\)\*\*\n\nThese are model suggestions not confirmed by a coverage report; on four evaluation corpora, 1 of 58 such claims with a coverage label cited a line no test ran\. See \[Coverage evidence\]\(https:\/\/github\.com\/Mira190\/SpecGuard#coverage-evidence-optional\)\./;
+
+test('unverified: no coverage report: a model missing_test is not inline, not in the visible summary, not counted; it sits in Details and the verdict says not verified', async (t) => {
+  const s = await v2(t, { findings: [[13, 'return y * 2;']], prep: DET() });
+  assert.equal(comments(s).length, 0);
+  assert.equal(s.calls.file.length, 0);
+  const b = s.calls.summary[0].body, vis = visible(s);
+  assert.doesNotMatch(vis, /Verify the boundary total|Missing unit tests \(/);
+  assert.match(vis, /\*\*❔ Missing unit tests: not verified \(no coverage report\); 1 suggestion in Details\*\*/);
+  assert.doesNotMatch(b, /No unit test gaps found|No gaps found|\| no gaps \|/);
+  assert.match(vis, /\| not verified \(no coverage report\) \|/, 'the table does not claim "no gaps"');
+  assert.equal(UNV_H.exec(b)[1], '1');
+  assert.match(b.slice(b.indexOf('<details><summary>')), /Unverified missing-test suggestions \(1\)[\s\S]*Verify the boundary total[\s\S]*`src\.js:13`/);
+  const c = countsOf(b);
+  assert.equal(c.unverified_missing_test, 1);
+  assert.equal(c.findings.missing_test, undefined, 'not counted as a unit test gap');
+  assert.equal(c.sum, undefined, 'not tracked as a summary-only finding');
+  assert.match(b, /specguard:status=complete/);
+});
+
+test('unverified: with no model missing_test the count is 0 and there is no section', async (t) => {
+  const none = await v2(t, { prep: DET() });
+  assert.equal(countsOf(none.calls.summary[0].body).unverified_missing_test, 0);
+  assert.doesNotMatch(none.calls.summary[0].body, /Unverified missing-test suggestions/);
+});
+
+test('unverified: with a report, a claim on a never-run line (outside any gap) and one merged into a coverage gap are delivered', async (t) => {
+  const never = await v2(t, { cov: V2COV({ 'src.js': { never: [[16, 17]], ran: [[9, 9]], miss: [[16, 17]] } }), findings: [[16, "console.log('beta', v);"]], prep: DET() });
+  assert.equal(comments(never).length, 1);
+  assert.match(comments(never)[0].body, /\(coverage: never executed\)/);
+  assert.equal(countsOf(never.calls.summary[0].body).unverified_missing_test, 0);
+  assert.doesNotMatch(never.calls.summary[0].body, /Unverified missing-test suggestions/);
+  const merged = await v2(t, { cov: V2COV({ 'src.js': { never: [[11, 11]], ran: [[9, 9]], miss: [[11, 11]] } }), findings: [[11, "throw new Error('neg');"]], prep: DET() });
+  assert.equal(comments(merged).length, 1);
+  assert.match(comments(merged)[0].body, /never executed/);
+  assert.equal(countsOf(merged.calls.summary[0].body).unverified_missing_test, 0);
+});
+
+test('unverified: with a report, a claim on a line that ran or on an uninstrumented line goes to Details, uncounted, with the telemetry kept', async (t) => {
+  const ran = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[9, 9], [10, 10], [13, 13]], miss: [] } }), findings: [[13, 'return y * 2;']], prep: DET() });
+  assert.equal(comments(ran).length, 0);
+  const rb = ran.calls.summary[0].body, rc = countsOf(rb);
+  assert.doesNotMatch(visible(ran), /Verify the boundary total/);
+  assert.match(rb, UNV_H);
+  assert.match(rb, /Verify the boundary total/);
+  assert.equal(rc.unverified_missing_test, 1);
+  assert.equal(rc.findings.weak_test, undefined, 'a held claim is not relabelled and counted');
+  assert.equal(rc.findings.missing_test, undefined);
+  assert.equal(rc.coverage_gaps.relabeled, 1);
+  assert.doesNotMatch(visible(ran), /Missing unit tests: not verified/, 'a report exists: the verdict is not the no-report one');
+  const unk = await v2(t, { cov: V2COV({ 'src.js': { never: [], ran: [[9, 9]], miss: [] } }), findings: [[12, '}']], prep: DET() });
+  assert.equal(comments(unk).length, 0);
+  assert.match(unk.calls.summary[0].body, UNV_H);
+  assert.equal(countsOf(unk.calls.summary[0].body).unverified_missing_test, 1);
+  assert.equal(gapsOf(unk).unverified, 1);
+  assert.equal(countsOf(unk.calls.summary[0].body).findings.missing_test, undefined);
+});
+
+test('unverified: a coverage-sourced gap beside held suggestions still counts as the gap; the verdict is the gap, not "not verified"', async (t) => {
+  const s = await v2(t, { cov: V2COV({ 'src.js': { never: [[11, 11]], ran: [[9, 9], [6, 6]], miss: [[11, 11]] } }), findings: [[6, 'return y;']], prep: DET() });
+  assert.equal(comments(s).length, 1);
+  assert.match(visible(s), /❌ 1 unit test gap to fix/);
+  assert.equal(countsOf(s.calls.summary[0].body).unverified_missing_test, 1);
+});
+
+test('unverified: unverified_missing_tests: show restores today\'s placement and adds no counts field', async (t) => {
+  const s = await v2(t, { findings: [[13, 'return y * 2;']], prep: () => { process.env.UNVERIFIED_MISSING_TESTS = 'show'; } });
+  assert.equal(comments(s).length, 1);
+  assert.doesNotMatch(s.calls.summary[0].body, /Unverified missing-test suggestions|not verified \(no coverage report\); /);
+  assert.equal(countsOf(s.calls.summary[0].body).unverified_missing_test, undefined);
+  assert.equal(countsOf(s.calls.summary[0].body).findings.missing_test.posted, 1);
+});
+
+test('unverified: a held suggestion neither makes the run incomplete nor trips fail_on_error', async (t) => {
+  const { spawnSync } = require('node:child_process');
+  const s = await v2(t, { findings: [[13, 'return y * 2;']], prep: DET() });
+  const status = /specguard:status=(\w+)/.exec(s.calls.summary[0].body)[1];
+  assert.equal(status, 'complete');
+  const r = spawnSync(process.execPath, [path.join(__dirname, 'fail-on-error.js')], { encoding: 'utf8', env: { ...process.env, STATUS: status, REASON: '', FAIL_ON_ERROR: 'true' } });
+  assert.equal(r.status, 0);
 });
